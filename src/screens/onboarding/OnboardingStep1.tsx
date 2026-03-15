@@ -1,0 +1,137 @@
+import React, { useState } from 'react';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity } from 'react-native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { OnboardingStackParamList } from '../../navigation/OnboardingNavigator';
+import { useAuthStore } from '../../store/authStore';
+import { updateProfile } from '../../db/profileDb';
+import OnboardingLayout from '../../components/OnboardingLayout';
+import { Colors } from '../../constants/colors';
+
+type Props = {
+  navigation: NativeStackNavigationProp<OnboardingStackParamList, 'Step1'>;
+};
+
+export default function OnboardingStep1({ navigation }: Props) {
+  const { currentUser } = useAuthStore();
+  const [firstName, setFirstName] = useState(currentUser?.firstName || '');
+  const [lastName, setLastName] = useState(currentUser?.lastName || '');
+  const [sex, setSex] = useState<'male' | 'female' | null>(null);
+
+  const canContinue = !!(firstName.trim() && lastName.trim() && sex !== null);
+
+  const handleContinue = async () => {
+    if (!canContinue || !currentUser) return;
+    await updateProfile(currentUser.id, { sex: sex! });
+    navigation.navigate('Step2');
+  };
+
+  return (
+    <OnboardingLayout
+      step={1}
+      totalSteps={10}
+      title="Let's get to know you"
+      subtitle="Tell us about yourself"
+      onContinue={handleContinue}
+      continueEnabled={canContinue}
+    >
+      <View style={styles.inputContainer}>
+        <Text style={styles.label}>First Name</Text>
+        <TextInput
+          style={styles.input}
+          value={firstName}
+          onChangeText={setFirstName}
+          placeholder="First name"
+          placeholderTextColor={Colors.textMuted}
+          autoCapitalize="words"
+        />
+      </View>
+
+      <View style={styles.inputContainer}>
+        <Text style={styles.label}>Last Name</Text>
+        <TextInput
+          style={styles.input}
+          value={lastName}
+          onChangeText={setLastName}
+          placeholder="Last name"
+          placeholderTextColor={Colors.textMuted}
+          autoCapitalize="words"
+        />
+      </View>
+
+      <Text style={styles.label}>Biological Sex</Text>
+      <View style={styles.toggleRow}>
+        <TouchableOpacity
+          style={[styles.toggleCard, sex === 'male' && styles.toggleCardActive]}
+          onPress={() => setSex('male')}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.toggleIcon}>♂</Text>
+          <Text style={[styles.toggleText, sex === 'male' && styles.toggleTextActive]}>
+            Male
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.toggleCard, sex === 'female' && styles.toggleCardActive]}
+          onPress={() => setSex('female')}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.toggleIcon}>♀</Text>
+          <Text style={[styles.toggleText, sex === 'female' && styles.toggleTextActive]}>
+            Female
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </OnboardingLayout>
+  );
+}
+
+const styles = StyleSheet.create({
+  inputContainer: {
+    marginBottom: 20,
+    gap: 8,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+    marginBottom: 8,
+  },
+  input: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    color: Colors.textPrimary,
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  toggleCard: {
+    flex: 1,
+    backgroundColor: Colors.surface,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    borderRadius: 14,
+    padding: 20,
+    alignItems: 'center',
+    gap: 8,
+  },
+  toggleCardActive: {
+    borderColor: Colors.primary,
+    backgroundColor: 'rgba(45, 106, 79, 0.08)',
+  },
+  toggleIcon: {
+    fontSize: 32,
+  },
+  toggleText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  toggleTextActive: {
+    color: Colors.primary,
+  },
+});

@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "The Growth Project",
+    "slug": "tgp-health-and-wellness",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0a0a0a"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.growthproject.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Used for barcode scanning to log food items",
+        "ITSAppUsesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png",
+        "backgroundColor": "#FAF8F3"
+      },
+      "package": "com.growthproject.app"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-sqlite",
+      "expo-font"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "a12c3345-cc8c-4c2c-9c57-711c10a57c1c"
+      }
+    }
+  }
+}

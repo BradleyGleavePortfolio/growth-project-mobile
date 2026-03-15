@@ -1,0 +1,475 @@
+import React, { useEffect, useState, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  RefreshControl,
+  TouchableOpacity,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { useAuthStore } from '../../store/authStore';
+import { useClientStore } from '../../store/clientStore';
+import { getGreeting, getTodayString as getToday } from '../../utils/date';
+import CalorieRing from '../../components/CalorieRing';
+import MacroBar from '../../components/MacroBar';
+import MealCard from '../../components/MealCard';
+import WaterTracker from '../../components/WaterTracker';
+import DaySelector from '../../components/DaySelector';
+import FadeInView from '../../components/FadeInView';
+import { SkeletonCard, SkeletonLine } from '../../components/SkeletonLoader';
+// All colors from central theme — never hardcode hex values here
+import { Colors, Spacing, Radius } from '../../theme/index';
+import { habitsApi } from '../../services/api';
+import { MealType } from '../../types';
+import { sendCalorieReminderNotification } from '../../utils/notifications';
+
+const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
+
+interface HabitItem {
+  id: string;
+  name: string;
+  color: string;
+  done: boolean;
+}
+
+interface HabitsData {
+  total: number;
+  completed: number;
+  habits: HabitItem[];
+}
+
+export default function HomeScreen() {
+  const { currentUser, clientProfile } = useAuthStore();
+  const {
+    selectedDate,
+    foodLogs,
+    dailyTotals,
+    waterOz,
+    isLoading,
+    setSelectedDate,
+    loadDayData,
+    loadProfile,
+    logWater,
+  } = useClientStore();
+
+  const navigation = useNavigation<any>();
+  const [refreshing, setRefreshing] = useState(false);
+  const [habitsData, setHabitsData] = useState<HabitsData>({
+    total: 0,
+    completed: 0,
+    habits: [],
+  });
+
+  // Load habits from REST API instead of SQLite
+  const loadHabits = useCallback(async () => {
+    if (!currentUser) return;
+    try {
+      const today = getToday();
+      const [habitsRes, logsRes] = await Promise.all([
+        habitsApi.getAll(),
+        habitsApi.getLogs(today),
+      ]);
+      const allHabits: any[] = habitsRes.data || [];
+      const logs: any[] = logsRes.data || [];
+      const enriched: HabitItem[] = allHabits.map((h: any) => ({
+        id: h.id,
+        name: h.name,
+        color: h.color || Colors.primary,
+        done: logs.some((l: any) => l.habitId === h.id && l.completed),
+      }));
+      setHabitsData({
+        total: allHabits.length,
+        completed: enriched.filter((h) => h.done).length,
+        habits: enriched.slice(0, 6),
+      });
+    } catch {
+      // Habits API unavailable — silently degrade, no SQLite fallback needed
+      setHabitsData({ total: 0, completed: 0, habits: [] });
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (currentUser) {
+      loadDayData(currentUser.id);
+      loadProfile(currentUser.id);
+      loadHabits();
+    }
+  }, [currentUser?.id]);
+
+  const handleDateChange = (date: string) => {
+    setSelectedDate(date);
+    if (currentUser) {
+      loadDayData(currentUser.id, date);
+    }
+  };
+
+  const handleAddWater = (oz: number) => {
+    if (currentUser) {
+      logWater(currentUser.id, currentUser.coachId || '', oz);
+    }
+  };
+
+  const onRefresh = useCallback(async () => {
+    if (!currentUser) return;
+    setRefreshing(true);
+    await loadDayData(currentUser.id, selectedDate);
+    await loadProfile(currentUser.id);
+    await loadHabits();
+    setRefreshing(false);
+  }, [currentUser?.id, selectedDate]);
+
+  const calorieTarget = clientProfile?.calorieTarget || 2000;
+  const proteinTarget = clientProfile?.proteinTarget || 150;
+  const carbTarget = clientProfile?.carbTarget || 200;
+  const fatTarget = clientProfile?.fatTarget || 65;
+
+  const getMealFoods = (mealType: MealType) =>
+    foodLogs.filter((f) => f.mealType === mealType);
+
+  if (isLoading && foodLogs.length === 0) {
+    return (
+      <View style={styles.loadingContainer}>
+        <View style={{ paddingHorizontal: Spacing.lg, paddingTop: 80, gap: 16 }}>
+          <SkeletonLine width="60%" height={24} />
+          <SkeletonLine width="40%" height={14} />
+          <View style={{ marginTop: 20 }}>
+            <SkeletonCard />
+            <SkeletonCard />
+            <SkeletonCard />
+          </View>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={Colors.primary}
+          colors={[Colors.primary]}
+        />
+      }
+    >
+      <FadeInView>
+        <View style={styles.header}>
+          <View style={styles.headerRow}>
+            <View style={styles.headerText}>
+              <Text style={styles.greeting}>
+                {getGreeting()}, {currentUser?.firstName || 'there'}
+              </Text>
+              <Text style={styles.subtitle}>Track your nutrition today</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => navigation.navigate('Notifications')}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="notifications-outline" size={24} color={Colors.dark} />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </FadeInView>
+
+      <DaySelector
+        selectedDate={selectedDate}
+        onDateChange={handleDateChange}
+      />
+
+      <FadeInView delay={100}>
+        <View style={styles.ringSection}>
+          <CalorieRing consumed={dailyTotals.calories} target={calorieTarget} />
+          <Text style={styles.targetLabel}>
+            Goal: {calorieTarget} kcal
+          </Text>
+          {(calorieTarget - dailyTotals.calories) > 200 && (
+            <TouchableOpacity
+              style={styles.remindBtn}
+              onPress={() => {
+                const remaining = calorieTarget - dailyTotals.calories;
+                const snacks: string[] = JSON.parse(
+                  (clientProfile as any)?.preferredSnacks || '[]',
+                );
+                sendCalorieReminderNotification(remaining, snacks);
+              }}
+            >
+              <Ionicons name="notifications-outline" size={14} color={Colors.primary} />
+              <Text style={styles.remindBtnText}>Remind me to eat</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </FadeInView>
+
+      <FadeInView delay={200}>
+        <View style={styles.macroSection}>
+          <MacroBar
+            label="Protein"
+            current={dailyTotals.protein}
+            target={proteinTarget}
+            color="#E88D67"
+          />
+          <MacroBar
+            label="Carbs"
+            current={dailyTotals.carbs}
+            target={carbTarget}
+            color="#C5A467"
+          />
+          <MacroBar
+            label="Fat"
+            current={dailyTotals.fat}
+            target={fatTarget}
+            color="#A78BFA"
+          />
+        </View>
+      </FadeInView>
+
+      <FadeInView delay={300}>
+        <View style={styles.mealsSection}>
+          <Text style={styles.sectionTitle}>Meals</Text>
+          <View style={styles.mealCards}>
+            {MEAL_ORDER.map((meal) => (
+              <MealCard
+                key={meal}
+                mealType={meal}
+                foods={getMealFoods(meal)}
+              />
+            ))}
+          </View>
+        </View>
+      </FadeInView>
+
+      <FadeInView delay={400}>
+        <View style={styles.waterSection}>
+          <WaterTracker
+            currentOz={waterOz}
+            onAdd={handleAddWater}
+          />
+        </View>
+      </FadeInView>
+
+      <FadeInView delay={500}>
+        <TouchableOpacity
+          style={styles.habitsCard}
+          onPress={() => navigation.navigate('Habits')}
+          activeOpacity={0.7}
+        >
+          <View style={styles.habitsCardHeader}>
+            <View style={styles.habitsCardLeft}>
+              <Ionicons name="leaf" size={20} color={Colors.primary} />
+              <Text style={styles.habitsCardTitle}>Daily Habits</Text>
+            </View>
+            <View style={styles.habitsCardRight}>
+              <Text style={styles.habitsCardCount}>
+                {habitsData.completed}/{habitsData.total}
+              </Text>
+              <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+            </View>
+          </View>
+          <View style={styles.habitsPreview}>
+            {habitsData.habits.map((h) => (
+              <View key={h.id} style={styles.habitDot}>
+                <View
+                  style={[
+                    styles.habitDotCircle,
+                    {
+                      backgroundColor: h.done ? h.color : 'transparent',
+                      borderColor: h.done ? h.color : Colors.border,
+                    },
+                  ]}
+                >
+                  {h.done && <Ionicons name="checkmark" size={12} color={Colors.white} />}
+                </View>
+                <Text style={styles.habitDotLabel} numberOfLines={1}>{h.name}</Text>
+              </View>
+            ))}
+          </View>
+        </TouchableOpacity>
+      </FadeInView>
+
+      <FadeInView delay={600}>
+        <View style={styles.quickAccessSection}>
+          <Text style={styles.sectionTitle}>Explore</Text>
+          <View style={styles.quickAccessGrid}>
+            {([
+              { screen: 'Plan', icon: 'calendar', label: 'Meal Plan', color: '#2D6A4F' },
+              { screen: 'Recipes', icon: 'restaurant-outline', label: 'Recipes', color: Colors.orange },
+              { screen: 'Fast', icon: 'timer-outline', label: 'Fasting', color: '#457B9D' },
+              { screen: 'AI', icon: 'chatbubble-ellipses-outline', label: 'AI Coach', color: '#A78BFA' },
+              { screen: 'ProfileStack', icon: 'book-outline', label: 'Learn', color: Colors.gold, nested: 'Learn' },
+              { screen: 'Community', icon: 'people-outline', label: 'Community', color: Colors.primary },
+            ] as { screen: string; icon: string; label: string; color: string; nested?: string }[]).map((item) => (
+              <TouchableOpacity
+                key={item.screen}
+                style={styles.quickAccessItem}
+                onPress={() =>
+                  item.nested
+                    ? navigation.navigate(item.screen, { screen: item.nested })
+                    : navigation.navigate(item.screen)
+                }
+                activeOpacity={0.7}
+              >
+                <View style={[styles.quickAccessIcon, { backgroundColor: item.color + '18' }]}>
+                  <Ionicons name={item.icon as any} size={22} color={item.color} />
+                </View>
+                <Text style={styles.quickAccessLabel}>{item.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      </FadeInView>
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  content: {
+    paddingBottom: 40,
+  },
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  header: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: 60,
+    marginBottom: 8,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  headerText: {
+    flex: 1,
+  },
+  greeting: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: Colors.dark,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: Colors.textMuted,
+    marginTop: 4,
+  },
+  ringSection: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  targetLabel: {
+    fontSize: 13,
+    color: Colors.textMuted,
+    marginTop: 8,
+  },
+  macroSection: {
+    paddingHorizontal: Spacing.lg,
+    gap: 14,
+    marginBottom: 28,
+  },
+  mealsSection: {
+    paddingHorizontal: Spacing.lg,
+    marginBottom: 20,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.dark,
+    marginBottom: 12,
+  },
+  mealCards: {
+    gap: 10,
+  },
+  waterSection: {
+    paddingHorizontal: Spacing.lg,
+    marginBottom: 20,
+  },
+  habitsCard: {
+    marginHorizontal: Spacing.lg,
+    marginBottom: 20,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+  },
+  habitsCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+  habitsCardLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  habitsCardTitle: { fontSize: 16, fontWeight: '700', color: Colors.dark },
+  habitsCardRight: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  habitsCardCount: { fontSize: 14, fontWeight: '600', color: Colors.primary },
+  habitsPreview: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  habitDot: { alignItems: 'center', width: 52, gap: 4 },
+  habitDotCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  habitDotLabel: { fontSize: 10, color: Colors.textMuted, textAlign: 'center' },
+  quickAccessSection: {
+    paddingHorizontal: Spacing.lg,
+    marginBottom: 20,
+  },
+  quickAccessGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  quickAccessItem: {
+    width: '30%',
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.md,
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+  },
+  quickAccessIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  quickAccessLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.dark,
+    textAlign: 'center',
+  },
+  remindBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: Colors.primaryLight,
+    borderRadius: Radius.full,
+    alignSelf: 'center',
+  },
+  remindBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+});
