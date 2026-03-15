@@ -1,0 +1,399 @@
+import React, { useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useAuthStore } from '../../store/authStore';
+import { getDailyTotals } from '../../db/foodLogDb';
+import { getWeightLogsForPeriod } from '../../db/weightLogDb';
+import { getTodayString } from '../../utils/date';
+import { WeightLog } from '../../types';
+
+import { Colors } from '../../constants/colors';
+
+const GREEN = Colors.primary;
+const BG = Colors.surface;
+const TEXT = Colors.textPrimary;
+const MUTED = Colors.textSecondary;
+
+export default function ReportScreen({ navigation }: any) {
+  const { currentUser, clientProfile } = useAuthStore();
+  const [weeklyWeights, setWeeklyWeights] = useState<WeightLog[]>([]);
+  const [todayMacros, setTodayMacros] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0 });
+
+  useEffect(() => {
+    loadReportData();
+  }, []);
+
+  const loadReportData = async () => {
+    if (!currentUser) return;
+    const weights = await getWeightLogsForPeriod(currentUser.id, 7);
+    setWeeklyWeights(weights);
+    const today = getTodayString();
+    const totals = await getDailyTotals(currentUser.id, today);
+    setTodayMacros(totals);
+  };
+
+  const latestWeight = weeklyWeights.length > 0 ? weeklyWeights[weeklyWeights.length - 1].weight : clientProfile?.currentWeight;
+  const startWeight = clientProfile?.currentWeight;
+  const change = latestWeight && startWeight ? latestWeight - startWeight : null;
+
+  const goalLabel = (() => {
+    switch (clientProfile?.primaryGoal) {
+      case 'lose_fast': return 'Aggressive Fat Loss';
+      case 'lose_moderate': return 'Moderate Weight Loss';
+      case 'maintain': return 'Maintenance';
+      case 'gain': return 'Lean Bulk';
+      case 'gain_fast': return 'Mass Gain';
+      case 'mobility': return 'Mobility & Wellness';
+      default: return 'General Fitness';
+    }
+  })();
+
+  return (
+    <View style={styles.wrapper}>
+      <View style={styles.topBar}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+        </TouchableOpacity>
+        <Text style={styles.topTitle}>My Report</Text>
+        <View style={styles.backBtn} />
+      </View>
+
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+        {/* Tip Banner */}
+        <View style={styles.tipBanner}>
+          <Ionicons name="camera-outline" size={16} color={GREEN} />
+          <Text style={styles.tipText}>Screenshot or screen-record to save your report</Text>
+        </View>
+
+        {/* Cover */}
+        <View style={styles.cover}>
+          <View style={styles.coverDot} />
+          <Text style={styles.coverTitle}>The Growth Project</Text>
+          <Text style={styles.coverSubtitle}>Weekly Progress Report</Text>
+          <Text style={styles.coverName}>
+            {currentUser?.firstName} {currentUser?.lastName}
+          </Text>
+          <Text style={styles.coverDate}>{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</Text>
+        </View>
+
+        {/* Macros */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Today's Macros</Text>
+          <View style={styles.macroRow}>
+            <MacroBox label="Calories" value={`${Math.round(todayMacros.calories)}`} unit="kcal" />
+            <MacroBox label="Protein" value={`${Math.round(todayMacros.protein)}`} unit="g" accent />
+            <MacroBox label="Carbs" value={`${Math.round(todayMacros.carbs)}`} unit="g" />
+            <MacroBox label="Fat" value={`${Math.round(todayMacros.fat)}`} unit="g" />
+          </View>
+          {clientProfile?.calorieTarget && (
+            <Text style={styles.targetHint}>
+              Target: {clientProfile.calorieTarget} kcal / day
+            </Text>
+          )}
+        </View>
+
+        {/* Weekly Progress */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Weekly Progress</Text>
+          <View style={styles.statsRow}>
+            <View style={styles.statBox}>
+              <Text style={styles.statValue}>{startWeight ? `${Math.round(startWeight)}` : '--'}</Text>
+              <Text style={styles.statLabel}>Start (lbs)</Text>
+            </View>
+            <View style={styles.statBox}>
+              <Text style={[styles.statValue, { color: GREEN }]}>
+                {latestWeight ? `${(Math.round(latestWeight * 10) / 10)}` : '--'}
+              </Text>
+              <Text style={styles.statLabel}>Current (lbs)</Text>
+            </View>
+            {change !== null && (
+              <View style={styles.statBox}>
+                <Text style={[styles.statValue, { color: change <= 0 ? GREEN : '#ef4444' }]}>
+                  {change > 0 ? '+' : ''}{change.toFixed(1)}
+                </Text>
+                <Text style={styles.statLabel}>Change</Text>
+              </View>
+            )}
+          </View>
+          {weeklyWeights.length > 0 && (
+            <View style={styles.weightList}>
+              {weeklyWeights.map((w) => (
+                <View key={w.id} style={styles.weightRow}>
+                  <Text style={styles.weightDate}>{w.date}</Text>
+                  <Text style={styles.weightVal}>{w.weight} {w.unit}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
+        {/* Training Focus */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Training Focus</Text>
+          <Text style={styles.goalBadge}>{goalLabel}</Text>
+          <Text style={styles.bodyText}>
+            {clientProfile?.primaryGoal?.includes('lose')
+              ? 'Focus on maintaining a caloric deficit while keeping protein high to preserve lean mass. Prioritize compound movements and HIIT cardio.'
+              : clientProfile?.primaryGoal?.includes('gain')
+              ? 'Keep surplus calories clean and progressive overload on compound lifts. Rest days are growth days — sleep 7-9 hours.'
+              : 'Maintain consistent nutrition habits and stay active. Focus on movement quality and recovery.'}
+          </Text>
+        </View>
+
+        {/* Shopping Essentials */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Shopping Essentials</Text>
+          {['Chicken breast', 'Greek yogurt', 'Brown rice', 'Broccoli', 'Eggs', 'Oats', 'Sweet potato', 'Almonds'].map((item) => (
+            <View key={item} style={styles.shopRow}>
+              <View style={styles.shopDot} />
+              <Text style={styles.shopItem}>{item}</Text>
+            </View>
+          ))}
+        </View>
+
+        {/* Footer */}
+        <View style={styles.footer}>
+          <View style={styles.footerDot} />
+          <Text style={styles.footerTitle}>The Growth Project</Text>
+          <Text style={styles.footerSub}>Consistency beats perfection. Keep showing up.</Text>
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
+function MacroBox({ label, value, unit, accent }: { label: string; value: string; unit: string; accent?: boolean }) {
+  return (
+    <View style={styles.macroBox}>
+      <Text style={[styles.macroValue, accent && { color: GREEN }]}>{value}</Text>
+      <Text style={styles.macroUnit}>{unit}</Text>
+      <Text style={styles.macroLabel}>{label}</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  wrapper: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 56,
+    paddingBottom: 12,
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  topTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  scroll: {
+    flex: 1,
+  },
+  content: {
+    paddingBottom: 60,
+  },
+  tipBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#e8f5ee',
+    marginHorizontal: 16,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 8,
+  },
+  tipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: GREEN,
+  },
+  cover: {
+    backgroundColor: BG,
+    marginHorizontal: 16,
+    borderRadius: 14,
+    padding: 32,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  coverDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: GREEN,
+    marginBottom: 16,
+  },
+  coverTitle: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: TEXT,
+  },
+  coverSubtitle: {
+    fontSize: 14,
+    color: MUTED,
+    marginTop: 4,
+  },
+  coverName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: TEXT,
+    marginTop: 20,
+  },
+  coverDate: {
+    fontSize: 13,
+    color: MUTED,
+    marginTop: 4,
+  },
+  section: {
+    backgroundColor: BG,
+    marginHorizontal: 16,
+    borderRadius: 14,
+    padding: 20,
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: TEXT,
+    marginBottom: 14,
+  },
+  macroRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  macroBox: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  macroValue: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: TEXT,
+  },
+  macroUnit: {
+    fontSize: 11,
+    color: MUTED,
+  },
+  macroLabel: {
+    fontSize: 11,
+    color: MUTED,
+    marginTop: 2,
+  },
+  targetHint: {
+    fontSize: 12,
+    color: MUTED,
+    textAlign: 'center',
+    marginTop: 12,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 16,
+  },
+  statBox: {
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: TEXT,
+  },
+  statLabel: {
+    fontSize: 11,
+    color: MUTED,
+    marginTop: 2,
+  },
+  weightList: {
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    paddingTop: 12,
+  },
+  weightRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+  },
+  weightDate: {
+    fontSize: 14,
+    color: MUTED,
+  },
+  weightVal: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: TEXT,
+  },
+  goalBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#e8f5ee',
+    color: GREEN,
+    fontSize: 13,
+    fontWeight: '700',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  bodyText: {
+    fontSize: 14,
+    color: MUTED,
+    lineHeight: 22,
+  },
+  shopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 5,
+  },
+  shopDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: GREEN,
+  },
+  shopItem: {
+    fontSize: 14,
+    color: TEXT,
+  },
+  footer: {
+    backgroundColor: BG,
+    marginHorizontal: 16,
+    borderRadius: 14,
+    padding: 24,
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  footerDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: GREEN,
+    marginBottom: 12,
+  },
+  footerTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: TEXT,
+  },
+  footerSub: {
+    fontSize: 13,
+    color: MUTED,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+});

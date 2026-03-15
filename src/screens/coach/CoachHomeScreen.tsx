@@ -1,0 +1,553 @@
+import React, { useEffect, useState, useCallback } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  RefreshControl,
+  ActivityIndicator,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { useAuthStore } from '../../store/authStore';
+import { useCoachStore } from '../../store/coachStore';
+import { Colors } from '../../constants/colors';
+import { getGreeting } from '../../utils/date';
+import FadeInView from '../../components/FadeInView';
+import { getWeightLogsForPeriod } from '../../db/weightLogDb';
+
+interface RedFlagClient {
+  id: string;
+  name: string;
+  trend: string;
+}
+
+export default function CoachHomeScreen() {
+  const { currentUser } = useAuthStore();
+  const { clients, recentLogs, isLoading, loadClients, loadRecentActivity } =
+    useCoachStore();
+  const navigation = useNavigation<any>();
+  const [refreshing, setRefreshing] = useState(false);
+  const [redFlagClients, setRedFlagClients] = useState<RedFlagClient[]>([]);
+  const [overdueClients, setOverdueClients] = useState<string[]>([]);
+
+  const detectRedFlags = useCallback(async () => {
+    const flags: RedFlagClient[] = [];
+    const overdue: string[] = [];
+    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+    for (const client of clients) {
+      if (client.status !== 'active') continue;
+
+      // Check weight trend (3+ consecutive increases)
+      try {
+        const weightLogs = await getWeightLogsForPeriod(client.id, 30);
+        if (weightLogs.length >= 3) {
+          // Sorted DESC by date from DB, take last 5
+          const recent = weightLogs.slice(0, 5);
+          let consecutiveIncreases = 0;
+          for (let i = 0; i < recent.length - 1; i++) {
+            if (recent[i].weight > recent[i + 1].weight) {
+              consecutiveIncreases++;
+            } else {
+              break;
+            }
+          }
+          if (consecutiveIncreases >= 2) {
+            const gain = recent[0].weight - recent[consecutiveIncreases].weight;
+            const days = Math.round(
+              (new Date(recent[0].date).getTime() - new Date(recent[consecutiveIncreases].date).getTime()) / 86400000
+            );
+            flags.push({
+              id: client.id,
+              name: `${client.firstName} ${client.lastName}`,
+              trend: `+${gain.toFixed(1)} lbs over ${days} days`,
+            });
+          }
+        }
+      } catch {}
+
+      // Check overdue check-ins (no food log in last 3 days)
+      const hasRecentLog = recentLogs.some(
+        (l) => l.firstName === client.firstName && l.lastName === client.lastName && l.date >= threeDaysAgo
+      );
+      if (!hasRecentLog) {
+        overdue.push(`${client.firstName} ${client.lastName}`);
+      }
+    }
+
+    setRedFlagClients(flags);
+    setOverdueClients(overdue);
+  }, [clients, recentLogs]);
+
+  const load = useCallback(async () => {
+    if (!currentUser) return;
+    await Promise.all([
+      loadClients(currentUser.id),
+      loadRecentActivity(currentUser.id),
+    ]);
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  useEffect(() => {
+    if (clients.length > 0) {
+      detectRedFlags();
+    }
+  }, [clients, recentLogs]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  }, [load]);
+
+  const activeClients = clients.filter((c) => c.status === 'active').length;
+  const today = new Date().toISOString().split('T')[0];
+  const todayLogs = recentLogs.filter((l) => l.date === today);
+  const uniqueLoggers = new Set(todayLogs.map((l) => l.firstName)).size;
+  const todayCalories = todayLogs.reduce((sum, l) => sum + l.calories, 0);
+  const complianceRate = activeClients > 0 ? Math.round((uniqueLoggers / activeClients) * 100) : 0;
+
+  if (isLoading && !refreshing) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={Colors.primary}
+          colors={[Colors.primary]}
+        />
+      }
+    >
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.greeting}>{getGreeting()}, {currentUser?.firstName || 'Coach'}</Text>
+          <Text style={styles.subtitle}>Here's your coaching overview</Text>
+        </View>
+        <TouchableOpacity
+          style={styles.settingsBtn}
+          onPress={() => navigation.navigate('Settings')}
+        >
+          <Ionicons name="settings-outline" size={22} color={Colors.textSecondary} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Key Metrics */}
+      <FadeInView>
+        <View style={styles.metricsGrid}>
+          <View style={styles.metricCard}>
+            <View style={[styles.metricIcon, { backgroundColor: Colors.primaryPale }]}>
+              <Ionicons name="people" size={22} color={Colors.primary} />
+            </View>
+            <Text style={styles.metricValue}>{activeClients}</Text>
+            <Text style={styles.metricLabel}>Active Clients</Text>
+          </View>
+          <View style={styles.metricCard}>
+            <View style={[styles.metricIcon, { backgroundColor: '#E8F4FD' }]}>
+              <Ionicons name="restaurant" size={22} color={Colors.carbs} />
+            </View>
+            <Text style={styles.metricValue}>{todayLogs.length}</Text>
+            <Text style={styles.metricLabel}>Logs Today</Text>
+          </View>
+          <View style={styles.metricCard}>
+            <View style={[styles.metricIcon, { backgroundColor: '#FEF3E2' }]}>
+              <Ionicons name="flame" size={22} color={Colors.fat} />
+            </View>
+            <Text style={styles.metricValue}>{Math.round(todayCalories)}</Text>
+            <Text style={styles.metricLabel}>Total kcal</Text>
+          </View>
+          <View style={styles.metricCard}>
+            <View style={[styles.metricIcon, { backgroundColor: Colors.primaryPale }]}>
+              <Ionicons name="checkmark-circle" size={22} color={Colors.primaryLight} />
+            </View>
+            <Text style={styles.metricValue}>{complianceRate}%</Text>
+            <Text style={styles.metricLabel}>Logging Rate</Text>
+          </View>
+        </View>
+      </FadeInView>
+
+      {/* ⚠️ Red Flag Clients */}
+      {redFlagClients.length > 0 && (
+        <FadeInView>
+          <Text style={styles.sectionTitle}>⚠️ Weight Trend Alerts</Text>
+          {redFlagClients.map((rf) => (
+            <TouchableOpacity
+              key={rf.id}
+              style={styles.redFlagCard}
+              onPress={() =>
+                navigation.navigate('ClientsStack', {
+                  screen: 'ClientDetail',
+                  params: { clientId: rf.id, clientName: rf.name },
+                })
+              }
+              activeOpacity={0.8}
+            >
+              <View style={styles.redFlagLeft}>
+                <Ionicons name="warning" size={22} color="#E9C46A" />
+                <View>
+                  <Text style={styles.redFlagName}>{rf.name}</Text>
+                  <Text style={styles.redFlagTrend}>Weight trending up · {rf.trend}</Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={styles.viewClientBtn}
+                onPress={() =>
+                  navigation.navigate('ClientsStack', {
+                    screen: 'ClientDetail',
+                    params: { clientId: rf.id, clientName: rf.name },
+                  })
+                }
+              >
+                <Text style={styles.viewClientBtnText}>View</Text>
+              </TouchableOpacity>
+            </TouchableOpacity>
+          ))}
+        </FadeInView>
+      )}
+
+      {/* Overdue Check-ins */}
+      {overdueClients.length > 0 && (
+        <FadeInView>
+          <Text style={styles.sectionTitle}>📅 Overdue Check-ins</Text>
+          <View style={styles.overdueCard}>
+            <Text style={styles.overdueSubtitle}>No food log in last 3 days</Text>
+            {overdueClients.slice(0, 5).map((name, idx) => (
+              <View key={idx} style={styles.overdueRow}>
+                <View style={styles.overdueDot} />
+                <Text style={styles.overdueName}>{name}</Text>
+              </View>
+            ))}
+            {overdueClients.length > 5 && (
+              <Text style={styles.overdueMore}>+{overdueClients.length - 5} more</Text>
+            )}
+          </View>
+        </FadeInView>
+      )}
+
+      {/* Quick Actions */}
+      <Text style={styles.sectionTitle}>Quick Actions</Text>
+      <View style={styles.actionsRow}>
+        <TouchableOpacity
+          style={styles.actionCard}
+          onPress={() => navigation.navigate('ClientsStack')}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.actionIcon, { backgroundColor: Colors.primaryPale }]}>
+            <Ionicons name="people-outline" size={22} color={Colors.primary} />
+          </View>
+          <Text style={styles.actionText}>View Clients</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.actionCard}
+          onPress={() => navigation.navigate('Messages')}
+          activeOpacity={0.7}
+        >
+          <View style={[styles.actionIcon, { backgroundColor: '#E8F4FD' }]}>
+            <Ionicons name="chatbubble-outline" size={22} color={Colors.carbs} />
+          </View>
+          <Text style={styles.actionText}>Messages</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Client Status */}
+      {clients.length > 0 && (
+        <>
+          <Text style={styles.sectionTitle}>Client Status Today</Text>
+          {clients.filter((c) => c.status === 'active').slice(0, 6).map((client) => {
+            const clientLogs = todayLogs.filter(
+              (l) => l.firstName === client.firstName && l.lastName === client.lastName
+            );
+            const hasLogged = clientLogs.length > 0;
+            const clientCals = clientLogs.reduce((sum, l) => sum + l.calories, 0);
+            return (
+              <TouchableOpacity
+                key={client.id}
+                style={styles.clientStatusCard}
+                onPress={() =>
+                  navigation.navigate('ClientsStack', {
+                    screen: 'ClientDetail',
+                    params: { clientId: client.id, clientName: `${client.firstName} ${client.lastName}` },
+                  })
+                }
+                activeOpacity={0.7}
+              >
+                <View style={styles.csAvatar}>
+                  <Text style={styles.csAvatarText}>
+                    {client.firstName[0]}{client.lastName[0]}
+                  </Text>
+                </View>
+                <View style={styles.csInfo}>
+                  <Text style={styles.csName}>{client.firstName} {client.lastName}</Text>
+                  <Text style={styles.csMeta}>
+                    {hasLogged
+                      ? `${clientLogs.length} logs · ${Math.round(clientCals)} kcal`
+                      : 'No activity today'}
+                  </Text>
+                </View>
+                <View style={[styles.csStatusDot, { backgroundColor: hasLogged ? Colors.success : Colors.warning }]} />
+              </TouchableOpacity>
+            );
+          })}
+        </>
+      )}
+
+      {/* Recent Activity Feed */}
+      <Text style={[styles.sectionTitle, { marginTop: 8 }]}>Recent Activity</Text>
+      {recentLogs.length === 0 ? (
+        <View style={styles.emptyActivity}>
+          <Ionicons name="time-outline" size={32} color={Colors.textMuted} />
+          <Text style={styles.emptyText}>No recent activity</Text>
+        </View>
+      ) : (
+        recentLogs.slice(0, 10).map((log) => (
+          <View key={log.id} style={styles.activityItem}>
+            <View style={styles.activityDot} />
+            <View style={styles.activityContent}>
+              <Text style={styles.activityText}>
+                <Text style={styles.activityName}>
+                  {log.firstName} {log.lastName}
+                </Text>
+                {' logged '}
+                <Text style={styles.activityHighlight}>{log.foodName}</Text>
+                {' — '}
+                {Math.round(log.calories)} kcal
+              </Text>
+              <Text style={styles.activityMeal}>{log.mealType}</Text>
+            </View>
+          </View>
+        ))
+      )}
+    </ScrollView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: Colors.background },
+  content: { paddingTop: 60, paddingBottom: 100 },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: Colors.background,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingHorizontal: 24,
+    marginBottom: 24,
+  },
+  greeting: { fontSize: 26, fontWeight: '800', color: Colors.textPrimary },
+  subtitle: { fontSize: 14, color: Colors.textSecondary, marginTop: 4 },
+  settingsBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  metricsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 24,
+    gap: 10,
+    marginBottom: 28,
+  },
+  metricCard: {
+    width: '47%',
+    backgroundColor: Colors.surface,
+    borderRadius: 14,
+    padding: 16,
+    gap: 8,
+    flexGrow: 1,
+  },
+  metricIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  metricValue: { fontSize: 24, fontWeight: '800', color: Colors.textPrimary },
+  metricLabel: { fontSize: 12, color: Colors.textSecondary },
+  sectionTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    paddingHorizontal: 24,
+    marginBottom: 12,
+  },
+  // Red Flag Cards
+  redFlagCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: 24,
+    marginBottom: 8,
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: '#FFF8E7',
+    borderLeftWidth: 4,
+    borderLeftColor: '#E9C46A',
+  },
+  redFlagLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  redFlagName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  redFlagTrend: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
+  viewClientBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    backgroundColor: '#E9C46A',
+    borderRadius: 10,
+  },
+  viewClientBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#7B5800',
+  },
+  // Overdue Card
+  overdueCard: {
+    marginHorizontal: 24,
+    marginBottom: 20,
+    padding: 16,
+    borderRadius: 14,
+    backgroundColor: '#FFF3E0',
+    borderLeftWidth: 4,
+    borderLeftColor: '#FB8C00',
+    gap: 8,
+  },
+  overdueSubtitle: {
+    fontSize: 12,
+    color: '#E65100',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  overdueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  overdueDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#FB8C00',
+  },
+  overdueName: {
+    fontSize: 14,
+    color: Colors.textPrimary,
+    fontWeight: '500',
+  },
+  overdueMore: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    fontStyle: 'italic',
+    marginTop: 4,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 24,
+    gap: 10,
+    marginBottom: 28,
+  },
+  actionCard: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: Colors.surface,
+    borderRadius: 14,
+    padding: 16,
+  },
+  actionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  actionText: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary },
+  clientStatusCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 24,
+    marginBottom: 8,
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    padding: 14,
+    gap: 12,
+  },
+  csAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Colors.primaryDark,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  csAvatarText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  csInfo: { flex: 1 },
+  csName: { fontSize: 15, fontWeight: '600', color: Colors.textPrimary },
+  csMeta: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
+  csStatusDot: { width: 10, height: 10, borderRadius: 5 },
+  activityItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginHorizontal: 24,
+    marginBottom: 14,
+    gap: 12,
+  },
+  activityDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.primary,
+    marginTop: 6,
+  },
+  activityContent: { flex: 1 },
+  activityText: { fontSize: 14, color: Colors.textSecondary, lineHeight: 20 },
+  activityName: { fontWeight: '600', color: Colors.textPrimary },
+  activityHighlight: { color: Colors.primary },
+  activityMeal: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    marginTop: 2,
+    textTransform: 'capitalize',
+  },
+  emptyActivity: {
+    paddingVertical: 30,
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 24,
+  },
+  emptyText: { color: Colors.textMuted, fontSize: 14 },
+});
