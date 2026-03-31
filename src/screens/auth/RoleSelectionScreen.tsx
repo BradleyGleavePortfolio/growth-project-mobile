@@ -65,8 +65,8 @@ export default function RoleSelectionScreen({ navigation }: Props) {
   const handleStudentSelect = () => handleRoleSelect('student');
 
   const handleCoachPinSubmit = () => {
-    if (coachPin.length < 7) {
-      setPinError('Enter the full 7-digit code');
+    if (coachPin.length < 4) {
+      setPinError('Enter the security code');
       return;
     }
     setShowCoachModal(false);
@@ -140,7 +140,7 @@ export default function RoleSelectionScreen({ navigation }: Props) {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Coach Access Code</Text>
             <Text style={styles.modalSubtitle}>
-              Enter the 7-digit code provided by The Growth Project
+              Enter the security code provided by The Growth Project
             </Text>
 
             {pinError ? (
@@ -154,15 +154,17 @@ export default function RoleSelectionScreen({ navigation }: Props) {
               style={styles.pinInput}
               value={coachPin}
               onChangeText={(text) => {
-                setCoachPin(text.replace(/[^0-9]/g, ''));
+                setCoachPin(text);
                 setPinError('');
               }}
-              placeholder="Enter 7-digit code"
+              placeholder="Security code"
               placeholderTextColor={Colors.textMuted}
-              keyboardType="number-pad"
-              maxLength={7}
+              keyboardType="default"
+              maxLength={20}
               textAlign="center"
               autoFocus
+              autoCapitalize="none"
+              autoCorrect={false}
             />
 
             <View style={styles.modalButtons}>
@@ -179,10 +181,10 @@ export default function RoleSelectionScreen({ navigation }: Props) {
               <TouchableOpacity
                 style={[
                   styles.modalSubmitButton,
-                  coachPin.length < 7 && styles.modalSubmitDisabled,
+                  coachPin.length < 4 && styles.modalSubmitDisabled,
                 ]}
                 onPress={handleCoachPinSubmit}
-                disabled={coachPin.length < 7}
+                disabled={coachPin.length < 4}
               >
                 <Text style={styles.modalSubmitText}>Verify</Text>
               </TouchableOpacity>

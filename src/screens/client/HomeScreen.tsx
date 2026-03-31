@@ -27,8 +27,144 @@ import { Colors, Spacing, Radius } from '../../theme/index';
 import { habitsApi } from '../../services/api';
 import { MealType } from '../../types';
 import { sendCalorieReminderNotification } from '../../utils/notifications';
+import {
+  getStartOfWeek,
+  getEndOfWeek,
+  formatWeekRange,
+  formatVolume,
+} from '../../utils/weekUtils';
+import {
+  getWeeklyVolume,
+  getDailyVolumeBreakdown,
+} from '../../db/workoutDb';
 
 const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
+
+// ── WeeklyVolumeCard ─────────────────────────────────────────────────────────
+
+const DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+const CHART_HEIGHT = 48;
+const BAR_WIDTH = 28;
+
+interface WeeklyVolumeCardProps {
+  totalVolume: number;
+  weekLabel: string;
+  breakdown: Array<{ date: string; volume: number }>;
+}
+
+function WeeklyVolumeCard({ totalVolume, weekLabel, breakdown }: WeeklyVolumeCardProps) {
+  const maxVol = Math.max(...breakdown.map((d) => d.volume), 1);
+  // Determine today's index in the week (Monday=0)
+  const todayDay = new Date().getDay();
+  const todayIdx = todayDay === 0 ? 6 : todayDay - 1;
+
+  return (
+    <View style={wvStyles.card}>
+      <View style={wvStyles.headerRow}>
+        <Ionicons name="barbell-outline" size={20} color="#2D6A4F" />
+        <View style={wvStyles.headerText}>
+          <Text style={wvStyles.title}>Total Weight Moved This Week</Text>
+          <Text style={wvStyles.weekLabel}>{weekLabel}</Text>
+        </View>
+      </View>
+
+      <Text style={wvStyles.volumeNumber}>
+        {formatVolume(Math.round(totalVolume))} lbs
+      </Text>
+
+      {/* 7-day mini bar chart */}
+      <View style={wvStyles.chartContainer}>
+        {breakdown.slice(0, 7).map((d, i) => {
+          const barH = d.volume > 0 ? Math.max(4, (d.volume / maxVol) * CHART_HEIGHT) : 4;
+          const isToday = i === todayIdx;
+          const hasVolume = d.volume > 0;
+          return (
+            <View key={d.date || i} style={wvStyles.barColumn}>
+              <View style={[wvStyles.barTrack, { height: CHART_HEIGHT }]}>
+                <View
+                  style={[
+                    wvStyles.bar,
+                    {
+                      height: barH,
+                      backgroundColor: hasVolume
+                        ? isToday ? '#2D6A4F' : '#52B788'
+                        : '#D8F3DC',
+                    },
+                  ]}
+                />
+              </View>
+              <Text style={[wvStyles.dayLabel, isToday && wvStyles.dayLabelToday]}>
+                {DAY_LABELS[i]}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+const wvStyles = StyleSheet.create({
+  card: {
+    marginHorizontal: Spacing.lg,
+    marginBottom: 20,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginBottom: 10,
+  },
+  headerText: { flex: 1 },
+  title: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.dark,
+  },
+  weekLabel: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+  volumeNumber: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: '#2D6A4F',
+    marginBottom: 14,
+  },
+  chartContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+  },
+  barColumn: {
+    alignItems: 'center',
+    flex: 1,
+    gap: 4,
+  },
+  barTrack: {
+    justifyContent: 'flex-end',
+    width: BAR_WIDTH,
+  },
+  bar: {
+    width: BAR_WIDTH,
+    borderRadius: 4,
+  },
+  dayLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: Colors.textMuted,
+  },
+  dayLabelToday: {
+    color: '#2D6A4F',
+    fontWeight: '700',
+  },
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface HabitItem {
   id: string;
@@ -69,6 +205,11 @@ export default function HomeScreen() {
     habits: [],
   });
 
+  // Weekly volume state
+  const [weeklyVolume, setWeeklyVolume] = useState<number>(0);
+  const [weeklyBreakdown, setWeeklyBreakdown] = useState<Array<{ date: string; volume: number }>>([]);
+  const [weekRangeLabel, setWeekRangeLabel] = useState<string>('');
+
   // Load habits from REST API instead of SQLite
   const loadHabits = useCallback(async () => {
     if (!currentUser) return;
@@ -97,11 +238,41 @@ export default function HomeScreen() {
     }
   }, [currentUser]);
 
+  const loadWeeklyVolumeData = useCallback(async () => {
+    if (!currentUser) return;
+    try {
+      const now = new Date();
+      const start = getStartOfWeek(now);
+      const end = getEndOfWeek(now);
+      const weekStart = start.toISOString();
+      const weekEnd = end.toISOString();
+      setWeekRangeLabel(formatWeekRange(now));
+      const [total, breakdown] = await Promise.all([
+        getWeeklyVolume(currentUser.id, weekStart, weekEnd),
+        getDailyVolumeBreakdown(currentUser.id, weekStart, weekEnd),
+      ]);
+      setWeeklyVolume(total);
+      // Build a full 7-day breakdown (fill zeros for missing days)
+      const fullBreakdown: Array<{ date: string; volume: number }> = [];
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(start);
+        d.setDate(d.getDate() + i);
+        const dateStr = d.toISOString().split('T')[0];
+        const found = breakdown.find((b) => b.date === dateStr);
+        fullBreakdown.push({ date: dateStr, volume: found?.volume || 0 });
+      }
+      setWeeklyBreakdown(fullBreakdown);
+    } catch (err) {
+      console.error('Failed to load weekly volume:', err);
+    }
+  }, [currentUser]);
+
   useEffect(() => {
     if (currentUser) {
       loadDayData(currentUser.id);
       loadProfile(currentUser.id);
       loadHabits();
+      loadWeeklyVolumeData();
       // Load personalized macro targets from AsyncStorage (saved during onboarding)
       AsyncStorage.getItem('macro_targets').then((raw) => {
         if (raw) {
@@ -127,9 +298,12 @@ export default function HomeScreen() {
   const onRefresh = useCallback(async () => {
     if (!currentUser) return;
     setRefreshing(true);
-    await loadDayData(currentUser.id, selectedDate);
-    await loadProfile(currentUser.id);
-    await loadHabits();
+    await Promise.all([
+      loadDayData(currentUser.id, selectedDate),
+      loadProfile(currentUser.id),
+      loadHabits(),
+      loadWeeklyVolumeData(),
+    ]);
     const raw = await AsyncStorage.getItem('macro_targets');
     if (raw) {
       try { setAsyncTargets(JSON.parse(raw)); } catch {}
@@ -252,6 +426,14 @@ export default function HomeScreen() {
             color="#A78BFA"
           />
         </View>
+      </FadeInView>
+
+      <FadeInView delay={250}>
+        <WeeklyVolumeCard
+          totalVolume={weeklyVolume}
+          weekLabel={weekRangeLabel}
+          breakdown={weeklyBreakdown}
+        />
       </FadeInView>
 
       <FadeInView delay={300}>

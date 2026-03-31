@@ -150,8 +150,8 @@ export const habitsApi = {
 
 export const coachApi = {
   getClients: () => api.get('/coach/clients'),
-  getClientTimeline: (clientId: string) =>
-    api.get(`/coach/clients/${clientId}/timeline`),
+  getClientTimeline: (clientId: string, days?: number) =>
+    api.get(`/coach/clients/${clientId}/timeline${days ? `?days=${days}` : ''}`),
   postGuidelines: (clientId: string, guidelines: string) =>
     api.post(`/coach/guidelines/${clientId}`, { guidelines }),
   getAlerts: () => api.get('/coach/alerts'),

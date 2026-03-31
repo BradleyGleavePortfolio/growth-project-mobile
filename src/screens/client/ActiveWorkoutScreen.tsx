@@ -20,7 +20,9 @@ import { workoutApi } from '../../services/api';
 import {
   searchExercises,
   getAllExercises,
+  logExerciseWithVolume,
 } from '../../db/workoutDb';
+import ExerciseLogModal, { ExerciseLogSaveData } from '../../components/ExerciseLogModal';
 
 interface SessionExercise {
   exerciseId: string;
@@ -174,6 +176,9 @@ export default function ActiveWorkoutScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filteredExercises, setFilteredExercises] = useState<Exercise[]>([]);
   const [selectedMuscle, setSelectedMuscle] = useState('All');
+  const [showLogModal, setShowLogModal] = useState(false);
+  const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
+  const [coachId, setCoachId] = useState<string>('');
 
   useEffect(() => {
     // Parse routine exercises into session format
@@ -196,6 +201,7 @@ export default function ActiveWorkoutScreen() {
       if (raw) {
         const parsed = JSON.parse(raw);
         setUserId(parsed.id);
+        setCoachId(parsed.coachId || '');
       }
     });
   }, []);
@@ -288,15 +294,53 @@ export default function ActiveWorkoutScreen() {
   };
 
   const addExerciseToSession = (exercise: Exercise) => {
+    // Open ExerciseLogModal to capture weight/reps/sets before adding to session
+    setSelectedExercise(exercise);
+    setShowLogModal(true);
+  };
+
+  const handleExerciseLogSave = async (data: ExerciseLogSaveData) => {
+    // Add the exercise to the active session with the logged sets
     setSessionExercises((prev) => [
       ...prev,
       {
-        exerciseId: exercise.id,
-        exerciseName: exercise.name,
-        sets: [{ reps: 10, weight: 0, completed: false }],
+        exerciseId: data.exerciseId,
+        exerciseName: data.exerciseName,
+        sets: data.sets.map((s) => ({
+          reps: s.reps,
+          weight: s.weight,
+          completed: true, // pre-logged sets are already complete
+        })),
       },
     ]);
+
+    // Persist to exercise_logs SQLite table for volume tracking
+    if (userId) {
+      try {
+        await logExerciseWithVolume({
+          userId,
+          coachId,
+          exerciseId: data.exerciseId,
+          exerciseName: data.exerciseName,
+          muscle: data.muscle,
+          sets: data.sets,
+          totalVolume: data.totalVolume,
+          loggedAt: new Date().toISOString(),
+        });
+      } catch (err) {
+        console.error('Failed to persist exercise log:', err);
+      }
+    }
+
+    // Close both the log modal and the add-exercise picker modal
+    setShowLogModal(false);
     setShowAddModal(false);
+    setSelectedExercise(null);
+  };
+
+  const handleExerciseLogClose = () => {
+    setShowLogModal(false);
+    setSelectedExercise(null);
   };
 
   const finishWorkout = () => {
@@ -430,6 +474,14 @@ export default function ActiveWorkoutScreen() {
           <Text style={styles.addExerciseText}>Add Exercise</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Exercise Log Modal — opens after selecting an exercise to capture sets/weight/reps */}
+      <ExerciseLogModal
+        visible={showLogModal}
+        exercise={selectedExercise}
+        onSave={handleExerciseLogSave}
+        onClose={handleExerciseLogClose}
+      />
 
       {/* Add Exercise Modal */}
       <Modal visible={showAddModal} animationType="slide" presentationStyle="pageSheet">

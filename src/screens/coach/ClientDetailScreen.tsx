@@ -22,16 +22,29 @@ import { getMealPlan, parsePlanData, PlanData, PlanDay } from '../../db/mealPlan
 import { getWeightLogsForPeriod } from '../../db/weightLogDb';
 import { getWorkoutSessions, WorkoutSession, SessionExercise } from '../../db/workoutDb';
 import { createNotification } from '../../db/notificationsDb';
+import { coachApi } from '../../services/api';
 import { Colors } from '../../constants/colors';
 import { ClientProfile, FoodLog, WeightLog } from '../../types';
 import { getTodayString, addDays } from '../../utils/date';
+
+// ── Types ────────────────────────────────────────────────────────────────────
+interface WeekSummary {
+  weekStart: string;    // ISO date string (Monday)
+  weekEnd: string;      // ISO date string (Sunday)
+  weekLabel: string;    // e.g. "Mar 24 – Mar 30"
+  totalCalories: number;
+  totalProtein: number;
+  totalWeightMoved: number;
+  latestWeight: number | null;
+  workoutCount: number;
+}
 
 type Props = {
   navigation: NativeStackNavigationProp<ClientsStackParamList, 'ClientDetail'>;
   route: RouteProp<ClientsStackParamList, 'ClientDetail'>;
 };
 
-type TabKey = 'summary' | 'logs' | 'mealplan' | 'progress' | 'workouts' | 'timeline';
+type TabKey = 'summary' | 'logs' | 'mealplan' | 'progress' | 'workouts' | 'timeline' | 'weekly';
 
 interface TimelineEvent {
   id: string;
@@ -56,6 +69,9 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
   const [weightLogs, setWeightLogs] = useState<WeightLog[]>([]);
   const [workoutSessions, setWorkoutSessions] = useState<WorkoutSession[]>([]);
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
+  const [weekSummaries, setWeekSummaries] = useState<WeekSummary[]>([]);
+  const [selectedDays, setSelectedDays] = useState<7 | 30 | 90>(90);
+  const [expandedWeeks, setExpandedWeeks] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [notifMsg, setNotifMsg] = useState('');
@@ -100,10 +116,13 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
   }, []);
 
   useEffect(() => {
-    if (activeTab === 'timeline' && timeline.length === 0) {
+    if (activeTab === 'timeline') {
       loadTimeline();
     }
-  }, [activeTab]);
+    if (activeTab === 'weekly') {
+      loadWeeklySummaries();
+    }
+  }, [activeTab, selectedDays]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -137,19 +156,18 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
     { key: 'mealplan', label: 'Plan', icon: 'calendar-outline' },
     { key: 'progress', label: 'Progress', icon: 'trending-up-outline' },
     { key: 'timeline', label: 'Timeline', icon: 'time-outline' },
+    { key: 'weekly', label: 'Weekly', icon: 'stats-chart-outline' },
   ];
 
   const loadTimeline = useCallback(async () => {
     try {
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 30);
       const events: TimelineEvent[] = [];
+      const daysToLoad = selectedDays;
 
-      // Food logs (last 30 days, grouped by date)
-      const today = getTodayString();
-      let dayOffset = 0;
+      // Food logs (grouped by date)
       const foodDates = new Set<string>();
-      while (dayOffset < 30) {
+      let dayOffset = 0;
+      while (dayOffset < daysToLoad) {
         const d = new Date();
         d.setDate(d.getDate() - dayOffset);
         const dateStr = d.toISOString().split('T')[0];
@@ -173,8 +191,8 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
       }
 
       // Weight logs
-      const wLogs = await getWeightLogsForPeriod(clientId, 30);
-      for (const w of wLogs.slice(0, 20)) {
+      const wLogs = await getWeightLogsForPeriod(clientId, daysToLoad);
+      for (const w of wLogs) {
         events.push({
           id: `weight_${w.id}`,
           type: 'weight',
@@ -187,7 +205,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
       }
 
       // Workout sessions
-      const wSessions = await getWorkoutSessions(clientId, 20);
+      const wSessions = await getWorkoutSessions(clientId, 50);
       for (const s of wSessions) {
         if (!s.completed) continue;
         events.push({
@@ -203,7 +221,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
 
       // Fasting sessions
       const fSessions = await getFastingHistory(clientId);
-      for (const f of fSessions.slice(0, 10)) {
+      for (const f of fSessions.slice(0, 20)) {
         if (!f.completed) continue;
         events.push({
           id: `fast_${f.id}`,
@@ -218,11 +236,123 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
 
       // Sort by date DESC
       events.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-      setTimeline(events.slice(0, 60));
+      setTimeline(events);
     } catch (err) {
       console.warn('loadTimeline error:', err);
     }
-  }, [clientId]);
+  }, [clientId, selectedDays]);
+
+  // ── Weekly Summary ────────────────────────────────────────────────────────────
+  const loadWeeklySummaries = useCallback(async () => {
+    try {
+      // Use the backend API to get timeline data for the selected period
+      const res = await coachApi.getClientTimeline(clientId, selectedDays);
+      const data = res.data;
+
+      if (data.error) return;
+
+      const { meals, workouts, weights } = data;
+
+      // Helper: get Monday of the week for a given date string
+      const getMondayOf = (dateStr: string): string => {
+        const d = new Date(dateStr + 'T00:00:00');
+        const day = d.getDay();
+        const diff = day === 0 ? -6 : 1 - day;
+        d.setDate(d.getDate() + diff);
+        return d.toISOString().split('T')[0];
+      };
+
+      const getSundayOf = (mondayStr: string): string => {
+        const d = new Date(mondayStr + 'T00:00:00');
+        d.setDate(d.getDate() + 6);
+        return d.toISOString().split('T')[0];
+      };
+
+      const formatWeekLabel = (startStr: string, endStr: string): string => {
+        const start = new Date(startStr + 'T00:00:00');
+        const end = new Date(endStr + 'T00:00:00');
+        const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        return `${fmt(start)} – ${fmt(end)}`;
+      };
+
+      // Build a map of weekStart -> WeekSummary
+      const weekMap = new Map<string, WeekSummary>();
+
+      const ensureWeek = (dateStr: string): WeekSummary => {
+        const monday = getMondayOf(dateStr);
+        if (!weekMap.has(monday)) {
+          const sunday = getSundayOf(monday);
+          weekMap.set(monday, {
+            weekStart: monday,
+            weekEnd: sunday,
+            weekLabel: formatWeekLabel(monday, sunday),
+            totalCalories: 0,
+            totalProtein: 0,
+            totalWeightMoved: 0,
+            latestWeight: null,
+            workoutCount: 0,
+          });
+        }
+        return weekMap.get(monday)!;
+      };
+
+      // Aggregate food logs
+      if (Array.isArray(meals)) {
+        for (const meal of meals) {
+          const dateStr = (meal.logged_at || meal.date || '').slice(0, 10);
+          if (!dateStr) continue;
+          const week = ensureWeek(dateStr);
+          week.totalCalories += meal.calories || meal.food_item?.calories || 0;
+          week.totalProtein += meal.protein || meal.food_item?.protein || 0;
+        }
+      }
+
+      // Aggregate workout sessions
+      if (Array.isArray(workouts)) {
+        for (const session of workouts) {
+          const dateStr = (session.created_at || session.date || '').slice(0, 10);
+          if (!dateStr) continue;
+          const week = ensureWeek(dateStr);
+          week.workoutCount += 1;
+          // Sum volume from exercises
+          if (Array.isArray(session.exercises)) {
+            for (const ex of session.exercises) {
+              const sets = ex.sets || [];
+              if (Array.isArray(sets)) {
+                for (const set of sets) {
+                  if (set.completed) {
+                    week.totalWeightMoved += (set.weight || 0) * (set.reps || 0);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Latest weight per week
+      if (Array.isArray(weights)) {
+        for (const w of weights) {
+          const dateStr = (w.date || '').slice(0, 10);
+          if (!dateStr) continue;
+          const week = ensureWeek(dateStr);
+          // weights are ordered desc, so first one per week is the latest
+          if (week.latestWeight === null) {
+            week.latestWeight = w.weight_lbs || w.weight || null;
+          }
+        }
+      }
+
+      // Sort weeks newest first
+      const sorted = Array.from(weekMap.values()).sort(
+        (a, b) => new Date(b.weekStart).getTime() - new Date(a.weekStart).getTime()
+      );
+
+      setWeekSummaries(sorted);
+    } catch (err) {
+      console.warn('loadWeeklySummaries error:', err);
+    }
+  }, [clientId, selectedDays]);
 
   const SLOT_LABELS = ['Breakfast', 'Lunch', 'Dinner', 'Snacks'] as const;
   const SLOT_KEYS = ['breakfast', 'lunch', 'dinner', 'snacks'] as const;
@@ -547,27 +677,130 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
         )}
 
         {activeTab === 'timeline' && (
-          <TimelineTab
-            events={timeline}
-            onLoad={loadTimeline}
-          />
+          <>
+            {/* Date Range Selector */}
+            <DateRangeSelector
+              selectedDays={selectedDays}
+              onSelect={(d) => {
+                setSelectedDays(d);
+                setTimeline([]);
+              }}
+            />
+            <TimelineTab
+              events={timeline}
+              onLoad={loadTimeline}
+              days={selectedDays}
+            />
+          </>
+        )}
+
+        {activeTab === 'weekly' && (
+          <>
+            {/* Date Range Selector */}
+            <DateRangeSelector
+              selectedDays={selectedDays}
+              onSelect={(d) => {
+                setSelectedDays(d);
+                setWeekSummaries([]);
+              }}
+            />
+            <WeeklySummaryTab
+              summaries={weekSummaries}
+              days={selectedDays}
+              expandedWeeks={expandedWeeks}
+              onToggleWeek={(weekStart) => {
+                setExpandedWeeks((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(weekStart)) {
+                    next.delete(weekStart);
+                  } else {
+                    next.add(weekStart);
+                  }
+                  return next;
+                });
+              }}
+            />
+          </>
         )}
       </ScrollView>
     </View>
   );
 }
 
+// ── Date Range Selector ───────────────────────────────────────────────────
+
+function DateRangeSelector({
+  selectedDays,
+  onSelect,
+}: {
+  selectedDays: 7 | 30 | 90;
+  onSelect: (days: 7 | 30 | 90) => void;
+}) {
+  const options: { label: string; value: 7 | 30 | 90 }[] = [
+    { label: '7 days', value: 7 },
+    { label: '30 days', value: 30 },
+    { label: '90 days', value: 90 },
+  ];
+  return (
+    <View style={drStyles.row}>
+      {options.map((opt) => (
+        <TouchableOpacity
+          key={opt.value}
+          style={[
+            drStyles.chip,
+            selectedDays === opt.value && drStyles.chipActive,
+          ]}
+          onPress={() => onSelect(opt.value)}
+        >
+          <Text
+            style={[
+              drStyles.chipText,
+              selectedDays === opt.value && drStyles.chipTextActive,
+            ]}
+          >
+            {opt.label}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+}
+
+const drStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+  },
+  chip: {
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  chipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  chipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  chipTextActive: {
+    color: '#fff',
+  },
+});
+
 // ── Timeline Tab Component ───────────────────────────────────────────────
 
-function TimelineTab({ events, onLoad }: { events: TimelineEvent[]; onLoad: () => void }) {
-  const [loaded, setLoaded] = React.useState(false);
-
+function TimelineTab({ events, onLoad, days }: { events: TimelineEvent[]; onLoad: () => void; days: number }) {
   React.useEffect(() => {
-    if (!loaded) {
-      onLoad();
-      setLoaded(true);
-    }
-  }, []);
+    onLoad();
+  }, [days]);
 
   const formatDate = (dateStr: string): string => {
     const d = new Date(dateStr);
@@ -583,14 +816,14 @@ function TimelineTab({ events, onLoad }: { events: TimelineEvent[]; onLoad: () =
     return (
       <View style={tlStyles.empty}>
         <Ionicons name="time-outline" size={40} color={Colors.textMuted} />
-        <Text style={tlStyles.emptyText}>No activity in the last 30 days</Text>
+        <Text style={tlStyles.emptyText}>No activity in the last {days} days</Text>
       </View>
     );
   }
 
   return (
     <View style={tlStyles.container}>
-      <Text style={tlStyles.header}>Activity Timeline</Text>
+      <Text style={tlStyles.header}>Activity — Last {days} Days</Text>
       {events.map((event, idx) => (
         <View key={event.id} style={tlStyles.eventRow}>
           {/* Left column: icon + line */}
@@ -676,6 +909,246 @@ const tlStyles = StyleSheet.create({
     color: Colors.textMuted,
     marginTop: 3,
     fontWeight: '600',
+  },
+});
+
+// ── Weekly Summary Tab Component ──────────────────────────────────────────────
+
+function WeeklySummaryTab({
+  summaries,
+  days,
+  expandedWeeks,
+  onToggleWeek,
+}: {
+  summaries: WeekSummary[];
+  days: number;
+  expandedWeeks: Set<string>;
+  onToggleWeek: (weekStart: string) => void;
+}) {
+  if (summaries.length === 0) {
+    return (
+      <View style={wsStyles.empty}>
+        <Ionicons name="stats-chart-outline" size={40} color={Colors.textMuted} />
+        <Text style={wsStyles.emptyText}>No data in the last {days} days</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={wsStyles.container}>
+      <Text style={wsStyles.header}>Week-by-Week Summary — Last {days} Days</Text>
+      {summaries.map((week) => {
+        const isExpanded = expandedWeeks.has(week.weekStart);
+        return (
+          <TouchableOpacity
+            key={week.weekStart}
+            style={wsStyles.card}
+            onPress={() => onToggleWeek(week.weekStart)}
+            activeOpacity={0.85}
+          >
+            {/* Card Header */}
+            <View style={wsStyles.cardHeader}>
+              <View style={wsStyles.cardHeaderLeft}>
+                <Text style={wsStyles.weekLabel}>{week.weekLabel}</Text>
+                <View style={wsStyles.pillRow}>
+                  {week.workoutCount > 0 && (
+                    <View style={wsStyles.pill}>
+                      <Ionicons name="barbell" size={10} color={Colors.primary} />
+                      <Text style={wsStyles.pillText}>{week.workoutCount} workout{week.workoutCount !== 1 ? 's' : ''}</Text>
+                    </View>
+                  )}
+                  {week.latestWeight !== null && (
+                    <View style={[wsStyles.pill, wsStyles.pillGrey]}>
+                      <Ionicons name="scale" size={10} color={Colors.textSecondary} />
+                      <Text style={[wsStyles.pillText, { color: Colors.textSecondary }]}>{week.latestWeight} lbs</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+              <Ionicons
+                name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                size={18}
+                color={Colors.textMuted}
+              />
+            </View>
+
+            {/* Quick stats row (always visible) */}
+            <View style={wsStyles.statsRow}>
+              <View style={wsStyles.statBox}>
+                <Text style={wsStyles.statValue}>{Math.round(week.totalCalories).toLocaleString()}</Text>
+                <Text style={wsStyles.statLabel}>kcal eaten</Text>
+              </View>
+              <View style={[wsStyles.statBox, wsStyles.statBoxMiddle]}>
+                <Text style={[wsStyles.statValue, { color: Colors.protein }]}>{Math.round(week.totalProtein)}g</Text>
+                <Text style={wsStyles.statLabel}>protein</Text>
+              </View>
+              <View style={wsStyles.statBox}>
+                <Text style={[wsStyles.statValue, { color: Colors.accent }]}>
+                  {week.totalWeightMoved > 0 ? `${Math.round(week.totalWeightMoved).toLocaleString()}` : '—'}
+                </Text>
+                <Text style={wsStyles.statLabel}>vol (lbs)</Text>
+              </View>
+            </View>
+
+            {/* Expanded detail */}
+            {isExpanded && (
+              <View style={wsStyles.expandedSection}>
+                <View style={wsStyles.divider} />
+                <View style={wsStyles.detailRow}>
+                  <Ionicons name="flame-outline" size={14} color={Colors.warning} />
+                  <Text style={wsStyles.detailLabel}>Total Calories</Text>
+                  <Text style={wsStyles.detailValue}>{Math.round(week.totalCalories).toLocaleString()} kcal</Text>
+                </View>
+                <View style={wsStyles.detailRow}>
+                  <Ionicons name="nutrition-outline" size={14} color={Colors.protein} />
+                  <Text style={wsStyles.detailLabel}>Total Protein</Text>
+                  <Text style={wsStyles.detailValue}>{Math.round(week.totalProtein)}g</Text>
+                </View>
+                <View style={wsStyles.detailRow}>
+                  <Ionicons name="barbell-outline" size={14} color={Colors.primary} />
+                  <Text style={wsStyles.detailLabel}>Workouts</Text>
+                  <Text style={wsStyles.detailValue}>{week.workoutCount}</Text>
+                </View>
+                <View style={wsStyles.detailRow}>
+                  <Ionicons name="trending-up-outline" size={14} color={Colors.accent} />
+                  <Text style={wsStyles.detailLabel}>Weight Moved</Text>
+                  <Text style={wsStyles.detailValue}>
+                    {week.totalWeightMoved > 0 ? `${Math.round(week.totalWeightMoved).toLocaleString()} lbs` : 'N/A'}
+                  </Text>
+                </View>
+                <View style={wsStyles.detailRow}>
+                  <Ionicons name="scale-outline" size={14} color={Colors.info} />
+                  <Text style={wsStyles.detailLabel}>Weight Logged</Text>
+                  <Text style={wsStyles.detailValue}>
+                    {week.latestWeight !== null ? `${week.latestWeight} lbs` : 'Not logged'}
+                  </Text>
+                </View>
+              </View>
+            )}
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
+const wsStyles = StyleSheet.create({
+  container: {
+    paddingHorizontal: 20,
+    paddingTop: 4,
+    paddingBottom: 24,
+  },
+  header: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    marginBottom: 14,
+  },
+  empty: {
+    paddingVertical: 48,
+    alignItems: 'center',
+    gap: 12,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: Colors.textMuted,
+    textAlign: 'center',
+  },
+  card: {
+    backgroundColor: Colors.surface,
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  cardHeaderLeft: {
+    flex: 1,
+    gap: 4,
+  },
+  weekLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  pillRow: {
+    flexDirection: 'row',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.primaryPale,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  pillGrey: {
+    backgroundColor: Colors.surfaceElevated,
+  },
+  pillText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  statBox: {
+    flex: 1,
+    backgroundColor: Colors.background,
+    borderRadius: 10,
+    padding: 10,
+    alignItems: 'center',
+  },
+  statBoxMiddle: {
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: Colors.divider,
+    borderRadius: 0,
+  },
+  statValue: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+  },
+  statLabel: {
+    fontSize: 10,
+    color: Colors.textMuted,
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  expandedSection: {
+    marginTop: 12,
+    gap: 8,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: Colors.divider,
+    marginBottom: 8,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  detailLabel: {
+    flex: 1,
+    fontSize: 13,
+    color: Colors.textSecondary,
+  },
+  detailValue: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.textPrimary,
   },
 });
 
