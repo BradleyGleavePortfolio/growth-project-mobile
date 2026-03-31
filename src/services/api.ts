@@ -4,12 +4,15 @@
 
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { authEvents } from '../utils/authEvents';
 
-const API_BASE = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000/api';
+// Hardcoded — EXPO_PUBLIC_ env vars require the .env to be present on the build machine.
+// Hardcoding is safer for EAS cloud builds.
+const API_BASE = 'https://backend-spring-lake-3890.fly.dev/api';
 
 const api = axios.create({
   baseURL: API_BASE,
-  timeout: 15000,
+  timeout: 30000, // 30sec — Fly.io free tier cold start can take up to 25sec
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -25,10 +28,20 @@ api.interceptors.request.use(async (config) => {
 // Global error handler
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
     if (error.response?.status === 401) {
-      // Token expired — clear storage and let app handle redirect
-      AsyncStorage.removeItem('supabase_token');
+      // Token expired — clear ALL auth keys and emit logout
+      await Promise.all([
+        AsyncStorage.removeItem('supabase_token'),
+        AsyncStorage.removeItem('user_data'),
+        AsyncStorage.removeItem('needs_role_selection'),
+        AsyncStorage.removeItem('onboarding_complete'),
+      ]);
+      authEvents.emit('logout');
+    }
+    if (!error.response) {
+      // Network error — no response from server
+      error.message = 'Cannot reach server. Please check your connection and try again.';
     }
     return Promise.reject(error);
   },

@@ -198,8 +198,13 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
   },
   section: {
-    paddingHorizontal: 24,
-    marginBottom: 28,
+    backgroundColor: Colors.surface,
+    borderRadius: 14,
+    marginHorizontal: 16,
+    marginBottom: 20,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   sectionTitle: {
     fontSize: 17,

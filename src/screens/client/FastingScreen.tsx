@@ -12,9 +12,8 @@ import {
 import Svg, { Circle, Path } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { useAuthStore } from '../../store/authStore';
-import { useFastingStore } from '../../store/fastingStore';
-import { getFastingStreak, getFastingStats } from '../../db/fastingDb';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { fastingApi } from '../../services/api';
 import { Colors } from '../../constants/colors';
 import EmptyState from '../../components/EmptyState';
 import FadeInView from '../../components/FadeInView';
@@ -55,37 +54,78 @@ function polarToCartesian(cx: number, cy: number, r: number, angleDeg: number) {
   return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
 }
 
-export default function FastingScreen() {
-  const { currentUser } = useAuthStore();
-  const {
-    activeFast,
-    selectedProtocol,
-    history,
-    loadActiveFast,
-    startFast,
-    endFast,
-    loadHistory,
-    setProtocol,
-  } = useFastingStore();
+interface FastSession {
+  id: string;
+  startTime: string;
+  endTime?: string;
+  targetHours: number;
+  completed: boolean;
+}
 
+export default function FastingScreen() {
+  const currentUser = useCurrentUser();
+
+  const [activeFast, setActiveFast] = useState<FastSession | null>(null);
+  const [selectedProtocol, setSelectedProtocol] = useState(16);
+  const [history, setHistory] = useState<FastSession[]>([]);
   const [elapsed, setElapsed] = useState(0);
   const [streak, setStreak] = useState(0);
   const [stats, setStats] = useState({ longestHours: 0, averageHours: 0, totalCompleted: 0 });
   const [refreshing, setRefreshing] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const userId = currentUser?.id || '';
-  const coachId = currentUser?.coachId || currentUser?.id || '';
+  const setProtocol = (hours: number) => setSelectedProtocol(hours);
 
   const loadAll = useCallback(async () => {
-    if (!userId) return;
-    await loadActiveFast(userId);
-    await loadHistory(userId);
-    const s = await getFastingStreak(userId);
-    setStreak(s);
-    const st = await getFastingStats(userId);
-    setStats(st);
-  }, [userId]);
+    if (!currentUser) return;
+    try {
+      const histRes = await fastingApi.getHistory(50);
+      const sessions: FastSession[] = (histRes.data || []).map((s: any) => ({
+        id: s.id,
+        startTime: s.start_time || s.startTime,
+        endTime: s.end_time || s.endTime,
+        targetHours: s.target_hours || s.targetHours || 16,
+        completed: s.completed ?? (s.end_time != null),
+      }));
+
+      // Find active fast (no end time)
+      const active = sessions.find((s) => !s.endTime) || null;
+      setActiveFast(active);
+
+      // History = completed fasts
+      const completed = sessions.filter((s) => s.endTime);
+      setHistory(completed);
+
+      // Compute stats from completed sessions
+      if (completed.length > 0) {
+        const hours = completed.map((s) => {
+          const startMs = new Date(s.startTime).getTime();
+          const endMs = new Date(s.endTime!).getTime();
+          return (endMs - startMs) / (1000 * 60 * 60);
+        });
+        const longestHours = Math.max(...hours);
+        const averageHours = hours.reduce((a, b) => a + b, 0) / hours.length;
+        setStats({ longestHours, averageHours, totalCompleted: completed.filter((s) => s.completed).length });
+      }
+
+      // Compute streak from consecutive days with completed fasts
+      let s = 0;
+      const now = new Date();
+      for (let i = 0; i < 60; i++) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i);
+        const dateStr = d.toISOString().split('T')[0];
+        if (completed.some((f) => f.startTime.startsWith(dateStr))) {
+          s++;
+        } else if (i > 0) {
+          break;
+        }
+      }
+      setStreak(s);
+    } catch (err) {
+      console.error('loadAll fasting error:', err);
+    }
+  }, [currentUser]);
 
   useEffect(() => {
     loadAll();
@@ -115,16 +155,29 @@ export default function FastingScreen() {
   }, [activeFast]);
 
   const handleStart = async () => {
-    if (!userId) return;
+    if (!currentUser) return;
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    await startFast(userId, coachId, selectedProtocol);
-    const endTime = new Date(Date.now() + selectedProtocol * 60 * 60 * 1000);
-    await scheduleFastingAlert(endTime);
+    try {
+      await fastingApi.start({ protocol: `${selectedProtocol}:${24 - selectedProtocol}` });
+      const endTime = new Date(Date.now() + selectedProtocol * 60 * 60 * 1000);
+      await scheduleFastingAlert(endTime);
+    } catch (err) {
+      console.error('Start fast error:', err);
+    }
+    loadAll();
+  };
+
+  const doEndFast = async () => {
+    try {
+      await fastingApi.end();
+    } catch (err) {
+      console.error('End fast error:', err);
+    }
     loadAll();
   };
 
   const handleEnd = async () => {
-    if (!userId || !activeFast) return;
+    if (!currentUser || !activeFast) return;
     const elapsedHours = elapsed / (1000 * 60 * 60);
     const pctDone = (elapsedHours / activeFast.targetHours) * 100;
     if (pctDone < 50) {
@@ -138,8 +191,7 @@ export default function FastingScreen() {
             style: 'destructive',
             onPress: async () => {
               await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-              await endFast(userId);
-              loadAll();
+              await doEndFast();
             },
           },
         ]
@@ -147,8 +199,7 @@ export default function FastingScreen() {
       return;
     }
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    await endFast(userId);
-    loadAll();
+    await doEndFast();
   };
 
   // Timer progress

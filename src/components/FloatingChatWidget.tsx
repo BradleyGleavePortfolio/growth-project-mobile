@@ -71,7 +71,7 @@ export default function FloatingChatWidget() {
     } catch (error) {
       const errorMessage: Message = {
         role: 'assistant',
-        content: 'GP is taking a break. Try again in a moment.',
+        content: 'GP is offline right now. Check your connection and try again.',
         timestamp: new Date(),
       };
       setMessages(prev => [...prev, errorMessage]);
@@ -86,8 +86,8 @@ export default function FloatingChatWidget() {
 
   return (
     <>
-      {/* Floating button */}
-      <TouchableOpacity style={styles.fab} onPress={openChat} activeOpacity={0.85}>
+      {/* Floating GP button — hidden when chat modal is open */}
+      <TouchableOpacity style={[styles.fab, isOpen && styles.fabHidden]} onPress={openChat} activeOpacity={0.85}>
         <Text style={styles.fabText}>GP</Text>
       </TouchableOpacity>
 
@@ -219,6 +219,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...Shadow.button,
     zIndex: 1000,
+  },
+  fabHidden: {
+    display: 'none',
   },
   fabText: {
     color: Colors.white,

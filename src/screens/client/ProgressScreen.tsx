@@ -13,18 +13,12 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle, G, Polyline, Line as SvgLine, Text as SvgText } from 'react-native-svg';
-import { useAuthStore } from '../../store/authStore';
-import {
-  getWeightLogs,
-  addWeightLog,
-  getWeightLogsForPeriod,
-  getAllWeightLogs,
-} from '../../db/weightLogDb';
-import { getDailyTotals } from '../../db/foodLogDb';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { weightApi, logApi } from '../../services/api';
 import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../../constants/colors';
 import { WeightLog } from '../../types';
-import { getTodayString, generateId } from '../../utils/date';
+import { getTodayString } from '../../utils/date';
 import FadeInView from '../../components/FadeInView';
 
 type Period = '7D' | '30D' | '90D' | 'All';
@@ -170,9 +164,10 @@ function CalorieRing({
 }
 
 export default function ProgressScreen() {
-  const { currentUser, clientProfile } = useAuthStore();
   const navigation = useNavigation<any>();
 
+  const [userId, setUserId] = useState<string | null>(null);
+  const [macroTargets, setMacroTargets] = useState<any>(null);
   const [weightLogs, setWeightLogs] = useState<WeightLog[]>([]);
   const [period, setPeriod] = useState<Period>('30D');
   const [showLogModal, setShowLogModal] = useState(false);
@@ -182,37 +177,69 @@ export default function ProgressScreen() {
   const [loggingStreak, setLoggingStreak] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
 
+  useEffect(() => {
+    AsyncStorage.getItem('user_data').then((raw) => {
+      if (raw) setUserId(JSON.parse(raw).id);
+    });
+    AsyncStorage.getItem('macro_targets').then((raw) => {
+      if (raw) setMacroTargets(JSON.parse(raw));
+    });
+  }, []);
+
   const loadData = useCallback(async () => {
-    if (!currentUser) return;
+    if (!userId) return;
 
     const periodDays: Record<Period, number | null> = { '7D': 7, '30D': 30, '90D': 90, All: null };
-    const days = periodDays[period];
+    const days = periodDays[period] || 365;
 
-    const logs = days
-      ? await getWeightLogsForPeriod(currentUser.id, days)
-      : await getAllWeightLogs(currentUser.id);
-    setWeightLogs(logs);
+    try {
+      const res = await weightApi.getHistory(days);
+      const logs: WeightLog[] = (res.data || []).map((w: any) => ({
+        id: w.id,
+        userId: w.user_id || userId,
+        coachId: '',
+        date: (w.date || w.created_at || '').split('T')[0],
+        weight: w.weight_lbs || w.weight,
+        unit: 'lbs',
+        notes: w.notes || '',
+      }));
+      // Sort by date ascending
+      logs.sort((a, b) => a.date.localeCompare(b.date));
+      setWeightLogs(logs);
 
-    const today = getTodayString();
-    const totals = await getDailyTotals(currentUser.id, today);
-    setTodayMacros(totals);
-
-    // Calculate logging streak from recent logs
-    const recentLogs = await getWeightLogs(currentUser.id, 60);
-    let streak = 0;
-    const now = new Date();
-    for (let i = 0; i < 60; i++) {
-      const d = new Date(now);
-      d.setDate(d.getDate() - i);
-      const dateStr = d.toISOString().split('T')[0];
-      if (recentLogs.some((l) => l.date === dateStr)) {
-        streak++;
-      } else if (i > 0) {
-        break;
+      // Calculate logging streak
+      let streak = 0;
+      const now = new Date();
+      for (let i = 0; i < 60; i++) {
+        const d = new Date(now);
+        d.setDate(d.getDate() - i);
+        const dateStr = d.toISOString().split('T')[0];
+        if (logs.some((l) => l.date === dateStr)) {
+          streak++;
+        } else if (i > 0) {
+          break;
+        }
       }
+      setLoggingStreak(streak);
+    } catch (err) {
+      console.error('loadWeightData error:', err);
     }
-    setLoggingStreak(streak);
-  }, [currentUser, period]);
+
+    // Load today's macros from API
+    try {
+      const today = getTodayString();
+      const dailyRes = await logApi.getDaily(today);
+      const data = dailyRes.data;
+      setTodayMacros({
+        calories: data.total_calories || 0,
+        protein: data.total_protein_g || 0,
+        carbs: data.total_carbs_g || 0,
+        fat: data.total_fat_g || 0,
+      });
+    } catch (err) {
+      console.error('loadTodayMacros error:', err);
+    }
+  }, [userId, period]);
 
   useEffect(() => {
     loadData();
@@ -225,68 +252,55 @@ export default function ProgressScreen() {
   }, [loadData]);
 
   const handleLogWeight = async () => {
-    if (!currentUser || !newWeight) return;
+    if (!newWeight) return;
     const w = parseFloat(newWeight);
     if (isNaN(w) || w <= 0) {
       Alert.alert('Invalid weight', 'Please enter a valid number.');
       return;
     }
-    await addWeightLog({
-      userId: currentUser.id,
-      coachId: currentUser.coachId || currentUser.id,
-      date: getTodayString(),
-      weight: w,
-      unit: 'lbs',
-      notes: newNotes || undefined,
-    });
+    try {
+      await weightApi.log({
+        weight_lbs: w,
+        date: getTodayString(),
+        notes: newNotes || undefined,
+      });
+    } catch (err) {
+      console.error('Log weight error:', err);
+    }
     setNewWeight('');
     setNewNotes('');
     setShowLogModal(false);
     loadData();
   };
 
-  const latestWeight = weightLogs.length > 0 ? weightLogs[weightLogs.length - 1].weight : clientProfile?.currentWeight;
-  const startWeight = clientProfile?.currentWeight;
-  const goalWeight = clientProfile?.targetWeight;
+  const latestWeight = weightLogs.length > 0 ? weightLogs[weightLogs.length - 1].weight : null;
+  const startWeight = weightLogs.length > 0 ? weightLogs[0].weight : null;
+  const goalWeight = macroTargets?.goalWeight || null;
   const change = latestWeight && startWeight ? latestWeight - startWeight : null;
 
-  // BMI calculation — height is stored in cm, convert to inches for the 703 formula
-  const heightCm = clientProfile?.height;
-  const heightInches = heightCm ? heightCm / 2.54 : null;
-  const bmi = latestWeight && heightInches && heightInches > 0
-    ? ((latestWeight / (heightInches * heightInches)) * 703)
-    : null;
-  const bmiCategory = bmi
-    ? bmi < 18.5 ? 'Underweight'
-      : bmi < 25 ? 'Normal'
-      : bmi < 30 ? 'Overweight'
-      : 'Obese'
-    : null;
-  const bmiColor = bmi
-    ? bmi < 18.5 ? Colors.water
-      : bmi < 25 ? Colors.success
-      : bmi < 30 ? Colors.warning
-      : Colors.error
-    : Colors.textMuted;
+  // BMI calculation — no height stored in macroTargets currently
+  const bmi: number | null = null;
+  const bmiCategory: string | null = null;
+  const bmiColor = Colors.textMuted;
 
   // Macro adherence
   const macroData = [
     {
       label: 'P',
       actual: todayMacros.protein,
-      target: clientProfile?.proteinTarget || 0,
+      target: macroTargets?.protein || 0,
       color: Colors.protein,
     },
     {
       label: 'C',
       actual: todayMacros.carbs,
-      target: clientProfile?.carbTarget || 0,
+      target: macroTargets?.carbs || 0,
       color: Colors.carbs,
     },
     {
       label: 'F',
       actual: todayMacros.fat,
-      target: clientProfile?.fatTarget || 0,
+      target: macroTargets?.fat || 0,
       color: Colors.fat,
     },
   ];
@@ -337,7 +351,7 @@ export default function ProgressScreen() {
           <View style={styles.ringCard}>
             <CalorieRing
               eaten={todayMacros.calories}
-              target={clientProfile?.calorieTarget || 2000}
+              target={macroTargets?.calories || 2000}
             />
             <View style={styles.ringMacros}>
               {macroData.map((m) => {
@@ -476,31 +490,10 @@ export default function ProgressScreen() {
                 <Text style={[styles.bodyStatSub, { color: bmiColor }]}>{bmiCategory}</Text>
               </View>
             )}
-            {heightCm && heightInches && (() => {
-              const totalIn = Math.round(heightInches);
-              const ft = Math.floor(totalIn / 12);
-              const inR = totalIn % 12;
-              return (
-                <View style={styles.bodyStatCard}>
-                  <Text style={styles.bodyStatValue}>
-                    {ft}'{inR}"
-                  </Text>
-                  <Text style={styles.bodyStatLabel}>Height</Text>
-                </View>
-              );
-            })()}
-            {clientProfile?.tdee && (
+            {macroTargets?.tdee && (
               <View style={styles.bodyStatCard}>
-                <Text style={styles.bodyStatValue}>{Math.round(clientProfile.tdee)}</Text>
+                <Text style={styles.bodyStatValue}>{Math.round(macroTargets.tdee)}</Text>
                 <Text style={styles.bodyStatLabel}>TDEE</Text>
-              </View>
-            )}
-            {clientProfile?.activityLevel && (
-              <View style={styles.bodyStatCard}>
-                <Text style={styles.bodyStatValue}>
-                  {clientProfile.activityLevel.replace('_', ' ')}
-                </Text>
-                <Text style={styles.bodyStatLabel}>Activity</Text>
               </View>
             )}
           </View>

@@ -2,8 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet, TouchableOpacity } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { OnboardingStackParamList } from '../../navigation/OnboardingNavigator';
-import { useAuthStore } from '../../store/authStore';
-import { updateProfile } from '../../db/profileDb';
+import { saveOnboardingData } from '../../utils/onboardingStore';
 import OnboardingLayout from '../../components/OnboardingLayout';
 import { feetInchesToCm } from '../../utils/nutrition';
 import { Colors } from '../../constants/colors';
@@ -13,7 +12,6 @@ type Props = {
 };
 
 export default function OnboardingStep2({ navigation }: Props) {
-  const { currentUser } = useAuthStore();
   const [weightUnit, setWeightUnit] = useState<'lbs' | 'kg'>('lbs');
   const [heightUnit, setHeightUnit] = useState<'imperial' | 'metric'>('imperial');
   const [currentWeight, setCurrentWeight] = useState('');
@@ -29,7 +27,7 @@ export default function OnboardingStep2({ navigation }: Props) {
   );
 
   const handleContinue = async () => {
-    if (!canContinue || !currentUser) return;
+    if (!canContinue) return;
 
     let weightLbs = parseFloat(currentWeight);
     let goalLbs = parseFloat(goalWeight);
@@ -45,7 +43,7 @@ export default function OnboardingStep2({ navigation }: Props) {
       heightCm = parseFloat(cm);
     }
 
-    await updateProfile(currentUser.id, {
+    await saveOnboardingData({
       currentWeight: Math.round(weightLbs),
       targetWeight: Math.round(goalLbs),
       height: Math.round(heightCm * 10) / 10,

@@ -12,18 +12,25 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { useAuthStore } from '../../store/authStore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/colors';
-import {
-  RoutineExercise,
-  Exercise,
-  createRoutine,
-  updateRoutine,
-  deleteRoutine,
-  getRoutines,
-  getAllExercises,
-  WorkoutRoutine,
-} from '../../db/workoutDb';
+import { workoutApi } from '../../services/api';
+import { getAllExercises } from '../../db/workoutDb';
+
+interface RoutineExercise {
+  exerciseId: string;
+  exerciseName: string;
+  sets: number;
+  reps: number;
+  restSec: number;
+}
+
+interface Exercise {
+  id: string;
+  name: string;
+  muscle: string;
+  equipment: string;
+}
 
 type RouteParams = {
   RoutineBuilder: { routineId?: string };
@@ -34,9 +41,9 @@ const MUSCLES = ['All', 'chest', 'back', 'shoulders', 'legs', 'biceps', 'triceps
 export default function RoutineBuilderScreen() {
   const route = useRoute<RouteProp<RouteParams, 'RoutineBuilder'>>();
   const navigation = useNavigation<any>();
-  const { currentUser } = useAuthStore();
   const routineId = route.params?.routineId;
 
+  const [userId, setUserId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [exercises, setExercises] = useState<RoutineExercise[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -46,16 +53,32 @@ export default function RoutineBuilderScreen() {
   const [selectedMuscle, setSelectedMuscle] = useState('All');
 
   useEffect(() => {
-    if (routineId && currentUser) {
-      getRoutines(currentUser.id).then((routines) => {
-        const routine = routines.find((r) => r.id === routineId);
+    AsyncStorage.getItem('user_data').then((raw) => {
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        setUserId(parsed.id);
+      }
+    });
+  }, []);
+
+  useEffect(() => {
+    if (routineId) {
+      workoutApi.getRoutines().then((res) => {
+        const routine = res.data.find((r: any) => r.id === routineId);
         if (routine) {
           setName(routine.name);
-          try { setExercises(JSON.parse(routine.exercises)); } catch {}
+          const exs = (routine.exercises || []).map((e: any) => ({
+            exerciseId: e.exercise_id || e.exerciseId || '',
+            exerciseName: e.exercise_name || e.exerciseName || '',
+            sets: e.sets || 3,
+            reps: e.reps || 10,
+            restSec: e.rest_sec || e.restSec || 60,
+          }));
+          setExercises(exs);
         }
       });
     }
-  }, [routineId, currentUser]);
+  }, [routineId]);
 
   const openAddExercise = async () => {
     setShowAddModal(true);
@@ -124,7 +147,6 @@ export default function RoutineBuilderScreen() {
   };
 
   const handleSave = async () => {
-    if (!currentUser) return;
     if (!name.trim()) {
       Alert.alert('Missing Name', 'Give your routine a name.');
       return;
@@ -133,10 +155,23 @@ export default function RoutineBuilderScreen() {
       Alert.alert('No Exercises', 'Add at least one exercise.');
       return;
     }
-    if (routineId) {
-      await updateRoutine(routineId, name.trim(), exercises);
-    } else {
-      await createRoutine(currentUser.id, currentUser.coachId || currentUser.id, name.trim(), exercises);
+    const payload = {
+      name: name.trim(),
+      exercises: exercises.map((e) => ({
+        exercise_name: e.exerciseName,
+        sets: e.sets,
+        reps: e.reps,
+        rest_sec: e.restSec,
+      })),
+    };
+    try {
+      if (routineId) {
+        await workoutApi.updateRoutine(routineId, payload);
+      } else {
+        await workoutApi.createRoutine(payload);
+      }
+    } catch (err) {
+      console.error('Save routine error:', err);
     }
     navigation.goBack();
   };
@@ -149,7 +184,11 @@ export default function RoutineBuilderScreen() {
         text: 'Delete',
         style: 'destructive',
         onPress: async () => {
-          await deleteRoutine(routineId);
+          try {
+            await workoutApi.deleteRoutine(routineId);
+          } catch (err) {
+            console.error('Delete routine error:', err);
+          }
           navigation.goBack();
         },
       },

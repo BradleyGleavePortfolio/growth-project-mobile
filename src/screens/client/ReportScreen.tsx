@@ -8,9 +8,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../../store/authStore';
-import { getDailyTotals } from '../../db/foodLogDb';
-import { getWeightLogsForPeriod } from '../../db/weightLogDb';
-import { getTodayString } from '../../utils/date';
+import { logApi, weightApi } from '../../services/api';
 import { WeightLog } from '../../types';
 
 import { Colors } from '../../constants/colors';
@@ -31,11 +29,26 @@ export default function ReportScreen({ navigation }: any) {
 
   const loadReportData = async () => {
     if (!currentUser) return;
-    const weights = await getWeightLogsForPeriod(currentUser.id, 7);
-    setWeeklyWeights(weights);
-    const today = getTodayString();
-    const totals = await getDailyTotals(currentUser.id, today);
-    setTodayMacros(totals);
+    try {
+      const weightRes = await weightApi.getLogs();
+      const logs = weightRes.data?.logs || weightRes.data || [];
+      setWeeklyWeights(logs.slice(-7));
+    } catch { setWeeklyWeights([]); }
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const logRes = await logApi.getDaily(today);
+      const entries = logRes.data?.entries || [];
+      let cals = 0, prot = 0, carbs = 0, fat = 0;
+      entries.forEach((e: any) => {
+        const fi = e.food_item || e.foodItem || {};
+        const qty = e.quantity_multiplier || 1;
+        cals += (fi.calories || 0) * qty;
+        prot += (fi.protein_g || 0) * qty;
+        carbs += (fi.carbs_g || 0) * qty;
+        fat += (fi.fat_g || 0) * qty;
+      });
+      setTodayMacros({ calories: cals, protein: prot, carbs, fat });
+    } catch { }
   };
 
   const latestWeight = weeklyWeights.length > 0 ? weeklyWeights[weeklyWeights.length - 1].weight : clientProfile?.currentWeight;
@@ -230,6 +243,8 @@ const styles = StyleSheet.create({
     padding: 32,
     alignItems: 'center',
     marginBottom: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   coverDot: {
     width: 12,
@@ -260,11 +275,13 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   section: {
-    backgroundColor: BG,
+    backgroundColor: Colors.surface,
     marginHorizontal: 16,
     borderRadius: 14,
     padding: 20,
-    marginBottom: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   sectionTitle: {
     fontSize: 17,
@@ -377,6 +394,8 @@ const styles = StyleSheet.create({
     padding: 24,
     alignItems: 'center',
     marginBottom: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   footerDot: {
     width: 10,

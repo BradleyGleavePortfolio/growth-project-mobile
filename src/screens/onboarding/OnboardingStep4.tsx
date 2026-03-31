@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { OnboardingStackParamList } from '../../navigation/OnboardingNavigator';
-import { useAuthStore } from '../../store/authStore';
-import { updateProfile } from '../../db/profileDb';
+import { saveOnboardingData } from '../../utils/onboardingStore';
 import OnboardingLayout from '../../components/OnboardingLayout';
 import OptionCard from '../../components/OptionCard';
 import { ActivityLevel } from '../../types';
@@ -50,12 +49,11 @@ const ACTIVITY_OPTIONS: {
 ];
 
 export default function OnboardingStep4({ navigation }: Props) {
-  const { currentUser } = useAuthStore();
   const [activity, setActivity] = useState<ActivityLevel | null>(null);
 
   const handleContinue = async () => {
-    if (!activity || !currentUser) return;
-    await updateProfile(currentUser.id, { activityLevel: activity });
+    if (!activity) return;
+    await saveOnboardingData({ activityLevel: activity });
     navigation.navigate('Step5');
   };
 

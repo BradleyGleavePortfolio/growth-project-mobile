@@ -1,10 +1,7 @@
 import { create } from 'zustand';
-import { FoodLog, ClientProfile } from '../types';
-import { getFoodLogsByDate, getDailyTotals, addFoodLog } from '../db/foodLogDb';
-import { getWaterLogByDate, addWaterLog } from '../db/waterLogDb';
-import { getProfileByUserId } from '../db/profileDb';
+import { logApi, profileApi } from '../services/api';
 import { getTodayString } from '../utils/date';
-import { MealType } from '../types';
+import { MealType, FoodLog } from '../types';
 
 interface DailyTotals {
   calories: number;
@@ -18,7 +15,6 @@ interface ClientStore {
   foodLogs: FoodLog[];
   dailyTotals: DailyTotals;
   waterOz: number;
-  profile: ClientProfile | null;
   isLoading: boolean;
 
   setSelectedDate: (date: string) => void;
@@ -26,16 +22,11 @@ interface ClientStore {
   loadProfile: (userId: string) => Promise<void>;
   logFood: (data: {
     userId: string;
-    coachId: string;
     date: string;
     mealType: MealType;
-    foodName: string;
-    calories: number;
-    protein: number;
-    carbs: number;
-    fat: number;
-    quantity: number;
-    unit: string;
+    foodItemId: string;
+    quantityMultiplier?: number;
+    notes?: string;
   }) => Promise<void>;
   logWater: (userId: string, coachId: string, amount: number) => Promise<void>;
 }
@@ -45,24 +36,43 @@ export const useClientStore = create<ClientStore>((set, get) => ({
   foodLogs: [],
   dailyTotals: { calories: 0, protein: 0, carbs: 0, fat: 0 },
   waterOz: 0,
-  profile: null,
   isLoading: false,
 
   setSelectedDate: (date: string) => set({ selectedDate: date }),
 
-  loadDayData: async (userId: string, date?: string) => {
+  loadDayData: async (_userId: string, date?: string) => {
     try {
       set({ isLoading: true });
       const d = date || get().selectedDate;
-      const [logs, totals, water] = await Promise.all([
-        getFoodLogsByDate(userId, d),
-        getDailyTotals(userId, d),
-        getWaterLogByDate(userId, d),
-      ]);
+      const response = await logApi.getDaily(d);
+      const data = response.data;
+
+      // Map entries to FoodLog shape
+      const logs: FoodLog[] = (data.entries || []).map((e: any) => ({
+        id: e.id,
+        foodItemId: e.food_item_id,
+        foodName: e.food_item?.name || '',
+        name: e.food_item?.name || '',
+        calories: Math.round((e.food_item?.calories || 0) * e.quantity_multiplier),
+        protein: Math.round((e.food_item?.protein_g || 0) * e.quantity_multiplier),
+        carbs: Math.round((e.food_item?.carbs_g || 0) * e.quantity_multiplier),
+        fat: Math.round((e.food_item?.fat_g || 0) * e.quantity_multiplier),
+        mealType: e.meal_type,
+        date: d,
+        quantity: e.quantity_multiplier,
+        unit: 'serving',
+        userId: e.user_id,
+        coachId: '',
+      }));
+
       set({
         foodLogs: logs,
-        dailyTotals: totals,
-        waterOz: water,
+        dailyTotals: {
+          calories: data.total_calories || 0,
+          protein: data.total_protein_g || 0,
+          carbs: data.total_carbs_g || 0,
+          fat: data.total_fat_g || 0,
+        },
         selectedDate: d,
         isLoading: false,
       });
@@ -72,32 +82,28 @@ export const useClientStore = create<ClientStore>((set, get) => ({
     }
   },
 
-  loadProfile: async (userId: string) => {
-    try {
-      const profile = await getProfileByUserId(userId);
-      set({ profile });
-    } catch (err) {
-      console.error('loadProfile error:', err);
-    }
+  loadProfile: async (_userId: string) => {
+    // Profile is loaded from AsyncStorage macro_targets — nothing to do here
   },
 
   logFood: async (data) => {
     try {
-      await addFoodLog(data);
+      await logApi.logFood({
+        date: data.date,
+        meal_type: data.mealType,
+        food_item_id: data.foodItemId,
+        quantity_multiplier: data.quantityMultiplier || 1.0,
+        notes: data.notes,
+      });
       await get().loadDayData(data.userId, data.date);
     } catch (err) {
       console.error('logFood error:', err);
+      throw err;
     }
   },
 
-  logWater: async (userId: string, coachId: string, amount: number) => {
-    try {
-      const date = get().selectedDate;
-      await addWaterLog({ userId, coachId, date, amount });
-      const water = await getWaterLogByDate(userId, date);
-      set({ waterOz: water });
-    } catch (err) {
-      console.error('logWater error:', err);
-    }
+  logWater: async (_userId: string, _coachId: string, amount: number) => {
+    // Water is still local — add to existing amount
+    set((state) => ({ waterOz: state.waterOz + amount }));
   },
 }));

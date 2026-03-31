@@ -2,8 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { View, Text, TextInput, StyleSheet } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { OnboardingStackParamList } from '../../navigation/OnboardingNavigator';
-import { useAuthStore } from '../../store/authStore';
-import { updateProfile } from '../../db/profileDb';
+import { saveOnboardingData } from '../../utils/onboardingStore';
 import OnboardingLayout from '../../components/OnboardingLayout';
 import { calculateAge } from '../../utils/nutrition';
 import { Colors } from '../../constants/colors';
@@ -13,7 +12,6 @@ type Props = {
 };
 
 export default function OnboardingStep3({ navigation }: Props) {
-  const { currentUser } = useAuthStore();
   const [year, setYear] = useState('');
   const [month, setMonth] = useState('');
   const [day, setDay] = useState('');
@@ -31,8 +29,8 @@ export default function OnboardingStep3({ navigation }: Props) {
   const canContinue = dob !== null && age !== null && age >= 13 && age <= 100;
 
   const handleContinue = async () => {
-    if (!canContinue || !currentUser || !dob) return;
-    await updateProfile(currentUser.id, { dob });
+    if (!canContinue || !dob) return;
+    await saveOnboardingData({ dob });
     navigation.navigate('Step4');
   };
 

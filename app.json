@@ -2,6 +2,7 @@
   "expo": {
     "name": "The Growth Project",
     "slug": "tgp-health-and-wellness",
+    "scheme": "tgp",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -36,8 +37,9 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "a12c3345-cc8c-4c2c-9c57-711c10a57c1c"
+        "projectId": "3aeadee6-34c5-4231-85b9-aff9f7ea3c5a"
       }
-    }
+    },
+    "owner": "bradley1031"
   }
 }

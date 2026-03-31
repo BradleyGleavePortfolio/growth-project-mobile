@@ -10,16 +10,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { useAuthStore } from '../../store/authStore';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { Colors } from '../../constants/colors';
-import {
-  getRoutines,
-  getWorkoutSessions,
-  WorkoutRoutine,
-  WorkoutSession,
-  RoutineExercise,
-  SessionExercise,
-} from '../../db/workoutDb';
+import { workoutApi } from '../../services/api';
 import FadeInView from '../../components/FadeInView';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -128,11 +121,26 @@ function MuscleBreakdown({ data }: { data: MuscleVolume[] }) {
   );
 }
 
+interface ApiRoutine {
+  id: string;
+  name: string;
+  exercises: Array<{ exercise_name: string; muscle_group: string; sets_target: number; reps_target: number }>;
+  is_template?: boolean;
+}
+
+interface ApiSession {
+  id: string;
+  date: string;
+  duration_minutes: number;
+  notes: string;
+  exercises: Array<{ muscle_group: string; exercise_name: string; sets_completed: number; weight_per_set: number[]; reps_per_set: number[] }>;
+}
+
 export default function WorkoutScreen() {
-  const { currentUser } = useAuthStore();
+  const currentUser = useCurrentUser();
   const navigation = useNavigation<any>();
-  const [routines, setRoutines] = useState<WorkoutRoutine[]>([]);
-  const [recentSessions, setRecentSessions] = useState<WorkoutSession[]>([]);
+  const [routines, setRoutines] = useState<ApiRoutine[]>([]);
+  const [recentSessions, setRecentSessions] = useState<ApiSession[]>([]);
   const [weeklyVolume, setWeeklyVolume] = useState<WeeklyVolume[]>([]);
   const [muscleVolume, setMuscleVolume] = useState<MuscleVolume[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -140,11 +148,20 @@ export default function WorkoutScreen() {
   const loadVolumeData = useCallback(async () => {
     if (!currentUser) return;
     try {
-      // Get last 8 weeks of sessions
-      const allSessions = await getWorkoutSessions(currentUser.id, 200);
-      const now = new Date();
+      // Use the volume API endpoint
+      const volRes = await workoutApi.getVolume('week');
+      const volumeData: Array<{ muscle_group: string; total_volume: number; period: string }> = volRes.data || [];
 
-      // Build weekly volume buckets
+      // Build muscle breakdown from API data
+      setMuscleVolume(
+        volumeData.map((v) => ({ muscle: v.muscle_group, volume: Math.round(v.total_volume) }))
+          .sort((a, b) => b.volume - a.volume)
+      );
+
+      // Build weekly volume from sessions (compute from last 8 weeks)
+      const allRes = await workoutApi.getAll(200);
+      const allSessions: ApiSession[] = allRes.data || [];
+      const now = new Date();
       const weeks: WeeklyVolume[] = [];
       for (let w = 7; w >= 0; w--) {
         const weekEnd = new Date(now.getTime() - w * 7 * 24 * 60 * 60 * 1000);
@@ -152,55 +169,20 @@ export default function WorkoutScreen() {
         const label = `W${8 - w}`;
         let vol = 0;
         for (const s of allSessions) {
-          const d = new Date(s.startTime);
-          if (d >= weekStart && d < weekEnd && s.completed) {
-            try {
-              const exs: SessionExercise[] = JSON.parse(s.exercises);
-              for (const ex of exs) {
-                for (const set of ex.sets) {
-                  if (set.completed) vol += set.weight * set.reps;
-                }
+          const d = new Date(s.date);
+          if (d >= weekStart && d < weekEnd) {
+            for (const ex of (s.exercises || [])) {
+              const weights = ex.weight_per_set || [];
+              const reps = ex.reps_per_set || [];
+              for (let i = 0; i < Math.min(weights.length, reps.length); i++) {
+                vol += (weights[i] || 0) * (reps[i] || 0);
               }
-            } catch {}
+            }
           }
         }
         weeks.push({ week: label, volume: Math.round(vol) });
       }
       setWeeklyVolume(weeks);
-
-      // Muscle breakdown this week
-      const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      const muscleMap: Record<string, number> = {};
-      for (const s of allSessions) {
-        if (new Date(s.startTime) < weekAgo) continue;
-        if (!s.completed) continue;
-        try {
-          const exs: SessionExercise[] = JSON.parse(s.exercises);
-          for (const ex of exs) {
-            // Map exerciseName to muscle via best-effort matching
-            const name = ex.exerciseName.toLowerCase();
-            let muscle = 'other';
-            if (name.includes('press') || name.includes('fly') || name.includes('push') || name.includes('dip')) muscle = 'chest';
-            else if (name.includes('row') || name.includes('pull') || name.includes('lat') || name.includes('chin')) muscle = 'back';
-            else if (name.includes('shoulder') || name.includes('lateral') || name.includes('overhead') || name.includes('arnold')) muscle = 'shoulders';
-            else if (name.includes('curl') || name.includes('tricep') || name.includes('skull') || name.includes('hammer')) muscle = 'arms';
-            else if (name.includes('squat') || name.includes('leg') || name.includes('lunge') || name.includes('deadlift') || name.includes('hip') || name.includes('calf')) muscle = 'legs';
-            else if (name.includes('plank') || name.includes('crunch') || name.includes('core') || name.includes('ab') || name.includes('twist')) muscle = 'core';
-            else if (name.includes('run') || name.includes('row') || name.includes('bike') || name.includes('jump') || name.includes('stair')) muscle = 'cardio';
-
-            for (const set of ex.sets) {
-              if (set.completed) {
-                muscleMap[muscle] = (muscleMap[muscle] || 0) + set.weight * set.reps;
-              }
-            }
-          }
-        } catch {}
-      }
-      setMuscleVolume(
-        Object.entries(muscleMap)
-          .map(([muscle, volume]) => ({ muscle, volume: Math.round(volume) }))
-          .sort((a, b) => b.volume - a.volume)
-      );
     } catch (err) {
       console.warn('loadVolumeData error:', err);
     }
@@ -208,12 +190,16 @@ export default function WorkoutScreen() {
 
   const loadData = useCallback(async () => {
     if (!currentUser) return;
-    const [r, s] = await Promise.all([
-      getRoutines(currentUser.id),
-      getWorkoutSessions(currentUser.id, 5),
-    ]);
-    setRoutines(r);
-    setRecentSessions(s);
+    try {
+      const [rRes, sRes] = await Promise.all([
+        workoutApi.getRoutines(),
+        workoutApi.getAll(5),
+      ]);
+      setRoutines(rRes.data || []);
+      setRecentSessions(sRes.data || []);
+    } catch (err) {
+      console.warn('loadData error:', err);
+    }
     await loadVolumeData();
   }, [currentUser, loadVolumeData]);
 
@@ -225,26 +211,28 @@ export default function WorkoutScreen() {
     setRefreshing(false);
   }, [loadData]);
 
-  const parseExercises = (json: string): RoutineExercise[] | SessionExercise[] => {
-    try { return JSON.parse(json); } catch { return []; }
-  };
-
-  const formatDuration = (start: string, end?: string): string => {
-    if (!end) return 'In progress';
-    const ms = new Date(end).getTime() - new Date(start).getTime();
-    const min = Math.round(ms / 60000);
-    return min < 60 ? `${min} min` : `${Math.floor(min / 60)}h ${min % 60}m`;
+  const formatDuration = (minutes: number): string => {
+    if (!minutes) return '0 min';
+    return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
   };
 
   const weekSessions = recentSessions.filter((s) => {
-    const d = new Date(s.startTime);
+    const d = new Date(s.date);
     const now = new Date();
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     return d >= weekAgo;
   });
 
-  const startRoutine = (routine: WorkoutRoutine) => {
-    navigation.navigate('ActiveWorkout', { routineId: routine.id, routineName: routine.name, exercises: routine.exercises });
+  const startRoutine = (routine: ApiRoutine) => {
+    // Convert API routine exercises to the format ActiveWorkoutScreen expects
+    const exercisesForSession = routine.exercises.map((e) => ({
+      exerciseId: '',
+      exerciseName: e.exercise_name,
+      sets: e.sets_target || 3,
+      reps: e.reps_target || 10,
+      restSec: 60,
+    }));
+    navigation.navigate('ActiveWorkout', { routineId: routine.id, routineName: routine.name, exercises: JSON.stringify(exercisesForSession) });
   };
 
   const startQuickWorkout = () => {
@@ -357,7 +345,7 @@ export default function WorkoutScreen() {
           </View>
         ) : (
           routines.map((routine) => {
-            const exList = parseExercises(routine.exercises) as RoutineExercise[];
+            const exList = routine.exercises || [];
             return (
               <TouchableOpacity
                 key={routine.id}
@@ -376,7 +364,7 @@ export default function WorkoutScreen() {
                 </View>
                 <Text style={styles.routineExCount}>{exList.length} exercises</Text>
                 <Text style={styles.routineExList} numberOfLines={1}>
-                  {exList.map((e) => e.exerciseName).join(' · ')}
+                  {exList.map((e) => e.exercise_name).join(' · ')}
                 </Text>
               </TouchableOpacity>
             );
@@ -388,22 +376,18 @@ export default function WorkoutScreen() {
           <>
             <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Recent Sessions</Text>
             {recentSessions.map((session) => {
-              const exList = parseExercises(session.exercises) as SessionExercise[];
+              const exList = session.exercises || [];
               return (
                 <View key={session.id} style={styles.sessionCard}>
                   <View style={styles.sessionTop}>
-                    <Text style={styles.sessionName}>{session.routineName}</Text>
-                    {session.completed ? (
-                      <View style={styles.completedBadge}>
-                        <Ionicons name="checkmark-circle" size={14} color={Colors.success} />
-                        <Text style={styles.completedText}>Done</Text>
-                      </View>
-                    ) : (
-                      <Text style={styles.inProgressText}>In progress</Text>
-                    )}
+                    <Text style={styles.sessionName}>{session.notes || 'Workout'}</Text>
+                    <View style={styles.completedBadge}>
+                      <Ionicons name="checkmark-circle" size={14} color={Colors.success} />
+                      <Text style={styles.completedText}>Done</Text>
+                    </View>
                   </View>
                   <Text style={styles.sessionMeta}>
-                    {new Date(session.startTime).toLocaleDateString()} · {formatDuration(session.startTime, session.endTime || undefined)} · {exList.length} exercises
+                    {new Date(session.date).toLocaleDateString()} · {formatDuration(session.duration_minutes)} · {exList.length} exercises
                   </Text>
                 </View>
               );

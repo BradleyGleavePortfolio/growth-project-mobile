@@ -2,8 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { OnboardingStackParamList } from '../../navigation/OnboardingNavigator';
-import { useAuthStore } from '../../store/authStore';
-import { updateProfile } from '../../db/profileDb';
+import { saveOnboardingData } from '../../utils/onboardingStore';
 import OnboardingLayout from '../../components/OnboardingLayout';
 import MultiSelectChip from '../../components/MultiSelectChip';
 import { Colors } from '../../constants/colors';
@@ -20,7 +19,6 @@ const SNACK_OPTIONS = [
 ];
 
 export default function OnboardingStep10({ navigation }: Props) {
-  const { currentUser } = useAuthStore();
   const [selected, setSelected] = useState<string[]>([]);
 
   const toggleSnack = (snack: string) => {
@@ -30,10 +28,7 @@ export default function OnboardingStep10({ navigation }: Props) {
   };
 
   const handleContinue = async () => {
-    if (!currentUser) return;
-    await updateProfile(currentUser.id, {
-      preferredSnacks: JSON.stringify(selected),
-    });
+    await saveOnboardingData({ preferredSnacks: selected });
     navigation.navigate('Results');
   };
 

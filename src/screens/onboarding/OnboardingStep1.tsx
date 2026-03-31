@@ -2,8 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet, TouchableOpacity } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { OnboardingStackParamList } from '../../navigation/OnboardingNavigator';
-import { useAuthStore } from '../../store/authStore';
-import { updateProfile } from '../../db/profileDb';
+import { saveOnboardingData } from '../../utils/onboardingStore';
 import OnboardingLayout from '../../components/OnboardingLayout';
 import { Colors } from '../../constants/colors';
 
@@ -12,16 +11,15 @@ type Props = {
 };
 
 export default function OnboardingStep1({ navigation }: Props) {
-  const { currentUser } = useAuthStore();
-  const [firstName, setFirstName] = useState(currentUser?.firstName || '');
-  const [lastName, setLastName] = useState(currentUser?.lastName || '');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [sex, setSex] = useState<'male' | 'female' | null>(null);
 
   const canContinue = !!(firstName.trim() && lastName.trim() && sex !== null);
 
   const handleContinue = async () => {
-    if (!canContinue || !currentUser) return;
-    await updateProfile(currentUser.id, { sex: sex! });
+    if (!canContinue) return;
+    await saveOnboardingData({ firstName, lastName, sex: sex! });
     navigation.navigate('Step2');
   };
 

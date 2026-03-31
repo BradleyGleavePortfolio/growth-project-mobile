@@ -7,15 +7,13 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import { useAuthStore } from '../../store/authStore';
-import { getProfileByUserId, updateProfile } from '../../db/profileDb';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { profileApi } from '../../services/api';
+import { authEvents } from '../../utils/authEvents';
 import { calcBMR, calcTDEE, calcMacros, calculateAge } from '../../utils/nutrition';
 import { Colors } from '../../constants/colors';
-import { ClientProfile } from '../../types';
 
 export default function OnboardingResults() {
-  const { currentUser, refreshProfile } = useAuthStore();
-  const [profile, setProfile] = useState<ClientProfile | null>(null);
   const [macros, setMacros] = useState<{
     calories: number;
     protein: number;
@@ -31,18 +29,17 @@ export default function OnboardingResults() {
   }, []);
 
   const loadAndCalc = async () => {
-    if (!currentUser) return;
     try {
-      const p = await getProfileByUserId(currentUser.id);
-      if (!p) return;
-      setProfile(p);
+      // Load from new onboardingStore (AsyncStorage)
+      const { getOnboardingData } = await import('../../utils/onboardingStore');
+      const d = await getOnboardingData();
 
-      const age = p.dob ? calculateAge(p.dob) : 25;
-      const weight = p.currentWeight || 180;
-      const height = p.height || 175;
-      const sex = p.sex || 'male';
-      const activity = p.activityLevel || 'moderate';
-      const goal = p.primaryGoal || 'maintain';
+      const age = d.dob ? calculateAge(d.dob) : 25;
+      const weight = d.currentWeight || 180;
+      const height = d.height || 175;
+      const sex = d.sex || 'male';
+      const activity = d.activityLevel || 'moderate';
+      const goal = d.primaryGoal || 'maintain';
 
       const bmr = calcBMR(weight, height, age, sex);
       const tdee = calcTDEE(bmr, activity);
@@ -63,18 +60,35 @@ export default function OnboardingResults() {
   };
 
   const handleStart = async () => {
-    if (!currentUser || !macros) return;
+    if (!macros) return;
     setSaving(true);
     try {
-      await updateProfile(currentUser.id, {
+      // Save macro targets to backend
+      try {
+        await profileApi.update({
+          tdee: macros.tdee,
+          calorie_target: macros.calories,
+          protein_target: macros.protein,
+          carb_target: macros.carbs,
+          fat_target: macros.fat,
+          onboarding_completed: true,
+        });
+      } catch (err) {
+        console.error('profileApi.update error:', err);
+      }
+
+      // Save macro targets to AsyncStorage for the dashboard to read
+      await AsyncStorage.setItem('macro_targets', JSON.stringify({
+        calories: macros.calories,
+        protein: macros.protein,
+        carbs: macros.carbs,
+        fat: macros.fat,
         tdee: macros.tdee,
-        calorieTarget: macros.calories,
-        proteinTarget: macros.protein,
-        carbTarget: macros.carbs,
-        fatTarget: macros.fat,
-        onboardingCompleted: true,
-      });
-      await refreshProfile();
+      }));
+
+      // Mark onboarding complete — RootNavigator will now route to ClientNavigator
+      await AsyncStorage.setItem('onboarding_complete', 'true');
+      authEvents.emit();
     } catch (err) {
       console.error('save error:', err);
     } finally {
