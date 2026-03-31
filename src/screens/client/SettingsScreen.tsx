@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useAuthStore } from '../../store/authStore';
 import { useSettings } from '../../hooks/useSettings';
-import { updateProfile } from '../../db/profileDb';
+import { profileApi } from '../../services/api';
 import { Colors } from '../../constants/colors';
 import { mediumTap, warningTap, successTap } from '../../utils/haptics';
 
@@ -49,7 +49,7 @@ export default function SettingsScreen({ navigation }: any) {
         onPress: async () => {
           warningTap();
           if (currentUser?.id) {
-            await updateProfile(currentUser.id, { onboardingCompleted: false });
+            await profileApi.update({ onboardingCompleted: false }).catch(() => {});
             await refreshProfile();
           }
         },
