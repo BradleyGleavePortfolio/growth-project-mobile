@@ -271,6 +271,75 @@ export async function seedExercisesIfNeeded(): Promise<void> {
     { name: 'Shoulder Dislocations', muscle: 'stretching', equipment: 'bodyweight', instructions: 'Use a resistance band or stick, pass overhead and behind back to mobilize shoulders.' },
     { name: 'Pigeon Pose', muscle: 'stretching', equipment: 'bodyweight', instructions: 'From push-up, bring one shin forward parallel to hands, sink hips down.' },
     { name: 'Cat-Cow', muscle: 'stretching', equipment: 'bodyweight', instructions: 'On all fours, alternate arching back up (cat) and dropping it down (cow).' },
+    // ── Additional Chest (3) ──
+    { name: 'Landmine Press', muscle: 'chest', equipment: 'barbell', instructions: 'Press the barbell end upward at an angle from chest height.' },
+    { name: 'Svend Press', muscle: 'chest', equipment: 'dumbbell', instructions: 'Squeeze two plates together at chest, press forward and squeeze.' },
+    { name: 'Wide Push-Ups', muscle: 'chest', equipment: 'bodyweight', instructions: 'Push-up with hands wider than shoulder-width to target outer chest.' },
+    // ── Additional Back (3) ──
+    { name: 'Inverted Row', muscle: 'back', equipment: 'bodyweight', instructions: 'Hang under bar, pull chest to bar keeping body straight.' },
+    { name: 'Single-Arm Lat Pulldown', muscle: 'back', equipment: 'cable', instructions: 'Pull cable down with one arm, focus on lat contraction.' },
+    { name: 'Snatch-Grip Deadlift', muscle: 'back', equipment: 'barbell', instructions: 'Wide grip deadlift targeting upper back and traps.' },
+    // ── Additional Shoulders (3) ──
+    { name: 'Plate Front Raise', muscle: 'shoulders', equipment: 'dumbbell', instructions: 'Hold plate with both hands, raise to eye level.' },
+    { name: 'Bradford Press', muscle: 'shoulders', equipment: 'barbell', instructions: 'Alternate pressing bar in front and behind head without locking out.' },
+    { name: 'Lu Raises', muscle: 'shoulders', equipment: 'dumbbell', instructions: 'Lean forward slightly, raise dumbbells laterally with thumbs up.' },
+    // ── Additional Legs (5) ──
+    { name: 'Sissy Squat', muscle: 'legs', equipment: 'bodyweight', instructions: 'Lean back, bend knees forward, lower until thighs stretch fully.' },
+    { name: 'Glute Bridge', muscle: 'legs', equipment: 'bodyweight', instructions: 'Lie on back, feet flat, drive hips up squeezing glutes.' },
+    { name: 'Nordic Hamstring Curl', muscle: 'legs', equipment: 'bodyweight', instructions: 'Kneel, anchor feet, lower body forward controlling with hamstrings.' },
+    { name: 'Seated Calf Raise', muscle: 'legs', equipment: 'machine', instructions: 'Sit with pad on knees, raise heels as high as possible.' },
+    { name: 'Pistol Squat', muscle: 'legs', equipment: 'bodyweight', instructions: 'Single-leg squat with other leg extended forward.' },
+    // ── Additional Biceps (3) ──
+    { name: 'Zottman Curl', muscle: 'biceps', equipment: 'dumbbell', instructions: 'Curl up supinated, rotate to pronated, lower slowly.' },
+    { name: 'Drag Curl', muscle: 'biceps', equipment: 'barbell', instructions: 'Curl bar up while pulling elbows back, bar stays close to body.' },
+    { name: 'Bayesian Curl', muscle: 'biceps', equipment: 'cable', instructions: 'Face away from cable, curl behind body for full stretch.' },
+    // ── Additional Triceps (3) ──
+    { name: 'JM Press', muscle: 'triceps', equipment: 'barbell', instructions: 'Hybrid of close-grip bench and skull crusher, lower to chin level.' },
+    { name: 'Bench Dips', muscle: 'triceps', equipment: 'bodyweight', instructions: 'Hands on bench behind you, lower body by bending elbows.' },
+    { name: 'Tate Press', muscle: 'triceps', equipment: 'dumbbell', instructions: 'Lie on bench, lower dumbbells to chest by bending elbows inward.' },
+    // ── Additional Core (3) ──
+    { name: 'V-Ups', muscle: 'core', equipment: 'bodyweight', instructions: 'Lie flat, simultaneously lift legs and torso forming a V shape.' },
+    { name: 'Flutter Kicks', muscle: 'core', equipment: 'bodyweight', instructions: 'Lie on back, legs slightly raised, alternate kicking up and down.' },
+    { name: 'Hollow Body Hold', muscle: 'core', equipment: 'bodyweight', instructions: 'Lie on back, lift shoulders and legs off ground, hold position.' },
+    // ── Additional Full Body (3) ──
+    { name: 'Farmers Walk', muscle: 'full body', equipment: 'dumbbell', instructions: 'Hold heavy dumbbells at sides, walk for distance or time.' },
+    { name: 'Sled Push', muscle: 'full body', equipment: 'machine', instructions: 'Push sled across floor driving through legs and arms.' },
+    { name: 'Sandbag Clean', muscle: 'full body', equipment: 'bodyweight', instructions: 'Lift sandbag from ground to bear hug position at chest.' },
+    // ── Additional Cardio (3) ──
+    { name: 'Assault Bike', muscle: 'cardio', equipment: 'machine', instructions: 'Pedal and push/pull arms simultaneously for full body cardio.' },
+    { name: 'Sled Pull', muscle: 'cardio', equipment: 'machine', instructions: 'Pull sled toward you using rope hand-over-hand.' },
+    { name: 'Swimming', muscle: 'cardio', equipment: 'bodyweight', instructions: 'Swim laps using preferred stroke at steady or interval pace.' },
+    // ── Additional Stretching (5) ──
+    { name: 'Worlds Greatest Stretch', muscle: 'stretching', equipment: 'bodyweight', instructions: 'Lunge position, rotate torso opening chest, alternate sides.' },
+    { name: 'Hamstring Stretch', muscle: 'stretching', equipment: 'bodyweight', instructions: 'Sit with legs extended, reach for toes and hold.' },
+    { name: 'Quad Stretch', muscle: 'stretching', equipment: 'bodyweight', instructions: 'Stand on one leg, pull other heel to glute, hold balance.' },
+    { name: 'Chest Doorway Stretch', muscle: 'stretching', equipment: 'bodyweight', instructions: 'Place arm on doorframe, lean through to stretch chest and shoulder.' },
+    { name: 'Lat Stretch', muscle: 'stretching', equipment: 'bodyweight', instructions: 'Grab overhead bar or doorframe, lean away to stretch lat.' },
+    // ── Additional Mixed (10) ──
+    { name: 'Dumbbell Pullover', muscle: 'chest', equipment: 'dumbbell', instructions: 'Lie across bench, lower dumbbell behind head then pull back over chest.' },
+    { name: 'Trap Bar Deadlift', muscle: 'legs', equipment: 'barbell', instructions: 'Stand inside trap bar, grip handles, stand up keeping back straight.' },
+    { name: 'Reverse Grip Barbell Row', muscle: 'back', equipment: 'barbell', instructions: 'Supinated grip barbell row to lower chest, great for lower lats.' },
+    { name: 'EZ Bar Curl', muscle: 'biceps', equipment: 'barbell', instructions: 'Curl EZ bar with angled grip reducing wrist strain.' },
+    { name: 'Dumbbell Lateral Lunge', muscle: 'legs', equipment: 'dumbbell', instructions: 'Step to the side into a lunge, push back to standing.' },
+    { name: 'Decline Dumbbell Press', muscle: 'chest', equipment: 'dumbbell', instructions: 'Lie on decline bench, press dumbbells from lower chest.' },
+    { name: 'Cable Face Pull', muscle: 'shoulders', equipment: 'cable', instructions: 'Pull rope to face rotating externally, focus on rear delts.' },
+    { name: 'Glute-Ham Raise', muscle: 'legs', equipment: 'machine', instructions: 'On GHD machine, lower and raise torso using hamstrings and glutes.' },
+    { name: 'Reverse Crunch', muscle: 'core', equipment: 'bodyweight', instructions: 'Lie on back, lift hips off floor curling knees toward chest.' },
+    { name: 'Single Leg Deadlift', muscle: 'legs', equipment: 'dumbbell', instructions: 'Balance on one leg, hinge forward lowering weights toward ground.' },
+
+    // ── Additional Exercises ──
+    { name: 'Sissy Squat', muscle: 'legs', equipment: 'bodyweight', instructions: 'Lean back while bending knees forward, lower body keeping hips extended.' },
+    { name: 'Cable Kickback', muscle: 'legs', equipment: 'cable', instructions: 'Attach ankle cuff, kick leg back squeezing glute at top.' },
+    { name: 'Dumbbell Shrug', muscle: 'shoulders', equipment: 'dumbbell', instructions: 'Hold dumbbells at sides, shrug shoulders up toward ears.' },
+    { name: 'Barbell Shrug', muscle: 'shoulders', equipment: 'barbell', instructions: 'Hold barbell in front, shrug shoulders straight up.' },
+    { name: 'Zottman Curl', muscle: 'biceps', equipment: 'dumbbell', instructions: 'Curl dumbbells up with supination, rotate to pronation, lower slowly.' },
+    { name: 'Behind The Back Wrist Curl', muscle: 'forearms', equipment: 'barbell', instructions: 'Hold barbell behind back, curl wrists upward.' },
+    { name: 'Wrist Roller', muscle: 'forearms', equipment: 'dumbbell', instructions: 'Roll weight up by rotating wrist roller, then slowly unroll.' },
+    { name: 'Hanging Knee Raise', muscle: 'core', equipment: 'bodyweight', instructions: 'Hang from bar, raise knees to chest, lower with control.' },
+    { name: 'Ab Wheel Rollout', muscle: 'core', equipment: 'bodyweight', instructions: 'Kneel with ab wheel, roll forward extending body, roll back.' },
+    { name: 'Decline Sit-Up', muscle: 'core', equipment: 'bodyweight', instructions: 'Hook feet on decline bench, sit up bringing chest to knees.' },
+    { name: 'Barbell Hip Thrust', muscle: 'legs', equipment: 'barbell', instructions: 'Sit against bench, roll barbell over hips, thrust upward squeezing glutes.' },
+    { name: 'Smith Machine Squat', muscle: 'legs', equipment: 'machine', instructions: 'Squat using Smith machine for guided bar path, feet slightly forward.' },
   ];
 
   for (const e of exercises) {
