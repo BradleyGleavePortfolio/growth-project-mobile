@@ -42,7 +42,6 @@ export async function saveOnboardingData(updates: Partial<OnboardingData>): Prom
     const existing = await getOnboardingData();
     await AsyncStorage.setItem(KEY, JSON.stringify({ ...existing, ...updates }));
   } catch (err) {
-    console.error('saveOnboardingData error:', err);
   }
 }
 

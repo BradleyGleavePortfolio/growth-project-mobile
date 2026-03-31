@@ -171,7 +171,6 @@ export default function RoutineBuilderScreen() {
         await workoutApi.createRoutine(payload);
       }
     } catch (err) {
-      console.error('Save routine error:', err);
     }
     navigation.goBack();
   };
@@ -187,7 +186,6 @@ export default function RoutineBuilderScreen() {
           try {
             await workoutApi.deleteRoutine(routineId);
           } catch (err) {
-            console.error('Delete routine error:', err);
           }
           navigation.goBack();
         },

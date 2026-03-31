@@ -77,7 +77,6 @@ export const useClientStore = create<ClientStore>((set, get) => ({
         isLoading: false,
       });
     } catch (err) {
-      console.error('loadDayData error:', err);
       set({ isLoading: false });
     }
   },
@@ -97,7 +96,6 @@ export const useClientStore = create<ClientStore>((set, get) => ({
       });
       await get().loadDayData(data.userId, data.date);
     } catch (err) {
-      console.error('logFood error:', err);
       throw err;
     }
   },

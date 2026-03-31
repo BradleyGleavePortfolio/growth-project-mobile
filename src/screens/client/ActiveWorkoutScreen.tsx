@@ -328,7 +328,6 @@ export default function ActiveWorkoutScreen() {
           loggedAt: new Date().toISOString(),
         });
       } catch (err) {
-        console.error('Failed to persist exercise log:', err);
       }
     }
 
@@ -369,7 +368,6 @@ export default function ActiveWorkoutScreen() {
                 })),
             });
           } catch (err) {
-            console.error('Failed to save workout:', err);
           }
           if (timerRef.current) clearInterval(timerRef.current);
           navigation.goBack();
