@@ -328,7 +328,13 @@ export async function seedRecipesIfNeeded(): Promise<void> {
   const count = await db.getFirstAsync<{ c: number }>(
     `SELECT COUNT(*) as c FROM recipes WHERE category = 'recipe'`
   );
-  if (count && count.c > 0) return;
+  // Re-seed if fewer than 20 recipes (handles wiped or partially-seeded DB)
+  if (count && count.c >= 20) return;
+
+  // Clear any partial data before re-seeding
+  if (count && count.c > 0 && count.c < 20) {
+    await db.runAsync(`DELETE FROM recipes WHERE category = 'recipe' AND isCustom = 0`);
+  }
 
   const now = new Date().toISOString();
 

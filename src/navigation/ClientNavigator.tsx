@@ -10,7 +10,6 @@ import PlanScreen from '../screens/client/PlanScreen';
 import RecipesScreen from '../screens/client/RecipesScreen';
 import ProgressScreen from '../screens/client/ProgressScreen';
 import FastingScreen from '../screens/client/FastingScreen';
-import AIGuideScreen from '../screens/client/AIGuideScreen';
 import ProfileScreen from '../screens/client/ProfileScreen';
 import SettingsScreen from '../screens/client/SettingsScreen';
 import ReportScreen from '../screens/client/ReportScreen';
@@ -38,7 +37,6 @@ export type ClientTabParamList = {
   Progress: undefined;
   Fast: undefined;
   WorkoutTab: undefined;
-  AI: undefined;
   Community: undefined;
   ProfileStack: undefined;
 };
@@ -197,16 +195,6 @@ export default function ClientNavigator() {
           tabBarLabel: 'Workout',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="barbell-outline" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="AI"
-        component={AIGuideScreen}
-        options={{
-          tabBarLabel: 'AI Coach',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="chatbubble-ellipses-outline" size={size} color={color} />
           ),
         }}
       />

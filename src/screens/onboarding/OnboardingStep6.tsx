@@ -2,8 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { OnboardingStackParamList } from '../../navigation/OnboardingNavigator';
-import { useAuthStore } from '../../store/authStore';
-import { updateProfile } from '../../db/profileDb';
+import { saveOnboardingData } from '../../utils/onboardingStore';
 import OnboardingLayout from '../../components/OnboardingLayout';
 import OptionCard from '../../components/OptionCard';
 import MultiSelectChip from '../../components/MultiSelectChip';
@@ -24,7 +23,6 @@ const FOOD_PREFS = ['Chicken', 'Turkey', 'Beef', 'Pork', 'Fish', 'Spicy'];
 const RESTRICTIONS = ['No Fish', 'Nut Allergy', 'No Spicy', 'No Beef', 'Vegetarian', 'Vegan'];
 
 export default function OnboardingStep6({ navigation }: Props) {
-  const { currentUser } = useAuthStore();
   const [eatHabits, setEatHabits] = useState<string | null>(null);
   const [foodPrefs, setFoodPrefs] = useState<string[]>([]);
   const [restrictions, setRestrictions] = useState<string[]>([]);
@@ -42,12 +40,8 @@ export default function OnboardingStep6({ navigation }: Props) {
   };
 
   const handleContinue = async () => {
-    if (!eatHabits || !currentUser) return;
-    await updateProfile(currentUser.id, {
-      eatHabits,
-      foodPrefs: JSON.stringify(foodPrefs),
-      restrictions: JSON.stringify(restrictions),
-    });
+    if (!eatHabits) return;
+    await saveOnboardingData({ eatHabits, foodPrefs, restrictions });
     navigation.navigate('Step7');
   };
 

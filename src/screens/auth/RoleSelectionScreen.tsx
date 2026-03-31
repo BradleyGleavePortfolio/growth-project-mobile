@@ -50,6 +50,8 @@ export default function RoleSelectionScreen({ navigation }: Props) {
         user.role = res.data.role;
         await AsyncStorage.setItem('user_data', JSON.stringify(user));
       }
+      // Clear the role selection flag — registration is fully complete
+      await AsyncStorage.removeItem('needs_role_selection');
       // Fire auth event — RootNavigator will re-render with the right navigator
       authEvents.emit();
     } catch (err: any) {

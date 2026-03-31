@@ -10,6 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useAuthStore } from '../../store/authStore';
 import { Colors } from '../../constants/colors';
 import { ProfileStackParamList } from '../../navigation/ClientNavigator';
@@ -17,7 +18,8 @@ import { ProfileStackParamList } from '../../navigation/ClientNavigator';
 type Nav = NativeStackNavigationProp<ProfileStackParamList>;
 
 export default function ProfileScreen() {
-  const { currentUser, clientProfile, signOut } = useAuthStore();
+  const currentUser = useCurrentUser();
+  const { clientProfile, signOut } = useAuthStore();
   const navigation = useNavigation<Nav>();
 
   const handleSignOut = () => {
@@ -28,8 +30,8 @@ export default function ProfileScreen() {
   };
 
   const profileItems = [
-    { label: 'Name', value: `${currentUser?.firstName} ${currentUser?.lastName}` },
-    { label: 'Email', value: currentUser?.email },
+    { label: 'Name', value: currentUser?.name || 'No name set' },
+    { label: 'Email', value: currentUser?.email || '' },
     { label: 'Sex', value: clientProfile?.sex || 'Not set' },
     { label: 'Date of Birth', value: clientProfile?.dob || 'Not set' },
     { label: 'Current Weight', value: clientProfile?.currentWeight ? `${clientProfile.currentWeight} lbs` : 'Not set' },
@@ -59,14 +61,13 @@ export default function ProfileScreen() {
       <View style={styles.avatarSection}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>
-            {currentUser?.firstName?.charAt(0) || ''}
-            {currentUser?.lastName?.charAt(0) || ''}
+            {currentUser?.name?.charAt(0)?.toUpperCase() || ''}
           </Text>
         </View>
         <Text style={styles.name}>
-          {currentUser?.firstName} {currentUser?.lastName}
+          {currentUser?.name || 'No name set'}
         </Text>
-        <Text style={styles.email}>{currentUser?.email}</Text>
+        <Text style={styles.email}>{currentUser?.email || ''}</Text>
       </View>
 
       {/* Quick Actions */}

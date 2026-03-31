@@ -56,21 +56,20 @@ export default function CreateAccountScreen({ navigation }: Props) {
 
     try {
       const res = await authApi.register({ name, email, password, phone: phone || undefined });
-      const { access_token, user } = res.data;
 
-      if (access_token && user) {
-        // Backend auto-confirmed — log straight in, go to role selection
-        await AsyncStorage.setItem('supabase_token', access_token);
-        await AsyncStorage.setItem('user_data', JSON.stringify(user));
-        navigation.replace('RoleSelection'); // role not set yet — must pick
-      } else {
-        // Fallback: email verification required
-        await AsyncStorage.setItem('pending_email', email);
-        setStep('verify');
-      }
+      // Backend sends a verification email — show the verify screen
+      await AsyncStorage.setItem('pending_email', email);
+      setStep('verify');
     } catch (err: any) {
-      const message = err.response?.data?.message || 'Registration failed. Please try again.';
-      setError(message);
+      // Show the exact backend error message if available
+      const backendMessage = err.response?.data?.message;
+      if (backendMessage) {
+        setError(backendMessage);
+      } else if (err.message === 'Network Error' || !err.response) {
+        setError('Cannot reach server. Check your internet connection.');
+      } else {
+        setError('Registration failed. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -81,17 +80,26 @@ export default function CreateAccountScreen({ navigation }: Props) {
     setError('');
 
     try {
-      // Try to login — Supabase will reject if email not verified
+      // Try to login — Supabase rejects login if email not yet verified
       const loginRes = await authApi.login({ email, password });
       const { access_token, user } = loginRes.data;
 
       await AsyncStorage.setItem('supabase_token', access_token);
       await AsyncStorage.setItem('user_data', JSON.stringify(user));
 
+      // Mark that role selection is still needed (prevents RootNavigator
+      // from jumping to ClientNavigator before the user picks a role)
+      await AsyncStorage.setItem('needs_role_selection', 'true');
+
+      // Navigate to role selection
       navigation.replace('RoleSelection');
     } catch (err: any) {
-      // If email not verified, login will fail
-      setError('Email not verified yet. Check your inbox and click the verification link.');
+      const msg = err.response?.data?.message || '';
+      if (msg.toLowerCase().includes('email') || msg.toLowerCase().includes('confirm')) {
+        setError('Email not verified yet. Please check your inbox and click the link first.');
+      } else {
+        setError('Could not sign in. Please try again.');
+      }
     } finally {
       setVerifyLoading(false);
     }

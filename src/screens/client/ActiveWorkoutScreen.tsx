@@ -12,18 +12,40 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { useAuthStore } from '../../store/authStore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/colors';
+import { workoutApi } from '../../services/api';
 import {
-  SessionExercise,
-  SessionSet,
-  RoutineExercise,
-  Exercise,
-  createWorkoutSession,
-  completeWorkoutSession,
   searchExercises,
   getAllExercises,
 } from '../../db/workoutDb';
+
+interface SessionExercise {
+  exerciseId: string;
+  exerciseName: string;
+  sets: SessionSet[];
+}
+
+interface SessionSet {
+  reps: number;
+  weight: number;
+  completed: boolean;
+}
+
+interface RoutineExercise {
+  exerciseId: string;
+  exerciseName: string;
+  sets: number;
+  reps: number;
+  restSec: number;
+}
+
+interface Exercise {
+  id: string;
+  name: string;
+  muscle: string;
+  equipment: string;
+}
 
 type RouteParams = {
   ActiveWorkout: {
@@ -38,10 +60,9 @@ const MUSCLES = ['All', 'chest', 'back', 'shoulders', 'legs', 'biceps', 'triceps
 export default function ActiveWorkoutScreen() {
   const route = useRoute<RouteProp<RouteParams, 'ActiveWorkout'>>();
   const navigation = useNavigation<any>();
-  const { currentUser } = useAuthStore();
   const { routineId, routineName, exercises: exercisesJson } = route.params;
 
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const [sessionExercises, setSessionExercises] = useState<SessionExercise[]>([]);
   const [timer, setTimer] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -67,29 +88,20 @@ export default function ActiveWorkoutScreen() {
   }, []);
 
   useEffect(() => {
+    // Load user from AsyncStorage
+    AsyncStorage.getItem('user_data').then((raw) => {
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        setUserId(parsed.id);
+      }
+    });
+  }, []);
+
+  useEffect(() => {
     // Start timer
     timerRef.current = setInterval(() => setTimer((t) => t + 1), 1000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, []);
-
-  useEffect(() => {
-    // Start session in DB
-    if (!currentUser || sessionId) return;
-    let routineExs: RoutineExercise[] = [];
-    try { routineExs = JSON.parse(exercisesJson); } catch {}
-    const sessionExs: SessionExercise[] = routineExs.map((re) => ({
-      exerciseId: re.exerciseId,
-      exerciseName: re.exerciseName,
-      sets: Array.from({ length: re.sets }, () => ({ reps: re.reps, weight: 0, completed: false })),
-    }));
-    createWorkoutSession({
-      userId: currentUser.id,
-      coachId: currentUser.coachId || currentUser.id,
-      routineId,
-      routineName,
-      exercises: sessionExs,
-    }).then(setSessionId);
-  }, [currentUser]);
 
   const formatTime = (sec: number): string => {
     const h = Math.floor(sec / 3600);
@@ -183,8 +195,22 @@ export default function ActiveWorkoutScreen() {
       {
         text: 'Finish',
         onPress: async () => {
-          if (sessionId) {
-            await completeWorkoutSession(sessionId, sessionExercises);
+          try {
+            await workoutApi.create({
+              date: new Date().toISOString(),
+              duration_minutes: Math.round(timer / 60),
+              notes: routineName,
+              exercises: sessionExercises
+                .filter((e) => e.sets.some((s) => s.completed))
+                .map((e) => ({
+                  exercise_name: e.exerciseName,
+                  sets_completed: e.sets.filter((s) => s.completed).length,
+                  weight_per_set: e.sets.filter((s) => s.completed).map((s) => s.weight),
+                  reps_per_set: e.sets.filter((s) => s.completed).map((s) => s.reps),
+                })),
+            });
+          } catch (err) {
+            console.error('Failed to save workout:', err);
           }
           if (timerRef.current) clearInterval(timerRef.current);
           navigation.goBack();

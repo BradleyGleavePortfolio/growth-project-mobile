@@ -6,9 +6,12 @@ import {
   ScrollView,
   RefreshControl,
   TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useAuthStore } from '../../store/authStore';
 import { useClientStore } from '../../store/clientStore';
 import { getGreeting, getTodayString as getToday } from '../../utils/date';
@@ -41,7 +44,8 @@ interface HabitsData {
 }
 
 export default function HomeScreen() {
-  const { currentUser, clientProfile } = useAuthStore();
+  const currentUser = useCurrentUser();
+  const { clientProfile } = useAuthStore();
   const {
     selectedDate,
     foodLogs,
@@ -56,6 +60,9 @@ export default function HomeScreen() {
 
   const navigation = useNavigation<any>();
   const [refreshing, setRefreshing] = useState(false);
+  const [asyncTargets, setAsyncTargets] = useState<{
+    calories: number; protein: number; carbs: number; fat: number;
+  } | null>(null);
   const [habitsData, setHabitsData] = useState<HabitsData>({
     total: 0,
     completed: 0,
@@ -95,6 +102,12 @@ export default function HomeScreen() {
       loadDayData(currentUser.id);
       loadProfile(currentUser.id);
       loadHabits();
+      // Load personalized macro targets from AsyncStorage (saved during onboarding)
+      AsyncStorage.getItem('macro_targets').then((raw) => {
+        if (raw) {
+          try { setAsyncTargets(JSON.parse(raw)); } catch {}
+        }
+      });
     }
   }, [currentUser?.id]);
 
@@ -107,7 +120,7 @@ export default function HomeScreen() {
 
   const handleAddWater = (oz: number) => {
     if (currentUser) {
-      logWater(currentUser.id, currentUser.coachId || '', oz);
+      logWater(currentUser.id, '', oz);
     }
   };
 
@@ -117,16 +130,28 @@ export default function HomeScreen() {
     await loadDayData(currentUser.id, selectedDate);
     await loadProfile(currentUser.id);
     await loadHabits();
+    const raw = await AsyncStorage.getItem('macro_targets');
+    if (raw) {
+      try { setAsyncTargets(JSON.parse(raw)); } catch {}
+    }
     setRefreshing(false);
   }, [currentUser?.id, selectedDate]);
 
-  const calorieTarget = clientProfile?.calorieTarget || 2000;
-  const proteinTarget = clientProfile?.proteinTarget || 150;
-  const carbTarget = clientProfile?.carbTarget || 200;
-  const fatTarget = clientProfile?.fatTarget || 65;
+  const calorieTarget = clientProfile?.calorieTarget || asyncTargets?.calories || 2000;
+  const proteinTarget = clientProfile?.proteinTarget || asyncTargets?.protein || 150;
+  const carbTarget = clientProfile?.carbTarget || asyncTargets?.carbs || 200;
+  const fatTarget = clientProfile?.fatTarget || asyncTargets?.fat || 65;
 
   const getMealFoods = (mealType: MealType) =>
     foodLogs.filter((f) => f.mealType === mealType);
+
+  if (!currentUser) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#1A9EA0" />
+      </View>
+    );
+  }
 
   if (isLoading && foodLogs.length === 0) {
     return (
@@ -163,7 +188,7 @@ export default function HomeScreen() {
           <View style={styles.headerRow}>
             <View style={styles.headerText}>
               <Text style={styles.greeting}>
-                {getGreeting()}, {currentUser?.firstName || 'there'}
+                {getGreeting()}, {currentUser?.name || 'there'}
               </Text>
               <Text style={styles.subtitle}>Track your nutrition today</Text>
             </View>

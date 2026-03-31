@@ -2,8 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { OnboardingStackParamList } from '../../navigation/OnboardingNavigator';
-import { useAuthStore } from '../../store/authStore';
-import { updateProfile, getProfileByUserId } from '../../db/profileDb';
+import { saveOnboardingData, getOnboardingData } from '../../utils/onboardingStore';
 import OnboardingLayout from '../../components/OnboardingLayout';
 import OptionCard from '../../components/OptionCard';
 import { Colors } from '../../constants/colors';
@@ -21,20 +20,24 @@ const TIMELINE_OPTIONS = [
 ];
 
 export default function OnboardingStep7({ navigation }: Props) {
-  const { currentUser } = useAuthStore();
   const [timeline, setTimeline] = useState<number | null>(null);
+  const [currentWeight, setCurrentWeight] = React.useState(180);
+  const [targetWeight, setTargetWeight] = React.useState(170);
 
-  const profile = useAuthStore.getState().clientProfile;
-  const currentWeight = profile?.currentWeight || 180;
-  const targetWeight = profile?.targetWeight || 170;
+  React.useEffect(() => {
+    getOnboardingData().then(d => {
+      if (d.currentWeight) setCurrentWeight(d.currentWeight);
+      if (d.targetWeight) setTargetWeight(d.targetWeight);
+    });
+  }, []);
   const weeklyChange =
     timeline && timeline > 0
       ? ((targetWeight - currentWeight) / timeline).toFixed(1)
       : null;
 
   const handleContinue = async () => {
-    if (!timeline || !currentUser) return;
-    await updateProfile(currentUser.id, { timeline });
+    if (!timeline) return;
+    await saveOnboardingData({ timeline });
     navigation.navigate('Step8');
   };
 

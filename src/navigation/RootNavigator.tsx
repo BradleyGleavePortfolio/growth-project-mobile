@@ -1,22 +1,39 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AuthNavigator from './AuthNavigator';
 import ClientNavigator from './ClientNavigator';
 import CoachNavigator from './CoachNavigator';
+import OnboardingNavigator from './OnboardingNavigator';
 import FloatingChatWidget from '../components/FloatingChatWidget';
 import { authEvents } from '../utils/authEvents';
 import { Colors } from '../constants/colors';
 
-type AuthState = 'loading' | 'unauthenticated' | 'coach' | 'student';
+type AuthState = 'loading' | 'unauthenticated' | 'onboarding' | 'coach' | 'student';
+
+// Extract the active tab name from nested navigation state
+function getActiveTabName(state: any): string | undefined {
+  if (!state) return undefined;
+  const route = state.routes?.[state.index];
+  if (!route) return undefined;
+  // If this route has nested state, recurse; otherwise return the name
+  if (route.state) return getActiveTabName(route.state) ?? route.name;
+  return route.name;
+}
 
 export default function RootNavigator() {
   const [authState, setAuthState] = useState<AuthState>('loading');
+  const navigationRef = useRef<NavigationContainerRef<any>>(null);
+  const [activeRoute, setActiveRoute] = useState<string | undefined>();
+
+  const onNavigationStateChange = useCallback(() => {
+    const state = navigationRef.current?.getRootState();
+    setActiveRoute(getActiveTabName(state));
+  }, []);
 
   useEffect(() => {
     bootstrapAuth();
-    // Re-check auth whenever a login/register screen fires the event
     const unsubscribe = authEvents.onAuthChange(bootstrapAuth);
     return unsubscribe;
   }, []);
@@ -25,23 +42,48 @@ export default function RootNavigator() {
     try {
       const token = await AsyncStorage.getItem('supabase_token');
       const userRaw = await AsyncStorage.getItem('user_data');
+      const needsRoleSelection = await AsyncStorage.getItem('needs_role_selection');
 
       if (!token || !userRaw) {
         setAuthState('unauthenticated');
         return;
       }
 
-      const user = JSON.parse(userRaw);
+      // Role selection not done yet — stay in auth flow
+      if (needsRoleSelection === 'true') {
+        setAuthState('unauthenticated');
+        return;
+      }
+
+      let user = null;
+      try {
+        user = JSON.parse(userRaw);
+      } catch {
+        // Corrupted storage — treat as logged out
+        await AsyncStorage.removeItem('user_data');
+        setAuthState('unauthenticated');
+        return;
+      }
       const role = user?.role;
 
       if (role === 'coach') {
         setAuthState('coach');
-      } else if (role === 'student') {
-        setAuthState('student');
-      } else {
-        // Token exists but role not set yet — show auth (role selection)
-        setAuthState('unauthenticated');
+        return;
       }
+
+      if (role === 'student') {
+        // Check if onboarding quiz has been completed
+        const onboardingDone = await AsyncStorage.getItem('onboarding_complete');
+        if (onboardingDone !== 'true') {
+          setAuthState('onboarding');
+          return;
+        }
+        setAuthState('student');
+        return;
+      }
+
+      // Token exists but no role yet
+      setAuthState('unauthenticated');
     } catch {
       setAuthState('unauthenticated');
     }
@@ -55,16 +97,24 @@ export default function RootNavigator() {
     );
   }
 
+  // Hide the GP chat widget on Profile and Recipes screens
+  const hideWidget = activeRoute === 'ProfileStack' || activeRoute === 'ProfileMain'
+    || activeRoute === 'Settings' || activeRoute === 'Report'
+    || activeRoute === 'Widgets' || activeRoute === 'Learn'
+    || activeRoute === 'Recipes';
+
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef} onStateChange={onNavigationStateChange}>
       {authState === 'unauthenticated' ? (
         <AuthNavigator />
+      ) : authState === 'onboarding' ? (
+        <OnboardingNavigator />
       ) : authState === 'coach' ? (
         <CoachNavigator />
       ) : (
         <>
           <ClientNavigator />
-          <FloatingChatWidget />
+          <FloatingChatWidget visible={!hideWidget} />
         </>
       )}
     </NavigationContainer>

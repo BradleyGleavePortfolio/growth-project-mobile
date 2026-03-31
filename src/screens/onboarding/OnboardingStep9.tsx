@@ -2,8 +2,7 @@ import React, { useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { OnboardingStackParamList } from '../../navigation/OnboardingNavigator';
-import { useAuthStore } from '../../store/authStore';
-import { updateProfile } from '../../db/profileDb';
+import { saveOnboardingData } from '../../utils/onboardingStore';
 import OnboardingLayout from '../../components/OnboardingLayout';
 import OptionCard from '../../components/OptionCard';
 
@@ -19,12 +18,11 @@ const FITNESS_LEVELS = [
 ];
 
 export default function OnboardingStep9({ navigation }: Props) {
-  const { currentUser } = useAuthStore();
   const [selected, setSelected] = useState<string | null>(null);
 
   const handleContinue = async () => {
-    if (!selected || !currentUser) return;
-    await updateProfile(currentUser.id, { fitnessLevel: selected as any });
+    if (!selected) return;
+    await saveOnboardingData({ fitnessLevel: selected });
     navigation.navigate('Step10');
   };
 

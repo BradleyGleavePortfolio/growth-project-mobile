@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useAuthStore } from '../../store/authStore';
 import { updateProfile } from '../../db/profileDb';
 import { Colors } from '../../constants/colors';
@@ -47,12 +48,11 @@ const DEFAULT_SETTINGS: ClientSettings = {
 };
 
 export default function SettingsScreen({ navigation }: any) {
-  const { currentUser, clientProfile, signOut, refreshProfile } = useAuthStore();
+  const currentUser = useCurrentUser();
+  const { clientProfile, signOut, refreshProfile } = useAuthStore();
   const [settings, setSettings] = useState<ClientSettings>(DEFAULT_SETTINGS);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
-  const [firstName, setFirstName] = useState(currentUser?.firstName || '');
-  const [lastName, setLastName] = useState(currentUser?.lastName || '');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
 
@@ -61,9 +61,14 @@ export default function SettingsScreen({ navigation }: any) {
   }, []);
 
   const loadSettings = async () => {
-    const stored = await AsyncStorage.getItem(SETTINGS_KEY);
-    if (stored) {
-      setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(stored) });
+    try {
+      const stored = await AsyncStorage.getItem(SETTINGS_KEY);
+      if (stored) {
+        setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(stored) });
+      }
+    } catch {
+      await AsyncStorage.removeItem(SETTINGS_KEY);
+      setSettings(DEFAULT_SETTINGS);
     }
   };
 
@@ -97,7 +102,7 @@ export default function SettingsScreen({ navigation }: any) {
         style: 'destructive',
         onPress: async () => {
           warningTap();
-          if (currentUser) {
+          if (currentUser?.id) {
             await updateProfile(currentUser.id, { onboardingCompleted: false });
             await refreshProfile();
           }
@@ -147,14 +152,13 @@ export default function SettingsScreen({ navigation }: any) {
         <View style={styles.card}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>
-              {currentUser?.firstName?.charAt(0) || ''}
-              {currentUser?.lastName?.charAt(0) || ''}
+              {currentUser?.name?.charAt(0)?.toUpperCase() || ''}
             </Text>
           </View>
           <View style={styles.row}>
             <Text style={styles.rowLabel}>Name</Text>
             <Text style={styles.rowValue}>
-              {currentUser?.firstName} {currentUser?.lastName}
+              {currentUser?.name || 'No name set'}
             </Text>
           </View>
           <View style={styles.row}>
