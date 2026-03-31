@@ -10,7 +10,7 @@ import {
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../../navigation/AuthNavigator';
 // All colors from central theme — never hardcode hex values here
-import { Colors, Typography, Spacing, Radius } from '../../theme/index';
+import { Colors, Spacing, Radius } from '../../theme/index';
 
 type Props = {
   navigation: NativeStackNavigationProp<AuthStackParamList, 'Welcome'>;
