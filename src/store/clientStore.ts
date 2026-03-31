@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { logApi, profileApi } from '../services/api';
+import { logApi, profileApi, waterApi } from '../services/api';
 import { getTodayString } from '../utils/date';
 import { MealType, FoodLog } from '../types';
 
@@ -44,8 +44,13 @@ export const useClientStore = create<ClientStore>((set, get) => ({
     try {
       set({ isLoading: true });
       const d = date || get().selectedDate;
-      const response = await logApi.getDaily(d);
-      const data = response.data;
+
+      // Fetch food logs and water in parallel
+      const [foodResponse, waterResponse] = await Promise.all([
+        logApi.getDaily(d),
+        waterApi.getDaily(d).catch(() => ({ data: { total_ml: 0 } })),
+      ]);
+      const data = foodResponse.data;
 
       // Map entries to FoodLog shape
       const logs: FoodLog[] = (data.entries || []).map((e: any) => ({
@@ -65,6 +70,10 @@ export const useClientStore = create<ClientStore>((set, get) => ({
         coachId: '',
       }));
 
+      // Convert ml to oz for display (1 oz = 29.5735 ml)
+      const totalMl = waterResponse.data?.total_ml || 0;
+      const waterOz = Math.round(totalMl / 29.5735);
+
       set({
         foodLogs: logs,
         dailyTotals: {
@@ -73,6 +82,7 @@ export const useClientStore = create<ClientStore>((set, get) => ({
           carbs: data.total_carbs_g || 0,
           fat: data.total_fat_g || 0,
         },
+        waterOz,
         selectedDate: d,
         isLoading: false,
       });
@@ -100,8 +110,16 @@ export const useClientStore = create<ClientStore>((set, get) => ({
     }
   },
 
-  logWater: async (_userId: string, _coachId: string, amount: number) => {
-    // Water is still local — add to existing amount
-    set((state) => ({ waterOz: state.waterOz + amount }));
+  logWater: async (_userId: string, _coachId: string, amountOz: number) => {
+    // Optimistic update — add immediately, sync to backend
+    set((state) => ({ waterOz: state.waterOz + amountOz }));
+    try {
+      const amountMl = Math.round(amountOz * 29.5735);
+      const date = get().selectedDate;
+      await waterApi.log({ amount_ml: amountMl, date });
+    } catch {
+      // Revert on failure
+      set((state) => ({ waterOz: Math.max(0, state.waterOz - amountOz) }));
+    }
   },
 }));

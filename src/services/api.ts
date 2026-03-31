@@ -173,6 +173,15 @@ export const communityApi = {
     api.post('/community/wins', data),
 };
 
+export const waterApi = {
+  log: (data: { amount_ml: number; date?: string }) =>
+    api.post('/nutrition/water', data),
+  getDaily: (date: string) =>
+    api.get(`/nutrition/water?date=${date}`),
+  getWeekly: (startDate: string) =>
+    api.get(`/nutrition/water/weekly?start_date=${startDate}`),
+};
+
 export const lessonsApi = {
   getAll: () => api.get('/lessons'),
   create: (data: Record<string, any>) => api.post('/lessons', data),
