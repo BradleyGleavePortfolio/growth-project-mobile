@@ -53,40 +53,16 @@ export default function LoginScreen({ navigation }: Props) {
     }
   };
 
-  const handleGoogleLogin = async () => {
-    // Google Sign-In via @react-native-google-signin/google-signin
-    // The actual Google token exchange happens here; Supabase handles OAuth
-    setGoogleLoading(true);
-    setError('');
-
-    try {
-      // GoogleSignin.configure is called in App.tsx
-      // Import GoogleSignin from @react-native-google-signin/google-signin
-      const { GoogleSignin } = await import('@react-native-google-signin/google-signin');
-      await GoogleSignin.hasPlayServices();
-      await GoogleSignin.signIn();
-      const { idToken } = await GoogleSignin.getTokens();
-
-      const response = await authApi.googleAuth(idToken);
-      const { access_token, user, is_new_user } = response.data;
-
-      await AsyncStorage.setItem('supabase_token', access_token);
-      await AsyncStorage.setItem('user_data', JSON.stringify(user));
-
-      if (is_new_user || !user.role || user.role === 'student') {
-        // For new Google users, go to role selection
-        navigation.replace('RoleSelection');
-      } else {
-        authEvents.emit();
-      }
-    } catch (err: any) {
-      if (err.code !== '-5') {
-        // -5 = user cancelled, don't show error
-        setError('Google sign-in failed. Try again.');
-      }
-    } finally {
-      setGoogleLoading(false);
-    }
+  const handleGoogleLogin = () => {
+    // Google Sign-In requires expo-auth-session + Google Cloud OAuth setup.
+    // Showing "Coming Soon" until OAuth credentials are configured.
+    import('react-native').then(({ Alert }) => {
+      Alert.alert(
+        'Coming Soon',
+        'Google sign-in will be available in a future update. Please sign in with your email and password.',
+        [{ text: 'OK' }],
+      );
+    });
   };
 
   return (

@@ -32,6 +32,7 @@ export default function CreateAccountScreen({ navigation }: Props) {
 
   const validatePassword = (pw: string) => {
     if (pw.length < 8) return 'Password must be at least 8 characters';
+    if (!/[A-Z]/.test(pw)) return 'Password must contain at least 1 uppercase letter';
     if (!/[0-9]/.test(pw)) return 'Password must contain at least 1 number';
     if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pw)) return 'Password must contain at least 1 special character';
     return null;
@@ -103,26 +104,16 @@ export default function CreateAccountScreen({ navigation }: Props) {
     }
   };
 
-  const handleGoogleSignup = async () => {
-    try {
-      const { GoogleSignin } = await import('@react-native-google-signin/google-signin');
-      await GoogleSignin.hasPlayServices();
-      await GoogleSignin.signIn();
-      const { idToken } = await GoogleSignin.getTokens();
-
-      const response = await authApi.googleAuth(idToken);
-      const { access_token, user } = response.data;
-
-      await AsyncStorage.setItem('supabase_token', access_token);
-      await AsyncStorage.setItem('user_data', JSON.stringify(user));
-
-      // Google users are pre-verified — go straight to role selection
-      navigation.replace('RoleSelection');
-    } catch (err: any) {
-      if (err.code !== '-5') {
-        setError('Google sign-up failed. Try again.');
-      }
-    }
+  const handleGoogleSignup = () => {
+    // Google Sign-In requires expo-auth-session + Google Cloud OAuth setup.
+    // Showing "Coming Soon" until OAuth credentials are configured.
+    import('react-native').then(({ Alert }) => {
+      Alert.alert(
+        'Coming Soon',
+        'Google sign-in will be available in a future update. Please create an account with your email for now.',
+        [{ text: 'OK' }],
+      );
+    });
   };
 
   if (step === 'verify') {
@@ -214,7 +205,7 @@ export default function CreateAccountScreen({ navigation }: Props) {
             style={styles.input}
             value={password}
             onChangeText={setPassword}
-            placeholder="Min 8 chars, 1 number, 1 special char"
+            placeholder="Min 8 chars, 1 upper, 1 number, 1 special"
             placeholderTextColor={Colors.textMuted}
             secureTextEntry
           />
