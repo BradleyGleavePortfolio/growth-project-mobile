@@ -204,7 +204,7 @@ export default function EducationScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Learn</Text>
-        <Text style={styles.subtitle}>Build your nutrition knowledge</Text>
+        <Text style={styles.subtitle}>Build your nutrition &amp; fitness knowledge</Text>
       </View>
 
       {/* Progress Card */}
@@ -295,6 +295,9 @@ export default function EducationScreen() {
                     <Text style={[styles.lessonCategoryText, { color: catColor }]}>
                       {item.category}
                     </Text>
+                  </View>
+                  <View style={styles.featuredTag}>
+                    <Text style={styles.featuredTagText}>Featured</Text>
                   </View>
                   <Text style={styles.lessonDuration}>{item.durationMin} min</Text>
                 </View>
@@ -389,6 +392,17 @@ const styles = StyleSheet.create({
   lessonMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
   lessonCategoryTag: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 },
   lessonCategoryText: { fontSize: 11, fontWeight: '600' },
+  featuredTag: {
+    backgroundColor: Colors.primaryPale,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  featuredTagText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
   lessonDuration: { fontSize: 11, color: Colors.textMuted },
   // ── Detail View ──
   detailHeader: {

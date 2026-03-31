@@ -261,11 +261,11 @@ export async function seedCommunityIfNeeded(): Promise<void> {
   );
 
   const demoWins = [
-    { type: 'streak' as const, title: '7-Day Logging Streak!', description: 'Logged meals for 7 days straight' },
-    { type: 'workout' as const, title: 'First Workout Complete!', description: 'Completed their first workout session' },
-    { type: 'weight' as const, title: 'Goal Weight Reached!', description: 'Lost 5 lbs and hit their target' },
-    { type: 'habit' as const, title: 'Habit Master', description: 'Completed all daily habits for a week' },
-    { type: 'lesson' as const, title: 'Knowledge Seeker', description: 'Completed 10 education lessons' },
+    { type: 'streak' as const, title: '7-Day Logging Streak!', description: 'Tracked every meal for 7 days straight — consistency pays off!' },
+    { type: 'workout' as const, title: 'Crushed Leg Day!', description: 'Hit a new squat PR of 225 lbs after 8 weeks of progressive overload' },
+    { type: 'weight' as const, title: 'Down 5 lbs This Month!', description: 'Stayed in a caloric deficit and hit their target weight — discipline wins' },
+    { type: 'habit' as const, title: 'Perfect Habit Week', description: 'Completed all daily habits for 7 days — water, vitamins, stretching, and meal prep' },
+    { type: 'lesson' as const, title: 'Nutrition Scholar', description: 'Finished 10 nutrition and fitness lessons — knowledge is power!' },
   ];
 
   for (let i = 0; i < demoWins.length; i++) {
