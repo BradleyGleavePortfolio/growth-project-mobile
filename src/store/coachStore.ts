@@ -1,17 +1,14 @@
 import { create } from 'zustand';
-import { User, FoodLog } from '../types';
-import { getClientsByCoachId } from '../db/userDb';
-import { getRecentFoodLogsForCoach } from '../db/foodLogDb';
+import { User } from '../types';
+import { coachApi } from '../services/api';
 
 interface CoachStore {
   clients: User[];
-  recentLogs: (FoodLog & { firstName?: string; lastName?: string })[];
   isLoading: boolean;
   searchQuery: string;
   filterStatus: 'all' | 'active' | 'archived';
 
   loadClients: (coachId: string) => Promise<void>;
-  loadRecentActivity: (coachId: string) => Promise<void>;
   setSearchQuery: (query: string) => void;
   setFilterStatus: (status: 'all' | 'active' | 'archived') => void;
   getFilteredClients: () => User[];
@@ -19,28 +16,34 @@ interface CoachStore {
 
 export const useCoachStore = create<CoachStore>((set, get) => ({
   clients: [],
-  recentLogs: [],
   isLoading: false,
   searchQuery: '',
   filterStatus: 'all',
 
-  loadClients: async (coachId: string) => {
+  loadClients: async (_coachId: string) => {
     try {
       set({ isLoading: true });
-      const clients = await getClientsByCoachId(coachId);
+      const res = await coachApi.getClients();
+      const raw: any[] = res.data || [];
+      const clients: User[] = raw.map((u: any) => {
+        const parts = (u.name || '').split(' ');
+        return {
+          id: u.id,
+          role: u.role === 'student' ? 'client' : u.role,
+          email: u.email || '',
+          passwordHash: '',
+          firstName: parts[0] || '',
+          lastName: parts.slice(1).join(' ') || '',
+          coachId: u.coach_id,
+          status: 'active' as const,
+          createdAt: u.created_at || new Date().toISOString(),
+          updatedAt: u.created_at || new Date().toISOString(),
+        };
+      });
       set({ clients, isLoading: false });
     } catch (err) {
       console.error('loadClients error:', err);
       set({ isLoading: false });
-    }
-  },
-
-  loadRecentActivity: async (coachId: string) => {
-    try {
-      const logs = await getRecentFoodLogsForCoach(coachId);
-      set({ recentLogs: logs });
-    } catch (err) {
-      console.error('loadRecentActivity error:', err);
     }
   },
 
