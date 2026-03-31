@@ -154,6 +154,12 @@ export const coachApi = {
   getClients: () => api.get('/coach/clients'),
   getClientTimeline: (clientId: string, days?: number) =>
     api.get(`/coach/clients/${clientId}/timeline${days ? `?days=${days}` : ''}`),
+  getClientSummary: (clientId: string) =>
+    api.get(`/coach/clients/${clientId}/summary`),
+  getGuidelines: (clientId: string) =>
+    api.get(`/coach/guidelines/${clientId}`),
+  getMyGuidelines: () =>
+    api.get('/coach/my-guidelines'),
   postGuidelines: (clientId: string, guidelines: string) =>
     api.post(`/coach/guidelines/${clientId}`, { guidelines }),
   getAlerts: () => api.get('/coach/alerts'),
