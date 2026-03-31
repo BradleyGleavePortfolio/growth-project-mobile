@@ -15,7 +15,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useAuthStore } from '../../store/authStore';
-import { getClientsByCoachId } from '../../db/userDb';
+import { coachApi } from '../../services/api';
 import { Colors } from '../../constants/colors';
 import { mediumTap, warningTap, successTap } from '../../utils/haptics';
 
@@ -56,8 +56,9 @@ export default function SettingsScreen() {
       const bio = await AsyncStorage.getItem('gp_coach_bio_' + userId);
       if (bio) setBioText(bio);
       if (userId) {
-        const clients = await getClientsByCoachId(userId);
-        setClientCount(clients.length);
+        const res = await coachApi.getClients();
+        const clients = res.data;
+        setClientCount(Array.isArray(clients) ? clients.length : 0);
       }
     } catch {}
   }, [userId]);

@@ -15,12 +15,7 @@ import { RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { ClientsStackParamList } from '../../navigation/CoachNavigator';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
-import { getProfileByUserId } from '../../db/profileDb';
-import { getFoodLogsByDateForCoach, getDailyTotals, getFoodLogsByDate } from '../../db/foodLogDb';
-import { getFastingHistory } from '../../db/fastingDb';
 import { getMealPlan, parsePlanData, PlanData, PlanDay } from '../../db/mealPlanDb';
-import { getWeightLogsForPeriod } from '../../db/weightLogDb';
-import { getWorkoutSessions, WorkoutSession, SessionExercise } from '../../db/workoutDb';
 import { createNotification } from '../../db/notificationsDb';
 import { coachApi } from '../../services/api';
 import { Colors } from '../../constants/colors';
@@ -28,6 +23,28 @@ import { ClientProfile, FoodLog, WeightLog } from '../../types';
 import { getTodayString, addDays } from '../../utils/date';
 
 // ── Types ────────────────────────────────────────────────────────────────────
+interface SessionSet {
+  reps: number;
+  weight: number;
+  completed: boolean;
+}
+
+interface SessionExercise {
+  exerciseId: string;
+  exerciseName: string;
+  name?: string;
+  sets: SessionSet[];
+}
+
+interface WorkoutSession {
+  id: string;
+  routineName: string;
+  startTime: string;
+  endTime?: string;
+  completed: boolean;
+  exercises: string; // JSON array of SessionExercise
+}
+
 interface WeekSummary {
   weekStart: string;    // ISO date string (Monday)
   weekEnd: string;      // ISO date string (Sunday)
@@ -48,7 +65,7 @@ type TabKey = 'summary' | 'logs' | 'mealplan' | 'progress' | 'workouts' | 'timel
 
 interface TimelineEvent {
   id: string;
-  type: 'food' | 'weight' | 'workout' | 'fasting';
+  type: 'food' | 'weight' | 'workout' | 'fasting' | 'checkin';
   title: string;
   subtitle: string;
   date: string;
@@ -88,27 +105,67 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
       const ws = d.toISOString().split('T')[0];
       setWeekStart(ws);
 
-      const [p, logs, t, plan, wLogs, sessions] = await Promise.all([
-        getProfileByUserId(clientId),
-        currentUser
-          ? getFoodLogsByDateForCoach(clientId, currentUser.id, today)
-          : Promise.resolve([]),
-        getDailyTotals(clientId, today),
-        getMealPlan(clientId, ws),
-        getWeightLogsForPeriod(clientId, 30),
-        getWorkoutSessions(clientId, 10),
-      ]);
-      setProfile(p);
+      const res = await coachApi.getClientSummary(clientId);
+      const data = res.data;
+      if (data.error) return;
+
+      // Set profile
+      setProfile(data.profile ? {
+        ...data.profile,
+        name: data.client_name,
+      } : null);
+
+      // Set food logs (map API response to expected shape)
+      const logs = (data.today?.entries || []).map((e: any) => ({
+        id: e.id,
+        foodName: e.food_item?.name || '',
+        calories: Math.round((e.food_item?.calories || 0) * (e.quantity_multiplier || 1)),
+        protein: Math.round((e.food_item?.protein_g || 0) * (e.quantity_multiplier || 1)),
+        carbs: Math.round((e.food_item?.carbs_g || 0) * (e.quantity_multiplier || 1)),
+        fat: Math.round((e.food_item?.fat_g || 0) * (e.quantity_multiplier || 1)),
+        mealType: e.meal_type,
+        date: today,
+      }));
       setFoodLogs(logs);
-      setTotals(t);
+
+      // Set totals
+      setTotals({
+        calories: data.today?.total_calories || 0,
+        protein: data.today?.total_protein_g || 0,
+        carbs: data.today?.total_carbs_g || 0,
+        fat: data.today?.total_fat_g || 0,
+      });
+
+      // Weight logs
+      setWeightLogs((data.weight_logs || []).map((w: any) => ({
+        id: w.id,
+        weight: w.weight_lbs,
+        date: typeof w.date === 'string' ? w.date.slice(0, 10) : new Date(w.date).toISOString().split('T')[0],
+        notes: w.notes || '',
+      })));
+
+      // Workout sessions
+      setWorkoutSessions((data.recent_workouts || []).map((s: any) => ({
+        id: s.id,
+        routineName: s.name || 'Workout',
+        startTime: s.created_at,
+        endTime: s.completed_at,
+        completed: true,
+        exercises: JSON.stringify((s.exercises || []).map((ex: any) => ({
+          exerciseId: ex.id || '',
+          exerciseName: ex.exercise_name || ex.name,
+          sets: ex.sets_data || [],
+        }))),
+      })));
+
+      // Meal plan stays local (local-first feature — coaches build meal plans offline)
+      const plan = await getMealPlan(clientId, ws).catch(() => null);
       setPlanData(plan ? parsePlanData(plan.planData) : {});
-      setWeightLogs(wLogs);
-      setWorkoutSessions(sessions);
     } catch (err) {
     } finally {
       setIsLoading(false);
     }
-  }, [clientId, currentUser?.id, refreshing]);
+  }, [clientId, refreshing]);
 
   useEffect(() => {
     loadData();
@@ -160,84 +217,77 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
 
   const loadTimeline = useCallback(async () => {
     try {
-      const events: TimelineEvent[] = [];
-      const daysToLoad = selectedDays;
+      const res = await coachApi.getClientTimeline(clientId, selectedDays);
+      const data = res.data;
+      if (data.error) return;
 
-      // Food logs (grouped by date)
-      const foodDates = new Set<string>();
-      let dayOffset = 0;
-      while (dayOffset < daysToLoad) {
-        const d = new Date();
-        d.setDate(d.getDate() - dayOffset);
-        const dateStr = d.toISOString().split('T')[0];
-        if (!foodDates.has(dateStr)) {
-          foodDates.add(dateStr);
-          const logs = await getFoodLogsByDate(clientId, dateStr);
-          if (logs.length > 0) {
-            const totalCals = logs.reduce((s, l) => s + l.calories, 0);
-            events.push({
-              id: `food_${dateStr}`,
-              type: 'food',
-              title: `${logs.length} meals logged`,
-              subtitle: `${Math.round(totalCals)} kcal total`,
-              date: dateStr + 'T12:00:00',
-              icon: 'restaurant',
-              iconColor: Colors.primary,
-            });
-          }
-        }
-        dayOffset++;
+      const events: TimelineEvent[] = [];
+
+      // Food events grouped by date
+      const mealsByDate = new Map<string, { count: number; totalCals: number }>();
+      for (const meal of (data.meals || [])) {
+        const dateStr = (meal.logged_at || '').slice(0, 10);
+        if (!dateStr) continue;
+        const existing = mealsByDate.get(dateStr) || { count: 0, totalCals: 0 };
+        existing.count += 1;
+        existing.totalCals += (meal.food_item?.calories || 0) * (meal.quantity_multiplier || 1);
+        mealsByDate.set(dateStr, existing);
+      }
+      for (const [dateStr, info] of mealsByDate) {
+        events.push({
+          id: `food_${dateStr}`,
+          type: 'food',
+          title: `${info.count} meals logged`,
+          subtitle: `${Math.round(info.totalCals)} kcal total`,
+          date: dateStr + 'T12:00:00',
+          icon: 'restaurant',
+          iconColor: Colors.primary,
+        });
       }
 
-      // Weight logs
-      const wLogs = await getWeightLogsForPeriod(clientId, daysToLoad);
-      for (const w of wLogs) {
+      // Weight events
+      for (const w of (data.weights || [])) {
+        const dateStr = (w.date || '').slice(0, 10);
         events.push({
           id: `weight_${w.id}`,
           type: 'weight',
-          title: `Weight: ${w.weight} lbs`,
+          title: `Weight: ${w.weight_lbs} lbs`,
           subtitle: w.notes || 'Weight logged',
-          date: w.date + 'T08:00:00',
+          date: dateStr + 'T08:00:00',
           icon: 'scale',
           iconColor: Colors.info,
         });
       }
 
-      // Workout sessions
-      const wSessions = await getWorkoutSessions(clientId, 50);
-      for (const s of wSessions) {
-        if (!s.completed) continue;
+      // Workout events
+      for (const s of (data.workouts || [])) {
         events.push({
           id: `workout_${s.id}`,
           type: 'workout',
-          title: s.routineName,
-          subtitle: s.endTime ? `Completed · ${Math.round((new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 60000)} min` : 'Completed',
-          date: s.startTime,
+          title: s.name || 'Workout',
+          subtitle: s.completed_at ? `Completed` : 'Logged',
+          date: s.created_at || s.date,
           icon: 'barbell',
           iconColor: '#9B72AA',
         });
       }
 
-      // Fasting sessions
-      const fSessions = await getFastingHistory(clientId);
-      for (const f of fSessions.slice(0, 20)) {
-        if (!f.completed) continue;
+      // Check-in events
+      for (const c of (data.checkIns || [])) {
         events.push({
-          id: `fast_${f.id}`,
-          type: 'fasting',
-          title: `${f.targetHours}h fast completed`,
-          subtitle: f.endTime ? `Ended ${new Date(f.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Completed',
-          date: f.startTime,
-          icon: 'timer',
-          iconColor: Colors.warning,
+          id: `checkin_${c.id}`,
+          type: 'checkin',
+          title: 'Check-in',
+          subtitle: c.notes || `Mood: ${c.mood_rating}/5`,
+          date: c.date + 'T09:00:00',
+          icon: 'chatbubble-ellipses',
+          iconColor: Colors.primary,
         });
       }
 
-      // Sort by date DESC
       events.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       setTimeline(events);
-    } catch (err) {
-    }
+    } catch (err) {}
   }, [clientId, selectedDays]);
 
   // ── Weekly Summary ────────────────────────────────────────────────────────────
