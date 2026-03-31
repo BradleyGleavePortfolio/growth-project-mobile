@@ -119,9 +119,19 @@ export default function AIGuideScreen() {
         ? Math.floor((Date.now() - new Date(currentUser.createdAt).getTime()) / (1000 * 60 * 60 * 24))
         : 1;
 
+      const profileAsClientProfile = currentUser?.profile ? {
+        id: '',
+        userId: currentUser.id,
+        coachId: currentUser.coach_id || '',
+        onboardingCompleted: true,
+        createdAt: currentUser.createdAt || new Date().toISOString(),
+        updatedAt: currentUser.createdAt || new Date().toISOString(),
+        ...currentUser.profile,
+      } as import('../../types').ClientProfile : null;
+
       const aiText = getAIResponse(text, {
         firstName: currentUser?.firstName || currentUser?.name || 'there',
-        profile: currentUser?.profile || null,
+        profile: profileAsClientProfile,
         daysSinceStart,
         loggingStreak: 0,
       });
@@ -137,7 +147,7 @@ export default function AIGuideScreen() {
       setMessages((prev) => [...prev, aiMsg]);
       await saveChatMessage(userId, aiMsg);
     },
-    [userId, currentUser, clientProfile]
+    [userId, currentUser]
   );
 
   const renderMessage = ({ item }: { item: ChatMessage }) => {

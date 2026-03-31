@@ -278,10 +278,18 @@ export default function ProgressScreen() {
   const goalWeight = macroTargets?.goalWeight || null;
   const change = latestWeight && startWeight ? latestWeight - startWeight : null;
 
-  // BMI calculation — no height stored in macroTargets currently
-  const bmi: number | null = null;
-  const bmiCategory: string | null = null;
-  const bmiColor = Colors.textMuted;
+  // BMI calculation — uses latest weight + profile height
+  let bmi: number | null = null;
+  let bmiCategory: string | null = null;
+  let bmiColor = Colors.textMuted;
+  if (latestWeight && macroTargets?.height) {
+    const heightM = macroTargets.height * 0.0254; // inches to meters
+    bmi = latestWeight * 0.453592 / (heightM * heightM); // lbs to kg / m^2
+    if (bmi < 18.5) { bmiCategory = 'Underweight'; bmiColor = Colors.warning; }
+    else if (bmi < 25) { bmiCategory = 'Normal'; bmiColor = Colors.success; }
+    else if (bmi < 30) { bmiCategory = 'Overweight'; bmiColor = Colors.warning; }
+    else { bmiCategory = 'Obese'; bmiColor = Colors.error; }
+  }
 
   // Macro adherence
   const macroData = [

@@ -396,7 +396,7 @@ export default function LogScreen() {
 
   const handleDeleteFood = async (log: FoodLog) => {
     if (!currentUser) return;
-    Alert.alert('Delete Food', `Remove ${log.foodName || log.name}?`, [
+    Alert.alert('Delete Food', `Remove ${log.foodName}?`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -709,7 +709,7 @@ export default function LogScreen() {
                         style={{ backgroundColor: Colors.primary, borderRadius: 999, paddingHorizontal: 24, paddingVertical: 10, marginTop: 12 }}
                         onPress={() => handleSearch(searchQuery)}
                       >
-                        <Text style={{ color: Colors.textOnPrimary, fontWeight: '600', fontSize: 14 }}>Retry Search</Text>
+                        <Text style={{ color: Colors.white, fontWeight: '600', fontSize: 14 }}>Retry Search</Text>
                       </TouchableOpacity>
                     </View>
                   ) : null

@@ -21,9 +21,13 @@ interface Message {
   timestamp: Date;
 }
 
+interface FloatingChatWidgetProps {
+  visible?: boolean;
+}
+
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-export default function FloatingChatWidget() {
+export default function FloatingChatWidget({ visible = true }: FloatingChatWidgetProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
@@ -84,10 +88,12 @@ export default function FloatingChatWidget() {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
+  if (!visible && !isOpen) return null;
+
   return (
     <>
-      {/* Floating GP button — hidden when chat modal is open */}
-      <TouchableOpacity style={[styles.fab, isOpen && styles.fabHidden]} onPress={openChat} activeOpacity={0.85}>
+      {/* Floating GP button — hidden when chat modal is open or visibility is off */}
+      <TouchableOpacity style={[styles.fab, (isOpen || !visible) && styles.fabHidden]} onPress={openChat} activeOpacity={0.85}>
         <Text style={styles.fabText}>GP</Text>
       </TouchableOpacity>
 
