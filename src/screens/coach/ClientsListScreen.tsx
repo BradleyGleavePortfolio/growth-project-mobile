@@ -54,8 +54,8 @@ export default function ClientsListScreen({ navigation }: Props) {
     >
       <View style={styles.avatar}>
         <Text style={styles.avatarText}>
-          {item.firstName[0]}
-          {item.lastName[0]}
+          {(item.firstName || '?')[0]}
+          {(item.lastName || '')[0]}
         </Text>
       </View>
       <View style={styles.clientInfo}>

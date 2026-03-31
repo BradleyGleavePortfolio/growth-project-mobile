@@ -301,7 +301,7 @@ export default function ProgramTemplatesScreen() {
                 >
                   <View style={styles.clientAvatar}>
                     <Text style={styles.clientAvatarText}>
-                      {client.firstName[0]}{client.lastName[0]}
+                      {(client.firstName || '?')[0]}{(client.lastName || '')[0]}
                     </Text>
                   </View>
                   <View style={styles.clientRowInfo}>
