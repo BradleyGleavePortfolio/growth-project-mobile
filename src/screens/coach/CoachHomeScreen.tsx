@@ -15,7 +15,7 @@ import { useCoachStore } from '../../store/coachStore';
 import { Colors } from '../../constants/colors';
 import { getGreeting } from '../../utils/date';
 import FadeInView from '../../components/FadeInView';
-import { getWeightLogsForPeriod } from '../../db/weightLogDb';
+import { coachApi } from '../../services/api';
 
 interface RedFlagClient {
   id: string;
@@ -25,68 +25,37 @@ interface RedFlagClient {
 
 export default function CoachHomeScreen() {
   const currentUser = useCurrentUser();
-  const { clients, recentLogs, isLoading, loadClients, loadRecentActivity } =
-    useCoachStore();
+  const { clients, isLoading, loadClients } = useCoachStore();
   const navigation = useNavigation<any>();
   const [refreshing, setRefreshing] = useState(false);
   const [redFlagClients, setRedFlagClients] = useState<RedFlagClient[]>([]);
   const [overdueClients, setOverdueClients] = useState<string[]>([]);
 
   const detectRedFlags = useCallback(async () => {
-    const flags: RedFlagClient[] = [];
-    const overdue: string[] = [];
-    const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    try {
+      const alertsRes = await coachApi.getAlerts();
+      const alerts: any[] = alertsRes.data || [];
+      const flags: RedFlagClient[] = alerts
+        .filter((a: any) => a.type === 'weight_increasing')
+        .map((a: any) => ({
+          id: a.client_id,
+          name: a.client_name,
+          trend: a.message,
+        }));
+      setRedFlagClients(flags);
 
-    for (const client of clients) {
-      if (client.status !== 'active') continue;
-
-      // Check weight trend (3+ consecutive increases)
-      try {
-        const weightLogs = await getWeightLogsForPeriod(client.id, 30);
-        if (weightLogs.length >= 3) {
-          // Sorted DESC by date from DB, take last 5
-          const recent = weightLogs.slice(0, 5);
-          let consecutiveIncreases = 0;
-          for (let i = 0; i < recent.length - 1; i++) {
-            if (recent[i].weight > recent[i + 1].weight) {
-              consecutiveIncreases++;
-            } else {
-              break;
-            }
-          }
-          if (consecutiveIncreases >= 2) {
-            const gain = recent[0].weight - recent[consecutiveIncreases].weight;
-            const days = Math.round(
-              (new Date(recent[0].date).getTime() - new Date(recent[consecutiveIncreases].date).getTime()) / 86400000
-            );
-            flags.push({
-              id: client.id,
-              name: `${client.firstName} ${client.lastName}`,
-              trend: `+${gain.toFixed(1)} lbs over ${days} days`,
-            });
-          }
-        }
-      } catch {}
-
-      // Check overdue check-ins (no food log in last 3 days)
-      const hasRecentLog = recentLogs.some(
-        (l) => l.firstName === client.firstName && l.lastName === client.lastName && l.date >= threeDaysAgo
-      );
-      if (!hasRecentLog) {
-        overdue.push(`${client.firstName} ${client.lastName}`);
-      }
+      const missed = alerts
+        .filter((a: any) => a.type === 'missed_workouts')
+        .map((a: any) => a.client_name);
+      setOverdueClients(missed);
+    } catch (err) {
+      console.error('detectRedFlags error:', err);
     }
-
-    setRedFlagClients(flags);
-    setOverdueClients(overdue);
-  }, [clients, recentLogs]);
+  }, []);
 
   const load = useCallback(async () => {
     if (!currentUser) return;
-    await Promise.all([
-      loadClients(currentUser.id),
-      loadRecentActivity(currentUser.id),
-    ]);
+    await loadClients(currentUser.id);
   }, [currentUser?.id]);
 
   useEffect(() => {
@@ -97,7 +66,7 @@ export default function CoachHomeScreen() {
     if (clients.length > 0) {
       detectRedFlags();
     }
-  }, [clients, recentLogs]);
+  }, [clients]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -106,11 +75,10 @@ export default function CoachHomeScreen() {
   }, [load]);
 
   const activeClients = clients.filter((c) => c.status === 'active').length;
-  const today = new Date().toISOString().split('T')[0];
-  const todayLogs = recentLogs.filter((l) => l.date === today);
-  const uniqueLoggers = new Set(todayLogs.map((l) => l.firstName)).size;
-  const todayCalories = todayLogs.reduce((sum, l) => sum + l.calories, 0);
-  const complianceRate = activeClients > 0 ? Math.round((uniqueLoggers / activeClients) * 100) : 0;
+  const todayLogs: any[] = [];
+  const uniqueLoggers = 0;
+  const todayCalories = 0;
+  const complianceRate = activeClients > 0 ? '--' : '--';
 
   if (isLoading && !refreshing) {
     return (
@@ -175,7 +143,7 @@ export default function CoachHomeScreen() {
             <View style={[styles.metricIcon, { backgroundColor: Colors.primaryPale }]}>
               <Ionicons name="checkmark-circle" size={22} color={Colors.primaryLight} />
             </View>
-            <Text style={styles.metricValue}>{complianceRate}%</Text>
+            <Text style={styles.metricValue}>{complianceRate}</Text>
             <Text style={styles.metricLabel}>Logging Rate</Text>
           </View>
         </View>
@@ -269,11 +237,8 @@ export default function CoachHomeScreen() {
         <>
           <Text style={styles.sectionTitle}>Client Status Today</Text>
           {clients.filter((c) => c.status === 'active').slice(0, 6).map((client) => {
-            const clientLogs = todayLogs.filter(
-              (l) => l.firstName === client.firstName && l.lastName === client.lastName
-            );
-            const hasLogged = clientLogs.length > 0;
-            const clientCals = clientLogs.reduce((sum, l) => sum + l.calories, 0);
+            const hasLogged = false;
+            const clientCals = 0;
             return (
               <TouchableOpacity
                 key={client.id}
@@ -308,30 +273,10 @@ export default function CoachHomeScreen() {
 
       {/* Recent Activity Feed */}
       <Text style={[styles.sectionTitle, { marginTop: 8 }]}>Recent Activity</Text>
-      {recentLogs.length === 0 ? (
-        <View style={styles.emptyActivity}>
-          <Ionicons name="time-outline" size={32} color={Colors.textMuted} />
-          <Text style={styles.emptyText}>No recent activity</Text>
-        </View>
-      ) : (
-        recentLogs.slice(0, 10).map((log) => (
-          <View key={log.id} style={styles.activityItem}>
-            <View style={styles.activityDot} />
-            <View style={styles.activityContent}>
-              <Text style={styles.activityText}>
-                <Text style={styles.activityName}>
-                  {log.firstName} {log.lastName}
-                </Text>
-                {' logged '}
-                <Text style={styles.activityHighlight}>{log.foodName}</Text>
-                {' — '}
-                {Math.round(log.calories)} kcal
-              </Text>
-              <Text style={styles.activityMeal}>{log.mealType}</Text>
-            </View>
-          </View>
-        ))
-      )}
+      <View style={styles.emptyActivity}>
+        <Ionicons name="time-outline" size={32} color={Colors.textMuted} />
+        <Text style={styles.emptyText}>Activity feed coming soon</Text>
+      </View>
     </ScrollView>
   );
 }
