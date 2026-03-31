@@ -1,6 +1,6 @@
-import { ClientProfile, Recipe } from '../types';
+import { ClientProfile } from '../types';
 import { getAllRecipes, getAllFoods } from '../db/recipesDb';
-import { PlanData, PlanDay, PlanDayMeal } from '../db/mealPlanDb';
+import { PlanData, PlanDay } from '../db/mealPlanDb';
 
 interface MealOption {
   name: string;
@@ -21,15 +21,6 @@ function parseTagsOrPrefs(jsonStr: string | undefined): string[] {
   }
 }
 
-function shuffleArray<T>(arr: T[]): T[] {
-  const shuffled = [...arr];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  }
-  return shuffled;
-}
-
 function getMealCategoryTag(slot: 'breakfast' | 'lunch' | 'dinner' | 'snacks'): string {
   switch (slot) {
     case 'breakfast': return 'breakfast';
@@ -42,7 +33,6 @@ function getMealCategoryTag(slot: 'breakfast' | 'lunch' | 'dinner' | 'snacks'): 
 function matchesRestrictions(meal: MealOption, restrictions: string[]): boolean {
   if (restrictions.length === 0) return true;
   const nameLower = meal.name.toLowerCase();
-  const tagsLower = meal.tags.map(t => t.toLowerCase());
 
   for (const restriction of restrictions) {
     const r = restriction.toLowerCase();

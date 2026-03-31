@@ -443,9 +443,6 @@ export async function seedRecipesIfNeeded(): Promise<void> {
 
   for (const r of recipes) {
     const id = 'recipe_' + generateId();
-    // Extract image hint from tags if present (e.g., 'img:chicken-broccoli')
-    const imgTag = r.tags.find(t => t.startsWith('img:'));
-    const imgSlug = imgTag ? imgTag.replace('img:', '') : r.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
     const imageUrl = `https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=200&h=200&fit=crop`;
     await db.runAsync(
       `INSERT INTO recipes (id, name, category, calories, protein, carbs, fat, servings, ingredients, instructions, tags, isCustom, imageUrl, createdAt)

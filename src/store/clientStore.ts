@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { logApi, profileApi, waterApi } from '../services/api';
+import { logApi, waterApi } from '../services/api';
 import { getTodayString } from '../utils/date';
 import { MealType, FoodLog } from '../types';
 

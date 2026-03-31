@@ -18,7 +18,7 @@ import {
   saveShoppingList,
   generateShoppingListFromPlan,
 } from '../../db/shoppingListDb';
-import { addDays, getTodayString, generateId } from '../../utils/date';
+import { getTodayString, generateId } from '../../utils/date';
 import FadeInView from '../../components/FadeInView';
 
 function getWeekStart(dateStr: string): string {

@@ -10,10 +10,9 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { Colors } from '../../constants/colors';
-import { Shadow, Radius, Spacing } from '../../constants/theme';
-import { getMealPlan, parsePlanData, PlanData, PlanDay } from '../../db/mealPlanDb';
-import { getRecipeById, searchRecipes } from '../../db/recipesDb';
-import { Recipe } from '../../types';
+import { Shadow, Radius } from '../../constants/theme';
+import { getMealPlan, parsePlanData, PlanDay } from '../../db/mealPlanDb';
+import { searchRecipes } from '../../db/recipesDb';
 import { addDays, getTodayString } from '../../utils/date';
 import FadeInView from '../../components/FadeInView';
 

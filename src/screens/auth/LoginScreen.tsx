@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -65,7 +64,7 @@ export default function LoginScreen({ navigation }: Props) {
       // Import GoogleSignin from @react-native-google-signin/google-signin
       const { GoogleSignin } = await import('@react-native-google-signin/google-signin');
       await GoogleSignin.hasPlayServices();
-      const userInfo = await GoogleSignin.signIn();
+      await GoogleSignin.signIn();
       const { idToken } = await GoogleSignin.getTokens();
 
       const response = await authApi.googleAuth(idToken);
