@@ -295,6 +295,11 @@ export default function MessagesScreen() {
         </View>
       </View>
 
+      <View style={styles.localBanner}>
+        <Ionicons name="phone-portrait-outline" size={14} color="#2D6A4F" />
+        <Text style={styles.localBannerText}>Messages are stored locally on this device</Text>
+      </View>
+
       <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
           <Ionicons name="search" size={18} color={Colors.textMuted} />
@@ -387,6 +392,22 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 28, fontWeight: '800', color: Colors.textPrimary },
   unreadSummary: { fontSize: 13, color: Colors.primary, fontWeight: '600', marginTop: 2 },
+  localBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginHorizontal: 24,
+    marginBottom: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: '#2D6A4F15',
+    borderRadius: 10,
+  },
+  localBannerText: {
+    fontSize: 12,
+    color: '#2D6A4F',
+    fontWeight: '600',
+  },
   searchContainer: { paddingHorizontal: 24, marginBottom: 8 },
   searchBar: {
     flexDirection: 'row',
