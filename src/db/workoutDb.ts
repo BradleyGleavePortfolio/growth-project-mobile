@@ -112,9 +112,24 @@ export async function initWorkoutTables(): Promise<void> {
       updatedAt TEXT NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS exercise_logs (
+      id TEXT PRIMARY KEY NOT NULL,
+      userId TEXT NOT NULL,
+      coachId TEXT NOT NULL,
+      exerciseId TEXT NOT NULL,
+      exerciseName TEXT NOT NULL,
+      muscle TEXT NOT NULL,
+      sets TEXT NOT NULL,
+      totalVolume REAL NOT NULL DEFAULT 0,
+      loggedAt TEXT NOT NULL,
+      createdAt TEXT NOT NULL
+    );
+
     CREATE INDEX IF NOT EXISTS idx_workout_sessions_user ON workout_sessions(userId);
     CREATE INDEX IF NOT EXISTS idx_workout_routines_user ON workout_routines(userId);
     CREATE INDEX IF NOT EXISTS idx_coach_guidelines_client ON coach_guidelines(clientId);
+    CREATE INDEX IF NOT EXISTS idx_exercise_logs_user ON exercise_logs(userId);
+    CREATE INDEX IF NOT EXISTS idx_exercise_logs_date ON exercise_logs(loggedAt);
   `);
 }
 
