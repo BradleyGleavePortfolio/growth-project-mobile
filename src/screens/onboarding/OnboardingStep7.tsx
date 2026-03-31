@@ -28,7 +28,7 @@ export default function OnboardingStep7({ navigation }: Props) {
     getOnboardingData().then(d => {
       if (d.currentWeight) setCurrentWeight(d.currentWeight);
       if (d.targetWeight) setTargetWeight(d.targetWeight);
-    });
+    }).catch(() => {});
   }, []);
   const weeklyChange =
     timeline && timeline > 0

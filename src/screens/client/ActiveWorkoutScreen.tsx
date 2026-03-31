@@ -203,7 +203,7 @@ export default function ActiveWorkoutScreen() {
         setUserId(parsed.id);
         setCoachId(parsed.coachId || '');
       }
-    });
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
