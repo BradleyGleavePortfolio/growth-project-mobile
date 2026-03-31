@@ -10,20 +10,22 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { Colors } from '../../constants/colors';
-import { getCoachGuidelines, CoachGuideline } from '../../db/workoutDb';
+import { coachApi } from '../../services/api';
 
 export default function CoachGuidelinesScreen() {
   const navigation = useNavigation<any>();
   const currentUser = useCurrentUser();
-  const [guideline, setGuideline] = useState<CoachGuideline | null>(null);
+  const [guideline, setGuideline] = useState<{ title?: string; description?: string; created_at?: string } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!currentUser) return;
-    getCoachGuidelines(currentUser.id).then((g) => {
-      setGuideline(g);
-      setLoading(false);
-    });
+    coachApi.getMyGuidelines()
+      .then((res) => {
+        setGuideline(res.data);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
   }, [currentUser]);
 
   const formatDate = (iso: string) => {
@@ -54,12 +56,12 @@ export default function CoachGuidelinesScreen() {
               </View>
               <Text style={styles.headerTitle}>Your Workout Plan</Text>
               <Text style={styles.headerSub}>
-                Last updated {formatDate(guideline.updatedAt)}
+                Last updated {guideline.created_at ? formatDate(guideline.created_at) : '—'}
               </Text>
             </View>
 
             <View style={styles.guidelineCard}>
-              {guideline.content.split('\n').map((line, idx) => {
+              {(guideline.description || '').split('\n').map((line, idx) => {
                 const trimmed = line.trim();
                 if (!trimmed) return <View key={idx} style={{ height: 12 }} />;
 
