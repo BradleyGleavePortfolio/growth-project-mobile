@@ -13,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachStore } from '../../store/coachStore';
+import { coachApi } from '../../services/api';
 import { Colors } from '../../constants/colors';
 import { Shadow, Radius } from '../../constants/theme';
 import { getDatabase } from '../../db/database';
@@ -118,10 +119,22 @@ async function applyTemplateToClient(
   clientId: string,
   template: ProgramTemplate
 ): Promise<void> {
+  const content = `## Nutrition\n${template.nutritionNotes}\n\n## Training\n${template.trainingNotes}`;
+
+  // Primary: send to backend API
+  try {
+    await coachApi.postGuidelines(clientId, content);
+  } catch {
+    Alert.alert(
+      'Sync Notice',
+      'Guidelines saved locally but could not sync to the server. They will be available on this device.',
+    );
+  }
+
+  // Also cache locally for offline access
   await ensureGuidelinesTable();
   const db = await getDatabase();
   const id = 'cg2_' + generateId();
-  const content = `## Nutrition\n${template.nutritionNotes}\n\n## Training\n${template.trainingNotes}`;
   await db.runAsync(
     `INSERT INTO coach_guidelines_v2 (id, coachId, clientId, title, content, tags, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [id, coachId, clientId, template.title + ' ' + template.emoji, content, JSON.stringify(template.tags), new Date().toISOString()]
