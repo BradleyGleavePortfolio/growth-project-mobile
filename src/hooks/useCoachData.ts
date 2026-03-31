@@ -1,15 +1,14 @@
 import { useEffect } from 'react';
 import { useCoachStore } from '../store/coachStore';
-import { useAuthStore } from '../store/authStore';
+import { useCurrentUser } from './useCurrentUser';
 
 export function useCoachData() {
-  const { currentUser } = useAuthStore();
+  const currentUser = useCurrentUser();
   const store = useCoachStore();
 
   useEffect(() => {
     if (currentUser && currentUser.role === 'coach') {
       store.loadClients(currentUser.id);
-      store.loadRecentActivity(currentUser.id);
     }
   }, [currentUser?.id]);
 
