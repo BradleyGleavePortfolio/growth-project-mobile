@@ -222,7 +222,6 @@ export default function ProgressScreen() {
       }
       setLoggingStreak(streak);
     } catch (err) {
-      console.error('loadWeightData error:', err);
     }
 
     // Load today's macros from API
@@ -237,7 +236,6 @@ export default function ProgressScreen() {
         fat: data.total_fat_g || 0,
       });
     } catch (err) {
-      console.error('loadTodayMacros error:', err);
     }
   }, [userId, period]);
 
@@ -265,7 +263,6 @@ export default function ProgressScreen() {
         notes: newNotes || undefined,
       });
     } catch (err) {
-      console.error('Log weight error:', err);
     }
     setNewWeight('');
     setNewNotes('');

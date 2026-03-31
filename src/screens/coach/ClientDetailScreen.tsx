@@ -105,7 +105,6 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
       setWeightLogs(wLogs);
       setWorkoutSessions(sessions);
     } catch (err) {
-      console.error('loadData error:', err);
     } finally {
       setIsLoading(false);
     }
@@ -238,7 +237,6 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
       events.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       setTimeline(events);
     } catch (err) {
-      console.warn('loadTimeline error:', err);
     }
   }, [clientId, selectedDays]);
 
@@ -350,7 +348,6 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
 
       setWeekSummaries(sorted);
     } catch (err) {
-      console.warn('loadWeeklySummaries error:', err);
     }
   }, [clientId, selectedDays]);
 

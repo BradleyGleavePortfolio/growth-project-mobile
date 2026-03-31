@@ -45,7 +45,6 @@ export async function requestNotificationPermissions(): Promise<boolean> {
 
     return finalStatus === 'granted';
   } catch (err) {
-    console.warn('requestNotificationPermissions error:', err);
     return false;
   }
 }
@@ -68,7 +67,6 @@ export async function scheduleWaterReminder(intervalHours = 2): Promise<string |
     });
     return id;
   } catch (err) {
-    console.warn('scheduleWaterReminder error:', err);
     return null;
   }
 }
@@ -92,7 +90,6 @@ export async function scheduleFastingAlert(fastEndTime: Date): Promise<string | 
     });
     return id;
   } catch (err) {
-    console.warn('scheduleFastingAlert error:', err);
     return null;
   }
 }
@@ -118,7 +115,6 @@ export async function sendCalorieReminderNotification(
     });
     return id;
   } catch (err) {
-    console.warn('sendCalorieReminderNotification error:', err);
     return null;
   }
 }
@@ -136,7 +132,6 @@ export async function sendMotivationNotification(message: string): Promise<strin
     });
     return id;
   } catch (err) {
-    console.warn('sendMotivationNotification error:', err);
     return null;
   }
 }
@@ -145,6 +140,5 @@ export async function cancelAllNotifications(): Promise<void> {
   try {
     await Notifications.cancelAllScheduledNotificationsAsync();
   } catch (err) {
-    console.warn('cancelAllNotifications error:', err);
   }
 }

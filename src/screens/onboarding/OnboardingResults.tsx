@@ -53,7 +53,6 @@ export default function OnboardingResults() {
         tdee: result.tdee,
       });
     } catch (err) {
-      console.error('calc error:', err);
     } finally {
       setIsLoading(false);
     }
@@ -74,7 +73,6 @@ export default function OnboardingResults() {
           onboarding_completed: true,
         });
       } catch (err) {
-        console.error('profileApi.update error:', err);
       }
 
       // Save macro targets to AsyncStorage for the dashboard to read
@@ -90,7 +88,6 @@ export default function OnboardingResults() {
       await AsyncStorage.setItem('onboarding_complete', 'true');
       authEvents.emit();
     } catch (err) {
-      console.error('save error:', err);
     } finally {
       setSaving(false);
     }

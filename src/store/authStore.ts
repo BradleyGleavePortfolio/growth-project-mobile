@@ -78,7 +78,6 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         isLoading: false,
       });
     } catch (err) {
-      console.error('bootstrapAuth error:', err);
       set({ isLoading: false, isAuthenticated: false, error: 'Failed to restore session' });
     }
   },
@@ -115,7 +114,6 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         isLoading: false,
       });
     } catch (err) {
-      console.error('signIn error:', err);
       set({ isLoading: false, error: 'Sign in failed. Please try again.' });
     }
   },
@@ -144,7 +142,6 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         error: null,
       });
     } catch (err) {
-      console.error('signOut error:', err);
     }
   },
 
@@ -186,7 +183,6 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         isLoading: false,
       });
     } catch (err) {
-      console.error('registerClient error:', err);
       set({ isLoading: false, error: 'Registration failed. Please try again.' });
     }
   },

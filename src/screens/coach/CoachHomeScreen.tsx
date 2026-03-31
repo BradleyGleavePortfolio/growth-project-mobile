@@ -49,7 +49,6 @@ export default function CoachHomeScreen() {
         .map((a: any) => a.client_name);
       setOverdueClients(missed);
     } catch (err) {
-      console.error('detectRedFlags error:', err);
     }
   }, []);
 

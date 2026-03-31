@@ -42,7 +42,6 @@ export const useCoachStore = create<CoachStore>((set, get) => ({
       });
       set({ clients, isLoading: false });
     } catch (err) {
-      console.error('loadClients error:', err);
       set({ isLoading: false });
     }
   },

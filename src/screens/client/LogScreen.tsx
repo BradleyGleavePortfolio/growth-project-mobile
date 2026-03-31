@@ -293,7 +293,6 @@ export default function LogScreen() {
           setDidYouMean([]);
         }
       } catch (err) {
-        console.error('food search error:', err);
         setSearchResults([]);
         setDidYouMean([]);
         setSearchError('Search unavailable. Check your connection.');
@@ -352,7 +351,6 @@ export default function LogScreen() {
       });
       await loadDayData(currentUser.id, selectedDate);
     } catch (err) {
-      console.error('handleConfirmLog error:', err);
     }
     setQuantityModalVisible(false);
     setSelectedFood(null);
@@ -389,7 +387,6 @@ export default function LogScreen() {
       });
       await loadDayData(currentUser.id, selectedDate);
     } catch (err) {
-      console.error('handleManualLog error:', err);
     }
     setModalVisible(false);
   };

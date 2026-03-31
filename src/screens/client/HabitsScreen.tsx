@@ -142,7 +142,6 @@ export default function HabitsScreen() {
       }));
       setHabits(withMeta);
     } catch (err) {
-      console.error('loadHabits error:', err);
     }
   }, [currentUser, today]);
 
@@ -183,7 +182,6 @@ export default function HabitsScreen() {
         value: newCompleted ? (habit.targetCount || 1) : 0,
       });
     } catch (err) {
-      console.error('Toggle habit error:', err);
     }
     await loadHabits();
   };
@@ -216,7 +214,6 @@ export default function HabitsScreen() {
         unit: newUnit || 'times',
       });
     } catch (err) {
-      console.error('Create habit error:', err);
     }
     setShowAddModal(false);
     setNewName('');

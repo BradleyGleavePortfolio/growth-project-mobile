@@ -261,7 +261,6 @@ export default function HomeScreen() {
       }
       setWeeklyBreakdown(fullBreakdown);
     } catch (err) {
-      console.error('Failed to load weekly volume:', err);
     }
   }, [currentUser]);
 

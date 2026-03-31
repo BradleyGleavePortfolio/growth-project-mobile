@@ -185,7 +185,6 @@ export default function WorkoutScreen() {
       }
       setWeeklyVolume(weeks);
     } catch (err) {
-      console.warn('loadVolumeData error:', err);
     }
   }, [currentUser]);
 
@@ -199,7 +198,6 @@ export default function WorkoutScreen() {
       setRoutines(rRes.data || []);
       setRecentSessions(sRes.data || []);
     } catch (err) {
-      console.warn('loadData error:', err);
     }
     await loadVolumeData();
   }, [currentUser, loadVolumeData]);

@@ -123,7 +123,6 @@ export default function FastingScreen() {
       }
       setStreak(s);
     } catch (err) {
-      console.error('loadAll fasting error:', err);
     }
   }, [currentUser]);
 
@@ -162,7 +161,6 @@ export default function FastingScreen() {
       const endTime = new Date(Date.now() + selectedProtocol * 60 * 60 * 1000);
       await scheduleFastingAlert(endTime);
     } catch (err) {
-      console.error('Start fast error:', err);
     }
     loadAll();
   };
@@ -171,7 +169,6 @@ export default function FastingScreen() {
     try {
       await fastingApi.end();
     } catch (err) {
-      console.error('End fast error:', err);
     }
     loadAll();
   };
