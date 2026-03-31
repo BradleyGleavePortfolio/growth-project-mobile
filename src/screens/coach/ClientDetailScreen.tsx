@@ -14,7 +14,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { ClientsStackParamList } from '../../navigation/CoachNavigator';
-import { useAuthStore } from '../../store/authStore';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { getProfileByUserId } from '../../db/profileDb';
 import { getFoodLogsByDateForCoach, getDailyTotals, getFoodLogsByDate } from '../../db/foodLogDb';
 import { getFastingHistory } from '../../db/fastingDb';
@@ -58,7 +58,7 @@ interface TimelineEvent {
 
 export default function ClientDetailScreen({ navigation, route }: Props) {
   const { clientId, clientName } = route.params;
-  const { currentUser } = useAuthStore();
+  const currentUser = useCurrentUser();
 
   const [activeTab, setActiveTab] = useState<TabKey>('summary');
   const [profile, setProfile] = useState<ClientProfile | null>(null);

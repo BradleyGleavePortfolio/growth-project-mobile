@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuthStore } from '../../store/authStore';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { logApi, weightApi } from '../../services/api';
 import { WeightLog } from '../../types';
 
@@ -19,7 +19,7 @@ const TEXT = Colors.textPrimary;
 const MUTED = Colors.textSecondary;
 
 export default function ReportScreen({ navigation }: any) {
-  const { currentUser, clientProfile } = useAuthStore();
+  const currentUser = useCurrentUser();
   const [weeklyWeights, setWeeklyWeights] = useState<WeightLog[]>([]);
   const [todayMacros, setTodayMacros] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0 });
 
@@ -51,12 +51,12 @@ export default function ReportScreen({ navigation }: any) {
     } catch { }
   };
 
-  const latestWeight = weeklyWeights.length > 0 ? weeklyWeights[weeklyWeights.length - 1].weight : clientProfile?.currentWeight;
-  const startWeight = clientProfile?.currentWeight;
+  const latestWeight = weeklyWeights.length > 0 ? weeklyWeights[weeklyWeights.length - 1].weight : currentUser?.profile?.current_weight;
+  const startWeight = currentUser?.profile?.current_weight;
   const change = latestWeight && startWeight ? latestWeight - startWeight : null;
 
   const goalLabel = (() => {
-    switch (clientProfile?.primaryGoal) {
+    switch (currentUser?.profile?.primary_goal) {
       case 'lose_fast': return 'Aggressive Fat Loss';
       case 'lose_moderate': return 'Moderate Weight Loss';
       case 'maintain': return 'Maintenance';
@@ -90,7 +90,7 @@ export default function ReportScreen({ navigation }: any) {
           <Text style={styles.coverTitle}>The Growth Project</Text>
           <Text style={styles.coverSubtitle}>Weekly Progress Report</Text>
           <Text style={styles.coverName}>
-            {currentUser?.firstName} {currentUser?.lastName}
+            {currentUser?.firstName || currentUser?.name}
           </Text>
           <Text style={styles.coverDate}>{new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</Text>
         </View>
@@ -104,9 +104,9 @@ export default function ReportScreen({ navigation }: any) {
             <MacroBox label="Carbs" value={`${Math.round(todayMacros.carbs)}`} unit="g" />
             <MacroBox label="Fat" value={`${Math.round(todayMacros.fat)}`} unit="g" />
           </View>
-          {clientProfile?.calorieTarget && (
+          {currentUser?.profile?.calorie_target && (
             <Text style={styles.targetHint}>
-              Target: {clientProfile.calorieTarget} kcal / day
+              Target: {currentUser.profile.calorie_target} kcal / day
             </Text>
           )}
         </View>
@@ -151,9 +151,9 @@ export default function ReportScreen({ navigation }: any) {
           <Text style={styles.sectionTitle}>Training Focus</Text>
           <Text style={styles.goalBadge}>{goalLabel}</Text>
           <Text style={styles.bodyText}>
-            {clientProfile?.primaryGoal?.includes('lose')
+            {currentUser?.profile?.primary_goal?.includes('lose')
               ? 'Focus on maintaining a caloric deficit while keeping protein high to preserve lean mass. Prioritize compound movements and HIIT cardio.'
-              : clientProfile?.primaryGoal?.includes('gain')
+              : currentUser?.profile?.primary_goal?.includes('gain')
               ? 'Keep surplus calories clean and progressive overload on compound lifts. Rest days are growth days — sleep 7-9 hours.'
               : 'Maintain consistent nutrition habits and stay active. Focus on movement quality and recovery.'}
           </Text>

@@ -8,13 +8,13 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { useAuthStore } from '../../store/authStore';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { Colors } from '../../constants/colors';
 import { getCoachGuidelines, CoachGuideline } from '../../db/workoutDb';
 
 export default function CoachGuidelinesScreen() {
   const navigation = useNavigation<any>();
-  const { currentUser } = useAuthStore();
+  const currentUser = useCurrentUser();
   const [guideline, setGuideline] = useState<CoachGuideline | null>(null);
   const [loading, setLoading] = useState(true);
 

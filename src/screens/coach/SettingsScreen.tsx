@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useAuthStore } from '../../store/authStore';
 import { getClientsByCoachId } from '../../db/userDb';
 import { Colors } from '../../constants/colors';
@@ -35,7 +36,8 @@ const DEFAULT_SETTINGS: CoachSettings = {
 };
 
 export default function SettingsScreen() {
-  const { currentUser, signOut } = useAuthStore();
+  const currentUser = useCurrentUser();
+  const { signOut } = useAuthStore();
   const [settings, setSettings] = useState<CoachSettings>(DEFAULT_SETTINGS);
   const [clientCount, setClientCount] = useState(0);
   const [bioText, setBioText] = useState('');

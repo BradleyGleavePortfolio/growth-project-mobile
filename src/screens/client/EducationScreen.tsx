@@ -9,7 +9,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuthStore } from '../../store/authStore';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { Colors } from '../../constants/colors';
 import {
   Lesson,
@@ -41,7 +41,7 @@ interface LessonWithProgress extends Lesson {
 }
 
 export default function EducationScreen() {
-  const { currentUser } = useAuthStore();
+  const currentUser = useCurrentUser();
   const [mode, setMode] = useState<ScreenMode>('list');
   const [lessons, setLessons] = useState<LessonWithProgress[]>([]);
   const [progress, setProgress] = useState<LessonProgress[]>([]);

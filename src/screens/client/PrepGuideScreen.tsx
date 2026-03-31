@@ -8,7 +8,7 @@ import {
   Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuthStore } from '../../store/authStore';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { Colors } from '../../constants/colors';
 import { Shadow, Radius, Spacing } from '../../constants/theme';
 import { getMealPlan, parsePlanData, PlanData, PlanDay } from '../../db/mealPlanDb';
@@ -56,7 +56,7 @@ interface PrepGuideScreenProps {
 }
 
 export default function PrepGuideScreen({ onBack, embedded, onDone }: PrepGuideScreenProps) {
-  const { currentUser } = useAuthStore();
+  const currentUser = useCurrentUser();
   const [weekStart] = useState(() => getWeekStart(getTodayString()));
   const [recipes, setRecipes] = useState<PrepRecipe[]>([]);
   const [isLoading, setIsLoading] = useState(true);

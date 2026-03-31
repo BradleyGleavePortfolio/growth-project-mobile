@@ -18,7 +18,7 @@ import Animated, {
   withSequence,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuthStore } from '../../store/authStore';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { getChatHistory, saveChatMessage } from '../../db/chatDb';
 import { getAIResponse } from '../../utils/aiGuide';
 import { Colors } from '../../constants/colors';
@@ -77,7 +77,7 @@ function TypingIndicator() {
 }
 
 export default function AIGuideScreen() {
-  const { currentUser, clientProfile } = useAuthStore();
+  const currentUser = useCurrentUser();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
@@ -120,8 +120,8 @@ export default function AIGuideScreen() {
         : 1;
 
       const aiText = getAIResponse(text, {
-        firstName: currentUser?.firstName || 'there',
-        profile: clientProfile,
+        firstName: currentUser?.firstName || currentUser?.name || 'there',
+        profile: currentUser?.profile || null,
         daysSinceStart,
         loggingStreak: 0,
       });

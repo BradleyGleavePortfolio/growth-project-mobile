@@ -11,7 +11,7 @@ import {
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { ClientsStackParamList } from '../../navigation/CoachNavigator';
-import { useAuthStore } from '../../store/authStore';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachStore } from '../../store/coachStore';
 import { Colors } from '../../constants/colors';
 import { User } from '../../types';
@@ -21,7 +21,7 @@ type Props = {
 };
 
 export default function ClientsListScreen({ navigation }: Props) {
-  const { currentUser } = useAuthStore();
+  const currentUser = useCurrentUser();
   const {
     isLoading,
     searchQuery,
