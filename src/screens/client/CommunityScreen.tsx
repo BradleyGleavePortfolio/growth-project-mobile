@@ -163,7 +163,8 @@ export default function CommunityScreen() {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} colors={[Colors.primary]} />
           }
           ListHeaderComponent={
-            myChallenges.length > 0 ? (
+            <>
+            {myChallenges.length > 0 && (
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>My Active Challenges</Text>
                 {myChallenges.map((mc) => (
@@ -190,7 +191,12 @@ export default function CommunityScreen() {
                   </View>
                 ))}
               </View>
-            ) : null
+            )}
+            <View style={styles.featuredBanner}>
+              <Ionicons name="sparkles" size={14} color={Colors.primary} />
+              <Text style={styles.featuredBannerText}>Featured Challenges</Text>
+            </View>
+            </>
           }
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
@@ -211,6 +217,9 @@ export default function CommunityScreen() {
                   <Text style={styles.challengeTitle}>{item.title}</Text>
                   <Text style={styles.challengeDesc}>{item.description}</Text>
                   <View style={styles.challengeMeta}>
+                    <View style={styles.featuredTag}>
+                      <Text style={styles.featuredTagText}>Featured</Text>
+                    </View>
                     <Text style={styles.challengeTarget}>
                       {item.targetValue} {item.unit}
                     </Text>
@@ -500,4 +509,26 @@ const styles = StyleSheet.create({
   winTitle: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
   winDesc: { fontSize: 13, color: Colors.textSecondary },
   winTime: { fontSize: 11, color: Colors.textMuted },
+  featuredBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 12,
+  },
+  featuredBannerText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  featuredTag: {
+    backgroundColor: Colors.primaryPale,
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  featuredTagText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
 });
