@@ -104,16 +104,28 @@ export default function CreateAccountScreen({ navigation }: Props) {
     }
   };
 
-  const handleGoogleSignup = () => {
-    // Google Sign-In requires expo-auth-session + Google Cloud OAuth setup.
-    // Showing "Coming Soon" until OAuth credentials are configured.
-    import('react-native').then(({ Alert }) => {
-      Alert.alert(
-        'Coming Soon',
-        'Google sign-in will be available in a future update. Please create an account with your email for now.',
-        [{ text: 'OK' }],
-      );
-    });
+  const handleGoogleSignup = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const { signInWithGoogle } = await import('../../utils/googleAuth');
+      const result = await signInWithGoogle();
+
+      if (!result.success) {
+        if (result.error !== 'Sign-in was cancelled') {
+          setError(result.error || 'Google sign-up failed');
+        }
+        return;
+      }
+
+      // Google users are pre-verified — go to role selection
+      await AsyncStorage.setItem('needs_role_selection', 'true');
+      navigation.replace('RoleSelection');
+    } catch (err: any) {
+      setError('Google sign-up failed. Try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (step === 'verify') {
