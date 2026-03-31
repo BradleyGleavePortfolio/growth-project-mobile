@@ -20,7 +20,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useClientStore } from '../../store/clientStore';
 // All colors from central theme — never hardcode hex values here
-import { Colors, Spacing, Radius, Typography } from '../../theme/index';
+import { Colors, Spacing, Radius } from '../../theme/index';
 import { MealType, FoodLog } from '../../types';
 import { foodApi, logApi } from '../../services/api';
 import DaySelector from '../../components/DaySelector';

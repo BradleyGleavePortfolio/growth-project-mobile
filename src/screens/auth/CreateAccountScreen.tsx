@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,6 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors, Typography, Spacing, Radius, Shadow } from '../../theme';
 import { authApi } from '../../services/api';
-import { authEvents } from '../../utils/authEvents';
 
 interface Props {
   navigation: any;

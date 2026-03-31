@@ -28,17 +28,6 @@ export default function RoleSelectionScreen({ navigation }: Props) {
   const [pinError, setPinError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const getUserName = async (): Promise<string> => {
-    try {
-      const raw = await AsyncStorage.getItem('user_data');
-      if (raw) {
-        const user = JSON.parse(raw);
-        return user.name?.split(' ')[0] || 'there';
-      }
-    } catch {}
-    return 'there';
-  };
-
   const handleRoleSelect = async (role: 'coach' | 'student', coachCode?: string) => {
     setLoading(true);
     try {
