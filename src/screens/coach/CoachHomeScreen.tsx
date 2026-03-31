@@ -260,7 +260,7 @@ export default function CoachHomeScreen() {
                   <Text style={styles.csName}>{client.firstName} {client.lastName}</Text>
                   <Text style={styles.csMeta}>
                     {hasLogged
-                      ? `${clientLogs.length} logs · ${Math.round(clientCals)} kcal`
+                      ? `${Math.round(clientCals)} kcal today`
                       : 'No activity today'}
                   </Text>
                 </View>

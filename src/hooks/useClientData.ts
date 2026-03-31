@@ -1,10 +1,10 @@
 import { useEffect } from 'react';
 import { useClientStore } from '../store/clientStore';
-import { useAuthStore } from '../store/authStore';
+import { useCurrentUser } from './useCurrentUser';
 import { getTodayString } from '../utils/date';
 
 export function useClientData() {
-  const { currentUser } = useAuthStore();
+  const currentUser = useCurrentUser();
   const store = useClientStore();
 
   useEffect(() => {
