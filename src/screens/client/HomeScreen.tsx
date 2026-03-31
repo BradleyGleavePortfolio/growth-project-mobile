@@ -275,7 +275,7 @@ export default function HomeScreen() {
         if (raw) {
           try { setAsyncTargets(JSON.parse(raw)); } catch {}
         }
-      });
+      }).catch(() => {});
     }
   }, [currentUser?.id]);
 

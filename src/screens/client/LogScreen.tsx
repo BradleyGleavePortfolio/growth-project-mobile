@@ -71,7 +71,7 @@ export default function LogScreen() {
   useEffect(() => {
     AsyncStorage.getItem('macro_targets').then((raw) => {
       if (raw) setMacroTargets(JSON.parse(raw));
-    });
+    }).catch(() => {});
   }, []);
   const {
     selectedDate,

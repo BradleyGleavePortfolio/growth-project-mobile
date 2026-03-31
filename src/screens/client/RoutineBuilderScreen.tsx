@@ -58,7 +58,7 @@ export default function RoutineBuilderScreen() {
         const parsed = JSON.parse(raw);
         setUserId(parsed.id);
       }
-    });
+    }).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -76,7 +76,7 @@ export default function RoutineBuilderScreen() {
           }));
           setExercises(exs);
         }
-      });
+      }).catch(() => {});
     }
   }, [routineId]);
 

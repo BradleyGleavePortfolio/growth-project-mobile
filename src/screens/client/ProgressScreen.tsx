@@ -180,10 +180,10 @@ export default function ProgressScreen() {
   useEffect(() => {
     AsyncStorage.getItem('user_data').then((raw) => {
       if (raw) setUserId(JSON.parse(raw).id);
-    });
+    }).catch(() => {});
     AsyncStorage.getItem('macro_targets').then((raw) => {
       if (raw) setMacroTargets(JSON.parse(raw));
-    });
+    }).catch(() => {});
   }, []);
 
   const loadData = useCallback(async () => {
