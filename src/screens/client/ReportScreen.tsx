@@ -30,7 +30,7 @@ export default function ReportScreen({ navigation }: any) {
   const loadReportData = async () => {
     if (!currentUser) return;
     try {
-      const weightRes = await weightApi.getLogs();
+      const weightRes = await weightApi.getHistory(7);
       const logs = weightRes.data?.logs || weightRes.data || [];
       setWeeklyWeights(logs.slice(-7));
     } catch { setWeeklyWeights([]); }
