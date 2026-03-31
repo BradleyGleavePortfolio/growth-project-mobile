@@ -18,7 +18,6 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/colors';
 import { workoutApi } from '../../services/api';
 import {
-  searchExercises,
   getAllExercises,
   logExerciseWithVolume,
 } from '../../db/workoutDb';
@@ -165,7 +164,7 @@ const exerciseImageStyles = StyleSheet.create({
 export default function ActiveWorkoutScreen() {
   const route = useRoute<RouteProp<RouteParams, 'ActiveWorkout'>>();
   const navigation = useNavigation<any>();
-  const { routineId, routineName, exercises: exercisesJson } = route.params;
+  const { routineName, exercises: exercisesJson } = route.params;
 
   const [userId, setUserId] = useState<string | null>(null);
   const [sessionExercises, setSessionExercises] = useState<SessionExercise[]>([]);

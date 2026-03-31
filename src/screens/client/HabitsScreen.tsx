@@ -80,7 +80,7 @@ export default function HabitsScreen() {
   const [showAddModal, setShowAddModal] = useState(false);
 
   // Check-in state
-  const [checkIn, setCheckIn] = useState<DailyCheckIn | null>(null);
+  const [_checkIn, setCheckIn] = useState<DailyCheckIn | null>(null);
   const [mood, setMood] = useState(3);
   const [energy, setEnergy] = useState(3);
   const [sleepHours, setSleepHours] = useState(7);

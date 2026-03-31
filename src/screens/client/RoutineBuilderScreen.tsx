@@ -43,7 +43,7 @@ export default function RoutineBuilderScreen() {
   const navigation = useNavigation<any>();
   const routineId = route.params?.routineId;
 
-  const [userId, setUserId] = useState<string | null>(null);
+  const [_userId, setUserId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [exercises, setExercises] = useState<RoutineExercise[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);

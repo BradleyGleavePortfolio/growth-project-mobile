@@ -78,10 +78,8 @@ export default function LogScreen() {
     foodLogs,
     dailyTotals,
     waterOz,
-    isLoading,
     setSelectedDate,
     loadDayData,
-    logFood,
     logWater,
   } = useClientStore();
 

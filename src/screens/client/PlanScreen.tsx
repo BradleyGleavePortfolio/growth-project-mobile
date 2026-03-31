@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
-import { Shadow, Radius, Spacing } from '../../constants/theme';
+import { Shadow } from '../../constants/theme';
 import GroceryListScreen from './GroceryListScreen';
 import PrepGuideScreen from './PrepGuideScreen';
 import FadeInView from '../../components/FadeInView';
@@ -111,7 +111,6 @@ function SwipeMealCard({ label, icon, pool, accepted, onAccept, onNext, currentI
   const opacity = useRef(new Animated.Value(1)).current;
   const [localIndex, setLocalIndex] = useState(currentIndex);
   const [isAnimating, setIsAnimating] = useState(false);
-  const meal = pool[localIndex % pool.length];
 
   const handleReject = () => {
     if (isAnimating || accepted) return;

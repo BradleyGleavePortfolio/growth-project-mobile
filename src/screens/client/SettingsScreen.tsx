@@ -9,7 +9,6 @@ import {
   Alert,
   Modal,
   TextInput,
-  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useCurrentUser } from '../../hooks/useCurrentUser';

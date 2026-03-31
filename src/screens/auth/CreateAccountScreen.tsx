@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -54,7 +53,7 @@ export default function CreateAccountScreen({ navigation }: Props) {
     setError('');
 
     try {
-      const res = await authApi.register({ name, email, password, phone: phone || undefined });
+      await authApi.register({ name, email, password, phone: phone || undefined });
 
       // Backend sends a verification email — show the verify screen
       await AsyncStorage.setItem('pending_email', email);

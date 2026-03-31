@@ -75,7 +75,6 @@ export default function CoachHomeScreen() {
 
   const activeClients = clients.filter((c) => c.status === 'active').length;
   const todayLogs: any[] = [];
-  const uniqueLoggers = 0;
   const todayCalories = 0;
   const complianceRate = activeClients > 0 ? '--' : '--';
 

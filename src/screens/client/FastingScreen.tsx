@@ -6,10 +6,9 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
-  Dimensions,
   RefreshControl,
 } from 'react-native';
-import Svg, { Circle, Path } from 'react-native-svg';
+import Svg, { Circle } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
@@ -40,18 +39,6 @@ function formatDuration(ms: number): string {
   const m = Math.floor((totalSec % 3600) / 60);
   const s = totalSec % 60;
   return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-}
-
-function describeArc(cx: number, cy: number, r: number, startAngle: number, endAngle: number): string {
-  const start = polarToCartesian(cx, cy, r, endAngle);
-  const end = polarToCartesian(cx, cy, r, startAngle);
-  const largeArc = endAngle - startAngle <= 180 ? '0' : '1';
-  return `M ${start.x} ${start.y} A ${r} ${r} 0 ${largeArc} 0 ${end.x} ${end.y}`;
-}
-
-function polarToCartesian(cx: number, cy: number, r: number, angleDeg: number) {
-  const rad = ((angleDeg - 90) * Math.PI) / 180;
-  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
 }
 
 interface FastSession {
@@ -202,10 +189,8 @@ export default function FastingScreen() {
   // Timer progress
   const targetMs = activeFast ? activeFast.targetHours * 60 * 60 * 1000 : selectedProtocol * 60 * 60 * 1000;
   const progress = activeFast ? Math.min(elapsed / targetMs, 1) : 0;
-  const progressAngle = progress * 360;
   const strokeDashoffset = CIRCUMFERENCE * (1 - progress);
 
-  const elapsedHours = elapsed / (1000 * 60 * 60);
   const remainingMs = activeFast ? Math.max(targetMs - elapsed, 0) : targetMs;
 
   return (

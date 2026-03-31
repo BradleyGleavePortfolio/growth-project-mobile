@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ShoppingItem } from '../types';
 import { generateId } from '../utils/date';
 import { getMealPlan, parsePlanData } from './mealPlanDb';
-import { getRecipesByTag, searchRecipes, getAllRecipes } from './recipesDb';
+import { getAllRecipes } from './recipesDb';
 
 function storageKey(userId: string, weekStart: string): string {
   return `shopping_${userId}_${weekStart}`;

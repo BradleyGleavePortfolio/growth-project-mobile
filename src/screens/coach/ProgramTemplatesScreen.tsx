@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -15,7 +15,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachStore } from '../../store/coachStore';
 import { coachApi } from '../../services/api';
 import { Colors } from '../../constants/colors';
-import { Shadow, Radius } from '../../constants/theme';
+import { Shadow } from '../../constants/theme';
 import { getDatabase } from '../../db/database';
 import { generateId } from '../../utils/date';
 import FadeInView from '../../components/FadeInView';
@@ -147,7 +147,6 @@ export default function ProgramTemplatesScreen() {
   const currentUser = useCurrentUser();
   const { clients, loadClients } = useCoachStore();
   const [expanded, setExpanded] = useState<string | null>(null);
-  const [applying, setApplying] = useState<string | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<ProgramTemplate | null>(null);
   const [clientModalVisible, setClientModalVisible] = useState(false);
   const [loading, setLoading] = useState(false);

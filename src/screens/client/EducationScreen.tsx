@@ -44,7 +44,7 @@ export default function EducationScreen() {
   const currentUser = useCurrentUser();
   const [mode, setMode] = useState<ScreenMode>('list');
   const [lessons, setLessons] = useState<LessonWithProgress[]>([]);
-  const [progress, setProgress] = useState<LessonProgress[]>([]);
+  const [_progress, setProgress] = useState<LessonProgress[]>([]);
   const [selectedLesson, setSelectedLesson] = useState<LessonWithProgress | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [filterCategory, setFilterCategory] = useState<string | null>(null);

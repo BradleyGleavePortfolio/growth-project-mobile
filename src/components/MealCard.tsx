@@ -27,8 +27,6 @@ export default function MealCard({ mealType, foods }: MealCardProps) {
   const [expanded, setExpanded] = useState(false);
 
   const totalCals = foods.reduce((sum, f) => sum + f.calories, 0);
-  const totalProtein = foods.reduce((sum, f) => sum + f.protein, 0);
-
   return (
     <TouchableOpacity
       style={styles.card}

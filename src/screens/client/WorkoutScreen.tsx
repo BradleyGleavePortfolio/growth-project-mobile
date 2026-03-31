@@ -18,18 +18,6 @@ import FadeInView from '../../components/FadeInView';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CHART_WIDTH = SCREEN_WIDTH - 48;
 
-const MUSCLE_ICONS: Record<string, string> = {
-  chest: 'body-outline',
-  back: 'body-outline',
-  shoulders: 'body-outline',
-  legs: 'walk-outline',
-  biceps: 'barbell-outline',
-  triceps: 'barbell-outline',
-  core: 'fitness-outline',
-  'full body': 'flash-outline',
-  cardio: 'heart-outline',
-};
-
 interface WeeklyVolume {
   week: string;
   volume: number;

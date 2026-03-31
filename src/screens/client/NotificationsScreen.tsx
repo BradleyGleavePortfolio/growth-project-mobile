@@ -9,7 +9,6 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { Colors } from '../../constants/colors';
 import {
@@ -32,7 +31,6 @@ const TYPE_CONFIG: Record<string, { icon: string; color: string }> = {
 
 export default function NotificationsScreen() {
   const currentUser = useCurrentUser();
-  const navigation = useNavigation<any>();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 

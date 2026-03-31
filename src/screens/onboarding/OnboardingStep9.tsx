@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { StyleSheet } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { OnboardingStackParamList } from '../../navigation/OnboardingNavigator';
 import { saveOnboardingData } from '../../utils/onboardingStore';
