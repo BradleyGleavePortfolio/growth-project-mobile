@@ -22,7 +22,7 @@ export type OnboardingData = {
   foodPrefs?: string[];
   restrictions?: string[];
   mealsPerDay?: number;
-  timeline?: string;
+  timeline?: number;
   gymMembership?: string;
   fitnessLevel?: string;
   preferredSnacks?: string[];

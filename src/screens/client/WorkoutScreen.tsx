@@ -133,6 +133,7 @@ interface ApiSession {
   date: string;
   duration_minutes: number;
   notes: string;
+  completed?: boolean;
   exercises: Array<{ muscle_group: string; exercise_name: string; sets_completed: number; weight_per_set: number[]; reps_per_set: number[] }>;
 }
 
