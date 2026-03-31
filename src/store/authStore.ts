@@ -4,6 +4,7 @@ import { User, AuthToken, ClientProfile } from '../types';
 import { mockHash, mockVerify, createToken, isTokenValid } from '../utils/auth';
 import { getUserByEmail, getUserById, createUser, getCoachUser } from '../db/userDb';
 import { getProfileByUserId, createProfile } from '../db/profileDb';
+import { authEvents } from '../utils/authEvents';
 
 const AUTH_TOKEN_KEY = 'gp_auth_token';
 const AUTH_USER_KEY = 'gp_auth_user';
@@ -121,7 +122,18 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
 
   signOut: async () => {
     try {
-      await AsyncStorage.multiRemove([AUTH_TOKEN_KEY, AUTH_USER_KEY]);
+      await AsyncStorage.multiRemove([
+        AUTH_TOKEN_KEY,     // gp_auth_token (legacy)
+        AUTH_USER_KEY,      // gp_auth_user (legacy)
+        'supabase_token',   // real Supabase JWT
+        'user_data',        // real user data
+        'needs_role_selection',
+        'onboarding_complete',
+        'macro_targets',
+        'pending_email',
+      ]);
+      // Emit auth event so RootNavigator re-evaluates → shows login
+      authEvents.emit();
       set({
         currentUser: null,
         authToken: null,
