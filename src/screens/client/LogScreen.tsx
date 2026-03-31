@@ -705,6 +705,12 @@ export default function LogScreen() {
                       <Text style={styles.emptyStateSubtitle}>
                         Try a simpler name, check spelling, or log it manually below.
                       </Text>
+                      <TouchableOpacity
+                        style={{ backgroundColor: Colors.primary, borderRadius: 999, paddingHorizontal: 24, paddingVertical: 10, marginTop: 12 }}
+                        onPress={() => handleSearch(searchQuery)}
+                      >
+                        <Text style={{ color: Colors.textOnPrimary, fontWeight: '600', fontSize: 14 }}>Retry Search</Text>
+                      </TouchableOpacity>
                     </View>
                   ) : null
                 }
