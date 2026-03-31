@@ -9,6 +9,8 @@ import {
   Alert,
   Modal,
   FlatList,
+  Image,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
@@ -45,6 +47,7 @@ interface Exercise {
   name: string;
   muscle: string;
   equipment: string;
+  imageUrl?: string;
 }
 
 type RouteParams = {
@@ -55,7 +58,107 @@ type RouteParams = {
   };
 };
 
-const MUSCLES = ['All', 'chest', 'back', 'shoulders', 'legs', 'biceps', 'triceps', 'core', 'full body', 'cardio'];
+// All muscle groups including new ones from seed
+const MUSCLES = [
+  'All',
+  'chest',
+  'back',
+  'shoulders',
+  'legs',
+  'biceps',
+  'triceps',
+  'core',
+  'full body',
+  'cardio',
+  'stretching',
+];
+
+// Muscle group color mapping
+const MUSCLE_COLORS: Record<string, string> = {
+  chest: '#E63946',
+  back: '#457B9D',
+  shoulders: '#E9C46A',
+  legs: '#2A9D8F',
+  biceps: '#E76F51',
+  triceps: '#F4A261',
+  core: '#264653',
+  'full body': '#6A4C93',
+  cardio: '#1DB954',
+  stretching: '#8FA89A',
+};
+
+function getMuscleColor(muscle: string): string {
+  return MUSCLE_COLORS[muscle.toLowerCase()] ?? '#4A6358';
+}
+
+// ── Exercise Image Component ──────────────────────────────────────────────
+
+interface ExerciseImageProps {
+  imageUrl?: string;
+  muscle: string;
+  size?: number;
+}
+
+function ExerciseImage({ imageUrl, muscle, size = 80 }: ExerciseImageProps) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+  const bgColor = getMuscleColor(muscle);
+
+  if (!imageUrl || error) {
+    return (
+      <View
+        style={[
+          exerciseImageStyles.placeholder,
+          { width: size, height: size, borderRadius: 10, backgroundColor: bgColor },
+        ]}
+      >
+        <Ionicons name="barbell-outline" size={size * 0.45} color="rgba(255,255,255,0.9)" />
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ width: size, height: size, borderRadius: 10, overflow: 'hidden' }}>
+      {loading && (
+        <View
+          style={[
+            exerciseImageStyles.skeleton,
+            { width: size, height: size, borderRadius: 10, backgroundColor: bgColor + '33' },
+          ]}
+        >
+          <ActivityIndicator size="small" color={bgColor} />
+        </View>
+      )}
+      <Image
+        source={{ uri: imageUrl }}
+        style={{ width: size, height: size, borderRadius: 10 }}
+        onLoadStart={() => setLoading(true)}
+        onLoadEnd={() => setLoading(false)}
+        onError={() => {
+          setLoading(false);
+          setError(true);
+        }}
+      />
+    </View>
+  );
+}
+
+const exerciseImageStyles = StyleSheet.create({
+  placeholder: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  skeleton: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
+  },
+});
+
+// ── Main Screen ───────────────────────────────────────────────────────────
 
 export default function ActiveWorkoutScreen() {
   const route = useRoute<RouteProp<RouteParams, 'ActiveWorkout'>>();
@@ -152,13 +255,25 @@ export default function ActiveWorkoutScreen() {
 
   const filterExercises = (query: string, muscle: string) => {
     let results = allExercises;
+
+    // Apply muscle filter — case-insensitive comparison, 'All' returns everything
     if (muscle !== 'All') {
-      results = results.filter((e) => e.muscle === muscle);
+      results = results.filter(
+        (e) => e.muscle.toLowerCase() === muscle.toLowerCase()
+      );
     }
-    if (query.length >= 2) {
-      const q = query.toLowerCase();
-      results = results.filter((e) => e.name.toLowerCase().includes(q) || e.muscle.toLowerCase().includes(q));
+
+    // Apply text search (no minimum length restriction — even 1 char is valid)
+    if (query.trim().length > 0) {
+      const q = query.toLowerCase().trim();
+      results = results.filter(
+        (e) =>
+          e.name.toLowerCase().includes(q) ||
+          e.muscle.toLowerCase().includes(q) ||
+          e.equipment.toLowerCase().includes(q)
+      );
     }
+
     setFilteredExercises(results);
   };
 
@@ -336,9 +451,19 @@ export default function ActiveWorkoutScreen() {
               value={searchQuery}
               onChangeText={handleSearchChange}
             />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => handleSearchChange('')}>
+                <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
+              </TouchableOpacity>
+            )}
           </View>
 
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.muscleFilter} contentContainerStyle={styles.muscleFilterContent}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.muscleFilter}
+            contentContainerStyle={styles.muscleFilterContent}
+          >
             {MUSCLES.map((m) => (
               <TouchableOpacity
                 key={m}
@@ -356,15 +481,49 @@ export default function ActiveWorkoutScreen() {
             data={filteredExercises}
             keyExtractor={(item) => item.id}
             contentContainerStyle={styles.exerciseList}
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <Ionicons name="barbell-outline" size={40} color={Colors.textMuted} />
+                <Text style={styles.emptyStateText}>No exercises found</Text>
+                <Text style={styles.emptyStateSubtext}>
+                  {searchQuery.length > 0
+                    ? `No results for "${searchQuery}"`
+                    : selectedMuscle !== 'All'
+                    ? `No ${selectedMuscle} exercises`
+                    : 'Try a different search'}
+                </Text>
+              </View>
+            }
             renderItem={({ item }) => (
-              <TouchableOpacity style={styles.exerciseListItem} onPress={() => addExerciseToSession(item)} activeOpacity={0.7}>
-                <View>
+              <TouchableOpacity
+                style={styles.exerciseListItem}
+                onPress={() => addExerciseToSession(item)}
+                activeOpacity={0.7}
+              >
+                {/* Thumbnail image */}
+                <ExerciseImage imageUrl={item.imageUrl} muscle={item.muscle} size={80} />
+
+                {/* Info */}
+                <View style={styles.exerciseListInfo}>
                   <Text style={styles.exerciseListName}>{item.name}</Text>
-                  <Text style={styles.exerciseListMeta}>
-                    {item.muscle.charAt(0).toUpperCase() + item.muscle.slice(1)} · {item.equipment}
-                  </Text>
+
+                  {/* Muscle badge */}
+                  <View
+                    style={[
+                      styles.muscleBadge,
+                      { backgroundColor: getMuscleColor(item.muscle) + '22', borderColor: getMuscleColor(item.muscle) + '66' },
+                    ]}
+                  >
+                    <Text style={[styles.muscleBadgeText, { color: getMuscleColor(item.muscle) }]}>
+                      {item.muscle.charAt(0).toUpperCase() + item.muscle.slice(1)}
+                    </Text>
+                  </View>
+
+                  {/* Equipment */}
+                  <Text style={styles.exerciseListEquipment}>{item.equipment}</Text>
                 </View>
-                <Ionicons name="add-circle-outline" size={22} color={Colors.primary} />
+
+                <Ionicons name="add-circle-outline" size={24} color={Colors.primary} />
               </TouchableOpacity>
             )}
           />
@@ -484,6 +643,7 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
   },
   addExerciseText: { fontSize: 15, fontWeight: '700', color: Colors.primary },
+
   // Modal
   modalContainer: { flex: 1, backgroundColor: Colors.background },
   modalHeader: {
@@ -525,15 +685,53 @@ const styles = StyleSheet.create({
   muscleChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   muscleChipText: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
   muscleChipTextActive: { color: '#fff' },
-  exerciseList: { paddingHorizontal: 20, paddingBottom: 40 },
+  exerciseList: { paddingHorizontal: 16, paddingBottom: 40 },
+
+  // Exercise list item with image
   exerciseListItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 14,
+    gap: 12,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  exerciseListName: { fontSize: 15, fontWeight: '600', color: Colors.textPrimary },
-  exerciseListMeta: { fontSize: 12, color: Colors.textMuted, marginTop: 2 },
+  exerciseListInfo: {
+    flex: 1,
+    gap: 4,
+  },
+  exerciseListName: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
+  muscleBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  muscleBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  exerciseListEquipment: { fontSize: 12, color: Colors.textMuted },
+
+  // Empty state
+  emptyState: {
+    alignItems: 'center',
+    paddingTop: 48,
+    paddingBottom: 24,
+    gap: 8,
+  },
+  emptyStateText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    marginTop: 8,
+  },
+  emptyStateSubtext: {
+    fontSize: 13,
+    color: Colors.textMuted,
+    textAlign: 'center',
+    paddingHorizontal: 32,
+  },
 });
