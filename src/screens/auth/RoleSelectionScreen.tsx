@@ -117,14 +117,14 @@ export default function RoleSelectionScreen({ navigation }: Props) {
           activeOpacity={0.8}
         >
           <View style={[styles.roleIconContainer, styles.coachIcon]}>
-            <Ionicons name="school" size={32} color="#40916c" />
+            <Ionicons name="school" size={32} color={Colors.accent} />
           </View>
           <Text style={styles.roleTitle}>I'm a Coach</Text>
           <Text style={styles.roleDescription}>
             Manage clients, create plans, and track their progress
           </Text>
           <View style={styles.roleArrow}>
-            <Ionicons name="arrow-forward" size={20} color="#40916c" />
+            <Ionicons name="arrow-forward" size={20} color={Colors.accent} />
           </View>
         </TouchableOpacity>
       </View>
@@ -344,6 +344,6 @@ const styles = StyleSheet.create({
   modalSubmitText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#ffffff',
+    color: Colors.textOnPrimary,
   },
 });

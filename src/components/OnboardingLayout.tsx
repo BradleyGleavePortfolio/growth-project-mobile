@@ -187,7 +187,7 @@ const styles = StyleSheet.create({
     opacity: 0.4,
   },
   continueText: {
-    color: '#ffffff',
+    color: Colors.textOnPrimary,
     fontSize: 18,
     fontWeight: '700',
   },
