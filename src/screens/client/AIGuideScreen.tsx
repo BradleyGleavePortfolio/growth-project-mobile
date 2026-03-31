@@ -238,7 +238,7 @@ export default function AIGuideScreen() {
           <Ionicons
             name="send"
             size={20}
-            color={input.trim() ? '#fff' : Colors.textMuted}
+            color={input.trim() ? Colors.textOnPrimary : Colors.textMuted}
           />
         </TouchableOpacity>
       </View>
@@ -294,7 +294,7 @@ const styles = StyleSheet.create({
   },
   userText: {
     fontSize: 15,
-    color: '#ffffff',
+    color: Colors.textOnPrimary,
     lineHeight: 21,
   },
   aiText: {
@@ -314,7 +314,7 @@ const styles = StyleSheet.create({
   aiAvatarText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#fff',
+    color: Colors.textOnPrimary,
   },
   typingRow: {
     flexDirection: 'row',

@@ -55,6 +55,6 @@ const styles = StyleSheet.create({
   ctaText: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#ffffff',
+    color: Colors.textOnPrimary,
   },
 });

@@ -140,7 +140,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   resetButtonText: {
-    color: '#ffffff',
+    color: Colors.textOnPrimary,
     fontSize: 18,
     fontWeight: '700',
   },

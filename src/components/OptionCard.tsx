@@ -86,7 +86,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   checkmarkText: {
-    color: '#ffffff',
+    color: Colors.textOnPrimary,
     fontSize: 14,
     fontWeight: '700',
   },
