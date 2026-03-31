@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import RootNavigator from './src/navigation/RootNavigator';
 import AppSplash from './src/components/AppSplash';
+import ErrorBoundary from './src/components/ErrorBoundary';
 import { requestNotificationPermissions } from './src/utils/notifications';
 import { initDatabase, seedCoachIfNeeded } from './src/db/database';
 
@@ -37,9 +38,9 @@ export default function App() {
   }
 
   return (
-    <>
+    <ErrorBoundary>
       <StatusBar style="dark" />
       <RootNavigator />
-    </>
+    </ErrorBoundary>
   );
 }
