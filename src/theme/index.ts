@@ -1,24 +1,26 @@
 // The Growth Project — Central Theme
-// All colors, typography, and design tokens live here.
+// Re-exports canonical green/cream palette from constants/colors.
 // NEVER hardcode hex values in component files — always import from here.
 
+import CanonicalColors from '../constants/colors';
+
 export const Colors = {
-  primary: '#1A9EA0',
-  gold: '#C5A467',
-  orange: '#E88D67',
-  dark: '#1C1F26',
-  background: '#F5F0EA',
-  surface: '#FFFFFF',
-  textMuted: '#7A7974',
-  success: '#2ECC71',
-  warning: '#F39C12',
-  error: '#E74C3C',
-  white: '#FFFFFF',
+  primary: CanonicalColors.primary,           // #2D6A4F deep green
+  gold: CanonicalColors.warning,              // #E9C46A (was teal-era gold)
+  orange: CanonicalColors.error,              // #E63946 (was #E88D67)
+  dark: CanonicalColors.textPrimary,          // #1B2B1E near-black green-tinted
+  background: CanonicalColors.background,     // #FAF8F3 warm cream
+  surface: CanonicalColors.surface,           // #FFFFFF
+  textMuted: CanonicalColors.textMuted,       // #8FA89A light muted
+  success: CanonicalColors.success,           // #2D6A4F
+  warning: CanonicalColors.warning,           // #E9C46A
+  error: CanonicalColors.error,               // #E63946
+  white: CanonicalColors.textOnPrimary,       // #FFFFFF
   // Additional tokens
-  border: '#E8E4DF',
-  cardShadow: 'rgba(28, 31, 38, 0.08)',
-  primaryLight: 'rgba(26, 158, 160, 0.12)',
-  goldLight: 'rgba(197, 164, 103, 0.12)',
+  border: CanonicalColors.border,             // #E2EDE6
+  cardShadow: CanonicalColors.cardShadow,     // rgba(45, 106, 79, 0.08)
+  primaryLight: CanonicalColors.primaryPale,   // #D8F3DC
+  goldLight: 'rgba(233, 196, 106, 0.12)',     // translucent warning
 };
 
 export const Typography = {
