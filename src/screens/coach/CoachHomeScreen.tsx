@@ -253,7 +253,7 @@ export default function CoachHomeScreen() {
               >
                 <View style={styles.csAvatar}>
                   <Text style={styles.csAvatarText}>
-                    {client.firstName[0]}{client.lastName[0]}
+                    {(client.firstName || '?')[0]}{(client.lastName || '')[0]}
                   </Text>
                 </View>
                 <View style={styles.csInfo}>
