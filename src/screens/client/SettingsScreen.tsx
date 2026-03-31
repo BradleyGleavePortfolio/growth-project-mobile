@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -12,75 +12,21 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useAuthStore } from '../../store/authStore';
+import { useSettings } from '../../hooks/useSettings';
 import { updateProfile } from '../../db/profileDb';
 import { Colors } from '../../constants/colors';
 import { mediumTap, warningTap, successTap } from '../../utils/haptics';
 
-const SETTINGS_KEY = 'gp_client_settings';
-
-interface ClientSettings {
-  unit: 'lbs' | 'kg';
-  mealsPerDay: number;
-  waterGoalOz: number;
-  calorieDisplay: 'net' | 'gross';
-  dailyCheckin: boolean;
-  checkinHour: number;
-  mealReminders: boolean;
-  fastingAlerts: boolean;
-  weeklySummary: boolean;
-  hapticsEnabled: boolean;
-}
-
-const DEFAULT_SETTINGS: ClientSettings = {
-  unit: 'lbs',
-  mealsPerDay: 4,
-  waterGoalOz: 100,
-  calorieDisplay: 'net',
-  dailyCheckin: true,
-  checkinHour: 9,
-  mealReminders: true,
-  fastingAlerts: false,
-  weeklySummary: true,
-  hapticsEnabled: true,
-};
-
 export default function SettingsScreen({ navigation }: any) {
   const currentUser = useCurrentUser();
   const { signOut, refreshProfile } = useAuthStore();
-  const [settings, setSettings] = useState<ClientSettings>(DEFAULT_SETTINGS);
+  const { settings, updateSetting } = useSettings();
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
-
-  useEffect(() => {
-    loadSettings();
-  }, []);
-
-  const loadSettings = async () => {
-    try {
-      const stored = await AsyncStorage.getItem(SETTINGS_KEY);
-      if (stored) {
-        setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(stored) });
-      }
-    } catch {
-      await AsyncStorage.removeItem(SETTINGS_KEY);
-      setSettings(DEFAULT_SETTINGS);
-    }
-  };
-
-  const saveSettings = useCallback(async (updated: ClientSettings) => {
-    setSettings(updated);
-    await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(updated));
-  }, []);
-
-  const updateSetting = <K extends keyof ClientSettings>(key: K, value: ClientSettings[K]) => {
-    const updated = { ...settings, [key]: value };
-    saveSettings(updated);
-  };
 
   const handleChangePassword = () => {
     if (!newPassword || newPassword.length < 6) {
