@@ -176,7 +176,12 @@ export default function HabitsScreen() {
   const handleToggle = async (habit: HabitWithMeta) => {
     if (!currentUser) return;
     try {
-      await habitsApi.logHabit(habit.id, { date: today });
+      const newCompleted = !(habit.log?.completed);
+      await habitsApi.logHabit(habit.id, {
+        date: today,
+        completed: newCompleted,
+        value: newCompleted ? (habit.targetCount || 1) : 0,
+      });
     } catch (err) {
       console.error('Toggle habit error:', err);
     }
