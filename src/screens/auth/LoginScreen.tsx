@@ -53,16 +53,31 @@ export default function LoginScreen({ navigation }: Props) {
     }
   };
 
-  const handleGoogleLogin = () => {
-    // Google Sign-In requires expo-auth-session + Google Cloud OAuth setup.
-    // Showing "Coming Soon" until OAuth credentials are configured.
-    import('react-native').then(({ Alert }) => {
-      Alert.alert(
-        'Coming Soon',
-        'Google sign-in will be available in a future update. Please sign in with your email and password.',
-        [{ text: 'OK' }],
-      );
-    });
+  const handleGoogleLogin = async () => {
+    setGoogleLoading(true);
+    setError('');
+    try {
+      const { signInWithGoogle } = await import('../../utils/googleAuth');
+      const result = await signInWithGoogle();
+
+      if (!result.success) {
+        if (result.error !== 'Sign-in was cancelled') {
+          setError(result.error || 'Google sign-in failed');
+        }
+        return;
+      }
+
+      if (result.is_new_user || !result.user?.role) {
+        await AsyncStorage.setItem('needs_role_selection', 'true');
+        navigation.replace('RoleSelection');
+      } else {
+        authEvents.emit();
+      }
+    } catch (err: any) {
+      setError('Google sign-in failed. Try again.');
+    } finally {
+      setGoogleLoading(false);
+    }
   };
 
   return (
