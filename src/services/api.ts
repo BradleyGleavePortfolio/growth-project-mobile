@@ -64,6 +64,8 @@ export const authApi = {
     api.post('/auth/select-role', { role, coach_code: coachCode }),
   me: () =>
     api.get('/auth/me'),
+  forgotPassword: (email: string) =>
+    api.post('/auth/forgot-password', { email }),
 };
 
 export const profileApi = {

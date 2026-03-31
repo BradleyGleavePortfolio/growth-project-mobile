@@ -9,6 +9,7 @@ import {
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthStackParamList } from '../../navigation/AuthNavigator';
+import { authApi } from '../../services/api';
 import { Colors } from '../../constants/colors';
 
 type Props = {
@@ -18,9 +19,17 @@ type Props = {
 export default function ForgotPasswordScreen({ navigation }: Props) {
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleReset = () => {
-    if (email.trim()) {
+  const handleReset = async () => {
+    if (!email.trim()) return;
+    setLoading(true);
+    try {
+      await authApi.forgotPassword(email.trim());
+    } catch {
+      // Still show success — don't reveal if email exists
+    } finally {
+      setLoading(false);
       setSent(true);
     }
   };
@@ -77,8 +86,9 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
             style={styles.resetButton}
             onPress={handleReset}
             activeOpacity={0.8}
+            disabled={loading}
           >
-            <Text style={styles.resetButtonText}>Send Reset Link</Text>
+            <Text style={styles.resetButtonText}>{loading ? 'Sending...' : 'Send Reset Link'}</Text>
           </TouchableOpacity>
         </View>
       )}
