@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -21,6 +22,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { getChatHistory, saveChatMessage } from '../../db/chatDb';
 import { getAIResponse } from '../../utils/aiGuide';
+import { aiApi } from '../../services/api';
 import { Colors } from '../../constants/colors';
 import { ChatMessage } from '../../types';
 import { generateId } from '../../utils/date';
@@ -112,29 +114,44 @@ export default function AIGuideScreen() {
       setInput('');
       setIsTyping(true);
 
-      // Simulate typing delay
-      await new Promise((r) => setTimeout(r, 600 + Math.random() * 400));
+      let aiText: string;
 
-      const daysSinceStart = currentUser?.createdAt
-        ? Math.floor((Date.now() - new Date(currentUser.createdAt).getTime()) / (1000 * 60 * 60 * 24))
-        : 1;
+      try {
+        // Build conversation history for the API
+        const history = messages.slice(-10).map((m) => ({
+          role: m.role === 'user' ? 'user' : 'assistant',
+          content: m.text,
+        }));
 
-      const profileAsClientProfile = currentUser?.profile ? {
-        id: '',
-        userId: currentUser.id,
-        coachId: currentUser.coach_id || '',
-        onboardingCompleted: true,
-        createdAt: currentUser.createdAt || new Date().toISOString(),
-        updatedAt: currentUser.createdAt || new Date().toISOString(),
-        ...currentUser.profile,
-      } as import('../../types').ClientProfile : null;
+        const response = await aiApi.chat(text.trim(), history);
+        aiText = response.data?.reply || response.data?.message || response.data?.response || '';
 
-      const aiText = getAIResponse(text, {
-        firstName: currentUser?.firstName || currentUser?.name || 'there',
-        profile: profileAsClientProfile,
-        daysSinceStart,
-        loggingStreak: 0,
-      });
+        if (!aiText) {
+          throw new Error('Empty API response');
+        }
+      } catch {
+        // Fallback to local pattern matching (offline mode)
+        const daysSinceStart = currentUser?.createdAt
+          ? Math.floor((Date.now() - new Date(currentUser.createdAt).getTime()) / (1000 * 60 * 60 * 24))
+          : 1;
+
+        const profileAsClientProfile = currentUser?.profile ? {
+          id: '',
+          userId: currentUser.id,
+          coachId: currentUser.coach_id || '',
+          onboardingCompleted: true,
+          createdAt: currentUser.createdAt || new Date().toISOString(),
+          updatedAt: currentUser.createdAt || new Date().toISOString(),
+          ...currentUser.profile,
+        } as import('../../types').ClientProfile : null;
+
+        aiText = getAIResponse(text, {
+          firstName: currentUser?.firstName || currentUser?.name || 'there',
+          profile: profileAsClientProfile,
+          daysSinceStart,
+          loggingStreak: 0,
+        });
+      }
 
       const aiMsg: ChatMessage = {
         id: 'msg_' + generateId(),
@@ -147,7 +164,7 @@ export default function AIGuideScreen() {
       setMessages((prev) => [...prev, aiMsg]);
       await saveChatMessage(userId, aiMsg);
     },
-    [userId, currentUser]
+    [userId, currentUser, messages]
   );
 
   const renderMessage = ({ item }: { item: ChatMessage }) => {
