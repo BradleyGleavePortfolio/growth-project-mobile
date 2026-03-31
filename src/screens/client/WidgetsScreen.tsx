@@ -5,11 +5,14 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../../constants/colors';
 import FadeInView from '../../components/FadeInView';
+
+const NON_FUNCTIONAL_IDS = new Set(['scan-barcode', 'apple-watch', 'health-kit']);
 
 const WIDGETS = [
   {
@@ -127,18 +130,33 @@ export default function WidgetsScreen() {
           <Text style={styles.sectionSubtitle}>
             3D Touch / long-press shortcuts from your app icon
           </Text>
-          {QUICK_ACTIONS.map((action) => (
-            <View key={action.id} style={styles.card}>
-              <View style={styles.cardIcon}>
-                <Ionicons name={action.icon} size={24} color={Colors.primary} />
-              </View>
-              <View style={styles.cardContent}>
-                <Text style={styles.cardTitle}>{action.title}</Text>
-                <Text style={styles.cardDesc}>{action.description}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-            </View>
-          ))}
+          {QUICK_ACTIONS.map((action) => {
+            const disabled = NON_FUNCTIONAL_IDS.has(action.id);
+            return (
+              <TouchableOpacity
+                key={action.id}
+                style={[styles.card, disabled && styles.cardDisabled]}
+                activeOpacity={disabled ? 0.7 : 1}
+                onPress={disabled ? () => Alert.alert('Coming Soon', 'This feature is under development.') : undefined}
+                disabled={!disabled}
+              >
+                <View style={styles.cardIcon}>
+                  <Ionicons name={action.icon} size={24} color={disabled ? Colors.textMuted : Colors.primary} />
+                </View>
+                <View style={styles.cardContent}>
+                  <Text style={[styles.cardTitle, disabled && styles.cardTitleDisabled]}>{action.title}</Text>
+                  <Text style={styles.cardDesc}>{action.description}</Text>
+                </View>
+                {disabled ? (
+                  <View style={styles.badgeComingSoon}>
+                    <Text style={styles.badgeComingSoonText}>Coming Soon</Text>
+                  </View>
+                ) : (
+                  <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+                )}
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </FadeInView>
 
@@ -149,22 +167,29 @@ export default function WidgetsScreen() {
           <Text style={styles.sectionSubtitle}>
             Connect your wearable devices for a seamless experience
           </Text>
-          {WEARABLES.map((device) => (
-            <View key={device.id} style={styles.card}>
-              <View style={styles.cardIcon}>
-                <Ionicons name={device.icon} size={24} color={Colors.primary} />
-              </View>
-              <View style={styles.cardContent}>
-                <Text style={styles.cardTitle}>{device.title}</Text>
-                <Text style={styles.cardDesc}>{device.description}</Text>
-              </View>
-              <View style={[styles.badge, device.status === 'In Development' && styles.badgeActive]}>
-                <Text style={[styles.badgeText, device.status === 'In Development' && styles.badgeTextActive]}>
-                  {device.status}
-                </Text>
-              </View>
-            </View>
-          ))}
+          {WEARABLES.map((device) => {
+            const disabled = NON_FUNCTIONAL_IDS.has(device.id);
+            return (
+              <TouchableOpacity
+                key={device.id}
+                style={[styles.card, disabled && styles.cardDisabled]}
+                activeOpacity={0.7}
+                onPress={disabled ? () => Alert.alert('Coming Soon', 'This feature is under development.') : undefined}
+                disabled={!disabled}
+              >
+                <View style={styles.cardIcon}>
+                  <Ionicons name={device.icon} size={24} color={disabled ? Colors.textMuted : Colors.primary} />
+                </View>
+                <View style={styles.cardContent}>
+                  <Text style={[styles.cardTitle, disabled && styles.cardTitleDisabled]}>{device.title}</Text>
+                  <Text style={styles.cardDesc}>{device.description}</Text>
+                </View>
+                <View style={styles.badgeComingSoon}>
+                  <Text style={styles.badgeComingSoonText}>Coming Soon</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </FadeInView>
     </ScrollView>
@@ -265,5 +290,22 @@ const styles = StyleSheet.create({
   },
   badgeTextActive: {
     color: '#ffffff',
+  },
+  cardDisabled: {
+    opacity: 0.5,
+  },
+  cardTitleDisabled: {
+    color: Colors.textMuted,
+  },
+  badgeComingSoon: {
+    backgroundColor: Colors.surfaceElevated,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  badgeComingSoonText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.textMuted,
   },
 });
