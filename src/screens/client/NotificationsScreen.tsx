@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { useAuthStore } from '../../store/authStore';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { Colors } from '../../constants/colors';
 import {
   Notification,
@@ -31,7 +31,7 @@ const TYPE_CONFIG: Record<string, { icon: string; color: string }> = {
 };
 
 export default function NotificationsScreen() {
-  const { currentUser } = useAuthStore();
+  const currentUser = useCurrentUser();
   const navigation = useNavigation<any>();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [refreshing, setRefreshing] = useState(false);

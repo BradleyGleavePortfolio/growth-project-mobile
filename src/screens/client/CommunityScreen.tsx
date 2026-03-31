@@ -10,7 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuthStore } from '../../store/authStore';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { Colors } from '../../constants/colors';
 import {
   Challenge,
@@ -52,7 +52,7 @@ const CHALLENGE_ICONS: Record<string, string> = {
 };
 
 export default function CommunityScreen() {
-  const { currentUser } = useAuthStore();
+  const currentUser = useCurrentUser();
   const [activeTab, setActiveTab] = useState<TabKey>('challenges');
   const [challenges, setChallenges] = useState<Challenge[]>([]);
   const [myChallenges, setMyChallenges] = useState<(ChallengeParticipant & { challenge: Challenge })[]>([]);

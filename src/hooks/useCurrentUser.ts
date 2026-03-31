@@ -7,6 +7,26 @@ export interface CurrentUser {
   email: string;
   name?: string;
   role?: string;
+  coach_id?: string;
+  phone?: string;
+  firstName?: string;
+  lastName?: string;
+  createdAt?: string;
+  profile?: {
+    calorie_target?: number;
+    protein_target?: number;
+    carbs_target?: number;
+    fat_target?: number;
+    current_weight?: number;
+    target_weight?: number;
+    height?: number;
+    sex?: string;
+    dob?: string;
+    activity_level?: string;
+    primary_goal?: string;
+    diet_type?: string;
+    tdee?: number;
+  };
 }
 
 /**

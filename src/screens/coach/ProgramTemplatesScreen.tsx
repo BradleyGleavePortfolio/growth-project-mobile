@@ -11,7 +11,7 @@ import {
   SafeAreaView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuthStore } from '../../store/authStore';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachStore } from '../../store/coachStore';
 import { Colors } from '../../constants/colors';
 import { Shadow, Radius } from '../../constants/theme';
@@ -131,7 +131,7 @@ async function applyTemplateToClient(
 // ── Component ─────────────────────────────────────────────────────────────
 
 export default function ProgramTemplatesScreen() {
-  const { currentUser } = useAuthStore();
+  const currentUser = useCurrentUser();
   const { clients, loadClients } = useCoachStore();
   const [expanded, setExpanded] = useState<string | null>(null);
   const [applying, setApplying] = useState<string | null>(null);

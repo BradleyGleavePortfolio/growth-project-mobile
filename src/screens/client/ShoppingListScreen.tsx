@@ -10,7 +10,7 @@ import {
   SectionList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuthStore } from '../../store/authStore';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { Colors } from '../../constants/colors';
 import { ShoppingItem } from '../../types';
 import {
@@ -40,7 +40,7 @@ function formatWeekRange(weekStart: string): string {
 }
 
 export default function ShoppingListScreen({ onBack }: { onBack?: () => void } = {}) {
-  const { currentUser } = useAuthStore();
+  const currentUser = useCurrentUser();
   const [weekStart, setWeekStart] = useState(() => getWeekStart(getTodayString()));
   const [items, setItems] = useState<ShoppingItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);

@@ -9,7 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuthStore } from '../../store/authStore';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { Colors } from '../../constants/colors';
 import { Shadow, Radius } from '../../constants/theme';
 import { ShoppingItem } from '../../types';
@@ -48,7 +48,7 @@ interface GroceryListScreenProps {
 }
 
 export default function GroceryListScreen({ onBack, embedded, onContinue }: GroceryListScreenProps) {
-  const { currentUser } = useAuthStore();
+  const currentUser = useCurrentUser();
   const [weekStart] = useState(() => getWeekStart(getTodayString()));
   const [items, setItems] = useState<ShoppingItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);

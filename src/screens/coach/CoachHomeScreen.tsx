@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { useAuthStore } from '../../store/authStore';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachStore } from '../../store/coachStore';
 import { Colors } from '../../constants/colors';
 import { getGreeting } from '../../utils/date';
@@ -24,7 +24,7 @@ interface RedFlagClient {
 }
 
 export default function CoachHomeScreen() {
-  const { currentUser } = useAuthStore();
+  const currentUser = useCurrentUser();
   const { clients, recentLogs, isLoading, loadClients, loadRecentActivity } =
     useCoachStore();
   const navigation = useNavigation<any>();

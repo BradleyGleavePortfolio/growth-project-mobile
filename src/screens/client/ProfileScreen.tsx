@@ -19,7 +19,7 @@ type Nav = NativeStackNavigationProp<ProfileStackParamList>;
 
 export default function ProfileScreen() {
   const currentUser = useCurrentUser();
-  const { clientProfile, signOut } = useAuthStore();
+  const { signOut } = useAuthStore();
   const navigation = useNavigation<Nav>();
 
   const handleSignOut = () => {
@@ -32,20 +32,20 @@ export default function ProfileScreen() {
   const profileItems = [
     { label: 'Name', value: currentUser?.name || 'No name set' },
     { label: 'Email', value: currentUser?.email || '' },
-    { label: 'Sex', value: clientProfile?.sex || 'Not set' },
-    { label: 'Date of Birth', value: clientProfile?.dob || 'Not set' },
-    { label: 'Current Weight', value: clientProfile?.currentWeight ? `${clientProfile.currentWeight} lbs` : 'Not set' },
-    { label: 'Target Weight', value: clientProfile?.targetWeight ? `${clientProfile.targetWeight} lbs` : 'Not set' },
-    { label: 'Activity Level', value: clientProfile?.activityLevel || 'Not set' },
-    { label: 'Goal', value: clientProfile?.primaryGoal || 'Not set' },
+    { label: 'Sex', value: currentUser?.profile?.sex || 'Not set' },
+    { label: 'Date of Birth', value: currentUser?.profile?.dob || 'Not set' },
+    { label: 'Current Weight', value: currentUser?.profile?.current_weight ? `${currentUser.profile.current_weight} lbs` : 'Not set' },
+    { label: 'Target Weight', value: currentUser?.profile?.target_weight ? `${currentUser.profile.target_weight} lbs` : 'Not set' },
+    { label: 'Activity Level', value: currentUser?.profile?.activity_level || 'Not set' },
+    { label: 'Goal', value: currentUser?.profile?.primary_goal || 'Not set' },
   ];
 
   const targetItems = [
-    { label: 'TDEE', value: clientProfile?.tdee ? `${clientProfile.tdee} kcal` : '--' },
-    { label: 'Calorie Target', value: clientProfile?.calorieTarget ? `${clientProfile.calorieTarget} kcal` : '--' },
-    { label: 'Protein', value: clientProfile?.proteinTarget ? `${clientProfile.proteinTarget}g` : '--' },
-    { label: 'Carbs', value: clientProfile?.carbTarget ? `${clientProfile.carbTarget}g` : '--' },
-    { label: 'Fat', value: clientProfile?.fatTarget ? `${clientProfile.fatTarget}g` : '--' },
+    { label: 'TDEE', value: currentUser?.profile?.tdee ? `${currentUser.profile.tdee} kcal` : '--' },
+    { label: 'Calorie Target', value: currentUser?.profile?.calorie_target ? `${currentUser.profile.calorie_target} kcal` : '--' },
+    { label: 'Protein', value: currentUser?.profile?.protein_target ? `${currentUser.profile.protein_target}g` : '--' },
+    { label: 'Carbs', value: currentUser?.profile?.carbs_target ? `${currentUser.profile.carbs_target}g` : '--' },
+    { label: 'Fat', value: currentUser?.profile?.fat_target ? `${currentUser.profile.fat_target}g` : '--' },
   ];
 
   return (

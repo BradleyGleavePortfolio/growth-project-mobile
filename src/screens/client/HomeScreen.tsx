@@ -12,7 +12,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
-import { useAuthStore } from '../../store/authStore';
 import { useClientStore } from '../../store/clientStore';
 import { getGreeting, getTodayString as getToday } from '../../utils/date';
 import CalorieRing from '../../components/CalorieRing';
@@ -181,7 +180,6 @@ interface HabitsData {
 
 export default function HomeScreen() {
   const currentUser = useCurrentUser();
-  const { clientProfile } = useAuthStore();
   const {
     selectedDate,
     foodLogs,
@@ -311,10 +309,10 @@ export default function HomeScreen() {
     setRefreshing(false);
   }, [currentUser?.id, selectedDate]);
 
-  const calorieTarget = clientProfile?.calorieTarget || asyncTargets?.calories || 2000;
-  const proteinTarget = clientProfile?.proteinTarget || asyncTargets?.protein || 150;
-  const carbTarget = clientProfile?.carbTarget || asyncTargets?.carbs || 200;
-  const fatTarget = clientProfile?.fatTarget || asyncTargets?.fat || 65;
+  const calorieTarget = currentUser?.profile?.calorie_target || asyncTargets?.calories || 2000;
+  const proteinTarget = currentUser?.profile?.protein_target || asyncTargets?.protein || 150;
+  const carbTarget = currentUser?.profile?.carbs_target || asyncTargets?.carbs || 200;
+  const fatTarget = currentUser?.profile?.fat_target || asyncTargets?.fat || 65;
 
   const getMealFoods = (mealType: MealType) =>
     foodLogs.filter((f) => f.mealType === mealType);
@@ -393,7 +391,7 @@ export default function HomeScreen() {
               onPress={() => {
                 const remaining = calorieTarget - dailyTotals.calories;
                 const snacks: string[] = JSON.parse(
-                  (clientProfile as any)?.preferredSnacks || '[]',
+                  (currentUser?.profile as any)?.preferredSnacks || '[]',
                 );
                 sendCalorieReminderNotification(remaining, snacks);
               }}

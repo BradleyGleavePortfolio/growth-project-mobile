@@ -49,7 +49,7 @@ const DEFAULT_SETTINGS: ClientSettings = {
 
 export default function SettingsScreen({ navigation }: any) {
   const currentUser = useCurrentUser();
-  const { clientProfile, signOut, refreshProfile } = useAuthStore();
+  const { signOut, refreshProfile } = useAuthStore();
   const [settings, setSettings] = useState<ClientSettings>(DEFAULT_SETTINGS);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
