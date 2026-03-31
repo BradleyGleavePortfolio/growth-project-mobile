@@ -205,8 +205,9 @@ export default function HabitsScreen() {
         name: newName.trim(),
         icon: newIcon,
         color: newColor,
+        category: 'custom',
         frequency: 'daily',
-        target_count: parseInt(newTarget) || 1,
+        target_value: parseInt(newTarget) || 1,
         unit: newUnit || 'times',
       });
     } catch (err) {
