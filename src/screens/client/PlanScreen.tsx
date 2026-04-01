@@ -17,6 +17,9 @@ import { Shadow } from '../../constants/theme';
 import GroceryListScreen from './GroceryListScreen';
 import PrepGuideScreen from './PrepGuideScreen';
 import FadeInView from '../../components/FadeInView';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { upsertMealPlan } from '../../db/mealPlanDb';
+import { getStartOfWeek } from '../../utils/weekUtils';
 
 // ── Meal Pools ─────────────────────────────────────────────────────────────
 
@@ -192,6 +195,7 @@ function SwipeMealCard({ label, icon, pool, accepted, onAccept, onNext, currentI
 // ── Main PlanScreen ───────────────────────────────────────────────────────
 
 export default function PlanScreen() {
+  const currentUser = useCurrentUser();
   const [phase, setPhase] = useState<Phase>('picker');
   const [selected, setSelected] = useState<SelectedMeals>({ breakfast: null, lunch: null, dinner: null });
   const [bIdx, setBIdx] = useState(0);
@@ -200,6 +204,26 @@ export default function PlanScreen() {
   const [weeklyModalVisible, setWeeklyModalVisible] = useState(false);
 
   const allAccepted = selected.breakfast && selected.lunch && selected.dinner;
+
+  const handleBuildGrocery = async () => {
+    if (!currentUser) return;
+
+    const weekStart = getStartOfWeek(new Date()).toISOString().split('T')[0];
+    const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+    const planData: Record<string, any> = {};
+
+    for (const day of days) {
+      planData[day] = {
+        breakfast: selected.breakfast ? { name: selected.breakfast.name, calories: selected.breakfast.cal } : null,
+        lunch: selected.lunch ? { name: selected.lunch.name, calories: selected.lunch.cal } : null,
+        dinner: selected.dinner ? { name: selected.dinner.name, calories: selected.dinner.cal } : null,
+        snacks: null,
+      };
+    }
+
+    await upsertMealPlan(currentUser.id, '', weekStart, planData);
+    setPhase('grocery');
+  };
 
   const totalCal = [selected.breakfast, selected.lunch, selected.dinner].reduce((s, m) => s + (m?.cal || 0), 0);
   const totalP = [selected.breakfast, selected.lunch, selected.dinner].reduce((s, m) => s + (m?.p || 0), 0);
@@ -307,7 +331,7 @@ export default function PlanScreen() {
             {/* Build Grocery List CTA */}
             <TouchableOpacity
               style={styles.groceryBtn}
-              onPress={() => setPhase('grocery')}
+              onPress={handleBuildGrocery}
               activeOpacity={0.85}
             >
               <Ionicons name="basket-outline" size={22} color="#FFFFFF" />
