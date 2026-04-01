@@ -356,9 +356,106 @@ export function getFoodImageUrl(foodName: string): string {
   return CATEGORY_FALLBACKS.default;
 }
 
+// Recipe-specific images for all 75 recipes
+const RECIPE_IMAGES: Record<string, string> = {
+  // High-protein meals (20)
+  'grilled chicken & broccoli': 'https://images.unsplash.com/photo-1598103442097-8b74394b95c6?w=200&h=160&fit=crop',
+  'salmon with asparagus': 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=200&h=160&fit=crop',
+  'turkey meatball': 'https://images.unsplash.com/photo-1529042410759-befb1204b468?w=200&h=160&fit=crop',
+  'beef stir fry': 'https://images.unsplash.com/photo-1512058564366-18510be2db19?w=200&h=160&fit=crop',
+  'shrimp taco': 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=200&h=160&fit=crop',
+  'chicken caesar salad': 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=200&h=160&fit=crop',
+  'tuna poke bowl': 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=200&h=160&fit=crop',
+  'protein pancake': 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=200&h=160&fit=crop',
+  'egg white omelette': 'https://images.unsplash.com/photo-1482049016688-2d3e1b311543?w=200&h=160&fit=crop',
+  'lean burger lettuce wrap': 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=200&h=160&fit=crop',
+  'chicken thigh with sweet potato': 'https://images.unsplash.com/photo-1598103442097-8b74394b95c6?w=200&h=160&fit=crop',
+  'cottage cheese power bowl': 'https://images.unsplash.com/photo-1488477181946-6428a0291777?w=200&h=160&fit=crop',
+  'baked cod with veggies': 'https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?w=200&h=160&fit=crop',
+  'greek chicken bowl': 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=200&h=160&fit=crop',
+  'steak & eggs': 'https://images.unsplash.com/photo-1600891964092-4316c288032e?w=200&h=160&fit=crop',
+  'chicken burrito bowl': 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=200&h=160&fit=crop',
+  'tofu scramble': 'https://images.unsplash.com/photo-1628689469838-524a4a973b8e?w=200&h=160&fit=crop',
+  'bbq chicken breast': 'https://images.unsplash.com/photo-1598103442097-8b74394b95c6?w=200&h=160&fit=crop',
+  'lentil & chicken soup': 'https://images.unsplash.com/photo-1547592166-23ac45744acd?w=200&h=160&fit=crop',
+  'tuna salad wrap': 'https://images.unsplash.com/photo-1528736235302-52922df5c122?w=200&h=160&fit=crop',
+
+  // Breakfast options (10)
+  'overnight oats': 'https://images.unsplash.com/photo-1517673400267-0251440c45dc?w=200&h=160&fit=crop',
+  'avocado toast with egg': 'https://images.unsplash.com/photo-1523049673857-eb18f1d7b578?w=200&h=160&fit=crop',
+  'berry smoothie bowl': 'https://images.unsplash.com/photo-1505252585461-04db1eb84625?w=200&h=160&fit=crop',
+  'breakfast burrito': 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=200&h=160&fit=crop',
+  'banana peanut butter smoothie': 'https://images.unsplash.com/photo-1505252585461-04db1eb84625?w=200&h=160&fit=crop',
+  'veggie frittata': 'https://images.unsplash.com/photo-1482049016688-2d3e1b311543?w=200&h=160&fit=crop',
+  'french toast': 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=200&h=160&fit=crop',
+  'chia pudding': 'https://images.unsplash.com/photo-1508061253366-f7da158b6d46?w=200&h=160&fit=crop',
+  'breakfast oat bar': 'https://images.unsplash.com/photo-1622484212850-eb596d769edc?w=200&h=160&fit=crop',
+  'yogurt parfait': 'https://images.unsplash.com/photo-1488477181946-6428a0291777?w=200&h=160&fit=crop',
+
+  // Quick meals (10)
+  'chicken quesadilla': 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=200&h=160&fit=crop',
+  'caprese sandwich': 'https://images.unsplash.com/photo-1528736235302-52922df5c122?w=200&h=160&fit=crop',
+  '5-minute egg fried rice': 'https://images.unsplash.com/photo-1512058564366-18510be2db19?w=200&h=160&fit=crop',
+  'blt sandwich': 'https://images.unsplash.com/photo-1528736235302-52922df5c122?w=200&h=160&fit=crop',
+  'microwave mug omelette': 'https://images.unsplash.com/photo-1482049016688-2d3e1b311543?w=200&h=160&fit=crop',
+  'mediterranean wrap': 'https://images.unsplash.com/photo-1528736235302-52922df5c122?w=200&h=160&fit=crop',
+  'peanut noodles': 'https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?w=200&h=160&fit=crop',
+  'greek salad with grilled chicken': 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=200&h=160&fit=crop',
+  'taco salad': 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=200&h=160&fit=crop',
+  'turkey & cheese roll-ups': 'https://images.unsplash.com/photo-1574672280600-4accfa404c94?w=200&h=160&fit=crop',
+
+  // Low-carb options (10)
+  'zucchini noodle bolognese': 'https://images.unsplash.com/photo-1563565375-f3fdfdbefa83?w=200&h=160&fit=crop',
+  'cauliflower fried rice': 'https://images.unsplash.com/photo-1459411552884-841db9b3cc2a?w=200&h=160&fit=crop',
+  'stuffed bell pepper': 'https://images.unsplash.com/photo-1563565375-f3fdfdbefa83?w=200&h=160&fit=crop',
+  'keto chicken wings': 'https://images.unsplash.com/photo-1527477396000-e27163b4bdb5?w=200&h=160&fit=crop',
+  'spinach & feta stuffed chicken': 'https://images.unsplash.com/photo-1598103442097-8b74394b95c6?w=200&h=160&fit=crop',
+  'cucumber tuna boats': 'https://images.unsplash.com/photo-1449300079323-02e209d9d3a6?w=200&h=160&fit=crop',
+  'chicken cobb salad': 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=200&h=160&fit=crop',
+  'garlic butter shrimp': 'https://images.unsplash.com/photo-1565680018434-b513d5e5fd47?w=200&h=160&fit=crop',
+  'caprese chicken': 'https://images.unsplash.com/photo-1598103442097-8b74394b95c6?w=200&h=160&fit=crop',
+  'egg drop soup': 'https://images.unsplash.com/photo-1547592166-23ac45744acd?w=200&h=160&fit=crop',
+
+  // International dishes (10)
+  'korean bulgogi': 'https://images.unsplash.com/photo-1588168333986-5078d3ae3976?w=200&h=160&fit=crop',
+  'thai basil turkey': 'https://images.unsplash.com/photo-1512058564366-18510be2db19?w=200&h=160&fit=crop',
+  'japanese miso salmon': 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=200&h=160&fit=crop',
+  'indian chicken tikka': 'https://images.unsplash.com/photo-1598103442097-8b74394b95c6?w=200&h=160&fit=crop',
+  'moroccan chickpea stew': 'https://images.unsplash.com/photo-1547592166-23ac45744acd?w=200&h=160&fit=crop',
+  'mexican burrito bowl': 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=200&h=160&fit=crop',
+  'vietnamese pho': 'https://images.unsplash.com/photo-1547592166-23ac45744acd?w=200&h=160&fit=crop',
+  'italian turkey meatball': 'https://images.unsplash.com/photo-1529042410759-befb1204b468?w=200&h=160&fit=crop',
+  'spanish tortilla': 'https://images.unsplash.com/photo-1482049016688-2d3e1b311543?w=200&h=160&fit=crop',
+  'teriyaki chicken bowl': 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=200&h=160&fit=crop',
+
+  // Vegetarian/vegan (5)
+  'black bean veggie burger': 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=200&h=160&fit=crop',
+  'chickpea curry': 'https://images.unsplash.com/photo-1547592166-23ac45744acd?w=200&h=160&fit=crop',
+  'lentil dal': 'https://images.unsplash.com/photo-1546549032-9571cd6b27df?w=200&h=160&fit=crop',
+  'veggie stir fry with tofu': 'https://images.unsplash.com/photo-1512058564366-18510be2db19?w=200&h=160&fit=crop',
+  'mushroom risotto': 'https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?w=200&h=160&fit=crop',
+
+  // Snacks/sides (10)
+  'trail mix': 'https://images.unsplash.com/photo-1508061253366-f7da158b6d46?w=200&h=160&fit=crop',
+  'apple slices with peanut butter': 'https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=200&h=160&fit=crop',
+  'protein energy balls': 'https://images.unsplash.com/photo-1622484212850-eb596d769edc?w=200&h=160&fit=crop',
+  'guacamole with veggies': 'https://images.unsplash.com/photo-1523049673857-eb18f1d7b578?w=200&h=160&fit=crop',
+  'hard-boiled eggs': 'https://images.unsplash.com/photo-1482049016688-2d3e1b311543?w=200&h=160&fit=crop',
+  'roasted sweet potato fries': 'https://images.unsplash.com/photo-1596097635121-14b63a7e0e75?w=200&h=160&fit=crop',
+  'greek tzatziki with pita': 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=200&h=160&fit=crop',
+  'edamame bowl': 'https://images.unsplash.com/photo-1615485290382-441e4d049cb5?w=200&h=160&fit=crop',
+  'banana nice cream': 'https://images.unsplash.com/photo-1497034825429-c343d7c6a68f?w=200&h=160&fit=crop',
+  'cheese & crackers plate': 'https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?w=200&h=160&fit=crop',
+};
+
 export function getRecipeImageUrl(recipeName: string): string {
   const lower = recipeName.toLowerCase().replace(/[()]/g, '');
   const underscored = lower.replace(/\s+/g, '_');
+
+  // Check RECIPE_IMAGES first for exact recipe name matches
+  for (const [keyword, url] of Object.entries(RECIPE_IMAGES)) {
+    if (lower.includes(keyword)) return url;
+  }
 
   // Check specific compound keywords first
   for (const [keyword, url] of Object.entries(FOOD_PHOTOS)) {
