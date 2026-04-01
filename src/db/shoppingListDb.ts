@@ -65,7 +65,19 @@ export async function generateShoppingListFromPlan(
     for (const slot of slots) {
       const meal = day[slot];
       if (!meal) continue;
-      const recipe = recipeMap.get(meal.name);
+      let recipe = recipeMap.get(meal.name);
+      if (!recipe) {
+        // Fuzzy match: find recipe whose name contains key words from the meal name
+        const mealWords = meal.name.toLowerCase().split(/[\s&+,]+/).filter(w => w.length > 2);
+        for (const [, recipeData] of recipeMap) {
+          const rLower = recipeData.name.toLowerCase();
+          const matchCount = mealWords.filter(w => rLower.includes(w)).length;
+          if (matchCount >= 2 || (mealWords.length === 1 && matchCount === 1)) {
+            recipe = recipeData;
+            break;
+          }
+        }
+      }
       if (!recipe) continue;
       try {
         const ingredients: string[] = JSON.parse(recipe.ingredients);
