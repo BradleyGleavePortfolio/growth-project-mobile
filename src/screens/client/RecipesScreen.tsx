@@ -16,6 +16,7 @@ import EmptyState from '../../components/EmptyState';
 import FadeInView from '../../components/FadeInView';
 import { SkeletonCard } from '../../components/SkeletonLoader';
 import { getAllRecipes, getRecipesByTag, searchRecipes } from '../../db/recipesDb';
+import { getRecipeImageUrl } from '../../utils/foodImages';
 
 type FilterKey = 'all' | 'high-protein' | 'breakfast' | 'quick' | 'low-carb' | 'international' | 'vegetarian' | 'snack';
 
@@ -29,15 +30,6 @@ const FILTERS: { key: FilterKey; label: string }[] = [
   { key: 'vegetarian', label: 'Vegetarian' },
   { key: 'snack', label: 'Snacks' },
 ];
-
-function getImageKeyword(recipe: Recipe): string {
-  try {
-    const tags: string[] = JSON.parse(recipe.tags);
-    const imgTag = tags.find((t) => t.startsWith('img:'));
-    if (imgTag) return imgTag.replace('img:', '');
-  } catch {}
-  return recipe.name.toLowerCase().replace(/[^a-z ]/g, '').split(' ').slice(0, 2).join('-');
-}
 
 function RecipeImage({ uri, name, style }: { uri: string; name: string; style: any }) {
   const [errored, setErrored] = useState(false);
@@ -201,7 +193,6 @@ export default function RecipesScreen() {
             />
           ) : (
             filtered.map((recipe) => {
-              const keyword = getImageKeyword(recipe);
               return (
                 <FadeInView key={recipe.id}>
                   <TouchableOpacity
@@ -210,7 +201,7 @@ export default function RecipesScreen() {
                     activeOpacity={0.7}
                   >
                     <RecipeImage
-                      uri={`https://source.unsplash.com/160x120/?${keyword},food`}
+                      uri={getRecipeImageUrl(recipe.name)}
                       name={recipe.name}
                       style={styles.recipeImage}
                     />
@@ -267,7 +258,6 @@ function RecipeDetailView({
   recipe: Recipe;
   onBack: () => void;
 }) {
-  const keyword = getImageKeyword(recipe);
   const ingredients = parseIngredients(recipe.ingredients);
   const tags = parseTags(recipe.tags).filter((t) => !t.startsWith('img:'));
 
@@ -275,7 +265,7 @@ function RecipeDetailView({
     <View style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
         <RecipeImage
-          uri={`https://source.unsplash.com/400x240/?${keyword},food`}
+          uri={getRecipeImageUrl(recipe.name)}
           name={recipe.name}
           style={styles.heroImage}
         />
