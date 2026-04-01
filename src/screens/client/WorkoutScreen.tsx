@@ -358,28 +358,34 @@ export default function WorkoutScreen() {
           })
         )}
 
-        {/* Recent Sessions */}
-        {recentSessions.length > 0 && (
-          <>
-            <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Recent Sessions</Text>
-            {recentSessions.map((session) => {
-              const exList = session.exercises || [];
-              return (
-                <View key={session.id} style={styles.sessionCard}>
-                  <View style={styles.sessionTop}>
-                    <Text style={styles.sessionName}>{session.notes || 'Workout'}</Text>
-                    <View style={styles.completedBadge}>
-                      <Ionicons name="checkmark-circle" size={14} color={Colors.success} />
-                      <Text style={styles.completedText}>Done</Text>
-                    </View>
-                  </View>
-                  <Text style={styles.sessionMeta}>
-                    {new Date(session.date).toLocaleDateString()} · {formatDuration(session.duration_minutes)} · {exList.length} exercises
+        {/* Recent Workouts */}
+        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Recent Workouts</Text>
+        {recentSessions.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Text style={styles.emptyText}>Complete a workout to see your history</Text>
+          </View>
+        ) : (
+          recentSessions.map((session) => (
+            <View key={session.id} style={styles.historyCard}>
+              <View style={styles.historyHeader}>
+                <Text style={styles.historyTitle}>{session.notes || 'Workout'}</Text>
+                <Text style={styles.historyDate}>
+                  {new Date(session.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                </Text>
+              </View>
+              {session.duration_minutes ? (
+                <Text style={styles.historyMeta}>{formatDuration(session.duration_minutes)}</Text>
+              ) : null}
+              {(session.exercises || []).map((ex, i) => (
+                <View key={i} style={styles.historyExercise}>
+                  <Text style={styles.exerciseName}>{ex.exercise_name}</Text>
+                  <Text style={styles.exerciseSets}>
+                    {ex.sets_completed} sets{ex.weight_per_set?.length ? ` · ${ex.weight_per_set.map((w) => `${w} lbs`).join(', ')}` : ''}
                   </Text>
                 </View>
-              );
-            })}
-          </>
+              ))}
+            </View>
+          ))
         )}
       </ScrollView>
     </View>
@@ -636,21 +642,49 @@ const styles = StyleSheet.create({
   routineName: { fontSize: 16, fontWeight: '700', color: Colors.textPrimary },
   routineExCount: { fontSize: 13, color: Colors.textSecondary, marginTop: 4 },
   routineExList: { fontSize: 12, color: Colors.textMuted, marginTop: 4 },
-  sessionCard: {
+  historyCard: {
     marginHorizontal: 24,
-    marginBottom: 8,
+    marginBottom: 10,
     backgroundColor: Colors.surface,
-    borderRadius: 12,
-    padding: 14,
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
-  sessionTop: {
+  historyHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  sessionName: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
-  completedBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  completedText: { fontSize: 12, fontWeight: '600', color: Colors.success },
-  inProgressText: { fontSize: 12, fontWeight: '600', color: Colors.warning },
-  sessionMeta: { fontSize: 12, color: Colors.textMuted, marginTop: 4 },
+  historyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  historyDate: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.primary,
+  },
+  historyMeta: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    marginTop: 4,
+  },
+  historyExercise: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  exerciseName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
+  exerciseSets: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginTop: 2,
+  },
 });
