@@ -383,3 +383,56 @@ export function getRecipeImageUrl(recipeName: string): string {
 
   return CATEGORY_FALLBACKS.default.replace('w=100&h=100', 'w=200&h=160');
 }
+
+// Restaurant and brand logo mappings using Clearbit Logo API
+const RESTAURANT_LOGOS: Record<string, string> = {
+  'mcdonald': 'https://logo.clearbit.com/mcdonalds.com',
+  'burger king': 'https://logo.clearbit.com/bk.com',
+  'wendy': 'https://logo.clearbit.com/wendys.com',
+  'chick-fil-a': 'https://logo.clearbit.com/chick-fil-a.com',
+  'chickfila': 'https://logo.clearbit.com/chick-fil-a.com',
+  'subway': 'https://logo.clearbit.com/subway.com',
+  'taco bell': 'https://logo.clearbit.com/tacobell.com',
+  'chipotle': 'https://logo.clearbit.com/chipotle.com',
+  'starbucks': 'https://logo.clearbit.com/starbucks.com',
+  'dunkin': 'https://logo.clearbit.com/dunkindonuts.com',
+  'domino': 'https://logo.clearbit.com/dominos.com',
+  'pizza hut': 'https://logo.clearbit.com/pizzahut.com',
+  'papa john': 'https://logo.clearbit.com/papajohns.com',
+  'kfc': 'https://logo.clearbit.com/kfc.com',
+  'popeye': 'https://logo.clearbit.com/popeyes.com',
+  'arby': 'https://logo.clearbit.com/arbys.com',
+  'panera': 'https://logo.clearbit.com/panerabread.com',
+  'five guys': 'https://logo.clearbit.com/fiveguys.com',
+  'in-n-out': 'https://logo.clearbit.com/in-n-out.com',
+  'jack in the box': 'https://logo.clearbit.com/jackinthebox.com',
+  'sonic': 'https://logo.clearbit.com/sonicdrivein.com',
+  'whataburger': 'https://logo.clearbit.com/whataburger.com',
+  'del taco': 'https://logo.clearbit.com/deltaco.com',
+  'raising cane': 'https://logo.clearbit.com/raisingcanes.com',
+  'wingstop': 'https://logo.clearbit.com/wingstop.com',
+  'panda express': 'https://logo.clearbit.com/pandaexpress.com',
+  'olive garden': 'https://logo.clearbit.com/olivegarden.com',
+  'applebee': 'https://logo.clearbit.com/applebees.com',
+  'chili': 'https://logo.clearbit.com/chilis.com',
+  'denny': 'https://logo.clearbit.com/dennys.com',
+  'ihop': 'https://logo.clearbit.com/ihop.com',
+  'waffle house': 'https://logo.clearbit.com/wafflehouse.com',
+  'wegman': 'https://logo.clearbit.com/wegmans.com',
+  'trader joe': 'https://logo.clearbit.com/traderjoes.com',
+  'whole foods': 'https://logo.clearbit.com/wholefoodsmarket.com',
+  'kroger': 'https://logo.clearbit.com/kroger.com',
+  'costco': 'https://logo.clearbit.com/costco.com',
+  'walmart': 'https://logo.clearbit.com/walmart.com',
+  'target': 'https://logo.clearbit.com/target.com',
+  'aldi': 'https://logo.clearbit.com/aldi.us',
+  'publix': 'https://logo.clearbit.com/publix.com',
+};
+
+export function getRestaurantLogo(foodName: string, brand?: string): string | null {
+  const searchText = `${foodName} ${brand || ''}`.toLowerCase();
+  for (const [keyword, logoUrl] of Object.entries(RESTAURANT_LOGOS)) {
+    if (searchText.includes(keyword)) return logoUrl;
+  }
+  return null;
+}
