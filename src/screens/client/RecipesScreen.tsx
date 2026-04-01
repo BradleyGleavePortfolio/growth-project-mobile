@@ -39,6 +39,28 @@ function getImageKeyword(recipe: Recipe): string {
   return recipe.name.toLowerCase().replace(/[^a-z ]/g, '').split(' ').slice(0, 2).join('-');
 }
 
+function RecipeImage({ uri, name, style }: { uri: string; name: string; style: any }) {
+  const [errored, setErrored] = useState(false);
+
+  if (errored) {
+    return (
+      <View style={[style, { backgroundColor: '#E8F5E9', justifyContent: 'center', alignItems: 'center' }]}>
+        <Text style={{ fontSize: 24, fontWeight: '700', color: '#2D6A4F' }}>
+          {name.charAt(0).toUpperCase()}
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <Image
+      source={{ uri }}
+      style={style}
+      onError={() => setErrored(true)}
+    />
+  );
+}
+
 export default function RecipesScreen() {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [filtered, setFiltered] = useState<Recipe[]>([]);
@@ -187,8 +209,9 @@ export default function RecipesScreen() {
                     onPress={() => openRecipe(recipe)}
                     activeOpacity={0.7}
                   >
-                    <Image
-                      source={{ uri: `https://source.unsplash.com/160x120/?${keyword},food` }}
+                    <RecipeImage
+                      uri={`https://source.unsplash.com/160x120/?${keyword},food`}
+                      name={recipe.name}
                       style={styles.recipeImage}
                     />
                     <View style={styles.recipeInfo}>
@@ -251,8 +274,9 @@ function RecipeDetailView({
   return (
     <View style={styles.container}>
       <ScrollView showsVerticalScrollIndicator={false}>
-        <Image
-          source={{ uri: `https://source.unsplash.com/400x240/?${keyword},food` }}
+        <RecipeImage
+          uri={`https://source.unsplash.com/400x240/?${keyword},food`}
+          name={recipe.name}
           style={styles.heroImage}
         />
         <TouchableOpacity style={styles.backButton} onPress={onBack}>
@@ -358,19 +382,20 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   filterChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
     borderRadius: 20,
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
+    marginRight: 8,
   },
   filterChipActive: {
     backgroundColor: Colors.primary,
     borderColor: Colors.primary,
   },
   filterChipText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
     color: Colors.textSecondary,
   },
