@@ -25,6 +25,8 @@ import { MealType, FoodLog } from '../../types';
 import { foodApi, logApi } from '../../services/api';
 import DaySelector from '../../components/DaySelector';
 import WaterTracker from '../../components/WaterTracker';
+import FoodImage from '../../components/FoodImage';
+import { getFoodImageUrl } from '../../utils/foodImages';
 
 const MEAL_SECTIONS: { type: MealType; label: string; icon: string }[] = [
   { type: 'breakfast', label: 'Breakfast', icon: 'sunny-outline' },
@@ -451,10 +453,8 @@ export default function LogScreen() {
       );
     }
     return (
-      <View style={[styles.foodThumb, styles.foodThumbPlaceholder]}>
-        <Text style={styles.foodThumbLetter}>
-          {(item.name || '?')[0].toUpperCase()}
-        </Text>
+      <View style={{ marginRight: 12 }}>
+        <FoodImage name={item.name || '?'} size={48} />
       </View>
     );
   };
@@ -877,11 +877,7 @@ export default function LogScreen() {
                 resizeMode="cover"
               />
             ) : (
-              <View style={[styles.quantityFoodImage, styles.quantityFoodImagePlaceholder]}>
-                <Text style={styles.quantityFoodImageLetter}>
-                  {(selectedFood?.name || '?')[0].toUpperCase()}
-                </Text>
-              </View>
+              <FoodImage name={selectedFood?.name || '?'} size={120} />
             )}
 
             {/* Food name */}
