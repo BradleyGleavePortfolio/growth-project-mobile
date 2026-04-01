@@ -70,22 +70,22 @@ export default function ProfileScreen() {
         <Text style={styles.email}>{currentUser?.email || ''}</Text>
       </View>
 
-      {/* Quick Actions */}
-      <View style={styles.actionsRow}>
+      {/* Quick Actions — 2x2 grid */}
+      <View style={styles.actionsGrid}>
         <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('Settings')}>
-          <Ionicons name="settings-outline" size={22} color={Colors.primary} />
+          <Ionicons name="settings-outline" size={24} color={Colors.primary} />
           <Text style={styles.actionText}>Settings</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('Report')}>
-          <Ionicons name="document-text-outline" size={22} color={Colors.primary} />
+          <Ionicons name="document-text-outline" size={24} color={Colors.primary} />
           <Text style={styles.actionText}>My Report</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('Widgets')}>
-          <Ionicons name="apps-outline" size={22} color={Colors.primary} />
+          <Ionicons name="apps-outline" size={24} color={Colors.primary} />
           <Text style={styles.actionText}>Widgets</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('Learn')}>
-          <Ionicons name="book-outline" size={22} color={Colors.primary} />
+          <Ionicons name="book-outline" size={24} color={Colors.primary} />
           <Text style={styles.actionText}>Learn</Text>
         </TouchableOpacity>
       </View>
@@ -166,7 +166,7 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     marginTop: 4,
   },
-  actionsRow: {
+  actionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: 24,
@@ -174,19 +174,18 @@ const styles = StyleSheet.create({
     marginBottom: 28,
   },
   actionBtn: {
-    flex: 1,
-    flexDirection: 'row',
+    width: '47%',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: 6,
     backgroundColor: Colors.surface,
-    borderRadius: 12,
-    paddingVertical: 14,
+    borderRadius: 14,
+    paddingVertical: 18,
     borderWidth: 1,
     borderColor: Colors.border,
   },
   actionText: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '600',
     color: Colors.textPrimary,
   },

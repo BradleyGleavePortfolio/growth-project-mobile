@@ -62,9 +62,23 @@ export default function OnboardingResults() {
     if (!macros) return;
     setSaving(true);
     try {
-      // Save macro targets to backend
+      // Save ALL onboarding data + macro targets to backend profile
       try {
+        const { getOnboardingData } = await import('../../utils/onboardingStore');
+        const quizData = await getOnboardingData();
+
         await profileApi.update({
+          // Quiz answers
+          sex: quizData.sex || null,
+          dob: quizData.dob || null,
+          current_weight: quizData.currentWeight || null,
+          target_weight: quizData.targetWeight || null,
+          height_cm: quizData.height || null,
+          activity_level: quizData.activityLevel || null,
+          primary_goal: quizData.primaryGoal || null,
+          diet_type: quizData.dietType || null,
+          meals_per_day: quizData.mealsPerDay || null,
+          // Calculated targets
           tdee: macros.tdee,
           calorie_target: macros.calories,
           protein_target: macros.protein,
