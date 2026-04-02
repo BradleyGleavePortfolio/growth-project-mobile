@@ -43,6 +43,11 @@ export default function LoginScreen({ navigation }: Props) {
       await AsyncStorage.setItem('supabase_token', access_token);
       await AsyncStorage.setItem('user_data', JSON.stringify(user));
 
+      // Restore onboarding status from backend profile — prevents re-onboarding on re-login
+      if (user.profile?.onboarding_completed) {
+        await AsyncStorage.setItem('onboarding_complete', 'true');
+      }
+
       // Fire auth event — RootNavigator will re-check AsyncStorage and navigate
       authEvents.emit();
     } catch (err: any) {

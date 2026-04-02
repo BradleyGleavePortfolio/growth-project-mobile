@@ -74,10 +74,18 @@ export default function RootNavigator() {
       if (role === 'student') {
         // Check if onboarding quiz has been completed
         const onboardingDone = await AsyncStorage.getItem('onboarding_complete');
-        if (onboardingDone !== 'true') {
+        const profileDone = user?.profile?.onboarding_completed;
+
+        if (onboardingDone !== 'true' && !profileDone) {
           setAuthState('onboarding');
           return;
         }
+
+        // Sync: if backend says done but AsyncStorage doesn't, fix it
+        if (profileDone && onboardingDone !== 'true') {
+          await AsyncStorage.setItem('onboarding_complete', 'true');
+        }
+
         setAuthState('student');
         return;
       }
