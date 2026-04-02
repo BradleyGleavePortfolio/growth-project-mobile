@@ -25,19 +25,41 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
-// Global error handler
+// Global error handler with auto token refresh
+let isRefreshing = false;
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401) {
-      // Token expired — clear auth token but KEEP onboarding status and user profile
-      // Only clear the session keys, not the onboarding flag
-      await Promise.all([
-        AsyncStorage.removeItem('supabase_token'),
-        AsyncStorage.removeItem('needs_role_selection'),
-      ]);
-      // DON'T remove 'user_data' or 'onboarding_complete' — 
-      // user shouldn't lose their profile or re-do onboarding just because the token expired
+    if (error.response?.status === 401 && !isRefreshing) {
+      // Try to refresh the token before logging out
+      isRefreshing = true;
+      try {
+        const refreshToken = await AsyncStorage.getItem('supabase_refresh_token');
+        if (refreshToken) {
+          const { createClient } = await import('@supabase/supabase-js');
+          const supabase = createClient(
+            'https://rpyfdsgxxltzutgqeouk.supabase.co',
+            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJweWZkc2d4eGx0enV0Z3Flb3VrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1MjE2OTAsImV4cCI6MjA4OTA5NzY5MH0.cH-yapSxmjdHgMlJiYEt6-uGzMTArgIs9tPVs29lUF0',
+          );
+          const { data, error: refreshError } = await supabase.auth.refreshSession({ refresh_token: refreshToken });
+          if (!refreshError && data.session) {
+            // Save new tokens
+            await AsyncStorage.setItem('supabase_token', data.session.access_token);
+            await AsyncStorage.setItem('supabase_refresh_token', data.session.refresh_token);
+            // Retry the original request with new token
+            error.config.headers.Authorization = `Bearer ${data.session.access_token}`;
+            isRefreshing = false;
+            return api.request(error.config);
+          }
+        }
+      } catch {
+        // Refresh failed — fall through to logout
+      }
+      isRefreshing = false;
+
+      // Refresh failed — clear token but KEEP user data and onboarding status
+      await AsyncStorage.removeItem('supabase_token');
+      await AsyncStorage.removeItem('needs_role_selection');
       authEvents.emit('logout');
     }
     if (!error.response) {

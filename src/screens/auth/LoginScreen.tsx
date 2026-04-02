@@ -37,10 +37,11 @@ export default function LoginScreen({ navigation }: Props) {
 
     try {
       const response = await authApi.login({ email, password });
-      const { access_token, user } = response.data;
+      const { access_token, refresh_token, user } = response.data;
 
-      // Store JWT token for all subsequent API calls
+      // Store JWT tokens for all subsequent API calls
       await AsyncStorage.setItem('supabase_token', access_token);
+      if (refresh_token) await AsyncStorage.setItem('supabase_refresh_token', refresh_token);
       await AsyncStorage.setItem('user_data', JSON.stringify(user));
 
       // Restore onboarding status from backend profile — prevents re-onboarding on re-login
