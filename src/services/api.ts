@@ -30,17 +30,19 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     if (error.response?.status === 401) {
-      // Token expired — clear ALL auth keys and emit logout
+      // Token expired — clear auth token but KEEP onboarding status and user profile
+      // Only clear the session keys, not the onboarding flag
       await Promise.all([
         AsyncStorage.removeItem('supabase_token'),
-        AsyncStorage.removeItem('user_data'),
         AsyncStorage.removeItem('needs_role_selection'),
-        AsyncStorage.removeItem('onboarding_complete'),
       ]);
+      // DON'T remove 'user_data' or 'onboarding_complete' — 
+      // user shouldn't lose their profile or re-do onboarding just because the token expired
       authEvents.emit('logout');
     }
     if (!error.response) {
-      // Network error — no response from server
+      // Network error — no response from server (cold start, no wifi, etc.)
+      // DON'T log the user out — just let the call fail
       error.message = 'Cannot reach server. Please check your connection and try again.';
     }
     return Promise.reject(error);
