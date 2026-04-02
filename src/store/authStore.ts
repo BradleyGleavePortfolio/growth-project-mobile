@@ -124,6 +124,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         AUTH_TOKEN_KEY,     // gp_auth_token (legacy)
         AUTH_USER_KEY,      // gp_auth_user (legacy)
         'supabase_token',   // real Supabase JWT
+        'supabase_refresh_token', // refresh token for auto-renewal
         'user_data',        // real user data
         'needs_role_selection',
         'onboarding_complete',
