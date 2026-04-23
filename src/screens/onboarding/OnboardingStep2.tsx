@@ -181,7 +181,7 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
   unitTextActive: {
-    color: '#ffffff',
+    color: Colors.textOnPrimary,
   },
   inputContainer: {
     marginBottom: 20,
