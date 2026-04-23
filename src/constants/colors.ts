@@ -26,6 +26,7 @@ export const Colors = {
   warning: '#E9C46A',
   error: '#E63946',
   info: '#457B9D',
+  streak: '#E76F51',         // terra-cotta for flame/streak icons
 
   // Macros
   protein: '#2D6A4F',
