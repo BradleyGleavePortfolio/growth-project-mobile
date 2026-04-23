@@ -1,6 +1,6 @@
 /**
  * Google OAuth via Supabase + expo-auth-session.
- * 
+ *
  * Flow:
  * 1. Open Google's consent screen in a web browser
  * 2. User picks their Google account
@@ -12,13 +12,16 @@ import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
+import { secureStorage } from '../services/secureStorage';
+import { env } from '../config/env';
 
 // Ensure the browser session is completed when returning to the app
 WebBrowser.maybeCompleteAuthSession();
 
-const SUPABASE_URL = 'https://rpyfdsgxxltzutgqeouk.supabase.co';
-const SUPABASE_ANON_KEY =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJweWZkc2d4eGx0enV0Z3Flb3VrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1MjE2OTAsImV4cCI6MjA4OTA5NzY5MH0.cH-yapSxmjdHgMlJiYEt6-uGzMTArgIs9tPVs29lUF0';
+// Security: Supabase URL + anon key are now read from env (see config/env.ts)
+// instead of being duplicated here and in services/api.ts.
+const SUPABASE_URL = env.SUPABASE_URL;
+const SUPABASE_ANON_KEY = env.SUPABASE_ANON_KEY;
 
 export interface GoogleAuthResult {
   success: boolean;
@@ -57,10 +60,29 @@ export async function signInWithGoogle(): Promise<GoogleAuthResult> {
       return { success: false, error: 'Sign-in was cancelled' };
     }
 
-    // Parse the tokens from the redirect URL
+    // Parse the tokens from the redirect URL.
     // Supabase redirects with: #access_token=xxx&refresh_token=xxx&...
+    // On error Supabase redirects with: #error=access_denied&error_description=...
+    // — we must surface those instead of silently showing "No access token received".
     const url = result.url;
     const hashFragment = url.split('#')[1];
+    const queryFragment = url.split('?')[1]?.split('#')[0];
+
+    // Check BOTH the hash fragment and the query string for error params — some
+    // OAuth return paths put errors in the query, not the hash.
+    const tryParseError = (frag: string | undefined) => {
+      if (!frag) return null;
+      const params = new URLSearchParams(frag);
+      const err = params.get('error');
+      if (!err) return null;
+      const desc = params.get('error_description');
+      return desc ? `${err}: ${decodeURIComponent(desc.replace(/\+/g, ' '))}` : err;
+    };
+    const errMsg = tryParseError(hashFragment) || tryParseError(queryFragment);
+    if (errMsg) {
+      return { success: false, error: errMsg };
+    }
+
     if (!hashFragment) {
       return { success: false, error: 'No auth data received' };
     }
@@ -88,10 +110,15 @@ export async function signInWithGoogle(): Promise<GoogleAuthResult> {
 
     // Now call our backend to upsert the user in our DB
     const { authApi } = await import('../services/api');
-    
-    // Store the token first so the API client can use it
-    await AsyncStorage.setItem('supabase_token', accessToken);
-    
+
+    // Store the token in SecureStore (not AsyncStorage) so the API client can
+    // attach it to the backend request. Security: SecureStore uses Keychain /
+    // Keystore, not the plain SQLite/plist that AsyncStorage uses.
+    await secureStorage.setItem('supabase_token', accessToken);
+    if (refreshToken) {
+      await secureStorage.setItem('supabase_refresh_token', refreshToken);
+    }
+
     try {
       const response = await authApi.googleAuth(accessToken);
       const { user } = response.data;

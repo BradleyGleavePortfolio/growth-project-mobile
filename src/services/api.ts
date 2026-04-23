@@ -3,12 +3,14 @@
 // The Perplexity API key lives ONLY on the backend — never in this file.
 
 import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authEvents } from '../utils/authEvents';
+import { secureStorage } from './secureStorage';
+import { env } from '../config/env';
 
-// Hardcoded — EXPO_PUBLIC_ env vars require the .env to be present on the build machine.
-// Hardcoding is safer for EAS cloud builds.
-const API_BASE = 'https://backend-spring-lake-3890.fly.dev/api';
+// Security: API base URL is read from EXPO_PUBLIC_API_URL so staging/prod can
+// diverge without code changes. A dev-only fallback keeps local RN boots
+// working without a .env. See src/config/env.ts.
+const API_BASE = env.API_URL;
 
 const api = axios.create({
   baseURL: API_BASE,
@@ -16,9 +18,11 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
-// Attach JWT token to every request automatically
+// Attach JWT token to every request automatically.
+// Security: token now comes from SecureStore (iOS Keychain / Android Keystore)
+// via the secureStorage adapter, not plain AsyncStorage.
 api.interceptors.request.use(async (config) => {
-  const token = await AsyncStorage.getItem('supabase_token');
+  const token = await secureStorage.getItem('supabase_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -34,18 +38,17 @@ api.interceptors.response.use(
       // Try to refresh the token before logging out
       isRefreshing = true;
       try {
-        const refreshToken = await AsyncStorage.getItem('supabase_refresh_token');
+        const refreshToken = await secureStorage.getItem('supabase_refresh_token');
         if (refreshToken) {
           const { createClient } = await import('@supabase/supabase-js');
-          const supabase = createClient(
-            'https://rpyfdsgxxltzutgqeouk.supabase.co',
-            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJweWZkc2d4eGx0enV0Z3Flb3VrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1MjE2OTAsImV4cCI6MjA4OTA5NzY5MH0.cH-yapSxmjdHgMlJiYEt6-uGzMTArgIs9tPVs29lUF0',
-          );
+          // Security: Supabase URL + anon key now come from env (see config/env.ts)
+          // instead of being hardcoded here and in googleAuth.ts.
+          const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY);
           const { data, error: refreshError } = await supabase.auth.refreshSession({ refresh_token: refreshToken });
           if (!refreshError && data.session) {
-            // Save new tokens
-            await AsyncStorage.setItem('supabase_token', data.session.access_token);
-            await AsyncStorage.setItem('supabase_refresh_token', data.session.refresh_token);
+            // Save new tokens in SecureStore, not AsyncStorage.
+            await secureStorage.setItem('supabase_token', data.session.access_token);
+            await secureStorage.setItem('supabase_refresh_token', data.session.refresh_token);
             // Retry the original request with new token
             error.config.headers.Authorization = `Bearer ${data.session.access_token}`;
             isRefreshing = false;
@@ -58,7 +61,8 @@ api.interceptors.response.use(
       isRefreshing = false;
 
       // Refresh failed — clear token but KEEP user data and onboarding status
-      await AsyncStorage.removeItem('supabase_token');
+      await secureStorage.removeItem('supabase_token');
+      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
       await AsyncStorage.removeItem('needs_role_selection');
       authEvents.emit('logout');
     }
