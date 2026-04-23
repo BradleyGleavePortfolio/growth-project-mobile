@@ -36,8 +36,8 @@ function RecipeImage({ uri, name, style }: { uri: string; name: string; style: a
 
   if (errored) {
     return (
-      <View style={[style, { backgroundColor: '#E8F5E9', justifyContent: 'center', alignItems: 'center' }]}>
-        <Text style={{ fontSize: 24, fontWeight: '700', color: '#2D6A4F' }}>
+      <View style={[style, { backgroundColor: Colors.primaryPale, justifyContent: 'center', alignItems: 'center' }]}>
+        <Text style={{ fontSize: 24, fontWeight: '700', color: Colors.primary }}>
           {name.charAt(0).toUpperCase()}
         </Text>
       </View>
@@ -270,7 +270,7 @@ function RecipeDetailView({
           style={styles.heroImage}
         />
         <TouchableOpacity style={styles.backButton} onPress={onBack}>
-          <Ionicons name="arrow-back" size={22} color="#fff" />
+          <Ionicons name="arrow-back" size={22} color={Colors.textOnPrimary} />
         </TouchableOpacity>
 
         <View style={styles.detailContent}>
@@ -390,7 +390,7 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
   filterChipTextActive: {
-    color: '#ffffff',
+    color: Colors.textOnPrimary,
   },
   recipeGrid: {
     paddingHorizontal: 24,

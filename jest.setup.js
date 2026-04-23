@@ -1,0 +1,41 @@
+// Jest global setup for the mobile app.
+// jest-expo handles most RN/Expo shims; we only add mocks for modules that
+// tests touch explicitly.
+
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
+);
+
+jest.mock('expo-secure-store', () => {
+  const store = new Map();
+  return {
+    __store: store,
+    setItemAsync: jest.fn(async (k, v) => {
+      store.set(k, v);
+    }),
+    getItemAsync: jest.fn(async (k) => (store.has(k) ? store.get(k) : null)),
+    deleteItemAsync: jest.fn(async (k) => {
+      store.delete(k);
+    }),
+  };
+});
+
+jest.mock('@react-native-community/netinfo', () => {
+  const listeners = new Set();
+  let current = { isConnected: true, isInternetReachable: true };
+  return {
+    __setState: (next) => {
+      current = { ...current, ...next };
+      listeners.forEach((fn) => fn(current));
+    },
+    __reset: () => {
+      current = { isConnected: true, isInternetReachable: true };
+      listeners.clear();
+    },
+    fetch: jest.fn(async () => current),
+    addEventListener: jest.fn((fn) => {
+      listeners.add(fn);
+      return () => listeners.delete(fn);
+    }),
+  };
+});
