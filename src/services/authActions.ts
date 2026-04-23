@@ -11,7 +11,7 @@ import { profileApi } from './api';
 // and `macro_targets` are intentionally left alone unless the caller is wiping
 // the whole account — see the security/critical-fixes-round-1 branch for why
 // we now keep those across 401s.
-const SIGN_OUT_KEYS = [
+export const SIGN_OUT_KEYS = [
   'supabase_token',
   'supabase_refresh_token',
   'user_data',
