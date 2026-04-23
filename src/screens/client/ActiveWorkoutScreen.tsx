@@ -76,20 +76,20 @@ const MUSCLES = [
 
 // Muscle group color mapping
 const MUSCLE_COLORS: Record<string, string> = {
-  chest: '#E63946',
-  back: '#457B9D',
-  shoulders: '#E9C46A',
-  legs: '#2A9D8F',
-  biceps: '#E76F51',
-  triceps: '#F4A261',
-  core: '#264653',
-  'full body': '#6A4C93',
-  cardio: '#1DB954',
-  stretching: '#8FA89A',
+  chest: Colors.error,
+  back: Colors.info,
+  shoulders: Colors.warning,
+  legs: Colors.muscleLegs,
+  biceps: Colors.streak,
+  triceps: Colors.muscleTriceps,
+  core: Colors.muscleCore,
+  'full body': Colors.muscleFullBody,
+  cardio: Colors.muscleCardio,
+  stretching: Colors.textMuted,
 };
 
 function getMuscleColor(muscle: string): string {
-  return MUSCLE_COLORS[muscle.toLowerCase()] ?? '#4A6358';
+  return MUSCLE_COLORS[muscle.toLowerCase()] ?? Colors.textSecondary;
 }
 
 // ── Exercise Image Component ──────────────────────────────────────────────
@@ -472,7 +472,7 @@ export default function ActiveWorkoutScreen() {
                   style={[styles.checkBtn, set.completed && styles.checkBtnDone]}
                   onPress={() => toggleSetComplete(exIdx, setIdx)}
                 >
-                  <Ionicons name="checkmark" size={16} color={set.completed ? '#fff' : Colors.textMuted} />
+                  <Ionicons name="checkmark" size={16} color={set.completed ? Colors.textOnPrimary : Colors.textMuted} />
                 </TouchableOpacity>
               </View>
             ))}
@@ -622,7 +622,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
-  finishBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  finishBtnText: { color: Colors.textOnPrimary, fontSize: 14, fontWeight: '700' },
   progressBar: {
     height: 3,
     backgroundColor: Colors.primaryPale,
@@ -751,7 +751,7 @@ const styles = StyleSheet.create({
   },
   muscleChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   muscleChipText: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
-  muscleChipTextActive: { color: '#fff' },
+  muscleChipTextActive: { color: Colors.textOnPrimary },
   exerciseList: { paddingHorizontal: 16, paddingBottom: 40 },
 
   // Exercise list item with image

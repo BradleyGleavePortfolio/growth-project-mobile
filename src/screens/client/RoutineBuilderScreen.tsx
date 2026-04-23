@@ -393,7 +393,7 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     backgroundColor: Colors.primary,
-    color: '#fff',
+    color: Colors.textOnPrimary,
     fontSize: 13,
     fontWeight: '700',
     textAlign: 'center',
@@ -446,7 +446,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
   },
-  saveBtnText: { color: '#fff', fontSize: 17, fontWeight: '700' },
+  saveBtnText: { color: Colors.textOnPrimary, fontSize: 17, fontWeight: '700' },
   // Modal
   modalContainer: { flex: 1, backgroundColor: Colors.background },
   modalHeader: {
@@ -487,7 +487,7 @@ const styles = StyleSheet.create({
   },
   muscleChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   muscleChipText: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
-  muscleChipTextActive: { color: '#fff' },
+  muscleChipTextActive: { color: Colors.textOnPrimary },
   exerciseList: { paddingHorizontal: 20, paddingBottom: 40 },
   exerciseListItem: {
     flexDirection: 'row',

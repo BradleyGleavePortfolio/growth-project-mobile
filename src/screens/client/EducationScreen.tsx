@@ -30,10 +30,10 @@ const CATEGORY_ICONS: Record<string, string> = {
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
-  'Nutrition Basics': '#2D6A4F',
-  'Muscle Building': '#457B9D',
-  Fitness: '#E9C46A',
-  Lifestyle: '#E76F51',
+  'Nutrition Basics': Colors.primary,
+  'Muscle Building': Colors.info,
+  Fitness: Colors.warning,
+  Lifestyle: Colors.streak,
 };
 
 interface LessonWithProgress extends Lesson {
@@ -181,7 +181,7 @@ export default function EducationScreen() {
 
           {!selectedLesson.completed && (
             <TouchableOpacity style={styles.completeBtn} onPress={handleComplete}>
-              <Ionicons name="checkmark-circle" size={20} color="#fff" />
+              <Ionicons name="checkmark-circle" size={20} color={Colors.textOnPrimary} />
               <Text style={styles.completeBtnText}>Mark as Complete</Text>
             </TouchableOpacity>
           )}
@@ -246,7 +246,7 @@ export default function EducationScreen() {
             <Ionicons
               name={(CATEGORY_ICONS[cat] || 'book') as any}
               size={14}
-              color={filterCategory === cat ? '#fff' : CATEGORY_COLORS[cat] || Colors.textSecondary}
+              color={filterCategory === cat ? Colors.textOnPrimary : CATEGORY_COLORS[cat] || Colors.textSecondary}
             />
             <Text
               style={[
@@ -364,7 +364,7 @@ const styles = StyleSheet.create({
   },
   categoryChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   categoryChipText: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
-  categoryChipTextActive: { color: '#fff' },
+  categoryChipTextActive: { color: Colors.textOnPrimary },
   // ── Lesson Cards ──
   listContent: { paddingHorizontal: 24, paddingBottom: 100 },
   lessonCard: {
@@ -461,7 +461,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     marginTop: 24,
   },
-  completeBtnText: { fontSize: 16, fontWeight: '700', color: '#fff' },
+  completeBtnText: { fontSize: 16, fontWeight: '700', color: Colors.textOnPrimary },
   completedCard: {
     flexDirection: 'row',
     alignItems: 'center',

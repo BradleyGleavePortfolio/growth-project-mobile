@@ -51,6 +51,8 @@ export default function ClientsListScreen({ navigation }: Props) {
         })
       }
       activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel={`Open client ${item.firstName} ${item.lastName}`}
     >
       <View style={styles.avatar}>
         <Text style={styles.avatarText}>
@@ -92,6 +94,7 @@ export default function ClientsListScreen({ navigation }: Props) {
           onChangeText={setSearchQuery}
           placeholder="Search clients..."
           placeholderTextColor={Colors.textMuted}
+          accessibilityLabel="Search clients"
         />
       </View>
 
@@ -101,6 +104,9 @@ export default function ClientsListScreen({ navigation }: Props) {
             key={f}
             style={[styles.filterChip, filterStatus === f && styles.filterChipActive]}
             onPress={() => setFilterStatus(f)}
+            accessibilityRole="button"
+            accessibilityLabel={`Filter ${f}`}
+            accessibilityState={{ selected: filterStatus === f }}
           >
             <Text
               style={[
@@ -199,7 +205,7 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
   filterChipTextActive: {
-    color: '#ffffff',
+    color: Colors.textOnPrimary,
   },
   listContent: {
     paddingHorizontal: 24,
@@ -223,7 +229,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   avatarText: {
-    color: '#ffffff',
+    color: Colors.textOnPrimary,
     fontSize: 16,
     fontWeight: '700',
   },
