@@ -102,14 +102,15 @@ export default function LoginScreen({ navigation }: Props) {
     >
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         {/* Header */}
+        {/* Round 3: accessibilityRole="header" for VoiceOver/TalkBack */}
         <View style={styles.header}>
-          <Text style={styles.title}>Welcome back.</Text>
+          <Text style={styles.title} accessibilityRole="header">Welcome back.</Text>
           <Text style={styles.subtitle}>Sign in to your account</Text>
         </View>
 
         {/* Error message */}
         {error ? (
-          <View style={styles.errorBox}>
+          <View style={styles.errorBox} accessible accessibilityRole="alert" accessibilityLiveRegion="assertive">
             <Text style={styles.errorText}>{error}</Text>
           </View>
         ) : null}
@@ -126,6 +127,9 @@ export default function LoginScreen({ navigation }: Props) {
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
+            accessibilityLabel="Email"
+            accessibilityHint="Enter your email address"
+            textContentType="emailAddress"
           />
         </View>
 
@@ -139,11 +143,19 @@ export default function LoginScreen({ navigation }: Props) {
             placeholder="••••••••"
             placeholderTextColor={Colors.textMuted}
             secureTextEntry
+            accessibilityLabel="Password"
+            accessibilityHint="Enter your password"
+            textContentType="password"
           />
         </View>
 
         {/* Forgot password */}
-        <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')}>
+        <TouchableOpacity
+          onPress={() => navigation.navigate('ForgotPassword')}
+          accessibilityRole="button"
+          accessibilityLabel="Forgot password"
+          accessibilityHint="Opens password reset flow"
+        >
           <Text style={styles.forgotText}>Forgot password?</Text>
         </TouchableOpacity>
 
@@ -152,6 +164,9 @@ export default function LoginScreen({ navigation }: Props) {
           style={[styles.loginButton, loading && styles.buttonDisabled]}
           onPress={handleLogin}
           disabled={loading}
+          accessibilityRole="button"
+          accessibilityLabel="Sign in"
+          accessibilityState={{ disabled: loading, busy: loading }}
         >
           {loading ? (
             <ActivityIndicator color={Colors.white} />
@@ -161,7 +176,7 @@ export default function LoginScreen({ navigation }: Props) {
         </TouchableOpacity>
 
         {/* Divider */}
-        <View style={styles.divider}>
+        <View style={styles.divider} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
           <View style={styles.dividerLine} />
           <Text style={styles.dividerText}>or</Text>
           <View style={styles.dividerLine} />
@@ -172,6 +187,9 @@ export default function LoginScreen({ navigation }: Props) {
           style={[styles.googleButton, googleLoading && styles.buttonDisabled]}
           onPress={handleGoogleLogin}
           disabled={googleLoading}
+          accessibilityRole="button"
+          accessibilityLabel="Continue with Google"
+          accessibilityState={{ disabled: googleLoading, busy: googleLoading }}
         >
           {googleLoading ? (
             <ActivityIndicator color={Colors.dark} />
@@ -186,7 +204,12 @@ export default function LoginScreen({ navigation }: Props) {
         {/* Sign up link */}
         <View style={styles.signupRow}>
           <Text style={styles.signupText}>Don't have an account? </Text>
-          <TouchableOpacity onPress={() => navigation.navigate('CreateAccount')}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('CreateAccount')}
+            accessibilityRole="link"
+            accessibilityLabel="Sign up"
+            accessibilityHint="Opens account creation"
+          >
             <Text style={styles.signupLink}>Sign up</Text>
           </TouchableOpacity>
         </View>

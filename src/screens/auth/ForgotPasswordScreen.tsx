@@ -36,15 +36,19 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
+      {/* Round 3: a11y labels on back, email input, reset CTA */}
       <TouchableOpacity
         style={styles.backButton}
         onPress={() => navigation.goBack()}
+        accessibilityRole="button"
+        accessibilityLabel="Back"
+        accessibilityHint="Returns to previous screen"
       >
         <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
       </TouchableOpacity>
 
       <View style={styles.header}>
-        <Text style={styles.title}>Reset Password</Text>
+        <Text style={styles.title} accessibilityRole="header">Reset Password</Text>
         <Text style={styles.subtitle}>
           {sent
             ? 'Check your email for a reset link'
@@ -53,7 +57,7 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
       </View>
 
       {sent ? (
-        <View style={styles.successContainer}>
+        <View style={styles.successContainer} accessible accessibilityRole="alert">
           <Ionicons name="checkmark-circle" size={64} color={Colors.primary} />
           <Text style={styles.successText}>
             If an account exists with {email}, you'll receive a password reset
@@ -62,6 +66,8 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
           <TouchableOpacity
             style={styles.backToLogin}
             onPress={() => navigation.navigate('Login')}
+            accessibilityRole="button"
+            accessibilityLabel="Back to login"
           >
             <Text style={styles.backToLoginText}>Back to Login</Text>
           </TouchableOpacity>
@@ -79,6 +85,8 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
+              accessibilityLabel="Email"
+              textContentType="emailAddress"
             />
           </View>
 
@@ -87,6 +95,9 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
             onPress={handleReset}
             activeOpacity={0.8}
             disabled={loading}
+            accessibilityRole="button"
+            accessibilityLabel="Send reset link"
+            accessibilityState={{ disabled: loading, busy: loading }}
           >
             <Text style={styles.resetButtonText}>{loading ? 'Sending...' : 'Send Reset Link'}</Text>
           </TouchableOpacity>
