@@ -210,7 +210,7 @@ export default function SettingsScreen() {
             value={settings.dailyCheckin}
             onValueChange={(v) => updateSetting('dailyCheckin', v)}
             trackColor={{ false: Colors.surfaceElevated, true: Colors.primary }}
-            thumbColor="#fff"
+            thumbColor={Colors.textOnPrimary}
           />
         </View>
         <View style={styles.divider} />
@@ -221,7 +221,7 @@ export default function SettingsScreen() {
             value={settings.newClientAlerts}
             onValueChange={(v) => updateSetting('newClientAlerts', v)}
             trackColor={{ false: Colors.surfaceElevated, true: Colors.primary }}
-            thumbColor="#fff"
+            thumbColor={Colors.textOnPrimary}
           />
         </View>
         <View style={styles.divider} />
@@ -232,7 +232,7 @@ export default function SettingsScreen() {
             value={settings.weeklySummary}
             onValueChange={(v) => updateSetting('weeklySummary', v)}
             trackColor={{ false: Colors.surfaceElevated, true: Colors.primary }}
-            thumbColor="#fff"
+            thumbColor={Colors.textOnPrimary}
           />
         </View>
       </View>
@@ -253,7 +253,7 @@ export default function SettingsScreen() {
             value={settings.hapticsEnabled}
             onValueChange={(v) => updateSetting('hapticsEnabled', v)}
             trackColor={{ false: Colors.surfaceElevated, true: Colors.primary }}
-            thumbColor="#fff"
+            thumbColor={Colors.textOnPrimary}
           />
         </View>
       </View>
@@ -399,7 +399,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   avatarText: {
-    color: '#ffffff',
+    color: Colors.textOnPrimary,
     fontSize: 20,
     fontWeight: '700',
   },
@@ -577,6 +577,6 @@ const styles = StyleSheet.create({
   modalSaveText: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#ffffff',
+    color: Colors.textOnPrimary,
   },
 });
