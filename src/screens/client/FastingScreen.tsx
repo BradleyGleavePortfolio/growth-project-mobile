@@ -300,12 +300,12 @@ export default function FastingScreen() {
       <View style={styles.actionRow}>
         {activeFast ? (
           <TouchableOpacity style={styles.endBtn} onPress={handleEnd}>
-            <Ionicons name="stop-circle" size={22} color="#fff" />
+            <Ionicons name="stop-circle" size={22} color={Colors.textOnPrimary} />
             <Text style={styles.actionBtnText}>End Fast</Text>
           </TouchableOpacity>
         ) : (
           <TouchableOpacity style={styles.startBtn} onPress={handleStart}>
-            <Ionicons name="play-circle" size={22} color="#fff" />
+            <Ionicons name="play-circle" size={22} color={Colors.textOnPrimary} />
             <Text style={styles.actionBtnText}>Start Fast</Text>
           </TouchableOpacity>
         )}
@@ -456,7 +456,7 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
   protocolTextActive: {
-    color: '#ffffff',
+    color: Colors.textOnPrimary,
   },
   timerContainer: {
     alignItems: 'center',
@@ -503,7 +503,7 @@ const styles = StyleSheet.create({
   actionBtnText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#ffffff',
+    color: Colors.textOnPrimary,
   },
   activeCard: {
     marginHorizontal: 24,
