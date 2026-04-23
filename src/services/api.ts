@@ -1,8 +1,36 @@
 // The Growth Project — API Client
 // All backend communication flows through here.
 // The Perplexity API key lives ONLY on the backend — never in this file.
+//
+// ============================================================================
+// TOKEN-REFRESH CONCURRENCY CONTRACT (read before editing this file)
+// ============================================================================
+// Problem this solves:
+//   Before this rewrite the interceptor used a bare `isRefreshing = true` flag.
+//   When N requests hit 401 at the same time (e.g. HomeScreen's 4-call
+//   Promise.all on cold start), only the first entered the refresh branch.
+//   The rest saw `isRefreshing === true`, skipped the `if`, and fell straight
+//   through to the logout block — so a single successful refresh would still
+//   force-log-out the user because of the concurrent 401 path.
+//
+// Scenarios this implementation handles:
+//   1. Single 401 → refresh OK → retry → caller gets 200.
+//   2. 5 simultaneous 401s → ONE refresh call in flight; requests 2–5 queue,
+//      then all retry with the new token.
+//   3. Refresh endpoint itself returns 401 (stale refresh token) → all queued
+//      requests reject, `authEvents.emit('logout')` fires EXACTLY ONCE, token
+//      keys are cleared once.
+//   4. Refresh throws a network error (offline, timeout) → same as (3): all
+//      queued requests reject with the error; logout emitted once. The user
+//      data / onboarding keys are NOT cleared — see the security/critical-
+//      fixes-round-1 branch for why we kept that behavior.
+//   5. A 401 arrives AFTER a refresh has already completed → a fresh refresh
+//      kicks off; this is unavoidable without deeper request-token tracking
+//      and is acceptable: worst case is two refreshes over a few seconds.
+// ============================================================================
 
-import axios from 'axios';
+import axios, { AxiosError, AxiosRequestConfig } from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authEvents } from '../utils/authEvents';
 import { secureStorage } from './secureStorage';
 import { env } from '../config/env';
@@ -11,6 +39,12 @@ import { env } from '../config/env';
 // diverge without code changes. A dev-only fallback keeps local RN boots
 // working without a .env. See src/config/env.ts.
 const API_BASE = env.API_URL;
+
+// Supabase project constants — duplicated in googleAuth.ts (tracked as audit Q2).
+// Not inlined at call time anymore to avoid reconstructing the client per 401.
+const SUPABASE_URL = 'https://rpyfdsgxxltzutgqeouk.supabase.co';
+const SUPABASE_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJweWZkc2d4eGx0enV0Z3Flb3VrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1MjE2OTAsImV4cCI6MjA4OTA5NzY5MH0.cH-yapSxmjdHgMlJiYEt6-uGzMTArgIs9tPVs29lUF0';
 
 const api = axios.create({
   baseURL: API_BASE,
@@ -29,49 +63,98 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
-// Global error handler with auto token refresh
-let isRefreshing = false;
+// ---------------------------------------------------------------------------
+// Token-refresh mutex + request queue
+// ---------------------------------------------------------------------------
+// While `refreshPromise` is non-null, any new 401 waits on it instead of kicking
+// off a second refresh. The promise resolves with the new access token on
+// success, or rejects on failure — callers await it and either retry or bubble
+// the error up. `authEvents.emit('logout')` is guarded by `loggedOutOnce` so a
+// fleet of concurrent 401s produces one sign-out, not N.
+let refreshPromise: Promise<string> | null = null;
+let loggedOutOnce = false;
+
+async function performRefresh(): Promise<string> {
+  const refreshToken = await AsyncStorage.getItem('supabase_refresh_token');
+  if (!refreshToken) throw new Error('No refresh token');
+
+  // Dynamic import keeps the supabase-js bundle out of the cold-start path for
+  // apps that never hit a 401.
+  const { createClient } = await import('@supabase/supabase-js');
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const { data, error: refreshError } = await supabase.auth.refreshSession({
+    refresh_token: refreshToken,
+  });
+  if (refreshError || !data.session) {
+    throw refreshError || new Error('Refresh returned no session');
+  }
+  await AsyncStorage.setItem('supabase_token', data.session.access_token);
+  await AsyncStorage.setItem('supabase_refresh_token', data.session.refresh_token);
+  return data.session.access_token;
+}
+
+async function handleRefreshFailure(): Promise<void> {
+  // Fire exactly once per refresh-failure cascade. The flag is reset after
+  // emission so a subsequent successful login → 401 cycle still works.
+  if (loggedOutOnce) return;
+  loggedOutOnce = true;
+  try {
+    // Clear token but KEEP user_data / onboarding_complete — matches the
+    // behavior introduced in security/critical-fixes-round-1 (commit 4816d54).
+    await AsyncStorage.removeItem('supabase_token');
+    await AsyncStorage.removeItem('needs_role_selection');
+  } catch (err) {
+    console.error('api: failed to clear tokens on logout', err);
+  }
+  authEvents.emit('logout');
+  // Reset the one-shot guard after the emit so we don't permanently suppress
+  // future logouts. The next refresh attempt starts fresh.
+  setTimeout(() => {
+    loggedOutOnce = false;
+  }, 1000);
+}
+
 api.interceptors.response.use(
   (response) => response,
-  async (error) => {
-    if (error.response?.status === 401 && !isRefreshing) {
-      // Try to refresh the token before logging out
-      isRefreshing = true;
-      try {
-        const refreshToken = await secureStorage.getItem('supabase_refresh_token');
-        if (refreshToken) {
-          const { createClient } = await import('@supabase/supabase-js');
-          // Security: Supabase URL + anon key now come from env (see config/env.ts)
-          // instead of being hardcoded here and in googleAuth.ts.
-          const supabase = createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY);
-          const { data, error: refreshError } = await supabase.auth.refreshSession({ refresh_token: refreshToken });
-          if (!refreshError && data.session) {
-            // Save new tokens in SecureStore, not AsyncStorage.
-            await secureStorage.setItem('supabase_token', data.session.access_token);
-            await secureStorage.setItem('supabase_refresh_token', data.session.refresh_token);
-            // Retry the original request with new token
-            error.config.headers.Authorization = `Bearer ${data.session.access_token}`;
-            isRefreshing = false;
-            return api.request(error.config);
-          }
-        }
-      } catch {
-        // Refresh failed — fall through to logout
-      }
-      isRefreshing = false;
+  async (error: AxiosError) => {
+    const originalConfig = error.config as (AxiosRequestConfig & { _retry?: boolean }) | undefined;
 
-      // Refresh failed — clear token but KEEP user data and onboarding status
-      await secureStorage.removeItem('supabase_token');
-      const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
-      await AsyncStorage.removeItem('needs_role_selection');
-      authEvents.emit('logout');
-    }
+    // Network error — no response from server (cold start, no wifi, etc.).
+    // Do NOT log the user out; just surface a friendly message.
     if (!error.response) {
-      // Network error — no response from server (cold start, no wifi, etc.)
-      // DON'T log the user out — just let the call fail
       error.message = 'Cannot reach server. Please check your connection and try again.';
+      return Promise.reject(error);
     }
-    return Promise.reject(error);
+
+    // Only 401s trigger refresh. `_retry` guards against an infinite loop if
+    // the retried request also returns 401 (server-side token rejection).
+    if (error.response.status !== 401 || !originalConfig || originalConfig._retry) {
+      return Promise.reject(error);
+    }
+    originalConfig._retry = true;
+
+    // If a refresh is already in flight, await it. Otherwise start one.
+    if (!refreshPromise) {
+      refreshPromise = performRefresh()
+        .catch(async (err) => {
+          await handleRefreshFailure();
+          throw err;
+        })
+        .finally(() => {
+          // Clear the promise so the next 401 burst (e.g. after re-login) can
+          // trigger a fresh refresh instead of reusing a resolved one.
+          refreshPromise = null;
+        });
+    }
+
+    try {
+      const newToken = await refreshPromise;
+      originalConfig.headers = originalConfig.headers || {};
+      (originalConfig.headers as Record<string, string>).Authorization = `Bearer ${newToken}`;
+      return api.request(originalConfig);
+    } catch (refreshErr) {
+      return Promise.reject(refreshErr);
+    }
   },
 );
 

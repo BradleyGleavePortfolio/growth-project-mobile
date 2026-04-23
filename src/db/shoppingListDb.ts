@@ -86,7 +86,11 @@ export async function generateShoppingListFromPlan(
             ingredientSet.set(ing.toLowerCase(), ing);
           }
         }
-      } catch {}
+      } catch {
+        // Best-effort: a recipe with malformed `ingredients` JSON is skipped
+        // so the rest of the shopping list still assembles. No user-facing
+        // action is possible — they'll just miss that one recipe's items.
+      }
     }
   }
 

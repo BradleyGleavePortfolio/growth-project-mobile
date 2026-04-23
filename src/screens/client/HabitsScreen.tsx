@@ -122,7 +122,11 @@ export default function HabitsScreen() {
           count: l.count || 0,
         }));
         logsMap = new Map(logs.map((l) => [l.habitId, l]));
-      } catch {}
+      } catch (err) {
+        // Best-effort read: today's habit logs are optional; habits list
+        // still renders with zero completions.
+        console.error('HabitsScreen: habitsApi.getLogs failed', err);
+      }
 
       // Load streaks
       let streaksMap = new Map<string, number>();
@@ -132,7 +136,10 @@ export default function HabitsScreen() {
         streaks.forEach((s: any) => {
           streaksMap.set(s.habit_id || s.habitId, s.streak || 0);
         });
-      } catch {}
+      } catch (err) {
+        // Best-effort: streaks display as 0 when unavailable.
+        console.error('HabitsScreen: habitsApi.getStreaks failed', err);
+      }
 
       const withMeta: HabitWithMeta[] = allHabits.map((h) => ({
         ...h,
@@ -142,6 +149,9 @@ export default function HabitsScreen() {
       }));
       setHabits(withMeta);
     } catch (err) {
+      // Outer read failure (probably /habits list): we leave the existing
+      // state in place. Empty screen on first load is acceptable.
+      console.error('HabitsScreen: loadHabits failed', err);
     }
   }, [currentUser, today]);
 
@@ -181,7 +191,11 @@ export default function HabitsScreen() {
         completed: newCompleted,
         value: newCompleted ? (habit.targetCount || 1) : 0,
       });
-    } catch (err) {
+    } catch (err: any) {
+      // Destructive-ish write (optimistic toggle). Surface so the user knows
+      // their tap didn't stick.
+      console.error('HabitsScreen: handleToggle failed', err);
+      Alert.alert("Couldn't update habit", err?.message || 'Please try again.');
     }
     await loadHabits();
   };
@@ -213,7 +227,12 @@ export default function HabitsScreen() {
         target_value: parseInt(newTarget) || 1,
         unit: newUnit || 'times',
       });
-    } catch (err) {
+    } catch (err: any) {
+      // Destructive write: surface failure so user can retry before the modal
+      // closes and they think the habit was created.
+      console.error('HabitsScreen: handleAddHabit failed', err);
+      Alert.alert("Couldn't create habit", err?.message || 'Please try again.');
+      return;
     }
     setShowAddModal(false);
     setNewName('');

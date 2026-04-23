@@ -13,11 +13,11 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
-// Security: sign-out now flows through a central helper that clears tokens
-// (in SecureStore), AsyncStorage, and every in-memory Zustand store —
-// replacing the old useAuthStore.signOut() which only cleared tokens as a side
-// effect and left previous-user data in memory for the next login.
-import { signOut } from '../../services/signOut';
+// Security: sign-out now flows through authActions which clears tokens
+// (in SecureStore), AsyncStorage, and notifies the auth event emitter —
+// replacing the old useAuthStore.signOut() which only cleared tokens as a
+// side effect and left previous-user data in memory for the next login.
+import { signOut } from '../../services/authActions';
 import { coachApi } from '../../services/api';
 import { Colors } from '../../constants/colors';
 import { mediumTap, warningTap, successTap } from '../../utils/haptics';
@@ -40,6 +40,7 @@ const DEFAULT_SETTINGS: CoachSettings = {
 
 export default function SettingsScreen() {
   const currentUser = useCurrentUser();
+  // signOut imported directly — no store wiring needed.
   const [settings, setSettings] = useState<CoachSettings>(DEFAULT_SETTINGS);
   const [clientCount, setClientCount] = useState(0);
   const [bioText, setBioText] = useState('');
@@ -62,7 +63,11 @@ export default function SettingsScreen() {
         const clients = res.data;
         setClientCount(Array.isArray(clients) ? clients.length : 0);
       }
-    } catch {}
+    } catch (err) {
+      // Best-effort read: coach settings fall back to defaults, bio stays empty,
+      // client count stays 0. No user action is useful here.
+      console.error('coach SettingsScreen: loadSettings failed', err);
+    }
   }, [userId]);
 
   useEffect(() => {

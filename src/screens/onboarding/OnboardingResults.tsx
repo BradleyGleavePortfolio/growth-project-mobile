@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -53,6 +54,10 @@ export default function OnboardingResults() {
         tdee: result.tdee,
       });
     } catch (err) {
+      // Macro calc failed — most likely malformed AsyncStorage payload.
+      // `macros` stays null which triggers the "Error calculating targets"
+      // view below; we log for telemetry.
+      console.error('OnboardingResults: macro calculation failed', err);
     } finally {
       setIsLoading(false);
     }
@@ -87,6 +92,10 @@ export default function OnboardingResults() {
           onboarding_completed: true,
         });
       } catch (err) {
+        // Backend profile save failed — we still proceed to write the local
+        // macro_targets + onboarding_complete flag so the user isn't stuck on
+        // this screen. Next login will re-sync via /auth/me.
+        console.error('OnboardingResults: profileApi.update failed', err);
       }
 
       // Save macro targets to AsyncStorage for the dashboard to read
@@ -101,7 +110,12 @@ export default function OnboardingResults() {
       // Mark onboarding complete — RootNavigator will now route to ClientNavigator
       await AsyncStorage.setItem('onboarding_complete', 'true');
       authEvents.emit();
-    } catch (err) {
+    } catch (err: any) {
+      // Catches the AsyncStorage.setItem failure paths above. Surface an alert
+      // because this is a user-initiated action (the "Start" button) and silence
+      // would leave them stuck on the results screen with no feedback.
+      console.error('OnboardingResults: handleStart failed', err);
+      Alert.alert("Couldn't finish setup", err?.message || 'Please try again.');
     } finally {
       setSaving(false);
     }

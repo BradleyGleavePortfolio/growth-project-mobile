@@ -42,6 +42,10 @@ export async function saveOnboardingData(updates: Partial<OnboardingData>): Prom
     const existing = await getOnboardingData();
     await AsyncStorage.setItem(KEY, JSON.stringify({ ...existing, ...updates }));
   } catch (err) {
+    // Write-side failure: the next onboarding step will retry. We don't alert
+    // here because it would interrupt the flow for every step; onboarding
+    // results screen will surface a final "couldn't save" alert instead.
+    console.error('onboardingStore: saveOnboardingData failed', err);
   }
 }
 
