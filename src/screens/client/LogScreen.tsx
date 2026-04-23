@@ -20,7 +20,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useClientStore } from '../../store/clientStore';
 // All colors from central theme — never hardcode hex values here
-import { Colors, Spacing, Radius } from '../../theme/index';
+// Round 3: added semantic `colors` for tinted feedback/data tokens
+import { Colors, Spacing, Radius, colors } from '../../theme/index';
 import { MealType, FoodLog } from '../../types';
 import { foodApi, logApi } from '../../services/api';
 import { enqueue as enqueueFoodLog, flush as flushFoodLogQueue } from '../../services/foodLogQueue';
@@ -610,7 +611,8 @@ export default function LogScreen() {
           </View>
           <View style={styles.summaryDivider} />
           <View style={styles.summaryItem}>
-            <Text style={[styles.summaryValue, { color: '#A78BFA' }]}>
+            {/* Round 3: hex → theme habit/accent token */}
+            <Text style={[styles.summaryValue, { color: colors.data.habit }]}>
               {Math.round(dailyTotals.fat)}g
             </Text>
             <Text style={styles.summaryLabel}>Fat</Text>
@@ -728,7 +730,8 @@ export default function LogScreen() {
               {/* Search error banner */}
               {searchError && (
                 <View style={styles.searchErrorBanner}>
-                  <Ionicons name="warning-outline" size={16} color={Colors.error || '#EF4444'} />
+                  {/* Round 3: removed hex fallback — Colors.error is always defined */}
+                  <Ionicons name="warning-outline" size={16} color={Colors.error} />
                   <Text style={styles.searchErrorText}>{searchError}</Text>
                 </View>
               )}
@@ -1006,7 +1009,8 @@ export default function LogScreen() {
               </View>
               <View style={styles.macroPreviewDivider} />
               <View style={styles.macroPreviewItem}>
-                <Text style={[styles.macroPreviewValue, { color: '#A78BFA' }]}>{previewMacros.fat}g</Text>
+                {/* Round 3: hex → theme habit/accent token */}
+                <Text style={[styles.macroPreviewValue, { color: colors.data.habit }]}>{previewMacros.fat}g</Text>
                 <Text style={styles.macroPreviewLabel}>Fat</Text>
               </View>
             </View>
@@ -1243,6 +1247,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.dark,
   },
+  // Round 3: hex → semantic feedback tokens
   searchErrorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1250,14 +1255,14 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginBottom: 8,
     padding: 10,
-    backgroundColor: '#FEF2F2',
+    backgroundColor: colors.feedback.errorBg,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: Colors.error,
   },
   searchErrorText: {
     fontSize: 13,
-    color: '#EF4444',
+    color: colors.feedback.errorText,
     flex: 1,
   },
   slowSearchBanner: {
@@ -1376,11 +1381,12 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     marginRight: 12,
   },
+  // Round 3: hex → theme tokens (primaryDark background, primaryPale letter, textPrimary shadow)
   foodThumbPlaceholder: {
-    backgroundColor: '#1A4D37',
+    backgroundColor: Colors.primaryDark,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
+    shadowColor: Colors.dark,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.12,
     shadowRadius: 4,
@@ -1389,7 +1395,7 @@ const styles = StyleSheet.create({
   foodThumbLetter: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#D8F3DC',
+    color: Colors.primaryPale,
   },
   searchResultItem: {
     flexDirection: 'row',

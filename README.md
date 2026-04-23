@@ -1,60 +1,104 @@
 # The Growth Project
 
-A production-grade React Native nutrition coaching app built with Expo, TypeScript, and SQLite.
+A React Native nutrition & fitness coaching app built with Expo, TypeScript, and SQLite.
 
 ## Features
 
 - **Calorie & Macro Tracking** — Log meals with protein, carbs, fat breakdowns
 - **Meal Plans** — Coach-assigned weekly meal plans with daily targets
-- **Recipe Library** — Searchable recipe database with filters and detailed views
-- **Progress Tracking** — Weight logging with trend charts (Victory Native)
+- **Recipe Library** — Searchable recipe database with filters
+- **Progress Tracking** — Weight logging with trend charts
 - **Intermittent Fasting** — Timer with protocol selection and streak tracking
 - **AI Guide** — Context-aware nutrition chatbot
 - **Coach Dashboard** — Multi-client management, reports, and invite system
-- **Weekly Reports** — Shareable PDF-style progress summaries
-- **Widgets & Shortcuts** — Home screen widget prep and quick actions
-- **Dark Mode First** — Full dark theme throughout
+- **Weekly Reports** — Shareable progress summaries
 
 ## Tech Stack
 
 - React Native 0.83 + Expo ~55 (managed workflow)
-- TypeScript (strict mode, zero errors)
+- TypeScript strict
 - expo-sqlite (async API)
-- Zustand v5 (state management)
-- React Navigation v7 (native stack + bottom tabs)
-- Victory Native (charts)
-- react-native-reanimated v4 (animations)
-- expo-haptics (micro-interactions)
+- Zustand v5 for state
+- React Navigation v7 (native stack + bottom tabs; 5 bottom tabs + More stack)
+- react-native-svg for hand-rolled charts
+- react-native-reanimated v4, expo-haptics
 
 ## Getting Started
 
-See [SETUP.md](./SETUP.md) for detailed installation instructions.
-
 ```bash
 npm install
-npx expo start
+cp .env.example .env   # fill in values (see below)
+npx expo start         # then press i / a / w for iOS / Android / web
 ```
+
+### iOS / Android dev build
+
+```bash
+# iOS simulator (requires Xcode)
+npx expo run:ios
+
+# Android emulator (requires Android Studio + SDK)
+npx expo run:android
+```
+
+### Production builds (EAS)
+
+```bash
+# One-time: install the EAS CLI and log in
+npm install -g eas-cli
+eas login
+
+# Build for the store (profile names in eas.json)
+eas build --platform ios --profile production
+eas build --platform android --profile production
+```
+
+## Environment variables
+
+All runtime env vars are read via `expo-constants` / `EXPO_PUBLIC_*`. Copy
+`.env.example` to `.env` and fill in:
+
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `EXPO_PUBLIC_API_URL` | yes | Base URL of the backend API (e.g. `https://backend-spring-lake-3890.fly.dev/api`). Falls back to the hardcoded Fly.io URL if unset. |
+| `EXPO_PUBLIC_SUPABASE_URL` | yes | Supabase project URL used for auth token refresh. |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | yes | Supabase anon JWT used by the client SDK. |
+| `EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS` | only for Google sign-in on iOS | OAuth client ID. |
+| `EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID` | only for Google sign-in on Android | OAuth client ID. |
+
+For EAS builds, either embed these in `eas.json` `env` blocks or store them as
+EAS Secrets (`eas secret:create --scope project --name FOO`).
 
 ## Project Structure
 
 ```
 src/
 ├── components/       # Reusable UI components
-├── constants/        # Colors, config
+├── constants/        # Raw colors / fonts / base theme
 ├── db/               # SQLite database layer
-├── navigation/       # React Navigation setup
+├── hooks/            # Shared hooks (useCurrentUser, …)
+├── navigation/       # React Navigation setup (5 bottom tabs + More stack)
 ├── screens/
-│   ├── auth/         # Login, Register, Onboarding
-│   ├── client/       # Client-facing screens (8 tabs)
-│   └── coach/        # Coach dashboard screens
+│   ├── auth/         # Welcome, Login, Create Account, Forgot Password, Role
+│   ├── client/       # Client-facing screens (Home, Log, Plan, Workout, More…)
+│   ├── coach/        # Coach dashboard screens
+│   └── onboarding/   # 10-step onboarding quiz
+├── services/         # API client, auth helpers
 ├── store/            # Zustand state stores
+├── theme/            # Semantic theme tokens (single source — never hardcode hex)
 ├── types/            # TypeScript type definitions
-└── utils/            # Helpers and utilities
+└── utils/            # Helpers (date, nutrition, notifications, …)
 ```
 
-## Architecture
+## Navigation
 
-- **Multi-tenant RBAC**: Coach and client roles with scoped data access
-- **Stack-in-tab navigation**: ProfileStack inside tab navigator for deep linking
-- **Offline-first**: All data stored locally in SQLite
-- **Component composition**: Skeleton loaders, empty states, fade animations
+Bottom tabs (round 3): **Home · Log · Plan · Workout · More**. The More tab
+is a nested stack housing Recipes, Fasting, Community, Progress, Profile,
+Settings, Report, Widgets, and Learn.
+
+## Theme
+
+`src/theme/index.ts` is the single source of truth for colors, typography,
+spacing, and radii. It exposes both the flat `Colors` palette and grouped
+`colors.{text,brand,feedback,border,data,background}` semantic tokens.
+Never hardcode hex values in components.

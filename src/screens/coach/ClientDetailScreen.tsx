@@ -271,7 +271,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
           subtitle: s.completed_at ? `Completed` : 'Logged',
           date: s.created_at || s.date,
           icon: 'barbell',
-          iconColor: '#9B72AA',
+          iconColor: Colors.primaryDark, // Round 3: hex → token (workout event icon)
         });
       }
 
@@ -490,7 +490,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
             <Ionicons
               name={tab.icon as any}
               size={16}
-              color={activeTab === tab.key ? '#fff' : Colors.textSecondary}
+              color={activeTab === tab.key ? Colors.textOnPrimary : Colors.textSecondary}
             />
             <Text style={[styles.tabText, activeTab === tab.key && styles.tabTextActive]}>
               {tab.label}
@@ -554,7 +554,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
                 onPress={sendNotification}
                 disabled={!notifMsg.trim() || sending}
               >
-                <Ionicons name="send" size={16} color="#fff" />
+                <Ionicons name="send" size={16} color={Colors.textOnPrimary} />
                 <Text style={styles.notifSendText}>{sending ? 'Sending...' : 'Send'}</Text>
               </TouchableOpacity>
             </View>
@@ -846,7 +846,7 @@ const drStyles = StyleSheet.create({
     color: Colors.textSecondary,
   },
   chipTextActive: {
-    color: '#fff',
+    color: Colors.textOnPrimary, // Round 3: hex → token
   },
 });
 
@@ -1249,7 +1249,7 @@ const styles = StyleSheet.create({
     width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.primaryDark,
     justifyContent: 'center', alignItems: 'center',
   },
-  avatarText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  avatarText: { color: Colors.textOnPrimary, fontSize: 16, fontWeight: '700' },
   clientName: { fontSize: 18, fontWeight: '700', color: Colors.textPrimary },
   clientStatus: { fontSize: 12, color: Colors.textSecondary, textTransform: 'capitalize', marginTop: 1 },
   msgIconBtn: {
@@ -1265,7 +1265,7 @@ const styles = StyleSheet.create({
   },
   tabActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
   tabText: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
-  tabTextActive: { color: '#fff' },
+  tabTextActive: { color: Colors.textOnPrimary },
   scrollContent: { paddingHorizontal: 20, paddingBottom: 100 },
   sectionTitle: { fontSize: 17, fontWeight: '700', color: Colors.textPrimary, marginBottom: 12, marginTop: 4 },
   // Calorie card
@@ -1302,7 +1302,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary, borderRadius: 10, paddingVertical: 10,
   },
   notifSendDisabled: { opacity: 0.5 },
-  notifSendText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  notifSendText: { color: Colors.textOnPrimary, fontSize: 14, fontWeight: '700' },
   // Logs
   logItem: { backgroundColor: Colors.surface, borderRadius: 12, padding: 16, marginBottom: 10 },
   logHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },

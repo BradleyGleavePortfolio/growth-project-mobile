@@ -1,26 +1,94 @@
 // The Growth Project — Central Theme
-// Re-exports canonical green/cream palette from constants/colors.
+// Single source of truth for colors/typography/spacing.
 // NEVER hardcode hex values in component files — always import from here.
+// Round 3: expanded to semantic tokens so screens can express intent.
 
 import CanonicalColors from '../constants/colors';
 
+// Flat palette (legacy — keep for back-compat with files already using it).
 export const Colors = {
   primary: CanonicalColors.primary,           // #2D6A4F deep green
-  gold: CanonicalColors.warning,              // #E9C46A (was teal-era gold)
-  orange: CanonicalColors.error,              // #E63946 (was #E88D67)
-  dark: CanonicalColors.textPrimary,          // #1B2B1E near-black green-tinted
-  background: CanonicalColors.background,     // #FAF8F3 warm cream
+  primaryLight: CanonicalColors.primaryLight, // #52B788
+  primaryPale: CanonicalColors.primaryPale,   // #D8F3DC
+  primaryDark: CanonicalColors.primaryDark,   // #1B4332
+  accent: CanonicalColors.accent,             // #40916C
+  gold: CanonicalColors.warning,              // #E9C46A
+  orange: CanonicalColors.error,              // #E63946
+  dark: CanonicalColors.textPrimary,          // #1B2B1E
+  background: CanonicalColors.background,     // #FAF8F3
   surface: CanonicalColors.surface,           // #FFFFFF
-  textMuted: CanonicalColors.textMuted,       // #8FA89A light muted
-  success: CanonicalColors.success,           // #2D6A4F
-  warning: CanonicalColors.warning,           // #E9C46A
-  error: CanonicalColors.error,               // #E63946
+  surfaceElevated: CanonicalColors.surfaceElevated, // #F5F0E8
+  textMuted: CanonicalColors.textMuted,       // #8FA89A
+  textPrimary: CanonicalColors.textPrimary,
+  textSecondary: CanonicalColors.textSecondary,
+  textOnPrimary: CanonicalColors.textOnPrimary,
+  success: CanonicalColors.success,
+  warning: CanonicalColors.warning,
+  error: CanonicalColors.error,
+  info: CanonicalColors.info,
   white: CanonicalColors.textOnPrimary,       // #FFFFFF
-  // Additional tokens
   border: CanonicalColors.border,             // #E2EDE6
-  cardShadow: CanonicalColors.cardShadow,     // rgba(45, 106, 79, 0.08)
-  primaryLight: CanonicalColors.primaryPale,   // #D8F3DC
-  goldLight: 'rgba(233, 196, 106, 0.12)',     // translucent warning
+  divider: CanonicalColors.divider,
+  cardShadow: CanonicalColors.cardShadow,
+  goldLight: 'rgba(233, 196, 106, 0.12)',
+  protein: CanonicalColors.protein,
+  carbs: CanonicalColors.carbs,
+  fat: CanonicalColors.fat,
+  water: CanonicalColors.water,
+  fiber: CanonicalColors.fiber,
+};
+
+// Semantic tokens grouped by purpose. Prefer these in new code.
+// Round 3: introduced so screens can say `colors.text.secondary` instead of `#4A6358`.
+export const colors = {
+  background: {
+    primary: CanonicalColors.background,       // screen bg
+    secondary: CanonicalColors.surfaceElevated,
+    surface: CanonicalColors.surface,          // cards
+    overlay: 'rgba(0, 0, 0, 0.5)',
+  },
+  text: {
+    primary: CanonicalColors.textPrimary,
+    secondary: CanonicalColors.textSecondary,
+    muted: CanonicalColors.textMuted,
+    onPrimary: CanonicalColors.textOnPrimary,  // text on brand bg
+    link: CanonicalColors.info,
+  },
+  brand: {
+    primary: CanonicalColors.primary,
+    primaryDark: CanonicalColors.primaryDark,
+    primaryLight: CanonicalColors.primaryLight,
+    primaryPale: CanonicalColors.primaryPale,
+    accent: CanonicalColors.accent,
+  },
+  feedback: {
+    success: CanonicalColors.success,
+    successBg: '#E8F5E9',        // tinted success background
+    warning: CanonicalColors.warning,
+    warningBg: '#FFF8E7',        // tinted warning background
+    error: CanonicalColors.error,
+    errorBg: '#FEF2F2',          // tinted error background
+    errorText: '#EF4444',
+    info: CanonicalColors.info,
+    infoBg: '#E8F4FD',
+  },
+  border: {
+    default: CanonicalColors.border,
+    divider: CanonicalColors.divider,
+    strong: CanonicalColors.textMuted,
+  },
+  // Domain-specific accents reused across the app.
+  data: {
+    protein: CanonicalColors.protein,
+    carbs: CanonicalColors.carbs,
+    fat: CanonicalColors.fat,
+    water: CanonicalColors.water,
+    fiber: CanonicalColors.fiber,
+    streak: '#E76F51',            // orange — streaks, fire, active timers
+    habit: '#A78BFA',             // purple — habit highlights
+  },
+  shadow: CanonicalColors.cardShadow,
+  transparent: 'transparent',
 };
 
 export const Typography = {

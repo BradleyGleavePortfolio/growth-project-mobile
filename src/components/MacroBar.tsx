@@ -19,8 +19,15 @@ export default function MacroBar({
 }: MacroBarProps) {
   const progress = Math.min(current / (target || 1), 1);
 
+  // Round 3: a11y — whole row is a progressbar announcing macro/current/target/unit
   return (
-    <View style={styles.container}>
+    <View
+      style={styles.container}
+      accessible
+      accessibilityRole="progressbar"
+      accessibilityLabel={label}
+      accessibilityValue={{ min: 0, max: target, now: current, text: `${current} of ${target}${unit}` }}
+    >
       <View style={styles.header}>
         <Text style={styles.label}>{label}</Text>
         <Text style={styles.values}>

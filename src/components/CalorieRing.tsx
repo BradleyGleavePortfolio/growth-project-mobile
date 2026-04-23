@@ -24,8 +24,22 @@ export default function CalorieRing({
   const isOver = consumed > target;
 
   return (
-    <View style={[styles.container, { width: size, height: size }]}>
-      <Svg width={size} height={size}>
+    // Round 3: ring is purely visual — expose as a single a11y element with summary text
+    <View
+      style={[styles.container, { width: size, height: size }]}
+      accessible
+      accessibilityRole="progressbar"
+      accessibilityLabel="Daily calories"
+      accessibilityValue={{
+        min: 0,
+        max: target,
+        now: consumed,
+        text: isOver
+          ? `${consumed} calories eaten, over target of ${target}`
+          : `${consumed} of ${target} calories eaten, ${remaining} remaining`,
+      }}
+    >
+      <Svg width={size} height={size} accessible={false}>
         <Circle
           cx={size / 2}
           cy={size / 2}

@@ -124,11 +124,14 @@ export default function RootNavigator() {
     );
   }
 
-  // Hide the GP chat widget on Profile and Recipes screens
-  const hideWidget = activeRoute === 'ProfileStack' || activeRoute === 'ProfileMain'
-    || activeRoute === 'Settings' || activeRoute === 'Report'
-    || activeRoute === 'Widgets' || activeRoute === 'Learn'
-    || activeRoute === 'Recipes';
+  // Hide the GP chat widget on Profile-like and Recipes screens.
+  // Round 3: after tab 9→5 consolidation, the old "ProfileStack" tab name
+  // is gone; ProfileMain / Settings / Report / Widgets / Learn / Recipes now
+  // live inside the new "MoreTab" stack. We also hide on the More index itself.
+  const hideWidget = activeRoute === 'MoreTab' || activeRoute === 'MoreIndex'
+    || activeRoute === 'ProfileMain' || activeRoute === 'Settings'
+    || activeRoute === 'Report' || activeRoute === 'Widgets'
+    || activeRoute === 'Learn' || activeRoute === 'Recipes';
 
   return (
     <NavigationContainer ref={navigationRef} onStateChange={onNavigationStateChange}>

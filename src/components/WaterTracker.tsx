@@ -19,6 +19,7 @@ export default function WaterTracker({
   const progress = Math.min(currentOz / targetOz, 1);
   const glasses = Math.floor(currentOz / 8);
 
+  // Round 3: a11y — progress track exposed as a progressbar, quick-add buttons labeled
   return (
     <View style={styles.card}>
       <View style={styles.header}>
@@ -31,7 +32,13 @@ export default function WaterTracker({
         </Text>
       </View>
 
-      <View style={styles.progressTrack}>
+      <View
+        style={styles.progressTrack}
+        accessible
+        accessibilityRole="progressbar"
+        accessibilityLabel="Water progress"
+        accessibilityValue={{ min: 0, max: targetOz, now: currentOz, text: `${currentOz} of ${targetOz} ounces` }}
+      >
         <View
           style={[styles.progressFill, { width: `${progress * 100}%` }]}
         />
@@ -44,6 +51,8 @@ export default function WaterTracker({
             style={styles.addButton}
             onPress={() => onAdd(oz)}
             activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={`Add ${oz} ounces of water`}
           >
             <Text style={styles.addButtonText}>+{oz}oz</Text>
           </TouchableOpacity>
