@@ -189,7 +189,10 @@ export default function ActiveWorkoutScreen() {
         sets: Array.from({ length: re.sets }, () => ({ reps: re.reps, weight: 0, completed: false })),
       }));
       setSessionExercises(sessionExs);
-    } catch {
+    } catch (err) {
+      // Best-effort parse of the routine JSON on screen mount. An empty list
+      // lets the user add exercises manually instead of crashing the screen.
+      console.error('ActiveWorkoutScreen: routine exercises parse failed', err);
       setSessionExercises([]);
     }
   }, []);
@@ -202,7 +205,12 @@ export default function ActiveWorkoutScreen() {
         setUserId(parsed.id);
         setCoachId(parsed.coachId || '');
       }
-    }).catch(() => {});
+    }).catch((err) => {
+      // Best-effort user-id hydration. The workout can still be logged via
+      // backend API; only the local exercise_logs SQLite table needs userId,
+      // and that table is best-effort too (see logExerciseWithVolume catch).
+      console.error('ActiveWorkoutScreen: user_data read failed', err);
+    });
   }, []);
 
   useEffect(() => {
@@ -327,6 +335,11 @@ export default function ActiveWorkoutScreen() {
           loggedAt: new Date().toISOString(),
         });
       } catch (err) {
+        // SQLite volume-log write is best-effort — the workout is still kept
+        // in React state and persisted via workoutApi.create on finish. If
+        // the local write fails we log for telemetry but don't interrupt
+        // the workout flow.
+        console.error('ActiveWorkoutScreen: logExerciseWithVolume failed', err);
       }
     }
 
@@ -366,7 +379,12 @@ export default function ActiveWorkoutScreen() {
                   reps_per_set: e.sets.filter((s) => s.completed).map((s) => s.reps),
                 })),
             });
-          } catch (err) {
+          } catch (err: any) {
+            // Destructive write — the user finished a workout and expects it
+            // saved. Surface so they can retry instead of losing the session.
+            console.error('ActiveWorkoutScreen: finishWorkout save failed', err);
+            Alert.alert("Couldn't save workout", err?.message || 'Please try again.');
+            return;
           }
           if (timerRef.current) clearInterval(timerRef.current);
           navigation.goBack();

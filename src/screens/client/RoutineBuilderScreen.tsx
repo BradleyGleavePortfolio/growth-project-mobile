@@ -170,7 +170,12 @@ export default function RoutineBuilderScreen() {
       } else {
         await workoutApi.createRoutine(payload);
       }
-    } catch (err) {
+    } catch (err: any) {
+      // Destructive write (user expects the routine to be saved). Alert so
+      // they know to retry instead of discovering the silent loss later.
+      console.error('RoutineBuilderScreen: save failed', err);
+      Alert.alert("Couldn't save routine", err?.message || 'Please try again.');
+      return;
     }
     navigation.goBack();
   };
@@ -185,7 +190,11 @@ export default function RoutineBuilderScreen() {
         onPress: async () => {
           try {
             await workoutApi.deleteRoutine(routineId);
-          } catch (err) {
+          } catch (err: any) {
+            // Destructive write: surface so user knows to retry.
+            console.error('RoutineBuilderScreen: delete failed', err);
+            Alert.alert("Couldn't delete routine", err?.message || 'Please try again.');
+            return;
           }
           navigation.goBack();
         },

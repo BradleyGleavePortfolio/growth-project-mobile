@@ -173,6 +173,8 @@ export default function WorkoutScreen() {
       }
       setWeeklyVolume(weeks);
     } catch (err) {
+      // Chart read-only: a failed volume aggregation just shows an empty chart.
+      console.error('WorkoutScreen: loadVolumeData failed', err);
     }
   }, [currentUser]);
 
@@ -186,6 +188,9 @@ export default function WorkoutScreen() {
       setRoutines(rRes.data || []);
       setRecentSessions(sRes.data || []);
     } catch (err) {
+      // Read-only data load for the workout landing screen; empty list is the
+      // graceful degrade. Retry via pull-to-refresh.
+      console.error('WorkoutScreen: loadData failed', err);
     }
     await loadVolumeData();
   }, [currentUser, loadVolumeData]);

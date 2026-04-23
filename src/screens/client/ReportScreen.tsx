@@ -33,7 +33,11 @@ export default function ReportScreen({ navigation }: any) {
       const weightRes = await weightApi.getHistory(7);
       const logs = weightRes.data?.logs || weightRes.data || [];
       setWeeklyWeights(logs.slice(-7));
-    } catch { setWeeklyWeights([]); }
+    } catch (err) {
+      // Read-only weight history; empty chart is the graceful fallback.
+      console.error('ReportScreen: weightApi.getHistory failed', err);
+      setWeeklyWeights([]);
+    }
     try {
       const today = new Date().toISOString().split('T')[0];
       const logRes = await logApi.getDaily(today);
@@ -48,7 +52,10 @@ export default function ReportScreen({ navigation }: any) {
         fat += (fi.fat_g || 0) * qty;
       });
       setTodayMacros({ calories: cals, protein: prot, carbs, fat });
-    } catch { }
+    } catch (err) {
+      // Read-only daily totals; defaults to 0 if the fetch fails.
+      console.error('ReportScreen: logApi.getDaily failed', err);
+    }
   };
 
   const latestWeight = weeklyWeights.length > 0 ? weeklyWeights[weeklyWeights.length - 1].weight : currentUser?.profile?.current_weight;

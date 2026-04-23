@@ -49,6 +49,8 @@ export default function CoachHomeScreen() {
         .map((a: any) => a.client_name);
       setOverdueClients(missed);
     } catch (err) {
+      // Alerts tile stays empty on failure — not a destructive write.
+      console.error('CoachHomeScreen: loadClients alerts failed', err);
     }
   }, []);
 
