@@ -46,6 +46,13 @@ export const Colors = {
 
   // Status / system UI
   offlineBanner: '#B45309',  // amber for offline banner warning
+
+  // Program template category accents (coach-side)
+  templateFatLoss: '#FF6B35',   // orange — fat loss
+  templateLeanBulk: '#2D6A4F',  // primary green — lean bulk
+  templateRecomp: '#457B9D',    // info blue — recomp
+  templateMaintenance: '#74C69D', // sage — maintenance
+  templateMobility: '#9B72AA',  // lavender — mobility
 };
 
 export default Colors;
