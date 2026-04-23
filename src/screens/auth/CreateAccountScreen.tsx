@@ -174,13 +174,14 @@ export default function CreateAccountScreen({ navigation }: Props) {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        {/* Round 3: accessibility labels on header, inputs, buttons, alerts */}
         <View style={styles.header}>
-          <Text style={styles.title}>Create account</Text>
+          <Text style={styles.title} accessibilityRole="header">Create account</Text>
           <Text style={styles.subtitle}>Join The Growth Project</Text>
         </View>
 
         {error ? (
-          <View style={styles.errorBox}>
+          <View style={styles.errorBox} accessible accessibilityRole="alert" accessibilityLiveRegion="assertive">
             <Text style={styles.errorText}>{error}</Text>
           </View>
         ) : null}
@@ -194,6 +195,8 @@ export default function CreateAccountScreen({ navigation }: Props) {
             placeholder="Your full name"
             placeholderTextColor={Colors.textMuted}
             autoCapitalize="words"
+            accessibilityLabel="Full name"
+            textContentType="name"
           />
         </View>
 
@@ -208,6 +211,8 @@ export default function CreateAccountScreen({ navigation }: Props) {
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
+            accessibilityLabel="Email"
+            textContentType="emailAddress"
           />
         </View>
 
@@ -220,6 +225,9 @@ export default function CreateAccountScreen({ navigation }: Props) {
             placeholder="Min 8 chars, 1 upper, 1 number, 1 special"
             placeholderTextColor={Colors.textMuted}
             secureTextEntry
+            accessibilityLabel="Password"
+            accessibilityHint="Minimum 8 characters, 1 uppercase, 1 number, 1 special"
+            textContentType="newPassword"
           />
         </View>
 
@@ -232,6 +240,8 @@ export default function CreateAccountScreen({ navigation }: Props) {
             placeholder="Your phone number"
             placeholderTextColor={Colors.textMuted}
             keyboardType="phone-pad"
+            accessibilityLabel="Phone number, optional"
+            textContentType="telephoneNumber"
           />
         </View>
 
@@ -239,6 +249,9 @@ export default function CreateAccountScreen({ navigation }: Props) {
           style={[styles.registerButton, loading && styles.buttonDisabled]}
           onPress={handleRegister}
           disabled={loading}
+          accessibilityRole="button"
+          accessibilityLabel="Create account"
+          accessibilityState={{ disabled: loading, busy: loading }}
         >
           {loading ? (
             <ActivityIndicator color={Colors.white} />
@@ -247,20 +260,29 @@ export default function CreateAccountScreen({ navigation }: Props) {
           )}
         </TouchableOpacity>
 
-        <View style={styles.divider}>
+        <View style={styles.divider} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
           <View style={styles.dividerLine} />
           <Text style={styles.dividerText}>or</Text>
           <View style={styles.dividerLine} />
         </View>
 
-        <TouchableOpacity style={styles.googleButton} onPress={handleGoogleSignup}>
+        <TouchableOpacity
+          style={styles.googleButton}
+          onPress={handleGoogleSignup}
+          accessibilityRole="button"
+          accessibilityLabel="Sign up with Google"
+        >
           <Text style={styles.googleG}>G</Text>
           <Text style={styles.googleButtonText}>Sign up with Google</Text>
         </TouchableOpacity>
 
         <View style={styles.signupRow}>
           <Text style={styles.signupText}>Already have an account? </Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Login')}>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Login')}
+            accessibilityRole="link"
+            accessibilityLabel="Sign in"
+          >
             <Text style={styles.signupLink}>Sign in</Text>
           </TouchableOpacity>
         </View>

@@ -22,7 +22,8 @@ export default function App() {
       await seedCoachIfNeeded();
       await requestNotificationPermissions();
     } catch (err) {
-      console.error('App init error:', err);
+      // Round 3: guard production builds — Metro strips __DEV__ at build time.
+      if (__DEV__) console.error('App init error:', err);
     } finally {
       setReady(true);
     }

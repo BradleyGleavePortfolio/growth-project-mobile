@@ -31,11 +31,15 @@ export default function WelcomeScreen({ navigation }: Props) {
           </Text>
         </View>
 
+        {/* Round 3: accessibility labels on primary CTAs */}
         <View style={styles.buttonContainer}>
           <TouchableOpacity
             style={styles.primaryButton}
             onPress={() => navigation.navigate('CreateAccount')}
             activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Get started"
+            accessibilityHint="Opens account creation"
           >
             <Text style={styles.primaryButtonText}>Get Started</Text>
           </TouchableOpacity>
@@ -44,6 +48,9 @@ export default function WelcomeScreen({ navigation }: Props) {
             style={styles.secondaryButton}
             onPress={() => navigation.navigate('Login')}
             activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Log in"
+            accessibilityHint="Opens sign-in screen"
           >
             <Text style={styles.secondaryButtonText}>Log In</Text>
           </TouchableOpacity>

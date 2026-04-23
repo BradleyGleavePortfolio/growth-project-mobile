@@ -72,21 +72,46 @@ export default function ProfileScreen() {
         <Text style={styles.email}>{currentUser?.email || ''}</Text>
       </View>
 
-      {/* Quick Actions — 2x2 grid */}
+      {/* Quick Actions — 2x2 grid. Round 3: each TouchableOpacity gets a
+          real a11y label / hint so VoiceOver announces destination, not "button". */}
       <View style={styles.actionsGrid}>
-        <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('Settings')}>
+        <TouchableOpacity
+          style={styles.actionBtn}
+          onPress={() => navigation.navigate('Settings')}
+          accessibilityRole="button"
+          accessibilityLabel="Settings"
+          accessibilityHint="Opens app settings"
+        >
           <Ionicons name="settings-outline" size={24} color={Colors.primary} />
           <Text style={styles.actionText}>Settings</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('Report')}>
+        <TouchableOpacity
+          style={styles.actionBtn}
+          onPress={() => navigation.navigate('Report')}
+          accessibilityRole="button"
+          accessibilityLabel="My report"
+          accessibilityHint="Opens your progress report"
+        >
           <Ionicons name="document-text-outline" size={24} color={Colors.primary} />
           <Text style={styles.actionText}>My Report</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('Widgets')}>
+        <TouchableOpacity
+          style={styles.actionBtn}
+          onPress={() => navigation.navigate('Widgets')}
+          accessibilityRole="button"
+          accessibilityLabel="Widgets"
+          accessibilityHint="Customize your dashboard widgets"
+        >
           <Ionicons name="apps-outline" size={24} color={Colors.primary} />
           <Text style={styles.actionText}>Widgets</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('Learn')}>
+        <TouchableOpacity
+          style={styles.actionBtn}
+          onPress={() => navigation.navigate('Learn')}
+          accessibilityRole="button"
+          accessibilityLabel="Learn"
+          accessibilityHint="Opens learning content"
+        >
           <Ionicons name="book-outline" size={24} color={Colors.primary} />
           <Text style={styles.actionText}>Learn</Text>
         </TouchableOpacity>

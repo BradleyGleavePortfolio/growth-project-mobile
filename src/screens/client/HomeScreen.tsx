@@ -367,9 +367,13 @@ export default function HomeScreen() {
               </Text>
               <Text style={styles.subtitle}>Track your nutrition today</Text>
             </View>
+            {/* Round 3: a11y on header notifications bell */}
             <TouchableOpacity
               onPress={() => navigation.navigate('Notifications')}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel="Notifications"
+              accessibilityHint="Opens your notifications"
             >
               <Ionicons name="notifications-outline" size={24} color={Colors.dark} />
             </TouchableOpacity>
@@ -398,6 +402,9 @@ export default function HomeScreen() {
                 );
                 sendCalorieReminderNotification(remaining, snacks);
               }}
+              accessibilityRole="button"
+              accessibilityLabel="Remind me to eat"
+              accessibilityHint="Schedules a calorie reminder notification"
             >
               <Ionicons name="notifications-outline" size={14} color={Colors.primary} />
               <Text style={styles.remindBtnText}>Remind me to eat</Text>
@@ -468,6 +475,9 @@ export default function HomeScreen() {
           style={styles.habitsCard}
           onPress={() => navigation.navigate('Habits')}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={`Daily habits, ${habitsData.completed} of ${habitsData.total} complete`}
+          accessibilityHint="Opens the habits tracker"
         >
           <View style={styles.habitsCardHeader}>
             <View style={styles.habitsCardLeft}>
