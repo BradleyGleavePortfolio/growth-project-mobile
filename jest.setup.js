@@ -2,6 +2,15 @@
 // jest-expo handles most RN/Expo shims; we only add mocks for modules that
 // tests touch explicitly.
 
+// env.ts throws at module-load when these aren't set; provide deterministic
+// stubs so tests that transitively import it (e.g. via services/api) can run.
+process.env.EXPO_PUBLIC_SUPABASE_URL =
+  process.env.EXPO_PUBLIC_SUPABASE_URL || 'http://test.local';
+process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY =
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'test-anon-key';
+process.env.EXPO_PUBLIC_API_URL =
+  process.env.EXPO_PUBLIC_API_URL || 'http://test.local/api';
+
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
 );
