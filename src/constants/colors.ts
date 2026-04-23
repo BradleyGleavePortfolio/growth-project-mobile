@@ -56,6 +56,12 @@ export const Colors = {
   noticeCriticalAccent: '#FB8C00', // bright orange accent/border
   noticeCriticalText: '#E65100',   // dark orange critical text
 
+  // Macro chip tints (Plan screen meal cards)
+  macroCarbsChipBg: '#E3F2FD',    // pale blue carbs chip
+  macroCarbsChipText: '#1565C0',  // dark blue carbs chip text
+  macroFatChipBg: '#FFF9C4',      // pale yellow fat chip
+  macroFatChipText: '#F57F17',    // dark amber fat chip text
+
   // Program template category accents (coach-side)
   templateFatLoss: '#FF6B35',   // orange — fat loss
   templateLeanBulk: '#2D6A4F',  // primary green — lean bulk
