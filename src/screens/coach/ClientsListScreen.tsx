@@ -199,7 +199,7 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
   filterChipTextActive: {
-    color: '#ffffff',
+    color: Colors.textOnPrimary,
   },
   listContent: {
     paddingHorizontal: 24,
@@ -223,7 +223,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   avatarText: {
-    color: '#ffffff',
+    color: Colors.textOnPrimary,
     fontSize: 16,
     fontWeight: '700',
   },
