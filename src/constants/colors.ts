@@ -68,6 +68,11 @@ export const Colors = {
   templateRecomp: '#457B9D',    // info blue — recomp
   templateMaintenance: '#74C69D', // sage — maintenance
   templateMobility: '#9B72AA',  // lavender — mobility
+
+  // Leaderboard medals (community screen)
+  medalGold: '#FFD700',
+  medalSilver: '#C0C0C0',
+  medalBronze: '#CD7F32',
 };
 
 export default Colors;
