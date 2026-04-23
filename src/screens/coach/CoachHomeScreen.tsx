@@ -13,6 +13,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachStore } from '../../store/coachStore';
 import { Colors } from '../../constants/colors';
+import { colors } from '../../theme';
 import { getGreeting } from '../../utils/date';
 import FadeInView from '../../components/FadeInView';
 import { coachApi } from '../../services/api';
@@ -126,14 +127,14 @@ export default function CoachHomeScreen() {
             <Text style={styles.metricLabel}>Active Clients</Text>
           </View>
           <View style={styles.metricCard}>
-            <View style={[styles.metricIcon, { backgroundColor: '#E8F4FD' }]}>
+            <View style={[styles.metricIcon, { backgroundColor: colors.feedback.infoBg }]}>
               <Ionicons name="restaurant" size={22} color={Colors.carbs} />
             </View>
             <Text style={styles.metricValue}>{todayLogs.length}</Text>
             <Text style={styles.metricLabel}>Logs Today</Text>
           </View>
           <View style={styles.metricCard}>
-            <View style={[styles.metricIcon, { backgroundColor: '#FEF3E2' }]}>
+            <View style={[styles.metricIcon, { backgroundColor: Colors.noticeWarningIconBg }]}>
               <Ionicons name="flame" size={22} color={Colors.fat} />
             </View>
             <Text style={styles.metricValue}>{Math.round(todayCalories)}</Text>
@@ -166,7 +167,7 @@ export default function CoachHomeScreen() {
               activeOpacity={0.8}
             >
               <View style={styles.redFlagLeft}>
-                <Ionicons name="warning" size={22} color="#E9C46A" />
+                <Ionicons name="warning" size={22} color={Colors.warning} />
                 <View>
                   <Text style={styles.redFlagName}>{rf.name}</Text>
                   <Text style={styles.redFlagTrend}>Weight trending up · {rf.trend}</Text>
@@ -225,7 +226,7 @@ export default function CoachHomeScreen() {
           onPress={() => navigation.navigate('Messages')}
           activeOpacity={0.7}
         >
-          <View style={[styles.actionIcon, { backgroundColor: '#E8F4FD' }]}>
+          <View style={[styles.actionIcon, { backgroundColor: colors.feedback.infoBg }]}>
             <Ionicons name="chatbubble-outline" size={22} color={Colors.carbs} />
           </View>
           <Text style={styles.actionText}>Messages</Text>
@@ -348,9 +349,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     padding: 14,
     borderRadius: 12,
-    backgroundColor: '#FFF8E7',
+    backgroundColor: Colors.noticeWarningBg,
     borderLeftWidth: 4,
-    borderLeftColor: '#E9C46A',
+    borderLeftColor: Colors.warning,
   },
   redFlagLeft: {
     flexDirection: 'row',
@@ -371,13 +372,13 @@ const styles = StyleSheet.create({
   viewClientBtn: {
     paddingHorizontal: 14,
     paddingVertical: 6,
-    backgroundColor: '#E9C46A',
+    backgroundColor: Colors.warning,
     borderRadius: 10,
   },
   viewClientBtnText: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#7B5800',
+    color: Colors.noticeWarningText,
   },
   // Overdue Card
   overdueCard: {
@@ -385,14 +386,14 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     padding: 16,
     borderRadius: 14,
-    backgroundColor: '#FFF3E0',
+    backgroundColor: Colors.noticeCriticalBg,
     borderLeftWidth: 4,
-    borderLeftColor: '#FB8C00',
+    borderLeftColor: Colors.noticeCriticalAccent,
     gap: 8,
   },
   overdueSubtitle: {
     fontSize: 12,
-    color: '#E65100',
+    color: Colors.noticeCriticalText,
     fontWeight: '600',
     marginBottom: 4,
   },
@@ -405,7 +406,7 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#FB8C00',
+    backgroundColor: Colors.noticeCriticalAccent,
   },
   overdueName: {
     fontSize: 14,
@@ -459,7 +460,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  csAvatarText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  csAvatarText: { color: Colors.textOnPrimary, fontSize: 13, fontWeight: '700' },
   csInfo: { flex: 1 },
   csName: { fontSize: 15, fontWeight: '600', color: Colors.textPrimary },
   csMeta: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },

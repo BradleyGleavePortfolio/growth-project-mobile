@@ -284,7 +284,7 @@ export default function HabitsScreen() {
           <Ionicons
             name="checkmark-done"
             size={16}
-            color={tab === 'habits' ? '#fff' : Colors.textSecondary}
+            color={tab === 'habits' ? Colors.textOnPrimary : Colors.textSecondary}
           />
           <Text style={[styles.tabLabel, tab === 'habits' && styles.tabLabelActive]}>
             Habits
@@ -297,7 +297,7 @@ export default function HabitsScreen() {
           <Ionicons
             name="heart"
             size={16}
-            color={tab === 'checkin' ? '#fff' : Colors.textSecondary}
+            color={tab === 'checkin' ? Colors.textOnPrimary : Colors.textSecondary}
           />
           <Text style={[styles.tabLabel, tab === 'checkin' && styles.tabLabelActive]}>
             Daily Check-in
@@ -358,7 +358,7 @@ export default function HabitsScreen() {
                     <View style={styles.habitMeta}>
                       {habit.streak > 0 && (
                         <View style={styles.streakBadge}>
-                          <Ionicons name="flame" size={12} color="#E76F51" />
+                          <Ionicons name="flame" size={12} color={Colors.streak} />
                           <Text style={styles.streakText}>{habit.streak}d</Text>
                         </View>
                       )}
@@ -390,7 +390,7 @@ export default function HabitsScreen() {
                   ]}
                 >
                   {habit.log?.completed && (
-                    <Ionicons name="checkmark" size={18} color="#fff" />
+                    <Ionicons name="checkmark" size={18} color={Colors.textOnPrimary} />
                   )}
                 </View>
               </TouchableOpacity>
@@ -482,7 +482,7 @@ export default function HabitsScreen() {
                         <Ionicons
                           name={val <= sleepQuality ? 'star' : 'star-outline'}
                           size={22}
-                          color={val <= sleepQuality ? '#E9C46A' : Colors.textMuted}
+                          color={val <= sleepQuality ? Colors.warning : Colors.textMuted}
                         />
                       </TouchableOpacity>
                     ))}
@@ -506,7 +506,7 @@ export default function HabitsScreen() {
                         styles.stressDot,
                         {
                           backgroundColor:
-                            val <= 2 ? Colors.primary : val === 3 ? '#E9C46A' : '#E63946',
+                            val <= 2 ? Colors.primary : val === 3 ? Colors.warning : Colors.error,
                           opacity: stress === val ? 1 : 0.4,
                         },
                       ]}
@@ -534,7 +534,7 @@ export default function HabitsScreen() {
             </View>
 
             <TouchableOpacity style={styles.saveBtn} onPress={handleSaveCheckIn}>
-              <Ionicons name="checkmark-circle" size={20} color="#fff" />
+              <Ionicons name="checkmark-circle" size={20} color={Colors.textOnPrimary} />
               <Text style={styles.saveBtnText}>
                 {checkInSaved ? 'Update Check-in' : 'Save Check-in'}
               </Text>
@@ -659,12 +659,12 @@ const styles = StyleSheet.create({
     borderColor: Colors.primary,
   },
   tabLabel: { fontSize: 14, fontWeight: '600', color: Colors.textSecondary },
-  tabLabelActive: { color: '#fff' },
+  tabLabelActive: { color: Colors.textOnPrimary },
   dotBadge: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#E63946',
+    backgroundColor: Colors.error,
   },
   scrollContent: { paddingHorizontal: 24 },
   progressCard: {
@@ -722,7 +722,7 @@ const styles = StyleSheet.create({
   habitNameDone: { textDecorationLine: 'line-through', color: Colors.textMuted },
   habitMeta: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   streakBadge: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  streakText: { fontSize: 12, fontWeight: '600', color: '#E76F51' },
+  streakText: { fontSize: 12, fontWeight: '600', color: Colors.streak },
   habitTarget: { fontSize: 12, color: Colors.textMuted },
   weekDots: { flexDirection: 'row', gap: 6, marginTop: 4 },
   weekDotCol: { alignItems: 'center', gap: 2 },
@@ -824,7 +824,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     marginTop: 8,
   },
-  saveBtnText: { fontSize: 16, fontWeight: '700', color: '#fff' },
+  saveBtnText: { fontSize: 16, fontWeight: '700', color: Colors.textOnPrimary },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -884,5 +884,5 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   modalSaveBtnDisabled: { opacity: 0.5 },
-  modalSaveBtnText: { fontSize: 16, fontWeight: '700', color: '#fff' },
+  modalSaveBtnText: { fontSize: 16, fontWeight: '700', color: Colors.textOnPrimary },
 });

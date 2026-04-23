@@ -309,7 +309,7 @@ export default function WorkoutScreen() {
         <TouchableOpacity style={styles.quickStart} onPress={startQuickWorkout} activeOpacity={0.8}>
           <View style={styles.quickStartLeft}>
             <View style={styles.quickStartIcon}>
-              <Ionicons name="flash" size={24} color="#fff" />
+              <Ionicons name="flash" size={24} color={Colors.textOnPrimary} />
             </View>
             <View>
               <Text style={styles.quickStartTitle}>Quick Workout</Text>
@@ -631,7 +631,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     marginTop: 4,
   },
-  emptyBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  emptyBtnText: { color: Colors.textOnPrimary, fontSize: 14, fontWeight: '700' },
   routineCard: {
     marginHorizontal: 24,
     marginBottom: 10,

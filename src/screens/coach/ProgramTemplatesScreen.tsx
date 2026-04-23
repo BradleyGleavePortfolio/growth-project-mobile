@@ -44,7 +44,7 @@ const PROGRAM_TEMPLATES: ProgramTemplate[] = [
     trainingNotes:
       '• 4–5x/week resistance training (compound movements first)\n• 2–3x/week LISS cardio (30–45 min, 60–70% max HR)\n• HIIT 1x/week for metabolic boost\n• Prioritize progressive overload to preserve muscle\n• Active recovery on rest days (walking, stretching)',
     tags: ['Fat Loss', 'Deficit', 'High Protein', 'Cardio'],
-    color: '#FF6B35',
+    color: Colors.templateFatLoss,
   },
   {
     id: 'lean_bulk',
@@ -56,7 +56,7 @@ const PROGRAM_TEMPLATES: ProgramTemplate[] = [
     trainingNotes:
       '• 4–5x/week heavy compound lifting\n• Progressive overload: add weight or reps weekly\n• Minimal cardio (1–2x/week maintenance cardio)\n• Prioritize recovery: 7–9 hours sleep\n• Deload every 6–8 weeks',
     tags: ['Lean Bulk', 'Surplus', 'Muscle Gain', 'Strength'],
-    color: '#2D6A4F',
+    color: Colors.templateLeanBulk,
   },
   {
     id: 'recomp',
@@ -68,7 +68,7 @@ const PROGRAM_TEMPLATES: ProgramTemplate[] = [
     trainingNotes:
       '• 3–5x/week resistance training\n• 2–3x/week moderate cardio\n• Focus on form and muscle mind-connection\n• Track body composition (measurements + photos) not just weight\n• Allow 3–6 months to see significant changes',
     tags: ['Recomp', 'Maintenance', 'Balanced', 'Body Composition'],
-    color: '#457B9D',
+    color: Colors.templateRecomp,
   },
   {
     id: 'maintenance',
@@ -80,7 +80,7 @@ const PROGRAM_TEMPLATES: ProgramTemplate[] = [
     trainingNotes:
       '• 3–4x/week training (mix of strength and cardio)\n• Maintain current strength levels — no need to push PRs\n• Try new activities to maintain motivation\n• Prioritize health markers: sleep, stress, energy levels\n• Adjust calories seasonally as activity changes',
     tags: ['Maintenance', 'Sustainable', 'Flexible', 'Lifestyle'],
-    color: '#74C69D',
+    color: Colors.templateMaintenance,
   },
   {
     id: 'mobility',
@@ -92,7 +92,7 @@ const PROGRAM_TEMPLATES: ProgramTemplate[] = [
     trainingNotes:
       '• Daily mobility work: 15–20 min morning routine\n• 2–3x/week yoga or Pilates\n• 2x/week light strength training\n• Daily step goal: 8,000–10,000 steps\n• Cold/heat therapy for recovery\n• Breathwork and stress management practices',
     tags: ['Mobility', 'Wellness', 'Recovery', 'Anti-Inflammatory'],
-    color: '#9B72AA',
+    color: Colors.templateMobility,
   },
 ];
 
@@ -256,7 +256,7 @@ export default function ProgramTemplatesScreen() {
                       onPress={() => handleApply(template)}
                       activeOpacity={0.85}
                     >
-                      <Ionicons name="person-add-outline" size={18} color="#FFFFFF" />
+                      <Ionicons name="person-add-outline" size={18} color={Colors.textOnPrimary} />
                       <Text style={styles.applyBtnText}>Apply to Client →</Text>
                     </TouchableOpacity>
                   </View>
@@ -459,7 +459,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   applyBtnText: {
-    color: '#FFFFFF',
+    color: Colors.textOnPrimary,
     fontSize: 15,
     fontWeight: '800',
     letterSpacing: 0.3,
@@ -524,7 +524,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   clientAvatarText: {
-    color: '#FFFFFF',
+    color: Colors.textOnPrimary,
     fontSize: 15,
     fontWeight: '700',
   },

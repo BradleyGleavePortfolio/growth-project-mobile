@@ -274,7 +274,7 @@ export default function MessagesScreen() {
             onPress={handleSend}
             disabled={!inputText.trim()}
           >
-            <Ionicons name="send" size={20} color={inputText.trim() ? '#fff' : Colors.textMuted} />
+            <Ionicons name="send" size={20} color={inputText.trim() ? Colors.textOnPrimary : Colors.textMuted} />
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -296,7 +296,7 @@ export default function MessagesScreen() {
       </View>
 
       <View style={styles.localBanner}>
-        <Ionicons name="phone-portrait-outline" size={14} color="#2D6A4F" />
+        <Ionicons name="phone-portrait-outline" size={14} color={Colors.primary} />
         <Text style={styles.localBannerText}>Messages are stored locally on this device</Text>
       </View>
 
@@ -400,12 +400,12 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    backgroundColor: '#2D6A4F15',
+    backgroundColor: Colors.primaryTint,
     borderRadius: 10,
   },
   localBannerText: {
     fontSize: 12,
-    color: '#2D6A4F',
+    color: Colors.primary,
     fontWeight: '600',
   },
   searchContainer: { paddingHorizontal: 24, marginBottom: 8 },
@@ -440,7 +440,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  convoAvatarText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  convoAvatarText: { color: Colors.textOnPrimary, fontSize: 16, fontWeight: '700' },
   convoInfo: { flex: 1, gap: 4 },
   convoTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   convoName: { fontSize: 15, fontWeight: '600', color: Colors.textPrimary },
@@ -457,7 +457,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 6,
   },
-  unreadBadgeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+  unreadBadgeText: { color: Colors.textOnPrimary, fontSize: 12, fontWeight: '700' },
   // ── Empty State ──
   emptyContainer: {
     alignItems: 'center',
@@ -487,7 +487,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  chatAvatarText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  chatAvatarText: { color: Colors.textOnPrimary, fontSize: 13, fontWeight: '700' },
   chatHeaderName: { fontSize: 16, fontWeight: '700', color: Colors.textPrimary },
   chatHeaderStatus: { fontSize: 12, color: Colors.textSecondary },
   // ── Chat Messages ──
@@ -516,7 +516,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   messageText: { fontSize: 15, color: Colors.textPrimary, lineHeight: 21 },
-  messageTextCoach: { color: '#fff' },
+  messageTextCoach: { color: Colors.textOnPrimary },
   messageTime: { fontSize: 11, color: Colors.textMuted, marginTop: 4, alignSelf: 'flex-end' },
   messageTimeCoach: { color: 'rgba(255,255,255,0.7)' },
   // ── Input Bar ──
