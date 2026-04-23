@@ -289,7 +289,7 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
   },
   badgeTextActive: {
-    color: '#ffffff',
+    color: Colors.textOnPrimary,
   },
   cardDisabled: {
     opacity: 0.5,
