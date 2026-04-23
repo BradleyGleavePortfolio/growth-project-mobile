@@ -48,6 +48,14 @@ export const Colors = {
   offlineBanner: '#B45309',  // amber for offline banner warning
   primaryTint: 'rgba(45, 106, 79, 0.08)', // soft primary tint for banners
 
+  // Alert/notice palettes for coach-side cards (warning + critical)
+  noticeWarningBg: '#FFF8E7',    // pale gold notice background
+  noticeWarningIconBg: '#FEF3E2', // softer gold icon tile
+  noticeWarningText: '#7B5800',   // dark gold notice text
+  noticeCriticalBg: '#FFF3E0',    // pale orange critical background
+  noticeCriticalAccent: '#FB8C00', // bright orange accent/border
+  noticeCriticalText: '#E65100',   // dark orange critical text
+
   // Program template category accents (coach-side)
   templateFatLoss: '#FF6B35',   // orange — fat loss
   templateLeanBulk: '#2D6A4F',  // primary green — lean bulk
