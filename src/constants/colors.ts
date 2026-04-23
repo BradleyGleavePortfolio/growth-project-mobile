@@ -43,6 +43,9 @@ export const Colors = {
 
   // Cards
   cardShadow: 'rgba(45, 106, 79, 0.08)',
+
+  // Status / system UI
+  offlineBanner: '#B45309',  // amber for offline banner warning
 };
 
 export default Colors;

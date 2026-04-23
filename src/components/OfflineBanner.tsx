@@ -7,6 +7,7 @@ import React from 'react';
 import { View, Text, StyleSheet, Platform, StatusBar } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNetworkStatus, isEffectivelyOnline } from '../hooks/useNetworkStatus';
+import { Colors } from '../constants/colors';
 
 export default function OfflineBanner() {
   const status = useNetworkStatus();
@@ -14,7 +15,7 @@ export default function OfflineBanner() {
 
   return (
     <View style={styles.banner} accessibilityRole="alert" accessibilityLiveRegion="polite">
-      <Ionicons name="cloud-offline-outline" size={14} color="#fff" />
+      <Ionicons name="cloud-offline-outline" size={14} color={Colors.textOnPrimary} />
       <Text style={styles.text}>You're offline — food logs will sync when you reconnect.</Text>
     </View>
   );
@@ -26,7 +27,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: '#B45309',
+    backgroundColor: Colors.offlineBanner,
     paddingVertical: 6,
     paddingHorizontal: 12,
     // Sit below the status bar on Android; iOS is handled by the SafeAreaView in
@@ -34,7 +35,7 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 6 : 6,
   },
   text: {
-    color: '#fff',
+    color: Colors.textOnPrimary,
     fontSize: 12,
     fontWeight: '600',
   },
