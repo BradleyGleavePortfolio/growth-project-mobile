@@ -9,10 +9,12 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Alert,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors, Typography, Spacing, Radius, Shadow } from '../../theme';
 import { authApi } from '../../services/api';
+import { secureStorage } from '../../services/secureStorage';
 
 interface Props {
   navigation: any;
@@ -81,9 +83,11 @@ export default function CreateAccountScreen({ navigation }: Props) {
     try {
       // Try to login — Supabase rejects login if email not yet verified
       const loginRes = await authApi.login({ email, password });
-      const { access_token, user } = loginRes.data;
+      const { access_token, refresh_token, user } = loginRes.data;
 
-      await AsyncStorage.setItem('supabase_token', access_token);
+      // Security: tokens go to SecureStore, not plain AsyncStorage.
+      await secureStorage.setItem('supabase_token', access_token);
+      if (refresh_token) await secureStorage.setItem('supabase_refresh_token', refresh_token);
       await AsyncStorage.setItem('user_data', JSON.stringify(user));
 
       // Mark that role selection is still needed (prevents RootNavigator
@@ -113,7 +117,10 @@ export default function CreateAccountScreen({ navigation }: Props) {
 
       if (!result.success) {
         if (result.error !== 'Sign-in was cancelled') {
-          setError(result.error || 'Google sign-up failed');
+          // Surface OAuth error from the URL fragment — previously swallowed.
+          const msg = result.error || 'Google sign-up failed';
+          setError(msg);
+          Alert.alert('Google sign-up failed', msg);
         }
         return;
       }

@@ -13,7 +13,11 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
-import { useAuthStore } from '../../store/authStore';
+// Security: sign-out now flows through a central helper that clears tokens
+// (in SecureStore), AsyncStorage, and every in-memory Zustand store —
+// replacing the old useAuthStore.signOut() which only cleared tokens as a side
+// effect and left previous-user data in memory for the next login.
+import { signOut } from '../../services/signOut';
 import { coachApi } from '../../services/api';
 import { Colors } from '../../constants/colors';
 import { mediumTap, warningTap, successTap } from '../../utils/haptics';
@@ -36,7 +40,6 @@ const DEFAULT_SETTINGS: CoachSettings = {
 
 export default function SettingsScreen() {
   const currentUser = useCurrentUser();
-  const { signOut } = useAuthStore();
   const [settings, setSettings] = useState<CoachSettings>(DEFAULT_SETTINGS);
   const [clientCount, setClientCount] = useState(0);
   const [bioText, setBioText] = useState('');

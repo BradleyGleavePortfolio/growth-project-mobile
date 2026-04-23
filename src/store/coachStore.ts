@@ -12,13 +12,22 @@ interface CoachStore {
   setSearchQuery: (query: string) => void;
   setFilterStatus: (status: 'all' | 'active' | 'archived') => void;
   getFilteredClients: () => User[];
+  // Security: reset on logout so a new coach on the same device can't briefly
+  // see the previous coach's clients list before a fresh load completes.
+  reset: () => void;
 }
 
-export const useCoachStore = create<CoachStore>((set, get) => ({
-  clients: [],
+const initialCoachState = {
+  clients: [] as User[],
   isLoading: false,
   searchQuery: '',
-  filterStatus: 'all',
+  filterStatus: 'all' as const,
+};
+
+export const useCoachStore = create<CoachStore>((set, get) => ({
+  ...initialCoachState,
+
+  reset: () => set({ ...initialCoachState }),
 
   loadClients: async (_coachId: string) => {
     try {

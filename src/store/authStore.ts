@@ -29,6 +29,10 @@ interface AuthStore {
   }) => Promise<void>;
   refreshProfile: () => Promise<void>;
   clearError: () => void;
+  // Security: reset() clears the in-memory slice of this store on logout.
+  // The central signOut helper (services/signOut.ts) is responsible for
+  // clearing tokens, storage, and every store including this one.
+  reset: () => void;
 }
 
 export const useAuthStore = create<AuthStore>((set, get) => ({
@@ -196,4 +200,15 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
   },
 
   clearError: () => set({ error: null }),
+
+  reset: () =>
+    set({
+      currentUser: null,
+      authToken: null,
+      clientProfile: null,
+      role: null,
+      isAuthenticated: false,
+      isLoading: false,
+      error: null,
+    }),
 }));
