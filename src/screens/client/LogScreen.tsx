@@ -23,6 +23,8 @@ import { useClientStore } from '../../store/clientStore';
 import { Colors, Spacing, Radius } from '../../theme/index';
 import { MealType, FoodLog } from '../../types';
 import { foodApi, logApi } from '../../services/api';
+import { enqueue as enqueueFoodLog, flush as flushFoodLogQueue } from '../../services/foodLogQueue';
+import { useNetworkStatus, isEffectivelyOnline } from '../../hooks/useNetworkStatus';
 import DaySelector from '../../components/DaySelector';
 import WaterTracker from '../../components/WaterTracker';
 import FoodImage from '../../components/FoodImage';
@@ -68,12 +70,18 @@ const calcMacros = (food: SearchResult, qty: number, unit: string) => {
 
 export default function LogScreen() {
   const currentUser = useCurrentUser();
+  const network = useNetworkStatus();
+  const online = isEffectivelyOnline(network);
   const [macroTargets, setMacroTargets] = useState<{ calories: number; protein: number; carbs: number; fat: number } | null>(null);
 
   useEffect(() => {
+    // Best-effort read of cached macro targets. If parsing fails, keep the
+    // default targets — no user-facing action is useful here.
     AsyncStorage.getItem('macro_targets').then((raw) => {
       if (raw) setMacroTargets(JSON.parse(raw));
-    }).catch(() => {});
+    }).catch((err) => {
+      console.error('LogScreen: failed to read macro_targets', err);
+    });
   }, []);
   const {
     selectedDate,
@@ -167,48 +175,56 @@ export default function LogScreen() {
         }
       }
       setRecentFoods(recent.slice(0, 8));
-    } catch {
+    } catch (err) {
+      // Best-effort read: the Recent tab stays empty, but we don't alert the
+      // user — they'll see the empty state and can still search or log manually.
+      console.error('LogScreen: loadRecentFoods failed', err);
       setRecentFoods([]);
     }
   }, [currentUser, selectedDate]);
 
-  // Load frequent foods from last 7 days
+  // Load frequent foods from last 7 days.
+  // Round-2 change: the 7 daily fetches used to run sequentially (~7 × 500ms on
+  // LTE = 3.5s before the list appeared). Now they fire in parallel via
+  // Promise.allSettled; cold-start time for the browse tab drops to a single
+  // round-trip plus a bit of fan-in. `allSettled` keeps one bad day from
+  // nuking the rest of the aggregate.
   const loadFrequentFoods = useCallback(async () => {
     if (!currentUser) return;
     try {
-      const foodCount: Record<string, { count: number; food: SearchResult }> = {};
       const today = new Date(selectedDate);
+      const dateStrings: string[] = [];
       for (let i = 0; i < 7; i++) {
         const d = new Date(today);
         d.setDate(d.getDate() - i);
-        const dateStr = d.toISOString().split('T')[0];
-        try {
-          const res = await logApi.getDaily(dateStr);
-          const entries: any[] = res.data?.entries || [];
-          for (const e of entries) {
-            const fi = e.food_item || e.foodItem;
-            const name = fi?.name || e.food_name || '';
-            if (!name) continue;
-            if (!foodCount[name]) {
-              foodCount[name] = {
-                count: 0,
-                food: {
-                  id: fi?.id,
-                  name,
-                  calories: fi?.calories ?? fi?.calories_per_serving ?? e.calories ?? 0,
-                  protein: fi?.protein_g ?? e.protein ?? 0,
-                  carbs: fi?.carbs_g ?? e.carbs ?? 0,
-                  fat: fi?.fat_g ?? e.fat ?? 0,
-                  serving_size: fi?.serving_description ?? fi?.serving_size,
-                  brand: fi?.brand_or_restaurant ?? fi?.brand ?? null,
-                  image_url: fi?.image_url ?? fi?.image_front_thumb_url ?? fi?.image_front_small_url ?? null,
-                },
-              };
-            }
-            foodCount[name].count++;
+        dateStrings.push(d.toISOString().split('T')[0]);
+      }
+      const settled = await Promise.allSettled(dateStrings.map((ds) => logApi.getDaily(ds)));
+      const foodCount: Record<string, { count: number; food: SearchResult }> = {};
+      for (const result of settled) {
+        if (result.status !== 'fulfilled') continue;
+        const entries: any[] = result.value.data?.entries || [];
+        for (const e of entries) {
+          const fi = e.food_item || e.foodItem;
+          const name = fi?.name || e.food_name || '';
+          if (!name) continue;
+          if (!foodCount[name]) {
+            foodCount[name] = {
+              count: 0,
+              food: {
+                id: fi?.id,
+                name,
+                calories: fi?.calories ?? fi?.calories_per_serving ?? e.calories ?? 0,
+                protein: fi?.protein_g ?? e.protein ?? 0,
+                carbs: fi?.carbs_g ?? e.carbs ?? 0,
+                fat: fi?.fat_g ?? e.fat ?? 0,
+                serving_size: fi?.serving_description ?? fi?.serving_size,
+                brand: fi?.brand_or_restaurant ?? fi?.brand ?? null,
+                image_url: fi?.image_url ?? fi?.image_front_thumb_url ?? fi?.image_front_small_url ?? null,
+              },
+            };
           }
-        } catch {
-          // Skip failed day loads
+          foodCount[name].count++;
         }
       }
       const sorted = Object.values(foodCount)
@@ -216,7 +232,9 @@ export default function LogScreen() {
         .slice(0, 8)
         .map((item) => item.food);
       setFrequentFoods(sorted);
-    } catch {
+    } catch (err) {
+      // Best-effort read; the Frequent tab just stays empty on failure.
+      console.error('LogScreen: loadFrequentFoods failed', err);
       setFrequentFoods([]);
     }
   }, [currentUser, selectedDate]);
@@ -310,10 +328,66 @@ export default function LogScreen() {
     setQuantityModalVisible(true);
   };
 
-  // Confirm log with quantity
+  // Confirm log with quantity.
+  // Behavior change (round 2): empty catches used to close the modal whether
+  // or not the save succeeded. Now the modal stays open on failure and shows
+  // an Alert with the real error message. When the device is offline we queue
+  // the log to AsyncStorage and close cleanly with a confirmation.
   const handleConfirmLog = async () => {
     if (!currentUser || !selectedFood) return;
     const qty = parseFloat(quantityInput) || 1;
+
+    // Compute the quantity multiplier once — identical code path for online
+    // and offline-queued writes.
+    let multiplier = qty;
+    if (selectedUnit === 'g') {
+      multiplier = qty / 100;
+    } else if (selectedUnit === 'oz') {
+      multiplier = (qty * 28.35) / 100;
+    }
+
+    // Offline: enqueue and close.
+    if (!online) {
+      try {
+        const needsCreate = !selectedFood.id || selectedFood.id.startsWith('off_');
+        await enqueueFoodLog({
+          kind: 'search',
+          foodItemId: needsCreate ? undefined : selectedFood.id,
+          food: needsCreate
+            ? {
+                name: selectedFood.name,
+                brand_or_restaurant: selectedFood.brand || null,
+                category: 'generic',
+                serving_description: selectedFood.serving_size || '100g',
+                serving_size_grams: 100,
+                calories: selectedFood.calories,
+                protein_g: selectedFood.protein,
+                carbs_g: selectedFood.carbs,
+                fat_g: selectedFood.fat,
+                tags: [],
+                search_aliases: [],
+              }
+            : undefined,
+          log: {
+            date: selectedDate,
+            meal_type: activeMealType,
+            quantity_multiplier: multiplier,
+          },
+        });
+        setQuantityModalVisible(false);
+        setSelectedFood(null);
+        setModalVisible(false);
+        Alert.alert(
+          'Saved offline',
+          `${selectedFood.name} will sync to your log when you reconnect.`,
+        );
+      } catch (err: any) {
+        console.error('LogScreen: enqueue failed', err);
+        Alert.alert("Couldn't save food", err?.message || 'Please try again.');
+      }
+      return;
+    }
+
     try {
       let foodItemId = selectedFood.id || '';
 
@@ -335,14 +409,6 @@ export default function LogScreen() {
         foodItemId = createRes.data.id;
       }
 
-      // Calculate the quantity multiplier based on unit
-      let multiplier = qty;
-      if (selectedUnit === 'g') {
-        multiplier = qty / 100;
-      } else if (selectedUnit === 'oz') {
-        multiplier = (qty * 28.35) / 100;
-      }
-
       await logApi.logFood({
         date: selectedDate,
         meal_type: activeMealType,
@@ -350,11 +416,15 @@ export default function LogScreen() {
         quantity_multiplier: multiplier,
       });
       await loadDayData(currentUser.id, selectedDate);
-    } catch (err) {
+      // Only dismiss the modal on success.
+      setQuantityModalVisible(false);
+      setSelectedFood(null);
+      setModalVisible(false);
+    } catch (err: any) {
+      console.error('LogScreen: handleConfirmLog failed', err);
+      Alert.alert("Couldn't log food", err?.message || 'Please try again.');
+      // Keep modals open so the user can retry or switch to offline queue.
     }
-    setQuantityModalVisible(false);
-    setSelectedFood(null);
-    setModalVisible(false);
   };
 
   const handleManualLog = async () => {
@@ -362,33 +432,51 @@ export default function LogScreen() {
       Alert.alert('Missing Info', 'Enter at least a food name and calories.');
       return;
     }
+
+    const foodPayload = {
+      name: foodName.trim(),
+      brand_or_restaurant: null,
+      category: 'generic',
+      serving_description: `${quantity} ${unit || 'serving'}`,
+      serving_size_grams: 100,
+      calories: parseInt(calories) || 0,
+      protein_g: parseInt(protein) || 0,
+      carbs_g: parseInt(carbs) || 0,
+      fat_g: parseInt(fat) || 0,
+      tags: [],
+      search_aliases: [],
+    };
+    const logPayload = {
+      date: selectedDate,
+      meal_type: activeMealType,
+      quantity_multiplier: parseFloat(quantity) || 1,
+    };
+
+    if (!online) {
+      try {
+        await enqueueFoodLog({ kind: 'manual', food: foodPayload, log: logPayload });
+        setModalVisible(false);
+        Alert.alert('Saved offline', `${foodPayload.name} will sync when you reconnect.`);
+      } catch (err: any) {
+        console.error('LogScreen: manual enqueue failed', err);
+        Alert.alert("Couldn't save food", err?.message || 'Please try again.');
+      }
+      return;
+    }
+
     try {
       // Create the food item in backend first
-      const createRes = await foodApi.create({
-        name: foodName.trim(),
-        brand_or_restaurant: null,
-        category: 'generic',
-        serving_description: `${quantity} ${unit || 'serving'}`,
-        serving_size_grams: 100,
-        calories: parseInt(calories) || 0,
-        protein_g: parseInt(protein) || 0,
-        carbs_g: parseInt(carbs) || 0,
-        fat_g: parseInt(fat) || 0,
-        tags: [],
-        search_aliases: [],
-      });
+      const createRes = await foodApi.create(foodPayload);
       const foodItemId = createRes.data.id;
 
-      await logApi.logFood({
-        date: selectedDate,
-        meal_type: activeMealType,
-        food_item_id: foodItemId,
-        quantity_multiplier: parseFloat(quantity) || 1,
-      });
+      await logApi.logFood({ ...logPayload, food_item_id: foodItemId });
       await loadDayData(currentUser.id, selectedDate);
-    } catch (err) {
+      // Only dismiss on success.
+      setModalVisible(false);
+    } catch (err: any) {
+      console.error('LogScreen: handleManualLog failed', err);
+      Alert.alert("Couldn't log food", err?.message || 'Please try again.');
     }
-    setModalVisible(false);
   };
 
   const handleDeleteFood = async (log: FoodLog) => {
@@ -401,8 +489,11 @@ export default function LogScreen() {
         onPress: async () => {
           try {
             await logApi.deleteEntry(log.id);
-          } catch {
-            // Gracefully handle — local state will refresh
+          } catch (err: any) {
+            // Destructive write: tell the user the delete didn't stick so they
+            // can retry. Local state still refreshes below.
+            console.error('LogScreen: handleDeleteFood failed', err);
+            Alert.alert("Couldn't remove food", err?.message || 'Please try again.');
           }
           loadDayData(currentUser.id, selectedDate);
         },
@@ -428,9 +519,20 @@ export default function LogScreen() {
   const onRefresh = useCallback(async () => {
     if (!currentUser) return;
     setRefreshing(true);
+    // Pull-to-refresh also opportunistically flushes the offline food-log queue.
+    // If we're still offline the flush is a cheap no-op; if we just came back
+    // online this catches us up before the RootNavigator's network-change
+    // effect fires.
+    if (online) {
+      try {
+        await flushFoodLogQueue();
+      } catch (err) {
+        console.error('LogScreen: flushFoodLogQueue failed', err);
+      }
+    }
     await loadDayData(currentUser.id, selectedDate);
     setRefreshing(false);
-  }, [currentUser?.id, selectedDate]);
+  }, [currentUser?.id, selectedDate, online]);
 
   const browseList = recentTab === 'recent' ? recentFoods : frequentFoods;
   const showList = searchQuery.length >= 2 ? searchResults : browseList;

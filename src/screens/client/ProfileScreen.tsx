@@ -13,9 +13,9 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 // Security: sign-out was previously routed through the dead SQLite-backed
 // useAuthStore, which only cleared tokens as a side effect and left Zustand
-// state in memory from the previous user. It now goes through the central
-// signOut helper that clears tokens, storage, and every store.
-import { signOut } from '../../services/signOut';
+// state in memory from the previous user. It now goes through authActions
+// which clears tokens, storage, and notifies the auth event emitter.
+import { signOut } from '../../services/authActions';
 import { Colors } from '../../constants/colors';
 import { ProfileStackParamList } from '../../navigation/ClientNavigator';
 
@@ -23,6 +23,7 @@ type Nav = NativeStackNavigationProp<ProfileStackParamList>;
 
 export default function ProfileScreen() {
   const currentUser = useCurrentUser();
+  // signOut imported directly — no store wiring needed.
   const navigation = useNavigation<Nav>();
 
   const handleSignOut = () => {

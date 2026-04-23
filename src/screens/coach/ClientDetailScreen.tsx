@@ -162,6 +162,9 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
       const plan = await getMealPlan(clientId, ws).catch(() => null);
       setPlanData(plan ? parsePlanData(plan.planData) : {});
     } catch (err) {
+      // Read-only client detail load — we log and let the UI render whatever
+      // partial state we accumulated before the throw. User can pull-to-refresh.
+      console.error('ClientDetailScreen: load failed', err);
     } finally {
       setIsLoading(false);
     }
@@ -287,7 +290,10 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
 
       events.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       setTimeline(events);
-    } catch (err) {}
+    } catch (err) {
+      // Timeline is a read-only aggregate — empty state is acceptable here.
+      console.error('ClientDetailScreen: loadTimeline failed', err);
+    }
   }, [clientId, selectedDays]);
 
   // ── Weekly Summary ────────────────────────────────────────────────────────────
@@ -398,6 +404,8 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
 
       setWeekSummaries(sorted);
     } catch (err) {
+      // Read-only summary aggregation — partial state is acceptable.
+      console.error('ClientDetailScreen: loadWeeklySummaries failed', err);
     }
   }, [clientId, selectedDays]);
 

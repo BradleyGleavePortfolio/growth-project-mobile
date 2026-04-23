@@ -4,7 +4,7 @@ import RootNavigator from './src/navigation/RootNavigator';
 import AppSplash from './src/components/AppSplash';
 import ErrorBoundary from './src/components/ErrorBoundary';
 import { requestNotificationPermissions } from './src/utils/notifications';
-import { initDatabase, seedCoachIfNeeded } from './src/db/database';
+import { initDatabase } from './src/db/database';
 
 export default function App() {
   const [ready, setReady] = useState(false);
@@ -18,8 +18,9 @@ export default function App() {
     try {
       // Initialize SQLite database: create tables, seed exercises (152),
       // recipes, foods, lessons, community data, etc.
+      // NOTE: seedCoachIfNeeded() was removed along with the dead SQLite auth path.
+      // Auth lives exclusively on the backend now; the local `users` table is no longer used.
       await initDatabase();
-      await seedCoachIfNeeded();
       await requestNotificationPermissions();
     } catch (err) {
       console.error('App init error:', err);

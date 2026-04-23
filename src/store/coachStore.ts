@@ -51,6 +51,9 @@ export const useCoachStore = create<CoachStore>((set, get) => ({
       });
       set({ clients, isLoading: false });
     } catch (err) {
+      // Read-only client list load. Existing state stays; user can retry
+      // via the coach-home pull-to-refresh.
+      console.error('coachStore: loadClients failed', err);
       set({ isLoading: false });
     }
   },

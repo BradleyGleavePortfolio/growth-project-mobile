@@ -140,5 +140,8 @@ export async function cancelAllNotifications(): Promise<void> {
   try {
     await Notifications.cancelAllScheduledNotificationsAsync();
   } catch (err) {
+    // Not user-facing — failing to cancel notifications shouldn't break
+    // sign-out or any flow that calls this; surface via console for telemetry.
+    console.error('notifications: cancelAllNotifications failed', err);
   }
 }

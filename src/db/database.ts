@@ -1,6 +1,6 @@
 import * as SQLite from 'expo-sqlite';
-import { mockHash } from '../utils/auth';
-import { generateId, getTodayString } from '../utils/date';
+// Auth + demo-seed imports removed: the old mock-SQLite auth path is gone.
+// Backend JWT is the single source of truth for identity now.
 import { seedFoodsIfNeeded, seedRecipesIfNeeded } from './recipesDb';
 import { initWorkoutTables, seedExercisesIfNeeded } from './workoutDb';
 import { initNotificationsTable } from './notificationsDb';
@@ -172,84 +172,8 @@ export async function initDatabase(): Promise<void> {
   await seedExercisesIfNeeded();
 }
 
-export async function seedCoachIfNeeded(): Promise<void> {
-  const database = await getDatabase();
-  const existing = await database.getFirstAsync<{ id: string }>(
-    'SELECT id FROM users WHERE email = ?',
-    ['coach@growthproject.app']
-  );
-
-  if (existing) return;
-
-  const now = new Date().toISOString();
-  const coachId = 'coach_' + generateId();
-
-  await database.runAsync(
-    `INSERT INTO users (id, role, email, passwordHash, firstName, lastName, coachId, status, createdAt, updatedAt)
-     VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)`,
-    [coachId, 'coach', 'coach@growthproject.app', mockHash('GrowthCoach2024!'), 'Growth', 'Coach', 'active', now, now]
-  );
-
-  await seedDemoClients(database, coachId);
-}
-
-async function seedDemoClients(database: SQLite.SQLiteDatabase, coachId: string): Promise<void> {
-  const now = new Date().toISOString();
-  const today = getTodayString();
-
-  // Client 1: Alex Johnson (completed onboarding, has food logs)
-  const client1Id = 'client1_' + generateId();
-  await database.runAsync(
-    `INSERT INTO users (id, role, email, passwordHash, firstName, lastName, coachId, status, createdAt, updatedAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [client1Id, 'client', 'client1@demo.com', mockHash('Demo1234!'), 'Alex', 'Johnson', coachId, 'active', now, now]
-  );
-
-  const profile1Id = 'profile1_' + generateId();
-  await database.runAsync(
-    `INSERT INTO client_profiles (id, userId, coachId, sex, dob, currentWeight, targetWeight, height, activityLevel, primaryGoal, dietType, eatHabits, foodPrefs, restrictions, mealsPerDay, timeline, tdee, calorieTarget, proteinTarget, carbTarget, fatTarget, onboardingCompleted, createdAt, updatedAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [profile1Id, client1Id, coachId, 'male', '1995-06-15', 185, 170, 177.8, 'moderate', 'lose_moderate', 'balanced', 'Regular meals', JSON.stringify(['chicken', 'fish', 'beef']), JSON.stringify([]), 3, 12, 2400, 1900, 157, 190, 53, 1, now, now]
-  );
-
-  // Seed some food logs for client1
-  const meals = [
-    { mealType: 'breakfast', foodName: 'Oatmeal with Berries', calories: 350, protein: 12, carbs: 55, fat: 8, quantity: 1, unit: 'bowl' },
-    { mealType: 'breakfast', foodName: 'Protein Shake', calories: 220, protein: 30, carbs: 10, fat: 5, quantity: 1, unit: 'shake' },
-    { mealType: 'lunch', foodName: 'Grilled Chicken Salad', calories: 450, protein: 42, carbs: 18, fat: 22, quantity: 1, unit: 'plate' },
-    { mealType: 'dinner', foodName: 'Salmon with Rice', calories: 580, protein: 38, carbs: 52, fat: 18, quantity: 1, unit: 'plate' },
-    { mealType: 'snack', foodName: 'Greek Yogurt', calories: 150, protein: 15, carbs: 12, fat: 4, quantity: 1, unit: 'cup' },
-  ];
-
-  for (const meal of meals) {
-    const logId = 'flog_' + generateId();
-    await database.runAsync(
-      `INSERT INTO food_logs (id, userId, coachId, date, mealType, foodName, calories, protein, carbs, fat, quantity, unit, createdAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [logId, client1Id, coachId, today, meal.mealType, meal.foodName, meal.calories, meal.protein, meal.carbs, meal.fat, meal.quantity, meal.unit, now]
-    );
-  }
-
-  // Seed water logs for client1
-  const waterId = 'wlog_' + generateId();
-  await database.runAsync(
-    `INSERT INTO water_logs (id, userId, coachId, date, amount, unit, createdAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [waterId, client1Id, coachId, today, 48, 'oz', now]
-  );
-
-  // Client 2: Sam Rivera (completed onboarding, no food logs)
-  const client2Id = 'client2_' + generateId();
-  await database.runAsync(
-    `INSERT INTO users (id, role, email, passwordHash, firstName, lastName, coachId, status, createdAt, updatedAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [client2Id, 'client', 'client2@demo.com', mockHash('Demo1234!'), 'Sam', 'Rivera', coachId, 'active', now, now]
-  );
-
-  const profile2Id = 'profile2_' + generateId();
-  await database.runAsync(
-    `INSERT INTO client_profiles (id, userId, coachId, sex, dob, currentWeight, targetWeight, height, activityLevel, primaryGoal, dietType, eatHabits, foodPrefs, restrictions, mealsPerDay, timeline, tdee, calorieTarget, proteinTarget, carbTarget, fatTarget, onboardingCompleted, createdAt, updatedAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [profile2Id, client2Id, coachId, 'female', '1998-03-22', 140, 130, 165.1, 'active', 'lose_moderate', 'balanced', 'Intermittent fasting', JSON.stringify(['chicken', 'turkey', 'fish']), JSON.stringify(['no beef']), 3, 8, 2050, 1550, 119, 155, 43, 1, now, now]
-  );
-}
+// seedCoachIfNeeded + seedDemoClients were removed along with the dead mock-auth path.
+// The local `users` / `client_profiles` / `food_logs` / `water_logs` / `weight_logs`
+// tables are still created above for schema compatibility with older builds, but
+// nothing writes to or reads from them anymore. A future cleanup should drop those
+// CREATE TABLE statements entirely.

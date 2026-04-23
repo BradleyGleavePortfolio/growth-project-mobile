@@ -110,6 +110,8 @@ export default function FastingScreen() {
       }
       setStreak(s);
     } catch (err) {
+      // Read-only streak aggregation; streak stays at its last good value.
+      console.error('FastingScreen: loadAll failed', err);
     }
   }, [currentUser]);
 
@@ -147,7 +149,11 @@ export default function FastingScreen() {
       await fastingApi.start({ protocol: `${selectedProtocol}:${24 - selectedProtocol}` });
       const endTime = new Date(Date.now() + selectedProtocol * 60 * 60 * 1000);
       await scheduleFastingAlert(endTime);
-    } catch (err) {
+    } catch (err: any) {
+      // Destructive write: surface so the user knows the fast didn't start.
+      console.error('FastingScreen: handleStart failed', err);
+      Alert.alert("Couldn't start fast", err?.message || 'Please try again.');
+      return;
     }
     loadAll();
   };
@@ -155,7 +161,12 @@ export default function FastingScreen() {
   const doEndFast = async () => {
     try {
       await fastingApi.end();
-    } catch (err) {
+    } catch (err: any) {
+      // Destructive write: surface so they know the fast wasn't ended. We
+      // still call loadAll() so the UI reflects whatever the backend actually
+      // recorded.
+      console.error('FastingScreen: doEndFast failed', err);
+      Alert.alert("Couldn't end fast", err?.message || 'Please try again.');
     }
     loadAll();
   };

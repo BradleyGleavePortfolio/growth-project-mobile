@@ -261,6 +261,8 @@ export default function HomeScreen() {
       }
       setWeeklyBreakdown(fullBreakdown);
     } catch (err) {
+      // Read-only volume chart — empty state is acceptable. Pull-to-refresh retries.
+      console.error('HomeScreen: loadWeeklyVolumeData failed', err);
     }
   }, [currentUser]);
 
@@ -273,9 +275,17 @@ export default function HomeScreen() {
       // Load personalized macro targets from AsyncStorage (saved during onboarding)
       AsyncStorage.getItem('macro_targets').then((raw) => {
         if (raw) {
-          try { setAsyncTargets(JSON.parse(raw)); } catch {}
+          try {
+            setAsyncTargets(JSON.parse(raw));
+          } catch (err) {
+            // Malformed JSON: fall back to defaults. A future save will
+            // overwrite the bad value.
+            console.error('HomeScreen: macro_targets parse failed', err);
+          }
         }
-      }).catch(() => {});
+      }).catch((err) => {
+        console.error('HomeScreen: macro_targets read failed', err);
+      });
     }
   }, [currentUser?.id]);
 
@@ -303,7 +313,12 @@ export default function HomeScreen() {
     ]);
     const raw = await AsyncStorage.getItem('macro_targets');
     if (raw) {
-      try { setAsyncTargets(JSON.parse(raw)); } catch {}
+      try {
+        setAsyncTargets(JSON.parse(raw));
+      } catch (err) {
+        // Same malformed-JSON path as the mount-time read above.
+        console.error('HomeScreen: macro_targets parse failed on refresh', err);
+      }
     }
     setRefreshing(false);
   }, [currentUser?.id, selectedDate]);

@@ -13,10 +13,10 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
-// Security: sign-out now flows through a central helper that clears tokens,
-// AsyncStorage, and every in-memory Zustand store — replacing the old
+// Security: sign-out now flows through authActions which clears tokens,
+// AsyncStorage, and notifies the auth event emitter — replacing the old
 // useAuthStore.signOut() which only cleared tokens as a side effect.
-import { signOut } from '../../services/signOut';
+import { signOut, refreshProfile } from '../../services/authActions';
 import { useSettings } from '../../hooks/useSettings';
 import { profileApi } from '../../services/api';
 import { authEvents } from '../../utils/authEvents';
@@ -25,6 +25,7 @@ import { mediumTap, warningTap, successTap } from '../../utils/haptics';
 
 export default function SettingsScreen({ navigation }: any) {
   const currentUser = useCurrentUser();
+  // signOut + refreshProfile imported directly — no store wiring needed.
   const { settings, updateSetting } = useSettings();
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);

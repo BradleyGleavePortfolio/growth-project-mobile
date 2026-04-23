@@ -7,9 +7,12 @@ import ClientNavigator from './ClientNavigator';
 import CoachNavigator from './CoachNavigator';
 import OnboardingNavigator from './OnboardingNavigator';
 import FloatingChatWidget from '../components/FloatingChatWidget';
+import OfflineBanner from '../components/OfflineBanner';
 import { authEvents } from '../utils/authEvents';
 import { secureStorage } from '../services/secureStorage';
 import { Colors } from '../constants/colors';
+import { useNetworkStatus, isEffectivelyOnline } from '../hooks/useNetworkStatus';
+import { flush as flushFoodLogQueue } from '../services/foodLogQueue';
 
 type AuthState = 'loading' | 'unauthenticated' | 'onboarding' | 'coach' | 'student';
 
@@ -38,6 +41,19 @@ export default function RootNavigator() {
     const unsubscribe = authEvents.onAuthChange(bootstrapAuth);
     return unsubscribe;
   }, []);
+
+  // Flush the offline food-log queue whenever the network comes back online.
+  // Only fires on the offline → online transition; repeated online events are
+  // no-ops because the queue is empty. Fire-and-forget; flush logs its own errors.
+  const network = useNetworkStatus();
+  const wasOnlineRef = useRef<boolean>(true);
+  useEffect(() => {
+    const online = isEffectivelyOnline(network);
+    if (online && !wasOnlineRef.current) {
+      flushFoodLogQueue().catch((err) => console.error('flushFoodLogQueue failed', err));
+    }
+    wasOnlineRef.current = online;
+  }, [network.isOnline, network.isInternetReachable]);
 
   const bootstrapAuth = async () => {
     try {
@@ -116,6 +132,9 @@ export default function RootNavigator() {
 
   return (
     <NavigationContainer ref={navigationRef} onStateChange={onNavigationStateChange}>
+      {/* OfflineBanner sits at the top of every auth state so users see the
+          offline indicator regardless of which navigator is mounted. */}
+      <OfflineBanner />
       {authState === 'unauthenticated' ? (
         <AuthNavigator />
       ) : authState === 'onboarding' ? (

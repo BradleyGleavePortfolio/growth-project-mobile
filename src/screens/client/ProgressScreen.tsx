@@ -222,6 +222,9 @@ export default function ProgressScreen() {
       }
       setLoggingStreak(streak);
     } catch (err) {
+      // Best-effort streak compute; if it fails the streak stays at its last
+      // good value (or zero on first load) — no user action is useful.
+      console.error('ProgressScreen: streak calc failed', err);
     }
 
     // Load today's macros from API
@@ -236,6 +239,8 @@ export default function ProgressScreen() {
         fat: data.total_fat_g || 0,
       });
     } catch (err) {
+      // Read-only; today's macro summary stays at previous value or zero.
+      console.error('ProgressScreen: today macros load failed', err);
     }
   }, [userId, period]);
 
@@ -262,7 +267,12 @@ export default function ProgressScreen() {
         date: getTodayString(),
         notes: newNotes || undefined,
       });
-    } catch (err) {
+    } catch (err: any) {
+      // Destructive write: surface failure so the user can retry before
+      // dismissing the modal.
+      console.error('ProgressScreen: weight log failed', err);
+      Alert.alert("Couldn't log weight", err?.message || 'Please try again.');
+      return;
     }
     setNewWeight('');
     setNewNotes('');
