@@ -46,6 +46,7 @@ export const Colors = {
 
   // Status / system UI
   offlineBanner: '#B45309',  // amber for offline banner warning
+  primaryTint: 'rgba(45, 106, 79, 0.08)', // soft primary tint for banners
 
   // Program template category accents (coach-side)
   templateFatLoss: '#FF6B35',   // orange — fat loss
