@@ -18,13 +18,22 @@ interface FastingState {
   endFast: (userId: string) => Promise<void>;
   loadHistory: (userId: string) => Promise<void>;
   setProtocol: (hours: number) => void;
+  // Security: reset on logout so the next user doesn't inherit the previous
+  // user's active fast or history in memory.
+  reset: () => void;
 }
 
-export const useFastingStore = create<FastingState>((set, get) => ({
-  activeFast: null,
+const initialFastingState = {
+  activeFast: null as FastingSession | null,
   selectedProtocol: 16,
-  history: [],
+  history: [] as FastingSession[],
   isLoading: false,
+};
+
+export const useFastingStore = create<FastingState>((set, get) => ({
+  ...initialFastingState,
+
+  reset: () => set({ ...initialFastingState }),
 
   loadActiveFast: async (userId: string) => {
     const fast = await getActiveFast(userId);

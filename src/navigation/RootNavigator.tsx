@@ -8,6 +8,7 @@ import CoachNavigator from './CoachNavigator';
 import OnboardingNavigator from './OnboardingNavigator';
 import FloatingChatWidget from '../components/FloatingChatWidget';
 import { authEvents } from '../utils/authEvents';
+import { secureStorage } from '../services/secureStorage';
 import { Colors } from '../constants/colors';
 
 type AuthState = 'loading' | 'unauthenticated' | 'onboarding' | 'coach' | 'student';
@@ -40,7 +41,9 @@ export default function RootNavigator() {
 
   const bootstrapAuth = async () => {
     try {
-      const token = await AsyncStorage.getItem('supabase_token');
+      // secureStorage.getItem migrates any legacy AsyncStorage token into
+      // SecureStore on first read, so existing users stay logged in.
+      const token = await secureStorage.getItem('supabase_token');
       const userRaw = await AsyncStorage.getItem('user_data');
       const needsRoleSelection = await AsyncStorage.getItem('needs_role_selection');
 

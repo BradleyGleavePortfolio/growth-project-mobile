@@ -11,7 +11,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
-import { useAuthStore } from '../../store/authStore';
+// Security: sign-out was previously routed through the dead SQLite-backed
+// useAuthStore, which only cleared tokens as a side effect and left Zustand
+// state in memory from the previous user. It now goes through the central
+// signOut helper that clears tokens, storage, and every store.
+import { signOut } from '../../services/signOut';
 import { Colors } from '../../constants/colors';
 import { ProfileStackParamList } from '../../navigation/ClientNavigator';
 
@@ -19,7 +23,6 @@ type Nav = NativeStackNavigationProp<ProfileStackParamList>;
 
 export default function ProfileScreen() {
   const currentUser = useCurrentUser();
-  const { signOut } = useAuthStore();
   const navigation = useNavigation<Nav>();
 
   const handleSignOut = () => {

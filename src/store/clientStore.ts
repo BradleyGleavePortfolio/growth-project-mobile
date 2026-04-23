@@ -29,16 +29,25 @@ interface ClientStore {
     notes?: string;
   }) => Promise<void>;
   logWater: (userId: string, coachId: string, amount: number) => Promise<void>;
+  // Security: reset all in-memory state on logout so the next user on the
+  // same device doesn't briefly see the previous user's food/water data.
+  reset: () => void;
 }
 
-export const useClientStore = create<ClientStore>((set, get) => ({
+const initialClientState = {
   selectedDate: getTodayString(),
-  foodLogs: [],
+  foodLogs: [] as FoodLog[],
   dailyTotals: { calories: 0, protein: 0, carbs: 0, fat: 0 },
   waterOz: 0,
   isLoading: false,
+};
+
+export const useClientStore = create<ClientStore>((set, get) => ({
+  ...initialClientState,
 
   setSelectedDate: (date: string) => set({ selectedDate: date }),
+
+  reset: () => set({ ...initialClientState, selectedDate: getTodayString() }),
 
   loadDayData: async (_userId: string, date?: string) => {
     try {

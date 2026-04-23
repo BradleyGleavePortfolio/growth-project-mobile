@@ -9,10 +9,12 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Alert,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors, Typography, Spacing, Radius, Shadow } from '../../theme';
 import { authApi } from '../../services/api';
+import { secureStorage } from '../../services/secureStorage';
 import { authEvents } from '../../utils/authEvents';
 
 interface Props {
@@ -39,9 +41,11 @@ export default function LoginScreen({ navigation }: Props) {
       const response = await authApi.login({ email, password });
       const { access_token, refresh_token, user } = response.data;
 
-      // Store JWT tokens for all subsequent API calls
-      await AsyncStorage.setItem('supabase_token', access_token);
-      if (refresh_token) await AsyncStorage.setItem('supabase_refresh_token', refresh_token);
+      // Store JWT tokens in SecureStore (not AsyncStorage) for all subsequent API calls.
+      // Security: SecureStore uses iOS Keychain / Android Keystore so tokens aren't
+      // readable from the plain app sandbox.
+      await secureStorage.setItem('supabase_token', access_token);
+      if (refresh_token) await secureStorage.setItem('supabase_refresh_token', refresh_token);
       await AsyncStorage.setItem('user_data', JSON.stringify(user));
 
       // Restore onboarding status from backend profile — prevents re-onboarding on re-login
@@ -68,7 +72,12 @@ export default function LoginScreen({ navigation }: Props) {
 
       if (!result.success) {
         if (result.error !== 'Sign-in was cancelled') {
-          setError(result.error || 'Google sign-in failed');
+          // Surface OAuth error. Previously these were silently swallowed
+          // (the URL fragment `#error=...&error_description=...` was ignored),
+          // so users saw "nothing happened" when Google sign-in failed.
+          const msg = result.error || 'Google sign-in failed';
+          setError(msg);
+          Alert.alert('Google sign-in failed', msg);
         }
         return;
       }
