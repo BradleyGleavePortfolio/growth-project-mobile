@@ -172,7 +172,7 @@ export default function ShoppingListScreen({ onBack }: { onBack?: () => void } =
 
       <View style={styles.actions}>
         <TouchableOpacity style={styles.generateBtn} onPress={handleGenerate}>
-          <Ionicons name="sparkles" size={16} color="#fff" />
+          <Ionicons name="sparkles" size={16} color={Colors.textOnPrimary} />
           <Text style={styles.generateBtnText}>Generate from Plan</Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -195,7 +195,7 @@ export default function ShoppingListScreen({ onBack }: { onBack?: () => void } =
             autoFocus
           />
           <TouchableOpacity style={styles.addConfirm} onPress={addItem}>
-            <Ionicons name="checkmark" size={20} color="#fff" />
+            <Ionicons name="checkmark" size={20} color={Colors.textOnPrimary} />
           </TouchableOpacity>
         </View>
       )}
@@ -307,7 +307,7 @@ const styles = StyleSheet.create({
   generateBtnText: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#fff',
+    color: Colors.textOnPrimary,
   },
   addBtn: {
     width: 44,
