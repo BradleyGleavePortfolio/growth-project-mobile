@@ -73,6 +73,13 @@ export const Colors = {
   medalGold: '#FFD700',
   medalSilver: '#C0C0C0',
   medalBronze: '#CD7F32',
+
+  // Muscle-group accents (workout screens)
+  muscleLegs: '#2A9D8F',      // teal
+  muscleTriceps: '#F4A261',   // warm orange
+  muscleCore: '#264653',      // deep blue-green
+  muscleFullBody: '#6A4C93',  // purple
+  muscleCardio: '#1DB954',    // vibrant green
 };
 
 export default Colors;
