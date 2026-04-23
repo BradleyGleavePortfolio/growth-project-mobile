@@ -30,7 +30,7 @@ export async function signOut(): Promise<void> {
   } catch (err) {
     console.error('signOut: multiRemove failed', err);
   }
-  authEvents.emit();
+  authEvents.emit('logout');
 }
 
 // Used by the Settings screen's "Reset Onboarding" action. Previously lived on
