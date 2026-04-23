@@ -21,6 +21,7 @@ import CoachGuidelinesScreen from '../screens/client/CoachGuidelinesScreen';
 import NotificationsScreen from '../screens/client/NotificationsScreen';
 import EducationScreen from '../screens/client/EducationScreen';
 import CommunityScreen from '../screens/client/CommunityScreen';
+import MoreScreen from '../screens/client/MoreScreen';
 import { Colors } from '../constants/colors';
 
 export type HomeStackParamList = {
@@ -29,16 +30,15 @@ export type HomeStackParamList = {
   Notifications: undefined;
 };
 
+// Round 3: reduced bottom tabs from 9 → 5 (iOS HIG cap).
+// Recipes / Fast / Community / Profile / Settings / Widgets / Report / Learn now live
+// in the "More" stack tab.
 export type ClientTabParamList = {
   Home: undefined;
   Log: undefined;
   Plan: undefined;
-  Recipes: undefined;
-  Progress: undefined;
-  Fast: undefined;
   WorkoutTab: undefined;
-  Community: undefined;
-  ProfileStack: undefined;
+  MoreTab: undefined;
 };
 
 export type WorkoutStackParamList = {
@@ -48,7 +48,16 @@ export type WorkoutStackParamList = {
   CoachGuidelines: undefined;
 };
 
-export type ProfileStackParamList = {
+// MoreStack holds every screen that used to be a top-level tab
+// (Recipes, Fast, Community, Progress) plus everything that used to live in
+// the ProfileStack. Screen names preserved so existing `navigate('Settings')` etc.
+// calls from ProfileScreen / HomeScreen keep working verbatim.
+export type MoreStackParamList = {
+  MoreIndex: undefined;
+  Recipes: undefined;
+  Fast: undefined;
+  Community: undefined;
+  Progress: undefined;
   ProfileMain: undefined;
   Settings: undefined;
   Widgets: undefined;
@@ -59,7 +68,7 @@ export type ProfileStackParamList = {
 const Tab = createBottomTabNavigator<ClientTabParamList>();
 const HomeStackNav = createNativeStackNavigator<HomeStackParamList>();
 const WorkoutStackNav = createNativeStackNavigator<WorkoutStackParamList>();
-const ProfileStackNav = createNativeStackNavigator<ProfileStackParamList>();
+const MoreStackNav = createNativeStackNavigator<MoreStackParamList>();
 
 function HomeStackNavigator() {
   return (
@@ -92,20 +101,28 @@ function WorkoutStackNavigator() {
   );
 }
 
-function ProfileStackNavigator() {
+// Round 3: MoreStack contains ex-tabs and old ProfileStack screens.
+// Keeps existing navigation targets ('Settings', 'Report', 'Widgets', 'Learn',
+// 'ProfileMain') valid — only the parent tab changes.
+function MoreStackNavigator() {
   return (
-    <ProfileStackNav.Navigator
+    <MoreStackNav.Navigator
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: Colors.background },
       }}
     >
-      <ProfileStackNav.Screen name="ProfileMain" component={ProfileScreen} />
-      <ProfileStackNav.Screen name="Settings" component={SettingsScreen} />
-      <ProfileStackNav.Screen name="Widgets" component={WidgetsScreen} />
-      <ProfileStackNav.Screen name="Report" component={ReportScreen} />
-      <ProfileStackNav.Screen name="Learn" component={EducationScreen} />
-    </ProfileStackNav.Navigator>
+      <MoreStackNav.Screen name="MoreIndex" component={MoreScreen} />
+      <MoreStackNav.Screen name="Recipes" component={RecipesScreen} />
+      <MoreStackNav.Screen name="Fast" component={FastingScreen} />
+      <MoreStackNav.Screen name="Community" component={CommunityScreen} />
+      <MoreStackNav.Screen name="Progress" component={ProgressScreen} />
+      <MoreStackNav.Screen name="ProfileMain" component={ProfileScreen} />
+      <MoreStackNav.Screen name="Settings" component={SettingsScreen} />
+      <MoreStackNav.Screen name="Widgets" component={WidgetsScreen} />
+      <MoreStackNav.Screen name="Report" component={ReportScreen} />
+      <MoreStackNav.Screen name="Learn" component={EducationScreen} />
+    </MoreStackNav.Navigator>
   );
 }
 
@@ -132,10 +149,13 @@ export default function ClientNavigator() {
         },
       }}
     >
+      {/* Round 3: each tab now has accessibilityLabel so VoiceOver / TalkBack
+          announce the destination rather than "tab, 1 of 5, selected". */}
       <Tab.Screen
         name="Home"
         component={HomeStackNavigator}
         options={{
+          tabBarAccessibilityLabel: 'Home tab',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="home" size={size} color={color} />
           ),
@@ -145,6 +165,7 @@ export default function ClientNavigator() {
         name="Log"
         component={LogScreen}
         options={{
+          tabBarAccessibilityLabel: 'Log food tab',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="add-circle" size={size} color={color} />
           ),
@@ -155,36 +176,9 @@ export default function ClientNavigator() {
         component={PlanScreen}
         options={{
           tabBarLabel: 'Plan',
+          tabBarAccessibilityLabel: 'Meal plan tab',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="calendar" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="Recipes"
-        component={RecipesScreen}
-        options={{
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="restaurant-outline" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="Progress"
-        component={ProgressScreen}
-        options={{
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="trending-up" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="Fast"
-        component={FastingScreen}
-        options={{
-          tabBarLabel: 'Fast',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="timer-outline" size={size} color={color} />
           ),
         }}
       />
@@ -193,27 +187,20 @@ export default function ClientNavigator() {
         component={WorkoutStackNavigator}
         options={{
           tabBarLabel: 'Workout',
+          tabBarAccessibilityLabel: 'Workout tab',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="barbell-outline" size={size} color={color} />
           ),
         }}
       />
       <Tab.Screen
-        name="Community"
-        component={CommunityScreen}
+        name="MoreTab"
+        component={MoreStackNavigator}
         options={{
+          tabBarLabel: 'More',
+          tabBarAccessibilityLabel: 'More tab — recipes, progress, community, profile',
           tabBarIcon: ({ color, size }) => (
-            <Ionicons name="people-outline" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="ProfileStack"
-        component={ProfileStackNavigator}
-        options={{
-          tabBarLabel: 'Profile',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person" size={size} color={color} />
+            <Ionicons name="grid-outline" size={size} color={color} />
           ),
         }}
       />

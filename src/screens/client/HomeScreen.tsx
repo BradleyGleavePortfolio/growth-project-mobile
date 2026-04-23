@@ -22,7 +22,8 @@ import DaySelector from '../../components/DaySelector';
 import FadeInView from '../../components/FadeInView';
 import { SkeletonCard, SkeletonLine } from '../../components/SkeletonLoader';
 // All colors from central theme — never hardcode hex values here
-import { Colors, Spacing, Radius } from '../../theme/index';
+// Round 3: added semantic `colors` import for chart/macro/info tokens
+import { Colors, Spacing, Radius, colors } from '../../theme/index';
 import { habitsApi } from '../../services/api';
 import { MealType } from '../../types';
 import { sendCalorieReminderNotification } from '../../utils/notifications';
@@ -60,7 +61,8 @@ function WeeklyVolumeCard({ totalVolume, weekLabel, breakdown }: WeeklyVolumeCar
   return (
     <View style={wvStyles.card}>
       <View style={wvStyles.headerRow}>
-        <Ionicons name="barbell-outline" size={20} color="#2D6A4F" />
+        {/* Round 3: hex → theme token */}
+        <Ionicons name="barbell-outline" size={20} color={Colors.primary} />
         <View style={wvStyles.headerText}>
           <Text style={wvStyles.title}>Total Weight Moved This Week</Text>
           <Text style={wvStyles.weekLabel}>{weekLabel}</Text>
@@ -85,9 +87,10 @@ function WeeklyVolumeCard({ totalVolume, weekLabel, breakdown }: WeeklyVolumeCar
                     wvStyles.bar,
                     {
                       height: barH,
+                      // Round 3: hex → theme tokens (primary / primaryLight / primaryPale)
                       backgroundColor: hasVolume
-                        ? isToday ? '#2D6A4F' : '#52B788'
-                        : '#D8F3DC',
+                        ? isToday ? Colors.primary : Colors.primaryLight
+                        : Colors.primaryPale,
                     },
                   ]}
                 />
@@ -131,7 +134,7 @@ const wvStyles = StyleSheet.create({
   volumeNumber: {
     fontSize: 28,
     fontWeight: '800',
-    color: '#2D6A4F',
+    color: Colors.primary, // Round 3: hex → token
     marginBottom: 14,
   },
   chartContainer: {
@@ -158,7 +161,7 @@ const wvStyles = StyleSheet.create({
     color: Colors.textMuted,
   },
   dayLabelToday: {
-    color: '#2D6A4F',
+    color: Colors.primary, // Round 3: hex → token
     fontWeight: '700',
   },
 });
@@ -319,7 +322,8 @@ export default function HomeScreen() {
   if (!currentUser) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#1A9EA0" />
+        {/* Round 3: stale teal hex → brand primary */}
+        <ActivityIndicator size="large" color={Colors.primary} />
       </View>
     );
   }
@@ -404,23 +408,25 @@ export default function HomeScreen() {
 
       <FadeInView delay={200}>
         <View style={styles.macroSection}>
+          {/* Round 3: macro hex colors → theme data tokens (protein/carbs/fat kept
+              with domain-specific accents; habit purple for fat per existing palette) */}
           <MacroBar
             label="Protein"
             current={dailyTotals.protein}
             target={proteinTarget}
-            color="#E88D67"
+            color={colors.data.streak}
           />
           <MacroBar
             label="Carbs"
             current={dailyTotals.carbs}
             target={carbTarget}
-            color="#C5A467"
+            color={Colors.gold}
           />
           <MacroBar
             label="Fat"
             current={dailyTotals.fat}
             target={fatTarget}
-            color="#A78BFA"
+            color={colors.data.habit}
           />
         </View>
       </FadeInView>
@@ -500,23 +506,30 @@ export default function HomeScreen() {
         <View style={styles.quickAccessSection}>
           <Text style={styles.sectionTitle}>Explore</Text>
           <View style={styles.quickAccessGrid}>
+            {/* Round 3: quick-access targets rewired after 9→5 tab consolidation.
+                Plan + (non-existent) AI stay as sibling tabs; Recipes / Fasting /
+                Community / Learn now live inside MoreTab and are reached with a
+                nested `{ screen: 'MoreTab', params: { screen: '…' } }` nav. */}
             {([
-              { screen: 'Plan', icon: 'calendar', label: 'Meal Plan', color: '#2D6A4F' },
-              { screen: 'Recipes', icon: 'restaurant-outline', label: 'Recipes', color: Colors.orange },
-              { screen: 'Fast', icon: 'timer-outline', label: 'Fasting', color: '#457B9D' },
-              { screen: 'AI', icon: 'chatbubble-ellipses-outline', label: 'AI Coach', color: '#A78BFA' },
-              { screen: 'ProfileStack', icon: 'book-outline', label: 'Learn', color: Colors.gold, nested: 'Learn' },
-              { screen: 'Community', icon: 'people-outline', label: 'Community', color: Colors.primary },
-            ] as { screen: string; icon: string; label: string; color: string; nested?: string }[]).map((item) => (
+              { tab: 'Plan', icon: 'calendar', label: 'Meal Plan', color: Colors.primary, a11y: 'Open meal plan' },
+              { tab: 'MoreTab', nested: 'Recipes', icon: 'restaurant-outline', label: 'Recipes', color: Colors.orange, a11y: 'Browse recipes' },
+              { tab: 'MoreTab', nested: 'Fast', icon: 'timer-outline', label: 'Fasting', color: colors.feedback.info, a11y: 'Open fasting tracker' },
+              { tab: 'MoreTab', nested: 'Learn', icon: 'book-outline', label: 'Learn', color: Colors.gold, a11y: 'Open learning content' },
+              { tab: 'MoreTab', nested: 'Community', icon: 'people-outline', label: 'Community', color: Colors.primary, a11y: 'Open community' },
+            ] as { tab: string; nested?: string; icon: string; label: string; color: string; a11y: string }[]).map((item) => (
               <TouchableOpacity
-                key={item.screen}
+                key={item.label}
                 style={styles.quickAccessItem}
                 onPress={() =>
                   item.nested
-                    ? navigation.navigate(item.screen, { screen: item.nested })
-                    : navigation.navigate(item.screen)
+                    ? navigation.navigate(item.tab, { screen: item.nested })
+                    : navigation.navigate(item.tab)
                 }
                 activeOpacity={0.7}
+                accessible
+                accessibilityRole="button"
+                accessibilityLabel={item.label}
+                accessibilityHint={item.a11y}
               >
                 <View style={[styles.quickAccessIcon, { backgroundColor: item.color + '18' }]}>
                   <Ionicons name={item.icon as any} size={22} color={item.color} />

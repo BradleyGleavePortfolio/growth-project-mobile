@@ -342,8 +342,10 @@ export default function ProgressScreen() {
                 <Text style={styles.streakText}>{loggingStreak}d streak</Text>
               </View>
             )}
+            {/* Round 3: Progress now lives inside MoreStack, so Report is a sibling —
+                navigate directly instead of through the old ProfileStack parent. */}
             <TouchableOpacity
-              onPress={() => navigation.navigate('ProfileStack', { screen: 'Report' })}
+              onPress={() => navigation.navigate('Report')}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
               <Ionicons name="share-outline" size={22} color={Colors.textSecondary} />
@@ -538,7 +540,8 @@ export default function ProgressScreen() {
         onPress={() => setShowLogModal(true)}
         activeOpacity={0.85}
       >
-        <Ionicons name="add" size={28} color="#fff" />
+        {/* Round 3: hex → theme token */}
+        <Ionicons name="add" size={28} color={Colors.textOnPrimary} />
       </TouchableOpacity>
 
       {/* Weight Log Modal */}
@@ -709,7 +712,7 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
   periodTextActive: {
-    color: '#ffffff',
+    color: Colors.textOnPrimary, // Round 3: hex → token
   },
   goalCard: {
     marginHorizontal: 24,
@@ -858,7 +861,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     elevation: 5,
-    shadowColor: '#000',
+    shadowColor: Colors.textPrimary, // Round 3: hex → token
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 6,
@@ -905,6 +908,6 @@ const styles = StyleSheet.create({
   saveBtnText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#ffffff',
+    color: Colors.textOnPrimary, // Round 3: hex → token
   },
 });

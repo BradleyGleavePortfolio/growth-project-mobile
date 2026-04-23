@@ -13,9 +13,11 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useAuthStore } from '../../store/authStore';
 import { Colors } from '../../constants/colors';
-import { ProfileStackParamList } from '../../navigation/ClientNavigator';
+// Round 3: ProfileStack was folded into MoreStack during the 9→5 tab consolidation.
+// Settings/Report/Widgets/Learn screens are unchanged — only the parent stack is renamed.
+import { MoreStackParamList } from '../../navigation/ClientNavigator';
 
-type Nav = NativeStackNavigationProp<ProfileStackParamList>;
+type Nav = NativeStackNavigationProp<MoreStackParamList>;
 
 export default function ProfileScreen() {
   const currentUser = useCurrentUser();
@@ -154,7 +156,7 @@ const styles = StyleSheet.create({
   avatarText: {
     fontSize: 28,
     fontWeight: '800',
-    color: '#fff',
+    color: Colors.textOnPrimary, // Round 3: hex → token
   },
   name: {
     fontSize: 20,
