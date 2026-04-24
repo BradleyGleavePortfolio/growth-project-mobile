@@ -217,7 +217,7 @@ export default function OnboardingResults() {
         activeOpacity={0.8}
       >
         {saving ? (
-          <ActivityIndicator color="#ffffff" />
+          <ActivityIndicator color={Colors.textOnPrimary} />
         ) : (
           <Text style={styles.startButtonText}>Start My Journey</Text>
         )}
@@ -321,7 +321,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   startButtonText: {
-    color: '#ffffff',
+    color: Colors.textOnPrimary,
     fontSize: 20,
     fontWeight: '800',
   },

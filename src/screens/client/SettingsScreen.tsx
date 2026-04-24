@@ -192,7 +192,7 @@ export default function SettingsScreen({ navigation }: any) {
               value={settings.dailyCheckin}
               onValueChange={(v) => updateSetting('dailyCheckin', v)}
               trackColor={{ false: Colors.border, true: Colors.primary }}
-              thumbColor="#fff"
+              thumbColor={Colors.textOnPrimary}
             />
           </View>
           {settings.dailyCheckin && (
@@ -207,7 +207,7 @@ export default function SettingsScreen({ navigation }: any) {
               value={settings.mealReminders}
               onValueChange={(v) => updateSetting('mealReminders', v)}
               trackColor={{ false: Colors.border, true: Colors.primary }}
-              thumbColor="#fff"
+              thumbColor={Colors.textOnPrimary}
             />
           </View>
           <View style={styles.row}>
@@ -216,7 +216,7 @@ export default function SettingsScreen({ navigation }: any) {
               value={settings.fastingAlerts}
               onValueChange={(v) => updateSetting('fastingAlerts', v)}
               trackColor={{ false: Colors.border, true: Colors.primary }}
-              thumbColor="#fff"
+              thumbColor={Colors.textOnPrimary}
             />
           </View>
           <View style={styles.row}>
@@ -225,7 +225,7 @@ export default function SettingsScreen({ navigation }: any) {
               value={settings.weeklySummary}
               onValueChange={(v) => updateSetting('weeklySummary', v)}
               trackColor={{ false: Colors.border, true: Colors.primary }}
-              thumbColor="#fff"
+              thumbColor={Colors.textOnPrimary}
             />
           </View>
         </View>
@@ -243,7 +243,7 @@ export default function SettingsScreen({ navigation }: any) {
               value={settings.hapticsEnabled}
               onValueChange={(v) => updateSetting('hapticsEnabled', v)}
               trackColor={{ false: Colors.border, true: Colors.primary }}
-              thumbColor="#fff"
+              thumbColor={Colors.textOnPrimary}
             />
           </View>
         </View>
@@ -390,7 +390,7 @@ const styles = StyleSheet.create({
   avatarText: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#fff',
+    color: Colors.textOnPrimary,
   },
   row: {
     flexDirection: 'row',
@@ -433,7 +433,7 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
   },
   segTextActive: {
-    color: '#fff',
+    color: Colors.textOnPrimary,
   },
   stepper: {
     flexDirection: 'row',
@@ -528,7 +528,7 @@ const styles = StyleSheet.create({
   saveBtnText: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#ffffff',
+    color: Colors.textOnPrimary,
   },
   exportText: {
     fontSize: 15,

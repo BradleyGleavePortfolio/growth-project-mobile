@@ -162,7 +162,12 @@ export default function SettingsScreen() {
           <Text style={styles.rowValue}>{currentUser?.email}</Text>
         </View>
         <View style={styles.divider} />
-        <TouchableOpacity style={styles.row} onPress={() => setShowBioModal(true)}>
+        <TouchableOpacity
+          style={styles.row}
+          onPress={() => setShowBioModal(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Edit bio"
+        >
           <Ionicons name="create-outline" size={20} color={Colors.textSecondary} />
           <Text style={styles.rowLabel}>Bio</Text>
           <Text style={styles.rowValueMuted} numberOfLines={1}>
@@ -171,7 +176,12 @@ export default function SettingsScreen() {
           <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
         </TouchableOpacity>
         <View style={styles.divider} />
-        <TouchableOpacity style={styles.row} onPress={() => setShowPasswordModal(true)}>
+        <TouchableOpacity
+          style={styles.row}
+          onPress={() => setShowPasswordModal(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Change password"
+        >
           <Ionicons name="lock-closed-outline" size={20} color={Colors.textSecondary} />
           <Text style={styles.rowLabel}>Change Password</Text>
           <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
@@ -187,13 +197,23 @@ export default function SettingsScreen() {
           <Text style={styles.rowValueHighlight}>{clientCount}</Text>
         </View>
         <View style={styles.divider} />
-        <TouchableOpacity style={styles.row} onPress={handleGenerateInvite}>
+        <TouchableOpacity
+          style={styles.row}
+          onPress={handleGenerateInvite}
+          accessibilityRole="button"
+          accessibilityLabel="Generate invite code"
+        >
           <Ionicons name="link-outline" size={20} color={Colors.textSecondary} />
           <Text style={styles.rowLabel}>Generate Invite Code</Text>
           <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
         </TouchableOpacity>
         <View style={styles.divider} />
-        <TouchableOpacity style={styles.row} onPress={() => setShowExportModal(true)}>
+        <TouchableOpacity
+          style={styles.row}
+          onPress={() => setShowExportModal(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Export all client data"
+        >
           <Ionicons name="download-outline" size={20} color={Colors.textSecondary} />
           <Text style={styles.rowLabel}>Export All Client Data</Text>
           <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
@@ -210,7 +230,7 @@ export default function SettingsScreen() {
             value={settings.dailyCheckin}
             onValueChange={(v) => updateSetting('dailyCheckin', v)}
             trackColor={{ false: Colors.surfaceElevated, true: Colors.primary }}
-            thumbColor="#fff"
+            thumbColor={Colors.textOnPrimary}
           />
         </View>
         <View style={styles.divider} />
@@ -221,7 +241,7 @@ export default function SettingsScreen() {
             value={settings.newClientAlerts}
             onValueChange={(v) => updateSetting('newClientAlerts', v)}
             trackColor={{ false: Colors.surfaceElevated, true: Colors.primary }}
-            thumbColor="#fff"
+            thumbColor={Colors.textOnPrimary}
           />
         </View>
         <View style={styles.divider} />
@@ -232,7 +252,7 @@ export default function SettingsScreen() {
             value={settings.weeklySummary}
             onValueChange={(v) => updateSetting('weeklySummary', v)}
             trackColor={{ false: Colors.surfaceElevated, true: Colors.primary }}
-            thumbColor="#fff"
+            thumbColor={Colors.textOnPrimary}
           />
         </View>
       </View>
@@ -253,13 +273,18 @@ export default function SettingsScreen() {
             value={settings.hapticsEnabled}
             onValueChange={(v) => updateSetting('hapticsEnabled', v)}
             trackColor={{ false: Colors.surfaceElevated, true: Colors.primary }}
-            thumbColor="#fff"
+            thumbColor={Colors.textOnPrimary}
           />
         </View>
       </View>
 
       {/* Sign Out */}
-      <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
+      <TouchableOpacity
+        style={styles.signOutButton}
+        onPress={handleSignOut}
+        accessibilityRole="button"
+        accessibilityLabel="Sign out"
+      >
         <Ionicons name="log-out-outline" size={20} color={Colors.error} />
         <Text style={styles.signOutText}>Sign Out</Text>
       </TouchableOpacity>
@@ -287,10 +312,20 @@ export default function SettingsScreen() {
             />
             <Text style={styles.charCount}>{bioText.length}/300</Text>
             <View style={styles.modalButtons}>
-              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowBioModal(false)}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setShowBioModal(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel"
+              >
                 <Text style={styles.modalCancelText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.modalSaveBtn} onPress={handleSaveBio}>
+              <TouchableOpacity
+                style={styles.modalSaveBtn}
+                onPress={handleSaveBio}
+                accessibilityRole="button"
+                accessibilityLabel="Save bio"
+              >
                 <Text style={styles.modalSaveText}>Save</Text>
               </TouchableOpacity>
             </View>
@@ -308,10 +343,20 @@ export default function SettingsScreen() {
               This will generate a summary of all your clients' nutrition logs, progress, and fasting data.
             </Text>
             <View style={styles.modalButtons}>
-              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowExportModal(false)}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setShowExportModal(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel"
+              >
                 <Text style={styles.modalCancelText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.modalSaveBtn} onPress={handleExportData}>
+              <TouchableOpacity
+                style={styles.modalSaveBtn}
+                onPress={handleExportData}
+                accessibilityRole="button"
+                accessibilityLabel="Export data"
+              >
                 <Text style={styles.modalSaveText}>Export</Text>
               </TouchableOpacity>
             </View>
@@ -348,10 +393,17 @@ export default function SettingsScreen() {
                   setCurrentPassword('');
                   setNewPassword('');
                 }}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel"
               >
                 <Text style={styles.modalCancelText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.modalSaveBtn} onPress={handleChangePassword}>
+              <TouchableOpacity
+                style={styles.modalSaveBtn}
+                onPress={handleChangePassword}
+                accessibilityRole="button"
+                accessibilityLabel="Update password"
+              >
                 <Text style={styles.modalSaveText}>Update</Text>
               </TouchableOpacity>
             </View>
@@ -399,7 +451,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   avatarText: {
-    color: '#ffffff',
+    color: Colors.textOnPrimary,
     fontSize: 20,
     fontWeight: '700',
   },
@@ -577,6 +629,6 @@ const styles = StyleSheet.create({
   modalSaveText: {
     fontSize: 15,
     fontWeight: '700',
-    color: '#ffffff',
+    color: Colors.textOnPrimary,
   },
 });

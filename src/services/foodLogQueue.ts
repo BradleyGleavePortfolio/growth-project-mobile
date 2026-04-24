@@ -94,6 +94,10 @@ export async function getQueueLength(): Promise<number> {
   return (await readQueue()).length;
 }
 
+export async function clearQueue(): Promise<void> {
+  await AsyncStorage.removeItem(QUEUE_KEY);
+}
+
 // Flush the queue to the backend. Returns the number of successfully flushed
 // entries. On failure, the remaining entries stay in the queue for the next
 // attempt. We stop flushing on the first failure to preserve ordering and to

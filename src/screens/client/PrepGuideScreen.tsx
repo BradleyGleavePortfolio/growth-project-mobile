@@ -446,7 +446,7 @@ const styles = StyleSheet.create({
     textTransform: 'capitalize',
   },
   filterTextActive: {
-    color: '#fff',
+    color: Colors.textOnPrimary,
   },
   emptyState: {
     flex: 1,
@@ -626,13 +626,13 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
   },
   doneBtn: {
-    backgroundColor: '#2D6A4F',
+    backgroundColor: Colors.primary,
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
   },
   doneBtnText: {
-    color: '#FFFFFF',
+    color: Colors.textOnPrimary,
     fontSize: 16,
     fontWeight: '700',
     letterSpacing: 0.3,

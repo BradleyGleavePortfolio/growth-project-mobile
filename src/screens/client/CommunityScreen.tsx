@@ -11,6 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { Colors } from '../../constants/colors';
+import { colors } from '../../theme';
 import {
   Challenge,
   ChallengeParticipant,
@@ -37,12 +38,12 @@ const WIN_ICONS: Record<string, string> = {
 };
 
 const WIN_COLORS: Record<string, string> = {
-  streak: '#E76F51',
-  challenge: '#E9C46A',
-  weight: '#2D6A4F',
-  workout: '#457B9D',
-  habit: '#52B788',
-  lesson: '#A78BFA',
+  streak: Colors.streak,
+  challenge: Colors.warning,
+  weight: Colors.primary,
+  workout: Colors.info,
+  habit: Colors.primaryLight,
+  lesson: colors.data.habit,
 };
 
 const CHALLENGE_ICONS: Record<string, string> = {
@@ -126,7 +127,7 @@ export default function CommunityScreen() {
           <Text style={styles.subtitle}>Compete, connect, celebrate</Text>
         </View>
         <View style={styles.pointsBadge}>
-          <Ionicons name="star" size={16} color="#E9C46A" />
+          <Ionicons name="star" size={16} color={Colors.warning} />
           <Text style={styles.pointsText}>{myPoints}</Text>
         </View>
       </View>
@@ -263,7 +264,7 @@ export default function CommunityScreen() {
           }
           renderItem={({ item }) => {
             const isMe = item.userId === currentUser?.id;
-            const medalColors = ['#FFD700', '#C0C0C0', '#CD7F32'];
+            const medalColors = [Colors.medalGold, Colors.medalSilver, Colors.medalBronze];
             return (
               <View style={[styles.leaderRow, isMe && styles.leaderRowMe]}>
                 <View style={styles.rankContainer}>
@@ -284,7 +285,7 @@ export default function CommunityScreen() {
                   </Text>
                 </View>
                 <View style={styles.leaderPoints}>
-                  <Ionicons name="star" size={14} color="#E9C46A" />
+                  <Ionicons name="star" size={14} color={Colors.warning} />
                   <Text style={styles.leaderPointsText}>{item.points}</Text>
                 </View>
               </View>
@@ -444,7 +445,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
-  joinBtnText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  joinBtnText: { color: Colors.textOnPrimary, fontSize: 13, fontWeight: '700' },
   joinedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -478,7 +479,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  leaderAvatarText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  leaderAvatarText: { color: Colors.textOnPrimary, fontSize: 14, fontWeight: '700' },
   leaderInfo: { flex: 1 },
   leaderName: { fontSize: 15, fontWeight: '600', color: Colors.textPrimary },
   leaderNameMe: { fontWeight: '800', color: Colors.primary },

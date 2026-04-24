@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Colors } from '../constants/colors';
 
 interface Props {
   children: React.ReactNode;
@@ -26,7 +27,7 @@ export default class ErrorBoundary extends React.Component<Props, State> {
     if (this.state.hasError) {
       return (
         <View style={styles.container}>
-          <Ionicons name="alert-circle-outline" size={64} color="#2D6A4F" />
+          <Ionicons name="alert-circle-outline" size={64} color={Colors.primary} />
           <Text style={styles.title}>Something went wrong</Text>
           <Text style={styles.message}>
             The app ran into an unexpected error. Please try again.
@@ -47,30 +48,30 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 32,
-    backgroundColor: '#FAF8F3',
+    backgroundColor: Colors.background,
   },
   title: {
     fontSize: 22,
     fontWeight: '700',
-    color: '#2D6A4F',
+    color: Colors.primary,
     marginTop: 16,
     marginBottom: 8,
   },
   message: {
     fontSize: 15,
-    color: '#666',
+    color: Colors.textSecondary,
     textAlign: 'center',
     lineHeight: 22,
     marginBottom: 24,
   },
   button: {
-    backgroundColor: '#2D6A4F',
+    backgroundColor: Colors.primary,
     paddingHorizontal: 32,
     paddingVertical: 14,
     borderRadius: 12,
   },
   buttonText: {
-    color: '#fff',
+    color: Colors.textOnPrimary,
     fontSize: 16,
     fontWeight: '600',
   },
