@@ -21,6 +21,8 @@ import { signOut } from '../../services/authActions';
 import { coachApi } from '../../services/api';
 import { Colors } from '../../constants/colors';
 import { mediumTap, warningTap, successTap } from '../../utils/haptics';
+import { updateSupabasePassword } from '../../utils/supabaseAuth';
+import { useNavigation } from '@react-navigation/native';
 
 const COACH_SETTINGS_KEY = 'gp_coach_settings';
 
@@ -39,16 +41,18 @@ const DEFAULT_SETTINGS: CoachSettings = {
 };
 
 export default function SettingsScreen() {
+  const navigation = useNavigation<any>();
   const currentUser = useCurrentUser();
   // signOut imported directly — no store wiring needed.
   const [settings, setSettings] = useState<CoachSettings>(DEFAULT_SETTINGS);
   const [clientCount, setClientCount] = useState(0);
   const [bioText, setBioText] = useState('');
   const [showBioModal, setShowBioModal] = useState(false);
-  const [showExportModal, setShowExportModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [passwordBusy, setPasswordBusy] = useState(false);
 
   const userId = currentUser?.id || '';
 
@@ -87,32 +91,33 @@ export default function SettingsScreen() {
     setShowBioModal(false);
   };
 
-  const handleChangePassword = () => {
-    if (!currentPassword || !newPassword) {
-      Alert.alert('Error', 'Please fill in both fields.');
+  const handleChangePassword = async () => {
+    setPasswordError('');
+    if (newPassword.length < 8) {
+      setPasswordError('New password must be at least 8 characters.');
       return;
     }
-    if (newPassword.length < 6) {
-      Alert.alert('Error', 'New password must be at least 6 characters.');
+    if (newPassword !== confirmPassword) {
+      setPasswordError('Passwords do not match.');
+      return;
+    }
+    setPasswordBusy(true);
+    const result = await updateSupabasePassword(newPassword);
+    setPasswordBusy(false);
+    if (!result.ok) {
+      setPasswordError(result.message);
       return;
     }
     successTap();
     setShowPasswordModal(false);
-    setCurrentPassword('');
     setNewPassword('');
-    Alert.alert('Success', 'Password updated successfully.');
+    setConfirmPassword('');
+    Alert.alert('Password updated', 'Your password has been changed.');
   };
 
-  const handleGenerateInvite = () => {
+  const handleOpenInviteCodes = () => {
     mediumTap();
-    const code = `GP-${userId.slice(0, 8).toUpperCase()}`;
-    Alert.alert('Invite Code', `Share this code with your clients:\n\n${code}`, [{ text: 'OK' }]);
-  };
-
-  const handleExportData = () => {
-    successTap();
-    setShowExportModal(false);
-    Alert.alert('Export Started', 'Your client data export is being prepared. This may take a moment.');
+    navigation.navigate('ClientsStack', { screen: 'InviteCodes' });
   };
 
   const handleSignOut = () => {
@@ -199,23 +204,12 @@ export default function SettingsScreen() {
         <View style={styles.divider} />
         <TouchableOpacity
           style={styles.row}
-          onPress={handleGenerateInvite}
+          onPress={handleOpenInviteCodes}
           accessibilityRole="button"
-          accessibilityLabel="Generate invite code"
+          accessibilityLabel="Manage invite codes"
         >
           <Ionicons name="link-outline" size={20} color={Colors.textSecondary} />
-          <Text style={styles.rowLabel}>Generate Invite Code</Text>
-          <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
-        </TouchableOpacity>
-        <View style={styles.divider} />
-        <TouchableOpacity
-          style={styles.row}
-          onPress={() => setShowExportModal(true)}
-          accessibilityRole="button"
-          accessibilityLabel="Export all client data"
-        >
-          <Ionicons name="download-outline" size={20} color={Colors.textSecondary} />
-          <Text style={styles.rowLabel}>Export All Client Data</Text>
+          <Text style={styles.rowLabel}>Invite Codes</Text>
           <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
         </TouchableOpacity>
       </View>
@@ -333,37 +327,6 @@ export default function SettingsScreen() {
         </View>
       </Modal>
 
-      {/* Export Modal */}
-      <Modal visible={showExportModal} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Ionicons name="download-outline" size={40} color={Colors.primary} style={{ alignSelf: 'center', marginBottom: 12 }} />
-            <Text style={styles.modalTitle}>Export Client Data</Text>
-            <Text style={styles.modalDesc}>
-              This will generate a summary of all your clients' nutrition logs, progress, and fasting data.
-            </Text>
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => setShowExportModal(false)}
-                accessibilityRole="button"
-                accessibilityLabel="Cancel"
-              >
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalSaveBtn}
-                onPress={handleExportData}
-                accessibilityRole="button"
-                accessibilityLabel="Export data"
-              >
-                <Text style={styles.modalSaveText}>Export</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
       {/* Password Modal */}
       <Modal visible={showPasswordModal} transparent animationType="fade">
         <View style={styles.modalOverlay}>
@@ -371,27 +334,40 @@ export default function SettingsScreen() {
             <Text style={styles.modalTitle}>Change Password</Text>
             <TextInput
               style={styles.modalInput}
-              value={currentPassword}
-              onChangeText={setCurrentPassword}
-              placeholder="Current password"
+              value={newPassword}
+              onChangeText={setNewPassword}
+              placeholder="New password (min 8 chars)"
               placeholderTextColor={Colors.textMuted}
               secureTextEntry
+              accessibilityLabel="New password"
+              textContentType="newPassword"
             />
             <TextInput
               style={[styles.modalInput, { marginTop: 10 }]}
-              value={newPassword}
-              onChangeText={setNewPassword}
-              placeholder="New password"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              placeholder="Confirm new password"
               placeholderTextColor={Colors.textMuted}
               secureTextEntry
+              accessibilityLabel="Confirm new password"
+              textContentType="newPassword"
             />
+            {passwordError ? (
+              <Text
+                style={{ color: Colors.error, fontSize: 13, marginTop: 10, textAlign: 'center' }}
+                accessibilityLiveRegion="assertive"
+              >
+                {passwordError}
+              </Text>
+            ) : null}
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={styles.modalCancelBtn}
                 onPress={() => {
                   setShowPasswordModal(false);
-                  setCurrentPassword('');
                   setNewPassword('');
+                  setConfirmPassword('');
+                  setPasswordError('');
                 }}
                 accessibilityRole="button"
                 accessibilityLabel="Cancel"
@@ -399,12 +375,13 @@ export default function SettingsScreen() {
                 <Text style={styles.modalCancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.modalSaveBtn}
+                style={[styles.modalSaveBtn, passwordBusy && { opacity: 0.6 }]}
                 onPress={handleChangePassword}
+                disabled={passwordBusy}
                 accessibilityRole="button"
                 accessibilityLabel="Update password"
               >
-                <Text style={styles.modalSaveText}>Update</Text>
+                <Text style={styles.modalSaveText}>{passwordBusy ? 'Updating…' : 'Update'}</Text>
               </TouchableOpacity>
             </View>
           </View>

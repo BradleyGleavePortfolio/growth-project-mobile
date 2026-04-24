@@ -7,8 +7,8 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   TextInput,
-  Alert,
   RefreshControl,
+  Modal,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
@@ -16,7 +16,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { ClientsStackParamList } from '../../navigation/CoachNavigator';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { getMealPlan, parsePlanData, PlanData, PlanDay } from '../../db/mealPlanDb';
-import { createNotification } from '../../db/notificationsDb';
 import { coachApi } from '../../services/api';
 import { Colors } from '../../constants/colors';
 import { ClientProfile, FoodLog, WeightLog } from '../../types';
@@ -91,8 +90,12 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
   const [expandedWeeks, setExpandedWeeks] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [notifMsg, setNotifMsg] = useState('');
-  const [sending, setSending] = useState(false);
+  const [showNudgeModal, setShowNudgeModal] = useState(false);
+  const [nudgeTitle, setNudgeTitle] = useState('');
+  const [nudgeBody, setNudgeBody] = useState('');
+  const [nudgeSending, setNudgeSending] = useState(false);
+  const [nudgeError, setNudgeError] = useState('');
+  const [nudgeSuccess, setNudgeSuccess] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -189,22 +192,28 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
     setRefreshing(false);
   }, [loadData]);
 
-  const sendNotification = async () => {
-    if (!notifMsg.trim() || !currentUser) return;
-    setSending(true);
+  const sendNudge = async () => {
+    setNudgeError('');
+    if (!nudgeTitle.trim() || !nudgeBody.trim()) {
+      setNudgeError('Title and message are both required.');
+      return;
+    }
+    setNudgeSending(true);
     try {
-      await createNotification({
-        userId: clientId,
-        type: 'coach',
-        title: `Message from ${currentUser.firstName}`,
-        body: notifMsg.trim(),
+      await coachApi.sendNudge(clientId, {
+        title: nudgeTitle.trim(),
+        body: nudgeBody.trim(),
       });
-      Alert.alert('Sent', 'Notification sent to client');
-      setNotifMsg('');
-    } catch {
-      Alert.alert('Error', 'Failed to send notification');
+      setNudgeTitle('');
+      setNudgeBody('');
+      setNudgeSuccess(true);
+      setShowNudgeModal(false);
+      // Toast-like transient banner — auto-hide.
+      setTimeout(() => setNudgeSuccess(false), 2500);
+    } catch (err: any) {
+      setNudgeError(err?.response?.data?.message || 'Failed to send nudge.');
     } finally {
-      setSending(false);
+      setNudgeSending(false);
     }
   };
 
@@ -538,26 +547,42 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
               <ProfileRow label="Fitness" value={profile?.fitnessLevel || '—'} />
             </View>
 
-            {/* Send Notification */}
-            <Text style={styles.sectionTitle}>Send Notification</Text>
-            <View style={styles.notifCard}>
-              <TextInput
-                style={styles.notifInput}
-                placeholder="Type a message to send as notification..."
-                placeholderTextColor={Colors.textMuted}
-                value={notifMsg}
-                onChangeText={setNotifMsg}
-                multiline
-              />
+            {/* Coach → Client actions */}
+            <Text style={styles.sectionTitle}>Actions</Text>
+            <View style={styles.actionsRow}>
               <TouchableOpacity
-                style={[styles.notifSendBtn, (!notifMsg.trim() || sending) && styles.notifSendDisabled]}
-                onPress={sendNotification}
-                disabled={!notifMsg.trim() || sending}
+                style={styles.actionPill}
+                onPress={() =>
+                  navigation.navigate('ClientMessages', {
+                    clientId,
+                    clientName: route.params.clientName,
+                  })
+                }
+                accessibilityRole="button"
+                accessibilityLabel="Open messages"
               >
-                <Ionicons name="send" size={16} color={Colors.textOnPrimary} />
-                <Text style={styles.notifSendText}>{sending ? 'Sending...' : 'Send'}</Text>
+                <Ionicons name="chatbubble-outline" size={18} color={Colors.primary} />
+                <Text style={styles.actionPillText}>Messages</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionPill}
+                onPress={() => {
+                  setShowNudgeModal(true);
+                  setNudgeError('');
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Send nudge notification"
+              >
+                <Ionicons name="notifications-outline" size={18} color={Colors.primary} />
+                <Text style={styles.actionPillText}>Send Nudge</Text>
               </TouchableOpacity>
             </View>
+            {nudgeSuccess && (
+              <View style={styles.successBanner} accessibilityLiveRegion="polite">
+                <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
+                <Text style={styles.successBannerText}>Nudge sent</Text>
+              </View>
+            )}
           </>
         )}
 
@@ -778,6 +803,69 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
           </>
         )}
       </ScrollView>
+
+      <Modal visible={showNudgeModal} transparent animationType="fade" onRequestClose={() => setShowNudgeModal(false)}>
+        <View style={styles.nudgeModalOverlay}>
+          <View style={styles.nudgeModalContent}>
+            <Text style={styles.nudgeModalTitle}>Send Nudge</Text>
+            <Text style={styles.nudgeModalDesc}>
+              Send a push-style notification to {route.params.clientName}.
+            </Text>
+
+            <Text style={styles.nudgeLabel}>Title</Text>
+            <TextInput
+              style={styles.nudgeInput}
+              placeholder="e.g. Great job today!"
+              placeholderTextColor={Colors.textMuted}
+              value={nudgeTitle}
+              onChangeText={setNudgeTitle}
+              maxLength={80}
+              accessibilityLabel="Nudge title"
+            />
+
+            <Text style={styles.nudgeLabel}>Message</Text>
+            <TextInput
+              style={[styles.nudgeInput, styles.nudgeInputMulti]}
+              placeholder="Write a short message..."
+              placeholderTextColor={Colors.textMuted}
+              value={nudgeBody}
+              onChangeText={setNudgeBody}
+              multiline
+              maxLength={500}
+              accessibilityLabel="Nudge message"
+            />
+
+            {nudgeError ? (
+              <Text style={styles.nudgeErrorText} accessibilityLiveRegion="assertive">
+                {nudgeError}
+              </Text>
+            ) : null}
+
+            <View style={styles.nudgeButtons}>
+              <TouchableOpacity
+                style={styles.nudgeCancelBtn}
+                onPress={() => {
+                  setShowNudgeModal(false);
+                  setNudgeError('');
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel"
+              >
+                <Text style={styles.nudgeCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.nudgeSendBtn, nudgeSending && { opacity: 0.6 }]}
+                onPress={sendNudge}
+                disabled={nudgeSending}
+                accessibilityRole="button"
+                accessibilityLabel="Send nudge"
+              >
+                <Text style={styles.nudgeSendText}>{nudgeSending ? 'Sending…' : 'Send'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1291,18 +1379,51 @@ const styles = StyleSheet.create({
   profileRow: { flexDirection: 'row', justifyContent: 'space-between' },
   profileLabel: { fontSize: 14, color: Colors.textSecondary, textTransform: 'capitalize' },
   profileValue: { fontSize: 14, fontWeight: '600', color: Colors.textPrimary, textTransform: 'capitalize' },
-  // Notification sender
-  notifCard: { backgroundColor: Colors.surface, borderRadius: 14, padding: 16, gap: 12, marginBottom: 20 },
-  notifInput: {
-    backgroundColor: Colors.background, borderRadius: 10, padding: 12,
-    fontSize: 14, color: Colors.textPrimary, minHeight: 60, textAlignVertical: 'top',
+  // Coach actions (messages + nudge)
+  actionsRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
+  actionPill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: Colors.primaryPale,
   },
-  notifSendBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
-    backgroundColor: Colors.primary, borderRadius: 10, paddingVertical: 10,
+  actionPillText: { fontSize: 14, fontWeight: '700', color: Colors.primary },
+  successBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    backgroundColor: Colors.success + '18',
+    borderRadius: 10,
+    marginBottom: 12,
   },
-  notifSendDisabled: { opacity: 0.5 },
-  notifSendText: { color: Colors.textOnPrimary, fontSize: 14, fontWeight: '700' },
+  successBannerText: { fontSize: 13, fontWeight: '600', color: Colors.success },
+  nudgeModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' },
+  nudgeModalContent: { width: '85%', backgroundColor: Colors.surface, borderRadius: 16, padding: 24 },
+  nudgeModalTitle: { fontSize: 18, fontWeight: '700', color: Colors.textPrimary, textAlign: 'center', marginBottom: 6 },
+  nudgeModalDesc: { fontSize: 13, color: Colors.textSecondary, textAlign: 'center', marginBottom: 16, lineHeight: 18 },
+  nudgeLabel: { fontSize: 12, fontWeight: '700', color: Colors.textSecondary, textTransform: 'uppercase', marginBottom: 6, marginTop: 8 },
+  nudgeInput: {
+    backgroundColor: Colors.surfaceElevated,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: Colors.textPrimary,
+  },
+  nudgeInputMulti: { minHeight: 90, textAlignVertical: 'top' },
+  nudgeErrorText: { color: Colors.error, fontSize: 13, marginTop: 10, textAlign: 'center' },
+  nudgeButtons: { flexDirection: 'row', gap: 12, marginTop: 20 },
+  nudgeCancelBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: Colors.surfaceElevated, alignItems: 'center' },
+  nudgeCancelText: { fontSize: 15, fontWeight: '600', color: Colors.textSecondary },
+  nudgeSendBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: Colors.primary, alignItems: 'center' },
+  nudgeSendText: { fontSize: 15, fontWeight: '700', color: Colors.textOnPrimary },
   // Logs
   logItem: { backgroundColor: Colors.surface, borderRadius: 12, padding: 16, marginBottom: 10 },
   logHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },

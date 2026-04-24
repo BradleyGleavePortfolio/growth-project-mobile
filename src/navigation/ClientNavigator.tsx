@@ -19,6 +19,7 @@ import ActiveWorkoutScreen from '../screens/client/ActiveWorkoutScreen';
 import RoutineBuilderScreen from '../screens/client/RoutineBuilderScreen';
 import CoachGuidelinesScreen from '../screens/client/CoachGuidelinesScreen';
 import NotificationsScreen from '../screens/client/NotificationsScreen';
+import MessagesScreen from '../screens/client/MessagesScreen';
 import EducationScreen from '../screens/client/EducationScreen';
 import CommunityScreen from '../screens/client/CommunityScreen';
 import MoreScreen from '../screens/client/MoreScreen';
@@ -28,6 +29,7 @@ export type HomeStackParamList = {
   HomeMain: undefined;
   Habits: undefined;
   Notifications: undefined;
+  Messages: undefined;
 };
 
 // Round 3: reduced bottom tabs from 9 → 5 (iOS HIG cap).
@@ -81,6 +83,7 @@ function HomeStackNavigator() {
       <HomeStackNav.Screen name="HomeMain" component={HomeScreen} />
       <HomeStackNav.Screen name="Habits" component={HabitsScreen} />
       <HomeStackNav.Screen name="Notifications" component={NotificationsScreen} />
+      <HomeStackNav.Screen name="Messages" component={MessagesScreen} />
     </HomeStackNav.Navigator>
   );
 }

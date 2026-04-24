@@ -24,7 +24,7 @@ import { SkeletonCard, SkeletonLine } from '../../components/SkeletonLoader';
 // All colors from central theme — never hardcode hex values here
 // Round 3: added semantic `colors` import for chart/macro/info tokens
 import { Colors, Spacing, Radius, colors } from '../../theme/index';
-import { habitsApi } from '../../services/api';
+import { habitsApi, messagesApi, nudgesApi } from '../../services/api';
 import { MealType } from '../../types';
 import { sendCalorieReminderNotification } from '../../utils/notifications';
 import {
@@ -197,6 +197,8 @@ export default function HomeScreen() {
 
   const navigation = useNavigation<any>();
   const [refreshing, setRefreshing] = useState(false);
+  const [messagesUnread, setMessagesUnread] = useState(0);
+  const [nudgesUnread, setNudgesUnread] = useState(0);
   const [asyncTargets, setAsyncTargets] = useState<{
     calories: number; protein: number; carbs: number; fat: number;
   } | null>(null);
@@ -292,6 +294,31 @@ export default function HomeScreen() {
     }
   }, [currentUser?.id]);
 
+  // Poll unread counts (messages + nudges) every 30s while mounted, and on
+  // focus. Silent failures — the badge just stays at its last known value.
+  useEffect(() => {
+    let active = true;
+    const refresh = async () => {
+      try {
+        const [m, n] = await Promise.all([
+          messagesApi.unreadCount().catch(() => ({ data: { total: 0 } })),
+          nudgesApi.unreadCount().catch(() => ({ data: { total: 0 } })),
+        ]);
+        if (!active) return;
+        setMessagesUnread(Number(m?.data?.total ?? 0));
+        setNudgesUnread(Number(n?.data?.total ?? 0));
+      } catch {
+        // Silent
+      }
+    };
+    refresh();
+    const id = setInterval(refresh, 30000);
+    return () => {
+      active = false;
+      clearInterval(id);
+    };
+  }, [currentUser?.id]);
+
   const handleDateChange = (date: string) => {
     setSelectedDate(date);
     if (currentUser) {
@@ -382,16 +409,42 @@ export default function HomeScreen() {
               </Text>
               <Text style={styles.subtitle}>Track your nutrition today</Text>
             </View>
-            {/* Round 3: a11y on header notifications bell */}
-            <TouchableOpacity
-              onPress={() => navigation.navigate('Notifications')}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              accessibilityRole="button"
-              accessibilityLabel="Notifications"
-              accessibilityHint="Opens your notifications"
-            >
-              <Ionicons name="notifications-outline" size={24} color={Colors.dark} />
-            </TouchableOpacity>
+            <View style={styles.headerIcons}>
+              <TouchableOpacity
+                onPress={() => navigation.navigate('Messages')}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityRole="button"
+                accessibilityLabel={`Messages${messagesUnread > 0 ? `, ${messagesUnread} unread` : ''}`}
+                accessibilityHint="Opens your chat with your coach"
+                style={styles.headerIconWrap}
+              >
+                <Ionicons name="chatbubble-outline" size={24} color={Colors.dark} />
+                {messagesUnread > 0 && (
+                  <View style={styles.headerBadge}>
+                    <Text style={styles.headerBadgeText}>
+                      {messagesUnread > 99 ? '99+' : messagesUnread}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => navigation.navigate('Notifications')}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityRole="button"
+                accessibilityLabel={`Notifications${nudgesUnread > 0 ? `, ${nudgesUnread} unread` : ''}`}
+                accessibilityHint="Opens your notifications"
+                style={styles.headerIconWrap}
+              >
+                <Ionicons name="notifications-outline" size={24} color={Colors.dark} />
+                {nudgesUnread > 0 && (
+                  <View style={styles.headerBadge}>
+                    <Text style={styles.headerBadgeText}>
+                      {nudgesUnread > 99 ? '99+' : nudgesUnread}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </FadeInView>
@@ -593,6 +646,31 @@ const styles = StyleSheet.create({
   },
   headerText: {
     flex: 1,
+  },
+  headerIcons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  headerIconWrap: {
+    position: 'relative',
+  },
+  headerBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -6,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerBadgeText: {
+    color: Colors.textOnPrimary,
+    fontSize: 10,
+    fontWeight: '700',
   },
   greeting: {
     fontSize: 26,
