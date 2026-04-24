@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
+import { colors } from '../theme';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -334,7 +335,7 @@ export default function ExerciseLogModal({
           {/* Save button */}
           <View style={styles.footer}>
             <TouchableOpacity style={styles.saveBtn} onPress={handleSave} activeOpacity={0.85}>
-              <Ionicons name="checkmark-circle" size={20} color="#fff" />
+              <Ionicons name="checkmark-circle" size={20} color={Colors.textOnPrimary} />
               <Text style={styles.saveBtnText}>Save Exercise</Text>
             </TouchableOpacity>
           </View>
@@ -481,7 +482,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     marginBottom: 12,
-    backgroundColor: '#FDECEC',
+    backgroundColor: colors.feedback.errorBg,
     borderRadius: 8,
     padding: 10,
   },
@@ -535,6 +536,6 @@ const styles = StyleSheet.create({
   saveBtnText: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#fff',
+    color: Colors.textOnPrimary,
   },
 });

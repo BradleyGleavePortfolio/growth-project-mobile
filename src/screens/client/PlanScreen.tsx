@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
+import { colors } from '../../theme';
 import { Shadow } from '../../constants/theme';
 import GroceryListScreen from './GroceryListScreen';
 import PrepGuideScreen from './PrepGuideScreen';
@@ -158,32 +159,32 @@ function SwipeMealCard({ label, icon, pool, accepted, onAccept, onNext, currentI
           <Text style={styles.mealDesc} numberOfLines={2}>{currentMeal.desc}</Text>
           {/* Macro Pills */}
           <View style={styles.macroPills}>
-            <View style={[styles.macroPill, { backgroundColor: '#FFF3E0' }]}>
-              <Text style={[styles.macroPillText, { color: '#E65100' }]}>{currentMeal.cal} kcal</Text>
+            <View style={[styles.macroPill, { backgroundColor: Colors.noticeCriticalBg }]}>
+              <Text style={[styles.macroPillText, { color: Colors.noticeCriticalText }]}>{currentMeal.cal} kcal</Text>
             </View>
             <View style={[styles.macroPill, { backgroundColor: Colors.primaryPale }]}>
               <Text style={[styles.macroPillText, { color: Colors.primary }]}>P {currentMeal.p}g</Text>
             </View>
-            <View style={[styles.macroPill, { backgroundColor: '#E3F2FD' }]}>
-              <Text style={[styles.macroPillText, { color: '#1565C0' }]}>C {currentMeal.c}g</Text>
+            <View style={[styles.macroPill, { backgroundColor: Colors.macroCarbsChipBg }]}>
+              <Text style={[styles.macroPillText, { color: Colors.macroCarbsChipText }]}>C {currentMeal.c}g</Text>
             </View>
-            <View style={[styles.macroPill, { backgroundColor: '#FFF9C4' }]}>
-              <Text style={[styles.macroPillText, { color: '#F57F17' }]}>F {currentMeal.f}g</Text>
+            <View style={[styles.macroPill, { backgroundColor: Colors.macroFatChipBg }]}>
+              <Text style={[styles.macroPillText, { color: Colors.macroFatChipText }]}>F {currentMeal.f}g</Text>
             </View>
           </View>
         </View>
         {/* Action Buttons or Accepted Overlay */}
         {accepted ? (
           <View style={styles.acceptedOverlay}>
-            <Ionicons name="checkmark-circle" size={32} color="#2D6A4F" />
+            <Ionicons name="checkmark-circle" size={32} color={Colors.primary} />
           </View>
         ) : (
           <View style={styles.actionBtns}>
             <TouchableOpacity style={styles.rejectBtn} onPress={handleReject}>
-              <Ionicons name="close" size={22} color="#E63946" />
+              <Ionicons name="close" size={22} color={Colors.error} />
             </TouchableOpacity>
             <TouchableOpacity style={styles.acceptBtn} onPress={handleAccept}>
-              <Ionicons name="checkmark" size={22} color="#2D6A4F" />
+              <Ionicons name="checkmark" size={22} color={Colors.primary} />
             </TouchableOpacity>
           </View>
         )}
@@ -334,7 +335,7 @@ export default function PlanScreen() {
               onPress={handleBuildGrocery}
               activeOpacity={0.85}
             >
-              <Ionicons name="basket-outline" size={22} color="#FFFFFF" />
+              <Ionicons name="basket-outline" size={22} color={Colors.textOnPrimary} />
               <Text style={styles.groceryBtnText}>Build Grocery List →</Text>
             </TouchableOpacity>
 
@@ -464,7 +465,7 @@ const styles = StyleSheet.create({
   mealCardAccepted: {
     borderColor: Colors.primary,
     borderWidth: 2,
-    backgroundColor: '#F0FAF4',
+    backgroundColor: colors.feedback.successBg,
   },
   mealThumb: {
     width: 80,
@@ -508,11 +509,11 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#FFEBEC',
+    backgroundColor: colors.feedback.errorBg,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
-    borderColor: '#E63946',
+    borderColor: Colors.error,
   },
   acceptBtn: {
     width: 40,
@@ -583,7 +584,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   groceryBtnText: {
-    color: '#FFFFFF',
+    color: Colors.textOnPrimary,
     fontSize: 17,
     fontWeight: '800',
     letterSpacing: 0.3,

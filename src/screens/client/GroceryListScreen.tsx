@@ -185,7 +185,7 @@ export default function GroceryListScreen({ onBack, embedded, onContinue }: Groc
             autoFocus
           />
           <TouchableOpacity style={styles.addConfirm} onPress={addItem}>
-            <Ionicons name="checkmark" size={20} color="#fff" />
+            <Ionicons name="checkmark" size={20} color={Colors.textOnPrimary} />
           </TouchableOpacity>
         </View>
       )}
@@ -416,13 +416,13 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
   },
   continueBtn: {
-    backgroundColor: '#2D6A4F',
+    backgroundColor: Colors.primary,
     borderRadius: 14,
     paddingVertical: 16,
     alignItems: 'center',
   },
   continueBtnText: {
-    color: '#FFFFFF',
+    color: Colors.textOnPrimary,
     fontSize: 16,
     fontWeight: '700',
     letterSpacing: 0.3,

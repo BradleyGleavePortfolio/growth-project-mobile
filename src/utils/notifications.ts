@@ -1,5 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import { Colors } from '../constants/colors';
 
 // Configure how notifications are handled when app is in foreground
 Notifications.setNotificationHandler({
@@ -19,19 +20,19 @@ export async function requestNotificationPermissions(): Promise<boolean> {
         name: 'Default',
         importance: Notifications.AndroidImportance.MAX,
         vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#2D6A4F',
+        lightColor: Colors.primary,
       });
       await Notifications.setNotificationChannelAsync('water', {
         name: 'Water Reminders',
         importance: Notifications.AndroidImportance.DEFAULT,
         vibrationPattern: [0, 100],
-        lightColor: '#52B788',
+        lightColor: Colors.primaryLight,
       });
       await Notifications.setNotificationChannelAsync('fasting', {
         name: 'Fasting Alerts',
         importance: Notifications.AndroidImportance.HIGH,
         vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#2D6A4F',
+        lightColor: Colors.primary,
       });
     }
 

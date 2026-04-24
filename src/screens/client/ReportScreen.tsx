@@ -12,6 +12,7 @@ import { logApi, weightApi } from '../../services/api';
 import { WeightLog } from '../../types';
 
 import { Colors } from '../../constants/colors';
+import { colors } from '../../theme';
 
 const GREEN = Colors.primary;
 const BG = Colors.surface;
@@ -134,7 +135,7 @@ export default function ReportScreen({ navigation }: any) {
             </View>
             {change !== null && (
               <View style={styles.statBox}>
-                <Text style={[styles.statValue, { color: change <= 0 ? GREEN : '#ef4444' }]}>
+                <Text style={[styles.statValue, { color: change <= 0 ? GREEN : colors.feedback.errorText }]}>
                   {change > 0 ? '+' : ''}{change.toFixed(1)}
                 </Text>
                 <Text style={styles.statLabel}>Change</Text>
@@ -232,7 +233,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#e8f5ee',
+    backgroundColor: colors.feedback.successBg,
     marginHorizontal: 16,
     borderRadius: 10,
     padding: 12,
@@ -344,7 +345,7 @@ const styles = StyleSheet.create({
   },
   weightList: {
     borderTopWidth: 1,
-    borderTopColor: '#eee',
+    borderTopColor: Colors.divider,
     paddingTop: 12,
   },
   weightRow: {
@@ -363,7 +364,7 @@ const styles = StyleSheet.create({
   },
   goalBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: '#e8f5ee',
+    backgroundColor: colors.feedback.successBg,
     color: GREEN,
     fontSize: 13,
     fontWeight: '700',

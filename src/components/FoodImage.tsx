@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Image, View, Text, StyleSheet } from 'react-native';
 import { getFoodImageUrl, getRestaurantLogo } from '../utils/foodImages';
+import { Colors } from '../constants/colors';
+import { colors } from '../theme';
 
 interface Props {
   name: string;
@@ -27,7 +29,7 @@ export default function FoodImage({ name, brand, size = 48 }: Props) {
       <View style={{ width: size, height: size }}>
         <Image
           source={{ uri: getFoodImageUrl(name) }}
-          style={{ width: size, height: size, borderRadius: size * 0.25, backgroundColor: '#E8F5E9' }}
+          style={{ width: size, height: size, borderRadius: size * 0.25, backgroundColor: colors.feedback.successBg }}
           onError={() => setFailed(true)}
         />
         <Image
@@ -48,7 +50,7 @@ export default function FoodImage({ name, brand, size = 48 }: Props) {
   return (
     <Image
       source={{ uri: getFoodImageUrl(name) }}
-      style={{ width: size, height: size, borderRadius: size * 0.25, backgroundColor: '#E8F5E9' }}
+      style={{ width: size, height: size, borderRadius: size * 0.25, backgroundColor: colors.feedback.successBg }}
       onError={() => setFailed(true)}
     />
   );
@@ -56,18 +58,18 @@ export default function FoodImage({ name, brand, size = 48 }: Props) {
 
 const styles = StyleSheet.create({
   fallback: {
-    backgroundColor: '#2D6A4F',
+    backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
   letter: {
-    color: '#FFFFFF',
+    color: Colors.textOnPrimary,
     fontWeight: '700',
   },
   logoOverlay: {
     position: 'absolute',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.surface,
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: Colors.border,
   },
 });
