@@ -9,8 +9,10 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { Colors } from '../../constants/colors';
+import { nudgesApi } from '../../services/api';
 import {
   Notification,
   getNotifications,
@@ -29,9 +31,18 @@ const TYPE_CONFIG: Record<string, { icon: string; color: string }> = {
   tip: { icon: 'bulb-outline', color: Colors.primaryLight },
 };
 
+interface ServerNudge {
+  id: string;
+  title: string;
+  body: string;
+  created_at: string;
+  read_at?: string | null;
+}
+
 export default function NotificationsScreen() {
   const currentUser = useCurrentUser();
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [nudges, setNudges] = useState<ServerNudge[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadNotifications = useCallback(async () => {
@@ -41,17 +52,45 @@ export default function NotificationsScreen() {
     setNotifications(data);
   }, [currentUser]);
 
+  const loadNudges = useCallback(async () => {
+    try {
+      const res = await nudgesApi.list({ limit: 100 });
+      const arr: ServerNudge[] = Array.isArray(res.data) ? res.data : res.data?.nudges || [];
+      setNudges(arr);
+    } catch (err) {
+      // Silent — keep previous list.
+    }
+  }, []);
+
   useEffect(() => {
     loadNotifications();
-  }, [loadNotifications]);
+    loadNudges();
+  }, [loadNotifications, loadNudges]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadNudges();
+    }, [loadNudges]),
+  );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadNotifications();
+    await Promise.all([loadNotifications(), loadNudges()]);
     setRefreshing(false);
-  }, [loadNotifications]);
+  }, [loadNotifications, loadNudges]);
 
   const handlePress = async (notif: Notification) => {
+    if (notif.id.startsWith('nudge_')) {
+      const nudgeId = notif.id.slice('nudge_'.length);
+      // Optimistic: mark read locally, then sync.
+      setNudges((prev) => prev.map((n) => (n.id === nudgeId ? { ...n, read_at: new Date().toISOString() } : n)));
+      try {
+        await nudgesApi.markRead(nudgeId);
+      } catch {
+        /* no-op — the next refresh will reconcile */
+      }
+      return;
+    }
     if (!notif.read) {
       await markAsRead(notif.id);
       setNotifications((prev) =>
@@ -61,6 +100,13 @@ export default function NotificationsScreen() {
   };
 
   const handleDelete = (notif: Notification) => {
+    if (notif.id.startsWith('nudge_')) {
+      // Server-side nudges can't be deleted client-side; just mark read.
+      const id = notif.id.slice('nudge_'.length);
+      setNudges((prev) => prev.map((n) => (n.id === id ? { ...n, read_at: new Date().toISOString() } : n)));
+      nudgesApi.markRead(id).catch(() => undefined);
+      return;
+    }
     Alert.alert('Delete Notification', 'Remove this notification?', [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -74,13 +120,34 @@ export default function NotificationsScreen() {
     ]);
   };
 
+  // Nudges come from the server with `read_at` markers. Convert them into the
+  // local Notification shape so the existing renderItem / list rendering works
+  // unchanged.
+  const nudgeNotifications: Notification[] = nudges.map((n) => ({
+    id: 'nudge_' + n.id,
+    userId: currentUser?.id || '',
+    type: 'coach',
+    title: n.title || 'From your coach',
+    body: n.body || '',
+    read: !!n.read_at,
+    createdAt: n.created_at,
+  }));
+
+  const combined: Notification[] = [...nudgeNotifications, ...notifications].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+
   const handleMarkAllRead = async () => {
     if (!currentUser) return;
     await markAllAsRead(currentUser.id);
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    // Mark all server-side nudges read too.
+    const unreadNudges = nudges.filter((n) => !n.read_at);
+    setNudges((prev) => prev.map((n) => ({ ...n, read_at: n.read_at || new Date().toISOString() })));
+    await Promise.all(unreadNudges.map((n) => nudgesApi.markRead(n.id).catch(() => undefined)));
   };
 
-  const unreadCount = notifications.filter((n) => !n.read).length;
+  const unreadCount = combined.filter((n) => !n.read).length;
 
   const formatTime = (iso: string): string => {
     const now = Date.now();
@@ -145,7 +212,7 @@ export default function NotificationsScreen() {
       )}
 
       <FlatList
-        data={notifications}
+        data={combined}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}

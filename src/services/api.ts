@@ -165,7 +165,7 @@ export default api;
 // ============================================================
 
 export const authApi = {
-  register: (data: { email: string; password: string; name: string; phone?: string }) =>
+  register: (data: { email: string; password: string; name: string; phone?: string; invite_code?: string }) =>
     api.post('/auth/register', data),
   login: (data: { email: string; password: string }) =>
     api.post('/auth/login', data),
@@ -177,6 +177,8 @@ export const authApi = {
     api.get('/auth/me'),
   forgotPassword: (email: string) =>
     api.post('/auth/forgot-password', { email }),
+  validateInviteCode: (code: string) =>
+    api.post('/auth/validate-invite-code', { code }),
 };
 
 export const profileApi = {
@@ -274,6 +276,53 @@ export const coachApi = {
   postGuidelines: (clientId: string, guidelines: string) =>
     api.post(`/coach/guidelines/${clientId}`, { guidelines }),
   getAlerts: () => api.get('/coach/alerts'),
+  // ── Invite codes ──
+  listInviteCodes: () => api.get('/coach/invite-codes'),
+  createInviteCode: (data: { expires_at?: string | null; max_uses?: number | null }) =>
+    api.post('/coach/invite-codes', data),
+  revokeInviteCode: (id: string) =>
+    api.delete(`/coach/invite-codes/${id}`),
+  // ── Messaging (coach → client thread) ──
+  getClientMessages: (clientId: string, params?: { before?: string; limit?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.before) q.set('before', params.before);
+    if (params?.limit) q.set('limit', String(params.limit));
+    const qs = q.toString();
+    return api.get(`/coach/clients/${clientId}/messages${qs ? `?${qs}` : ''}`);
+  },
+  sendClientMessage: (clientId: string, body: string) =>
+    api.post(`/coach/clients/${clientId}/messages`, { body }),
+  markClientThreadRead: (clientId: string) =>
+    api.post(`/coach/clients/${clientId}/messages/read`),
+  getUnreadCounts: () => api.get('/coach/messages/unread-count'),
+  // ── Nudges ──
+  sendNudge: (clientId: string, data: { title: string; body: string }) =>
+    api.post(`/coach/clients/${clientId}/nudges`, data),
+};
+
+export const messagesApi = {
+  list: (params?: { before?: string; limit?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.before) q.set('before', params.before);
+    if (params?.limit) q.set('limit', String(params.limit));
+    const qs = q.toString();
+    return api.get(`/messages${qs ? `?${qs}` : ''}`);
+  },
+  send: (body: string) => api.post('/messages', { body }),
+  markRead: () => api.post('/messages/read'),
+  unreadCount: () => api.get('/messages/unread-count'),
+};
+
+export const nudgesApi = {
+  list: (params?: { since?: string; limit?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.since) q.set('since', params.since);
+    if (params?.limit) q.set('limit', String(params.limit));
+    const qs = q.toString();
+    return api.get(`/nudges${qs ? `?${qs}` : ''}`);
+  },
+  unreadCount: () => api.get('/nudges/unread-count'),
+  markRead: (id: string) => api.post(`/nudges/${id}/read`),
 };
 
 export const notificationsApi = {
