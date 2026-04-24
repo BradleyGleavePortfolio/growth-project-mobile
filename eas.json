@@ -1,36 +1,28 @@
 {
   "cli": {
-    "version": ">= 7.0.0",
-    "appVersionSource": "local"
+    "version": ">= 18.0.0",
+    "appVersionSource": "local",
+    "requireCommit": true
   },
   "build": {
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "env": {
-        "EXPO_PUBLIC_API_URL": "https://backend-spring-lake-3890.fly.dev/api",
-        "EXPO_PUBLIC_SUPABASE_URL": "REPLACE_WITH_SUPABASE_URL",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "REPLACE_WITH_SUPABASE_ANON_KEY"
+      "environment": "development",
+      "android": {
+        "buildType": "apk"
       }
     },
     "preview": {
       "distribution": "internal",
+      "environment": "preview",
       "android": {
         "buildType": "apk"
-      },
-      "env": {
-        "EXPO_PUBLIC_API_URL": "REPLACE_WITH_PREVIEW_API_URL",
-        "EXPO_PUBLIC_SUPABASE_URL": "REPLACE_WITH_SUPABASE_URL",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "REPLACE_WITH_SUPABASE_ANON_KEY"
       }
     },
     "production": {
       "distribution": "store",
-      "env": {
-        "EXPO_PUBLIC_API_URL": "REPLACE_WITH_PROD_API_URL",
-        "EXPO_PUBLIC_SUPABASE_URL": "REPLACE_WITH_SUPABASE_URL",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "REPLACE_WITH_SUPABASE_ANON_KEY"
-      }
+      "environment": "production"
     }
   }
 }
