@@ -1,13 +1,17 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { AppState } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
+import { coachApi } from '../services/api';
 import ClientsListScreen from '../screens/coach/ClientsListScreen';
 import CoachHomeScreen from '../screens/coach/CoachHomeScreen';
 import MessagesScreen from '../screens/coach/MessagesScreen';
 import SettingsScreen from '../screens/coach/SettingsScreen';
 import ClientDetailScreen from '../screens/coach/ClientDetailScreen';
 import ProgramTemplatesScreen from '../screens/coach/ProgramTemplatesScreen';
+import InviteCodesScreen from '../screens/coach/InviteCodesScreen';
+import ClientMessagesScreen from '../screens/coach/ClientMessagesScreen';
 import { Colors } from '../constants/colors';
 
 export type CoachTabParamList = {
@@ -21,6 +25,8 @@ export type CoachTabParamList = {
 export type ClientsStackParamList = {
   ClientsList: undefined;
   ClientDetail: { clientId: string; clientName: string };
+  ClientMessages: { clientId: string; clientName: string };
+  InviteCodes: undefined;
 };
 
 const Tab = createBottomTabNavigator<CoachTabParamList>();
@@ -36,11 +42,41 @@ function ClientsStackNavigator() {
     >
       <ClientsStack.Screen name="ClientsList" component={ClientsListScreen} />
       <ClientsStack.Screen name="ClientDetail" component={ClientDetailScreen} />
+      <ClientsStack.Screen name="ClientMessages" component={ClientMessagesScreen} />
+      <ClientsStack.Screen name="InviteCodes" component={InviteCodesScreen} />
     </ClientsStack.Navigator>
   );
 }
 
+function useCoachUnreadPolling(): number {
+  const [total, setTotal] = useState(0);
+  useEffect(() => {
+    let mounted = true;
+    const refresh = async () => {
+      try {
+        const res = await coachApi.getUnreadCounts();
+        if (!mounted) return;
+        setTotal(Number(res.data?.total ?? 0));
+      } catch {
+        // Silent — retry on next tick.
+      }
+    };
+    refresh();
+    const id = setInterval(refresh, 30000);
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refresh();
+    });
+    return () => {
+      mounted = false;
+      clearInterval(id);
+      sub.remove();
+    };
+  }, []);
+  return total;
+}
+
 export default function CoachNavigator() {
+  const unreadCount = useCoachUnreadPolling();
   return (
     <Tab.Navigator
       screenOptions={{
@@ -94,6 +130,7 @@ export default function CoachNavigator() {
         name="Messages"
         component={MessagesScreen}
         options={{
+          tabBarBadge: unreadCount > 0 ? (unreadCount > 99 ? '99+' : unreadCount) : undefined,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="chatbubble" size={size} color={color} />
           ),

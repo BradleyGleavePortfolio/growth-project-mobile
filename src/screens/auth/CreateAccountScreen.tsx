@@ -28,6 +28,8 @@ export default function CreateAccountScreen({ navigation }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
+  const [inviteCodeInfo, setInviteCodeInfo] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [verifyLoading, setVerifyLoading] = useState(false);
   const [error, setError] = useState('');
@@ -54,9 +56,39 @@ export default function CreateAccountScreen({ navigation }: Props) {
 
     setLoading(true);
     setError('');
+    setInviteCodeInfo('');
+
+    const trimmedCode = inviteCode.trim();
+    if (trimmedCode) {
+      // Validate the invite code BEFORE creating the account so we can show
+      // a clear inline error without committing a half-setup user.
+      try {
+        const res = await authApi.validateInviteCode(trimmedCode);
+        if (!res.data?.valid) {
+          setError('Invite code is not valid. Check with your coach or leave it blank.');
+          setLoading(false);
+          return;
+        }
+        if (res.data?.coach_name) {
+          setInviteCodeInfo(`You'll be connected to coach ${res.data.coach_name}.`);
+        }
+      } catch (err: any) {
+        // If the validate endpoint is unreachable, block submission — safer
+        // than silently registering without the code.
+        setError('Could not verify invite code. Check your connection and try again.');
+        setLoading(false);
+        return;
+      }
+    }
 
     try {
-      await authApi.register({ name, email, password, phone: phone || undefined });
+      await authApi.register({
+        name,
+        email,
+        password,
+        phone: phone || undefined,
+        invite_code: trimmedCode || undefined,
+      });
 
       // Backend sends a verification email — show the verify screen
       await AsyncStorage.setItem('pending_email', email);
@@ -250,6 +282,28 @@ export default function CreateAccountScreen({ navigation }: Props) {
             accessibilityLabel="Phone number, optional"
             textContentType="telephoneNumber"
           />
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.inputLabel}>INVITE CODE (OPTIONAL)</Text>
+          <TextInput
+            style={styles.input}
+            value={inviteCode}
+            onChangeText={(v) => {
+              setInviteCode(v);
+              setInviteCodeInfo('');
+            }}
+            placeholder="From your coach (leave blank if none)"
+            placeholderTextColor={Colors.textMuted}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            accessibilityLabel="Invite code, optional"
+          />
+          {inviteCodeInfo ? (
+            <Text style={{ fontSize: 12, color: Colors.primary, marginTop: 6 }}>
+              {inviteCodeInfo}
+            </Text>
+          ) : null}
         </View>
 
         <TouchableOpacity

@@ -233,44 +233,10 @@ export default function CoachHomeScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Client Status */}
-      {clients.length > 0 && (
-        <>
-          <Text style={styles.sectionTitle}>Client Status Today</Text>
-          {clients.filter((c) => c.status === 'active').slice(0, 6).map((client) => {
-            const hasLogged = false;
-            const clientCals = 0;
-            return (
-              <TouchableOpacity
-                key={client.id}
-                style={styles.clientStatusCard}
-                onPress={() =>
-                  navigation.navigate('ClientsStack', {
-                    screen: 'ClientDetail',
-                    params: { clientId: client.id, clientName: `${client.firstName} ${client.lastName}` },
-                  })
-                }
-                activeOpacity={0.7}
-              >
-                <View style={styles.csAvatar}>
-                  <Text style={styles.csAvatarText}>
-                    {(client.firstName || '?')[0]}{(client.lastName || '')[0]}
-                  </Text>
-                </View>
-                <View style={styles.csInfo}>
-                  <Text style={styles.csName}>{client.firstName} {client.lastName}</Text>
-                  <Text style={styles.csMeta}>
-                    {hasLogged
-                      ? `${Math.round(clientCals)} kcal today`
-                      : 'No activity today'}
-                  </Text>
-                </View>
-                <View style={[styles.csStatusDot, { backgroundColor: hasLogged ? Colors.success : Colors.warning }]} />
-              </TouchableOpacity>
-            );
-          })}
-        </>
-      )}
+      {/* Client Status Today — hidden until the backend exposes a per-client
+          "logged today?" flag. The previous implementation hard-coded
+          hasLogged = false and showed "No activity today" for every client,
+          which was misleading. */}
 
       {/* Recent Activity Feed */}
       <Text style={[styles.sectionTitle, { marginTop: 8 }]}>Recent Activity</Text>
