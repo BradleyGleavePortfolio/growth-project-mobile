@@ -19,7 +19,6 @@ import {
   markAsRead,
   markAllAsRead,
   deleteNotification,
-  seedNotificationsIfNeeded,
 } from '../../db/notificationsDb';
 
 const TYPE_CONFIG: Record<string, { icon: string; color: string }> = {
@@ -47,7 +46,9 @@ export default function NotificationsScreen() {
 
   const loadNotifications = useCallback(async () => {
     if (!currentUser) return;
-    await seedNotificationsIfNeeded(currentUser.id);
+    // N4 (audit): no demo-seeding. Server nudges are the source of truth; any
+    // notifications in local SQLite are real ones the user kept around (or
+    // empty on a clean install). The empty state below handles that case.
     const data = await getNotifications(currentUser.id);
     setNotifications(data);
   }, [currentUser]);
@@ -223,8 +224,10 @@ export default function NotificationsScreen() {
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Ionicons name="notifications-off-outline" size={48} color={Colors.textMuted} />
-            <Text style={styles.emptyTitle}>No Notifications</Text>
-            <Text style={styles.emptyText}>You're all caught up! Check back later.</Text>
+            <Text style={styles.emptyTitle}>No notifications yet</Text>
+            <Text style={styles.emptyText}>
+              Nudges from your coach and reminders will show up here.
+            </Text>
           </View>
         }
       />

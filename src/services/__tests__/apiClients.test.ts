@@ -8,6 +8,7 @@ jest.mock('axios', () => {
     get: jest.fn(),
     post: jest.fn(),
     put: jest.fn(),
+    patch: jest.fn(),
     delete: jest.fn(),
     request,
     interceptors: {
@@ -29,18 +30,20 @@ const axiosMock = jest.requireMock('axios') as {
   __instance: {
     get: jest.Mock;
     post: jest.Mock;
+    patch: jest.Mock;
     delete: jest.Mock;
   };
 };
 
 // Must require AFTER the mock is installed.
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { authApi, coachApi, messagesApi, nudgesApi } = require('../api');
+const { authApi, coachApi, messagesApi, nudgesApi, mealPlansApi, checkInsApi } = require('../api');
 
 describe('new API wrappers', () => {
   beforeEach(() => {
     axiosMock.__instance.get.mockReset().mockResolvedValue({ data: {} });
     axiosMock.__instance.post.mockReset().mockResolvedValue({ data: {} });
+    axiosMock.__instance.patch.mockReset().mockResolvedValue({ data: {} });
     axiosMock.__instance.delete.mockReset().mockResolvedValue({ data: {} });
   });
 
@@ -147,6 +150,100 @@ describe('new API wrappers', () => {
       await messagesApi.unreadCount();
       expect(axiosMock.__instance.post).toHaveBeenCalledWith('/messages/read');
       expect(axiosMock.__instance.get).toHaveBeenCalledWith('/messages/unread-count');
+    });
+  });
+
+  describe('coachApi — meal plans (Tier 2)', () => {
+    it('listClientMealPlans calls GET /coach/clients/:id/meal-plans', async () => {
+      await coachApi.listClientMealPlans('client-1');
+      expect(axiosMock.__instance.get).toHaveBeenCalledWith(
+        '/coach/clients/client-1/meal-plans',
+      );
+    });
+    it('createClientMealPlan POSTs the plan body', async () => {
+      const body = {
+        title: 'Cutting Week 1',
+        notes: 'Drop 500 kcal',
+        items: [{ name: 'Oats', calories: 300, time_of_day: 'breakfast' }],
+      };
+      await coachApi.createClientMealPlan('client-1', body);
+      expect(axiosMock.__instance.post).toHaveBeenCalledWith(
+        '/coach/clients/client-1/meal-plans',
+        body,
+      );
+    });
+    it('updateMealPlan PATCHes /coach/meal-plans/:id', async () => {
+      await coachApi.updateMealPlan('plan-42', { title: 'Renamed' });
+      expect(axiosMock.__instance.patch).toHaveBeenCalledWith(
+        '/coach/meal-plans/plan-42',
+        { title: 'Renamed' },
+      );
+    });
+    it('archiveMealPlan DELETEs /coach/meal-plans/:id (soft archive)', async () => {
+      await coachApi.archiveMealPlan('plan-42');
+      expect(axiosMock.__instance.delete).toHaveBeenCalledWith('/coach/meal-plans/plan-42');
+    });
+  });
+
+  describe('coachApi — check-ins (Tier 2)', () => {
+    it('getClientCheckIns supports from+to+limit', async () => {
+      await coachApi.getClientCheckIns('client-1', {
+        from: '2026-01-01',
+        to: '2026-02-01',
+        limit: 50,
+      });
+      const url = axiosMock.__instance.get.mock.calls[0][0];
+      expect(url).toContain('/coach/clients/client-1/check-ins?');
+      expect(url).toContain('from=2026-01-01');
+      expect(url).toContain('to=2026-02-01');
+      expect(url).toContain('limit=50');
+    });
+    it('getClientCheckIns without params hits base URL', async () => {
+      await coachApi.getClientCheckIns('client-1');
+      expect(axiosMock.__instance.get).toHaveBeenCalledWith(
+        '/coach/clients/client-1/check-ins',
+      );
+    });
+  });
+
+  describe('mealPlansApi (client side)', () => {
+    it('list calls GET /meal-plans', async () => {
+      await mealPlansApi.list();
+      expect(axiosMock.__instance.get).toHaveBeenCalledWith('/meal-plans');
+    });
+    it('get fetches a single plan by id', async () => {
+      await mealPlansApi.get('plan-123');
+      expect(axiosMock.__instance.get).toHaveBeenCalledWith('/meal-plans/plan-123');
+    });
+  });
+
+  describe('checkInsApi (client side)', () => {
+    it('save POSTs the check-in body to /check-ins', async () => {
+      const body = {
+        date: '2026-04-24',
+        mood: 4,
+        energy: 3,
+        sleep_hours: 7,
+        notes: 'felt good',
+      };
+      await checkInsApi.save(body);
+      expect(axiosMock.__instance.post).toHaveBeenCalledWith('/check-ins', body);
+    });
+    it('list supports from+to+limit', async () => {
+      await checkInsApi.list({ from: '2026-01-01', to: '2026-02-01', limit: 30 });
+      const url = axiosMock.__instance.get.mock.calls[0][0];
+      expect(url).toContain('/check-ins?');
+      expect(url).toContain('from=2026-01-01');
+      expect(url).toContain('to=2026-02-01');
+      expect(url).toContain('limit=30');
+    });
+    it('list without params hits /check-ins', async () => {
+      await checkInsApi.list();
+      expect(axiosMock.__instance.get).toHaveBeenCalledWith('/check-ins');
+    });
+    it('get fetches a single check-in by id', async () => {
+      await checkInsApi.get('c-9');
+      expect(axiosMock.__instance.get).toHaveBeenCalledWith('/check-ins/c-9');
     });
   });
 

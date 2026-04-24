@@ -1,253 +1,163 @@
-import React, { useState, useRef } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
-  Animated,
-  Image,
-  Modal,
   Platform,
   SafeAreaView,
+  RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { Colors } from '../../constants/colors';
-import { colors } from '../../theme';
 import { Shadow } from '../../constants/theme';
-import GroceryListScreen from './GroceryListScreen';
-import PrepGuideScreen from './PrepGuideScreen';
 import FadeInView from '../../components/FadeInView';
-import { useCurrentUser } from '../../hooks/useCurrentUser';
-import { upsertMealPlan } from '../../db/mealPlanDb';
-import { getStartOfWeek } from '../../utils/weekUtils';
-
-// ── Meal Pools ─────────────────────────────────────────────────────────────
-
-interface MealOption {
-  name: string;
-  desc: string;
-  cal: number;
-  p: number;
-  c: number;
-  f: number;
-  img: string;
-}
-
-const BREAKFAST_POOL: MealOption[] = [
-  { name: 'Yogurt Parfait', desc: 'Greek yogurt, granola, mixed berries', cal: 380, p: 28, c: 42, f: 9, img: 'https://images.unsplash.com/photo-1488477181946-6428a0291777?w=160&h=160&fit=crop' },
-  { name: 'Overnight Oats', desc: 'Oats, almond milk, chia seeds, banana', cal: 420, p: 18, c: 68, f: 10, img: 'https://images.unsplash.com/photo-1484723091739-30a097e8f929?w=160&h=160&fit=crop' },
-  { name: 'Egg White Omelette', desc: 'Egg whites, spinach, peppers, feta', cal: 290, p: 35, c: 12, f: 8, img: 'https://images.unsplash.com/photo-1525351484163-7529414344d8?w=160&h=160&fit=crop' },
-  { name: 'Berry Smoothie Bowl', desc: 'Mixed berries, banana, protein powder, toppings', cal: 450, p: 32, c: 58, f: 11, img: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=160&h=160&fit=crop' },
-  { name: 'Veggie Frittata', desc: 'Eggs, zucchini, peppers, herbs', cal: 360, p: 38, c: 8, f: 18, img: 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=160&h=160&fit=crop' },
-  { name: 'Avocado Toast with Egg', desc: 'Sourdough, avocado, poached egg, red pepper flakes', cal: 430, p: 22, c: 44, f: 20, img: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=160&h=160&fit=crop' },
-  { name: 'Cottage Cheese Power Bowl', desc: 'Cottage cheese, pineapple, chia seeds, honey', cal: 310, p: 30, c: 32, f: 7, img: 'https://images.unsplash.com/photo-1567306226416-28f0efdc88ce?w=160&h=160&fit=crop' },
-  { name: 'French Toast', desc: 'Whole grain French toast, berries, maple syrup', cal: 480, p: 28, c: 55, f: 16, img: 'https://images.unsplash.com/photo-1562376552-0d160a2f238d?w=160&h=160&fit=crop' },
-  { name: 'Breakfast Burrito', desc: 'Whole wheat tortilla, eggs, black beans, salsa', cal: 520, p: 32, c: 58, f: 16, img: 'https://images.unsplash.com/photo-1626700051175-6818013e1d4f?w=160&h=160&fit=crop' },
-  { name: 'Chia Pudding', desc: 'Chia seeds, almond milk, cinnamon, apple, walnuts', cal: 400, p: 14, c: 65, f: 12, img: 'https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=160&h=160&fit=crop' },
-  { name: 'Tuna Salad Wrap', desc: 'Tuna, Greek yogurt, celery, whole grain wrap', cal: 340, p: 40, c: 28, f: 8, img: 'https://images.unsplash.com/photo-1571091718767-18b5b1457add?w=160&h=160&fit=crop' },
-  { name: 'Protein Pancakes', desc: 'Banana, oats, egg whites, protein powder', cal: 390, p: 34, c: 52, f: 6, img: 'https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=160&h=160&fit=crop' },
-  { name: 'Japanese Miso Salmon', desc: 'Miso-glazed salmon, cucumber, rice', cal: 350, p: 30, c: 12, f: 18, img: 'https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?w=160&h=160&fit=crop' },
-  { name: 'Breakfast Oat Bar', desc: 'Oats, protein powder, blueberries, honey', cal: 410, p: 28, c: 60, f: 8, img: 'https://images.unsplash.com/photo-1517673400267-0251440c45dc?w=160&h=160&fit=crop' },
-  { name: 'Microwave Mug Omelette', desc: 'Egg, turkey bacon, bell pepper, cheese', cal: 320, p: 36, c: 6, f: 16, img: 'https://images.unsplash.com/photo-1482049016688-2d3e1b311543?w=160&h=160&fit=crop' },
-];
-
-const LUNCH_POOL: MealOption[] = [
-  { name: 'Greek Chicken Bowl', desc: 'Grilled chicken, rice, cucumber, tomato, tzatziki', cal: 520, p: 48, c: 55, f: 10, img: 'https://images.unsplash.com/photo-1512058564366-18510be2db19?w=160&h=160&fit=crop' },
-  { name: 'Turkey & Cheese Roll-Ups', desc: 'Turkey breast, cheese, lettuce, mustard roll-ups', cal: 380, p: 40, c: 22, f: 12, img: 'https://images.unsplash.com/photo-1529193591184-b1d58069ecdd?w=160&h=160&fit=crop' },
-  { name: 'Mediterranean Wrap', desc: 'Hummus, cucumber, tomatoes, feta, olives in wrap', cal: 440, p: 18, c: 46, f: 20, img: 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=160&h=160&fit=crop' },
-  { name: 'Tuna Poke Bowl', desc: 'Tuna, rice, avocado, edamame, soy sauce', cal: 490, p: 46, c: 42, f: 16, img: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=160&h=160&fit=crop' },
-  { name: 'Beef Stir Fry', desc: 'Lean beef, bok choy, carrots, brown rice', cal: 550, p: 44, c: 52, f: 14, img: 'https://images.unsplash.com/photo-1603133872878-684f208fb84b?w=160&h=160&fit=crop' },
-  { name: 'Lentil & Chicken Soup', desc: 'Lentils, chicken, cumin, tomatoes, spinach', cal: 380, p: 22, c: 58, f: 6, img: 'https://images.unsplash.com/photo-1547592180-85f173990554?w=160&h=160&fit=crop' },
-  { name: 'Salmon with Asparagus', desc: 'Salmon fillet, roasted asparagus, lemon, rice', cal: 560, p: 48, c: 44, f: 18, img: 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=160&h=160&fit=crop' },
-  { name: 'Shrimp Tacos', desc: 'Shrimp, slaw, avocado, corn tortillas', cal: 480, p: 20, c: 62, f: 16, img: 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=160&h=160&fit=crop' },
-  { name: 'Caprese Sandwich', desc: 'Mozzarella, tomato, basil, whole grain bread', cal: 420, p: 28, c: 38, f: 16, img: 'https://images.unsplash.com/photo-1528736235302-52922df5c122?w=160&h=160&fit=crop' },
-  { name: 'Chicken Burrito Bowl', desc: 'Chicken breast, rice, peppers, beans, salsa', cal: 530, p: 50, c: 48, f: 12, img: 'https://images.unsplash.com/photo-1576021182211-9ea8dced3690?w=160&h=160&fit=crop' },
-  { name: 'Greek Salad with Grilled Chicken', desc: 'Chicken, romaine, cucumber, tomato, feta, olives', cal: 490, p: 42, c: 48, f: 14, img: 'https://images.unsplash.com/photo-1621996346565-e3dbc646d9a9?w=160&h=160&fit=crop' },
-  { name: 'Cauliflower Fried Rice', desc: 'Cauliflower rice, shrimp, lime, cilantro, egg', cal: 360, p: 38, c: 18, f: 14, img: 'https://images.unsplash.com/photo-1559847844-5315695dadae?w=160&h=160&fit=crop' },
-  { name: 'Mexican Burrito Bowl', desc: 'Beef, beans, rice, tomatoes, cheese, spices', cal: 500, p: 42, c: 50, f: 10, img: 'https://images.unsplash.com/photo-1548550023-2bdb3c5beed7?w=160&h=160&fit=crop' },
-  { name: 'Chickpea Curry', desc: 'Chickpeas, vegetables, coconut curry, rice', cal: 460, p: 16, c: 64, f: 18, img: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=160&h=160&fit=crop' },
-  { name: 'BLT Sandwich', desc: 'Bacon, lettuce, tomato, whole grain bread', cal: 510, p: 44, c: 42, f: 18, img: 'https://images.unsplash.com/photo-1571091718767-18b5b1457add?w=160&h=160&fit=crop' },
-];
-
-const DINNER_POOL: MealOption[] = [
-  { name: 'Salmon with Asparagus', desc: 'Atlantic salmon, roasted asparagus, lemon', cal: 480, p: 46, c: 14, f: 24, img: 'https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?w=160&h=160&fit=crop' },
-  { name: 'Grilled Chicken & Broccoli', desc: 'Grilled chicken breast, roasted broccoli, rice', cal: 520, p: 48, c: 46, f: 12, img: 'https://images.unsplash.com/photo-1603133872878-684f208fb84b?w=160&h=160&fit=crop' },
-  { name: 'Turkey Meatballs', desc: 'Turkey meatballs, zucchini noodles, marinara', cal: 440, p: 44, c: 22, f: 16, img: 'https://images.unsplash.com/photo-1551183053-bf91798d3e90?w=160&h=160&fit=crop' },
-  { name: 'Taco Salad', desc: 'Ground beef, black beans, lettuce, tomatoes, salsa', cal: 580, p: 46, c: 56, f: 14, img: 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=160&h=160&fit=crop' },
-  { name: 'Garlic Butter Shrimp', desc: 'Shrimp, garlic butter, vegetables, rice', cal: 400, p: 40, c: 32, f: 12, img: 'https://images.unsplash.com/photo-1512058564366-18510be2db19?w=160&h=160&fit=crop' },
-  { name: 'Indian Chicken Tikka', desc: 'Chicken tikka, spiced yogurt, basmati rice', cal: 560, p: 44, c: 62, f: 14, img: 'https://images.unsplash.com/photo-1565557623262-b51c2513a641?w=160&h=160&fit=crop' },
-  { name: 'BBQ Chicken Breast', desc: 'BBQ chicken breast, roasted sweet potato, greens', cal: 510, p: 48, c: 46, f: 14, img: 'https://images.unsplash.com/photo-1467003909585-2f8a72700288?w=160&h=160&fit=crop' },
-  { name: 'Stuffed Bell Peppers', desc: 'Lean beef, brown rice, tomatoes, cheese stuffed peppers', cal: 490, p: 40, c: 44, f: 14, img: 'https://images.unsplash.com/photo-1490645935967-10de6ba17061?w=160&h=160&fit=crop' },
-  { name: 'Baked Cod with Veggies', desc: 'Baked cod, roasted broccoli, cherry tomatoes, lemon', cal: 380, p: 44, c: 18, f: 12, img: 'https://images.unsplash.com/photo-1559847844-5315695dadae?w=160&h=160&fit=crop' },
-  { name: 'Lentil & Chicken Soup', desc: 'Chicken, lentils, vegetables, broth, spices', cal: 420, p: 42, c: 38, f: 8, img: 'https://images.unsplash.com/photo-1547592180-85f173990554?w=160&h=160&fit=crop' },
-  { name: 'Korean Bulgogi', desc: 'Marinated beef, rice, pickled vegetables', cal: 540, p: 38, c: 44, f: 20, img: 'https://images.unsplash.com/photo-1576021182211-9ea8dced3690?w=160&h=160&fit=crop' },
-  { name: 'Chickpea Curry', desc: 'Chickpeas, mixed vegetables, coconut curry, basmati', cal: 480, p: 24, c: 58, f: 18, img: 'https://images.unsplash.com/photo-1604379053956-6c49d5e43afe?w=160&h=160&fit=crop' },
-  { name: 'Chicken Caesar Salad', desc: 'Grilled chicken, romaine, parmesan, croutons, light caesar', cal: 450, p: 50, c: 22, f: 18, img: 'https://images.unsplash.com/photo-1546793665-c74683f339c1?w=160&h=160&fit=crop' },
-  { name: 'Lean Burger Lettuce Wrap', desc: 'Lean beef patty, lettuce wrap, avocado, tomato', cal: 580, p: 52, c: 36, f: 22, img: 'https://images.unsplash.com/photo-1565299507177-b0ac66763828?w=160&h=160&fit=crop' },
-  { name: '5-Minute Egg Fried Rice', desc: 'Rice, eggs, edamame, soy sauce, sesame oil', cal: 430, p: 28, c: 52, f: 14, img: 'https://images.unsplash.com/photo-1603360946369-dc9bb6258143?w=160&h=160&fit=crop' },
-];
+import { mealPlansApi } from '../../services/api';
 
 // ── Types ─────────────────────────────────────────────────────────────────
+//
+// The server shape is whatever the backend returns — it may nest items or
+// return a flat array of { name, calories?, protein?, notes?, time_of_day? }.
+// We read it defensively and fall back to an empty list when fields are
+// missing so a malformed plan never blanks the screen.
 
-type Phase = 'picker' | 'grocery' | 'prep';
-
-interface SelectedMeals {
-  breakfast: MealOption | null;
-  lunch: MealOption | null;
-  dinner: MealOption | null;
+interface MealItem {
+  name: string;
+  calories?: number | null;
+  protein?: number | null;
+  notes?: string | null;
+  time_of_day?: string | null;
 }
 
-// ── Meal Card with Swipe Animation ────────────────────────────────────────
-
-interface SwipeMealCardProps {
-  label: string;
-  icon: string;
-  pool: MealOption[];
-  accepted: boolean;
-  onAccept: (meal: MealOption) => void;
-  onNext: () => void;
-  currentIndex: number;
+interface MealPlan {
+  id: string;
+  title: string;
+  notes?: string | null;
+  items: MealItem[];
+  created_at?: string | null;
 }
 
-function SwipeMealCard({ label, icon, pool, accepted, onAccept, onNext, currentIndex }: SwipeMealCardProps) {
-  const translateX = useRef(new Animated.Value(0)).current;
-  const opacity = useRef(new Animated.Value(1)).current;
-  const [localIndex, setLocalIndex] = useState(currentIndex);
-  const [isAnimating, setIsAnimating] = useState(false);
+const TIME_ORDER = ['breakfast', 'lunch', 'dinner', 'snack'];
 
-  const handleReject = () => {
-    if (isAnimating || accepted) return;
-    setIsAnimating(true);
-    Animated.parallel([
-      Animated.timing(translateX, { toValue: -400, duration: 250, useNativeDriver: true }),
-      Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }),
-    ]).start(() => {
-      const nextIdx = localIndex + 1;
-      setLocalIndex(nextIdx);
-      translateX.setValue(400);
-      Animated.parallel([
-        Animated.timing(translateX, { toValue: 0, duration: 250, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }),
-      ]).start(() => {
-        setIsAnimating(false);
-        onNext();
-      });
-    });
-  };
-
-  const handleAccept = () => {
-    if (isAnimating || accepted) return;
-    onAccept(pool[localIndex % pool.length]);
-  };
-
-  const currentMeal = pool[localIndex % pool.length];
-
-  return (
-    <View style={styles.mealRow}>
-      {/* Meal Type Label */}
-      <View style={styles.mealLabel}>
-        <Text style={styles.mealLabelIcon}>{icon}</Text>
-        <Text style={styles.mealLabelText}>{label}</Text>
-      </View>
-
-      {/* Card */}
-      <Animated.View style={[styles.mealCard, { transform: [{ translateX }], opacity }, accepted && styles.mealCardAccepted]}>
-        <Image source={{ uri: currentMeal.img }} style={styles.mealThumb} />
-        <View style={styles.mealInfo}>
-          <Text style={styles.mealName} numberOfLines={1}>{currentMeal.name}</Text>
-          <Text style={styles.mealDesc} numberOfLines={2}>{currentMeal.desc}</Text>
-          {/* Macro Pills */}
-          <View style={styles.macroPills}>
-            <View style={[styles.macroPill, { backgroundColor: Colors.noticeCriticalBg }]}>
-              <Text style={[styles.macroPillText, { color: Colors.noticeCriticalText }]}>{currentMeal.cal} kcal</Text>
-            </View>
-            <View style={[styles.macroPill, { backgroundColor: Colors.primaryPale }]}>
-              <Text style={[styles.macroPillText, { color: Colors.primary }]}>P {currentMeal.p}g</Text>
-            </View>
-            <View style={[styles.macroPill, { backgroundColor: Colors.macroCarbsChipBg }]}>
-              <Text style={[styles.macroPillText, { color: Colors.macroCarbsChipText }]}>C {currentMeal.c}g</Text>
-            </View>
-            <View style={[styles.macroPill, { backgroundColor: Colors.macroFatChipBg }]}>
-              <Text style={[styles.macroPillText, { color: Colors.macroFatChipText }]}>F {currentMeal.f}g</Text>
-            </View>
-          </View>
-        </View>
-        {/* Action Buttons or Accepted Overlay */}
-        {accepted ? (
-          <View style={styles.acceptedOverlay}>
-            <Ionicons name="checkmark-circle" size={32} color={Colors.primary} />
-          </View>
-        ) : (
-          <View style={styles.actionBtns}>
-            <TouchableOpacity style={styles.rejectBtn} onPress={handleReject}>
-              <Ionicons name="close" size={22} color={Colors.error} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.acceptBtn} onPress={handleAccept}>
-              <Ionicons name="checkmark" size={22} color={Colors.primary} />
-            </TouchableOpacity>
-          </View>
-        )}
-      </Animated.View>
-    </View>
-  );
+function timeIcon(tod?: string | null): string {
+  const t = (tod || '').toLowerCase();
+  if (t.startsWith('break')) return '🌅';
+  if (t.startsWith('lunch')) return '☀️';
+  if (t.startsWith('din')) return '🌙';
+  if (t.startsWith('snack')) return '🍎';
+  return '🍽️';
 }
 
-// ── Main PlanScreen ───────────────────────────────────────────────────────
+function groupItems(items: MealItem[]): { key: string; label: string; rows: MealItem[] }[] {
+  if (!Array.isArray(items) || items.length === 0) return [];
+  const buckets = new Map<string, MealItem[]>();
+  for (const it of items) {
+    const key = (it.time_of_day || '').toLowerCase().trim() || 'other';
+    const arr = buckets.get(key) || [];
+    arr.push(it);
+    buckets.set(key, arr);
+  }
+  const ordered: { key: string; label: string; rows: MealItem[] }[] = [];
+  for (const k of TIME_ORDER) {
+    if (buckets.has(k)) {
+      ordered.push({ key: k, label: k.charAt(0).toUpperCase() + k.slice(1), rows: buckets.get(k)! });
+      buckets.delete(k);
+    }
+  }
+  for (const [k, rows] of buckets) {
+    ordered.push({ key: k, label: k === 'other' ? 'Other' : k.charAt(0).toUpperCase() + k.slice(1), rows });
+  }
+  return ordered;
+}
+
+// Normalise whatever the backend returns into a MealPlan[]. Handles both
+// `{ plans: [...] }` and bare arrays; tolerates camelCase or snake_case keys
+// on items.
+function normalisePlans(payload: any): MealPlan[] {
+  const raw: any[] = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.plans)
+      ? payload.plans
+      : Array.isArray(payload?.meal_plans)
+        ? payload.meal_plans
+        : [];
+  return raw.map((p) => {
+    const itemsRaw: any[] = Array.isArray(p.items)
+      ? p.items
+      : Array.isArray(p.meal_items)
+        ? p.meal_items
+        : [];
+    const items: MealItem[] = itemsRaw.map((it) => ({
+      name: it.name || '',
+      calories: it.calories ?? it.kcal ?? null,
+      protein: it.protein ?? it.protein_g ?? null,
+      notes: it.notes ?? null,
+      time_of_day: it.time_of_day ?? it.timeOfDay ?? null,
+    }));
+    return {
+      id: p.id,
+      title: p.title || 'Meal plan',
+      notes: p.notes ?? null,
+      items,
+      created_at: p.created_at ?? p.createdAt ?? null,
+    };
+  });
+}
 
 export default function PlanScreen() {
-  const currentUser = useCurrentUser();
-  const [phase, setPhase] = useState<Phase>('picker');
-  const [selected, setSelected] = useState<SelectedMeals>({ breakfast: null, lunch: null, dinner: null });
-  const [bIdx, setBIdx] = useState(0);
-  const [lIdx, setLIdx] = useState(5);
-  const [dIdx, setDIdx] = useState(10);
-  const [weeklyModalVisible, setWeeklyModalVisible] = useState(false);
+  const [plans, setPlans] = useState<MealPlan[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const allAccepted = selected.breakfast && selected.lunch && selected.dinner;
-
-  const handleBuildGrocery = async () => {
-    if (!currentUser) return;
-
-    const weekStart = getStartOfWeek(new Date()).toISOString().split('T')[0];
-    const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
-    const planData: Record<string, any> = {};
-
-    for (const day of days) {
-      planData[day] = {
-        breakfast: selected.breakfast ? { name: selected.breakfast.name, calories: selected.breakfast.cal } : null,
-        lunch: selected.lunch ? { name: selected.lunch.name, calories: selected.lunch.cal } : null,
-        dinner: selected.dinner ? { name: selected.dinner.name, calories: selected.dinner.cal } : null,
-        snacks: null,
-      };
+  const loadPlans = useCallback(async () => {
+    try {
+      const res = await mealPlansApi.list();
+      setPlans(normalisePlans(res.data));
+      setError(null);
+    } catch (err: any) {
+      // Read-only fetch. Surface a friendly message; leave any prior plans
+      // visible so a transient network blip doesn't empty the screen.
+      console.error('PlanScreen: mealPlansApi.list failed', err);
+      setError(err?.message || 'Could not load your meal plans.');
+      if (plans === null) setPlans([]);
+    } finally {
+      setLoading(false);
     }
+  }, [plans]);
 
-    await upsertMealPlan(currentUser.id, '', weekStart, planData);
-    setPhase('grocery');
-  };
+  useEffect(() => {
+    loadPlans();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const totalCal = [selected.breakfast, selected.lunch, selected.dinner].reduce((s, m) => s + (m?.cal || 0), 0);
-  const totalP = [selected.breakfast, selected.lunch, selected.dinner].reduce((s, m) => s + (m?.p || 0), 0);
-  const totalC = [selected.breakfast, selected.lunch, selected.dinner].reduce((s, m) => s + (m?.c || 0), 0);
-  const totalF = [selected.breakfast, selected.lunch, selected.dinner].reduce((s, m) => s + (m?.f || 0), 0);
+  // Refetch on focus so coach-side changes show up without a full reload.
+  useFocusEffect(
+    useCallback(() => {
+      loadPlans();
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []),
+  );
 
-  if (phase === 'grocery') {
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadPlans();
+    setRefreshing(false);
+  }, [loadPlans]);
+
+  if (loading && plans === null) {
     return (
-      <GroceryListScreen
-        embedded
-        onContinue={() => setPhase('prep')}
-      />
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.centered}>
+          <ActivityIndicator color={Colors.primary} size="large" />
+        </View>
+      </SafeAreaView>
     );
   }
 
-  if (phase === 'prep') {
-    return (
-      <PrepGuideScreen
-        embedded
-        onDone={() => setPhase('picker')}
-      />
-    );
-  }
+  const hasPlans = (plans?.length || 0) > 0;
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -255,131 +165,122 @@ export default function PlanScreen() {
         style={styles.container}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} colors={[Colors.primary]} />
+        }
       >
-        {/* Header */}
         <FadeInView>
           <View style={styles.header}>
             <View>
-              <Text style={styles.title}>Today's Meals</Text>
-              <Text style={styles.subtitle}>Tap ✓ to accept or ✗ to see next option</Text>
+              <Text style={styles.title}>Your Meal Plan</Text>
+              <Text style={styles.subtitle}>
+                {hasPlans ? 'Assigned by your coach' : 'Nothing here yet'}
+              </Text>
             </View>
-            <TouchableOpacity style={styles.weeklyBtn} onPress={() => setWeeklyModalVisible(true)}>
-              <Ionicons name="calendar-outline" size={18} color={Colors.primary} />
-              <Text style={styles.weeklyBtnText}>Weekly</Text>
-            </TouchableOpacity>
           </View>
         </FadeInView>
 
-        {/* Meal Cards */}
-        <View style={styles.mealSection}>
-          <SwipeMealCard
-            label="Breakfast"
-            icon="🌅"
-            pool={BREAKFAST_POOL}
-            accepted={!!selected.breakfast}
-            onAccept={(m) => setSelected((s) => ({ ...s, breakfast: m }))}
-            onNext={() => setBIdx((i) => i + 1)}
-            currentIndex={bIdx}
-          />
-          <SwipeMealCard
-            label="Lunch"
-            icon="☀️"
-            pool={LUNCH_POOL}
-            accepted={!!selected.lunch}
-            onAccept={(m) => setSelected((s) => ({ ...s, lunch: m }))}
-            onNext={() => setLIdx((i) => i + 1)}
-            currentIndex={lIdx}
-          />
-          <SwipeMealCard
-            label="Dinner"
-            icon="🌙"
-            pool={DINNER_POOL}
-            accepted={!!selected.dinner}
-            onAccept={(m) => setSelected((s) => ({ ...s, dinner: m }))}
-            onNext={() => setDIdx((i) => i + 1)}
-            currentIndex={dIdx}
-          />
-        </View>
+        {error && hasPlans && (
+          <View style={styles.errorBanner} accessibilityLiveRegion="polite">
+            <Ionicons name="cloud-offline-outline" size={16} color={Colors.warning} />
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        )}
 
-        {/* Daily Totals when meals selected */}
-        {allAccepted && (
+        {!hasPlans ? (
           <FadeInView>
-            <View style={styles.totalsCard}>
-              <Text style={styles.totalsTitle}>Daily Totals</Text>
-              <View style={styles.totalsRow}>
-                <View style={styles.totalItem}>
-                  <Text style={styles.totalValue}>{totalCal}</Text>
-                  <Text style={styles.totalLabel}>Calories</Text>
-                </View>
-                <View style={styles.totalDivider} />
-                <View style={styles.totalItem}>
-                  <Text style={[styles.totalValue, { color: Colors.primary }]}>{totalP}g</Text>
-                  <Text style={styles.totalLabel}>Protein</Text>
-                </View>
-                <View style={styles.totalDivider} />
-                <View style={styles.totalItem}>
-                  <Text style={[styles.totalValue, { color: Colors.carbs }]}>{totalC}g</Text>
-                  <Text style={styles.totalLabel}>Carbs</Text>
-                </View>
-                <View style={styles.totalDivider} />
-                <View style={styles.totalItem}>
-                  <Text style={[styles.totalValue, { color: Colors.fat }]}>{totalF}g</Text>
-                  <Text style={styles.totalLabel}>Fat</Text>
-                </View>
+            <View style={styles.emptyCard}>
+              <View style={styles.emptyIconCircle}>
+                <Ionicons name="restaurant-outline" size={32} color={Colors.primary} />
               </View>
+              <Text style={styles.emptyTitle}>
+                Your coach hasn't assigned a meal plan yet.
+              </Text>
+              <Text style={styles.emptyBody}>
+                Ask your coach in Messages — they can create one for you and it'll show up here automatically.
+              </Text>
             </View>
-
-            {/* Build Grocery List CTA */}
-            <TouchableOpacity
-              style={styles.groceryBtn}
-              onPress={handleBuildGrocery}
-              activeOpacity={0.85}
-            >
-              <Ionicons name="basket-outline" size={22} color={Colors.textOnPrimary} />
-              <Text style={styles.groceryBtnText}>Build Grocery List →</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.resetBtn}
-              onPress={() => setSelected({ breakfast: null, lunch: null, dinner: null })}
-            >
-              <Text style={styles.resetBtnText}>Start Over</Text>
-            </TouchableOpacity>
           </FadeInView>
+        ) : (
+          <View style={styles.planList}>
+            {plans!.map((plan) => {
+              const groups = groupItems(plan.items);
+              const totalCals = plan.items.reduce((s, it) => s + (Number(it.calories) || 0), 0);
+              const totalProtein = plan.items.reduce((s, it) => s + (Number(it.protein) || 0), 0);
+              return (
+                <FadeInView key={plan.id}>
+                  <View style={styles.planCard}>
+                    <View style={styles.planHeader}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.planTitle}>{plan.title}</Text>
+                        {plan.created_at && (
+                          <Text style={styles.planMeta}>
+                            Assigned {new Date(plan.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+
+                    {plan.notes ? (
+                      <View style={styles.notesBox}>
+                        <Text style={styles.notesText}>{plan.notes}</Text>
+                      </View>
+                    ) : null}
+
+                    {plan.items.length === 0 ? (
+                      <Text style={styles.emptyItemsText}>No meals listed in this plan.</Text>
+                    ) : (
+                      <>
+                        {groups.map((g) => (
+                          <View key={g.key} style={styles.group}>
+                            <Text style={styles.groupLabel}>
+                              {timeIcon(g.key)} {g.label.toUpperCase()}
+                            </Text>
+                            {g.rows.map((it, idx) => (
+                              <View key={idx} style={styles.itemRow}>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={styles.itemName}>{it.name || '—'}</Text>
+                                  {it.notes ? (
+                                    <Text style={styles.itemNotes} numberOfLines={2}>
+                                      {it.notes}
+                                    </Text>
+                                  ) : null}
+                                </View>
+                                <View style={styles.itemMacros}>
+                                  {it.calories != null && (
+                                    <Text style={styles.itemCal}>{Math.round(Number(it.calories))} kcal</Text>
+                                  )}
+                                  {it.protein != null && (
+                                    <Text style={styles.itemProtein}>P {Math.round(Number(it.protein))}g</Text>
+                                  )}
+                                </View>
+                              </View>
+                            ))}
+                          </View>
+                        ))}
+
+                        {(totalCals > 0 || totalProtein > 0) && (
+                          <View style={styles.totalsRow}>
+                            <Text style={styles.totalsLabel}>Daily total</Text>
+                            <Text style={styles.totalsValue}>
+                              {totalCals > 0 ? `${Math.round(totalCals)} kcal` : ''}
+                              {totalCals > 0 && totalProtein > 0 ? ' · ' : ''}
+                              {totalProtein > 0 ? `${Math.round(totalProtein)}g protein` : ''}
+                            </Text>
+                          </View>
+                        )}
+                      </>
+                    )}
+                  </View>
+                </FadeInView>
+              );
+            })}
+          </View>
         )}
       </ScrollView>
-
-      {/* Weekly Plan Modal */}
-      <Modal visible={weeklyModalVisible} animationType="slide" presentationStyle="pageSheet">
-        <SafeAreaView style={styles.modalSafe}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Weekly Plan</Text>
-            <TouchableOpacity onPress={() => setWeeklyModalVisible(false)}>
-              <Ionicons name="close" size={24} color={Colors.textPrimary} />
-            </TouchableOpacity>
-          </View>
-          <ScrollView contentContainerStyle={styles.modalContent}>
-            {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, idx) => (
-              <View key={day} style={styles.weekDayCard}>
-                <Text style={styles.weekDayLabel}>{day}</Text>
-                <View style={styles.weekDayMeals}>
-                  {['🌅 ' + BREAKFAST_POOL[(idx * 3) % BREAKFAST_POOL.length].name,
-                    '☀️ ' + LUNCH_POOL[(idx * 3 + 1) % LUNCH_POOL.length].name,
-                    '🌙 ' + DINNER_POOL[(idx * 3 + 2) % DINNER_POOL.length].name,
-                  ].map((meal, mi) => (
-                    <Text key={mi} style={styles.weekDayMeal} numberOfLines={1}>{meal}</Text>
-                  ))}
-                </View>
-              </View>
-            ))}
-          </ScrollView>
-        </SafeAreaView>
-      </Modal>
     </SafeAreaView>
   );
 }
-
-// ── Styles ────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   safe: {
@@ -389,6 +290,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   content: {
     paddingBottom: 40,
@@ -412,241 +318,161 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     marginTop: 4,
   },
-  weeklyBtn: {
+  errorBanner: {
+    marginHorizontal: 20,
+    marginBottom: 12,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: Colors.noticeCriticalBg,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: Colors.primaryPale,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 20,
-    marginTop: 4,
+    gap: 8,
   },
-  weeklyBtnText: {
+  errorText: {
+    flex: 1,
+    fontSize: 12,
+    color: Colors.noticeCriticalText,
+  },
+  emptyCard: {
+    marginHorizontal: 20,
+    marginTop: 40,
+    padding: 24,
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: 'center',
+    gap: 12,
+    ...Shadow.small,
+  },
+  emptyIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: Colors.primaryPale,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    textAlign: 'center',
+  },
+  emptyBody: {
     fontSize: 13,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 19,
+  },
+  planList: {
+    paddingHorizontal: 20,
+    gap: 16,
+  },
+  planCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    ...Shadow.small,
+  },
+  planHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+    marginBottom: 8,
+  },
+  planTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+  },
+  planMeta: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+  notesBox: {
+    backgroundColor: Colors.primaryPale,
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 4,
+    marginBottom: 12,
+  },
+  notesText: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    lineHeight: 19,
+  },
+  group: {
+    marginTop: 12,
+  },
+  groupLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+    marginBottom: 6,
+    letterSpacing: 0.5,
+  },
+  itemRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    gap: 10,
+  },
+  itemName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  itemNotes: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  itemMacros: {
+    alignItems: 'flex-end',
+    gap: 2,
+  },
+  itemCal: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+  },
+  itemProtein: {
+    fontSize: 11,
     fontWeight: '700',
     color: Colors.primary,
   },
-  mealSection: {
-    paddingHorizontal: 20,
-    gap: 16,
-    marginTop: 8,
-  },
-  mealRow: {
-    gap: 8,
-  },
-  mealLabel: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 4,
-  },
-  mealLabelIcon: {
-    fontSize: 16,
-  },
-  mealLabelText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.textSecondary,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  mealCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    gap: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    ...Shadow.small,
-  },
-  mealCardAccepted: {
-    borderColor: Colors.primary,
-    borderWidth: 2,
-    backgroundColor: colors.feedback.successBg,
-  },
-  mealThumb: {
-    width: 80,
-    height: 80,
-    borderRadius: 12,
-    backgroundColor: Colors.surfaceElevated,
-  },
-  mealInfo: {
-    flex: 1,
-    gap: 4,
-  },
-  mealName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-  },
-  mealDesc: {
-    fontSize: 12,
+  emptyItemsText: {
+    fontSize: 13,
     color: Colors.textMuted,
-    lineHeight: 16,
-  },
-  macroPills: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 4,
-    marginTop: 4,
-  },
-  macroPill: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 8,
-  },
-  macroPillText: {
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  actionBtns: {
-    gap: 8,
-  },
-  rejectBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.feedback.errorBg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: Colors.error,
-  },
-  acceptBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.primaryPale,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: Colors.primary,
-  },
-  acceptedOverlay: {
-    width: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  totalsCard: {
-    marginHorizontal: 20,
-    marginTop: 24,
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    ...Shadow.small,
-  },
-  totalsTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    marginBottom: 16,
+    paddingVertical: 10,
     textAlign: 'center',
   },
   totalsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  totalItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  totalValue: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: Colors.textPrimary,
-  },
-  totalLabel: {
-    fontSize: 11,
-    color: Colors.textMuted,
-    marginTop: 2,
-    fontWeight: '600',
-  },
-  totalDivider: {
-    width: 1,
-    height: 36,
-    backgroundColor: Colors.border,
-  },
-  groceryBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    backgroundColor: Colors.primary,
-    marginHorizontal: 20,
-    marginTop: 16,
-    paddingVertical: 18,
-    borderRadius: 16,
-  },
-  groceryBtnText: {
-    color: Colors.textOnPrimary,
-    fontSize: 17,
-    fontWeight: '800',
-    letterSpacing: 0.3,
-  },
-  resetBtn: {
-    alignItems: 'center',
-    marginTop: 12,
-    paddingVertical: 8,
-  },
-  resetBtnText: {
-    fontSize: 14,
-    color: Colors.textMuted,
-    fontWeight: '600',
-  },
-  // Modal
-  modalSafe: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  modalHeader: {
-    flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    paddingTop: 12,
+    marginTop: 4,
   },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: Colors.textPrimary,
+  totalsLabel: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
-  modalContent: {
-    padding: 20,
-    gap: 12,
-  },
-  weekDayCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 14,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    ...Shadow.small,
-  },
-  weekDayLabel: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: Colors.primary,
-    width: 34,
-    marginTop: 2,
-  },
-  weekDayMeals: {
-    flex: 1,
-    gap: 4,
-  },
-  weekDayMeal: {
+  totalsValue: {
     fontSize: 13,
-    color: Colors.textSecondary,
-    lineHeight: 20,
+    fontWeight: '700',
+    color: Colors.textPrimary,
   },
 });
