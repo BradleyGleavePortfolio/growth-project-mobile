@@ -298,6 +298,27 @@ export const coachApi = {
   // ── Nudges ──
   sendNudge: (clientId: string, data: { title: string; body: string }) =>
     api.post(`/coach/clients/${clientId}/nudges`, data),
+  // ── Meal plans (server is source of truth) ──
+  listClientMealPlans: (clientId: string) =>
+    api.get(`/coach/clients/${clientId}/meal-plans`),
+  createClientMealPlan: (clientId: string, data: Record<string, any>) =>
+    api.post(`/coach/clients/${clientId}/meal-plans`, data),
+  updateMealPlan: (planId: string, data: Record<string, any>) =>
+    api.patch(`/coach/meal-plans/${planId}`, data),
+  archiveMealPlan: (planId: string) =>
+    api.delete(`/coach/meal-plans/${planId}`),
+  // ── Check-ins (coach read) ──
+  getClientCheckIns: (
+    clientId: string,
+    params?: { from?: string; to?: string; limit?: number },
+  ) => {
+    const q = new URLSearchParams();
+    if (params?.from) q.set('from', params.from);
+    if (params?.to) q.set('to', params.to);
+    if (params?.limit) q.set('limit', String(params.limit));
+    const qs = q.toString();
+    return api.get(`/coach/clients/${clientId}/check-ins${qs ? `?${qs}` : ''}`);
+  },
 };
 
 export const messagesApi = {
@@ -354,4 +375,34 @@ export const lessonsApi = {
   update: (id: string, data: Record<string, any>) => api.put(`/lessons/${id}`, data),
   complete: (id: string) => api.post(`/lessons/${id}/complete`),
   getRecommended: () => api.get('/lessons/recommended'),
+};
+
+// Meal plans (client-facing, read-only).
+// Coach creates/edits via coachApi.createClientMealPlan / updateMealPlan /
+// archiveMealPlan; the client just reads what the coach assigned.
+export const mealPlansApi = {
+  list: () => api.get('/meal-plans'),
+  get: (id: string) => api.get(`/meal-plans/${id}`),
+};
+
+// Daily check-ins. POST /check-ins upserts on `date`, so saving the same day
+// twice replaces the row rather than creating duplicates.
+export const checkInsApi = {
+  save: (data: {
+    date: string;
+    mood?: number | null;
+    energy?: number | null;
+    sleep_hours?: number | null;
+    weight_kg?: number | null;
+    notes?: string | null;
+  }) => api.post('/check-ins', data),
+  list: (params?: { from?: string; to?: string; limit?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.from) q.set('from', params.from);
+    if (params?.to) q.set('to', params.to);
+    if (params?.limit) q.set('limit', String(params.limit));
+    const qs = q.toString();
+    return api.get(`/check-ins${qs ? `?${qs}` : ''}`);
+  },
+  get: (id: string) => api.get(`/check-ins/${id}`),
 };

@@ -9,17 +9,17 @@ import {
   TextInput,
   RefreshControl,
   Modal,
+  Alert,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { ClientsStackParamList } from '../../navigation/CoachNavigator';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
-import { getMealPlan, parsePlanData, PlanData, PlanDay } from '../../db/mealPlanDb';
 import { coachApi } from '../../services/api';
 import { Colors } from '../../constants/colors';
 import { ClientProfile, FoodLog, WeightLog } from '../../types';
-import { getTodayString, addDays } from '../../utils/date';
+import { getTodayString } from '../../utils/date';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface SessionSet {
@@ -62,6 +62,60 @@ type Props = {
 
 type TabKey = 'summary' | 'logs' | 'mealplan' | 'progress' | 'workouts' | 'timeline' | 'weekly';
 
+// ── Coach-side meal plans (server) ──
+interface CoachMealPlanItem {
+  name: string;
+  calories?: number | null;
+  protein?: number | null;
+  notes?: string | null;
+  time_of_day?: string | null;
+}
+
+interface CoachMealPlan {
+  id: string;
+  title: string;
+  notes?: string | null;
+  items: CoachMealPlanItem[];
+  created_at?: string | null;
+}
+
+interface PlanItemDraft {
+  name: string;
+  calories: string;
+  protein: string;
+  notes: string;
+  time_of_day: string;
+}
+
+function emptyItemDraft(): PlanItemDraft {
+  return { name: '', calories: '', protein: '', notes: '', time_of_day: 'breakfast' };
+}
+
+function normaliseServerPlans(payload: any): CoachMealPlan[] {
+  const raw: any[] = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.plans)
+      ? payload.plans
+      : Array.isArray(payload?.meal_plans)
+        ? payload.meal_plans
+        : [];
+  return raw.map((p) => ({
+    id: String(p.id),
+    title: p.title || 'Meal plan',
+    notes: p.notes ?? null,
+    items: (Array.isArray(p.items) ? p.items : Array.isArray(p.meal_items) ? p.meal_items : []).map(
+      (it: any) => ({
+        name: it.name || '',
+        calories: it.calories ?? it.kcal ?? null,
+        protein: it.protein ?? it.protein_g ?? null,
+        notes: it.notes ?? null,
+        time_of_day: it.time_of_day ?? it.timeOfDay ?? null,
+      }),
+    ),
+    created_at: p.created_at ?? p.createdAt ?? null,
+  }));
+}
+
 interface TimelineEvent {
   id: string;
   type: 'food' | 'weight' | 'workout' | 'fasting' | 'checkin';
@@ -80,8 +134,6 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
   const [profile, setProfile] = useState<ClientProfile | null>(null);
   const [foodLogs, setFoodLogs] = useState<FoodLog[]>([]);
   const [totals, setTotals] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0 });
-  const [planData, setPlanData] = useState<PlanData>({});
-  const [weekStart, setWeekStart] = useState('');
   const [weightLogs, setWeightLogs] = useState<WeightLog[]>([]);
   const [workoutSessions, setWorkoutSessions] = useState<WorkoutSession[]>([]);
   const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
@@ -97,16 +149,25 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
   const [nudgeError, setNudgeError] = useState('');
   const [nudgeSuccess, setNudgeSuccess] = useState(false);
 
+  // Server-side meal plans (Tier 2). The local-SQLite `planData` above is now
+  // legacy — kept only because GroceryListScreen / PrepGuideScreen still read
+  // from mealPlanDb on the client side. When those move to server-sourced
+  // plans the local block can go.
+  const [serverMealPlans, setServerMealPlans] = useState<CoachMealPlan[]>([]);
+  const [mealPlansLoading, setMealPlansLoading] = useState(false);
+  const [mealPlansError, setMealPlansError] = useState<string | null>(null);
+  const [showPlanModal, setShowPlanModal] = useState(false);
+  const [editingPlan, setEditingPlan] = useState<CoachMealPlan | null>(null);
+  const [planTitle, setPlanTitle] = useState('');
+  const [planNotes, setPlanNotes] = useState('');
+  const [planItems, setPlanItems] = useState<PlanItemDraft[]>([emptyItemDraft()]);
+  const [planSaving, setPlanSaving] = useState(false);
+  const [planFormError, setPlanFormError] = useState('');
+
   const loadData = useCallback(async () => {
     try {
       if (!refreshing) setIsLoading(true);
       const today = getTodayString();
-      const d = new Date(today + 'T00:00:00');
-      const day = d.getDay();
-      const diff = day === 0 ? -6 : 1 - day;
-      d.setDate(d.getDate() + diff);
-      const ws = d.toISOString().split('T')[0];
-      setWeekStart(ws);
 
       const res = await coachApi.getClientSummary(clientId);
       const data = res.data;
@@ -161,9 +222,6 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
         }))),
       })));
 
-      // Meal plan stays local (local-first feature — coaches build meal plans offline)
-      const plan = await getMealPlan(clientId, ws).catch(() => null);
-      setPlanData(plan ? parsePlanData(plan.planData) : {});
     } catch (err) {
       // Read-only client detail load — we log and let the UI render whatever
       // partial state we accumulated before the throw. User can pull-to-refresh.
@@ -177,6 +235,20 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
     loadData();
   }, []);
 
+  const loadServerMealPlans = useCallback(async () => {
+    setMealPlansLoading(true);
+    setMealPlansError(null);
+    try {
+      const res = await coachApi.listClientMealPlans(clientId);
+      setServerMealPlans(normaliseServerPlans(res.data));
+    } catch (err: any) {
+      console.error('ClientDetailScreen: listClientMealPlans failed', err);
+      setMealPlansError(err?.response?.data?.message || 'Could not load meal plans.');
+    } finally {
+      setMealPlansLoading(false);
+    }
+  }, [clientId]);
+
   useEffect(() => {
     if (activeTab === 'timeline') {
       loadTimeline();
@@ -184,7 +256,106 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
     if (activeTab === 'weekly') {
       loadWeeklySummaries();
     }
+    if (activeTab === 'mealplan') {
+      loadServerMealPlans();
+    }
   }, [activeTab, selectedDays]);
+
+  const openCreatePlan = () => {
+    setEditingPlan(null);
+    setPlanTitle('');
+    setPlanNotes('');
+    setPlanItems([emptyItemDraft()]);
+    setPlanFormError('');
+    setShowPlanModal(true);
+  };
+
+  const openEditPlan = (plan: CoachMealPlan) => {
+    setEditingPlan(plan);
+    setPlanTitle(plan.title);
+    setPlanNotes(plan.notes || '');
+    setPlanItems(
+      plan.items.length > 0
+        ? plan.items.map((it) => ({
+            name: it.name || '',
+            calories: it.calories != null ? String(it.calories) : '',
+            protein: it.protein != null ? String(it.protein) : '',
+            notes: it.notes || '',
+            time_of_day: it.time_of_day || '',
+          }))
+        : [emptyItemDraft()],
+    );
+    setPlanFormError('');
+    setShowPlanModal(true);
+  };
+
+  const submitPlanForm = async () => {
+    setPlanFormError('');
+    if (!planTitle.trim()) {
+      setPlanFormError('Give the plan a title.');
+      return;
+    }
+    const items = planItems
+      .filter((it) => it.name.trim().length > 0)
+      .map((it) => {
+        const row: Record<string, any> = { name: it.name.trim() };
+        const cal = Number(it.calories);
+        if (it.calories && !Number.isNaN(cal)) row.calories = cal;
+        const prot = Number(it.protein);
+        if (it.protein && !Number.isNaN(prot)) row.protein = prot;
+        if (it.notes.trim()) row.notes = it.notes.trim();
+        if (it.time_of_day.trim()) row.time_of_day = it.time_of_day.trim().toLowerCase();
+        return row;
+      });
+    if (items.length === 0) {
+      setPlanFormError('Add at least one meal item.');
+      return;
+    }
+    setPlanSaving(true);
+    try {
+      const body: Record<string, any> = {
+        title: planTitle.trim(),
+        notes: planNotes.trim() || null,
+        items,
+      };
+      if (editingPlan) {
+        await coachApi.updateMealPlan(editingPlan.id, body);
+      } else {
+        await coachApi.createClientMealPlan(clientId, body);
+      }
+      setShowPlanModal(false);
+      await loadServerMealPlans();
+    } catch (err: any) {
+      setPlanFormError(err?.response?.data?.message || 'Save failed. Try again.');
+    } finally {
+      setPlanSaving(false);
+    }
+  };
+
+  const archivePlan = (plan: CoachMealPlan) => {
+    Alert.alert(
+      'Archive meal plan?',
+      `"${plan.title}" will no longer show up for this client.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Archive',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await coachApi.archiveMealPlan(plan.id);
+              await loadServerMealPlans();
+            } catch (err: any) {
+              Alert.alert(
+                'Archive failed',
+                err?.response?.data?.message || err?.message || 'Try again.',
+              );
+            }
+          },
+        },
+      ],
+    );
+  };
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -417,18 +588,6 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
       console.error('ClientDetailScreen: loadWeeklySummaries failed', err);
     }
   }, [clientId, selectedDays]);
-
-  const SLOT_LABELS = ['Breakfast', 'Lunch', 'Dinner', 'Snacks'] as const;
-  const SLOT_KEYS = ['breakfast', 'lunch', 'dinner', 'snacks'] as const;
-  const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-  const getWeekDates = () => {
-    if (!weekStart) return [];
-    return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-  };
-
-  const getDayPlan = (dateStr: string): PlanDay =>
-    planData[dateStr] || { breakfast: null, lunch: null, dinner: null, snacks: null };
 
   const parseExercises = (json: string): SessionExercise[] => {
     try { return JSON.parse(json); } catch { return []; }
@@ -672,34 +831,111 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
 
         {activeTab === 'mealplan' && (
           <>
-            <Text style={styles.sectionTitle}>This Week's Meal Plan</Text>
-            {weekStart ? (
-              getWeekDates().map((date, dayIdx) => {
-                const dayPlan = getDayPlan(date);
-                const hasAny = SLOT_KEYS.some((k) => dayPlan[k] !== null);
-                return (
-                  <View key={date} style={styles.planDayCard}>
-                    <Text style={styles.planDayLabel}>
-                      {DAY_LABELS[dayIdx]} — {new Date(date + 'T00:00:00').getDate()}
-                    </Text>
-                    {hasAny ? (
-                      SLOT_KEYS.map((slot, si) =>
-                        dayPlan[slot] ? (
-                          <View key={slot} style={styles.planSlotRow}>
-                            <Text style={styles.planSlotLabel}>{SLOT_LABELS[si]}</Text>
-                            <Text style={styles.planSlotMeal}>{dayPlan[slot]!.name}</Text>
-                            <Text style={styles.planSlotCals}>{dayPlan[slot]!.calories} kcal</Text>
-                          </View>
-                        ) : null
-                      )
-                    ) : (
-                      <Text style={styles.planEmpty}>No meals planned</Text>
-                    )}
-                  </View>
-                );
-              })
+            <View style={styles.mealPlansHeader}>
+              <Text style={styles.sectionTitle}>Meal Plans</Text>
+              <TouchableOpacity
+                style={styles.createPlanBtn}
+                onPress={openCreatePlan}
+                accessibilityRole="button"
+                accessibilityLabel="Create meal plan"
+              >
+                <Ionicons name="add" size={16} color={Colors.textOnPrimary} />
+                <Text style={styles.createPlanBtnText}>New plan</Text>
+              </TouchableOpacity>
+            </View>
+
+            {mealPlansLoading && serverMealPlans.length === 0 ? (
+              <ActivityIndicator color={Colors.primary} style={{ marginTop: 20 }} />
+            ) : mealPlansError && serverMealPlans.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Ionicons name="cloud-offline-outline" size={32} color={Colors.textMuted} />
+                <Text style={styles.emptyText}>{mealPlansError}</Text>
+                <TouchableOpacity onPress={loadServerMealPlans} style={styles.retryBtn}>
+                  <Text style={styles.retryBtnText}>Retry</Text>
+                </TouchableOpacity>
+              </View>
+            ) : serverMealPlans.length === 0 ? (
+              <View style={styles.emptyCard}>
+                <Ionicons name="restaurant-outline" size={32} color={Colors.textMuted} />
+                <Text style={styles.emptyText}>
+                  No meal plans yet. Tap "New plan" to assign one — the client will see it
+                  on their Plan tab.
+                </Text>
+              </View>
             ) : (
-              <Text style={styles.emptyText}>Loading...</Text>
+              serverMealPlans.map((plan) => (
+                <View key={plan.id} style={styles.serverPlanCard}>
+                  <View style={styles.serverPlanHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.serverPlanTitle}>{plan.title}</Text>
+                      {plan.created_at && (
+                        <Text style={styles.serverPlanMeta}>
+                          Assigned{' '}
+                          {new Date(plan.created_at).toLocaleDateString('en-US', {
+                            month: 'short',
+                            day: 'numeric',
+                          })}
+                        </Text>
+                      )}
+                    </View>
+                    <View style={styles.serverPlanActions}>
+                      <TouchableOpacity
+                        onPress={() => openEditPlan(plan)}
+                        style={styles.planIconBtn}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Edit ${plan.title}`}
+                      >
+                        <Ionicons name="create-outline" size={18} color={Colors.primary} />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => archivePlan(plan)}
+                        style={styles.planIconBtn}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Archive ${plan.title}`}
+                      >
+                        <Ionicons name="archive-outline" size={18} color={Colors.error} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                  {plan.notes ? (
+                    <Text style={styles.serverPlanNotes}>{plan.notes}</Text>
+                  ) : null}
+                  {plan.items.length === 0 ? (
+                    <Text style={styles.serverPlanEmpty}>No items in this plan.</Text>
+                  ) : (
+                    plan.items.map((it, idx) => (
+                      <View key={idx} style={styles.serverPlanRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.serverPlanItemName}>
+                            {it.name || '—'}
+                            {it.time_of_day ? (
+                              <Text style={styles.serverPlanItemTod}>
+                                {'  · '}
+                                {it.time_of_day}
+                              </Text>
+                            ) : null}
+                          </Text>
+                          {it.notes ? (
+                            <Text style={styles.serverPlanItemNotes}>{it.notes}</Text>
+                          ) : null}
+                        </View>
+                        <View style={{ alignItems: 'flex-end' }}>
+                          {it.calories != null && (
+                            <Text style={styles.serverPlanItemCal}>
+                              {Math.round(Number(it.calories))} kcal
+                            </Text>
+                          )}
+                          {it.protein != null && (
+                            <Text style={styles.serverPlanItemProt}>
+                              P {Math.round(Number(it.protein))}g
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+                    ))
+                  )}
+                </View>
+              ))
             )}
           </>
         )}
@@ -803,6 +1039,179 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
           </>
         )}
       </ScrollView>
+
+      <Modal
+        visible={showPlanModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowPlanModal(false)}
+      >
+        <View style={styles.planModalContainer}>
+          <View style={styles.planModalHeader}>
+            <Text style={styles.planModalTitle}>
+              {editingPlan ? 'Edit meal plan' : 'New meal plan'}
+            </Text>
+            <TouchableOpacity
+              onPress={() => setShowPlanModal(false)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+            >
+              <Ionicons name="close" size={24} color={Colors.textPrimary} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={styles.planModalContent}
+            keyboardShouldPersistTaps="handled"
+          >
+            <Text style={styles.planFieldLabel}>Title</Text>
+            <TextInput
+              style={styles.planInput}
+              placeholder="e.g. Cutting Week 1"
+              placeholderTextColor={Colors.textMuted}
+              value={planTitle}
+              onChangeText={setPlanTitle}
+              maxLength={120}
+              accessibilityLabel="Plan title"
+            />
+
+            <Text style={styles.planFieldLabel}>Notes (optional)</Text>
+            <TextInput
+              style={[styles.planInput, styles.planInputMulti]}
+              placeholder="Overall guidance for this plan..."
+              placeholderTextColor={Colors.textMuted}
+              value={planNotes}
+              onChangeText={setPlanNotes}
+              multiline
+              maxLength={1000}
+              accessibilityLabel="Plan notes"
+            />
+
+            <View style={styles.planItemsHeader}>
+              <Text style={styles.planFieldLabel}>Items</Text>
+              <TouchableOpacity
+                onPress={() => setPlanItems((prev) => [...prev, emptyItemDraft()])}
+                style={styles.planAddItemBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Add meal item"
+              >
+                <Ionicons name="add" size={14} color={Colors.primary} />
+                <Text style={styles.planAddItemText}>Add item</Text>
+              </TouchableOpacity>
+            </View>
+
+            {planItems.map((it, idx) => (
+              <View key={idx} style={styles.planItemCard}>
+                <View style={styles.planItemTopRow}>
+                  <Text style={styles.planItemIndex}>#{idx + 1}</Text>
+                  {planItems.length > 1 && (
+                    <TouchableOpacity
+                      onPress={() =>
+                        setPlanItems((prev) => prev.filter((_, i) => i !== idx))
+                      }
+                      accessibilityRole="button"
+                      accessibilityLabel="Remove item"
+                    >
+                      <Ionicons name="trash-outline" size={16} color={Colors.error} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+                <TextInput
+                  style={styles.planItemInput}
+                  placeholder="Meal name (e.g. Chicken & rice)"
+                  placeholderTextColor={Colors.textMuted}
+                  value={it.name}
+                  onChangeText={(t) =>
+                    setPlanItems((prev) =>
+                      prev.map((p, i) => (i === idx ? { ...p, name: t } : p)),
+                    )
+                  }
+                  maxLength={120}
+                  accessibilityLabel={`Item ${idx + 1} name`}
+                />
+                <View style={styles.planItemRow}>
+                  <TextInput
+                    style={[styles.planItemInput, { flex: 1 }]}
+                    placeholder="kcal"
+                    placeholderTextColor={Colors.textMuted}
+                    value={it.calories}
+                    onChangeText={(t) =>
+                      setPlanItems((prev) =>
+                        prev.map((p, i) => (i === idx ? { ...p, calories: t } : p)),
+                      )
+                    }
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    accessibilityLabel={`Item ${idx + 1} calories`}
+                  />
+                  <TextInput
+                    style={[styles.planItemInput, { flex: 1 }]}
+                    placeholder="protein (g)"
+                    placeholderTextColor={Colors.textMuted}
+                    value={it.protein}
+                    onChangeText={(t) =>
+                      setPlanItems((prev) =>
+                        prev.map((p, i) => (i === idx ? { ...p, protein: t } : p)),
+                      )
+                    }
+                    keyboardType="number-pad"
+                    maxLength={5}
+                    accessibilityLabel={`Item ${idx + 1} protein`}
+                  />
+                </View>
+                <TextInput
+                  style={styles.planItemInput}
+                  placeholder="time of day (breakfast / lunch / dinner / snack)"
+                  placeholderTextColor={Colors.textMuted}
+                  value={it.time_of_day}
+                  onChangeText={(t) =>
+                    setPlanItems((prev) =>
+                      prev.map((p, i) => (i === idx ? { ...p, time_of_day: t } : p)),
+                    )
+                  }
+                  maxLength={32}
+                  autoCapitalize="none"
+                  accessibilityLabel={`Item ${idx + 1} time of day`}
+                />
+                <TextInput
+                  style={[styles.planItemInput, styles.planInputMulti]}
+                  placeholder="Notes (optional)"
+                  placeholderTextColor={Colors.textMuted}
+                  value={it.notes}
+                  onChangeText={(t) =>
+                    setPlanItems((prev) =>
+                      prev.map((p, i) => (i === idx ? { ...p, notes: t } : p)),
+                    )
+                  }
+                  multiline
+                  maxLength={300}
+                  accessibilityLabel={`Item ${idx + 1} notes`}
+                />
+              </View>
+            ))}
+
+            {planFormError ? (
+              <Text style={styles.planFormError} accessibilityLiveRegion="assertive">
+                {planFormError}
+              </Text>
+            ) : null}
+
+            <TouchableOpacity
+              style={[styles.planSubmitBtn, planSaving && { opacity: 0.6 }]}
+              onPress={submitPlanForm}
+              disabled={planSaving}
+              accessibilityRole="button"
+              accessibilityLabel={editingPlan ? 'Save changes' : 'Create plan'}
+            >
+              <Text style={styles.planSubmitText}>
+                {planSaving ? 'Saving…' : editingPlan ? 'Save changes' : 'Create plan'}
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </Modal>
 
       <Modal visible={showNudgeModal} transparent animationType="fade" onRequestClose={() => setShowNudgeModal(false)}>
         <View style={styles.nudgeModalOverlay}>
@@ -1462,4 +1871,182 @@ const styles = StyleSheet.create({
   // Empty
   emptyCard: { backgroundColor: Colors.surface, borderRadius: 14, padding: 32, alignItems: 'center', gap: 8 },
   emptyText: { color: Colors.textMuted, fontSize: 14, textAlign: 'center' },
+  // ── Server meal plans (coach side) ──
+  mealPlansHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    marginTop: 4,
+  },
+  createPlanBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  createPlanBtnText: {
+    color: Colors.textOnPrimary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  retryBtn: {
+    marginTop: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: Colors.primaryPale,
+  },
+  retryBtnText: { fontSize: 13, fontWeight: '700', color: Colors.primary },
+  serverPlanCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  serverPlanHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginBottom: 8,
+  },
+  serverPlanTitle: { fontSize: 16, fontWeight: '800', color: Colors.textPrimary },
+  serverPlanMeta: { fontSize: 12, color: Colors.textMuted, marginTop: 2 },
+  serverPlanActions: { flexDirection: 'row', gap: 4 },
+  planIconBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: Colors.primaryPale,
+  },
+  serverPlanNotes: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  serverPlanEmpty: {
+    fontSize: 13,
+    color: Colors.textMuted,
+    fontStyle: 'italic',
+    paddingVertical: 6,
+  },
+  serverPlanRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    gap: 10,
+  },
+  serverPlanItemName: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary },
+  serverPlanItemTod: { fontSize: 12, fontWeight: '600', color: Colors.textMuted },
+  serverPlanItemNotes: { fontSize: 12, color: Colors.textMuted, marginTop: 2, lineHeight: 16 },
+  serverPlanItemCal: { fontSize: 12, fontWeight: '700', color: Colors.textSecondary },
+  serverPlanItemProt: { fontSize: 11, fontWeight: '700', color: Colors.primary, marginTop: 2 },
+  // ── Plan form modal ──
+  planModalContainer: { flex: 1, backgroundColor: Colors.background },
+  planModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  planModalTitle: { fontSize: 20, fontWeight: '800', color: Colors.textPrimary },
+  planModalContent: { padding: 20, paddingBottom: 60 },
+  planFieldLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+    marginTop: 8,
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  planInput: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 14,
+    color: Colors.textPrimary,
+    marginBottom: 10,
+  },
+  planInputMulti: {
+    minHeight: 70,
+    textAlignVertical: 'top',
+  },
+  planItemsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  planAddItemBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: Colors.primaryPale,
+    borderRadius: 16,
+  },
+  planAddItemText: { fontSize: 12, fontWeight: '700', color: Colors.primary },
+  planItemCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  planItemTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  planItemIndex: { fontSize: 12, fontWeight: '700', color: Colors.textMuted },
+  planItemInput: {
+    backgroundColor: Colors.background,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+    padding: 10,
+    fontSize: 13,
+    color: Colors.textPrimary,
+    marginBottom: 8,
+  },
+  planItemRow: { flexDirection: 'row', gap: 8 },
+  planFormError: {
+    color: Colors.error,
+    fontSize: 13,
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  planSubmitBtn: {
+    backgroundColor: Colors.primary,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  planSubmitText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.textOnPrimary,
+  },
 });
