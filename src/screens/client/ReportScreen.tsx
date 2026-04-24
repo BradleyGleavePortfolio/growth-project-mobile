@@ -167,17 +167,6 @@ export default function ReportScreen({ navigation }: any) {
           </Text>
         </View>
 
-        {/* Shopping Essentials */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Shopping Essentials</Text>
-          {['Chicken breast', 'Greek yogurt', 'Brown rice', 'Broccoli', 'Eggs', 'Oats', 'Sweet potato', 'Almonds'].map((item) => (
-            <View key={item} style={styles.shopRow}>
-              <View style={styles.shopDot} />
-              <Text style={styles.shopItem}>{item}</Text>
-            </View>
-          ))}
-        </View>
-
         {/* Footer */}
         <View style={styles.footer}>
           <View style={styles.footerDot} />
@@ -378,22 +367,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: MUTED,
     lineHeight: 22,
-  },
-  shopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 5,
-  },
-  shopDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: GREEN,
-  },
-  shopItem: {
-    fontSize: 14,
-    color: TEXT,
   },
   footer: {
     backgroundColor: BG,

@@ -11,13 +11,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { Colors } from '../../constants/colors';
+import { lessonsApi } from '../../services/api';
 import {
   Lesson,
   LessonProgress,
-  getLessons,
   getUserProgress,
   markLessonComplete,
-  seedLessonsIfNeeded,
 } from '../../db/educationDb';
 
 type ScreenMode = 'list' | 'detail';
@@ -51,17 +50,41 @@ export default function EducationScreen() {
 
   const loadData = useCallback(async () => {
     if (!currentUser) return;
-    await seedLessonsIfNeeded();
-    const [allLessons, userProgress] = await Promise.all([
-      getLessons(),
-      getUserProgress(currentUser.id),
-    ]);
+    let serverLessons: Lesson[] = [];
+    try {
+      const res = await lessonsApi.getAll();
+      const raw: any[] = Array.isArray(res.data)
+        ? res.data
+        : Array.isArray(res.data?.lessons)
+          ? res.data.lessons
+          : [];
+      serverLessons = raw.map((l: any) => ({
+        id: String(l.id),
+        title: l.title || 'Untitled',
+        subtitle: l.subtitle || '',
+        category: l.category || 'Nutrition Basics',
+        content: l.content || l.body || '',
+        durationMin: l.duration_min ?? l.durationMin ?? 5,
+        sortOrder: l.sort_order ?? l.sortOrder ?? 0,
+        createdAt: l.created_at ?? l.createdAt ?? new Date().toISOString(),
+      }));
+      serverLessons.sort((a, b) => a.sortOrder - b.sortOrder);
+    } catch (err) {
+      // Read-only fetch. On failure leave whatever we had (first load = empty
+      // list with the honest empty state below).
+      console.error('EducationScreen: lessonsApi.getAll failed', err);
+    }
+    // Completion tracking stays local for now — the backend endpoint exists
+    // (`POST /lessons/:id/complete`) but the coach-side read has no UI yet,
+    // so we don't want to advertise progress that no one sees. Revisit when
+    // a "lesson completions" surface lands for the coach.
+    const userProgress = await getUserProgress(currentUser.id);
     setProgress(userProgress);
     const completedIds = new Set(
-      userProgress.filter((p) => p.completed).map((p) => p.lessonId)
+      userProgress.filter((p) => p.completed).map((p) => p.lessonId),
     );
     setLessons(
-      allLessons.map((l) => ({ ...l, completed: completedIds.has(l.id) }))
+      serverLessons.map((l) => ({ ...l, completed: completedIds.has(l.id) })),
     );
   }, [currentUser]);
 
@@ -266,6 +289,15 @@ export default function EducationScreen() {
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Ionicons name="book-outline" size={40} color={Colors.textMuted} />
+            <Text style={styles.emptyTitle}>No lessons yet</Text>
+            <Text style={styles.emptyText}>
+              Your coach hasn't published any lessons. When they do, you'll see them here.
+            </Text>
+          </View>
+        }
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -473,4 +505,17 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   completedCardText: { fontSize: 15, fontWeight: '700', color: Colors.primary },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingTop: 60,
+    paddingHorizontal: 32,
+    gap: 10,
+  },
+  emptyTitle: { fontSize: 17, fontWeight: '700', color: Colors.textPrimary },
+  emptyText: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 19,
+  },
 });

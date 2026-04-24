@@ -14,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { Colors } from '../../constants/colors';
 import { getTodayString } from '../../utils/date';
-import { habitsApi } from '../../services/api';
+import { habitsApi, checkInsApi } from '../../services/api';
 import {
   DailyCheckIn,
   getDailyCheckIn,
@@ -88,6 +88,8 @@ export default function HabitsScreen() {
   const [stress, setStress] = useState(3);
   const [notes, setNotes] = useState('');
   const [checkInSaved, setCheckInSaved] = useState(false);
+  const [lastCheckInDate, setLastCheckInDate] = useState<string | null>(null);
+  const [checkInToast, setCheckInToast] = useState(false);
 
   // Add habit form
   const [newName, setNewName] = useState('');
@@ -157,16 +159,44 @@ export default function HabitsScreen() {
 
   const loadCheckIn = useCallback(async () => {
     if (!currentUser) return;
-    const ci = await getDailyCheckIn(currentUser.id, today);
-    if (ci) {
-      setCheckIn(ci);
-      setMood(ci.mood);
-      setEnergy(ci.energyLevel);
-      setSleepHours(ci.sleepHours);
-      setSleepQuality(ci.sleepQuality);
-      setStress(ci.stressLevel);
-      setNotes(ci.notes);
+    // Local cache seeds the form so the user sees their last-saved values even
+    // if the server fetch is slow/fails. Server call below is the source of
+    // truth for "last check-in" — if it succeeds with data for today, we use
+    // those values instead.
+    const cached = await getDailyCheckIn(currentUser.id, today);
+    if (cached) {
+      setCheckIn(cached);
+      setMood(cached.mood);
+      setEnergy(cached.energyLevel);
+      setSleepHours(cached.sleepHours);
+      setSleepQuality(cached.sleepQuality);
+      setStress(cached.stressLevel);
+      setNotes(cached.notes);
       setCheckInSaved(true);
+    }
+    try {
+      const res = await checkInsApi.list({ limit: 7 });
+      const rows: any[] = Array.isArray(res.data)
+        ? res.data
+        : Array.isArray(res.data?.check_ins)
+          ? res.data.check_ins
+          : [];
+      if (rows.length > 0) {
+        const latest = rows[0];
+        const latestDate: string = (latest?.date || '').slice(0, 10);
+        setLastCheckInDate(latestDate || null);
+        if (latestDate === today) {
+          setCheckInSaved(true);
+          if (latest.mood != null) setMood(Number(latest.mood));
+          if (latest.energy != null) setEnergy(Number(latest.energy));
+          if (latest.sleep_hours != null) setSleepHours(Number(latest.sleep_hours));
+          if (latest.notes) setNotes(String(latest.notes));
+        }
+      }
+    } catch (err) {
+      // Best-effort — the form still works, just without the "last check-in"
+      // banner. Local cache already hydrated the inputs above.
+      console.error('HabitsScreen: checkInsApi.list failed', err);
     }
   }, [currentUser, today]);
 
@@ -245,6 +275,25 @@ export default function HabitsScreen() {
 
   const handleSaveCheckIn = async () => {
     if (!currentUser) return;
+    // Server is the source of truth — if this fails, surface it instead of
+    // silently persisting only locally (which is what got us in trouble pre-Tier-2).
+    try {
+      await checkInsApi.save({
+        date: today,
+        mood,
+        energy,
+        sleep_hours: sleepHours,
+        notes: notes || null,
+      });
+    } catch (err: any) {
+      console.error('HabitsScreen: checkInsApi.save failed', err);
+      Alert.alert(
+        "Couldn't save check-in",
+        err?.response?.data?.message || err?.message || 'Please try again.',
+      );
+      return;
+    }
+    // Keep the local cache in sync so offline reads still work.
     await saveDailyCheckIn({
       userId: currentUser.id,
       date: today,
@@ -256,6 +305,9 @@ export default function HabitsScreen() {
       notes,
     });
     setCheckInSaved(true);
+    setLastCheckInDate(today);
+    setCheckInToast(true);
+    setTimeout(() => setCheckInToast(false), 2200);
     await loadCheckIn();
   };
 
@@ -403,10 +455,28 @@ export default function HabitsScreen() {
           </>
         ) : (
           <>
-            {checkInSaved && (
+            {checkInToast && (
+              <View style={styles.savedBanner} accessibilityLiveRegion="polite">
+                <Ionicons name="checkmark-circle" size={20} color={Colors.primary} />
+                <Text style={styles.savedBannerText}>Check-in saved</Text>
+              </View>
+            )}
+            {!checkInToast && checkInSaved && (
               <View style={styles.savedBanner}>
                 <Ionicons name="checkmark-circle" size={20} color={Colors.primary} />
                 <Text style={styles.savedBannerText}>Today's check-in saved!</Text>
+              </View>
+            )}
+            {lastCheckInDate && lastCheckInDate !== today && (
+              <View style={styles.lastCheckInRow}>
+                <Ionicons name="time-outline" size={14} color={Colors.textMuted} />
+                <Text style={styles.lastCheckInText}>
+                  Last check-in: {new Date(lastCheckInDate + 'T00:00:00').toLocaleDateString('en-US', {
+                    weekday: 'short',
+                    month: 'short',
+                    day: 'numeric',
+                  })}
+                </Text>
               </View>
             )}
 
@@ -765,6 +835,14 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   savedBannerText: { fontSize: 14, fontWeight: '600', color: Colors.primary },
+  lastCheckInRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  lastCheckInText: { fontSize: 12, color: Colors.textMuted, fontWeight: '600' },
   checkInCard: {
     backgroundColor: Colors.surface,
     borderRadius: 14,
