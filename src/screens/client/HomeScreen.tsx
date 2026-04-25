@@ -39,6 +39,7 @@ import {
   useUnreadMessagesCount,
   useUnreadNudgeCount,
 } from '../../hooks/useApi';
+import HeroAction from '../../components/HeroAction';
 
 const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 
@@ -413,7 +414,16 @@ export default function HomeScreen() {
         onDateChange={handleDateChange}
       />
 
+      {/* ── UX Psych #1: One Dominant Hero Action ── */}
+      <FadeInView delay={50}>
+        <HeroAction />
+      </FadeInView>
+
       <FadeInView delay={100}>
+        {/* ── Secondary section: Nutrition ring (demoted below hero) ── */}
+        <View style={styles.ringSectionLabel}>
+          <Text style={styles.secondarySectionTitle}>Nutrition</Text>
+        </View>
         <View style={styles.ringSection}>
           <CalorieRing consumed={dailyTotals.calories} target={calorieTarget} />
           <Text style={styles.targetLabel}>
@@ -640,6 +650,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.textMuted,
     marginTop: 4,
+  },
+  ringSectionLabel: {
+    paddingHorizontal: Spacing.lg,
+    marginBottom: 4,
+  },
+  secondarySectionTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.textMuted,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
   ringSection: {
     alignItems: 'center',
