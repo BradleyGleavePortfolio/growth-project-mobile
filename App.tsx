@@ -11,8 +11,14 @@ import {
   asyncStoragePersister,
   QUERY_CACHE_MAX_AGE,
 } from './src/services/queryClient';
+import { initSentry, wrap as sentryWrap } from './src/services/sentry';
 
-export default function App() {
+// Initialise Sentry as early as possible so even import-time failures get
+// captured. The function no-ops when EXPO_PUBLIC_SENTRY_DSN is unset, so this
+// line is safe to commit without secrets.
+initSentry();
+
+function App() {
   const [ready, setReady] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
 
@@ -82,3 +88,7 @@ export default function App() {
     </ErrorBoundary>
   );
 }
+
+// Sentry.wrap() injects an automatic error boundary + touch tracking. When
+// the SDK isn't initialised (no DSN) it returns the component unchanged.
+export default sentryWrap(App);
