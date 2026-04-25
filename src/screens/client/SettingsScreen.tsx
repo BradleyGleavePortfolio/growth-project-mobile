@@ -18,7 +18,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 // useAuthStore.signOut() which only cleared tokens as a side effect.
 import { signOut, refreshProfile } from '../../services/authActions';
 import { useSettings } from '../../hooks/useSettings';
-import { profileApi } from '../../services/api';
+import { profileApi, notificationsApi } from '../../services/api';
 import { authEvents } from '../../utils/authEvents';
 import { Colors } from '../../constants/colors';
 import { mediumTap, warningTap, successTap } from '../../utils/haptics';
@@ -90,6 +90,29 @@ export default function SettingsScreen({ navigation }: any) {
         },
       },
     ]);
+  };
+
+  // Map client setting keys to backend notification preference fields
+  const NOTIFICATION_KEY_MAP: Partial<Record<keyof import('../../hooks/useSettings').ClientSettings, string>> = {
+    dailyCheckin: 'daily_checkin_enabled',
+    mealReminders: 'eat_enabled',
+    fastingAlerts: 'fasting_enabled',
+    weeklySummary: 'weekly_summary_enabled',
+  };
+
+  const handleNotificationToggle = <K extends keyof import('../../hooks/useSettings').ClientSettings>(
+    key: K,
+    value: import('../../hooks/useSettings').ClientSettings[K],
+  ) => {
+    updateSetting(key, value);
+    const backendKey = NOTIFICATION_KEY_MAP[key];
+    if (backendKey) {
+      notificationsApi
+        .updatePreferences({ [backendKey]: value })
+        .catch((err: any) => {
+          console.warn('SettingsScreen: failed to sync notification pref', key, err?.message);
+        });
+    }
   };
 
   const stepMeals = (delta: number) => {
@@ -204,7 +227,7 @@ export default function SettingsScreen({ navigation }: any) {
             <Text style={styles.rowLabel}>Daily Check-in</Text>
             <Switch
               value={settings.dailyCheckin}
-              onValueChange={(v) => updateSetting('dailyCheckin', v)}
+              onValueChange={(v) => handleNotificationToggle('dailyCheckin', v)}
               trackColor={{ false: Colors.border, true: Colors.primary }}
               thumbColor={Colors.textOnPrimary}
             />
@@ -219,7 +242,7 @@ export default function SettingsScreen({ navigation }: any) {
             <Text style={styles.rowLabel}>Meal Reminders</Text>
             <Switch
               value={settings.mealReminders}
-              onValueChange={(v) => updateSetting('mealReminders', v)}
+              onValueChange={(v) => handleNotificationToggle('mealReminders', v)}
               trackColor={{ false: Colors.border, true: Colors.primary }}
               thumbColor={Colors.textOnPrimary}
             />
@@ -228,7 +251,7 @@ export default function SettingsScreen({ navigation }: any) {
             <Text style={styles.rowLabel}>Fasting Alerts</Text>
             <Switch
               value={settings.fastingAlerts}
-              onValueChange={(v) => updateSetting('fastingAlerts', v)}
+              onValueChange={(v) => handleNotificationToggle('fastingAlerts', v)}
               trackColor={{ false: Colors.border, true: Colors.primary }}
               thumbColor={Colors.textOnPrimary}
             />
@@ -237,7 +260,7 @@ export default function SettingsScreen({ navigation }: any) {
             <Text style={styles.rowLabel}>Weekly Summary</Text>
             <Switch
               value={settings.weeklySummary}
-              onValueChange={(v) => updateSetting('weeklySummary', v)}
+              onValueChange={(v) => handleNotificationToggle('weeklySummary', v)}
               trackColor={{ false: Colors.border, true: Colors.primary }}
               thumbColor={Colors.textOnPrimary}
             />
