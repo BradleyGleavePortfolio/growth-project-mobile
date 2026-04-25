@@ -178,6 +178,8 @@ export const authApi = {
     api.post('/auth/forgot-password', { email }),
   validateInviteCode: (code: string) =>
     api.post('/auth/validate-invite-code', { code }),
+  becomeCoach: (password: string) =>
+    api.post('/auth/become-coach', { password }),
 };
 
 export const profileApi = {
