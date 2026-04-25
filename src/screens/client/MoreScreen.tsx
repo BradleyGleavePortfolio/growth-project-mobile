@@ -81,6 +81,27 @@ const MORE_ITEMS: MoreItem[] = [
     target: { type: 'stack', screen: 'Widgets' },
     a11yHint: 'Opens widgets configuration',
   },
+  {
+    icon: 'cart-outline',
+    label: 'Grocery List',
+    description: 'Your synced grocery list',
+    target: { type: 'stack', screen: 'GroceryList' },
+    a11yHint: 'Opens your grocery list',
+  },
+  {
+    icon: 'bag-outline',
+    label: 'Shopping List',
+    description: 'Your synced shopping list',
+    target: { type: 'stack', screen: 'ShoppingList' },
+    a11yHint: 'Opens your shopping list',
+  },
+  {
+    icon: 'clipboard-outline',
+    label: 'Prep Guide',
+    description: 'Weekly meal prep plan',
+    target: { type: 'stack', screen: 'PrepGuide' },
+    a11yHint: 'Opens your weekly prep guide',
+  },
 ];
 
 export default function MoreScreen() {
