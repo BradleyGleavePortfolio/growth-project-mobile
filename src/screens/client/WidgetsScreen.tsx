@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -6,11 +6,13 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../../constants/colors';
 import FadeInView from '../../components/FadeInView';
+import { fastingApi } from '../../services/api';
 
 const NON_FUNCTIONAL_IDS = new Set(['scan-barcode', 'apple-watch', 'health-kit']);
 
@@ -83,8 +85,42 @@ const WEARABLES = [
   },
 ];
 
+// Default 16:8 fast protocol.
+const DEFAULT_FAST_PROTOCOL = '16:8';
+
 export default function WidgetsScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
+  const [startingFast, setStartingFast] = useState(false);
+
+  const handleStartFast = useCallback(async () => {
+    if (startingFast) return;
+    Alert.alert(
+      'Start 16:8 Fast',
+      'Begin a 16-hour fast now? Your fasting timer will start immediately.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Start',
+          onPress: async () => {
+            setStartingFast(true);
+            try {
+              await fastingApi.start({ protocol: DEFAULT_FAST_PROTOCOL });
+              // Navigate to the fasting screen in the More stack.
+              navigation.navigate('Fast');
+            } catch (err: any) {
+              const msg =
+                err?.response?.data?.message ||
+                err?.message ||
+                'Could not start fast. Check if a fast is already in progress.';
+              Alert.alert('Error', msg);
+            } finally {
+              setStartingFast(false);
+            }
+          },
+        },
+      ],
+    );
+  }, [startingFast, navigation]);
 
   return (
     <ScrollView
@@ -131,23 +167,35 @@ export default function WidgetsScreen() {
             3D Touch / long-press shortcuts from your app icon
           </Text>
           {QUICK_ACTIONS.map((action) => {
-            const disabled = NON_FUNCTIONAL_IDS.has(action.id);
+            const isComingSoon = NON_FUNCTIONAL_IDS.has(action.id);
+            const isStartFast = action.id === 'start-fast';
+            const isLoading = isStartFast && startingFast;
+
+            let onPressHandler: (() => void) | undefined;
+            if (isComingSoon) {
+              onPressHandler = () => Alert.alert('Coming Soon', 'This feature is under development.');
+            } else if (isStartFast) {
+              onPressHandler = handleStartFast;
+            }
+
             return (
               <TouchableOpacity
                 key={action.id}
-                style={[styles.card, disabled && styles.cardDisabled]}
-                activeOpacity={disabled ? 0.7 : 1}
-                onPress={disabled ? () => Alert.alert('Coming Soon', 'This feature is under development.') : undefined}
-                disabled={!disabled}
+                style={[styles.card, isComingSoon && styles.cardDisabled]}
+                activeOpacity={0.7}
+                onPress={onPressHandler}
+                disabled={isLoading}
               >
                 <View style={styles.cardIcon}>
-                  <Ionicons name={action.icon} size={24} color={disabled ? Colors.textMuted : Colors.primary} />
+                  <Ionicons name={action.icon} size={24} color={isComingSoon ? Colors.textMuted : Colors.primary} />
                 </View>
                 <View style={styles.cardContent}>
-                  <Text style={[styles.cardTitle, disabled && styles.cardTitleDisabled]}>{action.title}</Text>
+                  <Text style={[styles.cardTitle, isComingSoon && styles.cardTitleDisabled]}>{action.title}</Text>
                   <Text style={styles.cardDesc}>{action.description}</Text>
                 </View>
-                {disabled ? (
+                {isLoading ? (
+                  <ActivityIndicator size="small" color={Colors.primary} />
+                ) : isComingSoon ? (
                   <View style={styles.badgeComingSoon}>
                     <Text style={styles.badgeComingSoonText}>Coming Soon</Text>
                   </View>
