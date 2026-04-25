@@ -96,8 +96,10 @@ export function useHabitStreaks(opts?: UseQueryOptions<ApiHabitStreak[]>) {
 export function useCreateHabit() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { name: string; emoji?: string; category?: string; target_per_week?: number }) =>
-      habitsApi.create(data).then((r) => r.data),
+    // Backend tolerates extra fields (icon/color/unit/target_value/frequency) that
+    // the legacy HabitsScreen modal already collected. Accept Record so callers
+    // don't have to be artificially narrow.
+    mutationFn: (data: Record<string, any>) => habitsApi.create(data).then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['habits'] });
     },
@@ -107,8 +109,10 @@ export function useCreateHabit() {
 export function useLogHabit() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (args: { id: string; date: string; completed: boolean }) =>
-      habitsApi.logHabit(args.id, { date: args.date, completed: args.completed }).then((r) => r.data),
+    mutationFn: (args: { id: string; date: string; completed: boolean; value?: number }) => {
+      const { id, ...payload } = args;
+      return habitsApi.logHabit(id, payload).then((r) => r.data);
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['habits'] });
     },

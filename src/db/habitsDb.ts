@@ -218,89 +218,19 @@ export async function getWeekCompletions(userId: string, habitId: string): Promi
 }
 
 // ── Daily Check-ins ────────────────────────────────────────────────────────
-
-export async function getDailyCheckIn(userId: string, date: string): Promise<DailyCheckIn | null> {
-  const db = await getDatabase();
-  const row = await db.getFirstAsync<any>(
-    'SELECT * FROM daily_checkins WHERE userId = ? AND date = ?',
-    [userId, date]
-  );
-  return row ? mapCheckIn(row) : null;
-}
-
-export async function saveDailyCheckIn(data: {
-  userId: string;
-  date: string;
-  mood: number;
-  energyLevel: number;
-  sleepHours: number;
-  sleepQuality: number;
-  stressLevel: number;
-  notes: string;
-}): Promise<DailyCheckIn> {
-  const db = await getDatabase();
-  const existing = await getDailyCheckIn(data.userId, data.date);
-
-  if (existing) {
-    await db.runAsync(
-      `UPDATE daily_checkins SET mood = ?, energyLevel = ?, sleepHours = ?, sleepQuality = ?, stressLevel = ?, notes = ?
-       WHERE userId = ? AND date = ?`,
-      [data.mood, data.energyLevel, data.sleepHours, data.sleepQuality, data.stressLevel, data.notes, data.userId, data.date]
-    );
-    return { ...existing, ...data };
-  }
-
-  const id = 'checkin_' + generateId();
-  const now = new Date().toISOString();
-  await db.runAsync(
-    `INSERT INTO daily_checkins (id, userId, date, mood, energyLevel, sleepHours, sleepQuality, stressLevel, notes, createdAt)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, data.userId, data.date, data.mood, data.energyLevel, data.sleepHours, data.sleepQuality, data.stressLevel, data.notes, now]
-  );
-  return { id, ...data, createdAt: now };
-}
-
-export async function getCheckInHistory(userId: string, days = 30): Promise<DailyCheckIn[]> {
-  const db = await getDatabase();
-  const rows = await db.getAllAsync<any>(
-    'SELECT * FROM daily_checkins WHERE userId = ? ORDER BY date DESC LIMIT ?',
-    [userId, days]
-  );
-  return rows.map(mapCheckIn);
-}
+//
+// Local check-in helpers (getDailyCheckIn / saveDailyCheckIn / getCheckInHistory)
+// were removed under Fix #2 — the server is the single source of truth and
+// React Query (useTodayCheckIn / useSaveCheckIn) handles caching. The local
+// `daily_checkins` table is still created above for schema compatibility with
+// older device builds, but nothing reads or writes to it anymore.
 
 // ── Seed ───────────────────────────────────────────────────────────────────
-
-export async function seedHabitsIfNeeded(userId: string): Promise<void> {
-  const db = await getDatabase();
-  const existing = await db.getFirstAsync<{ count: number }>(
-    'SELECT COUNT(*) as count FROM habits WHERE userId = ?',
-    [userId]
-  );
-  if ((existing?.count || 0) > 0) return;
-
-  const defaults = [
-    { name: 'Drink Water', icon: 'water', color: '#4ECDC4', frequency: 'daily', targetCount: 8, unit: 'glasses' },
-    { name: 'Take Vitamins', icon: 'medical', color: '#E76F51', frequency: 'daily', targetCount: 1, unit: 'times' },
-    { name: 'Eat Vegetables', icon: 'leaf', color: '#2D6A4F', frequency: 'daily', targetCount: 3, unit: 'servings' },
-    { name: '10k Steps', icon: 'walk', color: '#E9C46A', frequency: 'daily', targetCount: 1, unit: 'times' },
-    { name: 'Stretch', icon: 'body', color: '#52B788', frequency: 'daily', targetCount: 1, unit: 'times' },
-    { name: 'No Sugar', icon: 'close-circle', color: '#E63946', frequency: 'daily', targetCount: 1, unit: 'times' },
-    { name: 'Read 20 min', icon: 'book', color: '#264653', frequency: 'daily', targetCount: 1, unit: 'times' },
-    { name: 'Meditate', icon: 'happy', color: '#A78BFA', frequency: 'daily', targetCount: 1, unit: 'times' },
-  ];
-
-  for (let i = 0; i < defaults.length; i++) {
-    const h = defaults[i];
-    const id = 'habit_' + generateId();
-    const now = new Date().toISOString();
-    await db.runAsync(
-      `INSERT INTO habits (id, userId, name, icon, color, frequency, targetCount, unit, sortOrder, archived, createdAt)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)`,
-      [id, userId, h.name, h.icon, h.color, h.frequency as string, h.targetCount, h.unit, i + 1, now]
-    );
-  }
-}
+//
+// seedHabitsIfNeeded() was removed under Fix #2 — a fresh install starts with
+// no habits, the user adds the ones they want, and the backend stores them.
+// Theatrical seeding of generic habits the user never opted into was confusing
+// and made the data inconsistent with what the coach saw on their dashboard.
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
