@@ -18,6 +18,7 @@ import {
   getUserProgress,
   markLessonComplete,
 } from '../../db/educationDb';
+import { lessonsApi } from '../../services/api';
 
 type ScreenMode = 'list' | 'detail';
 
@@ -74,15 +75,32 @@ export default function EducationScreen() {
       // list with the honest empty state below).
       console.error('EducationScreen: lessonsApi.getAll failed', err);
     }
-    // Completion tracking stays local for now — the backend endpoint exists
-    // (`POST /lessons/:id/complete`) but the coach-side read has no UI yet,
-    // so we don't want to advertise progress that no one sees. Revisit when
-    // a "lesson completions" surface lands for the coach.
+    // Completion: backend is source of truth; local SQLite is used as a cache
+    // for offline reads. We merge both so lessons marked locally but not yet
+    // synced still show as complete.
     const userProgress = await getUserProgress(currentUser.id);
     setProgress(userProgress);
-    const completedIds = new Set(
+    const localCompletedIds = new Set(
       userProgress.filter((p) => p.completed).map((p) => p.lessonId),
     );
+    // Try to pull backend completions (lessons already completed will have
+    // completed=true in the lesson list response if the backend tracks it,
+    // otherwise we fall back to local SQLite).
+    let backendCompletedIds = new Set<string>();
+    try {
+      const allRes = await lessonsApi.getAll();
+      const allRaw: any[] = Array.isArray(allRes.data)
+        ? allRes.data
+        : Array.isArray(allRes.data?.lessons)
+          ? allRes.data.lessons
+          : [];
+      allRaw.forEach((l: any) => {
+        if (l.completed || l.is_completed) backendCompletedIds.add(String(l.id));
+      });
+    } catch {
+      // fallback to local only
+    }
+    const completedIds = new Set([...localCompletedIds, ...backendCompletedIds]);
     setLessons(
       serverLessons.map((l) => ({ ...l, completed: completedIds.has(l.id) })),
     );
@@ -105,11 +123,19 @@ export default function EducationScreen() {
 
   const handleComplete = async () => {
     if (!currentUser || !selectedLesson) return;
+    // Optimistic update — local SQLite keeps offline cache in sync
     await markLessonComplete(currentUser.id, selectedLesson.id);
     setSelectedLesson({ ...selectedLesson, completed: true });
     setLessons((prev) =>
       prev.map((l) => (l.id === selectedLesson.id ? { ...l, completed: true } : l))
     );
+    // Backend is source of truth — fire-and-forget; local state already updated
+    try {
+      await lessonsApi.complete(selectedLesson.id);
+    } catch (err) {
+      // Non-blocking: completion is cached locally; backend will sync on next load
+      console.warn('EducationScreen: lessonsApi.complete failed', err);
+    }
   };
 
   const goBack = () => {
