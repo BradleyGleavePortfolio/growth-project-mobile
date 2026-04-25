@@ -13,9 +13,11 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachStore } from '../../store/coachStore';
 import { coachApi } from '../../services/api';
+import { subscribeToMessages } from '../../services/realtime';
 import { Colors } from '../../constants/colors';
 
-const POLL_MS = 30000;
+// Backstop poll — Realtime broadcasts drive most refreshes now. Was 30s.
+const FALLBACK_POLL_MS = 60000;
 
 interface UnreadByClient {
   [clientId: string]: number;
@@ -50,12 +52,21 @@ export default function MessagesScreen() {
   useFocusEffect(
     useCallback(() => {
       loadUnread();
-      pollRef.current = setInterval(loadUnread, POLL_MS);
+
+      // Subscribe to message-arrived pings on the coach's own channel.
+      // The backend broadcasts to messages:{userId} for both inbound (client
+      // → coach) and acknowledgement events.
+      const unsubscribe = currentUser?.id
+        ? subscribeToMessages(currentUser.id, loadUnread)
+        : () => {};
+
+      pollRef.current = setInterval(loadUnread, FALLBACK_POLL_MS);
       return () => {
+        unsubscribe();
         if (pollRef.current) clearInterval(pollRef.current);
         pollRef.current = null;
       };
-    }, [loadUnread]),
+    }, [loadUnread, currentUser?.id]),
   );
 
   const onRefresh = useCallback(async () => {

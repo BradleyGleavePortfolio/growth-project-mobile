@@ -15,6 +15,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { messagesApi } from '../../services/api';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { subscribeToMessages } from '../../services/realtime';
 import { Colors } from '../../constants/colors';
 
 interface Message {
@@ -26,10 +28,14 @@ interface Message {
   read_at?: string | null;
 }
 
-const POLL_MS = 15000;
+// Realtime now drives most refreshes. Keep a 60s safety poll as a backstop in
+// case the WebSocket is dropped (background → foreground transitions, mobile
+// data dead zones). Without realtime this used to be 15s.
+const FALLBACK_POLL_MS = 60000;
 
 export default function MessagesScreen() {
   const navigation = useNavigation<any>();
+  const currentUser = useCurrentUser();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [inputText, setInputText] = useState('');
@@ -71,14 +77,27 @@ export default function MessagesScreen() {
     useCallback(() => {
       setLoading(true);
       load().then(() => markRead());
+
+      // Realtime: subscribe to message-arrived pings so the screen refreshes
+      // immediately when the coach replies. Falls back gracefully if the
+      // WebSocket fails to connect.
+      const unsubscribe = currentUser?.id
+        ? subscribeToMessages(currentUser.id, () => {
+            load().then(() => markRead());
+          })
+        : () => {};
+
+      // Backstop poll — if Realtime drops we still catch up within a minute.
       pollRef.current = setInterval(() => {
         load();
-      }, POLL_MS);
+      }, FALLBACK_POLL_MS);
+
       return () => {
+        unsubscribe();
         if (pollRef.current) clearInterval(pollRef.current);
         pollRef.current = null;
       };
-    }, [load, markRead]),
+    }, [load, markRead, currentUser?.id]),
   );
 
   const handleSend = async () => {
