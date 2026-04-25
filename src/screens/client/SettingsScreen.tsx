@@ -4,12 +4,12 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   Switch,
   Alert,
   Modal,
   TextInput,
 } from 'react-native';
+import HapticPressable from '../../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
@@ -152,9 +152,9 @@ export default function SettingsScreen({ navigation }: any) {
   return (
     <View style={styles.container}>
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <HapticPressable intent="light" onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
-        </TouchableOpacity>
+        </HapticPressable>
         <Text style={styles.topTitle}>Settings</Text>
         <View style={styles.backBtn} />
       </View>
@@ -178,10 +178,10 @@ export default function SettingsScreen({ navigation }: any) {
             <Text style={styles.rowLabel}>Email</Text>
             <Text style={styles.rowValueMuted}>{currentUser?.email}</Text>
           </View>
-          <TouchableOpacity style={styles.row} onPress={() => setShowPasswordModal(true)}>
+          <HapticPressable intent="light" style={styles.row} onPress={() => setShowPasswordModal(true)}>
             <Text style={styles.rowLabel}>Change Password</Text>
             <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-          </TouchableOpacity>
+          </HapticPressable>
         </View>
 
         {/* Nutrition Preferences */}
@@ -191,53 +191,55 @@ export default function SettingsScreen({ navigation }: any) {
             <Text style={styles.rowLabel}>Units</Text>
             <View style={styles.segmented}>
               {(['lbs', 'kg'] as const).map((u) => (
-                <TouchableOpacity
+                <HapticPressable
                   key={u}
+                  intent="light"
                   style={[styles.segBtn, settings.unit === u && styles.segBtnActive]}
                   onPress={() => handleProfileSettingUpdate('unit', u)}
                 >
                   <Text style={[styles.segText, settings.unit === u && styles.segTextActive]}>{u}</Text>
-                </TouchableOpacity>
+                </HapticPressable>
               ))}
             </View>
           </View>
           <View style={styles.row}>
             <Text style={styles.rowLabel}>Meals Per Day</Text>
             <View style={styles.stepper}>
-              <TouchableOpacity onPress={() => stepMeals(-1)} style={styles.stepBtn}>
+              <HapticPressable intent="light" onPress={() => stepMeals(-1)} style={styles.stepBtn}>
                 <Ionicons name="remove" size={18} color={Colors.textPrimary} />
-              </TouchableOpacity>
+              </HapticPressable>
               <Text style={styles.stepValue}>{settings.mealsPerDay}</Text>
-              <TouchableOpacity onPress={() => stepMeals(1)} style={styles.stepBtn}>
+              <HapticPressable intent="light" onPress={() => stepMeals(1)} style={styles.stepBtn}>
                 <Ionicons name="add" size={18} color={Colors.textPrimary} />
-              </TouchableOpacity>
+              </HapticPressable>
             </View>
           </View>
           <View style={styles.row}>
             <Text style={styles.rowLabel}>Water Goal (fl oz)</Text>
             <View style={styles.stepper}>
-              <TouchableOpacity onPress={() => stepWater(-10)} style={styles.stepBtn}>
+              <HapticPressable intent="light" onPress={() => stepWater(-10)} style={styles.stepBtn}>
                 <Ionicons name="remove" size={18} color={Colors.textPrimary} />
-              </TouchableOpacity>
+              </HapticPressable>
               <Text style={styles.stepValue}>{settings.waterGoalOz}</Text>
-              <TouchableOpacity onPress={() => stepWater(10)} style={styles.stepBtn}>
+              <HapticPressable intent="light" onPress={() => stepWater(10)} style={styles.stepBtn}>
                 <Ionicons name="add" size={18} color={Colors.textPrimary} />
-              </TouchableOpacity>
+              </HapticPressable>
             </View>
           </View>
           <View style={styles.row}>
             <Text style={styles.rowLabel}>Calorie Display</Text>
             <View style={styles.segmented}>
               {(['net', 'gross'] as const).map((c) => (
-                <TouchableOpacity
+                <HapticPressable
                   key={c}
+                  intent="light"
                   style={[styles.segBtn, settings.calorieDisplay === c && styles.segBtnActive]}
                   onPress={() => handleProfileSettingUpdate('calorieDisplay', c)}
                 >
                   <Text style={[styles.segText, settings.calorieDisplay === c && styles.segTextActive]}>
                     {c.charAt(0).toUpperCase() + c.slice(1)}
                   </Text>
-                </TouchableOpacity>
+                </HapticPressable>
               ))}
             </View>
           </View>
@@ -311,17 +313,17 @@ export default function SettingsScreen({ navigation }: any) {
         {/* Data & Privacy */}
         <Text style={styles.sectionLabel}>Data & Privacy</Text>
         <View style={styles.card}>
-          <TouchableOpacity style={styles.row} onPress={handleResetOnboarding}>
+          <HapticPressable intent="warning" style={styles.row} onPress={handleResetOnboarding}>
             <Text style={styles.rowLabel}>Reset Onboarding</Text>
             <Ionicons name="refresh-outline" size={18} color={Colors.warning} />
-          </TouchableOpacity>
+          </HapticPressable>
         </View>
 
         {/* Sign Out */}
-        <TouchableOpacity style={styles.signOutBtn} onPress={handleSignOut}>
+        <HapticPressable intent="warning" style={styles.signOutBtn} onPress={handleSignOut}>
           <Ionicons name="log-out-outline" size={20} color={Colors.error} />
           <Text style={styles.signOutText}>Sign Out</Text>
-        </TouchableOpacity>
+        </HapticPressable>
 
         {/* About */}
         <View style={styles.about}>
@@ -336,7 +338,8 @@ export default function SettingsScreen({ navigation }: any) {
           <View style={styles.modalSheet}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Change Password</Text>
-              <TouchableOpacity
+              <HapticPressable
+                intent="light"
                 onPress={() => {
                   setShowPasswordModal(false);
                   setPasswordError('');
@@ -347,7 +350,7 @@ export default function SettingsScreen({ navigation }: any) {
                 accessibilityLabel="Close"
               >
                 <Ionicons name="close" size={24} color={Colors.textSecondary} />
-              </TouchableOpacity>
+              </HapticPressable>
             </View>
             <TextInput
               style={styles.input}
@@ -377,7 +380,8 @@ export default function SettingsScreen({ navigation }: any) {
                 {passwordError}
               </Text>
             ) : null}
-            <TouchableOpacity
+            <HapticPressable
+              intent="success"
               style={[styles.saveBtn, passwordBusy && { opacity: 0.6 }]}
               onPress={handleChangePassword}
               disabled={passwordBusy}
@@ -385,7 +389,7 @@ export default function SettingsScreen({ navigation }: any) {
               accessibilityLabel="Update password"
             >
               <Text style={styles.saveBtnText}>{passwordBusy ? 'Updating…' : 'Update Password'}</Text>
-            </TouchableOpacity>
+            </HapticPressable>
           </View>
         </View>
       </Modal>

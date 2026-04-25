@@ -3,10 +3,10 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   TextInput,
   ScrollView,
 } from 'react-native';
+import HapticPressable from '../HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Radius } from '../../theme/index';
 
@@ -34,10 +34,10 @@ export default function ManualFoodEntryForm({ fields, onFieldChange, onBack, onS
       contentContainerStyle={styles.manualForm}
       keyboardShouldPersistTaps="handled"
     >
-      <TouchableOpacity style={styles.backToSearch} onPress={onBack}>
+      <HapticPressable intent="light" style={styles.backToSearch} onPress={onBack}>
         <Ionicons name="arrow-back" size={18} color={Colors.primary} />
         <Text style={styles.backToSearchText}>Back to Search</Text>
-      </TouchableOpacity>
+      </HapticPressable>
 
       <TextInput
         style={styles.input}
@@ -121,10 +121,10 @@ export default function ManualFoodEntryForm({ fields, onFieldChange, onBack, onS
         </View>
       </View>
 
-      <TouchableOpacity style={styles.logButton} onPress={onSubmit} activeOpacity={0.8}>
+      <HapticPressable intent="success" style={styles.logButton} onPress={onSubmit}>
         <Ionicons name="add-circle" size={22} color={Colors.white} />
         <Text style={styles.logButtonText}>Log Food</Text>
-      </TouchableOpacity>
+      </HapticPressable>
     </ScrollView>
   );
 }

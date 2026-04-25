@@ -4,12 +4,12 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   Modal,
   Alert,
   ActivityIndicator,
   SafeAreaView,
 } from 'react-native';
+import HapticPressable from '../../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachStore } from '../../store/coachStore';
@@ -157,10 +157,10 @@ export default function ProgramTemplatesScreen() {
             <FadeInView key={template.id} delay={idx * 60}>
               <View style={[styles.templateCard, isExpanded && styles.templateCardExpanded]}>
                 {/* Card Header */}
-                <TouchableOpacity
+                <HapticPressable
+                  intent="medium"
                   style={styles.cardHeader}
                   onPress={() => setExpanded(isExpanded ? null : template.id)}
-                  activeOpacity={0.75}
                 >
                   <View style={[styles.emojiCircle, { backgroundColor: template.color + '20' }]}>
                     <Text style={styles.emoji}>{template.emoji}</Text>
@@ -182,7 +182,7 @@ export default function ProgramTemplatesScreen() {
                     size={20}
                     color={Colors.textMuted}
                   />
-                </TouchableOpacity>
+                </HapticPressable>
 
                 {/* Expanded Content */}
                 {isExpanded && (
@@ -205,14 +205,14 @@ export default function ProgramTemplatesScreen() {
                       <Text style={styles.notesText}>{template.trainingNotes}</Text>
                     </View>
 
-                    <TouchableOpacity
+                    <HapticPressable
+                      intent="success"
                       style={[styles.applyBtn, { backgroundColor: template.color }]}
                       onPress={() => handleApply(template)}
-                      activeOpacity={0.85}
                     >
                       <Ionicons name="person-add-outline" size={18} color={Colors.textOnPrimary} />
                       <Text style={styles.applyBtnText}>Apply to Client →</Text>
-                    </TouchableOpacity>
+                    </HapticPressable>
                   </View>
                 )}
               </View>
@@ -246,9 +246,9 @@ export default function ProgramTemplatesScreen() {
                 </Text>
               )}
             </View>
-            <TouchableOpacity onPress={() => setClientModalVisible(false)}>
+            <HapticPressable intent="light" onPress={() => setClientModalVisible(false)}>
               <Ionicons name="close" size={24} color={Colors.textPrimary} />
-            </TouchableOpacity>
+            </HapticPressable>
           </View>
 
           <ScrollView contentContainerStyle={styles.clientList}>
@@ -259,11 +259,11 @@ export default function ProgramTemplatesScreen() {
               </View>
             ) : (
               activeClients.map((client) => (
-                <TouchableOpacity
+                <HapticPressable
                   key={client.id}
+                  intent="medium"
                   style={styles.clientRow}
                   onPress={() => handleSelectClient(client.id, `${client.firstName} ${client.lastName}`)}
-                  activeOpacity={0.75}
                 >
                   <View style={styles.clientAvatar}>
                     <Text style={styles.clientAvatarText}>
@@ -275,7 +275,7 @@ export default function ProgramTemplatesScreen() {
                     <Text style={styles.clientRowEmail}>{client.email}</Text>
                   </View>
                   <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-                </TouchableOpacity>
+                </HapticPressable>
               ))
             )}
           </ScrollView>

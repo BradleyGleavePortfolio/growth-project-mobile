@@ -3,11 +3,11 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   Modal,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import HapticPressable from '../HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../theme/index';
 import { SearchResult, MEAL_SECTIONS } from '../../utils/log/types';
@@ -66,9 +66,9 @@ export default function FoodSearchModal(props: Props) {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <View style={styles.modalHeader}>
-          <TouchableOpacity onPress={onClose}>
+          <HapticPressable intent="light" onPress={onClose}>
             <Ionicons name="close" size={24} color={Colors.dark} />
-          </TouchableOpacity>
+          </HapticPressable>
           <Text style={styles.modalTitle}>
             Add to {MEAL_SECTIONS.find((s) => s.type === activeMealType)?.label}
           </Text>

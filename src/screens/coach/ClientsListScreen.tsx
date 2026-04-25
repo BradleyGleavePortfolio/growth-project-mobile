@@ -4,10 +4,10 @@ import {
   Text,
   StyleSheet,
   FlatList,
-  TouchableOpacity,
   TextInput,
   ActivityIndicator,
 } from 'react-native';
+import HapticPressable from '../../components/HapticPressable';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { ClientsStackParamList } from '../../navigation/CoachNavigator';
@@ -42,7 +42,8 @@ export default function ClientsListScreen({ navigation }: Props) {
   const filters: Array<'all' | 'active' | 'archived'> = ['all', 'active', 'archived'];
 
   const renderClient = ({ item }: { item: User }) => (
-    <TouchableOpacity
+    <HapticPressable
+      intent="light"
       style={styles.clientCard}
       onPress={() =>
         navigation.navigate('ClientDetail', {
@@ -50,7 +51,6 @@ export default function ClientsListScreen({ navigation }: Props) {
           clientName: `${item.firstName} ${item.lastName}`,
         })
       }
-      activeOpacity={0.7}
       accessibilityRole="button"
       accessibilityLabel={`Open client ${item.firstName} ${item.lastName}`}
     >
@@ -76,7 +76,7 @@ export default function ClientsListScreen({ navigation }: Props) {
         <Text style={styles.statusText}>{item.status}</Text>
       </View>
       <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
-    </TouchableOpacity>
+    </HapticPressable>
   );
 
   return (
@@ -100,8 +100,9 @@ export default function ClientsListScreen({ navigation }: Props) {
 
       <View style={styles.filterRow}>
         {filters.map((f) => (
-          <TouchableOpacity
+          <HapticPressable
             key={f}
+            intent="light"
             style={[styles.filterChip, filterStatus === f && styles.filterChipActive]}
             onPress={() => setFilterStatus(f)}
             accessibilityRole="button"
@@ -116,7 +117,7 @@ export default function ClientsListScreen({ navigation }: Props) {
             >
               {f.charAt(0).toUpperCase() + f.slice(1)}
             </Text>
-          </TouchableOpacity>
+          </HapticPressable>
         ))}
       </View>
 
