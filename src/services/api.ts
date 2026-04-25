@@ -433,3 +433,9 @@ export const listsApi = {
   deleteItem: (id: string) => api.delete(`/lists/items/${id}`),
   clearChecked: (type: 'grocery' | 'shopping') => api.post(`/lists/${type}/clear-checked`),
 };
+
+// F14 — Prep Guide
+export const prepGuideApi = {
+  getWeeklyGuide: (week?: string) =>
+    api.get(`/prep-guide${week ? `?week=${week}` : ''}`),
+};
