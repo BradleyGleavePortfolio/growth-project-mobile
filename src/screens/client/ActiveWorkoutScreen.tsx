@@ -14,14 +14,16 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/colors';
-import { workoutApi } from '../../services/api';
-import {
-  getAllExercises,
-  logExerciseWithVolume,
-} from '../../db/workoutDb';
+import { getAllExercises } from '../../db/workoutDb';
+import { useCreateWorkout } from '../../hooks/useApi';
 import ExerciseLogModal, { ExerciseLogSaveData } from '../../components/ExerciseLogModal';
+
+// NB: Fix #2 — the local exercise_logs SQLite table (logExerciseWithVolume)
+// is no longer written to. Volume aggregation now happens on the server
+// from the workouts created by useCreateWorkout, so HomeScreen and the
+// coach dashboard stay in sync. The exercise *catalog* (getAllExercises)
+// is still local because it's static reference data, not per-user state.
 
 interface SessionExercise {
   exerciseId: string;
@@ -166,7 +168,6 @@ export default function ActiveWorkoutScreen() {
   const navigation = useNavigation<any>();
   const { routineName, exercises: exercisesJson } = route.params;
 
-  const [userId, setUserId] = useState<string | null>(null);
   const [sessionExercises, setSessionExercises] = useState<SessionExercise[]>([]);
   const [timer, setTimer] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -177,7 +178,7 @@ export default function ActiveWorkoutScreen() {
   const [selectedMuscle, setSelectedMuscle] = useState('All');
   const [showLogModal, setShowLogModal] = useState(false);
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
-  const [coachId, setCoachId] = useState<string>('');
+  const createWorkout = useCreateWorkout();
 
   useEffect(() => {
     // Parse routine exercises into session format
@@ -197,21 +198,9 @@ export default function ActiveWorkoutScreen() {
     }
   }, []);
 
-  useEffect(() => {
-    // Load user from AsyncStorage
-    AsyncStorage.getItem('user_data').then((raw) => {
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        setUserId(parsed.id);
-        setCoachId(parsed.coachId || '');
-      }
-    }).catch((err) => {
-      // Best-effort user-id hydration. The workout can still be logged via
-      // backend API; only the local exercise_logs SQLite table needs userId,
-      // and that table is best-effort too (see logExerciseWithVolume catch).
-      console.error('ActiveWorkoutScreen: user_data read failed', err);
-    });
-  }, []);
+  // (Fix #2) Removed AsyncStorage user_data read — the backend resolves the
+  // current user from the JWT, so we don't need a local user_id to write
+  // workouts anymore.
 
   useEffect(() => {
     // Start timer
@@ -306,8 +295,10 @@ export default function ActiveWorkoutScreen() {
     setShowLogModal(true);
   };
 
-  const handleExerciseLogSave = async (data: ExerciseLogSaveData) => {
-    // Add the exercise to the active session with the logged sets
+  const handleExerciseLogSave = (data: ExerciseLogSaveData) => {
+    // Add the exercise to the active session with the logged sets. Persistence
+    // happens once at the end via useCreateWorkout — we no longer dual-write
+    // to a local SQLite volume table.
     setSessionExercises((prev) => [
       ...prev,
       {
@@ -320,28 +311,6 @@ export default function ActiveWorkoutScreen() {
         })),
       },
     ]);
-
-    // Persist to exercise_logs SQLite table for volume tracking
-    if (userId) {
-      try {
-        await logExerciseWithVolume({
-          userId,
-          coachId,
-          exerciseId: data.exerciseId,
-          exerciseName: data.exerciseName,
-          muscle: data.muscle,
-          sets: data.sets,
-          totalVolume: data.totalVolume,
-          loggedAt: new Date().toISOString(),
-        });
-      } catch (err) {
-        // SQLite volume-log write is best-effort — the workout is still kept
-        // in React state and persisted via workoutApi.create on finish. If
-        // the local write fails we log for telemetry but don't interrupt
-        // the workout flow.
-        console.error('ActiveWorkoutScreen: logExerciseWithVolume failed', err);
-      }
-    }
 
     // Close both the log modal and the add-exercise picker modal
     setShowLogModal(false);
@@ -364,9 +333,9 @@ export default function ActiveWorkoutScreen() {
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Finish',
-        onPress: async () => {
-          try {
-            await workoutApi.create({
+        onPress: () => {
+          createWorkout.mutate(
+            {
               date: new Date().toISOString(),
               duration_minutes: Math.round(timer / 60),
               notes: routineName,
@@ -378,16 +347,17 @@ export default function ActiveWorkoutScreen() {
                   weight_per_set: e.sets.filter((s) => s.completed).map((s) => s.weight),
                   reps_per_set: e.sets.filter((s) => s.completed).map((s) => s.reps),
                 })),
-            });
-          } catch (err: any) {
-            // Destructive write — the user finished a workout and expects it
-            // saved. Surface so they can retry instead of losing the session.
-            console.error('ActiveWorkoutScreen: finishWorkout save failed', err);
-            Alert.alert("Couldn't save workout", err?.message || 'Please try again.');
-            return;
-          }
-          if (timerRef.current) clearInterval(timerRef.current);
-          navigation.goBack();
+            },
+            {
+              onSuccess: () => {
+                if (timerRef.current) clearInterval(timerRef.current);
+                navigation.goBack();
+              },
+              onError: (err: any) => {
+                Alert.alert("Couldn't save workout", err?.message || 'Please try again.');
+              },
+            },
+          );
         },
       },
     ]);

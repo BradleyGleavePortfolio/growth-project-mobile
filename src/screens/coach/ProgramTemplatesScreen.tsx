@@ -13,11 +13,9 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachStore } from '../../store/coachStore';
-import { coachApi } from '../../services/api';
+import { usePostClientGuidelines } from '../../hooks/useApi';
 import { Colors } from '../../constants/colors';
 import { Shadow } from '../../constants/theme';
-import { getDatabase } from '../../db/database';
-import { generateId } from '../../utils/date';
 import FadeInView from '../../components/FadeInView';
 
 // ── Program Templates ──────────────────────────────────────────────────────
@@ -96,51 +94,6 @@ const PROGRAM_TEMPLATES: ProgramTemplate[] = [
   },
 ];
 
-// ── Ensure extended guidelines table ─────────────────────────────────────
-
-async function ensureGuidelinesTable(): Promise<void> {
-  const db = await getDatabase();
-  await db.execAsync(`
-    CREATE TABLE IF NOT EXISTS coach_guidelines_v2 (
-      id TEXT PRIMARY KEY NOT NULL,
-      coachId TEXT NOT NULL,
-      clientId TEXT NOT NULL,
-      title TEXT NOT NULL,
-      content TEXT NOT NULL,
-      tags TEXT,
-      createdAt TEXT NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS idx_cg2_client ON coach_guidelines_v2(clientId);
-  `);
-}
-
-async function applyTemplateToClient(
-  coachId: string,
-  clientId: string,
-  template: ProgramTemplate
-): Promise<void> {
-  const content = `## Nutrition\n${template.nutritionNotes}\n\n## Training\n${template.trainingNotes}`;
-
-  // Primary: send to backend API
-  try {
-    await coachApi.postGuidelines(clientId, content);
-  } catch {
-    Alert.alert(
-      'Sync Notice',
-      'Guidelines saved locally but could not sync to the server. They will be available on this device.',
-    );
-  }
-
-  // Also cache locally for offline access
-  await ensureGuidelinesTable();
-  const db = await getDatabase();
-  const id = 'cg2_' + generateId();
-  await db.runAsync(
-    `INSERT INTO coach_guidelines_v2 (id, coachId, clientId, title, content, tags, createdAt) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [id, coachId, clientId, template.title + ' ' + template.emoji, content, JSON.stringify(template.tags), new Date().toISOString()]
-  );
-}
-
 // ── Component ─────────────────────────────────────────────────────────────
 
 export default function ProgramTemplatesScreen() {
@@ -149,7 +102,7 @@ export default function ProgramTemplatesScreen() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<ProgramTemplate | null>(null);
   const [clientModalVisible, setClientModalVisible] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const postGuidelines = usePostClientGuidelines();
 
   useEffect(() => {
     if (currentUser) loadClients(currentUser.id);
@@ -162,10 +115,10 @@ export default function ProgramTemplatesScreen() {
 
   const handleSelectClient = async (clientId: string, clientName: string) => {
     if (!selectedTemplate || !currentUser) return;
-    setLoading(true);
     setClientModalVisible(false);
+    const content = `## Nutrition\n${selectedTemplate.nutritionNotes}\n\n## Training\n${selectedTemplate.trainingNotes}`;
     try {
-      await applyTemplateToClient(currentUser.id, clientId, selectedTemplate);
+      await postGuidelines.mutateAsync({ clientId, guidelines: content });
       Alert.alert(
         '✅ Template Applied',
         `"${selectedTemplate.title}" has been assigned to ${clientName}.`,
@@ -174,10 +127,11 @@ export default function ProgramTemplatesScreen() {
     } catch (err) {
       Alert.alert('Error', 'Could not apply template. Please try again.');
     } finally {
-      setLoading(false);
       setSelectedTemplate(null);
     }
   };
+
+  const loading = postGuidelines.isPending;
 
   const activeClients = clients.filter((c) => c.status === 'active');
 

@@ -16,6 +16,7 @@ import Svg, { Circle, G, Polyline, Line as SvgLine, Text as SvgText } from 'reac
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { weightApi, logApi } from '../../services/api';
 import { useNavigation } from '@react-navigation/native';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { Colors } from '../../constants/colors';
 import { WeightLog } from '../../types';
 import { getTodayString } from '../../utils/date';
@@ -165,8 +166,9 @@ function CalorieRing({
 
 export default function ProgressScreen() {
   const navigation = useNavigation<any>();
+  const currentUser = useCurrentUser();
+  const userId = currentUser?.id ?? null;
 
-  const [userId, setUserId] = useState<string | null>(null);
   const [macroTargets, setMacroTargets] = useState<any>(null);
   const [weightLogs, setWeightLogs] = useState<WeightLog[]>([]);
   const [period, setPeriod] = useState<Period>('30D');
@@ -178,9 +180,6 @@ export default function ProgressScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
-    AsyncStorage.getItem('user_data').then((raw) => {
-      if (raw) setUserId(JSON.parse(raw).id);
-    }).catch(() => {});
     AsyncStorage.getItem('macro_targets').then((raw) => {
       if (raw) setMacroTargets(JSON.parse(raw));
     }).catch(() => {});
