@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authEvents } from '../utils/authEvents';
+import { setSentryUser } from '../services/sentry';
 
 export interface CurrentUser {
   id: string;
@@ -43,11 +44,16 @@ export function useCurrentUser(): CurrentUser | null {
       if (raw) {
         const parsed = JSON.parse(raw);
         setUser(parsed);
+        // Tag Sentry events with the current user so crash reports are
+        // attributable. No-op when Sentry is not configured.
+        setSentryUser({ id: parsed.id, email: parsed.email });
       } else {
         setUser(null);
+        setSentryUser(null);
       }
     } catch {
       setUser(null);
+      setSentryUser(null);
     }
   };
 

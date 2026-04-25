@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
+import { captureError } from '../services/sentry';
 
 interface Props {
   children: React.ReactNode;
@@ -17,6 +18,12 @@ export default class ErrorBoundary extends React.Component<Props, State> {
 
   static getDerivedStateFromError(error: Error): State {
     return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, info: { componentStack?: string }): void {
+    // Forward the crash to Sentry. No-op when DSN is unset, so this is safe
+    // to call unconditionally.
+    captureError(error, { componentStack: info.componentStack });
   }
 
   handleReset = () => {
