@@ -18,7 +18,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 // replacing the old useAuthStore.signOut() which only cleared tokens as a
 // side effect and left previous-user data in memory for the next login.
 import { signOut } from '../../services/authActions';
-import { coachApi } from '../../services/api';
+import { coachApi, profileApi } from '../../services/api';
 import { Colors } from '../../constants/colors';
 import { mediumTap, warningTap, successTap } from '../../utils/haptics';
 import { updateSupabasePassword } from '../../utils/supabaseAuth';
@@ -60,8 +60,22 @@ export default function SettingsScreen() {
     try {
       const raw = await AsyncStorage.getItem(COACH_SETTINGS_KEY + '_' + userId);
       if (raw) setSettings(JSON.parse(raw));
-      const bio = await AsyncStorage.getItem('gp_coach_bio_' + userId);
-      if (bio) setBioText(bio);
+      // Bio: try backend first (source of truth); fall back to AsyncStorage cache
+      try {
+        const profileRes = await profileApi.get();
+        const backendBio: string | null = profileRes.data?.bio ?? null;
+        if (backendBio !== null) {
+          setBioText(backendBio);
+          // Keep local cache in sync
+          await AsyncStorage.setItem('gp_coach_bio_' + userId, backendBio);
+        } else {
+          const localBio = await AsyncStorage.getItem('gp_coach_bio_' + userId);
+          if (localBio) setBioText(localBio);
+        }
+      } catch {
+        const localBio = await AsyncStorage.getItem('gp_coach_bio_' + userId);
+        if (localBio) setBioText(localBio);
+      }
       if (userId) {
         const res = await coachApi.getClients();
         const clients = res.data;
@@ -86,7 +100,14 @@ export default function SettingsScreen() {
   };
 
   const handleSaveBio = async () => {
+    // Optimistic: write to AsyncStorage cache first for instant UI
     await AsyncStorage.setItem('gp_coach_bio_' + userId, bioText);
+    // Backend is source of truth
+    try {
+      await profileApi.update({ bio: bioText });
+    } catch (err: any) {
+      console.warn('coach SettingsScreen: failed to sync bio to backend', err?.message);
+    }
     successTap();
     setShowBioModal(false);
   };
