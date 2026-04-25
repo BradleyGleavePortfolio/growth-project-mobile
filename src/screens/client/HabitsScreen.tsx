@@ -1,4 +1,16 @@
-import React, { useEffect, useState, useCallback } from 'react';
+/**
+ * HabitsScreen — API-first via React Query (Fix #2).
+ *
+ * Reads come exclusively from the backend through useHabits / useHabitLogs /
+ * useHabitStreaks / useTodayCheckIn. Writes use useLogHabit / useCreateHabit /
+ * useSaveCheckIn mutations, which auto-invalidate the relevant query keys.
+ *
+ * The local-SQLite functions (getDailyCheckIn / saveDailyCheckIn / seedHabits)
+ * are no longer referenced — the persisted React Query cache (24h max) covers
+ * offline reads, and the server is the single source of truth for writes.
+ */
+
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -11,17 +23,19 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { Colors } from '../../constants/colors';
 import { getTodayString } from '../../utils/date';
-import { habitsApi, checkInsApi } from '../../services/api';
 import {
-  DailyCheckIn,
-  getDailyCheckIn,
-  saveDailyCheckIn,
-} from '../../db/habitsDb';
+  useHabits,
+  useHabitLogs,
+  useHabitStreaks,
+  useLogHabit,
+  useCreateHabit,
+  useTodayCheckIn,
+  useSaveCheckIn,
+} from '../../hooks/useApi';
 
-interface Habit {
+interface HabitView {
   id: string;
   name: string;
   icon: string;
@@ -29,12 +43,9 @@ interface Habit {
   frequency: string;
   targetCount: number;
   unit: string;
-}
-
-interface HabitLog {
-  habitId: string;
-  completed: boolean;
-  count: number;
+  log: { completed: boolean; count: number } | null;
+  streak: number;
+  weekDots: boolean[];
 }
 
 type TabMode = 'habits' | 'checkin';
@@ -66,189 +77,122 @@ const HABIT_COLORS = [
   '#264653', '#6A4C93', '#F4A261', '#74C69D',
 ];
 
-interface HabitWithMeta extends Habit {
-  log: HabitLog | null;
-  streak: number;
-  weekDots: boolean[];
-}
-
 export default function HabitsScreen() {
-  const currentUser = useCurrentUser();
+  const today = getTodayString();
   const [tab, setTab] = useState<TabMode>('habits');
-  const [habits, setHabits] = useState<HabitWithMeta[]>([]);
-  const [refreshing, setRefreshing] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
 
-  // Check-in state
-  const [_checkIn, setCheckIn] = useState<DailyCheckIn | null>(null);
+  // Server reads (React Query)
+  const habitsQ = useHabits();
+  const logsQ = useHabitLogs(today);
+  const streaksQ = useHabitStreaks();
+  const todayCheckInQ = useTodayCheckIn(today);
+
+  // Server writes
+  const logHabit = useLogHabit();
+  const createHabit = useCreateHabit();
+  const saveCheckIn = useSaveCheckIn();
+
+  // Check-in form state — hydrated from server, edited locally before save.
   const [mood, setMood] = useState(3);
   const [energy, setEnergy] = useState(3);
   const [sleepHours, setSleepHours] = useState(7);
   const [sleepQuality, setSleepQuality] = useState(3);
   const [stress, setStress] = useState(3);
   const [notes, setNotes] = useState('');
-  const [checkInSaved, setCheckInSaved] = useState(false);
-  const [lastCheckInDate, setLastCheckInDate] = useState<string | null>(null);
   const [checkInToast, setCheckInToast] = useState(false);
+  const [lastCheckInDate, setLastCheckInDate] = useState<string | null>(null);
 
-  // Add habit form
+  // Add-habit modal form
   const [newName, setNewName] = useState('');
   const [newIcon, setNewIcon] = useState('checkmark-circle');
   const [newColor, setNewColor] = useState('#2D6A4F');
   const [newTarget, setNewTarget] = useState('1');
   const [newUnit, setNewUnit] = useState('times');
 
-  const today = getTodayString();
-
-  const loadHabits = useCallback(async () => {
-    if (!currentUser) return;
-    try {
-      const habitsRes = await habitsApi.getAll();
-      const allHabits: Habit[] = (habitsRes.data || []).map((h: any) => ({
-        id: h.id,
-        name: h.name,
-        icon: h.icon || 'checkmark-circle',
-        color: h.color || '#2D6A4F',
-        frequency: h.frequency || 'daily',
-        targetCount: h.target_count || h.targetCount || 1,
-        unit: h.unit || 'times',
-      }));
-
-      // Load today's logs
-      let logsMap = new Map<string, HabitLog>();
-      try {
-        const logsRes = await habitsApi.getLogs(today);
-        const logs: HabitLog[] = (logsRes.data || []).map((l: any) => ({
-          habitId: l.habit_id || l.habitId,
-          completed: l.completed ?? false,
-          count: l.count || 0,
-        }));
-        logsMap = new Map(logs.map((l) => [l.habitId, l]));
-      } catch (err) {
-        // Best-effort read: today's habit logs are optional; habits list
-        // still renders with zero completions.
-        console.error('HabitsScreen: habitsApi.getLogs failed', err);
-      }
-
-      // Load streaks
-      let streaksMap = new Map<string, number>();
-      try {
-        const streaksRes = await habitsApi.getStreaks();
-        const streaks = streaksRes.data || [];
-        streaks.forEach((s: any) => {
-          streaksMap.set(s.habit_id || s.habitId, s.streak || 0);
-        });
-      } catch (err) {
-        // Best-effort: streaks display as 0 when unavailable.
-        console.error('HabitsScreen: habitsApi.getStreaks failed', err);
-      }
-
-      const withMeta: HabitWithMeta[] = allHabits.map((h) => ({
-        ...h,
-        log: logsMap.get(h.id) || null,
-        streak: streaksMap.get(h.id) || 0,
-        weekDots: [false, false, false, false, false, false, false],
-      }));
-      setHabits(withMeta);
-    } catch (err) {
-      // Outer read failure (probably /habits list): we leave the existing
-      // state in place. Empty screen on first load is acceptable.
-      console.error('HabitsScreen: loadHabits failed', err);
-    }
-  }, [currentUser, today]);
-
-  const loadCheckIn = useCallback(async () => {
-    if (!currentUser) return;
-    // Local cache seeds the form so the user sees their last-saved values even
-    // if the server fetch is slow/fails. Server call below is the source of
-    // truth for "last check-in" — if it succeeds with data for today, we use
-    // those values instead.
-    const cached = await getDailyCheckIn(currentUser.id, today);
-    if (cached) {
-      setCheckIn(cached);
-      setMood(cached.mood);
-      setEnergy(cached.energyLevel);
-      setSleepHours(cached.sleepHours);
-      setSleepQuality(cached.sleepQuality);
-      setStress(cached.stressLevel);
-      setNotes(cached.notes);
-      setCheckInSaved(true);
-    }
-    try {
-      const res = await checkInsApi.list({ limit: 7 });
-      const rows: any[] = Array.isArray(res.data)
-        ? res.data
-        : Array.isArray(res.data?.check_ins)
-          ? res.data.check_ins
-          : [];
-      if (rows.length > 0) {
-        const latest = rows[0];
-        const latestDate: string = (latest?.date || '').slice(0, 10);
-        setLastCheckInDate(latestDate || null);
-        if (latestDate === today) {
-          setCheckInSaved(true);
-          if (latest.mood != null) setMood(Number(latest.mood));
-          if (latest.energy != null) setEnergy(Number(latest.energy));
-          if (latest.sleep_hours != null) setSleepHours(Number(latest.sleep_hours));
-          if (latest.notes) setNotes(String(latest.notes));
-        }
-      }
-    } catch (err) {
-      // Best-effort — the form still works, just without the "last check-in"
-      // banner. Local cache already hydrated the inputs above.
-      console.error('HabitsScreen: checkInsApi.list failed', err);
-    }
-  }, [currentUser, today]);
-
+  // Hydrate the form from today's check-in once the query resolves.
   useEffect(() => {
-    loadHabits();
-    loadCheckIn();
-  }, [loadHabits, loadCheckIn]);
+    const row = todayCheckInQ.data;
+    if (!row) return;
+    if (row.mood != null) setMood(Number(row.mood));
+    if (row.energy != null) setEnergy(Number(row.energy));
+    if (row.sleep_hours != null) setSleepHours(Number(row.sleep_hours));
+    if (row.notes) setNotes(String(row.notes));
+    if (row.date) setLastCheckInDate(String(row.date).slice(0, 10));
+  }, [todayCheckInQ.data]);
 
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await loadHabits();
-    await loadCheckIn();
-    setRefreshing(false);
-  }, [loadHabits, loadCheckIn]);
+  // Build the per-habit view model from three independent queries.
+  const allHabits = (habitsQ.data || []).map((h: any) => ({
+    id: h.id,
+    name: h.name,
+    icon: h.icon || h.emoji || 'checkmark-circle',
+    color: h.color || '#2D6A4F',
+    frequency: h.frequency || 'daily',
+    targetCount: h.target_count || h.target_value || 1,
+    unit: h.unit || 'times',
+  }));
+  const logsMap = new Map<string, { completed: boolean; count: number }>(
+    (logsQ.data || []).map((l: any) => [
+      l.habit_id || l.habitId,
+      { completed: l.completed ?? false, count: l.count || 0 },
+    ]),
+  );
+  const streaksMap = new Map<string, number>(
+    (streaksQ.data || []).map((s: any) => [
+      s.habit_id || s.habitId,
+      s.current_streak ?? s.streak ?? 0,
+    ]),
+  );
+  const habits: HabitView[] = allHabits.map((h) => ({
+    ...h,
+    log: logsMap.get(h.id) || null,
+    streak: streaksMap.get(h.id) || 0,
+    weekDots: [false, false, false, false, false, false, false],
+  }));
 
-  const handleToggle = async (habit: HabitWithMeta) => {
-    if (!currentUser) return;
-    try {
-      const newCompleted = !(habit.log?.completed);
-      await habitsApi.logHabit(habit.id, {
+  const refreshing =
+    habitsQ.isRefetching || logsQ.isRefetching || streaksQ.isRefetching || todayCheckInQ.isRefetching;
+
+  const onRefresh = () => {
+    habitsQ.refetch();
+    logsQ.refetch();
+    streaksQ.refetch();
+    todayCheckInQ.refetch();
+  };
+
+  const checkInSaved = !!todayCheckInQ.data;
+
+  const handleToggle = (habit: HabitView) => {
+    const newCompleted = !habit.log?.completed;
+    logHabit.mutate(
+      {
+        id: habit.id,
         date: today,
         completed: newCompleted,
-        value: newCompleted ? (habit.targetCount || 1) : 0,
-      });
-    } catch (err: any) {
-      // Destructive-ish write (optimistic toggle). Surface so the user knows
-      // their tap didn't stick.
-      console.error('HabitsScreen: handleToggle failed', err);
-      Alert.alert("Couldn't update habit", err?.message || 'Please try again.');
-    }
-    await loadHabits();
-  };
-
-  const handleDelete = (habit: HabitWithMeta) => {
-    Alert.alert('Delete Habit', `Remove "${habit.name}" from your habits?`, [
-      { text: 'Cancel', style: 'cancel' },
+        value: newCompleted ? habit.targetCount || 1 : 0,
+      },
       {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          // No delete endpoint in API — just reload
-          // habitsApi doesn't expose delete, so we skip
-          await loadHabits();
+        onError: (err: any) => {
+          Alert.alert("Couldn't update habit", err?.message || 'Please try again.');
         },
       },
-    ]);
+    );
   };
 
-  const handleAddHabit = async () => {
-    if (!currentUser || !newName.trim()) return;
-    try {
-      await habitsApi.create({
+  const handleDelete = (habit: HabitView) => {
+    // Backend has no DELETE /habits/:id today; keep the long-press as a
+    // confirmation dialog explaining that, so users don't think the tap was lost.
+    Alert.alert(
+      'Delete Habit',
+      `Removing "${habit.name}" from your habits is coming soon. For now, you can stop logging it and it will fall off your streak naturally.`,
+      [{ text: 'OK' }],
+    );
+  };
+
+  const handleAddHabit = () => {
+    if (!newName.trim()) return;
+    createHabit.mutate(
+      {
         name: newName.trim(),
         icon: newIcon,
         color: newColor,
@@ -256,59 +200,46 @@ export default function HabitsScreen() {
         frequency: 'daily',
         target_value: parseInt(newTarget) || 1,
         unit: newUnit || 'times',
-      });
-    } catch (err: any) {
-      // Destructive write: surface failure so user can retry before the modal
-      // closes and they think the habit was created.
-      console.error('HabitsScreen: handleAddHabit failed', err);
-      Alert.alert("Couldn't create habit", err?.message || 'Please try again.');
-      return;
-    }
-    setShowAddModal(false);
-    setNewName('');
-    setNewIcon('checkmark-circle');
-    setNewColor('#2D6A4F');
-    setNewTarget('1');
-    setNewUnit('times');
-    await loadHabits();
+      },
+      {
+        onSuccess: () => {
+          setShowAddModal(false);
+          setNewName('');
+          setNewIcon('checkmark-circle');
+          setNewColor('#2D6A4F');
+          setNewTarget('1');
+          setNewUnit('times');
+        },
+        onError: (err: any) => {
+          Alert.alert("Couldn't create habit", err?.message || 'Please try again.');
+        },
+      },
+    );
   };
 
-  const handleSaveCheckIn = async () => {
-    if (!currentUser) return;
-    // Server is the source of truth — if this fails, surface it instead of
-    // silently persisting only locally (which is what got us in trouble pre-Tier-2).
-    try {
-      await checkInsApi.save({
+  const handleSaveCheckIn = () => {
+    saveCheckIn.mutate(
+      {
         date: today,
         mood,
         energy,
         sleep_hours: sleepHours,
         notes: notes || null,
-      });
-    } catch (err: any) {
-      console.error('HabitsScreen: checkInsApi.save failed', err);
-      Alert.alert(
-        "Couldn't save check-in",
-        err?.response?.data?.message || err?.message || 'Please try again.',
-      );
-      return;
-    }
-    // Keep the local cache in sync so offline reads still work.
-    await saveDailyCheckIn({
-      userId: currentUser.id,
-      date: today,
-      mood,
-      energyLevel: energy,
-      sleepHours,
-      sleepQuality,
-      stressLevel: stress,
-      notes,
-    });
-    setCheckInSaved(true);
-    setLastCheckInDate(today);
-    setCheckInToast(true);
-    setTimeout(() => setCheckInToast(false), 2200);
-    await loadCheckIn();
+      },
+      {
+        onSuccess: () => {
+          setLastCheckInDate(today);
+          setCheckInToast(true);
+          setTimeout(() => setCheckInToast(false), 2200);
+        },
+        onError: (err: any) => {
+          Alert.alert(
+            "Couldn't save check-in",
+            err?.response?.data?.message || err?.message || 'Please try again.',
+          );
+        },
+      },
+    );
   };
 
   const completedCount = habits.filter((h) => h.log?.completed).length;

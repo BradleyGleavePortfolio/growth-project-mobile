@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -7,336 +7,383 @@ import {
   TouchableOpacity,
   RefreshControl,
   Alert,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { Colors } from '../../constants/colors';
-import { colors } from '../../theme';
 import {
-  Challenge,
-  ChallengeParticipant,
-  WinEntry,
-  LeaderboardEntry,
-  getChallenges,
-  getUserChallenges,
-  joinChallenge,
-  getWinsFeed,
-  getLeaderboard,
-  getUserPoints,
-  seedCommunityIfNeeded,
-} from '../../db/communityDb';
+  useLeaderboard,
+  useCommunityFeed,
+  usePostWin,
+  ApiCommunityWin,
+  ApiLeaderboardEntry,
+} from '../../hooks/useApi';
+import { SkeletonCard } from '../../components/SkeletonLoader';
 
-type TabKey = 'challenges' | 'leaderboard' | 'wins';
+/**
+ * CommunityScreen — API-first.
+ *
+ * Source-of-truth migration (Fix #2):
+ *   Wins        → real CommunityWin rows on the backend (Fix #9). When a
+ *                 client posts a win it's persisted server-side, scoped to
+ *                 the coach roster, and visible to teammates and the coach.
+ *   Leaderboard → real workout-volume groupBy on the backend (community.
+ *                 service.getLeaderboard). Same scope rules.
+ *   Challenges  → no backend module exists yet; tab renders as Coming Soon.
+ *                 Previously this tab was driven by a SQLite-only
+ *                 `seedCommunityIfNeeded` (theatrical seed of two fake
+ *                 challenges with hard-coded participants). That seed has
+ *                 been removed entirely; we will not show a feature that
+ *                 only exists per-device.
+ *
+ * Cache:
+ *   The two real queries (feed + leaderboard) are persisted via the
+ *   PersistQueryClientProvider so cold starts paint last-known data while
+ *   the network call refreshes in the background.
+ */
 
-const WIN_ICONS: Record<string, string> = {
-  streak: 'flame',
-  challenge: 'trophy',
-  weight: 'scale',
-  workout: 'barbell',
-  habit: 'checkmark-circle',
-  lesson: 'book',
-};
+type TabKey = 'wins' | 'leaderboard' | 'challenges';
 
-const WIN_COLORS: Record<string, string> = {
-  streak: Colors.streak,
-  challenge: Colors.warning,
-  weight: Colors.primary,
-  workout: Colors.info,
-  habit: Colors.primaryLight,
-  lesson: colors.data.habit,
-};
+const TABS: { key: TabKey; label: string; icon: string }[] = [
+  { key: 'wins', label: 'Wins', icon: 'star' },
+  { key: 'leaderboard', label: 'Leaderboard', icon: 'podium' },
+  { key: 'challenges', label: 'Challenges', icon: 'trophy' },
+];
 
-const CHALLENGE_ICONS: Record<string, string> = {
-  nutrition: 'nutrition',
-  fitness: 'fitness',
-};
+function formatTimeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days === 1) return 'Yesterday';
+  return `${days}d ago`;
+}
 
 export default function CommunityScreen() {
   const currentUser = useCurrentUser();
-  const [activeTab, setActiveTab] = useState<TabKey>('challenges');
-  const [challenges, setChallenges] = useState<Challenge[]>([]);
-  const [myChallenges, setMyChallenges] = useState<(ChallengeParticipant & { challenge: Challenge })[]>([]);
-  const [wins, setWins] = useState<WinEntry[]>([]);
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
-  const [myPoints, setMyPoints] = useState(0);
-  const [refreshing, setRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState<TabKey>('wins');
+  const [postWinOpen, setPostWinOpen] = useState(false);
+  const [winTitle, setWinTitle] = useState('');
+  const [winDesc, setWinDesc] = useState('');
 
-  const loadData = useCallback(async () => {
-    if (!currentUser) return;
-    await seedCommunityIfNeeded();
-    const [allChallenges, userChallenges, winsFeed, board, pts] = await Promise.all([
-      getChallenges(),
-      getUserChallenges(currentUser.id),
-      getWinsFeed(),
-      getLeaderboard(),
-      getUserPoints(currentUser.id),
-    ]);
-    setChallenges(allChallenges);
-    setMyChallenges(userChallenges);
-    setWins(winsFeed);
-    setLeaderboard(board);
-    setMyPoints(pts);
-  }, [currentUser]);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  const wins = useCommunityFeed();
+  const leaderboard = useLeaderboard('week');
+  const postWin = usePostWin();
 
   const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await loadData();
-    setRefreshing(false);
-  }, [loadData]);
+    await Promise.all([wins.refetch(), leaderboard.refetch()]);
+  }, [wins, leaderboard]);
 
-  const handleJoinChallenge = async (challengeId: string) => {
-    if (!currentUser) return;
-    try {
-      await joinChallenge(currentUser.id, challengeId);
-      await loadData();
-      Alert.alert('Joined!', 'You\'ve joined the challenge. Good luck!');
-    } catch {
-      Alert.alert('Already Joined', 'You\'re already in this challenge.');
+  const handleSubmitWin = useCallback(async () => {
+    const title = winTitle.trim();
+    const description = winDesc.trim();
+    if (!title || !description) {
+      Alert.alert('Almost there', 'Add a title and a quick description before posting.');
+      return;
     }
-  };
-
-  const joinedIds = new Set(myChallenges.map((mc) => mc.challengeId));
-
-  const formatTimeAgo = (iso: string): string => {
-    const diff = Date.now() - new Date(iso).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return 'Just now';
-    if (mins < 60) return `${mins}m ago`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}h ago`;
-    const days = Math.floor(hrs / 24);
-    if (days === 1) return 'Yesterday';
-    return `${days}d ago`;
-  };
-
-  const tabs: { key: TabKey; label: string; icon: string }[] = [
-    { key: 'challenges', label: 'Challenges', icon: 'trophy' },
-    { key: 'leaderboard', label: 'Leaderboard', icon: 'podium' },
-    { key: 'wins', label: 'Wins', icon: 'star' },
-  ];
+    try {
+      await postWin.mutateAsync({ title, description });
+      setWinTitle('');
+      setWinDesc('');
+      setPostWinOpen(false);
+    } catch (err: any) {
+      Alert.alert('Could not post', err?.response?.data?.message || 'Please try again in a moment.');
+    }
+  }, [winTitle, winDesc, postWin]);
 
   return (
     <View style={styles.container}>
+      {/* Header */}
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>Community</Text>
-          <Text style={styles.subtitle}>Compete, connect, celebrate</Text>
+          <Text style={styles.subtitle}>Wins, rankings, your team</Text>
         </View>
-        <View style={styles.pointsBadge}>
-          <Ionicons name="star" size={16} color={Colors.warning} />
-          <Text style={styles.pointsText}>{myPoints}</Text>
-        </View>
+        <TouchableOpacity
+          style={styles.shareWinBtn}
+          onPress={() => setPostWinOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Share a win"
+        >
+          <Ionicons name="add" size={18} color={Colors.textOnPrimary} />
+          <Text style={styles.shareWinText}>Share a win</Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Tab Bar */}
+      {/* Tabs */}
       <View style={styles.tabBar}>
-        {tabs.map((tab) => (
-          <TouchableOpacity
-            key={tab.key}
-            style={[styles.tab, activeTab === tab.key && styles.tabActive]}
-            onPress={() => setActiveTab(tab.key)}
-          >
-            <Ionicons
-              name={tab.icon as any}
-              size={16}
-              color={activeTab === tab.key ? Colors.primary : Colors.textMuted}
-            />
-            <Text style={[styles.tabText, activeTab === tab.key && styles.tabTextActive]}>
-              {tab.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
+        {TABS.map((tab) => {
+          const active = activeTab === tab.key;
+          return (
+            <TouchableOpacity
+              key={tab.key}
+              style={[styles.tab, active && styles.tabActive]}
+              onPress={() => setActiveTab(tab.key)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
+            >
+              <Ionicons
+                name={tab.icon as any}
+                size={16}
+                color={active ? Colors.primary : Colors.textMuted}
+              />
+              <Text style={[styles.tabText, active && styles.tabTextActive]}>{tab.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
-      {/* ──────────── CHALLENGES TAB ──────────── */}
-      {activeTab === 'challenges' && (
-        <FlatList
-          data={challenges}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} colors={[Colors.primary]} />
-          }
-          ListHeaderComponent={
-            <>
-            {myChallenges.length > 0 && (
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>My Active Challenges</Text>
-                {myChallenges.map((mc) => (
-                  <View key={mc.id} style={styles.myChallengeCard}>
-                    <View style={styles.myChallengeInfo}>
-                      <Text style={styles.myChallengeName}>{mc.challenge.title}</Text>
-                      <View style={styles.myChallengeProgress}>
-                        <View style={styles.progressBarBg}>
-                          <View
-                            style={[
-                              styles.progressBarFill,
-                              { width: `${Math.min(100, (mc.currentValue / mc.challenge.targetValue) * 100)}%` },
-                            ]}
-                          />
-                        </View>
-                        <Text style={styles.myChallengeCount}>
-                          {mc.currentValue}/{mc.challenge.targetValue} {mc.challenge.unit}
-                        </Text>
-                      </View>
-                    </View>
-                    {mc.completed && (
-                      <Ionicons name="checkmark-circle" size={24} color={Colors.primary} />
-                    )}
-                  </View>
-                ))}
-              </View>
-            )}
-            <View style={styles.featuredBanner}>
-              <Ionicons name="sparkles" size={14} color={Colors.primary} />
-              <Text style={styles.featuredBannerText}>Featured Challenges</Text>
-            </View>
-            </>
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Ionicons name="trophy-outline" size={48} color={Colors.textMuted} />
-              <Text style={styles.emptyTitle}>No Active Challenges</Text>
-              <Text style={styles.emptyText}>Check back soon for new challenges!</Text>
-            </View>
-          }
-          renderItem={({ item }) => {
-            const joined = joinedIds.has(item.id);
-            const catIcon = CHALLENGE_ICONS[item.category] || 'flag';
-            return (
-              <View style={styles.challengeCard}>
-                <View style={styles.challengeIconContainer}>
-                  <Ionicons name={catIcon as any} size={24} color={Colors.primary} />
-                </View>
-                <View style={styles.challengeInfo}>
-                  <Text style={styles.challengeTitle}>{item.title}</Text>
-                  <Text style={styles.challengeDesc}>{item.description}</Text>
-                  <View style={styles.challengeMeta}>
-                    <View style={styles.featuredTag}>
-                      <Text style={styles.featuredTagText}>Featured</Text>
-                    </View>
-                    <Text style={styles.challengeTarget}>
-                      {item.targetValue} {item.unit}
-                    </Text>
-                    <Text style={styles.challengeDuration}>{item.durationDays} days</Text>
-                  </View>
-                </View>
-                {joined ? (
-                  <View style={styles.joinedBadge}>
-                    <Ionicons name="checkmark" size={14} color={Colors.primary} />
-                    <Text style={styles.joinedText}>Joined</Text>
-                  </View>
-                ) : (
-                  <TouchableOpacity
-                    style={styles.joinBtn}
-                    onPress={() => handleJoinChallenge(item.id)}
-                  >
-                    <Text style={styles.joinBtnText}>Join</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            );
-          }}
-        />
-      )}
-
-      {/* ──────────── LEADERBOARD TAB ──────────── */}
-      {activeTab === 'leaderboard' && (
-        <FlatList
-          data={leaderboard}
-          keyExtractor={(item) => item.userId}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} colors={[Colors.primary]} />
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Ionicons name="podium-outline" size={48} color={Colors.textMuted} />
-              <Text style={styles.emptyTitle}>No Rankings Yet</Text>
-              <Text style={styles.emptyText}>Complete challenges and activities to earn points!</Text>
-            </View>
-          }
-          renderItem={({ item }) => {
-            const isMe = item.userId === currentUser?.id;
-            const medalColors = [Colors.medalGold, Colors.medalSilver, Colors.medalBronze];
-            return (
-              <View style={[styles.leaderRow, isMe && styles.leaderRowMe]}>
-                <View style={styles.rankContainer}>
-                  {item.rank <= 3 ? (
-                    <Ionicons name="medal" size={24} color={medalColors[item.rank - 1]} />
-                  ) : (
-                    <Text style={styles.rankText}>{item.rank}</Text>
-                  )}
-                </View>
-                <View style={styles.leaderAvatar}>
-                  <Text style={styles.leaderAvatarText}>
-                    {item.userName.split(' ').map((n) => n[0]).join('')}
-                  </Text>
-                </View>
-                <View style={styles.leaderInfo}>
-                  <Text style={[styles.leaderName, isMe && styles.leaderNameMe]}>
-                    {item.userName}{isMe ? ' (You)' : ''}
-                  </Text>
-                </View>
-                <View style={styles.leaderPoints}>
-                  <Ionicons name="star" size={14} color={Colors.warning} />
-                  <Text style={styles.leaderPointsText}>{item.points}</Text>
-                </View>
-              </View>
-            );
-          }}
-        />
-      )}
-
-      {/* ──────────── WINS TAB ──────────── */}
+      {/* WINS TAB ─────────────────────────────────────────────────────── */}
       {activeTab === 'wins' && (
         <FlatList
-          data={wins}
+          data={wins.data || []}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} colors={[Colors.primary]} />
+            <RefreshControl
+              refreshing={wins.isFetching && !wins.isLoading}
+              onRefresh={onRefresh}
+              tintColor={Colors.primary}
+              colors={[Colors.primary]}
+            />
           }
           ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Ionicons name="star-outline" size={48} color={Colors.textMuted} />
-              <Text style={styles.emptyTitle}>No Wins Yet</Text>
-              <Text style={styles.emptyText}>Achievements and milestones will show up here!</Text>
-            </View>
+            wins.isLoading ? (
+              <View>
+                <SkeletonCard />
+                <SkeletonCard />
+                <SkeletonCard />
+              </View>
+            ) : wins.isError ? (
+              <ErrorState
+                icon="cloud-offline-outline"
+                title="Couldn't load wins"
+                text="Pull down to try again."
+              />
+            ) : (
+              <EmptyState
+                icon="star-outline"
+                title="No wins yet"
+                text="Be the first — tap Share a win at the top."
+              />
+            )
           }
-          renderItem={({ item }) => {
-            const icon = WIN_ICONS[item.type] || 'star';
-            const color = WIN_COLORS[item.type] || Colors.primary;
+          renderItem={({ item }: { item: ApiCommunityWin }) => {
+            const isMe = item.user_id === currentUser?.id;
+            const authorName = item.user?.name || (isMe ? 'You' : 'Teammate');
             return (
               <View style={styles.winCard}>
-                <View style={[styles.winIcon, { backgroundColor: color + '18' }]}>
-                  <Ionicons name={icon as any} size={22} color={color} />
+                <View style={styles.winIcon}>
+                  <Ionicons name="star" size={22} color={Colors.warning} />
                 </View>
                 <View style={styles.winInfo}>
-                  <Text style={styles.winUserName}>{item.userName}</Text>
+                  <Text style={styles.winUserName}>
+                    {authorName}
+                    {isMe ? ' (You)' : ''}
+                  </Text>
                   <Text style={styles.winTitle}>{item.title}</Text>
                   <Text style={styles.winDesc}>{item.description}</Text>
                 </View>
-                <Text style={styles.winTime}>{formatTimeAgo(item.createdAt)}</Text>
+                <Text style={styles.winTime}>{formatTimeAgo(item.created_at)}</Text>
               </View>
             );
           }}
         />
       )}
+
+      {/* LEADERBOARD TAB ──────────────────────────────────────────────── */}
+      {activeTab === 'leaderboard' && (
+        <FlatList
+          data={leaderboard.data || []}
+          keyExtractor={(item) => item.user_id}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={leaderboard.isFetching && !leaderboard.isLoading}
+              onRefresh={onRefresh}
+              tintColor={Colors.primary}
+              colors={[Colors.primary]}
+            />
+          }
+          ListHeaderComponent={
+            <View style={styles.featuredBanner}>
+              <Ionicons name="sparkles" size={14} color={Colors.primary} />
+              <Text style={styles.featuredBannerText}>This week — workouts logged</Text>
+            </View>
+          }
+          ListEmptyComponent={
+            leaderboard.isLoading ? (
+              <View>
+                <SkeletonCard />
+                <SkeletonCard />
+                <SkeletonCard />
+              </View>
+            ) : leaderboard.isError ? (
+              <ErrorState
+                icon="cloud-offline-outline"
+                title="Couldn't load leaderboard"
+                text="Pull down to try again."
+              />
+            ) : (
+              <EmptyState
+                icon="podium-outline"
+                title="No rankings yet"
+                text="Log a workout this week to land on the board."
+              />
+            )
+          }
+          renderItem={({ item, index }: { item: ApiLeaderboardEntry; index: number }) => {
+            const rank = index + 1;
+            const isMe = item.user_id === currentUser?.id;
+            const initials = item.name
+              ? item.name
+                  .split(' ')
+                  .map((n) => n[0])
+                  .slice(0, 2)
+                  .join('')
+                  .toUpperCase()
+              : '?';
+            const medalColor =
+              rank === 1
+                ? '#D4AF37'
+                : rank === 2
+                ? '#A8A8A8'
+                : rank === 3
+                ? '#B97A57'
+                : Colors.textMuted;
+            return (
+              <View style={[styles.leaderRow, isMe && styles.leaderRowMe]}>
+                <View style={styles.rankContainer}>
+                  {rank <= 3 ? (
+                    <Ionicons name="medal" size={24} color={medalColor} />
+                  ) : (
+                    <Text style={styles.rankText}>{rank}</Text>
+                  )}
+                </View>
+                <View style={styles.leaderAvatar}>
+                  <Text style={styles.leaderAvatarText}>{initials}</Text>
+                </View>
+                <View style={styles.leaderInfo}>
+                  <Text style={[styles.leaderName, isMe && styles.leaderNameMe]}>
+                    {item.name}
+                    {isMe ? ' (You)' : ''}
+                  </Text>
+                </View>
+                <View style={styles.leaderPoints}>
+                  <Ionicons name="barbell-outline" size={14} color={Colors.primary} />
+                  <Text style={styles.leaderPointsText}>{item.workouts_completed}</Text>
+                </View>
+              </View>
+            );
+          }}
+        />
+      )}
+
+      {/* CHALLENGES TAB — coming-soon placeholder ────────────────────── */}
+      {activeTab === 'challenges' && (
+        <ScrollView contentContainerStyle={styles.comingSoonContainer}>
+          <View style={styles.comingSoonCard}>
+            <Ionicons name="trophy-outline" size={36} color={Colors.primary} />
+            <Text style={styles.comingSoonEyebrow}>Coming soon</Text>
+            <Text style={styles.comingSoonTitle}>Team challenges</Text>
+            <Text style={styles.comingSoonBody}>
+              Coach-launched group challenges with shared progress and a real leaderboard are
+              being built. We removed the old version because the challenges only existed on
+              your device — we'd rather wait and ship it right.
+            </Text>
+          </View>
+        </ScrollView>
+      )}
+
+      {/* POST-A-WIN MODAL ─────────────────────────────────────────────── */}
+      <Modal
+        visible={postWinOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setPostWinOpen(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalBackdrop}
+        >
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Share a win</Text>
+              <TouchableOpacity onPress={() => setPostWinOpen(false)} accessibilityRole="button">
+                <Ionicons name="close" size={24} color={Colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.modalSubtitle}>
+              Your coach and your teammates will see this.
+            </Text>
+            <TextInput
+              placeholder="Title — e.g. Hit a PR on squats"
+              placeholderTextColor={Colors.textMuted}
+              value={winTitle}
+              onChangeText={setWinTitle}
+              maxLength={80}
+              style={styles.modalInput}
+            />
+            <TextInput
+              placeholder="A few words about what happened"
+              placeholderTextColor={Colors.textMuted}
+              value={winDesc}
+              onChangeText={setWinDesc}
+              multiline
+              maxLength={500}
+              style={[styles.modalInput, styles.modalInputMultiline]}
+            />
+            <TouchableOpacity
+              style={[styles.modalSubmit, postWin.isPending && styles.modalSubmitDisabled]}
+              disabled={postWin.isPending}
+              onPress={handleSubmitWin}
+              accessibilityRole="button"
+            >
+              <Text style={styles.modalSubmitText}>
+                {postWin.isPending ? 'Posting…' : 'Post win'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    </View>
+  );
+}
+
+// ─── Small subcomponents kept local for cohesion ─────────────────────────
+
+function EmptyState({ icon, title, text }: { icon: string; title: string; text: string }) {
+  return (
+    <View style={styles.emptyContainer}>
+      <Ionicons name={icon as any} size={48} color={Colors.textMuted} />
+      <Text style={styles.emptyTitle}>{title}</Text>
+      <Text style={styles.emptyText}>{text}</Text>
+    </View>
+  );
+}
+
+function ErrorState({ icon, title, text }: { icon: string; title: string; text: string }) {
+  return (
+    <View style={styles.emptyContainer}>
+      <Ionicons name={icon as any} size={48} color={Colors.error} />
+      <Text style={[styles.emptyTitle, { color: Colors.error }]}>{title}</Text>
+      <Text style={styles.emptyText}>{text}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  // ── Header ──
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -347,25 +394,18 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 28, fontWeight: '800', color: Colors.textPrimary },
   subtitle: { fontSize: 14, color: Colors.textSecondary, marginTop: 4 },
-  pointsBadge: {
+  shareWinBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: Colors.surface,
+    backgroundColor: Colors.primary,
     borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
-  pointsText: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
-  // ── Tabs ──
-  tabBar: {
-    flexDirection: 'row',
-    marginHorizontal: 24,
-    marginBottom: 12,
-    gap: 8,
-  },
+  shareWinText: { color: Colors.textOnPrimary, fontSize: 13, fontWeight: '700' },
+
+  tabBar: { flexDirection: 'row', marginHorizontal: 24, marginBottom: 12, gap: 8 },
   tab: {
     flex: 1,
     flexDirection: 'row',
@@ -378,85 +418,29 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  tabActive: {
-    backgroundColor: Colors.primaryPale,
-    borderColor: Colors.primary,
-  },
+  tabActive: { backgroundColor: Colors.primaryPale, borderColor: Colors.primary },
   tabText: { fontSize: 13, fontWeight: '600', color: Colors.textMuted },
   tabTextActive: { color: Colors.primary },
-  // ── Shared ──
+
   listContent: { paddingHorizontal: 24, paddingBottom: 100 },
   emptyContainer: { alignItems: 'center', paddingTop: 60, gap: 10 },
   emptyTitle: { fontSize: 18, fontWeight: '700', color: Colors.textPrimary },
-  emptyText: { fontSize: 14, color: Colors.textSecondary, textAlign: 'center', paddingHorizontal: 40 },
-  // ── My Challenges Section ──
-  sectionHeader: { marginBottom: 16 },
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: Colors.textPrimary, marginBottom: 10 },
-  myChallengeCard: {
+  emptyText: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    paddingHorizontal: 40,
+  },
+
+  featuredBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.primaryPale,
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 8,
-    gap: 12,
+    gap: 6,
+    marginBottom: 12,
   },
-  myChallengeInfo: { flex: 1 },
-  myChallengeName: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary, marginBottom: 6 },
-  myChallengeProgress: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  progressBarBg: {
-    flex: 1,
-    height: 6,
-    backgroundColor: 'rgba(45,106,79,0.15)',
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  progressBarFill: { height: '100%', backgroundColor: Colors.primary, borderRadius: 3 },
-  myChallengeCount: { fontSize: 12, fontWeight: '600', color: Colors.textSecondary, minWidth: 60 },
-  // ── Challenge Cards ──
-  challengeCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.surface,
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 10,
-    gap: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  challengeIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: Colors.primaryPale,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  challengeInfo: { flex: 1, gap: 4 },
-  challengeTitle: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
-  challengeDesc: { fontSize: 12, color: Colors.textSecondary },
-  challengeMeta: { flexDirection: 'row', gap: 12, marginTop: 4 },
-  challengeTarget: { fontSize: 11, fontWeight: '600', color: Colors.primary },
-  challengeDuration: { fontSize: 11, color: Colors.textMuted },
-  joinBtn: {
-    backgroundColor: Colors.primary,
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  joinBtnText: { color: Colors.textOnPrimary, fontSize: 13, fontWeight: '700' },
-  joinedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: Colors.primaryPale,
-  },
-  joinedText: { fontSize: 12, fontWeight: '600', color: Colors.primary },
-  // ── Leaderboard ──
+  featuredBannerText: { fontSize: 14, fontWeight: '700', color: Colors.primary },
+
+  // Leaderboard
   leaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -485,7 +469,8 @@ const styles = StyleSheet.create({
   leaderNameMe: { fontWeight: '800', color: Colors.primary },
   leaderPoints: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   leaderPointsText: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
-  // ── Wins Feed ──
+
+  // Wins
   winCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -503,32 +488,85 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: 'rgba(233, 196, 106, 0.15)',
   },
   winInfo: { flex: 1, gap: 2 },
   winUserName: { fontSize: 13, fontWeight: '700', color: Colors.primary },
   winTitle: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
   winDesc: { fontSize: 13, color: Colors.textSecondary },
   winTime: { fontSize: 11, color: Colors.textMuted },
-  featuredBanner: {
+
+  // Coming soon for challenges
+  comingSoonContainer: {
+    flexGrow: 1,
+    paddingHorizontal: 24,
+    paddingVertical: 24,
+    justifyContent: 'center',
+  },
+  comingSoonCard: {
+    alignItems: 'center',
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    gap: 8,
+  },
+  comingSoonEyebrow: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    marginTop: 4,
+  },
+  comingSoonTitle: { fontSize: 22, fontWeight: '800', color: Colors.textPrimary },
+  comingSoonBody: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 4,
+  },
+
+  // Modal
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    paddingBottom: 40,
+    gap: 12,
+  },
+  modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginBottom: 12,
+    justifyContent: 'space-between',
   },
-  featuredBannerText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.primary,
+  modalTitle: { fontSize: 20, fontWeight: '800', color: Colors.textPrimary },
+  modalSubtitle: { fontSize: 13, color: Colors.textSecondary, marginTop: -4 },
+  modalInput: {
+    backgroundColor: Colors.background,
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 15,
+    color: Colors.textPrimary,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
-  featuredTag: {
-    backgroundColor: Colors.primaryPale,
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+  modalInputMultiline: { minHeight: 100, textAlignVertical: 'top' },
+  modalSubmit: {
+    backgroundColor: Colors.primary,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 6,
   },
-  featuredTagText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: Colors.primary,
-  },
+  modalSubmitDisabled: { opacity: 0.6 },
+  modalSubmitText: { color: Colors.textOnPrimary, fontSize: 15, fontWeight: '700' },
 });
