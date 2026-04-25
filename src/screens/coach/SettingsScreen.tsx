@@ -18,7 +18,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 // replacing the old useAuthStore.signOut() which only cleared tokens as a
 // side effect and left previous-user data in memory for the next login.
 import { signOut } from '../../services/authActions';
-import { coachApi, profileApi } from '../../services/api';
+import { coachApi, profileApi, notificationsApi } from '../../services/api';
 import { Colors } from '../../constants/colors';
 import { mediumTap, warningTap, successTap } from '../../utils/haptics';
 import { updateSupabasePassword } from '../../utils/supabaseAuth';
@@ -58,8 +58,31 @@ export default function SettingsScreen() {
 
   const loadSettings = useCallback(async () => {
     try {
-      const raw = await AsyncStorage.getItem(COACH_SETTINGS_KEY + '_' + userId);
-      if (raw) setSettings(JSON.parse(raw));
+      // Load notification prefs from backend (source of truth); fall back to AsyncStorage
+      try {
+        const prefsRes = await notificationsApi.getPreferences();
+        const prefs = prefsRes.data;
+        if (prefs) {
+          const serverSettings = {
+            hapticsEnabled: true, // haptics is local-only, not persisted to backend
+            dailyCheckin: prefs.daily_checkin_enabled ?? true,
+            newClientAlerts: prefs.new_client_alerts ?? true,
+            weeklySummary: prefs.weekly_summary_enabled ?? true,
+          };
+          // Preserve local haptics preference
+          const raw = await AsyncStorage.getItem(COACH_SETTINGS_KEY + '_' + userId);
+          if (raw) {
+            const localSettings = JSON.parse(raw);
+            serverSettings.hapticsEnabled = localSettings.hapticsEnabled ?? true;
+          }
+          setSettings(serverSettings);
+          await AsyncStorage.setItem(COACH_SETTINGS_KEY + '_' + userId, JSON.stringify(serverSettings));
+        }
+      } catch {
+        // Backend unavailable — fall back to AsyncStorage
+        const raw = await AsyncStorage.getItem(COACH_SETTINGS_KEY + '_' + userId);
+        if (raw) setSettings(JSON.parse(raw));
+      }
       // Bio: try backend first (source of truth); fall back to AsyncStorage cache
       try {
         const profileRes = await profileApi.get();
@@ -97,6 +120,20 @@ export default function SettingsScreen() {
     setSettings(updated);
     if (updated.hapticsEnabled) mediumTap();
     await AsyncStorage.setItem(COACH_SETTINGS_KEY + '_' + userId, JSON.stringify(updated));
+    // Sync notification toggles to backend
+    const notifFieldMap: Partial<Record<keyof CoachSettings, string>> = {
+      dailyCheckin: 'daily_checkin_enabled',
+      newClientAlerts: 'new_client_alerts',
+      weeklySummary: 'weekly_summary_enabled',
+    };
+    const notifField = notifFieldMap[key];
+    if (notifField) {
+      try {
+        await notificationsApi.updatePreferences({ [notifField]: value });
+      } catch (err) {
+        console.warn('coach SettingsScreen: failed to sync notification pref to backend', err);
+      }
+    }
   };
 
   const handleSaveBio = async () => {
