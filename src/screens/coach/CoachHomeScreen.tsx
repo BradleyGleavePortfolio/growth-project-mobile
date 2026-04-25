@@ -31,6 +31,20 @@ export default function CoachHomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [redFlagClients, setRedFlagClients] = useState<RedFlagClient[]>([]);
   const [overdueClients, setOverdueClients] = useState<string[]>([]);
+  const [dashboard, setDashboard] = useState<{ logs_today: number; total_kcal: number; logging_rate: number } | null>(null);
+  const [dashboardLoading, setDashboardLoading] = useState(true);
+
+  const fetchDashboard = useCallback(async () => {
+    setDashboardLoading(true);
+    try {
+      const res = await coachApi.getDashboard();
+      setDashboard(res.data);
+    } catch (err) {
+      console.error('CoachHomeScreen: fetchDashboard failed', err);
+    } finally {
+      setDashboardLoading(false);
+    }
+  }, []);
 
   const detectRedFlags = useCallback(async () => {
     try {
@@ -65,6 +79,10 @@ export default function CoachHomeScreen() {
   }, [load]);
 
   useEffect(() => {
+    fetchDashboard();
+  }, [fetchDashboard]);
+
+  useEffect(() => {
     if (clients.length > 0) {
       detectRedFlags();
     }
@@ -77,9 +95,11 @@ export default function CoachHomeScreen() {
   }, [load]);
 
   const activeClients = clients.filter((c) => c.status === 'active').length;
-  const todayLogs: any[] = [];
-  const todayCalories = 0;
-  const complianceRate = activeClients > 0 ? '--' : '--';
+  const logsToday = dashboard?.logs_today ?? 0;
+  const totalKcal = dashboard?.total_kcal ?? 0;
+  const loggingRateDisplay = dashboard
+    ? `${Math.round(dashboard.logging_rate * 100)}%`
+    : '--';
 
   if (isLoading && !refreshing) {
     return (
@@ -130,21 +150,33 @@ export default function CoachHomeScreen() {
             <View style={[styles.metricIcon, { backgroundColor: colors.feedback.infoBg }]}>
               <Ionicons name="restaurant" size={22} color={Colors.carbs} />
             </View>
-            <Text style={styles.metricValue}>{todayLogs.length}</Text>
+            {dashboardLoading ? (
+                <View style={{ width: 40, height: 28, backgroundColor: Colors.surface, borderRadius: 4, opacity: 0.4 }} />
+              ) : (
+                <Text style={styles.metricValue}>{logsToday}</Text>
+              )}
             <Text style={styles.metricLabel}>Logs Today</Text>
           </View>
           <View style={styles.metricCard}>
             <View style={[styles.metricIcon, { backgroundColor: Colors.noticeWarningIconBg }]}>
               <Ionicons name="flame" size={22} color={Colors.fat} />
             </View>
-            <Text style={styles.metricValue}>{Math.round(todayCalories)}</Text>
+            {dashboardLoading ? (
+                <View style={{ width: 60, height: 28, backgroundColor: Colors.surface, borderRadius: 4, opacity: 0.4 }} />
+              ) : (
+                <Text style={styles.metricValue}>{totalKcal.toLocaleString()}</Text>
+              )}
             <Text style={styles.metricLabel}>Total kcal</Text>
           </View>
           <View style={styles.metricCard}>
             <View style={[styles.metricIcon, { backgroundColor: Colors.primaryPale }]}>
               <Ionicons name="checkmark-circle" size={22} color={Colors.primaryLight} />
             </View>
-            <Text style={styles.metricValue}>{complianceRate}</Text>
+            {dashboardLoading ? (
+                <View style={{ width: 44, height: 28, backgroundColor: Colors.surface, borderRadius: 4, opacity: 0.4 }} />
+              ) : (
+                <Text style={styles.metricValue}>{loggingRateDisplay}</Text>
+              )}
             <Text style={styles.metricLabel}>Logging Rate</Text>
           </View>
         </View>
