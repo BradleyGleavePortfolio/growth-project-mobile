@@ -120,6 +120,16 @@ export function useLogHabit() {
   });
 }
 
+export function useDeleteHabit() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => habitsApi.delete(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['habits'] });
+    },
+  });
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Community  (real CommunityWin + leaderboard, post Fix #9 backend work)
 // ─────────────────────────────────────────────────────────────────────────────

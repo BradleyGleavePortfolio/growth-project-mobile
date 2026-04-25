@@ -257,6 +257,7 @@ export const habitsApi = {
   create: (data: Record<string, any>) => api.post('/habits', data),
   logHabit: (id: string, data: Record<string, any>) =>
     api.post(`/habits/${id}/log`, data),
+  delete: (id: string) => api.delete(`/habits/${id}`),
   getLogs: (date: string) =>
     api.get(`/habits/logs?date=${date}`),
   getStreaks: () => api.get('/habits/streaks'),
