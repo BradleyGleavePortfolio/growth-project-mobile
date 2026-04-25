@@ -276,6 +276,7 @@ export const coachApi = {
   postGuidelines: (clientId: string, guidelines: string) =>
     api.post(`/coach/guidelines/${clientId}`, { guidelines }),
   getAlerts: () => api.get('/coach/alerts'),
+  getDashboard: () => api.get('/coach/dashboard'),
   // ── Invite codes ──
   listInviteCodes: () => api.get('/coach/invite-codes'),
   createInviteCode: (data: { expires_at?: string | null; max_uses?: number | null }) =>
