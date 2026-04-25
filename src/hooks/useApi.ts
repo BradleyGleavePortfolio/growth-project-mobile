@@ -1,0 +1,404 @@
+// Centralized React Query hooks for every backend-backed feature.
+//
+// Why this file exists (Fix #2):
+//
+// Before this migration, screens called functions in src/db/*.ts that read and
+// wrote local SQLite directly. The same logical entity ("my habits today",
+// "the team leaderboard", "my recent workouts") existed in two places — the
+// device DB and the server DB — and could drift. Coaches couldn't see what
+// clients did on most screens, and a phone reset wiped history that should
+// have been on the server.
+//
+// Every screen migrated under Fix #2 reads through one of these hooks. The
+// hooks are thin wrappers around the existing api.ts surface so the network
+// transport (auth headers, refresh-token mutex, retry policy) keeps living
+// in one place — see src/services/api.ts. React Query owns the cache,
+// background revalidation, and mutation invalidation.
+//
+// Query key conventions:
+//   ['feature', 'sub-collection', ...params]
+// Mutations invalidate the broadest reasonable prefix — e.g. logging a
+// habit invalidates ['habits'] so both the list and the streak refetch.
+
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+  UseQueryOptions,
+} from '@tanstack/react-query';
+import {
+  habitsApi,
+  workoutApi,
+  communityApi,
+  nudgesApi,
+  notificationsApi,
+  weightApi,
+  logApi,
+  checkInsApi,
+  coachApi,
+  mealPlansApi,
+} from '../services/api';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Habits
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ApiHabit = {
+  id: string;
+  user_id: string;
+  name: string;
+  emoji?: string | null;
+  category?: string | null;
+  target_per_week?: number | null;
+  created_at: string;
+};
+
+export type ApiHabitLog = {
+  id: string;
+  habit_id: string;
+  user_id: string;
+  date: string;
+  completed: boolean;
+};
+
+export type ApiHabitStreak = {
+  habit_id: string;
+  current_streak: number;
+  longest_streak: number;
+  week_completions: boolean[];
+};
+
+export function useHabits(opts?: UseQueryOptions<ApiHabit[]>) {
+  return useQuery<ApiHabit[]>({
+    queryKey: ['habits', 'list'],
+    queryFn: async () => (await habitsApi.getAll()).data,
+    ...opts,
+  });
+}
+
+export function useHabitLogs(date: string, opts?: UseQueryOptions<ApiHabitLog[]>) {
+  return useQuery<ApiHabitLog[]>({
+    queryKey: ['habits', 'logs', date],
+    queryFn: async () => (await habitsApi.getLogs(date)).data,
+    enabled: !!date,
+    ...opts,
+  });
+}
+
+export function useHabitStreaks(opts?: UseQueryOptions<ApiHabitStreak[]>) {
+  return useQuery<ApiHabitStreak[]>({
+    queryKey: ['habits', 'streaks'],
+    queryFn: async () => (await habitsApi.getStreaks()).data,
+    ...opts,
+  });
+}
+
+export function useCreateHabit() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { name: string; emoji?: string; category?: string; target_per_week?: number }) =>
+      habitsApi.create(data).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['habits'] });
+    },
+  });
+}
+
+export function useLogHabit() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { id: string; date: string; completed: boolean }) =>
+      habitsApi.logHabit(args.id, { date: args.date, completed: args.completed }).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['habits'] });
+    },
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Community  (real CommunityWin + leaderboard, post Fix #9 backend work)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ApiLeaderboardEntry = {
+  user_id: string;
+  name: string;
+  workouts_completed: number;
+};
+
+export type ApiCommunityWin = {
+  id: string;
+  user_id: string;
+  coach_id: string | null;
+  title: string;
+  description: string;
+  created_at: string;
+  user?: { id: string; name: string };
+};
+
+export function useLeaderboard(period: 'week' | 'month' = 'week') {
+  return useQuery<ApiLeaderboardEntry[]>({
+    queryKey: ['community', 'leaderboard', period],
+    queryFn: async () => (await communityApi.getLeaderboard(period)).data,
+  });
+}
+
+export function useCommunityFeed() {
+  return useQuery<ApiCommunityWin[]>({
+    queryKey: ['community', 'feed'],
+    queryFn: async () => (await communityApi.getFeed()).data,
+  });
+}
+
+export function usePostWin() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { title: string; description: string }) =>
+      communityApi.postWin(data).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['community', 'feed'] });
+    },
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications  (coach nudges = the in-app notifications surface)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ApiNudge = {
+  id: string;
+  coach_id: string;
+  client_id: string;
+  title: string;
+  body: string;
+  created_at: string;
+  read_at: string | null;
+};
+
+export function useNudges(limit = 50) {
+  return useQuery<ApiNudge[]>({
+    queryKey: ['nudges', 'list', limit],
+    queryFn: async () => (await nudgesApi.list({ limit })).data,
+  });
+}
+
+export function useUnreadNudgeCount() {
+  return useQuery<{ count: number }>({
+    queryKey: ['nudges', 'unread-count'],
+    queryFn: async () => (await nudgesApi.unreadCount()).data,
+    // Cheap call; refetch a bit more aggressively so the badge stays current.
+    staleTime: 15_000,
+  });
+}
+
+export function useMarkNudgeRead() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => nudgesApi.markRead(id).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['nudges'] });
+    },
+  });
+}
+
+export function useNotificationPreferences() {
+  return useQuery<Record<string, any>>({
+    queryKey: ['notifications', 'preferences'],
+    queryFn: async () => (await notificationsApi.getPreferences()).data,
+  });
+}
+
+export function useUpdateNotificationPreferences() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Record<string, any>) => notificationsApi.updatePreferences(data).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['notifications', 'preferences'] });
+    },
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Workouts + Routines
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type ApiWorkoutSession = {
+  id: string;
+  user_id: string;
+  date: string;
+  notes?: string | null;
+  duration_min?: number | null;
+  exercises: ApiWorkoutExercise[];
+  created_at: string;
+};
+
+export type ApiWorkoutExercise = {
+  id: string;
+  exercise_name: string;
+  sets?: number | null;
+  reps?: number | null;
+  weight_lbs?: number | null;
+  notes?: string | null;
+};
+
+export type ApiRoutine = {
+  id: string;
+  creator_id: string;
+  name: string;
+  description?: string | null;
+  exercises: Array<{ exercise_name: string; sets: number; reps: number }>;
+  created_at: string;
+};
+
+export function useWorkouts(limit = 10) {
+  return useQuery<ApiWorkoutSession[]>({
+    queryKey: ['workouts', 'list', limit],
+    queryFn: async () => (await workoutApi.getAll(limit)).data,
+  });
+}
+
+export function useWorkoutVolume(period: 'week' | 'month') {
+  return useQuery<{ total_volume_lbs: number; sessions: number }>({
+    queryKey: ['workouts', 'volume', period],
+    queryFn: async () => (await workoutApi.getVolume(period)).data,
+  });
+}
+
+export function useCreateWorkout() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Record<string, any>) => workoutApi.create(data).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['workouts'] });
+    },
+  });
+}
+
+export function useRoutines() {
+  return useQuery<ApiRoutine[]>({
+    queryKey: ['routines', 'list'],
+    queryFn: async () => (await workoutApi.getRoutines()).data,
+  });
+}
+
+export function useCreateRoutine() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: Record<string, any>) => workoutApi.createRoutine(data).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['routines'] });
+    },
+  });
+}
+
+export function useUpdateRoutine() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { id: string; data: Record<string, any> }) =>
+      workoutApi.updateRoutine(args.id, args.data).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['routines'] });
+    },
+  });
+}
+
+export function useDeleteRoutine() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => workoutApi.deleteRoutine(id).then((r) => r.data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['routines'] });
+    },
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Home-screen aggregates
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function useTodayLog(date: string) {
+  return useQuery<any>({
+    queryKey: ['food', 'log', date],
+    queryFn: async () => (await logApi.getDaily(date)).data,
+    enabled: !!date,
+  });
+}
+
+export function useWeightHistory(days = 30) {
+  return useQuery<any[]>({
+    queryKey: ['weight', 'history', days],
+    queryFn: async () => (await weightApi.getHistory(days)).data,
+  });
+}
+
+// Today's check-in is fetched as a single-row range scan against the list
+// endpoint. checkInsApi.save is an idempotent upsert by (user, date) so callers
+// can post freely on top of whatever this returns.
+export function useTodayCheckIn(date: string) {
+  return useQuery<any | null>({
+    queryKey: ['check-ins', 'day', date],
+    queryFn: async () => {
+      const list = (await checkInsApi.list({ from: date, to: date, limit: 1 })).data as any[];
+      return list[0] ?? null;
+    },
+    enabled: !!date,
+  });
+}
+
+export function useSaveCheckIn() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: {
+      date: string;
+      mood?: number | null;
+      energy?: number | null;
+      sleep_hours?: number | null;
+      weight_kg?: number | null;
+      notes?: string | null;
+    }) => checkInsApi.save(data).then((r) => r.data),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['check-ins', 'day', vars.date] });
+      qc.invalidateQueries({ queryKey: ['check-ins'] });
+    },
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Coach surfaces (ProgramTemplatesScreen)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function useCoachClients() {
+  return useQuery<any[]>({
+    queryKey: ['coach', 'clients'],
+    queryFn: async () => (await coachApi.getClients()).data,
+  });
+}
+
+export function useClientGuidelines(clientId: string | null | undefined) {
+  return useQuery<any>({
+    queryKey: ['coach', 'guidelines', clientId],
+    queryFn: async () => (await coachApi.getGuidelines(clientId!)).data,
+    enabled: !!clientId,
+  });
+}
+
+export function usePostClientGuidelines() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (args: { clientId: string; guidelines: string }) =>
+      coachApi.postGuidelines(args.clientId, args.guidelines).then((r) => r.data),
+    onSuccess: (_data, vars) => {
+      qc.invalidateQueries({ queryKey: ['coach', 'guidelines', vars.clientId] });
+    },
+  });
+}
+
+// mealPlansApi.list returns the meal plans visible to the current user. For a
+// coach this is everything they authored; for a client this is everything
+// assigned to them. Filter by client_id in callers when a coach picks a roster
+// member.
+export function useMealPlans() {
+  return useQuery<any[]>({
+    queryKey: ['meal-plans', 'list'],
+    queryFn: async () => (await mealPlansApi.list()).data,
+  });
+}
