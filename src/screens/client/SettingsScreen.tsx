@@ -92,6 +92,29 @@ export default function SettingsScreen({ navigation }: any) {
     ]);
   };
 
+  // Map client setting keys to backend profile fields
+  const PROFILE_KEY_MAP: Partial<Record<keyof import('../../hooks/useSettings').ClientSettings, string>> = {
+    unit: 'weight_unit',
+    mealsPerDay: 'meals_per_day',
+    waterGoalOz: 'water_goal_oz',
+    calorieDisplay: 'calorie_display',
+  };
+
+  const handleProfileSettingUpdate = <K extends keyof import('../../hooks/useSettings').ClientSettings>(
+    key: K,
+    value: import('../../hooks/useSettings').ClientSettings[K],
+  ) => {
+    updateSetting(key, value);
+    const backendKey = PROFILE_KEY_MAP[key];
+    if (backendKey) {
+      profileApi
+        .update({ [backendKey]: value })
+        .catch((err: any) => {
+          console.warn('SettingsScreen: failed to sync profile setting', key, err?.message);
+        });
+    }
+  };
+
   // Map client setting keys to backend notification preference fields
   const NOTIFICATION_KEY_MAP: Partial<Record<keyof import('../../hooks/useSettings').ClientSettings, string>> = {
     dailyCheckin: 'daily_checkin_enabled',
@@ -118,12 +141,12 @@ export default function SettingsScreen({ navigation }: any) {
   const stepMeals = (delta: number) => {
     const next = Math.min(6, Math.max(2, settings.mealsPerDay + delta));
     mediumTap();
-    updateSetting('mealsPerDay', next);
+    handleProfileSettingUpdate('mealsPerDay', next);
   };
 
   const stepWater = (delta: number) => {
     const next = Math.min(200, Math.max(40, settings.waterGoalOz + delta));
-    updateSetting('waterGoalOz', next);
+    handleProfileSettingUpdate('waterGoalOz', next);
   };
 
   return (
@@ -171,7 +194,7 @@ export default function SettingsScreen({ navigation }: any) {
                 <TouchableOpacity
                   key={u}
                   style={[styles.segBtn, settings.unit === u && styles.segBtnActive]}
-                  onPress={() => updateSetting('unit', u)}
+                  onPress={() => handleProfileSettingUpdate('unit', u)}
                 >
                   <Text style={[styles.segText, settings.unit === u && styles.segTextActive]}>{u}</Text>
                 </TouchableOpacity>
@@ -209,7 +232,7 @@ export default function SettingsScreen({ navigation }: any) {
                 <TouchableOpacity
                   key={c}
                   style={[styles.segBtn, settings.calorieDisplay === c && styles.segBtnActive]}
-                  onPress={() => updateSetting('calorieDisplay', c)}
+                  onPress={() => handleProfileSettingUpdate('calorieDisplay', c)}
                 >
                   <Text style={[styles.segText, settings.calorieDisplay === c && styles.segTextActive]}>
                     {c.charAt(0).toUpperCase() + c.slice(1)}
