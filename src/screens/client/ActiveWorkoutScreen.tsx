@@ -12,6 +12,7 @@ import {
   Image,
   ActivityIndicator,
 } from 'react-native';
+import HapticPressable from '../../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { Colors } from '../../constants/colors';
@@ -384,16 +385,16 @@ export default function ActiveWorkoutScreen() {
     <View style={styles.container}>
       {/* Top Bar */}
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={cancelWorkout}>
+        <HapticPressable intent="warning" onPress={cancelWorkout}>
           <Ionicons name="close" size={24} color={Colors.textPrimary} />
-        </TouchableOpacity>
+        </HapticPressable>
         <View style={styles.topCenter}>
           <Text style={styles.topTitle}>{routineName}</Text>
           <Text style={styles.timerText}>{formatTime(timer)}</Text>
         </View>
-        <TouchableOpacity onPress={finishWorkout} style={styles.finishBtn}>
+        <HapticPressable intent="success" onPress={finishWorkout} style={styles.finishBtn}>
           <Text style={styles.finishBtnText}>Finish</Text>
-        </TouchableOpacity>
+        </HapticPressable>
       </View>
 
       {/* Progress */}
@@ -406,9 +407,9 @@ export default function ActiveWorkoutScreen() {
           <View key={`${exercise.exerciseId}-${exIdx}`} style={styles.exerciseCard}>
             <View style={styles.exerciseHeader}>
               <Text style={styles.exerciseName}>{exercise.exerciseName}</Text>
-              <TouchableOpacity onPress={() => removeExercise(exIdx)}>
+              <HapticPressable intent="warning" onPress={() => removeExercise(exIdx)}>
                 <Ionicons name="trash-outline" size={18} color={Colors.textMuted} />
-              </TouchableOpacity>
+              </HapticPressable>
             </View>
 
             {/* Set Headers */}
@@ -438,26 +439,27 @@ export default function ActiveWorkoutScreen() {
                   placeholder="0"
                   placeholderTextColor={Colors.textMuted}
                 />
-                <TouchableOpacity
+                <HapticPressable
+                  intent="medium"
                   style={[styles.checkBtn, set.completed && styles.checkBtnDone]}
                   onPress={() => toggleSetComplete(exIdx, setIdx)}
                 >
                   <Ionicons name="checkmark" size={16} color={set.completed ? Colors.textOnPrimary : Colors.textMuted} />
-                </TouchableOpacity>
+                </HapticPressable>
               </View>
             ))}
 
-            <TouchableOpacity style={styles.addSetBtn} onPress={() => addSet(exIdx)}>
+            <HapticPressable intent="medium" style={styles.addSetBtn} onPress={() => addSet(exIdx)}>
               <Ionicons name="add" size={16} color={Colors.primary} />
               <Text style={styles.addSetText}>Add Set</Text>
-            </TouchableOpacity>
+            </HapticPressable>
           </View>
         ))}
 
-        <TouchableOpacity style={styles.addExerciseBtn} onPress={openAddExercise}>
+        <HapticPressable intent="medium" style={styles.addExerciseBtn} onPress={openAddExercise}>
           <Ionicons name="add-circle" size={22} color={Colors.primary} />
           <Text style={styles.addExerciseText}>Add Exercise</Text>
-        </TouchableOpacity>
+        </HapticPressable>
       </ScrollView>
 
       {/* Exercise Log Modal — opens after selecting an exercise to capture sets/weight/reps */}
@@ -472,9 +474,9 @@ export default function ActiveWorkoutScreen() {
       <Modal visible={showAddModal} animationType="slide" presentationStyle="pageSheet">
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowAddModal(false)}>
+            <HapticPressable intent="light" onPress={() => setShowAddModal(false)}>
               <Ionicons name="close" size={24} color={Colors.textPrimary} />
-            </TouchableOpacity>
+            </HapticPressable>
             <Text style={styles.modalTitle}>Add Exercise</Text>
             <View style={{ width: 24 }} />
           </View>
@@ -489,9 +491,9 @@ export default function ActiveWorkoutScreen() {
               onChangeText={handleSearchChange}
             />
             {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => handleSearchChange('')}>
+              <HapticPressable intent="light" onPress={() => handleSearchChange('')}>
                 <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
-              </TouchableOpacity>
+              </HapticPressable>
             )}
           </View>
 
@@ -502,15 +504,16 @@ export default function ActiveWorkoutScreen() {
             contentContainerStyle={styles.muscleFilterContent}
           >
             {MUSCLES.map((m) => (
-              <TouchableOpacity
+              <HapticPressable
                 key={m}
+                intent="light"
                 style={[styles.muscleChip, selectedMuscle === m && styles.muscleChipActive]}
                 onPress={() => handleMuscleFilter(m)}
               >
                 <Text style={[styles.muscleChipText, selectedMuscle === m && styles.muscleChipTextActive]}>
                   {m === 'All' ? 'All' : m.charAt(0).toUpperCase() + m.slice(1)}
                 </Text>
-              </TouchableOpacity>
+              </HapticPressable>
             ))}
           </ScrollView>
 
@@ -532,10 +535,10 @@ export default function ActiveWorkoutScreen() {
               </View>
             }
             renderItem={({ item }) => (
-              <TouchableOpacity
+              <HapticPressable
+                intent="medium"
                 style={styles.exerciseListItem}
                 onPress={() => addExerciseToSession(item)}
-                activeOpacity={0.7}
               >
                 {/* Thumbnail image */}
                 <ExerciseImage imageUrl={item.imageUrl} muscle={item.muscle} size={80} />
@@ -561,7 +564,7 @@ export default function ActiveWorkoutScreen() {
                 </View>
 
                 <Ionicons name="add-circle-outline" size={24} color={Colors.primary} />
-              </TouchableOpacity>
+              </HapticPressable>
             )}
           />
         </View>

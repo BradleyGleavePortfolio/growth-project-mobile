@@ -4,10 +4,10 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   RefreshControl,
   Dimensions,
 } from 'react-native';
+import HapticPressable from '../../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
@@ -242,9 +242,9 @@ export default function WorkoutScreen() {
       >
         <View style={styles.header}>
           <Text style={styles.title}>Workouts</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('CoachGuidelines')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <HapticPressable intent="light" onPress={() => navigation.navigate('CoachGuidelines')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <Ionicons name="clipboard-outline" size={22} color={Colors.textSecondary} />
-          </TouchableOpacity>
+          </HapticPressable>
         </View>
 
         {/* Weekly Stats */}
@@ -306,7 +306,7 @@ export default function WorkoutScreen() {
         </FadeInView>
 
         {/* Quick Start */}
-        <TouchableOpacity style={styles.quickStart} onPress={startQuickWorkout} activeOpacity={0.8}>
+        <HapticPressable intent="medium" style={styles.quickStart} onPress={startQuickWorkout}>
           <View style={styles.quickStartLeft}>
             <View style={styles.quickStartIcon}>
               <Ionicons name="flash" size={24} color={Colors.textOnPrimary} />
@@ -317,48 +317,49 @@ export default function WorkoutScreen() {
             </View>
           </View>
           <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
-        </TouchableOpacity>
+        </HapticPressable>
 
         {/* My Routines */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>My Routines</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('RoutineBuilder')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <HapticPressable intent="medium" onPress={() => navigation.navigate('RoutineBuilder')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
             <Ionicons name="add-circle" size={24} color={Colors.primary} />
-          </TouchableOpacity>
+          </HapticPressable>
         </View>
 
         {routines.length === 0 ? (
           <View style={styles.emptyCard}>
             <Ionicons name="barbell-outline" size={32} color={Colors.textMuted} />
             <Text style={styles.emptyText}>No routines yet</Text>
-            <TouchableOpacity style={styles.emptyBtn} onPress={() => navigation.navigate('RoutineBuilder')}>
+            <HapticPressable intent="medium" style={styles.emptyBtn} onPress={() => navigation.navigate('RoutineBuilder')}>
               <Text style={styles.emptyBtnText}>Create Routine</Text>
-            </TouchableOpacity>
+            </HapticPressable>
           </View>
         ) : (
           routines.map((routine) => {
             const exList = routine.exercises || [];
             return (
-              <TouchableOpacity
+              <HapticPressable
                 key={routine.id}
+                intent="medium"
                 style={styles.routineCard}
                 onPress={() => startRoutine(routine)}
-                activeOpacity={0.7}
               >
                 <View style={styles.routineTop}>
                   <Text style={styles.routineName}>{routine.name}</Text>
-                  <TouchableOpacity
+                  <HapticPressable
+                    intent="light"
                     onPress={() => navigation.navigate('RoutineBuilder', { routineId: routine.id })}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
                     <Ionicons name="create-outline" size={18} color={Colors.textMuted} />
-                  </TouchableOpacity>
+                  </HapticPressable>
                 </View>
                 <Text style={styles.routineExCount}>{exList.length} exercises</Text>
                 <Text style={styles.routineExList} numberOfLines={1}>
                   {exList.map((e) => e.exercise_name).join(' · ')}
                 </Text>
-              </TouchableOpacity>
+              </HapticPressable>
             );
           })
         )}

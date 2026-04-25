@@ -8,9 +8,9 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   SafeAreaView,
 } from 'react-native';
+import HapticPressable from '../../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { Colors, Spacing, Radius } from '../../theme/index';
@@ -124,11 +124,11 @@ export default function MoreScreen() {
         showsVerticalScrollIndicator={false}
       >
         {MORE_ITEMS.map((item) => (
-          <TouchableOpacity
+          <HapticPressable
             key={item.label}
+            intent="light"
             style={styles.item}
             onPress={() => handlePress(item)}
-            activeOpacity={0.7}
             accessible
             accessibilityRole="button"
             accessibilityLabel={item.label}
@@ -142,7 +142,7 @@ export default function MoreScreen() {
               <Text style={styles.itemDescription}>{item.description}</Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
-          </TouchableOpacity>
+          </HapticPressable>
         ))}
       </ScrollView>
     </SafeAreaView>

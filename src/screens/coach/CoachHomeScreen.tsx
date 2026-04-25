@@ -4,10 +4,10 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   RefreshControl,
   ActivityIndicator,
 } from 'react-native';
+import HapticPressable from '../../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
@@ -128,12 +128,13 @@ export default function CoachHomeScreen() {
           <Text style={styles.greeting}>{getGreeting()}, {currentUser?.firstName || 'Coach'}</Text>
           <Text style={styles.subtitle}>Here's your coaching overview</Text>
         </View>
-        <TouchableOpacity
+        <HapticPressable
+          intent="light"
           style={styles.settingsBtn}
           onPress={() => navigation.navigate('Settings')}
         >
           <Ionicons name="settings-outline" size={22} color={Colors.textSecondary} />
-        </TouchableOpacity>
+        </HapticPressable>
       </View>
 
       {/* Key Metrics */}
@@ -187,8 +188,9 @@ export default function CoachHomeScreen() {
         <FadeInView>
           <Text style={styles.sectionTitle}>⚠️ Weight Trend Alerts</Text>
           {redFlagClients.map((rf) => (
-            <TouchableOpacity
+            <HapticPressable
               key={rf.id}
+              intent="medium"
               style={styles.redFlagCard}
               onPress={() =>
                 navigation.navigate('ClientsStack', {
@@ -196,7 +198,6 @@ export default function CoachHomeScreen() {
                   params: { clientId: rf.id, clientName: rf.name },
                 })
               }
-              activeOpacity={0.8}
             >
               <View style={styles.redFlagLeft}>
                 <Ionicons name="warning" size={22} color={Colors.warning} />
@@ -208,7 +209,7 @@ export default function CoachHomeScreen() {
               <View style={styles.viewClientBtn}>
                 <Text style={styles.viewClientBtnText}>View</Text>
               </View>
-            </TouchableOpacity>
+            </HapticPressable>
           ))}
         </FadeInView>
       )}
@@ -235,26 +236,26 @@ export default function CoachHomeScreen() {
       {/* Quick Actions */}
       <Text style={styles.sectionTitle}>Quick Actions</Text>
       <View style={styles.actionsRow}>
-        <TouchableOpacity
+        <HapticPressable
+          intent="medium"
           style={styles.actionCard}
           onPress={() => navigation.navigate('ClientsStack')}
-          activeOpacity={0.7}
         >
           <View style={[styles.actionIcon, { backgroundColor: Colors.primaryPale }]}>
             <Ionicons name="people-outline" size={22} color={Colors.primary} />
           </View>
           <Text style={styles.actionText}>View Clients</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
+        </HapticPressable>
+        <HapticPressable
+          intent="medium"
           style={styles.actionCard}
           onPress={() => navigation.navigate('Messages')}
-          activeOpacity={0.7}
         >
           <View style={[styles.actionIcon, { backgroundColor: colors.feedback.infoBg }]}>
             <Ionicons name="chatbubble-outline" size={22} color={Colors.carbs} />
           </View>
           <Text style={styles.actionText}>Messages</Text>
-        </TouchableOpacity>
+        </HapticPressable>
       </View>
 
       {/* Client Status Today — hidden until the backend exposes a per-client

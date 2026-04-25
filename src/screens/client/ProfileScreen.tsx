@@ -4,9 +4,9 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   Alert,
 } from 'react-native';
+import HapticPressable from '../../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -79,7 +79,8 @@ export default function ProfileScreen() {
       {/* Quick Actions — 2x2 grid. Round 3: each TouchableOpacity gets a
           real a11y label / hint so VoiceOver announces destination, not "button". */}
       <View style={styles.actionsGrid}>
-        <TouchableOpacity
+        <HapticPressable
+          intent="light"
           style={styles.actionBtn}
           onPress={() => navigation.navigate('Settings')}
           accessibilityRole="button"
@@ -88,8 +89,9 @@ export default function ProfileScreen() {
         >
           <Ionicons name="settings-outline" size={24} color={Colors.primary} />
           <Text style={styles.actionText}>Settings</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
+        </HapticPressable>
+        <HapticPressable
+          intent="light"
           style={styles.actionBtn}
           onPress={() => navigation.navigate('Report')}
           accessibilityRole="button"
@@ -98,8 +100,9 @@ export default function ProfileScreen() {
         >
           <Ionicons name="document-text-outline" size={24} color={Colors.primary} />
           <Text style={styles.actionText}>My Report</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
+        </HapticPressable>
+        <HapticPressable
+          intent="light"
           style={styles.actionBtn}
           onPress={() => navigation.navigate('Widgets')}
           accessibilityRole="button"
@@ -108,8 +111,9 @@ export default function ProfileScreen() {
         >
           <Ionicons name="apps-outline" size={24} color={Colors.primary} />
           <Text style={styles.actionText}>Widgets</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
+        </HapticPressable>
+        <HapticPressable
+          intent="light"
           style={styles.actionBtn}
           onPress={() => navigation.navigate('Learn')}
           accessibilityRole="button"
@@ -118,7 +122,7 @@ export default function ProfileScreen() {
         >
           <Ionicons name="book-outline" size={24} color={Colors.primary} />
           <Text style={styles.actionText}>Learn</Text>
-        </TouchableOpacity>
+        </HapticPressable>
       </View>
 
       <View style={styles.section}>
@@ -143,10 +147,10 @@ export default function ProfileScreen() {
         ))}
       </View>
 
-      <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
+      <HapticPressable intent="warning" style={styles.signOutButton} onPress={handleSignOut}>
         <Ionicons name="log-out-outline" size={20} color={Colors.error} />
         <Text style={styles.signOutText}>Sign Out</Text>
-      </TouchableOpacity>
+      </HapticPressable>
     </ScrollView>
   );
 }

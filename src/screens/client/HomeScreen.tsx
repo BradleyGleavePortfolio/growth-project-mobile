@@ -5,9 +5,9 @@ import {
   StyleSheet,
   ScrollView,
   RefreshControl,
-  TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
+import HapticPressable from '../../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -370,7 +370,8 @@ export default function HomeScreen() {
               <Text style={styles.subtitle}>Track your nutrition today</Text>
             </View>
             <View style={styles.headerIcons}>
-              <TouchableOpacity
+              <HapticPressable
+                intent="light"
                 onPress={() => navigation.navigate('Messages')}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 accessibilityRole="button"
@@ -386,8 +387,9 @@ export default function HomeScreen() {
                     </Text>
                   </View>
                 )}
-              </TouchableOpacity>
-              <TouchableOpacity
+              </HapticPressable>
+              <HapticPressable
+                intent="light"
                 onPress={() => navigation.navigate('Notifications')}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 accessibilityRole="button"
@@ -403,7 +405,7 @@ export default function HomeScreen() {
                     </Text>
                   </View>
                 )}
-              </TouchableOpacity>
+              </HapticPressable>
             </View>
           </View>
         </View>
@@ -430,7 +432,8 @@ export default function HomeScreen() {
             Goal: {calorieTarget} kcal
           </Text>
           {(calorieTarget - dailyTotals.calories) > 200 && (
-            <TouchableOpacity
+            <HapticPressable
+              intent="light"
               style={styles.remindBtn}
               onPress={() => {
                 const remaining = calorieTarget - dailyTotals.calories;
@@ -445,7 +448,7 @@ export default function HomeScreen() {
             >
               <Ionicons name="notifications-outline" size={14} color={Colors.primary} />
               <Text style={styles.remindBtnText}>Remind me to eat</Text>
-            </TouchableOpacity>
+            </HapticPressable>
           )}
         </View>
       </FadeInView>
@@ -508,10 +511,10 @@ export default function HomeScreen() {
       </FadeInView>
 
       <FadeInView delay={500}>
-        <TouchableOpacity
+        <HapticPressable
+          intent="light"
           style={styles.habitsCard}
           onPress={() => navigation.navigate('Habits')}
-          activeOpacity={0.7}
           accessibilityRole="button"
           accessibilityLabel={`Daily habits, ${habitsData.completed} of ${habitsData.total} complete`}
           accessibilityHint="Opens the habits tracker"
@@ -546,7 +549,7 @@ export default function HomeScreen() {
               </View>
             ))}
           </View>
-        </TouchableOpacity>
+        </HapticPressable>
       </FadeInView>
 
       <FadeInView delay={600}>
@@ -564,15 +567,15 @@ export default function HomeScreen() {
               { tab: 'MoreTab', nested: 'Learn', icon: 'book-outline', label: 'Learn', color: Colors.gold, a11y: 'Open learning content' },
               { tab: 'MoreTab', nested: 'Community', icon: 'people-outline', label: 'Community', color: Colors.primary, a11y: 'Open community' },
             ] as { tab: string; nested?: string; icon: string; label: string; color: string; a11y: string }[]).map((item) => (
-              <TouchableOpacity
+              <HapticPressable
                 key={item.label}
+                intent="light"
                 style={styles.quickAccessItem}
                 onPress={() =>
                   item.nested
                     ? navigation.navigate(item.tab, { screen: item.nested })
                     : navigation.navigate(item.tab)
                 }
-                activeOpacity={0.7}
                 accessible
                 accessibilityRole="button"
                 accessibilityLabel={item.label}
@@ -582,7 +585,7 @@ export default function HomeScreen() {
                   <Ionicons name={item.icon as any} size={22} color={item.color} />
                 </View>
                 <Text style={styles.quickAccessLabel}>{item.label}</Text>
-              </TouchableOpacity>
+              </HapticPressable>
             ))}
           </View>
         </View>

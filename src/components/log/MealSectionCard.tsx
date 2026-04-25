@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import HapticPressable from '../HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Radius, Spacing } from '../../theme/index';
 import { FoodLog, MealType } from '../../types';
@@ -40,11 +41,11 @@ export default function MealSectionCard({
       )}
 
       {logs.map((log) => (
-        <TouchableOpacity
+        <HapticPressable
           key={log.id}
+          intent="light"
           style={styles.foodItem}
           onLongPress={() => onDeletePress(log)}
-          activeOpacity={0.7}
         >
           <View style={styles.foodItemLeft}>
             <Text style={styles.foodName}>
@@ -60,17 +61,17 @@ export default function MealSectionCard({
             </Text>
           </View>
           <Text style={styles.foodCals}>{Math.round(log.calories)}</Text>
-        </TouchableOpacity>
+        </HapticPressable>
       ))}
 
-      <TouchableOpacity
+      <HapticPressable
+        intent="medium"
         style={styles.addFoodButton}
         onPress={() => onAddPress(mealType)}
-        activeOpacity={0.7}
       >
         <Ionicons name="add-circle-outline" size={18} color={Colors.primary} />
         <Text style={styles.addFoodText}>Add Food</Text>
-      </TouchableOpacity>
+      </HapticPressable>
     </View>
   );
 }

@@ -3,11 +3,11 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   TextInput,
   FlatList,
   ActivityIndicator,
   Image,
+  TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Radius, colors } from '../../theme/index';
@@ -87,7 +87,7 @@ export default function FoodSearchView({
         />
         {searching && <ActivityIndicator size="small" color={Colors.primary} />}
         {!searching && searchQuery.length > 0 && (
-          <TouchableOpacity onPress={onClearSearch}>
+          <TouchableOpacity onPress={onClearSearch} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
           </TouchableOpacity>
         )}
@@ -111,12 +111,14 @@ export default function FoodSearchView({
           <TouchableOpacity
             style={[styles.tabChip, recentTab === 'recent' && styles.tabChipActive]}
             onPress={() => onRecentTabChange('recent')}
+            activeOpacity={0.7}
           >
             <Text style={[styles.tabChipText, recentTab === 'recent' && styles.tabChipTextActive]}>Recent</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.tabChip, recentTab === 'frequent' && styles.tabChipActive]}
             onPress={() => onRecentTabChange('frequent')}
+            activeOpacity={0.7}
           >
             <Text style={[styles.tabChipText, recentTab === 'frequent' && styles.tabChipTextActive]}>Frequent</Text>
           </TouchableOpacity>
@@ -204,6 +206,7 @@ export default function FoodSearchView({
         onPress={onEnterManualMode}
         activeOpacity={0.8}
       >
+        {/* usePressFeedback not needed here — TouchableOpacity retained to avoid FlatList interaction conflict */}
         <Ionicons name="create-outline" size={18} color={Colors.primary} />
         <Text style={styles.manualButtonText}>Enter Manually</Text>
       </TouchableOpacity>

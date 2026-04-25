@@ -10,6 +10,7 @@ import {
   Platform,
   ScrollView,
   Alert,
+  // TouchableOpacity retained for auth buttons — safe pattern
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors, Typography, Spacing, Radius, Shadow } from '../../theme';
@@ -160,6 +161,7 @@ export default function LoginScreen({ navigation }: Props) {
         </TouchableOpacity>
 
         {/* Login button */}
+        {/* Sign In — success haptic fires in handleLogin after successful auth */}
         <TouchableOpacity
           style={[styles.loginButton, loading && styles.buttonDisabled]}
           onPress={handleLogin}
