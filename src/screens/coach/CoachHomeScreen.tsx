@@ -173,17 +173,9 @@ export default function CoachHomeScreen() {
                   <Text style={styles.redFlagTrend}>Weight trending up · {rf.trend}</Text>
                 </View>
               </View>
-              <TouchableOpacity
-                style={styles.viewClientBtn}
-                onPress={() =>
-                  navigation.navigate('ClientsStack', {
-                    screen: 'ClientDetail',
-                    params: { clientId: rf.id, clientName: rf.name },
-                  })
-                }
-              >
+              <View style={styles.viewClientBtn}>
                 <Text style={styles.viewClientBtnText}>View</Text>
-              </TouchableOpacity>
+              </View>
             </TouchableOpacity>
           ))}
         </FadeInView>
