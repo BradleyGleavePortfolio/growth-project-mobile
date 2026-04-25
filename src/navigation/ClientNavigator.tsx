@@ -11,6 +11,7 @@ import RecipesScreen from '../screens/client/RecipesScreen';
 import RecipeDetailScreen from '../screens/client/RecipeDetailScreen';
 import GroceryListScreen from '../screens/client/GroceryListScreen';
 import ShoppingListScreen from '../screens/client/ShoppingListScreen';
+import PrepGuideScreen from '../screens/client/PrepGuideScreen';
 import ProgressScreen from '../screens/client/ProgressScreen';
 import FastingScreen from '../screens/client/FastingScreen';
 import ProfileScreen from '../screens/client/ProfileScreen';
@@ -127,6 +128,7 @@ function MoreStackNavigator() {
       <MoreStackNav.Screen name="RecipeDetail" component={RecipeDetailScreen} />
       <MoreStackNav.Screen name="GroceryList" component={GroceryListScreen} />
       <MoreStackNav.Screen name="ShoppingList" component={ShoppingListScreen} />
+      <MoreStackNav.Screen name="PrepGuide" component={PrepGuideScreen} />
       <MoreStackNav.Screen name="Fast" component={FastingScreen} />
       <MoreStackNav.Screen name="Community" component={CommunityScreen} />
       <MoreStackNav.Screen name="Progress" component={ProgressScreen} />
