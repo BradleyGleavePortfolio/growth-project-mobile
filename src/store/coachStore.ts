@@ -8,7 +8,7 @@ interface CoachStore {
   searchQuery: string;
   filterStatus: 'all' | 'active' | 'archived';
 
-  loadClients: (coachId: string) => Promise<void>;
+  loadClients: (coachId: string, status?: 'active' | 'archived' | 'all') => Promise<void>;
   setSearchQuery: (query: string) => void;
   setFilterStatus: (status: 'all' | 'active' | 'archived') => void;
   getFilteredClients: () => User[];
@@ -29,10 +29,12 @@ export const useCoachStore = create<CoachStore>((set, get) => ({
 
   reset: () => set({ ...initialCoachState }),
 
-  loadClients: async (_coachId: string) => {
+  loadClients: async (_coachId: string, status?: 'active' | 'archived' | 'all') => {
+    const { filterStatus } = get();
+    const effectiveStatus = status ?? filterStatus ?? 'all';
     try {
       set({ isLoading: true });
-      const res = await coachApi.getClients();
+      const res = await coachApi.getClients(effectiveStatus === 'all' ? undefined : effectiveStatus);
       const raw: any[] = res.data || [];
       const clients: User[] = raw.map((u: any) => {
         const parts = (u.name || '').split(' ');
@@ -44,7 +46,8 @@ export const useCoachStore = create<CoachStore>((set, get) => ({
           firstName: parts[0] || '',
           lastName: parts.slice(1).join(' ') || '',
           coachId: u.coach_id,
-          status: 'active' as const,
+          // Reflect backend archived_at on the status field
+          status: u.archived_at ? 'archived' : 'active',
           createdAt: u.created_at || new Date().toISOString(),
           updatedAt: u.created_at || new Date().toISOString(),
         };
@@ -62,12 +65,9 @@ export const useCoachStore = create<CoachStore>((set, get) => ({
   setFilterStatus: (status: 'all' | 'active' | 'archived') => set({ filterStatus: status }),
 
   getFilteredClients: () => {
-    const { clients, searchQuery, filterStatus } = get();
+    const { clients, searchQuery } = get();
     let filtered = clients;
-
-    if (filterStatus !== 'all') {
-      filtered = filtered.filter((c) => c.status === filterStatus);
-    }
+    // Status filtering is now done server-side via loadClients; only apply search here
 
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();

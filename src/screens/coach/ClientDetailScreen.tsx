@@ -148,6 +148,8 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
   const [nudgeSending, setNudgeSending] = useState(false);
   const [nudgeError, setNudgeError] = useState('');
   const [nudgeSuccess, setNudgeSuccess] = useState(false);
+  const [isArchived, setIsArchived] = useState(false);
+  const [archiveBusy, setArchiveBusy] = useState(false);
 
   // Server-side meal plans (Tier 2). The local-SQLite `planData` above is now
   // legacy — kept only because GroceryListScreen / PrepGuideScreen still read
@@ -172,6 +174,8 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
       const res = await coachApi.getClientSummary(clientId);
       const data = res.data;
       if (data.error) return;
+      // Reflect archived status from summary (client.archived_at)
+      if (data.client) setIsArchived(!!data.client.archived_at);
 
       // Set profile
       setProfile(data.profile ? {
@@ -600,6 +604,25 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
     return min < 60 ? `${min} min` : `${Math.floor(min / 60)}h ${min % 60}m`;
   };
 
+  const handleToggleArchive = async () => {
+    setArchiveBusy(true);
+    try {
+      if (isArchived) {
+        await coachApi.unarchiveClient(clientId);
+        setIsArchived(false);
+        Alert.alert('Unarchived', `${clientName} has been restored to active.`);
+      } else {
+        await coachApi.archiveClient(clientId);
+        setIsArchived(true);
+        Alert.alert('Archived', `${clientName} has been archived.`);
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err?.response?.data?.message || 'Failed to update client status.');
+    } finally {
+      setArchiveBusy(false);
+    }
+  };
+
   if (isLoading && !refreshing) {
     return (
       <View style={styles.loadingContainer}>
@@ -639,6 +662,19 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
           }}
         >
           <Ionicons name="chatbubble-outline" size={20} color={Colors.primary} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.msgIconBtn, { marginLeft: 4 }]}
+          onPress={handleToggleArchive}
+          disabled={archiveBusy}
+          accessibilityRole="button"
+          accessibilityLabel={isArchived ? 'Unarchive client' : 'Archive client'}
+        >
+          <Ionicons
+            name={isArchived ? 'archive' : 'archive-outline'}
+            size={20}
+            color={isArchived ? Colors.warning : Colors.textSecondary}
+          />
         </TouchableOpacity>
       </View>
 
