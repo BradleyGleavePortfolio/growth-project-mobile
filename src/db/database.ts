@@ -4,7 +4,6 @@ import * as SQLite from 'expo-sqlite';
 import { seedFoodsIfNeeded, seedRecipesIfNeeded } from './recipesDb';
 import { initWorkoutTables, seedExercisesIfNeeded } from './workoutDb';
 import { initNotificationsTable } from './notificationsDb';
-import { initCoachMessagesTable } from './coachMessagesDb';
 import { initHabitsTables } from './habitsDb';
 import { initEducationTables, seedLessonsIfNeeded } from './educationDb';
 import { initCommunityTables, seedCommunityIfNeeded } from './communityDb';
@@ -161,8 +160,17 @@ export async function initDatabase(): Promise<void> {
 
   await initWorkoutTables();
   await initNotificationsTable();
-  await initCoachMessagesTable();
   await initHabitsTables();
+
+  // One-time cleanup: the legacy `coach_messages` SQLite table previously held
+  // seeded fake coach↔client conversations on first sign-in. Real messaging now
+  // lives behind the backend API (coachMessagesApi / messagesApi). Drop the
+  // orphaned table so no stale local rows can leak into the UI.
+  try {
+    await database.execAsync('DROP TABLE IF EXISTS coach_messages;');
+  } catch {
+    // Best-effort — ignore if the table never existed.
+  }
   await initEducationTables();
   await initCommunityTables();
   await seedFoodsIfNeeded();
