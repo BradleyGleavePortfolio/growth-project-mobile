@@ -7,6 +7,8 @@ import {
   StatusBar,
   ActivityIndicator,
   Alert,
+  Modal,
+  TextInput,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -22,6 +24,9 @@ type Props = {
 
 export default function RoleSelectionScreen(_: Props) {
   const [loading, setLoading] = useState(false);
+  const [showCoachModal, setShowCoachModal] = useState(false);
+  const [coachPassword, setCoachPassword] = useState('');
+  const [coachPasswordError, setCoachPasswordError] = useState('');
 
   const handleRoleSelect = async (role: 'coach' | 'student', coachCode?: string) => {
     setLoading(true);
@@ -44,6 +49,32 @@ export default function RoleSelectionScreen(_: Props) {
   };
 
   const handleStudentSelect = () => handleRoleSelect('student');
+
+  const handleCoachConfirm = async () => {
+    setCoachPasswordError('');
+    if (coachPassword.length < 8) {
+      setCoachPasswordError('Password must be at least 8 characters.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await authApi.becomeCoach(coachPassword);
+      const raw = await AsyncStorage.getItem('user_data');
+      if (raw) {
+        const user = JSON.parse(raw);
+        user.role = res.data.role;
+        await AsyncStorage.setItem('user_data', JSON.stringify(user));
+      }
+      await AsyncStorage.removeItem('needs_role_selection');
+      setShowCoachModal(false);
+      authEvents.emit();
+    } catch (err: any) {
+      const msg = err.response?.data?.message || 'Failed to become coach. Check your password.';
+      setCoachPasswordError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -80,13 +111,75 @@ export default function RoleSelectionScreen(_: Props) {
           )}
         </TouchableOpacity>
 
-        {/*
-         * Coach card hidden: coach accounts are SQL-provisioned per operator
-         * (see fitness-client-pov-audit.md A1 — the in-app flow always 403s
-         * on /auth/select-role). Bringing it back requires a real coach
-         * signup story on the backend.
-         */}
+        <TouchableOpacity
+          style={[styles.roleCard, styles.coachCard]}
+          onPress={() => setShowCoachModal(true)}
+          disabled={loading}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Register as a coach"
+        >
+          <View style={[styles.roleIconContainer, { backgroundColor: Colors.primaryDark + '20' }]}>
+            <Ionicons name="people" size={32} color={Colors.primaryDark} />
+          </View>
+          <Text style={styles.roleTitle}>I'm a Coach</Text>
+          <Text style={styles.roleDescription}>
+            Manage clients, assign meal plans, and track their progress
+          </Text>
+          <View style={styles.roleArrow}>
+            <Ionicons name="arrow-forward" size={20} color={Colors.primaryDark} />
+          </View>
+        </TouchableOpacity>
       </View>
+
+      {/* Coach password-confirmation modal */}
+      <Modal visible={showCoachModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Confirm Your Password</Text>
+            <Text style={styles.modalDesc}>
+              Enter your current password to activate your coach account.
+            </Text>
+            <TextInput
+              style={styles.modalInput}
+              value={coachPassword}
+              onChangeText={setCoachPassword}
+              placeholder="Current password"
+              placeholderTextColor={Colors.textMuted}
+              secureTextEntry
+              autoFocus
+              textContentType="password"
+              accessibilityLabel="Current password"
+            />
+            {coachPasswordError ? (
+              <Text style={styles.errorText}>{coachPasswordError}</Text>
+            ) : null}
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => {
+                  setShowCoachModal(false);
+                  setCoachPassword('');
+                  setCoachPasswordError('');
+                }}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalConfirmBtn, loading && { opacity: 0.6 }]}
+                onPress={handleCoachConfirm}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color={Colors.textOnPrimary} size="small" />
+                ) : (
+                  <Text style={styles.modalConfirmText}>Confirm</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -128,6 +221,9 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: Colors.border,
   },
+  coachCard: {
+    borderColor: Colors.primaryDark + '40',
+  },
   roleIconContainer: {
     width: 56,
     height: 56,
@@ -151,5 +247,75 @@ const styles = StyleSheet.create({
   roleArrow: {
     marginTop: 12,
     alignSelf: 'flex-end',
+  },
+  // Modal
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    width: '85%',
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    padding: 24,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  modalDesc: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  modalInput: {
+    backgroundColor: Colors.surfaceElevated,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    color: Colors.textPrimary,
+  },
+  errorText: {
+    color: Colors.error,
+    fontSize: 13,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 16,
+  },
+  modalCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: Colors.surfaceElevated,
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  modalConfirmBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+  },
+  modalConfirmText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.textOnPrimary,
   },
 });
