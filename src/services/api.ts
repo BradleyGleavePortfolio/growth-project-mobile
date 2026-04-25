@@ -40,11 +40,10 @@ import { env } from '../config/env';
 // working without a .env. See src/config/env.ts.
 const API_BASE = env.API_URL;
 
-// Supabase project constants — duplicated in googleAuth.ts (tracked as audit Q2).
-// Not inlined at call time anymore to avoid reconstructing the client per 401.
-const SUPABASE_URL = 'https://rpyfdsgxxltzutgqeouk.supabase.co';
-const SUPABASE_ANON_KEY =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJweWZkc2d4eGx0enV0Z3Flb3VrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1MjE2OTAsImV4cCI6MjA4OTA5NzY5MH0.cH-yapSxmjdHgMlJiYEt6-uGzMTArgIs9tPVs29lUF0';
+// Supabase project constants now come from env (src/config/env.ts) — no more
+// hardcoded duplicates.
+const SUPABASE_URL = env.SUPABASE_URL;
+const SUPABASE_ANON_KEY = env.SUPABASE_ANON_KEY;
 
 const api = axios.create({
   baseURL: API_BASE,

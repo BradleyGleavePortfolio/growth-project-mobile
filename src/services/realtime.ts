@@ -21,16 +21,13 @@
 //    fallback keeps working
 
 import { createClient, RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
-
-const SUPABASE_URL = 'https://rpyfdsgxxltzutgqeouk.supabase.co';
-const SUPABASE_ANON_KEY =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJweWZkc2d4eGx0enV0Z3Flb3VrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1MjE2OTAsImV4cCI6MjA4OTA5NzY5MH0.cH-yapSxmjdHgMlJiYEt6-uGzMTArgIs9tPVs29lUF0';
+import { env } from '../config/env';
 
 let client: SupabaseClient | null = null;
 
 function getClient(): SupabaseClient {
   if (!client) {
-    client = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    client = createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
       auth: {
         // Realtime client doesn't need to manage its own session \u2014 we use
         // anon role + Broadcast which doesn't touch RLS-protected tables.
