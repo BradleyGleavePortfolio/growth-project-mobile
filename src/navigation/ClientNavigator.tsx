@@ -8,6 +8,7 @@ import HabitsScreen from '../screens/client/HabitsScreen';
 import LogScreen from '../screens/client/LogScreen';
 import PlanScreen from '../screens/client/PlanScreen';
 import RecipesScreen from '../screens/client/RecipesScreen';
+import RecipeDetailScreen from '../screens/client/RecipeDetailScreen';
 import ProgressScreen from '../screens/client/ProgressScreen';
 import FastingScreen from '../screens/client/FastingScreen';
 import ProfileScreen from '../screens/client/ProfileScreen';
@@ -57,6 +58,7 @@ export type WorkoutStackParamList = {
 export type MoreStackParamList = {
   MoreIndex: undefined;
   Recipes: undefined;
+  RecipeDetail: { recipe: any };
   Fast: undefined;
   Community: undefined;
   Progress: undefined;
@@ -65,6 +67,9 @@ export type MoreStackParamList = {
   Widgets: undefined;
   Report: undefined;
   Learn: undefined;
+  GroceryList: undefined;
+  ShoppingList: undefined;
+  PrepGuide: undefined;
 };
 
 const Tab = createBottomTabNavigator<ClientTabParamList>();
@@ -117,6 +122,7 @@ function MoreStackNavigator() {
     >
       <MoreStackNav.Screen name="MoreIndex" component={MoreScreen} />
       <MoreStackNav.Screen name="Recipes" component={RecipesScreen} />
+      <MoreStackNav.Screen name="RecipeDetail" component={RecipeDetailScreen} />
       <MoreStackNav.Screen name="Fast" component={FastingScreen} />
       <MoreStackNav.Screen name="Community" component={CommunityScreen} />
       <MoreStackNav.Screen name="Progress" component={ProgressScreen} />
