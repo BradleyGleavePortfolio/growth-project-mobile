@@ -264,7 +264,10 @@ export const habitsApi = {
 };
 
 export const coachApi = {
-  getClients: () => api.get('/coach/clients'),
+  getClients: (status?: 'active' | 'archived' | 'all') =>
+    api.get('/coach/clients' + (status ? `?status=${status}` : '')),
+  archiveClient: (clientId: string) => api.post(`/coach/clients/${clientId}/archive`),
+  unarchiveClient: (clientId: string) => api.post(`/coach/clients/${clientId}/unarchive`),
   getClientTimeline: (clientId: string, days?: number) =>
     api.get(`/coach/clients/${clientId}/timeline${days ? `?days=${days}` : ''}`),
   getClientSummary: (clientId: string) =>

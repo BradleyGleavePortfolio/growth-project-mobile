@@ -34,15 +34,12 @@ export default function ClientsListScreen({ navigation }: Props) {
 
   useEffect(() => {
     if (currentUser) {
-      loadClients(currentUser.id);
+      loadClients(currentUser.id, filterStatus === 'all' ? undefined : filterStatus);
     }
-  }, [currentUser?.id]);
+  }, [currentUser?.id, filterStatus]);
 
   const filteredClients = getFilteredClients();
-  // 'archived' filter removed: the backend currently returns all clients with
-  // status=active, so filtering by 'archived' always yielded an empty list.
-  // Restore once a real archived state is wired through /coach/clients.
-  const filters: Array<'all' | 'active'> = ['all', 'active'];
+  const filters: Array<'all' | 'active' | 'archived'> = ['all', 'active', 'archived'];
 
   const renderClient = ({ item }: { item: User }) => (
     <TouchableOpacity
