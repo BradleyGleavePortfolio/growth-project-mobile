@@ -12,10 +12,14 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/colors';
-import { workoutApi } from '../../services/api';
 import { getAllExercises } from '../../db/workoutDb';
+import {
+  useRoutines,
+  useCreateRoutine,
+  useUpdateRoutine,
+  useDeleteRoutine,
+} from '../../hooks/useApi';
 
 interface RoutineExercise {
   exerciseId: string;
@@ -43,7 +47,6 @@ export default function RoutineBuilderScreen() {
   const navigation = useNavigation<any>();
   const routineId = route.params?.routineId;
 
-  const [_userId, setUserId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [exercises, setExercises] = useState<RoutineExercise[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -52,33 +55,28 @@ export default function RoutineBuilderScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMuscle, setSelectedMuscle] = useState('All');
 
-  useEffect(() => {
-    AsyncStorage.getItem('user_data').then((raw) => {
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        setUserId(parsed.id);
-      }
-    }).catch(() => {});
-  }, []);
+  // Load existing routine via React Query so the cache is shared with the
+  // routines list elsewhere in the app. When the screen is opened in "new"
+  // mode (no routineId) the query simply isn't needed for hydration.
+  const routinesQ = useRoutines();
+  const createRoutine = useCreateRoutine();
+  const updateRoutine = useUpdateRoutine();
+  const deleteRoutine = useDeleteRoutine();
 
   useEffect(() => {
-    if (routineId) {
-      workoutApi.getRoutines().then((res) => {
-        const routine = res.data.find((r: any) => r.id === routineId);
-        if (routine) {
-          setName(routine.name);
-          const exs = (routine.exercises || []).map((e: any) => ({
-            exerciseId: e.exercise_id || e.exerciseId || '',
-            exerciseName: e.exercise_name || e.exerciseName || '',
-            sets: e.sets || 3,
-            reps: e.reps || 10,
-            restSec: e.rest_sec || e.restSec || 60,
-          }));
-          setExercises(exs);
-        }
-      }).catch(() => {});
-    }
-  }, [routineId]);
+    if (!routineId || !routinesQ.data) return;
+    const routine = routinesQ.data.find((r: any) => r.id === routineId);
+    if (!routine) return;
+    setName(routine.name);
+    const exs = (routine.exercises || []).map((e: any) => ({
+      exerciseId: e.exercise_id || e.exerciseId || '',
+      exerciseName: e.exercise_name || e.exerciseName || '',
+      sets: e.sets || 3,
+      reps: e.reps || 10,
+      restSec: e.rest_sec || e.restSec || 60,
+    }));
+    setExercises(exs);
+  }, [routineId, routinesQ.data]);
 
   const openAddExercise = async () => {
     setShowAddModal(true);
@@ -146,7 +144,7 @@ export default function RoutineBuilderScreen() {
     });
   };
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!name.trim()) {
       Alert.alert('Missing Name', 'Give your routine a name.');
       return;
@@ -164,20 +162,15 @@ export default function RoutineBuilderScreen() {
         rest_sec: e.restSec,
       })),
     };
-    try {
-      if (routineId) {
-        await workoutApi.updateRoutine(routineId, payload);
-      } else {
-        await workoutApi.createRoutine(payload);
-      }
-    } catch (err: any) {
-      // Destructive write (user expects the routine to be saved). Alert so
-      // they know to retry instead of discovering the silent loss later.
-      console.error('RoutineBuilderScreen: save failed', err);
+    const onSuccess = () => navigation.goBack();
+    const onError = (err: any) => {
       Alert.alert("Couldn't save routine", err?.message || 'Please try again.');
-      return;
+    };
+    if (routineId) {
+      updateRoutine.mutate({ id: routineId, data: payload }, { onSuccess, onError });
+    } else {
+      createRoutine.mutate(payload, { onSuccess, onError });
     }
-    navigation.goBack();
   };
 
   const handleDelete = () => {
@@ -187,16 +180,13 @@ export default function RoutineBuilderScreen() {
       {
         text: 'Delete',
         style: 'destructive',
-        onPress: async () => {
-          try {
-            await workoutApi.deleteRoutine(routineId);
-          } catch (err: any) {
-            // Destructive write: surface so user knows to retry.
-            console.error('RoutineBuilderScreen: delete failed', err);
-            Alert.alert("Couldn't delete routine", err?.message || 'Please try again.');
-            return;
-          }
-          navigation.goBack();
+        onPress: () => {
+          deleteRoutine.mutate(routineId, {
+            onSuccess: () => navigation.goBack(),
+            onError: (err: any) => {
+              Alert.alert("Couldn't delete routine", err?.message || 'Please try again.');
+            },
+          });
         },
       },
     ]);

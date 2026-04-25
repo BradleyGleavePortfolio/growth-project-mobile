@@ -1,4 +1,17 @@
-import React, { useEffect, useState, useCallback } from 'react';
+/**
+ * NotificationsScreen — API-first via React Query (Fix #2 pass 2).
+ *
+ * The screen used to read from a local SQLite `notifications` table layered
+ * on top of server-side nudges. The local table is now ignored entirely:
+ * coach nudges from the backend are the single source of truth, the
+ * unread-count badge comes from `useUnreadNudgeCount`, and marking-read
+ * uses an optimistic mutation via `useMarkNudgeRead`.
+ *
+ * Cached for 30s with offline fallback through the persisted React Query
+ * cache, so the inbox still renders something useful when the network blips.
+ */
+
+import React, { useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,20 +19,14 @@ import {
   FlatList,
   TouchableOpacity,
   RefreshControl,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect } from '@react-navigation/native';
-import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { Colors } from '../../constants/colors';
-import { nudgesApi } from '../../services/api';
 import {
-  Notification,
-  getNotifications,
-  markAsRead,
-  markAllAsRead,
-  deleteNotification,
-} from '../../db/notificationsDb';
+  ApiNudge,
+  useNudges,
+  useMarkNudgeRead,
+} from '../../hooks/useApi';
 
 const TYPE_CONFIG: Record<string, { icon: string; color: string }> = {
   reminder: { icon: 'alarm-outline', color: Colors.warning },
@@ -30,125 +37,28 @@ const TYPE_CONFIG: Record<string, { icon: string; color: string }> = {
   tip: { icon: 'bulb-outline', color: Colors.primaryLight },
 };
 
-interface ServerNudge {
-  id: string;
-  title: string;
-  body: string;
-  created_at: string;
-  read_at?: string | null;
-}
-
 export default function NotificationsScreen() {
-  const currentUser = useCurrentUser();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [nudges, setNudges] = useState<ServerNudge[]>([]);
-  const [refreshing, setRefreshing] = useState(false);
+  const { data: nudges = [], isLoading, isRefetching, refetch } = useNudges(100);
+  const markRead = useMarkNudgeRead();
 
-  const loadNotifications = useCallback(async () => {
-    if (!currentUser) return;
-    // N4 (audit): no demo-seeding. Server nudges are the source of truth; any
-    // notifications in local SQLite are real ones the user kept around (or
-    // empty on a clean install). The empty state below handles that case.
-    const data = await getNotifications(currentUser.id);
-    setNotifications(data);
-  }, [currentUser]);
+  const onRefresh = useCallback(() => {
+    refetch();
+  }, [refetch]);
 
-  const loadNudges = useCallback(async () => {
-    try {
-      const res = await nudgesApi.list({ limit: 100 });
-      const arr: ServerNudge[] = Array.isArray(res.data) ? res.data : res.data?.nudges || [];
-      setNudges(arr);
-    } catch (err) {
-      // Silent — keep previous list.
-    }
-  }, []);
-
-  useEffect(() => {
-    loadNotifications();
-    loadNudges();
-  }, [loadNotifications, loadNudges]);
-
-  useFocusEffect(
-    useCallback(() => {
-      loadNudges();
-    }, [loadNudges]),
-  );
-
-  const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await Promise.all([loadNotifications(), loadNudges()]);
-    setRefreshing(false);
-  }, [loadNotifications, loadNudges]);
-
-  const handlePress = async (notif: Notification) => {
-    if (notif.id.startsWith('nudge_')) {
-      const nudgeId = notif.id.slice('nudge_'.length);
-      // Optimistic: mark read locally, then sync.
-      setNudges((prev) => prev.map((n) => (n.id === nudgeId ? { ...n, read_at: new Date().toISOString() } : n)));
-      try {
-        await nudgesApi.markRead(nudgeId);
-      } catch {
-        /* no-op — the next refresh will reconcile */
-      }
-      return;
-    }
-    if (!notif.read) {
-      await markAsRead(notif.id);
-      setNotifications((prev) =>
-        prev.map((n) => (n.id === notif.id ? { ...n, read: true } : n))
-      );
+  const handlePress = (nudge: ApiNudge) => {
+    if (!nudge.read_at) {
+      markRead.mutate(nudge.id);
     }
   };
 
-  const handleDelete = (notif: Notification) => {
-    if (notif.id.startsWith('nudge_')) {
-      // Server-side nudges can't be deleted client-side; just mark read.
-      const id = notif.id.slice('nudge_'.length);
-      setNudges((prev) => prev.map((n) => (n.id === id ? { ...n, read_at: new Date().toISOString() } : n)));
-      nudgesApi.markRead(id).catch(() => undefined);
-      return;
-    }
-    Alert.alert('Delete Notification', 'Remove this notification?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          await deleteNotification(notif.id);
-          setNotifications((prev) => prev.filter((n) => n.id !== notif.id));
-        },
-      },
-    ]);
+  // We intentionally don't expose "delete" — server-side nudges are the
+  // record of coach communication; users mark them read instead.
+  // (Long-press could be reused later for "snooze" once that exists.)
+
+  const handleMarkAllRead = () => {
+    const unread = nudges.filter((n) => !n.read_at);
+    unread.forEach((n) => markRead.mutate(n.id));
   };
-
-  // Nudges come from the server with `read_at` markers. Convert them into the
-  // local Notification shape so the existing renderItem / list rendering works
-  // unchanged.
-  const nudgeNotifications: Notification[] = nudges.map((n) => ({
-    id: 'nudge_' + n.id,
-    userId: currentUser?.id || '',
-    type: 'coach',
-    title: n.title || 'From your coach',
-    body: n.body || '',
-    read: !!n.read_at,
-    createdAt: n.created_at,
-  }));
-
-  const combined: Notification[] = [...nudgeNotifications, ...notifications].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-  );
-
-  const handleMarkAllRead = async () => {
-    if (!currentUser) return;
-    await markAllAsRead(currentUser.id);
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-    // Mark all server-side nudges read too.
-    const unreadNudges = nudges.filter((n) => !n.read_at);
-    setNudges((prev) => prev.map((n) => ({ ...n, read_at: n.read_at || new Date().toISOString() })));
-    await Promise.all(unreadNudges.map((n) => nudgesApi.markRead(n.id).catch(() => undefined)));
-  };
-
-  const unreadCount = combined.filter((n) => !n.read).length;
 
   const formatTime = (iso: string): string => {
     const now = Date.now();
@@ -164,13 +74,18 @@ export default function NotificationsScreen() {
     return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
-  const renderItem = ({ item }: { item: Notification }) => {
-    const config = TYPE_CONFIG[item.type] || TYPE_CONFIG.system;
+  const sorted = [...nudges].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+  );
+  const unreadCount = sorted.filter((n) => !n.read_at).length;
+
+  const renderItem = ({ item }: { item: ApiNudge }) => {
+    const config = TYPE_CONFIG.coach;
+    const isUnread = !item.read_at;
     return (
       <TouchableOpacity
-        style={[styles.notifCard, !item.read && styles.notifCardUnread]}
+        style={[styles.notifCard, isUnread && styles.notifCardUnread]}
         onPress={() => handlePress(item)}
-        onLongPress={() => handleDelete(item)}
         activeOpacity={0.7}
       >
         <View style={[styles.iconCircle, { backgroundColor: config.color + '18' }]}>
@@ -178,16 +93,19 @@ export default function NotificationsScreen() {
         </View>
         <View style={styles.notifContent}>
           <View style={styles.notifTop}>
-            <Text style={[styles.notifTitle, !item.read && styles.notifTitleUnread]} numberOfLines={1}>
-              {item.title}
+            <Text
+              style={[styles.notifTitle, isUnread && styles.notifTitleUnread]}
+              numberOfLines={1}
+            >
+              {item.title || 'From your coach'}
             </Text>
-            <Text style={styles.notifTime}>{formatTime(item.createdAt)}</Text>
+            <Text style={styles.notifTime}>{formatTime(item.created_at)}</Text>
           </View>
           <Text style={styles.notifBody} numberOfLines={2}>
             {item.body}
           </Text>
         </View>
-        {!item.read && <View style={styles.unreadDot} />}
+        {isUnread && <View style={styles.unreadDot} />}
       </TouchableOpacity>
     );
   };
@@ -197,7 +115,10 @@ export default function NotificationsScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>Notifications</Text>
         {unreadCount > 0 && (
-          <TouchableOpacity onPress={handleMarkAllRead} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <TouchableOpacity
+            onPress={handleMarkAllRead}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
             <Text style={styles.markAllText}>Mark all read</Text>
           </TouchableOpacity>
         )}
@@ -213,18 +134,25 @@ export default function NotificationsScreen() {
       )}
 
       <FlatList
-        data={combined}
+        data={sorted}
         renderItem={renderItem}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} colors={[Colors.primary]} />
+          <RefreshControl
+            refreshing={isRefetching}
+            onRefresh={onRefresh}
+            tintColor={Colors.primary}
+            colors={[Colors.primary]}
+          />
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Ionicons name="notifications-off-outline" size={48} color={Colors.textMuted} />
-            <Text style={styles.emptyTitle}>No notifications yet</Text>
+            <Text style={styles.emptyTitle}>
+              {isLoading ? 'Loading…' : 'No notifications yet'}
+            </Text>
             <Text style={styles.emptyText}>
               Nudges from your coach and reminders will show up here.
             </Text>

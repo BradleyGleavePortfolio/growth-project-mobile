@@ -6,7 +6,7 @@ import { initWorkoutTables, seedExercisesIfNeeded } from './workoutDb';
 import { initNotificationsTable } from './notificationsDb';
 import { initHabitsTables } from './habitsDb';
 import { initEducationTables, seedLessonsIfNeeded } from './educationDb';
-import { initCommunityTables, seedCommunityIfNeeded } from './communityDb';
+import { initCommunityTables } from './communityDb';
 
 let db: SQLite.SQLiteDatabase | null = null;
 
@@ -175,7 +175,7 @@ export async function initDatabase(): Promise<void> {
   await initCommunityTables();
   await seedFoodsIfNeeded();
   await seedLessonsIfNeeded();
-  await seedCommunityIfNeeded();
+  // seedCommunityIfNeeded() removed — community feed is now backend-driven (see useCommunityFeed).
   await seedRecipesIfNeeded();
   await seedExercisesIfNeeded();
 }
