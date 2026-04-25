@@ -412,3 +412,24 @@ export const checkInsApi = {
   },
   get: (id: string) => api.get(`/check-ins/${id}`),
 };
+
+// F12 — Recipes
+export const recipesApi = {
+  list: () => api.get('/recipes'),
+  listSaved: () => api.get('/recipes/saved'),
+  getById: (id: string) => api.get(`/recipes/${id}`),
+  create: (data: Record<string, any>) => api.post('/recipes', data),
+  save: (id: string) => api.post(`/recipes/${id}/save`),
+  unsave: (id: string) => api.delete(`/recipes/${id}/save`),
+};
+
+// F13 — Grocery & Shopping Lists
+export const listsApi = {
+  getList: (type: 'grocery' | 'shopping') => api.get(`/lists/${type}`),
+  addItem: (type: 'grocery' | 'shopping', data: { name: string; quantity?: number; unit?: string; source_recipe_id?: string }) =>
+    api.post(`/lists/${type}`, data),
+  updateItem: (id: string, data: { is_checked?: boolean; quantity?: number; name?: string }) =>
+    api.patch(`/lists/items/${id}`, data),
+  deleteItem: (id: string) => api.delete(`/lists/items/${id}`),
+  clearChecked: (type: 'grocery' | 'shopping') => api.post(`/lists/${type}/clear-checked`),
+};
