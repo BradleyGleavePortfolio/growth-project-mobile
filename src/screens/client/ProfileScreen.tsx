@@ -20,6 +20,10 @@ import { Colors } from '../../constants/colors';
 // Round 3: ProfileStack was folded into MoreStack during the 9→5 tab consolidation.
 // Settings/Report/Widgets/Learn screens are unchanged — only the parent stack is renamed.
 import { MoreStackParamList } from '../../navigation/ClientNavigator';
+// UX Psych #3: Identity Reinforcement
+import IdentityBadge from '../../components/IdentityBadge';
+import { useFoundingNumber } from '../../hooks/useIdentity';
+import { resolveIdentityTitle } from '../../lib/identityTitle';
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>;
 
@@ -27,6 +31,16 @@ export default function ProfileScreen() {
   const currentUser = useCurrentUser();
   // signOut imported directly — no store wiring needed.
   const navigation = useNavigation<Nav>();
+
+  // UX Psych #3: Identity Reinforcement
+  const foundingQ = useFoundingNumber();
+  const foundingData = foundingQ.data ?? null;
+  const identityTitle = resolveIdentityTitle({
+    isFoundingMember: foundingData?.isFoundingMember ?? false,
+    streakDays: 0,
+    totalWorkouts: 0,
+    weeksSinceJoin: 0,
+  });
 
   const handleSignOut = () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
@@ -73,6 +87,13 @@ export default function ProfileScreen() {
         <Text style={styles.name}>
           {currentUser?.name || 'No name set'}
         </Text>
+        {/* UX Psych #3: Identity title + founding badge under name */}
+        <Text style={styles.identityTitleText}>{identityTitle.label}</Text>
+        <IdentityBadge
+          rank={foundingData?.rank ?? 0}
+          isFoundingMember={foundingData?.isFoundingMember ?? false}
+          hidden={!foundingData}
+        />
         <Text style={styles.email}>{currentUser?.email || ''}</Text>
       </View>
 
@@ -200,6 +221,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.textSecondary,
     marginTop: 4,
+  },
+  identityTitleText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.primary,
+    marginTop: 4,
+    letterSpacing: 0.3,
   },
   actionsGrid: {
     flexDirection: 'row',

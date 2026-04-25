@@ -439,3 +439,15 @@ export const prepGuideApi = {
   getWeeklyGuide: (week?: string) =>
     api.get(`/prep-guide${week ? `?week=${week}` : ''}`),
 };
+
+// ── Identity (Psych #3) ──────────────────────────────────────────────────────
+export const usersApi = {
+  getFoundingNumber: () =>
+    api.get<{ rank: number; total: number; isFoundingMember: boolean }>(
+      '/users/me/founding-number',
+    ),
+  getCircleStats: () =>
+    api.get<{ trainedTodayCount: number; totalMembers: number }>(
+      '/users/me/circle-stats',
+    ),
+};

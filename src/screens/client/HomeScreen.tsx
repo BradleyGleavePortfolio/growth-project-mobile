@@ -40,6 +40,9 @@ import {
   useUnreadNudgeCount,
 } from '../../hooks/useApi';
 import HeroAction from '../../components/HeroAction';
+import IdentityBadge from '../../components/IdentityBadge';
+import { useFoundingNumber, useCircleStats } from '../../hooks/useIdentity';
+import { resolveIdentityTitle } from '../../lib/identityTitle';
 
 const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 
@@ -255,6 +258,22 @@ export default function HomeScreen() {
   const messagesUnread = Number(messagesUnreadQ.data?.total ?? 0);
   const nudgesUnread = Number((nudgesUnreadQ.data as any)?.total ?? (nudgesUnreadQ.data as any)?.count ?? 0);
 
+  // ── UX Psych #3: Identity Reinforcement ──
+  const foundingQ = useFoundingNumber();
+  const circleQ = useCircleStats();
+
+  const foundingData = foundingQ.data ?? null;
+  const circleStats = circleQ.data ?? null;
+
+  // Derive identity title from available data (graceful fallback to defaults)
+  const identityTitle = resolveIdentityTitle({
+    isFoundingMember: foundingData?.isFoundingMember ?? false,
+    streakDays: 0,         // streak endpoint not yet wired — safe default
+    totalWorkouts: 0,      // workout count not yet wired — safe default
+    weeksSinceJoin: 0,
+    daysSinceLastWorkout: undefined,
+  });
+
   useEffect(() => {
     if (currentUser) {
       loadDayData(currentUser.id);
@@ -367,7 +386,13 @@ export default function HomeScreen() {
               <Text style={styles.greeting}>
                 {getGreeting()}, {currentUser?.name || 'there'}
               </Text>
-              <Text style={styles.subtitle}>Track your nutrition today</Text>
+              {/* UX Psych #3: Identity title above secondary copy */}
+              <Text style={styles.identityTitle}>{identityTitle.label}</Text>
+              <IdentityBadge
+                rank={foundingData?.rank ?? 0}
+                isFoundingMember={foundingData?.isFoundingMember ?? false}
+                hidden={!foundingData}
+              />
             </View>
             <View style={styles.headerIcons}>
               <HapticPressable
@@ -419,6 +444,12 @@ export default function HomeScreen() {
       {/* ── UX Psych #1: One Dominant Hero Action ── */}
       <FadeInView delay={50}>
         <HeroAction />
+        {/* UX Psych #3: Social-proof — circle trained today */}
+        {circleStats && circleStats.trainedTodayCount > 0 && (
+          <Text style={styles.circleSocialProof}>
+            {circleStats.trainedTodayCount} of your circle trained today
+          </Text>
+        )}
       </FadeInView>
 
       <FadeInView delay={100}>
@@ -653,6 +684,21 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.textMuted,
     marginTop: 4,
+  },
+  identityTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.primary,
+    marginTop: 4,
+    letterSpacing: 0.3,
+  },
+  circleSocialProof: {
+    fontSize: 13,
+    color: Colors.textMuted,
+    textAlign: 'center',
+    marginTop: 8,
+    marginBottom: 4,
+    fontStyle: 'italic',
   },
   ringSectionLabel: {
     paddingHorizontal: Spacing.lg,
