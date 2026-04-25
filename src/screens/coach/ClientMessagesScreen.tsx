@@ -15,6 +15,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { coachApi } from '../../services/api';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { subscribeToMessages } from '../../services/realtime';
 import { Colors } from '../../constants/colors';
 import type { ClientsStackParamList } from '../../navigation/CoachNavigator';
 
@@ -27,12 +29,14 @@ interface Message {
   read_at?: string | null;
 }
 
-const POLL_MS = 15000;
+// Realtime drives most refreshes; this is just a backstop. Was 15s.
+const FALLBACK_POLL_MS = 60000;
 
 export default function ClientMessagesScreen() {
   const route = useRoute<RouteProp<ClientsStackParamList, 'ClientMessages'>>();
   const navigation = useNavigation<any>();
   const { clientId, clientName } = route.params;
+  const currentUser = useCurrentUser();
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,12 +84,26 @@ export default function ClientMessagesScreen() {
   useFocusEffect(
     useCallback(() => {
       loadInitial().then(markRead);
-      pollRef.current = setInterval(loadSinceNewest, POLL_MS);
+
+      // Subscribe to BOTH ends of the conversation:
+      //  - the client's channel (refresh when the client posts)
+      //  - the coach's own channel (refresh when their own send is mirrored
+      //    back, e.g. delivered ack)
+      const unsubClient = subscribeToMessages(clientId, () => {
+        loadSinceNewest().then(markRead);
+      });
+      const unsubSelf = currentUser?.id
+        ? subscribeToMessages(currentUser.id, loadSinceNewest)
+        : () => {};
+
+      pollRef.current = setInterval(loadSinceNewest, FALLBACK_POLL_MS);
       return () => {
+        unsubClient();
+        unsubSelf();
         if (pollRef.current) clearInterval(pollRef.current);
         pollRef.current = null;
       };
-    }, [loadInitial, loadSinceNewest, markRead]),
+    }, [loadInitial, loadSinceNewest, markRead, clientId, currentUser?.id]),
   );
 
   const handleSend = async () => {
