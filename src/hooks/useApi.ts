@@ -37,6 +37,7 @@ import {
   checkInsApi,
   coachApi,
   mealPlansApi,
+  messagesApi,
 } from '../services/api';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -194,6 +195,17 @@ export function useUnreadNudgeCount() {
   });
 }
 
+export function useUnreadMessagesCount() {
+  return useQuery<{ total: number }>({
+    queryKey: ['messages', 'unread-count'],
+    queryFn: async () => (await messagesApi.unreadCount()).data,
+    staleTime: 15_000,
+    // Refetch every 30s while the home screen is mounted so the badge stays
+    // current even without pull-to-refresh.
+    refetchInterval: 30_000,
+  });
+}
+
 export function useMarkNudgeRead() {
   const qc = useQueryClient();
   return useMutation({
@@ -264,6 +276,44 @@ export function useWorkoutVolume(period: 'week' | 'month') {
   return useQuery<{ total_volume_lbs: number; sessions: number }>({
     queryKey: ['workouts', 'volume', period],
     queryFn: async () => (await workoutApi.getVolume(period)).data,
+  });
+}
+
+// Daily volume breakdown for a week. Backend `workoutApi.getVolume('week')`
+// returns the lump-sum total only, so we fetch recent sessions and aggregate
+// per-day on the client. This is bounded by `limit` (default 50) which more
+// than covers a typical week of training. The result is keyed off the
+// week-start ISO date so it auto-rotates each Monday.
+export function useWeeklyVolumeBreakdown(weekStart: string, weekEnd: string, limit = 50) {
+  return useQuery<{ total: number; breakdown: Array<{ date: string; volume: number }> }>({
+    queryKey: ['workouts', 'weekly-breakdown', weekStart, weekEnd, limit],
+    queryFn: async () => {
+      const res = await workoutApi.getAll(limit);
+      const sessions: any[] = Array.isArray(res.data) ? res.data : (res.data?.workouts ?? []);
+      const start = new Date(weekStart).getTime();
+      const end = new Date(weekEnd).getTime();
+      const inRange = sessions.filter((s) => {
+        const t = new Date(s.date || s.created_at).getTime();
+        return t >= start && t <= end;
+      });
+      const totals: Record<string, number> = {};
+      let total = 0;
+      for (const s of inRange) {
+        const day = new Date(s.date || s.created_at).toISOString().split('T')[0];
+        let sessionVol = 0;
+        for (const ex of (s.exercises || [])) {
+          const sets = Number(ex.sets || 0);
+          const reps = Number(ex.reps || 0);
+          const w = Number(ex.weight_lbs || 0);
+          sessionVol += sets * reps * w;
+        }
+        totals[day] = (totals[day] || 0) + sessionVol;
+        total += sessionVol;
+      }
+      const breakdown = Object.entries(totals).map(([date, volume]) => ({ date, volume }));
+      return { total, breakdown };
+    },
+    enabled: !!weekStart && !!weekEnd,
   });
 }
 

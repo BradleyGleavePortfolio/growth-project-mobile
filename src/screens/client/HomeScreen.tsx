@@ -24,7 +24,6 @@ import { SkeletonCard, SkeletonLine } from '../../components/SkeletonLoader';
 // All colors from central theme — never hardcode hex values here
 // Round 3: added semantic `colors` import for chart/macro/info tokens
 import { Colors, Spacing, Radius, colors } from '../../theme/index';
-import { habitsApi, messagesApi, nudgesApi } from '../../services/api';
 import { MealType } from '../../types';
 import { sendCalorieReminderNotification } from '../../utils/notifications';
 import {
@@ -34,9 +33,12 @@ import {
   formatVolume,
 } from '../../utils/weekUtils';
 import {
-  getWeeklyVolume,
-  getDailyVolumeBreakdown,
-} from '../../db/workoutDb';
+  useHabits,
+  useHabitLogs,
+  useWeeklyVolumeBreakdown,
+  useUnreadMessagesCount,
+  useUnreadNudgeCount,
+} from '../../hooks/useApi';
 
 const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 
@@ -197,86 +199,65 @@ export default function HomeScreen() {
 
   const navigation = useNavigation<any>();
   const [refreshing, setRefreshing] = useState(false);
-  const [messagesUnread, setMessagesUnread] = useState(0);
-  const [nudgesUnread, setNudgesUnread] = useState(0);
   const [asyncTargets, setAsyncTargets] = useState<{
     calories: number; protein: number; carbs: number; fat: number;
   } | null>(null);
-  const [habitsData, setHabitsData] = useState<HabitsData>({
-    total: 0,
-    completed: 0,
-    habits: [],
-  });
 
-  // Weekly volume state
-  const [weeklyVolume, setWeeklyVolume] = useState<number>(0);
-  const [weeklyBreakdown, setWeeklyBreakdown] = useState<Array<{ date: string; volume: number }>>([]);
-  const [weekRangeLabel, setWeekRangeLabel] = useState<string>('');
+  // Today's date string and week-range — stable derivations, computed once
+  // per render. The week-range labels feed both the WeeklyVolume card and
+  // the volume hook below.
+  const today = getToday();
+  const now = new Date();
+  const weekStartIso = getStartOfWeek(now).toISOString();
+  const weekEndIso = getEndOfWeek(now).toISOString();
+  const weekRangeLabel = formatWeekRange(now);
 
-  // Load habits from REST API instead of SQLite
-  const loadHabits = useCallback(async () => {
-    if (!currentUser) return;
-    try {
-      const today = getToday();
-      const [habitsRes, logsRes] = await Promise.all([
-        habitsApi.getAll(),
-        habitsApi.getLogs(today),
-      ]);
-      const allHabits: any[] = habitsRes.data || [];
-      const logs: any[] = logsRes.data || [];
-      const enriched: HabitItem[] = allHabits.map((h: any) => ({
-        id: h.id,
-        name: h.name,
-        color: h.color || Colors.primary,
-        done: logs.some((l: any) => l.habitId === h.id && l.completed),
-      }));
-      setHabitsData({
-        total: allHabits.length,
-        completed: enriched.filter((h) => h.done).length,
-        habits: enriched.slice(0, 6),
-      });
-    } catch {
-      // Habits API unavailable — silently degrade, no SQLite fallback needed
-      setHabitsData({ total: 0, completed: 0, habits: [] });
+  // React Query reads (Fix #2): habits + logs + weekly volume + unread badges.
+  const habitsQ = useHabits();
+  const logsQ = useHabitLogs(today);
+  const weeklyVolQ = useWeeklyVolumeBreakdown(weekStartIso, weekEndIso);
+  const messagesUnreadQ = useUnreadMessagesCount();
+  const nudgesUnreadQ = useUnreadNudgeCount();
+
+  // Derive the per-screen view models from the queries above.
+  const allHabits = habitsQ.data || [];
+  const habitLogs = logsQ.data || [];
+  const enrichedHabits: HabitItem[] = allHabits.map((h: any) => ({
+    id: h.id,
+    name: h.name,
+    color: h.color || Colors.primary,
+    done: habitLogs.some((l: any) => (l.habit_id || l.habitId) === h.id && l.completed),
+  }));
+  const habitsData: HabitsData = {
+    total: allHabits.length,
+    completed: enrichedHabits.filter((h) => h.done).length,
+    habits: enrichedHabits.slice(0, 6),
+  };
+
+  // Weekly volume: pad to a full 7-day breakdown so the chart bars stay
+  // aligned even on quiet weeks.
+  const weeklyVolume = weeklyVolQ.data?.total ?? 0;
+  const weeklyBreakdown: Array<{ date: string; volume: number }> = (() => {
+    const start = getStartOfWeek(now);
+    const breakdown = weeklyVolQ.data?.breakdown || [];
+    const out: Array<{ date: string; volume: number }> = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(start);
+      d.setDate(d.getDate() + i);
+      const dateStr = d.toISOString().split('T')[0];
+      const found = breakdown.find((b) => b.date === dateStr);
+      out.push({ date: dateStr, volume: found?.volume || 0 });
     }
-  }, [currentUser]);
+    return out;
+  })();
 
-  const loadWeeklyVolumeData = useCallback(async () => {
-    if (!currentUser) return;
-    try {
-      const now = new Date();
-      const start = getStartOfWeek(now);
-      const end = getEndOfWeek(now);
-      const weekStart = start.toISOString();
-      const weekEnd = end.toISOString();
-      setWeekRangeLabel(formatWeekRange(now));
-      const [total, breakdown] = await Promise.all([
-        getWeeklyVolume(currentUser.id, weekStart, weekEnd),
-        getDailyVolumeBreakdown(currentUser.id, weekStart, weekEnd),
-      ]);
-      setWeeklyVolume(total);
-      // Build a full 7-day breakdown (fill zeros for missing days)
-      const fullBreakdown: Array<{ date: string; volume: number }> = [];
-      for (let i = 0; i < 7; i++) {
-        const d = new Date(start);
-        d.setDate(d.getDate() + i);
-        const dateStr = d.toISOString().split('T')[0];
-        const found = breakdown.find((b) => b.date === dateStr);
-        fullBreakdown.push({ date: dateStr, volume: found?.volume || 0 });
-      }
-      setWeeklyBreakdown(fullBreakdown);
-    } catch (err) {
-      // Read-only volume chart — empty state is acceptable. Pull-to-refresh retries.
-      console.error('HomeScreen: loadWeeklyVolumeData failed', err);
-    }
-  }, [currentUser]);
+  const messagesUnread = Number(messagesUnreadQ.data?.total ?? 0);
+  const nudgesUnread = Number((nudgesUnreadQ.data as any)?.total ?? (nudgesUnreadQ.data as any)?.count ?? 0);
 
   useEffect(() => {
     if (currentUser) {
       loadDayData(currentUser.id);
       loadProfile(currentUser.id);
-      loadHabits();
-      loadWeeklyVolumeData();
       // Load personalized macro targets from AsyncStorage (saved during onboarding)
       AsyncStorage.getItem('macro_targets').then((raw) => {
         if (raw) {
@@ -292,31 +273,6 @@ export default function HomeScreen() {
         console.error('HomeScreen: macro_targets read failed', err);
       });
     }
-  }, [currentUser?.id]);
-
-  // Poll unread counts (messages + nudges) every 30s while mounted, and on
-  // focus. Silent failures — the badge just stays at its last known value.
-  useEffect(() => {
-    let active = true;
-    const refresh = async () => {
-      try {
-        const [m, n] = await Promise.all([
-          messagesApi.unreadCount().catch(() => ({ data: { total: 0 } })),
-          nudgesApi.unreadCount().catch(() => ({ data: { total: 0 } })),
-        ]);
-        if (!active) return;
-        setMessagesUnread(Number(m?.data?.total ?? 0));
-        setNudgesUnread(Number(n?.data?.total ?? 0));
-      } catch {
-        // Silent
-      }
-    };
-    refresh();
-    const id = setInterval(refresh, 30000);
-    return () => {
-      active = false;
-      clearInterval(id);
-    };
   }, [currentUser?.id]);
 
   const handleDateChange = (date: string) => {
@@ -338,8 +294,11 @@ export default function HomeScreen() {
     await Promise.all([
       loadDayData(currentUser.id, selectedDate),
       loadProfile(currentUser.id),
-      loadHabits(),
-      loadWeeklyVolumeData(),
+      habitsQ.refetch(),
+      logsQ.refetch(),
+      weeklyVolQ.refetch(),
+      messagesUnreadQ.refetch(),
+      nudgesUnreadQ.refetch(),
     ]);
     const raw = await AsyncStorage.getItem('macro_targets');
     if (raw) {
