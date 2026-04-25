@@ -31,6 +31,7 @@ import {
   useHabitStreaks,
   useLogHabit,
   useCreateHabit,
+  useDeleteHabit,
   useTodayCheckIn,
   useSaveCheckIn,
 } from '../../hooks/useApi';
@@ -91,6 +92,7 @@ export default function HabitsScreen() {
   // Server writes
   const logHabit = useLogHabit();
   const createHabit = useCreateHabit();
+  const deleteHabit = useDeleteHabit();
   const saveCheckIn = useSaveCheckIn();
 
   // Check-in form state — hydrated from server, edited locally before save.
@@ -180,12 +182,23 @@ export default function HabitsScreen() {
   };
 
   const handleDelete = (habit: HabitView) => {
-    // Backend has no DELETE /habits/:id today; keep the long-press as a
-    // confirmation dialog explaining that, so users don't think the tap was lost.
     Alert.alert(
       'Delete Habit',
-      `Removing "${habit.name}" from your habits is coming soon. For now, you can stop logging it and it will fall off your streak naturally.`,
-      [{ text: 'OK' }],
+      `Are you sure you want to delete "${habit.name}"? This will remove the habit and all its history.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            deleteHabit.mutate(habit.id, {
+              onError: (err: any) => {
+                Alert.alert("Couldn't delete habit", err?.message || 'Please try again.');
+              },
+            });
+          },
+        },
+      ],
     );
   };
 
