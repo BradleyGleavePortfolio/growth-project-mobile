@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import FirstWinCelebration from '../../components/FirstWinCelebration';
+import { useFirstWinCelebration, FirstWinState } from '../../hooks/useFirstWinCelebration';
 import {
   View,
   Text,
@@ -181,6 +183,10 @@ export default function ActiveWorkoutScreen() {
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
   const createWorkout = useCreateWorkout();
 
+  // ── Psych Report #1: First-Win Celebration ────────────────────────────────
+  const [firstWin, setFirstWin] = useState<FirstWinState>({ visible: false, identityTitle: '' });
+  const { triggerFirstWin } = useFirstWinCelebration(setFirstWin);
+
   useEffect(() => {
     // Parse routine exercises into session format
     try {
@@ -352,7 +358,8 @@ export default function ActiveWorkoutScreen() {
             {
               onSuccess: () => {
                 if (timerRef.current) clearInterval(timerRef.current);
-                navigation.goBack();
+                // Psych Report #1: fire first-win celebration before navigating away
+                triggerFirstWin().then(() => navigation.goBack());
               },
               onError: (err: any) => {
                 Alert.alert("Couldn't save workout", err?.message || 'Please try again.');
@@ -569,6 +576,13 @@ export default function ActiveWorkoutScreen() {
           />
         </View>
       </Modal>
+
+      {/* Psych Report #1: First-win celebration overlay */}
+      <FirstWinCelebration
+        visible={firstWin.visible}
+        identityTitle={firstWin.identityTitle}
+        onDismiss={() => setFirstWin({ visible: false, identityTitle: '' })}
+      />
     </View>
   );
 }

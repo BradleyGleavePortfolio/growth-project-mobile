@@ -6,6 +6,7 @@ import AuthNavigator from './AuthNavigator';
 import ClientNavigator from './ClientNavigator';
 import CoachNavigator from './CoachNavigator';
 import OnboardingNavigator from './OnboardingNavigator';
+import LeanOnboardingNavigator from './LeanOnboardingNavigator';
 import FloatingChatWidget from '../components/FloatingChatWidget';
 import OfflineBanner from '../components/OfflineBanner';
 import { authEvents } from '../utils/authEvents';
@@ -96,6 +97,9 @@ export default function RootNavigator() {
         const profileDone = user?.profile?.onboarding_completed;
 
         if (onboardingDone !== 'true' && !profileDone) {
+          // Psych Report #1: route new users to 3-question lean flow.
+          // Existing users who already have the old 10-step onboarding_complete
+          // flag bypass this entirely — the check above handles them.
           setAuthState('onboarding');
           return;
         }
@@ -141,7 +145,9 @@ export default function RootNavigator() {
       {authState === 'unauthenticated' ? (
         <AuthNavigator />
       ) : authState === 'onboarding' ? (
-        <OnboardingNavigator />
+        // Psych Report #1: 3-question lean flow (< 60 s to first win).
+        // Original OnboardingNavigator is preserved; route around it here.
+        <LeanOnboardingNavigator />
       ) : authState === 'coach' ? (
         <CoachNavigator />
       ) : (
