@@ -238,7 +238,7 @@ export default function EducationScreen() {
           {selectedLesson.completed && (
             <View style={styles.completedCard}>
               <Ionicons name="checkmark-circle" size={24} color={Colors.primary} />
-              <Text style={styles.completedCardText}>Lesson completed!</Text>
+              <Text style={styles.completedCardText}>Complete.</Text>
             </View>
           )}
 

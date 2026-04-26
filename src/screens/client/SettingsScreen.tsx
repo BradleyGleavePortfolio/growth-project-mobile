@@ -362,7 +362,7 @@ export default function SettingsScreen({ navigation }: any) {
         {/* About */}
         <View style={styles.about}>
           <Text style={styles.aboutText}>The Growth Project v1.0.0</Text>
-          <Text style={styles.aboutSub}>Built with love for your health</Text>
+          <Text style={styles.aboutSub}>A daily practice.</Text>
         </View>
       </ScrollView>
 

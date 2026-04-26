@@ -34,7 +34,7 @@ const INTENTS: { key: TodayIntent; icon: string; label: string; sub: string; ide
     key: 'workout',
     icon: '🏋️',
     label: 'Log a workout',
-    sub: 'Start your first session right now',
+    sub: 'Begin your first session.',
     identity: 'Athlete',
   },
   {
@@ -48,7 +48,7 @@ const INTENTS: { key: TodayIntent; icon: string; label: string; sub: string; ide
     key: 'explore',
     icon: '🧭',
     label: 'Just explore',
-    sub: "I'll figure out what's here",
+    sub: 'Take a look around.',
     identity: 'Explorer',
   },
 ];
@@ -98,7 +98,7 @@ export default function LeanQ3IntentScreen({ navigation }: Props) {
             <View style={[styles.dot, styles.dotComplete]} />
             <View style={[styles.dot, styles.dotActive]} />
           </View>
-          <Text style={styles.headline}>What do you want to do first?</Text>
+          <Text style={styles.headline}>Where does it begin?</Text>
           <Text style={styles.subtext}>
             We'll set up your home screen to make it instant.
           </Text>
@@ -131,7 +131,7 @@ export default function LeanQ3IntentScreen({ navigation }: Props) {
         {/* Identity teaser */}
         <View style={styles.identityHint}>
           <Text style={styles.identityHintText}>
-            Your identity title unlocks on your first win
+            Your identity title begins with your first session.
           </Text>
         </View>
 

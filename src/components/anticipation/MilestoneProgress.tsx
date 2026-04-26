@@ -47,7 +47,7 @@ const ANTICIPATION_PCT   = 0.8; // trigger pulse above this fill ratio
 
 // Category icon map
 const CATEGORY_ICON: Record<string, string> = {
-  streak:   'flame',
+  streak:   'calendar-outline',
   workouts: 'barbell',
   identity: 'ribbon',
 };

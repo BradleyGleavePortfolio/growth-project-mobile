@@ -26,25 +26,25 @@ const ACTIVITY_OPTIONS: {
     value: 'light',
     label: 'Lightly Active',
     description: 'Light exercise 1-3 days/week',
-    icon: '🚶',
+    icon: '',
   },
   {
     value: 'moderate',
     label: 'Moderately Active',
     description: 'Moderate exercise 3-5 days/week',
-    icon: '🏃',
+    icon: '',
   },
   {
     value: 'active',
     label: 'Very Active',
     description: 'Hard exercise 6-7 days/week',
-    icon: '🏋️',
+    icon: '',
   },
   {
     value: 'very_active',
     label: 'Athlete',
     description: 'Very hard exercise, physical job, or 2x/day training',
-    icon: '⚡',
+    icon: '',
   },
 ];
 

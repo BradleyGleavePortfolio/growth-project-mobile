@@ -52,7 +52,7 @@ interface HabitView {
 type TabMode = 'habits' | 'checkin';
 
 const MOOD_LABELS = ['', 'Awful', 'Bad', 'Okay', 'Good', 'Great'];
-const MOOD_EMOJIS = ['', '😞', '😕', '😐', '🙂', '😄'];
+const MOOD_EMOJIS = ['', 'low', 'off', 'flat', 'good', 'strong'];
 const ENERGY_LABELS = ['', 'Exhausted', 'Low', 'Normal', 'High', 'Energized'];
 const STRESS_LABELS = ['', 'Minimal', 'Low', 'Moderate', 'High', 'Extreme'];
 const DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
@@ -408,7 +408,7 @@ export default function HabitsScreen() {
             {!checkInToast && checkInSaved && (
               <View style={styles.savedBanner}>
                 <Ionicons name="checkmark-circle" size={20} color={Colors.primary} />
-                <Text style={styles.savedBannerText}>Today's check-in saved!</Text>
+                <Text style={styles.savedBannerText}>Saved.</Text>
               </View>
             )}
             {lastCheckInDate && lastCheckInDate !== today && (

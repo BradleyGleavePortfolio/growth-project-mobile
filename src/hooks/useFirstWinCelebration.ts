@@ -45,7 +45,7 @@ async function resolveIdentity(): Promise<string> {
   } catch {
     // ignore
   }
-  return 'Champion';
+  return 'Complete.';
 }
 
 export function useFirstWinCelebration(

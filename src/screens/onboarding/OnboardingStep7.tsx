@@ -14,7 +14,7 @@ type Props = {
 const TIMELINE_OPTIONS = [
   { weeks: 4, label: '4 Weeks', description: 'Quick start sprint' },
   { weeks: 8, label: '8 Weeks', description: 'Standard transformation' },
-  { weeks: 12, label: '12 Weeks', description: 'Recommended for most goals' },
+  { weeks: 12, label: '12 Weeks', description: 'A complete cycle.' },
   { weeks: 16, label: '16 Weeks', description: 'Deep body recomposition' },
   { weeks: 24, label: '24 Weeks', description: 'Long-term lifestyle change' },
 ];

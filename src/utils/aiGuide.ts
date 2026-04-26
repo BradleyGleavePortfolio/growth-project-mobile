@@ -38,7 +38,7 @@ const intents: Intent[] = [
     name: 'GREETING',
     keywords: ['hi', 'hello', 'hey', 'good morning', 'sup', 'what\'s up', 'howdy'],
     respond: (ctx) =>
-      `Hey ${ctx.firstName}! Great to see you. You're on day ${ctx.daysSinceStart} of your journey. What can I help you with today?`,
+      `Day ${ctx.daysSinceStart}. What are you working on today, ${ctx.firstName}?`,
   },
   {
     name: 'CALORIES',
@@ -145,7 +145,7 @@ const intents: Intent[] = [
       if (isGainGoal(ctx.profile?.primaryGoal)) {
         return `For ${goalLabel(ctx.profile?.primaryGoal)}, prioritize progressive overload:\n\n• 4-5x/week: Push/Pull/Legs split or Upper/Lower\n• Focus on compound lifts: squat, bench, deadlift, OHP, rows\n• Increase weight by 2.5-5 lbs when you hit your rep target\n• Minimize cardio to 1-2 light sessions per week\n• Rest 2-3 minutes between heavy sets`;
       }
-      return `For ${goalLabel(ctx.profile?.primaryGoal)}, a balanced approach works best:\n\n• 3-4x/week: Strength training (full body or upper/lower split)\n• 2x/week: Moderate cardio (running, cycling, swimming)\n• 1x/week: Flexibility/mobility work (yoga, stretching)\n• Listen to your body and prioritize recovery`;
+      return `For ${goalLabel(ctx.profile?.primaryGoal)}, a balanced approach works:\n\n• 3-4x/week: Strength training (full body or upper/lower split)\n• 2x/week: Moderate cardio (running, cycling, swimming)\n• 1x/week: Flexibility/mobility work (yoga, stretching)\n• Listen to your body and prioritize recovery`;
     },
   },
   {
@@ -155,14 +155,14 @@ const intents: Intent[] = [
       const weight = ctx.profile?.currentWeight || 160;
       const oz = Math.round(weight * 0.5);
       const glasses = Math.round(oz / 8);
-      return `Aim for at least ${oz} fl oz of water per day — that's about ${glasses} glasses. Proper hydration boosts metabolism, reduces hunger, and improves performance. Track it in the Log tab with the water tracker. Tip: drink a glass before each meal.`;
+      return `Aim for at least ${oz} fl oz of water per day — that's about ${glasses} glasses. Proper hydration supports metabolism, reduces hunger, and improves performance. Track it in the Log tab with the water tracker. Tip: drink a glass before each meal.`;
     },
   },
   {
     name: 'SHOPPING',
     keywords: ['grocery', 'shopping', 'grocery list', 'buy', 'store', 'bulk buy'],
     respond: (ctx) =>
-      `Here are my top shopping tips:\n\n• Shop the perimeter of the store — produce, proteins, dairy\n• Buy protein in bulk: chicken breast, ground turkey, eggs, Greek yogurt\n• Stock up on frozen vegetables — they're just as nutritious and last longer\n• Prep-friendly staples: rice, oats, sweet potatoes, canned beans\n\nCheck your Plan tab and tap the cart icon to auto-generate a shopping list from your meal plan!`,
+      `Some shopping notes:\n\n• Shop the perimeter of the store — produce, proteins, dairy\n• Buy protein in bulk: chicken breast, ground turkey, eggs, Greek yogurt\n• Stock up on frozen vegetables — they're just as nutritious and last longer\n• Prep-friendly staples: rice, oats, sweet potatoes, canned beans\n\nCheck your Plan tab and tap the cart icon to build a shopping list from your meal plan.`,
   },
   {
     name: 'FAMILY',
@@ -174,13 +174,13 @@ const intents: Intent[] = [
     name: 'CHEAT_MEAL',
     keywords: ['cheat', 'cheat meal', 'pizza', 'dessert', 'treat', 'splurge', 'ice cream', 'burger'],
     respond: (ctx) =>
-      `One planned treat meal per week won't derail you — it can actually help sustainability and boost leptin levels. The key rules:\n\n• Plan it, don't binge spontaneously\n• Log it honestly in the app — awareness matters\n• Pick one meal, not a whole cheat day\n• Get right back on track the next meal\n• Don't "earn" it with extreme restriction — that leads to cycles`,
+      `One planned treat meal per week won't derail you — it can actually support leptin levels. The key rules:\n\n• Plan it, don't binge spontaneously\n• Log it honestly in the app — awareness matters\n• Pick one meal, not a whole cheat day\n• Get right back on track the next meal\n• Don't "earn" it with extreme restriction — that leads to cycles`,
   },
   {
     name: 'PLATEAU',
     keywords: ['plateau', 'stuck', 'not losing', 'same weight', 'stopped', 'stalled', 'stall'],
     respond: (ctx) =>
-      `Plateaus are normal after 4–6 weeks. Here's how to break through:\n\n• Zigzag calories: eat at maintenance 2 days/week, deficit the other 5\n• Increase protein by 20g per day to boost metabolism\n• Add a daily 30-minute walk (NEAT is underrated)\n• Try a 1-week diet break at maintenance — it resets hormones\n• Re-measure: take photos and measurements, not just scale weight\n\nIf you've truly stalled for 3+ weeks, your body may have adapted. Time to recalculate your targets.`,
+      `Plateaus are normal after 4–6 weeks. Here's how to break through:\n\n• Zigzag calories: eat at maintenance 2 days/week, deficit the other 5\n• Increase protein by 20g per day to raise metabolism\n• Add a daily 30-minute walk (NEAT is underrated)\n• Try a 1-week diet break at maintenance — it resets hormones\n• Re-measure: take photos and measurements, not just scale weight\n\nIf you've truly stalled for 3+ weeks, your body may have adapted. Time to recalculate your targets.`,
   },
   {
     name: 'SLEEP',
@@ -192,7 +192,7 @@ const intents: Intent[] = [
     name: 'SUPPLEMENT',
     keywords: ['supplement', 'protein powder', 'creatine', 'pre-workout', 'vitamins', 'whey'],
     respond: (ctx) =>
-      `The three supplements worth your money:\n\n1. **Creatine monohydrate** (5g/day, always) — the most researched supplement, improves strength and recovery\n2. **Protein powder** — only if you can't hit ${Math.round(ctx.profile?.proteinTarget || 150)}g from food. Whey isolate post-workout is ideal\n3. **Vitamin D** (2000-5000 IU/day) — if you're indoors a lot or live in a northern climate\n\nEverything else (BCAAs, fat burners, test boosters) is mostly marketing. Save your money.`,
+      `Three supplements worth your money:\n\n1. **Creatine monohydrate** (5g/day, always) — well-researched, improves strength and recovery\n2. **Protein powder** — only if you can't hit ${Math.round(ctx.profile?.proteinTarget || 150)}g from food. Whey isolate post-workout is ideal\n3. **Vitamin D** (2000-5000 IU/day) — if you're indoors a lot or live in a northern climate\n\nEverything else (BCAAs, fat burners, test boosters) is mostly marketing. Save your money.`,
   },
   {
     name: 'COACH',
@@ -204,14 +204,14 @@ const intents: Intent[] = [
     name: 'PROGRESS',
     keywords: ['progress', 'how am i doing', 'results', 'results so far', 'check in', 'stats'],
     respond: (ctx) =>
-      `Check the Progress tab for your weight chart, streak, and body stats. You've been on your journey for ${ctx.daysSinceStart} days${ctx.loggingStreak > 0 ? ` with a ${ctx.loggingStreak}-day logging streak` : ''}. Consistency is everything — the people who track daily lose 2x more weight than those who don't. Keep it up, ${ctx.firstName}!`,
+      `Check the Progress tab for your weight chart, streak, and body stats. You've been on your journey for ${ctx.daysSinceStart} days${ctx.loggingStreak > 0 ? ` with a ${ctx.loggingStreak}-day logging streak` : ''}. Consistency moves the needle. People who track daily lose about twice as much as those who don't.`,
   },
 ];
 
 const fallbackResponses = [
   'The top recommendation: stay consistent with logging your food. People who track daily are 2x more likely to reach their goals.',
   'Keep showing up every day. Small, consistent actions beat big sporadic efforts every time. Have you logged your meals today?',
-  'Check your macros in the Log tab — hitting your protein target is the single most impactful thing you can do for body composition.',
+  'Check your macros in the Log tab — hitting your protein target matters more than any other single variable for body composition.',
   'Remember: nutrition is about 80% of your results. The gym builds the muscle, but the kitchen reveals it. What are you eating today?',
   'Consistency over perfection. You don\'t need to be perfect — you just need to be good enough, often enough. How can I help you stay on track?',
 ];

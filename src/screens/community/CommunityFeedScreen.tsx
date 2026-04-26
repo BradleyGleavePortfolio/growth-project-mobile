@@ -213,7 +213,7 @@ export default function CommunityFeedScreen() {
             <View style={styles.emptyContainer}>
               <Ionicons name="star-outline" size={40} color={Colors.textMuted} />
               <Text style={styles.emptyTitle}>No wins yet</Text>
-              <Text style={styles.emptyBody}>Be the first — share what you accomplished!</Text>
+              <Text style={styles.emptyBody}>Nothing yet. Write the first entry.</Text>
             </View>
           )
         }
