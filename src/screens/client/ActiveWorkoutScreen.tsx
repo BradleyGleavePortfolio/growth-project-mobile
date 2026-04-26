@@ -117,7 +117,7 @@ function ExerciseImage({ imageUrl, muscle, size = 80 }: ExerciseImageProps) {
       <View
         style={[
           exerciseImageStyles.placeholder,
-          { width: size, height: size, borderRadius: 10, backgroundColor: bgColor },
+          { width: size, height: size, borderRadius: 4, backgroundColor: bgColor },
         ]}
       >
         <Ionicons name="barbell-outline" size={size * 0.45} color="rgba(255,255,255,0.9)" />
@@ -126,12 +126,12 @@ function ExerciseImage({ imageUrl, muscle, size = 80 }: ExerciseImageProps) {
   }
 
   return (
-    <View style={{ width: size, height: size, borderRadius: 10, overflow: 'hidden' }}>
+    <View style={{ width: size, height: size, borderRadius: 4, overflow: 'hidden' }}>
       {loading && (
         <View
           style={[
             exerciseImageStyles.skeleton,
-            { width: size, height: size, borderRadius: 10, backgroundColor: bgColor + '33' },
+            { width: size, height: size, borderRadius: 4, backgroundColor: bgColor + '33' },
           ]}
         >
           <ActivityIndicator size="small" color={bgColor} />
@@ -139,7 +139,7 @@ function ExerciseImage({ imageUrl, muscle, size = 80 }: ExerciseImageProps) {
       )}
       <Image
         source={{ uri: imageUrl }}
-        style={{ width: size, height: size, borderRadius: 10 }}
+        style={{ width: size, height: size, borderRadius: 4 }}
         onLoadStart={() => setLoading(true)}
         onLoadEnd={() => setLoading(false)}
         onError={() => {
@@ -657,7 +657,7 @@ const styles = StyleSheet.create({
   timerText: { fontSize: 20, fontWeight: '800', color: Colors.primary, marginTop: 2 },
   finishBtn: {
     backgroundColor: Colors.primary,
-    borderRadius: 8,
+    borderRadius: 0, // radius.sm
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
@@ -675,7 +675,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginBottom: 12,
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     padding: 16,
   },
   exerciseHeader: {
@@ -698,13 +698,13 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 6,
     paddingVertical: 4,
-    borderRadius: 8,
+    borderRadius: 0, // radius.sm
   },
   setRowCompleted: { backgroundColor: Colors.primaryPale },
   setText: { fontSize: 14, fontWeight: '600', color: Colors.textSecondary, textAlign: 'center' },
   setInput: {
     backgroundColor: Colors.background,
-    borderRadius: 8,
+    borderRadius: 0, // radius.sm
     paddingVertical: 8,
     paddingHorizontal: 12,
     fontSize: 15,
@@ -715,7 +715,7 @@ const styles = StyleSheet.create({
   checkBtn: {
     width: 32,
     height: 32,
-    borderRadius: 8,
+    borderRadius: 0, // radius.sm
     backgroundColor: Colors.background,
     justifyContent: 'center',
     alignItems: 'center',
@@ -743,7 +743,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     paddingVertical: 16,
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     borderWidth: 1,
     borderColor: Colors.border,
     borderStyle: 'dashed',
@@ -770,7 +770,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginTop: 16,
     marginBottom: 8,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     paddingHorizontal: 14,
     paddingVertical: 10,
     gap: 8,
@@ -783,7 +783,7 @@ const styles = StyleSheet.create({
   muscleChip: {
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
@@ -811,7 +811,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
     paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 6,
+    borderRadius: 4, // radius.lg
     borderWidth: 1,
   },
   muscleBadgeText: {

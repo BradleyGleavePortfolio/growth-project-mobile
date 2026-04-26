@@ -213,7 +213,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderWidth: 1.5,
     borderColor: Colors.border,
-    borderRadius: 16,
+    borderRadius: 4, // radius.lg
     padding: 20,
     gap: 16,
   },
@@ -242,7 +242,7 @@ const styles = StyleSheet.create({
   },
   identityHint: {
     backgroundColor: 'rgba(45, 106, 79, 0.08)',
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     paddingVertical: 12,
     paddingHorizontal: 16,
     marginVertical: 12,

@@ -76,7 +76,7 @@ const styles = StyleSheet.create({
   dot: {
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.primary,
     marginBottom: 24,
   },

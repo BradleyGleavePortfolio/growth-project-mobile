@@ -180,7 +180,7 @@ const styles = StyleSheet.create({
   continueButton: {
     backgroundColor: Colors.primary,
     paddingVertical: 16,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     alignItems: 'center',
   },
   continueDisabled: {

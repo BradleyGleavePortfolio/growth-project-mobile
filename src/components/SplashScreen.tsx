@@ -57,7 +57,7 @@ const styles = StyleSheet.create({
   dot: {
     width: 16,
     height: 16,
-    borderRadius: 8,
+    borderRadius: 0, // radius.sm
     backgroundColor: Colors.primary,
   },
   title: {

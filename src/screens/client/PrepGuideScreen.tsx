@@ -306,7 +306,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     marginHorizontal: 16,
     marginBottom: 12,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     borderWidth: 1,
     borderColor: Colors.border,
   },
@@ -320,7 +320,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primaryPale,
     paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 8,
+    borderRadius: 0, // radius.sm
   },
 
   content: { flex: 1 },
@@ -331,7 +331,7 @@ const styles = StyleSheet.create({
 
   section: {
     backgroundColor: Colors.surface,
-    borderRadius: 16,
+    borderRadius: 4, // radius.lg
     borderWidth: 1,
     borderColor: Colors.border,
     padding: 16,
@@ -352,7 +352,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primaryPale,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 20,
+    borderRadius: 4, // radius.lg
   },
   prepDayText: { fontSize: 14, fontWeight: '700', color: Colors.primary },
   prepDayHint: { fontSize: 12, color: Colors.textMuted, lineHeight: 16 },
@@ -361,7 +361,7 @@ const styles = StyleSheet.create({
   recipeIcon: {
     width: 38,
     height: 38,
-    borderRadius: 10,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.primaryPale,
     alignItems: 'center',
     justifyContent: 'center',
@@ -379,7 +379,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 8,
+    borderRadius: 0, // radius.sm
   },
   addToGroceryBtnDisabled: { opacity: 0.6 },
   addToGroceryBtnText: { fontSize: 12, fontWeight: '700', color: Colors.textOnPrimary },

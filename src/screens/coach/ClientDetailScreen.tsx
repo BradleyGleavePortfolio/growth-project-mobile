@@ -1364,7 +1364,7 @@ const drStyles = StyleSheet.create({
   chip: {
     paddingVertical: 6,
     paddingHorizontal: 16,
-    borderRadius: 20,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
@@ -1467,7 +1467,7 @@ const tlStyles = StyleSheet.create({
   iconCircle: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: 4, // radius.lg
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1644,7 +1644,7 @@ const wsStyles = StyleSheet.create({
   },
   card: {
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     padding: 16,
     marginBottom: 10,
     borderWidth: 1,
@@ -1674,7 +1674,7 @@ const wsStyles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     backgroundColor: Colors.primaryPale,
-    borderRadius: 10,
+    borderRadius: 4, // radius.lg
     paddingHorizontal: 8,
     paddingVertical: 3,
   },
@@ -1693,7 +1693,7 @@ const wsStyles = StyleSheet.create({
   statBox: {
     flex: 1,
     backgroundColor: Colors.background,
-    borderRadius: 10,
+    borderRadius: 4, // radius.lg
     padding: 10,
     alignItems: 'center',
   },
@@ -1793,7 +1793,7 @@ const styles = StyleSheet.create({
   tabRow: { paddingHorizontal: 20, gap: 8 },
   tab: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingVertical: 8, paddingHorizontal: 14, borderRadius: 20,
+    paddingVertical: 8, paddingHorizontal: 14, borderRadius: 4, // radius.lg
     backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border,
   },
   tabActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
@@ -1803,7 +1803,7 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 17, fontWeight: '700', color: Colors.textPrimary, marginBottom: 12, marginTop: 4 },
   // Calorie card
   calorieCard: {
-    backgroundColor: Colors.surface, borderRadius: 14, padding: 20, marginBottom: 16, alignItems: 'center',
+    backgroundColor: Colors.surface, borderRadius: 4, padding: 20, marginBottom: 16, alignItems: 'center',
   },
   calorieMain: { flexDirection: 'row', alignItems: 'baseline', gap: 4, marginBottom: 12 },
   calorieValue: { fontSize: 36, fontWeight: '800', color: Colors.textPrimary },
@@ -1813,14 +1813,14 @@ const styles = StyleSheet.create({
   caloriePctText: { fontSize: 12, color: Colors.textMuted, marginTop: 6 },
   // Macro cards
   macroGrid: { flexDirection: 'row', gap: 10, marginBottom: 20 },
-  macroCard: { flex: 1, backgroundColor: Colors.surface, borderRadius: 12, padding: 14, alignItems: 'center', gap: 4 },
+  macroCard: { flex: 1, backgroundColor: Colors.surface, borderRadius: 2, padding: 14, alignItems: 'center', gap: 4 },
   macroCardValue: { fontSize: 20, fontWeight: '800' },
   macroCardLabel: { fontSize: 11, color: Colors.textSecondary },
   macroBarBg: { width: '100%', height: 4, borderRadius: 2, backgroundColor: Colors.primaryPale, marginTop: 4 },
   macroBarFill: { height: '100%', borderRadius: 2 },
   macroCardTarget: { fontSize: 10, color: Colors.textMuted },
   // Profile
-  profileGrid: { backgroundColor: Colors.surface, borderRadius: 12, padding: 16, gap: 12, marginBottom: 20 },
+  profileGrid: { backgroundColor: Colors.surface, borderRadius: 2, padding: 16, gap: 12, marginBottom: 20 },
   profileRow: { flexDirection: 'row', justifyContent: 'space-between' },
   profileLabel: { fontSize: 14, color: Colors.textSecondary, textTransform: 'capitalize' },
   profileValue: { fontSize: 14, fontWeight: '600', color: Colors.textPrimary, textTransform: 'capitalize' },
@@ -1834,7 +1834,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 12,
     paddingHorizontal: 12,
-    borderRadius: 10,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.primaryPale,
   },
   actionPillText: { fontSize: 14, fontWeight: '700', color: Colors.primary },
@@ -1845,18 +1845,18 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 14,
     backgroundColor: Colors.success + '18',
-    borderRadius: 10,
+    borderRadius: 4, // radius.lg
     marginBottom: 12,
   },
   successBannerText: { fontSize: 13, fontWeight: '600', color: Colors.success },
   nudgeModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' },
-  nudgeModalContent: { width: '85%', backgroundColor: Colors.surface, borderRadius: 16, padding: 24 },
+  nudgeModalContent: { width: '85%', backgroundColor: Colors.surface, borderRadius: 4, padding: 24 },
   nudgeModalTitle: { fontSize: 18, fontWeight: '700', color: Colors.textPrimary, textAlign: 'center', marginBottom: 6 },
   nudgeModalDesc: { fontSize: 13, color: Colors.textSecondary, textAlign: 'center', marginBottom: 16, lineHeight: 18 },
   nudgeLabel: { fontSize: 12, fontWeight: '700', color: Colors.textSecondary, textTransform: 'uppercase', marginBottom: 6, marginTop: 8 },
   nudgeInput: {
     backgroundColor: Colors.surfaceElevated,
-    borderRadius: 10,
+    borderRadius: 4, // radius.lg
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
@@ -1865,19 +1865,19 @@ const styles = StyleSheet.create({
   nudgeInputMulti: { minHeight: 90, textAlignVertical: 'top' },
   nudgeErrorText: { color: Colors.error, fontSize: 13, marginTop: 10, textAlign: 'center' },
   nudgeButtons: { flexDirection: 'row', gap: 12, marginTop: 20 },
-  nudgeCancelBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: Colors.surfaceElevated, alignItems: 'center' },
+  nudgeCancelBtn: { flex: 1, paddingVertical: 12, borderRadius: 4, backgroundColor: Colors.surfaceElevated, alignItems: 'center' },
   nudgeCancelText: { fontSize: 15, fontWeight: '600', color: Colors.textSecondary },
-  nudgeSendBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: Colors.primary, alignItems: 'center' },
+  nudgeSendBtn: { flex: 1, paddingVertical: 12, borderRadius: 4, backgroundColor: Colors.primary, alignItems: 'center' },
   nudgeSendText: { fontSize: 15, fontWeight: '700', color: Colors.textOnPrimary },
   // Logs
-  logItem: { backgroundColor: Colors.surface, borderRadius: 12, padding: 16, marginBottom: 10 },
+  logItem: { backgroundColor: Colors.surface, borderRadius: 2, padding: 16, marginBottom: 10 },
   logHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
   logMeal: { fontSize: 12, fontWeight: '600', color: Colors.primary, textTransform: 'uppercase' },
   logCalories: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary },
   logFood: { fontSize: 16, fontWeight: '600', color: Colors.textPrimary, marginBottom: 4 },
   logMacros: { fontSize: 13, color: Colors.textSecondary },
   // Workouts
-  sessionCard: { backgroundColor: Colors.surface, borderRadius: 14, padding: 16, marginBottom: 10 },
+  sessionCard: { backgroundColor: Colors.surface, borderRadius: 4, padding: 16, marginBottom: 10 },
   sessionTop: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 },
   sessionName: { fontSize: 16, fontWeight: '700', color: Colors.textPrimary },
   sessionDate: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
@@ -1886,18 +1886,18 @@ const styles = StyleSheet.create({
   inProgressText: { fontSize: 12, fontWeight: '600', color: Colors.warning },
   sessionStats: { flexDirection: 'row', gap: 8, marginBottom: 10 },
   sessionStat: {
-    flex: 1, backgroundColor: Colors.background, borderRadius: 10, padding: 10, alignItems: 'center',
+    flex: 1, backgroundColor: Colors.background, borderRadius: 4, padding: 10, alignItems: 'center',
   },
   sessionStatValue: { fontSize: 16, fontWeight: '800', color: Colors.textPrimary },
   sessionStatLabel: { fontSize: 10, color: Colors.textMuted, marginTop: 2 },
   sessionExercises: { fontSize: 12, color: Colors.textMuted },
   // Progress
   progressStatsRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  progressStat: { flex: 1, backgroundColor: Colors.surface, borderRadius: 12, padding: 14, alignItems: 'center', gap: 4 },
+  progressStat: { flex: 1, backgroundColor: Colors.surface, borderRadius: 2, padding: 14, alignItems: 'center', gap: 4 },
   progressStatValue: { fontSize: 22, fontWeight: '800', color: Colors.textPrimary },
   progressStatLabel: { fontSize: 12, color: Colors.textSecondary },
   // Meal plan
-  planDayCard: { backgroundColor: Colors.surface, borderRadius: 12, padding: 14, marginBottom: 10 },
+  planDayCard: { backgroundColor: Colors.surface, borderRadius: 2, padding: 14, marginBottom: 10 },
   planDayLabel: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary, marginBottom: 8 },
   planSlotRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4 },
   planSlotLabel: { fontSize: 12, fontWeight: '600', color: Colors.textSecondary, width: 70 },
@@ -1905,7 +1905,7 @@ const styles = StyleSheet.create({
   planSlotCals: { fontSize: 12, fontWeight: '700', color: Colors.primary },
   planEmpty: { fontSize: 13, color: Colors.textMuted, fontStyle: 'italic' },
   // Empty
-  emptyCard: { backgroundColor: Colors.surface, borderRadius: 14, padding: 32, alignItems: 'center', gap: 8 },
+  emptyCard: { backgroundColor: Colors.surface, borderRadius: 4, padding: 32, alignItems: 'center', gap: 8 },
   emptyText: { color: Colors.textMuted, fontSize: 14, textAlign: 'center' },
   // ── Server meal plans (coach side) ──
   mealPlansHeader: {
@@ -1922,7 +1922,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: 4, // radius.lg
   },
   createPlanBtnText: {
     color: Colors.textOnPrimary,
@@ -1933,13 +1933,13 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingHorizontal: 18,
     paddingVertical: 8,
-    borderRadius: 10,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.primaryPale,
   },
   retryBtnText: { fontSize: 13, fontWeight: '700', color: Colors.primary },
   serverPlanCard: {
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
@@ -1957,7 +1957,7 @@ const styles = StyleSheet.create({
   planIconBtn: {
     width: 34,
     height: 34,
-    borderRadius: 17,
+    borderRadius: 4, // radius.lg
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: Colors.primaryPale,
@@ -2015,7 +2015,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
-    borderRadius: 10,
+    borderRadius: 4, // radius.lg
     padding: 12,
     fontSize: 14,
     color: Colors.textPrimary,
@@ -2038,12 +2038,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     backgroundColor: Colors.primaryPale,
-    borderRadius: 16,
+    borderRadius: 4, // radius.lg
   },
   planAddItemText: { fontSize: 12, fontWeight: '700', color: Colors.primary },
   planItemCard: {
     backgroundColor: Colors.surface,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     padding: 12,
     marginBottom: 10,
     borderWidth: 1,
@@ -2060,7 +2060,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
     borderWidth: 1,
     borderColor: Colors.border,
-    borderRadius: 8,
+    borderRadius: 0, // radius.sm
     padding: 10,
     fontSize: 13,
     color: Colors.textPrimary,
@@ -2075,7 +2075,7 @@ const styles = StyleSheet.create({
   },
   planSubmitBtn: {
     backgroundColor: Colors.primary,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 12,

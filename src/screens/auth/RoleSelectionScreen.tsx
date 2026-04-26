@@ -216,7 +216,7 @@ const styles = StyleSheet.create({
   },
   roleCard: {
     backgroundColor: Colors.surface,
-    borderRadius: 16,
+    borderRadius: 4, // radius.lg
     padding: 24,
     borderWidth: 1.5,
     borderColor: Colors.border,
@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
   roleIconContainer: {
     width: 56,
     height: 56,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.primaryPale,
     justifyContent: 'center',
     alignItems: 'center',
@@ -258,7 +258,7 @@ const styles = StyleSheet.create({
   modalContent: {
     width: '85%',
     backgroundColor: Colors.surface,
-    borderRadius: 16,
+    borderRadius: 4, // radius.lg
     padding: 24,
   },
   modalTitle: {
@@ -277,7 +277,7 @@ const styles = StyleSheet.create({
   },
   modalInput: {
     backgroundColor: Colors.surfaceElevated,
-    borderRadius: 10,
+    borderRadius: 4, // radius.lg
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
@@ -297,7 +297,7 @@ const styles = StyleSheet.create({
   modalCancelBtn: {
     flex: 1,
     paddingVertical: 12,
-    borderRadius: 10,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.surfaceElevated,
     alignItems: 'center',
   },
@@ -309,7 +309,7 @@ const styles = StyleSheet.create({
   modalConfirmBtn: {
     flex: 1,
     paddingVertical: 12,
-    borderRadius: 10,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.primary,
     alignItems: 'center',
   },

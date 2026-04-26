@@ -1,54 +1,31 @@
 /**
- * BadgeCabinet — Wave 1: Neutralized for luxury repositioning.
+ * BadgeCabinet — Wave 3: replaced with MilestoneList date-annotation layout.
  *
- * Emoji icons and decorative gamification chrome removed.
- * Rendered as a plain earned-date list with text labels.
- * Full redesign as a date-annotation list lands in Wave 3.
+ * Reads earned badges from useBadges() and renders them as:
+ *   DD · MM · YY   badge label
+ *
+ * Unearned badges are not shown (clean slate until milestones are met).
  */
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text } from 'react-native';
 import { useBadges, ApiBadge } from '../../hooks/useApi';
-import { Colors } from '../../constants/colors';
+import { colors, typography } from '../../theme/tokens';
 import { track } from '../../lib/analytics';
-
-// ─── Single badge row ─────────────────────────────────────────────────────────
-function BadgeRow({ badge }: { badge: ApiBadge }) {
-  const earned = !!badge.awardedAt;
-
-  return (
-    <View style={[styles.badgeRow, !earned && styles.badgeRowLocked]}>
-      <Text style={[styles.badgeLabel, !earned && styles.badgeLabelLocked]} numberOfLines={1}>
-        {badge.label}
-      </Text>
-
-      {earned ? (
-        <Text style={styles.badgeDate}>
-          {new Date(badge.awardedAt!).toLocaleDateString('en-GB', {
-            day: '2-digit',
-            month: '2-digit',
-            year: '2-digit',
-          })}
-        </Text>
-      ) : (
-        <Text style={styles.badgePending}>pending</Text>
-      )}
-    </View>
-  );
-}
+import MilestoneList, { formatMilestoneDate, MilestoneEntry } from '../MilestoneList';
 
 // ─── Cabinet ──────────────────────────────────────────────────────────────────
 interface BadgeCabinetProps {
   isFoundingMember?: boolean;
 }
 
-export default function BadgeCabinet({ isFoundingMember }: BadgeCabinetProps) {
+export default function BadgeCabinet({ isFoundingMember: _isFoundingMember }: BadgeCabinetProps) {
   const badgesQ = useBadges();
   const badges = badgesQ.data ?? [];
 
   // Analytics: badge_unlocked
   const prevEarnedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    const earned = badges.filter((b) => !!b.awardedAt);
+    const earned = badges.filter((b: ApiBadge) => !!b.awardedAt);
     const prev = prevEarnedRef.current;
     for (const b of earned) {
       if (!prev.has(b.slug)) {
@@ -60,108 +37,37 @@ export default function BadgeCabinet({ isFoundingMember }: BadgeCabinetProps) {
     }
   }, [badges]);
 
-  const earned = badges.filter((b) => !!b.awardedAt);
+  const earned = badges.filter((b: ApiBadge) => !!b.awardedAt);
+
+  // Convert earned badges → MilestoneEntry format
+  const entries: MilestoneEntry[] = earned.map((b: ApiBadge) => ({
+    date: formatMilestoneDate(new Date(b.awardedAt!)),
+    note: b.label,
+  }));
+
+  if (badgesQ.isLoading) {
+    return (
+      <Text style={{ ...typography.body, color: colors.stone, paddingVertical: 16 }}>
+        Loading…
+      </Text>
+    );
+  }
+
+  if (entries.length === 0) {
+    return (
+      <Text style={{ ...typography.body, color: colors.stone, paddingVertical: 16 }}>
+        Keep training — milestones will appear here.
+      </Text>
+    );
+  }
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.headerRow}>
-        <Text style={[styles.headerText, isFoundingMember && styles.headerTextFounding]}>
-          Milestones
-        </Text>
-        {earned.length > 0 && (
-          <Text style={styles.earnedCount}>
-            {earned.length} of {badges.length}
-          </Text>
-        )}
-      </View>
-
-      {/* List */}
-      {badgesQ.isLoading ? (
-        <Text style={styles.loadingText}>Loading…</Text>
-      ) : badges.length === 0 ? (
-        <Text style={styles.emptyText}>Keep training — milestones will appear here.</Text>
-      ) : (
-        <View style={styles.list}>
-          {badges.map((badge) => (
-            <BadgeRow key={badge.slug} badge={badge} />
-          ))}
-        </View>
-      )}
+    <View>
+      {/* Section label */}
+      <Text style={{ ...typography.eyebrow, color: colors.charcoal, marginBottom: 16 }}>
+        MILESTONES
+      </Text>
+      <MilestoneList entries={entries} />
     </View>
   );
 }
-
-// ─── Styles ───────────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
-  container: {
-    marginTop: 24,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 14,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  headerText: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
-  headerTextFounding: {
-    color: '#9A6F1A',
-  },
-  earnedCount: {
-    fontSize: 12,
-    color: Colors.textMuted,
-  },
-  loadingText: {
-    fontSize: 13,
-    color: Colors.textMuted,
-    paddingVertical: 16,
-  },
-  emptyText: {
-    fontSize: 13,
-    color: Colors.textMuted,
-    paddingVertical: 16,
-  },
-  list: {
-    gap: 0,
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  badgeRowLocked: {
-    opacity: 0.4,
-  },
-  badgeLabel: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '400',
-    color: Colors.textPrimary,
-  },
-  badgeLabelLocked: {
-    color: Colors.textMuted,
-  },
-  badgeDate: {
-    fontSize: 12,
-    color: Colors.textMuted,
-    letterSpacing: 0.5,
-    fontVariant: ['tabular-nums'],
-  },
-  badgePending: {
-    fontSize: 11,
-    color: Colors.textMuted,
-    fontStyle: 'italic',
-  },
-});

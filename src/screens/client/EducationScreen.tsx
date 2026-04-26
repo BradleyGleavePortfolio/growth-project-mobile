@@ -383,7 +383,7 @@ const styles = StyleSheet.create({
   progressCard: {
     marginHorizontal: 24,
     backgroundColor: Colors.surface,
-    borderRadius: 16,
+    borderRadius: 4, // radius.lg
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
@@ -414,7 +414,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     backgroundColor: Colors.surface,
-    borderRadius: 20,
+    borderRadius: 4, // radius.lg
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderWidth: 1,
@@ -429,7 +429,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     padding: 14,
     marginBottom: 10,
     gap: 12,
@@ -439,7 +439,7 @@ const styles = StyleSheet.create({
   lessonNumber: {
     width: 40,
     height: 40,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -448,11 +448,11 @@ const styles = StyleSheet.create({
   lessonTitle: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
   lessonSubtitle: { fontSize: 12, color: Colors.textSecondary },
   lessonMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
-  lessonCategoryTag: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 },
+  lessonCategoryTag: { borderRadius: 0, paddingHorizontal: 8, paddingVertical: 2 },
   lessonCategoryText: { fontSize: 11, fontWeight: '600' },
   featuredTag: {
     backgroundColor: Colors.primaryPale,
-    borderRadius: 6,
+    borderRadius: 4, // radius.lg
     paddingHorizontal: 6,
     paddingVertical: 2,
   },
@@ -515,7 +515,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     backgroundColor: Colors.primary,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     paddingVertical: 16,
     marginTop: 24,
   },
@@ -526,7 +526,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     backgroundColor: Colors.primaryPale,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     paddingVertical: 16,
     marginTop: 24,
   },

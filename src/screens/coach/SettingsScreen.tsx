@@ -472,7 +472,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: Colors.surface,
     marginHorizontal: 24,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     padding: 20,
     gap: 16,
     marginBottom: 28,
@@ -522,7 +522,7 @@ const styles = StyleSheet.create({
   section: {
     marginHorizontal: 24,
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     marginBottom: 24,
     overflow: 'hidden',
   },
@@ -564,7 +564,7 @@ const styles = StyleSheet.create({
     gap: 8,
     marginHorizontal: 24,
     paddingVertical: 16,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     borderWidth: 1,
     borderColor: Colors.error,
     marginBottom: 24,
@@ -596,7 +596,7 @@ const styles = StyleSheet.create({
   modalContent: {
     width: '85%',
     backgroundColor: Colors.surface,
-    borderRadius: 16,
+    borderRadius: 4, // radius.lg
     padding: 24,
   },
   modalTitle: {
@@ -615,7 +615,7 @@ const styles = StyleSheet.create({
   },
   modalInput: {
     backgroundColor: Colors.surfaceElevated,
-    borderRadius: 10,
+    borderRadius: 4, // radius.lg
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
@@ -623,7 +623,7 @@ const styles = StyleSheet.create({
   },
   bioInput: {
     backgroundColor: Colors.surfaceElevated,
-    borderRadius: 10,
+    borderRadius: 4, // radius.lg
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
@@ -645,7 +645,7 @@ const styles = StyleSheet.create({
   modalCancelBtn: {
     flex: 1,
     paddingVertical: 12,
-    borderRadius: 10,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.surfaceElevated,
     alignItems: 'center',
   },
@@ -657,7 +657,7 @@ const styles = StyleSheet.create({
   modalSaveBtn: {
     flex: 1,
     paddingVertical: 12,
-    borderRadius: 10,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.primary,
     alignItems: 'center',
   },

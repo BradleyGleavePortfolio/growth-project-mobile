@@ -427,7 +427,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 20,
+    borderRadius: 4, // radius.lg
   },
   streakText: {
     fontSize: 13,
@@ -444,7 +444,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 10,
     alignItems: 'center',
-    borderRadius: 10,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.surface,
   },
   protocolBtnActive: {
@@ -488,7 +488,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     backgroundColor: Colors.primary,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     paddingVertical: 16,
   },
   endBtn: {
@@ -497,7 +497,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     backgroundColor: Colors.error,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     paddingVertical: 16,
   },
   actionBtnText: {
@@ -508,7 +508,7 @@ const styles = StyleSheet.create({
   activeCard: {
     marginHorizontal: 24,
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     padding: 16,
     gap: 10,
     marginBottom: 24,
@@ -535,7 +535,7 @@ const styles = StyleSheet.create({
   statCard: {
     flex: 1,
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     padding: 14,
     alignItems: 'center',
     gap: 4,

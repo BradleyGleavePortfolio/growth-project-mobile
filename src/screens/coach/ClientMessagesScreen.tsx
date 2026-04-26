@@ -311,7 +311,7 @@ const styles = StyleSheet.create({
   chatAvatar: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.primaryDark,
     justifyContent: 'center',
     alignItems: 'center',
@@ -329,7 +329,7 @@ const styles = StyleSheet.create({
   messageBubbleRowLeft: { alignItems: 'flex-start' },
   messageBubble: {
     maxWidth: '78%',
-    borderRadius: 18,
+    borderRadius: 4, // radius.lg
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
@@ -373,7 +373,7 @@ const styles = StyleSheet.create({
   sendBtn: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',

@@ -67,7 +67,7 @@ export default function WaterTracker({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     padding: 16,
     gap: 12,
   },
@@ -109,7 +109,7 @@ const styles = StyleSheet.create({
   addButton: {
     flex: 1,
     backgroundColor: Colors.surfaceElevated,
-    borderRadius: 10,
+    borderRadius: 4, // radius.lg
     paddingVertical: 10,
     alignItems: 'center',
     borderWidth: 1,

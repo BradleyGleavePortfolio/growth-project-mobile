@@ -245,7 +245,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     padding: 10,
     backgroundColor: colors.feedback.errorBg,
-    borderRadius: 8,
+    borderRadius: 0, // radius.sm
     borderWidth: 1,
     borderColor: Colors.error,
   },
@@ -273,7 +273,7 @@ const styles = StyleSheet.create({
   tabChip: {
     paddingHorizontal: 16,
     paddingVertical: 6,
-    borderRadius: 20,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,

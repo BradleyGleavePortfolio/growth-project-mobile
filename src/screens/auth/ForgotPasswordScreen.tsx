@@ -149,7 +149,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     padding: 16,
     fontSize: 16,
     color: Colors.textPrimary,
@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
   resetButton: {
     backgroundColor: Colors.primary,
     paddingVertical: 16,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     alignItems: 'center',
   },
   resetButtonText: {

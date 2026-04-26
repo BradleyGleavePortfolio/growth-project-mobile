@@ -469,14 +469,14 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     overflow: 'hidden',
   },
   avatar: {
     alignSelf: 'center',
     width: 60,
     height: 60,
-    borderRadius: 30,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
@@ -512,7 +512,7 @@ const styles = StyleSheet.create({
   segmented: {
     flexDirection: 'row',
     backgroundColor: Colors.surfaceElevated,
-    borderRadius: 8,
+    borderRadius: 0, // radius.sm
     overflow: 'hidden',
   },
   segBtn: {
@@ -538,7 +538,7 @@ const styles = StyleSheet.create({
   stepBtn: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.surfaceElevated,
     justifyContent: 'center',
     alignItems: 'center',
@@ -558,7 +558,7 @@ const styles = StyleSheet.create({
     marginTop: 32,
     paddingVertical: 16,
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     borderWidth: 1,
     borderColor: Colors.error,
   },
@@ -606,7 +606,7 @@ const styles = StyleSheet.create({
   },
   input: {
     backgroundColor: Colors.surface,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     padding: 14,
     fontSize: 16,
     color: Colors.textPrimary,
@@ -616,7 +616,7 @@ const styles = StyleSheet.create({
   saveBtn: {
     marginTop: 20,
     backgroundColor: Colors.primary,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     paddingVertical: 14,
     alignItems: 'center',
   },

@@ -344,7 +344,7 @@ const styles = StyleSheet.create({
   messageBubbleRow: { marginBottom: 6 },
   messageBubbleRowRight: { alignItems: 'flex-end' },
   messageBubbleRowLeft: { alignItems: 'flex-start' },
-  messageBubble: { maxWidth: '78%', borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10 },
+  messageBubble: { maxWidth: '78%', borderRadius: 4, paddingHorizontal: 14, paddingVertical: 10 },
   messageBubbleMe: { backgroundColor: Colors.primary, borderBottomRightRadius: 4 },
   messageBubbleCoach: {
     backgroundColor: Colors.surface,
@@ -382,7 +382,7 @@ const styles = StyleSheet.create({
   sendBtn: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',

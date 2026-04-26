@@ -317,7 +317,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginBottom: 12,
     backgroundColor: Colors.surface,
-    borderRadius: 16,
+    borderRadius: 4, // radius.lg
     borderWidth: 1,
     borderColor: Colors.border,
     overflow: 'hidden',
@@ -336,7 +336,7 @@ const styles = StyleSheet.create({
   emojiCircle: {
     width: 48,
     height: 48,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     justifyContent: 'center',
     alignItems: 'center',
     flexShrink: 0,
@@ -367,7 +367,7 @@ const styles = StyleSheet.create({
   tagChip: {
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 8,
+    borderRadius: 0, // radius.sm
   },
   tagText: {
     fontSize: 10,
@@ -409,7 +409,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 14,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     marginTop: 8,
   },
   applyBtnText: {
@@ -462,7 +462,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     padding: 14,
     gap: 12,
     borderWidth: 1,

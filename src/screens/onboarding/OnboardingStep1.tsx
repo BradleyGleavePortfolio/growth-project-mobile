@@ -98,7 +98,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     padding: 16,
     fontSize: 16,
     color: Colors.textPrimary,
@@ -112,7 +112,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderWidth: 1.5,
     borderColor: Colors.border,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     padding: 20,
     alignItems: 'center',
     gap: 8,

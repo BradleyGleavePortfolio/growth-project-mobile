@@ -419,7 +419,7 @@ const styles = StyleSheet.create({
   heroIcon: {
     width: 64,
     height: 64,
-    borderRadius: 32,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.primaryPale,
     justifyContent: 'center',
     alignItems: 'center',
@@ -458,7 +458,7 @@ const styles = StyleSheet.create({
   actionIconWrap: {
     width: 34,
     height: 34,
-    borderRadius: 17,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.primaryPale,
     justifyContent: 'center',
     alignItems: 'center',

@@ -238,7 +238,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.surface,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     marginHorizontal: 16,
     marginBottom: 12,
     paddingHorizontal: 14,
@@ -254,7 +254,7 @@ const styles = StyleSheet.create({
   tagFilter: {
     paddingHorizontal: 14,
     paddingVertical: 6,
-    borderRadius: 20,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
 
   card: {
     backgroundColor: Colors.surface,
-    borderRadius: 16,
+    borderRadius: 4, // radius.lg
     borderWidth: 1,
     borderColor: Colors.border,
     overflow: 'hidden',
@@ -292,7 +292,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 8,
+    borderRadius: 0, // radius.sm
   },
   caloriesBadgeText: { fontSize: 12, fontWeight: '700', color: Colors.textOnPrimary },
   cardBody: { padding: 14, gap: 6 },
@@ -308,7 +308,7 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 8,
+    borderRadius: 0, // radius.sm
   },
   macroBadgeValue: { fontSize: 12, fontWeight: '700' },
   macroBadgeLabel: { fontSize: 11, fontWeight: '600' },
@@ -317,7 +317,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceElevated,
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 6,
+    borderRadius: 4, // radius.lg
     marginRight: 6,
   },
   tagText: { fontSize: 11, color: Colors.textMuted, fontWeight: '600' },

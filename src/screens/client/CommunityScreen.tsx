@@ -399,7 +399,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     backgroundColor: Colors.primary,
-    borderRadius: 20,
+    borderRadius: 4, // radius.lg
     paddingHorizontal: 14,
     paddingVertical: 8,
   },
@@ -413,7 +413,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     paddingVertical: 10,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
@@ -445,7 +445,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     padding: 14,
     marginBottom: 8,
     gap: 12,
@@ -458,7 +458,7 @@ const styles = StyleSheet.create({
   leaderAvatar: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.primaryDark,
     justifyContent: 'center',
     alignItems: 'center',
@@ -475,7 +475,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     padding: 14,
     marginBottom: 10,
     gap: 12,
@@ -485,7 +485,7 @@ const styles = StyleSheet.create({
   winIcon: {
     width: 44,
     height: 44,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(233, 196, 106, 0.15)',
@@ -506,7 +506,7 @@ const styles = StyleSheet.create({
   comingSoonCard: {
     alignItems: 'center',
     backgroundColor: Colors.surface,
-    borderRadius: 16,
+    borderRadius: 4, // radius.lg
     padding: 24,
     borderWidth: 1,
     borderColor: Colors.border,
@@ -552,7 +552,7 @@ const styles = StyleSheet.create({
   modalSubtitle: { fontSize: 13, color: Colors.textSecondary, marginTop: -4 },
   modalInput: {
     backgroundColor: Colors.background,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     padding: 14,
     fontSize: 15,
     color: Colors.textPrimary,
@@ -562,7 +562,7 @@ const styles = StyleSheet.create({
   modalInputMultiline: { minHeight: 100, textAlignVertical: 'top' },
   modalSubmit: {
     backgroundColor: Colors.primary,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 6,

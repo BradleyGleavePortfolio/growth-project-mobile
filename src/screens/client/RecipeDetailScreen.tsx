@@ -237,7 +237,7 @@ const styles = StyleSheet.create({
 
   section: {
     backgroundColor: Colors.surface,
-    borderRadius: 16,
+    borderRadius: 4, // radius.lg
     marginHorizontal: 16,
     marginTop: 14,
     padding: 18,
@@ -259,7 +259,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceElevated,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 8,
+    borderRadius: 0, // radius.sm
   },
   tagText: { fontSize: 12, color: Colors.textSecondary, fontWeight: '600' },
 
@@ -269,7 +269,7 @@ const styles = StyleSheet.create({
   macroCard: {
     flex: 1,
     minWidth: '40%',
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     padding: 14,
     alignItems: 'center',
     gap: 2,
@@ -292,7 +292,7 @@ const styles = StyleSheet.create({
   stepNumber: {
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',

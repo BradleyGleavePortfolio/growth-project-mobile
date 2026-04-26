@@ -48,7 +48,7 @@ export function SkeletonCard({ style }: { style?: ViewStyle }) {
   return (
     <Animated.View style={[styles.card, { opacity }, style]}>
       <View style={styles.cardRow}>
-        <View style={[styles.dot, { width: 40, height: 40, borderRadius: 20 }]} />
+        <View style={[styles.dot, { width: 40, height: 40, borderRadius: 999 }]} />
         <View style={styles.cardLines}>
           <View style={[styles.linePlaceholder, { width: '60%' }]} />
           <View style={[styles.linePlaceholder, { width: '40%', marginTop: 8 }]} />
@@ -66,7 +66,7 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     padding: 16,
     marginBottom: 12,
   },
@@ -83,7 +83,7 @@ const styles = StyleSheet.create({
   },
   linePlaceholder: {
     height: 14,
-    borderRadius: 7,
+    borderRadius: 2, // radius.md
     backgroundColor: Colors.surfaceElevated,
   },
 });

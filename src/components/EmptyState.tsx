@@ -50,7 +50,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     paddingHorizontal: 24,
     paddingVertical: 12,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
   },
   ctaText: {
     fontSize: 15,

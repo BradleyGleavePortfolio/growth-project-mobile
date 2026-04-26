@@ -86,7 +86,7 @@ export default function MealCard({ mealType, foods }: MealCardProps) {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     padding: 16,
   },
   header: {

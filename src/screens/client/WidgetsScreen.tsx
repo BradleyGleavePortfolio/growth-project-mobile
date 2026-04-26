@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
   },
   section: {
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     marginHorizontal: 16,
     marginBottom: 20,
     padding: 20,
@@ -295,7 +295,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     padding: 14,
     marginBottom: 10,
     gap: 12,
@@ -303,7 +303,7 @@ const styles = StyleSheet.create({
   cardIcon: {
     width: 44,
     height: 44,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     backgroundColor: Colors.surfaceElevated,
     justifyContent: 'center',
     alignItems: 'center',
@@ -326,7 +326,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceElevated,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 8,
+    borderRadius: 0, // radius.sm
   },
   badgeActive: {
     backgroundColor: Colors.primaryDark,
@@ -349,7 +349,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceElevated,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 8,
+    borderRadius: 0, // radius.sm
   },
   badgeComingSoonText: {
     fontSize: 10,

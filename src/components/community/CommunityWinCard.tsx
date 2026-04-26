@@ -99,7 +99,7 @@ export default function CommunityWinCard({ win, onReact, isPending }: CommunityW
 const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.surface,
-    borderRadius: 16,
+    borderRadius: 4, // radius.lg
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
@@ -114,7 +114,7 @@ const styles = StyleSheet.create({
   avatar: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.primaryDark,
     justifyContent: 'center',
     alignItems: 'center',
@@ -158,7 +158,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 5,
     backgroundColor: Colors.background,
-    borderRadius: 20,
+    borderRadius: 4, // radius.lg
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderWidth: 1,

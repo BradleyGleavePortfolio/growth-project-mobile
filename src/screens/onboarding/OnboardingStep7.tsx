@@ -89,7 +89,7 @@ export default function OnboardingStep7({ navigation }: Props) {
 const styles = StyleSheet.create({
   projectionCard: {
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     padding: 20,
     marginTop: 24,
     alignItems: 'center',

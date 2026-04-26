@@ -75,7 +75,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     paddingHorizontal: 32,
     paddingVertical: 14,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
   },
   buttonText: {
     color: Colors.textOnPrimary,
