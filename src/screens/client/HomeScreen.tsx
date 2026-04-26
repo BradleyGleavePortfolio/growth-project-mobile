@@ -45,6 +45,7 @@ import TrustCueRow from '../../components/trust/TrustCueRow';
 import IdentityBadge from '../../components/IdentityBadge';
 import { useFoundingNumber, useCircleStats } from '../../hooks/useIdentity';
 import { resolveIdentityTitle } from '../../lib/identityTitle';
+import { resolveNextMilestones } from '../../lib/milestones';
 import { track } from '../../lib/analytics';
 
 const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
