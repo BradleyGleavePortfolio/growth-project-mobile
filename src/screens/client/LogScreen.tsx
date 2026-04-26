@@ -32,6 +32,7 @@ import {
   submitManualLogOffline,
   submitManualLogOnline,
 } from '../../utils/log/logSubmit';
+import { track } from '../../lib/analytics';
 
 export default function LogScreen() {
   const currentUser = useCurrentUser();
@@ -215,6 +216,8 @@ export default function LogScreen() {
     try {
       await submitSearchLogOnline(args);
       await loadDayData(currentUser.id, selectedDate);
+      // Psych Report #4: Analytics — meal_logged (search flow)
+      track('meal_logged', { meal_type: activeMealType, source: 'search' });
       setQuantityModalVisible(false);
       setSelectedFood(null);
       setModalVisible(false);
@@ -246,6 +249,8 @@ export default function LogScreen() {
     try {
       await submitManualLogOnline(args);
       await loadDayData(currentUser.id, selectedDate);
+      // Psych Report #4: Analytics — meal_logged (manual flow)
+      track('meal_logged', { meal_type: activeMealType, source: 'manual' });
       setModalVisible(false);
     } catch (err: any) {
       console.error('LogScreen: handleManualLog failed', err);

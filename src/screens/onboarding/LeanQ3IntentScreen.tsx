@@ -21,6 +21,7 @@ import { LeanOnboardingParamList } from '../../navigation/LeanOnboardingNavigato
 import { Colors } from '../../constants/colors';
 import { saveOnboardingData } from '../../utils/onboardingStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { track } from '../../lib/analytics';
 
 type Props = {
   navigation: NativeStackNavigationProp<LeanOnboardingParamList, 'LeanQ3'>;
@@ -56,13 +57,20 @@ export default function LeanQ3IntentScreen({ navigation }: Props) {
   const [selected, setSelected] = useState<TodayIntent | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const finishOnboarding = async (intent: TodayIntent) => {
+  const finishOnboarding = async (intent: TodayIntent, skipped = false) => {
     setLoading(true);
     try {
       await saveOnboardingData({ activityLevel: intent });
       await AsyncStorage.setItem('onboarding_complete', 'true');
       await AsyncStorage.setItem('lean_onboarding_intent', intent);
       await AsyncStorage.setItem('lean_onboarding_done', 'true');
+      // Psych Report #4: onboarding_completed or onboarding_skipped
+      if (skipped) {
+        track('onboarding_skipped', { at_step: 3 });
+      } else {
+        track('onboarding_step_completed', { step: 3, intent });
+        track('onboarding_completed', { intent });
+      }
       // Fire root navigator refresh
       const { authEvents } = require('../../utils/authEvents');
       authEvents.emitAuthChange();
@@ -73,11 +81,11 @@ export default function LeanQ3IntentScreen({ navigation }: Props) {
 
   const handleSelect = async (intent: TodayIntent) => {
     setSelected(intent);
-    await finishOnboarding(intent);
+    await finishOnboarding(intent, false);
   };
 
   const handleSkip = async () => {
-    await finishOnboarding('explore');
+    await finishOnboarding('explore', true);
   };
 
   return (

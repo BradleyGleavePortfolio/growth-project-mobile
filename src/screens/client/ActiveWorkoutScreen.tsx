@@ -21,6 +21,7 @@ import { Colors } from '../../constants/colors';
 import { getAllExercises } from '../../db/workoutDb';
 import { useCreateWorkout } from '../../hooks/useApi';
 import ExerciseLogModal, { ExerciseLogSaveData } from '../../components/ExerciseLogModal';
+import { track } from '../../lib/analytics';
 
 // NB: Fix #2 — the local exercise_logs SQLite table (logExerciseWithVolume)
 // is no longer written to. Volume aggregation now happens on the server
@@ -358,6 +359,12 @@ export default function ActiveWorkoutScreen() {
             {
               onSuccess: () => {
                 if (timerRef.current) clearInterval(timerRef.current);
+                // Psych Report #4: Analytics — workout_logged
+                track('workout_logged', {
+                  duration_minutes: Math.round(timer / 60),
+                  sets_completed: completedSets,
+                  exercise_count: sessionExercises.filter((e) => e.sets.some((s) => s.completed)).length,
+                });
                 // Psych Report #1: fire first-win celebration before navigating away
                 triggerFirstWin().then(() => navigation.goBack());
               },

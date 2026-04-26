@@ -7,7 +7,7 @@
  * UX Psych #3: Identity Reinforcement / Inner Circle
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from './HapticPressable';
 import { Colors, Radius, Spacing } from '../theme/index';
+import { track } from '../lib/analytics';
 
 export interface IdentityBadgeProps {
   rank: number;
@@ -34,6 +35,14 @@ export default function IdentityBadge({
 }: IdentityBadgeProps) {
   const [tooltipVisible, setTooltipVisible] = useState(false);
 
+  // Psych Report #4: Analytics — identity_badge_viewed fires on mount
+  useEffect(() => {
+    if (!hidden) {
+      track('identity_badge_viewed', { rank, is_founding_member: isFoundingMember });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hidden]);
+
   if (hidden) return null;
 
   const badgeColor = isFoundingMember ? '#C4922A' : Colors.textMuted;       // gold vs neutral
@@ -43,7 +52,10 @@ export default function IdentityBadge({
     <>
       <HapticPressable
         intent="light"
-        onPress={() => setTooltipVisible(true)}
+        onPress={() => {
+          track('identity_badge_tapped', { rank, is_founding_member: isFoundingMember });
+          setTooltipVisible(true);
+        }}
         accessibilityRole="button"
         accessibilityLabel={
           isFoundingMember

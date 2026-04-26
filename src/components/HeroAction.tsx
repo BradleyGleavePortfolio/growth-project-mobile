@@ -28,6 +28,7 @@ import { Colors, Spacing, Radius, Shadow, colors } from '../theme/index';
 import { useQuery } from '@tanstack/react-query';
 import { workoutApi, mealPlansApi } from '../services/api';
 import { getTodayString } from '../utils/date';
+import { track } from '../lib/analytics';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -89,6 +90,10 @@ function useHeroData() {
 
     // Compute consecutive-day streak (counting back from today)
     const streakCount = computeStreak(sessions, today);
+    // TODO(psych-4): streak_extended event — fire when streakCount increases
+    // from the previous session. Requires persisting last-known streak in
+    // AsyncStorage and comparing on each data refresh. Skip for now to avoid
+    // over-engineering the data layer in this PR.
 
     // Active meal plan title for subtitle
     const activePlan: any = (plansQ.data ?? [])[0];
@@ -182,6 +187,9 @@ export default function HeroAction() {
   const handlePress = () => {
     // Fire medium haptic on press — feels substantial and intentional
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+
+    // Psych Report #4: Analytics — hero_action_tapped with current state
+    track('hero_action_tapped', { state: config.state, streak_count: config.streakCount });
 
     if (config.state === 'resume_plan') {
       // Navigate to the Plan tab

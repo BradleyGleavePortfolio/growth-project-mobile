@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
+import { PostHogProvider } from 'posthog-react-native';
 import RootNavigator from './src/navigation/RootNavigator';
 import AppSplash from './src/components/AppSplash';
 import ErrorBoundary from './src/components/ErrorBoundary';
@@ -12,11 +13,18 @@ import {
   QUERY_CACHE_MAX_AGE,
 } from './src/services/queryClient';
 import { initSentry, wrap as sentryWrap } from './src/services/sentry';
+import { track } from './src/lib/analytics';
 
 // Initialise Sentry as early as possible so even import-time failures get
 // captured. The function no-ops when EXPO_PUBLIC_SENTRY_DSN is unset, so this
 // line is safe to commit without secrets.
 initSentry();
+
+// PostHog credentials — loaded from Expo public env vars.
+// When the key is absent (CI, local dev without secrets) the SDK no-ops.
+const POSTHOG_KEY = process.env.EXPO_PUBLIC_POSTHOG_KEY ?? '';
+const POSTHOG_HOST =
+  process.env.EXPO_PUBLIC_POSTHOG_HOST ?? 'https://us.i.posthog.com';
 
 function App() {
   const [ready, setReady] = useState(false);
@@ -34,6 +42,8 @@ function App() {
       // Auth lives exclusively on the backend now; the local `users` table is no longer used.
       await initDatabase();
       await requestNotificationPermissions();
+      // Psych Report #4: Analytics — fire app_opened on every cold start.
+      track('app_opened');
     } catch (err) {
       // Round 3: guard production builds — Metro strips __DEV__ at build time.
       if (__DEV__) console.error('App init error:', err);
@@ -54,37 +64,47 @@ function App() {
   return (
     <ErrorBoundary>
       {/*
-        PersistQueryClientProvider wraps the whole app so any screen migrated
-        to API-first (Fix #2) can use useQuery/useMutation. We use the
-        persisting variant so the React Query cache is hydrated from
-        AsyncStorage on cold start — a user opening the app sees last-known
-        data immediately while a fresh fetch runs in the background, instead
-        of staring at a spinner. The provider is intentionally INSIDE
-        ErrorBoundary so a thrown query error from a single screen doesn't
-        take down the rest of the app — the boundary will catch it, and
-        React Query will retry on the next mount.
+        PostHogProvider wraps the whole app so the SDK can auto-capture
+        screen views and session recording (when enabled). It no-ops when
+        POSTHOG_KEY is an empty string, so no secrets are needed in dev.
       */}
-      <PersistQueryClientProvider
-        client={queryClient}
-        persistOptions={{
-          persister: asyncStoragePersister,
-          maxAge: QUERY_CACHE_MAX_AGE,
-          // Bump this string whenever the wire shape of any cached query
-          // changes incompatibly. Cache entries with a different buster are
-          // discarded on hydration instead of being deserialized into
-          // mismatched TypeScript types.
-          buster: 'tgp-rq-v1',
-          dehydrateOptions: {
-            // Don't persist transient or per-session-only queries. Anything
-            // tagged with the meta { persist: false } (none today, but future
-            // mutations-in-progress proxies will be) gets evicted before write.
-            shouldDehydrateQuery: (q) => q.meta?.persist !== false,
-          },
-        }}
+      <PostHogProvider
+        apiKey={POSTHOG_KEY}
+        options={{ host: POSTHOG_HOST }}
       >
-        <StatusBar style="dark" />
-        <RootNavigator />
-      </PersistQueryClientProvider>
+        {/*
+          PersistQueryClientProvider wraps the whole app so any screen migrated
+          to API-first (Fix #2) can use useQuery/useMutation. We use the
+          persisting variant so the React Query cache is hydrated from
+          AsyncStorage on cold start — a user opening the app sees last-known
+          data immediately while a fresh fetch runs in the background, instead
+          of staring at a spinner. The provider is intentionally INSIDE
+          ErrorBoundary so a thrown query error from a single screen doesn't
+          take down the rest of the app — the boundary will catch it, and
+          React Query will retry on the next mount.
+        */}
+        <PersistQueryClientProvider
+          client={queryClient}
+          persistOptions={{
+            persister: asyncStoragePersister,
+            maxAge: QUERY_CACHE_MAX_AGE,
+            // Bump this string whenever the wire shape of any cached query
+            // changes incompatibly. Cache entries with a different buster are
+            // discarded on hydration instead of being deserialized into
+            // mismatched TypeScript types.
+            buster: 'tgp-rq-v1',
+            dehydrateOptions: {
+              // Don't persist transient or per-session-only queries. Anything
+              // tagged with the meta { persist: false } (none today, but future
+              // mutations-in-progress proxies will be) gets evicted before write.
+              shouldDehydrateQuery: (q) => q.meta?.persist !== false,
+            },
+          }}
+        >
+          <StatusBar style="dark" />
+          <RootNavigator />
+        </PersistQueryClientProvider>
+      </PostHogProvider>
     </ErrorBoundary>
   );
 }

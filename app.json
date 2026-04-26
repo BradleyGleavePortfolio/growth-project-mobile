@@ -36,7 +36,8 @@
     "plugins": [
       "expo-sqlite",
       "expo-web-browser",
-      "expo-font"
+      "expo-font",
+      "expo-localization"
     ],
     "extra": {
       "eas": {

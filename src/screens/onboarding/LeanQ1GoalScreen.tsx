@@ -16,6 +16,7 @@ import { LeanOnboardingParamList } from '../../navigation/LeanOnboardingNavigato
 import { Colors } from '../../constants/colors';
 import { saveOnboardingData } from '../../utils/onboardingStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { track } from '../../lib/analytics';
 
 type Props = {
   navigation: NativeStackNavigationProp<LeanOnboardingParamList, 'LeanQ1'>;
@@ -32,13 +33,19 @@ const GOALS: { key: Goal; icon: string; label: string; sub: string }[] = [
 export default function LeanQ1GoalScreen({ navigation }: Props) {
   const [selected, setSelected] = useState<Goal | null>(null);
 
+  // Psych Report #4: Analytics — onboarding_started fires on mount of Q1
+  React.useEffect(() => { track('onboarding_started'); }, []);
+
   const handleSelect = async (goal: Goal) => {
     setSelected(goal);
     await saveOnboardingData({ primaryGoal: goal });
+    // Psych Report #4: step 1 completed
+    track('onboarding_step_completed', { step: 1, goal });
     navigation.navigate('LeanQ2');
   };
 
   const handleSkip = async () => {
+    track('onboarding_skipped', { at_step: 1 });
     await markOnboardingComplete('explore');
   };
 
