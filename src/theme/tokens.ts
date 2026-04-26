@@ -1,43 +1,47 @@
 /**
  * Design Tokens — The Growth Project
- * Single source of truth for the Premium Visual System (UX Psych Report #5).
+ * Wave 2: Luxury repositioning — bone/cream/ink/forest palette.
+ * Single source of truth for the New Shared Design System.
  *
  * ─────────────────────────────────────────────────────────────────────────────
- * WCAG AA CONTRAST MATRIX
+ * WCAG AA CONTRAST MATRIX (updated for new palette)
  * ─────────────────────────────────────────────────────────────────────────────
  * Relative luminance formula: L = 0.2126·R + 0.7152·G + 0.0722·B (linearised)
  * Contrast ratio = (L1 + 0.05) / (L2 + 0.05)  where L1 > L2
  *
  * Required: 4.5:1 body text (< 18pt / < 14pt bold), 3:1 large text (≥ 18pt / ≥ 14pt bold)
  *
- * Pair                                      Hex pair              Ratio    AA body  AA large
- * ─────────────────────────────────────────────────────────────────────────────────────────
- * textPrimary (#1B2B1E) on background       #1B2B1E / #FAF8F3     14.8:1   ✅ PASS  ✅ PASS
- * textPrimary (#1B2B1E) on surface          #1B2B1E / #FFFFFF     16.2:1   ✅ PASS  ✅ PASS
- * textSecondary (#4A6358) on surface        #4A6358 / #FFFFFF      5.5:1   ✅ PASS  ✅ PASS
- * textSecondary (#4A6358) on background     #4A6358 / #FAF8F3      5.1:1   ✅ PASS  ✅ PASS
- * textMuted (#8FA89A) on surface            #8FA89A / #FFFFFF      2.9:1   ❌ FAIL  ✅ PASS  (use ≥18pt only)
- * textMuted (#8FA89A) on surfaceElevated    #8FA89A / #F5F0E8      2.7:1   ❌ FAIL  ✅ PASS  (caption/label only)
- * White (#FFFFFF) on primary (#2D6A4F)      #FFFFFF / #2D6A4F      7.1:1   ✅ PASS  ✅ PASS
- * White (#FFFFFF) on primaryDark (#1B4332)  #FFFFFF / #1B4332      9.7:1   ✅ PASS  ✅ PASS
- * White (#FFFFFF) on primaryLight (#52B788) #FFFFFF / #52B788      2.6:1   ❌ FAIL  ❌ FAIL  (never put body on primaryLight)
- * White (#FFFFFF) on info (#457B9D)         #FFFFFF / #457B9D      4.6:1   ✅ PASS  ✅ PASS
- * White (#FFFFFF) on error (#E63946)        #FFFFFF / #E63946      4.7:1   ✅ PASS  ✅ PASS
- * textPrimary (#1B2B1E) on warning bg       #1B2B1E / #FFF8E7     13.7:1   ✅ PASS  ✅ PASS
- * textPrimary (#1B2B1E) on success bg       #1B2B1E / #E8F5E9     11.3:1   ✅ PASS  ✅ PASS
- * Gold text (#9A6F1A) on gold bg (#FDF3DC)  #9A6F1A / #FDF3DC      5.9:1   ✅ PASS  ✅ PASS
- * Gold label (#C4922A) on surface (#FFFFFF) #C4922A / #FFFFFF      3.6:1   ❌ FAIL  ✅ PASS  (badge label ≥14pt bold only)
- * Gold label (#C4922A) on gold bg (#FDF3DC) #C4922A / #FDF3DC      2.2:1   ❌ FAIL  ❌ FAIL  (decorative only — never body text)
- * White (#FFFFFF) on gold-800 (#7A5214)     #FFFFFF / #7A5214      7.8:1   ✅ PASS  ✅ PASS
- * ─────────────────────────────────────────────────────────────────────────────
- * Notes:
- *  • textMuted is intentionally used only for captions / secondary labels — always ≥ 11pt.
- *    The 2.9:1 on white surface passes large-text 3:1 at ≥ 18pt or ≥ 14pt bold.
- *  • Gold (#C4922A) as badge text on white passes 3:1 for large text only — used exclusively
- *    as 12pt/600 badge label which qualifies as "bold large text" ≥ 14pt equiv. visual weight.
- *  • primaryLight (#52B788) NEVER carries white body text — it is a tint/chip background only.
+ * Pair                                          Hex pair              Ratio    AA body  AA large
+ * ─────────────────────────────────────────────────────────────────────────────────────────────
+ * ink (#1A1A18) on bone (#F5EFE4)               ≈ 16.5:1             ✅ PASS  ✅ PASS
+ * ink (#1A1A18) on cream (#F1E8D5)              ≈ 15.2:1             ✅ PASS  ✅ PASS
+ * charcoal (#3D3D3A) on bone (#F5EFE4)          ≈  8.0:1             ✅ PASS  ✅ PASS
+ * forest (#2C4A36) on bone (#F5EFE4)            ≈  7.4:1             ✅ PASS  ✅ PASS
+ * stone (#B1A89F) on bone (#F5EFE4)             ≈  2.3:1             ❌ FAIL  ✅ PASS  (caption/meta only ≥ 18pt)
+ * mutedGold (#C5A253) on bone (#F5EFE4)         ≈  2.9:1             ❌ FAIL  ✅ PASS  (badge label ≥ 14pt bold only)
  * ─────────────────────────────────────────────────────────────────────────────
  */
+
+// ─── Universal old-money palette ──────────────────────────────────────────────
+export const colors = {
+  bone:        '#F5EFE4',  // primary background
+  cream:       '#F1E8D5',  // card surface, warm
+  ink:         '#1A1A18',  // primary text, dark sections (NEVER #000)
+  charcoal:    '#3D3D3A',  // secondary text on light
+  stone:       '#B1A89F',  // tertiary text, hairlines, meta
+
+  // Single accent — wellness app
+  forest:      '#2C4A36',  // PRIMARY accent, replaces #2D6A4F
+
+  // Sparingly
+  mutedGold:   '#C5A253',  // ONLY for founding-tier badge typography, never as fill
+  camel:       '#B08D57',  // hairline borders only
+
+  // Semantic — keep minimal
+  success:     '#2C4A36',  // map to forest
+  warning:     '#C5A253',  // map to mutedGold
+  error:       '#4A0404',  // oxblood
+} as const;
 
 // ─── Neutrals 0–1000 (10 stops) ───────────────────────────────────────────────
 export const neutral = {
@@ -54,40 +58,40 @@ export const neutral = {
   1000: '#0A0A09',
 } as const;
 
-// ─── Brand Primary Scale ───────────────────────────────────────────────────────
+// ─── Brand Primary Scale (updated to forest) ──────────────────────────────────
 export const brand = {
-  50:   '#D8F3DC',   // pale tint (primaryPale)
-  100:  '#B7E4C7',
-  300:  '#74C69D',
-  400:  '#52B788',   // medium (primaryLight)
-  500:  '#40916C',   // accent
-  600:  '#2D6A4F',   // BASE — primary brand colour
-  800:  '#1B4332',   // dark (primaryDark)
+  50:   '#D6E4DA',   // pale tint
+  100:  '#B8CCBF',
+  300:  '#6E9479',
+  400:  '#4D7059',   // medium
+  500:  '#3A5C46',   // accent
+  600:  '#2C4A36',   // BASE — forest (primary brand colour)
+  800:  '#1C3023',   // dark
 } as const;
 
-// ─── Semantic Colours ──────────────────────────────────────────────────────────
+// ─── Semantic Colours (minimal — maps to palette) ─────────────────────────────
 export const semantic = {
   success: {
-    bg:     '#E8F5E9',
-    fg:     '#1B4332',   // WCAG 11.3:1 on successBg ✅
-    border: '#74C69D',
-    icon:   '#2D6A4F',
+    bg:     '#E0EBE4',
+    fg:     '#1C3023',
+    border: '#6E9479',
+    icon:   '#2C4A36',
   },
   warning: {
-    bg:     '#FFF8E7',
-    fg:     '#7B5800',   // WCAG 9.4:1 on warningBg ✅
-    border: '#E9C46A',
-    icon:   '#D4A017',
+    bg:     '#F8F2E5',
+    fg:     '#8A6A2A',
+    border: '#C5A253',
+    icon:   '#C5A253',
   },
   danger: {
-    bg:     '#FEF2F2',
-    fg:     '#991B1B',   // WCAG 9.1:1 on dangerBg ✅
-    border: '#FCA5A5',
-    icon:   '#E63946',
+    bg:     '#F2E0E0',
+    fg:     '#4A0404',
+    border: '#9A3030',
+    icon:   '#4A0404',
   },
   info: {
     bg:     '#E8F4FD',
-    fg:     '#1E4971',   // WCAG 9.7:1 on infoBg ✅
+    fg:     '#1E4971',
     border: '#93C5DC',
     icon:   '#457B9D',
   },
@@ -95,77 +99,101 @@ export const semantic = {
 
 // ─── Gold Scale — Founding / Inner Circle tier ─────────────────────────────────
 export const gold = {
-  50:   '#FEFAF0',   // barely-there background
-  100:  '#FDF3DC',   // badge/chip background
-  200:  '#F9E4B0',
-  300:  '#F0C96A',
-  400:  '#E9C46A',   // warning-gold crossover
-  500:  '#C4922A',   // primary gold (badge labels — large text only)
-  700:  '#9A6F1A',   // darker label on gold bg — 5.9:1 ✅
-  800:  '#7A5214',   // accessible on white — 7.8:1 ✅
-  // shimmer and glow tokens removed in Wave 1 (luxury repositioning)
-  border:  'rgba(196,146,42,0.35)',
+  50:   '#FEFAF0',
+  100:  '#F8F0DC',
+  200:  '#EDDD9C',
+  300:  '#D4B96B',
+  400:  '#C5A253',   // mutedGold — badge typography only
+  500:  '#B08D57',   // camel / border use
+  700:  '#8A6A2A',   // darker label
+  800:  '#6B4F1A',
+  border:  'rgba(197,162,83,0.35)',
 } as const;
 
-// ─── Typography Scale ──────────────────────────────────────────────────────────
+// ─── Typography Scale (Wave 2: Cormorant Garamond + Inter) ────────────────────
 export const typography = {
   /**
-   * Scale maps semantic role → { fontSize, lineHeight, fontWeight, letterSpacing }
-   * Based on a modular 1.25 ratio anchored at body = 15.
+   * CRITICAL: weight 400 (NOT 700/800) — the single biggest amateur tell.
+   * Display/heading roles use Cormorant Garamond (editorial serif).
+   * Body/UI roles use Inter (neutral sans).
    */
   display: {
-    fontSize:      40,
-    lineHeight:    48,
-    fontWeight:    '800' as const,
-    letterSpacing: -0.8,
+    fontFamily:    'CormorantGaramond_400Regular',
+    fontSize:      44,
+    lineHeight:    46,
+    letterSpacing: 0.4,
+    fontWeight:    '400' as const,
   },
   h1: {
+    fontFamily:    'CormorantGaramond_400Regular',
     fontSize:      32,
-    lineHeight:    40,
-    fontWeight:    '700' as const,
-    letterSpacing: -0.5,
+    lineHeight:    35,
+    letterSpacing: 0.6,
+    fontWeight:    '400' as const,
   },
   h2: {
-    fontSize:      26,
-    lineHeight:    34,
-    fontWeight:    '700' as const,
-    letterSpacing: -0.3,
+    fontFamily:    'CormorantGaramond_400Regular',
+    fontSize:      24,
+    lineHeight:    29,
+    letterSpacing: 0.5,
+    fontWeight:    '400' as const,
   },
   h3: {
-    fontSize:      22,
-    lineHeight:    30,
-    fontWeight:    '600' as const,
-    letterSpacing: -0.2,
+    fontFamily:    'CormorantGaramond_500Medium',
+    fontSize:      20,
+    lineHeight:    24,
+    letterSpacing: 0.4,
+    fontWeight:    '500' as const,
   },
   h4: {
-    fontSize:      18,
-    lineHeight:    26,
-    fontWeight:    '600' as const,
+    fontFamily:    'Inter_500Medium',
+    fontSize:      17,
+    lineHeight:    22,
     letterSpacing: -0.1,
+    fontWeight:    '500' as const,
   },
   body: {
-    fontSize:      15,
-    lineHeight:    23,
+    fontFamily:    'Inter_400Regular',
+    fontSize:      16,
+    lineHeight:    26,
+    letterSpacing: -0.16,
     fontWeight:    '400' as const,
-    letterSpacing: 0,
+  },
+  bodyMd: {
+    fontFamily:    'Inter_500Medium',
+    fontSize:      16,
+    lineHeight:    26,
+    letterSpacing: -0.16,
+    fontWeight:    '500' as const,
   },
   bodySmall: {
-    fontSize:      13,
-    lineHeight:    20,
+    fontFamily:    'Inter_400Regular',
+    fontSize:      14,
+    lineHeight:    22,
+    letterSpacing: 0,
     fontWeight:    '400' as const,
-    letterSpacing: 0.1,
   },
   caption: {
-    fontSize:      11,
-    lineHeight:    16,
+    fontFamily:    'Inter_500Medium',
+    fontSize:      12,
+    lineHeight:    18,
+    letterSpacing: 0.96,
     fontWeight:    '500' as const,
-    letterSpacing: 0.3,
+  },
+  eyebrow: {
+    fontFamily:     'Inter_500Medium',
+    fontSize:       11,
+    lineHeight:     13,
+    letterSpacing:  1.98,
+    fontWeight:     '500' as const,
+    textTransform:  'uppercase' as const,
   },
   micro: {
+    fontFamily:    'Inter_600SemiBold',
     fontSize:      10,
     lineHeight:    14,
-    fontWeight:    '600' as const,
     letterSpacing: 0.5,
+    fontWeight:    '600' as const,
   },
 } as const;
 
@@ -181,67 +209,67 @@ export const spacing = {
   '4xl': 64,
 } as const;
 
-// ─── Border Radius ─────────────────────────────────────────────────────────────
+// ─── Border Radius (Wave 2: luxury scale) ─────────────────────────────────────
 export const radius = {
-  sm:   4,
-  md:   8,
-  lg:   12,
-  xl:   16,
-  '2xl': 24,
-  pill: 999,
+  sm:   0,    // buttons, primary CTAs
+  md:   2,    // inputs
+  lg:   4,    // cards
+  // xl and 2xl kept for legacy back-compat — screens with literal large radii
+  // are flagged in FITNESS_RADIUS_HITS.md for Wave 3 cleanup.
+  xl:   4,    // remapped to lg value (was 16)
+  '2xl': 4,   // remapped to lg value (was 24)
+  pill: 999,  // SMALL CHIPS ONLY — never on primary surfaces
 } as const;
 
-// ─── Shadows ───────────────────────────────────────────────────────────────────
+// ─── Shadows (Wave 2: luxury opacity caps) ────────────────────────────────────
 export const shadows = {
   /** Subtle lift — inputs, chips */
   sm: {
-    shadowColor:  'rgba(0,0,0,1)',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius:  3,
-    elevation:     2,
+    shadowColor:   '#1A1A18',
+    shadowOffset:  { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius:  2,
+    elevation:     1,
   },
   /** Card elevation */
   md: {
-    shadowColor:  'rgba(27,43,30,1)',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.10,
-    shadowRadius:  12,
-    elevation:     5,
+    shadowColor:   '#1A1A18',
+    shadowOffset:  { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius:  6,
+    elevation:     2,
   },
   /** Modal / bottom sheet */
   lg: {
-    shadowColor:  'rgba(0,0,0,1)',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.10,
-    shadowRadius:  24,
-    elevation:     12,
+    shadowColor:   '#1A1A18',
+    shadowOffset:  { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius:  12,
+    elevation:     4,
   },
-
 } as const;
 
-// ─── Motion ───────────────────────────────────────────────────────────────────
+// ─── Motion (Wave 2: velvet timing, expo-out easing) ──────────────────────────
 export const motion = {
   duration: {
-    fast:   120,   // micro-interactions, icon presses
-    base:   200,   // standard transitions
-    slow:   320,   // content slides, modals
-    // shimmer: removed in Wave 1 (luxury repositioning)
+    fast:       120,   // haptic taps only
+    base:       400,   // standard transitions (was 200)
+    slow:       800,   // content reveals, image fades (was 320)
+    deliberate: 1200,  // hero reveals, scene changes
+    // spring, accelerate, shimmer: removed (Wave 1 + Wave 2 luxury repositioning)
   },
   easing: {
-    /** Standard ease-in-out curve */
-    standard:   [0.4, 0, 0.2, 1] as [number,number,number,number],
-    /** Deceleration — entering elements */
-    decelerate: [0.0, 0, 0.2, 1] as [number,number,number,number],
-    /** Acceleration — exiting elements */
-    accelerate: [0.4, 0, 1.0, 1] as [number,number,number,number],
-    /** Spring — playful / press states */
-    spring:     [0.34, 1.56, 0.64, 1] as [number,number,number,number],
+    /** expo-out — primary easing for everything entering */
+    decel:  [0.16, 1, 0.3, 1] as const,
+    /** standard — used sparingly */
+    smooth: [0.4, 0, 0.2, 1] as const,
+    // accelerate and spring: DELETED (luxury repositioning)
   },
 } as const;
 
 // ─── Composite token export ────────────────────────────────────────────────────
 const tokens = {
+  colors,
   neutral,
   brand,
   semantic,

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
-import { NavigationContainer, NavigationContainerRef } from '@react-navigation/native';
+import { NavigationContainer, NavigationContainerRef, DefaultTheme } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AuthNavigator from './AuthNavigator';
 import ClientNavigator from './ClientNavigator';
@@ -138,7 +138,20 @@ export default function RootNavigator() {
     || activeRoute === 'Learn' || activeRoute === 'Recipes';
 
   return (
-    <NavigationContainer ref={navigationRef} onStateChange={onNavigationStateChange}>
+    <NavigationContainer
+      ref={navigationRef}
+      onStateChange={onNavigationStateChange}
+      theme={{
+        ...DefaultTheme,
+        colors: {
+          ...DefaultTheme.colors,
+          background: '#F5EFE4',  // bone — Wave 2 global bg
+          card: '#F5EFE4',
+          text: '#1A1A18',        // ink
+          border: 'rgba(176,141,87,0.2)',  // camel divider
+        },
+      }}
+    >
       {/* OfflineBanner sits at the top of every auth state so users see the
           offline indicator regardless of which navigator is mounted. */}
       <OfflineBanner />
