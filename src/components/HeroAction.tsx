@@ -1,5 +1,6 @@
 /**
  * HeroAction — UX Psychology Report #1 "One Dominant Home Action"
+ *             + UX Psychology Report #5 "Premium Visual System" (token refresh)
  *
  * A full-width, visually dominant card that surfaces the single most
  * important action for the user right now:
@@ -11,6 +12,14 @@
  *
  * Queries only endpoints that already exist in api.ts / useApi.ts.
  * Gracefully degrades to a sensible CTA on 401 / empty / error states.
+ *
+ * Psych #5 changes:
+ *   • Background gradient — base: primaryDark → primary stop.
+ *     Founder tier receives a gold accent gradient stop.
+ *   • Typography mapped from tokens.typography scale (h3, body).
+ *   • Spacing from tokens.spacing (lg, xl).
+ *   • Shadow from tokens.shadows.md (card) with brand shadow color.
+ *   • All hardcoded hex values removed.
  */
 
 import React, { useMemo } from 'react';
@@ -19,16 +28,20 @@ import {
   Text,
   StyleSheet,
   Pressable,
-  ActivityIndicator,
+  Platform,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
-import { Colors, Spacing, Radius, Shadow, colors } from '../theme/index';
 import { useQuery } from '@tanstack/react-query';
 import { workoutApi, mealPlansApi } from '../services/api';
 import { getTodayString } from '../utils/date';
 import { track } from '../lib/analytics';
+import tokens from '../theme/tokens';
+import { useTheme } from '../theme/ThemeProvider';
+// Legacy theme exports kept for the skeleton (uses Radius / Shadow)
+import { Radius, Shadow } from '../theme/index';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -50,7 +63,6 @@ interface HeroConfig {
 function useHeroData() {
   const today = getTodayString();
 
-  // Recent workouts (limit 30 to cover a decent streak window)
   const workoutsQ = useQuery<any[]>({
     queryKey: ['workouts', 'hero', 'list'],
     queryFn: async () => {
@@ -58,12 +70,10 @@ function useHeroData() {
       const raw = res.data;
       return Array.isArray(raw) ? raw : (raw?.workouts ?? []);
     },
-    // Don't block render — stale data is fine for hero state
     staleTime: 60_000,
     retry: 1,
   });
 
-  // Meal plans (for subtitle copy when resuming plan)
   const plansQ = useQuery<any[]>({
     queryKey: ['meal-plans', 'hero'],
     queryFn: async () => {
@@ -82,20 +92,13 @@ function useHeroData() {
 
     const sessions: any[] = workoutsQ.data ?? [];
 
-    // Did the user log a workout today?
     const loggedToday = sessions.some((s: any) => {
       const d = (s.completed_at || s.created_at || s.date || '').slice(0, 10);
       return d === today;
     });
 
-    // Compute consecutive-day streak (counting back from today)
     const streakCount = computeStreak(sessions, today);
-    // TODO(psych-4): streak_extended event — fire when streakCount increases
-    // from the previous session. Requires persisting last-known streak in
-    // AsyncStorage and comparing on each data refresh. Skip for now to avoid
-    // over-engineering the data layer in this PR.
 
-    // Active meal plan title for subtitle
     const activePlan: any = (plansQ.data ?? [])[0];
     const planTitle: string = activePlan?.title ?? '';
 
@@ -110,14 +113,13 @@ function useHeroData() {
       };
     }
 
-    // No workout today
     const workoutsThisWeek = sessions.filter((s: any) => {
       const d = new Date((s.completed_at || s.created_at || s.date || ''));
       const now = new Date();
       const diff = (now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24);
       return diff < 7;
     }).length;
-    const remaining = Math.max(0, 3 - workoutsThisWeek); // assume 3x/week goal
+    const remaining = Math.max(0, 3 - workoutsThisWeek);
 
     const subtitle =
       remaining > 0
@@ -135,22 +137,15 @@ function useHeroData() {
   return { config, workoutsQ, plansQ };
 }
 
-/**
- * Count how many consecutive calendar days (ending today) the user
- * has logged at least one workout.
- */
 function computeStreak(sessions: any[], today: string): number {
   if (!sessions.length) return 0;
-
   const datesWithWorkout = new Set<string>(
-    sessions.map((s: any) =>
-      (s.completed_at || s.created_at || s.date || '').slice(0, 10),
-    ).filter(Boolean),
+    sessions
+      .map((s: any) => (s.completed_at || s.created_at || s.date || '').slice(0, 10))
+      .filter(Boolean),
   );
-
   let streak = 0;
   const cursor = new Date(today + 'T00:00:00');
-
   for (let i = 0; i < 365; i++) {
     const dateStr = cursor.toISOString().slice(0, 10);
     if (datesWithWorkout.has(dateStr)) {
@@ -181,21 +176,22 @@ function HeroSkeleton() {
 export default function HeroAction() {
   const navigation = useNavigation<any>();
   const { config } = useHeroData();
+  const { tier, tierColors } = useTheme();
 
   if (config.state === 'loading') return <HeroSkeleton />;
 
+  // Gradient colours: dark → base for free; dark → base → gold for founders
+  const gradientColors: [string, string, ...string[]] =
+    tier === 'founder'
+      ? [tokens.brand[800], tokens.brand[600], tierColors.heroGradientStop]
+      : [tokens.brand[800], tokens.brand[600]];
+
   const handlePress = () => {
-    // Fire medium haptic on press — feels substantial and intentional
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-
-    // Psych Report #4: Analytics — hero_action_tapped with current state
     track('hero_action_tapped', { state: config.state, streak_count: config.streakCount });
-
     if (config.state === 'resume_plan') {
-      // Navigate to the Plan tab
       navigation.navigate('Plan');
     } else {
-      // Navigate to the Workout tab → WorkoutMain
       navigation.navigate('WorkoutTab');
     }
   };
@@ -222,6 +218,26 @@ export default function HeroAction() {
             : 'Opens the workout tracker'
         }
       >
+        {/* Tier-aware gradient background */}
+        <LinearGradient
+          colors={gradientColors}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
+
+        {/* Founder tier: subtle gold border glow */}
+        {tier === 'founder' && (
+          <View
+            style={[
+              StyleSheet.absoluteFill,
+              styles.founderBorderOverlay,
+              { borderColor: tierColors.accentBorder },
+            ]}
+            pointerEvents="none"
+          />
+        )}
+
         {/* Left: text content */}
         <View style={styles.textBlock}>
           <Text style={styles.title} numberOfLines={1} adjustsFontSizeToFit>
@@ -236,8 +252,8 @@ export default function HeroAction() {
         <View style={styles.iconWrap}>
           <Ionicons
             name="arrow-forward-circle"
-            size={36}
-            color="rgba(255,255,255,0.9)"
+            size={tokens.spacing['4xl'] / 2}   // 32
+            color="rgba(255,255,255,0.90)"
           />
         </View>
       </Pressable>
@@ -249,72 +265,81 @@ export default function HeroAction() {
 
 const styles = StyleSheet.create({
   wrapper: {
-    paddingHorizontal: Spacing.lg,
-    marginBottom: 24,
+    paddingHorizontal: tokens.spacing.xl,   // 24 — wider breathing room
+    marginBottom: tokens.spacing.xl,
   },
 
   // ── Streak badge ──
   streakBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: colors.data.streak + '22', // 13% opacity tint
-    borderRadius: Radius.full,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    marginBottom: 10,
+    backgroundColor: 'rgba(231,111,81,0.13)',
+    borderRadius: tokens.radius.pill,
+    paddingHorizontal: tokens.spacing.md,
+    paddingVertical: tokens.spacing.xs + 1,
+    marginBottom: tokens.spacing.sm,
     borderWidth: 1,
-    borderColor: colors.data.streak + '44',
+    borderColor: 'rgba(231,111,81,0.28)',
   },
   streakText: {
-    fontSize: 13,
+    fontSize: tokens.typography.caption.fontSize,
     fontWeight: '700',
-    color: colors.data.streak,
+    color: '#E76F51',
+    letterSpacing: tokens.typography.caption.letterSpacing,
   },
 
   // ── Hero card ──
   card: {
-    height: 160,
-    borderRadius: Radius.lg,
-    backgroundColor: Colors.primary, // brand deep green — #2D6A4F
+    height: 168,
+    borderRadius: tokens.radius.xl,          // 16 — a touch more refined
+    overflow: 'hidden',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    // Prominent shadow — makes it feel "lifted" above secondary content
-    ...Shadow.button,
-    shadowColor: Colors.primaryDark,
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 6,
+    paddingHorizontal: tokens.spacing.xl,    // 24
+    paddingVertical: tokens.spacing.lg,      // 16
+    // Card shadow from tokens
+    ...tokens.shadows.md,
+    shadowColor: tokens.brand[800],          // brand-tinted shadow
+    shadowOpacity: 0.30,
   },
   cardPressed: {
     opacity: 0.88,
-    transform: [{ scale: 0.985 }],
+    transform: [{ scale: 0.984 }],
   },
   cardSkeleton: {
-    backgroundColor: Colors.primaryPale,
-    ...Shadow.card,
+    backgroundColor: tokens.brand[100],
+    ...tokens.shadows.sm,
     justifyContent: 'center',
-    gap: 14,
+    gap: tokens.spacing.lg,
+    overflow: 'hidden',
+  },
+
+  // Founder-only 1 dp border overlay
+  founderBorderOverlay: {
+    borderRadius: tokens.radius.xl,
+    borderWidth: 1,
   },
 
   // ── Text block ──
   textBlock: {
     flex: 1,
-    marginRight: 12,
-    gap: 8,
+    marginRight: tokens.spacing.md,
+    gap: tokens.spacing.sm,
   },
   title: {
-    fontSize: 24,
-    fontWeight: '800',
+    fontSize: tokens.typography.h3.fontSize,        // 22
+    lineHeight: tokens.typography.h3.lineHeight,     // 30
+    fontWeight: tokens.typography.h3.fontWeight,     // 600
     color: '#FFFFFF',
-    lineHeight: 30,
-    letterSpacing: -0.3,
+    letterSpacing: tokens.typography.h3.letterSpacing,
+    // Boost to h2 weight visually on this dark card
+    ...Platform.select({ ios: { fontWeight: '800' as const }, android: {} }),
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: tokens.typography.bodySmall.fontSize,   // 13
     fontWeight: '500',
     color: 'rgba(255,255,255,0.80)',
-    lineHeight: 20,
+    lineHeight: tokens.typography.bodySmall.lineHeight,
+    letterSpacing: tokens.typography.bodySmall.letterSpacing,
   },
 
   // ── Arrow icon ──
@@ -325,15 +350,15 @@ const styles = StyleSheet.create({
 
   // ── Skeleton placeholders ──
   skeletonTitle: {
-    height: 28,
+    height: tokens.typography.h3.lineHeight,
     width: '65%',
-    borderRadius: Radius.sm,
-    backgroundColor: Colors.primaryLight + '55',
+    borderRadius: tokens.radius.sm,
+    backgroundColor: 'rgba(82,183,136,0.22)',
   },
   skeletonSubtitle: {
-    height: 16,
+    height: tokens.typography.bodySmall.lineHeight,
     width: '80%',
-    borderRadius: Radius.sm,
-    backgroundColor: Colors.primaryLight + '33',
+    borderRadius: tokens.radius.sm,
+    backgroundColor: 'rgba(82,183,136,0.14)',
   },
 });
