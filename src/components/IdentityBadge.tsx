@@ -5,9 +5,16 @@
  * Tap reveals a bottom sheet / tooltip explaining what "Founding Member" means.
  *
  * UX Psych #3: Identity Reinforcement / Inner Circle
+ * UX Psych #5: Premium Visual System — gold shimmer on mount for founders.
+ *
+ * Shimmer implementation:
+ *   • Animated.Value drives translateX from -badgeWidth to +badgeWidth over 1.2 s.
+ *   • A semi-opaque white overlay is clipped to the badge bounds (overflow: hidden).
+ *   • Runs once on mount (no loop); settles cleanly so badge looks crisp at rest.
+ *   • Uses React Native Animated API only — no Skia, no Lottie.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -15,10 +22,12 @@ import {
   Pressable,
   StyleSheet,
   Platform,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from './HapticPressable';
 import { Colors, Radius, Spacing } from '../theme/index';
+import tokens from '../theme/tokens';
 import { track } from '../lib/analytics';
 
 export interface IdentityBadgeProps {
@@ -28,12 +37,40 @@ export interface IdentityBadgeProps {
   hidden?: boolean;
 }
 
+/** Single-shot shimmer: sweeps once across the badge on mount. */
+function useShimmer(enabled: boolean) {
+  const shimmerAnim = useRef(new Animated.Value(0)).current;
+  const [badgeWidth, setBadgeWidth] = useState(120);
+
+  useEffect(() => {
+    if (!enabled) return;
+    // Short delay so the badge is fully painted before the shimmer starts
+    const delay = setTimeout(() => {
+      Animated.timing(shimmerAnim, {
+        toValue: 1,
+        duration: tokens.motion.duration.shimmer,   // 1200 ms
+        useNativeDriver: true,
+      }).start();
+    }, 300);
+    return () => clearTimeout(delay);
+  }, [enabled, shimmerAnim]);
+
+  // translateX goes from -badgeWidth–20 (off-left) to +badgeWidth+20 (off-right)
+  const translateX = shimmerAnim.interpolate({
+    inputRange:  [0, 1],
+    outputRange: [-badgeWidth - 20, badgeWidth + 20],
+  });
+
+  return { translateX, setBadgeWidth };
+}
+
 export default function IdentityBadge({
   rank,
   isFoundingMember,
   hidden = false,
 }: IdentityBadgeProps) {
   const [tooltipVisible, setTooltipVisible] = useState(false);
+  const { translateX, setBadgeWidth } = useShimmer(isFoundingMember && !hidden);
 
   // Psych Report #4: Analytics — identity_badge_viewed fires on mount
   useEffect(() => {
@@ -45,8 +82,13 @@ export default function IdentityBadge({
 
   if (hidden) return null;
 
-  const badgeColor = isFoundingMember ? '#C4922A' : Colors.textMuted;       // gold vs neutral
-  const badgeBg   = isFoundingMember ? 'rgba(196,146,42,0.12)' : 'rgba(143,168,154,0.12)';
+  // ── Colour config ──────────────────────────────────────────────────────────
+  const badgeColor  = isFoundingMember ? tokens.gold[500] : Colors.textMuted;
+  const badgeBg     = isFoundingMember ? tokens.gold[100] : 'rgba(143,168,154,0.12)';
+  const borderColor = isFoundingMember ? tokens.gold.border : 'transparent';
+
+  // ── Shadow ─────────────────────────────────────────────────────────────────
+  const badgeShadow = isFoundingMember ? tokens.shadows['glow-gold'] : {};
 
   return (
     <>
@@ -63,7 +105,12 @@ export default function IdentityBadge({
             : `Member number ${rank}`
         }
         accessibilityHint="Tap to learn more about your member number"
-        style={[styles.badge, { backgroundColor: badgeBg }]}
+        style={[
+          styles.badge,
+          { backgroundColor: badgeBg, borderColor },
+          badgeShadow,
+        ]}
+        onLayout={(e) => setBadgeWidth(e.nativeEvent.layout.width)}
       >
         {isFoundingMember && (
           <Ionicons name="star" size={11} color={badgeColor} style={styles.star} />
@@ -71,6 +118,14 @@ export default function IdentityBadge({
         <Text style={[styles.label, { color: badgeColor }]}>
           {isFoundingMember ? 'Founding Member' : 'Member'} · #{rank.toLocaleString()}
         </Text>
+
+        {/* Shimmer overlay — founder only, runs once on mount */}
+        {isFoundingMember && (
+          <Animated.View
+            style={[styles.shimmerOverlay, { transform: [{ translateX }] }]}
+            pointerEvents="none"
+          />
+        )}
       </HapticPressable>
 
       {/* Tooltip / bottom-sheet modal */}
@@ -88,7 +143,7 @@ export default function IdentityBadge({
             {isFoundingMember ? (
               <>
                 <View style={styles.iconRow}>
-                  <Ionicons name="star" size={32} color="#C4922A" />
+                  <Ionicons name="star" size={32} color={tokens.gold[500]} />
                 </View>
                 <Text style={styles.sheetTitle}>You're a Founding Member</Text>
                 <Text style={styles.sheetBody}>
@@ -136,70 +191,84 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: Radius.full,
-    marginTop: 6,
-    gap: 4,
+    paddingHorizontal: tokens.spacing.md,        // 12
+    paddingVertical:   tokens.spacing.xs,         // 4
+    borderRadius:      tokens.radius.pill,
+    marginTop:         tokens.spacing.sm - 2,     // 6
+    gap:               tokens.spacing.xs,         // 4
+    borderWidth:       1,
+    // overflow hidden clips the shimmer inside the pill
+    overflow:          'hidden',
   },
   star: {
     marginRight: 1,
   },
   label: {
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.2,
+    fontSize:      tokens.typography.caption.fontSize,   // 11
+    fontWeight:    '600',
+    letterSpacing: tokens.typography.caption.letterSpacing,
   },
+
+  // Shimmer: a diagonal white streak, clipped by badge overflow:hidden
+  shimmerOverlay: {
+    position:        'absolute',
+    top:             0,
+    bottom:          0,
+    width:           40,
+    backgroundColor: tokens.gold.shimmer,
+    transform:       [{ skewX: '-15deg' }],
+  },
+
   // Modal
   overlay: {
-    flex: 1,
+    flex:            1,
     backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'flex-end',
+    justifyContent:  'flex-end',
   },
   sheet: {
-    backgroundColor: Colors.surface,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingHorizontal: Spacing.lg,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 24,
-    paddingTop: 12,
+    backgroundColor:     Colors.surface,
+    borderTopLeftRadius:  tokens.radius['2xl'],
+    borderTopRightRadius: tokens.radius['2xl'],
+    paddingHorizontal:   Spacing.lg,
+    paddingBottom:       Platform.OS === 'ios' ? 40 : 24,
+    paddingTop:          tokens.spacing.md,
   },
   handle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: Colors.border,
-    alignSelf: 'center',
-    marginBottom: 20,
+    width:            40,
+    height:           4,
+    borderRadius:     2,
+    backgroundColor:  Colors.border,
+    alignSelf:        'center',
+    marginBottom:     tokens.spacing.xl,
   },
   iconRow: {
-    alignItems: 'center',
-    marginBottom: 12,
+    alignItems:   'center',
+    marginBottom: tokens.spacing.md,
   },
   sheetTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: Colors.dark,
-    textAlign: 'center',
-    marginBottom: 12,
+    fontSize:     tokens.typography.h3.fontSize,
+    fontWeight:   '800',
+    color:        Colors.dark,
+    textAlign:    'center',
+    marginBottom: tokens.spacing.md,
   },
   sheetBody: {
-    fontSize: 15,
-    color: Colors.textMuted,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 10,
+    fontSize:     tokens.typography.body.fontSize,
+    color:        Colors.textMuted,
+    textAlign:    'center',
+    lineHeight:   tokens.typography.body.lineHeight,
+    marginBottom: tokens.spacing.sm,
   },
   closeBtn: {
-    marginTop: 20,
-    backgroundColor: Colors.primary,
-    borderRadius: Radius.md,
-    paddingVertical: 14,
-    alignItems: 'center',
+    marginTop:        tokens.spacing.xl,
+    backgroundColor:  Colors.primary,
+    borderRadius:     tokens.radius.md,
+    paddingVertical:  14,
+    alignItems:       'center',
   },
   closeBtnText: {
-    color: Colors.white,
+    color:      Colors.white,
     fontWeight: '700',
-    fontSize: 16,
+    fontSize:   tokens.typography.body.fontSize,
   },
 });

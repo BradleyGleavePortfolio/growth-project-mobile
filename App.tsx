@@ -14,6 +14,7 @@ import {
 } from './src/services/queryClient';
 import { initSentry, wrap as sentryWrap } from './src/services/sentry';
 import { track } from './src/lib/analytics';
+import { ThemeProvider } from './src/theme/ThemeProvider';
 
 // Initialise Sentry as early as possible so even import-time failures get
 // captured. The function no-ops when EXPO_PUBLIC_SENTRY_DSN is unset, so this
@@ -102,7 +103,12 @@ function App() {
           }}
         >
           <StatusBar style="dark" />
-          <RootNavigator />
+          {/* ThemeProvider: Premium Visual System — UX Psych Report #5.
+              Must be inside PersistQueryClientProvider so useFoundingNumber()
+              (which calls useQuery) works correctly. */}
+          <ThemeProvider>
+            <RootNavigator />
+          </ThemeProvider>
         </PersistQueryClientProvider>
       </PostHogProvider>
     </ErrorBoundary>

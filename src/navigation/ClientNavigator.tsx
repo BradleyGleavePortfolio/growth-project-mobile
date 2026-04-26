@@ -1,5 +1,5 @@
 import React from 'react';
-import { Platform } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -28,6 +28,7 @@ import EducationScreen from '../screens/client/EducationScreen';
 import CommunityScreen from '../screens/client/CommunityScreen';
 import MoreScreen from '../screens/client/MoreScreen';
 import { Colors } from '../constants/colors';
+import tokens from '../theme/tokens';
 
 export type HomeStackParamList = {
   HomeMain: undefined;
@@ -156,11 +157,12 @@ export default function ClientNavigator() {
         },
         tabBarStyle: {
           backgroundColor: Colors.surface,
-          borderTopColor: Colors.border,
-          borderTopWidth: 1,
+          // Premium Visual System (psych #5): thinner 0.5 dp hairline divider
+          borderTopColor: Colors.divider,
+          borderTopWidth: StyleSheet.hairlineWidth,
           paddingBottom: Platform.OS === 'ios' ? 8 : 8,
-          paddingTop: 4,
-          height: 64,
+          paddingTop: tokens.spacing.xs,       // 4
+          height: 60,
         },
       }}
     >
