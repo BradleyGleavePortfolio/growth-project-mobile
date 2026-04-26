@@ -45,9 +45,6 @@ import TrustCueRow from '../../components/trust/TrustCueRow';
 import IdentityBadge from '../../components/IdentityBadge';
 import { useFoundingNumber, useCircleStats } from '../../hooks/useIdentity';
 import { resolveIdentityTitle } from '../../lib/identityTitle';
-import MilestoneProgress from '../../components/anticipation/MilestoneProgress';
-import CountdownTile from '../../components/anticipation/CountdownTile';
-import { resolveNextMilestones } from '../../lib/milestones';
 import { track } from '../../lib/analytics';
 
 const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
@@ -55,10 +52,10 @@ const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 // ── WeeklyVolumeCard ─────────────────────────────────────────────────────────
 
 // ── Psych #5: Streak Milestone Banner ───────────────────────────────────────
-// Shown once per milestone (7 / 30 / 90 day streaks), tappable to TrophyShare.
+// Shown once per milestone (7 / 30 / 90 day streaks). Tappable to TrophyShare.
 
 const STREAK_MILESTONES = [7, 30, 90] as const;
-const STREAK_STORAGE_KEY = 'trophy_streak_dismissed';
+const STREAK_TROPHY_KEY = 'trophy_streak_dismissed';
 
 interface StreakMilestoneBannerProps {
   streakDays: number;
@@ -75,9 +72,8 @@ function StreakMilestoneBanner({
 }: StreakMilestoneBannerProps) {
   const [dismissed, setDismissed] = React.useState<boolean | null>(null);
 
-  // The highest milestone hit so far
   const milestoneDays = STREAK_MILESTONES.filter((m) => streakDays >= m).slice(-1)[0];
-  const storageKey = milestoneDays ? `${STREAK_STORAGE_KEY}_${milestoneDays}` : null;
+  const storageKey = milestoneDays ? `${STREAK_TROPHY_KEY}_${milestoneDays}` : null;
 
   React.useEffect(() => {
     if (!storageKey) { setDismissed(true); return; }
@@ -93,7 +89,11 @@ function StreakMilestoneBanner({
 
   const openTrophy = () => {
     if (!milestoneDays) return;
-    track('trophy_generated', { surface: 'streak', kind: 'streak', is_founding_member: isFoundingMember });
+    track('trophy_generated', {
+      surface: 'streak',
+      kind: 'streak',
+      is_founding_member: isFoundingMember,
+    } as Record<string, unknown>);
     dismiss();
     navigation.navigate('TrophyShare', {
       kind: 'streak',
@@ -105,7 +105,6 @@ function StreakMilestoneBanner({
     });
   };
 
-  // Loading or no milestone reached or already dismissed
   if (dismissed !== false || !milestoneDays) return null;
 
   return (
@@ -575,58 +574,14 @@ export default function HomeScreen() {
       {prefs.homeModules.includes('hero') && (
         <FadeInView delay={50}>
           <HeroAction motivationalTone={prefs.motivationalTone} />
-          {/* UX Psych #3: Social-proof — circle trained today */}
-          {circleStats && circleStats.trainedTodayCount > 0 && (
-            <Text style={styles.circleSocialProof}>
-              {circleStats.trainedTodayCount} of your circle trained today
-            </Text>
-          )}
+        {/* UX Psych #3: Social-proof — circle trained today */}
+        {circleStats && circleStats.trainedTodayCount > 0 && (
+          <Text style={styles.circleSocialProof}>
+            {circleStats.trainedTodayCount} of your circle trained today
+          </Text>
+        )}
         </FadeInView>
       )}
-
-      {/* ── UX Psych #4: Healthy Anticipation — "Up Next" milestone section ─────── */}
-      <FadeInView delay={75}>
-        <View style={styles.upNextSection}>
-          <Text style={styles.upNextLabel}>Up Next</Text>
-
-          {/* Milestone progress cards */}
-          {upNextMilestones.map((milestone) => (
-            <MilestoneProgress
-              key={milestone.slug}
-              milestone={milestone}
-              isFoundingMember={foundingData?.isFoundingMember ?? false}
-              style={styles.milestoneCard}
-              onPress={() => {
-                track('milestone_unlocked', {
-                  slug:     milestone.slug,
-                  category: milestone.category,
-                  pct:      milestone.targetValue > 0
-                    ? Math.round((milestone.currentValue / milestone.targetValue) * 100)
-                    : 0,
-                });
-              }}
-            />
-          ))}
-
-          {/* Countdown tile — coach check-in: shown if next_coach_date exists in profile.
-              Rendered conditionally; skips gracefully when no date is available. */}
-          {(() => {
-            const nextCoachDate =
-              (currentUser?.profile as any)?.next_coach_checkin ||
-              (currentUser?.profile as any)?.next_plan_date;
-            if (!nextCoachDate) return null;
-
-            const isCoach = !!(currentUser?.profile as any)?.next_coach_checkin;
-            return (
-              <CountdownTile
-                targetDate={nextCoachDate}
-                eventType={isCoach ? 'coach_checkin' : 'new_plan'}
-                style={styles.countdownTile}
-              />
-            );
-          })()}
-        </View>
-      </FadeInView>
 
       {prefs.homeModules.includes('secondary') && <FadeInView delay={100}>
         {/* ── Secondary section: Nutrition ring (demoted below hero) ── */}
@@ -798,8 +753,8 @@ export default function HomeScreen() {
             ))}
           </View>
         </View>
-      {/* Psych #2: Trust as Emotion — trust cues below secondary sections, above footer */}
-      <TrustCueRow />
+      {/* Psych #2: Trust as Emotion — trust cues (prefs: trustcues module) */}
+      {prefs.homeModules.includes('trustcues') && <TrustCueRow />}
 
       </FadeInView>
     </ScrollView>
