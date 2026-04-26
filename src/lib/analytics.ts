@@ -81,7 +81,7 @@ function getClient(): PostHog | null {
  */
 export function track(event: string, props?: Record<string, unknown>): void {
   try {
-    getClient()?.capture(event, stripPII(props));
+    getClient()?.capture(event, stripPII(props) as never);
   } catch {
     // never crash the caller
   }
@@ -101,7 +101,7 @@ export function identify(
   props?: Record<string, unknown>,
 ): void {
   try {
-    getClient()?.identify(userId, stripPII(props));
+    getClient()?.identify(userId, stripPII(props) as never);
   } catch {
     // no-op
   }
