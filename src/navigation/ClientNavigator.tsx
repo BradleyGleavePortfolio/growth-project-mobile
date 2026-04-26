@@ -27,6 +27,7 @@ import MessagesScreen from '../screens/client/MessagesScreen';
 import EducationScreen from '../screens/client/EducationScreen';
 import CommunityScreen from '../screens/client/CommunityScreen';
 import MoreScreen from '../screens/client/MoreScreen';
+import TrustCenterScreen from '../screens/TrustCenterScreen';
 import { Colors } from '../constants/colors';
 import tokens from '../theme/tokens';
 
@@ -74,6 +75,7 @@ export type MoreStackParamList = {
   GroceryList: undefined;
   ShoppingList: undefined;
   PrepGuide: undefined;
+  TrustCenter: undefined; // Psych #2: Trust as Emotion
 };
 
 const Tab = createBottomTabNavigator<ClientTabParamList>();
@@ -138,6 +140,8 @@ function MoreStackNavigator() {
       <MoreStackNav.Screen name="Widgets" component={WidgetsScreen} />
       <MoreStackNav.Screen name="Report" component={ReportScreen} />
       <MoreStackNav.Screen name="Learn" component={EducationScreen} />
+      {/* Psych #2: Trust as Emotion */}
+      <MoreStackNav.Screen name="TrustCenter" component={TrustCenterScreen} />
     </MoreStackNav.Navigator>
   );
 }

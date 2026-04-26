@@ -313,6 +313,21 @@ export default function SettingsScreen({ navigation }: any) {
         {/* Data & Privacy */}
         <Text style={styles.sectionLabel}>Data & Privacy</Text>
         <View style={styles.card}>
+          {/* Psych #2: Trust as Emotion — Trust Center navigation row */}
+          <HapticPressable
+            intent="light"
+            style={styles.row}
+            onPress={() => navigation.navigate('TrustCenter')}
+            accessibilityRole="button"
+            accessibilityLabel="Trust and Privacy"
+            accessibilityHint="Opens the Trust Center with security details and privacy controls"
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+              <Ionicons name="lock-closed-outline" size={18} color={Colors.primary} />
+              <Text style={styles.rowLabel}>Trust & Privacy</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+          </HapticPressable>
           <HapticPressable intent="warning" style={styles.row} onPress={handleResetOnboarding}>
             <Text style={styles.rowLabel}>Reset Onboarding</Text>
             <Ionicons name="refresh-outline" size={18} color={Colors.warning} />

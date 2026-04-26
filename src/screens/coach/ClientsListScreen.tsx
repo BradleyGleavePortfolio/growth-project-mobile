@@ -86,6 +86,14 @@ export default function ClientsListScreen({ navigation }: Props) {
         <Text style={styles.subtitle}>{filteredClients.length} total</Text>
       </View>
 
+      {/* Psych #2: Trust as Emotion — coach-side privacy context banner */}
+      <View style={styles.privacyBanner}>
+        <Ionicons name="shield-checkmark-outline" size={16} color={Colors.info} style={{ marginTop: 1 }} />
+        <Text style={styles.privacyBannerText}>
+          Your students see what they share. You only see what they log.
+        </Text>
+      </View>
+
       <View style={styles.searchContainer}>
         <Ionicons name="search" size={18} color={Colors.textMuted} />
         <TextInput
@@ -263,6 +271,25 @@ const styles = StyleSheet.create({
   },
   loader: {
     marginTop: 40,
+  },
+  // Psych #2: Trust as Emotion
+  privacyBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginHorizontal: 16,
+    marginBottom: 12,
+    backgroundColor: Colors.primaryTint,
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  privacyBannerText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 19,
+    color: Colors.info,
+    fontWeight: '500',
   },
   emptyContainer: {
     alignItems: 'center',
