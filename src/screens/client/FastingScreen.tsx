@@ -284,7 +284,7 @@ export default function FastingScreen() {
               <Text style={styles.timerSub}>
                 {remainingMs > 0
                   ? `${formatDuration(remainingMs)} remaining`
-                  : 'Target reached!'}
+                  : 'Target reached'}
               </Text>
             </>
           ) : (

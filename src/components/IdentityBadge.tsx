@@ -71,32 +71,6 @@ function useEntrance() {
   return { translateY, opacity };
 }
 
-/** Single-shot shimmer: sweeps once across the badge on mount. */
-function useShimmer(enabled: boolean) {
-  const shimmerAnim = useRef(new Animated.Value(0)).current;
-  const [badgeWidth, setBadgeWidth] = useState(120);
-
-  useEffect(() => {
-    if (!enabled) return;
-    // Short delay so the badge is fully painted before the shimmer starts
-    const delay = setTimeout(() => {
-      Animated.timing(shimmerAnim, {
-        toValue: 1,
-        duration: tokens.motion.duration.shimmer,   // 1200 ms
-        useNativeDriver: true,
-      }).start();
-    }, 300);
-    return () => clearTimeout(delay);
-  }, [enabled, shimmerAnim]);
-
-  // translateX goes from -badgeWidth–20 (off-left) to +badgeWidth+20 (off-right)
-  const translateX = shimmerAnim.interpolate({
-    inputRange:  [0, 1],
-    outputRange: [-badgeWidth - 20, badgeWidth + 20],
-  });
-
-  return { translateX, setBadgeWidth };
-}
 
 export default function IdentityBadge({
   rank,
@@ -104,7 +78,6 @@ export default function IdentityBadge({
   hidden = false,
 }: IdentityBadgeProps) {
   const [tooltipVisible, setTooltipVisible] = useState(false);
-  const { translateX, setBadgeWidth } = useShimmer(isFoundingMember && !hidden);
   const entrance = useEntrance();
 
   // Psych Report #4: Analytics — identity_badge_viewed fires on mount
@@ -122,8 +95,6 @@ export default function IdentityBadge({
   const badgeBg     = isFoundingMember ? tokens.gold[100] : 'rgba(143,168,154,0.12)';
   const borderColor = isFoundingMember ? tokens.gold.border : 'transparent';
 
-  // ── Shadow ─────────────────────────────────────────────────────────────────
-  const badgeShadow = isFoundingMember ? tokens.shadows['glow-gold'] : {};
 
   return (
     <Animated.View
@@ -148,9 +119,7 @@ export default function IdentityBadge({
         style={[
           styles.badge,
           { backgroundColor: badgeBg, borderColor },
-          badgeShadow,
         ]}
-        onLayout={(e) => setBadgeWidth(e.nativeEvent.layout.width)}
       >
         {isFoundingMember && (
           <Ionicons name="star" size={11} color={badgeColor} style={styles.star} />
@@ -159,13 +128,7 @@ export default function IdentityBadge({
           {isFoundingMember ? 'Founding Member' : 'Member'} · #{rank.toLocaleString()}
         </Text>
 
-        {/* Shimmer overlay — founder only, runs once on mount */}
-        {isFoundingMember && (
-          <Animated.View
-            style={[styles.shimmerOverlay, { transform: [{ translateX }] }]}
-            pointerEvents="none"
-          />
-        )}
+
       </HapticPressable>
 
       {/* Tooltip / bottom-sheet modal */}
@@ -247,16 +210,6 @@ const styles = StyleSheet.create({
     fontSize:      tokens.typography.caption.fontSize,   // 11
     fontWeight:    '600',
     letterSpacing: tokens.typography.caption.letterSpacing,
-  },
-
-  // Shimmer: a diagonal white streak, clipped by badge overflow:hidden
-  shimmerOverlay: {
-    position:        'absolute',
-    top:             0,
-    bottom:          0,
-    width:           40,
-    backgroundColor: tokens.gold.shimmer,
-    transform:       [{ skewX: '-15deg' }],
   },
 
   // Modal

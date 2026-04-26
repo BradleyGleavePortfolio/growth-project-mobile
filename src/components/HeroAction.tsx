@@ -32,7 +32,7 @@ import {
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+
 import { useNavigation } from '@react-navigation/native';
 import { useQuery } from '@tanstack/react-query';
 import { workoutApi, mealPlansApi } from '../services/api';
@@ -125,7 +125,7 @@ function useHeroData() {
     const subtitle =
       remaining > 0
         ? `You're ${remaining} workout${remaining === 1 ? '' : 's'} from your weekly goal`
-        : "Great week — keep it going!";
+        : "Great week — keep it going";
 
     return {
       state: 'log_workout',
@@ -199,12 +199,6 @@ export default function HeroAction({ motivationalTone = 'direct' }: HeroActionPr
 
   if (config.state === 'loading') return <HeroSkeleton />;
 
-  // Gradient colours: dark → base for free; dark → base → gold for founders
-  const gradientColors: [string, string, ...string[]] =
-    tier === 'founder'
-      ? [tokens.brand[800], tokens.brand[600], tierColors.heroGradientStop]
-      : [tokens.brand[800], tokens.brand[600]];
-
   const handlePress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     track('hero_action_tapped', { state: config.state, streak_count: config.streakCount });
@@ -221,7 +215,7 @@ export default function HeroAction({ motivationalTone = 'direct' }: HeroActionPr
       {config.streakCount >= 3 && (
         <View style={styles.streakBadge}>
           <Text style={styles.streakText}>
-            🔥 {config.streakCount}-day streak — keep it alive
+            {config.streakCount}-day streak — keep it alive
           </Text>
         </View>
       )}
@@ -237,14 +231,6 @@ export default function HeroAction({ motivationalTone = 'direct' }: HeroActionPr
             : 'Opens the workout tracker'
         }
       >
-        {/* Tier-aware gradient background */}
-        <LinearGradient
-          colors={gradientColors}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={StyleSheet.absoluteFill}
-        />
-
         {/* Founder tier: subtle gold border glow */}
         {tier === 'founder' && (
           <View
@@ -318,7 +304,7 @@ const styles = StyleSheet.create({
     // Card shadow from tokens
     ...tokens.shadows.md,
     shadowColor: tokens.brand[800],          // brand-tinted shadow
-    shadowOpacity: 0.30,
+    backgroundColor: '#1A1A18',
   },
   cardPressed: {
     opacity: 0.88,

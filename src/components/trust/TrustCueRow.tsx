@@ -31,27 +31,27 @@ interface TrustCue {
 const TRUST_CUES: TrustCue[] = [
   {
     id: 'e2e_encrypted',
-    label: '🔒 End-to-end encrypted',
+    label: 'End-to-end encrypted',
     explainer: {
-      title: '🔒 End-to-end encrypted',
+      title: 'End-to-end encrypted',
       body:
         'All data between your phone and our servers travels over TLS 1.3 — the strongest transport encryption available. Your meals, workouts, and body stats are also encrypted at rest using AES-256, so even if our storage were ever accessed without authorisation, your data would be unreadable.',
     },
   },
   {
     id: 'your_data',
-    label: '👤 Your data is yours',
+    label: 'Your data is yours',
     explainer: {
-      title: '👤 Your data is yours',
+      title: 'Your data is yours',
       body:
         'You own everything you log in this app. You can request a full export of your data at any time from the Trust Center in Settings, and you can permanently delete your account with a 30-day grace period. We will never sell, license, or share your personal data with third parties for commercial purposes.',
     },
   },
   {
     id: 'zero_ads',
-    label: '🛡 Zero ads · Zero data sales',
+    label: 'Zero ads · Zero data sales',
     explainer: {
-      title: '🛡 Zero ads · Zero data sales',
+      title: 'Zero ads · Zero data sales',
       body:
         'The Growth Project runs on your subscription — not advertising revenue. We do not sell, rent, or trade your personal data to advertisers or data brokers. Analytics we collect are limited to anonymised, aggregate product-improvement signals and are never linked back to you individually.',
     },

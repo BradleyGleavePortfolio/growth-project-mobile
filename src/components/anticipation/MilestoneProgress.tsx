@@ -76,8 +76,6 @@ export default function MilestoneProgress({
 
   // ── Animations ──────────────────────────────────────────────────────────────
   const fillAnim  = useRef(new Animated.Value(0)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-
   // Bar fill on mount
   useEffect(() => {
     Animated.timing(fillAnim, {
@@ -90,29 +88,7 @@ export default function MilestoneProgress({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Anticipation pulse when ≥ 80% filled
-  useEffect(() => {
-    if (!isNearGoal) return;
-
-    const pulse = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue:         0.55,
-          duration:        PULSE_DURATION,
-          easing:          Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue:         1,
-          duration:        PULSE_DURATION,
-          easing:          Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-    pulse.start();
-    return () => pulse.stop();
-  }, [isNearGoal, pulseAnim]);
+  // Wave 1: Pulse shimmer animation removed (luxury repositioning)
 
   // ── Analytics ───────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -181,16 +157,7 @@ export default function MilestoneProgress({
           ]}
         />
 
-        {/* Pulse shimmer overlay — only visible when near goal */}
-        {isNearGoal && (
-          <Animated.View
-            style={[
-              styles.pulseOverlay,
-              { opacity: pulseAnim, backgroundColor: accentColor },
-            ]}
-            pointerEvents="none"
-          />
-        )}
+
       </View>
 
       {/* Motivational copy */}
@@ -226,12 +193,6 @@ const styles = StyleSheet.create({
   cardFounder: {
     borderColor: tokens.gold.border,
     borderWidth: 1.5,
-    // Gold glow
-    shadowColor:    tokens.gold[500],
-    shadowOffset:   { width: 0, height: 0 },
-    shadowOpacity:  0.2,
-    shadowRadius:   10,
-    elevation:      4,
   },
   headerRow: {
     flexDirection:  'row',
@@ -289,15 +250,6 @@ const styles = StyleSheet.create({
     height:       '100%',
     borderRadius: Radius.full,
   },
-  pulseOverlay: {
-    position:     'absolute',
-    top:          0,
-    left:         0,
-    right:        0,
-    bottom:       0,
-    borderRadius: Radius.full,
-  },
-
   // Copy
   remainingCopy: {
     fontSize:     13,

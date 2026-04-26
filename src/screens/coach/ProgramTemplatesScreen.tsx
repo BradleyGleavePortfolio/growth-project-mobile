@@ -120,9 +120,9 @@ export default function ProgramTemplatesScreen() {
     try {
       await postGuidelines.mutateAsync({ clientId, guidelines: content });
       Alert.alert(
-        '✅ Template Applied',
+        'Template Applied',
         `"${selectedTemplate.title}" has been assigned to ${clientName}.`,
-        [{ text: 'Great!' }]
+        [{ text: 'Great' }]
       );
     } catch (err) {
       Alert.alert('Error', 'Could not apply template. Please try again.');

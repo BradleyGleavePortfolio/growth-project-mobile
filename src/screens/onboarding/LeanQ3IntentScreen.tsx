@@ -131,7 +131,7 @@ export default function LeanQ3IntentScreen({ navigation }: Props) {
         {/* Identity teaser */}
         <View style={styles.identityHint}>
           <Text style={styles.identityHintText}>
-            ✨ Your identity title unlocks on your first win
+            Your identity title unlocks on your first win
           </Text>
         </View>
 

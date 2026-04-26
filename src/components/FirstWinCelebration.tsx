@@ -212,7 +212,7 @@ export default function FirstWinCelebration({ visible, identityTitle, onDismiss 
             { opacity: cardOpacity, transform: [{ scale: cardScale }] },
           ]}
         >
-          <Text style={styles.trophy}>🏆</Text>
+          
           <Text style={styles.winTitle}>First Win Locked In</Text>
           <View style={styles.identityBadge}>
             <Text style={styles.identityLabel}>Identity</Text>
@@ -252,10 +252,10 @@ const styles = StyleSheet.create({
     marginHorizontal: 32,
     width: SCREEN_W - 64,
     shadowColor: '#000',
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.10,
     shadowRadius: 20,
     shadowOffset: { width: 0, height: 8 },
-    elevation: 20,
+    elevation: 8,
     gap: 8,
   },
   trophy: {

@@ -141,7 +141,7 @@ export default function TrophyShareScreen() {
         const saved = await trySaveToLibrary(fileUri);
         if (saved) {
           track('trophy_shared', { surface, kind, method: 'save_to_roll' } as Record<string, unknown>);
-          Alert.alert('Saved!', 'Your trophy has been saved to your camera roll.');
+          Alert.alert('Saved', 'Your trophy has been saved to your camera roll.');
           return;
         }
         // Permission denied or media library not installed — fall through to share
@@ -310,7 +310,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: tokens.spacing.xl,
   },
   cardWrapper: {
-    ...tokens.shadows['glow-gold'],
+    ...tokens.shadows.sm,
     borderRadius: tokens.radius.xl,
     marginBottom: tokens.spacing.xl,
   },

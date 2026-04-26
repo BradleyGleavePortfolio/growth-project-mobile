@@ -209,7 +209,7 @@ const intents: Intent[] = [
 ];
 
 const fallbackResponses = [
-  'Great question! The #1 thing I recommend: stay consistent with logging your food. People who track daily are 2x more likely to reach their goals.',
+  'The top recommendation: stay consistent with logging your food. People who track daily are 2x more likely to reach their goals.',
   'Keep showing up every day. Small, consistent actions beat big sporadic efforts every time. Have you logged your meals today?',
   'Check your macros in the Log tab — hitting your protein target is the single most impactful thing you can do for body composition.',
   'Remember: nutrition is about 80% of your results. The gym builds the muscle, but the kitchen reveals it. What are you eating today?',

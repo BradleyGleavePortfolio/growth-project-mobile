@@ -174,7 +174,7 @@ export default function CreateAccountScreen({ navigation }: Props) {
     return (
       <View style={styles.container}>
         <View style={styles.verifyContent}>
-          <Text style={styles.verifyIcon}>📧</Text>
+          
           <Text style={styles.verifyTitle}>Check your email</Text>
           <Text style={styles.verifyBody}>
             We sent a verification email to{'\n'}
@@ -198,7 +198,7 @@ export default function CreateAccountScreen({ navigation }: Props) {
             {verifyLoading ? (
               <ActivityIndicator color={Colors.white} />
             ) : (
-              <Text style={styles.verifyButtonText}>I verified my email ✓</Text>
+              <Text style={styles.verifyButtonText}>I verified my email</Text>
             )}
           </TouchableOpacity>
 

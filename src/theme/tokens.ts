@@ -103,8 +103,7 @@ export const gold = {
   500:  '#C4922A',   // primary gold (badge labels — large text only)
   700:  '#9A6F1A',   // darker label on gold bg — 5.9:1 ✅
   800:  '#7A5214',   // accessible on white — 7.8:1 ✅
-  shimmer: 'rgba(249,228,176,0.60)',
-  glow:    'rgba(196,146,42,0.18)',
+  // shimmer and glow tokens removed in Wave 1 (luxury repositioning)
   border:  'rgba(196,146,42,0.35)',
 } as const;
 
@@ -214,18 +213,11 @@ export const shadows = {
   lg: {
     shadowColor:  'rgba(0,0,0,1)',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.16,
+    shadowOpacity: 0.10,
     shadowRadius:  24,
     elevation:     12,
   },
-  /** Founding-tier gold accent glow */
-  'glow-gold': {
-    shadowColor:  '#C4922A',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.30,
-    shadowRadius:  12,
-    elevation:     6,
-  },
+
 } as const;
 
 // ─── Motion ───────────────────────────────────────────────────────────────────
@@ -234,7 +226,7 @@ export const motion = {
     fast:   120,   // micro-interactions, icon presses
     base:   200,   // standard transitions
     slow:   320,   // content slides, modals
-    shimmer: 1200, // shimmer loop
+    // shimmer: removed in Wave 1 (luxury repositioning)
   },
   easing: {
     /** Standard ease-in-out curve */

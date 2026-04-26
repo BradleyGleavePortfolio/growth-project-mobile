@@ -1,7 +1,7 @@
 /**
  * CommunityWinCard — Contribution Loops (UX Psych #5)
  *
- * Displays an anonymised community win with fire 🔥 and clap 👏 reaction
+ * Displays an anonymised community win with fire  and clap  reaction
  * buttons. Taps trigger HapticPressable for tactile feedback and call the
  * reactToWin mutation. Counts update optimistically via React Query.
  */
@@ -77,7 +77,7 @@ export default function CommunityWinCard({ win, onReact, isPending }: CommunityW
           accessibilityLabel={`Fire reaction, ${reactions.fire} so far`}
           accessibilityRole="button"
         >
-          <Text style={styles.reactionEmoji}>🔥</Text>
+          <Text style={styles.reactionEmoji}></Text>
           <Text style={styles.reactionCount}>{reactions.fire}</Text>
         </HapticPressable>
 
@@ -87,7 +87,7 @@ export default function CommunityWinCard({ win, onReact, isPending }: CommunityW
           accessibilityLabel={`Clap reaction, ${reactions.clap} so far`}
           accessibilityRole="button"
         >
-          <Text style={styles.reactionEmoji}>👏</Text>
+          <Text style={styles.reactionEmoji}></Text>
           <Text style={styles.reactionCount}>{reactions.clap}</Text>
         </HapticPressable>
       </View>
