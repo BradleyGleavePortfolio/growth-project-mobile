@@ -36,8 +36,8 @@ export interface Theme {
     /** Hero gradient second stop */
     heroGradientStop: string;
     /** Badge shadow style */
-    badgeShadow: Tokens['shadows']['sm'] | Tokens['shadows']['glow-gold'];
-    /** Border glow for shimmer-capable elements */
+    badgeShadow: Tokens['shadows']['sm'];
+    /** Border highlight for tier-aware elements */
     shimmerHighlight: string;
   };
 }
@@ -50,9 +50,9 @@ const freeTheme: Theme = {
     accentBorder:      tokens.brand[600],            // primary green border
     accentBg:          'rgba(45,106,79,0.08)',        // primary pale tint
     accentFg:          tokens.brand[600],
-    heroGradientStop:  tokens.brand[400],             // medium green
+    heroGradientStop:  tokens.brand[400],             // medium green (unused since Wave 1)
     badgeShadow:       tokens.shadows.sm,
-    shimmerHighlight:  'rgba(82,183,136,0.30)',
+    shimmerHighlight:  'rgba(82,183,136,0.15)',
   },
 };
 
@@ -64,9 +64,9 @@ const founderTheme: Theme = {
     accentBorder:      tokens.gold.border,
     accentBg:          tokens.gold[100],
     accentFg:          tokens.gold[700],              // 5.9:1 on gold bg ✅
-    heroGradientStop:  tokens.gold[300],              // gold accent stop in hero gradient
-    badgeShadow:       tokens.shadows['glow-gold'],
-    shimmerHighlight:  tokens.gold.shimmer,
+    heroGradientStop:  tokens.gold[300],              // unused since Wave 1
+    badgeShadow:       tokens.shadows.sm,
+    shimmerHighlight:  'rgba(196,146,42,0.12)',
   },
 };
 

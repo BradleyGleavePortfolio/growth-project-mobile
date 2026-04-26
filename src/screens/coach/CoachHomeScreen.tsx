@@ -186,7 +186,7 @@ export default function CoachHomeScreen() {
       {/* ⚠️ Red Flag Clients */}
       {redFlagClients.length > 0 && (
         <FadeInView>
-          <Text style={styles.sectionTitle}>⚠️ Weight Trend Alerts</Text>
+          <Text style={styles.sectionTitle}>Weight Trend Alerts</Text>
           {redFlagClients.map((rf) => (
             <HapticPressable
               key={rf.id}
@@ -217,7 +217,7 @@ export default function CoachHomeScreen() {
       {/* Overdue Check-ins */}
       {overdueClients.length > 0 && (
         <FadeInView>
-          <Text style={styles.sectionTitle}>📅 Overdue Check-ins</Text>
+          <Text style={styles.sectionTitle}>Overdue Check-ins</Text>
           <View style={styles.overdueCard}>
             <Text style={styles.overdueSubtitle}>No food log in last 3 days</Text>
             {overdueClients.slice(0, 5).map((name, idx) => (

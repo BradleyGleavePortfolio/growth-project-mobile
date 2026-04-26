@@ -55,7 +55,7 @@ export async function scheduleWaterReminder(intervalHours = 2): Promise<string |
     await Notifications.cancelAllScheduledNotificationsAsync();
     const id = await Notifications.scheduleNotificationAsync({
       content: {
-        title: '💧 Time to Hydrate!',
+        title: 'Time to Hydrate',
         body: 'Stay on track with your water goals. Drink a glass of water now.',
         sound: true,
         data: { type: 'water_reminder' },
@@ -79,7 +79,7 @@ export async function scheduleFastingAlert(fastEndTime: Date): Promise<string | 
 
     const id = await Notifications.scheduleNotificationAsync({
       content: {
-        title: '🎉 Fast Complete!',
+        title: 'Fast Complete',
         body: 'You\'ve reached your fasting goal! Great job staying committed to your health journey.',
         sound: true,
         data: { type: 'fasting_complete' },
@@ -107,7 +107,7 @@ export async function sendCalorieReminderNotification(
 
     const id = await Notifications.scheduleNotificationAsync({
       content: {
-        title: '🍽️ You Have Calories Remaining',
+        title: 'You Have Calories Remaining',
         body: `${remaining} kcal left for today. ${snackSuggestion}`,
         sound: true,
         data: { type: 'calorie_reminder', remaining },
@@ -124,7 +124,7 @@ export async function sendMotivationNotification(message: string): Promise<strin
   try {
     const id = await Notifications.scheduleNotificationAsync({
       content: {
-        title: '💪 The Growth Project',
+        title: 'The Growth Project',
         body: message,
         sound: true,
         data: { type: 'motivation' },

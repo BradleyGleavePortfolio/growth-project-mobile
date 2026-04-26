@@ -29,7 +29,7 @@ const LEVELS: { key: Level; icon: string; label: string; sub: string }[] = [
     key: 'new',
     icon: '🌱',
     label: "New to this",
-    sub: 'Just getting started — welcome!',
+    sub: 'Just getting started — welcome',
   },
   {
     key: 'some',

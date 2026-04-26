@@ -872,7 +872,7 @@ const styles = StyleSheet.create({
     elevation: 5,
     shadowColor: Colors.textPrimary, // Round 3: hex → token
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.10,
     shadowRadius: 6,
   },
   modalOverlay: {

@@ -130,7 +130,7 @@ export const Shadow = {
   button: {
     shadowColor: Colors.primary,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.10,
     shadowRadius: 8,
     elevation: 4,
   },

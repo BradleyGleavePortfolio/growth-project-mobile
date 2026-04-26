@@ -1260,7 +1260,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
             <Text style={styles.nudgeLabel}>Title</Text>
             <TextInput
               style={styles.nudgeInput}
-              placeholder="e.g. Great job today!"
+              placeholder="e.g. Great job today"
               placeholderTextColor={Colors.textMuted}
               value={nudgeTitle}
               onChangeText={setNudgeTitle}

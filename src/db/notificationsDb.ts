@@ -111,7 +111,7 @@ export async function seedNotificationsIfNeeded(userId: string): Promise<void> {
   const notifications = [
     {
       type: 'system' as const,
-      title: 'Welcome to Growth Project!',
+      title: 'Welcome to Growth Project',
       body: 'Start logging your meals to track your nutrition and reach your fitness goals. Your personalized calorie and macro targets are ready.',
       hoursAgo: 0,
     },
@@ -124,19 +124,19 @@ export async function seedNotificationsIfNeeded(userId: string): Promise<void> {
     {
       type: 'reminder' as const,
       title: 'Log Your Breakfast',
-      body: "Tracking your morning meal helps set the tone for your macros all day. Consistent logging leads to 2x better results!",
+      body: "Tracking your morning meal helps set the tone for your macros all day. Consistent logging leads to 2x better results",
       hoursAgo: 5,
     },
     {
       type: 'achievement' as const,
-      title: 'Profile Complete!',
-      body: "Great start! Your personalized calorie target and macro split are now active based on your goals and activity level.",
+      title: 'Profile Complete',
+      body: "Your personalized calorie target and macro split are now active based on your goals and activity level.",
       hoursAgo: 12,
     },
     {
       type: 'coach' as const,
       title: 'Welcome from Your Coach',
-      body: "Welcome to the team! I've reviewed your profile and goals. Let's build a plan that works for your schedule and preferences.",
+      body: "I've reviewed your profile and goals. Let's build a plan that works for your schedule and preferences.",
       hoursAgo: 24,
     },
     {
@@ -147,8 +147,8 @@ export async function seedNotificationsIfNeeded(userId: string): Promise<void> {
     },
     {
       type: 'streak' as const,
-      title: 'Build Your Logging Streak!',
-      body: 'Log your meals for 3 consecutive days to earn your first streak badge. Users with streaks reach their goals 60% faster!',
+      title: 'Build Your Logging Streak',
+      body: 'Log your meals for 3 consecutive days to earn your first streak badge. Users with streaks reach their goals 60% faster',
       hoursAgo: 48,
     },
     {
