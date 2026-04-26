@@ -28,6 +28,9 @@ import EducationScreen from '../screens/client/EducationScreen';
 import CommunityScreen from '../screens/client/CommunityScreen';
 import MoreScreen from '../screens/client/MoreScreen';
 import TrustCenterScreen from '../screens/TrustCenterScreen';
+import PreferencesScreen from '../screens/client/PreferencesScreen';
+import TrophyShareScreen from '../screens/TrophyShareScreen';
+import type { TrophyShareScreenParams } from '../screens/TrophyShareScreen';
 import { Colors } from '../constants/colors';
 import tokens from '../theme/tokens';
 
@@ -76,6 +79,8 @@ export type MoreStackParamList = {
   ShoppingList: undefined;
   PrepGuide: undefined;
   TrustCenter: undefined; // Psych #2: Trust as Emotion
+  TrophyShare: TrophyShareScreenParams; // Psych #5: Trophy-Grade Milestone
+  Preferences: undefined; // Psych #4: Preference-Controlled Personalization
 };
 
 const Tab = createBottomTabNavigator<ClientTabParamList>();
@@ -142,6 +147,14 @@ function MoreStackNavigator() {
       <MoreStackNav.Screen name="Learn" component={EducationScreen} />
       {/* Psych #2: Trust as Emotion */}
       <MoreStackNav.Screen name="TrustCenter" component={TrustCenterScreen} />
+      {/* Psych #4: Preference-Controlled Personalization */}
+      <MoreStackNav.Screen name="Preferences" component={PreferencesScreen} />
+      {/* Psych #5: Trophy-Grade Milestone */}
+      <MoreStackNav.Screen
+        name="TrophyShare"
+        component={TrophyShareScreen}
+        options={{ presentation: 'modal' }}
+      />
     </MoreStackNav.Navigator>
   );
 }

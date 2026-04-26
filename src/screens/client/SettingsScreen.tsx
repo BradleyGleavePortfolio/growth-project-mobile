@@ -310,6 +310,25 @@ export default function SettingsScreen({ navigation }: any) {
           </View>
         </View>
 
+        {/* Personalization — Psych #4 */}
+        <Text style={styles.sectionLabel}>Personalization</Text>
+        <View style={styles.card}>
+          <HapticPressable
+            intent="light"
+            style={styles.row}
+            onPress={() => navigation.navigate('Preferences')}
+            accessibilityRole="button"
+            accessibilityLabel="Personalization"
+            accessibilityHint="Opens preference controls for home modules, notifications, tone, and units"
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+              <Ionicons name="options-outline" size={18} color={Colors.primary} />
+              <Text style={styles.rowLabel}>Personalization</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+          </HapticPressable>
+        </View>
+
         {/* Data & Privacy */}
         <Text style={styles.sectionLabel}>Data & Privacy</Text>
         <View style={styles.card}>

@@ -42,6 +42,7 @@ import tokens from '../theme/tokens';
 import { useTheme } from '../theme/ThemeProvider';
 // Legacy theme exports kept for the skeleton (uses Radius / Shadow)
 import { Radius, Shadow } from '../theme/index';
+import type { MotivationalTone } from '../hooks/usePreferences';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -158,6 +159,13 @@ function computeStreak(sessions: any[], today: string): number {
   return streak;
 }
 
+/** Psych #4: Tone-aware copy variants for the log-workout CTA */
+const TONE_TITLES: Record<MotivationalTone, string> = {
+  gentle: 'Ready when you are',
+  direct: "Log Today's Workout",
+  drill: 'No excuses. Log it now.',
+};
+
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
 
 function HeroSkeleton() {
@@ -173,10 +181,21 @@ function HeroSkeleton() {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function HeroAction() {
+interface HeroActionProps {
+  /** Psych #4: tone variant for the log-workout CTA copy. Defaults to 'direct'. */
+  motivationalTone?: MotivationalTone;
+}
+
+export default function HeroAction({ motivationalTone = 'direct' }: HeroActionProps = {}) {
   const navigation = useNavigation<any>();
   const { config } = useHeroData();
   const { tier, tierColors } = useTheme();
+
+  // Psych #4: override the log_workout title with tone-aware copy
+  const heroTitle =
+    config.state === 'log_workout'
+      ? TONE_TITLES[motivationalTone]
+      : config.title;
 
   if (config.state === 'loading') return <HeroSkeleton />;
 
@@ -211,7 +230,7 @@ export default function HeroAction() {
         onPress={handlePress}
         style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
         accessibilityRole="button"
-        accessibilityLabel={config.title}
+        accessibilityLabel={heroTitle}
         accessibilityHint={
           config.state === 'resume_plan'
             ? 'Opens your current meal plan'
@@ -241,7 +260,7 @@ export default function HeroAction() {
         {/* Left: text content */}
         <View style={styles.textBlock}>
           <Text style={styles.title} numberOfLines={1} adjustsFontSizeToFit>
-            {config.title}
+            {heroTitle}
           </Text>
           <Text style={styles.subtitle} numberOfLines={2}>
             {config.subtitle}
