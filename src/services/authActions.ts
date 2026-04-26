@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authEvents } from '../utils/authEvents';
 import { profileApi } from './api';
 import { setSentryUser } from './sentry';
+import { reset as analyticsReset } from '../lib/analytics';
 
 // Keys owned by the app. `needs_role_selection` is cleared here because it is
 // a per-session flag from the Supabase flow; `onboarding_complete`, `user_data`,
@@ -34,6 +35,8 @@ export async function signOut(): Promise<void> {
   // Clear Sentry user binding so post-logout errors aren't tagged with the
   // previous user's id. No-ops when Sentry is not configured.
   setSentryUser(null);
+  // Psych Report #4: Reset PostHog anonymous ID on sign-out
+  analyticsReset();
   authEvents.emit('logout');
 }
 

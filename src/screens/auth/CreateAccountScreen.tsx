@@ -15,6 +15,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors, Typography, Spacing, Radius, Shadow } from '../../theme';
 import { authApi } from '../../services/api';
 import { secureStorage } from '../../services/secureStorage';
+import { track, identify } from '../../lib/analytics';
 
 interface Props {
   navigation: any;
@@ -92,6 +93,8 @@ export default function CreateAccountScreen({ navigation }: Props) {
 
       // Backend sends a verification email — show the verify screen
       await AsyncStorage.setItem('pending_email', email);
+      // Psych Report #4: Analytics — signed_up fires on successful registration
+      track('signed_up', { method: 'email', has_invite_code: !!trimmedCode });
       setStep('verify');
     } catch (err: any) {
       // Show the exact backend error message if available

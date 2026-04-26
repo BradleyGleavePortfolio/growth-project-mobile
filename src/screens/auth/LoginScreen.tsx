@@ -17,6 +17,7 @@ import { Colors, Typography, Spacing, Radius, Shadow } from '../../theme';
 import { authApi } from '../../services/api';
 import { secureStorage } from '../../services/secureStorage';
 import { authEvents } from '../../utils/authEvents';
+import { track, identify } from '../../lib/analytics';
 
 interface Props {
   navigation: any;
@@ -54,6 +55,10 @@ export default function LoginScreen({ navigation }: Props) {
         await AsyncStorage.setItem('onboarding_complete', 'true');
       }
 
+      // Psych Report #4: Analytics — identify + signed_in event
+      identify(user.id, { role: user.role });
+      track('signed_in', { method: 'email' });
+
       // Fire auth event — RootNavigator will re-check AsyncStorage and navigate
       authEvents.emit();
     } catch (err: any) {
@@ -87,6 +92,9 @@ export default function LoginScreen({ navigation }: Props) {
         await AsyncStorage.setItem('needs_role_selection', 'true');
         navigation.replace('RoleSelection');
       } else {
+        // Psych Report #4: Analytics
+        if (result.user?.id) identify(result.user.id, { role: result.user.role });
+        track('signed_in', { method: 'google' });
         authEvents.emit();
       }
     } catch (err: any) {

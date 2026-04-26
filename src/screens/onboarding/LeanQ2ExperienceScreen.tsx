@@ -16,6 +16,7 @@ import { LeanOnboardingParamList } from '../../navigation/LeanOnboardingNavigato
 import { Colors } from '../../constants/colors';
 import { saveOnboardingData } from '../../utils/onboardingStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { track } from '../../lib/analytics';
 
 type Props = {
   navigation: NativeStackNavigationProp<LeanOnboardingParamList, 'LeanQ2'>;
@@ -50,10 +51,13 @@ export default function LeanQ2ExperienceScreen({ navigation }: Props) {
   const handleSelect = async (level: Level) => {
     setSelected(level);
     await saveOnboardingData({ fitnessLevel: level });
+    // Psych Report #4: step 2 completed
+    track('onboarding_step_completed', { step: 2, experience_level: level });
     navigation.navigate('LeanQ3');
   };
 
   const handleSkip = async () => {
+    track('onboarding_skipped', { at_step: 2 });
     await AsyncStorage.setItem('onboarding_complete', 'true');
     await AsyncStorage.setItem('lean_onboarding_intent', 'explore');
     await AsyncStorage.setItem('lean_onboarding_done', 'true');

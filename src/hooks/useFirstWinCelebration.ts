@@ -13,6 +13,7 @@ import { useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { TodayIntent } from '../screens/onboarding/LeanQ3IntentScreen';
+import { track } from '../lib/analytics';
 
 export interface FirstWinState {
   visible: boolean;
@@ -71,6 +72,9 @@ export function useFirstWinCelebration(
 
       // Haptic first — feels immediate
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+
+      // Psych Report #4: Analytics — first_win_celebrated
+      track('first_win_celebrated', { identity_title: identityTitle });
 
       // Show overlay
       setFirstWin({ visible: true, identityTitle });
