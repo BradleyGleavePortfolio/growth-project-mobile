@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import FirstWinCelebration from '../../components/FirstWinCelebration';
 import { useFirstWinCelebration, FirstWinState } from '../../hooks/useFirstWinCelebration';
+import { useFoundingNumber } from '../../hooks/useIdentity';
 import {
   View,
   Text,
@@ -164,6 +165,50 @@ const exerciseImageStyles = StyleSheet.create({
     zIndex: 1,
   },
 });
+
+// ── Psych #5: Trophy-wrapped first-win overlay ─────────────────────────────────
+// Dismissing the first-win celebration offers a "Save Your Trophy" CTA.
+
+interface FirstWinCelebrationWithTrophyProps {
+  visible: boolean;
+  identityTitle: string;
+  navigation: any;
+}
+
+function FirstWinCelebrationWithTrophy({
+  visible,
+  identityTitle,
+  navigation,
+}: FirstWinCelebrationWithTrophyProps) {
+  const [show, setShow] = useState(visible);
+  const { data: foundingData } = useFoundingNumber();
+  const isFoundingMember = foundingData?.isFoundingMember ?? false;
+
+  useEffect(() => { setShow(visible); }, [visible]);
+
+  const handleDismiss = useCallback(() => {
+    setShow(false);
+    // Psych #5: navigate to TrophyShare after first win dismissal
+    setTimeout(() => {
+      navigation.navigate('TrophyShare', {
+        kind: 'badge',
+        headline: 'First Win',
+        subtitle: 'You did it. Day one done.',
+        identityTitle,
+        isFoundingMember,
+        surface: 'first_win',
+      });
+    }, 350);
+  }, [identityTitle, isFoundingMember, navigation]);
+
+  return (
+    <FirstWinCelebration
+      visible={show}
+      identityTitle={identityTitle}
+      onDismiss={handleDismiss}
+    />
+  );
+}
 
 // ── Main Screen ───────────────────────────────────────────────────────────
 
@@ -584,11 +629,11 @@ export default function ActiveWorkoutScreen() {
         </View>
       </Modal>
 
-      {/* Psych Report #1: First-win celebration overlay */}
-      <FirstWinCelebration
+      {/* Psych Report #1 + #5: First-win overlay → trophy CTA on dismiss */}
+      <FirstWinCelebrationWithTrophy
         visible={firstWin.visible}
         identityTitle={firstWin.identityTitle}
-        onDismiss={() => setFirstWin({ visible: false, identityTitle: '' })}
+        navigation={navigation}
       />
     </View>
   );

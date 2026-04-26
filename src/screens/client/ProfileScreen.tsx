@@ -24,6 +24,10 @@ import { MoreStackParamList } from '../../navigation/ClientNavigator';
 import IdentityBadge from '../../components/IdentityBadge';
 import { useFoundingNumber } from '../../hooks/useIdentity';
 import { resolveIdentityTitle } from '../../lib/identityTitle';
+// UX Psych #5: Contribution Loops — Badge Cabinet
+import BadgeCabinet from '../../components/community/BadgeCabinet';
+import { track } from '../../lib/analytics';
+import { useEffect } from 'react';
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>;
 
@@ -35,6 +39,12 @@ export default function ProfileScreen() {
   // UX Psych #3: Identity Reinforcement
   const foundingQ = useFoundingNumber();
   const foundingData = foundingQ.data ?? null;
+
+  // Analytics: badge cabinet viewed
+  useEffect(() => {
+    track('badge_cabinet_viewed');
+  }, []);
+
   const identityTitle = resolveIdentityTitle({
     isFoundingMember: foundingData?.isFoundingMember ?? false,
     streakDays: 0,
@@ -98,6 +108,29 @@ export default function ProfileScreen() {
         {/* Psych #2: Trust as Emotion — privacy reassurance line near top of profile */}
         <Text style={styles.privacyLine}>Workouts and meals stay private to you and your assigned coach</Text>
       </View>
+
+      {/* Psych #5: Trophy CTA — tap to view + share identity trophy */}
+      <HapticPressable
+        intent="success"
+        style={styles.trophyCta}
+        onPress={() =>
+          navigation.navigate('TrophyShare', {
+            kind: 'identity',
+            headline: identityTitle.label,
+            subtitle: identityTitle.description,
+            identityTitle: identityTitle.label,
+            isFoundingMember: foundingData?.isFoundingMember ?? false,
+            surface: 'identity_upgrade',
+          })
+        }
+        accessibilityRole="button"
+        accessibilityLabel="Share your trophy"
+        accessibilityHint="Opens your shareable identity trophy card"
+      >
+        <Ionicons name="trophy-outline" size={18} color={Colors.primary} />
+        <Text style={styles.trophyCtaText}>Share Your Trophy</Text>
+        <Ionicons name="chevron-forward" size={14} color={Colors.textMuted} />
+      </HapticPressable>
 
       {/* Quick Actions — 2x2 grid. Round 3: each TouchableOpacity gets a
           real a11y label / hint so VoiceOver announces destination, not "button". */}
@@ -168,6 +201,11 @@ export default function ProfileScreen() {
             </Text>
           </View>
         ))}
+      </View>
+
+      {/* UX Psych #5: Contribution Loops — Badge Cabinet */}
+      <View style={styles.badgeCabinetSection}>
+        <BadgeCabinet isFoundingMember={foundingData?.isFoundingMember ?? false} />
       </View>
 
       <HapticPressable intent="warning" style={styles.signOutButton} onPress={handleSignOut}>
@@ -241,6 +279,25 @@ const styles = StyleSheet.create({
     marginTop: 4,
     letterSpacing: 0.3,
   },
+  trophyCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 24,
+    marginBottom: 16,
+    backgroundColor: Colors.surface,
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  trophyCtaText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
   actionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -289,6 +346,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: Colors.textPrimary,
+  },
+  badgeCabinetSection: {
+    paddingHorizontal: 24,
+    marginBottom: 24,
   },
   signOutButton: {
     flexDirection: 'row',

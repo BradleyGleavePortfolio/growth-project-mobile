@@ -352,6 +352,12 @@ export const nudgesApi = {
   markRead: (id: string) => api.post(`/nudges/${id}/read`),
 };
 
+/** Psych #4: Preference-Controlled Personalization */
+export const preferencesApi = {
+  get: () => api.get('/users/me/preferences'),
+  patch: (data: Record<string, any>) => api.patch('/users/me/preferences', data),
+};
+
 export const notificationsApi = {
   getPreferences: () => api.get('/notifications/preferences'),
   updatePreferences: (data: Record<string, any>) =>
@@ -362,8 +368,11 @@ export const communityApi = {
   getLeaderboard: (period: 'week' | 'month' = 'week') =>
     api.get(`/community/leaderboard?period=${period}`),
   getFeed: () => api.get('/community/feed'),
-  postWin: (data: { title: string; description: string }) =>
+  postWin: (data: { title: string; description: string; visibility?: 'circle' | 'public' }) =>
     api.post('/community/wins', data),
+  reactToWin: (winId: string, kind: 'fire' | 'clap') =>
+    api.post(`/community/wins/${winId}/react`, { kind }),
+  getBadges: () => api.get('/users/me/badges'),
 };
 
 export const waterApi = {

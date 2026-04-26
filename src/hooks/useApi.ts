@@ -148,6 +148,11 @@ export type ApiCommunityWin = {
   description: string;
   created_at: string;
   user?: { id: string; name: string };
+  // Anonymised feed shape returned by backend
+  displayName?: string;
+  action?: string;
+  createdAt?: string;
+  reactions?: { fire: number; clap: number };
 };
 
 export function useLeaderboard(period: 'week' | 'month' = 'week') {
@@ -167,11 +172,37 @@ export function useCommunityFeed() {
 export function usePostWin() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { title: string; description: string }) =>
+    mutationFn: (data: { title: string; description: string; visibility?: 'circle' | 'public' }) =>
       communityApi.postWin(data).then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['community', 'feed'] });
     },
+  });
+}
+
+export function useReactToWin() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ winId, kind }: { winId: string; kind: 'fire' | 'clap' }) =>
+      communityApi.reactToWin(winId, kind).then((r) => r.data as { fire: number; clap: number }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['community', 'feed'] });
+    },
+  });
+}
+
+export type ApiBadge = {
+  slug: string;
+  label: string;
+  awardedAt: string | null;
+  description: string;
+};
+
+export function useBadges(opts?: UseQueryOptions<ApiBadge[]>) {
+  return useQuery<ApiBadge[]>({
+    queryKey: ['badges', 'list'],
+    queryFn: async () => (await communityApi.getBadges()).data,
+    ...opts,
   });
 }
 
