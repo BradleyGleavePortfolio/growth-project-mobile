@@ -182,7 +182,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 24,
     marginBottom: 12,
     backgroundColor: Colors.primaryPale,
-    borderRadius: 10,
+    borderRadius: 4, // radius.lg
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
@@ -192,7 +192,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     padding: 14,
     marginBottom: 8,
     gap: 12,
@@ -204,7 +204,7 @@ const styles = StyleSheet.create({
   iconCircle: {
     width: 40,
     height: 40,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 2,

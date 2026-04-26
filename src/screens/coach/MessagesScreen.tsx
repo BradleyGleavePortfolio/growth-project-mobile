@@ -203,7 +203,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.surface,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     paddingHorizontal: 14,
     paddingVertical: 10,
     gap: 8,
@@ -216,7 +216,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     padding: 14,
     marginBottom: 8,
     gap: 12,
@@ -224,7 +224,7 @@ const styles = StyleSheet.create({
   convoAvatar: {
     width: 48,
     height: 48,
-    borderRadius: 24,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.primaryDark,
     justifyContent: 'center',
     alignItems: 'center',
@@ -237,7 +237,7 @@ const styles = StyleSheet.create({
   unreadBadge: {
     minWidth: 22,
     height: 22,
-    borderRadius: 11,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',

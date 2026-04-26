@@ -294,7 +294,7 @@ const styles = StyleSheet.create({
   settingsBtn: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
@@ -310,7 +310,7 @@ const styles = StyleSheet.create({
   metricCard: {
     width: '47%',
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     padding: 16,
     gap: 8,
     flexGrow: 1,
@@ -318,7 +318,7 @@ const styles = StyleSheet.create({
   metricIcon: {
     width: 40,
     height: 40,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -339,7 +339,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 24,
     marginBottom: 8,
     padding: 14,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     backgroundColor: Colors.noticeWarningBg,
     borderLeftWidth: 4,
     borderLeftColor: Colors.warning,
@@ -364,7 +364,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 6,
     backgroundColor: Colors.warning,
-    borderRadius: 10,
+    borderRadius: 4, // radius.lg
   },
   viewClientBtnText: {
     fontSize: 12,
@@ -376,7 +376,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 24,
     marginBottom: 20,
     padding: 16,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.noticeCriticalBg,
     borderLeftWidth: 4,
     borderLeftColor: Colors.noticeCriticalAccent,
@@ -422,13 +422,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     padding: 16,
   },
   actionIcon: {
     width: 40,
     height: 40,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -439,7 +439,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 24,
     marginBottom: 8,
     backgroundColor: Colors.surface,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     padding: 14,
     gap: 12,
   },
@@ -455,7 +455,7 @@ const styles = StyleSheet.create({
   csInfo: { flex: 1 },
   csName: { fontSize: 15, fontWeight: '600', color: Colors.textPrimary },
   csMeta: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
-  csStatusDot: { width: 10, height: 10, borderRadius: 5 },
+  csStatusDot: { width: 10, height: 10, borderRadius: 999 },
   activityItem: {
     flexDirection: 'row',
     alignItems: 'flex-start',

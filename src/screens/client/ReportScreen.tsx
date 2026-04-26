@@ -224,7 +224,7 @@ const styles = StyleSheet.create({
     gap: 8,
     backgroundColor: colors.feedback.successBg,
     marginHorizontal: 16,
-    borderRadius: 10,
+    borderRadius: 4, // radius.lg
     padding: 12,
     marginBottom: 8,
   },
@@ -236,7 +236,7 @@ const styles = StyleSheet.create({
   cover: {
     backgroundColor: BG,
     marginHorizontal: 16,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     padding: 32,
     alignItems: 'center',
     marginBottom: 12,
@@ -246,7 +246,7 @@ const styles = StyleSheet.create({
   coverDot: {
     width: 12,
     height: 12,
-    borderRadius: 6,
+    borderRadius: 4, // radius.lg
     backgroundColor: GREEN,
     marginBottom: 16,
   },
@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
   section: {
     backgroundColor: Colors.surface,
     marginHorizontal: 16,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     padding: 20,
     marginBottom: 16,
     borderWidth: 1,
@@ -359,7 +359,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 8,
+    borderRadius: 0, // radius.sm
     overflow: 'hidden',
     marginBottom: 12,
   },
@@ -371,7 +371,7 @@ const styles = StyleSheet.create({
   footer: {
     backgroundColor: BG,
     marginHorizontal: 16,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     padding: 24,
     alignItems: 'center',
     marginBottom: 20,
@@ -381,7 +381,7 @@ const styles = StyleSheet.create({
   footerDot: {
     width: 10,
     height: 10,
-    borderRadius: 5,
+    borderRadius: 2, // radius.md
     backgroundColor: GREEN,
     marginBottom: 12,
   },

@@ -622,7 +622,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 20,
+    borderRadius: 4, // radius.lg
   },
   streakText: {
     fontSize: 13,
@@ -635,7 +635,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 24,
     marginBottom: 16,
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     padding: 16,
     gap: 20,
   },
@@ -685,7 +685,7 @@ const styles = StyleSheet.create({
   statCard: {
     flex: 1,
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     padding: 14,
     alignItems: 'center',
     gap: 4,
@@ -709,7 +709,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 8,
     alignItems: 'center',
-    borderRadius: 8,
+    borderRadius: 0, // radius.sm
     backgroundColor: Colors.surface,
   },
   periodBtnActive: {
@@ -727,7 +727,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 24,
     marginBottom: 16,
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     padding: 16,
   },
   goalHeader: {
@@ -744,13 +744,13 @@ const styles = StyleSheet.create({
   goalTrack: {
     height: 10,
     backgroundColor: Colors.primaryPale,
-    borderRadius: 5,
+    borderRadius: 2, // radius.md
     overflow: 'hidden',
   },
   goalFill: {
     height: '100%',
     backgroundColor: Colors.primary,
-    borderRadius: 5,
+    borderRadius: 2, // radius.md
   },
   goalLabels: {
     flexDirection: 'row',
@@ -766,7 +766,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 24,
     marginBottom: 24,
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     padding: 16,
     overflow: 'hidden',
   },
@@ -784,7 +784,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 24,
     marginBottom: 24,
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     justifyContent: 'center',
     alignItems: 'center',
     gap: 8,
@@ -812,7 +812,7 @@ const styles = StyleSheet.create({
   },
   bodyStatCard: {
     backgroundColor: Colors.surface,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     padding: 16,
     alignItems: 'center',
     minWidth: (SCREEN_WIDTH - 58) / 2,
@@ -900,7 +900,7 @@ const styles = StyleSheet.create({
   },
   input: {
     backgroundColor: Colors.surface,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     padding: 14,
     fontSize: 16,
     color: Colors.textPrimary,
@@ -910,7 +910,7 @@ const styles = StyleSheet.create({
   saveBtn: {
     marginTop: 20,
     backgroundColor: Colors.primary,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     paddingVertical: 14,
     alignItems: 'center',
   },

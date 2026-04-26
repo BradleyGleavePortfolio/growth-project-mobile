@@ -245,7 +245,7 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: Colors.surface,
-    borderRadius: 24,
+    borderRadius: 4, // radius.lg
     paddingVertical: 40,
     paddingHorizontal: 32,
     alignItems: 'center',
@@ -271,7 +271,7 @@ const styles = StyleSheet.create({
   },
   identityBadge: {
     backgroundColor: 'rgba(45, 106, 79, 0.10)',
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     paddingVertical: 12,
     paddingHorizontal: 28,
     alignItems: 'center',

@@ -152,7 +152,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderWidth: 1.5,
     borderColor: Colors.border,
-    borderRadius: 16,
+    borderRadius: 4, // radius.lg
     padding: 20,
     gap: 16,
   },

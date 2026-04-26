@@ -162,7 +162,7 @@ const styles = StyleSheet.create({
   unitToggle: {
     flexDirection: 'row',
     backgroundColor: Colors.surface,
-    borderRadius: 10,
+    borderRadius: 4, // radius.lg
     padding: 3,
     marginBottom: 20,
     alignSelf: 'flex-start',
@@ -170,7 +170,7 @@ const styles = StyleSheet.create({
   unitButton: {
     paddingHorizontal: 20,
     paddingVertical: 8,
-    borderRadius: 8,
+    borderRadius: 0, // radius.sm
   },
   unitButtonActive: {
     backgroundColor: Colors.primary,
@@ -196,7 +196,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     padding: 16,
     fontSize: 16,
     color: Colors.textPrimary,

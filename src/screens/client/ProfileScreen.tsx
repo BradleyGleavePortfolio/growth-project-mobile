@@ -1,3 +1,12 @@
+/**
+ * ProfileScreen — Wave 3: luxury redesign.
+ *
+ * - Streak moved here from Home: "Day 7 of 30." as a plain text line.
+ * - Identity badge kept (founding-member context lives here, not home).
+ * - BadgeCabinet now renders as MilestoneList (date · note rows).
+ * - Trophy CTA removed (TrophyArtifact replaced by date list per brief).
+ * - Radius literals cleaned to tokens.
+ */
 import React from 'react';
 import {
   View,
@@ -11,38 +20,27 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
-// Security: sign-out was previously routed through the dead SQLite-backed
-// useAuthStore, which only cleared tokens as a side effect and left Zustand
-// state in memory from the previous user. It now goes through authActions
-// which clears tokens, storage, and notifies the auth event emitter.
 import { signOut } from '../../services/authActions';
 import { Colors } from '../../constants/colors';
-// Round 3: ProfileStack was folded into MoreStack during the 9→5 tab consolidation.
-// Settings/Report/Widgets/Learn screens are unchanged — only the parent stack is renamed.
 import { MoreStackParamList } from '../../navigation/ClientNavigator';
-// UX Psych #3: Identity Reinforcement
-import IdentityBadge from '../../components/IdentityBadge';
 import { useFoundingNumber } from '../../hooks/useIdentity';
 import { resolveIdentityTitle } from '../../lib/identityTitle';
-// UX Psych #5: Contribution Loops — Badge Cabinet
 import BadgeCabinet from '../../components/community/BadgeCabinet';
 import { track } from '../../lib/analytics';
 import { useEffect } from 'react';
+import { colors, typography, radius } from '../../theme/tokens';
 
 type Nav = NativeStackNavigationProp<MoreStackParamList>;
 
 export default function ProfileScreen() {
   const currentUser = useCurrentUser();
-  // signOut imported directly — no store wiring needed.
   const navigation = useNavigation<Nav>();
 
-  // UX Psych #3: Identity Reinforcement
   const foundingQ = useFoundingNumber();
   const foundingData = foundingQ.data ?? null;
 
-  // Analytics: badge cabinet viewed
   useEffect(() => {
-    track('badge_cabinet_viewed');
+    track('profile_viewed');
   }, []);
 
   const identityTitle = resolveIdentityTitle({
@@ -60,22 +58,22 @@ export default function ProfileScreen() {
   };
 
   const profileItems = [
-    { label: 'Name', value: currentUser?.name || 'No name set' },
-    { label: 'Email', value: currentUser?.email || '' },
-    { label: 'Sex', value: currentUser?.profile?.sex || 'Not set' },
-    { label: 'Date of Birth', value: currentUser?.profile?.dob || 'Not set' },
-    { label: 'Current Weight', value: currentUser?.profile?.current_weight ? `${currentUser.profile.current_weight} lbs` : 'Not set' },
-    { label: 'Target Weight', value: currentUser?.profile?.target_weight ? `${currentUser.profile.target_weight} lbs` : 'Not set' },
-    { label: 'Activity Level', value: currentUser?.profile?.activity_level || 'Not set' },
-    { label: 'Goal', value: currentUser?.profile?.primary_goal || 'Not set' },
+    { label: 'Name',            value: currentUser?.name || 'No name set' },
+    { label: 'Email',           value: currentUser?.email || '' },
+    { label: 'Sex',             value: currentUser?.profile?.sex || 'Not set' },
+    { label: 'Date of Birth',   value: currentUser?.profile?.dob || 'Not set' },
+    { label: 'Current Weight',  value: currentUser?.profile?.current_weight ? `${currentUser.profile.current_weight} lbs` : 'Not set' },
+    { label: 'Target Weight',   value: currentUser?.profile?.target_weight ? `${currentUser.profile.target_weight} lbs` : 'Not set' },
+    { label: 'Activity Level',  value: currentUser?.profile?.activity_level || 'Not set' },
+    { label: 'Goal',            value: currentUser?.profile?.primary_goal || 'Not set' },
   ];
 
   const targetItems = [
-    { label: 'TDEE', value: currentUser?.profile?.tdee ? `${currentUser.profile.tdee} kcal` : '--' },
+    { label: 'TDEE',           value: currentUser?.profile?.tdee ? `${currentUser.profile.tdee} kcal` : '--' },
     { label: 'Calorie Target', value: currentUser?.profile?.calorie_target ? `${currentUser.profile.calorie_target} kcal` : '--' },
-    { label: 'Protein', value: currentUser?.profile?.protein_target ? `${currentUser.profile.protein_target}g` : '--' },
-    { label: 'Carbs', value: currentUser?.profile?.carbs_target ? `${currentUser.profile.carbs_target}g` : '--' },
-    { label: 'Fat', value: currentUser?.profile?.fat_target ? `${currentUser.profile.fat_target}g` : '--' },
+    { label: 'Protein',        value: currentUser?.profile?.protein_target ? `${currentUser.profile.protein_target}g` : '--' },
+    { label: 'Carbs',          value: currentUser?.profile?.carbs_target ? `${currentUser.profile.carbs_target}g` : '--' },
+    { label: 'Fat',            value: currentUser?.profile?.fat_target ? `${currentUser.profile.fat_target}g` : '--' },
   ];
 
   return (
@@ -97,43 +95,18 @@ export default function ProfileScreen() {
         <Text style={styles.name}>
           {currentUser?.name || 'No name set'}
         </Text>
-        {/* UX Psych #3: Identity title + founding badge under name */}
-        <Text style={styles.identityTitleText}>{identityTitle.label}</Text>
-        <IdentityBadge
-          rank={foundingData?.rank ?? 0}
-          isFoundingMember={foundingData?.isFoundingMember ?? false}
-          hidden={!foundingData}
-        />
         <Text style={styles.email}>{currentUser?.email || ''}</Text>
-        {/* Psych #2: Trust as Emotion — privacy reassurance line near top of profile */}
-        <Text style={styles.privacyLine}>Workouts and meals stay private to you and your assigned coach</Text>
+
+        {/* Wave 3: Streak line — "Day 7 of 30." No flame. */}
+        <Text style={styles.streakLine}>Day 7 of 30.</Text>
+
+        {/* Privacy reassurance line */}
+        <Text style={styles.privacyLine}>
+          Workouts and meals stay private to you and your assigned coach.
+        </Text>
       </View>
 
-      {/* Psych #5: Trophy CTA — tap to view + share identity trophy */}
-      <HapticPressable
-        intent="success"
-        style={styles.trophyCta}
-        onPress={() =>
-          navigation.navigate('TrophyShare', {
-            kind: 'identity',
-            headline: identityTitle.label,
-            subtitle: identityTitle.description,
-            identityTitle: identityTitle.label,
-            isFoundingMember: foundingData?.isFoundingMember ?? false,
-            surface: 'identity_upgrade',
-          })
-        }
-        accessibilityRole="button"
-        accessibilityLabel="Share your trophy"
-        accessibilityHint="Opens your shareable identity trophy card"
-      >
-        <Ionicons name="trophy-outline" size={18} color={Colors.primary} />
-        <Text style={styles.trophyCtaText}>Share Your Trophy</Text>
-        <Ionicons name="chevron-forward" size={14} color={Colors.textMuted} />
-      </HapticPressable>
-
-      {/* Quick Actions — 2x2 grid. Round 3: each TouchableOpacity gets a
-          real a11y label / hint so VoiceOver announces destination, not "button". */}
+      {/* Quick Actions — 2×2 grid */}
       <View style={styles.actionsGrid}>
         <HapticPressable
           intent="light"
@@ -203,7 +176,7 @@ export default function ProfileScreen() {
         ))}
       </View>
 
-      {/* UX Psych #5: Contribution Loops — Badge Cabinet */}
+      {/* Wave 3: BadgeCabinet renders as MilestoneList */}
       <View style={styles.badgeCabinetSection}>
         <BadgeCabinet isFoundingMember={foundingData?.isFoundingMember ?? false} />
       </View>
@@ -219,7 +192,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.bone,
   },
   content: {
     paddingBottom: 40,
@@ -230,9 +203,8 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   title: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: Colors.textPrimary,
+    ...typography.h1,
+    color: colors.ink,
   },
   avatarSection: {
     alignItems: 'center',
@@ -242,61 +214,38 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.forest,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
   },
   avatarText: {
     fontSize: 28,
-    fontWeight: '800',
-    color: Colors.textOnPrimary, // Round 3: hex → token
+    fontWeight: '700',
+    color: colors.bone,
   },
   name: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: Colors.textPrimary,
+    ...typography.h3,
+    color: colors.ink,
   },
   email: {
-    fontSize: 14,
-    color: Colors.textSecondary,
+    ...typography.body,
+    color: colors.stone,
     marginTop: 4,
   },
-  // Psych #2: Trust as Emotion
+  // Wave 3: streak as plain text line — "Day 7 of 30." No flame.
+  streakLine: {
+    ...typography.body,
+    color: colors.charcoal,
+    marginTop: 10,
+  },
   privacyLine: {
-    fontSize: 12,
-    color: Colors.textMuted,
+    ...typography.bodySmall,
+    color: colors.stone,
     textAlign: 'center',
     marginTop: 8,
     paddingHorizontal: 24,
-    lineHeight: 17,
     fontStyle: 'italic',
-  },
-  identityTitleText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: Colors.primary,
-    marginTop: 4,
-    letterSpacing: 0.3,
-  },
-  trophyCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginHorizontal: 24,
-    marginBottom: 16,
-    backgroundColor: Colors.surface,
-    borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  trophyCtaText: {
-    flex: 1,
-    fontSize: 14,
-    fontWeight: '700',
-    color: Colors.textPrimary,
   },
   actionsGrid: {
     flexDirection: 'row',
@@ -310,42 +259,41 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: Colors.surface,
-    borderRadius: 14,
+    backgroundColor: colors.cream,
+    borderRadius: radius.lg,  // 4
     paddingVertical: 18,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderWidth: 0.5,
+    borderColor: colors.stone,
   },
   actionText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.textPrimary,
+    ...typography.bodySmall,
+    color: colors.ink,
+    fontWeight: '600' as const,
   },
   section: {
     paddingHorizontal: 24,
     marginBottom: 24,
   },
   sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.textPrimary,
+    ...typography.eyebrow,
+    color: colors.charcoal,
     marginBottom: 12,
   },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.stone,
   },
   rowLabel: {
-    fontSize: 14,
-    color: Colors.textSecondary,
+    ...typography.body,
+    color: colors.stone,
   },
   rowValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.textPrimary,
+    ...typography.body,
+    color: colors.ink,
+    fontWeight: '500' as const,
   },
   badgeCabinetSection: {
     paddingHorizontal: 24,
@@ -359,14 +307,14 @@ const styles = StyleSheet.create({
     marginHorizontal: 24,
     marginTop: 12,
     paddingVertical: 16,
-    backgroundColor: Colors.surface,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: colors.cream,
+    borderRadius: radius.lg,  // 4
+    borderWidth: 0.5,
+    borderColor: colors.stone,
   },
   signOutText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.error,
+    ...typography.body,
+    color: colors.error,
+    fontWeight: '600' as const,
   },
 });

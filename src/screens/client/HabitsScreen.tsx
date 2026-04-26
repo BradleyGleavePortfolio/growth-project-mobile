@@ -663,7 +663,7 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
@@ -685,7 +685,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.surface,
-    borderRadius: 16,
+    borderRadius: 4, // radius.lg
     padding: 20,
     marginBottom: 16,
     gap: 20,
@@ -719,7 +719,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     padding: 14,
     marginBottom: 10,
   },
@@ -727,7 +727,7 @@ const styles = StyleSheet.create({
   habitIconBox: {
     width: 44,
     height: 44,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -750,7 +750,7 @@ const styles = StyleSheet.create({
   checkCircle: {
     width: 30,
     height: 30,
-    borderRadius: 15,
+    borderRadius: 4, // radius.lg
     borderWidth: 2,
     borderColor: Colors.border,
     justifyContent: 'center',
@@ -762,7 +762,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     borderWidth: 1.5,
     borderColor: Colors.primary,
     borderStyle: 'dashed',
@@ -775,7 +775,7 @@ const styles = StyleSheet.create({
     gap: 8,
     backgroundColor: Colors.primaryPale,
     padding: 12,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     marginBottom: 16,
   },
   savedBannerText: { fontSize: 14, fontWeight: '600', color: Colors.primary },
@@ -789,7 +789,7 @@ const styles = StyleSheet.create({
   lastCheckInText: { fontSize: 12, color: Colors.textMuted, fontWeight: '600' },
   checkInCard: {
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     padding: 16,
     marginBottom: 12,
   },
@@ -799,7 +799,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
     paddingHorizontal: 6,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     flex: 1,
   },
   ratingBtnActive: {
@@ -815,7 +815,7 @@ const styles = StyleSheet.create({
   stepperBtn: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.background,
     borderWidth: 1,
     borderColor: Colors.border,
@@ -824,10 +824,10 @@ const styles = StyleSheet.create({
   },
   stepperValue: { fontSize: 20, fontWeight: '700', color: Colors.textPrimary, minWidth: 50, textAlign: 'center' },
   qualityRow: { flexDirection: 'row', justifyContent: 'center', gap: 6 },
-  stressDot: { width: 16, height: 16, borderRadius: 8, marginBottom: 4 },
+  stressDot: { width: 16, height: 16, borderRadius: 0, marginBottom: 4 },
   notesInput: {
     backgroundColor: Colors.background,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     padding: 14,
     fontSize: 14,
     color: Colors.textPrimary,
@@ -842,7 +842,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     backgroundColor: Colors.primary,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     paddingVertical: 16,
     marginTop: 8,
   },
@@ -870,7 +870,7 @@ const styles = StyleSheet.create({
   fieldLabel: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary, marginBottom: 8, marginTop: 12 },
   fieldInput: {
     backgroundColor: Colors.surface,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     padding: 14,
     fontSize: 15,
     color: Colors.textPrimary,
@@ -881,7 +881,7 @@ const styles = StyleSheet.create({
   iconOption: {
     width: 40,
     height: 40,
-    borderRadius: 10,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
@@ -893,14 +893,14 @@ const styles = StyleSheet.create({
   colorOption: {
     width: 32,
     height: 32,
-    borderRadius: 16,
+    borderRadius: 4, // radius.lg
   },
   colorOptionActive: { borderWidth: 3, borderColor: Colors.textPrimary },
   targetRow: { flexDirection: 'row', gap: 12 },
   targetField: { flex: 1 },
   modalSaveBtn: {
     backgroundColor: Colors.primary,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     paddingVertical: 16,
     alignItems: 'center',
     marginTop: 20,

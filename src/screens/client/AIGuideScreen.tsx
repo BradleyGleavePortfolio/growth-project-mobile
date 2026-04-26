@@ -305,14 +305,14 @@ const styles = StyleSheet.create({
   },
   userBubble: {
     backgroundColor: Colors.primary,
-    borderRadius: 18,
+    borderRadius: 4, // radius.lg
     borderBottomRightRadius: 4,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
   aiBubble: {
     backgroundColor: Colors.surface,
-    borderRadius: 18,
+    borderRadius: 4, // radius.lg
     borderBottomLeftRadius: 4,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -331,7 +331,7 @@ const styles = StyleSheet.create({
   aiAvatar: {
     width: 30,
     height: 30,
-    borderRadius: 15,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.primaryDark,
     justifyContent: 'center',
     alignItems: 'center',
@@ -386,7 +386,7 @@ const styles = StyleSheet.create({
   },
   quickChip: {
     backgroundColor: Colors.surface,
-    borderRadius: 20,
+    borderRadius: 4, // radius.lg
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderWidth: 1,
@@ -411,7 +411,7 @@ const styles = StyleSheet.create({
   textInput: {
     flex: 1,
     backgroundColor: Colors.surfaceElevated,
-    borderRadius: 20,
+    borderRadius: 4, // radius.lg
     paddingHorizontal: 16,
     paddingVertical: 10,
     fontSize: 15,
@@ -421,7 +421,7 @@ const styles = StyleSheet.create({
   sendBtn: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',

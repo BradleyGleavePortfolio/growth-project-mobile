@@ -321,7 +321,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 6,
     backgroundColor: Colors.error + '15',
-    borderRadius: 8,
+    borderRadius: 0, // radius.sm
   },
   clearBtnText: { fontSize: 13, fontWeight: '700', color: Colors.error },
 
@@ -337,7 +337,7 @@ const styles = StyleSheet.create({
     flex: 3,
     height: 44,
     backgroundColor: Colors.surface,
-    borderRadius: 10,
+    borderRadius: 4, // radius.lg
     borderWidth: 1,
     borderColor: Colors.border,
     paddingHorizontal: 12,
@@ -348,7 +348,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 44,
     backgroundColor: Colors.surface,
-    borderRadius: 10,
+    borderRadius: 4, // radius.lg
     borderWidth: 1,
     borderColor: Colors.border,
     paddingHorizontal: 8,
@@ -360,7 +360,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 44,
     backgroundColor: Colors.surface,
-    borderRadius: 10,
+    borderRadius: 4, // radius.lg
     borderWidth: 1,
     borderColor: Colors.border,
     paddingHorizontal: 8,
@@ -393,7 +393,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.surface,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     paddingVertical: 12,
     paddingHorizontal: 12,
     marginBottom: 8,

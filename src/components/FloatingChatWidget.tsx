@@ -263,7 +263,7 @@ const styles = StyleSheet.create({
   gpBadge: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
@@ -348,7 +348,7 @@ const styles = StyleSheet.create({
     marginLeft: Spacing.sm,
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',

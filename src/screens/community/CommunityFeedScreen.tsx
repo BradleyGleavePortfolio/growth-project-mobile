@@ -257,7 +257,7 @@ const styles = StyleSheet.create({
   // Composer
   composer: {
     backgroundColor: Colors.surface,
-    borderRadius: 16,
+    borderRadius: 4, // radius.lg
     padding: 14,
     marginBottom: 20,
     borderWidth: 1,
@@ -282,7 +282,7 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 20,
+    borderRadius: 4, // radius.lg
     borderWidth: 1,
     borderColor: Colors.border,
     backgroundColor: Colors.background,
@@ -302,7 +302,7 @@ const styles = StyleSheet.create({
   postBtn: {
     marginLeft: 'auto',
     backgroundColor: Colors.primary,
-    borderRadius: 20,
+    borderRadius: 4, // radius.lg
     paddingHorizontal: 18,
     paddingVertical: 8,
   },

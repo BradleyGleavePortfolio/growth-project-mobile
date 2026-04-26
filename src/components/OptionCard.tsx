@@ -48,7 +48,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderWidth: 1.5,
     borderColor: Colors.border,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     padding: 16,
     marginBottom: 10,
     gap: 14,
@@ -80,7 +80,7 @@ const styles = StyleSheet.create({
   checkmark: {
     width: 24,
     height: 24,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',

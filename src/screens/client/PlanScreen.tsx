@@ -322,7 +322,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginBottom: 12,
     padding: 10,
-    borderRadius: 10,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.noticeCriticalBg,
     flexDirection: 'row',
     alignItems: 'center',
@@ -338,7 +338,7 @@ const styles = StyleSheet.create({
     marginTop: 40,
     padding: 24,
     backgroundColor: Colors.surface,
-    borderRadius: 16,
+    borderRadius: 4, // radius.lg
     borderWidth: 1,
     borderColor: Colors.border,
     alignItems: 'center',
@@ -348,7 +348,7 @@ const styles = StyleSheet.create({
   emptyIconCircle: {
     width: 64,
     height: 64,
-    borderRadius: 32,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.primaryPale,
     justifyContent: 'center',
     alignItems: 'center',
@@ -372,7 +372,7 @@ const styles = StyleSheet.create({
   },
   planCard: {
     backgroundColor: Colors.surface,
-    borderRadius: 16,
+    borderRadius: 4, // radius.lg
     padding: 16,
     borderWidth: 1,
     borderColor: Colors.border,
@@ -396,7 +396,7 @@ const styles = StyleSheet.create({
   },
   notesBox: {
     backgroundColor: Colors.primaryPale,
-    borderRadius: 10,
+    borderRadius: 4, // radius.lg
     padding: 10,
     marginTop: 4,
     marginBottom: 12,

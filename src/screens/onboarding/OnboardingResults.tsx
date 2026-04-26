@@ -313,7 +313,7 @@ const styles = StyleSheet.create({
   startButton: {
     backgroundColor: Colors.primary,
     paddingVertical: 18,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     alignItems: 'center',
     width: '100%',
   },
@@ -331,7 +331,7 @@ const macroStyles = StyleSheet.create({
   card: {
     flex: 1,
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     padding: 16,
     alignItems: 'center',
     gap: 4,

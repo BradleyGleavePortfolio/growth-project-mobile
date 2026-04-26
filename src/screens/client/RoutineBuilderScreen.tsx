@@ -355,7 +355,7 @@ const styles = StyleSheet.create({
   content: { padding: 20, paddingBottom: 120 },
   nameInput: {
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 17,
@@ -367,7 +367,7 @@ const styles = StyleSheet.create({
   },
   exerciseCard: {
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     padding: 14,
     marginBottom: 10,
   },
@@ -381,7 +381,7 @@ const styles = StyleSheet.create({
   exerciseNum: {
     width: 24,
     height: 24,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     backgroundColor: Colors.primary,
     color: Colors.textOnPrimary,
     fontSize: 13,
@@ -397,7 +397,7 @@ const styles = StyleSheet.create({
   fieldLabel: { fontSize: 11, color: Colors.textMuted, marginBottom: 4 },
   fieldInput: {
     backgroundColor: Colors.background,
-    borderRadius: 8,
+    borderRadius: 0, // radius.sm
     paddingVertical: 8,
     paddingHorizontal: 12,
     fontSize: 15,
@@ -412,7 +412,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 16,
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     borderWidth: 1,
     borderColor: Colors.border,
     borderStyle: 'dashed',
@@ -432,7 +432,7 @@ const styles = StyleSheet.create({
   },
   saveBtn: {
     backgroundColor: Colors.primary,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     paddingVertical: 16,
     alignItems: 'center',
   },
@@ -457,7 +457,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginTop: 16,
     marginBottom: 8,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     paddingHorizontal: 14,
     paddingVertical: 10,
     gap: 8,
@@ -470,7 +470,7 @@ const styles = StyleSheet.create({
   muscleChip: {
     paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,

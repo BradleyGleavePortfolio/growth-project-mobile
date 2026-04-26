@@ -431,7 +431,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
-    borderRadius: 10,
+    borderRadius: 4, // radius.lg
     paddingVertical: 10,
     paddingHorizontal: 8,
     fontSize: 16,
@@ -466,7 +466,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
-    borderRadius: 20,
+    borderRadius: 4, // radius.lg
     paddingHorizontal: 12,
     paddingVertical: 7,
   },
@@ -483,7 +483,7 @@ const styles = StyleSheet.create({
     gap: 6,
     marginBottom: 12,
     backgroundColor: colors.feedback.errorBg,
-    borderRadius: 8,
+    borderRadius: 0, // radius.sm
     padding: 10,
   },
   errorText: {
@@ -498,7 +498,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     backgroundColor: Colors.primaryPale,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     paddingVertical: 14,
     paddingHorizontal: 16,
     marginTop: 4,
@@ -530,7 +530,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     backgroundColor: Colors.primary,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     paddingVertical: 16,
   },
   saveBtnText: {

@@ -358,7 +358,7 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     overflow: 'hidden',
   },
   row: {
@@ -392,7 +392,7 @@ const styles = StyleSheet.create({
   radioCircle: {
     width: 20,
     height: 20,
-    borderRadius: 10,
+    borderRadius: 4, // radius.lg
     borderWidth: 2,
     borderColor: Colors.border,
     justifyContent: 'center',
@@ -404,13 +404,13 @@ const styles = StyleSheet.create({
   radioInner: {
     width: 10,
     height: 10,
-    borderRadius: 5,
+    borderRadius: 2, // radius.md
     backgroundColor: Colors.primary,
   },
   segmented: {
     flexDirection: 'row',
     backgroundColor: Colors.surfaceElevated,
-    borderRadius: 8,
+    borderRadius: 0, // radius.sm
     overflow: 'hidden',
   },
   segBtn: {

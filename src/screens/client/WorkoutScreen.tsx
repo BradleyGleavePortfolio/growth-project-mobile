@@ -440,7 +440,7 @@ const chart = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   bar: {
-    borderRadius: 5,
+    borderRadius: 2, // radius.md
   },
   weekLabel: {
     fontSize: 9,
@@ -512,7 +512,7 @@ const styles = StyleSheet.create({
   statCard: {
     flex: 1,
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     padding: 14,
     alignItems: 'center',
     gap: 4,
@@ -524,7 +524,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 24,
     marginBottom: 16,
     backgroundColor: Colors.surface,
-    borderRadius: 16,
+    borderRadius: 4, // radius.lg
     padding: 16,
     borderWidth: 1,
     borderColor: Colors.border,
@@ -533,7 +533,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 24,
     marginBottom: 16,
     backgroundColor: Colors.surface,
-    borderRadius: 16,
+    borderRadius: 4, // radius.lg
     padding: 16,
     borderWidth: 1,
     borderColor: Colors.border,
@@ -555,7 +555,7 @@ const styles = StyleSheet.create({
   },
   chartBadge: {
     backgroundColor: Colors.primaryPale,
-    borderRadius: 10,
+    borderRadius: 4, // radius.lg
     paddingHorizontal: 10,
     paddingVertical: 6,
     alignItems: 'center',
@@ -588,14 +588,14 @@ const styles = StyleSheet.create({
     marginHorizontal: 24,
     marginBottom: 24,
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     padding: 16,
   },
   quickStartLeft: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   quickStartIcon: {
     width: 44,
     height: 44,
-    borderRadius: 12,
+    borderRadius: 2, // radius.md
     backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
@@ -619,7 +619,7 @@ const styles = StyleSheet.create({
   emptyCard: {
     marginHorizontal: 24,
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     padding: 32,
     alignItems: 'center',
     gap: 10,
@@ -627,7 +627,7 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 14, color: Colors.textMuted },
   emptyBtn: {
     backgroundColor: Colors.primary,
-    borderRadius: 10,
+    borderRadius: 4, // radius.lg
     paddingHorizontal: 20,
     paddingVertical: 10,
     marginTop: 4,
@@ -637,7 +637,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 24,
     marginBottom: 10,
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     padding: 16,
   },
   routineTop: {
@@ -652,7 +652,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 24,
     marginBottom: 10,
     backgroundColor: Colors.surface,
-    borderRadius: 14,
+    borderRadius: 4, // radius.lg
     padding: 16,
     borderWidth: 1,
     borderColor: Colors.border,

@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
   content: { padding: 20, paddingBottom: 100 },
   headerCard: {
     backgroundColor: Colors.primaryPale,
-    borderRadius: 16,
+    borderRadius: 4, // radius.lg
     padding: 24,
     alignItems: 'center',
     marginBottom: 20,
@@ -135,7 +135,7 @@ const styles = StyleSheet.create({
   headerIcon: {
     width: 52,
     height: 52,
-    borderRadius: 16,
+    borderRadius: 4, // radius.lg
     backgroundColor: Colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
@@ -145,7 +145,7 @@ const styles = StyleSheet.create({
   headerSub: { fontSize: 13, color: Colors.textSecondary },
   guidelineCard: {
     backgroundColor: Colors.surface,
-    borderRadius: 16,
+    borderRadius: 4, // radius.lg
     padding: 20,
   },
   heading1: {
@@ -187,7 +187,7 @@ const styles = StyleSheet.create({
   },
   emptyCard: {
     backgroundColor: Colors.surface,
-    borderRadius: 16,
+    borderRadius: 4, // radius.lg
     padding: 40,
     alignItems: 'center',
     marginTop: 40,
