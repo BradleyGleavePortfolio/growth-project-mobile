@@ -18,7 +18,6 @@ import {
   getUserProgress,
   markLessonComplete,
 } from '../../db/educationDb';
-import { lessonsApi } from '../../services/api';
 
 type ScreenMode = 'list' | 'detail';
 

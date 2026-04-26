@@ -81,11 +81,15 @@ export default function PrepGuideScreen() {
 
   const addToGroceryMutation = useMutation({
     mutationFn: async (ingredients: AggregatedIngredient[]) => {
-      return listsApi.bulkAddItems('grocery', ingredients.map((i) => ({
-        name: i.name,
-        quantity: Math.round(i.quantity * 10) / 10,
-        unit: i.unit || undefined,
-      })));
+      return Promise.all(
+        ingredients.map((i) =>
+          listsApi.addItem('grocery', {
+            name: i.name,
+            quantity: Math.round(i.quantity * 10) / 10,
+            unit: i.unit || undefined,
+          })
+        )
+      );
     },
     onSuccess: () => {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
