@@ -101,7 +101,7 @@ export default function CoachGuidelinesScreen() {
             <Ionicons name="clipboard-outline" size={48} color={Colors.textMuted} />
             <Text style={styles.emptyTitle}>No Guidelines Yet</Text>
             <Text style={styles.emptyText}>
-              Your coach hasn't added workout guidelines yet. Check back soon!
+              No guidelines added yet.
             </Text>
           </View>
         )}

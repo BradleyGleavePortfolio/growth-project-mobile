@@ -241,7 +241,7 @@ export async function seedCommunityIfNeeded(): Promise<void> {
   const challenges = [
     { title: '7-Day Protein Challenge', description: 'Hit your protein target every day for a week', category: 'nutrition', targetValue: 7, unit: 'days', durationDays: 7, endDate: end7 },
     { title: 'Hydration Hero', description: 'Drink 64oz+ of water daily for 14 days', category: 'nutrition', targetValue: 14, unit: 'days', durationDays: 14, endDate: end14 },
-    { title: '30-Day Workout Streak', description: 'Complete at least one workout every day for 30 days', category: 'fitness', targetValue: 30, unit: 'workouts', durationDays: 30, endDate: end30 },
+    { title: '30 Days', description: 'One workout every day for thirty days.', category: 'fitness', targetValue: 30, unit: 'workouts', durationDays: 30, endDate: end30 },
     { title: '10K Steps Challenge', description: 'Walk 10,000+ steps daily for 7 days', category: 'fitness', targetValue: 7, unit: 'days', durationDays: 7, endDate: end7 },
     { title: 'Meal Prep Master', description: 'Prep all your meals for the week ahead', category: 'nutrition', targetValue: 5, unit: 'days prepped', durationDays: 7, endDate: end7 },
     { title: 'No Sugar Week', description: 'Avoid added sugars for 7 consecutive days', category: 'nutrition', targetValue: 7, unit: 'days', durationDays: 7, endDate: end7 },
@@ -261,7 +261,7 @@ export async function seedCommunityIfNeeded(): Promise<void> {
   );
 
   const demoWins = [
-    { type: 'streak' as const, title: '7-Day Logging Streak', description: 'Tracked every meal for 7 days straight — consistency pays off' },
+    { type: 'streak' as const, title: 'Seven days.', description: 'Every meal logged, seven days running.' },
     { type: 'workout' as const, title: 'Leg Day', description: 'Hit a new squat PR of 225 lbs after 8 weeks of progressive overload' },
     { type: 'weight' as const, title: 'Down 5 lbs This Month', description: 'Stayed in a caloric deficit and hit their target weight — discipline wins' },
     { type: 'habit' as const, title: 'Perfect Habit Week', description: 'Completed all daily habits for 7 days — water, vitamins, stretching, and meal prep' },

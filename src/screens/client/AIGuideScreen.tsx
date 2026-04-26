@@ -211,7 +211,7 @@ export default function AIGuideScreen() {
             <View style={styles.welcomeContainer}>
               <Ionicons name="chatbubble-ellipses" size={40} color={Colors.primary} />
               <Text style={styles.welcomeTitle}>
-                Hey{currentUser?.firstName ? `, ${currentUser.firstName}` : ''}!
+                Hello{currentUser?.firstName ? `, ${currentUser.firstName}` : ''}.
               </Text>
               <Text style={styles.welcomeText}>
                 I'm your AI nutrition guide. Ask me about calories, macros, meal ideas, workouts, fasting, or anything fitness related.

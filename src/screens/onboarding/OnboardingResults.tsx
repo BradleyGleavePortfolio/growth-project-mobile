@@ -148,9 +148,9 @@ export default function OnboardingResults() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Your Plan is Ready</Text>
+      <Text style={styles.title}>The numbers.</Text>
       <Text style={styles.subtitle}>
-        Based on your profile, here are your daily targets
+        Calculated from what you shared.
       </Text>
 
       <View style={styles.ringContainer}>
@@ -219,7 +219,7 @@ export default function OnboardingResults() {
         {saving ? (
           <ActivityIndicator color={Colors.textOnPrimary} />
         ) : (
-          <Text style={styles.startButtonText}>Start My Journey</Text>
+          <Text style={styles.startButtonText}>Begin.</Text>
         )}
       </TouchableOpacity>
     </View>

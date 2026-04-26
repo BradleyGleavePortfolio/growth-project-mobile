@@ -80,7 +80,7 @@ export async function scheduleFastingAlert(fastEndTime: Date): Promise<string | 
     const id = await Notifications.scheduleNotificationAsync({
       content: {
         title: 'Fast Complete',
-        body: 'You\'ve reached your fasting goal! Great job staying committed to your health journey.',
+        body: 'Fasting goal reached.',
         sound: true,
         data: { type: 'fasting_complete' },
       },

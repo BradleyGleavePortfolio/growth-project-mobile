@@ -29,19 +29,19 @@ const LEVELS: { key: Level; icon: string; label: string; sub: string }[] = [
     key: 'new',
     icon: '🌱',
     label: "New to this",
-    sub: 'Just getting started — welcome',
+    sub: 'Finding your footing.',
   },
   {
     key: 'some',
     icon: '🏃',
     label: 'Some experience',
-    sub: 'I work out or track occasionally',
+    sub: 'Some time in.',
   },
   {
     key: 'experienced',
-    icon: '🏆',
+    icon: '',
     label: 'Experienced',
-    sub: "I know what I'm doing, let's go",
+    sub: 'The work is familiar.',
   },
 ];
 
@@ -75,8 +75,8 @@ export default function LeanQ2ExperienceScreen({ navigation }: Props) {
             <View style={[styles.dot, styles.dotActive]} />
             <View style={styles.dot} />
           </View>
-          <Text style={styles.headline}>What's your experience level?</Text>
-          <Text style={styles.subtext}>We'll tailor your first steps to match.</Text>
+          <Text style={styles.headline}>How long have you been at this?</Text>
+          <Text style={styles.subtext}>We shape the first steps to fit.</Text>
         </View>
 
         {/* Options */}

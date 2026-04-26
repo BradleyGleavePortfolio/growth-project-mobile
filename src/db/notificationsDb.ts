@@ -118,7 +118,7 @@ export async function seedNotificationsIfNeeded(userId: string): Promise<void> {
     {
       type: 'tip' as const,
       title: 'Hydration Reminder',
-      body: 'Aim for at least 64oz of water daily. Proper hydration boosts your metabolism by up to 30% and supports workout recovery.',
+      body: 'Aim for at least 64oz of water daily. Proper hydration supports metabolism and workout recovery.',
       hoursAgo: 2,
     },
     {
@@ -147,8 +147,8 @@ export async function seedNotificationsIfNeeded(userId: string): Promise<void> {
     },
     {
       type: 'streak' as const,
-      title: 'Build Your Logging Streak',
-      body: 'Log your meals for 3 consecutive days to earn your first streak badge. Users with streaks reach their goals 60% faster',
+      title: 'Build the habit.',
+      body: 'Log your meals three days in a row. Consistency over three days becomes a habit.',
       hoursAgo: 48,
     },
     {

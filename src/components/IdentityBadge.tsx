@@ -150,7 +150,7 @@ export default function IdentityBadge({
                 </View>
                 <Text style={styles.sheetTitle}>You're a Founding Member</Text>
                 <Text style={styles.sheetBody}>
-                  You joined when this app was brand new — before most people
+                  You joined early.
                   even knew it existed. Member #{rank.toLocaleString()} out of
                   the first 1,000. That's not luck; that's vision.
                 </Text>

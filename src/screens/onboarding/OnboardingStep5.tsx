@@ -20,37 +20,37 @@ const GOAL_OPTIONS: {
     value: 'lose_fast',
     label: 'Lose Weight Fast',
     description: 'Aggressive fat loss (~1.5 lbs/week)',
-    icon: '🔥',
+    icon: '',
   },
   {
     value: 'lose_moderate',
     label: 'Steady Fat Loss',
     description: 'Sustainable weight loss (~1 lb/week)',
-    icon: '📉',
+    icon: '',
   },
   {
     value: 'maintain',
     label: 'Recomp / Maintain',
     description: 'Build muscle while staying the same weight',
-    icon: '⚖️',
+    icon: '',
   },
   {
     value: 'gain',
     label: 'Lean Bulk',
     description: 'Build muscle with minimal fat gain',
-    icon: '💪',
+    icon: '',
   },
   {
     value: 'gain_fast',
     label: 'Gain Weight Fast',
     description: 'Maximize muscle & weight gain',
-    icon: '📈',
+    icon: '',
   },
   {
     value: 'mobility',
     label: 'Mobility & Cardio',
     description: 'Focus on movement, flexibility, and endurance',
-    icon: '🧘',
+    icon: '',
   },
 ];
 
@@ -68,7 +68,7 @@ export default function OnboardingStep5({ navigation }: Props) {
       step={5}
       totalSteps={10}
       title="What's your goal?"
-      subtitle="Choose the goal that best matches your ambition"
+      subtitle="Choose your direction."
       onBack={() => navigation.goBack()}
       onContinue={handleContinue}
       continueEnabled={goal !== null}

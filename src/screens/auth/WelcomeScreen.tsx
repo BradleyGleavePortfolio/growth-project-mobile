@@ -27,7 +27,7 @@ export default function WelcomeScreen({ navigation }: Props) {
           </View>
           <Text style={styles.title}>The Growth Project</Text>
           <Text style={styles.tagline}>
-            Your personal nutrition &amp; fitness coach
+            The work is quiet. The results are not.
           </Text>
         </View>
 

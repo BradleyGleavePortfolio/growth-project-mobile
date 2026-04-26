@@ -145,7 +145,7 @@ export default function FloatingChatWidget({ visible = true }: FloatingChatWidge
                     Nutrition, training, fasting, mindset — GP knows it all.
                   </Text>
                   <View style={styles.suggestions}>
-                    {['What should I eat today?', 'How much protein do I need?', 'Best pre-workout meal?'].map(s => (
+                    {['What should I eat today?', 'How much protein do I need?', 'Pre-workout meal ideas?'].map(s => (
                       <TouchableOpacity
                         key={s}
                         style={styles.suggestionChip}

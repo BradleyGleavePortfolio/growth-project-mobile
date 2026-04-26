@@ -54,28 +54,28 @@ const STREAK_MILESTONES: MilestoneDef[] = [
     slug:          'streak-3',
     label:         '3-Day Streak',
     threshold:     3,
-    unlockReward:  'Unlock "Habit Seed" badge',
+    unlockReward:  '"Habit Seed" — day three.',
     category:      'streak',
   },
   {
     slug:          'streak-7',
     label:         'Consistency Builder',
     threshold:     7,
-    unlockReward:  'Unlock "Consistency Builder" identity + 7-day trophy',
+    unlockReward:  'Consistency Builder — seven days.',
     category:      'streak',
   },
   {
     slug:          'streak-14',
     label:         '2-Week Streak',
     threshold:     14,
-    unlockReward:  'Unlock "Fortnight Fighter" badge',
+    unlockReward:  '"Fortnight Fighter" — two weeks.',
     category:      'streak',
   },
   {
     slug:          'streak-30',
     label:         '30-Day Streak',
     threshold:     30,
-    unlockReward:  'Unlock "Iron Discipline" badge + profile flair',
+    unlockReward:  '"Iron Discipline" — thirty days.',
     category:      'streak',
   },
 ];
@@ -85,35 +85,35 @@ const WORKOUT_MILESTONES: MilestoneDef[] = [
     slug:          'workouts-10',
     label:         'Rising Athlete',
     threshold:     10,
-    unlockReward:  'Unlock "Rising Athlete" identity title',
+    unlockReward:  '"Rising Athlete" — ten sessions.',
     category:      'workouts',
   },
   {
     slug:          'workouts-30',
     label:         'Iron Veteran',
     threshold:     30,
-    unlockReward:  'Unlock "Iron Veteran" identity + profile badge',
+    unlockReward:  '"Iron Veteran" — thirty sessions.',
     category:      'workouts',
   },
   {
     slug:          'workouts-50',
     label:         'Proven Grinder',
     threshold:     50,
-    unlockReward:  'Unlock "Proven Grinder" badge + leaderboard spot',
+    unlockReward:  '"Proven Grinder" — fifty sessions.',
     category:      'workouts',
   },
   {
     slug:          'workouts-90',
     label:         'Forge Forged',
     threshold:     90,
-    unlockReward:  'Unlock "Forge Forged" — elite tier, top 1% of members',
+    unlockReward:  '"Forge Forged" — ninety sessions.',
     category:      'workouts',
   },
   {
     slug:          'workouts-150',
     label:         'Iron Legend',
     threshold:     150,
-    unlockReward:  'Unlock "Iron Legend" — permanent hall of fame entry',
+    unlockReward:  '"Iron Legend" — one hundred fifty sessions.',
     category:      'workouts',
   },
 ];
@@ -165,16 +165,16 @@ export function resolveNextMilestones(input: MilestoneInput): Milestone[] {
 
 /**
  * Returns a human-readable "X more Y to Z" line for display below the bar.
- * e.g. "2 more workouts unlocks Iron Veteran"
+ * e.g. "2 workouts to Iron Veteran."
  */
 export function milestoneRemainingCopy(milestone: Milestone): string {
   const remaining = milestone.targetValue - milestone.currentValue;
-  if (remaining <= 0) return `${milestone.label} unlocked!`;
+  if (remaining <= 0) return `${milestone.label}.`;
 
   const unit =
     milestone.category === 'streak'
       ? remaining === 1 ? 'day' : 'days'
       : remaining === 1 ? 'workout' : 'workouts';
 
-  return `${remaining} more ${unit} unlocks ${milestone.label}`;
+  return `${remaining} ${unit} to ${milestone.label}.`;
 }

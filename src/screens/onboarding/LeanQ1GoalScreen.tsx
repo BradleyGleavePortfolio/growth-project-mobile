@@ -25,9 +25,9 @@ type Props = {
 type Goal = 'lose_weight' | 'build_muscle' | 'maintain';
 
 const GOALS: { key: Goal; icon: string; label: string; sub: string }[] = [
-  { key: 'lose_weight', icon: '🔥', label: 'Lose Weight', sub: 'Burn fat, feel lighter' },
-  { key: 'build_muscle', icon: '💪', label: 'Build Muscle', sub: 'Get stronger, add size' },
-  { key: 'maintain', icon: '⚖️', label: 'Maintain', sub: 'Stay consistent, feel great' },
+  { key: 'lose_weight', icon: '', label: 'Lose Weight', sub: 'A gradual shift.' },
+  { key: 'build_muscle', icon: '', label: 'Build Muscle', sub: 'Slow, deliberate strength.' },
+  { key: 'maintain', icon: '⚖️', label: 'Maintain', sub: 'Hold the line.' },
 ];
 
 export default function LeanQ1GoalScreen({ navigation }: Props) {
@@ -68,8 +68,8 @@ export default function LeanQ1GoalScreen({ navigation }: Props) {
             <View style={styles.dot} />
             <View style={styles.dot} />
           </View>
-          <Text style={styles.headline}>What's your primary goal?</Text>
-          <Text style={styles.subtext}>Pick one — you can always change it later.</Text>
+          <Text style={styles.headline}>Where are you headed?</Text>
+          <Text style={styles.subtext}>One direction at a time.</Text>
         </View>
 
         {/* Options */}

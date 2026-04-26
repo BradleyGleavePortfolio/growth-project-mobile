@@ -81,7 +81,7 @@ export default function RoleSelectionScreen(_: Props) {
       <StatusBar barStyle="dark-content" />
 
       <View style={styles.header}>
-        <Text style={styles.greeting}>Almost there!</Text>
+        <Text style={styles.greeting}>One more step.</Text>
         <Text style={styles.title}>Choose Your Role</Text>
         <Text style={styles.subtitle}>
           How will you be using The Growth Project?

@@ -34,19 +34,19 @@ interface ProgramTemplate {
 const PROGRAM_TEMPLATES: ProgramTemplate[] = [
   {
     id: 'fat_loss',
-    emoji: '🔥',
+    emoji: 'FL',
     title: 'Fat Loss Protocol',
     subtitle: 'Aggressive caloric deficit with muscle preservation',
     nutritionNotes:
       '• Caloric deficit of 500–700 kcal/day below TDEE\n• High protein: 1.0–1.2g per lb of body weight\n• Carb cycling: low carb on rest days, moderate on training days\n• Prioritize whole foods, minimize processed sugars\n• Meal timing: pre/post workout nutrition essential\n• Expect 1–1.5 lbs of fat loss per week',
     trainingNotes:
-      '• 4–5x/week resistance training (compound movements first)\n• 2–3x/week LISS cardio (30–45 min, 60–70% max HR)\n• HIIT 1x/week for metabolic boost\n• Prioritize progressive overload to preserve muscle\n• Active recovery on rest days (walking, stretching)',
+      '• 4–5x/week resistance training (compound movements first)\n• 2–3x/week LISS cardio (30–45 min, 60–70% max HR)\n• HIIT 1x/week for metabolic stimulus\n• Prioritize progressive overload to preserve muscle\n• Active recovery on rest days (walking, stretching)',
     tags: ['Fat Loss', 'Deficit', 'High Protein', 'Cardio'],
     color: Colors.templateFatLoss,
   },
   {
     id: 'lean_bulk',
-    emoji: '💪',
+    emoji: 'LB',
     title: 'Lean Bulk Protocol',
     subtitle: 'Clean caloric surplus for maximum muscle gain',
     nutritionNotes:
@@ -58,7 +58,7 @@ const PROGRAM_TEMPLATES: ProgramTemplate[] = [
   },
   {
     id: 'recomp',
-    emoji: '⚖️',
+    emoji: 'RC',
     title: 'Body Recomposition',
     subtitle: 'Simultaneously lose fat and build muscle',
     nutritionNotes:
@@ -70,7 +70,7 @@ const PROGRAM_TEMPLATES: ProgramTemplate[] = [
   },
   {
     id: 'maintenance',
-    emoji: '🎯',
+    emoji: 'MP',
     title: 'Maintenance Protocol',
     subtitle: 'Sustain current physique and optimize performance',
     nutritionNotes:
@@ -82,7 +82,7 @@ const PROGRAM_TEMPLATES: ProgramTemplate[] = [
   },
   {
     id: 'mobility',
-    emoji: '🧘',
+    emoji: 'MW',
     title: 'Mobility & Wellness',
     subtitle: 'Recovery, flexibility, and holistic health focus',
     nutritionNotes:

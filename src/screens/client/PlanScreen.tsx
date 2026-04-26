@@ -43,11 +43,11 @@ const TIME_ORDER = ['breakfast', 'lunch', 'dinner', 'snack'];
 
 function timeIcon(tod?: string | null): string {
   const t = (tod || '').toLowerCase();
-  if (t.startsWith('break')) return '🌅';
-  if (t.startsWith('lunch')) return '☀️';
-  if (t.startsWith('din')) return '🌙';
-  if (t.startsWith('snack')) return '🍎';
-  return '🍽️';
+  if (t.startsWith('break')) return 'AM';
+  if (t.startsWith('lunch')) return 'MID';
+  if (t.startsWith('din')) return 'PM';
+  if (t.startsWith('snack')) return '+';
+  return '·';
 }
 
 function groupItems(items: MealItem[]): { key: string; label: string; rows: MealItem[] }[] {
