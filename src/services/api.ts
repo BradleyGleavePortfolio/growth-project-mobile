@@ -440,7 +440,7 @@ export const prepGuideApi = {
     api.get(`/prep-guide${week ? `?week=${week}` : ''}`),
 };
 
-// ── Identity (Psych #3) ──────────────────────────────────────────────────────
+// ── Identity (Psych #3) + Trust (Psych #2) ─────────────────────────────────
 export const usersApi = {
   getFoundingNumber: () =>
     api.get<{ rank: number; total: number; isFoundingMember: boolean }>(
@@ -450,4 +450,22 @@ export const usersApi = {
     api.get<{ trainedTodayCount: number; totalMembers: number }>(
       '/users/me/circle-stats',
     ),
+  // Psych #2: Trust as Emotion
+  requestDataExport: () =>
+    api.post<{ requested: boolean; eta: string }>('/users/me/data-export'),
+  deleteAccount: () =>
+    api.delete<{ scheduled: boolean; gracePeriodDays: number }>('/users/me/account'),
+};
+
+// ── Public system / trust metadata (no auth required) ───────────────────────
+export const systemApi = {
+  getTrustMeta: () =>
+    api.get<{
+      lastSecurityUpdate: string;
+      encryptionLevel: string;
+      dataResidency: string;
+      auditPolicyVersion: string;
+      dataExportSupported: boolean;
+      accountDeletionSupported: boolean;
+    }>('/system/trust-meta'),
 };

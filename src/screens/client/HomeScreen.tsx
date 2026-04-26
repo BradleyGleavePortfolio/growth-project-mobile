@@ -40,6 +40,7 @@ import {
   useUnreadNudgeCount,
 } from '../../hooks/useApi';
 import HeroAction from '../../components/HeroAction';
+import TrustCueRow from '../../components/trust/TrustCueRow';
 import IdentityBadge from '../../components/IdentityBadge';
 import { useFoundingNumber, useCircleStats } from '../../hooks/useIdentity';
 import { resolveIdentityTitle } from '../../lib/identityTitle';
@@ -620,6 +621,9 @@ export default function HomeScreen() {
             ))}
           </View>
         </View>
+      {/* Psych #2: Trust as Emotion — trust cues below secondary sections, above footer */}
+      <TrustCueRow />
+
       </FadeInView>
     </ScrollView>
   );

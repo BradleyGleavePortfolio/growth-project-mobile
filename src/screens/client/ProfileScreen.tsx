@@ -95,6 +95,8 @@ export default function ProfileScreen() {
           hidden={!foundingData}
         />
         <Text style={styles.email}>{currentUser?.email || ''}</Text>
+        {/* Psych #2: Trust as Emotion — privacy reassurance line near top of profile */}
+        <Text style={styles.privacyLine}>Workouts and meals stay private to you and your assigned coach</Text>
       </View>
 
       {/* Quick Actions — 2x2 grid. Round 3: each TouchableOpacity gets a
@@ -221,6 +223,16 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.textSecondary,
     marginTop: 4,
+  },
+  // Psych #2: Trust as Emotion
+  privacyLine: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    textAlign: 'center',
+    marginTop: 8,
+    paddingHorizontal: 24,
+    lineHeight: 17,
+    fontStyle: 'italic',
   },
   identityTitleText: {
     fontSize: 13,
