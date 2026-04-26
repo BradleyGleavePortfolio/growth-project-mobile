@@ -2,6 +2,17 @@ import React, { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { PostHogProvider } from 'posthog-react-native';
+import {
+  useFonts,
+  CormorantGaramond_400Regular,
+  CormorantGaramond_500Medium,
+} from '@expo-google-fonts/cormorant-garamond';
+import {
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+} from '@expo-google-fonts/inter';
+import * as SplashScreen from 'expo-splash-screen';
 import RootNavigator from './src/navigation/RootNavigator';
 import AppSplash from './src/components/AppSplash';
 import ErrorBoundary from './src/components/ErrorBoundary';
@@ -21,6 +32,10 @@ import { ThemeProvider } from './src/theme/ThemeProvider';
 // line is safe to commit without secrets.
 initSentry();
 
+// Prevent the native splash from auto-hiding before fonts are ready.
+// We hide it manually once fonts + app init are both complete.
+SplashScreen.preventAutoHideAsync();
+
 // PostHog credentials — loaded from Expo public env vars.
 // When the key is absent (CI, local dev without secrets) the SDK no-ops.
 const POSTHOG_KEY = process.env.EXPO_PUBLIC_POSTHOG_KEY ?? '';
@@ -30,6 +45,23 @@ const POSTHOG_HOST =
 function App() {
   const [ready, setReady] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
+
+  // Wave 2: Load Cormorant Garamond (display serif) + Inter (neutral sans).
+  // Open-source fallback pair for GT Sectra + Söhne (commercial).
+  const [fontsLoaded] = useFonts({
+    CormorantGaramond_400Regular,
+    CormorantGaramond_500Medium,
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+  });
+
+  // Hide native splash once fonts are loaded.
+  useEffect(() => {
+    if (fontsLoaded) {
+      SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded]);
 
   useEffect(() => {
     initApp();
@@ -53,11 +85,17 @@ function App() {
     }
   };
 
+  // Block render until fonts are loaded — prevents flash of unstyled text.
+  // The native splash screen remains visible during this window (preventAutoHideAsync above).
+  if (!fontsLoaded) {
+    return null;
+  }
+
   if (!ready || showSplash) {
     return (
       <>
         <AppSplash onFinish={() => setShowSplash(false)} />
-        <StatusBar style="light" />
+        <StatusBar style="dark" backgroundColor="#F5EFE4" />
       </>
     );
   }
@@ -102,7 +140,8 @@ function App() {
             },
           }}
         >
-          <StatusBar style="dark" />
+          {/* Wave 2: dark status bar on bone background */}
+          <StatusBar style="dark" backgroundColor="#F5EFE4" />
           {/* ThemeProvider: Premium Visual System — UX Psych Report #5.
               Must be inside PersistQueryClientProvider so useFoundingNumber()
               (which calls useQuery) works correctly. */}

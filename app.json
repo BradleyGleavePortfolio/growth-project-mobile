@@ -10,7 +10,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#FAF8F3"
+      "backgroundColor": "#F5EFE4"
     },
     "ios": {
       "supportsTablet": true,
@@ -25,7 +25,7 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/android-icon-foreground.png",
         "monochromeImage": "./assets/android-icon-monochrome.png",
-        "backgroundColor": "#FAF8F3"
+        "backgroundColor": "#F5EFE4"
       },
       "package": "com.growthproject.app",
       "versionCode": 1

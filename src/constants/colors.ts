@@ -1,85 +1,93 @@
+/**
+ * Canonical Colors — The Growth Project
+ * Wave 2: Luxury repositioning — bone/cream/ink/forest palette.
+ * Old keys are preserved for back-compat; values updated to new system.
+ */
+
 export const Colors = {
-  // Primary brand
-  primary: '#2D6A4F',        // deep green
-  primaryLight: '#52B788',   // medium green
-  primaryPale: '#D8F3DC',    // very light green
-  primaryDark: '#1B4332',    // dark green for avatars
-  accent: '#40916C',         // accent green
+  // Primary brand → forest
+  primary:       '#2C4A36',  // forest (was #2D6A4F)
+  primaryLight:  '#4D7059',  // forest light tint (was #52B788)
+  primaryPale:   '#D6E4DA',  // forest pale (was #D8F3DC)
+  primaryDark:   '#1C3023',  // forest dark (was #1B4332)
+  accent:        '#3A5C46',  // forest mid (was #40916C)
 
-  // Backgrounds
-  background: '#FAF8F3',     // warm cream
-  surface: '#FFFFFF',        // pure white cards
-  surfaceElevated: '#F5F0E8', // slightly warm white
+  // Backgrounds → bone/cream
+  background:        '#F5EFE4',  // bone (was #FAF8F3)
+  surface:           '#F1E8D5',  // cream (was #FFFFFF)
+  surfaceElevated:   '#F1E8D5',  // cream (was #F5F0E8)
 
-  // Text
-  textPrimary: '#1B2B1E',    // near-black green-tinted
-  textSecondary: '#4A6358',  // muted green-grey
-  textMuted: '#8FA89A',      // light muted
-  textOnPrimary: '#FFFFFF',  // white text on green bg
+  // Text → ink/charcoal/stone
+  textPrimary:    '#1A1A18',  // ink (was #1B2B1E)
+  textSecondary:  '#3D3D3A',  // charcoal (was #4A6358)
+  textMuted:      '#B1A89F',  // stone (was #8FA89A)
+  textOnPrimary:  '#F5EFE4',  // bone on dark bg (was #FFFFFF)
 
-  // Borders & dividers
-  border: '#E2EDE6',
-  divider: '#EDF2EF',
+  // Borders & dividers → stone/camel
+  border:   '#B08D57',  // camel hairlines (was #E2EDE6)
+  divider:  'rgba(176,141,87,0.2)',  // camel at low opacity (was #EDF2EF)
 
   // Semantic
-  success: '#2D6A4F',
-  warning: '#E9C46A',
-  error: '#E63946',
-  info: '#457B9D',
-  streak: '#E76F51',         // terra-cotta for flame/streak icons
+  success: '#2C4A36',  // forest
+  warning: '#C5A253',  // mutedGold (was #E9C46A)
+  error:   '#4A0404',  // oxblood (was #E63946)
+  info:    '#457B9D',  // unchanged
 
-  // Macros
-  protein: '#2D6A4F',
-  carbs: '#457B9D',
-  fat: '#E9C46A',
-  water: '#52B788',
-  fiber: '#74C69D',
+  // Streak/flame — demoted, kept for back-compat (Wave 3 copy pass will remove)
+  streak: '#B1A89F',   // stone — neutralised (was #E76F51)
+
+  // Macros — kept for chart/bar use
+  protein: '#2C4A36',  // forest
+  carbs:   '#457B9D',  // info blue
+  fat:     '#C5A253',  // mutedGold
+  water:   '#4D7059',  // forest light
+  fiber:   '#6E9479',  // forest mid-light
 
   // Tab bar
-  tabActive: '#2D6A4F',
-  tabInactive: '#8FA89A',
-  tabBackground: '#FFFFFF',
-  tabBorder: '#E2EDE6',
+  tabActive:      '#2C4A36',  // forest
+  tabInactive:    '#B1A89F',  // stone
+  tabBackground:  '#F5EFE4',  // bone
+  tabBorder:      'rgba(176,141,87,0.3)',  // camel
 
   // Cards
-  cardShadow: 'rgba(45, 106, 79, 0.08)',
+  cardShadow: 'rgba(26,26,24,0.06)',  // ink at low opacity
 
   // Status / system UI
-  offlineBanner: '#B45309',  // amber for offline banner warning
-  primaryTint: 'rgba(45, 106, 79, 0.08)', // soft primary tint for banners
+  offlineBanner:  '#8A6A2A',   // warm gold-brown for offline banner
+  primaryTint:    'rgba(44,74,54,0.06)',  // forest soft tint
 
-  // Alert/notice palettes for coach-side cards (warning + critical)
-  noticeWarningBg: '#FFF8E7',    // pale gold notice background
-  noticeWarningIconBg: '#FEF3E2', // softer gold icon tile
-  noticeWarningText: '#7B5800',   // dark gold notice text
-  noticeCriticalBg: '#FFF3E0',    // pale orange critical background
-  noticeCriticalAccent: '#FB8C00', // bright orange accent/border
-  noticeCriticalText: '#E65100',   // dark orange critical text
+  // Alert/notice palettes — neutralised to bone system
+  noticeWarningBg:       '#F8F2E5',
+  noticeWarningIconBg:   '#F3EBD8',
+  noticeWarningText:     '#8A6A2A',
+  noticeCriticalBg:      '#F2E0E0',
+  noticeCriticalAccent:  '#9A3030',
+  noticeCriticalText:    '#4A0404',
 
-  // Macro chip tints (Plan screen meal cards)
-  macroCarbsChipBg: '#E3F2FD',    // pale blue carbs chip
-  macroCarbsChipText: '#1565C0',  // dark blue carbs chip text
-  macroFatChipBg: '#FFF9C4',      // pale yellow fat chip
-  macroFatChipText: '#F57F17',    // dark amber fat chip text
+  // Macro chip tints — subtle versions
+  macroCarbsChipBg:   '#E3EDF5',
+  macroCarbsChipText: '#1E4971',
+  macroFatChipBg:     '#F3EBD8',
+  macroFatChipText:   '#8A6A2A',
 
-  // Program template category accents (coach-side)
-  templateFatLoss: '#FF6B35',   // orange — fat loss
-  templateLeanBulk: '#2D6A4F',  // primary green — lean bulk
-  templateRecomp: '#457B9D',    // info blue — recomp
-  templateMaintenance: '#74C69D', // sage — maintenance
-  templateMobility: '#9B72AA',  // lavender — mobility
+  // Program template category accents (coach-side) — kept for back-compat
+  templateFatLoss:    '#9A3030',  // oxblood-adjacent
+  templateLeanBulk:   '#2C4A36',  // forest
+  templateRecomp:     '#457B9D',  // info blue
+  templateMaintenance:'#6E9479',  // forest mid-light
+  templateMobility:   '#7A6A9B',  // muted lavender
 
-  // Leaderboard medals (community screen)
-  medalGold: '#FFD700',
-  medalSilver: '#C0C0C0',
-  medalBronze: '#CD7F32',
+  // Leaderboard medals — kept, slightly desaturated
+  medalGold:   '#C5A253',  // mutedGold
+  medalSilver: '#B1A89F',  // stone
+  medalBronze: '#9A7240',  // warm brown
 
-  // Muscle-group accents (workout screens)
-  muscleLegs: '#2A9D8F',      // teal
-  muscleTriceps: '#F4A261',   // warm orange
-  muscleCore: '#264653',      // deep blue-green
-  muscleFullBody: '#6A4C93',  // purple
-  muscleCardio: '#1DB954',    // vibrant green
+  // Muscle-group accents (workout screens) — kept for data-viz use
+  muscleLegs:     '#2A9D8F',
+  muscleTriceps:  '#B07040',
+  muscleCore:     '#264653',
+  muscleFullBody: '#6A5085',
+  muscleCardio:   '#2C4A36',  // forest
 };
 
 export default Colors;

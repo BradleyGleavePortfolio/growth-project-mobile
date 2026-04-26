@@ -1,137 +1,161 @@
-// The Growth Project — Central Theme
-// Single source of truth for colors/typography/spacing.
+// The Growth Project — Central Theme (Wave 2: Luxury Repositioning)
+// tokens.ts is the canonical source of truth.
+// This file re-exports everything from tokens.ts and maintains legacy
+// named exports so existing imports keep working without changes.
 // NEVER hardcode hex values in component files — always import from here.
-// Round 3: expanded to semantic tokens so screens can express intent.
 
 import CanonicalColors from '../constants/colors';
 
-// Flat palette (legacy — keep for back-compat with files already using it).
+// Re-export all canonical tokens (new code should import from here or tokens.ts)
+export {
+  colors as colorTokens,
+  neutral,
+  brand,
+  semantic,
+  gold,
+  typography as typographyTokens,
+  spacing as spacingTokens,
+  radius as radiusTokens,
+  shadows as shadowTokens,
+  motion,
+} from './tokens';
+export { default as tokens } from './tokens';
+export type { Tokens } from './tokens';
+
+// ─── Legacy flat Colors export ────────────────────────────────────────────────
+// Maps old keys to the new palette. Components don't need to change imports.
 export const Colors = {
-  primary: CanonicalColors.primary,           // #2D6A4F deep green
-  primaryLight: CanonicalColors.primaryLight, // #52B788
-  primaryPale: CanonicalColors.primaryPale,   // #D8F3DC
-  primaryDark: CanonicalColors.primaryDark,   // #1B4332
-  accent: CanonicalColors.accent,             // #40916C
-  gold: CanonicalColors.warning,              // #E9C46A
-  orange: CanonicalColors.error,              // #E63946
-  dark: CanonicalColors.textPrimary,          // #1B2B1E
-  background: CanonicalColors.background,     // #FAF8F3
-  surface: CanonicalColors.surface,           // #FFFFFF
-  surfaceElevated: CanonicalColors.surfaceElevated, // #F5F0E8
-  textMuted: CanonicalColors.textMuted,       // #8FA89A
-  textPrimary: CanonicalColors.textPrimary,
-  textSecondary: CanonicalColors.textSecondary,
-  textOnPrimary: CanonicalColors.textOnPrimary,
-  success: CanonicalColors.success,
-  warning: CanonicalColors.warning,
-  error: CanonicalColors.error,
-  info: CanonicalColors.info,
-  white: CanonicalColors.textOnPrimary,       // #FFFFFF
-  border: CanonicalColors.border,             // #E2EDE6
-  divider: CanonicalColors.divider,
-  cardShadow: CanonicalColors.cardShadow,
-  goldLight: 'rgba(233, 196, 106, 0.12)',
-  protein: CanonicalColors.protein,
-  carbs: CanonicalColors.carbs,
-  fat: CanonicalColors.fat,
-  water: CanonicalColors.water,
-  fiber: CanonicalColors.fiber,
+  primary:         CanonicalColors.primary,           // #2C4A36 forest
+  primaryLight:    CanonicalColors.primaryLight,
+  primaryPale:     CanonicalColors.primaryPale,
+  primaryDark:     CanonicalColors.primaryDark,
+  accent:          CanonicalColors.accent,
+  gold:            CanonicalColors.warning,           // #C5A253 mutedGold
+  orange:          CanonicalColors.error,             // #4A0404 oxblood
+  dark:            CanonicalColors.textPrimary,       // #1A1A18 ink
+  background:      CanonicalColors.background,        // #F5EFE4 bone
+  surface:         CanonicalColors.surface,           // #F1E8D5 cream
+  surfaceElevated: CanonicalColors.surfaceElevated,
+  textMuted:       CanonicalColors.textMuted,         // #B1A89F stone
+  textPrimary:     CanonicalColors.textPrimary,
+  textSecondary:   CanonicalColors.textSecondary,
+  textOnPrimary:   CanonicalColors.textOnPrimary,
+  success:         CanonicalColors.success,
+  warning:         CanonicalColors.warning,
+  error:           CanonicalColors.error,
+  info:            CanonicalColors.info,
+  white:           CanonicalColors.textOnPrimary,     // bone (was #FFFFFF)
+  border:          CanonicalColors.border,
+  divider:         CanonicalColors.divider,
+  cardShadow:      CanonicalColors.cardShadow,
+  goldLight:       'rgba(197,162,83,0.12)',
+  protein:         CanonicalColors.protein,
+  carbs:           CanonicalColors.carbs,
+  fat:             CanonicalColors.fat,
+  water:           CanonicalColors.water,
+  fiber:           CanonicalColors.fiber,
 };
 
-// Semantic tokens grouped by purpose. Prefer these in new code.
-// Round 3: introduced so screens can say `colors.text.secondary` instead of `#4A6358`.
+// ─── Legacy grouped colors export ─────────────────────────────────────────────
 export const colors = {
   background: {
-    primary: CanonicalColors.background,       // screen bg
+    primary:   CanonicalColors.background,       // bone — screen bg
     secondary: CanonicalColors.surfaceElevated,
-    surface: CanonicalColors.surface,          // cards
-    overlay: 'rgba(0, 0, 0, 0.5)',
+    surface:   CanonicalColors.surface,          // cream — cards
+    overlay:   'rgba(26, 26, 24, 0.5)',
   },
   text: {
-    primary: CanonicalColors.textPrimary,
-    secondary: CanonicalColors.textSecondary,
-    muted: CanonicalColors.textMuted,
-    onPrimary: CanonicalColors.textOnPrimary,  // text on brand bg
-    link: CanonicalColors.info,
+    primary:    CanonicalColors.textPrimary,
+    secondary:  CanonicalColors.textSecondary,
+    muted:      CanonicalColors.textMuted,
+    onPrimary:  CanonicalColors.textOnPrimary,
+    link:       CanonicalColors.info,
   },
   brand: {
-    primary: CanonicalColors.primary,
-    primaryDark: CanonicalColors.primaryDark,
+    primary:      CanonicalColors.primary,
+    primaryDark:  CanonicalColors.primaryDark,
     primaryLight: CanonicalColors.primaryLight,
-    primaryPale: CanonicalColors.primaryPale,
-    accent: CanonicalColors.accent,
+    primaryPale:  CanonicalColors.primaryPale,
+    accent:       CanonicalColors.accent,
   },
   feedback: {
-    success: CanonicalColors.success,
-    successBg: '#E8F5E9',        // tinted success background
-    warning: CanonicalColors.warning,
-    warningBg: '#FFF8E7',        // tinted warning background
-    error: CanonicalColors.error,
-    errorBg: '#FEF2F2',          // tinted error background
-    errorText: '#EF4444',
-    info: CanonicalColors.info,
-    infoBg: '#E8F4FD',
+    success:    CanonicalColors.success,
+    successBg:  '#E0EBE4',
+    warning:    CanonicalColors.warning,
+    warningBg:  '#F8F2E5',
+    error:      CanonicalColors.error,
+    errorBg:    '#F2E0E0',
+    errorText:  '#9A3030',
+    info:       CanonicalColors.info,
+    infoBg:     '#E8F4FD',
   },
   border: {
     default: CanonicalColors.border,
     divider: CanonicalColors.divider,
-    strong: CanonicalColors.textMuted,
+    strong:  CanonicalColors.textMuted,
   },
-  // Domain-specific accents reused across the app.
   data: {
     protein: CanonicalColors.protein,
-    carbs: CanonicalColors.carbs,
-    fat: CanonicalColors.fat,
-    water: CanonicalColors.water,
-    fiber: CanonicalColors.fiber,
-    streak: '#E76F51',            // orange — streaks, fire, active timers
-    habit: '#A78BFA',             // purple — habit highlights
+    carbs:   CanonicalColors.carbs,
+    fat:     CanonicalColors.fat,
+    water:   CanonicalColors.water,
+    fiber:   CanonicalColors.fiber,
+    streak:  '#B1A89F',  // stone — neutralised from orange
+    habit:   '#7A6A9B',  // muted lavender
   },
-  shadow: CanonicalColors.cardShadow,
+  shadow:      CanonicalColors.cardShadow,
   transparent: 'transparent',
 };
 
+// ─── Legacy Typography export ──────────────────────────────────────────────────
+// Re-maps old keys to new luxury typography values.
+// CRITICAL: weight 400 for headings — not 700/800.
 export const Typography = {
-  h1: { fontSize: 28, fontWeight: '700' as const, color: Colors.dark },
-  h2: { fontSize: 22, fontWeight: '700' as const, color: Colors.dark },
-  h3: { fontSize: 18, fontWeight: '600' as const, color: Colors.dark },
-  body: { fontSize: 15, fontWeight: '400' as const, color: Colors.textMuted },
-  bodyDark: { fontSize: 15, fontWeight: '400' as const, color: Colors.dark },
-  label: { fontSize: 12, fontWeight: '600' as const, color: Colors.primary, letterSpacing: 0.5 },
-  caption: { fontSize: 13, fontWeight: '400' as const, color: Colors.textMuted },
-  button: { fontSize: 16, fontWeight: '600' as const },
+  // Map legacy keys → new token values
+  hero:     { fontFamily: 'CormorantGaramond_400Regular', fontSize: 44, lineHeight: 46, fontWeight: '400' as const, letterSpacing: 0.4 },
+  h1:       { fontFamily: 'CormorantGaramond_400Regular', fontSize: 32, lineHeight: 35, fontWeight: '400' as const, letterSpacing: 0.6, color: Colors.dark },
+  h2:       { fontFamily: 'CormorantGaramond_400Regular', fontSize: 24, lineHeight: 29, fontWeight: '400' as const, letterSpacing: 0.5, color: Colors.dark },
+  h3:       { fontFamily: 'CormorantGaramond_500Medium',  fontSize: 20, lineHeight: 24, fontWeight: '500' as const, letterSpacing: 0.4, color: Colors.dark },
+  body:     { fontFamily: 'Inter_400Regular',             fontSize: 16, lineHeight: 26, fontWeight: '400' as const, letterSpacing: -0.16, color: Colors.textMuted },
+  bodyDark: { fontFamily: 'Inter_400Regular',             fontSize: 16, lineHeight: 26, fontWeight: '400' as const, letterSpacing: -0.16, color: Colors.dark },
+  label:    { fontFamily: 'Inter_500Medium',              fontSize: 11, lineHeight: 13, fontWeight: '500' as const, letterSpacing: 1.98, textTransform: 'uppercase' as const, color: Colors.primary },
+  caption:  { fontFamily: 'Inter_500Medium',              fontSize: 12, lineHeight: 18, fontWeight: '500' as const, letterSpacing: 0.96, color: Colors.textMuted },
+  button:   { fontFamily: 'Inter_600SemiBold',            fontSize: 14, lineHeight: 18, fontWeight: '600' as const, letterSpacing: 1.2, textTransform: 'uppercase' as const },
 };
 
+// ─── Legacy Spacing export ────────────────────────────────────────────────────
 export const Spacing = {
-  xs: 4,
-  sm: 8,
-  md: 16,
-  lg: 24,
-  xl: 32,
+  xs:  4,
+  sm:  8,
+  md:  16,
+  lg:  24,
+  xl:  32,
   xxl: 48,
 };
 
+// ─── Legacy Radius export (Wave 2: luxury scale) ──────────────────────────────
 export const Radius = {
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 24,
-  full: 999,
+  sm:   0,    // buttons, primary CTAs (was 8)
+  md:   2,    // inputs (was 12)
+  lg:   4,    // cards (was 16)
+  xl:   4,    // remapped to lg (was 24)
+  full: 999,  // small chips only
 };
 
+// ─── Legacy Shadow export (Wave 2: luxury opacity caps) ───────────────────────
 export const Shadow = {
   card: {
-    shadowColor: Colors.dark,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    shadowColor:   '#1A1A18',
+    shadowOffset:  { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius:  6,
+    elevation:     2,
   },
   button: {
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.10,
-    shadowRadius: 8,
-    elevation: 4,
+    shadowColor:   '#2C4A36',
+    shadowOffset:  { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius:  2,
+    elevation:     1,
   },
 };

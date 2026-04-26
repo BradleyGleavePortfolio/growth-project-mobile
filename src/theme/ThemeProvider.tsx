@@ -1,14 +1,18 @@
 /**
- * ThemeProvider — Premium Visual System (UX Psych Report #5)
+ * ThemeProvider — Luxury Visual System (Wave 2)
  *
- * Reads founding-member status from useFoundingNumber() (PR #41) and
+ * Reads founding-member status from useFoundingNumber() and
  * vends either freeTheme or founderTheme via useTheme().
  *
- * founderTheme = freeTheme + gold accent overrides:
- *   • border tints → gold.border
- *   • hero gradient stop → gold.300 accent
- *   • badge highlight colours → gold scale
- *   • shadow on tier-aware cards → shadows['glow-gold']
+ * founderTheme = freeTheme + muted-gold accent overrides:
+ *   • border tints → gold.border (camel hairline)
+ *   • badge highlight → mutedGold typography
+ *   • shadow → shadows.sm (no glow)
+ *
+ * Wave 2 changes:
+ *   - heroGradientStop removed (LinearGradient deleted in Wave 1)
+ *   - shimmerHighlight removed (shimmer deleted in Wave 1)
+ *   - All references updated to new color tokens
  */
 
 import React, { createContext, useContext, ReactNode } from 'react';
@@ -33,12 +37,8 @@ export interface Theme {
     accentBg: string;
     /** Primary text accent (badge label, highlights) */
     accentFg: string;
-    /** Hero gradient second stop */
-    heroGradientStop: string;
     /** Badge shadow style */
     badgeShadow: Tokens['shadows']['sm'];
-    /** Border highlight for tier-aware elements */
-    shimmerHighlight: string;
   };
 }
 
@@ -47,26 +47,24 @@ const freeTheme: Theme = {
   tokens,
   tier: 'free',
   tierColors: {
-    accentBorder:      tokens.brand[600],            // primary green border
-    accentBg:          'rgba(45,106,79,0.08)',        // primary pale tint
-    accentFg:          tokens.brand[600],
-    heroGradientStop:  tokens.brand[400],             // medium green (unused since Wave 1)
-    badgeShadow:       tokens.shadows.sm,
-    shimmerHighlight:  'rgba(82,183,136,0.15)',
+    accentBorder: tokens.colors.forest,           // forest hairline
+    accentBg:     'rgba(44,74,54,0.06)',           // forest at 6% opacity
+    accentFg:     tokens.colors.forest,
+    badgeShadow:  tokens.shadows.sm,
   },
 };
 
 // ─── Founder theme ─────────────────────────────────────────────────────────────
+// Founding member badge: a 1px hairline in mutedGold on bone,
+// tracked all-caps label "FOUNDING · 03 OF 88." No glow. No fill.
 const founderTheme: Theme = {
   tokens,
   tier: 'founder',
   tierColors: {
-    accentBorder:      tokens.gold.border,
-    accentBg:          tokens.gold[100],
-    accentFg:          tokens.gold[700],              // 5.9:1 on gold bg ✅
-    heroGradientStop:  tokens.gold[300],              // unused since Wave 1
-    badgeShadow:       tokens.shadows.sm,
-    shimmerHighlight:  'rgba(196,146,42,0.12)',
+    accentBorder: tokens.gold.border,             // camel hairline (rgba)
+    accentBg:     tokens.gold[100],               // subtle gold tint
+    accentFg:     tokens.gold[700],               // darker gold label
+    badgeShadow:  tokens.shadows.sm,
   },
 };
 
