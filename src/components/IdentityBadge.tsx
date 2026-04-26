@@ -5,13 +5,18 @@
  * Tap reveals a bottom sheet / tooltip explaining what "Founding Member" means.
  *
  * UX Psych #3: Identity Reinforcement / Inner Circle
+ * UX Psych #4: Healthy Anticipation — entrance animation (slide up 12px + fade, 240ms).
  * UX Psych #5: Premium Visual System — gold shimmer on mount for founders.
+ *                                      Founding members get a gold border accent.
  *
  * Shimmer implementation:
  *   • Animated.Value drives translateX from -badgeWidth to +badgeWidth over 1.2 s.
  *   • A semi-opaque white overlay is clipped to the badge bounds (overflow: hidden).
  *   • Runs once on mount (no loop); settles cleanly so badge looks crisp at rest.
  *   • Uses React Native Animated API only — no Skia, no Lottie.
+ *
+ * Entrance animation (Psych #4):
+ *   • translateY: +12 → 0, opacity: 0 → 1, duration 240 ms, easeOut.
  */
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -23,6 +28,7 @@ import {
   StyleSheet,
   Platform,
   Animated,
+  Easing,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from './HapticPressable';
@@ -35,6 +41,34 @@ export interface IdentityBadgeProps {
   isFoundingMember: boolean;
   /** If true, render nothing (e.g. still loading or endpoint unavailable) */
   hidden?: boolean;
+}
+
+// ─── Entrance animation hook ─────────────────────────────────────────────────
+
+/** Slide-up + fade-in entrance: 240 ms easeOut, runs once on mount. */
+function useEntrance() {
+  const translateY = useRef(new Animated.Value(12)).current;
+  const opacity    = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(translateY, {
+        toValue:         0,
+        duration:        240,
+        easing:          Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacity, {
+        toValue:         1,
+        duration:        240,
+        easing:          Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return { translateY, opacity };
 }
 
 /** Single-shot shimmer: sweeps once across the badge on mount. */
@@ -71,6 +105,7 @@ export default function IdentityBadge({
 }: IdentityBadgeProps) {
   const [tooltipVisible, setTooltipVisible] = useState(false);
   const { translateX, setBadgeWidth } = useShimmer(isFoundingMember && !hidden);
+  const entrance = useEntrance();
 
   // Psych Report #4: Analytics — identity_badge_viewed fires on mount
   useEffect(() => {
@@ -91,7 +126,12 @@ export default function IdentityBadge({
   const badgeShadow = isFoundingMember ? tokens.shadows['glow-gold'] : {};
 
   return (
-    <>
+    <Animated.View
+      style={{
+        transform: [{ translateY: entrance.translateY }],
+        opacity:   entrance.opacity,
+      }}
+    >
       <HapticPressable
         intent="light"
         onPress={() => {
@@ -182,7 +222,7 @@ export default function IdentityBadge({
           </View>
         </Pressable>
       </Modal>
-    </>
+    </Animated.View>
   );
 }
 

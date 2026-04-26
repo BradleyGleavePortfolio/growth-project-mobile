@@ -40,14 +40,121 @@ import {
   useUnreadNudgeCount,
 } from '../../hooks/useApi';
 import HeroAction from '../../components/HeroAction';
+import { usePreferences } from '../../hooks/usePreferences';
 import TrustCueRow from '../../components/trust/TrustCueRow';
 import IdentityBadge from '../../components/IdentityBadge';
 import { useFoundingNumber, useCircleStats } from '../../hooks/useIdentity';
 import { resolveIdentityTitle } from '../../lib/identityTitle';
+import MilestoneProgress from '../../components/anticipation/MilestoneProgress';
+import CountdownTile from '../../components/anticipation/CountdownTile';
+import { resolveNextMilestones } from '../../lib/milestones';
+import { track } from '../../lib/analytics';
 
 const MEAL_ORDER: MealType[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 
 // ── WeeklyVolumeCard ─────────────────────────────────────────────────────────
+
+// ── Psych #5: Streak Milestone Banner ───────────────────────────────────────
+// Shown once per milestone (7 / 30 / 90 day streaks), tappable to TrophyShare.
+
+const STREAK_MILESTONES = [7, 30, 90] as const;
+const STREAK_STORAGE_KEY = 'trophy_streak_dismissed';
+
+interface StreakMilestoneBannerProps {
+  streakDays: number;
+  identityTitle: string;
+  isFoundingMember: boolean;
+  navigation: any;
+}
+
+function StreakMilestoneBanner({
+  streakDays,
+  identityTitle,
+  isFoundingMember,
+  navigation,
+}: StreakMilestoneBannerProps) {
+  const [dismissed, setDismissed] = React.useState<boolean | null>(null);
+
+  // The highest milestone hit so far
+  const milestoneDays = STREAK_MILESTONES.filter((m) => streakDays >= m).slice(-1)[0];
+  const storageKey = milestoneDays ? `${STREAK_STORAGE_KEY}_${milestoneDays}` : null;
+
+  React.useEffect(() => {
+    if (!storageKey) { setDismissed(true); return; }
+    AsyncStorage.getItem(storageKey)
+      .then((val) => setDismissed(val === 'true'))
+      .catch(() => setDismissed(true));
+  }, [storageKey]);
+
+  const dismiss = () => {
+    if (storageKey) AsyncStorage.setItem(storageKey, 'true').catch(() => {});
+    setDismissed(true);
+  };
+
+  const openTrophy = () => {
+    if (!milestoneDays) return;
+    track('trophy_generated', { surface: 'streak', kind: 'streak', is_founding_member: isFoundingMember });
+    dismiss();
+    navigation.navigate('TrophyShare', {
+      kind: 'streak',
+      headline: `${milestoneDays}-DAY\nSTREAK`,
+      subtitle: `${milestoneDays} days of consistent effort.`,
+      identityTitle,
+      isFoundingMember,
+      surface: 'streak',
+    });
+  };
+
+  // Loading or no milestone reached or already dismissed
+  if (dismissed !== false || !milestoneDays) return null;
+
+  return (
+    <HapticPressable intent="success" onPress={openTrophy} style={smStyles.banner}>
+      <Text style={smStyles.flame}>{String.fromCodePoint(0x1F525)}</Text>
+      <View style={smStyles.text}>
+        <Text style={smStyles.title}>{milestoneDays}-Day Streak!</Text>
+        <Text style={smStyles.sub}>Tap to claim your trophy</Text>
+      </View>
+      <HapticPressable intent="light" onPress={dismiss} style={smStyles.close}>
+        <Ionicons name="close" size={16} color={Colors.textMuted} />
+      </HapticPressable>
+    </HapticPressable>
+  );
+}
+
+const smStyles = StyleSheet.create({
+  banner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginHorizontal: Spacing.lg,
+    marginBottom: 12,
+    backgroundColor: Colors.surface,
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: Colors.primary,
+    shadowColor: Colors.primary,
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  flame: { fontSize: 28 },
+  text: { flex: 1 },
+  title: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+    letterSpacing: -0.2,
+  },
+  sub: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginTop: 1,
+  },
+  close: { padding: 4 },
+});
 
 const DAY_LABELS = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 const CHART_HEIGHT = 48;
@@ -259,6 +366,9 @@ export default function HomeScreen() {
   const messagesUnread = Number(messagesUnreadQ.data?.total ?? 0);
   const nudgesUnread = Number((nudgesUnreadQ.data as any)?.total ?? (nudgesUnreadQ.data as any)?.count ?? 0);
 
+  // ── UX Psych #4: Preference-Controlled Personalization ──
+  const { prefs } = usePreferences();
+
   // ── UX Psych #3: Identity Reinforcement ──
   const foundingQ = useFoundingNumber();
   const circleQ = useCircleStats();
@@ -273,6 +383,17 @@ export default function HomeScreen() {
     totalWorkouts: 0,      // workout count not yet wired — safe default
     weeksSinceJoin: 0,
     daysSinceLastWorkout: undefined,
+  });
+
+  // ── UX Psych #4: Healthy Anticipation — milestone progress ─────────────────
+  // Resolved from local data only (no backend). Uses 0-defaults until streak/
+  // workout endpoints are wired; milestone cards still render with meaningful
+  // progress bars once those values are available.
+  const upNextMilestones = resolveNextMilestones({
+    workoutCount:    0,   // safe default — wire to real value when endpoint ready
+    streakDays:      0,   // safe default
+    identityTitle:   identityTitle.label,
+    isFoundingMember: foundingData?.isFoundingMember ?? false,
   });
 
   useEffect(() => {
@@ -442,18 +563,72 @@ export default function HomeScreen() {
         onDateChange={handleDateChange}
       />
 
-      {/* ── UX Psych #1: One Dominant Hero Action ── */}
-      <FadeInView delay={50}>
-        <HeroAction />
-        {/* UX Psych #3: Social-proof — circle trained today */}
-        {circleStats && circleStats.trainedTodayCount > 0 && (
-          <Text style={styles.circleSocialProof}>
-            {circleStats.trainedTodayCount} of your circle trained today
-          </Text>
-        )}
+      {/* ── Psych #5: Streak milestone trophy banner ── */}
+      <StreakMilestoneBanner
+        streakDays={0}
+        identityTitle={identityTitle.label}
+        isFoundingMember={foundingData?.isFoundingMember ?? false}
+        navigation={navigation}
+      />
+
+      {/* ── UX Psych #1: One Dominant Hero Action (prefs: hero module) ── */}
+      {prefs.homeModules.includes('hero') && (
+        <FadeInView delay={50}>
+          <HeroAction motivationalTone={prefs.motivationalTone} />
+          {/* UX Psych #3: Social-proof — circle trained today */}
+          {circleStats && circleStats.trainedTodayCount > 0 && (
+            <Text style={styles.circleSocialProof}>
+              {circleStats.trainedTodayCount} of your circle trained today
+            </Text>
+          )}
+        </FadeInView>
+      )}
+
+      {/* ── UX Psych #4: Healthy Anticipation — "Up Next" milestone section ─────── */}
+      <FadeInView delay={75}>
+        <View style={styles.upNextSection}>
+          <Text style={styles.upNextLabel}>Up Next</Text>
+
+          {/* Milestone progress cards */}
+          {upNextMilestones.map((milestone) => (
+            <MilestoneProgress
+              key={milestone.slug}
+              milestone={milestone}
+              isFoundingMember={foundingData?.isFoundingMember ?? false}
+              style={styles.milestoneCard}
+              onPress={() => {
+                track('milestone_unlocked', {
+                  slug:     milestone.slug,
+                  category: milestone.category,
+                  pct:      milestone.targetValue > 0
+                    ? Math.round((milestone.currentValue / milestone.targetValue) * 100)
+                    : 0,
+                });
+              }}
+            />
+          ))}
+
+          {/* Countdown tile — coach check-in: shown if next_coach_date exists in profile.
+              Rendered conditionally; skips gracefully when no date is available. */}
+          {(() => {
+            const nextCoachDate =
+              (currentUser?.profile as any)?.next_coach_checkin ||
+              (currentUser?.profile as any)?.next_plan_date;
+            if (!nextCoachDate) return null;
+
+            const isCoach = !!(currentUser?.profile as any)?.next_coach_checkin;
+            return (
+              <CountdownTile
+                targetDate={nextCoachDate}
+                eventType={isCoach ? 'coach_checkin' : 'new_plan'}
+                style={styles.countdownTile}
+              />
+            );
+          })()}
+        </View>
       </FadeInView>
 
-      <FadeInView delay={100}>
+      {prefs.homeModules.includes('secondary') && <FadeInView delay={100}>
         {/* ── Secondary section: Nutrition ring (demoted below hero) ── */}
         <View style={styles.ringSectionLabel}>
           <Text style={styles.secondarySectionTitle}>Nutrition</Text>
@@ -483,9 +658,9 @@ export default function HomeScreen() {
             </HapticPressable>
           )}
         </View>
-      </FadeInView>
+      </FadeInView>}
 
-      <FadeInView delay={200}>
+      {prefs.homeModules.includes('secondary') && <FadeInView delay={200}>
         <View style={styles.macroSection}>
           {/* Round 3: macro hex colors → theme data tokens (protein/carbs/fat kept
               with domain-specific accents; habit purple for fat per existing palette) */}
@@ -508,15 +683,17 @@ export default function HomeScreen() {
             color={colors.data.habit}
           />
         </View>
-      </FadeInView>
+      </FadeInView>}
 
-      <FadeInView delay={250}>
-        <WeeklyVolumeCard
-          totalVolume={weeklyVolume}
-          weekLabel={weekRangeLabel}
-          breakdown={weeklyBreakdown}
-        />
-      </FadeInView>
+      {prefs.homeModules.includes('secondary') && (
+        <FadeInView delay={250}>
+          <WeeklyVolumeCard
+            totalVolume={weeklyVolume}
+            weekLabel={weekRangeLabel}
+            breakdown={weeklyBreakdown}
+          />
+        </FadeInView>
+      )}
 
       <FadeInView delay={300}>
         <View style={styles.mealsSection}>
@@ -824,5 +1001,26 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: Colors.primary,
+  },
+
+  // ── UX Psych #4: Healthy Anticipation ─────────────────────────────────────
+  upNextSection: {
+    paddingHorizontal: Spacing.lg,
+    marginBottom:      20,
+    gap:               10,
+  },
+  upNextLabel: {
+    fontSize:      12,
+    fontWeight:    '700',
+    color:         Colors.textMuted,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom:  2,
+  },
+  milestoneCard: {
+    // flex-child spacing handled by upNextSection gap
+  },
+  countdownTile: {
+    marginTop: 2,
   },
 });
