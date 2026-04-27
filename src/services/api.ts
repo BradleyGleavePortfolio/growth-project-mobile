@@ -182,7 +182,7 @@ export const authApi = {
   googleAuth: (token: string, inviteCode?: string) =>
     api.post('/auth/google', inviteCode ? { token, invite_code: inviteCode } : { token }),
   attachInviteCode: (code: string) =>
-    api.post('/auth/attach-invite-code', { code }),
+    api.post('/auth/attach-invite-code', { invite_code: code }),
   selectRole: (role: 'coach' | 'student', coachCode?: string) =>
     api.post('/auth/select-role', { role, coach_code: coachCode }),
   me: () =>

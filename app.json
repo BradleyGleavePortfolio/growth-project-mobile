@@ -19,7 +19,8 @@
       "infoPlist": {
         "NSCameraUsageDescription": "Used for barcode scanning to log food items",
         "ITSAppUsesNonExemptEncryption": false
-      }
+      },
+      "associatedDomains": ["applinks:app.tgp.com"]
     },
     "android": {
       "adaptiveIcon": {
@@ -28,7 +29,18 @@
         "backgroundColor": "#F5EFE4"
       },
       "package": "com.growthproject.app",
-      "versionCode": 1
+      "versionCode": 1,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            { "scheme": "tgp", "host": "join" },
+            { "scheme": "https", "host": "app.tgp.com", "pathPrefix": "/join" }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
