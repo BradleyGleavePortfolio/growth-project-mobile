@@ -47,20 +47,25 @@ Copy `.env.example` to `.env` for local dev, and configure the same keys in
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon (publishable) key |
 | `EXPO_PUBLIC_API_URL` | Backend API base URL. Required in non-dev builds |
 
-### Optional, Google sign-in
-
-Google sign-in works through Supabase OAuth. The mobile app does NOT need
-the Google client secret. The two `EXPO_PUBLIC_GOOGLE_CLIENT_ID_*` entries
-are kept for future native flows; today only the Supabase path is used.
+### Optional, observability and analytics
 
 | Var | Purpose |
 |---|---|
-| `EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS` | iOS OAuth client ID, only required if a native Google SDK is enabled |
-| `EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID` | Android OAuth client ID, same constraint |
+| `EXPO_PUBLIC_SENTRY_DSN` | Sentry DSN. When unset, `services/sentry.ts` no-ops and crashes go uncaptured. |
+| `EXPO_PUBLIC_ENVIRONMENT` | Sentry environment tag. Defaults to `'production'`. |
+| `EXPO_PUBLIC_POSTHOG_KEY` | PostHog project key. Empty string disables capture; the SDK no-ops cleanly. |
+| `EXPO_PUBLIC_POSTHOG_HOST` | PostHog ingest URL. Defaults to `https://us.i.posthog.com`. |
 
-If both Google client IDs are unset, the app falls back to the Supabase
-OAuth web flow. The "Continue with Google" button on the signup screen is
-hidden if the backend `signup-policy` returns `google_signin_enabled: false`.
+### Google sign-in
+
+Google sign-in is brokered entirely through Supabase OAuth. The mobile app
+embeds no per-platform Google client ID and reads no `EXPO_PUBLIC_GOOGLE_*`
+variable. The OAuth client / secret pair lives in the Supabase dashboard
+(Authentication > Providers > Google), backed by a single Web client in
+Google Cloud Console. The "Continue with Google" button on the signup
+screen is hidden when the backend `signup-policy` endpoint returns
+`google_signin_enabled: false`. Adding a `EXPO_PUBLIC_GOOGLE_CLIENT_ID_*`
+key is rejected by `scripts/validate-app-config.js`.
 
 ### Google OAuth, backend wiring
 
