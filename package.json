@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint \"src/**/*.{ts,tsx}\" --max-warnings=99999",
     "validate:config": "node scripts/validate-app-config.js",
-    "smoke:android": "bash scripts/release-smoke.sh"
+    "smoke:android": "bash scripts/release-smoke.sh",
+    "qa:invite": "bash scripts/invite-qa.sh"
   },
   "jest": {
     "preset": "jest-expo",
