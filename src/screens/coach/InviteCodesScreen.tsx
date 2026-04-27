@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { coachApi } from '../../services/api';
 import { Colors } from '../../constants/colors';
 import { mediumTap, successTap, warningTap } from '../../utils/haptics';
+import { buildInviteUniversalLink } from '../../utils/deepLink';
 
 interface InviteCode {
   id: string;
@@ -101,8 +102,15 @@ export default function InviteCodesScreen({ navigation }: any) {
   const handleShare = async (code: string) => {
     mediumTap();
     try {
+      // Universal link is the canonical share format — taps from SMS / email /
+      // WhatsApp open the app via App Links (iOS) / Android App Links and
+      // pre-fill the invite code on the signup screen. The code is included
+      // in the body so recipients without the app installed can still copy it
+      // into manual entry on the web fallback.
+      const url = buildInviteUniversalLink(code);
       await Share.share({
-        message: `Join me on The Growth Project. Use invite code ${code} when signing up.`,
+        url,
+        message: `Join me on The Growth Project: ${url}\nInvite code: ${code}`,
       });
     } catch (err) {
       console.error('InviteCodesScreen: share failed', err);

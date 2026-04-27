@@ -12,6 +12,8 @@ import ClientDetailScreen from '../screens/coach/ClientDetailScreen';
 import ProgramTemplatesScreen from '../screens/coach/ProgramTemplatesScreen';
 import InviteCodesScreen from '../screens/coach/InviteCodesScreen';
 import ClientMessagesScreen from '../screens/coach/ClientMessagesScreen';
+import CoachBillingScreen from '../screens/coach/CoachBillingScreen';
+import TrustCenterScreen from '../screens/TrustCenterScreen';
 import { Colors } from '../constants/colors';
 
 export type CoachTabParamList = {
@@ -19,7 +21,7 @@ export type CoachTabParamList = {
   Dashboard: undefined;
   Templates: undefined;
   Messages: undefined;
-  Settings: undefined;
+  SettingsStack: undefined;
 };
 
 export type ClientsStackParamList = {
@@ -29,8 +31,15 @@ export type ClientsStackParamList = {
   InviteCodes: undefined;
 };
 
+export type SettingsStackParamList = {
+  SettingsHome: undefined;
+  Billing: undefined;
+  TrustCenter: undefined;
+};
+
 const Tab = createBottomTabNavigator<CoachTabParamList>();
 const ClientsStack = createNativeStackNavigator<ClientsStackParamList>();
+const SettingsStack = createNativeStackNavigator<SettingsStackParamList>();
 
 function ClientsStackNavigator() {
   return (
@@ -45,6 +54,21 @@ function ClientsStackNavigator() {
       <ClientsStack.Screen name="ClientMessages" component={ClientMessagesScreen} />
       <ClientsStack.Screen name="InviteCodes" component={InviteCodesScreen} />
     </ClientsStack.Navigator>
+  );
+}
+
+function SettingsStackNavigator() {
+  return (
+    <SettingsStack.Navigator
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: Colors.background },
+      }}
+    >
+      <SettingsStack.Screen name="SettingsHome" component={SettingsScreen} />
+      <SettingsStack.Screen name="Billing" component={CoachBillingScreen} />
+      <SettingsStack.Screen name="TrustCenter" component={TrustCenterScreen} />
+    </SettingsStack.Navigator>
   );
 }
 
@@ -137,9 +161,10 @@ export default function CoachNavigator() {
         }}
       />
       <Tab.Screen
-        name="Settings"
-        component={SettingsScreen}
+        name="SettingsStack"
+        component={SettingsStackNavigator}
         options={{
+          tabBarLabel: 'Settings',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="settings" size={size} color={color} />
           ),

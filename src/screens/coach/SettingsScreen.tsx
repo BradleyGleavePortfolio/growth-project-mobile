@@ -18,7 +18,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 // replacing the old useAuthStore.signOut() which only cleared tokens as a
 // side effect and left previous-user data in memory for the next login.
 import { signOut } from '../../services/authActions';
-import { coachApi, profileApi, notificationsApi } from '../../services/api';
+import { coachApi, profileApi, notificationsApi, usersApi, AccountStatus } from '../../services/api';
 import { Colors } from '../../constants/colors';
 import { mediumTap, warningTap, successTap } from '../../utils/haptics';
 import { updateSupabasePassword } from '../../utils/supabaseAuth';
@@ -53,6 +53,9 @@ export default function SettingsScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [passwordBusy, setPasswordBusy] = useState(false);
+  const [accountStatus, setAccountStatus] = useState<AccountStatus | null>(null);
+  const [accountStatusLoading, setAccountStatusLoading] = useState(true);
+  const [deletionBusy, setDeletionBusy] = useState(false);
 
   const userId = currentUser?.id || '';
 
@@ -114,6 +117,30 @@ export default function SettingsScreen() {
   useEffect(() => {
     loadSettings();
   }, [loadSettings]);
+
+  const loadAccountStatus = useCallback(async () => {
+    setAccountStatusLoading(true);
+    try {
+      const res = await usersApi.getAccountStatus();
+      setAccountStatus(res.data ?? null);
+    } catch (err: any) {
+      // 404 means the backend has not yet shipped the status endpoint — treat
+      // as "no scheduled deletion" so the UI shows the request-deletion path.
+      if (err?.response?.status === 404) {
+        setAccountStatus({ deletionScheduled: false });
+      } else {
+        // On other errors, hide the section entirely rather than render a
+        // misleading state.
+        setAccountStatus(null);
+      }
+    } finally {
+      setAccountStatusLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadAccountStatus();
+  }, [loadAccountStatus]);
 
   const updateSetting = async <K extends keyof CoachSettings>(key: K, value: CoachSettings[K]) => {
     const updated = { ...settings, [key]: value };
@@ -178,6 +205,80 @@ export default function SettingsScreen() {
     navigation.navigate('ClientsStack', { screen: 'InviteCodes' });
   };
 
+  const handleOpenBilling = () => {
+    mediumTap();
+    navigation.navigate('Billing');
+  };
+
+  const handleOpenTrustCenter = () => {
+    mediumTap();
+    navigation.navigate('TrustCenter');
+  };
+
+  const handleRequestDeletion = () => {
+    warningTap();
+    Alert.alert(
+      'Delete account',
+      'Your account will be scheduled for permanent deletion after a 30-day grace period. You can cancel any time during the window from this screen.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Schedule deletion',
+          style: 'destructive',
+          onPress: async () => {
+            setDeletionBusy(true);
+            try {
+              const res = await usersApi.deleteAccount();
+              const grace = res.data?.gracePeriodDays ?? 30;
+              await loadAccountStatus();
+              Alert.alert(
+                'Account scheduled for deletion',
+                `Your account will be permanently deleted in ${grace} days. Cancel any time before then from Settings.`,
+              );
+            } catch (err: any) {
+              const msg =
+                err?.response?.data?.message ||
+                'Could not schedule account deletion. Please try again.';
+              Alert.alert('Request failed', msg);
+            } finally {
+              setDeletionBusy(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const handleCancelDeletion = () => {
+    mediumTap();
+    Alert.alert(
+      'Keep account',
+      'Cancel the scheduled deletion and keep your account active?',
+      [
+        { text: 'Back', style: 'cancel' },
+        {
+          text: 'Keep account',
+          onPress: async () => {
+            setDeletionBusy(true);
+            try {
+              await usersApi.cancelAccountDeletion();
+              await loadAccountStatus();
+              successTap();
+              Alert.alert('Deletion canceled', 'Your account is no longer scheduled for deletion.');
+            } catch (err: any) {
+              const msg =
+                err?.response?.data?.message ||
+                'Could not cancel deletion. Contact support if this keeps happening.';
+              Alert.alert('Could not cancel', msg);
+            } finally {
+              setDeletionBusy(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const handleSignOut = () => {
     warningTap();
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
@@ -187,6 +288,14 @@ export default function SettingsScreen() {
   };
 
   const initials = `${currentUser?.firstName?.[0] || ''}${currentUser?.lastName?.[0] || ''}`;
+
+  const formatPermanentDate = (iso?: string | null): string | null => {
+    if (!iso) return null;
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return null;
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+  const permanentDate = formatPermanentDate(accountStatus?.permanentDeletionAt);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -272,6 +381,21 @@ export default function SettingsScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Subscription & access */}
+      <Text style={styles.sectionHeader}>Subscription</Text>
+      <View style={styles.section}>
+        <TouchableOpacity
+          style={styles.row}
+          onPress={handleOpenBilling}
+          accessibilityRole="button"
+          accessibilityLabel="Open billing and subscription"
+        >
+          <Ionicons name="card-outline" size={20} color={Colors.textSecondary} />
+          <Text style={styles.rowLabel}>Billing & access</Text>
+          <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+        </TouchableOpacity>
+      </View>
+
       {/* Notifications */}
       <Text style={styles.sectionHeader}>Notifications</Text>
       <View style={styles.section}>
@@ -313,12 +437,6 @@ export default function SettingsScreen() {
       <Text style={styles.sectionHeader}>App Preferences</Text>
       <View style={styles.section}>
         <View style={styles.row}>
-          <Ionicons name="moon-outline" size={20} color={Colors.textSecondary} />
-          <Text style={styles.rowLabel}>Theme</Text>
-          <Text style={styles.rowValueMuted}>Dark</Text>
-        </View>
-        <View style={styles.divider} />
-        <View style={styles.row}>
           <Ionicons name="phone-portrait-outline" size={20} color={Colors.textSecondary} />
           <Text style={styles.rowLabel}>Haptics</Text>
           <Switch
@@ -328,6 +446,64 @@ export default function SettingsScreen() {
             thumbColor={Colors.textOnPrimary}
           />
         </View>
+      </View>
+
+      {/* Privacy & data */}
+      <Text style={styles.sectionHeader}>Privacy & Data</Text>
+      <View style={styles.section}>
+        <TouchableOpacity
+          style={styles.row}
+          onPress={handleOpenTrustCenter}
+          accessibilityRole="button"
+          accessibilityLabel="Open trust and privacy center"
+        >
+          <Ionicons name="shield-checkmark-outline" size={20} color={Colors.textSecondary} />
+          <Text style={styles.rowLabel}>Trust & Privacy</Text>
+          <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+        </TouchableOpacity>
+        <View style={styles.divider} />
+        {accountStatusLoading ? (
+          <View style={styles.row}>
+            <Ionicons name="trash-outline" size={20} color={Colors.textSecondary} />
+            <Text style={styles.rowLabel}>Account deletion</Text>
+            <Text style={styles.rowValueMuted}>Checking…</Text>
+          </View>
+        ) : accountStatus?.deletionScheduled ? (
+          <TouchableOpacity
+            style={styles.row}
+            onPress={handleCancelDeletion}
+            disabled={deletionBusy}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel scheduled deletion"
+          >
+            <Ionicons name="time-outline" size={20} color={Colors.warning} />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.rowLabel, { color: Colors.warning }]}>
+                Deletion scheduled
+              </Text>
+              {permanentDate ? (
+                <Text style={styles.rowSubLabel}>
+                  Permanent on {permanentDate} — tap to cancel
+                </Text>
+              ) : (
+                <Text style={styles.rowSubLabel}>Tap to cancel deletion</Text>
+              )}
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={styles.row}
+            onPress={handleRequestDeletion}
+            disabled={deletionBusy}
+            accessibilityRole="button"
+            accessibilityLabel="Delete account"
+          >
+            <Ionicons name="trash-outline" size={20} color={Colors.error} />
+            <Text style={[styles.rowLabel, { color: Colors.error }]}>Delete account</Text>
+            <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Sign Out */}
@@ -537,6 +713,11 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     color: Colors.textPrimary,
+  },
+  rowSubLabel: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    marginTop: 2,
   },
   rowValue: {
     fontSize: 14,

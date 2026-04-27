@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StatusBar,
   SafeAreaView,
+  Linking,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../../navigation/AuthNavigator';
@@ -54,6 +55,23 @@ export default function WelcomeScreen({ navigation }: Props) {
           >
             <Text style={styles.secondaryButtonText}>Log In</Text>
           </TouchableOpacity>
+
+          <Text style={styles.accessNote}>
+            By invitation only. Without a code from your coach,{' '}
+            <Text
+              style={styles.accessLink}
+              accessibilityRole="link"
+              accessibilityLabel="Request access by email"
+              onPress={() =>
+                Linking.openURL(
+                  'mailto:hello@thegrowthproject.app?subject=Request%20access%20to%20The%20Growth%20Project',
+                )
+              }
+            >
+              request access
+            </Text>
+            .
+          </Text>
         </View>
       </View>
     </SafeAreaView>
@@ -133,5 +151,16 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     textTransform: 'uppercase',
     color: Colors.dark,
+  },
+  accessNote: {
+    marginTop: Spacing.md,
+    fontSize: 12,
+    color: Colors.textMuted,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  accessLink: {
+    color: Colors.primary,
+    textDecorationLine: 'underline',
   },
 });

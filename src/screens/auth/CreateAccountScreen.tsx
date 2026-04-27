@@ -10,6 +10,7 @@ import {
   Platform,
   ScrollView,
   Alert,
+  Linking,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors, Typography, Spacing, Radius, Shadow } from '../../theme';
@@ -322,6 +323,23 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
             <Text style={styles.invitePreviewBad}>
               {invitePreview.reason || 'This code is not currently active.'}
             </Text>
+          ) : requireInviteCode ? (
+            <Text style={styles.invitePreviewMuted}>
+              Don't have a code?{' '}
+              <Text
+                style={styles.requestAccessLink}
+                accessibilityRole="link"
+                accessibilityLabel="Request access by email"
+                onPress={() =>
+                  Linking.openURL(
+                    'mailto:hello@thegrowthproject.app?subject=Request%20access%20to%20The%20Growth%20Project',
+                  )
+                }
+              >
+                Request access
+              </Text>
+              .
+            </Text>
           ) : null}
         </View>
 
@@ -464,6 +482,7 @@ const styles = StyleSheet.create({
   invitePreviewOk: { fontSize: 13, color: Colors.primary, marginTop: 6 },
   invitePreviewBad: { fontSize: 13, color: Colors.error, marginTop: 6 },
   invitePreviewMuted: { fontSize: 13, color: Colors.textMuted, marginTop: 6 },
+  requestAccessLink: { color: Colors.primary, textDecorationLine: 'underline' },
   registerButton: {
     backgroundColor: Colors.primary,
     borderRadius: Radius.md,
