@@ -4,6 +4,10 @@ Run this end-to-end against an EAS `preview` APK or `production` AAB before prom
 
 A scripted sub-set lives at `scripts/release-smoke.sh` for the parts that can be automated from a connected device.
 
+## Real-device proof
+
+Every row marked **proof: …** below requires an artefact captured from a physical Android device (or a hardware-emulator AVD if no physical handset is available) and saved under `release-artifacts/<build-version>-<date>/`. Filename and capture command are listed per row. The release manager pastes the path in the Play Console release notes' internal section and keeps the folder for at least one rollback window (7 days). A row that lists a proof artefact but has no file in the folder is treated as not run. Emulators on CI are explicitly **not** acceptable for the push-notification, deep-link, and OAuth rows — those exercise system services that behave differently in cloud emulators.
+
 ---
 
 ## Pre-build
@@ -12,7 +16,7 @@ A scripted sub-set lives at `scripts/release-smoke.sh` for the parts that can be
 | --- | --- | --- |
 | 1 | `versionCode` bumped past last Play upload | `jq '.expo.android.versionCode' app.json` and compare to Play Console → Releases → Internal testing |
 | 2 | `version` bumped (semver) | `jq '.expo.version' app.json` |
-| 3 | App config validates | `npm run validate:config` |
+| 3 | App config validates | `npm run validate:config` (CI / dev) and `npm run validate:release` (pre-promotion gate — fails if any `REPLACE_WITH_*` placeholder remains in the well-known templates or if `expo.extra.storeListings.{playStoreUrl,appStoreUrl}` is still `null`) |
 | 4 | Required env vars set in EAS profile | `eas env:list --environment production` (and `preview` for APK) |
 | 5 | `eas.json` `requireCommit: true` is honoured | git tree clean before `eas build` |
 | 6 | Typecheck / lint / tests green | `npm run typecheck && npm run lint && npm test -- --ci --passWithNoTests` |
@@ -27,8 +31,8 @@ If item 4 lists `EXPO_PUBLIC_GOOGLE_CLIENT_ID_*`, **delete** them — auth is Su
 | 8 | App launches without crashing | `adb logcat -d -t 200 \| grep -i 'AndroidRuntime\|FATAL'` should be empty |
 | 9 | Splash + Welcome render (no white-flash, no Sentry init failure) | manual eyes-on |
 | 10 | `EXPO_PUBLIC_SUPABASE_URL` / `_ANON_KEY` are present (env validation throws on missing) | implicit — boot succeeds means env passed `src/config/env.ts` |
-| 11 | Push permission prompt fires once | tap through; second launch must NOT re-prompt |
-| 12 | Notification channels created on Android | `adb shell dumpsys notification \| grep -A1 'NotificationChannel.*com.growthproject.app'` shows `default`, `water`, `fasting` |
+| 11 | Push permission prompt fires once on Android 13+ | tap through; second launch must NOT re-prompt. **proof:** capture `adb shell dumpsys package com.growthproject.app \| grep -E 'POST_NOTIFICATIONS\|granted=true'` to `release-artifacts/<build>/notifications-permission.txt`. The `POST_NOTIFICATIONS` line must show `granted=true` — if it is missing entirely, the `expo-notifications` plugin is not registered in `app.json` and the build needs a respin. |
+| 12 | Notification channels created on Android | `adb shell dumpsys notification \| grep -A1 'NotificationChannel.*com.growthproject.app'` shows `default`, `water`, `fasting`. **proof:** save the full grep output to `release-artifacts/<build>/notification-channels.txt`. |
 
 ## Auth
 
@@ -44,8 +48,8 @@ If item 4 lists `EXPO_PUBLIC_GOOGLE_CLIENT_ID_*`, **delete** them — auth is Su
 
 | # | Check | How |
 | --- | --- | --- |
-| 18 | Custom scheme `tgp://join/<code>` opens CreateAccount with code prefilled | `adb shell am start -a android.intent.action.VIEW -d "tgp://join/SMOKE01" com.growthproject.app` |
-| 19 | Universal link `https://app.trygrowthproject.com/join/<code>` opens app silently (no chooser) | requires `assetlinks.json` hosted; see `docs/well-known/README.md`. Run `adb shell pm get-app-links com.growthproject.app` to confirm `app.trygrowthproject.com: verified` |
+| 18 | Custom scheme `tgp://join/<code>` opens CreateAccount with code prefilled | `adb shell am start -a android.intent.action.VIEW -d "tgp://join/SMOKE01" com.growthproject.app`. **proof:** screen-record (`adb shell screenrecord /sdcard/deeplink.mp4`, then `adb pull`) saved as `release-artifacts/<build>/deeplink-custom.mp4`. |
+| 19 | Universal link `https://app.trygrowthproject.com/join/<code>` opens app silently (no chooser) | requires `assetlinks.json` hosted with the production fingerprint (no `REPLACE_WITH_*` placeholders — `npm run validate:release` blocks publish if they remain). Run `adb shell pm get-app-links com.growthproject.app` to confirm `app.trygrowthproject.com: verified`. **proof:** save the full `pm get-app-links` output to `release-artifacts/<build>/app-links.txt`; the line for `app.trygrowthproject.com` must read `verified` (anything else — `legacy_failure`, `none`, `1024` — is a fail). |
 | 20 | Invite code without leading slash also works | tap a link in Gmail / Messages, not just `adb` |
 | 21 | App handles bad invite code gracefully | `tgp://join/NOT_REAL` — error surfaces in CreateAccount, no crash |
 
@@ -61,9 +65,9 @@ If item 4 lists `EXPO_PUBLIC_GOOGLE_CLIENT_ID_*`, **delete** them — auth is Su
 
 | # | Check | How |
 | --- | --- | --- |
-| 25 | Foreground notification renders (water reminder fires) | trigger `scheduleWaterReminder(0.001)` from a dev build, or manually post `adb shell cmd notification post -t "Hydrate" smoke 'Drink water'` |
-| 26 | Background tap routes back to the app | post a notification, swipe app away, tap notification → app reopens |
-| 27 | Notification shows correct channel name in long-press → settings | "Default" / "Water Reminders" / "Fasting Alerts" |
+| 25 | Foreground notification renders (water reminder fires) | trigger `scheduleWaterReminder(0.001)` from a dev build, or manually post `adb shell cmd notification post -t "Hydrate" smoke 'Drink water'`. **proof:** screenshot saved as `release-artifacts/<build>/notification-foreground.png`. |
+| 26 | Background tap routes back to the app | post a notification, swipe app away, tap notification → app reopens. **proof:** screen-record saved as `release-artifacts/<build>/notification-background.mp4`. |
+| 27 | Notification shows correct channel name in long-press → settings | "Default" / "Water Reminders" / "Fasting Alerts". **proof:** screenshot of the per-channel settings page saved as `release-artifacts/<build>/notification-channels-ui.png`. |
 
 ## Logging / observability
 

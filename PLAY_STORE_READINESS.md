@@ -173,6 +173,12 @@ npm run lint
 npm test -- --ci --passWithNoTests
 npm run validate:config
 
+# Pre-publish gate — promotes every REPLACE_WITH_* placeholder in the
+# well-known templates and any null entry in expo.extra.storeListings to a
+# hard error. Run this against the AAB you intend to upload, never just
+# against `main`.
+npm run validate:release
+
 # After installing the APK on a connected device
 npm run smoke:android
 ```
@@ -196,8 +202,10 @@ These cannot be derived from the codebase — someone has to fetch them and eith
 
 | Value | Source | Used by |
 | --- | --- | --- |
-| Play App Signing SHA-256 fingerprint | Play Console → Setup → App integrity → App signing (after first AAB upload) | `assetlinks.json` |
-| Apple Team ID (10-char) | App Store Connect → Membership | `apple-app-site-association` |
+| Play App Signing SHA-256 fingerprint | Play Console → Setup → App integrity → App signing (after first AAB upload) | `assetlinks.json` (replaces `REPLACE_WITH_PLAY_APP_SIGNING_SHA256_FINGERPRINT`; `npm run validate:release` blocks publish until done) |
+| Apple Team ID (10-char) | App Store Connect → Membership | `apple-app-site-association` (replaces `REPLACE_WITH_APPLE_TEAM_ID`; `npm run validate:release` blocks publish until done) |
+| Play Store listing URL | Play Console → Store presence → Main store listing → Share, after the listing is published | `app.json → expo.extra.storeListings.playStoreUrl`. Until published, leave as `null`; `npm run validate:release` rejects `null` so the value cannot be forgotten. |
+| App Store listing URL | App Store Connect → App Information → "View on the App Store", after first approved version | `app.json → expo.extra.storeListings.appStoreUrl`. Same fail-loud rule as the Play URL. |
 | Privacy policy URL | Marketing site, `https://app.trygrowthproject.com/privacy` | Play Data Safety form, App Store privacy nutrition label |
 | Test account credentials (client + coach) | Internal QA | Play "App access" instructions, App Store review notes |
 | Supabase project ref (for OAuth redirect) | Supabase dashboard URL | Google Cloud Console authorized redirect URIs |

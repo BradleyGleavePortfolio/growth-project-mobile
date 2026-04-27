@@ -19,7 +19,7 @@ A React Native nutrition & fitness coaching app built with Expo, TypeScript, and
 - TypeScript strict
 - expo-sqlite (async API)
 - Zustand v5 for state
-- React Navigation v7 (native stack + bottom tabs; 5 bottom tabs + More stack)
+- React Navigation v7 (native stack + bottom tabs; 4 bottom tabs, icons-only, with a More stack hung off the Profile tab)
 - react-native-svg for hand-rolled charts
 - react-native-reanimated v4, expo-haptics
 
@@ -89,10 +89,10 @@ src/
 ├── constants/        # Raw colors / fonts / base theme
 ├── db/               # SQLite database layer
 ├── hooks/            # Shared hooks (useCurrentUser, …)
-├── navigation/       # React Navigation setup (5 bottom tabs + More stack)
+├── navigation/       # React Navigation setup (4 bottom tabs + More stack hung off the Profile tab)
 ├── screens/
 │   ├── auth/         # Welcome, Login, Create Account, Forgot Password, Role
-│   ├── client/       # Client-facing screens (Home, Log, Plan, Workout, More…)
+│   ├── client/       # Client-facing screens (Home, Workout/Train, Log, Plan, Profile/More…)
 │   ├── coach/        # Coach dashboard screens
 │   └── onboarding/   # 10-step onboarding quiz
 ├── services/         # API client, auth helpers
@@ -104,9 +104,14 @@ src/
 
 ## Navigation
 
-Bottom tabs (round 3): **Home · Log · Plan · Workout · More**. The More tab
-is a nested stack housing Recipes, Fasting, Community, Progress, Profile,
-Settings, Report, Widgets, and Learn.
+Bottom tabs are icons-only (no labels). Four tabs, in order:
+
+1. **Home** — accessibility label `Home`, route name `Home`. Wraps `HomeStack` (`HomeMain`, `Habits`, `Notifications`, `Messages`).
+2. **Train** — accessibility label `Train`, route name `WorkoutTab`. Wraps `WorkoutStack` (`WorkoutMain`, `ActiveWorkout`, `RoutineBuilder`, `CoachGuidelines`).
+3. **Log** — accessibility label `Log food`, route name `Log`. Single screen (`LogScreen`).
+4. **Profile** — accessibility label `Profile and more`, route name `MoreTab`. Wraps `MoreStack`, which houses `MoreIndex`, `ProfileMain`, `Recipes`, `RecipeDetail`, `GroceryList`, `ShoppingList`, `PrepGuide`, `Fast`, `Community`, `Progress`, `Settings`, `Widgets`, `Report`, `Learn`, `Plan`, `TrustCenter`, `Preferences`, and the `TrophyShare` modal.
+
+The route names (`Home` / `WorkoutTab` / `Log` / `MoreTab`) are what `navigate()` calls and the linking config use; the user-facing labels live only in the accessibility props because the bar is icon-only. See `src/navigation/ClientNavigator.tsx`.
 
 ## Theme
 
