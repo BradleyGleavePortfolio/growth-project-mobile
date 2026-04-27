@@ -185,13 +185,13 @@ const styles = StyleSheet.create({
   },
   eventLabel: {
     fontSize:      11,
-    fontWeight:    '700',
+    fontWeight: '500',
     letterSpacing: 0.4,
     textTransform: 'uppercase',
   },
   timeLabel: {
     fontSize:   14,
-    fontWeight: '700',
+    fontWeight: '500',
     color:      Colors.dark,
   },
 });

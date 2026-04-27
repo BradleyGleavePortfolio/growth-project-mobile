@@ -452,7 +452,7 @@ const styles = StyleSheet.create({
   },
   topTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textPrimary,
   },
   content: {
@@ -461,7 +461,7 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textSecondary,
     textTransform: 'uppercase',
     marginBottom: 8,
@@ -484,7 +484,7 @@ const styles = StyleSheet.create({
   },
   avatarText: {
     fontSize: 22,
-    fontWeight: '800',
+    fontWeight: '500',
     color: Colors.textOnPrimary,
   },
   row: {
@@ -545,7 +545,7 @@ const styles = StyleSheet.create({
   },
   stepValue: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textPrimary,
     minWidth: 30,
     textAlign: 'center',
@@ -601,7 +601,7 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textPrimary,
   },
   input: {
@@ -622,7 +622,7 @@ const styles = StyleSheet.create({
   },
   saveBtnText: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textOnPrimary,
   },
   exportText: {

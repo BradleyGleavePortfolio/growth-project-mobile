@@ -11,7 +11,6 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
@@ -34,12 +33,10 @@ import { SkeletonCard } from '../../components/SkeletonLoader';
  *                 the coach roster, and visible to teammates and the coach.
  *   Leaderboard → real workout-volume groupBy on the backend (community.
  *                 service.getLeaderboard). Same scope rules.
- *   Challenges  → no backend module exists yet; tab renders as Coming Soon.
- *                 Previously this tab was driven by a SQLite-only
- *                 `seedCommunityIfNeeded` (theatrical seed of two fake
- *                 challenges with hard-coded participants). That seed has
- *                 been removed entirely; we will not show a feature that
- *                 only exists per-device.
+ *
+ * Wave 5b: the Challenges tab is gone. There is no backend module behind
+ * it, and the quiet-luxury doctrine forbids "Coming Soon" placeholder UI.
+ * The tab returns when there is real data to render.
  *
  * Cache:
  *   The two real queries (feed + leaderboard) are persisted via the
@@ -47,12 +44,11 @@ import { SkeletonCard } from '../../components/SkeletonLoader';
  *   the network call refreshes in the background.
  */
 
-type TabKey = 'wins' | 'leaderboard' | 'challenges';
+type TabKey = 'wins' | 'leaderboard';
 
 const TABS: { key: TabKey; label: string; icon: string }[] = [
   { key: 'wins', label: 'Wins', icon: 'star' },
   { key: 'leaderboard', label: 'Leaderboard', icon: 'podium' },
-  { key: 'challenges', label: 'Challenges', icon: 'trophy' },
 ];
 
 function formatTimeAgo(iso: string): string {
@@ -287,22 +283,6 @@ export default function CommunityScreen() {
             );
           }}
         />
-      )}
-
-      {/* CHALLENGES TAB — coming-soon placeholder ────────────────────── */}
-      {activeTab === 'challenges' && (
-        <ScrollView contentContainerStyle={styles.comingSoonContainer}>
-          <View style={styles.comingSoonCard}>
-            <Ionicons name="trophy-outline" size={36} color={Colors.primary} />
-            <Text style={styles.comingSoonEyebrow}>Coming soon</Text>
-            <Text style={styles.comingSoonTitle}>Team challenges</Text>
-            <Text style={styles.comingSoonBody}>
-              Coach-launched group challenges with shared progress and a real leaderboard are
-              being built. We removed the old version because the challenges only existed on
-              your device — we'd rather wait and ship it right.
-            </Text>
-          </View>
-        </ScrollView>
       )}
 
       {/* POST-A-WIN MODAL ─────────────────────────────────────────────── */}
@@ -574,48 +554,6 @@ const styles = StyleSheet.create({
   },
   winDesc: { fontFamily: 'Inter_400Regular', fontSize: 13, color: Colors.textSecondary, lineHeight: 20 },
   winTime: { fontFamily: 'Inter_400Regular', fontSize: 11, color: Colors.textMuted },
-
-  // Coming soon for challenges
-  comingSoonContainer: {
-    flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingVertical: 24,
-    justifyContent: 'center',
-  },
-  comingSoonCard: {
-    alignItems: 'center',
-    backgroundColor: Colors.surface,
-    borderRadius: 4, // radius.lg
-    padding: 24,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    gap: 8,
-  },
-  comingSoonEyebrow: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 11,
-    fontWeight: '500',
-    color: Colors.primary,
-    textTransform: 'uppercase',
-    letterSpacing: 1.98,
-    marginTop: 4,
-  },
-  comingSoonTitle: {
-    fontFamily: 'CormorantGaramond_400Regular',
-    fontSize: 24,
-    lineHeight: 29,
-    letterSpacing: 0.5,
-    fontWeight: '400',
-    color: Colors.textPrimary,
-  },
-  comingSoonBody: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 14,
-    lineHeight: 22,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    marginTop: 4,
-  },
 
   // Modal
   modalBackdrop: {

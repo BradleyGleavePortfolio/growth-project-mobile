@@ -40,8 +40,6 @@ import CommunityScreen from '../screens/client/CommunityScreen';
 import MoreScreen from '../screens/client/MoreScreen';
 import TrustCenterScreen from '../screens/TrustCenterScreen';
 import PreferencesScreen from '../screens/client/PreferencesScreen';
-import TrophyShareScreen from '../screens/TrophyShareScreen';
-import type { TrophyShareScreenParams } from '../screens/TrophyShareScreen';
 import { colors } from '../theme/tokens';
 
 // ─── Param lists ──────────────────────────────────────────────────────────────
@@ -86,7 +84,6 @@ export type MoreStackParamList = {
   PrepGuide:   undefined;
   Plan:        undefined;
   TrustCenter: undefined;
-  TrophyShare: TrophyShareScreenParams;
   Preferences: undefined;
 };
 
@@ -155,11 +152,6 @@ function MoreStackNavigator() {
       <MoreStackNav.Screen name="Plan"         component={PlanScreen} />
       <MoreStackNav.Screen name="TrustCenter"  component={TrustCenterScreen} />
       <MoreStackNav.Screen name="Preferences"  component={PreferencesScreen} />
-      <MoreStackNav.Screen
-        name="TrophyShare"
-        component={TrophyShareScreen}
-        options={{ presentation: 'modal' }}
-      />
     </MoreStackNav.Navigator>
   );
 }

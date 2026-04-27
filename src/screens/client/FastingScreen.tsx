@@ -417,7 +417,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontWeight: '800',
+    fontWeight: '500',
     color: Colors.textPrimary,
   },
   streakBadge: {
@@ -431,7 +431,7 @@ const styles = StyleSheet.create({
   },
   streakText: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.warning,
   },
   protocolRow: {
@@ -452,7 +452,7 @@ const styles = StyleSheet.create({
   },
   protocolText: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textSecondary,
   },
   protocolTextActive: {
@@ -470,7 +470,7 @@ const styles = StyleSheet.create({
   },
   timerValue: {
     fontSize: 36,
-    fontWeight: '800',
+    fontWeight: '500',
     color: Colors.textPrimary,
   },
   timerSub: {
@@ -502,7 +502,7 @@ const styles = StyleSheet.create({
   },
   actionBtnText: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textOnPrimary,
   },
   activeCard: {
@@ -523,7 +523,7 @@ const styles = StyleSheet.create({
   },
   activeValue: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textPrimary,
   },
   statsRow: {
@@ -542,7 +542,7 @@ const styles = StyleSheet.create({
   },
   statValue: {
     fontSize: 20,
-    fontWeight: '800',
+    fontWeight: '500',
     color: Colors.textPrimary,
   },
   statLabel: {
@@ -555,7 +555,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 17,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textPrimary,
     marginBottom: 12,
   },
@@ -583,7 +583,7 @@ const styles = StyleSheet.create({
   },
   historyDuration: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.primary,
   },
 });

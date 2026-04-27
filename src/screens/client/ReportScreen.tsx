@@ -209,7 +209,7 @@ const styles = StyleSheet.create({
   },
   topTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textPrimary,
   },
   scroll: {
@@ -252,7 +252,7 @@ const styles = StyleSheet.create({
   },
   coverTitle: {
     fontSize: 24,
-    fontWeight: '800',
+    fontWeight: '500',
     color: TEXT,
   },
   coverSubtitle: {
@@ -262,7 +262,7 @@ const styles = StyleSheet.create({
   },
   coverName: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '500',
     color: TEXT,
     marginTop: 20,
   },
@@ -282,7 +282,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 17,
-    fontWeight: '700',
+    fontWeight: '500',
     color: TEXT,
     marginBottom: 14,
   },
@@ -296,7 +296,7 @@ const styles = StyleSheet.create({
   },
   macroValue: {
     fontSize: 22,
-    fontWeight: '800',
+    fontWeight: '500',
     color: TEXT,
   },
   macroUnit: {
@@ -324,7 +324,7 @@ const styles = StyleSheet.create({
   },
   statValue: {
     fontSize: 22,
-    fontWeight: '800',
+    fontWeight: '500',
     color: TEXT,
   },
   statLabel: {
@@ -356,7 +356,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.feedback.successBg,
     color: GREEN,
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '500',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 0, // radius.sm
@@ -387,7 +387,7 @@ const styles = StyleSheet.create({
   },
   footerTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '500',
     color: TEXT,
   },
   footerSub: {

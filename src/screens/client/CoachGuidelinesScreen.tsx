@@ -123,7 +123,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  topTitle: { fontSize: 17, fontWeight: '700', color: Colors.textPrimary },
+  topTitle: { fontSize: 17, fontWeight: '500', color: Colors.textPrimary },
   content: { padding: 20, paddingBottom: 100 },
   headerCard: {
     backgroundColor: Colors.primaryPale,
@@ -141,7 +141,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  headerTitle: { fontSize: 20, fontWeight: '800', color: Colors.textPrimary, marginBottom: 4 },
+  headerTitle: { fontSize: 20, fontWeight: '500', color: Colors.textPrimary, marginBottom: 4 },
   headerSub: { fontSize: 13, color: Colors.textSecondary },
   guidelineCard: {
     backgroundColor: Colors.surface,
@@ -150,14 +150,14 @@ const styles = StyleSheet.create({
   },
   heading1: {
     fontSize: 18,
-    fontWeight: '800',
+    fontWeight: '500',
     color: Colors.textPrimary,
     marginBottom: 8,
     marginTop: 8,
   },
   heading2: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.primary,
     marginBottom: 6,
     marginTop: 12,
@@ -193,6 +193,6 @@ const styles = StyleSheet.create({
     marginTop: 40,
     gap: 12,
   },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: Colors.textPrimary },
+  emptyTitle: { fontSize: 18, fontWeight: '500', color: Colors.textPrimary },
   emptyText: { fontSize: 14, color: Colors.textMuted, textAlign: 'center', lineHeight: 20 },
 });

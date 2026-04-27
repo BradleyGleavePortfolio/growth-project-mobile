@@ -63,7 +63,7 @@ const styles = StyleSheet.create({
   },
   values: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '500',
   },
   target: {
     color: Colors.textMuted,

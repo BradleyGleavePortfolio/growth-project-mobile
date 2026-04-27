@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
   },
   projectionTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textPrimary,
   },
   projectionRow: {
@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
   },
   projectionValue: {
     fontSize: 32,
-    fontWeight: '800',
+    fontWeight: '500',
     color: Colors.textPrimary,
   },
   projectionLabel: {

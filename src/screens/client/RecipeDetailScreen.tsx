@@ -247,7 +247,7 @@ const styles = StyleSheet.create({
   },
   lastSection: { marginBottom: 0 },
 
-  recipeTitle: { fontSize: 22, fontWeight: '800', color: Colors.textPrimary, lineHeight: 28 },
+  recipeTitle: { fontSize: 22, fontWeight: '500', color: Colors.textPrimary, lineHeight: 28 },
   recipeDesc: { fontSize: 14, color: Colors.textSecondary, lineHeight: 20 },
 
   metaRow: { flexDirection: 'row', gap: 16, flexWrap: 'wrap', marginTop: 2 },
@@ -263,7 +263,7 @@ const styles = StyleSheet.create({
   },
   tagText: { fontSize: 12, color: Colors.textSecondary, fontWeight: '600' },
 
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: Colors.textPrimary },
+  sectionTitle: { fontSize: 16, fontWeight: '500', color: Colors.textPrimary },
 
   macroGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 4 },
   macroCard: {
@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 2,
   },
-  macroValue: { fontSize: 20, fontWeight: '800' },
+  macroValue: { fontSize: 20, fontWeight: '500' },
   macroLabel: { fontSize: 12, fontWeight: '600' },
 
   listItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
@@ -299,7 +299,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     marginTop: 1,
   },
-  stepNumberText: { fontSize: 13, fontWeight: '800', color: Colors.textOnPrimary },
+  stepNumberText: { fontSize: 13, fontWeight: '500', color: Colors.textOnPrimary },
   stepText: { flex: 1, fontSize: 14, color: Colors.textPrimary, lineHeight: 22 },
 
   errorContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },

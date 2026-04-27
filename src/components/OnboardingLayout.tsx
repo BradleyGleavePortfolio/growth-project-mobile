@@ -159,7 +159,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontWeight: '800',
+    fontWeight: '500',
     color: Colors.textPrimary,
     marginBottom: 8,
   },
@@ -189,6 +189,6 @@ const styles = StyleSheet.create({
   continueText: {
     color: Colors.textOnPrimary,
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '500',
   },
 });

@@ -371,7 +371,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 17,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textPrimary,
   },
   headerMeta: {
@@ -424,7 +424,7 @@ const styles = StyleSheet.create({
   },
   setNum: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.primary,
   },
   input: {
@@ -511,7 +511,7 @@ const styles = StyleSheet.create({
   },
   totalVolValue: {
     fontSize: 20,
-    fontWeight: '800',
+    fontWeight: '500',
     color: Colors.primary,
   },
 
@@ -535,7 +535,7 @@ const styles = StyleSheet.create({
   },
   saveBtnText: {
     fontSize: 17,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textOnPrimary,
   },
 });

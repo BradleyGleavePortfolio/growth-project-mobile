@@ -183,7 +183,7 @@ export default function CoachHomeScreen() {
         </View>
       </FadeInView>
 
-      {/* ⚠️ Red Flag Clients */}
+      {/* Red flag clients */}
       {redFlagClients.length > 0 && (
         <FadeInView>
           <Text style={styles.sectionTitle}>Weight Trend Alerts</Text>
@@ -289,7 +289,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     marginBottom: 24,
   },
-  greeting: { fontSize: 26, fontWeight: '800', color: Colors.textPrimary },
+  greeting: { fontSize: 26, fontWeight: '500', color: Colors.textPrimary },
   subtitle: { fontSize: 14, color: Colors.textSecondary, marginTop: 4 },
   settingsBtn: {
     width: 40,
@@ -322,11 +322,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  metricValue: { fontSize: 24, fontWeight: '800', color: Colors.textPrimary },
+  metricValue: { fontSize: 24, fontWeight: '500', color: Colors.textPrimary },
   metricLabel: { fontSize: 12, color: Colors.textSecondary },
   sectionTitle: {
     fontSize: 17,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textPrimary,
     paddingHorizontal: 24,
     marginBottom: 12,
@@ -352,7 +352,7 @@ const styles = StyleSheet.create({
   },
   redFlagName: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textPrimary,
   },
   redFlagTrend: {
@@ -368,7 +368,7 @@ const styles = StyleSheet.create({
   },
   viewClientBtnText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.noticeWarningText,
   },
   // Overdue Card
@@ -432,7 +432,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  actionText: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary },
+  actionText: { fontSize: 14, fontWeight: '500', color: Colors.textPrimary },
   clientStatusCard: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -451,7 +451,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  csAvatarText: { color: Colors.textOnPrimary, fontSize: 13, fontWeight: '700' },
+  csAvatarText: { color: Colors.textOnPrimary, fontSize: 13, fontWeight: '500' },
   csInfo: { flex: 1 },
   csName: { fontSize: 15, fontWeight: '600', color: Colors.textPrimary },
   csMeta: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },

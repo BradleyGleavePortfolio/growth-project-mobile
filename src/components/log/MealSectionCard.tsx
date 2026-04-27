@@ -97,7 +97,7 @@ const styles = StyleSheet.create({
   },
   mealTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.dark,
   },
   mealCals: {
@@ -134,7 +134,7 @@ const styles = StyleSheet.create({
   },
   foodCals: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.dark,
   },
   addFoodButton: {

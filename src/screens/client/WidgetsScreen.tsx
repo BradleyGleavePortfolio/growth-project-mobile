@@ -13,79 +13,37 @@ import { useNavigation } from '@react-navigation/native';
 import { Colors } from '../../constants/colors';
 import FadeInView from '../../components/FadeInView';
 import { fastingApi } from '../../services/api';
+import { typography, spacing, radius } from '../../theme/tokens';
 
-const NON_FUNCTIONAL_IDS = new Set(['scan-barcode', 'apple-watch', 'health-kit']);
+// Wave 5b: WidgetsScreen reduced to the actions that actually work today.
+// Per the no-placeholder doctrine, "Coming Soon" widgets, wearables and
+// barcode-scanner stubs are removed from the shipped surface. They will
+// return when there's a real implementation behind them.
 
-const WIDGETS = [
-  {
-    id: 'calorie-ring',
-    title: 'Calorie Ring',
-    description: 'At-a-glance daily calorie progress on your home screen',
-    icon: 'pie-chart-outline' as const,
-    status: 'Coming Soon',
-  },
-  {
-    id: 'macro-summary',
-    title: 'Macro Summary',
-    description: 'Protein, carbs & fat breakdown widget',
-    icon: 'bar-chart-outline' as const,
-    status: 'Coming Soon',
-  },
-  {
-    id: 'water-tracker',
-    title: 'Water Tracker',
-    description: 'Quick-add water intake without opening the app',
-    icon: 'water-outline' as const,
-    status: 'Coming Soon',
-  },
-  {
-    id: 'fasting-timer',
-    title: 'Fasting Timer',
-    description: 'Live countdown of your current fast on the home screen',
-    icon: 'timer-outline' as const,
-    status: 'Coming Soon',
-  },
-];
+type QuickActionId = 'quick-log' | 'start-fast';
 
-const QUICK_ACTIONS = [
+interface QuickAction {
+  id: QuickActionId;
+  title: string;
+  description: string;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+}
+
+const QUICK_ACTIONS: QuickAction[] = [
   {
     id: 'quick-log',
-    title: 'Quick Log',
-    description: 'Log a meal directly from your home screen',
-    icon: 'add-circle-outline' as const,
+    title: 'Quick log',
+    description: 'Open the food log from anywhere',
+    icon: 'add-circle-outline',
   },
   {
     id: 'start-fast',
-    title: 'Start Fast',
-    description: 'Begin a fasting session with one tap',
-    icon: 'play-circle-outline' as const,
-  },
-  {
-    id: 'scan-barcode',
-    title: 'Scan Barcode',
-    description: 'Open barcode scanner instantly',
-    icon: 'barcode-outline' as const,
+    title: 'Start fast',
+    description: 'Begin a 16:8 fasting session',
+    icon: 'play-circle-outline',
   },
 ];
 
-const WEARABLES = [
-  {
-    id: 'apple-watch',
-    title: 'Apple Watch',
-    description: 'Sync calories, macros & fasting timer to your wrist',
-    icon: 'watch-outline' as const,
-    status: 'In Development',
-  },
-  {
-    id: 'health-kit',
-    title: 'Apple Health',
-    description: 'Import workouts & export nutrition data',
-    icon: 'heart-outline' as const,
-    status: 'Planned',
-  },
-];
-
-// Default 16:8 fast protocol.
 const DEFAULT_FAST_PROTOCOL = '16:8';
 
 export default function WidgetsScreen() {
@@ -95,7 +53,7 @@ export default function WidgetsScreen() {
   const handleStartFast = useCallback(async () => {
     if (startingFast) return;
     Alert.alert(
-      'Start 16:8 Fast',
+      'Start 16:8 fast',
       'Begin a 16-hour fast now? Your fasting timer will start immediately.',
       [
         { text: 'Cancel', style: 'cancel' },
@@ -105,14 +63,13 @@ export default function WidgetsScreen() {
             setStartingFast(true);
             try {
               await fastingApi.start({ protocol: DEFAULT_FAST_PROTOCOL });
-              // Navigate to the fasting screen in the More stack.
               navigation.navigate('Fast');
             } catch (err: any) {
               const msg =
                 err?.response?.data?.message ||
                 err?.message ||
-                'Could not start fast. Check if a fast is already in progress.';
-              Alert.alert('Error', msg);
+                'Could not start fast. A fast may already be in progress.';
+              Alert.alert('Could not start fast', msg);
             } finally {
               setStartingFast(false);
             }
@@ -121,6 +78,19 @@ export default function WidgetsScreen() {
       ],
     );
   }, [startingFast, navigation]);
+
+  const handlePress = useCallback(
+    (id: QuickActionId) => {
+      if (id === 'start-fast') {
+        handleStartFast();
+        return;
+      }
+      if (id === 'quick-log') {
+        navigation.navigate('Log');
+      }
+    },
+    [navigation, handleStartFast],
+  );
 
   return (
     <ScrollView
@@ -132,109 +102,36 @@ export default function WidgetsScreen() {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.title}>Widgets & Shortcuts</Text>
+        <Text style={styles.title}>Shortcuts</Text>
       </View>
 
-      {/* Home Screen Widgets */}
       <FadeInView>
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Home Screen Widgets</Text>
-          <Text style={styles.sectionSubtitle}>
-            Add widgets to your device home screen for quick access
-          </Text>
-          {WIDGETS.map((widget) => (
-            <View key={widget.id} style={styles.card}>
-              <View style={styles.cardIcon}>
-                <Ionicons name={widget.icon} size={24} color={Colors.primary} />
-              </View>
-              <View style={styles.cardContent}>
-                <Text style={styles.cardTitle}>{widget.title}</Text>
-                <Text style={styles.cardDesc}>{widget.description}</Text>
-              </View>
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{widget.status}</Text>
-              </View>
-            </View>
-          ))}
-        </View>
-      </FadeInView>
-
-      {/* Quick Actions */}
-      <FadeInView delay={100}>
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
-          <Text style={styles.sectionSubtitle}>
-            3D Touch / long-press shortcuts from your app icon
-          </Text>
+          <Text style={styles.eyebrow}>Quick actions</Text>
           {QUICK_ACTIONS.map((action) => {
-            const isComingSoon = NON_FUNCTIONAL_IDS.has(action.id);
             const isStartFast = action.id === 'start-fast';
             const isLoading = isStartFast && startingFast;
-
-            let onPressHandler: (() => void) | undefined;
-            if (isComingSoon) {
-              onPressHandler = () => Alert.alert('Coming Soon', 'This feature is under development.');
-            } else if (isStartFast) {
-              onPressHandler = handleStartFast;
-            }
 
             return (
               <TouchableOpacity
                 key={action.id}
-                style={[styles.card, isComingSoon && styles.cardDisabled]}
+                style={styles.card}
                 activeOpacity={0.7}
-                onPress={onPressHandler}
+                onPress={() => handlePress(action.id)}
                 disabled={isLoading}
               >
                 <View style={styles.cardIcon}>
-                  <Ionicons name={action.icon} size={24} color={isComingSoon ? Colors.textMuted : Colors.primary} />
+                  <Ionicons name={action.icon} size={22} color={Colors.primary} />
                 </View>
                 <View style={styles.cardContent}>
-                  <Text style={[styles.cardTitle, isComingSoon && styles.cardTitleDisabled]}>{action.title}</Text>
+                  <Text style={styles.cardTitle}>{action.title}</Text>
                   <Text style={styles.cardDesc}>{action.description}</Text>
                 </View>
                 {isLoading ? (
                   <ActivityIndicator size="small" color={Colors.primary} />
-                ) : isComingSoon ? (
-                  <View style={styles.badgeComingSoon}>
-                    <Text style={styles.badgeComingSoonText}>Coming Soon</Text>
-                  </View>
                 ) : (
                   <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
                 )}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </FadeInView>
-
-      {/* Wearables */}
-      <FadeInView delay={200}>
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Wearables</Text>
-          <Text style={styles.sectionSubtitle}>
-            Connect your wearable devices for a seamless experience
-          </Text>
-          {WEARABLES.map((device) => {
-            const disabled = NON_FUNCTIONAL_IDS.has(device.id);
-            return (
-              <TouchableOpacity
-                key={device.id}
-                style={[styles.card, disabled && styles.cardDisabled]}
-                activeOpacity={0.7}
-                onPress={disabled ? () => Alert.alert('Coming Soon', 'This feature is under development.') : undefined}
-                disabled={!disabled}
-              >
-                <View style={styles.cardIcon}>
-                  <Ionicons name={device.icon} size={24} color={disabled ? Colors.textMuted : Colors.primary} />
-                </View>
-                <View style={styles.cardContent}>
-                  <Text style={[styles.cardTitle, disabled && styles.cardTitleDisabled]}>{device.title}</Text>
-                  <Text style={styles.cardDesc}>{device.description}</Text>
-                </View>
-                <View style={styles.badgeComingSoon}>
-                  <Text style={styles.badgeComingSoonText}>Coming Soon</Text>
-                </View>
               </TouchableOpacity>
             );
           })}
@@ -250,15 +147,15 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   content: {
-    paddingBottom: 40,
+    paddingBottom: spacing['2xl'],
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: spacing.xl,
     paddingTop: 60,
-    marginBottom: 24,
-    gap: 12,
+    marginBottom: spacing.xl,
+    gap: spacing.md,
   },
   backBtn: {
     width: 40,
@@ -266,44 +163,45 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   title: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: Colors.textPrimary,
+    fontFamily:    typography.h1.fontFamily,
+    fontSize:      typography.h1.fontSize,
+    lineHeight:    typography.h1.lineHeight,
+    fontWeight:    typography.h1.fontWeight,
+    letterSpacing: typography.h1.letterSpacing,
+    color:         Colors.textPrimary,
   },
   section: {
     backgroundColor: Colors.surface,
-    borderRadius: 4, // radius.lg
-    marginHorizontal: 16,
-    marginBottom: 20,
-    padding: 20,
+    borderRadius: radius.lg,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+    padding: spacing.lg,
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    marginBottom: 4,
-  },
-  sectionSubtitle: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    marginBottom: 14,
-    lineHeight: 18,
+  eyebrow: {
+    fontFamily:     typography.eyebrow.fontFamily,
+    fontSize:       typography.eyebrow.fontSize,
+    lineHeight:     typography.eyebrow.lineHeight,
+    fontWeight:     typography.eyebrow.fontWeight,
+    letterSpacing:  typography.eyebrow.letterSpacing,
+    textTransform:  'uppercase',
+    color:          Colors.textSecondary,
+    marginBottom:   spacing.md,
   },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.surface,
-    borderRadius: 4, // radius.lg
-    padding: 14,
-    marginBottom: 10,
-    gap: 12,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
+    marginBottom: spacing.sm,
+    gap: spacing.md,
   },
   cardIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 2, // radius.md
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
     backgroundColor: Colors.surfaceElevated,
     justifyContent: 'center',
     alignItems: 'center',
@@ -312,48 +210,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   cardTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    marginBottom: 2,
+    fontFamily:    typography.bodyMd.fontFamily,
+    fontSize:      typography.bodyMd.fontSize,
+    lineHeight:    typography.bodyMd.lineHeight,
+    fontWeight:    typography.bodyMd.fontWeight,
+    letterSpacing: typography.bodyMd.letterSpacing,
+    color:         Colors.textPrimary,
+    marginBottom:  2,
   },
   cardDesc: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    lineHeight: 16,
-  },
-  badge: {
-    backgroundColor: Colors.surfaceElevated,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 0, // radius.sm
-  },
-  badgeActive: {
-    backgroundColor: Colors.primaryDark,
-  },
-  badgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: Colors.textMuted,
-  },
-  badgeTextActive: {
-    color: Colors.textOnPrimary,
-  },
-  cardDisabled: {
-    opacity: 0.5,
-  },
-  cardTitleDisabled: {
-    color: Colors.textMuted,
-  },
-  badgeComingSoon: {
-    backgroundColor: Colors.surfaceElevated,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 0, // radius.sm
-  },
-  badgeComingSoonText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: Colors.textMuted,
+    fontFamily:    typography.bodySmall.fontFamily,
+    fontSize:      typography.bodySmall.fontSize,
+    lineHeight:    typography.bodySmall.lineHeight,
+    color:         Colors.textSecondary,
   },
 });

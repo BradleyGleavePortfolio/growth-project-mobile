@@ -214,7 +214,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize:      14,
-    fontWeight:    '700',
+    fontWeight: '500',
     color:         Colors.dark,
     letterSpacing: 0.1,
   },
@@ -231,7 +231,7 @@ const styles = StyleSheet.create({
   },
   pctText: {
     fontSize:   11,
-    fontWeight: '700',
+    fontWeight: '500',
   },
 
   // Progress bar

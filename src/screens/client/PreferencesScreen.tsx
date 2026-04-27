@@ -334,7 +334,7 @@ const styles = StyleSheet.create({
   },
   topTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textPrimary,
   },
   content: {
@@ -350,7 +350,7 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textSecondary,
     letterSpacing: 0.6,
     marginBottom: 8,

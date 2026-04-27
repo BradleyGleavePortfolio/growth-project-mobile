@@ -99,7 +99,7 @@ export default function OnboardingStep6({ navigation }: Props) {
 const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textPrimary,
     marginBottom: 12,
   },

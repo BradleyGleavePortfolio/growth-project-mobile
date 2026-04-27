@@ -123,7 +123,7 @@ const styles = StyleSheet.create({
   },
   ageNumber: {
     fontSize: 64,
-    fontWeight: '800',
+    fontWeight: '500',
     color: Colors.primary,
   },
   ageLabel: {

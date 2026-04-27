@@ -1,7 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import FirstWinCelebration from '../../components/FirstWinCelebration';
-import { useFirstWinCelebration, FirstWinState } from '../../hooks/useFirstWinCelebration';
-import { useFoundingNumber } from '../../hooks/useIdentity';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -166,50 +163,6 @@ const exerciseImageStyles = StyleSheet.create({
   },
 });
 
-// ── Psych #5: Trophy-wrapped first-win overlay ─────────────────────────────────
-// Dismissing the first-win celebration offers a "Save Your Trophy" CTA.
-
-interface FirstWinCelebrationWithTrophyProps {
-  visible: boolean;
-  identityTitle: string;
-  navigation: any;
-}
-
-function FirstWinCelebrationWithTrophy({
-  visible,
-  identityTitle,
-  navigation,
-}: FirstWinCelebrationWithTrophyProps) {
-  const [show, setShow] = useState(visible);
-  const { data: foundingData } = useFoundingNumber();
-  const isFoundingMember = foundingData?.isFoundingMember ?? false;
-
-  useEffect(() => { setShow(visible); }, [visible]);
-
-  const handleDismiss = useCallback(() => {
-    setShow(false);
-    // Psych #5: navigate to TrophyShare after first win dismissal
-    setTimeout(() => {
-      navigation.navigate('TrophyShare', {
-        kind: 'badge',
-        headline: 'First Win',
-        subtitle: 'You did it. Day one done.',
-        identityTitle,
-        isFoundingMember,
-        surface: 'first_win',
-      });
-    }, 350);
-  }, [identityTitle, isFoundingMember, navigation]);
-
-  return (
-    <FirstWinCelebration
-      visible={show}
-      identityTitle={identityTitle}
-      onDismiss={handleDismiss}
-    />
-  );
-}
-
 // ── Main Screen ───────────────────────────────────────────────────────────
 
 export default function ActiveWorkoutScreen() {
@@ -228,10 +181,6 @@ export default function ActiveWorkoutScreen() {
   const [showLogModal, setShowLogModal] = useState(false);
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
   const createWorkout = useCreateWorkout();
-
-  // ── Psych Report #1: First-Win Celebration ────────────────────────────────
-  const [firstWin, setFirstWin] = useState<FirstWinState>({ visible: false, identityTitle: '' });
-  const { triggerFirstWin } = useFirstWinCelebration(setFirstWin);
 
   useEffect(() => {
     // Parse routine exercises into session format
@@ -410,8 +359,7 @@ export default function ActiveWorkoutScreen() {
                   sets_completed: completedSets,
                   exercise_count: sessionExercises.filter((e) => e.sets.some((s) => s.completed)).length,
                 });
-                // Psych Report #1: fire first-win celebration before navigating away
-                triggerFirstWin().then(() => navigation.goBack());
+                navigation.goBack();
               },
               onError: (err: any) => {
                 Alert.alert("Couldn't save workout", err?.message || 'Please try again.');
@@ -629,12 +577,6 @@ export default function ActiveWorkoutScreen() {
         </View>
       </Modal>
 
-      {/* Psych Report #1 + #5: First-win overlay → trophy CTA on dismiss */}
-      <FirstWinCelebrationWithTrophy
-        visible={firstWin.visible}
-        identityTitle={firstWin.identityTitle}
-        navigation={navigation}
-      />
     </View>
   );
 }
@@ -653,15 +595,15 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   topCenter: { alignItems: 'center' },
-  topTitle: { fontSize: 16, fontWeight: '700', color: Colors.textPrimary },
-  timerText: { fontSize: 20, fontWeight: '800', color: Colors.primary, marginTop: 2 },
+  topTitle: { fontSize: 16, fontWeight: '500', color: Colors.textPrimary },
+  timerText: { fontSize: 20, fontWeight: '500', color: Colors.primary, marginTop: 2 },
   finishBtn: {
     backgroundColor: Colors.primary,
     borderRadius: 0, // radius.sm
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
-  finishBtnText: { color: Colors.textOnPrimary, fontSize: 14, fontWeight: '700' },
+  finishBtnText: { color: Colors.textOnPrimary, fontSize: 14, fontWeight: '500' },
   progressBar: {
     height: 3,
     backgroundColor: Colors.primaryPale,
@@ -684,7 +626,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  exerciseName: { fontSize: 16, fontWeight: '700', color: Colors.primary },
+  exerciseName: { fontSize: 16, fontWeight: '500', color: Colors.primary },
   setHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -748,7 +690,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     borderStyle: 'dashed',
   },
-  addExerciseText: { fontSize: 15, fontWeight: '700', color: Colors.primary },
+  addExerciseText: { fontSize: 15, fontWeight: '500', color: Colors.primary },
 
   // Modal
   modalContainer: { flex: 1, backgroundColor: Colors.background },
@@ -762,7 +704,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  modalTitle: { fontSize: 17, fontWeight: '700', color: Colors.textPrimary },
+  modalTitle: { fontSize: 17, fontWeight: '500', color: Colors.textPrimary },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -806,7 +748,7 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 4,
   },
-  exerciseListName: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
+  exerciseListName: { fontSize: 15, fontWeight: '500', color: Colors.textPrimary },
   muscleBadge: {
     alignSelf: 'flex-start',
     paddingHorizontal: 8,
@@ -816,7 +758,7 @@ const styles = StyleSheet.create({
   },
   muscleBadgeText: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '500',
     letterSpacing: 0.3,
   },
   exerciseListEquipment: { fontSize: 12, color: Colors.textMuted },
@@ -830,7 +772,7 @@ const styles = StyleSheet.create({
   },
   emptyStateText: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textPrimary,
     marginTop: 8,
   },

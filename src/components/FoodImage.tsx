@@ -64,7 +64,7 @@ const styles = StyleSheet.create({
   },
   letter: {
     color: Colors.textOnPrimary,
-    fontWeight: '700',
+    fontWeight: '500',
   },
   logoOverlay: {
     position: 'absolute',

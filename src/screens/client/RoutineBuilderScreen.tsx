@@ -351,7 +351,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  topTitle: { fontSize: 17, fontWeight: '700', color: Colors.textPrimary },
+  topTitle: { fontSize: 17, fontWeight: '500', color: Colors.textPrimary },
   content: { padding: 20, paddingBottom: 120 },
   nameInput: {
     backgroundColor: Colors.surface,
@@ -385,12 +385,12 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     color: Colors.textOnPrimary,
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '500',
     textAlign: 'center',
     lineHeight: 24,
     overflow: 'hidden',
   },
-  exerciseName: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary, flex: 1 },
+  exerciseName: { fontSize: 15, fontWeight: '500', color: Colors.textPrimary, flex: 1 },
   exerciseActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   fieldRow: { flexDirection: 'row', gap: 10 },
   field: { flex: 1 },
@@ -418,7 +418,7 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     marginTop: 4,
   },
-  addBtnText: { fontSize: 15, fontWeight: '700', color: Colors.primary },
+  addBtnText: { fontSize: 15, fontWeight: '500', color: Colors.primary },
   footer: {
     position: 'absolute',
     bottom: 0,
@@ -436,7 +436,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
   },
-  saveBtnText: { color: Colors.textOnPrimary, fontSize: 17, fontWeight: '700' },
+  saveBtnText: { color: Colors.textOnPrimary, fontSize: 17, fontWeight: '500' },
   // Modal
   modalContainer: { flex: 1, backgroundColor: Colors.background },
   modalHeader: {
@@ -449,7 +449,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  modalTitle: { fontSize: 17, fontWeight: '700', color: Colors.textPrimary },
+  modalTitle: { fontSize: 17, fontWeight: '500', color: Colors.textPrimary },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -106,7 +106,7 @@ const styles = StyleSheet.create({
   },
   mealLabel: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textPrimary,
   },
   itemCount: {
