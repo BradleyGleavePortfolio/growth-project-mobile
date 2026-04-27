@@ -30,7 +30,7 @@ The corresponding iOS notes live alongside each item in parentheses where they d
 ## 3. Privacy policy
 
 - A live, public-URL privacy policy is **required** before the listing will accept a "Data safety" form.
-- Hosting target: marketing site at `https://app.tgp.com/privacy` (TBD — confirm this URL is published before submission).
+- Hosting target: marketing site at `https://app.trygrowthproject.com/privacy` (TBD — confirm this URL is published before submission).
 - Content must cover: data collected, why, who it is shared with, retention, deletion request flow, contact email.
 - Must match what the in-app **Trust Center** says (`src/screens/TrustCenterScreen.tsx`). Trust Center exposes:
   - Data export (calls `POST /system/data-export` via `track('data_export_requested')`)
@@ -82,26 +82,26 @@ iOS App Store: same five screens at 6.7" device (iPhone 15 Pro Max simulator).
 App declares (`app.json`):
 
 - Custom scheme: `tgp://`
-- Universal link host: `https://app.tgp.com` (iOS `associatedDomains: applinks:app.tgp.com`)
-- Android intent filter: `autoVerify: true` for both `tgp://join` and `https://app.tgp.com/join`
+- Universal link host: `https://app.trygrowthproject.com` (iOS `associatedDomains: applinks:app.trygrowthproject.com`)
+- Android intent filter: `autoVerify: true` for both `tgp://join` and `https://app.trygrowthproject.com/join`
 
 Navigation linking is wired in `src/navigation/RootNavigator.tsx` via `LinkingOptions`:
 
 ```
-prefixes: ['tgp://', 'https://app.tgp.com']
+prefixes: ['tgp://', 'https://app.trygrowthproject.com']
 config: { screens: { CreateAccount: 'join/:invite_code?' } }
 ```
 
 That maps:
 
 - `tgp://join/AB12CD` → `CreateAccount` with `route.params.invite_code = 'AB12CD'`
-- `https://app.tgp.com/join/AB12CD` → same screen, same param
+- `https://app.trygrowthproject.com/join/AB12CD` → same screen, same param
 - `CreateAccountScreen` already auto-previews the invite code on mount when the param is present.
 
 Server-side requirements for `autoVerify: true` (Android App Links):
 
-- Host an `assetlinks.json` at `https://app.tgp.com/.well-known/assetlinks.json` containing the SHA-256 cert fingerprint of the **Play App Signing** key. Get it from `eas credentials → Android → Production → keystore`.
-- For iOS universal links: host `apple-app-site-association` at `https://app.tgp.com/.well-known/apple-app-site-association` covering bundle id `com.growthproject.app`.
+- Host an `assetlinks.json` at `https://app.trygrowthproject.com/.well-known/assetlinks.json` containing the SHA-256 cert fingerprint of the **Play App Signing** key. Get it from `eas credentials → Android → Production → keystore`.
+- For iOS universal links: host `apple-app-site-association` at `https://app.trygrowthproject.com/.well-known/apple-app-site-association` covering bundle id `com.growthproject.app`.
 
 These two files are the gate that promotes our deep links from "opens a chooser" to "opens the app silently". They must exist before the first production release if marketing intends to use the universal-link form.
 
@@ -120,7 +120,7 @@ What needs to be true before production:
    - `https://<supabase-project-ref>.supabase.co/auth/v1/callback`
 3. The **Supabase auth → URL configuration → redirect URLs** must include:
    - `tgp://auth/callback` (custom scheme)
-   - `https://app.tgp.com/auth/callback` (if web parity is wanted later)
+   - `https://app.trygrowthproject.com/auth/callback` (if web parity is wanted later)
 4. Anonymous-key + Supabase URL flow through `EXPO_PUBLIC_SUPABASE_URL` / `EXPO_PUBLIC_SUPABASE_ANON_KEY` (see `.env.example`). These are public by design (anon role) — secret material lives only in the Supabase dashboard.
 
 Stale variables removed: `.env.example` previously listed `EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS/ANDROID`. They are not read anywhere in the codebase. The .env.example has been updated to explain why.
@@ -183,7 +183,7 @@ Manual sign-off items that scripts cannot cover:
 - [ ] App boots on a fresh install with prod env vars → can sign in via email/password
 - [ ] Google sign-in completes and lands on RoleSelection (new user) or Home (returning)
 - [ ] Deep link `tgp://join/TESTCODE` opens CreateAccount with invite code prefilled
-- [ ] Deep link `https://app.tgp.com/join/TESTCODE` opens the same screen (after `assetlinks.json` is hosted)
+- [ ] Deep link `https://app.trygrowthproject.com/join/TESTCODE` opens the same screen (after `assetlinks.json` is hosted)
 - [ ] Trust Center → Export data triggers `data_export_requested` analytics event
 - [ ] Trust Center → Delete account triggers `account_deletion_requested` analytics event
 - [ ] Notifications permission prompt fires once on first launch and never again
@@ -192,13 +192,13 @@ Manual sign-off items that scripts cannot cover:
 
 ### Blocking manual values needed before first production submission
 
-These cannot be derived from the codebase — someone has to fetch them and either fill them into `docs/well-known/*` (then host on `app.tgp.com`) or paste them directly into Play / App Store Connect:
+These cannot be derived from the codebase — someone has to fetch them and either fill them into `docs/well-known/*` (then host on `app.trygrowthproject.com`) or paste them directly into Play / App Store Connect:
 
 | Value | Source | Used by |
 | --- | --- | --- |
 | Play App Signing SHA-256 fingerprint | Play Console → Setup → App integrity → App signing (after first AAB upload) | `assetlinks.json` |
 | Apple Team ID (10-char) | App Store Connect → Membership | `apple-app-site-association` |
-| Privacy policy URL | Marketing site, `https://app.tgp.com/privacy` | Play Data Safety form, App Store privacy nutrition label |
+| Privacy policy URL | Marketing site, `https://app.trygrowthproject.com/privacy` | Play Data Safety form, App Store privacy nutrition label |
 | Test account credentials (client + coach) | Internal QA | Play "App access" instructions, App Store review notes |
 | Supabase project ref (for OAuth redirect) | Supabase dashboard URL | Google Cloud Console authorized redirect URIs |
 

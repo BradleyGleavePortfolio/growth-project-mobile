@@ -20,7 +20,7 @@
         "NSCameraUsageDescription": "Used for barcode scanning to log food items",
         "ITSAppUsesNonExemptEncryption": false
       },
-      "associatedDomains": ["applinks:app.tgp.com"]
+      "associatedDomains": ["applinks:app.trygrowthproject.com"]
     },
     "android": {
       "adaptiveIcon": {
@@ -36,7 +36,7 @@
           "autoVerify": true,
           "data": [
             { "scheme": "tgp", "host": "join" },
-            { "scheme": "https", "host": "app.tgp.com", "pathPrefix": "/join" }
+            { "scheme": "https", "host": "app.trygrowthproject.com", "pathPrefix": "/join" }
           ],
           "category": ["BROWSABLE", "DEFAULT"]
         }

@@ -11,7 +11,7 @@ export type AuthStackParamList = {
   Welcome: undefined;
   Login: undefined;
   // CreateAccount accepts an invite_code param when arriving from a deep link
-  // (`tgp://join/<code>` or `https://app.tgp.com/join/<code>`).
+  // (`tgp://join/<code>` or `https://app.trygrowthproject.com/join/<code>`).
   CreateAccount: { invite_code?: string } | undefined;
   ForgotPassword: undefined;
   RoleSelection: undefined;

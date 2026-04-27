@@ -1,11 +1,11 @@
 # Hosted association files for deep links
 
-These two files must be hosted on `https://app.tgp.com` for Android App Links and iOS Universal Links to verify silently. Until they are live, taps on `https://app.tgp.com/join/<code>` will open a chooser sheet on Android (or Safari on iOS) instead of launching the app.
+These two files must be hosted on `https://app.trygrowthproject.com` for Android App Links and iOS Universal Links to verify silently. Until they are live, taps on `https://app.trygrowthproject.com/join/<code>` will open a chooser sheet on Android (or Safari on iOS) instead of launching the app.
 
 | File | Hosted URL | Purpose |
 | --- | --- | --- |
-| `assetlinks.json` | `https://app.tgp.com/.well-known/assetlinks.json` | Verifies Android App Link for `com.growthproject.app` |
-| `apple-app-site-association` | `https://app.tgp.com/.well-known/apple-app-site-association` | Verifies iOS Universal Link for `com.growthproject.app` |
+| `assetlinks.json` | `https://app.trygrowthproject.com/.well-known/assetlinks.json` | Verifies Android App Link for `com.growthproject.app` |
+| `apple-app-site-association` | `https://app.trygrowthproject.com/.well-known/apple-app-site-association` | Verifies iOS Universal Link for `com.growthproject.app` |
 
 Both files in this directory are **templates**. Replace the placeholders before publishing — never check real fingerprints into the marketing site repo without confirming the source of truth is EAS managed credentials, not a one-off keystore.
 
@@ -45,21 +45,21 @@ If a build was distributed to internal testing using the **upload key** before P
 
 ```bash
 # Sanity-check the file is reachable and valid JSON
-curl -sS https://app.tgp.com/.well-known/assetlinks.json | jq .
+curl -sS https://app.trygrowthproject.com/.well-known/assetlinks.json | jq .
 
 # Google's hosted verifier — returns the parsed asset statement on success
 curl -sS "https://digitalassetlinks.googleapis.com/v1/statements:list?\
-source.web.site=https://app.tgp.com&\
+source.web.site=https://app.trygrowthproject.com&\
 relation=delegate_permission/common.handle_all_urls" | jq .
 
 # On a connected Android device, ask the system to re-verify our domain
 adb shell pm verify-app-links --re-verify com.growthproject.app
 adb shell pm get-app-links com.growthproject.app
-# Expected: "Domain verification state: app.tgp.com:  verified"
+# Expected: "Domain verification state: app.trygrowthproject.com:  verified"
 
 # End-to-end: tapping this URL should open the app silently (no chooser)
 adb shell am start -a android.intent.action.VIEW \
-  -d "https://app.tgp.com/join/SMOKE01" \
+  -d "https://app.trygrowthproject.com/join/SMOKE01" \
   com.growthproject.app
 ```
 
@@ -85,10 +85,10 @@ If `pm get-app-links` reports `legacy_failure` or `none`, the most common causes
 
 ```bash
 # Confirm the file is served and valid JSON
-curl -sS https://app.tgp.com/.well-known/apple-app-site-association | jq .
+curl -sS https://app.trygrowthproject.com/.well-known/apple-app-site-association | jq .
 
 # Apple's CDN (the AASA-CDN that iOS actually fetches from on device)
-curl -sS "https://app-site-association.cdn-apple.com/a/v1/app.tgp.com" | jq .
+curl -sS "https://app-site-association.cdn-apple.com/a/v1/app.trygrowthproject.com" | jq .
 
 # Apple's official validator (web UI):
 #   https://branch.io/resources/aasa-validator/   (third-party but widely used)
@@ -100,7 +100,7 @@ On device, after install:
 ```bash
 # Watch the swcd (shared web credentials daemon) log for AASA fetch results
 log stream --predicate 'subsystem == "com.apple.swc"' --info
-# Then tap https://app.tgp.com/join/SMOKE01 from Notes or Messages.
+# Then tap https://app.trygrowthproject.com/join/SMOKE01 from Notes or Messages.
 ```
 
 A successful verification logs `applinks: matched <URL>` and the app launches without Safari blinking.
@@ -116,5 +116,5 @@ A successful verification logs `applinks: matched <URL>` and the app launches wi
 
 The matching `app.json` declarations are at:
 
-- iOS: `expo.ios.associatedDomains: ["applinks:app.tgp.com"]`
-- Android: `expo.android.intentFilters[*].data` entries for `https://app.tgp.com/join`
+- iOS: `expo.ios.associatedDomains: ["applinks:app.trygrowthproject.com"]`
+- Android: `expo.android.intentFilters[*].data` entries for `https://app.trygrowthproject.com/join`

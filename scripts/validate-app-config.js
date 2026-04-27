@@ -4,7 +4,7 @@
  *
  * Catches the things that silently break a release:
  *   - missing custom scheme (deep links never fire)
- *   - missing Android intent filter for app.tgp.com (universal links broken)
+ *   - missing Android intent filter for app.trygrowthproject.com (universal links broken)
  *   - missing iOS associatedDomains entry (universal links broken)
  *   - mismatched package id / bundle id
  *   - required EXPO_PUBLIC_* vars missing from .env.example
@@ -31,9 +31,9 @@ const EXPECTED = {
   scheme: 'tgp',
   androidPackage: 'com.growthproject.app',
   iosBundleId: 'com.growthproject.app',
-  universalLinkHost: 'app.tgp.com',
+  universalLinkHost: 'app.trygrowthproject.com',
   invitePathPrefix: '/join',
-  associatedDomain: 'applinks:app.tgp.com',
+  associatedDomain: 'applinks:app.trygrowthproject.com',
 };
 
 const REQUIRED_ENV = [

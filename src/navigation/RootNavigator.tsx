@@ -22,9 +22,9 @@ type AuthState = 'loading' | 'unauthenticated' | 'onboarding' | 'coach' | 'stude
 // invite code straight into the signup screen so the user only sees one form.
 //
 //   tgp://join/<code>
-//   https://app.tgp.com/join/<code>
+//   https://app.trygrowthproject.com/join/<code>
 const linking: LinkingOptions<Record<string, object | undefined>> = {
-  prefixes: ['tgp://', 'https://app.tgp.com'],
+  prefixes: ['tgp://', 'https://app.trygrowthproject.com'],
   config: {
     screens: {
       // Only the unauthenticated AuthNavigator owns the signup screen — once a

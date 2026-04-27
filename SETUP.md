@@ -83,7 +83,7 @@ if it 404s, the mobile app defaults to the strictest setting (require code).
 Universal links / custom scheme are configured in `app.json`:
 
 - `tgp://join/<code>` (custom scheme)
-- `https://app.tgp.com/join/<code>` (universal link)
+- `https://app.trygrowthproject.com/join/<code>` (universal link)
 
 The mobile signup screen reads `route.params.invite_code` and prefills and
 auto-validates it on mount.
