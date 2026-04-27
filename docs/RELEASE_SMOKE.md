@@ -45,7 +45,7 @@ If item 4 lists `EXPO_PUBLIC_GOOGLE_CLIENT_ID_*`, **delete** them — auth is Su
 | # | Check | How |
 | --- | --- | --- |
 | 18 | Custom scheme `tgp://join/<code>` opens CreateAccount with code prefilled | `adb shell am start -a android.intent.action.VIEW -d "tgp://join/SMOKE01" com.growthproject.app` |
-| 19 | Universal link `https://app.tgp.com/join/<code>` opens app silently (no chooser) | requires `assetlinks.json` hosted; see `docs/well-known/README.md`. Run `adb shell pm get-app-links com.growthproject.app` to confirm `app.tgp.com: verified` |
+| 19 | Universal link `https://app.trygrowthproject.com/join/<code>` opens app silently (no chooser) | requires `assetlinks.json` hosted; see `docs/well-known/README.md`. Run `adb shell pm get-app-links com.growthproject.app` to confirm `app.trygrowthproject.com: verified` |
 | 20 | Invite code without leading slash also works | tap a link in Gmail / Messages, not just `adb` |
 | 21 | App handles bad invite code gracefully | `tgp://join/NOT_REAL` — error surfaces in CreateAccount, no crash |
 

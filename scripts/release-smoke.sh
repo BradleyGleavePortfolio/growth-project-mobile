@@ -17,7 +17,7 @@
 set -euo pipefail
 
 PACKAGE="com.growthproject.app"
-HOST="app.tgp.com"
+HOST="app.trygrowthproject.com"
 SMOKE_INVITE="SMOKE01"
 
 SKIP_UNIVERSAL=0
