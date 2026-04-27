@@ -17,6 +17,7 @@ import { Colors } from '../../constants/colors';
 import { saveOnboardingData } from '../../utils/onboardingStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { track } from '../../lib/analytics';
+import { authEvents } from '../../utils/authEvents';
 
 type Props = {
   navigation: NativeStackNavigationProp<LeanOnboardingParamList, 'LeanQ1'>;
@@ -24,10 +25,10 @@ type Props = {
 
 type Goal = 'lose_weight' | 'build_muscle' | 'maintain';
 
-const GOALS: { key: Goal; icon: string; label: string; sub: string }[] = [
-  { key: 'lose_weight', icon: '', label: 'Lose Weight', sub: 'A gradual shift.' },
-  { key: 'build_muscle', icon: '', label: 'Build Muscle', sub: 'Slow, deliberate strength.' },
-  { key: 'maintain', icon: '⚖️', label: 'Maintain', sub: 'Hold the line.' },
+const GOALS: { key: Goal; label: string; sub: string }[] = [
+  { key: 'lose_weight',  label: 'Lose Weight',  sub: 'A gradual shift.' },
+  { key: 'build_muscle', label: 'Build Muscle', sub: 'Slow, deliberate strength.' },
+  { key: 'maintain',     label: 'Maintain',     sub: 'Hold the line.' },
 ];
 
 export default function LeanQ1GoalScreen({ navigation }: Props) {
@@ -54,8 +55,7 @@ export default function LeanQ1GoalScreen({ navigation }: Props) {
     await AsyncStorage.setItem('lean_onboarding_intent', intent);
     await AsyncStorage.setItem('lean_onboarding_done', 'true');
     // Trigger root re-render via authEvents
-    const { authEvents } = require('../../utils/authEvents');
-    authEvents.emitAuthChange();
+    authEvents.emit();
   };
 
   return (
@@ -81,7 +81,6 @@ export default function LeanQ1GoalScreen({ navigation }: Props) {
               onPress={() => handleSelect(g.key)}
               activeOpacity={0.75}
             >
-              <Text style={styles.optionIcon}>{g.icon}</Text>
               <View style={styles.optionText}>
                 <Text style={[styles.optionLabel, selected === g.key && styles.optionLabelSelected]}>
                   {g.label}
@@ -131,13 +130,16 @@ const styles = StyleSheet.create({
     width: 24,
   },
   headline: {
-    fontSize: 28,
-    fontWeight: '800',
+    fontFamily: 'CormorantGaramond_400Regular',
+    fontSize: 32,
+    lineHeight: 35,
+    letterSpacing: 0.6,
+    fontWeight: '400',
     color: Colors.textPrimary,
     marginBottom: 8,
-    letterSpacing: -0.5,
   },
   subtext: {
+    fontFamily: 'Inter_400Regular',
     fontSize: 15,
     color: Colors.textSecondary,
     lineHeight: 22,
@@ -150,34 +152,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.surface,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: Colors.border,
     borderRadius: 4, // radius.lg
-    padding: 20,
-    gap: 16,
+    paddingVertical: 22,
+    paddingHorizontal: 22,
   },
   optionSelected: {
     borderColor: Colors.primary,
-    backgroundColor: 'rgba(45, 106, 79, 0.07)',
-  },
-  optionIcon: {
-    fontSize: 32,
+    borderWidth: 1.5,
+    backgroundColor: 'rgba(44, 74, 54, 0.04)',
   },
   optionText: {
     flex: 1,
     gap: 4,
   },
   optionLabel: {
-    fontSize: 17,
-    fontWeight: '700',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 22,
+    fontWeight: '500',
+    letterSpacing: 0.4,
     color: Colors.textPrimary,
   },
   optionLabelSelected: {
     color: Colors.primary,
   },
   optionSub: {
+    fontFamily: 'Inter_400Regular',
     fontSize: 13,
     color: Colors.textSecondary,
+    lineHeight: 19,
   },
   skipBtn: {
     alignSelf: 'center',
@@ -186,8 +190,9 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   skipText: {
-    fontSize: 14,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
     color: Colors.textMuted,
-    textDecorationLine: 'underline',
+    letterSpacing: 0.3,
   },
 });

@@ -220,15 +220,20 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   title: {
-    fontSize: 28,
-    fontWeight: '800',
+    fontFamily: 'CormorantGaramond_400Regular',
+    fontSize: 32,
+    lineHeight: 35,
+    letterSpacing: 0.6,
+    fontWeight: '400',
     color: Colors.textPrimary,
     marginBottom: 8,
   },
   subtitle: {
+    fontFamily: 'Inter_400Regular',
     fontSize: 16,
+    lineHeight: 26,
+    letterSpacing: -0.16,
     color: Colors.textSecondary,
-    lineHeight: 22,
   },
   cardsContainer: {
     gap: 16,
@@ -264,9 +269,12 @@ const styles = StyleSheet.create({
   },
   btnDisabled: { opacity: 0.6 },
   continueText: {
+    fontFamily: 'Inter_600SemiBold',
     color: Colors.textOnPrimary,
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
   },
   coachNote: {
     flexDirection: 'row',

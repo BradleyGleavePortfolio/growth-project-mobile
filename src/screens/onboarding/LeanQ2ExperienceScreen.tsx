@@ -17,6 +17,7 @@ import { Colors } from '../../constants/colors';
 import { saveOnboardingData } from '../../utils/onboardingStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { track } from '../../lib/analytics';
+import { authEvents } from '../../utils/authEvents';
 
 type Props = {
   navigation: NativeStackNavigationProp<LeanOnboardingParamList, 'LeanQ2'>;
@@ -24,25 +25,10 @@ type Props = {
 
 type Level = 'new' | 'some' | 'experienced';
 
-const LEVELS: { key: Level; icon: string; label: string; sub: string }[] = [
-  {
-    key: 'new',
-    icon: '🌱',
-    label: "New to this",
-    sub: 'Finding your footing.',
-  },
-  {
-    key: 'some',
-    icon: '🏃',
-    label: 'Some experience',
-    sub: 'Some time in.',
-  },
-  {
-    key: 'experienced',
-    icon: '',
-    label: 'Experienced',
-    sub: 'The work is familiar.',
-  },
+const LEVELS: { key: Level; label: string; sub: string }[] = [
+  { key: 'new',          label: "New to this",      sub: 'Finding your footing.' },
+  { key: 'some',         label: 'Some experience',  sub: 'Some time in.' },
+  { key: 'experienced',  label: 'Experienced',      sub: 'The work is familiar.' },
 ];
 
 export default function LeanQ2ExperienceScreen({ navigation }: Props) {
@@ -61,8 +47,7 @@ export default function LeanQ2ExperienceScreen({ navigation }: Props) {
     await AsyncStorage.setItem('onboarding_complete', 'true');
     await AsyncStorage.setItem('lean_onboarding_intent', 'explore');
     await AsyncStorage.setItem('lean_onboarding_done', 'true');
-    const { authEvents } = require('../../utils/authEvents');
-    authEvents.emitAuthChange();
+    authEvents.emit();
   };
 
   return (
@@ -88,7 +73,6 @@ export default function LeanQ2ExperienceScreen({ navigation }: Props) {
               onPress={() => handleSelect(l.key)}
               activeOpacity={0.75}
             >
-              <Text style={styles.optionIcon}>{l.icon}</Text>
               <View style={styles.optionText}>
                 <Text style={[styles.optionLabel, selected === l.key && styles.optionLabelSelected]}>
                   {l.label}
@@ -146,13 +130,16 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
   },
   headline: {
-    fontSize: 28,
-    fontWeight: '800',
+    fontFamily: 'CormorantGaramond_400Regular',
+    fontSize: 32,
+    lineHeight: 35,
+    letterSpacing: 0.6,
+    fontWeight: '400',
     color: Colors.textPrimary,
     marginBottom: 8,
-    letterSpacing: -0.5,
   },
   subtext: {
+    fontFamily: 'Inter_400Regular',
     fontSize: 15,
     color: Colors.textSecondary,
     lineHeight: 22,
@@ -165,34 +152,36 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.surface,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: Colors.border,
     borderRadius: 4, // radius.lg
-    padding: 20,
-    gap: 16,
+    paddingVertical: 22,
+    paddingHorizontal: 22,
   },
   optionSelected: {
     borderColor: Colors.primary,
-    backgroundColor: 'rgba(45, 106, 79, 0.07)',
-  },
-  optionIcon: {
-    fontSize: 32,
+    borderWidth: 1.5,
+    backgroundColor: 'rgba(44, 74, 54, 0.04)',
   },
   optionText: {
     flex: 1,
     gap: 4,
   },
   optionLabel: {
-    fontSize: 17,
-    fontWeight: '700',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 22,
+    fontWeight: '500',
+    letterSpacing: 0.4,
     color: Colors.textPrimary,
   },
   optionLabelSelected: {
     color: Colors.primary,
   },
   optionSub: {
+    fontFamily: 'Inter_400Regular',
     fontSize: 13,
     color: Colors.textSecondary,
+    lineHeight: 19,
   },
   bottomRow: {
     flexDirection: 'row',
@@ -206,17 +195,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   backText: {
-    fontSize: 14,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
     color: Colors.textSecondary,
-    fontWeight: '600',
+    fontWeight: '500',
+    letterSpacing: 0.3,
   },
   skipBtn: {
     paddingVertical: 12,
     paddingHorizontal: 4,
   },
   skipText: {
-    fontSize: 14,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
     color: Colors.textMuted,
-    textDecorationLine: 'underline',
+    letterSpacing: 0.3,
   },
 });

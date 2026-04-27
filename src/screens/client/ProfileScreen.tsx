@@ -213,15 +213,18 @@ const styles = StyleSheet.create({
   avatar: {
     width: 80,
     height: 80,
-    borderRadius: 40,
+    borderRadius: 4,
     backgroundColor: colors.forest,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
   },
   avatarText: {
+    fontFamily: 'CormorantGaramond_400Regular',
     fontSize: 28,
-    fontWeight: '700',
+    lineHeight: 32,
+    letterSpacing: 0.5,
+    fontWeight: '400',
     color: colors.bone,
   },
   name: {

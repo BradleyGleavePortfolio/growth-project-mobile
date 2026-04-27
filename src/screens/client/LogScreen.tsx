@@ -418,8 +418,11 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   title: {
-    fontSize: 28,
-    fontWeight: '800',
+    fontFamily: 'CormorantGaramond_400Regular',
+    fontSize: 32,
+    lineHeight: 35,
+    letterSpacing: 0.6,
+    fontWeight: '400',
     color: Colors.dark,
   },
   waterSection: {

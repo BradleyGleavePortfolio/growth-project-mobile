@@ -10,7 +10,7 @@ import {
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../../navigation/AuthNavigator';
 // All colors from central theme — never hardcode hex values here
-import { Colors, Spacing, Radius } from '../../theme/index';
+import { Colors, Spacing, Radius, typographyTokens } from '../../theme/index';
 
 type Props = {
   navigation: NativeStackNavigationProp<AuthStackParamList, 'Welcome'>;
@@ -87,22 +87,19 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
   },
   logoIconText: {
-    fontSize: 32,
-    fontWeight: '800',
+    ...typographyTokens.h2,
     color: Colors.white,
   },
   title: {
-    fontSize: 32,
-    fontWeight: '800',
+    ...typographyTokens.h1,
     color: Colors.dark,
     textAlign: 'center',
     marginBottom: Spacing.sm,
   },
   tagline: {
-    fontSize: 16,
+    ...typographyTokens.body,
     color: Colors.textMuted,
     textAlign: 'center',
-    lineHeight: 24,
   },
   buttonContainer: {
     gap: 12,
@@ -114,9 +111,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   primaryButtonText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 15,
+    fontWeight: '600',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
     color: Colors.white,
-    fontSize: 18,
-    fontWeight: '700',
   },
   secondaryButton: {
     backgroundColor: 'transparent',
@@ -127,8 +127,11 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   secondaryButtonText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 15,
+    fontWeight: '500',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
     color: Colors.dark,
-    fontSize: 18,
-    fontWeight: '600',
   },
 });

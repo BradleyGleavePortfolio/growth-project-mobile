@@ -314,14 +314,22 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   title: {
-    fontSize: 28,
-    fontWeight: '800',
+    fontFamily: 'CormorantGaramond_400Regular',
+    fontSize: 32,
+    lineHeight: 35,
+    letterSpacing: 0.6,
+    fontWeight: '400',
     color: Colors.textPrimary,
   },
   subTitle: {
-    fontSize: 13,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    lineHeight: 13,
+    letterSpacing: 1.98,
+    fontWeight: '500',
+    textTransform: 'uppercase',
     color: Colors.textMuted,
-    marginTop: 2,
+    marginTop: 8,
   },
   listContent: {
     paddingHorizontal: 16,
@@ -374,8 +382,10 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   aiAvatarText: {
+    fontFamily: 'Inter_600SemiBold',
     fontSize: 11,
-    fontWeight: '800',
+    fontWeight: '600',
+    letterSpacing: 1,
     color: Colors.textOnPrimary,
   },
   typingRow: {
@@ -403,8 +413,11 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   welcomeTitle: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 22,
+    lineHeight: 26,
+    letterSpacing: 0.4,
+    fontWeight: '500',
     color: Colors.textPrimary,
   },
   welcomeText: {

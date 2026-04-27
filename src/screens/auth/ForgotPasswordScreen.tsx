@@ -124,15 +124,20 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   title: {
-    fontSize: 28,
-    fontWeight: '800',
+    fontFamily: 'CormorantGaramond_400Regular',
+    fontSize: 32,
+    lineHeight: 35,
+    letterSpacing: 0.6,
+    fontWeight: '400',
     color: Colors.textPrimary,
     marginBottom: 8,
   },
   subtitle: {
+    fontFamily: 'Inter_400Regular',
     fontSize: 16,
+    lineHeight: 26,
+    letterSpacing: -0.16,
     color: Colors.textSecondary,
-    lineHeight: 24,
   },
   form: {
     gap: 24,
@@ -161,9 +166,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   resetButtonText: {
+    fontFamily: 'Inter_600SemiBold',
     color: Colors.textOnPrimary,
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
   },
   successContainer: {
     alignItems: 'center',
