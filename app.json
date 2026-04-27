@@ -49,11 +49,22 @@
       "expo-sqlite",
       "expo-web-browser",
       "expo-font",
-      "expo-localization"
+      "expo-localization",
+      [
+        "expo-notifications",
+        {
+          "color": "#2C4A36",
+          "defaultChannel": "default"
+        }
+      ]
     ],
     "extra": {
       "eas": {
         "projectId": "3aeadee6-34c5-4231-85b9-aff9f7ea3c5a"
+      },
+      "storeListings": {
+        "playStoreUrl": null,
+        "appStoreUrl": null
       }
     },
     "owner": "bradley1031"

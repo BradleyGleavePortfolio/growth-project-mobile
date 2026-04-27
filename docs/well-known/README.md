@@ -7,7 +7,9 @@ These two files must be hosted on `https://app.trygrowthproject.com` for Android
 | `assetlinks.json` | `https://app.trygrowthproject.com/.well-known/assetlinks.json` | Verifies Android App Link for `com.growthproject.app` |
 | `apple-app-site-association` | `https://app.trygrowthproject.com/.well-known/apple-app-site-association` | Verifies iOS Universal Link for `com.growthproject.app` |
 
-Both files in this directory are **templates**. Replace the placeholders before publishing — never check real fingerprints into the marketing site repo without confirming the source of truth is EAS managed credentials, not a one-off keystore.
+Both files in this directory are **templates** — they are committed for the marketing-site operator to copy and fill, and they are not bundled into the app binary. Replace the placeholders before publishing; never check real fingerprints into the marketing site repo without confirming the source of truth is EAS managed credentials, not a one-off keystore.
+
+A release-time gate enforces this. `npm run validate:release` (or `node scripts/validate-app-config.js --release`) treats every `REPLACE_WITH_*` token as a hard error, and the same script also requires `expo.extra.storeListings.{playStoreUrl,appStoreUrl}` to be real Play / App Store URLs (not `null`) before it will exit zero. Wire that command into the release runbook and any CI job that produces a production AAB so a placeholder cannot reach production by accident. The default `npm run validate:config` keeps the same checks as warnings — useful in development without blocking work.
 
 ---
 

@@ -17,7 +17,7 @@ React Navigation v7 is the routing layer. `RootNavigator` decides which sub-navi
 | `AuthNavigator.tsx` | Stack: `Welcome`, `Login`, `CreateAccount`, `ForgotPassword`, `RoleSelection`. The only navigator that's reachable from a deep link. |
 | `LeanOnboardingNavigator.tsx` | Stack: `LeanQ1`, `LeanQ2`, `LeanQ3`. Default for new accounts. |
 | `OnboardingNavigator.tsx` | The legacy 10-step flow. Preserved but not routed to from a fresh signup today. |
-| `ClientNavigator.tsx` | 4-tab bottom bar (Home / Train / Coach / Profile). Each tab is a nested native stack. The Profile tab (`MoreTab`) houses every secondary screen. |
+| `ClientNavigator.tsx` | 4-tab bottom bar, icons-only. Route names: `Home`, `WorkoutTab`, `Log`, `MoreTab`. Accessibility labels: `Home`, `Train`, `Log food`, `Profile and more`. `Home`, `WorkoutTab`, and `MoreTab` are nested native stacks; `Log` is a single screen (`LogScreen` — food/macro logging). The Profile tab (`MoreTab`) houses every secondary screen. |
 | `CoachNavigator.tsx` | 5-tab bottom bar (Clients / Dashboard / Templates / Messages / Settings). The Clients tab is a nested stack with `ClientsList`, `ClientDetail`, `ClientMessages`, `InviteCodes`. |
 
 ## Data flow
@@ -96,6 +96,6 @@ There are no navigation-level jest tests; the structure is exercised end-to-end 
 
 ## Release notes
 
-- The 4-tab bar (Home / Train / Coach / Profile) was consolidated from an earlier 9-tab layout. The old screen names are preserved inside the `MoreStack` so any external `navigate()` calls (analytics, push payloads) keep working.
+- The 4-tab bar (Home / Train / Log / Profile) was consolidated from an earlier 9-tab layout. The old screen names are preserved inside the `MoreStack` so any external `navigate()` calls (analytics, push payloads) keep working.
 - The floating chat widget visibility rule is in `RootNavigator`. If the More-tab screen list grows, update the `hideWidget` check or the widget will overlap a screen that doesn't expect it.
 - The `linking` config covers only the unauthenticated path. If a future feature needs to be addressable by a deep link to a signed-in screen, that route must be added under both `ClientNavigator` and `CoachNavigator` configs and the Android intent filter / `applinks:` entry extended in `app.json`.

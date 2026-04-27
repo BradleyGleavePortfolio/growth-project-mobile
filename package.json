@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint \"src/**/*.{ts,tsx}\" --max-warnings=99999",
     "validate:config": "node scripts/validate-app-config.js",
+    "validate:release": "node scripts/validate-app-config.js --release",
     "smoke:android": "bash scripts/release-smoke.sh",
     "qa:invite": "bash scripts/invite-qa.sh"
   },

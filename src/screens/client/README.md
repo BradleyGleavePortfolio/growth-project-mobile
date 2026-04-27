@@ -1,6 +1,6 @@
 # Client screens
 
-Everything a signed-in `student` user sees. Mounted under `ClientNavigator`, which is itself a 4-tab bottom bar (Home / Train / Coach / Profile) with nested stacks. Most of the surface area below is reachable through the More tab and the floating chat widget.
+Everything a signed-in `student` user sees. Mounted under `ClientNavigator`, which is itself a 4-tab icons-only bottom bar — accessibility labels `Home` / `Train` / `Log food` / `Profile and more` (route names `Home` / `WorkoutTab` / `Log` / `MoreTab`). Three of the four tabs wrap nested native stacks; the `Log` tab is a single screen. Most of the surface area below is reachable through the Profile tab (`MoreTab`) and the floating chat widget.
 
 ## Purpose
 
@@ -17,7 +17,7 @@ Everything a signed-in `student` user sees. Mounted under `ClientNavigator`, whi
 | --- | --- | --- |
 | `HomeScreen.tsx` | Home | Editorial date headline + single "CONTINUE" CTA + 2×2 number grid (calories, protein, water, streak). Pulls from `useClientStore`. |
 | `WorkoutScreen.tsx` | Train | Lists routines (`workoutApi.getRoutines`), launches `ActiveWorkoutScreen`, links to `RoutineBuilder` and `CoachGuidelines`. |
-| `LogScreen.tsx` | Coach (Log + Plan) | Day selector, macro summary, four meal sections, water tracker. Search modal hits `foodApi.search`; offline writes go through `services/foodLogQueue`. |
+| `LogScreen.tsx` | Log | Day selector, macro summary, four meal sections, water tracker. Search modal hits `foodApi.search`; offline writes go through `services/foodLogQueue`. The `Plan` screen is reached from inside `MoreStack`, not from this tab. |
 | `MoreScreen.tsx` | Profile | Index of every secondary screen (Recipes, Fasting, Community, Progress, Profile, Settings, Trust Center, Preferences, Widgets, Report, Learn, lists, Plan). |
 
 ### AI Guide and messaging

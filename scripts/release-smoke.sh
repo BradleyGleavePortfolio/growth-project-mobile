@@ -86,6 +86,27 @@ for ch in default water fasting; do
   fi
 done
 
+# ----- 5b. POST_NOTIFICATIONS declared (Android 13+) -------------------------
+#
+# On Android 13+ (API 33) the runtime notification permission only surfaces if
+# POST_NOTIFICATIONS is in the manifest. The `expo-notifications` config plugin
+# injects it; without the plugin, requestPermissionsAsync() succeeds silently
+# and no notifications are ever delivered to the system tray. Catch that here
+# rather than during a missed-notification triage three weeks later.
+
+step "POST_NOTIFICATIONS declared in manifest"
+SDK_INT="$(adb shell getprop ro.build.version.sdk | tr -d '\r')"
+if [ -n "${SDK_INT}" ] && [ "${SDK_INT}" -ge 33 ] 2>/dev/null; then
+  PERMS_DUMP="$(adb shell dumpsys package "${PACKAGE}" 2>/dev/null | grep -E 'POST_NOTIFICATIONS|requested permissions' || true)"
+  if echo "${PERMS_DUMP}" | grep -q 'POST_NOTIFICATIONS'; then
+    ok "POST_NOTIFICATIONS is declared by ${PACKAGE} on API ${SDK_INT}"
+  else
+    fail "POST_NOTIFICATIONS not declared on API ${SDK_INT}; the expo-notifications plugin is likely missing from app.json — runtime permission prompt will never appear and notifications will silently fail"
+  fi
+else
+  printf 'skip: device API level %s is below 33; POST_NOTIFICATIONS is auto-granted on Android 12 and earlier\n' "${SDK_INT:-unknown}"
+fi
+
 # ----- 6. Custom-scheme deep link --------------------------------------------
 
 step "custom scheme deep link"
