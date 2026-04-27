@@ -1,0 +1,101 @@
+# Navigation
+
+React Navigation v7 is the routing layer. `RootNavigator` decides which sub-navigator is mounted based on auth + onboarding state, and owns the deep-link configuration that all `tgp://` and `https://app.trygrowthproject.com` URLs flow through.
+
+## Purpose
+
+- Centralise the auth gate. There is exactly one place where "is this user signed in, and which experience do they get?" is decided: `RootNavigator.bootstrapAuth`.
+- Map deep links to a single screen (`CreateAccount`) so an invite-code URL always lands in the right place, regardless of which navigator is currently active.
+- Keep the per-role navigators (auth, lean onboarding, client, coach) self-contained. Adding a screen to one role does not require touching the others.
+- Handle the offline → online transition by flushing the food-log queue when the network returns.
+
+## Key files
+
+| File | What it does |
+| --- | --- |
+| `RootNavigator.tsx` | Decides between `unauthenticated`, `onboarding`, `coach`, `student`. Owns the `LinkingOptions`, the `NavigationContainer` theme, the offline banner, and the floating chat widget show/hide rule. |
+| `AuthNavigator.tsx` | Stack: `Welcome`, `Login`, `CreateAccount`, `ForgotPassword`, `RoleSelection`. The only navigator that's reachable from a deep link. |
+| `LeanOnboardingNavigator.tsx` | Stack: `LeanQ1`, `LeanQ2`, `LeanQ3`. Default for new accounts. |
+| `OnboardingNavigator.tsx` | The legacy 10-step flow. Preserved but not routed to from a fresh signup today. |
+| `ClientNavigator.tsx` | 4-tab bottom bar (Home / Train / Coach / Profile). Each tab is a nested native stack. The Profile tab (`MoreTab`) houses every secondary screen. |
+| `CoachNavigator.tsx` | 5-tab bottom bar (Clients / Dashboard / Templates / Messages / Settings). The Clients tab is a nested stack with `ClientsList`, `ClientDetail`, `ClientMessages`, `InviteCodes`. |
+
+## Data flow
+
+```
+App.tsx mounts RootNavigator
+   │
+   ├─► bootstrapAuth()
+   │     │
+   │     ├─ secureStorage.getItem('supabase_token')      // migrates legacy AsyncStorage on first read
+   │     ├─ AsyncStorage.getItem('user_data')
+   │     ├─ AsyncStorage.getItem('needs_role_selection') // gate after Google / codeless signup
+   │     ├─ AsyncStorage.getItem('onboarding_complete')  // student-only
+   │     │
+   │     └─► setAuthState('unauthenticated' | 'onboarding' | 'coach' | 'student')
+   │
+   ├─► authEvents.onAuthChange ─► bootstrapAuth        // re-runs on logout / login emit
+   │
+   └─► useNetworkStatus ─► flushFoodLogQueue() on offline → online
+```
+
+Deep links are parsed by `linking` in `RootNavigator`:
+
+```
+prefixes: ['tgp://', 'https://app.trygrowthproject.com']
+config:
+  Welcome:        'welcome'
+  Login:          'login'
+  CreateAccount:  'join/:invite_code?'   // both /join and /join/<code> map here
+```
+
+This means:
+
+- `tgp://join` and `tgp://join/AB12CD` both resolve to `CreateAccount`. The optional param is parsed straight through.
+- `https://app.trygrowthproject.com/join/AB12CD` resolves the same way **after** Android App Links / iOS Universal Links verify silently. Until the hosted association files are live, the URL opens a chooser (Android) or Safari (iOS) — at which point the user can paste the code into the welcome screen manually.
+- Signed-in users are not routed by deep links because the matching screen is not mounted under their navigator. This is intentional: a signed-in client tapping an invite URL is a no-op.
+
+## App-store / deep-link dependencies
+
+- Android intent filters are declared in `app.json → expo.android.intentFilters` and must match the linking prefixes here. The two declared shapes are `tgp://join` and `https://app.trygrowthproject.com/join`.
+- `autoVerify: true` on the Android filter requires `https://app.trygrowthproject.com/.well-known/assetlinks.json` to be hosted with the SHA-256 of the Play App Signing key.
+- iOS `expo.ios.associatedDomains: ['applinks:app.trygrowthproject.com']` requires `https://app.trygrowthproject.com/.well-known/apple-app-site-association` with the bundle id `com.growthproject.app` and the matching team id.
+- The custom scheme `tgp://` is also used for Supabase OAuth return (`tgp://auth/callback`). It is not registered as a screen here because the OAuth WebBrowser closes the auth session itself; control returns to whichever screen kicked off the sign-in. Don't repurpose this path without checking `utils/googleAuth.ts`.
+
+See `docs/well-known/README.md` for hosting and verification commands.
+
+## Security and tenancy
+
+- The auth gate is the only path to a signed-in navigator. There is no escape hatch from `AuthNavigator` to a tab.
+- `RoleSelectionScreen` is reachable both from the email-signup verify step and from the Google-signup completion. It hardcodes `selectRole('student', …)` — there is no client-side path to a coach role.
+- `secureStorage` migrates any legacy AsyncStorage token into Keychain / Keystore on first read. After migration the AsyncStorage copy is deleted.
+- The role read from `user_data` is treated as advisory only. The backend re-derives role from the JWT on every request, so a tampered local copy cannot grant access.
+
+## Environment variables
+
+`RootNavigator` does not read env directly. The navigators it mounts do, transitively, through `services/api`, `services/realtime`, and `lib/analytics`.
+
+## Failure modes
+
+| Symptom | Cause | Recovery |
+| --- | --- | --- |
+| Splash never resolves | `src/config/env.ts` threw because Supabase env is missing | Fix the env in `.env` (dev) or EAS build config (prod) — this is a deliberate loud-fail. |
+| `tgp://join/<code>` opens app but lands on Home instead of CreateAccount | User is already signed in, so the matching screen isn't mounted | Sign out first, or have the client tap the invite URL on a fresh install. |
+| Universal link opens a browser instead of the app | `assetlinks.json` / `apple-app-site-association` not hosted, or fingerprint mismatch | Verify with `adb shell pm get-app-links com.growthproject.app` (Android) and Apple's AASA validator (iOS). |
+| User stuck in `onboarding` forever | `LeanQ3` never wrote `onboarding_complete=true` (e.g. AsyncStorage full) | Clear app data; `RootNavigator` re-bootstraps fresh. |
+| Logout from a deeply-nested screen leaves the screen visible briefly | `signOut` clears storage before the listener fires | Acceptable — `authEvents.emit('logout')` triggers the re-bootstrap; the unauthenticated navigator replaces the tree synchronously. |
+
+## Tests
+
+```bash
+npm run typecheck
+npm test
+```
+
+There are no navigation-level jest tests; the structure is exercised end-to-end by the smoke matrix and by every screen test that imports a navigator type.
+
+## Release notes
+
+- The 4-tab bar (Home / Train / Coach / Profile) was consolidated from an earlier 9-tab layout. The old screen names are preserved inside the `MoreStack` so any external `navigate()` calls (analytics, push payloads) keep working.
+- The floating chat widget visibility rule is in `RootNavigator`. If the More-tab screen list grows, update the `hideWidget` check or the widget will overlap a screen that doesn't expect it.
+- The `linking` config covers only the unauthenticated path. If a future feature needs to be addressable by a deep link to a signed-in screen, that route must be added under both `ClientNavigator` and `CoachNavigator` configs and the Android intent filter / `applinks:` entry extended in `app.json`.
