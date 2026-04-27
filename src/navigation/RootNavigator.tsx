@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
-import { NavigationContainer, NavigationContainerRef, DefaultTheme } from '@react-navigation/native';
+import { NavigationContainer, NavigationContainerRef, DefaultTheme, LinkingOptions } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AuthNavigator from './AuthNavigator';
 import ClientNavigator from './ClientNavigator';
@@ -16,6 +16,30 @@ import { useNetworkStatus, isEffectivelyOnline } from '../hooks/useNetworkStatus
 import { flush as flushFoodLogQueue } from '../services/foodLogQueue';
 
 type AuthState = 'loading' | 'unauthenticated' | 'onboarding' | 'coach' | 'student';
+
+// Deep-link config — must match the Android intent filters and iOS
+// associatedDomains entries declared in app.json. Both URL shapes route an
+// invite code straight into the signup screen so the user only sees one form.
+//
+//   tgp://join/<code>
+//   https://app.tgp.com/join/<code>
+const linking: LinkingOptions<Record<string, object | undefined>> = {
+  prefixes: ['tgp://', 'https://app.tgp.com'],
+  config: {
+    screens: {
+      // Only the unauthenticated AuthNavigator owns the signup screen — once a
+      // user is signed in, the linking config is effectively a no-op because
+      // the matching screen is not mounted. That's fine: signed-in users can
+      // attach an invite code via the in-app flow on RoleSelection.
+      Welcome: 'welcome',
+      Login: 'login',
+      CreateAccount: {
+        path: 'join/:invite_code?',
+        parse: { invite_code: (v: string) => v },
+      },
+    },
+  },
+};
 
 // Extract the active tab name from nested navigation state
 function getActiveTabName(state: any): string | undefined {
@@ -141,6 +165,7 @@ export default function RootNavigator() {
     <NavigationContainer
       ref={navigationRef}
       onStateChange={onNavigationStateChange}
+      linking={linking}
       theme={{
         ...DefaultTheme,
         colors: {

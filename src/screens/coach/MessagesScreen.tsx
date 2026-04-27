@@ -196,7 +196,7 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     marginBottom: 8,
   },
-  title: { fontSize: 28, fontWeight: '800', color: Colors.textPrimary },
+  title: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 32, lineHeight: 35, letterSpacing: 0.6, fontWeight: '400', color: Colors.textPrimary },
   unreadSummary: { fontSize: 13, color: Colors.primary, fontWeight: '600', marginTop: 2 },
   searchContainer: { paddingHorizontal: 24, marginBottom: 8 },
   searchBar: {
@@ -229,10 +229,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  convoAvatarText: { color: Colors.textOnPrimary, fontSize: 16, fontWeight: '700' },
+  convoAvatarText: { fontFamily: 'Inter_600SemiBold', color: Colors.textOnPrimary, fontSize: 14, fontWeight: '600', letterSpacing: 0.5 },
   convoInfo: { flex: 1, gap: 4 },
-  convoName: { fontSize: 15, fontWeight: '600', color: Colors.textPrimary },
-  convoNameUnread: { fontWeight: '800' },
+  convoName: { fontFamily: 'Inter_500Medium', fontSize: 15, fontWeight: '500', color: Colors.textPrimary },
+  convoNameUnread: { fontFamily: 'Inter_600SemiBold', fontWeight: '600' },
   convoPreview: { fontSize: 13, color: Colors.textSecondary },
   unreadBadge: {
     minWidth: 22,
@@ -249,6 +249,6 @@ const styles = StyleSheet.create({
     paddingTop: 80,
     gap: 10,
   },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: Colors.textPrimary },
+  emptyTitle: { fontFamily: 'CormorantGaramond_500Medium', fontSize: 22, lineHeight: 26, letterSpacing: 0.4, fontWeight: '500', color: Colors.textPrimary },
   emptyText: { fontSize: 14, color: Colors.textSecondary, textAlign: 'center', paddingHorizontal: 40 },
 });

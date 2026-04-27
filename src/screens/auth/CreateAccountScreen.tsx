@@ -441,14 +441,14 @@ const styles = StyleSheet.create({
   title: { ...Typography.h1, marginBottom: Spacing.xs },
   subtitle: { ...Typography.body },
   errorBox: {
-    backgroundColor: 'rgba(231, 76, 60, 0.1)',
+    backgroundColor: '#F2E0E0',
     borderRadius: Radius.sm,
     padding: Spacing.md,
     marginBottom: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.error,
+    borderLeftWidth: 2,
+    borderLeftColor: Colors.error,
   },
-  errorText: { color: Colors.error, fontSize: 14 },
+  errorText: { color: Colors.error, fontSize: 14, fontFamily: 'Inter_400Regular' },
   inputGroup: { marginBottom: Spacing.md },
   inputLabel: { ...Typography.label, marginBottom: Spacing.xs },
   input: {
@@ -492,7 +492,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     ...Shadow.card,
   },
-  googleG: { fontSize: 18, fontWeight: '700', marginRight: Spacing.sm, color: Colors.dark },
+  googleG: { fontFamily: 'Inter_600SemiBold', fontSize: 16, fontWeight: '600', marginRight: Spacing.sm, color: Colors.dark },
   googleButtonText: { ...Typography.button, color: Colors.dark },
   signupRow: {
     flexDirection: 'row',

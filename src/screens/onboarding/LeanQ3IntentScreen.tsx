@@ -22,6 +22,7 @@ import { Colors } from '../../constants/colors';
 import { saveOnboardingData } from '../../utils/onboardingStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { track } from '../../lib/analytics';
+import { authEvents } from '../../utils/authEvents';
 
 type Props = {
   navigation: NativeStackNavigationProp<LeanOnboardingParamList, 'LeanQ3'>;
@@ -29,28 +30,10 @@ type Props = {
 
 export type TodayIntent = 'workout' | 'track_meals' | 'explore';
 
-const INTENTS: { key: TodayIntent; icon: string; label: string; sub: string; identity: string }[] = [
-  {
-    key: 'workout',
-    icon: '🏋️',
-    label: 'Log a workout',
-    sub: 'Begin your first session.',
-    identity: 'Athlete',
-  },
-  {
-    key: 'track_meals',
-    icon: '🥗',
-    label: 'Track my meals',
-    sub: 'Log what I eat and hit my targets',
-    identity: 'Nutrition Pro',
-  },
-  {
-    key: 'explore',
-    icon: '🧭',
-    label: 'Just explore',
-    sub: 'Take a look around.',
-    identity: 'Explorer',
-  },
+const INTENTS: { key: TodayIntent; label: string; sub: string; identity: string }[] = [
+  { key: 'workout',     label: 'Log a workout',  sub: 'Begin your first session.',          identity: 'Athlete' },
+  { key: 'track_meals', label: 'Track my meals', sub: 'Log what you eat. Hit your targets.', identity: 'Nutrition Pro' },
+  { key: 'explore',     label: 'Just explore',   sub: 'Take a look around.',                 identity: 'Explorer' },
 ];
 
 export default function LeanQ3IntentScreen({ navigation }: Props) {
@@ -72,8 +55,7 @@ export default function LeanQ3IntentScreen({ navigation }: Props) {
         track('onboarding_completed', { intent });
       }
       // Fire root navigator refresh
-      const { authEvents } = require('../../utils/authEvents');
-      authEvents.emitAuthChange();
+      authEvents.emit();
     } catch {
       setLoading(false);
     }
@@ -114,7 +96,6 @@ export default function LeanQ3IntentScreen({ navigation }: Props) {
               activeOpacity={0.75}
               disabled={loading}
             >
-              <Text style={styles.optionIcon}>{i.icon}</Text>
               <View style={styles.optionText}>
                 <Text style={[styles.optionLabel, selected === i.key && styles.optionLabelSelected]}>
                   {i.label}
@@ -131,7 +112,7 @@ export default function LeanQ3IntentScreen({ navigation }: Props) {
         {/* Identity teaser */}
         <View style={styles.identityHint}>
           <Text style={styles.identityHintText}>
-            Your identity title begins with your first session.
+            Your title begins with your first session
           </Text>
         </View>
 
@@ -192,13 +173,16 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
   },
   headline: {
-    fontSize: 28,
-    fontWeight: '800',
+    fontFamily: 'CormorantGaramond_400Regular',
+    fontSize: 32,
+    lineHeight: 35,
+    letterSpacing: 0.6,
+    fontWeight: '400',
     color: Colors.textPrimary,
     marginBottom: 8,
-    letterSpacing: -0.5,
   },
   subtext: {
+    fontFamily: 'Inter_400Regular',
     fontSize: 15,
     color: Colors.textSecondary,
     lineHeight: 22,
@@ -211,47 +195,51 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: Colors.surface,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: Colors.border,
     borderRadius: 4, // radius.lg
-    padding: 20,
-    gap: 16,
+    paddingVertical: 22,
+    paddingHorizontal: 22,
   },
   optionSelected: {
     borderColor: Colors.primary,
-    backgroundColor: 'rgba(45, 106, 79, 0.07)',
-  },
-  optionIcon: {
-    fontSize: 32,
+    borderWidth: 1.5,
+    backgroundColor: 'rgba(44, 74, 54, 0.04)',
   },
   optionText: {
     flex: 1,
     gap: 4,
   },
   optionLabel: {
-    fontSize: 17,
-    fontWeight: '700',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 22,
+    fontWeight: '500',
+    letterSpacing: 0.4,
     color: Colors.textPrimary,
   },
   optionLabelSelected: {
     color: Colors.primary,
   },
   optionSub: {
+    fontFamily: 'Inter_400Regular',
     fontSize: 13,
     color: Colors.textSecondary,
+    lineHeight: 19,
   },
   identityHint: {
-    backgroundColor: 'rgba(45, 106, 79, 0.08)',
-    borderRadius: 2, // radius.md
     paddingVertical: 12,
-    paddingHorizontal: 16,
-    marginVertical: 12,
+    paddingHorizontal: 4,
+    marginVertical: 8,
     alignItems: 'center',
   },
   identityHintText: {
-    fontSize: 13,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    lineHeight: 13,
+    letterSpacing: 1.98,
+    fontWeight: '500',
+    textTransform: 'uppercase',
     color: Colors.primary,
-    fontWeight: '600',
   },
   bottomRow: {
     flexDirection: 'row',
@@ -264,17 +252,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   backText: {
-    fontSize: 14,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
     color: Colors.textSecondary,
-    fontWeight: '600',
+    fontWeight: '500',
+    letterSpacing: 0.3,
   },
   skipBtn: {
     paddingVertical: 12,
     paddingHorizontal: 4,
   },
   skipText: {
-    fontSize: 14,
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
     color: Colors.textMuted,
-    textDecorationLine: 'underline',
+    letterSpacing: 0.3,
   },
 });
