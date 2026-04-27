@@ -2,9 +2,9 @@
  * LeanQ3IntentScreen — Psych Report #1 "Activation-First Dopamine"
  * Q3: Today's intent — workout / track meals / explore
  *
- * After selection (or skip), marks onboarding complete, saves intent to
- * AsyncStorage, and re-boots root navigator so the user lands on HomeScreen
- * with the HeroAction pre-set to match their intent.
+ * After selection (or skip), saves intent then routes to LeanQ4 (essential
+ * body metrics). LeanQ4 is the screen that finalises onboarding — it can
+ * also be skipped, in which case the onboarding completes without metrics.
  */
 
 import React, { useState } from 'react';
@@ -40,21 +40,18 @@ export default function LeanQ3IntentScreen({ navigation }: Props) {
   const [selected, setSelected] = useState<TodayIntent | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const finishOnboarding = async (intent: TodayIntent, skipped = false) => {
+  const persistIntent = async (intent: TodayIntent) => {
+    await saveOnboardingData({ activityLevel: intent });
+    await AsyncStorage.setItem('lean_onboarding_intent', intent);
+  };
+
+  const skipToHome = async (intent: TodayIntent) => {
     setLoading(true);
     try {
-      await saveOnboardingData({ activityLevel: intent });
+      await persistIntent(intent);
       await AsyncStorage.setItem('onboarding_complete', 'true');
-      await AsyncStorage.setItem('lean_onboarding_intent', intent);
       await AsyncStorage.setItem('lean_onboarding_done', 'true');
-      // Psych Report #4: onboarding_completed or onboarding_skipped
-      if (skipped) {
-        track('onboarding_skipped', { at_step: 3 });
-      } else {
-        track('onboarding_step_completed', { step: 3, intent });
-        track('onboarding_completed', { intent });
-      }
-      // Fire root navigator refresh
+      track('onboarding_skipped', { at_step: 3 });
       authEvents.emit();
     } catch {
       setLoading(false);
@@ -63,11 +60,18 @@ export default function LeanQ3IntentScreen({ navigation }: Props) {
 
   const handleSelect = async (intent: TodayIntent) => {
     setSelected(intent);
-    await finishOnboarding(intent, false);
+    setLoading(true);
+    try {
+      await persistIntent(intent);
+      track('onboarding_step_completed', { step: 3, intent });
+      navigation.navigate('LeanQ4');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSkip = async () => {
-    await finishOnboarding('explore', true);
+    await skipToHome('explore');
   };
 
   return (
@@ -79,6 +83,7 @@ export default function LeanQ3IntentScreen({ navigation }: Props) {
             <View style={[styles.dot, styles.dotComplete]} />
             <View style={[styles.dot, styles.dotComplete]} />
             <View style={[styles.dot, styles.dotActive]} />
+            <View style={styles.dot} />
           </View>
           <Text style={styles.headline}>Where does it begin?</Text>
           <Text style={styles.subtext}>

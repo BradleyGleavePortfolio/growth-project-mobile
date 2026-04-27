@@ -14,11 +14,13 @@ import { Colors } from '../constants/colors';
 import LeanQ1GoalScreen from '../screens/onboarding/LeanQ1GoalScreen';
 import LeanQ2ExperienceScreen from '../screens/onboarding/LeanQ2ExperienceScreen';
 import LeanQ3IntentScreen from '../screens/onboarding/LeanQ3IntentScreen';
+import LeanQ4MetricsScreen from '../screens/onboarding/LeanQ4MetricsScreen';
 
 export type LeanOnboardingParamList = {
   LeanQ1: undefined;
   LeanQ2: undefined;
   LeanQ3: undefined;
+  LeanQ4: undefined;
 };
 
 const Stack = createNativeStackNavigator<LeanOnboardingParamList>();
@@ -35,6 +37,7 @@ export default function LeanOnboardingNavigator() {
       <Stack.Screen name="LeanQ1" component={LeanQ1GoalScreen} />
       <Stack.Screen name="LeanQ2" component={LeanQ2ExperienceScreen} />
       <Stack.Screen name="LeanQ3" component={LeanQ3IntentScreen} />
+      <Stack.Screen name="LeanQ4" component={LeanQ4MetricsScreen} />
     </Stack.Navigator>
   );
 }

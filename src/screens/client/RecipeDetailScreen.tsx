@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { recipesApi } from '../../services/api';
 import { Colors } from '../../constants/colors';
 import FadeInView from '../../components/FadeInView';
@@ -47,16 +48,40 @@ function MacroCard({ label, value, unit, color }: {
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function RecipeDetailScreen() {
   const navigation = useNavigation<any>();
-  const route = useRoute<RouteProp<{ RecipeDetail: { recipe: Recipe } }, 'RecipeDetail'>>();
-  const recipe = route.params?.recipe;
+  const route = useRoute<RouteProp<{ RecipeDetail: { recipeId: string } }, 'RecipeDetail'>>();
+  const recipeId = route.params?.recipeId;
+  const queryClient = useQueryClient();
 
-  const [isSaved, setIsSaved] = useState(recipe?.isSaved ?? false);
+  // Cache-first read: if the user navigated from RecipesScreen (the list
+  // query), we'll already have the recipe in cache and paint synchronously.
+  // Otherwise, we fetch by id and fall back to first paint loading state.
+  const initialFromCache = (() => {
+    const list = queryClient.getQueryData<Recipe[]>(['recipes']);
+    return list?.find((r) => r.id === recipeId);
+  })();
+
+  const { data, isLoading, isError } = useQuery<Recipe>({
+    queryKey: ['recipe', recipeId],
+    queryFn: () => recipesApi.getById(recipeId).then((r) => r.data as Recipe),
+    enabled: !!recipeId,
+    initialData: initialFromCache,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const recipe = data;
+
+  const [isSaved, setIsSaved] = useState<boolean>(recipe?.isSaved ?? false);
   const [saving, setSaving] = useState(false);
+
+  // Keep local saved-state in sync if the underlying record refreshes.
+  useEffect(() => {
+    if (recipe?.isSaved !== undefined) setIsSaved(recipe.isSaved);
+  }, [recipe?.isSaved]);
 
   const totalTime = (recipe?.prep_time_min ?? 0) + (recipe?.cook_time_min ?? 0);
 
   const handleToggleSave = useCallback(async () => {
-    if (saving) return;
+    if (saving || !recipe) return;
     setSaving(true);
     try {
       if (isSaved) {
@@ -71,9 +96,17 @@ export default function RecipeDetailScreen() {
     } finally {
       setSaving(false);
     }
-  }, [isSaved, saving, recipe?.id]);
+  }, [isSaved, saving, recipe]);
 
-  if (!recipe) {
+  if (isLoading && !recipe) {
+    return (
+      <View style={styles.errorContainer}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    );
+  }
+
+  if (isError || !recipe) {
     return (
       <View style={styles.errorContainer}>
         <Text style={styles.errorText}>Recipe not found.</Text>

@@ -67,6 +67,7 @@ export default function LeanQ1GoalScreen({ navigation }: Props) {
             <View style={[styles.dot, styles.dotActive]} />
             <View style={styles.dot} />
             <View style={styles.dot} />
+            <View style={styles.dot} />
           </View>
           <Text style={styles.headline}>Where are you headed?</Text>
           <Text style={styles.subtext}>One direction at a time.</Text>

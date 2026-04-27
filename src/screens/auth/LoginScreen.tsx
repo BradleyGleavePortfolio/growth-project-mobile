@@ -18,6 +18,7 @@ import { authApi } from '../../services/api';
 import { secureStorage } from '../../services/secureStorage';
 import { authEvents } from '../../utils/authEvents';
 import { track, identify } from '../../lib/analytics';
+import { toFriendlyAuthError } from '../../utils/authErrorMessage';
 
 interface Props {
   navigation: any;
@@ -62,8 +63,11 @@ export default function LoginScreen({ navigation }: Props) {
       // Fire auth event — RootNavigator will re-check AsyncStorage and navigate
       authEvents.emit();
     } catch (err: any) {
-      const message = err.response?.data?.message || 'Invalid email or password';
-      setError(message);
+      // Map any upstream string (Supabase, axios, or backend) into a quiet,
+      // safe line. Operators still get the raw error in console / Sentry.
+      const raw = err?.response?.data?.message || err?.message || err;
+      const friendly = toFriendlyAuthError(raw);
+      setError(friendly.message);
     } finally {
       setLoading(false);
     }
@@ -77,13 +81,11 @@ export default function LoginScreen({ navigation }: Props) {
       const result = await signInWithGoogle();
 
       if (!result.success) {
-        if (result.error !== 'Sign-in was cancelled') {
-          // Surface OAuth error. Previously these were silently swallowed
-          // (the URL fragment `#error=...&error_description=...` was ignored),
-          // so users saw "nothing happened" when Google sign-in failed.
-          const msg = result.error || 'Google sign-in failed';
-          setError(msg);
-          Alert.alert('Google sign-in failed', msg);
+        // Map raw OAuth strings to quiet safe copy. Cancellation stays silent.
+        const friendly = toFriendlyAuthError(result.error);
+        if (!friendly.cancelled) {
+          setError(friendly.message);
+          Alert.alert('Sign-in', friendly.message);
         }
         return;
       }
@@ -98,7 +100,8 @@ export default function LoginScreen({ navigation }: Props) {
         authEvents.emit();
       }
     } catch (err: any) {
-      setError('Google sign-in failed. Try again.');
+      const friendly = toFriendlyAuthError(err);
+      if (!friendly.cancelled) setError(friendly.message);
     } finally {
       setGoogleLoading(false);
     }

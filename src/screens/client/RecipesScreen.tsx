@@ -124,7 +124,9 @@ export default function RecipesScreen() {
 
   const handleRecipePress = useCallback(
     (recipe: Recipe) => {
-      navigation.navigate('RecipeDetail', { recipe });
+      // Pass only the serializable id — the detail screen fetches the full
+      // record via React Query (cache hit on the list query is reused).
+      navigation.navigate('RecipeDetail', { recipeId: recipe.id });
     },
     [navigation],
   );

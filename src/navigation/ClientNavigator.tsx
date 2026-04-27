@@ -40,6 +40,8 @@ import CommunityScreen from '../screens/client/CommunityScreen';
 import MoreScreen from '../screens/client/MoreScreen';
 import TrustCenterScreen from '../screens/TrustCenterScreen';
 import PreferencesScreen from '../screens/client/PreferencesScreen';
+import AIGuideScreen from '../screens/client/AIGuideScreen';
+import MembershipScreen from '../screens/client/MembershipScreen';
 import { colors } from '../theme/tokens';
 
 // ─── Param lists ──────────────────────────────────────────────────────────────
@@ -70,7 +72,7 @@ export type WorkoutStackParamList = {
 export type MoreStackParamList = {
   MoreIndex:   undefined;
   Recipes:     undefined;
-  RecipeDetail: { recipe: any };
+  RecipeDetail: { recipeId: string };
   Fast:        undefined;
   Community:   undefined;
   Progress:    undefined;
@@ -85,6 +87,8 @@ export type MoreStackParamList = {
   Plan:        undefined;
   TrustCenter: undefined;
   Preferences: undefined;
+  AIGuide:     undefined;
+  Membership:  undefined;
 };
 
 // ─── Stack navigators ─────────────────────────────────────────────────────────
@@ -152,6 +156,8 @@ function MoreStackNavigator() {
       <MoreStackNav.Screen name="Plan"         component={PlanScreen} />
       <MoreStackNav.Screen name="TrustCenter"  component={TrustCenterScreen} />
       <MoreStackNav.Screen name="Preferences"  component={PreferencesScreen} />
+      <MoreStackNav.Screen name="AIGuide"      component={AIGuideScreen} />
+      <MoreStackNav.Screen name="Membership"   component={MembershipScreen} />
     </MoreStackNav.Navigator>
   );
 }
