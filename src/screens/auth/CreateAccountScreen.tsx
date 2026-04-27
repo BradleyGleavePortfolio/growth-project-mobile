@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -13,27 +13,84 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors, Typography, Spacing, Radius, Shadow } from '../../theme';
-import { authApi } from '../../services/api';
+import { authApi, InvitePreview } from '../../services/api';
 import { secureStorage } from '../../services/secureStorage';
-import { track, identify } from '../../lib/analytics';
+import { track } from '../../lib/analytics';
 
 interface Props {
   navigation: any;
+  route?: { params?: { invite_code?: string } };
 }
 
 type Step = 'register' | 'verify';
 
-export default function CreateAccountScreen({ navigation }: Props) {
+export default function CreateAccountScreen({ navigation, route }: Props) {
   const [step, setStep] = useState<Step>('register');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
-  const [inviteCode, setInviteCode] = useState('');
-  const [inviteCodeInfo, setInviteCodeInfo] = useState<string>('');
+  const [inviteCode, setInviteCode] = useState(route?.params?.invite_code ?? '');
+  const [invitePreview, setInvitePreview] = useState<InvitePreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [requireInviteCode, setRequireInviteCode] = useState(true);
+  const [googleEnabled, setGoogleEnabled] = useState(true);
   const [loading, setLoading] = useState(false);
   const [verifyLoading, setVerifyLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Pull policy from backend so the signup form matches the live invite-gating
+  // rule. If the request fails, fall back to the strictest setting (require
+  // invite code) so we never accidentally let a codeless client through.
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await authApi.getSignupPolicy();
+        if (!mounted) return;
+        setRequireInviteCode(res.data?.require_invite_code ?? true);
+        setGoogleEnabled(res.data?.google_signin_enabled ?? true);
+      } catch {
+        if (!mounted) return;
+        setRequireInviteCode(true);
+        setGoogleEnabled(true);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // Auto-preview when an invite code is prefilled from a deep link.
+  useEffect(() => {
+    if (route?.params?.invite_code) {
+      previewCode(route.params.invite_code);
+    }
+  }, [route?.params?.invite_code]);
+
+  const previewCode = async (code: string) => {
+    const trimmed = code.trim();
+    if (!trimmed) {
+      setInvitePreview(null);
+      return;
+    }
+    setPreviewLoading(true);
+    try {
+      // Prefer the public preview endpoint (no auth, returns coach branding).
+      // Fall back to the legacy validate endpoint if preview is unavailable.
+      try {
+        const res = await authApi.getInvitePreview(trimmed);
+        setInvitePreview(res.data ?? null);
+      } catch {
+        const res = await authApi.validateInviteCode(trimmed);
+        setInvitePreview(res.data ?? null);
+      }
+    } catch {
+      setInvitePreview(null);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
 
   const validatePassword = (pw: string) => {
     if (pw.length < 8) return 'Password must be at least 8 characters';
@@ -45,7 +102,14 @@ export default function CreateAccountScreen({ navigation }: Props) {
 
   const handleRegister = async () => {
     if (!name || !email || !password) {
-      setError('Please fill in all required fields');
+      setError('Please complete the required fields');
+      return;
+    }
+
+    const trimmedCode = inviteCode.trim();
+
+    if (requireInviteCode && !trimmedCode) {
+      setError('An invite code from your coach is required to join.');
       return;
     }
 
@@ -57,47 +121,48 @@ export default function CreateAccountScreen({ navigation }: Props) {
 
     setLoading(true);
     setError('');
-    setInviteCodeInfo('');
 
-    const trimmedCode = inviteCode.trim();
     if (trimmedCode) {
-      // Validate the invite code BEFORE creating the account so we can show
-      // a clear inline error without committing a half-setup user.
       try {
         const res = await authApi.validateInviteCode(trimmedCode);
         if (!res.data?.valid) {
-          setError('Invite code is not valid. Check with your coach or leave it blank.');
+          setError('That invite code is not valid. Please check with your coach.');
           setLoading(false);
           return;
         }
-        if (res.data?.coach_name) {
-          setInviteCodeInfo(`You'll be connected to coach ${res.data.coach_name}.`);
-        }
-      } catch (err: any) {
-        // If the validate endpoint is unreachable, block submission — safer
-        // than silently registering without the code.
-        setError('Could not verify invite code. Check your connection and try again.');
+        setInvitePreview(res.data);
+      } catch {
+        setError('Could not verify the invite code. Check your connection and try again.');
         setLoading(false);
         return;
       }
     }
 
     try {
-      await authApi.register({
-        name,
-        email,
-        password,
-        phone: phone || undefined,
-        invite_code: trimmedCode || undefined,
-      });
+      // When an invite code is present, prefer the dedicated signup-with-code
+      // route so the backend can stamp coachId atomically. Falls back to the
+      // legacy /auth/register for codeless flows when policy allows it.
+      if (trimmedCode) {
+        await authApi.signupWithCode({
+          name,
+          email,
+          password,
+          phone: phone || undefined,
+          invite_code: trimmedCode,
+        });
+      } else {
+        await authApi.register({
+          name,
+          email,
+          password,
+          phone: phone || undefined,
+        });
+      }
 
-      // Backend sends a verification email — show the verify screen
       await AsyncStorage.setItem('pending_email', email);
-      // Psych Report #4: Analytics — signed_up fires on successful registration
       track('signed_up', { method: 'email', has_invite_code: !!trimmedCode });
       setStep('verify');
     } catch (err: any) {
-      // Show the exact backend error message if available
       const backendMessage = err.response?.data?.message;
       if (backendMessage) {
         setError(backendMessage);
@@ -116,25 +181,20 @@ export default function CreateAccountScreen({ navigation }: Props) {
     setError('');
 
     try {
-      // Try to login — Supabase rejects login if email not yet verified
       const loginRes = await authApi.login({ email, password });
       const { access_token, refresh_token, user } = loginRes.data;
 
-      // Security: tokens go to SecureStore, not plain AsyncStorage.
       await secureStorage.setItem('supabase_token', access_token);
       if (refresh_token) await secureStorage.setItem('supabase_refresh_token', refresh_token);
       await AsyncStorage.setItem('user_data', JSON.stringify(user));
 
-      // Mark that role selection is still needed (prevents RootNavigator
-      // from jumping to ClientNavigator before the user picks a role)
       await AsyncStorage.setItem('needs_role_selection', 'true');
 
-      // Navigate to role selection
       navigation.replace('RoleSelection');
     } catch (err: any) {
       const msg = err.response?.data?.message || '';
       if (msg.toLowerCase().includes('email') || msg.toLowerCase().includes('confirm')) {
-        setError('Email not verified yet. Please check your inbox and click the link first.');
+        setError('Email not yet verified. Open the link we sent and try again.');
       } else {
         setError('Could not sign in. Please try again.');
       }
@@ -144,27 +204,30 @@ export default function CreateAccountScreen({ navigation }: Props) {
   };
 
   const handleGoogleSignup = async () => {
+    const trimmedCode = inviteCode.trim();
+    if (requireInviteCode && !trimmedCode) {
+      setError('Enter your coach invite code before continuing with Google.');
+      return;
+    }
     setLoading(true);
     setError('');
     try {
       const { signInWithGoogle } = await import('../../utils/googleAuth');
-      const result = await signInWithGoogle();
+      const result = await signInWithGoogle({ inviteCode: trimmedCode || undefined });
 
       if (!result.success) {
         if (result.error !== 'Sign-in was cancelled') {
-          // Surface OAuth error from the URL fragment — previously swallowed.
-          const msg = result.error || 'Google sign-up failed';
+          const msg = result.error || 'Google sign-in was unsuccessful';
           setError(msg);
-          Alert.alert('Google sign-up failed', msg);
+          Alert.alert('Google sign-in unavailable', msg);
         }
         return;
       }
 
-      // Google users are pre-verified — go to role selection
       await AsyncStorage.setItem('needs_role_selection', 'true');
       navigation.replace('RoleSelection');
     } catch (err: any) {
-      setError('Google sign-up failed. Try again.');
+      setError('Google sign-in was unsuccessful. Try again.');
     } finally {
       setLoading(false);
     }
@@ -174,14 +237,13 @@ export default function CreateAccountScreen({ navigation }: Props) {
     return (
       <View style={styles.container}>
         <View style={styles.verifyContent}>
-          
-          <Text style={styles.verifyTitle}>Check your email</Text>
+          <Text style={styles.verifyTitle}>Check your inbox</Text>
           <Text style={styles.verifyBody}>
-            We sent a verification email to{'\n'}
+            We sent a verification link to{'\n'}
             <Text style={styles.emailHighlight}>{email}</Text>
           </Text>
           <Text style={styles.verifySubBody}>
-            Click the link in the email to verify your account, then tap the button below.
+            Confirm the link, then return here to continue.
           </Text>
 
           {error ? (
@@ -203,7 +265,7 @@ export default function CreateAccountScreen({ navigation }: Props) {
           </TouchableOpacity>
 
           <TouchableOpacity onPress={() => setStep('register')} style={styles.backLink}>
-            <Text style={styles.backLinkText}>← Use a different email</Text>
+            <Text style={styles.backLinkText}>Use a different email</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -216,10 +278,13 @@ export default function CreateAccountScreen({ navigation }: Props) {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        {/* Round 3: accessibility labels on header, inputs, buttons, alerts */}
         <View style={styles.header}>
-          <Text style={styles.title} accessibilityRole="header">Create account</Text>
-          <Text style={styles.subtitle}>Join The Growth Project</Text>
+          <Text style={styles.title} accessibilityRole="header">Join your coach</Text>
+          <Text style={styles.subtitle}>
+            {requireInviteCode
+              ? 'Enter the invite code your coach shared to begin.'
+              : 'Create your account to begin.'}
+          </Text>
         </View>
 
         {error ? (
@@ -227,6 +292,38 @@ export default function CreateAccountScreen({ navigation }: Props) {
             <Text style={styles.errorText}>{error}</Text>
           </View>
         ) : null}
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.inputLabel}>
+            {requireInviteCode ? 'INVITE CODE' : 'INVITE CODE (OPTIONAL)'}
+          </Text>
+          <TextInput
+            style={styles.input}
+            value={inviteCode}
+            onChangeText={(v) => {
+              setInviteCode(v);
+              setInvitePreview(null);
+            }}
+            onBlur={() => previewCode(inviteCode)}
+            placeholder="From your coach"
+            placeholderTextColor={Colors.textMuted}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            accessibilityLabel="Coach invite code"
+          />
+          {previewLoading ? (
+            <Text style={styles.invitePreviewMuted}>Checking code…</Text>
+          ) : invitePreview?.valid ? (
+            <Text style={styles.invitePreviewOk}>
+              You will be paired with{' '}
+              {invitePreview.business_name || invitePreview.coach_name || 'your coach'}.
+            </Text>
+          ) : invitePreview && !invitePreview.valid ? (
+            <Text style={styles.invitePreviewBad}>
+              {invitePreview.reason || 'This code is not currently active.'}
+            </Text>
+          ) : null}
+        </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.inputLabel}>FULL NAME</Text>
@@ -287,28 +384,6 @@ export default function CreateAccountScreen({ navigation }: Props) {
           />
         </View>
 
-        <View style={styles.inputGroup}>
-          <Text style={styles.inputLabel}>INVITE CODE (OPTIONAL)</Text>
-          <TextInput
-            style={styles.input}
-            value={inviteCode}
-            onChangeText={(v) => {
-              setInviteCode(v);
-              setInviteCodeInfo('');
-            }}
-            placeholder="From your coach (leave blank if none)"
-            placeholderTextColor={Colors.textMuted}
-            autoCapitalize="characters"
-            autoCorrect={false}
-            accessibilityLabel="Invite code, optional"
-          />
-          {inviteCodeInfo ? (
-            <Text style={{ fontSize: 12, color: Colors.primary, marginTop: 6 }}>
-              {inviteCodeInfo}
-            </Text>
-          ) : null}
-        </View>
-
         <TouchableOpacity
           style={[styles.registerButton, loading && styles.buttonDisabled]}
           onPress={handleRegister}
@@ -320,25 +395,29 @@ export default function CreateAccountScreen({ navigation }: Props) {
           {loading ? (
             <ActivityIndicator color={Colors.white} />
           ) : (
-            <Text style={styles.registerButtonText}>Create Account</Text>
+            <Text style={styles.registerButtonText}>Create account</Text>
           )}
         </TouchableOpacity>
 
-        <View style={styles.divider} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>or</Text>
-          <View style={styles.dividerLine} />
-        </View>
+        {googleEnabled && (
+          <>
+            <View style={styles.divider} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>or</Text>
+              <View style={styles.dividerLine} />
+            </View>
 
-        <TouchableOpacity
-          style={styles.googleButton}
-          onPress={handleGoogleSignup}
-          accessibilityRole="button"
-          accessibilityLabel="Sign up with Google"
-        >
-          <Text style={styles.googleG}>G</Text>
-          <Text style={styles.googleButtonText}>Sign up with Google</Text>
-        </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.googleButton}
+              onPress={handleGoogleSignup}
+              accessibilityRole="button"
+              accessibilityLabel="Continue with Google"
+            >
+              <Text style={styles.googleG}>G</Text>
+              <Text style={styles.googleButtonText}>Continue with Google</Text>
+            </TouchableOpacity>
+          </>
+        )}
 
         <View style={styles.signupRow}>
           <Text style={styles.signupText}>Already have an account? </Text>
@@ -382,6 +461,9 @@ const styles = StyleSheet.create({
     color: Colors.dark,
     ...Shadow.card,
   },
+  invitePreviewOk: { fontSize: 13, color: Colors.primary, marginTop: 6 },
+  invitePreviewBad: { fontSize: 13, color: Colors.error, marginTop: 6 },
+  invitePreviewMuted: { fontSize: 13, color: Colors.textMuted, marginTop: 6 },
   registerButton: {
     backgroundColor: Colors.primary,
     borderRadius: Radius.md,
@@ -420,14 +502,12 @@ const styles = StyleSheet.create({
   },
   signupText: { color: Colors.textMuted, fontSize: 15 },
   signupLink: { color: Colors.primary, fontSize: 15, fontWeight: '600' },
-  // Verify step styles
   verifyContent: {
     flex: 1,
     padding: Spacing.lg,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  verifyIcon: { fontSize: 56, marginBottom: Spacing.lg },
   verifyTitle: { ...Typography.h2, marginBottom: Spacing.md, textAlign: 'center' },
   verifyBody: {
     fontSize: 16,

@@ -21,19 +21,20 @@ import { Ionicons } from '@expo/vector-icons';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { getChatHistory, saveChatMessage } from '../../db/chatDb';
 import { getAIResponse } from '../../utils/aiGuide';
-import { aiApi } from '../../services/api';
+import { aiApi, AIStructuredContext } from '../../services/api';
 import { Colors } from '../../constants/colors';
 import { ChatMessage } from '../../types';
 import { generateId } from '../../utils/date';
 import FadeInView from '../../components/FadeInView';
 
+// Quiet-luxury prompts. The AI is the coach's voice; the prompts should read
+// like a coach asking, not a fitness app pushing keywords.
 const QUICK_PROMPTS = [
-  'How many calories?',
-  'Protein tips',
+  'Today’s focus',
+  'Adjust my plan',
   'Meal ideas',
-  'Motivation',
-  'Workout plan',
-  'Fasting help',
+  'Recovery',
+  'Training notes',
 ];
 
 function TypingIndicator() {
@@ -82,6 +83,8 @@ export default function AIGuideScreen() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [contextReady, setContextReady] = useState(false);
+  const [coachName, setCoachName] = useState<string | undefined>(undefined);
   const listRef = useRef<FlatList>(null);
 
   const userId = currentUser?.id || '';
@@ -89,6 +92,20 @@ export default function AIGuideScreen() {
   useEffect(() => {
     if (userId) {
       loadChat();
+      // Pull structured context once on mount so the screen can show what the
+      // backend will relay. The mobile app does NOT use these fields to build
+      // a prompt — the backend is the only place that touches the AI provider.
+      // This call is purely informational for the UI.
+      (async () => {
+        try {
+          const res = await aiApi.getStructuredContext();
+          const ctx: AIStructuredContext | undefined = res.data;
+          setCoachName(ctx?.coach?.name || ctx?.coach?.business_name);
+          setContextReady(true);
+        } catch {
+          setContextReady(false);
+        }
+      })();
     }
   }, [userId]);
 
@@ -116,7 +133,10 @@ export default function AIGuideScreen() {
       let aiText: string;
 
       try {
-        // Build conversation history for the API
+        // Build short conversation history for short-term continuity. The
+        // backend is responsible for assembling structured context (coach,
+        // macros, recent logs, persona, guardrails) — the mobile app sends
+        // ONLY the user's message text and last few turns.
         const history = messages.slice(-10).map((m) => ({
           role: m.role === 'user' ? 'user' : 'assistant',
           content: m.text,
@@ -129,7 +149,9 @@ export default function AIGuideScreen() {
           throw new Error('Empty API response');
         }
       } catch {
-        // Fallback to local pattern matching (offline mode)
+        // Offline-only fallback: local keyword matcher. This is intentionally
+        // kept minimal and only fires when the backend cannot be reached.
+        // Surfacing this lets the user notice they are offline.
         const daysSinceStart = currentUser?.createdAt
           ? Math.floor((Date.now() - new Date(currentUser.createdAt).getTime()) / (1000 * 60 * 60 * 24))
           : 1;
@@ -144,12 +166,13 @@ export default function AIGuideScreen() {
           ...currentUser.profile,
         } as import('../../types').ClientProfile : null;
 
-        aiText = getAIResponse(text, {
+        const offlineReply = getAIResponse(text, {
           firstName: currentUser?.firstName || currentUser?.name || 'there',
           profile: profileAsClientProfile,
           daysSinceStart,
           loggingStreak: 0,
         });
+        aiText = `(Offline reply — connect to receive your coach's full guidance.)\n\n${offlineReply}`;
       }
 
       const aiMsg: ChatMessage = {
@@ -193,7 +216,10 @@ export default function AIGuideScreen() {
     >
       <FadeInView>
         <View style={styles.header}>
-          <Text style={styles.title}>AI Guide</Text>
+          <Text style={styles.title}>Guidance</Text>
+          {coachName ? (
+            <Text style={styles.subTitle}>Trained on {coachName}'s approach</Text>
+          ) : null}
         </View>
       </FadeInView>
 
@@ -214,8 +240,13 @@ export default function AIGuideScreen() {
                 Hello{currentUser?.firstName ? `, ${currentUser.firstName}` : ''}.
               </Text>
               <Text style={styles.welcomeText}>
-                I'm your AI nutrition guide. Ask me about calories, macros, meal ideas, workouts, fasting, or anything fitness related.
+                {coachName
+                  ? `Trained on ${coachName}'s approach. I have your goals, recent logs, and check-ins on hand.`
+                  : 'Trained on your coach’s approach. I have your goals, recent logs, and check-ins on hand.'}
               </Text>
+              {!contextReady ? (
+                <Text style={styles.welcomeFooter}>Working offline. Replies are generic until you reconnect.</Text>
+              ) : null}
             </View>
           ) : null
         }
@@ -286,6 +317,11 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '800',
     color: Colors.textPrimary,
+  },
+  subTitle: {
+    fontSize: 13,
+    color: Colors.textMuted,
+    marginTop: 2,
   },
   listContent: {
     paddingHorizontal: 16,
@@ -376,6 +412,12 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
+  },
+  welcomeFooter: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    textAlign: 'center',
+    marginTop: 6,
   },
   quickRow: {
     paddingBottom: 8,

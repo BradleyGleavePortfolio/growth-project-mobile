@@ -163,13 +163,26 @@ export default api;
 // TYPED API FUNCTIONS
 // ============================================================
 
+export interface InvitePreview {
+  valid: boolean;
+  coach_name?: string;
+  business_name?: string;
+  accent_color?: string;
+  logo_url?: string;
+  reason?: string;
+}
+
 export const authApi = {
   register: (data: { email: string; password: string; name: string; phone?: string; invite_code?: string }) =>
     api.post('/auth/register', data),
+  signupWithCode: (data: { email: string; password: string; name: string; phone?: string; invite_code: string }) =>
+    api.post('/auth/signup-with-code', data),
   login: (data: { email: string; password: string }) =>
     api.post('/auth/login', data),
-  googleAuth: (token: string) =>
-    api.post('/auth/google', { token }),
+  googleAuth: (token: string, inviteCode?: string) =>
+    api.post('/auth/google', inviteCode ? { token, invite_code: inviteCode } : { token }),
+  attachInviteCode: (code: string) =>
+    api.post('/auth/attach-invite-code', { invite_code: code }),
   selectRole: (role: 'coach' | 'student', coachCode?: string) =>
     api.post('/auth/select-role', { role, coach_code: coachCode }),
   me: () =>
@@ -177,9 +190,16 @@ export const authApi = {
   forgotPassword: (email: string) =>
     api.post('/auth/forgot-password', { email }),
   validateInviteCode: (code: string) =>
-    api.post('/auth/validate-invite-code', { code }),
-  becomeCoach: (password: string) =>
-    api.post('/auth/become-coach', { password }),
+    api.post<InvitePreview>('/auth/validate-invite-code', { code }),
+  // Public preview — read-only, no PII; surfaces coach branding before signup.
+  getInvitePreview: (code: string) =>
+    api.get<InvitePreview>(`/invite/${encodeURIComponent(code)}/preview`),
+  // Backend feature flag: when true, codeless client signup is rejected.
+  // Mobile checks this on the signup screen so the UX matches policy.
+  getSignupPolicy: () =>
+    api.get<{ require_invite_code: boolean; google_signin_enabled: boolean }>(
+      '/auth/signup-policy',
+    ),
 };
 
 export const profileApi = {
@@ -214,11 +234,32 @@ export const logApi = {
     api.get(`/log/weekly?week_start=${weekStart}`),
 };
 
+// Structured client context relayed by the backend to the AI provider.
+// The mobile app never assembles raw PII into prompts; it just sends the
+// user's message and lets the server attach the structured context.
+export interface AIStructuredContext {
+  user: { id: string; first_name?: string; created_at?: string };
+  coach?: { id: string; name?: string; business_name?: string };
+  goals?: { primary?: string; calorie_target?: number; protein_g?: number };
+  recent: {
+    log_streak_days?: number;
+    last_logged_at?: string | null;
+    last_check_in_at?: string | null;
+    habit_completion_7d?: number;
+  };
+  preferences?: { units?: 'metric' | 'imperial'; tone?: string };
+}
+
 export const aiApi = {
-  chat: (message: string, history: Array<{ role: string; content: string }>) =>
-    api.post('/ai/chat', { message, conversation_history: history }),
-  getContext: () =>
-    api.get('/ai/context'),
+  // Send only the user's message. Server attaches structured context, persona,
+  // and guardrails. Conversation history is optional for short-term continuity.
+  chat: (message: string, history?: Array<{ role: string; content: string }>) =>
+    api.post('/ai/chat', { message, conversation_history: history ?? [] }),
+  // Replaces the old /ai/context. Returns the structured context the backend
+  // would attach if the client called /ai/chat right now — useful for showing
+  // a "what your coach has shared" panel before a conversation starts.
+  getStructuredContext: () =>
+    api.get<AIStructuredContext>('/ai/structured-context'),
 };
 
 export const workoutApi = {
