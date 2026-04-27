@@ -105,6 +105,8 @@ Server-side requirements for `autoVerify: true` (Android App Links):
 
 These two files are the gate that promotes our deep links from "opens a chooser" to "opens the app silently". They must exist before the first production release if marketing intends to use the universal-link form.
 
+Templates live in `docs/well-known/` — copy them to the marketing site repo, fill in the placeholders (Play App Signing SHA-256 for Android, Apple Team ID for iOS), and ship. `docs/well-known/README.md` has the verification commands (`curl`, `adb shell pm get-app-links`, Apple's AASA-CDN endpoint).
+
 ## 7. Google OAuth
 
 The app does **not** ship a native Google Sign-In SDK. Sign-in is brokered through **Supabase OAuth** (see `src/utils/googleAuth.ts`).
@@ -162,12 +164,22 @@ For iOS: TestFlight internal → external (90-day cycle) → App Store Connect p
 
 ## 11. Pre-submission verification checklist
 
-Run through this list locally on the production build before uploading:
+Run through this list locally on the production build before uploading. The full smoke matrix lives at `docs/RELEASE_SMOKE.md`; the automatable subset is `scripts/release-smoke.sh`.
 
-- [ ] `npm run typecheck` clean
-- [ ] `npm run lint` exits zero (warnings allowed, errors not)
-- [ ] `npm test` passes
-- [ ] App boots on a fresh install with no Supabase env vars set → splash + welcome (no crash)
+```bash
+# Static checks (CI runs these, but rerun locally before tagging a release)
+npm run typecheck
+npm run lint
+npm test -- --ci --passWithNoTests
+npm run validate:config
+
+# After installing the APK on a connected device
+npm run smoke:android
+```
+
+Manual sign-off items that scripts cannot cover:
+
+- [ ] App boots on a fresh install with no Supabase env vars set → env validation throws, splash + welcome never render (this is the desired loud-fail behavior from `src/config/env.ts`)
 - [ ] App boots on a fresh install with prod env vars → can sign in via email/password
 - [ ] Google sign-in completes and lands on RoleSelection (new user) or Home (returning)
 - [ ] Deep link `tgp://join/TESTCODE` opens CreateAccount with invite code prefilled
@@ -177,6 +189,18 @@ Run through this list locally on the production build before uploading:
 - [ ] Notifications permission prompt fires once on first launch and never again
 - [ ] No self-serve "Become a coach" UI is reachable from any client surface (this is verified — `RoleSelectionScreen` hardcodes `selectRole('student', …)`)
 - [ ] No console references to staging or localhost URLs remain
+
+### Blocking manual values needed before first production submission
+
+These cannot be derived from the codebase — someone has to fetch them and either fill them into `docs/well-known/*` (then host on `app.tgp.com`) or paste them directly into Play / App Store Connect:
+
+| Value | Source | Used by |
+| --- | --- | --- |
+| Play App Signing SHA-256 fingerprint | Play Console → Setup → App integrity → App signing (after first AAB upload) | `assetlinks.json` |
+| Apple Team ID (10-char) | App Store Connect → Membership | `apple-app-site-association` |
+| Privacy policy URL | Marketing site, `https://app.tgp.com/privacy` | Play Data Safety form, App Store privacy nutrition label |
+| Test account credentials (client + coach) | Internal QA | Play "App access" instructions, App Store review notes |
+| Supabase project ref (for OAuth redirect) | Supabase dashboard URL | Google Cloud Console authorized redirect URIs |
 
 ## 12. Rollback plan
 

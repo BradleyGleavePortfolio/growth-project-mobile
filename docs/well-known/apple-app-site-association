@@ -1,0 +1,27 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": [
+          "REPLACE_WITH_APPLE_TEAM_ID.com.growthproject.app"
+        ],
+        "components": [
+          {
+            "/": "/join/*",
+            "comment": "Universal link to invite-gated signup"
+          },
+          {
+            "/": "/join",
+            "comment": "Universal link without invite code (manual entry)"
+          }
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": [
+      "REPLACE_WITH_APPLE_TEAM_ID.com.growthproject.app"
+    ]
+  }
+}

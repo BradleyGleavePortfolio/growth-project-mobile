@@ -9,7 +9,9 @@
     "web": "expo start --web",
     "test": "jest",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint \"src/**/*.{ts,tsx}\" --max-warnings=99999"
+    "lint": "eslint \"src/**/*.{ts,tsx}\" --max-warnings=99999",
+    "validate:config": "node scripts/validate-app-config.js",
+    "smoke:android": "bash scripts/release-smoke.sh"
   },
   "jest": {
     "preset": "jest-expo",
