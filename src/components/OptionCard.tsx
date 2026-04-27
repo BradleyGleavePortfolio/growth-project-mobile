@@ -88,6 +88,6 @@ const styles = StyleSheet.create({
   checkmarkText: {
     color: Colors.textOnPrimary,
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '500',
   },
 });

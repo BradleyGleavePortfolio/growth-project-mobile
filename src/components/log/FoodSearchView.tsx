@@ -309,7 +309,7 @@ const styles = StyleSheet.create({
   },
   didYouMeanHeaderText: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.gold,
   },
   didYouMeanItem: {
@@ -328,7 +328,7 @@ const styles = StyleSheet.create({
   },
   emptyStateTitle: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.dark,
     marginTop: 8,
   },
@@ -344,7 +344,7 @@ const styles = StyleSheet.create({
   },
   listHeader: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textMuted,
     marginBottom: 8,
     marginTop: 4,
@@ -383,7 +383,7 @@ const styles = StyleSheet.create({
   },
   searchResultCals: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.primary,
   },
   manualButton: {

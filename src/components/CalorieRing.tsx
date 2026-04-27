@@ -82,7 +82,7 @@ const styles = StyleSheet.create({
   },
   remaining: {
     fontSize: 40,
-    fontWeight: '800',
+    fontWeight: '500',
     color: Colors.textPrimary,
   },
   label: {

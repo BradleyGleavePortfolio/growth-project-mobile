@@ -116,7 +116,7 @@ const styles = StyleSheet.create({
   },
   dismissBtnText: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textOnPrimary,
     letterSpacing: 0.3,
   },

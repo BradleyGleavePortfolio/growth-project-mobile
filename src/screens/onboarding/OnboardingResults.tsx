@@ -266,7 +266,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontWeight: '800',
+    fontWeight: '500',
     color: Colors.textPrimary,
     marginBottom: 8,
   },
@@ -289,7 +289,7 @@ const styles = StyleSheet.create({
   },
   calorieNumber: {
     fontSize: 42,
-    fontWeight: '800',
+    fontWeight: '500',
     color: Colors.textPrimary,
   },
   calorieLabel: {
@@ -323,7 +323,7 @@ const styles = StyleSheet.create({
   startButtonText: {
     color: Colors.textOnPrimary,
     fontSize: 20,
-    fontWeight: '800',
+    fontWeight: '500',
   },
 });
 
@@ -339,7 +339,7 @@ const macroStyles = StyleSheet.create({
   },
   grams: {
     fontSize: 24,
-    fontWeight: '800',
+    fontWeight: '500',
   },
   label: {
     fontSize: 13,

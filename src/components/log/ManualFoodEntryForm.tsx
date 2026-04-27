@@ -196,6 +196,6 @@ const styles = StyleSheet.create({
   logButtonText: {
     color: Colors.white,
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '500',
   },
 });

@@ -437,7 +437,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textMuted,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
@@ -501,7 +501,7 @@ const styles = StyleSheet.create({
   },
   bulletGroupLabel: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textMuted,
     letterSpacing: 0.4,
     textTransform: 'uppercase',

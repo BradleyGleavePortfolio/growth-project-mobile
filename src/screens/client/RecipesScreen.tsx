@@ -232,7 +232,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   backBtn: { width: 40, height: 40, justifyContent: 'center' },
-  title: { fontSize: 24, fontWeight: '800', color: Colors.textPrimary },
+  title: { fontSize: 24, fontWeight: '500', color: Colors.textPrimary },
 
   searchRow: {
     flexDirection: 'row',
@@ -294,9 +294,9 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 0, // radius.sm
   },
-  caloriesBadgeText: { fontSize: 12, fontWeight: '700', color: Colors.textOnPrimary },
+  caloriesBadgeText: { fontSize: 12, fontWeight: '500', color: Colors.textOnPrimary },
   cardBody: { padding: 14, gap: 6 },
-  cardTitle: { fontSize: 16, fontWeight: '700', color: Colors.textPrimary },
+  cardTitle: { fontSize: 16, fontWeight: '500', color: Colors.textPrimary },
   cardDesc: { fontSize: 13, color: Colors.textSecondary, lineHeight: 18 },
   cardMeta: { flexDirection: 'row', gap: 14, marginTop: 2 },
   cardMetaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
@@ -310,7 +310,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 0, // radius.sm
   },
-  macroBadgeValue: { fontSize: 12, fontWeight: '700' },
+  macroBadgeValue: { fontSize: 12, fontWeight: '500' },
   macroBadgeLabel: { fontSize: 11, fontWeight: '600' },
   tagsRow: { marginTop: 6 },
   tag: {

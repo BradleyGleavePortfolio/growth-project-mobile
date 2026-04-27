@@ -243,7 +243,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 6,
   },
-  unreadBadgeText: { color: Colors.textOnPrimary, fontSize: 12, fontWeight: '700' },
+  unreadBadgeText: { color: Colors.textOnPrimary, fontSize: 12, fontWeight: '500' },
   emptyContainer: {
     alignItems: 'center',
     paddingTop: 80,

@@ -11,7 +11,6 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
@@ -34,12 +33,10 @@ import { SkeletonCard } from '../../components/SkeletonLoader';
  *                 the coach roster, and visible to teammates and the coach.
  *   Leaderboard → real workout-volume groupBy on the backend (community.
  *                 service.getLeaderboard). Same scope rules.
- *   Challenges  → no backend module exists yet; tab renders as Coming Soon.
- *                 Previously this tab was driven by a SQLite-only
- *                 `seedCommunityIfNeeded` (theatrical seed of two fake
- *                 challenges with hard-coded participants). That seed has
- *                 been removed entirely; we will not show a feature that
- *                 only exists per-device.
+ *
+ * Wave 5b: the Challenges tab is gone. There is no backend module behind
+ * it, and the quiet-luxury doctrine forbids "Coming Soon" placeholder UI.
+ * The tab returns when there is real data to render.
  *
  * Cache:
  *   The two real queries (feed + leaderboard) are persisted via the
@@ -47,12 +44,11 @@ import { SkeletonCard } from '../../components/SkeletonLoader';
  *   the network call refreshes in the background.
  */
 
-type TabKey = 'wins' | 'leaderboard' | 'challenges';
+type TabKey = 'wins' | 'leaderboard';
 
 const TABS: { key: TabKey; label: string; icon: string }[] = [
   { key: 'wins', label: 'Wins', icon: 'star' },
   { key: 'leaderboard', label: 'Leaderboard', icon: 'podium' },
-  { key: 'challenges', label: 'Challenges', icon: 'trophy' },
 ];
 
 function formatTimeAgo(iso: string): string {
@@ -255,11 +251,11 @@ export default function CommunityScreen() {
               : '?';
             const medalColor =
               rank === 1
-                ? '#D4AF37'
+                ? Colors.medalGold
                 : rank === 2
-                ? '#A8A8A8'
+                ? Colors.medalSilver
                 : rank === 3
-                ? '#B97A57'
+                ? Colors.medalBronze
                 : Colors.textMuted;
             return (
               <View style={[styles.leaderRow, isMe && styles.leaderRowMe]}>
@@ -287,22 +283,6 @@ export default function CommunityScreen() {
             );
           }}
         />
-      )}
-
-      {/* CHALLENGES TAB — coming-soon placeholder ────────────────────── */}
-      {activeTab === 'challenges' && (
-        <ScrollView contentContainerStyle={styles.comingSoonContainer}>
-          <View style={styles.comingSoonCard}>
-            <Ionicons name="trophy-outline" size={36} color={Colors.primary} />
-            <Text style={styles.comingSoonEyebrow}>Coming soon</Text>
-            <Text style={styles.comingSoonTitle}>Team challenges</Text>
-            <Text style={styles.comingSoonBody}>
-              Coach-launched group challenges with shared progress and a real leaderboard are
-              being built. We removed the old version because the challenges only existed on
-              your device — we'd rather wait and ship it right.
-            </Text>
-          </View>
-        </ScrollView>
       )}
 
       {/* POST-A-WIN MODAL ─────────────────────────────────────────────── */}
@@ -392,8 +372,24 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     marginBottom: 12,
   },
-  title: { fontSize: 28, fontWeight: '800', color: Colors.textPrimary },
-  subtitle: { fontSize: 14, color: Colors.textSecondary, marginTop: 4 },
+  title: {
+    fontFamily: 'CormorantGaramond_400Regular',
+    fontSize: 32,
+    lineHeight: 35,
+    letterSpacing: 0.6,
+    fontWeight: '400',
+    color: Colors.textPrimary,
+  },
+  subtitle: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    lineHeight: 13,
+    letterSpacing: 1.98,
+    fontWeight: '500',
+    textTransform: 'uppercase',
+    color: Colors.textMuted,
+    marginTop: 8,
+  },
   shareWinBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -403,7 +399,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
   },
-  shareWinText: { color: Colors.textOnPrimary, fontSize: 13, fontWeight: '700' },
+  shareWinText: {
+    fontFamily: 'Inter_500Medium',
+    color: Colors.textOnPrimary,
+    fontSize: 12,
+    fontWeight: '500',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
 
   tabBar: { flexDirection: 'row', marginHorizontal: 24, marginBottom: 12, gap: 8 },
   tab: {
@@ -419,17 +422,32 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   tabActive: { backgroundColor: Colors.primaryPale, borderColor: Colors.primary },
-  tabText: { fontSize: 13, fontWeight: '600', color: Colors.textMuted },
+  tabText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    fontWeight: '500',
+    letterSpacing: 0.4,
+    color: Colors.textMuted,
+  },
   tabTextActive: { color: Colors.primary },
 
   listContent: { paddingHorizontal: 24, paddingBottom: 100 },
   emptyContainer: { alignItems: 'center', paddingTop: 60, gap: 10 },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: Colors.textPrimary },
+  emptyTitle: {
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 20,
+    lineHeight: 24,
+    letterSpacing: 0.4,
+    fontWeight: '500',
+    color: Colors.textPrimary,
+  },
   emptyText: {
+    fontFamily: 'Inter_400Regular',
     fontSize: 14,
     color: Colors.textSecondary,
     textAlign: 'center',
     paddingHorizontal: 40,
+    lineHeight: 22,
   },
 
   featuredBanner: {
@@ -438,7 +456,14 @@ const styles = StyleSheet.create({
     gap: 6,
     marginBottom: 12,
   },
-  featuredBannerText: { fontSize: 14, fontWeight: '700', color: Colors.primary },
+  featuredBannerText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    fontWeight: '500',
+    letterSpacing: 1.98,
+    textTransform: 'uppercase',
+    color: Colors.primary,
+  },
 
   // Leaderboard
   leaderRow: {
@@ -454,7 +479,14 @@ const styles = StyleSheet.create({
   },
   leaderRowMe: { borderColor: Colors.primary, backgroundColor: Colors.primaryPale },
   rankContainer: { width: 30, alignItems: 'center' },
-  rankText: { fontSize: 16, fontWeight: '800', color: Colors.textMuted },
+  rankText: {
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 18,
+    lineHeight: 22,
+    letterSpacing: 0.4,
+    fontWeight: '500',
+    color: Colors.textMuted,
+  },
   leaderAvatar: {
     width: 40,
     height: 40,
@@ -463,12 +495,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  leaderAvatarText: { color: Colors.textOnPrimary, fontSize: 14, fontWeight: '700' },
+  leaderAvatarText: {
+    fontFamily: 'Inter_600SemiBold',
+    color: Colors.textOnPrimary,
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 1,
+  },
   leaderInfo: { flex: 1 },
-  leaderName: { fontSize: 15, fontWeight: '600', color: Colors.textPrimary },
-  leaderNameMe: { fontWeight: '800', color: Colors.primary },
+  leaderName: { fontFamily: 'Inter_500Medium', fontSize: 15, fontWeight: '500', color: Colors.textPrimary },
+  leaderNameMe: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', color: Colors.primary },
   leaderPoints: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  leaderPointsText: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
+  leaderPointsText: {
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 18,
+    lineHeight: 22,
+    letterSpacing: 0.4,
+    fontWeight: '500',
+    color: Colors.textPrimary,
+  },
 
   // Wins
   winCard: {
@@ -491,54 +536,35 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(233, 196, 106, 0.15)',
   },
   winInfo: { flex: 1, gap: 2 },
-  winUserName: { fontSize: 13, fontWeight: '700', color: Colors.primary },
-  winTitle: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
-  winDesc: { fontSize: 13, color: Colors.textSecondary },
-  winTime: { fontSize: 11, color: Colors.textMuted },
-
-  // Coming soon for challenges
-  comingSoonContainer: {
-    flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingVertical: 24,
-    justifyContent: 'center',
-  },
-  comingSoonCard: {
-    alignItems: 'center',
-    backgroundColor: Colors.surface,
-    borderRadius: 4, // radius.lg
-    padding: 24,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    gap: 8,
-  },
-  comingSoonEyebrow: {
+  winUserName: {
+    fontFamily: 'Inter_500Medium',
     fontSize: 11,
-    fontWeight: '700',
-    color: Colors.primary,
+    fontWeight: '500',
+    letterSpacing: 1.5,
     textTransform: 'uppercase',
-    letterSpacing: 1.2,
-    marginTop: 4,
+    color: Colors.primary,
   },
-  comingSoonTitle: { fontSize: 22, fontWeight: '800', color: Colors.textPrimary },
-  comingSoonBody: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    marginTop: 4,
+  winTitle: {
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 18,
+    lineHeight: 22,
+    letterSpacing: 0.4,
+    fontWeight: '500',
+    color: Colors.textPrimary,
   },
+  winDesc: { fontFamily: 'Inter_400Regular', fontSize: 13, color: Colors.textSecondary, lineHeight: 20 },
+  winTime: { fontFamily: 'Inter_400Regular', fontSize: 11, color: Colors.textMuted },
 
   // Modal
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(26,26,24,0.5)',
     justifyContent: 'flex-end',
   },
   modalSheet: {
     backgroundColor: Colors.surface,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 4,
     padding: 20,
     paddingBottom: 40,
     gap: 12,
@@ -548,8 +574,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  modalTitle: { fontSize: 20, fontWeight: '800', color: Colors.textPrimary },
-  modalSubtitle: { fontSize: 13, color: Colors.textSecondary, marginTop: -4 },
+  modalTitle: {
+    fontFamily: 'CormorantGaramond_400Regular',
+    fontSize: 24,
+    lineHeight: 29,
+    letterSpacing: 0.5,
+    fontWeight: '400',
+    color: Colors.textPrimary,
+  },
+  modalSubtitle: { fontFamily: 'Inter_400Regular', fontSize: 13, color: Colors.textSecondary, marginTop: -4 },
   modalInput: {
     backgroundColor: Colors.background,
     borderRadius: 2, // radius.md
@@ -568,5 +601,12 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   modalSubmitDisabled: { opacity: 0.6 },
-  modalSubmitText: { color: Colors.textOnPrimary, fontSize: 15, fontWeight: '700' },
+  modalSubmitText: {
+    fontFamily: 'Inter_500Medium',
+    color: Colors.textOnPrimary,
+    fontSize: 13,
+    fontWeight: '500',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
 });

@@ -166,7 +166,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontWeight: '800',
+    fontWeight: '500',
     color: Colors.textPrimary,
   },
   subtitle: {
@@ -240,7 +240,7 @@ const styles = StyleSheet.create({
   avatarText: {
     color: Colors.textOnPrimary,
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '500',
   },
   clientInfo: {
     flex: 1,

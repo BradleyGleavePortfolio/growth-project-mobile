@@ -72,10 +72,22 @@ const HABIT_ICONS: { icon: string; label: string }[] = [
   { icon: 'checkmark-circle', label: 'Custom' },
 ];
 
+// Habit colour palette — picker swatches the user assigns per habit.
+// Pulled from the new bone/forest palette plus muted secondaries so the
+// chosen colour reads as a quiet luxury accent rather than a neon tag.
 const HABIT_COLORS = [
-  '#2D6A4F', '#52B788', '#4ECDC4', '#457B9D',
-  '#E9C46A', '#E76F51', '#A78BFA', '#E63946',
-  '#264653', '#6A4C93', '#F4A261', '#74C69D',
+  Colors.primary,        // forest (default)
+  Colors.primaryDark,    // deep forest
+  Colors.primaryLight,   // pale forest
+  Colors.info,           // muted blue
+  Colors.warning,        // mutedGold
+  '#B08D57',             // camel
+  '#7A6A9B',             // muted lavender
+  '#9A3030',             // muted oxblood
+  '#264653',             // deep teal
+  '#5A5A56',             // charcoal grey
+  '#B1A89F',             // stone
+  '#4D7059',             // mid forest
 ];
 
 export default function HabitsScreen() {
@@ -108,7 +120,7 @@ export default function HabitsScreen() {
   // Add-habit modal form
   const [newName, setNewName] = useState('');
   const [newIcon, setNewIcon] = useState('checkmark-circle');
-  const [newColor, setNewColor] = useState('#2D6A4F');
+  const [newColor, setNewColor] = useState(Colors.primary);
   const [newTarget, setNewTarget] = useState('1');
   const [newUnit, setNewUnit] = useState('times');
 
@@ -128,7 +140,7 @@ export default function HabitsScreen() {
     id: h.id,
     name: h.name,
     icon: h.icon || h.emoji || 'checkmark-circle',
-    color: h.color || '#2D6A4F',
+    color: h.color || Colors.primary,
     frequency: h.frequency || 'daily',
     targetCount: h.target_count || h.target_value || 1,
     unit: h.unit || 'times',
@@ -219,7 +231,7 @@ export default function HabitsScreen() {
           setShowAddModal(false);
           setNewName('');
           setNewIcon('checkmark-circle');
-          setNewColor('#2D6A4F');
+          setNewColor(Colors.primary);
           setNewTarget('1');
           setNewUnit('times');
         },
@@ -649,8 +661,24 @@ export default function HabitsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   header: { paddingHorizontal: 24, paddingTop: 60, marginBottom: 8 },
-  title: { fontSize: 28, fontWeight: '800', color: Colors.textPrimary },
-  subtitle: { fontSize: 14, color: Colors.textSecondary, marginTop: 2 },
+  title: {
+    fontFamily: 'CormorantGaramond_400Regular',
+    fontSize: 32,
+    lineHeight: 35,
+    letterSpacing: 0.6,
+    fontWeight: '400',
+    color: Colors.textPrimary,
+  },
+  subtitle: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    lineHeight: 13,
+    letterSpacing: 1.98,
+    fontWeight: '500',
+    textTransform: 'uppercase',
+    color: Colors.textMuted,
+    marginTop: 8,
+  },
   tabRow: {
     flexDirection: 'row',
     paddingHorizontal: 24,
@@ -672,7 +700,13 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     borderColor: Colors.primary,
   },
-  tabLabel: { fontSize: 14, fontWeight: '600', color: Colors.textSecondary },
+  tabLabel: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    fontWeight: '500',
+    letterSpacing: 0.4,
+    color: Colors.textSecondary,
+  },
   tabLabelActive: { color: Colors.textOnPrimary },
   dotBadge: {
     width: 8,
@@ -698,11 +732,32 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  progressPct: { fontSize: 20, fontWeight: '800', color: Colors.primary },
-  progressLabel: { fontSize: 11, color: Colors.textSecondary },
+  progressPct: {
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 22,
+    lineHeight: 26,
+    letterSpacing: 0.4,
+    fontWeight: '500',
+    color: Colors.primary,
+  },
+  progressLabel: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 10,
+    fontWeight: '500',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    color: Colors.textMuted,
+  },
   progressStats: { flex: 1, gap: 6 },
-  progressStatValue: { fontSize: 18, fontWeight: '700', color: Colors.textPrimary },
-  progressStatLabel: { fontSize: 13, color: Colors.textSecondary },
+  progressStatValue: {
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 20,
+    lineHeight: 24,
+    letterSpacing: 0.4,
+    fontWeight: '500',
+    color: Colors.textPrimary,
+  },
+  progressStatLabel: { fontFamily: 'Inter_400Regular', fontSize: 13, color: Colors.textSecondary },
   progressBar: {
     height: 6,
     borderRadius: 3,
@@ -732,12 +787,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   habitInfo: { flex: 1, gap: 4 },
-  habitName: { fontSize: 15, fontWeight: '600', color: Colors.textPrimary },
+  habitName: { fontFamily: 'Inter_500Medium', fontSize: 15, fontWeight: '500', color: Colors.textPrimary },
   habitNameDone: { textDecorationLine: 'line-through', color: Colors.textMuted },
   habitMeta: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   streakBadge: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  streakText: { fontSize: 12, fontWeight: '600', color: Colors.streak },
-  habitTarget: { fontSize: 12, color: Colors.textMuted },
+  streakText: { fontFamily: 'Inter_500Medium', fontSize: 12, fontWeight: '500', color: Colors.streak },
+  habitTarget: { fontFamily: 'Inter_400Regular', fontSize: 12, color: Colors.textMuted },
   weekDots: { flexDirection: 'row', gap: 6, marginTop: 4 },
   weekDotCol: { alignItems: 'center', gap: 2 },
   weekDot: {
@@ -768,7 +823,14 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     marginTop: 4,
   },
-  addBtnText: { fontSize: 15, fontWeight: '600', color: Colors.primary },
+  addBtnText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    fontWeight: '500',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: Colors.primary,
+  },
   savedBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -778,7 +840,7 @@ const styles = StyleSheet.create({
     borderRadius: 2, // radius.md
     marginBottom: 16,
   },
-  savedBannerText: { fontSize: 14, fontWeight: '600', color: Colors.primary },
+  savedBannerText: { fontFamily: 'Inter_500Medium', fontSize: 13, fontWeight: '500', color: Colors.primary },
   lastCheckInRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -786,14 +848,22 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     paddingHorizontal: 4,
   },
-  lastCheckInText: { fontSize: 12, color: Colors.textMuted, fontWeight: '600' },
+  lastCheckInText: { fontFamily: 'Inter_500Medium', fontSize: 11, color: Colors.textMuted, fontWeight: '500', letterSpacing: 1.5, textTransform: 'uppercase' },
   checkInCard: {
     backgroundColor: Colors.surface,
     borderRadius: 4, // radius.lg
     padding: 16,
     marginBottom: 12,
   },
-  checkInLabel: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary, marginBottom: 12 },
+  checkInLabel: {
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 18,
+    lineHeight: 22,
+    letterSpacing: 0.4,
+    fontWeight: '500',
+    color: Colors.textPrimary,
+    marginBottom: 12,
+  },
   ratingRow: { flexDirection: 'row', justifyContent: 'space-between' },
   ratingBtn: {
     alignItems: 'center',
@@ -806,11 +876,27 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primaryPale,
   },
   ratingEmoji: { fontSize: 22 },
-  ratingLabel: { fontSize: 10, color: Colors.textMuted, marginTop: 4 },
-  ratingLabelActive: { color: Colors.primary, fontWeight: '700' },
+  ratingLabel: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 10,
+    fontWeight: '500',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    color: Colors.textMuted,
+    marginTop: 4,
+  },
+  ratingLabelActive: { color: Colors.primary, fontWeight: '500' },
   sleepRow: { flexDirection: 'row', gap: 20 },
   sleepControl: { flex: 1 },
-  sleepLabel: { fontSize: 13, color: Colors.textSecondary, marginBottom: 8 },
+  sleepLabel: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    fontWeight: '500',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    color: Colors.textMuted,
+    marginBottom: 8,
+  },
   stepperRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 },
   stepperBtn: {
     width: 36,
@@ -822,7 +908,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  stepperValue: { fontSize: 20, fontWeight: '700', color: Colors.textPrimary, minWidth: 50, textAlign: 'center' },
+  stepperValue: {
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 22,
+    lineHeight: 26,
+    letterSpacing: 0.4,
+    fontWeight: '500',
+    color: Colors.textPrimary,
+    minWidth: 50,
+    textAlign: 'center',
+  },
   qualityRow: { flexDirection: 'row', justifyContent: 'center', gap: 6 },
   stressDot: { width: 16, height: 16, borderRadius: 0, marginBottom: 4 },
   notesInput: {
@@ -846,16 +941,23 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     marginTop: 8,
   },
-  saveBtnText: { fontSize: 16, fontWeight: '700', color: Colors.textOnPrimary },
+  saveBtnText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    fontWeight: '500',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: Colors.textOnPrimary,
+  },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(26,26,24,0.5)',
     justifyContent: 'flex-end',
   },
   modalContent: {
     backgroundColor: Colors.background,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 4,
     padding: 24,
     paddingBottom: 40,
     maxHeight: '85%',
@@ -866,8 +968,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
   },
-  modalTitle: { fontSize: 20, fontWeight: '700', color: Colors.textPrimary },
-  fieldLabel: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary, marginBottom: 8, marginTop: 12 },
+  modalTitle: {
+    fontFamily: 'CormorantGaramond_400Regular',
+    fontSize: 24,
+    lineHeight: 29,
+    letterSpacing: 0.5,
+    fontWeight: '400',
+    color: Colors.textPrimary,
+  },
+  fieldLabel: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 11,
+    fontWeight: '500',
+    letterSpacing: 1.98,
+    textTransform: 'uppercase',
+    color: Colors.textMuted,
+    marginBottom: 8,
+    marginTop: 12,
+  },
   fieldInput: {
     backgroundColor: Colors.surface,
     borderRadius: 2, // radius.md
@@ -906,5 +1024,12 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   modalSaveBtnDisabled: { opacity: 0.5 },
-  modalSaveBtnText: { fontSize: 16, fontWeight: '700', color: Colors.textOnPrimary },
+  modalSaveBtnText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    fontWeight: '500',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: Colors.textOnPrimary,
+  },
 });

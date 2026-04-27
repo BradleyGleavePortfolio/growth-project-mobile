@@ -299,7 +299,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   backBtn: { width: 40, height: 40, justifyContent: 'center' },
-  title: { fontSize: 24, fontWeight: '800', color: Colors.textPrimary },
+  title: { fontSize: 24, fontWeight: '500', color: Colors.textPrimary },
 
   weekSelector: {
     flexDirection: 'row',
@@ -316,7 +316,7 @@ const styles = StyleSheet.create({
   },
   weekArrow: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
   weekLabel: { alignItems: 'center', gap: 2 },
-  weekLabelText: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary },
+  weekLabelText: { fontSize: 14, fontWeight: '500', color: Colors.textPrimary },
   weekCurrentBadge: {
     fontSize: 11,
     fontWeight: '600',
@@ -346,7 +346,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  sectionTitle: { fontSize: 15, fontWeight: '700', color: Colors.textPrimary },
+  sectionTitle: { fontSize: 15, fontWeight: '500', color: Colors.textPrimary },
 
   prepDayRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
   prepDayBadge: {
@@ -358,7 +358,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 4, // radius.lg
   },
-  prepDayText: { fontSize: 14, fontWeight: '700', color: Colors.primary },
+  prepDayText: { fontSize: 14, fontWeight: '500', color: Colors.primary },
   prepDayHint: { fontSize: 12, color: Colors.textMuted, lineHeight: 16 },
 
   recipeRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -371,7 +371,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   recipeInfo: { flex: 1 },
-  recipeName: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary },
+  recipeName: { fontSize: 14, fontWeight: '500', color: Colors.textPrimary },
   recipeMeta: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
   recipeMetaText: { fontSize: 12, color: Colors.textMuted },
   recipeMetaDot: { fontSize: 12, color: Colors.textMuted },
@@ -386,7 +386,7 @@ const styles = StyleSheet.create({
     borderRadius: 0, // radius.sm
   },
   addToGroceryBtnDisabled: { opacity: 0.6 },
-  addToGroceryBtnText: { fontSize: 12, fontWeight: '700', color: Colors.textOnPrimary },
+  addToGroceryBtnText: { fontSize: 12, fontWeight: '500', color: Colors.textOnPrimary },
 
   ingredientRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   ingredientBullet: {

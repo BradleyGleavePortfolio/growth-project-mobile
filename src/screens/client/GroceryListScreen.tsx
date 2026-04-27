@@ -316,14 +316,14 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   backBtn: { width: 40, height: 40, justifyContent: 'center' },
-  title: { fontSize: 24, fontWeight: '800', color: Colors.textPrimary, flex: 1 },
+  title: { fontSize: 24, fontWeight: '500', color: Colors.textPrimary, flex: 1 },
   clearBtn: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     backgroundColor: Colors.error + '15',
     borderRadius: 0, // radius.sm
   },
-  clearBtnText: { fontSize: 13, fontWeight: '700', color: Colors.error },
+  clearBtnText: { fontSize: 13, fontWeight: '500', color: Colors.error },
 
   addRow: {
     flexDirection: 'row',
@@ -387,7 +387,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     marginTop: 8,
   },
-  sectionHeaderText: { fontSize: 13, fontWeight: '700', color: Colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
+  sectionHeaderText: { fontSize: 13, fontWeight: '500', color: Colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
 
   itemRow: {
     flexDirection: 'row',

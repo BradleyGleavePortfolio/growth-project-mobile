@@ -83,7 +83,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textPrimary,
   },
   total: {
@@ -117,7 +117,7 @@ const styles = StyleSheet.create({
   },
   addButtonText: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.water,
   },
   glasses: {

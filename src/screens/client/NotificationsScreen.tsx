@@ -173,7 +173,7 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     marginBottom: 8,
   },
-  title: { fontSize: 28, fontWeight: '800', color: Colors.textPrimary },
+  title: { fontSize: 28, fontWeight: '500', color: Colors.textPrimary },
   markAllText: { fontSize: 14, fontWeight: '600', color: Colors.primary },
   unreadBanner: {
     flexDirection: 'row',
@@ -216,7 +216,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   notifTitle: { fontSize: 14, fontWeight: '600', color: Colors.textPrimary, flex: 1, marginRight: 8 },
-  notifTitleUnread: { fontWeight: '700' },
+  notifTitleUnread: { fontWeight: '500' },
   notifTime: { fontSize: 11, color: Colors.textMuted },
   notifBody: { fontSize: 13, color: Colors.textSecondary, lineHeight: 18 },
   unreadDot: {
@@ -231,6 +231,6 @@ const styles = StyleSheet.create({
     paddingTop: 80,
     gap: 10,
   },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: Colors.textPrimary },
+  emptyTitle: { fontSize: 18, fontWeight: '500', color: Colors.textPrimary },
   emptyText: { fontSize: 14, color: Colors.textSecondary },
 });

@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
   },
   quantityFoodName: {
     fontSize: 22,
-    fontWeight: '800',
+    fontWeight: '500',
     color: Colors.dark,
     textAlign: 'center',
     marginBottom: 4,
@@ -189,7 +189,7 @@ const styles = StyleSheet.create({
   },
   macroPreviewValue: {
     fontSize: 18,
-    fontWeight: '800',
+    fontWeight: '500',
     color: Colors.dark,
   },
   macroPreviewLabel: {
@@ -204,7 +204,7 @@ const styles = StyleSheet.create({
   },
   quantitySectionLabel: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textMuted,
     alignSelf: 'flex-start',
     marginBottom: 8,
@@ -215,7 +215,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 20,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.dark,
     borderWidth: 1,
     borderColor: Colors.border,
@@ -271,7 +271,7 @@ const styles = StyleSheet.create({
   quantityLogButtonText: {
     color: Colors.white,
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '500',
   },
   quantityCancelLink: {
     paddingVertical: 16,

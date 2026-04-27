@@ -343,7 +343,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  topTitle: { fontSize: 18, fontWeight: '700', color: Colors.textPrimary },
+  topTitle: { fontSize: 18, fontWeight: '500', color: Colors.textPrimary },
   content: { paddingHorizontal: 24, paddingBottom: 40 },
   intro: { fontSize: 14, color: Colors.textSecondary, lineHeight: 20, marginBottom: 16 },
   createBtn: {
@@ -356,9 +356,9 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 24,
   },
-  createBtnText: { color: Colors.textOnPrimary, fontSize: 15, fontWeight: '700' },
+  createBtnText: { color: Colors.textOnPrimary, fontSize: 15, fontWeight: '500' },
   emptyState: { alignItems: 'center', paddingTop: 40, gap: 8 },
-  emptyTitle: { fontSize: 16, fontWeight: '700', color: Colors.textPrimary },
+  emptyTitle: { fontSize: 16, fontWeight: '500', color: Colors.textPrimary },
   emptyText: { fontSize: 13, color: Colors.textSecondary },
   codeCard: {
     backgroundColor: Colors.surface,
@@ -368,9 +368,9 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   codeCardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  codeText: { fontSize: 20, fontWeight: '800', color: Colors.textPrimary, letterSpacing: 1 },
+  codeText: { fontSize: 20, fontWeight: '500', color: Colors.textPrimary, letterSpacing: 1 },
   statusPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
-  statusPillText: { fontSize: 11, fontWeight: '700', textTransform: 'uppercase' },
+  statusPillText: { fontSize: 11, fontWeight: '500', textTransform: 'uppercase' },
   codeMetaRow: { flexDirection: 'row', gap: 16 },
   codeMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   codeMetaText: { fontSize: 12, color: Colors.textMuted },
@@ -388,9 +388,9 @@ const styles = StyleSheet.create({
   actionBtnText: { fontSize: 13, fontWeight: '600', color: Colors.primary },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' },
   modalContent: { width: '85%', backgroundColor: Colors.surface, borderRadius: 4, padding: 24 },
-  modalTitle: { fontSize: 18, fontWeight: '700', color: Colors.textPrimary, textAlign: 'center', marginBottom: 8 },
+  modalTitle: { fontSize: 18, fontWeight: '500', color: Colors.textPrimary, textAlign: 'center', marginBottom: 8 },
   modalDesc: { fontSize: 13, color: Colors.textSecondary, textAlign: 'center', marginBottom: 16, lineHeight: 18 },
-  inputLabel: { fontSize: 12, fontWeight: '700', color: Colors.textSecondary, textTransform: 'uppercase', marginBottom: 6, marginTop: 10 },
+  inputLabel: { fontSize: 12, fontWeight: '500', color: Colors.textSecondary, textTransform: 'uppercase', marginBottom: 6, marginTop: 10 },
   input: {
     backgroundColor: Colors.surfaceElevated,
     borderRadius: 4, // radius.lg
@@ -404,6 +404,6 @@ const styles = StyleSheet.create({
   modalCancelBtn: { flex: 1, paddingVertical: 12, borderRadius: 4, backgroundColor: Colors.surfaceElevated, alignItems: 'center' },
   modalCancelText: { fontSize: 15, fontWeight: '600', color: Colors.textSecondary },
   modalSaveBtn: { flex: 1, paddingVertical: 12, borderRadius: 4, backgroundColor: Colors.primary, alignItems: 'center' },
-  modalSaveText: { fontSize: 15, fontWeight: '700', color: Colors.textOnPrimary },
+  modalSaveText: { fontSize: 15, fontWeight: '500', color: Colors.textOnPrimary },
   buttonDisabled: { opacity: 0.6 },
 });

@@ -243,7 +243,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textSecondary,
     letterSpacing: 1,
   },

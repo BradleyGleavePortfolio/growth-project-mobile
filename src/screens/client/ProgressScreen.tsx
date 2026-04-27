@@ -153,10 +153,28 @@ function CalorieRing({
         </G>
       </Svg>
       <View style={{ position: 'absolute', alignItems: 'center' }}>
-        <Text style={{ fontSize: 22, fontWeight: '800', color: Colors.textPrimary }}>
+        <Text
+          style={{
+            fontFamily: 'CormorantGaramond_400Regular',
+            fontSize: 26,
+            lineHeight: 30,
+            letterSpacing: 0.4,
+            fontWeight: '400',
+            color: Colors.textPrimary,
+          }}
+        >
           {Math.round(eaten)}
         </Text>
-        <Text style={{ fontSize: 10, color: Colors.textMuted }}>
+        <Text
+          style={{
+            fontFamily: 'Inter_500Medium',
+            fontSize: 10,
+            letterSpacing: 1.5,
+            textTransform: 'uppercase',
+            color: Colors.textMuted,
+            marginTop: 2,
+          }}
+        >
           / {target} kcal
         </Text>
       </View>
@@ -462,7 +480,7 @@ export default function ProgressScreen() {
               </View>
               <View style={styles.goalLabels}>
                 <Text style={styles.goalLabelText}>{Math.round(startWeight)} lbs</Text>
-                <Text style={[styles.goalLabelText, { color: Colors.primary, fontWeight: '700' }]}>
+                <Text style={[styles.goalLabelText, { color: Colors.primary, fontFamily: 'Inter_500Medium', fontWeight: '500' }]}>
                   {Math.round(Math.min(Math.max(((startWeight - latestWeight) / (startWeight - goalWeight)) * 100, 0), 100))}%
                 </Text>
                 <Text style={styles.goalLabelText}>{Math.round(goalWeight)} lbs</Text>
@@ -611,8 +629,11 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   title: {
-    fontSize: 28,
-    fontWeight: '800',
+    fontFamily: 'CormorantGaramond_400Regular',
+    fontSize: 32,
+    lineHeight: 35,
+    letterSpacing: 0.6,
+    fontWeight: '400',
     color: Colors.textPrimary,
   },
   streakBadge: {
@@ -625,8 +646,10 @@ const styles = StyleSheet.create({
     borderRadius: 4, // radius.lg
   },
   streakText: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    fontWeight: '500',
+    letterSpacing: 0.4,
     color: Colors.warning,
   },
   ringCard: {
@@ -657,8 +680,9 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   ringMacroLabel: {
+    fontFamily: 'Inter_500Medium',
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '500',
     color: Colors.textSecondary,
   },
   ringMacroTrack: {
@@ -672,8 +696,9 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   ringMacroValue: {
+    fontFamily: 'Inter_500Medium',
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '500',
     color: Colors.textMuted,
   },
   statsRow: {
@@ -691,13 +716,20 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   statValue: {
-    fontSize: 20,
-    fontWeight: '800',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 22,
+    lineHeight: 26,
+    letterSpacing: 0.4,
+    fontWeight: '500',
     color: Colors.textPrimary,
   },
   statLabel: {
-    fontSize: 11,
-    color: Colors.textSecondary,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 10,
+    fontWeight: '500',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    color: Colors.textMuted,
   },
   periodRow: {
     flexDirection: 'row',
@@ -716,8 +748,10 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
   },
   periodText: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    fontWeight: '500',
+    letterSpacing: 0.4,
     color: Colors.textSecondary,
   },
   periodTextActive: {
@@ -737,8 +771,11 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   goalTitle: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 18,
+    lineHeight: 22,
+    letterSpacing: 0.4,
+    fontWeight: '500',
     color: Colors.textPrimary,
   },
   goalTrack: {
@@ -759,7 +796,9 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   goalLabelText: {
+    fontFamily: 'Inter_500Medium',
     fontSize: 12,
+    fontWeight: '500',
     color: Colors.textSecondary,
   },
   chartContainer: {
@@ -771,8 +810,11 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   chartTitle: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 18,
+    lineHeight: 22,
+    letterSpacing: 0.4,
+    fontWeight: '500',
     color: Colors.textPrimary,
     marginBottom: 8,
   },
@@ -800,8 +842,11 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   sectionTitle: {
-    fontSize: 17,
-    fontWeight: '700',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 20,
+    lineHeight: 24,
+    letterSpacing: 0.4,
+    fontWeight: '500',
     color: Colors.textPrimary,
     marginBottom: 12,
   },
@@ -820,18 +865,26 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   bodyStatValue: {
-    fontSize: 20,
-    fontWeight: '800',
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 22,
+    lineHeight: 26,
+    letterSpacing: 0.4,
+    fontWeight: '500',
     color: Colors.textPrimary,
     textTransform: 'capitalize',
   },
   bodyStatLabel: {
-    fontSize: 11,
-    color: Colors.textSecondary,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 10,
+    fontWeight: '500',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    color: Colors.textMuted,
   },
   bodyStatSub: {
+    fontFamily: 'Inter_500Medium',
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   logRow: {
     flexDirection: 'row',
@@ -850,8 +903,9 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   logWeight: {
+    fontFamily: 'Inter_500Medium',
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textPrimary,
   },
   logNotes: {
@@ -877,13 +931,13 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(26,26,24,0.5)',
     justifyContent: 'flex-end',
   },
   modalSheet: {
     backgroundColor: Colors.surfaceElevated,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: 4,
+    borderTopRightRadius: 4,
     padding: 24,
     paddingBottom: 40,
   },
@@ -894,8 +948,11 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
+    fontFamily: 'CormorantGaramond_400Regular',
+    fontSize: 24,
+    lineHeight: 29,
+    letterSpacing: 0.5,
+    fontWeight: '400',
     color: Colors.textPrimary,
   },
   input: {
@@ -915,8 +972,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   saveBtnText: {
-    fontSize: 16,
-    fontWeight: '700',
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    fontWeight: '500',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
     color: Colors.textOnPrimary, // Round 3: hex → token
   },
 });

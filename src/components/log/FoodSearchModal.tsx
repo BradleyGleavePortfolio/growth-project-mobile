@@ -123,7 +123,7 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 17,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.dark,
   },
 });

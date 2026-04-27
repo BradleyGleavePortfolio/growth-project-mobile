@@ -309,7 +309,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 26,
-    fontWeight: '800',
+    fontWeight: '500',
     color: Colors.textPrimary,
     letterSpacing: -0.5,
   },
@@ -356,7 +356,7 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textPrimary,
     textAlign: 'center',
   },
@@ -386,7 +386,7 @@ const styles = StyleSheet.create({
   },
   planTitle: {
     fontSize: 18,
-    fontWeight: '800',
+    fontWeight: '500',
     color: Colors.textPrimary,
   },
   planMeta: {
@@ -411,7 +411,7 @@ const styles = StyleSheet.create({
   },
   groupLabel: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textSecondary,
     marginBottom: 6,
     letterSpacing: 0.5,
@@ -427,7 +427,7 @@ const styles = StyleSheet.create({
   },
   itemName: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textPrimary,
   },
   itemNotes: {
@@ -442,12 +442,12 @@ const styles = StyleSheet.create({
   },
   itemCal: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textSecondary,
   },
   itemProtein: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.primary,
   },
   emptyItemsText: {
@@ -466,13 +466,13 @@ const styles = StyleSheet.create({
   totalsLabel: {
     fontSize: 12,
     color: Colors.textMuted,
-    fontWeight: '700',
+    fontWeight: '500',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
   totalsValue: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textPrimary,
   },
 });

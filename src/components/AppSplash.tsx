@@ -1,34 +1,21 @@
 import React, { useEffect, useRef } from 'react';
-import { StyleSheet, Animated } from 'react-native';
+import { StyleSheet, View, Animated } from 'react-native';
 import { Colors } from '../constants/colors';
+import { typography } from '../theme/tokens';
+
+// Wave 5b: AppSplash is the only splash component in the app. The earlier
+// SplashScreen.tsx duplicate was deleted. The pulsing accent dot has been
+// retired; we hold a single static mark while the brand name fades in.
 
 interface Props {
   onFinish: () => void;
 }
 
 export default function AppSplash({ onFinish }: Props) {
-  const dotScale = useRef(new Animated.Value(0.6)).current;
   const textOpacity = useRef(new Animated.Value(0)).current;
   const containerOpacity = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    // Pulsing green dot
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(dotScale, {
-          toValue: 1,
-          duration: 500,
-          useNativeDriver: true,
-        }),
-        Animated.timing(dotScale, {
-          toValue: 0.6,
-          duration: 500,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-
-    // Fade in title
     Animated.timing(textOpacity, {
       toValue: 1,
       duration: 600,
@@ -36,7 +23,6 @@ export default function AppSplash({ onFinish }: Props) {
       useNativeDriver: true,
     }).start();
 
-    // Fade out and finish
     const timeout = setTimeout(() => {
       Animated.timing(containerOpacity, {
         toValue: 0,
@@ -50,17 +36,9 @@ export default function AppSplash({ onFinish }: Props) {
 
   return (
     <Animated.View style={[styles.container, { opacity: containerOpacity }]}>
-      <Animated.View
-        style={[
-          styles.dot,
-          { transform: [{ scale: dotScale }] },
-        ]}
-      />
+      <View style={styles.mark} />
       <Animated.Text style={[styles.title, { opacity: textOpacity }]}>
         The Growth Project
-      </Animated.Text>
-      <Animated.Text style={[styles.subtitle, { opacity: textOpacity }]}>
-        Nutrition. Simplified.
       </Animated.Text>
     </Animated.View>
   );
@@ -73,21 +51,19 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  dot: {
-    width: 20,
-    height: 20,
-    borderRadius: 4, // radius.lg
+  mark: {
+    width: 8,
+    height: 8,
+    borderRadius: 0,
     backgroundColor: Colors.primary,
     marginBottom: 24,
   },
   title: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: Colors.textPrimary,
-    marginBottom: 6,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: Colors.textSecondary,
+    fontFamily:    typography.h2.fontFamily,
+    fontSize:      typography.h2.fontSize,
+    lineHeight:    typography.h2.lineHeight,
+    fontWeight:    typography.h2.fontWeight,
+    letterSpacing: typography.h2.letterSpacing,
+    color:         Colors.textPrimary,
   },
 });

@@ -245,7 +245,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 26,
-    fontWeight: '800',
+    fontWeight: '500',
     color: Colors.textPrimary,
   },
   subtitle: {
@@ -312,12 +312,12 @@ const styles = StyleSheet.create({
   postBtnText: {
     color: Colors.textOnPrimary,
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '500',
   },
 
   sectionLabel: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
@@ -332,7 +332,7 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 17,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textPrimary,
   },
   emptyBody: {

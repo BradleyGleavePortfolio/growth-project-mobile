@@ -463,7 +463,7 @@ const muscle = StyleSheet.create({
   },
   label: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textSecondary,
     width: 70,
   },
@@ -502,7 +502,7 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     marginBottom: 20,
   },
-  title: { fontSize: 28, fontWeight: '800', color: Colors.textPrimary },
+  title: { fontSize: 28, fontWeight: '500', color: Colors.textPrimary },
   statsRow: {
     flexDirection: 'row',
     paddingHorizontal: 24,
@@ -517,7 +517,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
-  statValue: { fontSize: 22, fontWeight: '800', color: Colors.textPrimary },
+  statValue: { fontSize: 22, fontWeight: '500', color: Colors.textPrimary },
   statLabel: { fontSize: 11, color: Colors.textSecondary },
   // Charts
   chartCard: {
@@ -545,7 +545,7 @@ const styles = StyleSheet.create({
   },
   chartTitle: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textPrimary,
   },
   chartSubtitle: {
@@ -562,7 +562,7 @@ const styles = StyleSheet.create({
   },
   chartBadgeText: {
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: '500',
     color: Colors.primary,
   },
   chartBadgeSub: {
@@ -600,7 +600,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  quickStartTitle: { fontSize: 16, fontWeight: '700', color: Colors.textPrimary },
+  quickStartTitle: { fontSize: 16, fontWeight: '500', color: Colors.textPrimary },
   quickStartSub: { fontSize: 13, color: Colors.textMuted, marginTop: 2 },
   sectionHeader: {
     flexDirection: 'row',
@@ -611,7 +611,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 17,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textPrimary,
     paddingHorizontal: 24,
     marginBottom: 12,
@@ -632,7 +632,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     marginTop: 4,
   },
-  emptyBtnText: { color: Colors.textOnPrimary, fontSize: 14, fontWeight: '700' },
+  emptyBtnText: { color: Colors.textOnPrimary, fontSize: 14, fontWeight: '500' },
   routineCard: {
     marginHorizontal: 24,
     marginBottom: 10,
@@ -645,7 +645,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  routineName: { fontSize: 16, fontWeight: '700', color: Colors.textPrimary },
+  routineName: { fontSize: 16, fontWeight: '500', color: Colors.textPrimary },
   routineExCount: { fontSize: 13, color: Colors.textSecondary, marginTop: 4 },
   routineExList: { fontSize: 12, color: Colors.textMuted, marginTop: 4 },
   historyCard: {
@@ -664,7 +664,7 @@ const styles = StyleSheet.create({
   },
   historyTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textPrimary,
   },
   historyDate: {

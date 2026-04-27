@@ -122,14 +122,14 @@ const styles = StyleSheet.create({
   avatarText: {
     color: Colors.textOnPrimary,
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '500',
   },
   nameMeta: {
     flex: 1,
   },
   displayName: {
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.primary,
   },
   timeAgo: {
@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
   },
   action: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textPrimary,
     lineHeight: 21,
   },

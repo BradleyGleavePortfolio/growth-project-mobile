@@ -1,14 +1,11 @@
 /**
- * TrustCueRow — UX Psychology Report #2: Trust as Emotion
- *
- * Horizontal scroll of three pill-style trust-cue chips:
- *   🔒 End-to-end encrypted
- *   👤 Your data is yours
- *   🛡 Zero ads · Zero data sales
+ * TrustCueRow — three pill-style trust-cue chips:
+ *   End-to-end encrypted
+ *   Your data is yours
+ *   Zero ads · Zero data sales
  *
  * Each chip opens TrustExplainerSheet with context-specific copy on tap.
- * Uses design tokens — no hardcoded hex values.
- * PII-safe analytics: fires `trust_cue_tapped` with `cue_id`.
+ * Uses design tokens. PII-safe analytics: fires `trust_cue_tapped`.
  */
 
 import React, { useState, useCallback } from 'react';

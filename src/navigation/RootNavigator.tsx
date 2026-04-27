@@ -1,13 +1,12 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
-import { NavigationContainer, NavigationContainerRef, DefaultTheme, LinkingOptions } from '@react-navigation/native';
+import { NavigationContainer, DefaultTheme, LinkingOptions } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AuthNavigator from './AuthNavigator';
 import ClientNavigator from './ClientNavigator';
 import CoachNavigator from './CoachNavigator';
 import OnboardingNavigator from './OnboardingNavigator';
 import LeanOnboardingNavigator from './LeanOnboardingNavigator';
-import FloatingChatWidget from '../components/FloatingChatWidget';
 import OfflineBanner from '../components/OfflineBanner';
 import { authEvents } from '../utils/authEvents';
 import { secureStorage } from '../services/secureStorage';
@@ -41,25 +40,8 @@ const linking: LinkingOptions<Record<string, object | undefined>> = {
   },
 };
 
-// Extract the active tab name from nested navigation state
-function getActiveTabName(state: any): string | undefined {
-  if (!state) return undefined;
-  const route = state.routes?.[state.index];
-  if (!route) return undefined;
-  // If this route has nested state, recurse; otherwise return the name
-  if (route.state) return getActiveTabName(route.state) ?? route.name;
-  return route.name;
-}
-
 export default function RootNavigator() {
   const [authState, setAuthState] = useState<AuthState>('loading');
-  const navigationRef = useRef<NavigationContainerRef<any>>(null);
-  const [activeRoute, setActiveRoute] = useState<string | undefined>();
-
-  const onNavigationStateChange = useCallback(() => {
-    const state = navigationRef.current?.getRootState();
-    setActiveRoute(getActiveTabName(state));
-  }, []);
 
   useEffect(() => {
     bootstrapAuth();
@@ -152,19 +134,8 @@ export default function RootNavigator() {
     );
   }
 
-  // Hide the GP chat widget on Profile-like and Recipes screens.
-  // Round 3: after tab 9→5 consolidation, the old "ProfileStack" tab name
-  // is gone; ProfileMain / Settings / Report / Widgets / Learn / Recipes now
-  // live inside the new "MoreTab" stack. We also hide on the More index itself.
-  const hideWidget = activeRoute === 'MoreTab' || activeRoute === 'MoreIndex'
-    || activeRoute === 'ProfileMain' || activeRoute === 'Settings'
-    || activeRoute === 'Report' || activeRoute === 'Widgets'
-    || activeRoute === 'Learn' || activeRoute === 'Recipes';
-
   return (
     <NavigationContainer
-      ref={navigationRef}
-      onStateChange={onNavigationStateChange}
       linking={linking}
       theme={{
         ...DefaultTheme,
@@ -189,10 +160,7 @@ export default function RootNavigator() {
       ) : authState === 'coach' ? (
         <CoachNavigator />
       ) : (
-        <>
-          <ClientNavigator />
-          <FloatingChatWidget visible={!hideWidget} />
-        </>
+        <ClientNavigator />
       )}
     </NavigationContainer>
   );

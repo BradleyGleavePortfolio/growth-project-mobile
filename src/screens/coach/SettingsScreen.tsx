@@ -464,7 +464,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 28,
-    fontWeight: '800',
+    fontWeight: '500',
     color: Colors.textPrimary,
   },
   profileCard: {
@@ -488,14 +488,14 @@ const styles = StyleSheet.create({
   avatarText: {
     color: Colors.textOnPrimary,
     fontSize: 20,
-    fontWeight: '700',
+    fontWeight: '500',
   },
   profileInfo: {
     flex: 1,
   },
   profileName: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textPrimary,
   },
   profileEmail: {
@@ -506,12 +506,12 @@ const styles = StyleSheet.create({
   profileRole: {
     fontSize: 11,
     color: Colors.primary,
-    fontWeight: '700',
+    fontWeight: '500',
     marginTop: 4,
   },
   sectionHeader: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -549,7 +549,7 @@ const styles = StyleSheet.create({
   },
   rowValueHighlight: {
     fontSize: 16,
-    fontWeight: '800',
+    fontWeight: '500',
     color: Colors.primary,
   },
   divider: {
@@ -601,7 +601,7 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textPrimary,
     textAlign: 'center',
     marginBottom: 16,
@@ -663,7 +663,7 @@ const styles = StyleSheet.create({
   },
   modalSaveText: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '500',
     color: Colors.textOnPrimary,
   },
 });

@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
   },
   summaryValue: {
     fontSize: 16,
-    fontWeight: '800',
+    fontWeight: '500',
     color: Colors.dark,
   },
   summaryLabel: {
