@@ -26,5 +26,8 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
+      - name: Validate app config
+        run: npm run validate:config --if-present
+
       - name: Test
         run: npm test --if-present -- --ci --passWithNoTests

@@ -60,14 +60,26 @@ All runtime env vars are read via `expo-constants` / `EXPO_PUBLIC_*`. Copy
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
-| `EXPO_PUBLIC_API_URL` | yes | Base URL of the backend API (e.g. `https://backend-spring-lake-3890.fly.dev/api`). Falls back to the hardcoded Fly.io URL if unset. |
-| `EXPO_PUBLIC_SUPABASE_URL` | yes | Supabase project URL used for auth token refresh. |
+| `EXPO_PUBLIC_API_URL` | yes (non-dev) | Base URL of the backend API. In dev, falls back to the Fly.io URL in `src/config/env.ts`. |
+| `EXPO_PUBLIC_SUPABASE_URL` | yes | Supabase project URL used for auth + token refresh. |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | yes | Supabase anon JWT used by the client SDK. |
-| `EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS` | only for Google sign-in on iOS | OAuth client ID. |
-| `EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID` | only for Google sign-in on Android | OAuth client ID. |
+
+Google sign-in is brokered through Supabase OAuth — the mobile build does
+**not** embed any per-platform Google client ID. See `PLAY_STORE_READINESS.md`
+section 7 for the redirect URIs Supabase + Google Cloud Console must allow.
 
 For EAS builds, either embed these in `eas.json` `env` blocks or store them as
-EAS Secrets (`eas secret:create --scope project --name FOO`).
+EAS Secrets (`eas secret:create --scope project --name FOO`). Run
+`npm run validate:config` before `eas build` to catch missing or stale config.
+
+## Release readiness
+
+Android-specific:
+
+- `PLAY_STORE_READINESS.md` — full pre-submission checklist (signing, data safety, deep links, OAuth).
+- `docs/RELEASE_SMOKE.md` — manual smoke checks per build.
+- `scripts/release-smoke.sh` — automated subset, run after `adb install -r build.apk`.
+- `docs/well-known/` — hosted-file templates for Android App Links + iOS Universal Links.
 
 ## Project Structure
 
