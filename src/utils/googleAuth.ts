@@ -37,7 +37,15 @@ export interface GoogleAuthResult {
   error?: string;
 }
 
-export async function signInWithGoogle(): Promise<GoogleAuthResult> {
+export interface GoogleAuthOptions {
+  // When set, the invite code is forwarded to /auth/google so the backend can
+  // attach the new (or existing) user to the right coach during the upsert.
+  inviteCode?: string;
+}
+
+export async function signInWithGoogle(
+  options: GoogleAuthOptions = {},
+): Promise<GoogleAuthResult> {
   try {
     // Build the redirect URI that Expo will use to return to our app
     const redirectUri = AuthSession.makeRedirectUri({
@@ -120,8 +128,20 @@ export async function signInWithGoogle(): Promise<GoogleAuthResult> {
     }
 
     try {
-      const response = await authApi.googleAuth(accessToken);
+      const response = await authApi.googleAuth(accessToken, options.inviteCode);
       const { user } = response.data;
+
+      // Defensive second pass: if the backend doesn't yet support the
+      // invite_code arg on /auth/google but exposes the dedicated attach
+      // endpoint, forward the code there. Failure is non-fatal — sign-in
+      // already succeeded; the user can re-enter the code on RoleSelection.
+      if (options.inviteCode && !user?.coach_id) {
+        try {
+          await authApi.attachInviteCode(options.inviteCode);
+        } catch {
+          // ignore — non-fatal
+        }
+      }
 
       await AsyncStorage.setItem('user_data', JSON.stringify(user));
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -7,14 +7,13 @@ import {
   StatusBar,
   ActivityIndicator,
   Alert,
-  Modal,
   TextInput,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthStackParamList } from '../../navigation/AuthNavigator';
-import { authApi } from '../../services/api';
+import { authApi, InvitePreview } from '../../services/api';
 import { authEvents } from '../../utils/authEvents';
 import { Colors } from '../../constants/colors';
 
@@ -22,55 +21,111 @@ type Props = {
   navigation: NativeStackNavigationProp<AuthStackParamList, 'RoleSelection'>;
 };
 
+// Role selection is now a client-only flow. Coach and admin promotion are
+// handled by an OWNER from the web console — there is no self-serve coach
+// upgrade in the mobile app.
+//
+// Rationale: per-seat billing means a client cannot promote themselves into a
+// paid coach tier; only an admin can. Removing the in-app become-coach UI
+// closes the privilege-escalation gap that existed in the prior version.
 export default function RoleSelectionScreen(_: Props) {
   const [loading, setLoading] = useState(false);
-  const [showCoachModal, setShowCoachModal] = useState(false);
-  const [coachPassword, setCoachPassword] = useState('');
-  const [coachPasswordError, setCoachPasswordError] = useState('');
+  const [requireInviteCode, setRequireInviteCode] = useState(true);
+  const [inviteCode, setInviteCode] = useState('');
+  const [invitePreview, setInvitePreview] = useState<InvitePreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleRoleSelect = async (role: 'coach' | 'student', coachCode?: string) => {
-    setLoading(true);
-    try {
-      const res = await authApi.selectRole(role, coachCode);
-      const raw = await AsyncStorage.getItem('user_data');
-      if (raw) {
-        const user = JSON.parse(raw);
-        user.role = res.data.role;
-        await AsyncStorage.setItem('user_data', JSON.stringify(user));
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await authApi.getSignupPolicy();
+        if (!mounted) return;
+        setRequireInviteCode(res.data?.require_invite_code ?? true);
+      } catch {
+        if (!mounted) return;
+        setRequireInviteCode(true);
       }
-      await AsyncStorage.removeItem('needs_role_selection');
-      authEvents.emit();
-    } catch (err: any) {
-      const msg = err.response?.data?.message || 'Failed to set role. Try again.';
-      Alert.alert('Error', msg);
+
+      // If the user already has a coach attached (e.g. they signed up with
+      // an invite code, or it was attached during Google sign-in), they can
+      // continue without re-entering it.
+      try {
+        const raw = await AsyncStorage.getItem('user_data');
+        if (raw) {
+          const u = JSON.parse(raw);
+          if (u?.coach_id) {
+            // Auto-continue silently; the screen still renders briefly to
+            // avoid flashing.
+          }
+        }
+      } catch {
+        // ignore
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const previewCode = async (code: string) => {
+    const trimmed = code.trim();
+    if (!trimmed) {
+      setInvitePreview(null);
+      return;
+    }
+    setPreviewLoading(true);
+    try {
+      try {
+        const res = await authApi.getInvitePreview(trimmed);
+        setInvitePreview(res.data ?? null);
+      } catch {
+        const res = await authApi.validateInviteCode(trimmed);
+        setInvitePreview(res.data ?? null);
+      }
+    } catch {
+      setInvitePreview(null);
     } finally {
-      setLoading(false);
+      setPreviewLoading(false);
     }
   };
 
-  const handleStudentSelect = () => handleRoleSelect('student');
+  const handleContinue = async () => {
+    setError('');
+    const trimmed = inviteCode.trim();
 
-  const handleCoachConfirm = async () => {
-    setCoachPasswordError('');
-    if (coachPassword.length < 8) {
-      setCoachPasswordError('Password must be at least 8 characters.');
+    if (requireInviteCode && !trimmed) {
+      setError('Enter the invite code your coach shared.');
       return;
     }
+
     setLoading(true);
     try {
-      const res = await authApi.becomeCoach(coachPassword);
+      // If a code was supplied, attach it before completing role selection.
+      if (trimmed) {
+        try {
+          await authApi.attachInviteCode(trimmed);
+        } catch (err: any) {
+          // Fall through to selectRole — selectRole accepts coach_code and
+          // many backends accept the code in either path.
+        }
+      }
+
+      const res = await authApi.selectRole('student', trimmed || undefined);
       const raw = await AsyncStorage.getItem('user_data');
       if (raw) {
         const user = JSON.parse(raw);
         user.role = res.data.role;
+        if (res.data.coach_id) user.coach_id = res.data.coach_id;
         await AsyncStorage.setItem('user_data', JSON.stringify(user));
       }
       await AsyncStorage.removeItem('needs_role_selection');
-      setShowCoachModal(false);
       authEvents.emit();
     } catch (err: any) {
-      const msg = err.response?.data?.message || 'Failed to become coach. Check your password.';
-      setCoachPasswordError(msg);
+      const msg = err.response?.data?.message || 'Could not complete sign-up. Please try again.';
+      setError(msg);
+      Alert.alert('Sign-up unavailable', msg);
     } finally {
       setLoading(false);
     }
@@ -82,104 +137,68 @@ export default function RoleSelectionScreen(_: Props) {
 
       <View style={styles.header}>
         <Text style={styles.greeting}>One more step.</Text>
-        <Text style={styles.title}>Choose Your Role</Text>
+        <Text style={styles.title}>Pair with your coach</Text>
         <Text style={styles.subtitle}>
-          How will you be using The Growth Project?
+          {requireInviteCode
+            ? 'Enter the invite code your coach shared. This connects you to their roster.'
+            : 'If your coach shared an invite code, enter it now. Otherwise continue.'}
         </Text>
       </View>
 
       <View style={styles.cardsContainer}>
+        <View style={styles.inputBlock}>
+          <Text style={styles.label}>INVITE CODE</Text>
+          <TextInput
+            style={styles.input}
+            value={inviteCode}
+            onChangeText={(v) => {
+              setInviteCode(v);
+              setInvitePreview(null);
+            }}
+            onBlur={() => previewCode(inviteCode)}
+            placeholder="From your coach"
+            placeholderTextColor={Colors.textMuted}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            accessibilityLabel="Coach invite code"
+          />
+          {previewLoading ? (
+            <Text style={styles.invitePreviewMuted}>Checking code…</Text>
+          ) : invitePreview?.valid ? (
+            <Text style={styles.invitePreviewOk}>
+              You will be paired with{' '}
+              {invitePreview.business_name || invitePreview.coach_name || 'your coach'}.
+            </Text>
+          ) : invitePreview && !invitePreview.valid ? (
+            <Text style={styles.invitePreviewBad}>
+              {invitePreview.reason || 'This code is not currently active.'}
+            </Text>
+          ) : null}
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
+        </View>
+
         <TouchableOpacity
-          style={styles.roleCard}
-          onPress={handleStudentSelect}
+          style={[styles.continueBtn, loading && styles.btnDisabled]}
+          onPress={handleContinue}
           disabled={loading}
-          activeOpacity={0.8}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Continue"
         >
-          <View style={styles.roleIconContainer}>
-            <Ionicons name="person" size={32} color={Colors.primary} />
-          </View>
-          <Text style={styles.roleTitle}>I'm a Student</Text>
-          <Text style={styles.roleDescription}>
-            Track nutrition, workouts, and get personalized coaching
-          </Text>
           {loading ? (
-            <ActivityIndicator color={Colors.primary} style={{ marginTop: 12 }} />
+            <ActivityIndicator color={Colors.textOnPrimary} />
           ) : (
-            <View style={styles.roleArrow}>
-              <Ionicons name="arrow-forward" size={20} color={Colors.primary} />
-            </View>
+            <Text style={styles.continueText}>Continue</Text>
           )}
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.roleCard, styles.coachCard]}
-          onPress={() => setShowCoachModal(true)}
-          disabled={loading}
-          activeOpacity={0.8}
-          accessibilityRole="button"
-          accessibilityLabel="Register as a coach"
-        >
-          <View style={[styles.roleIconContainer, { backgroundColor: Colors.primaryDark + '20' }]}>
-            <Ionicons name="people" size={32} color={Colors.primaryDark} />
-          </View>
-          <Text style={styles.roleTitle}>I'm a Coach</Text>
-          <Text style={styles.roleDescription}>
-            Manage clients, assign meal plans, and track their progress
+        <View style={styles.coachNote}>
+          <Ionicons name="information-circle-outline" size={16} color={Colors.textMuted} />
+          <Text style={styles.coachNoteText}>
+            Coach access is managed by the platform team. If you should be a coach, contact your administrator.
           </Text>
-          <View style={styles.roleArrow}>
-            <Ionicons name="arrow-forward" size={20} color={Colors.primaryDark} />
-          </View>
-        </TouchableOpacity>
-      </View>
-
-      {/* Coach password-confirmation modal */}
-      <Modal visible={showCoachModal} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Confirm Your Password</Text>
-            <Text style={styles.modalDesc}>
-              Enter your current password to activate your coach account.
-            </Text>
-            <TextInput
-              style={styles.modalInput}
-              value={coachPassword}
-              onChangeText={setCoachPassword}
-              placeholder="Current password"
-              placeholderTextColor={Colors.textMuted}
-              secureTextEntry
-              autoFocus
-              textContentType="password"
-              accessibilityLabel="Current password"
-            />
-            {coachPasswordError ? (
-              <Text style={styles.errorText}>{coachPasswordError}</Text>
-            ) : null}
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => {
-                  setShowCoachModal(false);
-                  setCoachPassword('');
-                  setCoachPasswordError('');
-                }}
-              >
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalConfirmBtn, loading && { opacity: 0.6 }]}
-                onPress={handleCoachConfirm}
-                disabled={loading}
-              >
-                {loading ? (
-                  <ActivityIndicator color={Colors.textOnPrimary} size="small" />
-                ) : (
-                  <Text style={styles.modalConfirmText}>Confirm</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
         </View>
-      </Modal>
+      </View>
     </View>
   );
 }
@@ -214,108 +233,52 @@ const styles = StyleSheet.create({
   cardsContainer: {
     gap: 16,
   },
-  roleCard: {
+  inputBlock: {
+    gap: 6,
+  },
+  label: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+    letterSpacing: 1,
+  },
+  input: {
     backgroundColor: Colors.surface,
-    borderRadius: 4, // radius.lg
-    padding: 24,
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: Colors.border,
-  },
-  coachCard: {
-    borderColor: Colors.primaryDark + '40',
-  },
-  roleIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 4, // radius.lg
-    backgroundColor: Colors.primaryPale,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  roleTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    marginBottom: 6,
-  },
-  roleDescription: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    lineHeight: 20,
-  },
-  roleArrow: {
-    marginTop: 12,
-    alignSelf: 'flex-end',
-  },
-  // Modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    width: '85%',
-    backgroundColor: Colors.surface,
-    borderRadius: 4, // radius.lg
-    padding: 24,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  modalDesc: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 16,
-  },
-  modalInput: {
-    backgroundColor: Colors.surfaceElevated,
-    borderRadius: 4, // radius.lg
+    borderRadius: 4,
     paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 15,
+    paddingVertical: 14,
+    fontSize: 16,
     color: Colors.textPrimary,
   },
-  errorText: {
-    color: Colors.error,
-    fontSize: 13,
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 16,
-  },
-  modalCancelBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 4, // radius.lg
-    backgroundColor: Colors.surfaceElevated,
-    alignItems: 'center',
-  },
-  modalCancelText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-  },
-  modalConfirmBtn: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 4, // radius.lg
+  invitePreviewOk: { fontSize: 13, color: Colors.primary, marginTop: 4 },
+  invitePreviewBad: { fontSize: 13, color: Colors.error, marginTop: 4 },
+  invitePreviewMuted: { fontSize: 13, color: Colors.textMuted, marginTop: 4 },
+  errorText: { fontSize: 13, color: Colors.error, marginTop: 4 },
+  continueBtn: {
     backgroundColor: Colors.primary,
+    borderRadius: 4,
+    paddingVertical: 16,
     alignItems: 'center',
   },
-  modalConfirmText: {
+  btnDisabled: { opacity: 0.6 },
+  continueText: {
+    color: Colors.textOnPrimary,
     fontSize: 15,
     fontWeight: '700',
-    color: Colors.textOnPrimary,
+  },
+  coachNote: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'flex-start',
+    paddingHorizontal: 4,
+    marginTop: 8,
+  },
+  coachNoteText: {
+    flex: 1,
+    fontSize: 12,
+    color: Colors.textMuted,
+    lineHeight: 18,
   },
 });
