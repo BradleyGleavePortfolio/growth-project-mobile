@@ -491,6 +491,16 @@ export const prepGuideApi = {
 };
 
 // ── Identity (Psych #3) + Trust (Psych #2) ─────────────────────────────────
+export interface AccountStatus {
+  // True only when the account has been scheduled for deletion and has not
+  // yet been hard-deleted. The response also returns the ISO timestamp the
+  // grace window opened so the UI can render an exact "permanent on" date.
+  deletionScheduled: boolean;
+  scheduledAt?: string | null;
+  gracePeriodDays?: number | null;
+  permanentDeletionAt?: string | null;
+}
+
 export const usersApi = {
   getFoundingNumber: () =>
     api.get<{ rank: number; total: number; isFoundingMember: boolean }>(
@@ -505,6 +515,51 @@ export const usersApi = {
     api.post<{ requested: boolean; eta: string }>('/users/me/data-export'),
   deleteAccount: () =>
     api.delete<{ scheduled: boolean; gracePeriodDays: number }>('/users/me/account'),
+  // GET returns the deletion schedule (or { deletionScheduled: false } if the
+  // account is in good standing). DELETE on the same path cancels a pending
+  // deletion within the grace window. Both endpoints sit alongside the
+  // existing DELETE /users/me/account that schedules deletion.
+  getAccountStatus: () => api.get<AccountStatus>('/users/me/account/status'),
+  cancelAccountDeletion: () =>
+    api.post<{ cancelled: boolean }>('/users/me/account/cancel-deletion'),
+};
+
+// ── Coach billing & subscription ────────────────────────────────────────────
+// Mobile shows status; the actual checkout / card-update flow lives on the
+// backend portal session (Stripe billing portal). The portal endpoint returns
+// a one-time URL the app opens in a system web browser, then drops the user
+// back into the Settings screen when the sheet closes.
+export interface CoachBillingStatus {
+  // 'active' = paid, billing OK
+  // 'trialing' = trial in progress
+  // 'past_due' = payment failed but access still allowed
+  // 'paused' = access paused (no checkout completed yet, or grace window over)
+  // 'canceled' = subscription ended
+  // 'none' = never subscribed (self-serve seat not yet provisioned)
+  state: 'active' | 'trialing' | 'past_due' | 'paused' | 'canceled' | 'none';
+  planName?: string | null;
+  seatLimit?: number | null;
+  seatsUsed?: number | null;
+  currentPeriodEnd?: string | null;
+  trialEndsAt?: string | null;
+  cancelAtPeriodEnd?: boolean;
+  // Backend renders a human-readable summary it wants the app to show
+  // verbatim (e.g. "Past-due since Apr 21 — please update your card"). Render
+  // when present rather than constructing copy on the client.
+  summary?: string | null;
+}
+
+export const coachBillingApi = {
+  getStatus: () => api.get<CoachBillingStatus>('/coach/billing/status'),
+  // POST returns { url } — a one-time Stripe billing portal URL. The app
+  // opens it in a browser sheet; the portal handles checkout / card update /
+  // cancel. The endpoint accepts an optional return path so the portal can
+  // bounce the coach back to the right deep link when they finish.
+  createPortalSession: (returnPath?: string) =>
+    api.post<{ url: string }>(
+      '/coach/billing/portal-session',
+      returnPath ? { return_path: returnPath } : {},
+    ),
 };
 
 // ── Public system / trust metadata (no auth required) ───────────────────────

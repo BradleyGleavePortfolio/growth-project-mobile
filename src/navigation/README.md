@@ -18,7 +18,7 @@ React Navigation v7 is the routing layer. `RootNavigator` decides which sub-navi
 | `LeanOnboardingNavigator.tsx` | Stack: `LeanQ1`, `LeanQ2`, `LeanQ3`, `LeanQ4`. Default for new accounts. `LeanQ4` is the optional body-metric capture step (height + current weight, imperial / metric toggle, both fields skippable). |
 | `OnboardingNavigator.tsx` | The legacy 10-step flow. Preserved but not routed to from a fresh signup today. |
 | `ClientNavigator.tsx` | 4-tab bottom bar, icons-only. Route names: `Home`, `WorkoutTab`, `Log`, `MoreTab`. Accessibility labels: `Home`, `Train`, `Log food`, `Profile and more`. `Home`, `WorkoutTab`, and `MoreTab` are nested native stacks; `Log` is a single screen (`LogScreen` — food/macro logging). The Profile tab (`MoreTab`) houses every secondary screen, including `AIGuide` and `Membership`. `RecipeDetail` accepts a single serialisable `{ recipeId: string }` param — never the whole recipe object. |
-| `CoachNavigator.tsx` | 5-tab bottom bar (Clients / Dashboard / Templates / Messages / Settings). The Clients tab is a nested stack with `ClientsList`, `ClientDetail`, `ClientMessages`, `InviteCodes`. The Settings tab is a nested stack (`SettingsHome → Billing → TrustCenter`). |
+| `CoachNavigator.tsx` | 5-tab bottom bar (Clients / Dashboard / Templates / Messages / Settings). The Clients tab is a nested stack (`ClientsList`, `ClientDetail`, `ClientMessages`, `InviteCodes`). The Settings tab is a nested stack (`SettingsHome → Billing → TrustCenter`) so child screens are reachable from a single tab. |
 
 ## Data flow
 

@@ -131,7 +131,7 @@ export default function CoachHomeScreen() {
         <HapticPressable
           intent="light"
           style={styles.settingsBtn}
-          onPress={() => navigation.navigate('Settings')}
+          onPress={() => navigation.navigate('SettingsStack')}
         >
           <Ionicons name="settings-outline" size={22} color={Colors.textSecondary} />
         </HapticPressable>
@@ -258,17 +258,22 @@ export default function CoachHomeScreen() {
         </HapticPressable>
       </View>
 
-      {/* Client Status Today — hidden until the backend exposes a per-client
-          "logged today?" flag. The previous implementation hard-coded
-          hasLogged = false and showed "No activity today" for every client,
-          which was misleading. */}
-
-      {/* Recent Activity Feed */}
-      <Text style={[styles.sectionTitle, { marginTop: 8 }]}>Recent Activity</Text>
-      <View style={styles.emptyActivity}>
-        <Ionicons name="time-outline" size={32} color={Colors.textMuted} />
-        <Text style={styles.emptyText}>Activity feed coming soon</Text>
-      </View>
+      {/* When both alert lists are empty we render an explicit "all clear"
+          state under Recent Activity. The previous "Activity feed coming
+          soon" copy violated the no-placeholder doctrine and made the
+          dashboard look unfinished even when data was present. */}
+      {redFlagClients.length === 0 && overdueClients.length === 0 && (
+        <FadeInView>
+          <Text style={[styles.sectionTitle, { marginTop: 8 }]}>Recent Activity</Text>
+          <View style={styles.emptyActivity}>
+            <Ionicons name="checkmark-circle-outline" size={28} color={Colors.textMuted} />
+            <Text style={styles.emptyText}>No new client signals.</Text>
+            <Text style={styles.emptySub}>
+              Weight-trend and missed-check-in alerts will appear here when they fire.
+            </Text>
+          </View>
+        </FadeInView>
+      )}
     </ScrollView>
   );
 }
@@ -487,4 +492,11 @@ const styles = StyleSheet.create({
     marginHorizontal: 24,
   },
   emptyText: { color: Colors.textMuted, fontSize: 14 },
+  emptySub: {
+    color: Colors.textMuted,
+    fontSize: 12,
+    textAlign: 'center',
+    paddingHorizontal: 16,
+    lineHeight: 18,
+  },
 });
