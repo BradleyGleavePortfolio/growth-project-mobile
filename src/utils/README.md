@@ -19,6 +19,7 @@ Helpers used across the app. The rule of thumb: if a piece of logic is reused by
 | `googleAuth.ts` | Supabase OAuth via `expo-auth-session` + `expo-web-browser`. Builds the redirect URI (`tgp://auth/callback`), opens the consent screen, parses tokens out of the redirect URL (handles both error and success fragments), persists tokens through `secureStorage`, then calls `/auth/google` (with optional invite code) to upsert the backend user. |
 | `supabaseAuth.ts` | Thin Supabase wrapper for password change. Only loaded when actually needed so `supabase-js` stays out of the cold-start path. |
 | `authEvents.ts` | Tiny event bus: `onAuthChange`, `on('logout' | 'login', …)`, `emit(event?)`. The single mechanism `RootNavigator` listens on. |
+| `authErrorMessage.ts` | `toFriendlyAuthError(err)` — single mapping from raw Supabase / Google OAuth / network / backend error strings (and `Error` instances, and `null` / `undefined`) into the quiet copy the auth screens render. Cancellations resolve to a sentinel that callers ignore so the UI stays silent. Wired into `LoginScreen` and `CreateAccountScreen`. Contract — including `access_denied`, `redirect_uri_mismatch`, invalid credentials, unconfirmed email, rate limiting, and unknown-error fallback — is asserted in `src/utils/__tests__/authErrorMessage.test.ts`. |
 | `rbac.ts` | `canAccessResource(currentUser, resourceUserId, resourceCoachId)` — client sees own data, coach sees their clients' data. Defensive client-side check; the backend enforces the same rule by JWT. |
 
 ### Platform

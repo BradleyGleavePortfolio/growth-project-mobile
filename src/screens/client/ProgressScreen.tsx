@@ -18,6 +18,7 @@ import { weightApi, logApi } from '../../services/api';
 import { useNavigation } from '@react-navigation/native';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { Colors } from '../../constants/colors';
+import { shadows as shadowTokens } from '../../theme/tokens';
 import { WeightLog } from '../../types';
 import { getTodayString } from '../../utils/date';
 import FadeInView from '../../components/FadeInView';
@@ -923,11 +924,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    elevation: 5,
-    shadowColor: Colors.textPrimary, // Round 3: hex → token
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.10,
-    shadowRadius: 6,
+    // Quiet-luxury elevation — replaces the old hand-tuned 0.10 opacity shadow.
+    ...shadowTokens.md,
   },
   modalOverlay: {
     flex: 1,

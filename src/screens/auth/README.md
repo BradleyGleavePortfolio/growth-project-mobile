@@ -63,6 +63,7 @@ Persisted state, in order of write:
 - Codeless signups are allowed only when `/auth/signup-policy` returns `require_invite_code: false`. If the policy fetch fails, the form falls back to the strictest setting — never accidentally let a codeless client through.
 - `RoleSelectionScreen` only ever calls `selectRole('student', …)`. There is no client-side path to elevate to a coach role.
 - Passwords are checked against four rules client-side (length, uppercase, digit, symbol) before submission. The backend re-validates.
+- Raw upstream auth errors are never echoed to the UI. `LoginScreen` and `CreateAccountScreen` route every error through `utils/authErrorMessage.toFriendlyAuthError`, which maps Supabase strings, Google OAuth (`access_denied`, `redirect_uri_mismatch`), network failures, and our backend responses into safe, quiet copy. Cancellations stay silent — no banner, no alert, no jargon. See `src/utils/__tests__/authErrorMessage.test.ts` for the contract.
 
 ## Environment variables
 
@@ -96,5 +97,6 @@ npm test
 ## Release notes
 
 - The signup form is invite-gated by default. Reviewers (Play / App Store) cannot self-register; either supply pre-created accounts or a working invite code in the listing's "App access" notes. See `PLAY_STORE_READINESS.md` §9.
+- Welcome surfaces a quiet *"By invitation only — request access"* mailto link, and `CreateAccountScreen` shows a *"Don't have a code? Request access"* hint under the invite-code field when the policy requires one. There is no fake self-serve flow — the access posture is legible.
 - The Google button is hidden when `/auth/signup-policy` returns `google_signin_enabled: false`. This is the kill switch if Supabase OAuth ever needs to be cut without a release.
 - Deep links into the signup screen depend on hosted `assetlinks.json` / `apple-app-site-association`. Until those go live, the `https://` form opens a chooser; the `tgp://` form works because it does not need verification.

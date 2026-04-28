@@ -79,19 +79,40 @@ function buildProgressLine(mealsLogged: number, workoutDone: boolean): string {
 interface NumberCellProps {
   label: string;
   value: string;
+  hint?: string;
+  onPress?: () => void;
+  accessibilityLabel?: string;
 }
 
-function NumberCell({ label, value }: NumberCellProps) {
-  return (
-    <View style={{ width: '50%', paddingVertical: 20 }}>
+function NumberCell({ label, value, hint, onPress, accessibilityLabel }: NumberCellProps) {
+  const Inner = (
+    <View style={{ width: '100%', paddingVertical: 20 }}>
       <Text style={{ ...typography.eyebrow, color: colors.stone, marginBottom: 6 }}>
         {label}
       </Text>
       <Text style={{ ...typography.h2, color: colors.ink }}>
         {value}
       </Text>
+      {hint ? (
+        <Text style={{ ...typography.caption, color: colors.stone, marginTop: 4 }}>
+          {hint}
+        </Text>
+      ) : null}
     </View>
   );
+  if (onPress) {
+    return (
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={accessibilityLabel ?? `${label}: ${value}`}
+        style={({ pressed }) => ({ width: '50%', opacity: pressed ? 0.7 : 1 })}
+      >
+        {Inner}
+      </Pressable>
+    );
+  }
+  return <View style={{ width: '50%' }}>{Inner}</View>;
 }
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
@@ -102,7 +123,6 @@ export default function HomeScreen() {
     foodLogs,
     dailyTotals,
     waterOz,
-    isLoading,
     loadDayData,
     loadProfile,
   } = useClientStore();
@@ -129,10 +149,32 @@ export default function HomeScreen() {
   // Water in litres
   const waterL = waterOz > 0 ? `${(waterOz * 0.0295735).toFixed(1)}L` : '0.0L';
 
-  // Macro display values
-  const protein = dailyTotals?.protein ? `${Math.round(dailyTotals.protein)}g` : '—';
-  const carbs   = dailyTotals?.carbs   ? `${Math.round(dailyTotals.carbs)}g`   : '—';
-  const fat     = dailyTotals?.fat     ? `${Math.round(dailyTotals.fat)}g`     : '—';
+  // Macro display: prefer logged value; fall back to "0 of {target}g" when a
+  // coach/onboarding target exists; fall back to a "Log to see" prompt only
+  // when neither logged data nor a target is present. This is the contract:
+  // never render a bare "—" with no path forward — Home always points the
+  // user at their next action.
+  const proteinTarget = currentUser?.profile?.protein_target;
+  const carbsTarget   = currentUser?.profile?.carbs_target;
+  const fatTarget     = currentUser?.profile?.fat_target;
+
+  const buildMacro = (logged: number | undefined, target: number | undefined) => {
+    if (logged && logged > 0) {
+      return {
+        value: `${Math.round(logged)}g`,
+        hint: target ? `of ${Math.round(target)}g` : undefined,
+        prompt: false,
+      };
+    }
+    if (target && target > 0) {
+      return { value: `0 of ${Math.round(target)}g`, hint: undefined, prompt: false };
+    }
+    return { value: 'Log to see', hint: undefined, prompt: true };
+  };
+
+  const protein = buildMacro(dailyTotals?.protein, proteinTarget);
+  const carbs   = buildMacro(dailyTotals?.carbs,   carbsTarget);
+  const fat     = buildMacro(dailyTotals?.fat,     fatTarget);
 
   useEffect(() => {
     if (currentUser) {
@@ -155,6 +197,11 @@ export default function HomeScreen() {
     track('home_continue_tapped', { surface: 'home_hero' });
     // Wire to workout tab — same destination as the old HeroAction log_workout state
     navigation.navigate('WorkoutTab');
+  };
+
+  const goToLog = () => {
+    track('home_macro_tapped', { surface: 'home_macro_grid' });
+    navigation.navigate('Log');
   };
 
   if (!currentUser) {
@@ -208,10 +255,40 @@ export default function HomeScreen() {
         {/* Below-fold rule + 2×2 numbers grid */}
         <View style={{ height: 1, backgroundColor: colors.stone, marginTop: 96, marginBottom: 32 }} />
         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-          <NumberCell label="PROTEIN" value={protein} />
-          <NumberCell label="CARBS"   value={carbs} />
-          <NumberCell label="FAT"     value={fat} />
-          <NumberCell label="WATER"   value={waterL} />
+          <NumberCell
+            label="PROTEIN"
+            value={protein.value}
+            hint={protein.hint}
+            onPress={protein.prompt ? goToLog : undefined}
+            accessibilityLabel={
+              protein.prompt
+                ? 'Log a meal to see your protein'
+                : `Protein: ${protein.value}${protein.hint ? `, ${protein.hint}` : ''}`
+            }
+          />
+          <NumberCell
+            label="CARBS"
+            value={carbs.value}
+            hint={carbs.hint}
+            onPress={carbs.prompt ? goToLog : undefined}
+            accessibilityLabel={
+              carbs.prompt
+                ? 'Log a meal to see your carbs'
+                : `Carbs: ${carbs.value}${carbs.hint ? `, ${carbs.hint}` : ''}`
+            }
+          />
+          <NumberCell
+            label="FAT"
+            value={fat.value}
+            hint={fat.hint}
+            onPress={fat.prompt ? goToLog : undefined}
+            accessibilityLabel={
+              fat.prompt
+                ? 'Log a meal to see your fat'
+                : `Fat: ${fat.value}${fat.hint ? `, ${fat.hint}` : ''}`
+            }
+          />
+          <NumberCell label="WATER" value={waterL} />
         </View>
       </ScrollView>
     </SafeAreaView>
