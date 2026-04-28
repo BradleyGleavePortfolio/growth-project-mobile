@@ -26,6 +26,20 @@ type MoreItem = {
 
 const MORE_ITEMS: MoreItem[] = [
   {
+    icon: 'chatbubble-ellipses-outline',
+    label: 'Guidance',
+    description: 'Ask your coach’s guide anything',
+    target: { type: 'stack', screen: 'AIGuide' },
+    a11yHint: 'Opens guidance — your coach’s AI assistant',
+  },
+  {
+    icon: 'ribbon-outline',
+    label: 'Membership',
+    description: 'Your access and coaching tier',
+    target: { type: 'stack', screen: 'Membership' },
+    a11yHint: 'Opens membership and access details',
+  },
+  {
     icon: 'restaurant-outline',
     label: 'Recipes',
     description: 'Browse recipes and meal ideas',

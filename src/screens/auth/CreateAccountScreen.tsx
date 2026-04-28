@@ -17,6 +17,7 @@ import { Colors, Typography, Spacing, Radius, Shadow } from '../../theme';
 import { authApi, InvitePreview } from '../../services/api';
 import { secureStorage } from '../../services/secureStorage';
 import { track } from '../../lib/analytics';
+import { toFriendlyAuthError } from '../../utils/authErrorMessage';
 
 interface Props {
   navigation: any;
@@ -164,14 +165,11 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
       track('signed_up', { method: 'email', has_invite_code: !!trimmedCode });
       setStep('verify');
     } catch (err: any) {
-      const backendMessage = err.response?.data?.message;
-      if (backendMessage) {
-        setError(backendMessage);
-      } else if (err.message === 'Network Error' || !err.response) {
-        setError('Cannot reach server. Check your internet connection.');
-      } else {
-        setError('Registration failed. Please try again.');
-      }
+      // Map raw upstream strings (Supabase / backend / network) into quiet,
+      // safe copy. Operators retain the original via console + Sentry.
+      const raw = err?.response?.data?.message || err?.message || err;
+      const friendly = toFriendlyAuthError(raw);
+      setError(friendly.message);
     } finally {
       setLoading(false);
     }
@@ -217,10 +215,10 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
       const result = await signInWithGoogle({ inviteCode: trimmedCode || undefined });
 
       if (!result.success) {
-        if (result.error !== 'Sign-in was cancelled') {
-          const msg = result.error || 'Google sign-in was unsuccessful';
-          setError(msg);
-          Alert.alert('Google sign-in unavailable', msg);
+        const friendly = toFriendlyAuthError(result.error);
+        if (!friendly.cancelled) {
+          setError(friendly.message);
+          Alert.alert('Sign-in', friendly.message);
         }
         return;
       }
@@ -228,7 +226,8 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
       await AsyncStorage.setItem('needs_role_selection', 'true');
       navigation.replace('RoleSelection');
     } catch (err: any) {
-      setError('Google sign-in was unsuccessful. Try again.');
+      const friendly = toFriendlyAuthError(err);
+      if (!friendly.cancelled) setError(friendly.message);
     } finally {
       setLoading(false);
     }
