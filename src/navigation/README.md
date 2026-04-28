@@ -13,12 +13,12 @@ React Navigation v7 is the routing layer. `RootNavigator` decides which sub-navi
 
 | File | What it does |
 | --- | --- |
-| `RootNavigator.tsx` | Decides between `unauthenticated`, `onboarding`, `coach`, `student`. Owns the `LinkingOptions`, the `NavigationContainer` theme, the offline banner, and the floating chat widget show/hide rule. |
+| `RootNavigator.tsx` | Decides between `unauthenticated`, `onboarding`, `coach`, `student`. Owns the `LinkingOptions`, the `NavigationContainer` theme, and the offline banner. There is no global floating chat widget — the dedicated AI surface is `AIGuideScreen`, registered on the client `MoreStack`. |
 | `AuthNavigator.tsx` | Stack: `Welcome`, `Login`, `CreateAccount`, `ForgotPassword`, `RoleSelection`. The only navigator that's reachable from a deep link. |
-| `LeanOnboardingNavigator.tsx` | Stack: `LeanQ1`, `LeanQ2`, `LeanQ3`. Default for new accounts. |
+| `LeanOnboardingNavigator.tsx` | Stack: `LeanQ1`, `LeanQ2`, `LeanQ3`, `LeanQ4`. Default for new accounts. `LeanQ4` is the optional body-metric capture step (height + current weight, imperial / metric toggle, both fields skippable). |
 | `OnboardingNavigator.tsx` | The legacy 10-step flow. Preserved but not routed to from a fresh signup today. |
-| `ClientNavigator.tsx` | 4-tab bottom bar, icons-only. Route names: `Home`, `WorkoutTab`, `Log`, `MoreTab`. Accessibility labels: `Home`, `Train`, `Log food`, `Profile and more`. `Home`, `WorkoutTab`, and `MoreTab` are nested native stacks; `Log` is a single screen (`LogScreen` — food/macro logging). The Profile tab (`MoreTab`) houses every secondary screen. |
-| `CoachNavigator.tsx` | 5-tab bottom bar (Clients / Dashboard / Templates / Messages / Settings). The Clients tab is a nested stack with `ClientsList`, `ClientDetail`, `ClientMessages`, `InviteCodes`. |
+| `ClientNavigator.tsx` | 4-tab bottom bar, icons-only. Route names: `Home`, `WorkoutTab`, `Log`, `MoreTab`. Accessibility labels: `Home`, `Train`, `Log food`, `Profile and more`. `Home`, `WorkoutTab`, and `MoreTab` are nested native stacks; `Log` is a single screen (`LogScreen` — food/macro logging). The Profile tab (`MoreTab`) houses every secondary screen, including `AIGuide` and `Membership`. `RecipeDetail` accepts a single serialisable `{ recipeId: string }` param — never the whole recipe object. |
+| `CoachNavigator.tsx` | 5-tab bottom bar (Clients / Dashboard / Templates / Messages / Settings). The Clients tab is a nested stack with `ClientsList`, `ClientDetail`, `ClientMessages`, `InviteCodes`. The Settings tab is a nested stack (`SettingsHome → Billing → TrustCenter`). |
 
 ## Data flow
 
@@ -97,5 +97,7 @@ There are no navigation-level jest tests; the structure is exercised end-to-end 
 ## Release notes
 
 - The 4-tab bar (Home / Train / Log / Profile) was consolidated from an earlier 9-tab layout. The old screen names are preserved inside the `MoreStack` so any external `navigate()` calls (analytics, push payloads) keep working.
-- The floating chat widget visibility rule is in `RootNavigator`. If the More-tab screen list grows, update the `hideWidget` check or the widget will overlap a screen that doesn't expect it.
+- The `MoreStack` registers `AIGuide` and `Membership` (sale-readiness, #67). Both are static targets of `MoreScreen` rows; neither is a deep-link target and neither requires backend changes (`Membership` reads only `usersApi.getFoundingNumber` and `aiApi.getStructuredContext`).
+- `RecipeDetail` is a serialisable-only route. The list passes `{ recipeId }`, the detail screen reads from the React Query cache for synchronous paint and falls back to `recipesApi.getById`. The shape is asserted in `src/navigation/__tests__/clientNavigator.test.ts`. Do not add screens that pass full domain objects through navigation params.
+- There is no global floating chat widget. If a future feature wants a shared surface, it must be a real screen registered under the relevant navigator, not a global FAB — the doctrine (`docs/QUIET_LUXURY_DOCTRINE.md` §6) forbids reintroducing one.
 - The `linking` config covers only the unauthenticated path. If a future feature needs to be addressable by a deep link to a signed-in screen, that route must be added under both `ClientNavigator` and `CoachNavigator` configs and the Android intent filter / `applinks:` entry extended in `app.json`.

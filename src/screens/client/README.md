@@ -1,6 +1,6 @@
 # Client screens
 
-Everything a signed-in `student` user sees. Mounted under `ClientNavigator`, which is itself a 4-tab icons-only bottom bar — accessibility labels `Home` / `Train` / `Log food` / `Profile and more` (route names `Home` / `WorkoutTab` / `Log` / `MoreTab`). Three of the four tabs wrap nested native stacks; the `Log` tab is a single screen. Most of the surface area below is reachable through the Profile tab (`MoreTab`) and the floating chat widget.
+Everything a signed-in `student` user sees. Mounted under `ClientNavigator`, which is itself a 4-tab icons-only bottom bar — accessibility labels `Home` / `Train` / `Log food` / `Profile and more` (route names `Home` / `WorkoutTab` / `Log` / `MoreTab`). Three of the four tabs wrap nested native stacks; the `Log` tab is a single screen. Every secondary screen lives inside the `MoreStack` reached from the Profile tab — there is no global floating chat widget; the dedicated AI surface is `AIGuideScreen` and is reached from the **Guidance** row on `MoreScreen`.
 
 ## Purpose
 
@@ -18,13 +18,14 @@ Everything a signed-in `student` user sees. Mounted under `ClientNavigator`, whi
 | `HomeScreen.tsx` | Home | Editorial date headline + single "CONTINUE" CTA + 2×2 number grid (calories, protein, water, streak). Pulls from `useClientStore`. |
 | `WorkoutScreen.tsx` | Train | Lists routines (`workoutApi.getRoutines`), launches `ActiveWorkoutScreen`, links to `RoutineBuilder` and `CoachGuidelines`. |
 | `LogScreen.tsx` | Log | Day selector, macro summary, four meal sections, water tracker. Search modal hits `foodApi.search`; offline writes go through `services/foodLogQueue`. The `Plan` screen is reached from inside `MoreStack`, not from this tab. |
-| `MoreScreen.tsx` | Profile | Index of every secondary screen (Recipes, Fasting, Community, Progress, Profile, Settings, Trust Center, Preferences, Widgets, Report, Learn, lists, Plan). |
+| `MoreScreen.tsx` | Profile | Index of every secondary screen. The two top rows are **Guidance** (`AIGuide`) and **Membership** (`Membership`); the rest cover Recipes, Fasting, Community, Profile, Settings, Trust Center, Preferences, Widgets, Report, Learn, the lists, and the Plan view. There is no floating chat widget — `AIGuide` is reached from this index, not from a global FAB. |
 
 ### AI Guide and messaging
 
 | File | What it does |
 | --- | --- |
-| `AIGuideScreen.tsx` | Chat with the assistant. Sends only the user message + short history; the backend attaches structured context, persona, and guardrails. Uses `aiApi.getStructuredContext` once on mount to display "what your coach has shared" — purely informational, never assembled into a prompt by the client. Persists locally via `db/chatDb.ts`. |
+| `AIGuideScreen.tsx` | Chat with the assistant. Registered on the More stack as `AIGuide` and reachable from the **Guidance** row on `MoreScreen`. Sends only the user message + short history; the backend attaches structured context, persona, and guardrails. Uses `aiApi.getStructuredContext` once on mount to display "what your coach has shared" — purely informational, never assembled into a prompt by the client. Persists locally via `db/chatDb.ts`. |
+| `MembershipScreen.tsx` | Access surface. Shows account state, coach identity, member-since date, founding-member badge if applicable, and an in-app **MESSAGE YOUR COACH** action that routes to the Home stack's `Messages` screen. Suitable for external Stripe / coach-managed access — there is no in-app billing chrome on the client side. Reads `usersApi.getFoundingNumber()` and `aiApi.getStructuredContext()` only. |
 | `MessagesScreen.tsx` | One-on-one messages with the assigned coach. REST round-trip through `messagesApi`; a Supabase Realtime broadcast channel pings a refetch on new messages. 60 s fallback poll covers WebSocket drops. |
 | `NotificationsScreen.tsx` | Coach nudges feed (`nudgesApi`). |
 
@@ -33,7 +34,7 @@ Everything a signed-in `student` user sees. Mounted under `ClientNavigator`, whi
 | File | What it does |
 | --- | --- |
 | `PlanScreen.tsx` | Read-only view of the meal plan the coach has assigned (`mealPlansApi.list`). |
-| `RecipesScreen.tsx`, `RecipeDetailScreen.tsx` | Browse and save recipes (`recipesApi`). |
+| `RecipesScreen.tsx`, `RecipeDetailScreen.tsx` | Browse and save recipes (`recipesApi`). The list passes `{ recipeId }` (a serialisable string) when navigating, never the full recipe object — `RecipeDetailScreen` reads from the React Query cache for synchronous paint and falls back to `recipesApi.getById(recipeId)`. This eliminates React Navigation's non-serializable-params warning and keeps state rehydration intact. New recipe-aware screens must follow the same id-only param pattern. |
 | `GroceryListScreen.tsx`, `ShoppingListScreen.tsx`, `PrepGuideScreen.tsx` | List management + weekly prep guide (`listsApi`, `prepGuideApi`). |
 | `FastingScreen.tsx` | Start/end fasting timer (`fastingApi`); state persists in `store/fastingStore`. |
 | `HabitsScreen.tsx` | Daily habit check-ins (`habitsApi`). |
@@ -115,9 +116,16 @@ npm test
 npm run typecheck
 ```
 
+## Removed surfaces
+
+- `CommunityFeedScreen` is gone. It was an orphan — `CommunityScreen` already covers Wins + Leaderboard from inside the More stack — and the duplicate route was never reachable from a fresh signup. Do not reintroduce it; if a future feed needs to ship, extend `CommunityScreen`.
+- `TrophyShareScreen`, the `FirstWinCelebration` overlay, and the `IdentityBadge` / `TrophyArtifact` components were deleted in the wave-5b cleanup (#63). They are not registered as screens, not imported anywhere, and are explicitly forbidden by the doctrine test (`src/__tests__/quietLuxuryDoctrine.test.ts`).
+- The `FloatingChatWidget` and the `RootNavigator.hideWidget` predicate it lived behind are gone. The dedicated AI surface is `AIGuideScreen`, reached from the **Guidance** row on `MoreScreen`.
+
 ## Release notes
 
-- Floating AI chat widget is hidden on Profile-like screens (`MoreTab`, `MoreIndex`, `ProfileMain`, `Settings`, `Report`, `Widgets`, `Learn`, `Recipes`). The hide list is in `navigation/RootNavigator.tsx`.
 - Home is the screenshot anchor for the listing — date headline + CONTINUE CTA + 2×2 number grid. Don't recompose it for marketing without coordinating with whoever owns the design tokens.
+- The macro grid on Home follows a strict three-state contract: logged value with target hint when known, `0 of {target}g` when a target exists but no logs yet, and a tappable **Log to see** prompt that routes to the Log tab when no target is configured. The grid never renders a bare placeholder. The contract is guarded by `src/screens/client/__tests__/homeMacroDisplay.test.ts`.
 - The AI Guide screen is part of the "Personal communications → in-app messages" data-safety declaration, not the "Marketing" category. Keep that mapping in sync with `PLAY_STORE_READINESS.md` §8 if the screen ever does push notifications.
 - The Trust Center entry point lives in Settings → Trust & Privacy. Its export and delete actions fire `data_export_requested` and `account_deletion_requested` analytics events; Play reviewers exercise both during data-safety verification.
+- `MembershipScreen` is intentionally read-only on the client side. Coach-managed billing is handled by the coach app (`CoachBillingScreen` under the Settings stack). If a self-serve client billing surface is ever introduced, it must add a backend contract and a new screen — do not bolt it onto `MembershipScreen`.
