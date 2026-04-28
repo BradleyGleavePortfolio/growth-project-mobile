@@ -1,6 +1,6 @@
 # Client screens
 
-Everything a signed-in `student` user sees. Mounted under `ClientNavigator`, which is itself a 4-tab icons-only bottom bar — accessibility labels `Home` / `Train` / `Log food` / `Profile and more` (route names `Home` / `WorkoutTab` / `Log` / `MoreTab`). Three of the four tabs wrap nested native stacks; the `Log` tab is a single screen. Most of the surface area below is reachable through the Profile tab (`MoreTab`) and the floating chat widget.
+Everything a signed-in `student` user sees. Mounted under `ClientNavigator`, which is itself a 4-tab icons-only bottom bar — accessibility labels `Home` / `Train` / `Log food` / `Profile and more` (route names `Home` / `WorkoutTab` / `Log` / `MoreTab`). Three of the four tabs wrap nested native stacks; the `Log` tab is a single screen. Every secondary screen is reached through the Profile tab (`MoreTab`) — there is no global floating chat widget; the dedicated AI surface is `AIGuideScreen`.
 
 ## Purpose
 
@@ -115,9 +115,13 @@ npm test
 npm run typecheck
 ```
 
+## Removed surfaces
+
+- `TrophyShareScreen`, `FirstWinCelebration`, `IdentityBadge`, and `TrophyArtifact` were deleted in the wave-5b cleanup (#63). They are not registered as screens, not imported anywhere, and are explicitly forbidden by the doctrine test (`src/__tests__/quietLuxuryDoctrine.test.ts`).
+- The `FloatingChatWidget` and the `RootNavigator.hideWidget` predicate it lived behind are gone. The dedicated AI surface is `AIGuideScreen`.
+
 ## Release notes
 
-- Floating AI chat widget is hidden on Profile-like screens (`MoreTab`, `MoreIndex`, `ProfileMain`, `Settings`, `Report`, `Widgets`, `Learn`, `Recipes`). The hide list is in `navigation/RootNavigator.tsx`.
 - Home is the screenshot anchor for the listing — date headline + CONTINUE CTA + 2×2 number grid. Don't recompose it for marketing without coordinating with whoever owns the design tokens.
 - The AI Guide screen is part of the "Personal communications → in-app messages" data-safety declaration, not the "Marketing" category. Keep that mapping in sync with `PLAY_STORE_READINESS.md` §8 if the screen ever does push notifications.
 - The Trust Center entry point lives in Settings → Trust & Privacy. Its export and delete actions fire `data_export_requested` and `account_deletion_requested` analytics events; Play reviewers exercise both during data-safety verification.

@@ -13,7 +13,7 @@ React Navigation v7 is the routing layer. `RootNavigator` decides which sub-navi
 
 | File | What it does |
 | --- | --- |
-| `RootNavigator.tsx` | Decides between `unauthenticated`, `onboarding`, `coach`, `student`. Owns the `LinkingOptions`, the `NavigationContainer` theme, the offline banner, and the floating chat widget show/hide rule. |
+| `RootNavigator.tsx` | Decides between `unauthenticated`, `onboarding`, `coach`, `student`. Owns the `LinkingOptions`, the `NavigationContainer` theme, and the offline banner. There is no global floating chat widget — it was deleted in #63 along with the `hideWidget` predicate; the dedicated AI surface is `AIGuideScreen` under the client `MoreStack`. |
 | `AuthNavigator.tsx` | Stack: `Welcome`, `Login`, `CreateAccount`, `ForgotPassword`, `RoleSelection`. The only navigator that's reachable from a deep link. |
 | `LeanOnboardingNavigator.tsx` | Stack: `LeanQ1`, `LeanQ2`, `LeanQ3`. Default for new accounts. |
 | `OnboardingNavigator.tsx` | The legacy 10-step flow. Preserved but not routed to from a fresh signup today. |
@@ -97,5 +97,6 @@ There are no navigation-level jest tests; the structure is exercised end-to-end 
 ## Release notes
 
 - The 4-tab bar (Home / Train / Log / Profile) was consolidated from an earlier 9-tab layout. The old screen names are preserved inside the `MoreStack` so any external `navigate()` calls (analytics, push payloads) keep working.
-- The floating chat widget visibility rule is in `RootNavigator`. If the More-tab screen list grows, update the `hideWidget` check or the widget will overlap a screen that doesn't expect it.
+- There is no global floating chat widget. The `FloatingChatWidget` and the `RootNavigator.hideWidget` predicate it lived behind were deleted in #63. If a future feature wants a shared AI surface, it must be a real screen registered under the relevant navigator — the doctrine (`docs/QUIET_LUXURY_DOCTRINE.md` §6) forbids reintroducing a global FAB.
+- The `TrophyShare` route was removed from `ClientNavigator` in #63 alongside the `TrophyShareScreen` and `FirstWinCelebration`. Do not reintroduce it; the doctrine test (`src/__tests__/quietLuxuryDoctrine.test.ts`) will fail the build.
 - The `linking` config covers only the unauthenticated path. If a future feature needs to be addressable by a deep link to a signed-in screen, that route must be added under both `ClientNavigator` and `CoachNavigator` configs and the Android intent filter / `applinks:` entry extended in `app.json`.

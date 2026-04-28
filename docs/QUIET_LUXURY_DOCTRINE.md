@@ -54,7 +54,23 @@ If a change in this repo would violate one of the rules below, the rule wins. Wh
 - The lean 3-question flow (`LeanQ1`–`LeanQ3`) is the only onboarding path for new accounts. The legacy 10-step flow is preserved for existing users only and is not reachable from a fresh signup.
 - `AppSplash` is the only splash component. The earlier `SplashScreen.tsx` duplicate has been removed.
 
-## 8. Reviewer checklist (paste into PRs that touch UI)
+## 8. Every PR updates the corresponding README
+
+Every PR must update the README / module documentation that describes the surface it changes. This is a hard rule, not a nice-to-have. Docs that drift past one or two PRs are docs that get ignored, and the cost of an out-of-date `src/screens/client/README.md` is a contributor reading a file that confidently describes a `FloatingChatWidget` that was deleted three releases ago.
+
+Concretely, when a PR:
+
+- adds or removes a screen, route, or component → update `src/screens/<role>/README.md`, `src/components/README.md`, and `src/navigation/README.md` to match.
+- changes a navigator's tab list, route param shape, or stack → update `src/navigation/README.md` and the root `README.md` Navigation section.
+- adds an external dependency the screen calls (a new backend endpoint, a new env var, a new hosted file) → record it in the dependencies / env-var section of the relevant README, and in `PLAY_STORE_READINESS.md` if it gates a release.
+- removes a previously-documented surface → either rewrite the entry to describe the replacement, or move it to a "Removed surfaces" section so the next contributor knows it is intentional.
+- introduces or changes a doctrine-relevant rule → update this file *and* link it from the affected README.
+
+If a change is genuinely doc-free (CI-only, a one-line lint fix, a typo) the PR description must say so explicitly. The default is: **docs change with the code, in the same PR**. The PR template (`.github/pull_request_template.md`) carries the checklist.
+
+The reviewer checklist below applies to UI changes; the doc rule above applies to *every* PR.
+
+## 9. Reviewer checklist (paste into PRs that touch UI)
 
 - [ ] No `fontWeight: '700'` or `'800'` introduced.
 - [ ] No "Coming Soon" / "Planned" / "In Development" copy introduced.
