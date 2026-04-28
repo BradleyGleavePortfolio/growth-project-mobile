@@ -109,7 +109,7 @@ Bottom tabs are icons-only (no labels). Four tabs, in order:
 1. **Home** — accessibility label `Home`, route name `Home`. Wraps `HomeStack` (`HomeMain`, `Habits`, `Notifications`, `Messages`).
 2. **Train** — accessibility label `Train`, route name `WorkoutTab`. Wraps `WorkoutStack` (`WorkoutMain`, `ActiveWorkout`, `RoutineBuilder`, `CoachGuidelines`).
 3. **Log** — accessibility label `Log food`, route name `Log`. Single screen (`LogScreen`).
-4. **Profile** — accessibility label `Profile and more`, route name `MoreTab`. Wraps `MoreStack`, which houses `MoreIndex`, `ProfileMain`, `Recipes`, `RecipeDetail`, `GroceryList`, `ShoppingList`, `PrepGuide`, `Fast`, `Community`, `Progress`, `Settings`, `Widgets`, `Report`, `Learn`, `Plan`, `TrustCenter`, `Preferences`, `AIGuide`, and `Membership`. There is no global floating chat widget — the AI surface is `AIGuide`, reached from the **Guidance** row on `MoreScreen`. `RecipeDetail` accepts a serialisable `{ recipeId: string }` only.
+4. **Profile** — accessibility label `Profile and more`, route name `MoreTab`. Wraps `MoreStack`, which houses `MoreIndex`, `ProfileMain`, `Recipes`, `RecipeDetail`, `GroceryList`, `ShoppingList`, `PrepGuide`, `Fast`, `Community`, `Progress`, `Settings`, `Widgets`, `Report`, `Learn`, `Plan`, `TrustCenter`, `Preferences`, `AIGuide`, and `Membership`. There is no global floating chat widget — the AI surface is `AIGuide`, reached from the **Guidance** row on `MoreScreen`. The `TrophyShare` route was removed in #63 alongside the celebration chrome. `RecipeDetail` accepts a serialisable `{ recipeId: string }` only.
 
 The route names (`Home` / `WorkoutTab` / `Log` / `MoreTab`) are what `navigate()` calls and the linking config use; the user-facing labels live only in the accessibility props because the bar is icon-only. See `src/navigation/ClientNavigator.tsx`.
 
@@ -119,3 +119,19 @@ The route names (`Home` / `WorkoutTab` / `Log` / `MoreTab`) are what `navigate()
 spacing, and radii. It exposes both the flat `Colors` palette and grouped
 `colors.{text,brand,feedback,border,data,background}` semantic tokens.
 Never hardcode hex values in components.
+
+## Contributing
+
+Every PR updates the corresponding README / module documentation. The rule —
+and the rationale — live in `docs/QUIET_LUXURY_DOCTRINE.md` §8. The PR
+template (`.github/pull_request_template.md`) carries the checklist.
+
+Per-module READMEs:
+
+- `src/components/README.md`, `src/db/README.md`, `src/hooks/README.md`,
+  `src/navigation/README.md`, `src/services/README.md`, `src/store/README.md`,
+  `src/theme/README.md`, `src/utils/README.md`
+- `src/screens/auth/README.md`, `src/screens/client/README.md`,
+  `src/screens/coach/README.md`, `src/screens/onboarding/README.md`
+- `docs/QUIET_LUXURY_DOCTRINE.md`, `docs/RELEASE_SMOKE.md`,
+  `docs/INVITE_DEEPLINK_QA.md`, `docs/well-known/README.md`
