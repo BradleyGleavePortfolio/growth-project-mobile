@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,8 +12,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { recipesApi } from '../../services/api';
-import { Colors } from '../../constants/colors';
+
 import FadeInView from '../../components/FadeInView';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Recipe {
@@ -37,6 +38,8 @@ interface Recipe {
 function MacroCard({ label, value, unit, color }: {
   label: string; value: number; unit: string; color: string;
 }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <View style={[styles.macroCard, { backgroundColor: color + '15' }]}>
       <Text style={[styles.macroValue, { color }]}>{Math.round(value)}{unit}</Text>
@@ -47,6 +50,8 @@ function MacroCard({ label, value, unit, color }: {
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function RecipeDetailScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation<any>();
   const route = useRoute<RouteProp<{ RecipeDetail: { recipeId: string } }, 'RecipeDetail'>>();
   const recipeId = route.params?.recipeId;
@@ -101,7 +106,7 @@ export default function RecipeDetailScreen() {
   if (isLoading && !recipe) {
     return (
       <View style={styles.errorContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -126,10 +131,10 @@ export default function RecipeDetailScreen() {
       {/* Hero banner */}
       <View style={styles.hero}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <View style={styles.heroIcon}>
-          <Ionicons name="restaurant" size={56} color={Colors.primary} />
+          <Ionicons name="restaurant" size={56} color={colors.primary} />
         </View>
         <TouchableOpacity
           style={styles.saveBtn}
@@ -138,12 +143,12 @@ export default function RecipeDetailScreen() {
           disabled={saving}
         >
           {saving ? (
-            <ActivityIndicator size="small" color={Colors.primary} />
+            <ActivityIndicator size="small" color={colors.primary} />
           ) : (
             <Ionicons
               name={isSaved ? 'bookmark' : 'bookmark-outline'}
               size={24}
-              color={isSaved ? Colors.primary : Colors.textSecondary}
+              color={isSaved ? colors.primary : colors.textSecondary}
             />
           )}
         </TouchableOpacity>
@@ -159,16 +164,16 @@ export default function RecipeDetailScreen() {
 
           <View style={styles.metaRow}>
             <View style={styles.metaItem}>
-              <Ionicons name="time-outline" size={16} color={Colors.textMuted} />
+              <Ionicons name="time-outline" size={16} color={colors.textMuted} />
               <Text style={styles.metaText}>{totalTime} min total</Text>
             </View>
             <View style={styles.metaItem}>
-              <Ionicons name="restaurant-outline" size={16} color={Colors.textMuted} />
+              <Ionicons name="restaurant-outline" size={16} color={colors.textMuted} />
               <Text style={styles.metaText}>{recipe.servings} servings</Text>
             </View>
             {recipe.prep_time_min > 0 && (
               <View style={styles.metaItem}>
-                <Ionicons name="cut-outline" size={16} color={Colors.textMuted} />
+                <Ionicons name="cut-outline" size={16} color={colors.textMuted} />
                 <Text style={styles.metaText}>{recipe.prep_time_min} min prep</Text>
               </View>
             )}
@@ -192,10 +197,10 @@ export default function RecipeDetailScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Nutrition (per serving)</Text>
           <View style={styles.macroGrid}>
-            <MacroCard label="Calories" value={recipe.calories} unit="kcal" color={Colors.accent} />
-            <MacroCard label="Protein" value={recipe.protein} unit="g" color={Colors.protein} />
-            <MacroCard label="Carbs" value={recipe.carbs} unit="g" color={Colors.carbs} />
-            <MacroCard label="Fat" value={recipe.fat} unit="g" color={Colors.fat} />
+            <MacroCard label="Calories" value={recipe.calories} unit="kcal" color={colors.accent} />
+            <MacroCard label="Protein" value={recipe.protein} unit="g" color={colors.protein} />
+            <MacroCard label="Carbs" value={recipe.carbs} unit="g" color={colors.carbs} />
+            <MacroCard label="Fat" value={recipe.fat} unit="g" color={colors.fat} />
           </View>
         </View>
       </FadeInView>
@@ -232,13 +237,14 @@ export default function RecipeDetailScreen() {
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   content: { paddingBottom: 60 },
 
   hero: {
     height: 200,
-    backgroundColor: Colors.primaryPale,
+    backgroundColor: colors.primaryPale,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
@@ -261,42 +267,42 @@ const styles = StyleSheet.create({
     height: 44,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     zIndex: 10,
   },
 
   section: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     marginHorizontal: 16,
     marginTop: 14,
     padding: 18,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     gap: 10,
   },
   lastSection: { marginBottom: 0 },
 
-  recipeTitle: { fontSize: 22, fontWeight: '500', color: Colors.textPrimary, lineHeight: 28 },
-  recipeDesc: { fontSize: 14, color: Colors.textSecondary, lineHeight: 20 },
+  recipeTitle: { fontSize: 22, fontWeight: '500', color: colors.textPrimary, lineHeight: 28 },
+  recipeDesc: { fontSize: 14, color: colors.textSecondary, lineHeight: 20 },
 
   metaRow: { flexDirection: 'row', gap: 16, flexWrap: 'wrap', marginTop: 2 },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  metaText: { fontSize: 13, color: Colors.textMuted },
+  metaText: { fontSize: 13, color: colors.textMuted },
 
   tagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   tag: {
-    backgroundColor: Colors.surfaceElevated,
+    backgroundColor: colors.surfaceElevated,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 0, // radius.sm
   },
-  tagText: { fontSize: 12, color: Colors.textSecondary, fontWeight: '600' },
+  tagText: { fontSize: 12, color: colors.textSecondary, fontWeight: '600' },
 
-  sectionTitle: { fontSize: 16, fontWeight: '500', color: Colors.textPrimary },
+  sectionTitle: { fontSize: 16, fontWeight: '500', color: colors.textPrimary },
 
   macroGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 4 },
   macroCard: {
@@ -315,27 +321,28 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     marginTop: 7,
     flexShrink: 0,
   },
-  listItemText: { flex: 1, fontSize: 14, color: Colors.textPrimary, lineHeight: 22 },
+  listItemText: { flex: 1, fontSize: 14, color: colors.textPrimary, lineHeight: 22 },
 
   stepItem: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
   stepNumber: {
     width: 28,
     height: 28,
     borderRadius: 4, // radius.lg
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
     marginTop: 1,
   },
-  stepNumberText: { fontSize: 13, fontWeight: '500', color: Colors.textOnPrimary },
-  stepText: { flex: 1, fontSize: 14, color: Colors.textPrimary, lineHeight: 22 },
+  stepNumberText: { fontSize: 13, fontWeight: '500', color: colors.textOnPrimary },
+  stepText: { flex: 1, fontSize: 14, color: colors.textPrimary, lineHeight: 22 },
 
   errorContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  errorText: { fontSize: 16, color: Colors.textSecondary },
-  errorLink: { fontSize: 15, color: Colors.primary, fontWeight: '600' },
-});
+  errorText: { fontSize: 16, color: colors.textSecondary },
+  errorLink: { fontSize: 15, color: colors.primary, fontWeight: '600' },
+
+  });

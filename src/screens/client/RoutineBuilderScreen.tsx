@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,8 +12,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { Colors } from '../../constants/colors';
+
 import { getAllExercises } from '../../db/workoutDb';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import {
   useRoutines,
   useCreateRoutine,
@@ -43,6 +44,8 @@ type RouteParams = {
 const MUSCLES = ['All', 'chest', 'back', 'shoulders', 'legs', 'biceps', 'triceps', 'core', 'full body', 'cardio'];
 
 export default function RoutineBuilderScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const route = useRoute<RouteProp<RouteParams, 'RoutineBuilder'>>();
   const navigation = useNavigation<any>();
   const routineId = route.params?.routineId;
@@ -196,12 +199,12 @@ export default function RoutineBuilderScreen() {
     <View style={styles.container}>
       <View style={styles.topBar}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.topTitle}>{routineId ? 'Edit Routine' : 'New Routine'}</Text>
         {routineId ? (
           <TouchableOpacity onPress={handleDelete}>
-            <Ionicons name="trash-outline" size={22} color={Colors.error} />
+            <Ionicons name="trash-outline" size={22} color={colors.error} />
           </TouchableOpacity>
         ) : (
           <View style={{ width: 22 }} />
@@ -212,7 +215,7 @@ export default function RoutineBuilderScreen() {
         <TextInput
           style={styles.nameInput}
           placeholder="Routine name (e.g. Push Day)"
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           value={name}
           onChangeText={setName}
         />
@@ -226,13 +229,13 @@ export default function RoutineBuilderScreen() {
               </View>
               <View style={styles.exerciseActions}>
                 <TouchableOpacity onPress={() => moveExercise(idx, 'up')} disabled={idx === 0}>
-                  <Ionicons name="chevron-up" size={18} color={idx === 0 ? Colors.border : Colors.textMuted} />
+                  <Ionicons name="chevron-up" size={18} color={idx === 0 ? colors.border : colors.textMuted} />
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => moveExercise(idx, 'down')} disabled={idx === exercises.length - 1}>
-                  <Ionicons name="chevron-down" size={18} color={idx === exercises.length - 1 ? Colors.border : Colors.textMuted} />
+                  <Ionicons name="chevron-down" size={18} color={idx === exercises.length - 1 ? colors.border : colors.textMuted} />
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => removeExercise(idx)}>
-                  <Ionicons name="close-circle" size={18} color={Colors.error} />
+                  <Ionicons name="close-circle" size={18} color={colors.error} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -269,7 +272,7 @@ export default function RoutineBuilderScreen() {
         ))}
 
         <TouchableOpacity style={styles.addBtn} onPress={openAddExercise}>
-          <Ionicons name="add-circle" size={22} color={Colors.primary} />
+          <Ionicons name="add-circle" size={22} color={colors.primary} />
           <Text style={styles.addBtnText}>Add Exercise</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -285,18 +288,18 @@ export default function RoutineBuilderScreen() {
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <TouchableOpacity onPress={() => setShowAddModal(false)}>
-              <Ionicons name="close" size={24} color={Colors.textPrimary} />
+              <Ionicons name="close" size={24} color={colors.textPrimary} />
             </TouchableOpacity>
             <Text style={styles.modalTitle}>Add Exercise</Text>
             <View style={{ width: 24 }} />
           </View>
 
           <View style={styles.searchBar}>
-            <Ionicons name="search" size={18} color={Colors.textMuted} />
+            <Ionicons name="search" size={18} color={colors.textMuted} />
             <TextInput
               style={styles.searchInput}
               placeholder="Search exercises..."
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               value={searchQuery}
               onChangeText={handleSearchChange}
             />
@@ -328,7 +331,7 @@ export default function RoutineBuilderScreen() {
                     {item.muscle.charAt(0).toUpperCase() + item.muscle.slice(1)} · {item.equipment}
                   </Text>
                 </View>
-                <Ionicons name="add-circle-outline" size={22} color={Colors.primary} />
+                <Ionicons name="add-circle-outline" size={22} color={colors.primary} />
               </TouchableOpacity>
             )}
           />
@@ -338,8 +341,9 @@ export default function RoutineBuilderScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -347,26 +351,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 56,
     paddingBottom: 12,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
-  topTitle: { fontSize: 17, fontWeight: '500', color: Colors.textPrimary },
+  topTitle: { fontSize: 17, fontWeight: '500', color: colors.textPrimary },
   content: { padding: 20, paddingBottom: 120 },
   nameInput: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 17,
     fontWeight: '600',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     marginBottom: 20,
   },
   exerciseCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     padding: 14,
     marginBottom: 10,
@@ -382,27 +386,27 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 2, // radius.md
-    backgroundColor: Colors.primary,
-    color: Colors.textOnPrimary,
+    backgroundColor: colors.primary,
+    color: colors.textOnPrimary,
     fontSize: 13,
     fontWeight: '500',
     textAlign: 'center',
     lineHeight: 24,
     overflow: 'hidden',
   },
-  exerciseName: { fontSize: 15, fontWeight: '500', color: Colors.textPrimary, flex: 1 },
+  exerciseName: { fontSize: 15, fontWeight: '500', color: colors.textPrimary, flex: 1 },
   exerciseActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   fieldRow: { flexDirection: 'row', gap: 10 },
   field: { flex: 1 },
-  fieldLabel: { fontSize: 11, color: Colors.textMuted, marginBottom: 4 },
+  fieldLabel: { fontSize: 11, color: colors.textMuted, marginBottom: 4 },
   fieldInput: {
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     borderRadius: 0, // radius.sm
     paddingVertical: 8,
     paddingHorizontal: 12,
     fontSize: 15,
     fontWeight: '600',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     textAlign: 'center',
   },
   addBtn: {
@@ -411,14 +415,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
     paddingVertical: 16,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     borderStyle: 'dashed',
     marginTop: 4,
   },
-  addBtnText: { fontSize: 15, fontWeight: '500', color: Colors.primary },
+  addBtnText: { fontSize: 15, fontWeight: '500', color: colors.primary },
   footer: {
     position: 'absolute',
     bottom: 0,
@@ -426,19 +430,19 @@ const styles = StyleSheet.create({
     right: 0,
     padding: 20,
     paddingBottom: 36,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
   },
   saveBtn: {
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     borderRadius: 4, // radius.lg
     paddingVertical: 16,
     alignItems: 'center',
   },
-  saveBtnText: { color: Colors.textOnPrimary, fontSize: 17, fontWeight: '500' },
+  saveBtnText: { color: colors.textOnPrimary, fontSize: 17, fontWeight: '500' },
   // Modal
-  modalContainer: { flex: 1, backgroundColor: Colors.background },
+  modalContainer: { flex: 1, backgroundColor: colors.background },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -447,13 +451,13 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
-  modalTitle: { fontSize: 17, fontWeight: '500', color: Colors.textPrimary },
+  modalTitle: { fontSize: 17, fontWeight: '500', color: colors.textPrimary },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     marginHorizontal: 20,
     marginTop: 16,
     marginBottom: 8,
@@ -462,22 +466,22 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     gap: 8,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
-  searchInput: { flex: 1, fontSize: 16, color: Colors.textPrimary },
+  searchInput: { flex: 1, fontSize: 16, color: colors.textPrimary },
   muscleFilter: { maxHeight: 44, marginBottom: 8 },
   muscleFilterContent: { paddingHorizontal: 20, gap: 8 },
   muscleChip: {
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 4, // radius.lg
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
-  muscleChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  muscleChipText: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
-  muscleChipTextActive: { color: Colors.textOnPrimary },
+  muscleChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  muscleChipText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
+  muscleChipTextActive: { color: colors.textOnPrimary },
   exerciseList: { paddingHorizontal: 20, paddingBottom: 40 },
   exerciseListItem: {
     flexDirection: 'row',
@@ -485,8 +489,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
-  exerciseListName: { fontSize: 15, fontWeight: '600', color: Colors.textPrimary },
-  exerciseListMeta: { fontSize: 12, color: Colors.textMuted, marginTop: 2 },
-});
+  exerciseListName: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
+  exerciseListMeta: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
+
+  });
