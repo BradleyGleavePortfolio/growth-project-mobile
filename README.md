@@ -126,6 +126,25 @@ Every PR updates the corresponding README / module documentation. The rule —
 and the rationale — live in `docs/QUIET_LUXURY_DOCTRINE.md` §8. The PR
 template (`.github/pull_request_template.md`) carries the checklist.
 
+### Type-safety doctrine: no `any` in production paths
+
+`src/` outside `__tests__` may not contain explicit `any` (annotation, generic
+position, or `as any` cast). The rule lives in `.eslintrc.js`:
+`@typescript-eslint/no-explicit-any`. Tests are exempted via the override block
+because mock helpers and JSON fixtures use ad-hoc shapes.
+
+The rule is currently `'warn'` — it surfaces all violations in `npm run lint`
+output without failing CI. The target is `'error'` once the burndown lands. Do
+**not** mass-suppress with `// eslint-disable-next-line` to clear the warnings;
+fix the types properly (e.g. `useNavigation<NavigationProp<MoreStackParamList>>`
+instead of `useNavigation<any>()`). When the count reaches zero, flip the rule
+to `'error'` and remove the TODO comment in `.eslintrc.js`.
+
+Why: `any` silently disables type-checking for everything it touches and
+propagates through inference. A single `as any` can hide a real type mismatch
+that ships to prod. Quiet-luxury doctrine: do the work to type things
+correctly, or use `unknown` and narrow.
+
 Per-module READMEs:
 
 - `src/components/README.md`, `src/db/README.md`, `src/hooks/README.md`,

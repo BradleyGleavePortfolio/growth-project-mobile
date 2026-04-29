@@ -70,7 +70,23 @@ If a change is genuinely doc-free (CI-only, a one-line lint fix, a typo) the PR 
 
 The reviewer checklist below applies to UI changes; the doc rule above applies to *every* PR.
 
-## 9. Reviewer checklist (paste into PRs that touch UI)
+## 9. No explicit `any` in production paths
+
+`src/` outside `__tests__` may not contain explicit `any` — neither annotation
+(`x: any`), generic position (`useNavigation<any>()`), nor cast (`x as any`).
+`@typescript-eslint/no-explicit-any` enforces this in `.eslintrc.js`. The
+target rule level is `'error'`; it is currently `'warn'` while the burndown
+finishes (see TODO in `.eslintrc.js`). Tests are exempted via override.
+
+`any` silently disables type-checking for everything it touches and propagates
+through inference. A single `as any` can hide a real type mismatch that ships
+to production. Use `unknown` and narrow, define a proper interface, or import
+the exported type — but do not reach for `any`. Do **not** mass-suppress
+warnings with `// eslint-disable-next-line` to dodge the doctrine; fix the
+type. When the warning count reaches zero, flip the rule to `'error'` and
+delete the TODO comment.
+
+## 10. Reviewer checklist (paste into PRs that touch UI)
 
 - [ ] No `fontWeight: '700'` or `'800'` introduced.
 - [ ] No "Coming Soon" / "Planned" / "In Development" copy introduced.
@@ -79,4 +95,5 @@ The reviewer checklist below applies to UI changes; the doc rule above applies t
 - [ ] No new `radius.xl` / `radius.2xl` values larger than 4.
 - [ ] No new floating widgets, FABs, or global banners.
 - [ ] No new TODO/FIXME comments.
+- [ ] No new explicit `any` in `src/` outside `__tests__` (use `unknown` + narrowing or a real type — see §9).
 - [ ] If founding/inner-circle phrasing appears, it is restrained (hairline + label only — no shimmer, no glow, no celebration).

@@ -30,8 +30,13 @@ module.exports = {
     '**/*.d.ts',
   ],
   rules: {
-    // Relaxed — baseline is not clean. Tighten in a follow-up PR.
-    '@typescript-eslint/no-explicit-any': 'off',
+    // Doctrine: no explicit `any` in production paths (`src/` outside tests).
+    // Tests are exempted by the override block below because mock helpers and
+    // JSON fixtures still use ad-hoc shapes.
+    // TODO(any-burndown): flip from 'warn' → 'error' once PR #69 lands and the
+    // remaining ~200 violations across 60 files are eliminated. Do NOT
+    // mass-suppress with eslint-disable; fix the types properly.
+    '@typescript-eslint/no-explicit-any': 'warn',
     '@typescript-eslint/no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
     '@typescript-eslint/no-require-imports': 'off',
     'no-empty': ['warn', { allowEmptyCatch: true }],
