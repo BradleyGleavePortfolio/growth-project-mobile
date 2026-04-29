@@ -17,74 +17,90 @@
 
 import React, { createContext, useContext, ReactNode } from 'react';
 import tokens, { Tokens } from './tokens';
+import CanonicalColors from '../constants/colors';
 import { useFoundingNumber } from '../hooks/useIdentity';
 
 // ─── Tier Type ─────────────────────────────────────────────────────────────────
 export type Tier = 'free' | 'founder';
 
+// ─── Flat colour map vended by useTheme().colors ─────────────────────────────
+export interface ThemeColors {
+  primary: string; primaryLight: string; primaryPale: string; primaryDark: string; accent: string;
+  background: string; surface: string; surfaceElevated: string;
+  textPrimary: string; textSecondary: string; textMuted: string; textOnPrimary: string;
+  border: string; divider: string;
+  success: string; warning: string; error: string; info: string;
+  streak: string;
+  protein: string; carbs: string; fat: string; water: string; fiber: string;
+  tabActive: string; tabInactive: string; tabBackground: string; tabBorder: string;
+  cardShadow: string;
+  offlineBanner: string; primaryTint: string;
+  noticeWarningBg: string; noticeWarningIconBg: string; noticeWarningText: string;
+  noticeCriticalBg: string; noticeCriticalAccent: string; noticeCriticalText: string;
+  macroCarbsChipBg: string; macroCarbsChipText: string; macroFatChipBg: string; macroFatChipText: string;
+  templateFatLoss: string; templateLeanBulk: string; templateRecomp: string; templateMaintenance: string; templateMobility: string;
+  medalGold: string; medalSilver: string; medalBronze: string;
+  muscleLegs: string; muscleTriceps: string; muscleCore: string; muscleFullBody: string; muscleCardio: string;
+  dark: string; white: string; gold: string; orange: string;
+}
+
+const baseColors: ThemeColors = {
+  ...CanonicalColors,
+  dark:   CanonicalColors.textPrimary,
+  white:  CanonicalColors.textOnPrimary,
+  gold:   CanonicalColors.warning,
+  orange: CanonicalColors.error,
+};
+
 // ─── Theme shape ───────────────────────────────────────────────────────────────
 export interface Theme {
   tokens: Tokens;
   tier: Tier;
-  /**
-   * Tier-specific overrides applied on top of base tokens.
-   * Components read these via useTheme().tierColors instead of branching on tier.
-   */
+  colors: ThemeColors;
   tierColors: {
-    /** Card/badge border colour */
     accentBorder: string;
-    /** Subtle background tint for tier-aware elements */
     accentBg: string;
-    /** Primary text accent (badge label, highlights) */
     accentFg: string;
-    /** Badge shadow style */
     badgeShadow: Tokens['shadows']['sm'];
   };
 }
 
-// ─── Free theme ────────────────────────────────────────────────────────────────
 const freeTheme: Theme = {
   tokens,
   tier: 'free',
+  colors: baseColors,
   tierColors: {
-    accentBorder: tokens.colors.forest,           // forest hairline
-    accentBg:     'rgba(44,74,54,0.06)',           // forest at 6% opacity
+    accentBorder: tokens.colors.forest,
+    accentBg:     'rgba(44,74,54,0.06)',
     accentFg:     tokens.colors.forest,
     badgeShadow:  tokens.shadows.sm,
   },
 };
 
-// ─── Founder theme ─────────────────────────────────────────────────────────────
-// Founding member badge: a 1px hairline in mutedGold on bone,
-// tracked all-caps label "FOUNDING · 03 OF 88." No glow. No fill.
 const founderTheme: Theme = {
   tokens,
   tier: 'founder',
+  colors: baseColors,
   tierColors: {
-    accentBorder: tokens.gold.border,             // camel hairline (rgba)
-    accentBg:     tokens.gold[100],               // subtle gold tint
-    accentFg:     tokens.gold[700],               // darker gold label
+    accentBorder: tokens.gold.border,
+    accentBg:     tokens.gold[100],
+    accentFg:     tokens.gold[700],
     badgeShadow:  tokens.shadows.sm,
   },
 };
 
-// ─── Context ───────────────────────────────────────────────────────────────────
 const ThemeContext = createContext<Theme>(freeTheme);
 
-// ─── Provider ──────────────────────────────────────────────────────────────────
 interface ThemeProviderProps {
   children: ReactNode;
 }
 
 export function ThemeProvider({ children }: ThemeProviderProps) {
-  // useFoundingNumber comes from PR #41 — degrades gracefully to null on error
   const { data: foundingData } = useFoundingNumber();
 
-  // A user is a founding member if the API returns a founding_number field.
-  // Mirrors the logic already used in IdentityBadge / HomeScreen.
   const isFoundingMember =
     foundingData != null &&
-    typeof (foundingData as any).founding_number === 'number';
+    typeof (foundingData as { founding_number?: unknown }).founding_number === 'number';
 
   const theme = isFoundingMember ? founderTheme : freeTheme;
 
@@ -95,8 +111,6 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
   );
 }
 
-// ─── Hook ──────────────────────────────────────────────────────────────────────
-/** Access the active theme (tokens + tier + tierColors) from any component. */
 export function useTheme(): Theme {
   return useContext(ThemeContext);
 }
