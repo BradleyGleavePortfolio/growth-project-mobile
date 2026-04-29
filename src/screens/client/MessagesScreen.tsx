@@ -13,11 +13,12 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { messagesApi } from '../../services/api';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { subscribeToMessages } from '../../services/realtime';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { errorMessage, errorStatus, errorCode } from '../../types/common';
 
 interface Message {
   id: string;
@@ -36,7 +37,7 @@ const FALLBACK_POLL_MS = 60000;
 export default function MessagesScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const currentUser = useCurrentUser();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,9 +54,9 @@ export default function MessagesScreen() {
       setMessages(normalizeList(res.data));
       setError('');
       setNoCoach(false);
-    } catch (err: any) {
-      const code = err?.response?.data?.error;
-      if (err?.response?.status === 409 || code === 'NO_COACH_ASSIGNED') {
+    } catch (err) {
+      const code = errorCode(err);
+      if (errorStatus(err) === 409 || code === 'NO_COACH_ASSIGNED') {
         setNoCoach(true);
         setMessages([]);
       } else {
@@ -113,12 +114,12 @@ export default function MessagesScreen() {
       setInputText('');
       setMessages((prev) => mergeById(prev, [created]));
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
-    } catch (err: any) {
-      const code = err?.response?.data?.error;
-      if (err?.response?.status === 409 || code === 'NO_COACH_ASSIGNED') {
+    } catch (err) {
+      const code = errorCode(err);
+      if (errorStatus(err) === 409 || code === 'NO_COACH_ASSIGNED') {
         setNoCoach(true);
       } else {
-        Alert.alert('Failed to send', err?.response?.data?.message || 'Message could not be sent.');
+        Alert.alert('Failed to send', errorMessage(err, 'Message could not be sent.'));
       }
     } finally {
       setSending(false);
@@ -279,22 +280,26 @@ export default function MessagesScreen() {
   );
 }
 
-function normalizeList(raw: any): Message[] {
-  const arr = Array.isArray(raw) ? raw : raw?.messages || [];
+function normalizeList(raw: unknown): Message[] {
+  const wrapper = (raw && typeof raw === 'object' && !Array.isArray(raw))
+    ? (raw as { messages?: unknown[] })
+    : null;
+  const arr: unknown[] = Array.isArray(raw) ? raw : (wrapper?.messages ?? []);
   return arr
     .map(normalizeMessage)
     .filter((m: Message) => !!m.id)
     .sort((a: Message, b: Message) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
 }
 
-function normalizeMessage(raw: any): Message {
+function normalizeMessage(raw: unknown): Message {
+  const r = (raw && typeof raw === 'object') ? (raw as Record<string, unknown>) : {};
   return {
-    id: String(raw.id),
-    sender_role: raw.sender_role === 'coach' ? 'coach' : 'client',
-    sender_id: raw.sender_id,
-    body: String(raw.body ?? ''),
-    created_at: raw.created_at || new Date().toISOString(),
-    read_at: raw.read_at ?? null,
+    id: String(r.id ?? ''),
+    sender_role: r.sender_role === 'coach' ? 'coach' : 'client',
+    sender_id: typeof r.sender_id === 'string' ? r.sender_id : undefined,
+    body: String(r.body ?? ''),
+    created_at: typeof r.created_at === 'string' ? r.created_at : new Date().toISOString(),
+    read_at: (r.read_at as string | null | undefined) ?? null,
   };
 }
 

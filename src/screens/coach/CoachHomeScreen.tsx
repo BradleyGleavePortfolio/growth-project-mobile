@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import HapticPressable from '../../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachStore } from '../../store/coachStore';
 
@@ -30,7 +30,7 @@ export default function CoachHomeScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();
   const { clients, isLoading, loadClients } = useCoachStore();
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const [refreshing, setRefreshing] = useState(false);
   const [redFlagClients, setRedFlagClients] = useState<RedFlagClient[]>([]);
   const [overdueClients, setOverdueClients] = useState<string[]>([]);
@@ -52,10 +52,11 @@ export default function CoachHomeScreen() {
   const detectRedFlags = useCallback(async () => {
     try {
       const alertsRes = await coachApi.getAlerts();
-      const alerts: any[] = alertsRes.data || [];
+      type Alert = { type: string; client_id: string; client_name: string; message: string };
+      const alerts: Alert[] = (alertsRes.data as Alert[] | undefined) || [];
       const flags: RedFlagClient[] = alerts
-        .filter((a: any) => a.type === 'weight_increasing')
-        .map((a: any) => ({
+        .filter((a) => a.type === 'weight_increasing')
+        .map((a) => ({
           id: a.client_id,
           name: a.client_name,
           trend: a.message,
@@ -63,8 +64,8 @@ export default function CoachHomeScreen() {
       setRedFlagClients(flags);
 
       const missed = alerts
-        .filter((a: any) => a.type === 'missed_workouts')
-        .map((a: any) => a.client_name);
+        .filter((a) => a.type === 'missed_workouts')
+        .map((a) => a.client_name);
       setOverdueClients(missed);
     } catch (err) {
       // Alerts tile stays empty on failure — not a destructive write.

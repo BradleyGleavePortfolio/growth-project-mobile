@@ -16,7 +16,7 @@
 import React from 'react';
 import { Pressable, Text } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { track } from '../lib/analytics';
 import { colors, typography } from '../theme/tokens';
 import type { MotivationalTone } from '../hooks/usePreferences';
@@ -27,7 +27,7 @@ interface HeroActionProps {
 }
 
 export default function HeroAction({ motivationalTone: _tone }: HeroActionProps = {}) {
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
 
   const handlePress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});

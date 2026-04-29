@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { recipesApi } from '../../services/api';
 
@@ -52,7 +52,7 @@ function MacroCard({ label, value, unit, color }: {
 export default function RecipeDetailScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const route = useRoute<RouteProp<{ RecipeDetail: { recipeId: string } }, 'RecipeDetail'>>();
   const recipeId = route.params?.recipeId;
   const queryClient = useQueryClient();

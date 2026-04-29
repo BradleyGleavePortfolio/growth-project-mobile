@@ -25,7 +25,7 @@ import { useMacroTargets } from '../../hooks/useMacroTargets';
 import { useFoodBrowse } from '../../hooks/useFoodBrowse';
 import { SearchResult, MEAL_SECTIONS } from '../../utils/log/types';
 import { quantityMultiplier } from '../../utils/log/macros';
-import { mapFoodItem } from '../../utils/log/mapFoodItem';
+import { mapFoodItem, type RawFoodItem } from '../../utils/log/mapFoodItem';
 import {
   submitSearchLogOffline,
   submitSearchLogOnline,
@@ -34,6 +34,7 @@ import {
 } from '../../utils/log/logSubmit';
 import { track } from '../../lib/analytics';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { errorMessage } from '../../types/common';
 
 export default function LogScreen() {
   const { colors } = useTheme();
@@ -154,12 +155,12 @@ export default function LogScreen() {
         const data = res.data;
         // Backend always returns { results, suggestions, did_you_mean }
         // Guard against legacy plain-array responses
-        const results: any[] = Array.isArray(data)
+        const results: RawFoodItem[] = Array.isArray(data)
           ? data
           : Array.isArray(data?.results)
           ? data.results
           : [];
-        const suggestions: any[] = Array.isArray(data?.suggestions)
+        const suggestions: RawFoodItem[] = Array.isArray(data?.suggestions)
           ? data.suggestions
           : [];
 
@@ -209,9 +210,9 @@ export default function LogScreen() {
           'Saved offline',
           `${selectedFood.name} will sync to your log when you reconnect.`,
         );
-      } catch (err: any) {
+      } catch (err) {
         console.error('LogScreen: enqueue failed', err);
-        Alert.alert("Couldn't save food", err?.message || 'Please try again.');
+        Alert.alert("Couldn't save food", errorMessage(err, 'Please try again.'));
       }
       return;
     }
@@ -224,9 +225,9 @@ export default function LogScreen() {
       setQuantityModalVisible(false);
       setSelectedFood(null);
       setModalVisible(false);
-    } catch (err: any) {
+    } catch (err) {
       console.error('LogScreen: handleConfirmLog failed', err);
-      Alert.alert("Couldn't log food", err?.message || 'Please try again.');
+      Alert.alert("Couldn't log food", errorMessage(err, 'Please try again.'));
     }
   };
 
@@ -242,9 +243,9 @@ export default function LogScreen() {
         const name = await submitManualLogOffline(args);
         setModalVisible(false);
         Alert.alert('Saved offline', `${name} will sync when you reconnect.`);
-      } catch (err: any) {
+      } catch (err) {
         console.error('LogScreen: manual enqueue failed', err);
-        Alert.alert("Couldn't save food", err?.message || 'Please try again.');
+        Alert.alert("Couldn't save food", errorMessage(err, 'Please try again.'));
       }
       return;
     }
@@ -255,9 +256,9 @@ export default function LogScreen() {
       // Psych Report #4: Analytics — meal_logged (manual flow)
       track('meal_logged', { meal_type: activeMealType, source: 'manual' });
       setModalVisible(false);
-    } catch (err: any) {
+    } catch (err) {
       console.error('LogScreen: handleManualLog failed', err);
-      Alert.alert("Couldn't log food", err?.message || 'Please try again.');
+      Alert.alert("Couldn't log food", errorMessage(err, 'Please try again.'));
     }
   };
 
@@ -271,9 +272,9 @@ export default function LogScreen() {
         onPress: async () => {
           try {
             await logApi.deleteEntry(log.id);
-          } catch (err: any) {
+          } catch (err) {
             console.error('LogScreen: handleDeleteFood failed', err);
-            Alert.alert("Couldn't remove food", err?.message || 'Please try again.');
+            Alert.alert("Couldn't remove food", errorMessage(err, 'Please try again.'));
           }
           loadDayData(currentUser.id, selectedDate);
         },

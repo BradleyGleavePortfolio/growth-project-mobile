@@ -14,6 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import { secureStorage } from '../services/secureStorage';
 import { env } from '../config/env';
+import { errorMessage } from '../types/common';
 
 // Ensure the browser session is completed when returning to the app
 WebBrowser.maybeCompleteAuthSession();
@@ -168,7 +169,7 @@ export async function signInWithGoogle(
         is_new_user: true,
       };
     }
-  } catch (err: any) {
-    return { success: false, error: err.message || 'Google sign-in failed' };
+  } catch (err) {
+    return { success: false, error: errorMessage(err) || 'Google sign-in failed' };
   }
 }

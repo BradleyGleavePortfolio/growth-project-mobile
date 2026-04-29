@@ -20,9 +20,13 @@ import { authEvents } from '../../utils/authEvents';
 import { track, identify } from '../../lib/analytics';
 import { toFriendlyAuthError } from '../../utils/authErrorMessage';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { errorMessage } from '../../types/common';
+import type { NavigationProp, ParamListBase } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { AuthStackParamList } from '../../navigation/AuthNavigator';
 
 interface Props {
-  navigation: any;
+  navigation: NativeStackNavigationProp<AuthStackParamList>;
 }
 
 export default function LoginScreen({ navigation }: Props) {
@@ -65,10 +69,10 @@ export default function LoginScreen({ navigation }: Props) {
 
       // Fire auth event — RootNavigator will re-check AsyncStorage and navigate
       authEvents.emit();
-    } catch (err: any) {
+    } catch (err) {
       // Map any upstream string (Supabase, axios, or backend) into a quiet,
       // safe line. Operators still get the raw error in console / Sentry.
-      const raw = err?.response?.data?.message || err?.message || err;
+      const raw = errorMessage(err) || err;
       const friendly = toFriendlyAuthError(raw);
       setError(friendly.message);
     } finally {
@@ -102,7 +106,7 @@ export default function LoginScreen({ navigation }: Props) {
         track('signed_in', { method: 'google' });
         authEvents.emit();
       }
-    } catch (err: any) {
+    } catch (err) {
       const friendly = toFriendlyAuthError(err);
       if (!friendly.cancelled) setError(friendly.message);
     } finally {

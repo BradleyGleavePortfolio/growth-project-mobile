@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import HapticPressable from '../../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp, NavigationProp, ParamListBase } from '@react-navigation/native';
 
 import { getAllExercises } from '../../db/workoutDb';
 import { useCreateWorkout } from '../../hooks/useApi';
@@ -176,7 +176,7 @@ export default function ActiveWorkoutScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const muscleColors = useMemo(() => makeMuscleColors(colors), [colors]);
   const route = useRoute<RouteProp<RouteParams, 'ActiveWorkout'>>();
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const { routineName, exercises: exercisesJson } = route.params;
 
   const [sessionExercises, setSessionExercises] = useState<SessionExercise[]>([]);
@@ -227,7 +227,7 @@ export default function ActiveWorkoutScreen() {
     return `${m}:${String(s).padStart(2, '0')}`;
   };
 
-  const updateSet = (exIdx: number, setIdx: number, field: keyof SessionSet, value: any) => {
+  const updateSet = <K extends keyof SessionSet>(exIdx: number, setIdx: number, field: K, value: SessionSet[K]) => {
     setSessionExercises((prev) => {
       const updated = [...prev];
       const sets = [...updated[exIdx].sets];
@@ -370,8 +370,8 @@ export default function ActiveWorkoutScreen() {
                 });
                 navigation.goBack();
               },
-              onError: (err: any) => {
-                Alert.alert("Couldn't save workout", err?.message || 'Please try again.');
+              onError: (err) => {
+                Alert.alert("Couldn't save workout",  'Please try again.');
               },
             },
           );

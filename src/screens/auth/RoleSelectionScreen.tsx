@@ -13,6 +13,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthStackParamList } from '../../navigation/AuthNavigator';
+import { errorMessage } from '../../types/common';
 import { authApi, InvitePreview } from '../../services/api';
 import { authEvents } from '../../utils/authEvents';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
@@ -108,7 +109,7 @@ export default function RoleSelectionScreen(_: Props) {
       if (trimmed) {
         try {
           await authApi.attachInviteCode(trimmed);
-        } catch (err: any) {
+        } catch (err) {
           // Fall through to selectRole — selectRole accepts coach_code and
           // many backends accept the code in either path.
         }
@@ -124,8 +125,8 @@ export default function RoleSelectionScreen(_: Props) {
       }
       await AsyncStorage.removeItem('needs_role_selection');
       authEvents.emit();
-    } catch (err: any) {
-      const msg = err.response?.data?.message || 'Could not complete sign-up. Please try again.';
+    } catch (err) {
+      const msg = errorMessage(err, 'Could not complete sign-up. Please try again.');
       setError(msg);
       Alert.alert('Sign-up unavailable', msg);
     } finally {

@@ -19,9 +19,13 @@ import { secureStorage } from '../../services/secureStorage';
 import { track } from '../../lib/analytics';
 import { toFriendlyAuthError } from '../../utils/authErrorMessage';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { errorMessage } from '../../types/common';
+import type { NavigationProp, ParamListBase } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { AuthStackParamList } from '../../navigation/AuthNavigator';
 
 interface Props {
-  navigation: any;
+  navigation: NativeStackNavigationProp<AuthStackParamList>;
   route?: { params?: { invite_code?: string } };
 }
 
@@ -167,10 +171,10 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
       await AsyncStorage.setItem('pending_email', email);
       track('signed_up', { method: 'email', has_invite_code: !!trimmedCode });
       setStep('verify');
-    } catch (err: any) {
+    } catch (err) {
       // Map raw upstream strings (Supabase / backend / network) into quiet,
       // safe copy. Operators retain the original via console + Sentry.
-      const raw = err?.response?.data?.message || err?.message || err;
+      const raw = errorMessage(err) || err;
       const friendly = toFriendlyAuthError(raw);
       setError(friendly.message);
     } finally {
@@ -193,9 +197,9 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
       await AsyncStorage.setItem('needs_role_selection', 'true');
 
       navigation.replace('RoleSelection');
-    } catch (err: any) {
-      const msg = err.response?.data?.message || '';
-      if (msg.toLowerCase().includes('email') || msg.toLowerCase().includes('confirm')) {
+    } catch (err) {
+      const msg = errorMessage(err, '').toLowerCase();
+      if (msg.includes('email') || msg.includes('confirm')) {
         setError('Email not yet verified. Open the link we sent and try again.');
       } else {
         setError('Could not sign in. Please try again.');
@@ -228,7 +232,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
 
       await AsyncStorage.setItem('needs_role_selection', 'true');
       navigation.replace('RoleSelection');
-    } catch (err: any) {
+    } catch (err) {
       const friendly = toFriendlyAuthError(err);
       if (!friendly.cancelled) setError(friendly.message);
     } finally {

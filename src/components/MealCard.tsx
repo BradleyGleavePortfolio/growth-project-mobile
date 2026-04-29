@@ -3,13 +3,14 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { FoodLog, MealType } from '../types';
+import type { IoniconName } from '../types/common';
 
 interface MealCardProps {
   mealType: MealType;
   foods: FoodLog[];
 }
 
-const MEAL_ICONS: Record<MealType, string> = {
+const MEAL_ICONS: Record<MealType, IoniconName> = {
   breakfast: 'sunny-outline',
   lunch: 'restaurant-outline',
   dinner: 'moon-outline',
@@ -36,7 +37,7 @@ export default function MealCard({ mealType, foods }: MealCardProps) {
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <Ionicons
-            name={MEAL_ICONS[mealType] as any}
+            name={MEAL_ICONS[mealType]}
             size={20}
             color={Colors.primary}
           />

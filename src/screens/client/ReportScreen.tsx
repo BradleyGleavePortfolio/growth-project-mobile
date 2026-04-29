@@ -13,8 +13,9 @@ import { WeightLog } from '../../types';
 
 import { colors as legacyColors } from '../../theme';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 
-export default function ReportScreen({ navigation }: any) {
+export default function ReportScreen({ navigation }: { navigation: NavigationProp<ParamListBase> }) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();
@@ -39,9 +40,14 @@ export default function ReportScreen({ navigation }: any) {
     try {
       const today = new Date().toISOString().split('T')[0];
       const logRes = await logApi.getDaily(today);
-      const entries = logRes.data?.entries || [];
+      type Entry = {
+        food_item?: { calories?: number; protein_g?: number; carbs_g?: number; fat_g?: number };
+        foodItem?: { calories?: number; protein_g?: number; carbs_g?: number; fat_g?: number };
+        quantity_multiplier?: number;
+      };
+      const entries: Entry[] = (logRes.data?.entries as Entry[] | undefined) || [];
       let cals = 0, prot = 0, carbs = 0, fat = 0;
-      entries.forEach((e: any) => {
+      entries.forEach((e) => {
         const fi = e.food_item || e.foodItem || {};
         const qty = e.quantity_multiplier || 1;
         cals += (fi.calories || 0) * qty;

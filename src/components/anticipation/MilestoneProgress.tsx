@@ -27,6 +27,7 @@ import { Colors, colors, Spacing, Radius } from '../../theme/index';
 import tokens from '../../theme/tokens';
 import { track } from '../../lib/analytics';
 import { Milestone, milestoneRemainingCopy } from '../../lib/milestones';
+import type { IoniconName } from '../../types/common';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -134,7 +135,7 @@ export default function MilestoneProgress({
       {/* Header row */}
       <View style={styles.headerRow}>
         <View style={[styles.iconWrap, { backgroundColor: accentColor + '1A' }]}>
-          <Ionicons name={iconName as any} size={16} color={accentColor} />
+          <Ionicons name={iconName as IoniconName} size={16} color={accentColor} />
         </View>
         <View style={styles.headerText}>
           <Text style={styles.label} numberOfLines={1}>{label}</Text>

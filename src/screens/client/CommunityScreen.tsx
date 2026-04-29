@@ -22,6 +22,8 @@ import {
 } from '../../hooks/useApi';
 import { SkeletonCard } from '../../components/SkeletonLoader';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { errorMessage } from '../../types/common';
+import type { IoniconName } from '../../types/common';
 
 /**
  * CommunityScreen — API-first.
@@ -82,8 +84,8 @@ export default function CommunityScreen() {
       setWinTitle('');
       setWinDesc('');
       setPostWinOpen(false);
-    } catch (err: any) {
-      Alert.alert('Could not post', err?.response?.data?.message || 'Please try again in a moment.');
+    } catch (err) {
+      Alert.alert('Could not post', errorMessage(err, 'Please try again in a moment.'));
     }
   }, [winTitle, winDesc, postWin]);
 
@@ -224,7 +226,7 @@ function EmptyState({ icon, title, text }: { icon: string; title: string; text: 
   const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <View style={styles.emptyContainer}>
-      <Ionicons name={icon as any} size={48} color={colors.textMuted} />
+      <Ionicons name={icon as IoniconName} size={48} color={colors.textMuted} />
       <Text style={styles.emptyTitle}>{title}</Text>
       <Text style={styles.emptyText}>{text}</Text>
     </View>
@@ -236,7 +238,7 @@ function ErrorState({ icon, title, text }: { icon: string; title: string; text: 
   const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <View style={styles.emptyContainer}>
-      <Ionicons name={icon as any} size={48} color={colors.error} />
+      <Ionicons name={icon as IoniconName} size={48} color={colors.error} />
       <Text style={[styles.emptyTitle, { color: colors.error }]}>{title}</Text>
       <Text style={styles.emptyText}>{text}</Text>
     </View>

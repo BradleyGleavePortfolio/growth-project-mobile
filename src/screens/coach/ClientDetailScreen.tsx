@@ -19,8 +19,10 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { coachApi } from '../../services/api';
 
 import { ClientProfile, FoodLog, WeightLog } from '../../types';
+import type { JsonRecord, IoniconName } from '../../types/common';
 import { getTodayString } from '../../utils/date';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { errorMessage } from '../../types/common';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface SessionSet {
@@ -92,29 +94,35 @@ function emptyItemDraft(): PlanItemDraft {
   return { name: '', calories: '', protein: '', notes: '', time_of_day: 'breakfast' };
 }
 
-function normaliseServerPlans(payload: any): CoachMealPlan[] {
-  const raw: any[] = Array.isArray(payload)
-    ? payload
-    : Array.isArray(payload?.plans)
-      ? payload.plans
-      : Array.isArray(payload?.meal_plans)
-        ? payload.meal_plans
+function normaliseServerPlans(payload: unknown): CoachMealPlan[] {
+  const root = (payload && typeof payload === 'object') ? (payload as JsonRecord) : null;
+  const raw: JsonRecord[] = Array.isArray(payload)
+    ? (payload as JsonRecord[])
+    : Array.isArray(root?.plans)
+      ? (root.plans as JsonRecord[])
+      : Array.isArray(root?.meal_plans)
+        ? (root.meal_plans as JsonRecord[])
         : [];
-  return raw.map((p) => ({
-    id: String(p.id),
-    title: p.title || 'Meal plan',
-    notes: p.notes ?? null,
-    items: (Array.isArray(p.items) ? p.items : Array.isArray(p.meal_items) ? p.meal_items : []).map(
-      (it: any) => ({
-        name: it.name || '',
-        calories: it.calories ?? it.kcal ?? null,
-        protein: it.protein ?? it.protein_g ?? null,
-        notes: it.notes ?? null,
-        time_of_day: it.time_of_day ?? it.timeOfDay ?? null,
-      }),
-    ),
-    created_at: p.created_at ?? p.createdAt ?? null,
-  }));
+  return raw.map((p) => {
+    const items = Array.isArray(p.items)
+      ? (p.items as JsonRecord[])
+      : Array.isArray(p.meal_items)
+        ? (p.meal_items as JsonRecord[])
+        : [];
+    return {
+      id: String(p.id),
+      title: typeof p.title === 'string' && p.title ? p.title : 'Meal plan',
+      notes: (p.notes as string | null | undefined) ?? null,
+      items: items.map((it) => ({
+        name: typeof it.name === 'string' ? it.name : '',
+        calories: (it.calories as number | null | undefined) ?? (it.kcal as number | null | undefined) ?? null,
+        protein: (it.protein as number | null | undefined) ?? (it.protein_g as number | null | undefined) ?? null,
+        notes: (it.notes as string | null | undefined) ?? null,
+        time_of_day: (it.time_of_day as string | null | undefined) ?? (it.timeOfDay as string | null | undefined) ?? null,
+      })),
+      created_at: (p.created_at as string | null | undefined) ?? (p.createdAt as string | null | undefined) ?? null,
+    };
+  });
 }
 
 interface TimelineEvent {
@@ -123,7 +131,7 @@ interface TimelineEvent {
   title: string;
   subtitle: string;
   date: string;
-  icon: string;
+  icon: IoniconName;
   iconColor: string;
 }
 
@@ -190,7 +198,13 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
       } : null);
 
       // Set food logs (map API response to expected shape)
-      const logs = (data.today?.entries || []).map((e: any) => ({
+      type Entry = {
+        id: string;
+        food_item?: { name?: string; calories?: number; protein_g?: number; carbs_g?: number; fat_g?: number };
+        quantity_multiplier?: number;
+        meal_type?: string;
+      };
+      const logs = ((data.today?.entries as Entry[] | undefined) || []).map((e) => ({
         id: e.id,
         foodName: e.food_item?.name || '',
         calories: Math.round((e.food_item?.calories || 0) * (e.quantity_multiplier || 1)),
@@ -200,7 +214,9 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
         mealType: e.meal_type,
         date: today,
       }));
-      setFoodLogs(logs);
+      // Display-only projection — the full FoodLog shape (userId, coachId,
+      // etc.) is not needed by ClientDetailScreen's read-only meal list.
+      setFoodLogs(logs as unknown as FoodLog[]);
 
       // Set totals
       setTotals({
@@ -211,26 +227,31 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
       });
 
       // Weight logs
-      setWeightLogs((data.weight_logs || []).map((w: any) => ({
+      type WeightRow = { id: string; weight_lbs: number; date: string | number; notes?: string };
+      const weights = ((data.weight_logs as WeightRow[] | undefined) || []).map((w) => ({
         id: w.id,
         weight: w.weight_lbs,
         date: typeof w.date === 'string' ? w.date.slice(0, 10) : new Date(w.date).toISOString().split('T')[0],
         notes: w.notes || '',
-      })));
+      }));
+      setWeightLogs(weights as unknown as WeightLog[]);
 
       // Workout sessions
-      setWorkoutSessions((data.recent_workouts || []).map((s: any) => ({
+      type SessionEx = { id?: string; exercise_name?: string; name?: string; sets_data?: unknown[] };
+      type SessionRow = { id: string; name?: string; created_at: string; completed_at: string; exercises?: SessionEx[] };
+      const sessions = ((data.recent_workouts as SessionRow[] | undefined) || []).map((s) => ({
         id: s.id,
         routineName: s.name || 'Workout',
         startTime: s.created_at,
         endTime: s.completed_at,
         completed: true,
-        exercises: JSON.stringify((s.exercises || []).map((ex: any) => ({
+        exercises: JSON.stringify((s.exercises || []).map((ex) => ({
           exerciseId: ex.id || '',
           exerciseName: ex.exercise_name || ex.name,
           sets: ex.sets_data || [],
         }))),
-      })));
+      }));
+      setWorkoutSessions(sessions as unknown as WorkoutSession[]);
 
     } catch (err) {
       // Read-only client detail load — we log and let the UI render whatever
@@ -251,9 +272,9 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
     try {
       const res = await coachApi.listClientMealPlans(clientId);
       setServerMealPlans(normaliseServerPlans(res.data));
-    } catch (err: any) {
+    } catch (err) {
       console.error('ClientDetailScreen: listClientMealPlans failed', err);
-      setMealPlansError(err?.response?.data?.message || 'Could not load meal plans.');
+      setMealPlansError(errorMessage(err, 'Could not load meal plans.'));
     } finally {
       setMealPlansLoading(false);
     }
@@ -308,7 +329,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
     const items = planItems
       .filter((it) => it.name.trim().length > 0)
       .map((it) => {
-        const row: Record<string, any> = { name: it.name.trim() };
+        const row: Record<string, unknown> = { name: it.name.trim() };
         const cal = Number(it.calories);
         if (it.calories && !Number.isNaN(cal)) row.calories = cal;
         const prot = Number(it.protein);
@@ -323,7 +344,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
     }
     setPlanSaving(true);
     try {
-      const body: Record<string, any> = {
+      const body: Record<string, unknown> = {
         title: planTitle.trim(),
         notes: planNotes.trim() || null,
         items,
@@ -335,8 +356,8 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
       }
       setShowPlanModal(false);
       await loadServerMealPlans();
-    } catch (err: any) {
-      setPlanFormError(err?.response?.data?.message || 'Save failed. Try again.');
+    } catch (err) {
+      setPlanFormError(errorMessage(err, 'Save failed. Try again.'));
     } finally {
       setPlanSaving(false);
     }
@@ -355,10 +376,10 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
             try {
               await coachApi.archiveMealPlan(plan.id);
               await loadServerMealPlans();
-            } catch (err: any) {
+            } catch (err) {
               Alert.alert(
                 'Archive failed',
-                err?.response?.data?.message || err?.message || 'Try again.',
+                errorMessage(err, 'Try again.'),
               );
             }
           },
@@ -391,14 +412,14 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
       setShowNudgeModal(false);
       // Toast-like transient banner — auto-hide.
       setTimeout(() => setNudgeSuccess(false), 2500);
-    } catch (err: any) {
-      setNudgeError(err?.response?.data?.message || 'Failed to send nudge.');
+    } catch (err) {
+      setNudgeError(errorMessage(err, 'Failed to send nudge.'));
     } finally {
       setNudgeSending(false);
     }
   };
 
-  const tabs: { key: TabKey; label: string; icon: string }[] = [
+  const tabs: { key: TabKey; label: string; icon: IoniconName }[] = [
     { key: 'summary', label: 'Summary', icon: 'pie-chart-outline' },
     { key: 'logs', label: 'Logs', icon: 'restaurant-outline' },
     { key: 'workouts', label: 'Workouts', icon: 'barbell-outline' },
@@ -622,8 +643,8 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
         setIsArchived(true);
         Alert.alert('Archived', `${clientName} has been archived.`);
       }
-    } catch (err: any) {
-      Alert.alert('Error', err?.response?.data?.message || 'Failed to update client status.');
+    } catch (err) {
+      Alert.alert('Error', errorMessage(err, 'Failed to update client status.'));
     } finally {
       setArchiveBusy(false);
     }
@@ -698,7 +719,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
             onPress={() => setActiveTab(tab.key)}
           >
             <Ionicons
-              name={tab.icon as any}
+              name={tab.icon}
               size={16}
               color={activeTab === tab.key ? colors.textOnPrimary : colors.textSecondary}
             />
@@ -1431,7 +1452,7 @@ function TimelineTab({ events, onLoad, days }: { events: TimelineEvent[]; onLoad
           {/* Left column: icon + line */}
           <View style={tlStyles.leftCol}>
             <View style={[tlStyles.iconCircle, { backgroundColor: event.iconColor + '20' }]}>
-              <Ionicons name={event.icon as any} size={16} color={event.iconColor} />
+              <Ionicons name={event.icon} size={16} color={event.iconColor} />
             </View>
             {idx < events.length - 1 && <View style={tlStyles.line} />}
           </View>

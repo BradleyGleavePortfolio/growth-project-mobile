@@ -61,8 +61,32 @@ export const useClientStore = create<ClientStore>((set, get) => ({
       ]);
       const data = foodResponse.data;
 
-      // Map entries to FoodLog shape
-      const logs: FoodLog[] = (data.entries || []).map((e: any) => ({
+      // Wire shape returned by /v1/log/daily.
+      interface DailyLogEntry {
+        id: string;
+        food_item_id: string;
+        user_id: string;
+        meal_type: FoodLog['mealType'];
+        quantity_multiplier: number;
+        logged_at?: string;
+        created_at?: string;
+        food_item?: {
+          name?: string;
+          calories?: number;
+          protein_g?: number;
+          carbs_g?: number;
+          fat_g?: number;
+        };
+      }
+      const entries = (data.entries || []) as DailyLogEntry[];
+      // The existing mapping intentionally writes both `foodName` (the
+      // canonical FoodLog field) and a duplicate `name` consumed by older
+      // screens; FoodLog itself doesn't declare `name`, so we have to
+      // double-cast through unknown to keep both shapes in flight without
+      // re-introducing `any`.
+      // TODO(types): drop the duplicate `name` field once all consumers
+      // read `foodName` directly.
+      const logs: FoodLog[] = entries.map<FoodLog>((e) => ({
         id: e.id,
         foodItemId: e.food_item_id,
         foodName: e.food_item?.name || '',
@@ -77,7 +101,8 @@ export const useClientStore = create<ClientStore>((set, get) => ({
         unit: 'serving',
         userId: e.user_id,
         coachId: '',
-      }));
+        createdAt: e.logged_at || e.created_at || new Date().toISOString(),
+      } as FoodLog & { name: string }));
 
       // Convert ml to oz for display (1 oz = 29.5735 ml)
       const totalMl = waterResponse.data?.total_ml || 0;

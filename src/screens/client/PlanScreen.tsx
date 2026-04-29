@@ -16,6 +16,7 @@ import { Shadow } from '../../constants/theme';
 import FadeInView from '../../components/FadeInView';
 import { mealPlansApi } from '../../services/api';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { errorMessage, type JsonRecord } from '../../types/common';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 //
@@ -76,33 +77,36 @@ function groupItems(items: MealItem[]): { key: string; label: string; rows: Meal
 // Normalise whatever the backend returns into a MealPlan[]. Handles both
 // `{ plans: [...] }` and bare arrays; tolerates camelCase or snake_case keys
 // on items.
-function normalisePlans(payload: any): MealPlan[] {
-  const raw: any[] = Array.isArray(payload)
-    ? payload
-    : Array.isArray(payload?.plans)
-      ? payload.plans
-      : Array.isArray(payload?.meal_plans)
-        ? payload.meal_plans
+function normalisePlans(payload: unknown): MealPlan[] {
+  const root = (payload && typeof payload === 'object' && !Array.isArray(payload))
+    ? (payload as JsonRecord)
+    : null;
+  const raw: JsonRecord[] = Array.isArray(payload)
+    ? (payload as JsonRecord[])
+    : Array.isArray(root?.plans)
+      ? (root.plans as JsonRecord[])
+      : Array.isArray(root?.meal_plans)
+        ? (root.meal_plans as JsonRecord[])
         : [];
   return raw.map((p) => {
-    const itemsRaw: any[] = Array.isArray(p.items)
-      ? p.items
+    const itemsRaw: JsonRecord[] = Array.isArray(p.items)
+      ? (p.items as JsonRecord[])
       : Array.isArray(p.meal_items)
-        ? p.meal_items
+        ? (p.meal_items as JsonRecord[])
         : [];
     const items: MealItem[] = itemsRaw.map((it) => ({
-      name: it.name || '',
-      calories: it.calories ?? it.kcal ?? null,
-      protein: it.protein ?? it.protein_g ?? null,
-      notes: it.notes ?? null,
-      time_of_day: it.time_of_day ?? it.timeOfDay ?? null,
+      name: typeof it.name === 'string' ? it.name : '',
+      calories: (it.calories as number | null | undefined) ?? (it.kcal as number | null | undefined) ?? null,
+      protein: (it.protein as number | null | undefined) ?? (it.protein_g as number | null | undefined) ?? null,
+      notes: (it.notes as string | null | undefined) ?? null,
+      time_of_day: (it.time_of_day as string | null | undefined) ?? (it.timeOfDay as string | null | undefined) ?? null,
     }));
     return {
-      id: p.id,
-      title: p.title || 'Meal plan',
-      notes: p.notes ?? null,
+      id: String(p.id),
+      title: typeof p.title === 'string' && p.title ? p.title : 'Meal plan',
+      notes: (p.notes as string | null | undefined) ?? null,
       items,
-      created_at: p.created_at ?? p.createdAt ?? null,
+      created_at: (p.created_at as string | null | undefined) ?? (p.createdAt as string | null | undefined) ?? null,
     };
   });
 }
@@ -120,11 +124,11 @@ export default function PlanScreen() {
       const res = await mealPlansApi.list();
       setPlans(normalisePlans(res.data));
       setError(null);
-    } catch (err: any) {
+    } catch (err) {
       // Read-only fetch. Surface a friendly message; leave any prior plans
       // visible so a transient network blip doesn't empty the screen.
       console.error('PlanScreen: mealPlansApi.list failed', err);
-      setError(err?.message || 'Could not load your meal plans.');
+      setError(errorMessage(err, 'Could not load your meal plans.'));
       if (plans === null) setPlans([]);
     } finally {
       setLoading(false);

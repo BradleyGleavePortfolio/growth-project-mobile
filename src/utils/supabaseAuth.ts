@@ -9,6 +9,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { secureStorage } from '../services/secureStorage';
 import { env } from '../config/env';
+import { errorMessage } from '../types/common';
 
 const SUPABASE_URL = env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = env.SUPABASE_ANON_KEY;
@@ -38,7 +39,7 @@ export async function updateSupabasePassword(newPassword: string): Promise<{ ok:
       return { ok: false, message: error.message || 'Password update failed' };
     }
     return { ok: true };
-  } catch (err: any) {
-    return { ok: false, message: err?.message || 'Password update failed' };
+  } catch (err) {
+    return { ok: false, message: errorMessage(err, 'Password update failed') };
   }
 }

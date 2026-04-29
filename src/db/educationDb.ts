@@ -49,7 +49,7 @@ export async function initEducationTables(): Promise<void> {
 
 export async function getLessons(): Promise<Lesson[]> {
   const db = await getDatabase();
-  const rows = await db.getAllAsync<any>(
+  const rows = await db.getAllAsync<Lesson>(
     'SELECT * FROM lessons ORDER BY sortOrder ASC'
   );
   return rows;
@@ -57,7 +57,7 @@ export async function getLessons(): Promise<Lesson[]> {
 
 export async function getLessonById(lessonId: string): Promise<Lesson | null> {
   const db = await getDatabase();
-  const row = await db.getFirstAsync<any>(
+  const row = await db.getFirstAsync<Lesson>(
     'SELECT * FROM lessons WHERE id = ?',
     [lessonId]
   );
@@ -66,16 +66,17 @@ export async function getLessonById(lessonId: string): Promise<Lesson | null> {
 
 export async function getUserProgress(userId: string): Promise<LessonProgress[]> {
   const db = await getDatabase();
-  const rows = await db.getAllAsync<any>(
+  type LessonProgressRow = Omit<LessonProgress, 'completed'> & { completed: number };
+  const rows = await db.getAllAsync<LessonProgressRow>(
     'SELECT * FROM lesson_progress WHERE userId = ?',
     [userId]
   );
-  return rows.map((r: any) => ({ ...r, completed: !!r.completed }));
+  return rows.map((r) => ({ ...r, completed: !!r.completed }));
 }
 
 export async function markLessonComplete(userId: string, lessonId: string): Promise<void> {
   const db = await getDatabase();
-  const existing = await db.getFirstAsync<any>(
+  const existing = await db.getFirstAsync<{ id: string }>(
     'SELECT id FROM lesson_progress WHERE userId = ? AND lessonId = ?',
     [userId, lessonId]
   );
@@ -241,7 +242,7 @@ export async function seedLessonsIfNeeded(): Promise<void> {
       subtitle: 'Small changes, big results',
       category: 'Lifestyle',
       durationMin: 6,
-      content: `Motivation fades. Habits last. Here's the science of building habits that stick.\n\n**The habit loop:**\n1. Cue (trigger that starts the behavior)\n2. Routine (the behavior itself)\n3. Reward (the benefit you get)\n\n**Start tiny:**\n• Don't say "I'll work out 5x/week" — say "I'll do 5 push-ups after my morning coffee"\n• Don't say "I'll meal prep all week" — say "I'll prep tomorrow's lunch tonight"\n• Success builds momentum\n\n**Stack habits:**\nAttach new habits to existing ones:\n• "After I pour my coffee, I'll drink a glass of water"\n• "After I park at work, I'll walk an extra 5 minutes"\n• "After dinner, I'll prep tomorrow's lunch"\n\n**Track and notice:**\n• Use this app's habit tracker.\n• Consistency compounds — small repetitions, large outcomes\n• Notice the small wins (not with food — with acknowledgment)\n\n**When you slip:**\n• Never miss twice in a row\n• A bad day doesn't erase a good week\n• Progress is not perfection\n• The best plan is the one you actually follow`,
+      content: `Motivation fades. Habits last. Here's the science of building habits that stick.\n\n**The habit loop:**\n1. Cue (trigger that starts the behavior)\n2. Routine (the behavior itself)\n3. Reward (the benefit you get)\n\n**Start tiny:**\n• Don't say "I'll work out 5x/week" — say "I'll do 5 push-ups after my morning coffee"\n• Don't say "I'll meal prep all week" — say "I'll prep tomorrow's lunch tonight"\n• Success builds momentum\n\n**Stack habits:**\nAttach new habits to existing ones:\n• "After I pour my coffee, I'll drink a glass of water"\n• "After I park at work, I'll walk an extra 5 minutes"\n• "After dinner, I'll prep tomorrow's lunch"\n\n**Track and celebrate:**\n• Use this app's habit tracker.\n• Don't break the chain — visual streaks are powerful\n• Celebrate small wins (not with food — with acknowledgment)\n\n**When you slip:**\n• Never miss twice in a row\n• A bad day doesn't erase a good week\n• Progress is not perfection\n• The best plan is the one you actually follow`,
     },
   ];
 

@@ -18,6 +18,8 @@ import { coachApi } from '../../services/api';
 import { mediumTap, successTap, warningTap } from '../../utils/haptics';
 import { buildInviteUniversalLink } from '../../utils/deepLink';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { errorMessage } from '../../types/common';
+import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 
 interface InviteCode {
   id: string;
@@ -29,7 +31,7 @@ interface InviteCode {
   created_at?: string;
 }
 
-export default function InviteCodesScreen({ navigation }: any) {
+export default function InviteCodesScreen({ navigation }: { navigation: NavigationProp<ParamListBase> }) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [codes, setCodes] = useState<InviteCode[]>([]);
@@ -46,7 +48,7 @@ export default function InviteCodesScreen({ navigation }: any) {
       const res = await coachApi.listInviteCodes();
       const rows: InviteCode[] = Array.isArray(res.data) ? res.data : (res.data?.codes || []);
       setCodes(rows);
-    } catch (err: any) {
+    } catch (err) {
       console.error('InviteCodesScreen: load failed', err);
     } finally {
       setLoading(false);
@@ -94,8 +96,8 @@ export default function InviteCodesScreen({ navigation }: any) {
       setShowCreateModal(false);
       setMaxUsesText('');
       setExpiresInDaysText('');
-    } catch (err: any) {
-      const msg = err?.response?.data?.message || err?.message || 'Failed to create code';
+    } catch (err) {
+      const msg = errorMessage(err, 'Failed to create code');
       setCreateError(msg);
     } finally {
       setCreating(false);
@@ -133,8 +135,8 @@ export default function InviteCodesScreen({ navigation }: any) {
             setCodes((prev) =>
               prev.map((c) => (c.id === id ? { ...c, revoked: true } : c)),
             );
-          } catch (err: any) {
-            Alert.alert('Error', err?.response?.data?.message || 'Failed to revoke');
+          } catch (err) {
+            Alert.alert('Error', errorMessage(err, 'Failed to revoke'));
           }
         },
       },

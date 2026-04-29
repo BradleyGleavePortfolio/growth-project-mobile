@@ -9,12 +9,13 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 
 import FadeInView from '../../components/FadeInView';
 import { fastingApi } from '../../services/api';
 import { typography, spacing, radius } from '../../theme/tokens';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { errorMessage } from '../../types/common';
 
 // Wave 5b: WidgetsScreen reduced to the actions that actually work today.
 // Per the no-placeholder doctrine, "Coming Soon" widgets, wearables and
@@ -50,7 +51,7 @@ const DEFAULT_FAST_PROTOCOL = '16:8';
 export default function WidgetsScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const [startingFast, setStartingFast] = useState(false);
 
   const handleStartFast = useCallback(async () => {
@@ -67,11 +68,9 @@ export default function WidgetsScreen() {
             try {
               await fastingApi.start({ protocol: DEFAULT_FAST_PROTOCOL });
               navigation.navigate('Fast');
-            } catch (err: any) {
+            } catch (err) {
               const msg =
-                err?.response?.data?.message ||
-                err?.message ||
-                'Could not start fast. A fast may already be in progress.';
+                errorMessage(err, 'Could not start fast. A fast may already be in progress.');
               Alert.alert('Could not start fast', msg);
             } finally {
               setStartingFast(false);

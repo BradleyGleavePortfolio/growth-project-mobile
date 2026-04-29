@@ -26,14 +26,16 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { getTodayString } from '../../utils/date';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
-import {
-  useHabits,
+import { errorMessage, type IoniconName } from '../../types/common';
+import {useHabits,
   useHabitLogs,
   useLogHabit,
   useCreateHabit,
   useDeleteHabit,
   useTodayCheckIn,
   useSaveCheckIn,
+  type ApiHabit,
+  type ApiHabitLog,
 } from '../../hooks/useApi';
 
 interface HabitView {
@@ -130,7 +132,10 @@ export default function HabitsScreen() {
 
   // Hydrate the form from today's check-in once the query resolves.
   useEffect(() => {
-    const row = todayCheckInQ.data;
+    const row = todayCheckInQ.data as
+      | { mood?: number; energy?: number; sleep_hours?: number; notes?: string; date?: string }
+      | null
+      | undefined;
     if (!row) return;
     if (row.mood != null) setMood(Number(row.mood));
     if (row.energy != null) setEnergy(Number(row.energy));
@@ -140,20 +145,28 @@ export default function HabitsScreen() {
   }, [todayCheckInQ.data]);
 
   // Build the per-habit view model from three independent queries.
-  const allHabits = (habitsQ.data || []).map((h: any) => ({
-    id: h.id,
-    name: h.name,
-    icon: h.icon || h.emoji || 'checkmark-circle',
-    color: h.color || colors.primary,
-    frequency: h.frequency || 'daily',
-    targetCount: h.target_count || h.target_value || 1,
-    unit: h.unit || 'times',
-  }));
+  // Server rows may carry extra cosmetic fields the ApiHabit type does not yet
+  // model. Read them through Record indexing rather than any-typing the row.
+  const allHabits = (habitsQ.data || []).map((row) => {
+    const h = row as ApiHabit & Partial<{ icon: string; color: string; frequency: string; target_count: number; target_value: number; unit: string; emoji: string }>;
+    return {
+      id: h.id,
+      name: h.name,
+      icon: h.icon || h.emoji || 'checkmark-circle',
+      color: h.color || colors.primary,
+      frequency: h.frequency || 'daily',
+      targetCount: h.target_count || h.target_value || 1,
+      unit: h.unit || 'times',
+    };
+  });
   const logsMap = new Map<string, { completed: boolean; count: number }>(
-    (logsQ.data || []).map((l: any) => [
-      l.habit_id || l.habitId,
-      { completed: l.completed ?? false, count: l.count || 0 },
-    ]),
+    (logsQ.data || []).map((row) => {
+      const l = row as ApiHabitLog & Partial<{ habitId: string; count: number }>;
+      return [
+        l.habit_id || l.habitId || '',
+        { completed: l.completed ?? false, count: l.count || 0 },
+      ] as [string, { completed: boolean; count: number }];
+    }),
   );
   const habits: HabitView[] = allHabits.map((h) => ({
     ...h,
@@ -183,8 +196,8 @@ export default function HabitsScreen() {
         value: newCompleted ? habit.targetCount || 1 : 0,
       },
       {
-        onError: (err: any) => {
-          Alert.alert("Couldn't update habit", err?.message || 'Please try again.');
+        onError: (err) => {
+          Alert.alert("Couldn't update habit", errorMessage(err, 'Please try again.'));
         },
       },
     );
@@ -201,8 +214,8 @@ export default function HabitsScreen() {
           style: 'destructive',
           onPress: () => {
             deleteHabit.mutate(habit.id, {
-              onError: (err: any) => {
-                Alert.alert("Couldn't delete habit", err?.message || 'Please try again.');
+              onError: (err) => {
+                Alert.alert("Couldn't delete habit", errorMessage(err, 'Please try again.'));
               },
             });
           },
@@ -232,8 +245,8 @@ export default function HabitsScreen() {
           setNewTarget('1');
           setNewUnit('times');
         },
-        onError: (err: any) => {
-          Alert.alert("Couldn't create habit", err?.message || 'Please try again.');
+        onError: (err) => {
+          Alert.alert("Couldn't create habit", errorMessage(err, 'Please try again.'));
         },
       },
     );
@@ -254,11 +267,8 @@ export default function HabitsScreen() {
           setCheckInToast(true);
           setTimeout(() => setCheckInToast(false), 2200);
         },
-        onError: (err: any) => {
-          Alert.alert(
-            "Couldn't save check-in",
-            err?.response?.data?.message || err?.message || 'Please try again.',
-          );
+        onError: (err) => {
+          Alert.alert("Couldn't save check-in", errorMessage(err, 'Please try again.'));
         },
       },
     );
@@ -351,7 +361,7 @@ export default function HabitsScreen() {
                 <View style={styles.habitLeft}>
                   <View style={[styles.habitIconBox, { backgroundColor: habit.color + '20' }]}>
                     <Ionicons
-                      name={(habit.icon || 'checkmark-circle') as any}
+                      name={(habit.icon || 'checkmark-circle') as IoniconName}
                       size={22}
                       color={habit.color}
                     />
@@ -595,7 +605,7 @@ export default function HabitsScreen() {
                   onPress={() => setNewIcon(item.icon)}
                 >
                   <Ionicons
-                    name={item.icon as any}
+                    name={item.icon as IoniconName}
                     size={20}
                     color={newIcon === item.icon ? colors.primary : colors.textMuted}
                   />

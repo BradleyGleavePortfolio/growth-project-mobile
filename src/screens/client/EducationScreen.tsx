@@ -13,6 +13,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 import { lessonsApi } from '../../services/api';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import type { IoniconName, JsonRecord } from '../../types/common';
 import {
   Lesson,
   LessonProgress,
@@ -59,20 +60,21 @@ export default function EducationScreen() {
     let serverLessons: Lesson[] = [];
     try {
       const res = await lessonsApi.getAll();
-      const raw: any[] = Array.isArray(res.data)
-        ? res.data
-        : Array.isArray(res.data?.lessons)
-          ? res.data.lessons
+      const data = res.data as { lessons?: JsonRecord[] } | JsonRecord[] | undefined;
+      const raw: JsonRecord[] = Array.isArray(data)
+        ? data
+        : Array.isArray(data?.lessons)
+          ? data.lessons
           : [];
-      serverLessons = raw.map((l: any) => ({
+      serverLessons = raw.map((l) => ({
         id: String(l.id),
-        title: l.title || 'Untitled',
-        subtitle: l.subtitle || '',
-        category: l.category || 'Nutrition Basics',
-        content: l.content || l.body || '',
-        durationMin: l.duration_min ?? l.durationMin ?? 5,
-        sortOrder: l.sort_order ?? l.sortOrder ?? 0,
-        createdAt: l.created_at ?? l.createdAt ?? new Date().toISOString(),
+        title: (l.title as string) || 'Untitled',
+        subtitle: (l.subtitle as string) || '',
+        category: (l.category as string) || 'Nutrition Basics',
+        content: (l.content as string) || (l.body as string) || '',
+        durationMin: (l.duration_min as number) ?? (l.durationMin as number) ?? 5,
+        sortOrder: (l.sort_order as number) ?? (l.sortOrder as number) ?? 0,
+        createdAt: (l.created_at as string) ?? (l.createdAt as string) ?? new Date().toISOString(),
       }));
       serverLessons.sort((a, b) => a.sortOrder - b.sortOrder);
     } catch (err) {
@@ -94,12 +96,13 @@ export default function EducationScreen() {
     let backendCompletedIds = new Set<string>();
     try {
       const allRes = await lessonsApi.getAll();
-      const allRaw: any[] = Array.isArray(allRes.data)
-        ? allRes.data
-        : Array.isArray(allRes.data?.lessons)
-          ? allRes.data.lessons
+      const allData = allRes.data as { lessons?: JsonRecord[] } | JsonRecord[] | undefined;
+      const allRaw: JsonRecord[] = Array.isArray(allData)
+        ? allData
+        : Array.isArray(allData?.lessons)
+          ? allData.lessons
           : [];
-      allRaw.forEach((l: any) => {
+      allRaw.forEach((l) => {
         if (l.completed || l.is_completed) backendCompletedIds.add(String(l.id));
       });
     } catch {
@@ -298,7 +301,7 @@ export default function EducationScreen() {
             onPress={() => setFilterCategory(filterCategory === cat ? null : cat)}
           >
             <Ionicons
-              name={(CATEGORY_ICONS[cat] || 'book') as any}
+              name={(CATEGORY_ICONS[cat] || 'book') as IoniconName}
               size={14}
               color={filterCategory === cat ? colors.textOnPrimary : CATEGORY_COLORS[cat] || colors.textSecondary}
             />

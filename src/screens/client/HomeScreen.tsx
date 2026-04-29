@@ -22,7 +22,7 @@ import {
   RefreshControl,
   ActivityIndicator,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useClientStore } from '../../store/clientStore';
 import { track } from '../../lib/analytics';
@@ -127,7 +127,7 @@ export default function HomeScreen() {
     loadProfile,
   } = useClientStore();
 
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const [refreshing, setRefreshing] = useState(false);
 
   // Stable today date
@@ -135,7 +135,7 @@ export default function HomeScreen() {
 
   // Derive state
   const mealsLogged = (() => {
-    const mealTypes = new Set(foodLogs.map((f: any) => f.mealType));
+    const mealTypes = new Set(foodLogs.map((f) => f.mealType));
     return mealTypes.size;
   })();
 

@@ -22,7 +22,7 @@ import {
   Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import HapticPressable from '../../components/HapticPressable';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { aiApi, AIStructuredContext, usersApi } from '../../services/api';
@@ -34,7 +34,7 @@ type FoundingInfo = { rank: number; total: number; isFoundingMember: boolean };
 export default function MembershipScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const currentUser = useCurrentUser();
   const [coach, setCoach] = useState<AIStructuredContext['coach'] | null>(null);
   const [founding, setFounding] = useState<FoundingInfo | null>(null);

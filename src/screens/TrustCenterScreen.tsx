@@ -30,6 +30,7 @@ import { typography, shadows } from '../theme/tokens';
 import { track } from '../lib/analytics';
 import api from '../services/api';
 import { useTheme, ThemeColors } from '../theme/ThemeProvider';
+import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -151,7 +152,7 @@ const makeBulletStyles = (colors: ThemeColors) =>
 
 // ─── Main screen ─────────────────────────────────────────────────────────────
 
-export default function TrustCenterScreen({ navigation }: any) {
+export default function TrustCenterScreen({ navigation }: { navigation: NavigationProp<ParamListBase> }) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [meta, setMeta] = useState<TrustMeta | null>(null);

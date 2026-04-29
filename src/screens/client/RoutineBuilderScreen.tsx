@@ -11,10 +11,11 @@ import {
   FlatList,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp, NavigationProp, ParamListBase } from '@react-navigation/native';
 
 import { getAllExercises } from '../../db/workoutDb';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { errorMessage } from '../../types/common';
 import {
   useRoutines,
   useCreateRoutine,
@@ -47,7 +48,7 @@ export default function RoutineBuilderScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const route = useRoute<RouteProp<RouteParams, 'RoutineBuilder'>>();
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const routineId = route.params?.routineId;
 
   const [name, setName] = useState('');
@@ -68,10 +69,11 @@ export default function RoutineBuilderScreen() {
 
   useEffect(() => {
     if (!routineId || !routinesQ.data) return;
-    const routine = routinesQ.data.find((r: any) => r.id === routineId);
+    const routine = routinesQ.data.find((r) => r.id === routineId);
     if (!routine) return;
     setName(routine.name);
-    const exs = (routine.exercises || []).map((e: any) => ({
+    type Ex = { exercise_id?: string; exerciseId?: string; exercise_name?: string; exerciseName?: string; sets?: number; reps?: number; rest_sec?: number; restSec?: number };
+    const exs = ((routine.exercises as Ex[] | undefined) || []).map((e) => ({
       exerciseId: e.exercise_id || e.exerciseId || '',
       exerciseName: e.exercise_name || e.exerciseName || '',
       sets: e.sets || 3,
@@ -128,7 +130,7 @@ export default function RoutineBuilderScreen() {
     setExercises((prev) => prev.filter((_, i) => i !== idx));
   };
 
-  const updateExerciseField = (idx: number, field: keyof RoutineExercise, value: any) => {
+  const updateExerciseField = <K extends keyof RoutineExercise>(idx: number, field: K, value: RoutineExercise[K]) => {
     setExercises((prev) => {
       const updated = [...prev];
       updated[idx] = { ...updated[idx], [field]: value };
@@ -166,8 +168,8 @@ export default function RoutineBuilderScreen() {
       })),
     };
     const onSuccess = () => navigation.goBack();
-    const onError = (err: any) => {
-      Alert.alert("Couldn't save routine", err?.message || 'Please try again.');
+    const onError = (err: unknown) => {
+      Alert.alert("Couldn't save routine", errorMessage(err, 'Please try again.'));
     };
     if (routineId) {
       updateRoutine.mutate({ id: routineId, data: payload }, { onSuccess, onError });
@@ -186,8 +188,8 @@ export default function RoutineBuilderScreen() {
         onPress: () => {
           deleteRoutine.mutate(routineId, {
             onSuccess: () => navigation.goBack(),
-            onError: (err: any) => {
-              Alert.alert("Couldn't delete routine", err?.message || 'Please try again.');
+            onError: (err) => {
+              Alert.alert("Couldn't delete routine", errorMessage(err, 'Please try again.'));
             },
           });
         },

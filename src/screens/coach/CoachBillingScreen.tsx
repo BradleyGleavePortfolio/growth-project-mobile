@@ -16,9 +16,11 @@ import { coachBillingApi, CoachBillingStatus } from '../../services/api';
 import { mediumTap } from '../../utils/haptics';
 import { track } from '../../lib/analytics';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { errorMessage, errorStatus } from '../../types/common';
+import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 
 interface Props {
-  navigation: any;
+  navigation: NavigationProp<ParamListBase>;
 }
 
 const STATE_COPY: Record<
@@ -78,16 +80,15 @@ export default function CoachBillingScreen({ navigation }: Props) {
     try {
       const res = await coachBillingApi.getStatus();
       setStatus(res.data ?? null);
-    } catch (err: any) {
-      const code = err?.response?.status;
+    } catch (err) {
+      const code = errorStatus(err);
       if (code === 404) {
         // Backend has not deployed billing yet — render an explicit, accurate
         // empty state instead of a vague spinner.
         setStatus({ state: 'none' });
       } else {
         setError(
-          err?.response?.data?.message ||
-            'Could not load billing status. Check your connection and try again.',
+          errorMessage(err, 'Could not load billing status. Check your connection and try again.'),
         );
       }
     } finally {
@@ -123,10 +124,9 @@ export default function CoachBillingScreen({ navigation }: Props) {
       if (result.type === 'cancel' || result.type === 'dismiss' || result.type === 'opened') {
         await load();
       }
-    } catch (err: any) {
+    } catch (err) {
       const msg =
-        err?.response?.data?.message ||
-        'Could not open the billing portal. Please try again.';
+        errorMessage(err, 'Could not open the billing portal. Please try again.');
       Alert.alert('Billing portal unavailable', msg);
     } finally {
       setPortalBusy(false);

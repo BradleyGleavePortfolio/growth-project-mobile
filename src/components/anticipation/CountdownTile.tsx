@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../HapticPressable';
 import { Colors, Spacing, Radius } from '../../theme/index';
 import { track } from '../../lib/analytics';
+import type { IoniconName } from '../../types/common';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -139,7 +140,7 @@ export default function CountdownTile({
     >
       {/* Icon */}
       <View style={[styles.iconWrap, { backgroundColor: accentColor + '1A' }]}>
-        <Ionicons name={iconName as any} size={18} color={accentColor} />
+        <Ionicons name={iconName as IoniconName} size={18} color={accentColor} />
       </View>
 
       {/* Text */}

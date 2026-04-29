@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 import { coachApi } from '../../services/api';
@@ -16,7 +16,7 @@ import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 export default function CoachGuidelinesScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const currentUser = useCurrentUser();
   const [guideline, setGuideline] = useState<{ title?: string; description?: string; created_at?: string } | null>(null);
   const [loading, setLoading] = useState(true);

@@ -39,7 +39,7 @@ export async function initNotificationsTable(): Promise<void> {
 
 export async function getNotifications(userId: string, limit = 50): Promise<Notification[]> {
   const db = await getDatabase();
-  const rows = await db.getAllAsync<any>(
+  const rows = await db.getAllAsync<NotificationRow>(
     'SELECT * FROM notifications WHERE userId = ? ORDER BY createdAt DESC LIMIT ?',
     [userId, limit]
   );
@@ -172,7 +172,9 @@ export async function seedNotificationsIfNeeded(userId: string): Promise<void> {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
-function mapNotification(row: any): Notification {
+type NotificationRow = Omit<Notification, 'read'> & { read: number };
+
+function mapNotification(row: NotificationRow): Notification {
   return {
     id: row.id,
     userId: row.userId,
