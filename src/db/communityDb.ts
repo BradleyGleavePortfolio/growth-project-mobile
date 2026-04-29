@@ -92,17 +92,42 @@ export async function initCommunityTables(): Promise<void> {
   `);
 }
 
+// Raw shape returned by `SELECT * FROM challenges` — SQLite stores
+// `active` as 0/1, so we coerce to boolean below.
+type ChallengeRow = Omit<Challenge, 'active'> & { active: number };
+
 export async function getChallenges(): Promise<Challenge[]> {
   const db = await getDatabase();
-  const rows = await db.getAllAsync<any>(
+  const rows = await db.getAllAsync<ChallengeRow>(
     'SELECT * FROM challenges WHERE active = 1 ORDER BY createdAt DESC'
   );
-  return rows.map((r: any) => ({ ...r, active: !!r.active }));
+  return rows.map((r) => ({ ...r, active: !!r.active }));
 }
+
+// Joined row shape from getUserChallenges — challenge fields are flattened
+// onto the participant row, with createdAt aliased as `challengeCreatedAt`.
+type UserChallengeRow = {
+  id: string;
+  challengeId: string;
+  userId: string;
+  currentValue: number;
+  completed: number;
+  joinedAt: string;
+  title: string;
+  description: string;
+  category: string;
+  targetValue: number;
+  unit: string;
+  durationDays: number;
+  startDate: string;
+  endDate: string;
+  active: number;
+  challengeCreatedAt: string;
+};
 
 export async function getUserChallenges(userId: string): Promise<(ChallengeParticipant & { challenge: Challenge })[]> {
   const db = await getDatabase();
-  const rows = await db.getAllAsync<any>(
+  const rows = await db.getAllAsync<UserChallengeRow>(
     `SELECT cp.*, c.title, c.description, c.category, c.targetValue, c.unit, c.durationDays, c.startDate, c.endDate, c.active, c.createdAt as challengeCreatedAt
      FROM challenge_participants cp
      JOIN challenges c ON cp.challengeId = c.id
@@ -110,7 +135,7 @@ export async function getUserChallenges(userId: string): Promise<(ChallengeParti
      ORDER BY cp.joinedAt DESC`,
     [userId]
   );
-  return rows.map((r: any) => ({
+  return rows.map((r) => ({
     id: r.id,
     challengeId: r.challengeId,
     userId: r.userId,
@@ -150,7 +175,7 @@ export async function updateChallengeProgress(userId: string, challengeId: strin
     [value, userId, challengeId]
   );
   // Check if completed
-  const challenge = await db.getFirstAsync<any>('SELECT targetValue FROM challenges WHERE id = ?', [challengeId]);
+  const challenge = await db.getFirstAsync<{ targetValue: number }>('SELECT targetValue FROM challenges WHERE id = ?', [challengeId]);
   if (challenge && value >= challenge.targetValue) {
     await db.runAsync(
       'UPDATE challenge_participants SET completed = 1 WHERE userId = ? AND challengeId = ?',
@@ -161,7 +186,7 @@ export async function updateChallengeProgress(userId: string, challengeId: strin
 
 export async function getWinsFeed(limit = 30): Promise<WinEntry[]> {
   const db = await getDatabase();
-  const rows = await db.getAllAsync<any>(
+  const rows = await db.getAllAsync<WinEntry>(
     'SELECT * FROM wins ORDER BY createdAt DESC LIMIT ?',
     [limit]
   );
@@ -190,7 +215,7 @@ export async function addPoints(userId: string, amount: number, reason: string):
 
 export async function getLeaderboard(limit = 20): Promise<LeaderboardEntry[]> {
   const db = await getDatabase();
-  const rows = await db.getAllAsync<any>(
+  const rows = await db.getAllAsync<{ userId: string; userName: string; points: number }>(
     `SELECT p.userId, u.firstName || ' ' || u.lastName as userName, SUM(p.amount) as points
      FROM points p
      JOIN users u ON p.userId = u.id
@@ -199,7 +224,7 @@ export async function getLeaderboard(limit = 20): Promise<LeaderboardEntry[]> {
      LIMIT ?`,
     [limit]
   );
-  return rows.map((r: any, idx: number) => ({
+  return rows.map((r, idx) => ({
     userId: r.userId,
     userName: r.userName,
     points: r.points,

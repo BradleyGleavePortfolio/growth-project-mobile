@@ -4,6 +4,7 @@ import HapticPressable from '../HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Radius, Spacing } from '../../theme/index';
 import { FoodLog, MealType } from '../../types';
+import type { IoniconName } from '../../types/common';
 
 interface Props {
   label: string;
@@ -28,7 +29,7 @@ export default function MealSectionCard({
     <View style={styles.mealSection}>
       <View style={styles.mealHeader}>
         <View style={styles.mealHeaderLeft}>
-          <Ionicons name={icon as any} size={18} color={Colors.primary} />
+          <Ionicons name={icon as IoniconName} size={18} color={Colors.primary} />
           <Text style={styles.mealTitle}>{label}</Text>
         </View>
         <Text style={styles.mealCals}>
@@ -50,9 +51,9 @@ export default function MealSectionCard({
           <View style={styles.foodItemLeft}>
             <Text style={styles.foodName}>
               {log.foodName}
-              {(log as any).quantity_multiplier > 1 && (
+              {log.quantity > 1 && (
                 <Text style={styles.foodQuantityMuted}>
-                  {' '}· ×{(log as any).quantity_multiplier}
+                  {' '}· ×{log.quantity}
                 </Text>
               )}
             </Text>

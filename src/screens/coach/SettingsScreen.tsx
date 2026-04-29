@@ -22,8 +22,9 @@ import { coachApi, profileApi, notificationsApi, usersApi, AccountStatus } from 
 
 import { mediumTap, warningTap, successTap } from '../../utils/haptics';
 import { updateSupabasePassword } from '../../utils/supabaseAuth';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { errorMessage, errorStatus } from '../../types/common';
 
 const COACH_SETTINGS_KEY = 'gp_coach_settings';
 
@@ -44,7 +45,7 @@ const DEFAULT_SETTINGS: CoachSettings = {
 export default function SettingsScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const currentUser = useCurrentUser();
   // signOut imported directly — no store wiring needed.
   const [settings, setSettings] = useState<CoachSettings>(DEFAULT_SETTINGS);
@@ -126,10 +127,10 @@ export default function SettingsScreen() {
     try {
       const res = await usersApi.getAccountStatus();
       setAccountStatus(res.data ?? null);
-    } catch (err: any) {
+    } catch (err) {
       // 404 means the backend has not yet shipped the status endpoint — treat
       // as "no scheduled deletion" so the UI shows the request-deletion path.
-      if (err?.response?.status === 404) {
+      if (errorStatus(err) === 404) {
         setAccountStatus({ deletionScheduled: false });
       } else {
         // On other errors, hide the section entirely rather than render a
@@ -172,8 +173,8 @@ export default function SettingsScreen() {
     // Backend is source of truth
     try {
       await profileApi.update({ bio: bioText });
-    } catch (err: any) {
-      console.warn('coach SettingsScreen: failed to sync bio to backend', err?.message);
+    } catch (err) {
+      console.warn('coach SettingsScreen: failed to sync bio to backend', errorMessage(err));
     }
     successTap();
     setShowBioModal(false);
@@ -238,10 +239,9 @@ export default function SettingsScreen() {
                 'Account scheduled for deletion',
                 `Your account will be permanently deleted in ${grace} days. Cancel any time before then from Settings.`,
               );
-            } catch (err: any) {
+            } catch (err) {
               const msg =
-                err?.response?.data?.message ||
-                'Could not schedule account deletion. Please try again.';
+                errorMessage(err, 'Could not schedule account deletion. Please try again.');
               Alert.alert('Request failed', msg);
             } finally {
               setDeletionBusy(false);
@@ -268,10 +268,9 @@ export default function SettingsScreen() {
               await loadAccountStatus();
               successTap();
               Alert.alert('Deletion canceled', 'Your account is no longer scheduled for deletion.');
-            } catch (err: any) {
+            } catch (err) {
               const msg =
-                err?.response?.data?.message ||
-                'Could not cancel deletion. Contact support if this keeps happening.';
+                errorMessage(err, 'Could not cancel deletion. Contact support if this keeps happening.');
               Alert.alert('Could not cancel', msg);
             } finally {
               setDeletionBusy(false);

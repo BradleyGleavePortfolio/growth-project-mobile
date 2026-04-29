@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Animated, StyleSheet, ViewStyle } from 'react-native';
+import { View, Animated, StyleSheet, ViewStyle, DimensionValue } from 'react-native';
 import { Colors } from '../constants/colors';
 
 function useShimmer() {
@@ -17,13 +17,13 @@ function useShimmer() {
   return opacity;
 }
 
-export function SkeletonLine({ width = '100%', height = 14, style }: { width?: number | string; height?: number; style?: ViewStyle }) {
+export function SkeletonLine({ width = '100%', height = 14, style }: { width?: DimensionValue; height?: number; style?: ViewStyle }) {
   const opacity = useShimmer();
   return (
     <Animated.View
       style={[
         styles.line,
-        { width: width as any, height, borderRadius: height / 2, opacity },
+        { width, height, borderRadius: height / 2, opacity },
         style,
       ]}
     />

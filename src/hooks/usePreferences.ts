@@ -11,6 +11,7 @@
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { preferencesApi } from '../services/api';
+import { errorStatus } from '../types/common';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -46,9 +47,12 @@ async function fetchPreferences(): Promise<UserPreferences> {
     const data = res.data ?? res;
     // Merge with defaults to handle missing fields gracefully
     return { ...DEFAULT_PREFERENCES, ...data };
-  } catch (err: any) {
-    // 401 = unauthenticated, any network error → return defaults silently
-    if (err?.response?.status === 401 || err?.response?.status === 403) {
+  } catch (err) {
+    // 401/403 = unauthenticated → return defaults silently. We log nothing
+    // because the screen is rendered before the user is forced through auth
+    // and noisy console output here masks real failures elsewhere.
+    const status = errorStatus(err);
+    if (status === 401 || status === 403) {
       return { ...DEFAULT_PREFERENCES };
     }
     return { ...DEFAULT_PREFERENCES };
@@ -56,7 +60,7 @@ async function fetchPreferences(): Promise<UserPreferences> {
 }
 
 async function patchPreferences(patch: Partial<UserPreferences>): Promise<UserPreferences> {
-  const res = await preferencesApi.patch(patch as Record<string, any>);
+  const res = await preferencesApi.patch(patch as Record<string, unknown>);
   const data = res.data ?? res;
   return { ...DEFAULT_PREFERENCES, ...data };
 }

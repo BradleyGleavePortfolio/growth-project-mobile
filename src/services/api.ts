@@ -204,7 +204,7 @@ export const authApi = {
 
 export const profileApi = {
   get: () => api.get('/profile'),
-  update: (data: Record<string, any>) => api.put('/profile', data),
+  update: (data: Record<string, unknown>) => api.put('/profile', data),
 };
 
 export const foodApi = {
@@ -212,7 +212,7 @@ export const foodApi = {
     api.get(`/foods/search?q=${encodeURIComponent(q)}&limit=${limit}`),
   getById: (id: string) =>
     api.get(`/foods/${id}`),
-  create: (data: Record<string, any>) =>
+  create: (data: Record<string, unknown>) =>
     api.post('/foods', data),
 };
 
@@ -226,7 +226,7 @@ export const logApi = {
   }) => api.post('/log/food', data),
   getDaily: (date: string) =>
     api.get(`/log/daily?date=${date}`),
-  updateEntry: (id: string, data: Record<string, any>) =>
+  updateEntry: (id: string, data: Record<string, unknown>) =>
     api.put(`/log/food/${id}`, data),
   deleteEntry: (id: string) =>
     api.delete(`/log/food/${id}`),
@@ -263,7 +263,7 @@ export const aiApi = {
 };
 
 export const workoutApi = {
-  create: (data: Record<string, any>) =>
+  create: (data: Record<string, unknown>) =>
     api.post('/workouts', data),
   getAll: (limit = 10) =>
     api.get(`/workouts?limit=${limit}`),
@@ -271,9 +271,9 @@ export const workoutApi = {
     api.get(`/workouts/volume?period=${period}`),
   getRoutines: () =>
     api.get('/routines'),
-  createRoutine: (data: Record<string, any>) =>
+  createRoutine: (data: Record<string, unknown>) =>
     api.post('/routines', data),
-  updateRoutine: (id: string, data: Record<string, any>) =>
+  updateRoutine: (id: string, data: Record<string, unknown>) =>
     api.put(`/routines/${id}`, data),
   deleteRoutine: (id: string) =>
     api.delete(`/routines/${id}`),
@@ -297,8 +297,8 @@ export const weightApi = {
 
 export const habitsApi = {
   getAll: () => api.get('/habits'),
-  create: (data: Record<string, any>) => api.post('/habits', data),
-  logHabit: (id: string, data: Record<string, any>) =>
+  create: (data: Record<string, unknown>) => api.post('/habits', data),
+  logHabit: (id: string, data: Record<string, unknown>) =>
     api.post(`/habits/${id}/log`, data),
   delete: (id: string) => api.delete(`/habits/${id}`),
   getLogs: (date: string) =>
@@ -347,9 +347,9 @@ export const coachApi = {
   // ── Meal plans (server is source of truth) ──
   listClientMealPlans: (clientId: string) =>
     api.get(`/coach/clients/${clientId}/meal-plans`),
-  createClientMealPlan: (clientId: string, data: Record<string, any>) =>
+  createClientMealPlan: (clientId: string, data: Record<string, unknown>) =>
     api.post(`/coach/clients/${clientId}/meal-plans`, data),
-  updateMealPlan: (planId: string, data: Record<string, any>) =>
+  updateMealPlan: (planId: string, data: Record<string, unknown>) =>
     api.patch(`/coach/meal-plans/${planId}`, data),
   archiveMealPlan: (planId: string) =>
     api.delete(`/coach/meal-plans/${planId}`),
@@ -395,12 +395,12 @@ export const nudgesApi = {
 /** Psych #4: Preference-Controlled Personalization */
 export const preferencesApi = {
   get: () => api.get('/users/me/preferences'),
-  patch: (data: Record<string, any>) => api.patch('/users/me/preferences', data),
+  patch: (data: Record<string, unknown>) => api.patch('/users/me/preferences', data),
 };
 
 export const notificationsApi = {
   getPreferences: () => api.get('/notifications/preferences'),
-  updatePreferences: (data: Record<string, any>) =>
+  updatePreferences: (data: Record<string, unknown>) =>
     api.put('/notifications/preferences', data),
 };
 
@@ -423,8 +423,8 @@ export const waterApi = {
 
 export const lessonsApi = {
   getAll: () => api.get('/lessons'),
-  create: (data: Record<string, any>) => api.post('/lessons', data),
-  update: (id: string, data: Record<string, any>) => api.put(`/lessons/${id}`, data),
+  create: (data: Record<string, unknown>) => api.post('/lessons', data),
+  update: (id: string, data: Record<string, unknown>) => api.put(`/lessons/${id}`, data),
   complete: (id: string) => api.post(`/lessons/${id}/complete`),
   getRecommended: () => api.get('/lessons/recommended'),
 };
@@ -464,7 +464,7 @@ export const recipesApi = {
   list: () => api.get('/recipes'),
   listSaved: () => api.get('/recipes/saved'),
   getById: (id: string) => api.get(`/recipes/${id}`),
-  create: (data: Record<string, any>) => api.post('/recipes', data),
+  create: (data: Record<string, unknown>) => api.post('/recipes', data),
   save: (id: string) => api.post(`/recipes/${id}/save`),
   unsave: (id: string) => api.delete(`/recipes/${id}/save`),
 };

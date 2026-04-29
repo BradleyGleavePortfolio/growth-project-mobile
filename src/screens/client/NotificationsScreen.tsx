@@ -22,6 +22,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import type { IoniconName } from '../../types/common';
 
 import {
   ApiNudge,
@@ -94,7 +95,7 @@ export default function NotificationsScreen() {
         activeOpacity={0.7}
       >
         <View style={[styles.iconCircle, { backgroundColor: config.color + '18' }]}>
-          <Ionicons name={config.icon as any} size={20} color={config.color} />
+          <Ionicons name={config.icon as IoniconName} size={20} color={config.color} />
         </View>
         <View style={styles.notifContent}>
           <View style={styles.notifTop}>

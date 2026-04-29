@@ -12,7 +12,7 @@ import {
   Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { listsApi } from '../../services/api';
@@ -39,7 +39,7 @@ const QUERY_KEY = ['lists', LIST_TYPE];
 export default function GroceryListScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const queryClient = useQueryClient();
 
   const [newItemName, setNewItemName] = useState('');

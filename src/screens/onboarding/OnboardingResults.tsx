@@ -13,6 +13,7 @@ import { profileApi } from '../../services/api';
 import { authEvents } from '../../utils/authEvents';
 import { calcBMR, calcTDEE, calcMacros, calculateAge } from '../../utils/nutrition';
 import { Colors } from '../../constants/colors';
+import { errorMessage } from '../../types/common';
 
 export default function OnboardingResults() {
   const [macros, setMacros] = useState<{
@@ -110,12 +111,12 @@ export default function OnboardingResults() {
       // Mark onboarding complete — RootNavigator will now route to ClientNavigator
       await AsyncStorage.setItem('onboarding_complete', 'true');
       authEvents.emit();
-    } catch (err: any) {
+    } catch (err) {
       // Catches the AsyncStorage.setItem failure paths above. Surface an alert
       // because this is a user-initiated action (the "Start" button) and silence
       // would leave them stuck on the results screen with no feedback.
       console.error('OnboardingResults: handleStart failed', err);
-      Alert.alert("Couldn't finish setup", err?.message || 'Please try again.');
+      Alert.alert("Couldn't finish setup", errorMessage(err, 'Please try again.'));
     } finally {
       setSaving(false);
     }

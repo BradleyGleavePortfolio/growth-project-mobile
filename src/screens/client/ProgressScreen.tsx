@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle, G, Polyline, Line as SvgLine, Text as SvgText } from 'react-native-svg';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { weightApi, logApi } from '../../services/api';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 import { shadows as shadowTokens } from '../../theme/tokens';
@@ -23,6 +23,7 @@ import { WeightLog } from '../../types';
 import { getTodayString } from '../../utils/date';
 import FadeInView from '../../components/FadeInView';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { errorMessage } from '../../types/common';
 
 type Period = '7D' | '30D' | '90D' | 'All';
 
@@ -189,11 +190,11 @@ function CalorieRing({
 export default function ProgressScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const currentUser = useCurrentUser();
   const userId = currentUser?.id ?? null;
 
-  const [macroTargets, setMacroTargets] = useState<any>(null);
+  const [macroTargets, setMacroTargets] = useState<{ calories?: number; protein?: number; carbs?: number; fat?: number; goalWeight?: number; height?: number; tdee?: number } | null>(null);
   const [weightLogs, setWeightLogs] = useState<WeightLog[]>([]);
   const [period, setPeriod] = useState<Period>('30D');
   const [showLogModal, setShowLogModal] = useState(false);
@@ -217,15 +218,16 @@ export default function ProgressScreen() {
 
     try {
       const res = await weightApi.getHistory(days);
-      const logs: WeightLog[] = (res.data || []).map((w: any) => ({
+      type WeightRow = { id: string; user_id?: string; date?: string; created_at?: string; weight_lbs?: number; weight?: number; notes?: string };
+      const logs = (((res.data as WeightRow[] | undefined) || []).map((w) => ({
         id: w.id,
         userId: w.user_id || userId,
         coachId: '',
         date: (w.date || w.created_at || '').split('T')[0],
         weight: w.weight_lbs || w.weight,
-        unit: 'lbs',
+        unit: 'lbs' as const,
         notes: w.notes || '',
-      }));
+      }))) as unknown as WeightLog[];
       // Sort by date ascending
       logs.sort((a, b) => a.date.localeCompare(b.date));
       setWeightLogs(logs);
@@ -290,11 +292,11 @@ export default function ProgressScreen() {
         date: getTodayString(),
         notes: newNotes || undefined,
       });
-    } catch (err: any) {
+    } catch (err) {
       // Destructive write: surface failure so the user can retry before
       // dismissing the modal.
       console.error('ProgressScreen: weight log failed', err);
-      Alert.alert("Couldn't log weight", err?.message || 'Please try again.');
+      Alert.alert("Couldn't log weight", errorMessage(err, 'Please try again.'));
       return;
     }
     setNewWeight('');

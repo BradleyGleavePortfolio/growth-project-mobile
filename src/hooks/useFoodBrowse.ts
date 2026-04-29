@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { logApi } from '../services/api';
 import { SearchResult } from '../utils/log/types';
-import { mapLogEntryToFood } from '../utils/log/mapFoodItem';
+import { mapLogEntryToFood, RawLogEntry } from '../utils/log/mapFoodItem';
 
 export function useFoodBrowse(currentUserId: string | undefined, selectedDate: string) {
   const [recentFoods, setRecentFoods] = useState<SearchResult[]>([]);
@@ -11,7 +11,7 @@ export function useFoodBrowse(currentUserId: string | undefined, selectedDate: s
     if (!currentUserId) return;
     try {
       const res = await logApi.getDaily(selectedDate);
-      const entries: any[] = res.data?.entries || [];
+      const entries: RawLogEntry[] = res.data?.entries || [];
       const seen = new Set<string>();
       const recent: SearchResult[] = [];
       for (const e of entries) {
@@ -47,7 +47,7 @@ export function useFoodBrowse(currentUserId: string | undefined, selectedDate: s
       const foodCount: Record<string, { count: number; food: SearchResult }> = {};
       for (const result of settled) {
         if (result.status !== 'fulfilled') continue;
-        const entries: any[] = result.value.data?.entries || [];
+        const entries: RawLogEntry[] = result.value.data?.entries || [];
         for (const e of entries) {
           const food = mapLogEntryToFood(e);
           if (!food) continue;

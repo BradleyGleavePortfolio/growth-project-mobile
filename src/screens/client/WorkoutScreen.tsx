@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import HapticPressable from '../../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 import { workoutApi } from '../../services/api';
@@ -135,7 +135,7 @@ export default function WorkoutScreen() {
   const chart = useMemo(() => makeChart(colors), [colors]);
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const [routines, setRoutines] = useState<ApiRoutine[]>([]);
   const [recentSessions, setRecentSessions] = useState<ApiSession[]>([]);
   const [weeklyVolume, setWeeklyVolume] = useState<WeeklyVolume[]>([]);

@@ -74,7 +74,9 @@ export function toFriendlyAuthError(raw: unknown): FriendlyAuthError {
       ? raw
       : raw instanceof Error
         ? raw.message
-        : ((raw as any)?.message ?? '');
+        : (raw && typeof raw === 'object' && 'message' in raw && typeof (raw as { message: unknown }).message === 'string'
+            ? (raw as { message: string }).message
+            : '');
 
   for (const p of PATTERNS) {
     if (p.test.test(text)) {

@@ -18,6 +18,7 @@ import EmptyState from '../../components/EmptyState';
 import FadeInView from '../../components/FadeInView';
 import { scheduleFastingAlert } from '../../utils/notifications';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { errorMessage } from '../../types/common';
 
 type Protocol = { label: string; hours: number };
 
@@ -70,10 +71,11 @@ export default function FastingScreen() {
     if (!currentUser) return;
     try {
       const histRes = await fastingApi.getHistory(50);
-      const sessions: FastSession[] = (histRes.data || []).map((s: any) => ({
+      type SessionRow = { id: string; start_time?: string; end_time?: string | null; target_hours?: number; completed?: boolean; startTime?: string; endTime?: string | null; targetHours?: number };
+      const sessions: FastSession[] = ((histRes.data as SessionRow[] | undefined) || []).map((s) => ({
         id: s.id,
-        startTime: s.start_time || s.startTime,
-        endTime: s.end_time || s.endTime,
+        startTime: s.start_time || s.startTime || '',
+        endTime: s.end_time || s.endTime || undefined,
         targetHours: s.target_hours || s.targetHours || 16,
         completed: s.completed ?? (s.end_time != null),
       }));
@@ -152,10 +154,10 @@ export default function FastingScreen() {
       await fastingApi.start({ protocol: `${selectedProtocol}:${24 - selectedProtocol}` });
       const endTime = new Date(Date.now() + selectedProtocol * 60 * 60 * 1000);
       await scheduleFastingAlert(endTime);
-    } catch (err: any) {
+    } catch (err) {
       // Destructive write: surface so the user knows the fast didn't start.
       console.error('FastingScreen: handleStart failed', err);
-      Alert.alert("Couldn't start fast", err?.message || 'Please try again.');
+      Alert.alert("Couldn't start fast", errorMessage(err, 'Please try again.'));
       return;
     }
     loadAll();
@@ -164,12 +166,12 @@ export default function FastingScreen() {
   const doEndFast = async () => {
     try {
       await fastingApi.end();
-    } catch (err: any) {
+    } catch (err) {
       // Destructive write: surface so they know the fast wasn't ended. We
       // still call loadAll() so the UI reflects whatever the backend actually
       // recorded.
       console.error('FastingScreen: doEndFast failed', err);
-      Alert.alert("Couldn't end fast", err?.message || 'Please try again.');
+      Alert.alert("Couldn't end fast", errorMessage(err, 'Please try again.'));
     }
     loadAll();
   };

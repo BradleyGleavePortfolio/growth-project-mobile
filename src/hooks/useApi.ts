@@ -85,7 +85,7 @@ export function useCreateHabit() {
     // Backend tolerates extra fields (icon/color/unit/target_value/frequency) that
     // the legacy HabitsScreen modal already collected. Accept Record so callers
     // don't have to be artificially narrow.
-    mutationFn: (data: Record<string, any>) => habitsApi.create(data).then((r) => r.data),
+    mutationFn: (data: Record<string, unknown>) => habitsApi.create(data).then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['habits'] });
     },
@@ -233,7 +233,7 @@ export function useMarkNudgeRead() {
 }
 
 export function useNotificationPreferences() {
-  return useQuery<Record<string, any>>({
+  return useQuery<Record<string, unknown>>({
     queryKey: ['notifications', 'preferences'],
     queryFn: async () => (await notificationsApi.getPreferences()).data,
   });
@@ -242,7 +242,7 @@ export function useNotificationPreferences() {
 export function useUpdateNotificationPreferences() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, any>) => notificationsApi.updatePreferences(data).then((r) => r.data),
+    mutationFn: (data: Record<string, unknown>) => notificationsApi.updatePreferences(data).then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['notifications', 'preferences'] });
     },
@@ -305,17 +305,21 @@ export function useWeeklyVolumeBreakdown(weekStart: string, weekEnd: string, lim
     queryKey: ['workouts', 'weekly-breakdown', weekStart, weekEnd, limit],
     queryFn: async () => {
       const res = await workoutApi.getAll(limit);
-      const sessions: any[] = Array.isArray(res.data) ? res.data : (res.data?.workouts ?? []);
+      type Session = { date?: string; created_at?: string; exercises?: { sets?: number | string; reps?: number | string; weight_lbs?: number | string }[] };
+      const data = res.data as { workouts?: Session[] } | Session[] | undefined;
+      const sessions: Session[] = Array.isArray(data) ? data : (data?.workouts ?? []);
       const start = new Date(weekStart).getTime();
       const end = new Date(weekEnd).getTime();
       const inRange = sessions.filter((s) => {
-        const t = new Date(s.date || s.created_at).getTime();
+        const stamp = s.date || s.created_at || '';
+        const t = stamp ? new Date(stamp).getTime() : NaN;
         return t >= start && t <= end;
       });
       const totals: Record<string, number> = {};
       let total = 0;
       for (const s of inRange) {
-        const day = new Date(s.date || s.created_at).toISOString().split('T')[0];
+        const stamp = s.date || s.created_at || '';
+        const day = new Date(stamp).toISOString().split('T')[0];
         let sessionVol = 0;
         for (const ex of (s.exercises || [])) {
           const sets = Number(ex.sets || 0);
@@ -336,7 +340,7 @@ export function useWeeklyVolumeBreakdown(weekStart: string, weekEnd: string, lim
 export function useCreateWorkout() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, any>) => workoutApi.create(data).then((r) => r.data),
+    mutationFn: (data: Record<string, unknown>) => workoutApi.create(data).then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['workouts'] });
     },
@@ -353,7 +357,7 @@ export function useRoutines() {
 export function useCreateRoutine() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: Record<string, any>) => workoutApi.createRoutine(data).then((r) => r.data),
+    mutationFn: (data: Record<string, unknown>) => workoutApi.createRoutine(data).then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['routines'] });
     },
@@ -363,7 +367,7 @@ export function useCreateRoutine() {
 export function useUpdateRoutine() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (args: { id: string; data: Record<string, any> }) =>
+    mutationFn: (args: { id: string; data: Record<string, unknown> }) =>
       workoutApi.updateRoutine(args.id, args.data).then((r) => r.data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['routines'] });
@@ -386,7 +390,7 @@ export function useDeleteRoutine() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function useTodayLog(date: string) {
-  return useQuery<any>({
+  return useQuery<unknown>({
     queryKey: ['food', 'log', date],
     queryFn: async () => (await logApi.getDaily(date)).data,
     enabled: !!date,
@@ -394,7 +398,7 @@ export function useTodayLog(date: string) {
 }
 
 export function useWeightHistory(days = 30) {
-  return useQuery<any[]>({
+  return useQuery<unknown[]>({
     queryKey: ['weight', 'history', days],
     queryFn: async () => (await weightApi.getHistory(days)).data,
   });
@@ -404,10 +408,10 @@ export function useWeightHistory(days = 30) {
 // endpoint. checkInsApi.save is an idempotent upsert by (user, date) so callers
 // can post freely on top of whatever this returns.
 export function useTodayCheckIn(date: string) {
-  return useQuery<any | null>({
+  return useQuery<unknown>({
     queryKey: ['check-ins', 'day', date],
     queryFn: async () => {
-      const list = (await checkInsApi.list({ from: date, to: date, limit: 1 })).data as any[];
+      const list = (await checkInsApi.list({ from: date, to: date, limit: 1 })).data as unknown[];
       return list[0] ?? null;
     },
     enabled: !!date,
@@ -437,14 +441,14 @@ export function useSaveCheckIn() {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export function useCoachClients() {
-  return useQuery<any[]>({
+  return useQuery<unknown[]>({
     queryKey: ['coach', 'clients'],
     queryFn: async () => (await coachApi.getClients()).data,
   });
 }
 
 export function useClientGuidelines(clientId: string | null | undefined) {
-  return useQuery<any>({
+  return useQuery<unknown>({
     queryKey: ['coach', 'guidelines', clientId],
     queryFn: async () => (await coachApi.getGuidelines(clientId!)).data,
     enabled: !!clientId,
@@ -467,7 +471,7 @@ export function usePostClientGuidelines() {
 // assigned to them. Filter by client_id in callers when a coach picks a roster
 // member.
 export function useMealPlans() {
-  return useQuery<any[]>({
+  return useQuery<unknown[]>({
     queryKey: ['meal-plans', 'list'],
     queryFn: async () => (await mealPlansApi.list()).data,
   });

@@ -13,13 +13,14 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useRoute, useNavigation, RouteProp } from '@react-navigation/native';
+import { useFocusEffect, useRoute, useNavigation, RouteProp, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { coachApi } from '../../services/api';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { subscribeToMessages } from '../../services/realtime';
 
 import type { ClientsStackParamList } from '../../navigation/CoachNavigator';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { errorMessage } from '../../types/common';
 
 interface Message {
   id: string;
@@ -37,7 +38,7 @@ export default function ClientMessagesScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const route = useRoute<RouteProp<ClientsStackParamList, 'ClientMessages'>>();
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const { clientId, clientName } = route.params;
   const currentUser = useCurrentUser();
 
@@ -55,7 +56,7 @@ export default function ClientMessagesScreen() {
       const list: Message[] = normalizeList(res.data);
       setMessages(list);
       setError('');
-    } catch (err: any) {
+    } catch (err) {
       console.error('ClientMessagesScreen: load failed', err);
       setError('Could not load messages. Pull to retry.');
     } finally {
@@ -120,8 +121,8 @@ export default function ClientMessagesScreen() {
       setInputText('');
       setMessages((prev) => mergeById(prev, [created]));
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
-    } catch (err: any) {
-      Alert.alert('Failed to send', err?.response?.data?.message || 'Message could not be sent.');
+    } catch (err) {
+      Alert.alert('Failed to send', errorMessage(err, 'Message could not be sent.'));
     } finally {
       setSending(false);
     }
@@ -264,22 +265,26 @@ export default function ClientMessagesScreen() {
   );
 }
 
-function normalizeList(raw: any): Message[] {
-  const arr = Array.isArray(raw) ? raw : raw?.messages || [];
+function normalizeList(raw: unknown): Message[] {
+  const wrapper = (raw && typeof raw === 'object' && !Array.isArray(raw))
+    ? (raw as { messages?: unknown[] })
+    : null;
+  const arr: unknown[] = Array.isArray(raw) ? raw : (wrapper?.messages ?? []);
   return arr
     .map(normalizeMessage)
     .filter((m: Message) => !!m.id)
     .sort(byCreatedAtAsc);
 }
 
-function normalizeMessage(raw: any): Message {
+function normalizeMessage(raw: unknown): Message {
+  const r = (raw && typeof raw === 'object') ? (raw as Record<string, unknown>) : {};
   return {
-    id: String(raw.id),
-    sender_role: raw.sender_role === 'coach' ? 'coach' : 'client',
-    sender_id: raw.sender_id,
-    body: String(raw.body ?? ''),
-    created_at: raw.created_at || new Date().toISOString(),
-    read_at: raw.read_at ?? null,
+    id: String(r.id ?? ''),
+    sender_role: r.sender_role === 'coach' ? 'coach' : 'client',
+    sender_id: typeof r.sender_id === 'string' ? r.sender_id : undefined,
+    body: String(r.body ?? ''),
+    created_at: typeof r.created_at === 'string' ? r.created_at : new Date().toISOString(),
+    read_at: (r.read_at as string | null | undefined) ?? null,
   };
 }
 

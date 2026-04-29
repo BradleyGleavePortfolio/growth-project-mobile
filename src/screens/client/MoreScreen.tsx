@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import HapticPressable from '../../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { Spacing, Radius } from '../../theme/index';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 type MoreItem = {
@@ -121,7 +121,7 @@ const MORE_ITEMS: MoreItem[] = [
 export default function MoreScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
 
   const handlePress = (item: MoreItem) => {
     if (item.target.type === 'stack') {

@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { prepGuideApi, listsApi } from '../../services/api';
@@ -70,7 +70,7 @@ function formatWeekLabel(weekStart: string): string {
 export default function PrepGuideScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const queryClient = useQueryClient();
   const [weekOffset, setWeekOffset] = useState(0);
 

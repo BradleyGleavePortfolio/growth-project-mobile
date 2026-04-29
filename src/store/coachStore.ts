@@ -35,17 +35,29 @@ export const useCoachStore = create<CoachStore>((set, get) => ({
     try {
       set({ isLoading: true });
       const res = await coachApi.getClients(effectiveStatus === 'all' ? undefined : effectiveStatus);
-      const raw: any[] = res.data || [];
-      const clients: User[] = raw.map((u: any) => {
+      // Backend coach-clients row shape. Field names mirror the
+      // /v1/coach/me/clients DTO; `role` arrives as the wire `student`
+      // string, normalized to the mobile `client` literal below.
+      interface CoachClientRow {
+        id: string;
+        name?: string | null;
+        email?: string | null;
+        role?: string | null;
+        coach_id?: string | null;
+        archived_at?: string | null;
+        created_at?: string | null;
+      }
+      const raw: CoachClientRow[] = res.data || [];
+      const clients: User[] = raw.map((u) => {
         const parts = (u.name || '').split(' ');
         return {
           id: u.id,
-          role: u.role === 'student' ? 'client' : u.role,
+          role: u.role === 'student' ? 'client' : (u.role as User['role']),
           email: u.email || '',
           passwordHash: '',
           firstName: parts[0] || '',
           lastName: parts.slice(1).join(' ') || '',
-          coachId: u.coach_id,
+          coachId: u.coach_id ?? undefined,
           // Reflect backend archived_at on the status field
           status: u.archived_at ? 'archived' : 'active',
           createdAt: u.created_at || new Date().toISOString(),

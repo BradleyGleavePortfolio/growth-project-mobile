@@ -1,8 +1,40 @@
 import { SearchResult } from './types';
 
-export const mapFoodItem = (item: any): SearchResult => ({
-  id: item.id,
-  name: item.name,
+// Server payload shape (loose — backend has historically sent at least three
+// schemas for food items so each field is optional and we normalise here).
+export interface RawFoodItem {
+  id?: string;
+  name?: string;
+  calories?: number;
+  calories_per_serving?: number;
+  protein_g?: number;
+  protein?: number;
+  carbs_g?: number;
+  carbs?: number;
+  fat_g?: number;
+  fat?: number;
+  serving_description?: string;
+  serving_size?: string;
+  brand_or_restaurant?: string | null;
+  brand?: string | null;
+  image_url?: string | null;
+  image_front_thumb_url?: string | null;
+  image_front_small_url?: string | null;
+}
+
+export interface RawLogEntry {
+  food_item?: RawFoodItem;
+  foodItem?: RawFoodItem;
+  food_name?: string;
+  calories?: number;
+  protein?: number;
+  carbs?: number;
+  fat?: number;
+}
+
+export const mapFoodItem = (item: RawFoodItem): SearchResult => ({
+  id: String(item.id ?? ''),
+  name: item.name ?? '',
   calories: item.calories ?? item.calories_per_serving ?? 0,
   protein: item.protein_g ?? item.protein ?? 0,
   carbs: item.carbs_g ?? item.carbs ?? 0,
@@ -13,12 +45,12 @@ export const mapFoodItem = (item: any): SearchResult => ({
 });
 
 // For log-entry shape: {food_item, food_name, calories, ...} → SearchResult
-export const mapLogEntryToFood = (e: any): SearchResult | null => {
+export const mapLogEntryToFood = (e: RawLogEntry): SearchResult | null => {
   const fi = e.food_item || e.foodItem;
   const name = fi?.name || e.food_name || '';
   if (!name) return null;
   return {
-    id: fi?.id,
+    id: String(fi?.id ?? ''),
     name,
     calories: fi?.calories ?? fi?.calories_per_serving ?? e.calories ?? 0,
     protein: fi?.protein_g ?? e.protein ?? 0,

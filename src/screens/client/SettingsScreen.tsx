@@ -24,8 +24,10 @@ import { authEvents } from '../../utils/authEvents';
 import { mediumTap, warningTap, successTap } from '../../utils/haptics';
 import { updateSupabasePassword } from '../../utils/supabaseAuth';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { errorMessage } from '../../types/common';
+import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 
-export default function SettingsScreen({ navigation }: any) {
+export default function SettingsScreen({ navigation }: { navigation: NavigationProp<ParamListBase> }) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();
@@ -112,8 +114,8 @@ export default function SettingsScreen({ navigation }: any) {
     if (backendKey) {
       profileApi
         .update({ [backendKey]: value })
-        .catch((err: any) => {
-          console.warn('SettingsScreen: failed to sync profile setting', key, err?.message);
+        .catch((err: unknown) => {
+          console.warn('SettingsScreen: failed to sync profile setting', key, errorMessage(err));
         });
     }
   };
@@ -135,8 +137,8 @@ export default function SettingsScreen({ navigation }: any) {
     if (backendKey) {
       notificationsApi
         .updatePreferences({ [backendKey]: value })
-        .catch((err: any) => {
-          console.warn('SettingsScreen: failed to sync notification pref', key, err?.message);
+        .catch((err: unknown) => {
+          console.warn('SettingsScreen: failed to sync notification pref', key, errorMessage(err));
         });
     }
   };

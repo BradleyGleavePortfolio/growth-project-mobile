@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useQuery } from '@tanstack/react-query';
 import { recipesApi } from '../../services/api';
 
@@ -108,7 +108,7 @@ const ALL_TAGS = [
 export default function RecipesScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const [search, setSearch] = useState('');
   const [activeTag, setActiveTag] = useState('All');
 

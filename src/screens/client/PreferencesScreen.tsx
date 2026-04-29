@@ -26,6 +26,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { track } from '../../lib/analytics';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import {
   usePreferences,
   type HomeModule,
@@ -150,7 +151,7 @@ function SegmentControl<T extends string | number>({
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
-export default function PreferencesScreen({ navigation }: any) {
+export default function PreferencesScreen({ navigation }: { navigation: NavigationProp<ParamListBase> }) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const { prefs, isLoading, isSaving, updatePrefs } = usePreferences();
@@ -163,7 +164,7 @@ export default function PreferencesScreen({ navigation }: any) {
   const change = useCallback(
     <K extends keyof typeof prefs>(key: K, value: (typeof prefs)[K]) => {
       track('preference_changed', { key });
-      updatePrefs({ [key]: value } as any);
+      updatePrefs({ [key]: value } as Partial<typeof prefs>);
     },
     [updatePrefs],
   );

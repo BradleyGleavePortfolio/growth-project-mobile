@@ -21,7 +21,8 @@ if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
 // Fly.io URL stays as the default so local RN dev without a .env still boots.
 const DEV_API_FALLBACK = 'https://backend-spring-lake-3890.fly.dev/api';
 const isDev =
-  process.env.NODE_ENV !== 'production' && !!(globalThis as any).__DEV__;
+  process.env.NODE_ENV !== 'production' &&
+  !!(globalThis as { __DEV__?: boolean }).__DEV__;
 
 let resolvedApiUrl: string;
 if (API_URL_FROM_ENV) {
