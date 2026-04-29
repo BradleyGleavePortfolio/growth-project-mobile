@@ -63,14 +63,24 @@ All runtime env vars are read via `expo-constants` / `EXPO_PUBLIC_*`. Copy
 | `EXPO_PUBLIC_API_URL` | yes (non-dev) | Base URL of the backend API. In dev, falls back to the Fly.io URL in `src/config/env.ts`. |
 | `EXPO_PUBLIC_SUPABASE_URL` | yes | Supabase project URL used for auth + token refresh. |
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | yes | Supabase anon JWT used by the client SDK. |
+| `EXPO_PUBLIC_SENTRY_DSN` | no | When set, Sentry is initialised in `services/sentry.ts`. Missing DSN means `wrap`, `captureError`, `setSentryUser` are no-ops. |
+| `EXPO_PUBLIC_ENVIRONMENT` | no | Sentry `environment` tag. Defaults to `'production'`. |
+| `EXPO_PUBLIC_POSTHOG_KEY` | no | PostHog project key. Empty string disables capture. |
+| `EXPO_PUBLIC_POSTHOG_HOST` | no | Defaults to `https://us.i.posthog.com`. |
 
-Google sign-in is brokered through Supabase OAuth — the mobile build does
+Google sign-in is brokered through Supabase OAuth. The mobile build does
 **not** embed any per-platform Google client ID. See `PLAY_STORE_READINESS.md`
 section 7 for the redirect URIs Supabase + Google Cloud Console must allow.
 
 For EAS builds, either embed these in `eas.json` `env` blocks or store them as
 EAS Secrets (`eas secret:create --scope project --name FOO`). Run
 `npm run validate:config` before `eas build` to catch missing or stale config.
+
+`docs/HANDOFF.md` is the single reference covering every variable, the
+`app.json` shape, the auth state machine, the AI context contract, the
+deep-link parser, the design-token structure, the Play Internal Testing
+checklist, and the open verification gaps. Read it before picking up
+unfamiliar work in this repo.
 
 ## Release readiness
 
