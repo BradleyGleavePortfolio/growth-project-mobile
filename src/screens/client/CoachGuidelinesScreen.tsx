@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -9,10 +9,13 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
-import { Colors } from '../../constants/colors';
+
 import { coachApi } from '../../services/api';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 export default function CoachGuidelinesScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation<any>();
   const currentUser = useCurrentUser();
   const [guideline, setGuideline] = useState<{ title?: string; description?: string; created_at?: string } | null>(null);
@@ -37,7 +40,7 @@ export default function CoachGuidelinesScreen() {
     <View style={styles.container}>
       <View style={styles.topBar}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.topTitle}>Coach Guidelines</Text>
         <View style={{ width: 24 }} />
@@ -52,7 +55,7 @@ export default function CoachGuidelinesScreen() {
           <>
             <View style={styles.headerCard}>
               <View style={styles.headerIcon}>
-                <Ionicons name="clipboard" size={24} color={Colors.primary} />
+                <Ionicons name="clipboard" size={24} color={colors.primary} />
               </View>
               <Text style={styles.headerTitle}>Your Workout Plan</Text>
               <Text style={styles.headerSub}>
@@ -98,7 +101,7 @@ export default function CoachGuidelinesScreen() {
           </>
         ) : (
           <View style={styles.emptyCard}>
-            <Ionicons name="clipboard-outline" size={48} color={Colors.textMuted} />
+            <Ionicons name="clipboard-outline" size={48} color={colors.textMuted} />
             <Text style={styles.emptyTitle}>No Guidelines Yet</Text>
             <Text style={styles.emptyText}>
               No guidelines added yet.
@@ -110,8 +113,9 @@ export default function CoachGuidelinesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -119,14 +123,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 56,
     paddingBottom: 12,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
-  topTitle: { fontSize: 17, fontWeight: '500', color: Colors.textPrimary },
+  topTitle: { fontSize: 17, fontWeight: '500', color: colors.textPrimary },
   content: { padding: 20, paddingBottom: 100 },
   headerCard: {
-    backgroundColor: Colors.primaryPale,
+    backgroundColor: colors.primaryPale,
     borderRadius: 4, // radius.lg
     padding: 24,
     alignItems: 'center',
@@ -136,35 +140,35 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 4, // radius.lg
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
   },
-  headerTitle: { fontSize: 20, fontWeight: '500', color: Colors.textPrimary, marginBottom: 4 },
-  headerSub: { fontSize: 13, color: Colors.textSecondary },
+  headerTitle: { fontSize: 20, fontWeight: '500', color: colors.textPrimary, marginBottom: 4 },
+  headerSub: { fontSize: 13, color: colors.textSecondary },
   guidelineCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     padding: 20,
   },
   heading1: {
     fontSize: 18,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginBottom: 8,
     marginTop: 8,
   },
   heading2: {
     fontSize: 15,
     fontWeight: '500',
-    color: Colors.primary,
+    color: colors.primary,
     marginBottom: 6,
     marginTop: 12,
   },
   paragraph: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     lineHeight: 22,
     marginBottom: 4,
   },
@@ -175,24 +179,25 @@ const styles = StyleSheet.create({
   },
   bulletDot: {
     fontSize: 14,
-    color: Colors.primary,
+    color: colors.primary,
     marginRight: 8,
     lineHeight: 22,
   },
   bulletText: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     lineHeight: 22,
     flex: 1,
   },
   emptyCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     padding: 40,
     alignItems: 'center',
     marginTop: 40,
     gap: 12,
   },
-  emptyTitle: { fontSize: 18, fontWeight: '500', color: Colors.textPrimary },
-  emptyText: { fontSize: 14, color: Colors.textMuted, textAlign: 'center', lineHeight: 20 },
-});
+  emptyTitle: { fontSize: 18, fontWeight: '500', color: colors.textPrimary },
+  emptyText: { fontSize: 14, color: colors.textMuted, textAlign: 'center', lineHeight: 20 },
+
+  });

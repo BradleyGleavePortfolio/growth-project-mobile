@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -22,10 +22,11 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { getChatHistory, saveChatMessage } from '../../db/chatDb';
 import { getAIResponse } from '../../utils/aiGuide';
 import { aiApi, AIStructuredContext } from '../../services/api';
-import { Colors } from '../../constants/colors';
+
 import { ChatMessage } from '../../types';
 import { generateId } from '../../utils/date';
 import FadeInView from '../../components/FadeInView';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 // Quiet-luxury prompts. The AI is the coach's voice; the prompts should read
 // like a coach asking, not a fitness app pushing keywords.
@@ -38,6 +39,8 @@ const QUICK_PROMPTS = [
 ];
 
 function TypingIndicator() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const dot1 = useSharedValue(0);
   const dot2 = useSharedValue(0);
   const dot3 = useSharedValue(0);
@@ -79,6 +82,8 @@ function TypingIndicator() {
 }
 
 export default function AIGuideScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -235,7 +240,7 @@ export default function AIGuideScreen() {
         ListFooterComponent={
           messages.length === 0 ? (
             <View style={styles.welcomeContainer}>
-              <Ionicons name="chatbubble-ellipses" size={40} color={Colors.primary} />
+              <Ionicons name="chatbubble-ellipses" size={40} color={colors.primary} />
               <Text style={styles.welcomeTitle}>
                 Hello{currentUser?.firstName ? `, ${currentUser.firstName}` : ''}.
               </Text>
@@ -278,7 +283,7 @@ export default function AIGuideScreen() {
         <TextInput
           style={styles.textInput}
           placeholder="Ask me anything..."
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           value={input}
           onChangeText={setInput}
           multiline
@@ -295,7 +300,7 @@ export default function AIGuideScreen() {
           <Ionicons
             name="send"
             size={20}
-            color={input.trim() ? Colors.textOnPrimary : Colors.textMuted}
+            color={input.trim() ? colors.textOnPrimary : colors.textMuted}
           />
         </TouchableOpacity>
       </View>
@@ -303,10 +308,11 @@ export default function AIGuideScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   header: {
     paddingHorizontal: 24,
@@ -319,7 +325,7 @@ const styles = StyleSheet.create({
     lineHeight: 35,
     letterSpacing: 0.6,
     fontWeight: '400',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   subTitle: {
     fontFamily: 'Inter_500Medium',
@@ -328,7 +334,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1.98,
     fontWeight: '500',
     textTransform: 'uppercase',
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 8,
   },
   listContent: {
@@ -348,14 +354,14 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   userBubble: {
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     borderRadius: 4, // radius.lg
     borderBottomRightRadius: 4,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
   aiBubble: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     borderBottomLeftRadius: 4,
     paddingHorizontal: 14,
@@ -364,19 +370,19 @@ const styles = StyleSheet.create({
   },
   userText: {
     fontSize: 15,
-    color: Colors.textOnPrimary,
+    color: colors.textOnPrimary,
     lineHeight: 21,
   },
   aiText: {
     fontSize: 15,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     lineHeight: 21,
   },
   aiAvatar: {
     width: 30,
     height: 30,
     borderRadius: 4, // radius.lg
-    backgroundColor: Colors.primaryDark,
+    backgroundColor: colors.primaryDark,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 4,
@@ -386,7 +392,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     letterSpacing: 1,
-    color: Colors.textOnPrimary,
+    color: colors.textOnPrimary,
   },
   typingRow: {
     flexDirection: 'row',
@@ -404,7 +410,7 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: Colors.textSecondary,
+    backgroundColor: colors.textSecondary,
   },
   welcomeContainer: {
     alignItems: 'center',
@@ -418,17 +424,17 @@ const styles = StyleSheet.create({
     lineHeight: 26,
     letterSpacing: 0.4,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   welcomeText: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
   },
   welcomeFooter: {
     fontSize: 12,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'center',
     marginTop: 6,
   },
@@ -440,17 +446,17 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   quickChip: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   quickChipText: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   inputBar: {
     flexDirection: 'row',
@@ -458,30 +464,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     paddingBottom: Platform.OS === 'ios' ? 32 : 16,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
     gap: 10,
   },
   textInput: {
     flex: 1,
-    backgroundColor: Colors.surfaceElevated,
+    backgroundColor: colors.surfaceElevated,
     borderRadius: 4, // radius.lg
     paddingHorizontal: 16,
     paddingVertical: 10,
     fontSize: 15,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     maxHeight: 100,
   },
   sendBtn: {
     width: 40,
     height: 40,
     borderRadius: 4, // radius.lg
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
   sendBtnDisabled: {
-    backgroundColor: Colors.surfaceElevated,
+    backgroundColor: colors.surfaceElevated,
   },
-});
+
+  });

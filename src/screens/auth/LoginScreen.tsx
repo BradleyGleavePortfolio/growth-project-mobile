@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,18 +13,21 @@ import {
   // TouchableOpacity retained for auth buttons — safe pattern
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Colors, Typography, Spacing, Radius, Shadow } from '../../theme';
+import { Typography, Spacing, Radius, Shadow } from '../../theme';
 import { authApi } from '../../services/api';
 import { secureStorage } from '../../services/secureStorage';
 import { authEvents } from '../../utils/authEvents';
 import { track, identify } from '../../lib/analytics';
 import { toFriendlyAuthError } from '../../utils/authErrorMessage';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 interface Props {
   navigation: any;
 }
 
 export default function LoginScreen({ navigation }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -135,7 +138,7 @@ export default function LoginScreen({ navigation }: Props) {
             value={email}
             onChangeText={setEmail}
             placeholder="you@email.com"
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor={colors.textMuted}
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
@@ -153,7 +156,7 @@ export default function LoginScreen({ navigation }: Props) {
             value={password}
             onChangeText={setPassword}
             placeholder="••••••••"
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor={colors.textMuted}
             secureTextEntry
             accessibilityLabel="Password"
             accessibilityHint="Enter your password"
@@ -182,7 +185,7 @@ export default function LoginScreen({ navigation }: Props) {
           accessibilityState={{ disabled: loading, busy: loading }}
         >
           {loading ? (
-            <ActivityIndicator color={Colors.white} />
+            <ActivityIndicator color={colors.white} />
           ) : (
             <Text style={styles.loginButtonText}>Sign In</Text>
           )}
@@ -205,7 +208,7 @@ export default function LoginScreen({ navigation }: Props) {
           accessibilityState={{ disabled: googleLoading, busy: googleLoading }}
         >
           {googleLoading ? (
-            <ActivityIndicator color={Colors.dark} />
+            <ActivityIndicator color={colors.dark} />
           ) : (
             <>
               <Text style={styles.googleG}>G</Text>
@@ -231,8 +234,9 @@ export default function LoginScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   scroll: { flexGrow: 1, padding: Spacing.lg, justifyContent: 'center' },
   header: { marginBottom: Spacing.xl },
   title: { ...Typography.h1, marginBottom: Spacing.xs },
@@ -243,52 +247,52 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     marginBottom: Spacing.md,
     borderLeftWidth: 2,
-    borderLeftColor: Colors.error,
+    borderLeftColor: colors.error,
   },
-  errorText: { color: Colors.error, fontSize: 14, fontFamily: 'Inter_400Regular' },
+  errorText: { color: colors.error, fontSize: 14, fontFamily: 'Inter_400Regular' },
   inputGroup: { marginBottom: Spacing.md },
   inputLabel: { ...Typography.label, marginBottom: Spacing.xs },
   input: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     borderRadius: Radius.md,
     padding: Spacing.md,
     fontSize: 16,
-    color: Colors.dark,
+    color: colors.dark,
     ...Shadow.card,
   },
   forgotText: {
-    color: Colors.primary,
+    color: colors.primary,
     fontSize: 14,
     textAlign: 'right',
     marginBottom: Spacing.lg,
   },
   loginButton: {
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     borderRadius: Radius.md,
     padding: Spacing.md,
     alignItems: 'center',
     ...Shadow.button,
   },
   buttonDisabled: { opacity: 0.6 },
-  loginButtonText: { ...Typography.button, color: Colors.white },
+  loginButtonText: { ...Typography.button, color: colors.white },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
     marginVertical: Spacing.lg,
   },
-  dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
-  dividerText: { marginHorizontal: Spacing.sm, color: Colors.textMuted, fontSize: 14 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
+  dividerText: { marginHorizontal: Spacing.sm, color: colors.textMuted, fontSize: 14 },
   googleButton: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.md,
     padding: Spacing.md,
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     ...Shadow.card,
   },
   googleG: {
@@ -296,14 +300,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginRight: Spacing.sm,
-    color: Colors.dark,
+    color: colors.dark,
   },
-  googleButtonText: { ...Typography.button, color: Colors.dark },
+  googleButtonText: { ...Typography.button, color: colors.dark },
   signupRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     marginTop: Spacing.xl,
   },
-  signupText: { color: Colors.textMuted, fontSize: 15 },
-  signupLink: { color: Colors.primary, fontSize: 15, fontWeight: '600' },
-});
+  signupText: { color: colors.textMuted, fontSize: 15 },
+  signupLink: { color: colors.primary, fontSize: 15, fontWeight: '600' },
+
+  });

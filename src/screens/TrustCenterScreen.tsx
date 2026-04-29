@@ -13,7 +13,7 @@
  *   account_deletion_requested
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -24,11 +24,12 @@ import {
 } from 'react-native';
 import HapticPressable from '../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../constants/colors';
+
 import { Spacing, Radius } from '../theme/index';
 import { typography, shadows } from '../theme/tokens';
 import { track } from '../lib/analytics';
 import api from '../services/api';
+import { useTheme, ThemeColors } from '../theme/ThemeProvider';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -66,9 +67,11 @@ function formatRelativeDate(isoString: string): string {
 // ─── Metadata row component ───────────────────────────────────────────────────
 
 function MetaRow({ icon, label, value }: { icon: keyof typeof Ionicons.glyphMap; label: string; value: string }) {
+  const { colors } = useTheme();
+  const metaStyles = useMemo(() => makeMetaStyles(colors), [colors]);
   return (
     <View style={metaStyles.row}>
-      <Ionicons name={icon} size={18} color={Colors.primary} style={metaStyles.icon} />
+      <Ionicons name={icon} size={18} color={colors.primary} style={metaStyles.icon} />
       <View style={metaStyles.textGroup}>
         <Text style={metaStyles.label}>{label}</Text>
         <Text style={metaStyles.value}>{value}</Text>
@@ -77,13 +80,14 @@ function MetaRow({ icon, label, value }: { icon: keyof typeof Ionicons.glyphMap;
   );
 }
 
-const metaStyles = StyleSheet.create({
+const makeMetaStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
     gap: 12,
   },
   icon: {
@@ -95,7 +99,7 @@ const metaStyles = StyleSheet.create({
   label: {
     fontSize: typography.caption.fontSize,
     fontWeight: '600',
-    color: Colors.textMuted,
+    color: colors.textMuted,
     letterSpacing: 0.4,
     textTransform: 'uppercase',
     marginBottom: 2,
@@ -103,13 +107,16 @@ const metaStyles = StyleSheet.create({
   value: {
     fontSize: typography.body.fontSize,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
-});
+
+  });
 
 // ─── Bullet item ─────────────────────────────────────────────────────────────
 
 function BulletItem({ text }: { text: string }) {
+  const { colors } = useTheme();
+  const bulletStyles = useMemo(() => makeBulletStyles(colors), [colors]);
   return (
     <View style={bulletStyles.row}>
       <View style={bulletStyles.dot} />
@@ -118,7 +125,8 @@ function BulletItem({ text }: { text: string }) {
   );
 }
 
-const bulletStyles = StyleSheet.create({
+const makeBulletStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -129,20 +137,23 @@ const bulletStyles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     marginTop: 7,
   },
   text: {
     flex: 1,
     fontSize: typography.body.fontSize,
     lineHeight: typography.body.lineHeight,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
-});
+
+  });
 
 // ─── Main screen ─────────────────────────────────────────────────────────────
 
 export default function TrustCenterScreen({ navigation }: any) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [meta, setMeta] = useState<TrustMeta | null>(null);
   const [loading, setLoading] = useState(true);
   const [exportBusy, setExportBusy] = useState(false);
@@ -233,7 +244,7 @@ export default function TrustCenterScreen({ navigation }: any) {
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </HapticPressable>
         <Text style={styles.headerTitle}>Trust & Privacy</Text>
         <View style={styles.backBtn} />
@@ -242,7 +253,7 @@ export default function TrustCenterScreen({ navigation }: any) {
       {/* Hero lockup */}
       <View style={styles.heroSection}>
         <View style={styles.heroIcon}>
-          <Ionicons name="shield-checkmark" size={32} color={Colors.primary} />
+          <Ionicons name="shield-checkmark" size={32} color={colors.primary} />
         </View>
         <Text style={styles.heroSubtitle}>
           Your health data is sensitive. Here is exactly how we protect it.
@@ -254,7 +265,7 @@ export default function TrustCenterScreen({ navigation }: any) {
         <Text style={styles.sectionTitle}>Security Status</Text>
         <View style={styles.card}>
           {loading ? (
-            <ActivityIndicator color={Colors.primary} />
+            <ActivityIndicator color={colors.primary} />
           ) : meta ? (
             <>
               <MetaRow
@@ -289,7 +300,7 @@ export default function TrustCenterScreen({ navigation }: any) {
           {/* Info row — no action */}
           <View style={styles.actionInfoRow}>
             <View style={styles.actionIconWrap}>
-              <Ionicons name="people-outline" size={18} color={Colors.primary} />
+              <Ionicons name="people-outline" size={18} color={colors.primary} />
             </View>
             <Text style={styles.actionInfoText}>
               Workouts and meals stay private to you and your assigned coach
@@ -308,16 +319,16 @@ export default function TrustCenterScreen({ navigation }: any) {
             accessibilityLabel="Request data export"
           >
             <View style={styles.actionIconWrap}>
-              <Ionicons name="download-outline" size={18} color={Colors.primary} />
+              <Ionicons name="download-outline" size={18} color={colors.primary} />
             </View>
             <View style={styles.actionBtnText}>
               <Text style={styles.actionBtnLabel}>Request data export</Text>
               <Text style={styles.actionBtnSub}>Receive all your data within 24 hours</Text>
             </View>
             {exportBusy ? (
-              <ActivityIndicator size="small" color={Colors.primary} />
+              <ActivityIndicator size="small" color={colors.primary} />
             ) : (
-              <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             )}
           </HapticPressable>
 
@@ -333,16 +344,16 @@ export default function TrustCenterScreen({ navigation }: any) {
             accessibilityLabel="Delete my account"
           >
             <View style={[styles.actionIconWrap, styles.actionIconDanger]}>
-              <Ionicons name="trash-outline" size={18} color={Colors.error} />
+              <Ionicons name="trash-outline" size={18} color={colors.error} />
             </View>
             <View style={styles.actionBtnText}>
               <Text style={[styles.actionBtnLabel, styles.dangerText]}>Delete my account</Text>
               <Text style={styles.actionBtnSub}>30-day grace period before permanent deletion</Text>
             </View>
             {deleteBusy ? (
-              <ActivityIndicator size="small" color={Colors.error} />
+              <ActivityIndicator size="small" color={colors.error} />
             ) : (
-              <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             )}
           </HapticPressable>
         </View>
@@ -381,10 +392,11 @@ export default function TrustCenterScreen({ navigation }: any) {
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   content: {
     paddingBottom: 48,
@@ -396,7 +408,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingTop: 56,
     paddingBottom: 12,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   backBtn: {
     width: 40,
@@ -407,7 +419,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: typography.h3.fontSize,
     fontWeight: typography.h3.fontWeight,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     textAlign: 'center',
   },
   heroSection: {
@@ -420,14 +432,14 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 4, // radius.lg
-    backgroundColor: Colors.primaryPale,
+    backgroundColor: colors.primaryPale,
     justifyContent: 'center',
     alignItems: 'center',
   },
   heroSubtitle: {
     fontSize: typography.body.fontSize,
     lineHeight: typography.body.lineHeight,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     textAlign: 'center',
     maxWidth: 280,
   },
@@ -438,13 +450,13 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 12,
     fontWeight: '500',
-    color: Colors.textMuted,
+    color: colors.textMuted,
     letterSpacing: 0.8,
     textTransform: 'uppercase',
     marginBottom: 10,
   },
   card: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.lg,
     padding: Spacing.md,
     ...shadows.sm,
@@ -459,7 +471,7 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 4, // radius.lg
-    backgroundColor: Colors.primaryPale,
+    backgroundColor: colors.primaryPale,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -470,11 +482,11 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: typography.body.fontSize,
     lineHeight: typography.body.lineHeight,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   divider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
     marginVertical: 4,
   },
   actionBtn: {
@@ -489,20 +501,20 @@ const styles = StyleSheet.create({
   actionBtnLabel: {
     fontSize: typography.body.fontSize,
     fontWeight: '600',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   actionBtnSub: {
     fontSize: typography.bodySmall.fontSize,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 2,
   },
   dangerText: {
-    color: Colors.error,
+    color: colors.error,
   },
   bulletGroupLabel: {
     fontSize: 12,
     fontWeight: '500',
-    color: Colors.textMuted,
+    color: colors.textMuted,
     letterSpacing: 0.4,
     textTransform: 'uppercase',
     marginBottom: 10,
@@ -514,11 +526,12 @@ const styles = StyleSheet.create({
   },
   footerText: {
     fontSize: typography.bodySmall.fontSize,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'center',
   },
   footerLink: {
-    color: Colors.primary,
+    color: colors.primary,
     fontWeight: '600',
   },
-});
+
+  });

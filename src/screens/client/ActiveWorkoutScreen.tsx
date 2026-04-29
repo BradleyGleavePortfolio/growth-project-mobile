@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -15,11 +15,12 @@ import {
 import HapticPressable from '../../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { Colors } from '../../constants/colors';
+
 import { getAllExercises } from '../../db/workoutDb';
 import { useCreateWorkout } from '../../hooks/useApi';
 import ExerciseLogModal, { ExerciseLogSaveData } from '../../components/ExerciseLogModal';
 import { track } from '../../lib/analytics';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 // NB: Fix #2 — the local exercise_logs SQLite table (logExerciseWithVolume)
 // is no longer written to. Volume aggregation now happens on the server
@@ -78,22 +79,25 @@ const MUSCLES = [
   'stretching',
 ];
 
-// Muscle group color mapping
-const MUSCLE_COLORS: Record<string, string> = {
-  chest: Colors.error,
-  back: Colors.info,
-  shoulders: Colors.warning,
-  legs: Colors.muscleLegs,
-  biceps: Colors.streak,
-  triceps: Colors.muscleTriceps,
-  core: Colors.muscleCore,
-  'full body': Colors.muscleFullBody,
-  cardio: Colors.muscleCardio,
-  stretching: Colors.textMuted,
-};
+// Muscle-group palette — built from theme colors at component scope so the
+// mapping always reflects the active theme.
+function makeMuscleColors(colors: ThemeColors): Record<string, string> {
+  return {
+    chest: colors.error,
+    back: colors.info,
+    shoulders: colors.warning,
+    legs: colors.muscleLegs,
+    biceps: colors.streak,
+    triceps: colors.muscleTriceps,
+    core: colors.muscleCore,
+    'full body': colors.muscleFullBody,
+    cardio: colors.muscleCardio,
+    stretching: colors.textMuted,
+  };
+}
 
-function getMuscleColor(muscle: string): string {
-  return MUSCLE_COLORS[muscle.toLowerCase()] ?? Colors.textSecondary;
+function lookupMuscleColor(map: Record<string, string>, muscle: string, fallback: string): string {
+  return map[muscle.toLowerCase()] ?? fallback;
 }
 
 // ── Exercise Image Component ──────────────────────────────────────────────
@@ -105,9 +109,11 @@ interface ExerciseImageProps {
 }
 
 function ExerciseImage({ imageUrl, muscle, size = 80 }: ExerciseImageProps) {
+  const { colors } = useTheme();
+  const muscleColors = useMemo(() => makeMuscleColors(colors), [colors]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const bgColor = getMuscleColor(muscle);
+  const bgColor = lookupMuscleColor(muscleColors, muscle, colors.textSecondary);
 
   if (!imageUrl || error) {
     return (
@@ -166,6 +172,9 @@ const exerciseImageStyles = StyleSheet.create({
 // ── Main Screen ───────────────────────────────────────────────────────────
 
 export default function ActiveWorkoutScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const muscleColors = useMemo(() => makeMuscleColors(colors), [colors]);
   const route = useRoute<RouteProp<RouteParams, 'ActiveWorkout'>>();
   const navigation = useNavigation<any>();
   const { routineName, exercises: exercisesJson } = route.params;
@@ -393,7 +402,7 @@ export default function ActiveWorkoutScreen() {
       {/* Top Bar */}
       <View style={styles.topBar}>
         <HapticPressable intent="warning" onPress={cancelWorkout}>
-          <Ionicons name="close" size={24} color={Colors.textPrimary} />
+          <Ionicons name="close" size={24} color={colors.textPrimary} />
         </HapticPressable>
         <View style={styles.topCenter}>
           <Text style={styles.topTitle}>{routineName}</Text>
@@ -415,7 +424,7 @@ export default function ActiveWorkoutScreen() {
             <View style={styles.exerciseHeader}>
               <Text style={styles.exerciseName}>{exercise.exerciseName}</Text>
               <HapticPressable intent="warning" onPress={() => removeExercise(exIdx)}>
-                <Ionicons name="trash-outline" size={18} color={Colors.textMuted} />
+                <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
               </HapticPressable>
             </View>
 
@@ -436,7 +445,7 @@ export default function ActiveWorkoutScreen() {
                   onChangeText={(v) => updateSet(exIdx, setIdx, 'weight', parseFloat(v) || 0)}
                   keyboardType="numeric"
                   placeholder="0"
-                  placeholderTextColor={Colors.textMuted}
+                  placeholderTextColor={colors.textMuted}
                 />
                 <TextInput
                   style={[styles.setInput, { flex: 1 }]}
@@ -444,27 +453,27 @@ export default function ActiveWorkoutScreen() {
                   onChangeText={(v) => updateSet(exIdx, setIdx, 'reps', parseInt(v) || 0)}
                   keyboardType="numeric"
                   placeholder="0"
-                  placeholderTextColor={Colors.textMuted}
+                  placeholderTextColor={colors.textMuted}
                 />
                 <HapticPressable
                   intent="medium"
                   style={[styles.checkBtn, set.completed && styles.checkBtnDone]}
                   onPress={() => toggleSetComplete(exIdx, setIdx)}
                 >
-                  <Ionicons name="checkmark" size={16} color={set.completed ? Colors.textOnPrimary : Colors.textMuted} />
+                  <Ionicons name="checkmark" size={16} color={set.completed ? colors.textOnPrimary : colors.textMuted} />
                 </HapticPressable>
               </View>
             ))}
 
             <HapticPressable intent="medium" style={styles.addSetBtn} onPress={() => addSet(exIdx)}>
-              <Ionicons name="add" size={16} color={Colors.primary} />
+              <Ionicons name="add" size={16} color={colors.primary} />
               <Text style={styles.addSetText}>Add Set</Text>
             </HapticPressable>
           </View>
         ))}
 
         <HapticPressable intent="medium" style={styles.addExerciseBtn} onPress={openAddExercise}>
-          <Ionicons name="add-circle" size={22} color={Colors.primary} />
+          <Ionicons name="add-circle" size={22} color={colors.primary} />
           <Text style={styles.addExerciseText}>Add Exercise</Text>
         </HapticPressable>
       </ScrollView>
@@ -482,24 +491,24 @@ export default function ActiveWorkoutScreen() {
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <HapticPressable intent="light" onPress={() => setShowAddModal(false)}>
-              <Ionicons name="close" size={24} color={Colors.textPrimary} />
+              <Ionicons name="close" size={24} color={colors.textPrimary} />
             </HapticPressable>
             <Text style={styles.modalTitle}>Add Exercise</Text>
             <View style={{ width: 24 }} />
           </View>
 
           <View style={styles.searchBar}>
-            <Ionicons name="search" size={18} color={Colors.textMuted} />
+            <Ionicons name="search" size={18} color={colors.textMuted} />
             <TextInput
               style={styles.searchInput}
               placeholder="Search exercises..."
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               value={searchQuery}
               onChangeText={handleSearchChange}
             />
             {searchQuery.length > 0 && (
               <HapticPressable intent="light" onPress={() => handleSearchChange('')}>
-                <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
+                <Ionicons name="close-circle" size={18} color={colors.textMuted} />
               </HapticPressable>
             )}
           </View>
@@ -530,7 +539,7 @@ export default function ActiveWorkoutScreen() {
             contentContainerStyle={styles.exerciseList}
             ListEmptyComponent={
               <View style={styles.emptyState}>
-                <Ionicons name="barbell-outline" size={40} color={Colors.textMuted} />
+                <Ionicons name="barbell-outline" size={40} color={colors.textMuted} />
                 <Text style={styles.emptyStateText}>No exercises found</Text>
                 <Text style={styles.emptyStateSubtext}>
                   {searchQuery.length > 0
@@ -558,10 +567,10 @@ export default function ActiveWorkoutScreen() {
                   <View
                     style={[
                       styles.muscleBadge,
-                      { backgroundColor: getMuscleColor(item.muscle) + '22', borderColor: getMuscleColor(item.muscle) + '66' },
+                      { backgroundColor: lookupMuscleColor(muscleColors, item.muscle, colors.textSecondary) + '22', borderColor: lookupMuscleColor(muscleColors, item.muscle, colors.textSecondary) + '66' },
                     ]}
                   >
-                    <Text style={[styles.muscleBadgeText, { color: getMuscleColor(item.muscle) }]}>
+                    <Text style={[styles.muscleBadgeText, { color: lookupMuscleColor(muscleColors, item.muscle, colors.textSecondary) }]}>
                       {item.muscle.charAt(0).toUpperCase() + item.muscle.slice(1)}
                     </Text>
                   </View>
@@ -570,7 +579,7 @@ export default function ActiveWorkoutScreen() {
                   <Text style={styles.exerciseListEquipment}>{item.equipment}</Text>
                 </View>
 
-                <Ionicons name="add-circle-outline" size={24} color={Colors.primary} />
+                <Ionicons name="add-circle-outline" size={24} color={colors.primary} />
               </HapticPressable>
             )}
           />
@@ -581,8 +590,9 @@ export default function ActiveWorkoutScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -590,33 +600,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 56,
     paddingBottom: 12,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   topCenter: { alignItems: 'center' },
-  topTitle: { fontSize: 16, fontWeight: '500', color: Colors.textPrimary },
-  timerText: { fontSize: 20, fontWeight: '500', color: Colors.primary, marginTop: 2 },
+  topTitle: { fontSize: 16, fontWeight: '500', color: colors.textPrimary },
+  timerText: { fontSize: 20, fontWeight: '500', color: colors.primary, marginTop: 2 },
   finishBtn: {
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     borderRadius: 0, // radius.sm
     paddingHorizontal: 16,
     paddingVertical: 8,
   },
-  finishBtnText: { color: Colors.textOnPrimary, fontSize: 14, fontWeight: '500' },
+  finishBtnText: { color: colors.textOnPrimary, fontSize: 14, fontWeight: '500' },
   progressBar: {
     height: 3,
-    backgroundColor: Colors.primaryPale,
+    backgroundColor: colors.primaryPale,
   },
   progressFill: {
     height: '100%',
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
   },
   content: { paddingVertical: 16, paddingBottom: 100 },
   exerciseCard: {
     marginHorizontal: 16,
     marginBottom: 12,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     padding: 16,
   },
@@ -626,14 +636,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  exerciseName: { fontSize: 16, fontWeight: '500', color: Colors.primary },
+  exerciseName: { fontSize: 16, fontWeight: '500', color: colors.primary },
   setHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 6,
     gap: 8,
   },
-  setHeaderText: { fontSize: 11, fontWeight: '600', color: Colors.textMuted, textAlign: 'center' },
+  setHeaderText: { fontSize: 11, fontWeight: '600', color: colors.textMuted, textAlign: 'center' },
   setRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -642,31 +652,31 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 0, // radius.sm
   },
-  setRowCompleted: { backgroundColor: Colors.primaryPale },
-  setText: { fontSize: 14, fontWeight: '600', color: Colors.textSecondary, textAlign: 'center' },
+  setRowCompleted: { backgroundColor: colors.primaryPale },
+  setText: { fontSize: 14, fontWeight: '600', color: colors.textSecondary, textAlign: 'center' },
   setInput: {
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     borderRadius: 0, // radius.sm
     paddingVertical: 8,
     paddingHorizontal: 12,
     fontSize: 15,
     fontWeight: '600',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     textAlign: 'center',
   },
   checkBtn: {
     width: 32,
     height: 32,
     borderRadius: 0, // radius.sm
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   checkBtnDone: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   addSetBtn: {
     flexDirection: 'row',
@@ -676,7 +686,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     marginTop: 4,
   },
-  addSetText: { fontSize: 13, fontWeight: '600', color: Colors.primary },
+  addSetText: { fontSize: 13, fontWeight: '600', color: colors.primary },
   addExerciseBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -684,16 +694,16 @@ const styles = StyleSheet.create({
     gap: 8,
     marginHorizontal: 16,
     paddingVertical: 16,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     borderStyle: 'dashed',
   },
-  addExerciseText: { fontSize: 15, fontWeight: '500', color: Colors.primary },
+  addExerciseText: { fontSize: 15, fontWeight: '500', color: colors.primary },
 
   // Modal
-  modalContainer: { flex: 1, backgroundColor: Colors.background },
+  modalContainer: { flex: 1, backgroundColor: colors.background },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -702,13 +712,13 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
-  modalTitle: { fontSize: 17, fontWeight: '500', color: Colors.textPrimary },
+  modalTitle: { fontSize: 17, fontWeight: '500', color: colors.textPrimary },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     marginHorizontal: 20,
     marginTop: 16,
     marginBottom: 8,
@@ -717,22 +727,22 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     gap: 8,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
-  searchInput: { flex: 1, fontSize: 16, color: Colors.textPrimary },
+  searchInput: { flex: 1, fontSize: 16, color: colors.textPrimary },
   muscleFilter: { maxHeight: 44, marginBottom: 8 },
   muscleFilterContent: { paddingHorizontal: 20, gap: 8 },
   muscleChip: {
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 4, // radius.lg
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
-  muscleChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  muscleChipText: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
-  muscleChipTextActive: { color: Colors.textOnPrimary },
+  muscleChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  muscleChipText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
+  muscleChipTextActive: { color: colors.textOnPrimary },
   exerciseList: { paddingHorizontal: 16, paddingBottom: 40 },
 
   // Exercise list item with image
@@ -742,13 +752,13 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   exerciseListInfo: {
     flex: 1,
     gap: 4,
   },
-  exerciseListName: { fontSize: 15, fontWeight: '500', color: Colors.textPrimary },
+  exerciseListName: { fontSize: 15, fontWeight: '500', color: colors.textPrimary },
   muscleBadge: {
     alignSelf: 'flex-start',
     paddingHorizontal: 8,
@@ -761,7 +771,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: 0.3,
   },
-  exerciseListEquipment: { fontSize: 12, color: Colors.textMuted },
+  exerciseListEquipment: { fontSize: 12, color: colors.textMuted },
 
   // Empty state
   emptyState: {
@@ -773,13 +783,14 @@ const styles = StyleSheet.create({
   emptyStateText: {
     fontSize: 16,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginTop: 8,
   },
   emptyStateSubtext: {
     fontSize: 13,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'center',
     paddingHorizontal: 32,
   },
-});
+
+  });

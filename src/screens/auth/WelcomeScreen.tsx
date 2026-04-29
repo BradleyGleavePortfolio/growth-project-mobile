@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,16 +11,18 @@ import {
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { AuthStackParamList } from '../../navigation/AuthNavigator';
 // All colors from central theme — never hardcode hex values here
-import { Colors, Spacing, Radius, typographyTokens } from '../../theme/index';
-
+import { Spacing, Radius, typographyTokens } from '../../theme/index';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 type Props = {
   navigation: NativeStackNavigationProp<AuthStackParamList, 'Welcome'>;
 };
 
 export default function WelcomeScreen({ navigation }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.background} />
+      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
       <View style={styles.container}>
         <View style={styles.logoContainer}>
           <View style={styles.logoIcon}>
@@ -78,14 +80,15 @@ export default function WelcomeScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.lg,
     paddingTop: 80,
@@ -99,31 +102,31 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: Radius.lg,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: Spacing.lg,
   },
   logoIconText: {
     ...typographyTokens.h2,
-    color: Colors.white,
+    color: colors.white,
   },
   title: {
     ...typographyTokens.h1,
-    color: Colors.dark,
+    color: colors.dark,
     textAlign: 'center',
     marginBottom: Spacing.sm,
   },
   tagline: {
     ...typographyTokens.body,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'center',
   },
   buttonContainer: {
     gap: 12,
   },
   primaryButton: {
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     paddingVertical: Spacing.md,
     borderRadius: Radius.md,
     alignItems: 'center',
@@ -134,7 +137,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 1.2,
     textTransform: 'uppercase',
-    color: Colors.white,
+    color: colors.white,
   },
   secondaryButton: {
     backgroundColor: 'transparent',
@@ -142,7 +145,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   secondaryButtonText: {
     fontFamily: 'Inter_500Medium',
@@ -150,17 +153,18 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: 1.2,
     textTransform: 'uppercase',
-    color: Colors.dark,
+    color: colors.dark,
   },
   accessNote: {
     marginTop: Spacing.md,
     fontSize: 12,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'center',
     lineHeight: 18,
   },
   accessLink: {
-    color: Colors.primary,
+    color: colors.primary,
     textDecorationLine: 'underline',
   },
-});
+
+  });

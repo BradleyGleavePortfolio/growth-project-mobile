@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,13 +10,15 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthStackParamList } from '../../navigation/AuthNavigator';
 import { authApi } from '../../services/api';
-import { Colors } from '../../constants/colors';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 type Props = {
   navigation: NativeStackNavigationProp<AuthStackParamList, 'ForgotPassword'>;
 };
 
 export default function ForgotPasswordScreen({ navigation }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -44,7 +46,7 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
         accessibilityLabel="Back"
         accessibilityHint="Returns to previous screen"
       >
-        <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+        <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
       </TouchableOpacity>
 
       <View style={styles.header}>
@@ -58,7 +60,7 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
 
       {sent ? (
         <View style={styles.successContainer} accessible accessibilityRole="alert">
-          <Ionicons name="checkmark-circle" size={64} color={Colors.primary} />
+          <Ionicons name="checkmark-circle" size={64} color={colors.primary} />
           <Text style={styles.successText}>
             If an account exists with {email}, you'll receive a password reset
             email shortly.
@@ -81,7 +83,7 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
               value={email}
               onChangeText={setEmail}
               placeholder="your@email.com"
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               keyboardType="email-address"
               autoCapitalize="none"
               autoCorrect={false}
@@ -107,10 +109,11 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     paddingHorizontal: 24,
     paddingTop: 60,
   },
@@ -129,7 +132,7 @@ const styles = StyleSheet.create({
     lineHeight: 35,
     letterSpacing: 0.6,
     fontWeight: '400',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginBottom: 8,
   },
   subtitle: {
@@ -137,7 +140,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 26,
     letterSpacing: -0.16,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   form: {
     gap: 24,
@@ -148,26 +151,26 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   input: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     borderRadius: 2, // radius.md
     padding: 16,
     fontSize: 16,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   resetButton: {
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     paddingVertical: 16,
     borderRadius: 2, // radius.md
     alignItems: 'center',
   },
   resetButtonText: {
     fontFamily: 'Inter_600SemiBold',
-    color: Colors.textOnPrimary,
+    color: colors.textOnPrimary,
     fontSize: 14,
     fontWeight: '600',
     letterSpacing: 1.2,
@@ -179,7 +182,7 @@ const styles = StyleSheet.create({
     paddingTop: 40,
   },
   successText: {
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontSize: 16,
     textAlign: 'center',
     lineHeight: 24,
@@ -189,8 +192,9 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
   backToLoginText: {
-    color: Colors.primary,
+    color: colors.primary,
     fontSize: 16,
     fontWeight: '600',
   },
-});
+
+  });
