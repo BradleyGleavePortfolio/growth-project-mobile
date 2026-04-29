@@ -47,16 +47,17 @@ const ANTICIPATION_PCT   = 0.8; // trigger pulse above this fill ratio
 
 // Category icon map
 const CATEGORY_ICON: Record<string, string> = {
-  streak:   'calendar-outline',
-  workouts: 'barbell',
-  identity: 'ribbon',
+  consistency: 'calendar-outline',
+  workouts:    'barbell',
+  identity:    'ribbon',
 };
 
-// Category colour map (using theme tokens)
+// Category colour map (using theme tokens). The consistency accent is
+// the neutral stone tone — quiet-luxury palette, no orange streak chrome.
 const CATEGORY_COLOR: Record<string, string> = {
-  streak:   colors.data.streak,     // terra-cotta (#E76F51)
-  workouts: Colors.primary,         // deep green
-  identity: tokens.gold[500],       // gold
+  consistency: colors.data.consistency,
+  workouts:    Colors.primary,
+  identity:    tokens.gold[500],
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -138,7 +139,7 @@ export default function MilestoneProgress({
         <View style={styles.headerText}>
           <Text style={styles.label} numberOfLines={1}>{label}</Text>
           <Text style={styles.valueLine}>
-            {currentValue} / {targetValue} {category === 'streak' ? 'days' : 'workouts'}
+            {currentValue} / {targetValue} {category === 'consistency' ? 'days' : 'workouts'}
           </Text>
         </View>
         {/* Percentage badge */}

@@ -45,7 +45,7 @@ export default function ProfileScreen() {
 
   const identityTitle = resolveIdentityTitle({
     isFoundingMember: foundingData?.isFoundingMember ?? false,
-    streakDays: 0,
+    consecutiveDays: 0,
     totalWorkouts: 0,
     weeksSinceJoin: 0,
   });

@@ -1,5 +1,5 @@
 import { getDatabase } from './database';
-import { generateId, getTodayString } from '../utils/date';
+import { generateId } from '../utils/date';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -173,49 +173,13 @@ export async function toggleHabit(
   return { id, habitId, userId, date, count: targetCount, completed: true, createdAt: now };
 }
 
-export async function getHabitStreak(habitId: string, userId: string): Promise<number> {
-  const db = await getDatabase();
-  const today = getTodayString();
-  let streak = 0;
-  let checkDate = new Date(today + 'T00:00:00');
-
-  for (let i = 0; i < 365; i++) {
-    const dateStr = checkDate.toISOString().split('T')[0];
-    const log = await db.getFirstAsync<any>(
-      'SELECT completed FROM habit_logs WHERE habitId = ? AND userId = ? AND date = ? AND completed = 1',
-      [habitId, userId, dateStr]
-    );
-    if (log) {
-      streak++;
-      checkDate.setDate(checkDate.getDate() - 1);
-    } else {
-      break;
-    }
-  }
-  return streak;
-}
-
-export async function getWeekCompletions(userId: string, habitId: string): Promise<boolean[]> {
-  const today = new Date();
-  const dayOfWeek = today.getDay();
-  const monday = new Date(today);
-  monday.setDate(today.getDate() - ((dayOfWeek + 6) % 7));
-
-  const db = await getDatabase();
-  const result: boolean[] = [];
-
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(monday);
-    d.setDate(monday.getDate() + i);
-    const dateStr = d.toISOString().split('T')[0];
-    const log = await db.getFirstAsync<any>(
-      'SELECT completed FROM habit_logs WHERE habitId = ? AND userId = ? AND date = ? AND completed = 1',
-      [habitId, userId, dateStr]
-    );
-    result.push(!!log);
-  }
-  return result;
-}
+// ── Consecutive-day count ──────────────────────────────────────────────────
+//
+// `getHabitStreak` and `getWeekCompletions` were removed in the doctrine
+// wave-2 sweep. The former returned a "streak" count for a single habit and
+// had no remaining consumers; the latter drove a week-strip UI that no
+// longer ships. The server-side habits surface is the source of truth for
+// any consecutive-day display the app shows now.
 
 // ── Daily Check-ins ────────────────────────────────────────────────────────
 //
