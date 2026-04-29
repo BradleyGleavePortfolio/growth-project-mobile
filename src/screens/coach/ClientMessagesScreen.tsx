@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -17,8 +17,9 @@ import { useFocusEffect, useRoute, useNavigation, RouteProp } from '@react-navig
 import { coachApi } from '../../services/api';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { subscribeToMessages } from '../../services/realtime';
-import { Colors } from '../../constants/colors';
+
 import type { ClientsStackParamList } from '../../navigation/CoachNavigator';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 interface Message {
   id: string;
@@ -33,6 +34,8 @@ interface Message {
 const FALLBACK_POLL_MS = 60000;
 
 export default function ClientMessagesScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const route = useRoute<RouteProp<ClientsStackParamList, 'ClientMessages'>>();
   const navigation = useNavigation<any>();
   const { clientId, clientName } = route.params;
@@ -133,7 +136,7 @@ export default function ClientMessagesScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -151,7 +154,7 @@ export default function ClientMessagesScreen() {
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <View style={styles.chatHeaderInfo}>
           <View style={styles.chatAvatar}>
@@ -182,7 +185,7 @@ export default function ClientMessagesScreen() {
         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
         ListEmptyComponent={
           <View style={styles.chatEmpty}>
-            <Ionicons name="chatbubbles-outline" size={40} color={Colors.textMuted} />
+            <Ionicons name="chatbubbles-outline" size={40} color={colors.textMuted} />
             <Text style={styles.chatEmptyText}>
               Start a conversation with {clientName.split(' ')[0]}
             </Text>
@@ -236,7 +239,7 @@ export default function ClientMessagesScreen() {
         <TextInput
           style={styles.chatInput}
           placeholder="Type a message..."
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           value={inputText}
           onChangeText={setInputText}
           multiline
@@ -253,7 +256,7 @@ export default function ClientMessagesScreen() {
           <Ionicons
             name="send"
             size={20}
-            color={inputText.trim() && !sending ? Colors.textOnPrimary : Colors.textMuted}
+            color={inputText.trim() && !sending ? colors.textOnPrimary : colors.textMuted}
           />
         </TouchableOpacity>
       </View>
@@ -291,11 +294,12 @@ function mergeById(existing: Message[], incoming: Message[]): Message[] {
   return Array.from(map.values()).sort(byCreatedAtAsc);
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.background },
-  errorBanner: { backgroundColor: Colors.error + '22', paddingVertical: 8, paddingHorizontal: 16 },
-  errorBannerText: { color: Colors.error, fontSize: 13, textAlign: 'center' },
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
+  errorBanner: { backgroundColor: colors.error + '22', paddingVertical: 8, paddingHorizontal: 16 },
+  errorBannerText: { color: colors.error, fontSize: 13, textAlign: 'center' },
   chatHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -303,27 +307,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 56,
     paddingBottom: 12,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   chatHeaderInfo: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   chatAvatar: {
     width: 36,
     height: 36,
     borderRadius: 4, // radius.lg
-    backgroundColor: Colors.primaryDark,
+    backgroundColor: colors.primaryDark,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  chatAvatarText: { color: Colors.textOnPrimary, fontSize: 13, fontWeight: '500' },
-  chatHeaderName: { fontSize: 16, fontWeight: '500', color: Colors.textPrimary },
-  chatHeaderStatus: { fontSize: 12, color: Colors.textSecondary },
+  chatAvatarText: { color: colors.textOnPrimary, fontSize: 13, fontWeight: '500' },
+  chatHeaderName: { fontSize: 16, fontWeight: '500', color: colors.textPrimary },
+  chatHeaderStatus: { fontSize: 12, color: colors.textSecondary },
   chatList: { padding: 16, paddingBottom: 8 },
   chatEmpty: { alignItems: 'center', paddingTop: 60, gap: 12 },
-  chatEmptyText: { fontSize: 14, color: Colors.textMuted },
+  chatEmptyText: { fontSize: 14, color: colors.textMuted },
   dateSep: { alignItems: 'center', marginVertical: 16 },
-  dateSepText: { fontSize: 12, color: Colors.textMuted, backgroundColor: Colors.background, paddingHorizontal: 12 },
+  dateSepText: { fontSize: 12, color: colors.textMuted, backgroundColor: colors.background, paddingHorizontal: 12 },
   messageBubbleRow: { marginBottom: 6 },
   messageBubbleRowRight: { alignItems: 'flex-end' },
   messageBubbleRowLeft: { alignItems: 'flex-start' },
@@ -334,18 +338,18 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   messageBubbleCoach: {
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     borderBottomRightRadius: 4,
   },
   messageBubbleClient: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderBottomLeftRadius: 4,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
-  messageText: { fontSize: 15, color: Colors.textPrimary, lineHeight: 21 },
-  messageTextCoach: { color: Colors.textOnPrimary },
-  messageTime: { fontSize: 11, color: Colors.textMuted, marginTop: 4, alignSelf: 'flex-end' },
+  messageText: { fontSize: 15, color: colors.textPrimary, lineHeight: 21 },
+  messageTextCoach: { color: colors.textOnPrimary },
+  messageTime: { fontSize: 11, color: colors.textMuted, marginTop: 4, alignSelf: 'flex-end' },
   messageTimeCoach: { color: 'rgba(255,255,255,0.7)' },
   inputBar: {
     flexDirection: 'row',
@@ -353,30 +357,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     paddingBottom: 36,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
     gap: 10,
   },
   chatInput: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     borderRadius: 22,
     paddingHorizontal: 16,
     paddingVertical: 10,
     fontSize: 15,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     maxHeight: 100,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   sendBtn: {
     width: 40,
     height: 40,
     borderRadius: 4, // radius.lg
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  sendBtnDisabled: { backgroundColor: Colors.surface },
-});
+  sendBtnDisabled: { backgroundColor: colors.surface },
+
+  });

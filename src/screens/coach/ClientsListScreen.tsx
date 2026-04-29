@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,14 +13,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { ClientsStackParamList } from '../../navigation/CoachNavigator';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachStore } from '../../store/coachStore';
-import { Colors } from '../../constants/colors';
+
 import { User } from '../../types';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 type Props = {
   navigation: NativeStackNavigationProp<ClientsStackParamList, 'ClientsList'>;
 };
 
 export default function ClientsListScreen({ navigation }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();
   const {
     isLoading,
@@ -70,12 +73,12 @@ export default function ClientsListScreen({ navigation }: Props) {
         <View
           style={[
             styles.statusDot,
-            { backgroundColor: item.status === 'active' ? Colors.success : Colors.textMuted },
+            { backgroundColor: item.status === 'active' ? colors.success : colors.textMuted },
           ]}
         />
         <Text style={styles.statusText}>{item.status}</Text>
       </View>
-      <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+      <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
     </HapticPressable>
   );
 
@@ -88,20 +91,20 @@ export default function ClientsListScreen({ navigation }: Props) {
 
       {/* Psych #2: Trust as Emotion — coach-side privacy context banner */}
       <View style={styles.privacyBanner}>
-        <Ionicons name="shield-checkmark-outline" size={16} color={Colors.info} style={{ marginTop: 1 }} />
+        <Ionicons name="shield-checkmark-outline" size={16} color={colors.info} style={{ marginTop: 1 }} />
         <Text style={styles.privacyBannerText}>
           Your students see what they share. You only see what they log.
         </Text>
       </View>
 
       <View style={styles.searchContainer}>
-        <Ionicons name="search" size={18} color={Colors.textMuted} />
+        <Ionicons name="search" size={18} color={colors.textMuted} />
         <TextInput
           style={styles.searchInput}
           value={searchQuery}
           onChangeText={setSearchQuery}
           placeholder="Search clients..."
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           accessibilityLabel="Search clients"
         />
       </View>
@@ -132,7 +135,7 @@ export default function ClientsListScreen({ navigation }: Props) {
       {isLoading ? (
         <ActivityIndicator
           size="large"
-          color={Colors.primary}
+          color={colors.primary}
           style={styles.loader}
         />
       ) : (
@@ -144,7 +147,7 @@ export default function ClientsListScreen({ navigation }: Props) {
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <Ionicons name="people-outline" size={48} color={Colors.textMuted} />
+              <Ionicons name="people-outline" size={48} color={colors.textMuted} />
               <Text style={styles.emptyText}>No clients found</Text>
             </View>
           }
@@ -154,10 +157,11 @@ export default function ClientsListScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     paddingTop: 60,
   },
   header: {
@@ -167,17 +171,17 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   subtitle: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginTop: 4,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 2, // radius.md
     paddingHorizontal: 16,
     marginHorizontal: 24,
@@ -188,7 +192,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 14,
     fontSize: 16,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   filterRow: {
     flexDirection: 'row',
@@ -200,21 +204,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 4, // radius.lg
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   filterChipActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   filterChipText: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   filterChipTextActive: {
-    color: Colors.textOnPrimary,
+    color: colors.textOnPrimary,
   },
   listContent: {
     paddingHorizontal: 24,
@@ -223,7 +227,7 @@ const styles = StyleSheet.create({
   clientCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 2, // radius.md
     padding: 16,
     marginBottom: 10,
@@ -233,12 +237,12 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: Colors.primaryDark,
+    backgroundColor: colors.primaryDark,
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: {
-    color: Colors.textOnPrimary,
+    color: colors.textOnPrimary,
     fontSize: 16,
     fontWeight: '500',
   },
@@ -248,11 +252,11 @@ const styles = StyleSheet.create({
   clientName: {
     fontSize: 16,
     fontWeight: '600',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   clientEmail: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginTop: 2,
   },
   statusBadge: {
@@ -267,7 +271,7 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   loader: {
     marginTop: 40,
@@ -279,7 +283,7 @@ const styles = StyleSheet.create({
     gap: 8,
     marginHorizontal: 16,
     marginBottom: 12,
-    backgroundColor: Colors.primaryTint,
+    backgroundColor: colors.primaryTint,
     borderRadius: 4, // radius.lg
     paddingVertical: 10,
     paddingHorizontal: 12,
@@ -288,7 +292,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     lineHeight: 19,
-    color: Colors.info,
+    color: colors.info,
     fontWeight: '500',
   },
   emptyContainer: {
@@ -298,6 +302,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
-});
+
+  });

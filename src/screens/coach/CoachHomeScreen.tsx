@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,11 +12,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachStore } from '../../store/coachStore';
-import { Colors } from '../../constants/colors';
-import { colors } from '../../theme';
+
+import { colors as legacyColors } from '../../theme';
 import { getGreeting } from '../../utils/date';
 import FadeInView from '../../components/FadeInView';
 import { coachApi } from '../../services/api';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 interface RedFlagClient {
   id: string;
@@ -25,6 +26,8 @@ interface RedFlagClient {
 }
 
 export default function CoachHomeScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();
   const { clients, isLoading, loadClients } = useCoachStore();
   const navigation = useNavigation<any>();
@@ -104,7 +107,7 @@ export default function CoachHomeScreen() {
   if (isLoading && !refreshing) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -118,8 +121,8 @@ export default function CoachHomeScreen() {
         <RefreshControl
           refreshing={refreshing}
           onRefresh={onRefresh}
-          tintColor={Colors.primary}
-          colors={[Colors.primary]}
+          tintColor={colors.primary}
+          colors={[colors.primary]}
         />
       }
     >
@@ -133,7 +136,7 @@ export default function CoachHomeScreen() {
           style={styles.settingsBtn}
           onPress={() => navigation.navigate('SettingsStack')}
         >
-          <Ionicons name="settings-outline" size={22} color={Colors.textSecondary} />
+          <Ionicons name="settings-outline" size={22} color={colors.textSecondary} />
         </HapticPressable>
       </View>
 
@@ -141,40 +144,40 @@ export default function CoachHomeScreen() {
       <FadeInView>
         <View style={styles.metricsGrid}>
           <View style={styles.metricCard}>
-            <View style={[styles.metricIcon, { backgroundColor: Colors.primaryPale }]}>
-              <Ionicons name="people" size={22} color={Colors.primary} />
+            <View style={[styles.metricIcon, { backgroundColor: colors.primaryPale }]}>
+              <Ionicons name="people" size={22} color={colors.primary} />
             </View>
             <Text style={styles.metricValue}>{activeClients}</Text>
             <Text style={styles.metricLabel}>Active Clients</Text>
           </View>
           <View style={styles.metricCard}>
-            <View style={[styles.metricIcon, { backgroundColor: colors.feedback.infoBg }]}>
-              <Ionicons name="restaurant" size={22} color={Colors.carbs} />
+            <View style={[styles.metricIcon, { backgroundColor: legacyColors.feedback.infoBg }]}>
+              <Ionicons name="restaurant" size={22} color={colors.carbs} />
             </View>
             {dashboardLoading ? (
-                <View style={{ width: 40, height: 28, backgroundColor: Colors.surface, borderRadius: 4, opacity: 0.4 }} />
+                <View style={{ width: 40, height: 28, backgroundColor: colors.surface, borderRadius: 4, opacity: 0.4 }} />
               ) : (
                 <Text style={styles.metricValue}>{logsToday}</Text>
               )}
             <Text style={styles.metricLabel}>Logs Today</Text>
           </View>
           <View style={styles.metricCard}>
-            <View style={[styles.metricIcon, { backgroundColor: Colors.noticeWarningIconBg }]}>
-              <Ionicons name="restaurant-outline" size={22} color={Colors.fat} />
+            <View style={[styles.metricIcon, { backgroundColor: colors.noticeWarningIconBg }]}>
+              <Ionicons name="restaurant-outline" size={22} color={colors.fat} />
             </View>
             {dashboardLoading ? (
-                <View style={{ width: 60, height: 28, backgroundColor: Colors.surface, borderRadius: 4, opacity: 0.4 }} />
+                <View style={{ width: 60, height: 28, backgroundColor: colors.surface, borderRadius: 4, opacity: 0.4 }} />
               ) : (
                 <Text style={styles.metricValue}>{totalKcal.toLocaleString()}</Text>
               )}
             <Text style={styles.metricLabel}>Total kcal</Text>
           </View>
           <View style={styles.metricCard}>
-            <View style={[styles.metricIcon, { backgroundColor: Colors.primaryPale }]}>
-              <Ionicons name="checkmark-circle" size={22} color={Colors.primaryLight} />
+            <View style={[styles.metricIcon, { backgroundColor: colors.primaryPale }]}>
+              <Ionicons name="checkmark-circle" size={22} color={colors.primaryLight} />
             </View>
             {dashboardLoading ? (
-                <View style={{ width: 44, height: 28, backgroundColor: Colors.surface, borderRadius: 4, opacity: 0.4 }} />
+                <View style={{ width: 44, height: 28, backgroundColor: colors.surface, borderRadius: 4, opacity: 0.4 }} />
               ) : (
                 <Text style={styles.metricValue}>{loggingRateDisplay}</Text>
               )}
@@ -200,7 +203,7 @@ export default function CoachHomeScreen() {
               }
             >
               <View style={styles.redFlagLeft}>
-                <Ionicons name="warning" size={22} color={Colors.warning} />
+                <Ionicons name="warning" size={22} color={colors.warning} />
                 <View>
                   <Text style={styles.redFlagName}>{rf.name}</Text>
                   <Text style={styles.redFlagTrend}>Weight trending up · {rf.trend}</Text>
@@ -241,8 +244,8 @@ export default function CoachHomeScreen() {
           style={styles.actionCard}
           onPress={() => navigation.navigate('ClientsStack')}
         >
-          <View style={[styles.actionIcon, { backgroundColor: Colors.primaryPale }]}>
-            <Ionicons name="people-outline" size={22} color={Colors.primary} />
+          <View style={[styles.actionIcon, { backgroundColor: colors.primaryPale }]}>
+            <Ionicons name="people-outline" size={22} color={colors.primary} />
           </View>
           <Text style={styles.actionText}>View Clients</Text>
         </HapticPressable>
@@ -251,8 +254,8 @@ export default function CoachHomeScreen() {
           style={styles.actionCard}
           onPress={() => navigation.navigate('Messages')}
         >
-          <View style={[styles.actionIcon, { backgroundColor: colors.feedback.infoBg }]}>
-            <Ionicons name="chatbubble-outline" size={22} color={Colors.carbs} />
+          <View style={[styles.actionIcon, { backgroundColor: legacyColors.feedback.infoBg }]}>
+            <Ionicons name="chatbubble-outline" size={22} color={colors.carbs} />
           </View>
           <Text style={styles.actionText}>Messages</Text>
         </HapticPressable>
@@ -266,7 +269,7 @@ export default function CoachHomeScreen() {
         <FadeInView>
           <Text style={[styles.sectionTitle, { marginTop: 8 }]}>Recent Activity</Text>
           <View style={styles.emptyActivity}>
-            <Ionicons name="checkmark-circle-outline" size={28} color={Colors.textMuted} />
+            <Ionicons name="checkmark-circle-outline" size={28} color={colors.textMuted} />
             <Text style={styles.emptyText}>No new client signals.</Text>
             <Text style={styles.emptySub}>
               Weight-trend and missed-check-in alerts will appear here when they fire.
@@ -278,14 +281,15 @@ export default function CoachHomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   content: { paddingTop: 60, paddingBottom: 100 },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -294,13 +298,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     marginBottom: 24,
   },
-  greeting: { fontSize: 26, fontWeight: '500', color: Colors.textPrimary },
-  subtitle: { fontSize: 14, color: Colors.textSecondary, marginTop: 4 },
+  greeting: { fontSize: 26, fontWeight: '500', color: colors.textPrimary },
+  subtitle: { fontSize: 14, color: colors.textSecondary, marginTop: 4 },
   settingsBtn: {
     width: 40,
     height: 40,
     borderRadius: 4, // radius.lg
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
     marginTop: 2,
@@ -314,7 +318,7 @@ const styles = StyleSheet.create({
   },
   metricCard: {
     width: '47%',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     padding: 16,
     gap: 8,
@@ -327,12 +331,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  metricValue: { fontSize: 24, fontWeight: '500', color: Colors.textPrimary },
-  metricLabel: { fontSize: 12, color: Colors.textSecondary },
+  metricValue: { fontSize: 24, fontWeight: '500', color: colors.textPrimary },
+  metricLabel: { fontSize: 12, color: colors.textSecondary },
   sectionTitle: {
     fontSize: 17,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     paddingHorizontal: 24,
     marginBottom: 12,
   },
@@ -345,9 +349,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     padding: 14,
     borderRadius: 2, // radius.md
-    backgroundColor: Colors.noticeWarningBg,
+    backgroundColor: colors.noticeWarningBg,
     borderLeftWidth: 4,
-    borderLeftColor: Colors.warning,
+    borderLeftColor: colors.warning,
   },
   redFlagLeft: {
     flexDirection: 'row',
@@ -358,23 +362,23 @@ const styles = StyleSheet.create({
   redFlagName: {
     fontSize: 14,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   redFlagTrend: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginTop: 2,
   },
   viewClientBtn: {
     paddingHorizontal: 14,
     paddingVertical: 6,
-    backgroundColor: Colors.warning,
+    backgroundColor: colors.warning,
     borderRadius: 4, // radius.lg
   },
   viewClientBtnText: {
     fontSize: 12,
     fontWeight: '500',
-    color: Colors.noticeWarningText,
+    color: colors.noticeWarningText,
   },
   // Overdue Card
   overdueCard: {
@@ -382,14 +386,14 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     padding: 16,
     borderRadius: 4, // radius.lg
-    backgroundColor: Colors.noticeCriticalBg,
+    backgroundColor: colors.noticeCriticalBg,
     borderLeftWidth: 4,
-    borderLeftColor: Colors.noticeCriticalAccent,
+    borderLeftColor: colors.noticeCriticalAccent,
     gap: 8,
   },
   overdueSubtitle: {
     fontSize: 12,
-    color: Colors.noticeCriticalText,
+    color: colors.noticeCriticalText,
     fontWeight: '600',
     marginBottom: 4,
   },
@@ -402,16 +406,16 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: Colors.noticeCriticalAccent,
+    backgroundColor: colors.noticeCriticalAccent,
   },
   overdueName: {
     fontSize: 14,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontWeight: '500',
   },
   overdueMore: {
     fontSize: 12,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontStyle: 'italic',
     marginTop: 4,
   },
@@ -426,7 +430,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     padding: 16,
   },
@@ -437,13 +441,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  actionText: { fontSize: 14, fontWeight: '500', color: Colors.textPrimary },
+  actionText: { fontSize: 14, fontWeight: '500', color: colors.textPrimary },
   clientStatusCard: {
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: 24,
     marginBottom: 8,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 2, // radius.md
     padding: 14,
     gap: 12,
@@ -452,14 +456,14 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: Colors.primaryDark,
+    backgroundColor: colors.primaryDark,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  csAvatarText: { color: Colors.textOnPrimary, fontSize: 13, fontWeight: '500' },
+  csAvatarText: { color: colors.textOnPrimary, fontSize: 13, fontWeight: '500' },
   csInfo: { flex: 1 },
-  csName: { fontSize: 15, fontWeight: '600', color: Colors.textPrimary },
-  csMeta: { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
+  csName: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
+  csMeta: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
   csStatusDot: { width: 10, height: 10, borderRadius: 999 },
   activityItem: {
     flexDirection: 'row',
@@ -472,16 +476,16 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     marginTop: 6,
   },
   activityContent: { flex: 1 },
-  activityText: { fontSize: 14, color: Colors.textSecondary, lineHeight: 20 },
-  activityName: { fontWeight: '600', color: Colors.textPrimary },
-  activityHighlight: { color: Colors.primary },
+  activityText: { fontSize: 14, color: colors.textSecondary, lineHeight: 20 },
+  activityName: { fontWeight: '600', color: colors.textPrimary },
+  activityHighlight: { color: colors.primary },
   activityMeal: {
     fontSize: 12,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 2,
     textTransform: 'capitalize',
   },
@@ -491,12 +495,13 @@ const styles = StyleSheet.create({
     gap: 8,
     marginHorizontal: 24,
   },
-  emptyText: { color: Colors.textMuted, fontSize: 14 },
+  emptyText: { color: colors.textMuted, fontSize: 14 },
   emptySub: {
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontSize: 12,
     textAlign: 'center',
     paddingHorizontal: 16,
     lineHeight: 18,
   },
-});
+
+  });

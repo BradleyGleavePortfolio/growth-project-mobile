@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachStore } from '../../store/coachStore';
 import { coachApi } from '../../services/api';
 import { subscribeToMessages } from '../../services/realtime';
-import { Colors } from '../../constants/colors';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 // Backstop poll — Realtime broadcasts drive most refreshes now. Was 30s.
 const FALLBACK_POLL_MS = 60000;
@@ -24,6 +24,8 @@ interface UnreadByClient {
 }
 
 export default function MessagesScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation<any>();
   const currentUser = useCurrentUser();
   const { clients, loadClients } = useCoachStore();
@@ -108,18 +110,18 @@ export default function MessagesScreen() {
 
       <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
-          <Ionicons name="search" size={18} color={Colors.textMuted} />
+          <Ionicons name="search" size={18} color={colors.textMuted} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search clients..."
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor={colors.textMuted}
             value={searchQuery}
             onChangeText={setSearchQuery}
             accessibilityLabel="Search clients"
           />
           {searchQuery.length > 0 && (
             <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
+              <Ionicons name="close-circle" size={18} color={colors.textMuted} />
             </TouchableOpacity>
           )}
         </View>
@@ -134,13 +136,13 @@ export default function MessagesScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={Colors.primary}
-            colors={[Colors.primary]}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
           />
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Ionicons name="chatbubble-outline" size={48} color={Colors.textMuted} />
+            <Ionicons name="chatbubble-outline" size={48} color={colors.textMuted} />
             <Text style={styles.emptyTitle}>No Clients</Text>
             <Text style={styles.emptyText}>
               {searchQuery ? 'No clients match your search.' : 'Active clients will appear here.'}
@@ -178,7 +180,7 @@ export default function MessagesScreen() {
                 <Text style={styles.unreadBadgeText}>{item.unread}</Text>
               </View>
             )}
-            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </TouchableOpacity>
         )}
       />
@@ -186,8 +188,9 @@ export default function MessagesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -196,26 +199,26 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     marginBottom: 8,
   },
-  title: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 32, lineHeight: 35, letterSpacing: 0.6, fontWeight: '400', color: Colors.textPrimary },
-  unreadSummary: { fontSize: 13, color: Colors.primary, fontWeight: '600', marginTop: 2 },
+  title: { fontFamily: 'CormorantGaramond_400Regular', fontSize: 32, lineHeight: 35, letterSpacing: 0.6, fontWeight: '400', color: colors.textPrimary },
+  unreadSummary: { fontSize: 13, color: colors.primary, fontWeight: '600', marginTop: 2 },
   searchContainer: { paddingHorizontal: 24, marginBottom: 8 },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 2, // radius.md
     paddingHorizontal: 14,
     paddingVertical: 10,
     gap: 8,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
-  searchInput: { flex: 1, fontSize: 15, color: Colors.textPrimary },
+  searchInput: { flex: 1, fontSize: 15, color: colors.textPrimary },
   listContent: { paddingHorizontal: 16, paddingBottom: 100 },
   convoCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     padding: 14,
     marginBottom: 8,
@@ -225,30 +228,31 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 4, // radius.lg
-    backgroundColor: Colors.primaryDark,
+    backgroundColor: colors.primaryDark,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  convoAvatarText: { fontFamily: 'Inter_600SemiBold', color: Colors.textOnPrimary, fontSize: 14, fontWeight: '600', letterSpacing: 0.5 },
+  convoAvatarText: { fontFamily: 'Inter_600SemiBold', color: colors.textOnPrimary, fontSize: 14, fontWeight: '600', letterSpacing: 0.5 },
   convoInfo: { flex: 1, gap: 4 },
-  convoName: { fontFamily: 'Inter_500Medium', fontSize: 15, fontWeight: '500', color: Colors.textPrimary },
+  convoName: { fontFamily: 'Inter_500Medium', fontSize: 15, fontWeight: '500', color: colors.textPrimary },
   convoNameUnread: { fontFamily: 'Inter_600SemiBold', fontWeight: '600' },
-  convoPreview: { fontSize: 13, color: Colors.textSecondary },
+  convoPreview: { fontSize: 13, color: colors.textSecondary },
   unreadBadge: {
     minWidth: 22,
     height: 22,
     borderRadius: 4, // radius.lg
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 6,
   },
-  unreadBadgeText: { color: Colors.textOnPrimary, fontSize: 12, fontWeight: '500' },
+  unreadBadgeText: { color: colors.textOnPrimary, fontSize: 12, fontWeight: '500' },
   emptyContainer: {
     alignItems: 'center',
     paddingTop: 80,
     gap: 10,
   },
-  emptyTitle: { fontFamily: 'CormorantGaramond_500Medium', fontSize: 22, lineHeight: 26, letterSpacing: 0.4, fontWeight: '500', color: Colors.textPrimary },
-  emptyText: { fontSize: 14, color: Colors.textSecondary, textAlign: 'center', paddingHorizontal: 40 },
-});
+  emptyTitle: { fontFamily: 'CormorantGaramond_500Medium', fontSize: 22, lineHeight: 26, letterSpacing: 0.4, fontWeight: '500', color: colors.textPrimary },
+  emptyText: { fontSize: 14, color: colors.textSecondary, textAlign: 'center', paddingHorizontal: 40 },
+
+  });

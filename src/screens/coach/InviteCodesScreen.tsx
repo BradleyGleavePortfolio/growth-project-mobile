@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,9 +14,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { coachApi } from '../../services/api';
-import { Colors } from '../../constants/colors';
+
 import { mediumTap, successTap, warningTap } from '../../utils/haptics';
 import { buildInviteUniversalLink } from '../../utils/deepLink';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 interface InviteCode {
   id: string;
@@ -29,6 +30,8 @@ interface InviteCode {
 }
 
 export default function InviteCodesScreen({ navigation }: any) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [codes, setCodes] = useState<InviteCode[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -148,20 +151,20 @@ export default function InviteCodesScreen({ navigation }: any) {
   };
 
   const statusLabel = (c: InviteCode): { text: string; color: string } => {
-    if (c.revoked) return { text: 'Revoked', color: Colors.textMuted };
+    if (c.revoked) return { text: 'Revoked', color: colors.textMuted };
     if (c.expires_at && new Date(c.expires_at).getTime() < Date.now()) {
-      return { text: 'Expired', color: Colors.textMuted };
+      return { text: 'Expired', color: colors.textMuted };
     }
     if (c.max_uses && c.used_count >= c.max_uses) {
-      return { text: 'Used up', color: Colors.textMuted };
+      return { text: 'Used up', color: colors.textMuted };
     }
-    return { text: 'Active', color: Colors.success };
+    return { text: 'Active', color: colors.success };
   };
 
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -175,7 +178,7 @@ export default function InviteCodesScreen({ navigation }: any) {
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.topTitle}>Invite Codes</Text>
         <View style={styles.backBtn} />
@@ -184,7 +187,7 @@ export default function InviteCodesScreen({ navigation }: any) {
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
         }
       >
         <Text style={styles.intro}>
@@ -198,13 +201,13 @@ export default function InviteCodesScreen({ navigation }: any) {
           accessibilityRole="button"
           accessibilityLabel="Create new invite code"
         >
-          <Ionicons name="add-circle-outline" size={20} color={Colors.textOnPrimary} />
+          <Ionicons name="add-circle-outline" size={20} color={colors.textOnPrimary} />
           <Text style={styles.createBtnText}>Create new invite code</Text>
         </TouchableOpacity>
 
         {codes.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons name="key-outline" size={48} color={Colors.textMuted} />
+            <Ionicons name="key-outline" size={48} color={colors.textMuted} />
             <Text style={styles.emptyTitle}>No codes yet</Text>
             <Text style={styles.emptyText}>Create your first invite code above.</Text>
           </View>
@@ -226,14 +229,14 @@ export default function InviteCodesScreen({ navigation }: any) {
                 </View>
                 <View style={styles.codeMetaRow}>
                   <View style={styles.codeMeta}>
-                    <Ionicons name="people-outline" size={14} color={Colors.textMuted} />
+                    <Ionicons name="people-outline" size={14} color={colors.textMuted} />
                     <Text style={styles.codeMetaText}>
                       {c.used_count}
                       {c.max_uses ? ` / ${c.max_uses}` : ''} used
                     </Text>
                   </View>
                   <View style={styles.codeMeta}>
-                    <Ionicons name="time-outline" size={14} color={Colors.textMuted} />
+                    <Ionicons name="time-outline" size={14} color={colors.textMuted} />
                     <Text style={styles.codeMetaText}>{formatExpiry(c.expires_at)}</Text>
                   </View>
                 </View>
@@ -244,7 +247,7 @@ export default function InviteCodesScreen({ navigation }: any) {
                     accessibilityRole="button"
                     accessibilityLabel={`Share code ${c.code}`}
                   >
-                    <Ionicons name="share-outline" size={16} color={Colors.primary} />
+                    <Ionicons name="share-outline" size={16} color={colors.primary} />
                     <Text style={styles.actionBtnText}>Share</Text>
                   </TouchableOpacity>
                   {isActive && (
@@ -254,8 +257,8 @@ export default function InviteCodesScreen({ navigation }: any) {
                       accessibilityRole="button"
                       accessibilityLabel={`Revoke code ${c.code}`}
                     >
-                      <Ionicons name="close-circle-outline" size={16} color={Colors.error} />
-                      <Text style={[styles.actionBtnText, { color: Colors.error }]}>Revoke</Text>
+                      <Ionicons name="close-circle-outline" size={16} color={colors.error} />
+                      <Text style={[styles.actionBtnText, { color: colors.error }]}>Revoke</Text>
                     </TouchableOpacity>
                   )}
                 </View>
@@ -279,7 +282,7 @@ export default function InviteCodesScreen({ navigation }: any) {
               value={maxUsesText}
               onChangeText={setMaxUsesText}
               placeholder="e.g. 5"
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               keyboardType="number-pad"
               accessibilityLabel="Max uses"
             />
@@ -290,7 +293,7 @@ export default function InviteCodesScreen({ navigation }: any) {
               value={expiresInDaysText}
               onChangeText={setExpiresInDaysText}
               placeholder="e.g. 30"
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               keyboardType="number-pad"
               accessibilityLabel="Expires in days"
             />
@@ -321,7 +324,7 @@ export default function InviteCodesScreen({ navigation }: any) {
                 accessibilityLabel="Create invite code"
               >
                 {creating ? (
-                  <ActivityIndicator color={Colors.textOnPrimary} />
+                  <ActivityIndicator color={colors.textOnPrimary} />
                 ) : (
                   <Text style={styles.modalSaveText}>Create</Text>
                 )}
@@ -334,9 +337,10 @@ export default function InviteCodesScreen({ navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  loadingContainer: { flex: 1, backgroundColor: Colors.background, justifyContent: 'center', alignItems: 'center' },
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
+  loadingContainer: { flex: 1, backgroundColor: colors.background, justifyContent: 'center', alignItems: 'center' },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -351,37 +355,37 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  topTitle: { fontSize: 18, fontWeight: '500', color: Colors.textPrimary },
+  topTitle: { fontSize: 18, fontWeight: '500', color: colors.textPrimary },
   content: { paddingHorizontal: 24, paddingBottom: 40 },
-  intro: { fontSize: 14, color: Colors.textSecondary, lineHeight: 20, marginBottom: 16 },
+  intro: { fontSize: 14, color: colors.textSecondary, lineHeight: 20, marginBottom: 16 },
   createBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     borderRadius: 2, // radius.md
     paddingVertical: 14,
     gap: 8,
     marginBottom: 24,
   },
-  createBtnText: { color: Colors.textOnPrimary, fontSize: 15, fontWeight: '500' },
+  createBtnText: { color: colors.textOnPrimary, fontSize: 15, fontWeight: '500' },
   emptyState: { alignItems: 'center', paddingTop: 40, gap: 8 },
-  emptyTitle: { fontSize: 16, fontWeight: '500', color: Colors.textPrimary },
-  emptyText: { fontSize: 13, color: Colors.textSecondary },
+  emptyTitle: { fontSize: 16, fontWeight: '500', color: colors.textPrimary },
+  emptyText: { fontSize: 13, color: colors.textSecondary },
   codeCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     padding: 16,
     marginBottom: 12,
     gap: 10,
   },
   codeCardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  codeText: { fontSize: 20, fontWeight: '500', color: Colors.textPrimary, letterSpacing: 1 },
+  codeText: { fontSize: 20, fontWeight: '500', color: colors.textPrimary, letterSpacing: 1 },
   statusPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
   statusPillText: { fontSize: 11, fontWeight: '500', textTransform: 'uppercase' },
   codeMetaRow: { flexDirection: 'row', gap: 16 },
   codeMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  codeMetaText: { fontSize: 12, color: Colors.textMuted },
+  codeMetaText: { fontSize: 12, color: colors.textMuted },
   codeActions: { flexDirection: 'row', gap: 8, marginTop: 4 },
   actionBtn: {
     flexDirection: 'row',
@@ -389,29 +393,30 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 12,
     paddingVertical: 8,
-    backgroundColor: Colors.primaryPale,
+    backgroundColor: colors.primaryPale,
     borderRadius: 4, // radius.lg
   },
-  actionBtnDanger: { backgroundColor: Colors.error + '18' },
-  actionBtnText: { fontSize: 13, fontWeight: '600', color: Colors.primary },
+  actionBtnDanger: { backgroundColor: colors.error + '18' },
+  actionBtnText: { fontSize: 13, fontWeight: '600', color: colors.primary },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' },
-  modalContent: { width: '85%', backgroundColor: Colors.surface, borderRadius: 4, padding: 24 },
-  modalTitle: { fontSize: 18, fontWeight: '500', color: Colors.textPrimary, textAlign: 'center', marginBottom: 8 },
-  modalDesc: { fontSize: 13, color: Colors.textSecondary, textAlign: 'center', marginBottom: 16, lineHeight: 18 },
-  inputLabel: { fontSize: 12, fontWeight: '500', color: Colors.textSecondary, textTransform: 'uppercase', marginBottom: 6, marginTop: 10 },
+  modalContent: { width: '85%', backgroundColor: colors.surface, borderRadius: 4, padding: 24 },
+  modalTitle: { fontSize: 18, fontWeight: '500', color: colors.textPrimary, textAlign: 'center', marginBottom: 8 },
+  modalDesc: { fontSize: 13, color: colors.textSecondary, textAlign: 'center', marginBottom: 16, lineHeight: 18 },
+  inputLabel: { fontSize: 12, fontWeight: '500', color: colors.textSecondary, textTransform: 'uppercase', marginBottom: 6, marginTop: 10 },
   input: {
-    backgroundColor: Colors.surfaceElevated,
+    backgroundColor: colors.surfaceElevated,
     borderRadius: 4, // radius.lg
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
-  errorText: { color: Colors.error, fontSize: 13, marginTop: 12, textAlign: 'center' },
+  errorText: { color: colors.error, fontSize: 13, marginTop: 12, textAlign: 'center' },
   modalButtons: { flexDirection: 'row', gap: 12, marginTop: 20 },
-  modalCancelBtn: { flex: 1, paddingVertical: 12, borderRadius: 4, backgroundColor: Colors.surfaceElevated, alignItems: 'center' },
-  modalCancelText: { fontSize: 15, fontWeight: '600', color: Colors.textSecondary },
-  modalSaveBtn: { flex: 1, paddingVertical: 12, borderRadius: 4, backgroundColor: Colors.primary, alignItems: 'center' },
-  modalSaveText: { fontSize: 15, fontWeight: '500', color: Colors.textOnPrimary },
+  modalCancelBtn: { flex: 1, paddingVertical: 12, borderRadius: 4, backgroundColor: colors.surfaceElevated, alignItems: 'center' },
+  modalCancelText: { fontSize: 15, fontWeight: '600', color: colors.textSecondary },
+  modalSaveBtn: { flex: 1, paddingVertical: 12, borderRadius: 4, backgroundColor: colors.primary, alignItems: 'center' },
+  modalSaveText: { fontSize: 15, fontWeight: '500', color: colors.textOnPrimary },
   buttonDisabled: { opacity: 0.6 },
-});
+
+  });

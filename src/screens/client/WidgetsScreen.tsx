@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,10 +10,11 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { Colors } from '../../constants/colors';
+
 import FadeInView from '../../components/FadeInView';
 import { fastingApi } from '../../services/api';
 import { typography, spacing, radius } from '../../theme/tokens';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 // Wave 5b: WidgetsScreen reduced to the actions that actually work today.
 // Per the no-placeholder doctrine, "Coming Soon" widgets, wearables and
@@ -47,6 +48,8 @@ const QUICK_ACTIONS: QuickAction[] = [
 const DEFAULT_FAST_PROTOCOL = '16:8';
 
 export default function WidgetsScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation<any>();
   const [startingFast, setStartingFast] = useState(false);
 
@@ -100,7 +103,7 @@ export default function WidgetsScreen() {
     >
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.title}>Shortcuts</Text>
       </View>
@@ -121,16 +124,16 @@ export default function WidgetsScreen() {
                 disabled={isLoading}
               >
                 <View style={styles.cardIcon}>
-                  <Ionicons name={action.icon} size={22} color={Colors.primary} />
+                  <Ionicons name={action.icon} size={22} color={colors.primary} />
                 </View>
                 <View style={styles.cardContent}>
                   <Text style={styles.cardTitle}>{action.title}</Text>
                   <Text style={styles.cardDesc}>{action.description}</Text>
                 </View>
                 {isLoading ? (
-                  <ActivityIndicator size="small" color={Colors.primary} />
+                  <ActivityIndicator size="small" color={colors.primary} />
                 ) : (
-                  <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+                  <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
                 )}
               </TouchableOpacity>
             );
@@ -141,10 +144,11 @@ export default function WidgetsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   content: {
     paddingBottom: spacing['2xl'],
@@ -168,16 +172,16 @@ const styles = StyleSheet.create({
     lineHeight:    typography.h1.lineHeight,
     fontWeight:    typography.h1.fontWeight,
     letterSpacing: typography.h1.letterSpacing,
-    color:         Colors.textPrimary,
+    color:         colors.textPrimary,
   },
   section: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: radius.lg,
     marginHorizontal: spacing.lg,
     marginBottom: spacing.lg,
     padding: spacing.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   eyebrow: {
     fontFamily:     typography.eyebrow.fontFamily,
@@ -186,13 +190,13 @@ const styles = StyleSheet.create({
     fontWeight:     typography.eyebrow.fontWeight,
     letterSpacing:  typography.eyebrow.letterSpacing,
     textTransform:  'uppercase',
-    color:          Colors.textSecondary,
+    color:          colors.textSecondary,
     marginBottom:   spacing.md,
   },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: radius.lg,
     paddingVertical: spacing.md,
     marginBottom: spacing.sm,
@@ -202,7 +206,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: radius.md,
-    backgroundColor: Colors.surfaceElevated,
+    backgroundColor: colors.surfaceElevated,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -215,13 +219,14 @@ const styles = StyleSheet.create({
     lineHeight:    typography.bodyMd.lineHeight,
     fontWeight:    typography.bodyMd.fontWeight,
     letterSpacing: typography.bodyMd.letterSpacing,
-    color:         Colors.textPrimary,
+    color:         colors.textPrimary,
     marginBottom:  2,
   },
   cardDesc: {
     fontFamily:    typography.bodySmall.fontFamily,
     fontSize:      typography.bodySmall.fontSize,
     lineHeight:    typography.bodySmall.lineHeight,
-    color:         Colors.textSecondary,
+    color:         colors.textSecondary,
   },
-});
+
+  });
