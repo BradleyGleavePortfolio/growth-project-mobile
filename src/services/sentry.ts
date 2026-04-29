@@ -1,7 +1,38 @@
 import * as Sentry from '@sentry/react-native';
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
 let initialized = false;
+
+/**
+ * Build the release identifier that the running app reports to Sentry. It
+ * must match the release name the EAS build uploaded source maps under,
+ * otherwise Sentry cannot symbolicate the stack and the issue page reads
+ * minified Hermes bundle indices instead of source lines.
+ *
+ * Format mirrors what `@sentry/react-native/expo` (the Sentry config plugin)
+ * uses by default: `<applicationId>@<version>+<buildNumber|versionCode>`. We
+ * derive the right-hand half from the Expo runtime config so a debug build,
+ * a TestFlight build, and an App Store build can never collide.
+ *
+ * Falls back to the bare `version` when the per-platform build code is
+ * missing (older Expo configs, web). Returns `undefined` when no version is
+ * available so Sentry's own auto-detection takes over.
+ */
+function buildReleaseId(): string | undefined {
+  const cfg = Constants.expoConfig;
+  const version = cfg?.version;
+  if (!version) return undefined;
+  const build = Platform.select({
+    ios: cfg?.ios?.buildNumber,
+    android:
+      cfg?.android?.versionCode != null
+        ? String(cfg.android.versionCode)
+        : undefined,
+    default: undefined,
+  });
+  return build ? `${version}+${build}` : version;
+}
 
 /**
  * Initialise Sentry once at app boot.
@@ -43,7 +74,7 @@ export function initSentry(): void {
       return event;
     },
     environment: process.env.EXPO_PUBLIC_ENVIRONMENT || 'production',
-    release: Constants.expoConfig?.version || undefined,
+    release: buildReleaseId(),
   });
 
   initialized = true;

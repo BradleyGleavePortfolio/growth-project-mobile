@@ -20,7 +20,9 @@
         "NSCameraUsageDescription": "Used for barcode scanning to log food items",
         "ITSAppUsesNonExemptEncryption": false
       },
-      "associatedDomains": ["applinks:app.trygrowthproject.com"]
+      "associatedDomains": [
+        "applinks:app.trygrowthproject.com"
+      ]
     },
     "android": {
       "adaptiveIcon": {
@@ -35,10 +37,20 @@
           "action": "VIEW",
           "autoVerify": true,
           "data": [
-            { "scheme": "tgp", "host": "join" },
-            { "scheme": "https", "host": "app.trygrowthproject.com", "pathPrefix": "/join" }
+            {
+              "scheme": "tgp",
+              "host": "join"
+            },
+            {
+              "scheme": "https",
+              "host": "app.trygrowthproject.com",
+              "pathPrefix": "/join"
+            }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
@@ -55,6 +67,14 @@
         {
           "color": "#2C4A36",
           "defaultChannel": "default"
+        }
+      ],
+      [
+        "@sentry/react-native/expo",
+        {
+          "organization": "the-growth-project",
+          "project": "growth-project-mobile",
+          "url": "https://sentry.io/"
         }
       ]
     ],

@@ -65,6 +65,7 @@ All runtime env vars are read via `expo-constants` / `EXPO_PUBLIC_*`. Copy
 | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | yes | Supabase anon JWT used by the client SDK. |
 | `EXPO_PUBLIC_SENTRY_DSN` | no | When set, Sentry is initialised in `services/sentry.ts`. Missing DSN means `wrap`, `captureError`, `setSentryUser` are no-ops. |
 | `EXPO_PUBLIC_ENVIRONMENT` | no | Sentry `environment` tag. Defaults to `'production'`. |
+| `SENTRY_AUTH_TOKEN` | no (recommended for prod) | EAS-time secret consumed by `@sentry/react-native/expo`'s release-upload step. When unset the build still succeeds, but no source maps reach Sentry, so production stack traces stay minified. See "Sentry release tracking" below. |
 | `EXPO_PUBLIC_POSTHOG_KEY` | no | PostHog project key. Empty string disables capture. |
 | `EXPO_PUBLIC_POSTHOG_HOST` | no | Defaults to `https://us.i.posthog.com`. |
 
@@ -81,6 +82,48 @@ EAS Secrets (`eas secret:create --scope project --name FOO`). Run
 deep-link parser, the design-token structure, the Play Internal Testing
 checklist, and the open verification gaps. Read it before picking up
 unfamiliar work in this repo.
+
+## Sentry release tracking
+
+Production crashes are useful only if their stack traces are readable.
+Three pieces have to line up for that to happen on a Hermes-bundled
+Expo build:
+
+1. **`metro.config.js`** wraps the Expo defaults with
+   `getSentryExpoConfig` so every JS bundle ships a stable Debug ID.
+2. **`@sentry/react-native/expo`** is registered as a config plugin in
+   `app.json` so EAS's prebuild step injects the upload phase into the
+   Xcode and Gradle build pipelines.
+3. **`SENTRY_AUTH_TOKEN`** is provided to EAS at build time so the
+   upload phase can publish source maps to Sentry under the same
+   release identifier the running app reports.
+
+The release identifier is built in `src/services/sentry.ts` as
+`<version>+<buildNumber|versionCode>` so a TestFlight build, an App
+Store build, and a Google Play track build never collide.
+
+### Setting up SENTRY_AUTH_TOKEN
+
+Generate a token at sentry.io → User Settings → Auth Tokens with the
+`project:releases` and `project:write` scopes (no broader access
+needed).
+
+Then store it as an EAS Secret — not an `EXPO_PUBLIC_*` env var,
+because it is a write credential and must never reach the client
+bundle:
+
+```
+eas secret:create --scope project --name SENTRY_AUTH_TOKEN --value <token>
+```
+
+The next `eas build` picks up the secret automatically. The build
+still succeeds when the secret is missing — the upload step in the
+Sentry config plugin no-ops with a warning rather than failing the
+build — so the gate is lossy-but-loud rather than hard-fail.
+
+The `organization`, `project`, and `url` values that the upload step
+needs live in `app.json` under the plugin's options. Edit them there
+if the Sentry account moves.
 
 ## Release readiness
 
