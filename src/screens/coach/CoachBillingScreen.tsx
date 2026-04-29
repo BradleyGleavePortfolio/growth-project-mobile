@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,10 +11,11 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
-import { Colors } from '../../constants/colors';
+
 import { coachBillingApi, CoachBillingStatus } from '../../services/api';
 import { mediumTap } from '../../utils/haptics';
 import { track } from '../../lib/analytics';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 interface Props {
   navigation: any;
@@ -64,6 +65,8 @@ function formatDate(iso?: string | null): string | null {
 }
 
 export default function CoachBillingScreen({ navigation }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [status, setStatus] = useState<CoachBillingStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -134,14 +137,14 @@ export default function CoachBillingScreen({ navigation }: Props) {
     if (loading) {
       return (
         <View style={styles.loadingWrap}>
-          <ActivityIndicator color={Colors.primary} />
+          <ActivityIndicator color={colors.primary} />
         </View>
       );
     }
     if (error) {
       return (
         <View style={styles.errorWrap}>
-          <Ionicons name="alert-circle-outline" size={28} color={Colors.error} />
+          <Ionicons name="alert-circle-outline" size={28} color={colors.error} />
           <Text style={styles.errorTitle}>Could not load billing</Text>
           <Text style={styles.errorBody}>{error}</Text>
           <TouchableOpacity
@@ -234,10 +237,10 @@ export default function CoachBillingScreen({ navigation }: Props) {
           }
         >
           {portalBusy ? (
-            <ActivityIndicator color={Colors.textOnPrimary} />
+            <ActivityIndicator color={colors.textOnPrimary} />
           ) : (
             <>
-              <Ionicons name="open-outline" size={18} color={Colors.textOnPrimary} />
+              <Ionicons name="open-outline" size={18} color={colors.textOnPrimary} />
               <Text style={styles.portalBtnText}>
                 {s.state === 'none' || s.state === 'paused' || s.state === 'canceled'
                   ? 'Start subscription'
@@ -264,7 +267,7 @@ export default function CoachBillingScreen({ navigation }: Props) {
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.topTitle}>Billing</Text>
         <View style={styles.backBtn} />
@@ -273,7 +276,7 @@ export default function CoachBillingScreen({ navigation }: Props) {
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
         }
       >
         {renderBody()}
@@ -282,8 +285,9 @@ export default function CoachBillingScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -293,14 +297,14 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   backBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  topTitle: { fontSize: 18, fontWeight: '500', color: Colors.textPrimary },
+  topTitle: { fontSize: 18, fontWeight: '500', color: colors.textPrimary },
   content: { paddingHorizontal: 24, paddingBottom: 40 },
   loadingWrap: { paddingVertical: 60, alignItems: 'center' },
   errorWrap: { paddingVertical: 40, alignItems: 'center', gap: 8 },
-  errorTitle: { fontSize: 16, fontWeight: '500', color: Colors.textPrimary },
+  errorTitle: { fontSize: 16, fontWeight: '500', color: colors.textPrimary },
   errorBody: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     textAlign: 'center',
     paddingHorizontal: 16,
   },
@@ -310,18 +314,18 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 4,
     borderWidth: 1,
-    borderColor: Colors.primary,
+    borderColor: colors.primary,
   },
-  retryText: { color: Colors.primary, fontSize: 14, fontWeight: '600' },
+  retryText: { color: colors.primary, fontSize: 14, fontWeight: '600' },
   statusCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4,
     padding: 18,
     marginBottom: 16,
   },
   statusCardAttention: {
     borderLeftWidth: 2,
-    borderLeftColor: Colors.warning,
+    borderLeftColor: colors.warning,
   },
   statusHeader: {
     flexDirection: 'row',
@@ -332,45 +336,46 @@ const styles = StyleSheet.create({
   statusLabel: {
     fontSize: 12,
     fontWeight: '500',
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   statusPill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
-  statusPillOk: { backgroundColor: Colors.primaryPale },
-  statusPillAttention: { backgroundColor: Colors.noticeWarningIconBg },
-  statusPillMuted: { backgroundColor: Colors.surfaceElevated },
+  statusPillOk: { backgroundColor: colors.primaryPale },
+  statusPillAttention: { backgroundColor: colors.noticeWarningIconBg },
+  statusPillMuted: { backgroundColor: colors.surfaceElevated },
   statusPillText: { fontSize: 11, fontWeight: '500', textTransform: 'uppercase' },
-  statusPillTextOk: { color: Colors.primary },
-  statusPillTextAttention: { color: Colors.warning },
-  statusPillTextMuted: { color: Colors.textMuted },
-  statusBody: { fontSize: 14, color: Colors.textPrimary, lineHeight: 20 },
+  statusPillTextOk: { color: colors.primary },
+  statusPillTextAttention: { color: colors.warning },
+  statusPillTextMuted: { color: colors.textMuted },
+  statusBody: { fontSize: 14, color: colors.textPrimary, lineHeight: 20 },
   detailGrid: {
     marginTop: 14,
     paddingTop: 14,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
     gap: 8,
   },
   detailRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  detailKey: { fontSize: 13, color: Colors.textSecondary },
-  detailValue: { fontSize: 13, color: Colors.textPrimary, fontWeight: '500' },
+  detailKey: { fontSize: 13, color: colors.textSecondary },
+  detailValue: { fontSize: 13, color: colors.textPrimary, fontWeight: '500' },
   portalBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     paddingVertical: 14,
     borderRadius: 2,
     marginBottom: 12,
   },
   portalBtnDisabled: { opacity: 0.6 },
-  portalBtnText: { color: Colors.textOnPrimary, fontSize: 15, fontWeight: '500' },
+  portalBtnText: { color: colors.textOnPrimary, fontSize: 15, fontWeight: '500' },
   fineprint: {
     fontSize: 12,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'center',
     lineHeight: 18,
   },
-});
+
+  });

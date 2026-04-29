@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,9 +11,10 @@ import HapticPressable from '../../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
-import { Colors } from '../../constants/colors';
+
 import { workoutApi } from '../../services/api';
 import FadeInView from '../../components/FadeInView';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CHART_WIDTH = SCREEN_WIDTH - 48;
@@ -31,6 +32,8 @@ interface MuscleVolume {
 // ── Pure-RN Bar Chart ─────────────────────────────────────────────────────
 
 function BarChart({ data }: { data: WeeklyVolume[] }) {
+  const { colors } = useTheme();
+  const chart = useMemo(() => makeChart(colors), [colors]);
   if (!data.length) return null;
   const maxVol = Math.max(...data.map((d) => d.volume), 1);
   const BAR_HEIGHT = 160;
@@ -64,7 +67,7 @@ function BarChart({ data }: { data: WeeklyVolume[] }) {
                       {
                         width: BAR_WIDTH,
                         height: barH,
-                        backgroundColor: i === data.length - 1 ? Colors.primary : Colors.primaryLight,
+                        backgroundColor: i === data.length - 1 ? colors.primary : colors.primaryLight,
                       },
                     ]}
                   />
@@ -82,6 +85,8 @@ function BarChart({ data }: { data: WeeklyVolume[] }) {
 // ── Muscle Progress Bars ──────────────────────────────────────────────────
 
 function MuscleBreakdown({ data }: { data: MuscleVolume[] }) {
+  const { colors } = useTheme();
+  const muscle = useMemo(() => makeMuscle(colors), [colors]);
   if (!data.length) return null;
   const maxVol = Math.max(...data.map((d) => d.volume), 1);
   const MUSCLES_DISPLAY = ['chest', 'back', 'shoulders', 'arms', 'legs', 'core'];
@@ -126,6 +131,9 @@ interface ApiSession {
 }
 
 export default function WorkoutScreen() {
+  const { colors } = useTheme();
+  const chart = useMemo(() => makeChart(colors), [colors]);
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();
   const navigation = useNavigation<any>();
   const [routines, setRoutines] = useState<ApiRoutine[]>([]);
@@ -238,12 +246,12 @@ export default function WorkoutScreen() {
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} colors={[Colors.primary]} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
       >
         <View style={styles.header}>
           <Text style={styles.title}>Workouts</Text>
           <HapticPressable intent="light" onPress={() => navigation.navigate('CoachGuidelines')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <Ionicons name="clipboard-outline" size={22} color={Colors.textSecondary} />
+            <Ionicons name="clipboard-outline" size={22} color={colors.textSecondary} />
           </HapticPressable>
         </View>
 
@@ -251,7 +259,7 @@ export default function WorkoutScreen() {
         <FadeInView>
           <View style={styles.statsRow}>
             <View style={styles.statCard}>
-              <Text style={[styles.statValue, { color: Colors.primary }]}>{weekSessions.length}</Text>
+              <Text style={[styles.statValue, { color: colors.primary }]}>{weekSessions.length}</Text>
               <Text style={styles.statLabel}>This Week</Text>
             </View>
             <View style={styles.statCard}>
@@ -284,7 +292,7 @@ export default function WorkoutScreen() {
               <BarChart data={weeklyVolume} />
             ) : (
               <View style={styles.chartEmpty}>
-                <Ionicons name="bar-chart-outline" size={32} color={Colors.textMuted} />
+                <Ionicons name="bar-chart-outline" size={32} color={colors.textMuted} />
                 <Text style={styles.chartEmptyText}>Complete workouts to see volume data</Text>
               </View>
             )}
@@ -309,27 +317,27 @@ export default function WorkoutScreen() {
         <HapticPressable intent="medium" style={styles.quickStart} onPress={startQuickWorkout}>
           <View style={styles.quickStartLeft}>
             <View style={styles.quickStartIcon}>
-              <Ionicons name="flash" size={24} color={Colors.textOnPrimary} />
+              <Ionicons name="flash" size={24} color={colors.textOnPrimary} />
             </View>
             <View>
               <Text style={styles.quickStartTitle}>Quick Workout</Text>
               <Text style={styles.quickStartSub}>Start an empty session</Text>
             </View>
           </View>
-          <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+          <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
         </HapticPressable>
 
         {/* My Routines */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>My Routines</Text>
           <HapticPressable intent="medium" onPress={() => navigation.navigate('RoutineBuilder')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <Ionicons name="add-circle" size={24} color={Colors.primary} />
+            <Ionicons name="add-circle" size={24} color={colors.primary} />
           </HapticPressable>
         </View>
 
         {routines.length === 0 ? (
           <View style={styles.emptyCard}>
-            <Ionicons name="barbell-outline" size={32} color={Colors.textMuted} />
+            <Ionicons name="barbell-outline" size={32} color={colors.textMuted} />
             <Text style={styles.emptyText}>No routines yet</Text>
             <HapticPressable intent="medium" style={styles.emptyBtn} onPress={() => navigation.navigate('RoutineBuilder')}>
               <Text style={styles.emptyBtnText}>Create Routine</Text>
@@ -352,7 +360,7 @@ export default function WorkoutScreen() {
                     onPress={() => navigation.navigate('RoutineBuilder', { routineId: routine.id })}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
-                    <Ionicons name="create-outline" size={18} color={Colors.textMuted} />
+                    <Ionicons name="create-outline" size={18} color={colors.textMuted} />
                   </HapticPressable>
                 </View>
                 <Text style={styles.routineExCount}>{exList.length} exercises</Text>
@@ -400,7 +408,8 @@ export default function WorkoutScreen() {
 
 // ── Chart Styles ──────────────────────────────────────────────────────────
 
-const chart = StyleSheet.create({
+const makeChart = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -416,7 +425,7 @@ const chart = StyleSheet.create({
   },
   yLabel: {
     fontSize: 9,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontWeight: '600',
   },
   barsContainer: {
@@ -431,7 +440,7 @@ const chart = StyleSheet.create({
   },
   barLabel: {
     fontSize: 8,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     height: 12,
     textAlign: 'center',
   },
@@ -444,14 +453,16 @@ const chart = StyleSheet.create({
   },
   weekLabel: {
     fontSize: 9,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontWeight: '600',
     marginTop: 4,
     textAlign: 'center',
   },
-});
 
-const muscle = StyleSheet.create({
+  });
+
+const makeMuscle = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: {
     gap: 10,
     marginTop: 12,
@@ -464,35 +475,37 @@ const muscle = StyleSheet.create({
   label: {
     fontSize: 12,
     fontWeight: '500',
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     width: 70,
   },
   track: {
     flex: 1,
     height: 8,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
     borderRadius: 4,
     overflow: 'hidden',
   },
   fill: {
     height: '100%',
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     borderRadius: 4,
     minWidth: 0,
   },
   value: {
     fontSize: 11,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     width: 70,
     textAlign: 'right',
     fontWeight: '600',
   },
-});
+
+  });
 
 // ── Screen Styles ─────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   content: { paddingBottom: 100 },
   header: {
     flexDirection: 'row',
@@ -502,7 +515,7 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     marginBottom: 20,
   },
-  title: { fontSize: 28, fontWeight: '500', color: Colors.textPrimary },
+  title: { fontSize: 28, fontWeight: '500', color: colors.textPrimary },
   statsRow: {
     flexDirection: 'row',
     paddingHorizontal: 24,
@@ -511,32 +524,32 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     padding: 14,
     alignItems: 'center',
     gap: 4,
   },
-  statValue: { fontSize: 22, fontWeight: '500', color: Colors.textPrimary },
-  statLabel: { fontSize: 11, color: Colors.textSecondary },
+  statValue: { fontSize: 22, fontWeight: '500', color: colors.textPrimary },
+  statLabel: { fontSize: 11, color: colors.textSecondary },
   // Charts
   chartCard: {
     marginHorizontal: 24,
     marginBottom: 16,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     padding: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   muscleCard: {
     marginHorizontal: 24,
     marginBottom: 16,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     padding: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   chartHeader: {
     flexDirection: 'row',
@@ -546,15 +559,15 @@ const styles = StyleSheet.create({
   chartTitle: {
     fontSize: 15,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   chartSubtitle: {
     fontSize: 11,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 2,
   },
   chartBadge: {
-    backgroundColor: Colors.primaryPale,
+    backgroundColor: colors.primaryPale,
     borderRadius: 4, // radius.lg
     paddingHorizontal: 10,
     paddingVertical: 6,
@@ -563,11 +576,11 @@ const styles = StyleSheet.create({
   chartBadgeText: {
     fontSize: 14,
     fontWeight: '500',
-    color: Colors.primary,
+    color: colors.primary,
   },
   chartBadgeSub: {
     fontSize: 9,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontWeight: '600',
   },
   chartEmpty: {
@@ -577,7 +590,7 @@ const styles = StyleSheet.create({
   },
   chartEmptyText: {
     fontSize: 13,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'center',
   },
   // Existing styles
@@ -587,7 +600,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginHorizontal: 24,
     marginBottom: 24,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     padding: 16,
   },
@@ -596,12 +609,12 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 2, // radius.md
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  quickStartTitle: { fontSize: 16, fontWeight: '500', color: Colors.textPrimary },
-  quickStartSub: { fontSize: 13, color: Colors.textMuted, marginTop: 2 },
+  quickStartTitle: { fontSize: 16, fontWeight: '500', color: colors.textPrimary },
+  quickStartSub: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -612,31 +625,31 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 17,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     paddingHorizontal: 24,
     marginBottom: 12,
   },
   emptyCard: {
     marginHorizontal: 24,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     padding: 32,
     alignItems: 'center',
     gap: 10,
   },
-  emptyText: { fontSize: 14, color: Colors.textMuted },
+  emptyText: { fontSize: 14, color: colors.textMuted },
   emptyBtn: {
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     borderRadius: 4, // radius.lg
     paddingHorizontal: 20,
     paddingVertical: 10,
     marginTop: 4,
   },
-  emptyBtnText: { color: Colors.textOnPrimary, fontSize: 14, fontWeight: '500' },
+  emptyBtnText: { color: colors.textOnPrimary, fontSize: 14, fontWeight: '500' },
   routineCard: {
     marginHorizontal: 24,
     marginBottom: 10,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     padding: 16,
   },
@@ -645,17 +658,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  routineName: { fontSize: 16, fontWeight: '500', color: Colors.textPrimary },
-  routineExCount: { fontSize: 13, color: Colors.textSecondary, marginTop: 4 },
-  routineExList: { fontSize: 12, color: Colors.textMuted, marginTop: 4 },
+  routineName: { fontSize: 16, fontWeight: '500', color: colors.textPrimary },
+  routineExCount: { fontSize: 13, color: colors.textSecondary, marginTop: 4 },
+  routineExList: { fontSize: 12, color: colors.textMuted, marginTop: 4 },
   historyCard: {
     marginHorizontal: 24,
     marginBottom: 10,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     padding: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   historyHeader: {
     flexDirection: 'row',
@@ -665,32 +678,33 @@ const styles = StyleSheet.create({
   historyTitle: {
     fontSize: 16,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   historyDate: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.primary,
+    color: colors.primary,
   },
   historyMeta: {
     fontSize: 12,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 4,
   },
   historyExercise: {
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
   },
   exerciseName: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   exerciseSets: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginTop: 2,
   },
-});
+
+  });

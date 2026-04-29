@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -16,9 +16,10 @@ import { useNavigation } from '@react-navigation/native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as Haptics from 'expo-haptics';
 import { listsApi } from '../../services/api';
-import { Colors } from '../../constants/colors';
+
 import FadeInView from '../../components/FadeInView';
 import EmptyState from '../../components/EmptyState';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface ListItem {
@@ -35,6 +36,8 @@ const QUERY_KEY = ['lists', LIST_TYPE];
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function ShoppingListScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation<any>();
   const queryClient = useQueryClient();
 
@@ -156,7 +159,7 @@ export default function ShoppingListScreen() {
         <Ionicons
           name={item.is_checked ? 'checkmark-circle' : 'ellipse-outline'}
           size={24}
-          color={item.is_checked ? Colors.success : Colors.textMuted}
+          color={item.is_checked ? colors.success : colors.textMuted}
         />
       </TouchableOpacity>
       <View style={styles.itemContent}>
@@ -175,7 +178,7 @@ export default function ShoppingListScreen() {
         activeOpacity={0.7}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       >
-        <Ionicons name="close-circle-outline" size={20} color={Colors.textMuted} />
+        <Ionicons name="close-circle-outline" size={20} color={colors.textMuted} />
       </TouchableOpacity>
     </View>
   );
@@ -191,7 +194,7 @@ export default function ShoppingListScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.title}>Shopping List</Text>
         {checked.length > 0 ? (
@@ -212,7 +215,7 @@ export default function ShoppingListScreen() {
           <TextInput
             style={styles.nameInput}
             placeholder="Add item…"
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor={colors.textMuted}
             value={newItemName}
             onChangeText={setNewItemName}
             returnKeyType="done"
@@ -221,7 +224,7 @@ export default function ShoppingListScreen() {
           <TextInput
             style={styles.qtyInput}
             placeholder="Qty"
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor={colors.textMuted}
             value={newItemQty}
             onChangeText={setNewItemQty}
             keyboardType="numeric"
@@ -230,7 +233,7 @@ export default function ShoppingListScreen() {
           <TextInput
             style={styles.unitInput}
             placeholder="Unit"
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor={colors.textMuted}
             value={newItemUnit}
             onChangeText={setNewItemUnit}
             returnKeyType="done"
@@ -243,9 +246,9 @@ export default function ShoppingListScreen() {
           activeOpacity={0.8}
         >
           {addMutation.isPending ? (
-            <ActivityIndicator size="small" color={Colors.textOnPrimary} />
+            <ActivityIndicator size="small" color={colors.textOnPrimary} />
           ) : (
-            <Ionicons name="add" size={22} color={Colors.textOnPrimary} />
+            <Ionicons name="add" size={22} color={colors.textOnPrimary} />
           )}
         </TouchableOpacity>
       </View>
@@ -253,7 +256,7 @@ export default function ShoppingListScreen() {
       {/* List */}
       {isLoading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Loading shopping list…</Text>
         </View>
       ) : isError ? (
@@ -280,7 +283,7 @@ export default function ShoppingListScreen() {
             <RefreshControl
               refreshing={isRefetching}
               onRefresh={refetch}
-              tintColor={Colors.primary}
+              tintColor={colors.primary}
             />
           }
           contentContainerStyle={styles.listContent}
@@ -304,8 +307,9 @@ export default function ShoppingListScreen() {
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -315,14 +319,14 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   backBtn: { width: 40, height: 40, justifyContent: 'center' },
-  title: { fontSize: 24, fontWeight: '500', color: Colors.textPrimary, flex: 1 },
+  title: { fontSize: 24, fontWeight: '500', color: colors.textPrimary, flex: 1 },
   clearBtn: {
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: Colors.error + '15',
+    backgroundColor: colors.error + '15',
     borderRadius: 0, // radius.sm
   },
-  clearBtnText: { fontSize: 13, fontWeight: '500', color: Colors.error },
+  clearBtnText: { fontSize: 13, fontWeight: '500', color: colors.error },
 
   addRow: {
     flexDirection: 'row',
@@ -335,41 +339,41 @@ const styles = StyleSheet.create({
   nameInput: {
     flex: 3,
     height: 44,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     paddingHorizontal: 12,
     fontSize: 14,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   qtyInput: {
     flex: 1,
     height: 44,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     paddingHorizontal: 8,
     fontSize: 14,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     textAlign: 'center',
   },
   unitInput: {
     flex: 1,
     height: 44,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     paddingHorizontal: 8,
     fontSize: 14,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   addBtn: {
     width: 44,
     height: 44,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
@@ -377,7 +381,7 @@ const styles = StyleSheet.create({
   addBtnDisabled: { opacity: 0.5 },
 
   loadingContainer: { alignItems: 'center', paddingTop: 60, gap: 12 },
-  loadingText: { fontSize: 15, color: Colors.textMuted },
+  loadingText: { fontSize: 15, color: colors.textMuted },
 
   listContent: { paddingHorizontal: 16, paddingBottom: 40 },
 
@@ -386,25 +390,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     marginTop: 8,
   },
-  sectionHeaderText: { fontSize: 13, fontWeight: '500', color: Colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
+  sectionHeaderText: { fontSize: 13, fontWeight: '500', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
 
   itemRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 2, // radius.md
     paddingVertical: 12,
     paddingHorizontal: 12,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     gap: 10,
   },
   itemRowChecked: { opacity: 0.6 },
   checkbox: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
   itemContent: { flex: 1 },
-  itemName: { fontSize: 15, fontWeight: '600', color: Colors.textPrimary },
-  itemNameChecked: { textDecorationLine: 'line-through', color: Colors.textMuted },
-  itemMeta: { fontSize: 12, color: Colors.textMuted, marginTop: 1 },
+  itemName: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
+  itemNameChecked: { textDecorationLine: 'line-through', color: colors.textMuted },
+  itemMeta: { fontSize: 12, color: colors.textMuted, marginTop: 1 },
   deleteBtn: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
-});
+
+  });

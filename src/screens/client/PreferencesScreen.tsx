@@ -12,7 +12,7 @@
  *             `preference_changed` with {key} on each change.
  */
 
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -23,8 +23,9 @@ import {
 } from 'react-native';
 import HapticPressable from '../../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+
 import { track } from '../../lib/analytics';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import {
   usePreferences,
   type HomeModule,
@@ -73,6 +74,8 @@ interface SectionHeaderProps {
   title: string;
 }
 function SectionHeader({ title }: SectionHeaderProps) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return <Text style={styles.sectionLabel}>{title.toUpperCase()}</Text>;
 }
 
@@ -83,6 +86,8 @@ interface RadioRowProps {
   preview?: string;
 }
 function RadioRow({ label, selected, onPress, preview }: RadioRowProps) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <HapticPressable
       intent="light"
@@ -117,6 +122,8 @@ function SegmentControl<T extends string | number>({
   label,
   onSelect,
 }: SegmentControlProps<T>) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <View style={styles.segmented}>
       {options.map((opt) => {
@@ -144,6 +151,8 @@ function SegmentControl<T extends string | number>({
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function PreferencesScreen({ navigation }: any) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { prefs, isLoading, isSaving, updatePrefs } = usePreferences();
 
   useEffect(() => {
@@ -180,7 +189,7 @@ export default function PreferencesScreen({ navigation }: any) {
   if (isLoading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -198,11 +207,11 @@ export default function PreferencesScreen({ navigation }: any) {
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </HapticPressable>
         <Text style={styles.topTitle}>Personalization</Text>
         <View style={styles.backBtn}>
-          {isSaving && <ActivityIndicator size="small" color={Colors.primary} />}
+          {isSaving && <ActivityIndicator size="small" color={colors.primary} />}
         </View>
       </View>
 
@@ -231,8 +240,8 @@ export default function PreferencesScreen({ navigation }: any) {
                 <Switch
                   value={enabled}
                   onValueChange={(v) => toggleModule(mod, v)}
-                  trackColor={{ false: Colors.border, true: Colors.primary }}
-                  thumbColor={Colors.textOnPrimary}
+                  trackColor={{ false: colors.border, true: colors.primary }}
+                  thumbColor={colors.textOnPrimary}
                   accessibilityRole="switch"
                   accessibilityLabel={HOME_MODULE_LABELS[mod]}
                   accessibilityState={{ checked: enabled }}
@@ -307,16 +316,17 @@ export default function PreferencesScreen({ navigation }: any) {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   centered: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   topBar: {
     flexDirection: 'row',
@@ -335,7 +345,7 @@ const styles = StyleSheet.create({
   topTitle: {
     fontSize: 18,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   content: {
     paddingHorizontal: 24,
@@ -343,7 +353,7 @@ const styles = StyleSheet.create({
   },
   intro: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginBottom: 20,
     marginTop: 4,
     lineHeight: 20,
@@ -351,13 +361,13 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 12,
     fontWeight: '500',
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     letterSpacing: 0.6,
     marginBottom: 8,
     marginTop: 24,
   },
   card: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     overflow: 'hidden',
   },
@@ -370,16 +380,16 @@ const styles = StyleSheet.create({
   },
   rowBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   rowLabel: {
     fontSize: 15,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     flex: 1,
   },
   preview: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontStyle: 'italic',
     marginTop: 2,
   },
@@ -394,22 +404,22 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 4, // radius.lg
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     justifyContent: 'center',
     alignItems: 'center',
   },
   radioCircleActive: {
-    borderColor: Colors.primary,
+    borderColor: colors.primary,
   },
   radioInner: {
     width: 10,
     height: 10,
     borderRadius: 2, // radius.md
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
   },
   segmented: {
     flexDirection: 'row',
-    backgroundColor: Colors.surfaceElevated,
+    backgroundColor: colors.surfaceElevated,
     borderRadius: 0, // radius.sm
     overflow: 'hidden',
   },
@@ -418,14 +428,15 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   segBtnActive: {
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
   },
   segText: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   segTextActive: {
-    color: Colors.textOnPrimary,
+    color: colors.textOnPrimary,
   },
-});
+
+  });

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,10 +11,11 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
-import { Colors } from '../../constants/colors';
+
 import { Shadow } from '../../constants/theme';
 import FadeInView from '../../components/FadeInView';
 import { mealPlansApi } from '../../services/api';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 // ── Types ─────────────────────────────────────────────────────────────────
 //
@@ -107,6 +108,8 @@ function normalisePlans(payload: any): MealPlan[] {
 }
 
 export default function PlanScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [plans, setPlans] = useState<MealPlan[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -151,7 +154,7 @@ export default function PlanScreen() {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.centered}>
-          <ActivityIndicator color={Colors.primary} size="large" />
+          <ActivityIndicator color={colors.primary} size="large" />
         </View>
       </SafeAreaView>
     );
@@ -166,7 +169,7 @@ export default function PlanScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} colors={[Colors.primary]} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
         }
       >
         <FadeInView>
@@ -182,7 +185,7 @@ export default function PlanScreen() {
 
         {error && hasPlans && (
           <View style={styles.errorBanner} accessibilityLiveRegion="polite">
-            <Ionicons name="cloud-offline-outline" size={16} color={Colors.warning} />
+            <Ionicons name="cloud-offline-outline" size={16} color={colors.warning} />
             <Text style={styles.errorText}>{error}</Text>
           </View>
         )}
@@ -191,7 +194,7 @@ export default function PlanScreen() {
           <FadeInView>
             <View style={styles.emptyCard}>
               <View style={styles.emptyIconCircle}>
-                <Ionicons name="restaurant-outline" size={32} color={Colors.primary} />
+                <Ionicons name="restaurant-outline" size={32} color={colors.primary} />
               </View>
               <Text style={styles.emptyTitle}>
                 Your coach hasn't assigned a meal plan yet.
@@ -282,14 +285,15 @@ export default function PlanScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   centered: {
     flex: 1,
@@ -310,12 +314,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 26,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 13,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 4,
   },
   errorBanner: {
@@ -323,7 +327,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     padding: 10,
     borderRadius: 4, // radius.lg
-    backgroundColor: Colors.noticeCriticalBg,
+    backgroundColor: colors.noticeCriticalBg,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
@@ -331,16 +335,16 @@ const styles = StyleSheet.create({
   errorText: {
     flex: 1,
     fontSize: 12,
-    color: Colors.noticeCriticalText,
+    color: colors.noticeCriticalText,
   },
   emptyCard: {
     marginHorizontal: 20,
     marginTop: 40,
     padding: 24,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     alignItems: 'center',
     gap: 12,
     ...Shadow.small,
@@ -349,7 +353,7 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 4, // radius.lg
-    backgroundColor: Colors.primaryPale,
+    backgroundColor: colors.primaryPale,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 8,
@@ -357,12 +361,12 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 16,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     textAlign: 'center',
   },
   emptyBody: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 19,
   },
@@ -371,11 +375,11 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   planCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     padding: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     ...Shadow.small,
   },
   planHeader: {
@@ -387,15 +391,15 @@ const styles = StyleSheet.create({
   planTitle: {
     fontSize: 18,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   planMeta: {
     fontSize: 12,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 2,
   },
   notesBox: {
-    backgroundColor: Colors.primaryPale,
+    backgroundColor: colors.primaryPale,
     borderRadius: 4, // radius.lg
     padding: 10,
     marginTop: 4,
@@ -403,7 +407,7 @@ const styles = StyleSheet.create({
   },
   notesText: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     lineHeight: 19,
   },
   group: {
@@ -412,7 +416,7 @@ const styles = StyleSheet.create({
   groupLabel: {
     fontSize: 12,
     fontWeight: '500',
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginBottom: 6,
     letterSpacing: 0.5,
   },
@@ -422,17 +426,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
     gap: 10,
   },
   itemName: {
     fontSize: 14,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   itemNotes: {
     fontSize: 12,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 2,
     lineHeight: 16,
   },
@@ -443,16 +447,16 @@ const styles = StyleSheet.create({
   itemCal: {
     fontSize: 12,
     fontWeight: '500',
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   itemProtein: {
     fontSize: 11,
     fontWeight: '500',
-    color: Colors.primary,
+    color: colors.primary,
   },
   emptyItemsText: {
     fontSize: 13,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     paddingVertical: 10,
     textAlign: 'center',
   },
@@ -465,7 +469,7 @@ const styles = StyleSheet.create({
   },
   totalsLabel: {
     fontSize: 12,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontWeight: '500',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
@@ -473,6 +477,7 @@ const styles = StyleSheet.create({
   totalsValue: {
     fontSize: 13,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
-});
+
+  });

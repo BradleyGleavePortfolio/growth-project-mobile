@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -20,11 +20,14 @@ import { signOut, refreshProfile } from '../../services/authActions';
 import { useSettings } from '../../hooks/useSettings';
 import { profileApi, notificationsApi } from '../../services/api';
 import { authEvents } from '../../utils/authEvents';
-import { Colors } from '../../constants/colors';
+
 import { mediumTap, warningTap, successTap } from '../../utils/haptics';
 import { updateSupabasePassword } from '../../utils/supabaseAuth';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 export default function SettingsScreen({ navigation }: any) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();
   // signOut + refreshProfile imported directly — no store wiring needed.
   const { settings, updateSetting } = useSettings();
@@ -153,7 +156,7 @@ export default function SettingsScreen({ navigation }: any) {
     <View style={styles.container}>
       <View style={styles.topBar}>
         <HapticPressable intent="light" onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </HapticPressable>
         <Text style={styles.topTitle}>Settings</Text>
         <View style={styles.backBtn} />
@@ -180,7 +183,7 @@ export default function SettingsScreen({ navigation }: any) {
           </View>
           <HapticPressable intent="light" style={styles.row} onPress={() => setShowPasswordModal(true)}>
             <Text style={styles.rowLabel}>Change Password</Text>
-            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </HapticPressable>
         </View>
 
@@ -206,11 +209,11 @@ export default function SettingsScreen({ navigation }: any) {
             <Text style={styles.rowLabel}>Meals Per Day</Text>
             <View style={styles.stepper}>
               <HapticPressable intent="light" onPress={() => stepMeals(-1)} style={styles.stepBtn}>
-                <Ionicons name="remove" size={18} color={Colors.textPrimary} />
+                <Ionicons name="remove" size={18} color={colors.textPrimary} />
               </HapticPressable>
               <Text style={styles.stepValue}>{settings.mealsPerDay}</Text>
               <HapticPressable intent="light" onPress={() => stepMeals(1)} style={styles.stepBtn}>
-                <Ionicons name="add" size={18} color={Colors.textPrimary} />
+                <Ionicons name="add" size={18} color={colors.textPrimary} />
               </HapticPressable>
             </View>
           </View>
@@ -218,11 +221,11 @@ export default function SettingsScreen({ navigation }: any) {
             <Text style={styles.rowLabel}>Water Goal (fl oz)</Text>
             <View style={styles.stepper}>
               <HapticPressable intent="light" onPress={() => stepWater(-10)} style={styles.stepBtn}>
-                <Ionicons name="remove" size={18} color={Colors.textPrimary} />
+                <Ionicons name="remove" size={18} color={colors.textPrimary} />
               </HapticPressable>
               <Text style={styles.stepValue}>{settings.waterGoalOz}</Text>
               <HapticPressable intent="light" onPress={() => stepWater(10)} style={styles.stepBtn}>
-                <Ionicons name="add" size={18} color={Colors.textPrimary} />
+                <Ionicons name="add" size={18} color={colors.textPrimary} />
               </HapticPressable>
             </View>
           </View>
@@ -253,8 +256,8 @@ export default function SettingsScreen({ navigation }: any) {
             <Switch
               value={settings.dailyCheckin}
               onValueChange={(v) => handleNotificationToggle('dailyCheckin', v)}
-              trackColor={{ false: Colors.border, true: Colors.primary }}
-              thumbColor={Colors.textOnPrimary}
+              trackColor={{ false: colors.border, true: colors.primary }}
+              thumbColor={colors.textOnPrimary}
             />
           </View>
           {settings.dailyCheckin && (
@@ -268,8 +271,8 @@ export default function SettingsScreen({ navigation }: any) {
             <Switch
               value={settings.mealReminders}
               onValueChange={(v) => handleNotificationToggle('mealReminders', v)}
-              trackColor={{ false: Colors.border, true: Colors.primary }}
-              thumbColor={Colors.textOnPrimary}
+              trackColor={{ false: colors.border, true: colors.primary }}
+              thumbColor={colors.textOnPrimary}
             />
           </View>
           <View style={styles.row}>
@@ -277,8 +280,8 @@ export default function SettingsScreen({ navigation }: any) {
             <Switch
               value={settings.fastingAlerts}
               onValueChange={(v) => handleNotificationToggle('fastingAlerts', v)}
-              trackColor={{ false: Colors.border, true: Colors.primary }}
-              thumbColor={Colors.textOnPrimary}
+              trackColor={{ false: colors.border, true: colors.primary }}
+              thumbColor={colors.textOnPrimary}
             />
           </View>
           <View style={styles.row}>
@@ -286,8 +289,8 @@ export default function SettingsScreen({ navigation }: any) {
             <Switch
               value={settings.weeklySummary}
               onValueChange={(v) => handleNotificationToggle('weeklySummary', v)}
-              trackColor={{ false: Colors.border, true: Colors.primary }}
-              thumbColor={Colors.textOnPrimary}
+              trackColor={{ false: colors.border, true: colors.primary }}
+              thumbColor={colors.textOnPrimary}
             />
           </View>
         </View>
@@ -304,8 +307,8 @@ export default function SettingsScreen({ navigation }: any) {
             <Switch
               value={settings.hapticsEnabled}
               onValueChange={(v) => updateSetting('hapticsEnabled', v)}
-              trackColor={{ false: Colors.border, true: Colors.primary }}
-              thumbColor={Colors.textOnPrimary}
+              trackColor={{ false: colors.border, true: colors.primary }}
+              thumbColor={colors.textOnPrimary}
             />
           </View>
         </View>
@@ -322,10 +325,10 @@ export default function SettingsScreen({ navigation }: any) {
             accessibilityHint="Opens preference controls for home modules, notifications, tone, and units"
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-              <Ionicons name="options-outline" size={18} color={Colors.primary} />
+              <Ionicons name="options-outline" size={18} color={colors.primary} />
               <Text style={styles.rowLabel}>Personalization</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </HapticPressable>
         </View>
 
@@ -342,20 +345,20 @@ export default function SettingsScreen({ navigation }: any) {
             accessibilityHint="Opens the Trust Center with security details and privacy controls"
           >
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-              <Ionicons name="lock-closed-outline" size={18} color={Colors.primary} />
+              <Ionicons name="lock-closed-outline" size={18} color={colors.primary} />
               <Text style={styles.rowLabel}>Trust & Privacy</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </HapticPressable>
           <HapticPressable intent="warning" style={styles.row} onPress={handleResetOnboarding}>
             <Text style={styles.rowLabel}>Reset Onboarding</Text>
-            <Ionicons name="refresh-outline" size={18} color={Colors.warning} />
+            <Ionicons name="refresh-outline" size={18} color={colors.warning} />
           </HapticPressable>
         </View>
 
         {/* Sign Out */}
         <HapticPressable intent="warning" style={styles.signOutBtn} onPress={handleSignOut}>
-          <Ionicons name="log-out-outline" size={20} color={Colors.error} />
+          <Ionicons name="log-out-outline" size={20} color={colors.error} />
           <Text style={styles.signOutText}>Sign Out</Text>
         </HapticPressable>
 
@@ -383,13 +386,13 @@ export default function SettingsScreen({ navigation }: any) {
                 accessibilityRole="button"
                 accessibilityLabel="Close"
               >
-                <Ionicons name="close" size={24} color={Colors.textSecondary} />
+                <Ionicons name="close" size={24} color={colors.textSecondary} />
               </HapticPressable>
             </View>
             <TextInput
               style={styles.input}
               placeholder="New password (min 8 chars)"
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               secureTextEntry
               value={newPassword}
               onChangeText={setNewPassword}
@@ -399,7 +402,7 @@ export default function SettingsScreen({ navigation }: any) {
             <TextInput
               style={[styles.input, { marginTop: 12 }]}
               placeholder="Confirm new password"
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               secureTextEntry
               value={confirmPassword}
               onChangeText={setConfirmPassword}
@@ -408,7 +411,7 @@ export default function SettingsScreen({ navigation }: any) {
             />
             {passwordError ? (
               <Text
-                style={{ color: Colors.error, fontSize: 13, marginTop: 10, textAlign: 'center' }}
+                style={{ color: colors.error, fontSize: 13, marginTop: 10, textAlign: 'center' }}
                 accessibilityLiveRegion="assertive"
               >
                 {passwordError}
@@ -431,10 +434,11 @@ export default function SettingsScreen({ navigation }: any) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   topBar: {
     flexDirection: 'row',
@@ -453,7 +457,7 @@ const styles = StyleSheet.create({
   topTitle: {
     fontSize: 18,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   content: {
     paddingHorizontal: 24,
@@ -462,13 +466,13 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 13,
     fontWeight: '500',
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     textTransform: 'uppercase',
     marginBottom: 8,
     marginTop: 24,
   },
   card: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     overflow: 'hidden',
   },
@@ -477,7 +481,7 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 4, // radius.lg
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginVertical: 16,
@@ -485,7 +489,7 @@ const styles = StyleSheet.create({
   avatarText: {
     fontSize: 22,
     fontWeight: '500',
-    color: Colors.textOnPrimary,
+    color: colors.textOnPrimary,
   },
   row: {
     flexDirection: 'row',
@@ -494,24 +498,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   rowLabel: {
     fontSize: 15,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   rowValue: {
     fontSize: 15,
     fontWeight: '600',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   rowValueMuted: {
     fontSize: 15,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   segmented: {
     flexDirection: 'row',
-    backgroundColor: Colors.surfaceElevated,
+    backgroundColor: colors.surfaceElevated,
     borderRadius: 0, // radius.sm
     overflow: 'hidden',
   },
@@ -520,15 +524,15 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   segBtnActive: {
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
   },
   segText: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   segTextActive: {
-    color: Colors.textOnPrimary,
+    color: colors.textOnPrimary,
   },
   stepper: {
     flexDirection: 'row',
@@ -539,14 +543,14 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 4, // radius.lg
-    backgroundColor: Colors.surfaceElevated,
+    backgroundColor: colors.surfaceElevated,
     justifyContent: 'center',
     alignItems: 'center',
   },
   stepValue: {
     fontSize: 16,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     minWidth: 30,
     textAlign: 'center',
   },
@@ -557,15 +561,15 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 32,
     paddingVertical: 16,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     borderWidth: 1,
-    borderColor: Colors.error,
+    borderColor: colors.error,
   },
   signOutText: {
     fontSize: 16,
     fontWeight: '600',
-    color: Colors.error,
+    color: colors.error,
   },
   about: {
     alignItems: 'center',
@@ -575,11 +579,11 @@ const styles = StyleSheet.create({
   aboutText: {
     fontSize: 13,
     fontWeight: '600',
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   aboutSub: {
     fontSize: 12,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   modalOverlay: {
     flex: 1,
@@ -587,7 +591,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalSheet: {
-    backgroundColor: Colors.surfaceElevated,
+    backgroundColor: colors.surfaceElevated,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 24,
@@ -602,20 +606,20 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 20,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   input: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 2, // radius.md
     padding: 14,
     fontSize: 16,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   saveBtn: {
     marginTop: 20,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     borderRadius: 2, // radius.md
     paddingVertical: 14,
     alignItems: 'center',
@@ -623,17 +627,18 @@ const styles = StyleSheet.create({
   saveBtnText: {
     fontSize: 16,
     fontWeight: '500',
-    color: Colors.textOnPrimary,
+    color: colors.textOnPrimary,
   },
   exportText: {
     fontSize: 15,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     lineHeight: 22,
     marginBottom: 12,
   },
   exportHint: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     lineHeight: 20,
   },
-});
+
+  });

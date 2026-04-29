@@ -10,7 +10,7 @@
  * offline reads, and the server is the single source of truth for writes.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -23,8 +23,9 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+
 import { getTodayString } from '../../utils/date';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import {
   useHabits,
   useHabitLogs,
@@ -74,12 +75,13 @@ const HABIT_ICONS: { icon: string; label: string }[] = [
 // Habit colour palette — picker swatches the user assigns per habit.
 // Pulled from the new bone/forest palette plus muted secondaries so the
 // chosen colour reads as a quiet luxury accent rather than a neon tag.
-const HABIT_COLORS = [
-  Colors.primary,        // forest (default)
-  Colors.primaryDark,    // deep forest
-  Colors.primaryLight,   // pale forest
-  Colors.info,           // muted blue
-  Colors.warning,        // mutedGold
+function makeHABIT_COLORS(colors: ThemeColors) {
+  return [
+  colors.primary,        // forest (default)
+  colors.primaryDark,    // deep forest
+  colors.primaryLight,   // pale forest
+  colors.info,           // muted blue
+  colors.warning,        // mutedGold
   '#B08D57',             // camel
   '#7A6A9B',             // muted lavender
   '#9A3030',             // muted oxblood
@@ -88,8 +90,12 @@ const HABIT_COLORS = [
   '#B1A89F',             // stone
   '#4D7059',             // mid forest
 ];
+}
 
 export default function HabitsScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const HABIT_COLORS = useMemo(() => makeHABIT_COLORS(colors), [colors]);
   const today = getTodayString();
   const [tab, setTab] = useState<TabMode>('habits');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -118,7 +124,7 @@ export default function HabitsScreen() {
   // Add-habit modal form
   const [newName, setNewName] = useState('');
   const [newIcon, setNewIcon] = useState('checkmark-circle');
-  const [newColor, setNewColor] = useState(Colors.primary);
+  const [newColor, setNewColor] = useState(colors.primary);
   const [newTarget, setNewTarget] = useState('1');
   const [newUnit, setNewUnit] = useState('times');
 
@@ -138,7 +144,7 @@ export default function HabitsScreen() {
     id: h.id,
     name: h.name,
     icon: h.icon || h.emoji || 'checkmark-circle',
-    color: h.color || Colors.primary,
+    color: h.color || colors.primary,
     frequency: h.frequency || 'daily',
     targetCount: h.target_count || h.target_value || 1,
     unit: h.unit || 'times',
@@ -222,7 +228,7 @@ export default function HabitsScreen() {
           setShowAddModal(false);
           setNewName('');
           setNewIcon('checkmark-circle');
-          setNewColor(Colors.primary);
+          setNewColor(colors.primary);
           setNewTarget('1');
           setNewUnit('times');
         },
@@ -283,7 +289,7 @@ export default function HabitsScreen() {
           <Ionicons
             name="checkmark-done"
             size={16}
-            color={tab === 'habits' ? Colors.textOnPrimary : Colors.textSecondary}
+            color={tab === 'habits' ? colors.textOnPrimary : colors.textSecondary}
           />
           <Text style={[styles.tabLabel, tab === 'habits' && styles.tabLabelActive]}>
             Habits
@@ -296,7 +302,7 @@ export default function HabitsScreen() {
           <Ionicons
             name="heart"
             size={16}
-            color={tab === 'checkin' ? Colors.textOnPrimary : Colors.textSecondary}
+            color={tab === 'checkin' ? colors.textOnPrimary : colors.textSecondary}
           />
           <Text style={[styles.tabLabel, tab === 'checkin' && styles.tabLabelActive]}>
             Daily Check-in
@@ -311,7 +317,7 @@ export default function HabitsScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} colors={[Colors.primary]} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
         }
       >
         {tab === 'habits' ? (
@@ -386,14 +392,14 @@ export default function HabitsScreen() {
                   ]}
                 >
                   {habit.log?.completed && (
-                    <Ionicons name="checkmark" size={18} color={Colors.textOnPrimary} />
+                    <Ionicons name="checkmark" size={18} color={colors.textOnPrimary} />
                   )}
                 </View>
               </TouchableOpacity>
             ))}
 
             <TouchableOpacity style={styles.addBtn} onPress={() => setShowAddModal(true)}>
-              <Ionicons name="add-circle" size={22} color={Colors.primary} />
+              <Ionicons name="add-circle" size={22} color={colors.primary} />
               <Text style={styles.addBtnText}>Add New Habit</Text>
             </TouchableOpacity>
           </>
@@ -401,19 +407,19 @@ export default function HabitsScreen() {
           <>
             {checkInToast && (
               <View style={styles.savedBanner} accessibilityLiveRegion="polite">
-                <Ionicons name="checkmark-circle" size={20} color={Colors.primary} />
+                <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
                 <Text style={styles.savedBannerText}>Check-in saved</Text>
               </View>
             )}
             {!checkInToast && checkInSaved && (
               <View style={styles.savedBanner}>
-                <Ionicons name="checkmark-circle" size={20} color={Colors.primary} />
+                <Ionicons name="checkmark-circle" size={20} color={colors.primary} />
                 <Text style={styles.savedBannerText}>Saved.</Text>
               </View>
             )}
             {lastCheckInDate && lastCheckInDate !== today && (
               <View style={styles.lastCheckInRow}>
-                <Ionicons name="time-outline" size={14} color={Colors.textMuted} />
+                <Ionicons name="time-outline" size={14} color={colors.textMuted} />
                 <Text style={styles.lastCheckInText}>
                   Last check-in: {new Date(lastCheckInDate + 'T00:00:00').toLocaleDateString('en-US', {
                     weekday: 'short',
@@ -456,7 +462,7 @@ export default function HabitsScreen() {
                     <Ionicons
                       name="flash"
                       size={20}
-                      color={energy === val ? Colors.primary : Colors.textMuted}
+                      color={energy === val ? colors.primary : colors.textMuted}
                     />
                     <Text style={[styles.ratingLabel, energy === val && styles.ratingLabelActive]}>
                       {ENERGY_LABELS[val]}
@@ -477,14 +483,14 @@ export default function HabitsScreen() {
                       style={styles.stepperBtn}
                       onPress={() => setSleepHours((h) => Math.max(0, h - 0.5))}
                     >
-                      <Ionicons name="remove" size={18} color={Colors.textPrimary} />
+                      <Ionicons name="remove" size={18} color={colors.textPrimary} />
                     </TouchableOpacity>
                     <Text style={styles.stepperValue}>{sleepHours}h</Text>
                     <TouchableOpacity
                       style={styles.stepperBtn}
                       onPress={() => setSleepHours((h) => Math.min(14, h + 0.5))}
                     >
-                      <Ionicons name="add" size={18} color={Colors.textPrimary} />
+                      <Ionicons name="add" size={18} color={colors.textPrimary} />
                     </TouchableOpacity>
                   </View>
                 </View>
@@ -496,7 +502,7 @@ export default function HabitsScreen() {
                         <Ionicons
                           name={val <= sleepQuality ? 'star' : 'star-outline'}
                           size={22}
-                          color={val <= sleepQuality ? Colors.warning : Colors.textMuted}
+                          color={val <= sleepQuality ? colors.warning : colors.textMuted}
                         />
                       </TouchableOpacity>
                     ))}
@@ -520,7 +526,7 @@ export default function HabitsScreen() {
                         styles.stressDot,
                         {
                           backgroundColor:
-                            val <= 2 ? Colors.primary : val === 3 ? Colors.warning : Colors.error,
+                            val <= 2 ? colors.primary : val === 3 ? colors.warning : colors.error,
                           opacity: stress === val ? 1 : 0.4,
                         },
                       ]}
@@ -539,7 +545,7 @@ export default function HabitsScreen() {
               <TextInput
                 style={styles.notesInput}
                 placeholder="How's your day going? Anything noteworthy?"
-                placeholderTextColor={Colors.textMuted}
+                placeholderTextColor={colors.textMuted}
                 value={notes}
                 onChangeText={setNotes}
                 multiline
@@ -548,7 +554,7 @@ export default function HabitsScreen() {
             </View>
 
             <TouchableOpacity style={styles.saveBtn} onPress={handleSaveCheckIn}>
-              <Ionicons name="checkmark-circle" size={20} color={Colors.textOnPrimary} />
+              <Ionicons name="checkmark-circle" size={20} color={colors.textOnPrimary} />
               <Text style={styles.saveBtnText}>
                 {checkInSaved ? 'Update Check-in' : 'Save Check-in'}
               </Text>
@@ -566,7 +572,7 @@ export default function HabitsScreen() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>New Habit</Text>
               <TouchableOpacity onPress={() => setShowAddModal(false)}>
-                <Ionicons name="close" size={24} color={Colors.textPrimary} />
+                <Ionicons name="close" size={24} color={colors.textPrimary} />
               </TouchableOpacity>
             </View>
 
@@ -574,7 +580,7 @@ export default function HabitsScreen() {
             <TextInput
               style={styles.fieldInput}
               placeholder="e.g. Drink 8 glasses of water"
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               value={newName}
               onChangeText={setNewName}
               maxLength={60}
@@ -591,7 +597,7 @@ export default function HabitsScreen() {
                   <Ionicons
                     name={item.icon as any}
                     size={20}
-                    color={newIcon === item.icon ? Colors.primary : Colors.textMuted}
+                    color={newIcon === item.icon ? colors.primary : colors.textMuted}
                   />
                 </TouchableOpacity>
               ))}
@@ -614,7 +620,7 @@ export default function HabitsScreen() {
                 <TextInput
                   style={styles.fieldInput}
                   placeholder="1"
-                  placeholderTextColor={Colors.textMuted}
+                  placeholderTextColor={colors.textMuted}
                   value={newTarget}
                   onChangeText={setNewTarget}
                   keyboardType="numeric"
@@ -625,7 +631,7 @@ export default function HabitsScreen() {
                 <TextInput
                   style={styles.fieldInput}
                   placeholder="times"
-                  placeholderTextColor={Colors.textMuted}
+                  placeholderTextColor={colors.textMuted}
                   value={newUnit}
                   onChangeText={setNewUnit}
                 />
@@ -646,8 +652,9 @@ export default function HabitsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   header: { paddingHorizontal: 24, paddingTop: 60, marginBottom: 8 },
   title: {
     fontFamily: 'CormorantGaramond_400Regular',
@@ -655,7 +662,7 @@ const styles = StyleSheet.create({
     lineHeight: 35,
     letterSpacing: 0.6,
     fontWeight: '400',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   subtitle: {
     fontFamily: 'Inter_500Medium',
@@ -664,7 +671,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1.98,
     fontWeight: '500',
     textTransform: 'uppercase',
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 8,
   },
   tabRow: {
@@ -680,33 +687,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 4, // radius.lg
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   tabBtnActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   tabLabel: {
     fontFamily: 'Inter_500Medium',
     fontSize: 12,
     fontWeight: '500',
     letterSpacing: 0.4,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
-  tabLabelActive: { color: Colors.textOnPrimary },
+  tabLabelActive: { color: colors.textOnPrimary },
   dotBadge: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: Colors.error,
+    backgroundColor: colors.error,
   },
   scrollContent: { paddingHorizontal: 24 },
   progressCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     padding: 20,
     marginBottom: 16,
@@ -716,7 +723,7 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: Colors.primaryPale,
+    backgroundColor: colors.primaryPale,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -726,7 +733,7 @@ const styles = StyleSheet.create({
     lineHeight: 26,
     letterSpacing: 0.4,
     fontWeight: '500',
-    color: Colors.primary,
+    color: colors.primary,
   },
   progressLabel: {
     fontFamily: 'Inter_500Medium',
@@ -734,7 +741,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: 1.5,
     textTransform: 'uppercase',
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   progressStats: { flex: 1, gap: 6 },
   progressStatValue: {
@@ -743,25 +750,25 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     letterSpacing: 0.4,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
-  progressStatLabel: { fontFamily: 'Inter_400Regular', fontSize: 13, color: Colors.textSecondary },
+  progressStatLabel: { fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.textSecondary },
   progressBar: {
     height: 6,
     borderRadius: 3,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
     overflow: 'hidden',
   },
   progressBarFill: {
     height: 6,
     borderRadius: 3,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
   },
   habitCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     padding: 14,
     marginBottom: 10,
@@ -775,26 +782,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   habitInfo: { flex: 1, gap: 4 },
-  habitName: { fontFamily: 'Inter_500Medium', fontSize: 15, fontWeight: '500', color: Colors.textPrimary },
-  habitNameDone: { textDecorationLine: 'line-through', color: Colors.textMuted },
+  habitName: { fontFamily: 'Inter_500Medium', fontSize: 15, fontWeight: '500', color: colors.textPrimary },
+  habitNameDone: { textDecorationLine: 'line-through', color: colors.textMuted },
   habitMeta: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  runText: { fontFamily: 'Inter_400Regular', fontSize: 12, color: Colors.textMuted },
-  habitTarget: { fontFamily: 'Inter_400Regular', fontSize: 12, color: Colors.textMuted },
+  runText: { fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textMuted },
+  habitTarget: { fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textMuted },
   weekDots: { flexDirection: 'row', gap: 6, marginTop: 4 },
   weekDotCol: { alignItems: 'center', gap: 2 },
   weekDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
   },
-  weekDotLabel: { fontSize: 9, color: Colors.textMuted },
+  weekDotLabel: { fontSize: 9, color: colors.textMuted },
   checkCircle: {
     width: 30,
     height: 30,
     borderRadius: 4, // radius.lg
     borderWidth: 2,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -806,7 +813,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 4, // radius.lg
     borderWidth: 1.5,
-    borderColor: Colors.primary,
+    borderColor: colors.primary,
     borderStyle: 'dashed',
     marginTop: 4,
   },
@@ -816,18 +823,18 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: 1.2,
     textTransform: 'uppercase',
-    color: Colors.primary,
+    color: colors.primary,
   },
   savedBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: Colors.primaryPale,
+    backgroundColor: colors.primaryPale,
     padding: 12,
     borderRadius: 2, // radius.md
     marginBottom: 16,
   },
-  savedBannerText: { fontFamily: 'Inter_500Medium', fontSize: 13, fontWeight: '500', color: Colors.primary },
+  savedBannerText: { fontFamily: 'Inter_500Medium', fontSize: 13, fontWeight: '500', color: colors.primary },
   lastCheckInRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -835,9 +842,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     paddingHorizontal: 4,
   },
-  lastCheckInText: { fontFamily: 'Inter_500Medium', fontSize: 11, color: Colors.textMuted, fontWeight: '500', letterSpacing: 1.5, textTransform: 'uppercase' },
+  lastCheckInText: { fontFamily: 'Inter_500Medium', fontSize: 11, color: colors.textMuted, fontWeight: '500', letterSpacing: 1.5, textTransform: 'uppercase' },
   checkInCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     padding: 16,
     marginBottom: 12,
@@ -848,7 +855,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     letterSpacing: 0.4,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginBottom: 12,
   },
   ratingRow: { flexDirection: 'row', justifyContent: 'space-between' },
@@ -860,7 +867,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   ratingBtnActive: {
-    backgroundColor: Colors.primaryPale,
+    backgroundColor: colors.primaryPale,
   },
   ratingEmoji: { fontSize: 22 },
   ratingLabel: {
@@ -869,10 +876,10 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: 1.5,
     textTransform: 'uppercase',
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 4,
   },
-  ratingLabelActive: { color: Colors.primary, fontWeight: '500' },
+  ratingLabelActive: { color: colors.primary, fontWeight: '500' },
   sleepRow: { flexDirection: 'row', gap: 20 },
   sleepControl: { flex: 1 },
   sleepLabel: {
@@ -881,7 +888,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: 1.5,
     textTransform: 'uppercase',
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginBottom: 8,
   },
   stepperRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 },
@@ -889,9 +896,9 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 4, // radius.lg
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -901,29 +908,29 @@ const styles = StyleSheet.create({
     lineHeight: 26,
     letterSpacing: 0.4,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     minWidth: 50,
     textAlign: 'center',
   },
   qualityRow: { flexDirection: 'row', justifyContent: 'center', gap: 6 },
   stressDot: { width: 16, height: 16, borderRadius: 0, marginBottom: 4 },
   notesInput: {
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     borderRadius: 2, // radius.md
     padding: 14,
     fontSize: 14,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     minHeight: 80,
     textAlignVertical: 'top',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   saveBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     borderRadius: 4, // radius.lg
     paddingVertical: 16,
     marginTop: 8,
@@ -934,7 +941,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: 1.2,
     textTransform: 'uppercase',
-    color: Colors.textOnPrimary,
+    color: colors.textOnPrimary,
   },
   modalOverlay: {
     flex: 1,
@@ -942,7 +949,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     borderTopLeftRadius: 4,
     borderTopRightRadius: 4,
     padding: 24,
@@ -961,7 +968,7 @@ const styles = StyleSheet.create({
     lineHeight: 29,
     letterSpacing: 0.5,
     fontWeight: '400',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   fieldLabel: {
     fontFamily: 'Inter_500Medium',
@@ -969,42 +976,42 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: 1.98,
     textTransform: 'uppercase',
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginBottom: 8,
     marginTop: 12,
   },
   fieldInput: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 2, // radius.md
     padding: 14,
     fontSize: 15,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   iconGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   iconOption: {
     width: 40,
     height: 40,
     borderRadius: 4, // radius.lg
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
-  iconOptionActive: { borderColor: Colors.primary, backgroundColor: Colors.primaryPale },
+  iconOptionActive: { borderColor: colors.primary, backgroundColor: colors.primaryPale },
   colorGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   colorOption: {
     width: 32,
     height: 32,
     borderRadius: 4, // radius.lg
   },
-  colorOptionActive: { borderWidth: 3, borderColor: Colors.textPrimary },
+  colorOptionActive: { borderWidth: 3, borderColor: colors.textPrimary },
   targetRow: { flexDirection: 'row', gap: 12 },
   targetField: { flex: 1 },
   modalSaveBtn: {
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     borderRadius: 4, // radius.lg
     paddingVertical: 16,
     alignItems: 'center',
@@ -1017,6 +1024,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: 1.2,
     textTransform: 'uppercase',
-    color: Colors.textOnPrimary,
+    color: colors.textOnPrimary,
   },
-});
+
+  });

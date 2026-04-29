@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AuthStackParamList } from '../../navigation/AuthNavigator';
 import { authApi, InvitePreview } from '../../services/api';
 import { authEvents } from '../../utils/authEvents';
-import { Colors } from '../../constants/colors';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 type Props = {
   navigation: NativeStackNavigationProp<AuthStackParamList, 'RoleSelection'>;
@@ -29,6 +29,8 @@ type Props = {
 // paid coach tier; only an admin can. Removing the in-app become-coach UI
 // closes the privilege-escalation gap that existed in the prior version.
 export default function RoleSelectionScreen(_: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [loading, setLoading] = useState(false);
   const [requireInviteCode, setRequireInviteCode] = useState(true);
   const [inviteCode, setInviteCode] = useState('');
@@ -157,7 +159,7 @@ export default function RoleSelectionScreen(_: Props) {
             }}
             onBlur={() => previewCode(inviteCode)}
             placeholder="From your coach"
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor={colors.textMuted}
             autoCapitalize="characters"
             autoCorrect={false}
             accessibilityLabel="Coach invite code"
@@ -186,14 +188,14 @@ export default function RoleSelectionScreen(_: Props) {
           accessibilityLabel="Continue"
         >
           {loading ? (
-            <ActivityIndicator color={Colors.textOnPrimary} />
+            <ActivityIndicator color={colors.textOnPrimary} />
           ) : (
             <Text style={styles.continueText}>Continue</Text>
           )}
         </TouchableOpacity>
 
         <View style={styles.coachNote}>
-          <Ionicons name="information-circle-outline" size={16} color={Colors.textMuted} />
+          <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
           <Text style={styles.coachNoteText}>
             Coach access is managed by the platform team. If you should be a coach, contact your administrator.
           </Text>
@@ -203,10 +205,11 @@ export default function RoleSelectionScreen(_: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     paddingHorizontal: 24,
     paddingTop: 80,
   },
@@ -215,7 +218,7 @@ const styles = StyleSheet.create({
   },
   greeting: {
     fontSize: 16,
-    color: Colors.primary,
+    color: colors.primary,
     fontWeight: '600',
     marginBottom: 8,
   },
@@ -225,7 +228,7 @@ const styles = StyleSheet.create({
     lineHeight: 35,
     letterSpacing: 0.6,
     fontWeight: '400',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginBottom: 8,
   },
   subtitle: {
@@ -233,7 +236,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 26,
     letterSpacing: -0.16,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   cardsContainer: {
     gap: 16,
@@ -244,25 +247,25 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 12,
     fontWeight: '500',
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     letterSpacing: 1,
   },
   input: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     borderRadius: 4,
     paddingHorizontal: 14,
     paddingVertical: 14,
     fontSize: 16,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
-  invitePreviewOk: { fontSize: 13, color: Colors.primary, marginTop: 4 },
-  invitePreviewBad: { fontSize: 13, color: Colors.error, marginTop: 4 },
-  invitePreviewMuted: { fontSize: 13, color: Colors.textMuted, marginTop: 4 },
-  errorText: { fontSize: 13, color: Colors.error, marginTop: 4 },
+  invitePreviewOk: { fontSize: 13, color: colors.primary, marginTop: 4 },
+  invitePreviewBad: { fontSize: 13, color: colors.error, marginTop: 4 },
+  invitePreviewMuted: { fontSize: 13, color: colors.textMuted, marginTop: 4 },
+  errorText: { fontSize: 13, color: colors.error, marginTop: 4 },
   continueBtn: {
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     borderRadius: 4,
     paddingVertical: 16,
     alignItems: 'center',
@@ -270,7 +273,7 @@ const styles = StyleSheet.create({
   btnDisabled: { opacity: 0.6 },
   continueText: {
     fontFamily: 'Inter_600SemiBold',
-    color: Colors.textOnPrimary,
+    color: colors.textOnPrimary,
     fontSize: 14,
     fontWeight: '600',
     letterSpacing: 1.2,
@@ -286,7 +289,8 @@ const styles = StyleSheet.create({
   coachNoteText: {
     flex: 1,
     fontSize: 12,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     lineHeight: 18,
   },
-});
+
+  });

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,11 +13,12 @@ import {
   Linking,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Colors, Typography, Spacing, Radius, Shadow } from '../../theme';
+import { Typography, Spacing, Radius, Shadow } from '../../theme';
 import { authApi, InvitePreview } from '../../services/api';
 import { secureStorage } from '../../services/secureStorage';
 import { track } from '../../lib/analytics';
 import { toFriendlyAuthError } from '../../utils/authErrorMessage';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 interface Props {
   navigation: any;
@@ -27,6 +28,8 @@ interface Props {
 type Step = 'register' | 'verify';
 
 export default function CreateAccountScreen({ navigation, route }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [step, setStep] = useState<Step>('register');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -258,7 +261,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
             disabled={verifyLoading}
           >
             {verifyLoading ? (
-              <ActivityIndicator color={Colors.white} />
+              <ActivityIndicator color={colors.white} />
             ) : (
               <Text style={styles.verifyButtonText}>I verified my email</Text>
             )}
@@ -306,7 +309,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
             }}
             onBlur={() => previewCode(inviteCode)}
             placeholder="From your coach"
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor={colors.textMuted}
             autoCapitalize="characters"
             autoCorrect={false}
             accessibilityLabel="Coach invite code"
@@ -349,7 +352,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
             value={name}
             onChangeText={setName}
             placeholder="Your full name"
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor={colors.textMuted}
             autoCapitalize="words"
             accessibilityLabel="Full name"
             textContentType="name"
@@ -363,7 +366,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
             value={email}
             onChangeText={setEmail}
             placeholder="you@email.com"
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor={colors.textMuted}
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
@@ -379,7 +382,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
             value={password}
             onChangeText={setPassword}
             placeholder="Min 8 chars, 1 upper, 1 number, 1 special"
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor={colors.textMuted}
             secureTextEntry
             accessibilityLabel="Password"
             accessibilityHint="Minimum 8 characters, 1 uppercase, 1 number, 1 special"
@@ -394,7 +397,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
             value={phone}
             onChangeText={setPhone}
             placeholder="Your phone number"
-            placeholderTextColor={Colors.textMuted}
+            placeholderTextColor={colors.textMuted}
             keyboardType="phone-pad"
             accessibilityLabel="Phone number, optional"
             textContentType="telephoneNumber"
@@ -410,7 +413,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
           accessibilityState={{ disabled: loading, busy: loading }}
         >
           {loading ? (
-            <ActivityIndicator color={Colors.white} />
+            <ActivityIndicator color={colors.white} />
           ) : (
             <Text style={styles.registerButtonText}>Create account</Text>
           )}
@@ -451,8 +454,9 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   scroll: { flexGrow: 1, padding: Spacing.lg },
   header: { marginTop: Spacing.xl, marginBottom: Spacing.xl },
   title: { ...Typography.h1, marginBottom: Spacing.xs },
@@ -463,27 +467,27 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     marginBottom: Spacing.md,
     borderLeftWidth: 2,
-    borderLeftColor: Colors.error,
+    borderLeftColor: colors.error,
   },
-  errorText: { color: Colors.error, fontSize: 14, fontFamily: 'Inter_400Regular' },
+  errorText: { color: colors.error, fontSize: 14, fontFamily: 'Inter_400Regular' },
   inputGroup: { marginBottom: Spacing.md },
   inputLabel: { ...Typography.label, marginBottom: Spacing.xs },
   input: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     borderRadius: Radius.md,
     padding: Spacing.md,
     fontSize: 16,
-    color: Colors.dark,
+    color: colors.dark,
     ...Shadow.card,
   },
-  invitePreviewOk: { fontSize: 13, color: Colors.primary, marginTop: 6 },
-  invitePreviewBad: { fontSize: 13, color: Colors.error, marginTop: 6 },
-  invitePreviewMuted: { fontSize: 13, color: Colors.textMuted, marginTop: 6 },
-  requestAccessLink: { color: Colors.primary, textDecorationLine: 'underline' },
+  invitePreviewOk: { fontSize: 13, color: colors.primary, marginTop: 6 },
+  invitePreviewBad: { fontSize: 13, color: colors.error, marginTop: 6 },
+  invitePreviewMuted: { fontSize: 13, color: colors.textMuted, marginTop: 6 },
+  requestAccessLink: { color: colors.primary, textDecorationLine: 'underline' },
   registerButton: {
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     borderRadius: Radius.md,
     padding: Spacing.md,
     alignItems: 'center',
@@ -491,35 +495,35 @@ const styles = StyleSheet.create({
     ...Shadow.button,
   },
   buttonDisabled: { opacity: 0.6 },
-  registerButtonText: { ...Typography.button, color: Colors.white },
+  registerButtonText: { ...Typography.button, color: colors.white },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
     marginVertical: Spacing.lg,
   },
-  dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
-  dividerText: { marginHorizontal: Spacing.sm, color: Colors.textMuted, fontSize: 14 },
+  dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
+  dividerText: { marginHorizontal: Spacing.sm, color: colors.textMuted, fontSize: 14 },
   googleButton: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.md,
     padding: Spacing.md,
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     ...Shadow.card,
   },
-  googleG: { fontFamily: 'Inter_600SemiBold', fontSize: 16, fontWeight: '600', marginRight: Spacing.sm, color: Colors.dark },
-  googleButtonText: { ...Typography.button, color: Colors.dark },
+  googleG: { fontFamily: 'Inter_600SemiBold', fontSize: 16, fontWeight: '600', marginRight: Spacing.sm, color: colors.dark },
+  googleButtonText: { ...Typography.button, color: colors.dark },
   signupRow: {
     flexDirection: 'row',
     justifyContent: 'center',
     marginTop: Spacing.xl,
     marginBottom: Spacing.xl,
   },
-  signupText: { color: Colors.textMuted, fontSize: 15 },
-  signupLink: { color: Colors.primary, fontSize: 15, fontWeight: '600' },
+  signupText: { color: colors.textMuted, fontSize: 15 },
+  signupLink: { color: colors.primary, fontSize: 15, fontWeight: '600' },
   verifyContent: {
     flex: 1,
     padding: Spacing.lg,
@@ -529,28 +533,29 @@ const styles = StyleSheet.create({
   verifyTitle: { ...Typography.h2, marginBottom: Spacing.md, textAlign: 'center' },
   verifyBody: {
     fontSize: 16,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'center',
     marginBottom: Spacing.sm,
     lineHeight: 24,
   },
-  emailHighlight: { color: Colors.primary, fontWeight: '600' },
+  emailHighlight: { color: colors.primary, fontWeight: '600' },
   verifySubBody: {
     fontSize: 14,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'center',
     marginBottom: Spacing.xl,
     lineHeight: 22,
   },
   verifyButton: {
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     borderRadius: Radius.md,
     padding: Spacing.md,
     alignItems: 'center',
     width: '100%',
     ...Shadow.button,
   },
-  verifyButtonText: { ...Typography.button, color: Colors.white },
+  verifyButtonText: { ...Typography.button, color: colors.white },
   backLink: { marginTop: Spacing.lg },
-  backLinkText: { color: Colors.textMuted, fontSize: 14 },
-});
+  backLinkText: { color: colors.textMuted, fontSize: 14 },
+
+  });

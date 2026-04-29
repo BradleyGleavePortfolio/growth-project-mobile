@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -17,11 +17,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { weightApi, logApi } from '../../services/api';
 import { useNavigation } from '@react-navigation/native';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
-import { Colors } from '../../constants/colors';
+
 import { shadows as shadowTokens } from '../../theme/tokens';
 import { WeightLog } from '../../types';
 import { getTodayString } from '../../utils/date';
 import FadeInView from '../../components/FadeInView';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 type Period = '7D' | '30D' | '90D' | 'All';
 
@@ -29,6 +30,7 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
 
 // Pure SVG weight line chart — no Skia dependency
 function WeightLineChart({ data }: { data: { x: number; weight: number; dateLabel: string }[] }) {
+  const { colors } = useTheme();
   const W = SCREEN_WIDTH - 64;
   const H = 180;
   const padL = 40;
@@ -65,7 +67,7 @@ function WeightLineChart({ data }: { data: { x: number; weight: number; dateLabe
           y1={toY(v)}
           x2={W - padR}
           y2={toY(v)}
-          stroke={Colors.border}
+          stroke={colors.border}
           strokeWidth={1}
         />
       ))}
@@ -77,7 +79,7 @@ function WeightLineChart({ data }: { data: { x: number; weight: number; dateLabe
           y={toY(v) + 4}
           textAnchor="end"
           fontSize={9}
-          fill={Colors.textMuted}
+          fill={colors.textMuted}
         >
           {Math.round(v)}
         </SvgText>
@@ -86,14 +88,14 @@ function WeightLineChart({ data }: { data: { x: number; weight: number; dateLabe
       <Polyline
         points={points}
         fill="none"
-        stroke={Colors.primary}
+        stroke={colors.primary}
         strokeWidth={2.5}
         strokeLinejoin="round"
         strokeLinecap="round"
       />
       {/* Dots */}
       {data.map((d, i) => (
-        <Circle key={i} cx={toX(d.x)} cy={toY(d.weight)} r={4} fill={Colors.primary} />
+        <Circle key={i} cx={toX(d.x)} cy={toY(d.weight)} r={4} fill={colors.primary} />
       ))}
       {/* X-axis labels */}
       {xLabels.map((d, i) => (
@@ -103,7 +105,7 @@ function WeightLineChart({ data }: { data: { x: number; weight: number; dateLabe
           y={H - 6}
           textAnchor="middle"
           fontSize={9}
-          fill={Colors.textMuted}
+          fill={colors.textMuted}
         >
           {d.dateLabel}
         </SvgText>
@@ -121,6 +123,7 @@ function CalorieRing({
   target: number;
   size?: number;
 }) {
+  const { colors } = useTheme();
   const strokeWidth = 10;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -136,7 +139,7 @@ function CalorieRing({
             cx={center}
             cy={center}
             r={radius}
-            stroke={Colors.surfaceElevated}
+            stroke={colors.surfaceElevated}
             strokeWidth={strokeWidth}
             fill="none"
           />
@@ -144,7 +147,7 @@ function CalorieRing({
             cx={center}
             cy={center}
             r={radius}
-            stroke={Colors.primary}
+            stroke={colors.primary}
             strokeWidth={strokeWidth}
             fill="none"
             strokeDasharray={`${circumference}`}
@@ -161,7 +164,7 @@ function CalorieRing({
             lineHeight: 30,
             letterSpacing: 0.4,
             fontWeight: '400',
-            color: Colors.textPrimary,
+            color: colors.textPrimary,
           }}
         >
           {Math.round(eaten)}
@@ -172,7 +175,7 @@ function CalorieRing({
             fontSize: 10,
             letterSpacing: 1.5,
             textTransform: 'uppercase',
-            color: Colors.textMuted,
+            color: colors.textMuted,
             marginTop: 2,
           }}
         >
@@ -184,6 +187,8 @@ function CalorieRing({
 }
 
 export default function ProgressScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation<any>();
   const currentUser = useCurrentUser();
   const userId = currentUser?.id ?? null;
@@ -306,14 +311,14 @@ export default function ProgressScreen() {
   // BMI calculation — uses latest weight + profile height
   let bmi: number | null = null;
   let bmiCategory: string | null = null;
-  let bmiColor = Colors.textMuted;
+  let bmiColor = colors.textMuted;
   if (latestWeight && macroTargets?.height) {
     const heightM = macroTargets.height * 0.0254; // inches to meters
     bmi = latestWeight * 0.453592 / (heightM * heightM); // lbs to kg / m^2
-    if (bmi < 18.5) { bmiCategory = 'Underweight'; bmiColor = Colors.warning; }
-    else if (bmi < 25) { bmiCategory = 'Normal'; bmiColor = Colors.success; }
-    else if (bmi < 30) { bmiCategory = 'Overweight'; bmiColor = Colors.warning; }
-    else { bmiCategory = 'Obese'; bmiColor = Colors.error; }
+    if (bmi < 18.5) { bmiCategory = 'Underweight'; bmiColor = colors.warning; }
+    else if (bmi < 25) { bmiCategory = 'Normal'; bmiColor = colors.success; }
+    else if (bmi < 30) { bmiCategory = 'Overweight'; bmiColor = colors.warning; }
+    else { bmiCategory = 'Obese'; bmiColor = colors.error; }
   }
 
   // Macro adherence
@@ -322,19 +327,19 @@ export default function ProgressScreen() {
       label: 'P',
       actual: todayMacros.protein,
       target: macroTargets?.protein || 0,
-      color: Colors.protein,
+      color: colors.protein,
     },
     {
       label: 'C',
       actual: todayMacros.carbs,
       target: macroTargets?.carbs || 0,
-      color: Colors.carbs,
+      color: colors.carbs,
     },
     {
       label: 'F',
       actual: todayMacros.fat,
       target: macroTargets?.fat || 0,
-      color: Colors.fat,
+      color: colors.fat,
     },
   ];
 
@@ -356,8 +361,8 @@ export default function ProgressScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={Colors.primary}
-            colors={[Colors.primary]}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
           />
         }
       >
@@ -373,7 +378,7 @@ export default function ProgressScreen() {
               onPress={() => navigation.navigate('Report')}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             >
-              <Ionicons name="share-outline" size={22} color={Colors.textSecondary} />
+              <Ionicons name="share-outline" size={22} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
         </View>
@@ -417,7 +422,7 @@ export default function ProgressScreen() {
             <Text style={styles.statLabel}>Start</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={[styles.statValue, { color: Colors.primary }]}>
+            <Text style={[styles.statValue, { color: colors.primary }]}>
               {latestWeight ? Math.round(latestWeight * 10) / 10 : '--'}
             </Text>
             <Text style={styles.statLabel}>Current</Text>
@@ -431,7 +436,7 @@ export default function ProgressScreen() {
               <Text
                 style={[
                   styles.statValue,
-                  { color: change <= 0 ? Colors.success : Colors.warning },
+                  { color: change <= 0 ? colors.success : colors.warning },
                 ]}
               >
                 {change > 0 ? '+' : ''}
@@ -478,7 +483,7 @@ export default function ProgressScreen() {
               </View>
               <View style={styles.goalLabels}>
                 <Text style={styles.goalLabelText}>{Math.round(startWeight)} lbs</Text>
-                <Text style={[styles.goalLabelText, { color: Colors.primary, fontFamily: 'Inter_500Medium', fontWeight: '500' }]}>
+                <Text style={[styles.goalLabelText, { color: colors.primary, fontFamily: 'Inter_500Medium', fontWeight: '500' }]}>
                   {Math.round(Math.min(Math.max(((startWeight - latestWeight) / (startWeight - goalWeight)) * 100, 0), 100))}%
                 </Text>
                 <Text style={styles.goalLabelText}>{Math.round(goalWeight)} lbs</Text>
@@ -497,7 +502,7 @@ export default function ProgressScreen() {
           </View>
         ) : (
           <View style={styles.emptyChart}>
-            <Ionicons name="analytics-outline" size={36} color={Colors.textMuted} />
+            <Ionicons name="analytics-outline" size={36} color={colors.textMuted} />
             <Text style={styles.emptyText}>
               {weightLogs.length === 0
                 ? 'Log your weight to see your chart'
@@ -566,7 +571,7 @@ export default function ProgressScreen() {
         activeOpacity={0.85}
       >
         {/* Round 3: hex → theme token */}
-        <Ionicons name="add" size={28} color={Colors.textOnPrimary} />
+        <Ionicons name="add" size={28} color={colors.textOnPrimary} />
       </TouchableOpacity>
 
       {/* Weight Log Modal */}
@@ -576,13 +581,13 @@ export default function ProgressScreen() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Log Weight</Text>
               <TouchableOpacity onPress={() => setShowLogModal(false)}>
-                <Ionicons name="close" size={24} color={Colors.textSecondary} />
+                <Ionicons name="close" size={24} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
             <TextInput
               style={styles.input}
               placeholder="Weight (lbs)"
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               keyboardType="decimal-pad"
               value={newWeight}
               onChangeText={setNewWeight}
@@ -591,7 +596,7 @@ export default function ProgressScreen() {
             <TextInput
               style={[styles.input, { marginTop: 12 }]}
               placeholder="Notes (optional)"
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               value={newNotes}
               onChangeText={setNewNotes}
             />
@@ -605,10 +610,11 @@ export default function ProgressScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   content: {
     paddingBottom: 100,
@@ -632,25 +638,25 @@ const styles = StyleSheet.create({
     lineHeight: 35,
     letterSpacing: 0.6,
     fontWeight: '400',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   runText: {
     fontFamily: 'Inter_400Regular',
     fontSize: 12,
     letterSpacing: 0.4,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   goalRule: {
     width: 18,
     height: 1,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
   },
   ringCard: {
     flexDirection: 'row',
     alignItems: 'center',
     marginHorizontal: 24,
     marginBottom: 16,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     padding: 16,
     gap: 20,
@@ -676,11 +682,11 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_500Medium',
     fontSize: 12,
     fontWeight: '500',
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   ringMacroTrack: {
     height: 6,
-    backgroundColor: Colors.surfaceElevated,
+    backgroundColor: colors.surfaceElevated,
     borderRadius: 3,
     overflow: 'hidden',
   },
@@ -692,7 +698,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_500Medium',
     fontSize: 11,
     fontWeight: '500',
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   statsRow: {
     flexDirection: 'row',
@@ -702,7 +708,7 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     padding: 14,
     alignItems: 'center',
@@ -714,7 +720,7 @@ const styles = StyleSheet.create({
     lineHeight: 26,
     letterSpacing: 0.4,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   statLabel: {
     fontFamily: 'Inter_500Medium',
@@ -722,7 +728,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: 1.5,
     textTransform: 'uppercase',
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   periodRow: {
     flexDirection: 'row',
@@ -735,25 +741,25 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     alignItems: 'center',
     borderRadius: 0, // radius.sm
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
   },
   periodBtnActive: {
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
   },
   periodText: {
     fontFamily: 'Inter_500Medium',
     fontSize: 12,
     fontWeight: '500',
     letterSpacing: 0.4,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   periodTextActive: {
-    color: Colors.textOnPrimary, // Round 3: hex → token
+    color: colors.textOnPrimary, // Round 3: hex → token
   },
   goalCard: {
     marginHorizontal: 24,
     marginBottom: 16,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     padding: 16,
   },
@@ -769,17 +775,17 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     letterSpacing: 0.4,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   goalTrack: {
     height: 10,
-    backgroundColor: Colors.primaryPale,
+    backgroundColor: colors.primaryPale,
     borderRadius: 2, // radius.md
     overflow: 'hidden',
   },
   goalFill: {
     height: '100%',
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     borderRadius: 2, // radius.md
   },
   goalLabels: {
@@ -792,12 +798,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_500Medium',
     fontSize: 12,
     fontWeight: '500',
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   chartContainer: {
     marginHorizontal: 24,
     marginBottom: 24,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     padding: 16,
     overflow: 'hidden',
@@ -808,7 +814,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     letterSpacing: 0.4,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginBottom: 8,
   },
   chartInner: {
@@ -818,7 +824,7 @@ const styles = StyleSheet.create({
     height: 160,
     marginHorizontal: 24,
     marginBottom: 24,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     justifyContent: 'center',
     alignItems: 'center',
@@ -826,7 +832,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 13,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'center',
     paddingHorizontal: 20,
   },
@@ -840,7 +846,7 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     letterSpacing: 0.4,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginBottom: 12,
   },
   bodyStatsGrid: {
@@ -849,7 +855,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   bodyStatCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 2, // radius.md
     padding: 16,
     alignItems: 'center',
@@ -863,7 +869,7 @@ const styles = StyleSheet.create({
     lineHeight: 26,
     letterSpacing: 0.4,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     textTransform: 'capitalize',
   },
   bodyStatLabel: {
@@ -872,7 +878,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: 1.5,
     textTransform: 'uppercase',
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   bodyStatSub: {
     fontFamily: 'Inter_500Medium',
@@ -885,11 +891,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   logDate: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   logRight: {
     alignItems: 'flex-end',
@@ -899,11 +905,11 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_500Medium',
     fontSize: 15,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   logNotes: {
     fontSize: 12,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     maxWidth: 160,
   },
   fab: {
@@ -913,7 +919,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     // Quiet-luxury elevation — replaces the old hand-tuned 0.10 opacity shadow.
@@ -925,7 +931,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalSheet: {
-    backgroundColor: Colors.surfaceElevated,
+    backgroundColor: colors.surfaceElevated,
     borderTopLeftRadius: 4,
     borderTopRightRadius: 4,
     padding: 24,
@@ -943,20 +949,20 @@ const styles = StyleSheet.create({
     lineHeight: 29,
     letterSpacing: 0.5,
     fontWeight: '400',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   input: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 2, // radius.md
     padding: 14,
     fontSize: 16,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   saveBtn: {
     marginTop: 20,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     borderRadius: 2, // radius.md
     paddingVertical: 14,
     alignItems: 'center',
@@ -967,6 +973,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: 1.2,
     textTransform: 'uppercase',
-    color: Colors.textOnPrimary, // Round 3: hex → token
+    color: colors.textOnPrimary, // Round 3: hex → token
   },
-});
+
+  });

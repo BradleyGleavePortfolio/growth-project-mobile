@@ -21,18 +21,19 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { signOut } from '../../services/authActions';
-import { Colors } from '../../constants/colors';
+
 import { MoreStackParamList } from '../../navigation/ClientNavigator';
 import { useFoundingNumber } from '../../hooks/useIdentity';
 import { resolveIdentityTitle } from '../../lib/identityTitle';
 import MilestoneCabinet from '../../components/community/MilestoneCabinet';
 import { track } from '../../lib/analytics';
 import { useEffect } from 'react';
-import { colors, typography, radius } from '../../theme/tokens';
-
+import { colors as colorTokens, typography, radius } from '../../theme/tokens';
+import { useTheme } from '../../theme/ThemeProvider';
 type Nav = NativeStackNavigationProp<MoreStackParamList>;
 
 export default function ProfileScreen() {
+  const { colors } = useTheme();
   const currentUser = useCurrentUser();
   const navigation = useNavigation<Nav>();
 
@@ -116,7 +117,7 @@ export default function ProfileScreen() {
           accessibilityLabel="Settings"
           accessibilityHint="Opens app settings"
         >
-          <Ionicons name="settings-outline" size={24} color={Colors.primary} />
+          <Ionicons name="settings-outline" size={24} color={colors.primary} />
           <Text style={styles.actionText}>Settings</Text>
         </HapticPressable>
         <HapticPressable
@@ -127,7 +128,7 @@ export default function ProfileScreen() {
           accessibilityLabel="My report"
           accessibilityHint="Opens your progress report"
         >
-          <Ionicons name="document-text-outline" size={24} color={Colors.primary} />
+          <Ionicons name="document-text-outline" size={24} color={colors.primary} />
           <Text style={styles.actionText}>My Report</Text>
         </HapticPressable>
         <HapticPressable
@@ -138,7 +139,7 @@ export default function ProfileScreen() {
           accessibilityLabel="Widgets"
           accessibilityHint="Customize your dashboard widgets"
         >
-          <Ionicons name="apps-outline" size={24} color={Colors.primary} />
+          <Ionicons name="apps-outline" size={24} color={colors.primary} />
           <Text style={styles.actionText}>Widgets</Text>
         </HapticPressable>
         <HapticPressable
@@ -149,7 +150,7 @@ export default function ProfileScreen() {
           accessibilityLabel="Learn"
           accessibilityHint="Opens learning content"
         >
-          <Ionicons name="book-outline" size={24} color={Colors.primary} />
+          <Ionicons name="book-outline" size={24} color={colors.primary} />
           <Text style={styles.actionText}>Learn</Text>
         </HapticPressable>
       </View>
@@ -169,7 +170,7 @@ export default function ProfileScreen() {
         {targetItems.map((item) => (
           <View key={item.label} style={styles.row}>
             <Text style={styles.rowLabel}>{item.label}</Text>
-            <Text style={[styles.rowValue, { color: Colors.primary }]}>
+            <Text style={[styles.rowValue, { color: colors.primary }]}>
               {item.value}
             </Text>
           </View>
@@ -182,7 +183,7 @@ export default function ProfileScreen() {
       </View>
 
       <HapticPressable intent="warning" style={styles.signOutButton} onPress={handleSignOut}>
-        <Ionicons name="log-out-outline" size={20} color={Colors.error} />
+        <Ionicons name="log-out-outline" size={20} color={colors.error} />
         <Text style={styles.signOutText}>Sign Out</Text>
       </HapticPressable>
     </ScrollView>
@@ -192,7 +193,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.bone,
+    backgroundColor: colorTokens.bone,
   },
   content: {
     paddingBottom: 40,
@@ -204,7 +205,7 @@ const styles = StyleSheet.create({
   },
   title: {
     ...typography.h1,
-    color: colors.ink,
+    color: colorTokens.ink,
   },
   avatarSection: {
     alignItems: 'center',
@@ -214,7 +215,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 4,
-    backgroundColor: colors.forest,
+    backgroundColor: colorTokens.forest,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 12,
@@ -225,26 +226,26 @@ const styles = StyleSheet.create({
     lineHeight: 32,
     letterSpacing: 0.5,
     fontWeight: '400',
-    color: colors.bone,
+    color: colorTokens.bone,
   },
   name: {
     ...typography.h3,
-    color: colors.ink,
+    color: colorTokens.ink,
   },
   email: {
     ...typography.body,
-    color: colors.stone,
+    color: colorTokens.stone,
     marginTop: 4,
   },
   // Wave 3: streak as plain text line — "Day 7 of 30." No flame.
   streakLine: {
     ...typography.body,
-    color: colors.charcoal,
+    color: colorTokens.charcoal,
     marginTop: 10,
   },
   privacyLine: {
     ...typography.bodySmall,
-    color: colors.stone,
+    color: colorTokens.stone,
     textAlign: 'center',
     marginTop: 8,
     paddingHorizontal: 24,
@@ -262,15 +263,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    backgroundColor: colors.cream,
+    backgroundColor: colorTokens.cream,
     borderRadius: radius.lg,  // 4
     paddingVertical: 18,
     borderWidth: 0.5,
-    borderColor: colors.stone,
+    borderColor: colorTokens.stone,
   },
   actionText: {
     ...typography.bodySmall,
-    color: colors.ink,
+    color: colorTokens.ink,
     fontWeight: '600' as const,
   },
   section: {
@@ -279,7 +280,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     ...typography.eyebrow,
-    color: colors.charcoal,
+    color: colorTokens.charcoal,
     marginBottom: 12,
   },
   row: {
@@ -287,15 +288,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 12,
     borderBottomWidth: 0.5,
-    borderBottomColor: colors.stone,
+    borderBottomColor: colorTokens.stone,
   },
   rowLabel: {
     ...typography.body,
-    color: colors.stone,
+    color: colorTokens.stone,
   },
   rowValue: {
     ...typography.body,
-    color: colors.ink,
+    color: colorTokens.ink,
     fontWeight: '500' as const,
   },
   milestoneCabinetSection: {
@@ -310,14 +311,14 @@ const styles = StyleSheet.create({
     marginHorizontal: 24,
     marginTop: 12,
     paddingVertical: 16,
-    backgroundColor: colors.cream,
+    backgroundColor: colorTokens.cream,
     borderRadius: radius.lg,  // 4
     borderWidth: 0.5,
-    borderColor: colors.stone,
+    borderColor: colorTokens.stone,
   },
   signOutText: {
     ...typography.body,
-    color: colors.error,
+    color: colorTokens.error,
     fontWeight: '600' as const,
   },
 });

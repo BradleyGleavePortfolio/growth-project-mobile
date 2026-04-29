@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,10 +13,11 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { fastingApi } from '../../services/api';
-import { Colors } from '../../constants/colors';
+
 import EmptyState from '../../components/EmptyState';
 import FadeInView from '../../components/FadeInView';
 import { scheduleFastingAlert } from '../../utils/notifications';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 type Protocol = { label: string; hours: number };
 
@@ -50,6 +51,8 @@ interface FastSession {
 }
 
 export default function FastingScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();
 
   const [activeFast, setActiveFast] = useState<FastSession | null>(null);
@@ -213,8 +216,8 @@ export default function FastingScreen() {
         <RefreshControl
           refreshing={refreshing}
           onRefresh={onRefresh}
-          tintColor={Colors.primary}
-          colors={[Colors.primary]}
+          tintColor={colors.primary}
+          colors={[colors.primary]}
         />
       }
     >
@@ -255,7 +258,7 @@ export default function FastingScreen() {
             cx={TIMER_SIZE / 2}
             cy={TIMER_SIZE / 2}
             r={RADIUS}
-            stroke={Colors.surfaceElevated}
+            stroke={colors.surfaceElevated}
             strokeWidth={STROKE_WIDTH}
             fill="none"
           />
@@ -264,7 +267,7 @@ export default function FastingScreen() {
             cx={TIMER_SIZE / 2}
             cy={TIMER_SIZE / 2}
             r={RADIUS}
-            stroke={progress >= 0.9 ? Colors.success : Colors.primary}
+            stroke={progress >= 0.9 ? colors.success : colors.primary}
             strokeWidth={STROKE_WIDTH}
             fill="none"
             strokeDasharray={`${CIRCUMFERENCE} ${CIRCUMFERENCE}`}
@@ -297,12 +300,12 @@ export default function FastingScreen() {
       <View style={styles.actionRow}>
         {activeFast ? (
           <TouchableOpacity style={styles.endBtn} onPress={handleEnd}>
-            <Ionicons name="stop-circle" size={22} color={Colors.textOnPrimary} />
+            <Ionicons name="stop-circle" size={22} color={colors.textOnPrimary} />
             <Text style={styles.actionBtnText}>End Fast</Text>
           </TouchableOpacity>
         ) : (
           <TouchableOpacity style={styles.startBtn} onPress={handleStart}>
-            <Ionicons name="play-circle" size={22} color={Colors.textOnPrimary} />
+            <Ionicons name="play-circle" size={22} color={colors.textOnPrimary} />
             <Text style={styles.actionBtnText}>Start Fast</Text>
           </TouchableOpacity>
         )}
@@ -326,7 +329,7 @@ export default function FastingScreen() {
           </View>
           <View style={styles.activeRow}>
             <Text style={styles.activeLabel}>Progress</Text>
-            <Text style={[styles.activeValue, { color: Colors.primary }]}>
+            <Text style={[styles.activeValue, { color: colors.primary }]}>
               {Math.round(progress * 100)}%
             </Text>
           </View>
@@ -369,7 +372,7 @@ export default function FastingScreen() {
                   <Ionicons
                     name={session.completed ? 'checkmark-circle' : 'close-circle'}
                     size={20}
-                    color={session.completed ? Colors.success : Colors.error}
+                    color={session.completed ? colors.success : colors.error}
                   />
                   <View>
                     <Text style={styles.historyDate}>
@@ -396,10 +399,11 @@ export default function FastingScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   content: {
     paddingBottom: 100,
@@ -415,12 +419,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   runText: {
     fontSize: 13,
     fontWeight: '400',
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     letterSpacing: 0.4,
   },
   protocolRow: {
@@ -434,18 +438,18 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     alignItems: 'center',
     borderRadius: 4, // radius.lg
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
   },
   protocolBtnActive: {
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
   },
   protocolText: {
     fontSize: 13,
     fontWeight: '500',
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   protocolTextActive: {
-    color: Colors.textOnPrimary,
+    color: colors.textOnPrimary,
   },
   timerContainer: {
     alignItems: 'center',
@@ -460,11 +464,11 @@ const styles = StyleSheet.create({
   timerValue: {
     fontSize: 36,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   timerSub: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginTop: 4,
   },
   actionRow: {
@@ -476,7 +480,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     borderRadius: 4, // radius.lg
     paddingVertical: 16,
   },
@@ -485,18 +489,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: Colors.error,
+    backgroundColor: colors.error,
     borderRadius: 4, // radius.lg
     paddingVertical: 16,
   },
   actionBtnText: {
     fontSize: 16,
     fontWeight: '500',
-    color: Colors.textOnPrimary,
+    color: colors.textOnPrimary,
   },
   activeCard: {
     marginHorizontal: 24,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     padding: 16,
     gap: 10,
@@ -508,12 +512,12 @@ const styles = StyleSheet.create({
   },
   activeLabel: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   activeValue: {
     fontSize: 14,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   statsRow: {
     flexDirection: 'row',
@@ -523,7 +527,7 @@ const styles = StyleSheet.create({
   },
   statCard: {
     flex: 1,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     padding: 14,
     alignItems: 'center',
@@ -532,11 +536,11 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 20,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   statLabel: {
     fontSize: 11,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   section: {
     paddingHorizontal: 24,
@@ -545,7 +549,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 17,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginBottom: 12,
   },
   historyRow: {
@@ -554,7 +558,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   historyLeft: {
     flexDirection: 'row',
@@ -564,15 +568,16 @@ const styles = StyleSheet.create({
   historyDate: {
     fontSize: 14,
     fontWeight: '600',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   historyTarget: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   historyDuration: {
     fontSize: 16,
     fontWeight: '500',
-    color: Colors.primary,
+    color: colors.primary,
   },
-});
+
+  });

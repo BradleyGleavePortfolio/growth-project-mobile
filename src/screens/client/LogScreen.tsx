@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useClientStore } from '../../store/clientStore';
-import { Colors, Spacing } from '../../theme/index';
+import { Spacing } from '../../theme/index';
 import { MealType, FoodLog } from '../../types';
 import { foodApi, logApi } from '../../services/api';
 import { flush as flushFoodLogQueue } from '../../services/foodLogQueue';
@@ -33,8 +33,11 @@ import {
   submitManualLogOnline,
 } from '../../utils/log/logSubmit';
 import { track } from '../../lib/analytics';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 export default function LogScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();
   const network = useNetworkStatus();
   const online = isEffectivelyOnline(network);
@@ -330,8 +333,8 @@ export default function LogScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={Colors.primary}
-            colors={[Colors.primary]}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
           />
         }
       >
@@ -404,10 +407,11 @@ export default function LogScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   content: {
     paddingBottom: 40,
@@ -423,10 +427,11 @@ const styles = StyleSheet.create({
     lineHeight: 35,
     letterSpacing: 0.6,
     fontWeight: '400',
-    color: Colors.dark,
+    color: colors.dark,
   },
   waterSection: {
     paddingHorizontal: Spacing.lg,
     marginBottom: 20,
   },
-});
+
+  });

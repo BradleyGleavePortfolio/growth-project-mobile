@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -17,9 +17,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { ClientsStackParamList } from '../../navigation/CoachNavigator';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { coachApi } from '../../services/api';
-import { Colors } from '../../constants/colors';
+
 import { ClientProfile, FoodLog, WeightLog } from '../../types';
 import { getTodayString } from '../../utils/date';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface SessionSet {
@@ -127,6 +128,11 @@ interface TimelineEvent {
 }
 
 export default function ClientDetailScreen({ navigation, route }: Props) {
+  const { colors } = useTheme();
+  const drStyles = useMemo(() => makeDrStyles(colors), [colors]);
+  const tlStyles = useMemo(() => makeTlStyles(colors), [colors]);
+  const wsStyles = useMemo(() => makeWsStyles(colors), [colors]);
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const { clientId, clientName } = route.params;
   const currentUser = useCurrentUser();
 
@@ -428,7 +434,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
           subtitle: `${Math.round(info.totalCals)} kcal total`,
           date: dateStr + 'T12:00:00',
           icon: 'restaurant',
-          iconColor: Colors.primary,
+          iconColor: colors.primary,
         });
       }
 
@@ -442,7 +448,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
           subtitle: w.notes || 'Weight logged',
           date: dateStr + 'T08:00:00',
           icon: 'scale',
-          iconColor: Colors.info,
+          iconColor: colors.info,
         });
       }
 
@@ -455,7 +461,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
           subtitle: s.completed_at ? `Completed` : 'Logged',
           date: s.created_at || s.date,
           icon: 'barbell',
-          iconColor: Colors.primaryDark, // Round 3: hex → token (workout event icon)
+          iconColor: colors.primaryDark, // Round 3: hex → token (workout event icon)
         });
       }
 
@@ -468,7 +474,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
           subtitle: c.notes || `Mood: ${c.mood_rating}/5`,
           date: c.date + 'T09:00:00',
           icon: 'chatbubble-ellipses',
-          iconColor: Colors.primary,
+          iconColor: colors.primary,
         });
       }
 
@@ -626,7 +632,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
   if (isLoading && !refreshing) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+        <ActivityIndicator size="large" color={colors.primary} />
       </View>
     );
   }
@@ -639,7 +645,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <View style={styles.headerCenter}>
           <View style={styles.avatar}>
@@ -661,7 +667,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
             navigation.getParent()?.navigate('Messages', { clientId, clientName });
           }}
         >
-          <Ionicons name="chatbubble-outline" size={20} color={Colors.primary} />
+          <Ionicons name="chatbubble-outline" size={20} color={colors.primary} />
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.msgIconBtn, { marginLeft: 4 }]}
@@ -673,7 +679,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
           <Ionicons
             name={isArchived ? 'archive' : 'archive-outline'}
             size={20}
-            color={isArchived ? Colors.warning : Colors.textSecondary}
+            color={isArchived ? colors.warning : colors.textSecondary}
           />
         </TouchableOpacity>
       </View>
@@ -694,7 +700,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
             <Ionicons
               name={tab.icon as any}
               size={16}
-              color={activeTab === tab.key ? Colors.textOnPrimary : Colors.textSecondary}
+              color={activeTab === tab.key ? colors.textOnPrimary : colors.textSecondary}
             />
             <Text style={[styles.tabText, activeTab === tab.key && styles.tabTextActive]}>
               {tab.label}
@@ -707,7 +713,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} colors={[Colors.primary]} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
         }
       >
         {activeTab === 'summary' && (
@@ -726,9 +732,9 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
 
             {/* Macro Cards */}
             <View style={styles.macroGrid}>
-              <MacroCard label="Protein" value={totals.protein} target={profile?.proteinTarget} unit="g" color={Colors.protein} />
-              <MacroCard label="Carbs" value={totals.carbs} target={profile?.carbTarget} unit="g" color={Colors.carbs} />
-              <MacroCard label="Fat" value={totals.fat} target={profile?.fatTarget} unit="g" color={Colors.fat} />
+              <MacroCard label="Protein" value={totals.protein} target={profile?.proteinTarget} unit="g" color={colors.protein} />
+              <MacroCard label="Carbs" value={totals.carbs} target={profile?.carbTarget} unit="g" color={colors.carbs} />
+              <MacroCard label="Fat" value={totals.fat} target={profile?.fatTarget} unit="g" color={colors.fat} />
             </View>
 
             {/* Profile Info */}
@@ -756,7 +762,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
                 accessibilityRole="button"
                 accessibilityLabel="Open messages"
               >
-                <Ionicons name="chatbubble-outline" size={18} color={Colors.primary} />
+                <Ionicons name="chatbubble-outline" size={18} color={colors.primary} />
                 <Text style={styles.actionPillText}>Messages</Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -768,13 +774,13 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
                 accessibilityRole="button"
                 accessibilityLabel="Send nudge notification"
               >
-                <Ionicons name="notifications-outline" size={18} color={Colors.primary} />
+                <Ionicons name="notifications-outline" size={18} color={colors.primary} />
                 <Text style={styles.actionPillText}>Send Nudge</Text>
               </TouchableOpacity>
             </View>
             {nudgeSuccess && (
               <View style={styles.successBanner} accessibilityLiveRegion="polite">
-                <Ionicons name="checkmark-circle" size={16} color={Colors.success} />
+                <Ionicons name="checkmark-circle" size={16} color={colors.success} />
                 <Text style={styles.successBannerText}>Nudge sent</Text>
               </View>
             )}
@@ -786,7 +792,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
             <Text style={styles.sectionTitle}>Today's Food Logs</Text>
             {foodLogs.length === 0 ? (
               <View style={styles.emptyCard}>
-                <Ionicons name="restaurant-outline" size={32} color={Colors.textMuted} />
+                <Ionicons name="restaurant-outline" size={32} color={colors.textMuted} />
                 <Text style={styles.emptyText}>No logs for today</Text>
               </View>
             ) : (
@@ -811,7 +817,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
             <Text style={styles.sectionTitle}>Recent Workouts</Text>
             {workoutSessions.length === 0 ? (
               <View style={styles.emptyCard}>
-                <Ionicons name="barbell-outline" size={32} color={Colors.textMuted} />
+                <Ionicons name="barbell-outline" size={32} color={colors.textMuted} />
                 <Text style={styles.emptyText}>No workout sessions yet</Text>
               </View>
             ) : (
@@ -830,7 +836,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
                       </View>
                       {session.completed ? (
                         <View style={styles.completedBadge}>
-                          <Ionicons name="checkmark-circle" size={14} color={Colors.success} />
+                          <Ionicons name="checkmark-circle" size={14} color={colors.success} />
                           <Text style={styles.completedText}>Done</Text>
                         </View>
                       ) : (
@@ -875,16 +881,16 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
                 accessibilityRole="button"
                 accessibilityLabel="Create meal plan"
               >
-                <Ionicons name="add" size={16} color={Colors.textOnPrimary} />
+                <Ionicons name="add" size={16} color={colors.textOnPrimary} />
                 <Text style={styles.createPlanBtnText}>New plan</Text>
               </TouchableOpacity>
             </View>
 
             {mealPlansLoading && serverMealPlans.length === 0 ? (
-              <ActivityIndicator color={Colors.primary} style={{ marginTop: 20 }} />
+              <ActivityIndicator color={colors.primary} style={{ marginTop: 20 }} />
             ) : mealPlansError && serverMealPlans.length === 0 ? (
               <View style={styles.emptyCard}>
-                <Ionicons name="cloud-offline-outline" size={32} color={Colors.textMuted} />
+                <Ionicons name="cloud-offline-outline" size={32} color={colors.textMuted} />
                 <Text style={styles.emptyText}>{mealPlansError}</Text>
                 <TouchableOpacity onPress={loadServerMealPlans} style={styles.retryBtn}>
                   <Text style={styles.retryBtnText}>Retry</Text>
@@ -892,7 +898,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
               </View>
             ) : serverMealPlans.length === 0 ? (
               <View style={styles.emptyCard}>
-                <Ionicons name="restaurant-outline" size={32} color={Colors.textMuted} />
+                <Ionicons name="restaurant-outline" size={32} color={colors.textMuted} />
                 <Text style={styles.emptyText}>
                   No meal plans yet. Tap "New plan" to assign one — the client will see it
                   on their Plan tab.
@@ -921,7 +927,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
                         accessibilityRole="button"
                         accessibilityLabel={`Edit ${plan.title}`}
                       >
-                        <Ionicons name="create-outline" size={18} color={Colors.primary} />
+                        <Ionicons name="create-outline" size={18} color={colors.primary} />
                       </TouchableOpacity>
                       <TouchableOpacity
                         onPress={() => archivePlan(plan)}
@@ -929,7 +935,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
                         accessibilityRole="button"
                         accessibilityLabel={`Archive ${plan.title}`}
                       >
-                        <Ionicons name="archive-outline" size={18} color={Colors.error} />
+                        <Ionicons name="archive-outline" size={18} color={colors.error} />
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -987,7 +993,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
                     <Text style={styles.progressStatLabel}>First</Text>
                   </View>
                   <View style={styles.progressStat}>
-                    <Text style={[styles.progressStatValue, { color: Colors.primary }]}>
+                    <Text style={[styles.progressStatValue, { color: colors.primary }]}>
                       {weightLogs[weightLogs.length - 1]?.weight || '—'}
                     </Text>
                     <Text style={styles.progressStatLabel}>Latest</Text>
@@ -999,8 +1005,8 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
                         {
                           color:
                             (weightLogs[weightLogs.length - 1]?.weight || 0) - (weightLogs[0]?.weight || 0) <= 0
-                              ? Colors.success
-                              : Colors.warning,
+                              ? colors.success
+                              : colors.warning,
                         },
                       ]}
                     >
@@ -1021,7 +1027,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
               </>
             ) : (
               <View style={styles.emptyCard}>
-                <Ionicons name="scale-outline" size={32} color={Colors.textMuted} />
+                <Ionicons name="scale-outline" size={32} color={colors.textMuted} />
                 <Text style={styles.emptyText}>No weight logs in the last 30 days</Text>
               </View>
             )}
@@ -1093,7 +1099,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
               accessibilityRole="button"
               accessibilityLabel="Close"
             >
-              <Ionicons name="close" size={24} color={Colors.textPrimary} />
+              <Ionicons name="close" size={24} color={colors.textPrimary} />
             </TouchableOpacity>
           </View>
 
@@ -1106,7 +1112,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
             <TextInput
               style={styles.planInput}
               placeholder="e.g. Cutting Week 1"
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               value={planTitle}
               onChangeText={setPlanTitle}
               maxLength={120}
@@ -1117,7 +1123,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
             <TextInput
               style={[styles.planInput, styles.planInputMulti]}
               placeholder="Overall guidance for this plan..."
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               value={planNotes}
               onChangeText={setPlanNotes}
               multiline
@@ -1133,7 +1139,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
                 accessibilityRole="button"
                 accessibilityLabel="Add meal item"
               >
-                <Ionicons name="add" size={14} color={Colors.primary} />
+                <Ionicons name="add" size={14} color={colors.primary} />
                 <Text style={styles.planAddItemText}>Add item</Text>
               </TouchableOpacity>
             </View>
@@ -1150,14 +1156,14 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
                       accessibilityRole="button"
                       accessibilityLabel="Remove item"
                     >
-                      <Ionicons name="trash-outline" size={16} color={Colors.error} />
+                      <Ionicons name="trash-outline" size={16} color={colors.error} />
                     </TouchableOpacity>
                   )}
                 </View>
                 <TextInput
                   style={styles.planItemInput}
                   placeholder="Meal name (e.g. Chicken & rice)"
-                  placeholderTextColor={Colors.textMuted}
+                  placeholderTextColor={colors.textMuted}
                   value={it.name}
                   onChangeText={(t) =>
                     setPlanItems((prev) =>
@@ -1171,7 +1177,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
                   <TextInput
                     style={[styles.planItemInput, { flex: 1 }]}
                     placeholder="kcal"
-                    placeholderTextColor={Colors.textMuted}
+                    placeholderTextColor={colors.textMuted}
                     value={it.calories}
                     onChangeText={(t) =>
                       setPlanItems((prev) =>
@@ -1185,7 +1191,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
                   <TextInput
                     style={[styles.planItemInput, { flex: 1 }]}
                     placeholder="protein (g)"
-                    placeholderTextColor={Colors.textMuted}
+                    placeholderTextColor={colors.textMuted}
                     value={it.protein}
                     onChangeText={(t) =>
                       setPlanItems((prev) =>
@@ -1200,7 +1206,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
                 <TextInput
                   style={styles.planItemInput}
                   placeholder="time of day (breakfast / lunch / dinner / snack)"
-                  placeholderTextColor={Colors.textMuted}
+                  placeholderTextColor={colors.textMuted}
                   value={it.time_of_day}
                   onChangeText={(t) =>
                     setPlanItems((prev) =>
@@ -1214,7 +1220,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
                 <TextInput
                   style={[styles.planItemInput, styles.planInputMulti]}
                   placeholder="Notes (optional)"
-                  placeholderTextColor={Colors.textMuted}
+                  placeholderTextColor={colors.textMuted}
                   value={it.notes}
                   onChangeText={(t) =>
                     setPlanItems((prev) =>
@@ -1261,7 +1267,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
             <TextInput
               style={styles.nudgeInput}
               placeholder="e.g. Great job today"
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               value={nudgeTitle}
               onChangeText={setNudgeTitle}
               maxLength={80}
@@ -1272,7 +1278,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
             <TextInput
               style={[styles.nudgeInput, styles.nudgeInputMulti]}
               placeholder="Write a short message..."
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               value={nudgeBody}
               onChangeText={setNudgeBody}
               multiline
@@ -1324,6 +1330,8 @@ function DateRangeSelector({
   selectedDays: 7 | 30 | 90;
   onSelect: (days: 7 | 30 | 90) => void;
 }) {
+  const { colors } = useTheme();
+  const drStyles = useMemo(() => makeDrStyles(colors), [colors]);
   const options: { label: string; value: 7 | 30 | 90 }[] = [
     { label: '7 days', value: 7 },
     { label: '30 days', value: 30 },
@@ -1354,7 +1362,8 @@ function DateRangeSelector({
   );
 }
 
-const drStyles = StyleSheet.create({
+const makeDrStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   row: {
     flexDirection: 'row',
     gap: 8,
@@ -1365,29 +1374,32 @@ const drStyles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 16,
     borderRadius: 4, // radius.lg
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   chipActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   chipText: {
     fontFamily: 'Inter_500Medium',
     fontSize: 12,
     fontWeight: '500',
     letterSpacing: 0.4,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   chipTextActive: {
-    color: Colors.textOnPrimary, // Round 3: hex → token
+    color: colors.textOnPrimary, // Round 3: hex → token
   },
-});
+
+  });
 
 // ── Timeline Tab Component ───────────────────────────────────────────────
 
 function TimelineTab({ events, onLoad, days }: { events: TimelineEvent[]; onLoad: () => void; days: number }) {
+  const { colors } = useTheme();
+  const tlStyles = useMemo(() => makeTlStyles(colors), [colors]);
   React.useEffect(() => {
     onLoad();
   }, [days]);
@@ -1405,7 +1417,7 @@ function TimelineTab({ events, onLoad, days }: { events: TimelineEvent[]; onLoad
   if (events.length === 0) {
     return (
       <View style={tlStyles.empty}>
-        <Ionicons name="time-outline" size={40} color={Colors.textMuted} />
+        <Ionicons name="time-outline" size={40} color={colors.textMuted} />
         <Text style={tlStyles.emptyText}>No activity in the last {days} days</Text>
       </View>
     );
@@ -1435,7 +1447,8 @@ function TimelineTab({ events, onLoad, days }: { events: TimelineEvent[]; onLoad
   );
 }
 
-const tlStyles = StyleSheet.create({
+const makeTlStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: {
     paddingHorizontal: 20,
     paddingTop: 8,
@@ -1447,7 +1460,7 @@ const tlStyles = StyleSheet.create({
     lineHeight: 24,
     letterSpacing: 0.4,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginBottom: 16,
   },
   empty: {
@@ -1458,7 +1471,7 @@ const tlStyles = StyleSheet.create({
   emptyText: {
     fontFamily: 'Inter_400Regular',
     fontSize: 14,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'center',
   },
   eventRow: {
@@ -1481,7 +1494,7 @@ const tlStyles = StyleSheet.create({
     width: 2,
     flex: 1,
     minHeight: 16,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
     marginVertical: 4,
   },
   content: {
@@ -1492,24 +1505,25 @@ const tlStyles = StyleSheet.create({
     fontFamily: 'Inter_500Medium',
     fontSize: 14,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   subtitle: {
     fontFamily: 'Inter_400Regular',
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginTop: 2,
   },
   date: {
     fontFamily: 'Inter_500Medium',
     fontSize: 11,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 3,
     fontWeight: '500',
     letterSpacing: 1.5,
     textTransform: 'uppercase',
   },
-});
+
+  });
 
 // ── Weekly Summary Tab Component ──────────────────────────────────────────────
 
@@ -1524,10 +1538,12 @@ function WeeklySummaryTab({
   expandedWeeks: Set<string>;
   onToggleWeek: (weekStart: string) => void;
 }) {
+  const { colors } = useTheme();
+  const wsStyles = useMemo(() => makeWsStyles(colors), [colors]);
   if (summaries.length === 0) {
     return (
       <View style={wsStyles.empty}>
-        <Ionicons name="stats-chart-outline" size={40} color={Colors.textMuted} />
+        <Ionicons name="stats-chart-outline" size={40} color={colors.textMuted} />
         <Text style={wsStyles.emptyText}>No data in the last {days} days</Text>
       </View>
     );
@@ -1552,14 +1568,14 @@ function WeeklySummaryTab({
                 <View style={wsStyles.pillRow}>
                   {week.workoutCount > 0 && (
                     <View style={wsStyles.pill}>
-                      <Ionicons name="barbell" size={10} color={Colors.primary} />
+                      <Ionicons name="barbell" size={10} color={colors.primary} />
                       <Text style={wsStyles.pillText}>{week.workoutCount} workout{week.workoutCount !== 1 ? 's' : ''}</Text>
                     </View>
                   )}
                   {week.latestWeight !== null && (
                     <View style={[wsStyles.pill, wsStyles.pillGrey]}>
-                      <Ionicons name="scale" size={10} color={Colors.textSecondary} />
-                      <Text style={[wsStyles.pillText, { color: Colors.textSecondary }]}>{week.latestWeight} lbs</Text>
+                      <Ionicons name="scale" size={10} color={colors.textSecondary} />
+                      <Text style={[wsStyles.pillText, { color: colors.textSecondary }]}>{week.latestWeight} lbs</Text>
                     </View>
                   )}
                 </View>
@@ -1567,7 +1583,7 @@ function WeeklySummaryTab({
               <Ionicons
                 name={isExpanded ? 'chevron-up' : 'chevron-down'}
                 size={18}
-                color={Colors.textMuted}
+                color={colors.textMuted}
               />
             </View>
 
@@ -1578,11 +1594,11 @@ function WeeklySummaryTab({
                 <Text style={wsStyles.statLabel}>kcal eaten</Text>
               </View>
               <View style={[wsStyles.statBox, wsStyles.statBoxMiddle]}>
-                <Text style={[wsStyles.statValue, { color: Colors.protein }]}>{Math.round(week.totalProtein)}g</Text>
+                <Text style={[wsStyles.statValue, { color: colors.protein }]}>{Math.round(week.totalProtein)}g</Text>
                 <Text style={wsStyles.statLabel}>protein</Text>
               </View>
               <View style={wsStyles.statBox}>
-                <Text style={[wsStyles.statValue, { color: Colors.accent }]}>
+                <Text style={[wsStyles.statValue, { color: colors.accent }]}>
                   {week.totalWeightMoved > 0 ? `${Math.round(week.totalWeightMoved).toLocaleString()}` : '—'}
                 </Text>
                 <Text style={wsStyles.statLabel}>vol (lbs)</Text>
@@ -1594,29 +1610,29 @@ function WeeklySummaryTab({
               <View style={wsStyles.expandedSection}>
                 <View style={wsStyles.divider} />
                 <View style={wsStyles.detailRow}>
-                  <Ionicons name="restaurant-outline" size={14} color={Colors.warning} />
+                  <Ionicons name="restaurant-outline" size={14} color={colors.warning} />
                   <Text style={wsStyles.detailLabel}>Total Calories</Text>
                   <Text style={wsStyles.detailValue}>{Math.round(week.totalCalories).toLocaleString()} kcal</Text>
                 </View>
                 <View style={wsStyles.detailRow}>
-                  <Ionicons name="nutrition-outline" size={14} color={Colors.protein} />
+                  <Ionicons name="nutrition-outline" size={14} color={colors.protein} />
                   <Text style={wsStyles.detailLabel}>Total Protein</Text>
                   <Text style={wsStyles.detailValue}>{Math.round(week.totalProtein)}g</Text>
                 </View>
                 <View style={wsStyles.detailRow}>
-                  <Ionicons name="barbell-outline" size={14} color={Colors.primary} />
+                  <Ionicons name="barbell-outline" size={14} color={colors.primary} />
                   <Text style={wsStyles.detailLabel}>Workouts</Text>
                   <Text style={wsStyles.detailValue}>{week.workoutCount}</Text>
                 </View>
                 <View style={wsStyles.detailRow}>
-                  <Ionicons name="trending-up-outline" size={14} color={Colors.accent} />
+                  <Ionicons name="trending-up-outline" size={14} color={colors.accent} />
                   <Text style={wsStyles.detailLabel}>Weight Moved</Text>
                   <Text style={wsStyles.detailValue}>
                     {week.totalWeightMoved > 0 ? `${Math.round(week.totalWeightMoved).toLocaleString()} lbs` : 'N/A'}
                   </Text>
                 </View>
                 <View style={wsStyles.detailRow}>
-                  <Ionicons name="scale-outline" size={14} color={Colors.info} />
+                  <Ionicons name="scale-outline" size={14} color={colors.info} />
                   <Text style={wsStyles.detailLabel}>Weight Logged</Text>
                   <Text style={wsStyles.detailValue}>
                     {week.latestWeight !== null ? `${week.latestWeight} lbs` : 'Not logged'}
@@ -1631,7 +1647,8 @@ function WeeklySummaryTab({
   );
 }
 
-const wsStyles = StyleSheet.create({
+const makeWsStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: {
     paddingHorizontal: 20,
     paddingTop: 4,
@@ -1643,7 +1660,7 @@ const wsStyles = StyleSheet.create({
     lineHeight: 24,
     letterSpacing: 0.4,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginBottom: 14,
   },
   empty: {
@@ -1654,16 +1671,16 @@ const wsStyles = StyleSheet.create({
   emptyText: {
     fontFamily: 'Inter_400Regular',
     fontSize: 14,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'center',
   },
   card: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     padding: 16,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -1680,7 +1697,7 @@ const wsStyles = StyleSheet.create({
     lineHeight: 22,
     letterSpacing: 0.4,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   pillRow: {
     flexDirection: 'row',
@@ -1691,19 +1708,19 @@ const wsStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: Colors.primaryPale,
+    backgroundColor: colors.primaryPale,
     borderRadius: 4, // radius.lg
     paddingHorizontal: 8,
     paddingVertical: 3,
   },
   pillGrey: {
-    backgroundColor: Colors.surfaceElevated,
+    backgroundColor: colors.surfaceElevated,
   },
   pillText: {
     fontFamily: 'Inter_500Medium',
     fontSize: 11,
     fontWeight: '500',
-    color: Colors.primary,
+    color: colors.primary,
   },
   statsRow: {
     flexDirection: 'row',
@@ -1711,7 +1728,7 @@ const wsStyles = StyleSheet.create({
   },
   statBox: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     borderRadius: 4, // radius.lg
     padding: 10,
     alignItems: 'center',
@@ -1719,7 +1736,7 @@ const wsStyles = StyleSheet.create({
   statBoxMiddle: {
     borderLeftWidth: 1,
     borderRightWidth: 1,
-    borderColor: Colors.divider,
+    borderColor: colors.divider,
     borderRadius: 0,
   },
   statValue: {
@@ -1728,14 +1745,14 @@ const wsStyles = StyleSheet.create({
     lineHeight: 22,
     letterSpacing: 0.4,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   statLabel: {
     fontFamily: 'Inter_500Medium',
     fontSize: 10,
     fontWeight: '500',
     letterSpacing: 1.5,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 4,
     textAlign: 'center',
     textTransform: 'uppercase',
@@ -1746,7 +1763,7 @@ const wsStyles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: Colors.divider,
+    backgroundColor: colors.divider,
     marginBottom: 8,
   },
   detailRow: {
@@ -1758,19 +1775,22 @@ const wsStyles = StyleSheet.create({
     flex: 1,
     fontFamily: 'Inter_400Regular',
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   detailValue: {
     fontFamily: 'Inter_500Medium',
     fontSize: 13,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
-});
+
+  });
 
 function MacroCard({ label, value, target, unit, color }: {
   label: string; value: number; target?: number; unit: string; color: string;
 }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const pct = target && target > 0 ? Math.min(100, Math.round((value / target) * 100)) : 0;
   return (
     <View style={styles.macroCard}>
@@ -1789,6 +1809,8 @@ function MacroCard({ label, value, target, unit, color }: {
 }
 
 function ProfileRow({ label, value }: { label: string; value: string }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <View style={styles.profileRow}>
       <Text style={styles.profileLabel}>{label}</Text>
@@ -1797,22 +1819,23 @@ function ProfileRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background, paddingTop: 56 },
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background, paddingTop: 56 },
   loadingContainer: {
-    flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: Colors.background,
+    flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background,
   },
   header: {
     flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, marginBottom: 16, gap: 14,
   },
   headerCenter: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
   avatar: {
-    width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.primaryDark,
+    width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primaryDark,
     justifyContent: 'center', alignItems: 'center',
   },
   avatarText: {
     fontFamily: 'Inter_600SemiBold',
-    color: Colors.textOnPrimary,
+    color: colors.textOnPrimary,
     fontSize: 14,
     fontWeight: '600',
     letterSpacing: 1,
@@ -1823,7 +1846,7 @@ const styles = StyleSheet.create({
     lineHeight: 29,
     letterSpacing: 0.5,
     fontWeight: '400',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   clientStatus: {
     fontFamily: 'Inter_500Medium',
@@ -1832,11 +1855,11 @@ const styles = StyleSheet.create({
     letterSpacing: 1.98,
     fontWeight: '500',
     textTransform: 'uppercase',
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 4,
   },
   msgIconBtn: {
-    width: 38, height: 38, borderRadius: 19, backgroundColor: Colors.primaryPale,
+    width: 38, height: 38, borderRadius: 19, backgroundColor: colors.primaryPale,
     justifyContent: 'center', alignItems: 'center',
   },
   tabScroll: { maxHeight: 44, marginBottom: 16 },
@@ -1844,11 +1867,11 @@ const styles = StyleSheet.create({
   tab: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingVertical: 8, paddingHorizontal: 14, borderRadius: 4, // radius.lg
-    backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border,
+    backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border,
   },
-  tabActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  tabText: { fontFamily: 'Inter_500Medium', fontSize: 12, fontWeight: '500', color: Colors.textSecondary, letterSpacing: 0.4 },
-  tabTextActive: { color: Colors.textOnPrimary },
+  tabActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  tabText: { fontFamily: 'Inter_500Medium', fontSize: 12, fontWeight: '500', color: colors.textSecondary, letterSpacing: 0.4 },
+  tabTextActive: { color: colors.textOnPrimary },
   scrollContent: { paddingHorizontal: 20, paddingBottom: 100 },
   sectionTitle: {
     fontFamily: 'CormorantGaramond_500Medium',
@@ -1856,13 +1879,13 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     letterSpacing: 0.4,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginBottom: 12,
     marginTop: 4,
   },
   // Calorie card
   calorieCard: {
-    backgroundColor: Colors.surface, borderRadius: 4, padding: 20, marginBottom: 16, alignItems: 'center',
+    backgroundColor: colors.surface, borderRadius: 4, padding: 20, marginBottom: 16, alignItems: 'center',
   },
   calorieMain: { flexDirection: 'row', alignItems: 'baseline', gap: 4, marginBottom: 12 },
   calorieValue: {
@@ -1871,15 +1894,15 @@ const styles = StyleSheet.create({
     lineHeight: 46,
     letterSpacing: 0.4,
     fontWeight: '400',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
-  calorieTarget: { fontSize: 16, color: Colors.textSecondary },
-  caloriePctBg: { width: '100%', height: 6, borderRadius: 3, backgroundColor: Colors.primaryPale },
-  caloriePctFill: { height: '100%', borderRadius: 3, backgroundColor: Colors.primary },
-  caloriePctText: { fontSize: 12, color: Colors.textMuted, marginTop: 6 },
+  calorieTarget: { fontSize: 16, color: colors.textSecondary },
+  caloriePctBg: { width: '100%', height: 6, borderRadius: 3, backgroundColor: colors.primaryPale },
+  caloriePctFill: { height: '100%', borderRadius: 3, backgroundColor: colors.primary },
+  caloriePctText: { fontSize: 12, color: colors.textMuted, marginTop: 6 },
   // Macro cards
   macroGrid: { flexDirection: 'row', gap: 10, marginBottom: 20 },
-  macroCard: { flex: 1, backgroundColor: Colors.surface, borderRadius: 2, padding: 14, alignItems: 'center', gap: 4 },
+  macroCard: { flex: 1, backgroundColor: colors.surface, borderRadius: 2, padding: 14, alignItems: 'center', gap: 4 },
   macroCardValue: {
     fontFamily: 'CormorantGaramond_500Medium',
     fontSize: 22,
@@ -1893,16 +1916,16 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
     fontWeight: '500',
     textTransform: 'uppercase',
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
-  macroBarBg: { width: '100%', height: 4, borderRadius: 2, backgroundColor: Colors.primaryPale, marginTop: 4 },
+  macroBarBg: { width: '100%', height: 4, borderRadius: 2, backgroundColor: colors.primaryPale, marginTop: 4 },
   macroBarFill: { height: '100%', borderRadius: 2 },
-  macroCardTarget: { fontSize: 10, color: Colors.textMuted },
+  macroCardTarget: { fontSize: 10, color: colors.textMuted },
   // Profile
-  profileGrid: { backgroundColor: Colors.surface, borderRadius: 2, padding: 16, gap: 12, marginBottom: 20 },
+  profileGrid: { backgroundColor: colors.surface, borderRadius: 2, padding: 16, gap: 12, marginBottom: 20 },
   profileRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  profileLabel: { fontFamily: 'Inter_400Regular', fontSize: 14, color: Colors.textSecondary, textTransform: 'capitalize' },
-  profileValue: { fontFamily: 'Inter_500Medium', fontSize: 14, fontWeight: '500', color: Colors.textPrimary, textTransform: 'capitalize' },
+  profileLabel: { fontFamily: 'Inter_400Regular', fontSize: 14, color: colors.textSecondary, textTransform: 'capitalize' },
+  profileValue: { fontFamily: 'Inter_500Medium', fontSize: 14, fontWeight: '500', color: colors.textPrimary, textTransform: 'capitalize' },
   // Coach actions (messages + nudge)
   actionsRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
   actionPill: {
@@ -1914,7 +1937,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 12,
     borderRadius: 4, // radius.lg
-    backgroundColor: Colors.primaryPale,
+    backgroundColor: colors.primaryPale,
   },
   actionPillText: {
     fontFamily: 'Inter_500Medium',
@@ -1922,7 +1945,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: 1.2,
     textTransform: 'uppercase',
-    color: Colors.primary,
+    color: colors.primary,
   },
   successBanner: {
     flexDirection: 'row',
@@ -1930,79 +1953,79 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 10,
     paddingHorizontal: 14,
-    backgroundColor: Colors.success + '18',
+    backgroundColor: colors.success + '18',
     borderRadius: 4, // radius.lg
     marginBottom: 12,
   },
-  successBannerText: { fontFamily: 'Inter_500Medium', fontSize: 13, fontWeight: '500', color: Colors.success },
+  successBannerText: { fontFamily: 'Inter_500Medium', fontSize: 13, fontWeight: '500', color: colors.success },
   nudgeModalOverlay: { flex: 1, backgroundColor: 'rgba(26,26,24,0.5)', justifyContent: 'center', alignItems: 'center' },
-  nudgeModalContent: { width: '85%', backgroundColor: Colors.surface, borderRadius: 4, padding: 24 },
+  nudgeModalContent: { width: '85%', backgroundColor: colors.surface, borderRadius: 4, padding: 24 },
   nudgeModalTitle: {
     fontFamily: 'CormorantGaramond_500Medium',
     fontSize: 22,
     lineHeight: 26,
     letterSpacing: 0.4,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     textAlign: 'center',
     marginBottom: 6,
   },
-  nudgeModalDesc: { fontFamily: 'Inter_400Regular', fontSize: 13, color: Colors.textSecondary, textAlign: 'center', marginBottom: 16, lineHeight: 18 },
+  nudgeModalDesc: { fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.textSecondary, textAlign: 'center', marginBottom: 16, lineHeight: 18 },
   nudgeLabel: {
     fontFamily: 'Inter_500Medium',
     fontSize: 11,
     fontWeight: '500',
     letterSpacing: 1.98,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textTransform: 'uppercase',
     marginBottom: 6,
     marginTop: 8,
   },
   nudgeInput: {
-    backgroundColor: Colors.surfaceElevated,
+    backgroundColor: colors.surfaceElevated,
     borderRadius: 4, // radius.lg
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   nudgeInputMulti: { minHeight: 90, textAlignVertical: 'top' },
-  nudgeErrorText: { color: Colors.error, fontSize: 13, marginTop: 10, textAlign: 'center' },
+  nudgeErrorText: { color: colors.error, fontSize: 13, marginTop: 10, textAlign: 'center' },
   nudgeButtons: { flexDirection: 'row', gap: 12, marginTop: 20 },
-  nudgeCancelBtn: { flex: 1, paddingVertical: 12, borderRadius: 4, backgroundColor: Colors.surfaceElevated, alignItems: 'center' },
+  nudgeCancelBtn: { flex: 1, paddingVertical: 12, borderRadius: 4, backgroundColor: colors.surfaceElevated, alignItems: 'center' },
   nudgeCancelText: {
     fontFamily: 'Inter_500Medium',
     fontSize: 12,
     fontWeight: '500',
     letterSpacing: 1.2,
     textTransform: 'uppercase',
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
-  nudgeSendBtn: { flex: 1, paddingVertical: 12, borderRadius: 4, backgroundColor: Colors.primary, alignItems: 'center' },
+  nudgeSendBtn: { flex: 1, paddingVertical: 12, borderRadius: 4, backgroundColor: colors.primary, alignItems: 'center' },
   nudgeSendText: {
     fontFamily: 'Inter_500Medium',
     fontSize: 12,
     fontWeight: '500',
     letterSpacing: 1.2,
     textTransform: 'uppercase',
-    color: Colors.textOnPrimary,
+    color: colors.textOnPrimary,
   },
   // Logs
-  logItem: { backgroundColor: Colors.surface, borderRadius: 2, padding: 16, marginBottom: 10 },
+  logItem: { backgroundColor: colors.surface, borderRadius: 2, padding: 16, marginBottom: 10 },
   logHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
   logMeal: {
     fontFamily: 'Inter_500Medium',
     fontSize: 11,
     fontWeight: '500',
     letterSpacing: 1.98,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textTransform: 'uppercase',
   },
-  logCalories: { fontFamily: 'Inter_500Medium', fontSize: 14, fontWeight: '500', color: Colors.textPrimary },
-  logFood: { fontFamily: 'Inter_500Medium', fontSize: 16, fontWeight: '500', color: Colors.textPrimary, marginBottom: 4 },
-  logMacros: { fontFamily: 'Inter_400Regular', fontSize: 13, color: Colors.textSecondary },
+  logCalories: { fontFamily: 'Inter_500Medium', fontSize: 14, fontWeight: '500', color: colors.textPrimary },
+  logFood: { fontFamily: 'Inter_500Medium', fontSize: 16, fontWeight: '500', color: colors.textPrimary, marginBottom: 4 },
+  logMacros: { fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.textSecondary },
   // Workouts
-  sessionCard: { backgroundColor: Colors.surface, borderRadius: 4, padding: 16, marginBottom: 10 },
+  sessionCard: { backgroundColor: colors.surface, borderRadius: 4, padding: 16, marginBottom: 10 },
   sessionTop: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 },
   sessionName: {
     fontFamily: 'CormorantGaramond_500Medium',
@@ -2010,15 +2033,15 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     letterSpacing: 0.4,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
-  sessionDate: { fontFamily: 'Inter_400Regular', fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
+  sessionDate: { fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textSecondary, marginTop: 2 },
   completedBadge: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  completedText: { fontFamily: 'Inter_500Medium', fontSize: 12, fontWeight: '500', color: Colors.success },
-  inProgressText: { fontFamily: 'Inter_500Medium', fontSize: 12, fontWeight: '500', color: Colors.warning },
+  completedText: { fontFamily: 'Inter_500Medium', fontSize: 12, fontWeight: '500', color: colors.success },
+  inProgressText: { fontFamily: 'Inter_500Medium', fontSize: 12, fontWeight: '500', color: colors.warning },
   sessionStats: { flexDirection: 'row', gap: 8, marginBottom: 10 },
   sessionStat: {
-    flex: 1, backgroundColor: Colors.background, borderRadius: 4, padding: 10, alignItems: 'center',
+    flex: 1, backgroundColor: colors.background, borderRadius: 4, padding: 10, alignItems: 'center',
   },
   sessionStatValue: {
     fontFamily: 'CormorantGaramond_500Medium',
@@ -2026,48 +2049,48 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     letterSpacing: 0.4,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   sessionStatLabel: {
     fontFamily: 'Inter_500Medium',
     fontSize: 10,
     fontWeight: '500',
     letterSpacing: 1.5,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 2,
     textTransform: 'uppercase',
   },
-  sessionExercises: { fontFamily: 'Inter_400Regular', fontSize: 12, color: Colors.textMuted },
+  sessionExercises: { fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textMuted },
   // Progress
   progressStatsRow: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  progressStat: { flex: 1, backgroundColor: Colors.surface, borderRadius: 2, padding: 14, alignItems: 'center', gap: 4 },
+  progressStat: { flex: 1, backgroundColor: colors.surface, borderRadius: 2, padding: 14, alignItems: 'center', gap: 4 },
   progressStatValue: {
     fontFamily: 'CormorantGaramond_400Regular',
     fontSize: 28,
     lineHeight: 32,
     letterSpacing: 0.4,
     fontWeight: '400',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   progressStatLabel: {
     fontFamily: 'Inter_500Medium',
     fontSize: 11,
     fontWeight: '500',
     letterSpacing: 1.5,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textTransform: 'uppercase',
   },
   // Meal plan
-  planDayCard: { backgroundColor: Colors.surface, borderRadius: 2, padding: 14, marginBottom: 10 },
-  planDayLabel: { fontFamily: 'Inter_500Medium', fontSize: 14, fontWeight: '500', color: Colors.textPrimary, marginBottom: 8 },
+  planDayCard: { backgroundColor: colors.surface, borderRadius: 2, padding: 14, marginBottom: 10 },
+  planDayLabel: { fontFamily: 'Inter_500Medium', fontSize: 14, fontWeight: '500', color: colors.textPrimary, marginBottom: 8 },
   planSlotRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4 },
-  planSlotLabel: { fontFamily: 'Inter_500Medium', fontSize: 12, fontWeight: '500', color: Colors.textSecondary, width: 70 },
-  planSlotMeal: { flex: 1, fontFamily: 'Inter_500Medium', fontSize: 13, fontWeight: '500', color: Colors.textPrimary },
-  planSlotCals: { fontFamily: 'Inter_500Medium', fontSize: 12, fontWeight: '500', color: Colors.primary },
-  planEmpty: { fontFamily: 'Inter_400Regular', fontSize: 13, color: Colors.textMuted, fontStyle: 'italic' },
+  planSlotLabel: { fontFamily: 'Inter_500Medium', fontSize: 12, fontWeight: '500', color: colors.textSecondary, width: 70 },
+  planSlotMeal: { flex: 1, fontFamily: 'Inter_500Medium', fontSize: 13, fontWeight: '500', color: colors.textPrimary },
+  planSlotCals: { fontFamily: 'Inter_500Medium', fontSize: 12, fontWeight: '500', color: colors.primary },
+  planEmpty: { fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.textMuted, fontStyle: 'italic' },
   // Empty
-  emptyCard: { backgroundColor: Colors.surface, borderRadius: 4, padding: 32, alignItems: 'center', gap: 8 },
-  emptyText: { color: Colors.textMuted, fontSize: 14, textAlign: 'center' },
+  emptyCard: { backgroundColor: colors.surface, borderRadius: 4, padding: 32, alignItems: 'center', gap: 8 },
+  emptyText: { color: colors.textMuted, fontSize: 14, textAlign: 'center' },
   // ── Server meal plans (coach side) ──
   mealPlansHeader: {
     flexDirection: 'row',
@@ -2080,14 +2103,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 4, // radius.lg
   },
   createPlanBtnText: {
     fontFamily: 'Inter_500Medium',
-    color: Colors.textOnPrimary,
+    color: colors.textOnPrimary,
     fontSize: 12,
     fontWeight: '500',
     letterSpacing: 1.2,
@@ -2098,7 +2121,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 8,
     borderRadius: 4, // radius.lg
-    backgroundColor: Colors.primaryPale,
+    backgroundColor: colors.primaryPale,
   },
   retryBtnText: {
     fontFamily: 'Inter_500Medium',
@@ -2106,15 +2129,15 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: 1.2,
     textTransform: 'uppercase',
-    color: Colors.primary,
+    color: colors.primary,
   },
   serverPlanCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   serverPlanHeader: {
     flexDirection: 'row',
@@ -2128,9 +2151,9 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     letterSpacing: 0.4,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
-  serverPlanMeta: { fontFamily: 'Inter_400Regular', fontSize: 12, color: Colors.textMuted, marginTop: 4 },
+  serverPlanMeta: { fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textMuted, marginTop: 4 },
   serverPlanActions: { flexDirection: 'row', gap: 4 },
   planIconBtn: {
     width: 34,
@@ -2138,17 +2161,17 @@ const styles = StyleSheet.create({
     borderRadius: 4, // radius.lg
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.primaryPale,
+    backgroundColor: colors.primaryPale,
   },
   serverPlanNotes: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     lineHeight: 18,
     marginBottom: 8,
   },
   serverPlanEmpty: {
     fontSize: 13,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     fontStyle: 'italic',
     paddingVertical: 6,
   },
@@ -2158,16 +2181,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 8,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: colors.border,
     gap: 10,
   },
-  serverPlanItemName: { fontFamily: 'Inter_500Medium', fontSize: 14, fontWeight: '500', color: Colors.textPrimary },
-  serverPlanItemTod: { fontFamily: 'Inter_400Regular', fontSize: 12, color: Colors.textMuted },
-  serverPlanItemNotes: { fontFamily: 'Inter_400Regular', fontSize: 12, color: Colors.textMuted, marginTop: 2, lineHeight: 16 },
-  serverPlanItemCal: { fontFamily: 'Inter_500Medium', fontSize: 12, fontWeight: '500', color: Colors.textSecondary },
-  serverPlanItemProt: { fontFamily: 'Inter_500Medium', fontSize: 11, fontWeight: '500', color: Colors.primary, marginTop: 2 },
+  serverPlanItemName: { fontFamily: 'Inter_500Medium', fontSize: 14, fontWeight: '500', color: colors.textPrimary },
+  serverPlanItemTod: { fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textMuted },
+  serverPlanItemNotes: { fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textMuted, marginTop: 2, lineHeight: 16 },
+  serverPlanItemCal: { fontFamily: 'Inter_500Medium', fontSize: 12, fontWeight: '500', color: colors.textSecondary },
+  serverPlanItemProt: { fontFamily: 'Inter_500Medium', fontSize: 11, fontWeight: '500', color: colors.primary, marginTop: 2 },
   // ── Plan form modal ──
-  planModalContainer: { flex: 1, backgroundColor: Colors.background },
+  planModalContainer: { flex: 1, backgroundColor: colors.background },
   planModalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2176,7 +2199,7 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   planModalTitle: {
     fontFamily: 'CormorantGaramond_400Regular',
@@ -2184,27 +2207,27 @@ const styles = StyleSheet.create({
     lineHeight: 29,
     letterSpacing: 0.5,
     fontWeight: '400',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   planModalContent: { padding: 20, paddingBottom: 60 },
   planFieldLabel: {
     fontFamily: 'Inter_500Medium',
     fontSize: 11,
     fontWeight: '500',
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 8,
     marginBottom: 6,
     textTransform: 'uppercase',
     letterSpacing: 1.98,
   },
   planInput: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     borderRadius: 4, // radius.lg
     padding: 12,
     fontSize: 14,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginBottom: 10,
   },
   planInputMulti: {
@@ -2223,7 +2246,7 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 10,
     paddingVertical: 6,
-    backgroundColor: Colors.primaryPale,
+    backgroundColor: colors.primaryPale,
     borderRadius: 4, // radius.lg
   },
   planAddItemText: {
@@ -2232,15 +2255,15 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: 1.5,
     textTransform: 'uppercase',
-    color: Colors.primary,
+    color: colors.primary,
   },
   planItemCard: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 2, // radius.md
     padding: 12,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   planItemTopRow: {
     flexDirection: 'row',
@@ -2248,26 +2271,26 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 6,
   },
-  planItemIndex: { fontFamily: 'Inter_500Medium', fontSize: 12, fontWeight: '500', color: Colors.textMuted },
+  planItemIndex: { fontFamily: 'Inter_500Medium', fontSize: 12, fontWeight: '500', color: colors.textMuted },
   planItemInput: {
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     borderRadius: 0, // radius.sm
     padding: 10,
     fontSize: 13,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginBottom: 8,
   },
   planItemRow: { flexDirection: 'row', gap: 8 },
   planFormError: {
-    color: Colors.error,
+    color: colors.error,
     fontSize: 13,
     marginTop: 4,
     marginBottom: 8,
   },
   planSubmitBtn: {
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     borderRadius: 2, // radius.md
     paddingVertical: 14,
     alignItems: 'center',
@@ -2279,6 +2302,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: 1.2,
     textTransform: 'uppercase',
-    color: Colors.textOnPrimary,
+    color: colors.textOnPrimary,
   },
-});
+
+  });

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -19,10 +19,11 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 // side effect and left previous-user data in memory for the next login.
 import { signOut } from '../../services/authActions';
 import { coachApi, profileApi, notificationsApi, usersApi, AccountStatus } from '../../services/api';
-import { Colors } from '../../constants/colors';
+
 import { mediumTap, warningTap, successTap } from '../../utils/haptics';
 import { updateSupabasePassword } from '../../utils/supabaseAuth';
 import { useNavigation } from '@react-navigation/native';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 const COACH_SETTINGS_KEY = 'gp_coach_settings';
 
@@ -41,6 +42,8 @@ const DEFAULT_SETTINGS: CoachSettings = {
 };
 
 export default function SettingsScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation<any>();
   const currentUser = useCurrentUser();
   // signOut imported directly — no store wiring needed.
@@ -321,7 +324,7 @@ export default function SettingsScreen() {
       <Text style={styles.sectionHeader}>Account</Text>
       <View style={styles.section}>
         <View style={styles.row}>
-          <Ionicons name="person-outline" size={20} color={Colors.textSecondary} />
+          <Ionicons name="person-outline" size={20} color={colors.textSecondary} />
           <Text style={styles.rowLabel}>Name</Text>
           <Text style={styles.rowValue}>
             {currentUser?.firstName} {currentUser?.lastName}
@@ -329,7 +332,7 @@ export default function SettingsScreen() {
         </View>
         <View style={styles.divider} />
         <View style={styles.row}>
-          <Ionicons name="mail-outline" size={20} color={Colors.textSecondary} />
+          <Ionicons name="mail-outline" size={20} color={colors.textSecondary} />
           <Text style={styles.rowLabel}>Email</Text>
           <Text style={styles.rowValue}>{currentUser?.email}</Text>
         </View>
@@ -340,12 +343,12 @@ export default function SettingsScreen() {
           accessibilityRole="button"
           accessibilityLabel="Edit bio"
         >
-          <Ionicons name="create-outline" size={20} color={Colors.textSecondary} />
+          <Ionicons name="create-outline" size={20} color={colors.textSecondary} />
           <Text style={styles.rowLabel}>Bio</Text>
           <Text style={styles.rowValueMuted} numberOfLines={1}>
             {bioText || 'Add a bio'}
           </Text>
-          <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
         <View style={styles.divider} />
         <TouchableOpacity
@@ -354,9 +357,9 @@ export default function SettingsScreen() {
           accessibilityRole="button"
           accessibilityLabel="Change password"
         >
-          <Ionicons name="lock-closed-outline" size={20} color={Colors.textSecondary} />
+          <Ionicons name="lock-closed-outline" size={20} color={colors.textSecondary} />
           <Text style={styles.rowLabel}>Change Password</Text>
-          <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
       </View>
 
@@ -364,7 +367,7 @@ export default function SettingsScreen() {
       <Text style={styles.sectionHeader}>Client Management</Text>
       <View style={styles.section}>
         <View style={styles.row}>
-          <Ionicons name="people-outline" size={20} color={Colors.textSecondary} />
+          <Ionicons name="people-outline" size={20} color={colors.textSecondary} />
           <Text style={styles.rowLabel}>Active Clients</Text>
           <Text style={styles.rowValueHighlight}>{clientCount}</Text>
         </View>
@@ -375,9 +378,9 @@ export default function SettingsScreen() {
           accessibilityRole="button"
           accessibilityLabel="Manage invite codes"
         >
-          <Ionicons name="link-outline" size={20} color={Colors.textSecondary} />
+          <Ionicons name="link-outline" size={20} color={colors.textSecondary} />
           <Text style={styles.rowLabel}>Invite Codes</Text>
-          <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
       </View>
 
@@ -390,9 +393,9 @@ export default function SettingsScreen() {
           accessibilityRole="button"
           accessibilityLabel="Open billing and subscription"
         >
-          <Ionicons name="card-outline" size={20} color={Colors.textSecondary} />
+          <Ionicons name="card-outline" size={20} color={colors.textSecondary} />
           <Text style={styles.rowLabel}>Billing & access</Text>
-          <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
       </View>
 
@@ -400,35 +403,35 @@ export default function SettingsScreen() {
       <Text style={styles.sectionHeader}>Notifications</Text>
       <View style={styles.section}>
         <View style={styles.row}>
-          <Ionicons name="alarm-outline" size={20} color={Colors.textSecondary} />
+          <Ionicons name="alarm-outline" size={20} color={colors.textSecondary} />
           <Text style={styles.rowLabel}>Daily Check-in</Text>
           <Switch
             value={settings.dailyCheckin}
             onValueChange={(v) => updateSetting('dailyCheckin', v)}
-            trackColor={{ false: Colors.surfaceElevated, true: Colors.primary }}
-            thumbColor={Colors.textOnPrimary}
+            trackColor={{ false: colors.surfaceElevated, true: colors.primary }}
+            thumbColor={colors.textOnPrimary}
           />
         </View>
         <View style={styles.divider} />
         <View style={styles.row}>
-          <Ionicons name="person-add-outline" size={20} color={Colors.textSecondary} />
+          <Ionicons name="person-add-outline" size={20} color={colors.textSecondary} />
           <Text style={styles.rowLabel}>New Client Alerts</Text>
           <Switch
             value={settings.newClientAlerts}
             onValueChange={(v) => updateSetting('newClientAlerts', v)}
-            trackColor={{ false: Colors.surfaceElevated, true: Colors.primary }}
-            thumbColor={Colors.textOnPrimary}
+            trackColor={{ false: colors.surfaceElevated, true: colors.primary }}
+            thumbColor={colors.textOnPrimary}
           />
         </View>
         <View style={styles.divider} />
         <View style={styles.row}>
-          <Ionicons name="stats-chart-outline" size={20} color={Colors.textSecondary} />
+          <Ionicons name="stats-chart-outline" size={20} color={colors.textSecondary} />
           <Text style={styles.rowLabel}>Weekly Summary</Text>
           <Switch
             value={settings.weeklySummary}
             onValueChange={(v) => updateSetting('weeklySummary', v)}
-            trackColor={{ false: Colors.surfaceElevated, true: Colors.primary }}
-            thumbColor={Colors.textOnPrimary}
+            trackColor={{ false: colors.surfaceElevated, true: colors.primary }}
+            thumbColor={colors.textOnPrimary}
           />
         </View>
       </View>
@@ -437,13 +440,13 @@ export default function SettingsScreen() {
       <Text style={styles.sectionHeader}>App Preferences</Text>
       <View style={styles.section}>
         <View style={styles.row}>
-          <Ionicons name="phone-portrait-outline" size={20} color={Colors.textSecondary} />
+          <Ionicons name="phone-portrait-outline" size={20} color={colors.textSecondary} />
           <Text style={styles.rowLabel}>Haptics</Text>
           <Switch
             value={settings.hapticsEnabled}
             onValueChange={(v) => updateSetting('hapticsEnabled', v)}
-            trackColor={{ false: Colors.surfaceElevated, true: Colors.primary }}
-            thumbColor={Colors.textOnPrimary}
+            trackColor={{ false: colors.surfaceElevated, true: colors.primary }}
+            thumbColor={colors.textOnPrimary}
           />
         </View>
       </View>
@@ -457,14 +460,14 @@ export default function SettingsScreen() {
           accessibilityRole="button"
           accessibilityLabel="Open trust and privacy center"
         >
-          <Ionicons name="shield-checkmark-outline" size={20} color={Colors.textSecondary} />
+          <Ionicons name="shield-checkmark-outline" size={20} color={colors.textSecondary} />
           <Text style={styles.rowLabel}>Trust & Privacy</Text>
-          <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
         <View style={styles.divider} />
         {accountStatusLoading ? (
           <View style={styles.row}>
-            <Ionicons name="trash-outline" size={20} color={Colors.textSecondary} />
+            <Ionicons name="trash-outline" size={20} color={colors.textSecondary} />
             <Text style={styles.rowLabel}>Account deletion</Text>
             <Text style={styles.rowValueMuted}>Checking…</Text>
           </View>
@@ -476,9 +479,9 @@ export default function SettingsScreen() {
             accessibilityRole="button"
             accessibilityLabel="Cancel scheduled deletion"
           >
-            <Ionicons name="time-outline" size={20} color={Colors.warning} />
+            <Ionicons name="time-outline" size={20} color={colors.warning} />
             <View style={{ flex: 1 }}>
-              <Text style={[styles.rowLabel, { color: Colors.warning }]}>
+              <Text style={[styles.rowLabel, { color: colors.warning }]}>
                 Deletion scheduled
               </Text>
               {permanentDate ? (
@@ -489,7 +492,7 @@ export default function SettingsScreen() {
                 <Text style={styles.rowSubLabel}>Tap to cancel deletion</Text>
               )}
             </View>
-            <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
           </TouchableOpacity>
         ) : (
           <TouchableOpacity
@@ -499,9 +502,9 @@ export default function SettingsScreen() {
             accessibilityRole="button"
             accessibilityLabel="Delete account"
           >
-            <Ionicons name="trash-outline" size={20} color={Colors.error} />
-            <Text style={[styles.rowLabel, { color: Colors.error }]}>Delete account</Text>
-            <Ionicons name="chevron-forward" size={16} color={Colors.textMuted} />
+            <Ionicons name="trash-outline" size={20} color={colors.error} />
+            <Text style={[styles.rowLabel, { color: colors.error }]}>Delete account</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
           </TouchableOpacity>
         )}
       </View>
@@ -513,7 +516,7 @@ export default function SettingsScreen() {
         accessibilityRole="button"
         accessibilityLabel="Sign out"
       >
-        <Ionicons name="log-out-outline" size={20} color={Colors.error} />
+        <Ionicons name="log-out-outline" size={20} color={colors.error} />
         <Text style={styles.signOutText}>Sign Out</Text>
       </TouchableOpacity>
 
@@ -533,7 +536,7 @@ export default function SettingsScreen() {
               value={bioText}
               onChangeText={setBioText}
               placeholder="Tell your clients about yourself..."
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               multiline
               maxLength={300}
               textAlignVertical="top"
@@ -571,7 +574,7 @@ export default function SettingsScreen() {
               value={newPassword}
               onChangeText={setNewPassword}
               placeholder="New password (min 8 chars)"
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               secureTextEntry
               accessibilityLabel="New password"
               textContentType="newPassword"
@@ -581,14 +584,14 @@ export default function SettingsScreen() {
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               placeholder="Confirm new password"
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               secureTextEntry
               accessibilityLabel="Confirm new password"
               textContentType="newPassword"
             />
             {passwordError ? (
               <Text
-                style={{ color: Colors.error, fontSize: 13, marginTop: 10, textAlign: 'center' }}
+                style={{ color: colors.error, fontSize: 13, marginTop: 10, textAlign: 'center' }}
                 accessibilityLiveRegion="assertive"
               >
                 {passwordError}
@@ -625,10 +628,11 @@ export default function SettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   content: {
     paddingBottom: 100,
@@ -641,12 +645,12 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   profileCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     marginHorizontal: 24,
     borderRadius: 4, // radius.lg
     padding: 20,
@@ -657,12 +661,12 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: Colors.primaryDark,
+    backgroundColor: colors.primaryDark,
     justifyContent: 'center',
     alignItems: 'center',
   },
   avatarText: {
-    color: Colors.textOnPrimary,
+    color: colors.textOnPrimary,
     fontSize: 20,
     fontWeight: '500',
   },
@@ -672,23 +676,23 @@ const styles = StyleSheet.create({
   profileName: {
     fontSize: 18,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   profileEmail: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginTop: 2,
   },
   profileRole: {
     fontSize: 11,
-    color: Colors.primary,
+    color: colors.primary,
     fontWeight: '500',
     marginTop: 4,
   },
   sectionHeader: {
     fontSize: 13,
     fontWeight: '500',
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginHorizontal: 24,
@@ -697,7 +701,7 @@ const styles = StyleSheet.create({
   },
   section: {
     marginHorizontal: 24,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     marginBottom: 24,
     overflow: 'hidden',
@@ -712,30 +716,30 @@ const styles = StyleSheet.create({
   rowLabel: {
     flex: 1,
     fontSize: 15,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   rowSubLabel: {
     fontSize: 12,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 2,
   },
   rowValue: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   rowValueMuted: {
     fontSize: 14,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     maxWidth: 140,
   },
   rowValueHighlight: {
     fontSize: 16,
     fontWeight: '500',
-    color: Colors.primary,
+    color: colors.primary,
   },
   divider: {
     height: 1,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
     marginLeft: 48,
   },
   signOutButton: {
@@ -747,13 +751,13 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderRadius: 2, // radius.md
     borderWidth: 1,
-    borderColor: Colors.error,
+    borderColor: colors.error,
     marginBottom: 24,
   },
   signOutText: {
     fontSize: 16,
     fontWeight: '600',
-    color: Colors.error,
+    color: colors.error,
   },
   aboutSection: {
     alignItems: 'center',
@@ -762,11 +766,11 @@ const styles = StyleSheet.create({
   },
   aboutText: {
     fontSize: 13,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   aboutSubText: {
     fontSize: 11,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
   modalOverlay: {
     flex: 1,
@@ -776,44 +780,44 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     width: '85%',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     padding: 24,
   },
   modalTitle: {
     fontSize: 18,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     textAlign: 'center',
     marginBottom: 16,
   },
   modalDesc: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
     marginBottom: 20,
   },
   modalInput: {
-    backgroundColor: Colors.surfaceElevated,
+    backgroundColor: colors.surfaceElevated,
     borderRadius: 4, // radius.lg
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   bioInput: {
-    backgroundColor: Colors.surfaceElevated,
+    backgroundColor: colors.surfaceElevated,
     borderRadius: 4, // radius.lg
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     height: 100,
   },
   charCount: {
     fontSize: 11,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     textAlign: 'right',
     marginTop: 4,
     marginBottom: 12,
@@ -827,24 +831,25 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     borderRadius: 4, // radius.lg
-    backgroundColor: Colors.surfaceElevated,
+    backgroundColor: colors.surfaceElevated,
     alignItems: 'center',
   },
   modalCancelText: {
     fontSize: 15,
     fontWeight: '600',
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
   modalSaveBtn: {
     flex: 1,
     paddingVertical: 12,
     borderRadius: 4, // radius.lg
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     alignItems: 'center',
   },
   modalSaveText: {
     fontSize: 15,
     fontWeight: '500',
-    color: Colors.textOnPrimary,
+    color: colors.textOnPrimary,
   },
-});
+
+  });

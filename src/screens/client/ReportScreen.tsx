@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,15 +11,12 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { logApi, weightApi } from '../../services/api';
 import { WeightLog } from '../../types';
 
-import { Colors } from '../../constants/colors';
-import { colors } from '../../theme';
-
-const GREEN = Colors.primary;
-const BG = Colors.surface;
-const TEXT = Colors.textPrimary;
-const MUTED = Colors.textSecondary;
+import { colors as legacyColors } from '../../theme';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 export default function ReportScreen({ navigation }: any) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();
   const [weeklyWeights, setWeeklyWeights] = useState<WeightLog[]>([]);
   const [todayMacros, setTodayMacros] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0 });
@@ -79,7 +76,7 @@ export default function ReportScreen({ navigation }: any) {
     <View style={styles.wrapper}>
       <View style={styles.topBar}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.topTitle}>My Report</Text>
         <View style={styles.backBtn} />
@@ -88,7 +85,7 @@ export default function ReportScreen({ navigation }: any) {
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         {/* Tip Banner */}
         <View style={styles.tipBanner}>
-          <Ionicons name="camera-outline" size={16} color={GREEN} />
+          <Ionicons name="camera-outline" size={16} color={colors.primary} />
           <Text style={styles.tipText}>Screenshot or screen-record to save your report</Text>
         </View>
 
@@ -128,14 +125,14 @@ export default function ReportScreen({ navigation }: any) {
               <Text style={styles.statLabel}>Start (lbs)</Text>
             </View>
             <View style={styles.statBox}>
-              <Text style={[styles.statValue, { color: GREEN }]}>
+              <Text style={[styles.statValue, { color: colors.primary }]}>
                 {latestWeight ? `${(Math.round(latestWeight * 10) / 10)}` : '--'}
               </Text>
               <Text style={styles.statLabel}>Current (lbs)</Text>
             </View>
             {change !== null && (
               <View style={styles.statBox}>
-                <Text style={[styles.statValue, { color: change <= 0 ? GREEN : colors.feedback.errorText }]}>
+                <Text style={[styles.statValue, { color: change <= 0 ? colors.primary : legacyColors.feedback.errorText }]}>
                   {change > 0 ? '+' : ''}{change.toFixed(1)}
                 </Text>
                 <Text style={styles.statLabel}>Change</Text>
@@ -179,19 +176,22 @@ export default function ReportScreen({ navigation }: any) {
 }
 
 function MacroBox({ label, value, unit, accent }: { label: string; value: string; unit: string; accent?: boolean }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <View style={styles.macroBox}>
-      <Text style={[styles.macroValue, accent && { color: GREEN }]}>{value}</Text>
+      <Text style={[styles.macroValue, accent && { color: colors.primary }]}>{value}</Text>
       <Text style={styles.macroUnit}>{unit}</Text>
       <Text style={styles.macroLabel}>{label}</Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   wrapper: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   topBar: {
     flexDirection: 'row',
@@ -210,7 +210,7 @@ const styles = StyleSheet.create({
   topTitle: {
     fontSize: 18,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   scroll: {
     flex: 1,
@@ -222,7 +222,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: colors.feedback.successBg,
+    backgroundColor: legacyColors.feedback.successBg,
     marginHorizontal: 16,
     borderRadius: 4, // radius.lg
     padding: 12,
@@ -231,59 +231,59 @@ const styles = StyleSheet.create({
   tipText: {
     fontSize: 13,
     fontWeight: '600',
-    color: GREEN,
+    color: colors.primary,
   },
   cover: {
-    backgroundColor: BG,
+    backgroundColor: colors.surface,
     marginHorizontal: 16,
     borderRadius: 4, // radius.lg
     padding: 32,
     alignItems: 'center',
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   coverDot: {
     width: 12,
     height: 12,
     borderRadius: 4, // radius.lg
-    backgroundColor: GREEN,
+    backgroundColor: colors.primary,
     marginBottom: 16,
   },
   coverTitle: {
     fontSize: 24,
     fontWeight: '500',
-    color: TEXT,
+    color: colors.textPrimary,
   },
   coverSubtitle: {
     fontSize: 14,
-    color: MUTED,
+    color: colors.textSecondary,
     marginTop: 4,
   },
   coverName: {
     fontSize: 18,
     fontWeight: '500',
-    color: TEXT,
+    color: colors.textPrimary,
     marginTop: 20,
   },
   coverDate: {
     fontSize: 13,
-    color: MUTED,
+    color: colors.textSecondary,
     marginTop: 4,
   },
   section: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     marginHorizontal: 16,
     borderRadius: 4, // radius.lg
     padding: 20,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   sectionTitle: {
     fontSize: 17,
     fontWeight: '500',
-    color: TEXT,
+    color: colors.textPrimary,
     marginBottom: 14,
   },
   macroRow: {
@@ -297,20 +297,20 @@ const styles = StyleSheet.create({
   macroValue: {
     fontSize: 22,
     fontWeight: '500',
-    color: TEXT,
+    color: colors.textPrimary,
   },
   macroUnit: {
     fontSize: 11,
-    color: MUTED,
+    color: colors.textSecondary,
   },
   macroLabel: {
     fontSize: 11,
-    color: MUTED,
+    color: colors.textSecondary,
     marginTop: 2,
   },
   targetHint: {
     fontSize: 12,
-    color: MUTED,
+    color: colors.textSecondary,
     textAlign: 'center',
     marginTop: 12,
   },
@@ -325,16 +325,16 @@ const styles = StyleSheet.create({
   statValue: {
     fontSize: 22,
     fontWeight: '500',
-    color: TEXT,
+    color: colors.textPrimary,
   },
   statLabel: {
     fontSize: 11,
-    color: MUTED,
+    color: colors.textSecondary,
     marginTop: 2,
   },
   weightList: {
     borderTopWidth: 1,
-    borderTopColor: Colors.divider,
+    borderTopColor: colors.divider,
     paddingTop: 12,
   },
   weightRow: {
@@ -344,17 +344,17 @@ const styles = StyleSheet.create({
   },
   weightDate: {
     fontSize: 14,
-    color: MUTED,
+    color: colors.textSecondary,
   },
   weightVal: {
     fontSize: 14,
     fontWeight: '600',
-    color: TEXT,
+    color: colors.textPrimary,
   },
   goalBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: colors.feedback.successBg,
-    color: GREEN,
+    backgroundColor: legacyColors.feedback.successBg,
+    color: colors.primary,
     fontSize: 13,
     fontWeight: '500',
     paddingHorizontal: 12,
@@ -365,35 +365,36 @@ const styles = StyleSheet.create({
   },
   bodyText: {
     fontSize: 14,
-    color: MUTED,
+    color: colors.textSecondary,
     lineHeight: 22,
   },
   footer: {
-    backgroundColor: BG,
+    backgroundColor: colors.surface,
     marginHorizontal: 16,
     borderRadius: 4, // radius.lg
     padding: 24,
     alignItems: 'center',
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   footerDot: {
     width: 10,
     height: 10,
     borderRadius: 2, // radius.md
-    backgroundColor: GREEN,
+    backgroundColor: colors.primary,
     marginBottom: 12,
   },
   footerTitle: {
     fontSize: 16,
     fontWeight: '500',
-    color: TEXT,
+    color: colors.textPrimary,
   },
   footerSub: {
     fontSize: 13,
-    color: MUTED,
+    color: colors.textSecondary,
     marginTop: 4,
     textAlign: 'center',
   },
-});
+
+  });

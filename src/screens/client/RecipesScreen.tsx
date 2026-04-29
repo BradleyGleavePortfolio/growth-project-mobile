@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,9 +13,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useQuery } from '@tanstack/react-query';
 import { recipesApi } from '../../services/api';
-import { Colors } from '../../constants/colors';
+
 import FadeInView from '../../components/FadeInView';
 import EmptyState from '../../components/EmptyState';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Recipe {
@@ -40,6 +41,8 @@ interface Recipe {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 function MacroBadge({ label, value, color }: { label: string; value: number; color: string }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <View style={[styles.macroBadge, { backgroundColor: color + '20' }]}>
       <Text style={[styles.macroBadgeValue, { color }]}>{Math.round(value)}g</Text>
@@ -49,12 +52,14 @@ function MacroBadge({ label, value, color }: { label: string; value: number; col
 }
 
 function RecipeCard({ recipe, onPress }: { recipe: Recipe; onPress: () => void }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const totalTime = recipe.prep_time_min + recipe.cook_time_min;
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.8}>
       {/* Placeholder for image — uses colored header */}
       <View style={styles.cardImagePlaceholder}>
-        <Ionicons name="restaurant-outline" size={32} color={Colors.primary + '80'} />
+        <Ionicons name="restaurant-outline" size={32} color={colors.primary + '80'} />
         <View style={styles.caloriesBadge}>
           <Text style={styles.caloriesBadgeText}>{Math.round(recipe.calories)} kcal</Text>
         </View>
@@ -66,18 +71,18 @@ function RecipeCard({ recipe, onPress }: { recipe: Recipe; onPress: () => void }
         ) : null}
         <View style={styles.cardMeta}>
           <View style={styles.cardMetaItem}>
-            <Ionicons name="time-outline" size={13} color={Colors.textMuted} />
+            <Ionicons name="time-outline" size={13} color={colors.textMuted} />
             <Text style={styles.cardMetaText}>{totalTime} min</Text>
           </View>
           <View style={styles.cardMetaItem}>
-            <Ionicons name="people-outline" size={13} color={Colors.textMuted} />
+            <Ionicons name="people-outline" size={13} color={colors.textMuted} />
             <Text style={styles.cardMetaText}>{recipe.servings} servings</Text>
           </View>
         </View>
         <View style={styles.macroRow}>
-          <MacroBadge label="P" value={recipe.protein} color={Colors.protein} />
-          <MacroBadge label="C" value={recipe.carbs} color={Colors.carbs} />
-          <MacroBadge label="F" value={recipe.fat} color={Colors.fat} />
+          <MacroBadge label="P" value={recipe.protein} color={colors.protein} />
+          <MacroBadge label="C" value={recipe.carbs} color={colors.carbs} />
+          <MacroBadge label="F" value={recipe.fat} color={colors.fat} />
         </View>
         {recipe.tags.length > 0 ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tagsRow}>
@@ -101,6 +106,8 @@ const ALL_TAGS = [
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function RecipesScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation<any>();
   const [search, setSearch] = useState('');
   const [activeTag, setActiveTag] = useState('All');
@@ -136,18 +143,18 @@ export default function RecipesScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.title}>Recipes</Text>
       </View>
 
       {/* Search */}
       <View style={styles.searchRow}>
-        <Ionicons name="search-outline" size={18} color={Colors.textMuted} style={styles.searchIcon} />
+        <Ionicons name="search-outline" size={18} color={colors.textMuted} style={styles.searchIcon} />
         <TextInput
           style={styles.searchInput}
           placeholder="Search recipes…"
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           value={search}
           onChangeText={setSearch}
           returnKeyType="search"
@@ -185,13 +192,13 @@ export default function RecipesScreen() {
           <RefreshControl
             refreshing={isRefetching}
             onRefresh={refetch}
-            tintColor={Colors.primary}
+            tintColor={colors.primary}
           />
         }
       >
         {isLoading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={Colors.primary} />
+            <ActivityIndicator size="large" color={colors.primary} />
             <Text style={styles.loadingText}>Loading recipes…</Text>
           </View>
         ) : isError ? (
@@ -223,8 +230,9 @@ export default function RecipesScreen() {
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -234,22 +242,22 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   backBtn: { width: 40, height: 40, justifyContent: 'center' },
-  title: { fontSize: 24, fontWeight: '500', color: Colors.textPrimary },
+  title: { fontSize: 24, fontWeight: '500', color: colors.textPrimary },
 
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 2, // radius.md
     marginHorizontal: 16,
     marginBottom: 12,
     paddingHorizontal: 14,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     height: 44,
   },
   searchIcon: { marginRight: 8 },
-  searchInput: { flex: 1, fontSize: 15, color: Colors.textPrimary, height: 44 },
+  searchInput: { flex: 1, fontSize: 15, color: colors.textPrimary, height: 44 },
 
   tagFilterRow: { maxHeight: 44, marginBottom: 8 },
   tagFilterContent: { paddingHorizontal: 16, gap: 8, alignItems: 'center' },
@@ -257,33 +265,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 4, // radius.lg
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   tagFilterActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
-  tagFilterText: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
-  tagFilterTextActive: { color: Colors.textOnPrimary },
+  tagFilterText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
+  tagFilterTextActive: { color: colors.textOnPrimary },
 
   list: { flex: 1 },
   listContent: { padding: 16, gap: 14, paddingBottom: 40 },
 
   loadingContainer: { alignItems: 'center', paddingTop: 60, gap: 12 },
-  loadingText: { fontSize: 15, color: Colors.textMuted },
+  loadingText: { fontSize: 15, color: colors.textMuted },
 
   card: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     overflow: 'hidden',
   },
   cardImagePlaceholder: {
     height: 120,
-    backgroundColor: Colors.primaryPale,
+    backgroundColor: colors.primaryPale,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -291,18 +299,18 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 10,
     right: 10,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 0, // radius.sm
   },
-  caloriesBadgeText: { fontSize: 12, fontWeight: '500', color: Colors.textOnPrimary },
+  caloriesBadgeText: { fontSize: 12, fontWeight: '500', color: colors.textOnPrimary },
   cardBody: { padding: 14, gap: 6 },
-  cardTitle: { fontSize: 16, fontWeight: '500', color: Colors.textPrimary },
-  cardDesc: { fontSize: 13, color: Colors.textSecondary, lineHeight: 18 },
+  cardTitle: { fontSize: 16, fontWeight: '500', color: colors.textPrimary },
+  cardDesc: { fontSize: 13, color: colors.textSecondary, lineHeight: 18 },
   cardMeta: { flexDirection: 'row', gap: 14, marginTop: 2 },
   cardMetaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  cardMetaText: { fontSize: 12, color: Colors.textMuted },
+  cardMetaText: { fontSize: 12, color: colors.textMuted },
   macroRow: { flexDirection: 'row', gap: 8, marginTop: 4 },
   macroBadge: {
     flexDirection: 'row',
@@ -316,11 +324,12 @@ const styles = StyleSheet.create({
   macroBadgeLabel: { fontSize: 11, fontWeight: '600' },
   tagsRow: { marginTop: 6 },
   tag: {
-    backgroundColor: Colors.surfaceElevated,
+    backgroundColor: colors.surfaceElevated,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 4, // radius.lg
     marginRight: 6,
   },
-  tagText: { fontSize: 11, color: Colors.textMuted, fontWeight: '600' },
-});
+  tagText: { fontSize: 11, color: colors.textMuted, fontWeight: '600' },
+
+  });

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,13 +14,14 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
-import { Colors } from '../../constants/colors';
+
 import {
   useCommunityFeed,
   usePostWin,
   ApiCommunityWin,
 } from '../../hooks/useApi';
 import { SkeletonCard } from '../../components/SkeletonLoader';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 /**
  * CommunityScreen — API-first.
@@ -55,6 +56,8 @@ function formatTimeAgo(iso: string): string {
 }
 
 export default function CommunityScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();
   const [postWinOpen, setPostWinOpen] = useState(false);
   const [winTitle, setWinTitle] = useState('');
@@ -98,7 +101,7 @@ export default function CommunityScreen() {
           accessibilityRole="button"
           accessibilityLabel="Share a win"
         >
-          <Ionicons name="add" size={18} color={Colors.textOnPrimary} />
+          <Ionicons name="add" size={18} color={colors.textOnPrimary} />
           <Text style={styles.shareWinText}>Share a win</Text>
         </TouchableOpacity>
       </View>
@@ -112,8 +115,8 @@ export default function CommunityScreen() {
           <RefreshControl
             refreshing={wins.isFetching && !wins.isLoading}
             onRefresh={onRefresh}
-            tintColor={Colors.primary}
-            colors={[Colors.primary]}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
           />
         }
         ListEmptyComponent={
@@ -143,7 +146,7 @@ export default function CommunityScreen() {
           return (
             <View style={styles.winCard}>
               <View style={styles.winIcon}>
-                <Ionicons name="star" size={22} color={Colors.warning} />
+                <Ionicons name="star" size={22} color={colors.warning} />
               </View>
               <View style={styles.winInfo}>
                 <Text style={styles.winUserName}>
@@ -174,7 +177,7 @@ export default function CommunityScreen() {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Share a win</Text>
               <TouchableOpacity onPress={() => setPostWinOpen(false)} accessibilityRole="button">
-                <Ionicons name="close" size={24} color={Colors.textSecondary} />
+                <Ionicons name="close" size={24} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
             <Text style={styles.modalSubtitle}>
@@ -182,7 +185,7 @@ export default function CommunityScreen() {
             </Text>
             <TextInput
               placeholder="Title — e.g. Hit a PR on squats"
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               value={winTitle}
               onChangeText={setWinTitle}
               maxLength={80}
@@ -190,7 +193,7 @@ export default function CommunityScreen() {
             />
             <TextInput
               placeholder="A few words about what happened"
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               value={winDesc}
               onChangeText={setWinDesc}
               multiline
@@ -217,9 +220,11 @@ export default function CommunityScreen() {
 // ─── Small subcomponents kept local for cohesion ─────────────────────────
 
 function EmptyState({ icon, title, text }: { icon: string; title: string; text: string }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <View style={styles.emptyContainer}>
-      <Ionicons name={icon as any} size={48} color={Colors.textMuted} />
+      <Ionicons name={icon as any} size={48} color={colors.textMuted} />
       <Text style={styles.emptyTitle}>{title}</Text>
       <Text style={styles.emptyText}>{text}</Text>
     </View>
@@ -227,17 +232,20 @@ function EmptyState({ icon, title, text }: { icon: string; title: string; text: 
 }
 
 function ErrorState({ icon, title, text }: { icon: string; title: string; text: string }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <View style={styles.emptyContainer}>
-      <Ionicons name={icon as any} size={48} color={Colors.error} />
-      <Text style={[styles.emptyTitle, { color: Colors.error }]}>{title}</Text>
+      <Ionicons name={icon as any} size={48} color={colors.error} />
+      <Text style={[styles.emptyTitle, { color: colors.error }]}>{title}</Text>
       <Text style={styles.emptyText}>{text}</Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -252,7 +260,7 @@ const styles = StyleSheet.create({
     lineHeight: 35,
     letterSpacing: 0.6,
     fontWeight: '400',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   subtitle: {
     fontFamily: 'Inter_500Medium',
@@ -261,21 +269,21 @@ const styles = StyleSheet.create({
     letterSpacing: 1.98,
     fontWeight: '500',
     textTransform: 'uppercase',
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 8,
   },
   shareWinBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     borderRadius: 4, // radius.lg
     paddingHorizontal: 14,
     paddingVertical: 8,
   },
   shareWinText: {
     fontFamily: 'Inter_500Medium',
-    color: Colors.textOnPrimary,
+    color: colors.textOnPrimary,
     fontSize: 12,
     fontWeight: '500',
     letterSpacing: 1.2,
@@ -290,12 +298,12 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     letterSpacing: 0.4,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   emptyText: {
     fontFamily: 'Inter_400Regular',
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     textAlign: 'center',
     paddingHorizontal: 40,
     lineHeight: 22,
@@ -305,13 +313,13 @@ const styles = StyleSheet.create({
   winCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     padding: 14,
     marginBottom: 10,
     gap: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   winIcon: {
     width: 44,
@@ -328,7 +336,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: 1.5,
     textTransform: 'uppercase',
-    color: Colors.primary,
+    color: colors.primary,
   },
   winTitle: {
     fontFamily: 'CormorantGaramond_500Medium',
@@ -336,10 +344,10 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     letterSpacing: 0.4,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
-  winDesc: { fontFamily: 'Inter_400Regular', fontSize: 13, color: Colors.textSecondary, lineHeight: 20 },
-  winTime: { fontFamily: 'Inter_400Regular', fontSize: 11, color: Colors.textMuted },
+  winDesc: { fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.textSecondary, lineHeight: 20 },
+  winTime: { fontFamily: 'Inter_400Regular', fontSize: 11, color: colors.textMuted },
 
   // Modal
   modalBackdrop: {
@@ -348,7 +356,7 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   modalSheet: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderTopLeftRadius: 4,
     borderTopRightRadius: 4,
     padding: 20,
@@ -366,21 +374,21 @@ const styles = StyleSheet.create({
     lineHeight: 29,
     letterSpacing: 0.5,
     fontWeight: '400',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
-  modalSubtitle: { fontFamily: 'Inter_400Regular', fontSize: 13, color: Colors.textSecondary, marginTop: -4 },
+  modalSubtitle: { fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.textSecondary, marginTop: -4 },
   modalInput: {
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
     borderRadius: 2, // radius.md
     padding: 14,
     fontSize: 15,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   modalInputMultiline: { minHeight: 100, textAlignVertical: 'top' },
   modalSubmit: {
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     borderRadius: 2, // radius.md
     paddingVertical: 14,
     alignItems: 'center',
@@ -389,10 +397,11 @@ const styles = StyleSheet.create({
   modalSubmitDisabled: { opacity: 0.6 },
   modalSubmitText: {
     fontFamily: 'Inter_500Medium',
-    color: Colors.textOnPrimary,
+    color: colors.textOnPrimary,
     fontSize: 13,
     fontWeight: '500',
     letterSpacing: 1.2,
     textTransform: 'uppercase',
   },
-});
+
+  });

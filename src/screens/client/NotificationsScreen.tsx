@@ -11,7 +11,7 @@
  * cache, so the inbox still renders something useful when the network blips.
  */
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -21,22 +21,28 @@ import {
   RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors } from '../../constants/colors';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+
 import {
   ApiNudge,
   useNudges,
   useMarkNudgeRead,
 } from '../../hooks/useApi';
 
-const TYPE_CONFIG: Record<string, { icon: string; color: string }> = {
-  reminder: { icon: 'alarm-outline', color: Colors.warning },
-  milestone: { icon: 'document-outline', color: Colors.warning },
-  coach: { icon: 'person-outline', color: Colors.primary },
-  system: { icon: 'information-circle-outline', color: Colors.info },
-  tip: { icon: 'bulb-outline', color: Colors.primaryLight },
+function makeTYPE_CONFIG(colors: ThemeColors): Record<string, { icon: string; color: string }> {
+  return {
+  reminder: { icon: 'alarm-outline', color: colors.warning },
+  milestone: { icon: 'document-outline', color: colors.warning },
+  coach: { icon: 'person-outline', color: colors.primary },
+  system: { icon: 'information-circle-outline', color: colors.info },
+  tip: { icon: 'bulb-outline', color: colors.primaryLight },
 };
+}
 
 export default function NotificationsScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const TYPE_CONFIG = useMemo(() => makeTYPE_CONFIG(colors), [colors]);
   const { data: nudges = [], isLoading, isRefetching, refetch } = useNudges(100);
   const markRead = useMarkNudgeRead();
 
@@ -125,7 +131,7 @@ export default function NotificationsScreen() {
 
       {unreadCount > 0 && (
         <View style={styles.unreadBanner}>
-          <Ionicons name="notifications" size={16} color={Colors.primary} />
+          <Ionicons name="notifications" size={16} color={colors.primary} />
           <Text style={styles.unreadBannerText}>
             {unreadCount} unread notification{unreadCount !== 1 ? 's' : ''}
           </Text>
@@ -142,13 +148,13 @@ export default function NotificationsScreen() {
           <RefreshControl
             refreshing={isRefetching}
             onRefresh={onRefresh}
-            tintColor={Colors.primary}
-            colors={[Colors.primary]}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
           />
         }
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Ionicons name="notifications-off-outline" size={48} color={Colors.textMuted} />
+            <Ionicons name="notifications-off-outline" size={48} color={colors.textMuted} />
             <Text style={styles.emptyTitle}>
               {isLoading ? 'Loading…' : 'No notifications yet'}
             </Text>
@@ -162,8 +168,9 @@ export default function NotificationsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -172,25 +179,25 @@ const styles = StyleSheet.create({
     paddingTop: 60,
     marginBottom: 8,
   },
-  title: { fontSize: 28, fontWeight: '500', color: Colors.textPrimary },
-  markAllText: { fontSize: 14, fontWeight: '600', color: Colors.primary },
+  title: { fontSize: 28, fontWeight: '500', color: colors.textPrimary },
+  markAllText: { fontSize: 14, fontWeight: '600', color: colors.primary },
   unreadBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     marginHorizontal: 24,
     marginBottom: 12,
-    backgroundColor: Colors.primaryPale,
+    backgroundColor: colors.primaryPale,
     borderRadius: 4, // radius.lg
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
-  unreadBannerText: { fontSize: 13, fontWeight: '600', color: Colors.primary },
+  unreadBannerText: { fontSize: 13, fontWeight: '600', color: colors.primary },
   listContent: { paddingHorizontal: 16, paddingBottom: 100 },
   notifCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     padding: 14,
     marginBottom: 8,
@@ -198,7 +205,7 @@ const styles = StyleSheet.create({
   },
   notifCardUnread: {
     borderLeftWidth: 3,
-    borderLeftColor: Colors.primary,
+    borderLeftColor: colors.primary,
   },
   iconCircle: {
     width: 40,
@@ -214,15 +221,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  notifTitle: { fontSize: 14, fontWeight: '600', color: Colors.textPrimary, flex: 1, marginRight: 8 },
+  notifTitle: { fontSize: 14, fontWeight: '600', color: colors.textPrimary, flex: 1, marginRight: 8 },
   notifTitleUnread: { fontWeight: '500' },
-  notifTime: { fontSize: 11, color: Colors.textMuted },
-  notifBody: { fontSize: 13, color: Colors.textSecondary, lineHeight: 18 },
+  notifTime: { fontSize: 11, color: colors.textMuted },
+  notifBody: { fontSize: 13, color: colors.textSecondary, lineHeight: 18 },
   unreadDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     marginTop: 6,
   },
   emptyContainer: {
@@ -230,6 +237,7 @@ const styles = StyleSheet.create({
     paddingTop: 80,
     gap: 10,
   },
-  emptyTitle: { fontSize: 18, fontWeight: '500', color: Colors.textPrimary },
-  emptyText: { fontSize: 14, color: Colors.textSecondary },
-});
+  emptyTitle: { fontSize: 18, fontWeight: '500', color: colors.textPrimary },
+  emptyText: { fontSize: 14, color: colors.textSecondary },
+
+  });
