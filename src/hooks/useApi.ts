@@ -62,13 +62,6 @@ export type ApiHabitLog = {
   completed: boolean;
 };
 
-export type ApiHabitStreak = {
-  habit_id: string;
-  current_streak: number;
-  longest_streak: number;
-  week_completions: boolean[];
-};
-
 export function useHabits(opts?: UseQueryOptions<ApiHabit[]>) {
   return useQuery<ApiHabit[]>({
     queryKey: ['habits', 'list'],
@@ -82,14 +75,6 @@ export function useHabitLogs(date: string, opts?: UseQueryOptions<ApiHabitLog[]>
     queryKey: ['habits', 'logs', date],
     queryFn: async () => (await habitsApi.getLogs(date)).data,
     enabled: !!date,
-    ...opts,
-  });
-}
-
-export function useHabitStreaks(opts?: UseQueryOptions<ApiHabitStreak[]>) {
-  return useQuery<ApiHabitStreak[]>({
-    queryKey: ['habits', 'streaks'],
-    queryFn: async () => (await habitsApi.getStreaks()).data,
     ...opts,
   });
 }
@@ -131,14 +116,8 @@ export function useDeleteHabit() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Community  (real CommunityWin + leaderboard, post Fix #9 backend work)
+// Community  (real CommunityWin feed, post Fix #9 backend work)
 // ─────────────────────────────────────────────────────────────────────────────
-
-export type ApiLeaderboardEntry = {
-  user_id: string;
-  name: string;
-  workouts_completed: number;
-};
 
 export type ApiCommunityWin = {
   id: string;
@@ -154,13 +133,6 @@ export type ApiCommunityWin = {
   createdAt?: string;
   reactions?: { fire: number; clap: number };
 };
-
-export function useLeaderboard(period: 'week' | 'month' = 'week') {
-  return useQuery<ApiLeaderboardEntry[]>({
-    queryKey: ['community', 'leaderboard', period],
-    queryFn: async () => (await communityApi.getLeaderboard(period)).data,
-  });
-}
 
 export function useCommunityFeed() {
   return useQuery<ApiCommunityWin[]>({
@@ -191,17 +163,20 @@ export function useReactToWin() {
   });
 }
 
-export type ApiBadge = {
+export type ApiMilestone = {
   slug: string;
   label: string;
-  awardedAt: string | null;
+  reachedAt: string | null;
   description: string;
 };
 
-export function useBadges(opts?: UseQueryOptions<ApiBadge[]>) {
-  return useQuery<ApiBadge[]>({
-    queryKey: ['badges', 'list'],
-    queryFn: async () => (await communityApi.getBadges()).data,
+// Backend has removed GET /users/me/badges. Until a milestones endpoint
+// replaces it, this hook returns an empty array so consumers render a
+// clean slate instead of pinging a 410 route.
+export function useMilestones(opts?: UseQueryOptions<ApiMilestone[]>) {
+  return useQuery<ApiMilestone[]>({
+    queryKey: ['milestones', 'list'],
+    queryFn: async () => [] as ApiMilestone[],
     ...opts,
   });
 }

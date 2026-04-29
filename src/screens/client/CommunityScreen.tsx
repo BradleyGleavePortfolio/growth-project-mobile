@@ -16,11 +16,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { Colors } from '../../constants/colors';
 import {
-  useLeaderboard,
   useCommunityFeed,
   usePostWin,
   ApiCommunityWin,
-  ApiLeaderboardEntry,
 } from '../../hooks/useApi';
 import { SkeletonCard } from '../../components/SkeletonLoader';
 
@@ -28,28 +26,21 @@ import { SkeletonCard } from '../../components/SkeletonLoader';
  * CommunityScreen — API-first.
  *
  * Source-of-truth migration (Fix #2):
- *   Wins        → real CommunityWin rows on the backend (Fix #9). When a
- *                 client posts a win it's persisted server-side, scoped to
- *                 the coach roster, and visible to teammates and the coach.
- *   Leaderboard → real workout-volume groupBy on the backend (community.
- *                 service.getLeaderboard). Same scope rules.
+ *   Wins → real CommunityWin rows on the backend (Fix #9). When a client posts
+ *   a win it's persisted server-side, scoped to the coach roster, and visible
+ *   to teammates and the coach.
  *
- * Wave 5b: the Challenges tab is gone. There is no backend module behind
- * it, and the quiet-luxury doctrine forbids "Coming Soon" placeholder UI.
- * The tab returns when there is real data to render.
+ * Wave 5b: the Challenges tab is gone. There is no backend module behind it,
+ * and the quiet-luxury doctrine forbids "Coming Soon" placeholder UI.
+ *
+ * Doctrine excise: the rankings tab has been removed. Ranked competition is
+ * not part of the quiet-luxury voice; the Wins feed is the only social surface.
  *
  * Cache:
- *   The two real queries (feed + leaderboard) are persisted via the
- *   PersistQueryClientProvider so cold starts paint last-known data while
- *   the network call refreshes in the background.
+ *   The feed query is persisted via the PersistQueryClientProvider so cold
+ *   starts paint last-known data while the network call refreshes in the
+ *   background.
  */
-
-type TabKey = 'wins' | 'leaderboard';
-
-const TABS: { key: TabKey; label: string; icon: string }[] = [
-  { key: 'wins', label: 'Wins', icon: 'star' },
-  { key: 'leaderboard', label: 'Leaderboard', icon: 'podium' },
-];
 
 function formatTimeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -65,18 +56,16 @@ function formatTimeAgo(iso: string): string {
 
 export default function CommunityScreen() {
   const currentUser = useCurrentUser();
-  const [activeTab, setActiveTab] = useState<TabKey>('wins');
   const [postWinOpen, setPostWinOpen] = useState(false);
   const [winTitle, setWinTitle] = useState('');
   const [winDesc, setWinDesc] = useState('');
 
   const wins = useCommunityFeed();
-  const leaderboard = useLeaderboard('week');
   const postWin = usePostWin();
 
   const onRefresh = useCallback(async () => {
-    await Promise.all([wins.refetch(), leaderboard.refetch()]);
-  }, [wins, leaderboard]);
+    await wins.refetch();
+  }, [wins]);
 
   const handleSubmitWin = useCallback(async () => {
     const title = winTitle.trim();
@@ -101,7 +90,7 @@ export default function CommunityScreen() {
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>Community</Text>
-          <Text style={styles.subtitle}>Wins, rankings, your team</Text>
+          <Text style={styles.subtitle}>Wins from your team</Text>
         </View>
         <TouchableOpacity
           style={styles.shareWinBtn}
@@ -114,176 +103,61 @@ export default function CommunityScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Tabs */}
-      <View style={styles.tabBar}>
-        {TABS.map((tab) => {
-          const active = activeTab === tab.key;
-          return (
-            <TouchableOpacity
-              key={tab.key}
-              style={[styles.tab, active && styles.tabActive]}
-              onPress={() => setActiveTab(tab.key)}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: active }}
-            >
-              <Ionicons
-                name={tab.icon as any}
-                size={16}
-                color={active ? Colors.primary : Colors.textMuted}
-              />
-              <Text style={[styles.tabText, active && styles.tabTextActive]}>{tab.label}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-
-      {/* WINS TAB ─────────────────────────────────────────────────────── */}
-      {activeTab === 'wins' && (
-        <FlatList
-          data={wins.data || []}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={wins.isFetching && !wins.isLoading}
-              onRefresh={onRefresh}
-              tintColor={Colors.primary}
-              colors={[Colors.primary]}
-            />
-          }
-          ListEmptyComponent={
-            wins.isLoading ? (
-              <View>
-                <SkeletonCard />
-                <SkeletonCard />
-                <SkeletonCard />
-              </View>
-            ) : wins.isError ? (
-              <ErrorState
-                icon="cloud-offline-outline"
-                title="Couldn't load wins"
-                text="Pull down to try again."
-              />
-            ) : (
-              <EmptyState
-                icon="star-outline"
-                title="No wins yet"
-                text="Be the first — tap Share a win at the top."
-              />
-            )
-          }
-          renderItem={({ item }: { item: ApiCommunityWin }) => {
-            const isMe = item.user_id === currentUser?.id;
-            const authorName = item.user?.name || (isMe ? 'You' : 'Teammate');
-            return (
-              <View style={styles.winCard}>
-                <View style={styles.winIcon}>
-                  <Ionicons name="star" size={22} color={Colors.warning} />
-                </View>
-                <View style={styles.winInfo}>
-                  <Text style={styles.winUserName}>
-                    {authorName}
-                    {isMe ? ' (You)' : ''}
-                  </Text>
-                  <Text style={styles.winTitle}>{item.title}</Text>
-                  <Text style={styles.winDesc}>{item.description}</Text>
-                </View>
-                <Text style={styles.winTime}>{formatTimeAgo(item.created_at)}</Text>
-              </View>
-            );
-          }}
-        />
-      )}
-
-      {/* LEADERBOARD TAB ──────────────────────────────────────────────── */}
-      {activeTab === 'leaderboard' && (
-        <FlatList
-          data={leaderboard.data || []}
-          keyExtractor={(item) => item.user_id}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={leaderboard.isFetching && !leaderboard.isLoading}
-              onRefresh={onRefresh}
-              tintColor={Colors.primary}
-              colors={[Colors.primary]}
-            />
-          }
-          ListHeaderComponent={
-            <View style={styles.featuredBanner}>
-              <Ionicons name="sparkles" size={14} color={Colors.primary} />
-              <Text style={styles.featuredBannerText}>This week — workouts logged</Text>
+      <FlatList
+        data={wins.data || []}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={wins.isFetching && !wins.isLoading}
+            onRefresh={onRefresh}
+            tintColor={Colors.primary}
+            colors={[Colors.primary]}
+          />
+        }
+        ListEmptyComponent={
+          wins.isLoading ? (
+            <View>
+              <SkeletonCard />
+              <SkeletonCard />
+              <SkeletonCard />
             </View>
-          }
-          ListEmptyComponent={
-            leaderboard.isLoading ? (
-              <View>
-                <SkeletonCard />
-                <SkeletonCard />
-                <SkeletonCard />
+          ) : wins.isError ? (
+            <ErrorState
+              icon="cloud-offline-outline"
+              title="Couldn't load wins"
+              text="Pull down to try again."
+            />
+          ) : (
+            <EmptyState
+              icon="star-outline"
+              title="No wins yet"
+              text="Be the first — tap Share a win at the top."
+            />
+          )
+        }
+        renderItem={({ item }: { item: ApiCommunityWin }) => {
+          const isMe = item.user_id === currentUser?.id;
+          const authorName = item.user?.name || (isMe ? 'You' : 'Teammate');
+          return (
+            <View style={styles.winCard}>
+              <View style={styles.winIcon}>
+                <Ionicons name="star" size={22} color={Colors.warning} />
               </View>
-            ) : leaderboard.isError ? (
-              <ErrorState
-                icon="cloud-offline-outline"
-                title="Couldn't load leaderboard"
-                text="Pull down to try again."
-              />
-            ) : (
-              <EmptyState
-                icon="podium-outline"
-                title="No rankings yet"
-                text="Log a workout this week to land on the board."
-              />
-            )
-          }
-          renderItem={({ item, index }: { item: ApiLeaderboardEntry; index: number }) => {
-            const rank = index + 1;
-            const isMe = item.user_id === currentUser?.id;
-            const initials = item.name
-              ? item.name
-                  .split(' ')
-                  .map((n) => n[0])
-                  .slice(0, 2)
-                  .join('')
-                  .toUpperCase()
-              : '?';
-            const medalColor =
-              rank === 1
-                ? Colors.medalGold
-                : rank === 2
-                ? Colors.medalSilver
-                : rank === 3
-                ? Colors.medalBronze
-                : Colors.textMuted;
-            return (
-              <View style={[styles.leaderRow, isMe && styles.leaderRowMe]}>
-                <View style={styles.rankContainer}>
-                  {rank <= 3 ? (
-                    <Ionicons name="medal" size={24} color={medalColor} />
-                  ) : (
-                    <Text style={styles.rankText}>{rank}</Text>
-                  )}
-                </View>
-                <View style={styles.leaderAvatar}>
-                  <Text style={styles.leaderAvatarText}>{initials}</Text>
-                </View>
-                <View style={styles.leaderInfo}>
-                  <Text style={[styles.leaderName, isMe && styles.leaderNameMe]}>
-                    {item.name}
-                    {isMe ? ' (You)' : ''}
-                  </Text>
-                </View>
-                <View style={styles.leaderPoints}>
-                  <Ionicons name="barbell-outline" size={14} color={Colors.primary} />
-                  <Text style={styles.leaderPointsText}>{item.workouts_completed}</Text>
-                </View>
+              <View style={styles.winInfo}>
+                <Text style={styles.winUserName}>
+                  {authorName}
+                  {isMe ? ' (You)' : ''}
+                </Text>
+                <Text style={styles.winTitle}>{item.title}</Text>
+                <Text style={styles.winDesc}>{item.description}</Text>
               </View>
-            );
-          }}
-        />
-      )}
+              <Text style={styles.winTime}>{formatTimeAgo(item.created_at)}</Text>
+            </View>
+          );
+        }}
+      />
 
       {/* POST-A-WIN MODAL ─────────────────────────────────────────────── */}
       <Modal
@@ -408,30 +282,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
 
-  tabBar: { flexDirection: 'row', marginHorizontal: 24, marginBottom: 12, gap: 8 },
-  tab: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: 2, // radius.md
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  tabActive: { backgroundColor: Colors.primaryPale, borderColor: Colors.primary },
-  tabText: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 12,
-    fontWeight: '500',
-    letterSpacing: 0.4,
-    color: Colors.textMuted,
-  },
-  tabTextActive: { color: Colors.primary },
-
-  listContent: { paddingHorizontal: 24, paddingBottom: 100 },
+  listContent: { paddingHorizontal: 24, paddingTop: 8, paddingBottom: 100 },
   emptyContainer: { alignItems: 'center', paddingTop: 60, gap: 10 },
   emptyTitle: {
     fontFamily: 'CormorantGaramond_500Medium',
@@ -448,71 +299,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingHorizontal: 40,
     lineHeight: 22,
-  },
-
-  featuredBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 12,
-  },
-  featuredBannerText: {
-    fontFamily: 'Inter_500Medium',
-    fontSize: 11,
-    fontWeight: '500',
-    letterSpacing: 1.98,
-    textTransform: 'uppercase',
-    color: Colors.primary,
-  },
-
-  // Leaderboard
-  leaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Colors.surface,
-    borderRadius: 4, // radius.lg
-    padding: 14,
-    marginBottom: 8,
-    gap: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  leaderRowMe: { borderColor: Colors.primary, backgroundColor: Colors.primaryPale },
-  rankContainer: { width: 30, alignItems: 'center' },
-  rankText: {
-    fontFamily: 'CormorantGaramond_500Medium',
-    fontSize: 18,
-    lineHeight: 22,
-    letterSpacing: 0.4,
-    fontWeight: '500',
-    color: Colors.textMuted,
-  },
-  leaderAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 4, // radius.lg
-    backgroundColor: Colors.primaryDark,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  leaderAvatarText: {
-    fontFamily: 'Inter_600SemiBold',
-    color: Colors.textOnPrimary,
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 1,
-  },
-  leaderInfo: { flex: 1 },
-  leaderName: { fontFamily: 'Inter_500Medium', fontSize: 15, fontWeight: '500', color: Colors.textPrimary },
-  leaderNameMe: { fontFamily: 'Inter_600SemiBold', fontWeight: '600', color: Colors.primary },
-  leaderPoints: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  leaderPointsText: {
-    fontFamily: 'CormorantGaramond_500Medium',
-    fontSize: 18,
-    lineHeight: 22,
-    letterSpacing: 0.4,
-    fontWeight: '500',
-    color: Colors.textPrimary,
   },
 
   // Wins

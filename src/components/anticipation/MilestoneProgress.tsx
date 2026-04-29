@@ -115,7 +115,7 @@ export default function MilestoneProgress({
   });
 
   // ── Render ──────────────────────────────────────────────────────────────────
-  const iconName = CATEGORY_ICON[category] ?? 'trophy';
+  const iconName = CATEGORY_ICON[category] ?? 'document-outline';
 
   return (
     <HapticPressable

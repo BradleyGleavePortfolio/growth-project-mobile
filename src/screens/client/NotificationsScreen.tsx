@@ -30,10 +30,9 @@ import {
 
 const TYPE_CONFIG: Record<string, { icon: string; color: string }> = {
   reminder: { icon: 'alarm-outline', color: Colors.warning },
-  achievement: { icon: 'trophy-outline', color: Colors.warning },
+  milestone: { icon: 'document-outline', color: Colors.warning },
   coach: { icon: 'person-outline', color: Colors.primary },
   system: { icon: 'information-circle-outline', color: Colors.info },
-  streak: { icon: 'flame-outline', color: Colors.streak },
   tip: { icon: 'bulb-outline', color: Colors.primaryLight },
 };
 

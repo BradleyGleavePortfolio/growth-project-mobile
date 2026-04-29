@@ -1594,7 +1594,7 @@ function WeeklySummaryTab({
               <View style={wsStyles.expandedSection}>
                 <View style={wsStyles.divider} />
                 <View style={wsStyles.detailRow}>
-                  <Ionicons name="flame-outline" size={14} color={Colors.warning} />
+                  <Ionicons name="restaurant-outline" size={14} color={Colors.warning} />
                   <Text style={wsStyles.detailLabel}>Total Calories</Text>
                   <Text style={wsStyles.detailValue}>{Math.round(week.totalCalories).toLocaleString()} kcal</Text>
                 </View>

@@ -365,10 +365,7 @@ export default function ProgressScreen() {
           <Text style={styles.title}>Progress</Text>
           <View style={styles.headerRight}>
             {loggingStreak > 0 && (
-              <View style={styles.streakBadge}>
-                <Ionicons name="flame" size={14} color={Colors.warning} />
-                <Text style={styles.streakText}>{loggingStreak}d streak</Text>
-              </View>
+              <Text style={styles.runText}>Day {loggingStreak}</Text>
             )}
             {/* Round 3: Progress now lives inside MoreStack, so Report is a sibling —
                 navigate directly instead of through the old ProfileStack parent. */}
@@ -466,7 +463,7 @@ export default function ProgressScreen() {
           <FadeInView delay={50}>
             <View style={styles.goalCard}>
               <View style={styles.goalHeader}>
-                <Ionicons name="trophy-outline" size={18} color={Colors.primary} />
+                <View style={styles.goalRule} />
                 <Text style={styles.goalTitle}>Goal Progress</Text>
               </View>
               <View style={styles.goalTrack}>
@@ -637,21 +634,16 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     color: Colors.textPrimary,
   },
-  streakBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: Colors.surface,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 4, // radius.lg
-  },
-  streakText: {
-    fontFamily: 'Inter_500Medium',
+  runText: {
+    fontFamily: 'Inter_400Regular',
     fontSize: 12,
-    fontWeight: '500',
     letterSpacing: 0.4,
-    color: Colors.warning,
+    color: Colors.textSecondary,
+  },
+  goalRule: {
+    width: 18,
+    height: 1,
+    backgroundColor: Colors.border,
   },
   ringCard: {
     flexDirection: 'row',

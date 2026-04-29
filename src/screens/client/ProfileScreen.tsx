@@ -3,8 +3,8 @@
  *
  * - Streak moved here from Home: "Day 7 of 30." as a plain text line.
  * - Identity badge kept (founding-member context lives here, not home).
- * - BadgeCabinet now renders as MilestoneList (date · note rows).
- * - Trophy CTA removed (TrophyArtifact replaced by date list per brief).
+ * - MilestoneCabinet now renders as MilestoneList (date · note rows).
+ * - Closing CTA replaced by date list per brief.
  * - Radius literals cleaned to tokens.
  */
 import React from 'react';
@@ -25,7 +25,7 @@ import { Colors } from '../../constants/colors';
 import { MoreStackParamList } from '../../navigation/ClientNavigator';
 import { useFoundingNumber } from '../../hooks/useIdentity';
 import { resolveIdentityTitle } from '../../lib/identityTitle';
-import BadgeCabinet from '../../components/community/BadgeCabinet';
+import MilestoneCabinet from '../../components/community/MilestoneCabinet';
 import { track } from '../../lib/analytics';
 import { useEffect } from 'react';
 import { colors, typography, radius } from '../../theme/tokens';
@@ -176,9 +176,9 @@ export default function ProfileScreen() {
         ))}
       </View>
 
-      {/* Wave 3: BadgeCabinet renders as MilestoneList */}
-      <View style={styles.badgeCabinetSection}>
-        <BadgeCabinet isFoundingMember={foundingData?.isFoundingMember ?? false} />
+      {/* Wave 3: MilestoneCabinet renders as MilestoneList */}
+      <View style={styles.milestoneCabinetSection}>
+        <MilestoneCabinet isFoundingMember={foundingData?.isFoundingMember ?? false} />
       </View>
 
       <HapticPressable intent="warning" style={styles.signOutButton} onPress={handleSignOut}>
@@ -298,7 +298,7 @@ const styles = StyleSheet.create({
     color: colors.ink,
     fontWeight: '500' as const,
   },
-  badgeCabinetSection: {
+  milestoneCabinetSection: {
     paddingHorizontal: 24,
     marginBottom: 24,
   },

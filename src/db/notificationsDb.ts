@@ -6,7 +6,7 @@ import { generateId } from '../utils/date';
 export interface Notification {
   id: string;
   userId: string;
-  type: 'reminder' | 'achievement' | 'coach' | 'system' | 'streak' | 'tip';
+  type: 'reminder' | 'milestone' | 'coach' | 'system' | 'tip';
   title: string;
   body: string;
   read: boolean;
@@ -128,7 +128,7 @@ export async function seedNotificationsIfNeeded(userId: string): Promise<void> {
       hoursAgo: 5,
     },
     {
-      type: 'achievement' as const,
+      type: 'milestone' as const,
       title: 'Profile Complete',
       body: "Your personalized calorie target and macro split are now active based on your goals and activity level.",
       hoursAgo: 12,
@@ -146,7 +146,7 @@ export async function seedNotificationsIfNeeded(userId: string): Promise<void> {
       hoursAgo: 36,
     },
     {
-      type: 'streak' as const,
+      type: 'reminder' as const,
       title: 'Build the habit.',
       body: 'Log your meals three days in a row. Consistency over three days becomes a habit.',
       hoursAgo: 48,
