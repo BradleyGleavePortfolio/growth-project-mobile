@@ -2,7 +2,7 @@
 // (Recipes, Fasting, Community, Profile). Consolidation addresses iOS HIG 5-tab cap.
 // Every previously-reachable screen remains reachable via this list.
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,8 +13,8 @@ import {
 import HapticPressable from '../../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { Colors, Spacing, Radius } from '../../theme/index';
-
+import { Spacing, Radius } from '../../theme/index';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 type MoreItem = {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
@@ -119,6 +119,8 @@ const MORE_ITEMS: MoreItem[] = [
 ];
 
 export default function MoreScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation<any>();
 
   const handlePress = (item: MoreItem) => {
@@ -149,13 +151,13 @@ export default function MoreScreen() {
             accessibilityHint={item.a11yHint}
           >
             <View style={styles.iconWrap}>
-              <Ionicons name={item.icon} size={22} color={Colors.primary} />
+              <Ionicons name={item.icon} size={22} color={colors.primary} />
             </View>
             <View style={styles.textWrap}>
               <Text style={styles.itemLabel}>{item.label}</Text>
               <Text style={styles.itemDescription}>{item.description}</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
           </HapticPressable>
         ))}
       </ScrollView>
@@ -163,10 +165,11 @@ export default function MoreScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   header: {
     paddingHorizontal: Spacing.lg,
@@ -176,11 +179,11 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '500',
-    color: Colors.dark,
+    color: colors.dark,
   },
   subtitle: {
     fontSize: 14,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 4,
   },
   content: {
@@ -190,18 +193,18 @@ const styles = StyleSheet.create({
   item: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: Radius.md,
     padding: Spacing.md,
     marginBottom: Spacing.sm,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   iconWrap: {
     width: 40,
     height: 40,
     borderRadius: 4, // radius.lg
-    backgroundColor: Colors.primaryPale,
+    backgroundColor: colors.primaryPale,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: Spacing.md,
@@ -212,11 +215,12 @@ const styles = StyleSheet.create({
   itemLabel: {
     fontSize: 16,
     fontWeight: '600',
-    color: Colors.dark,
+    color: colors.dark,
   },
   itemDescription: {
     fontSize: 13,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 2,
   },
-});
+
+  });

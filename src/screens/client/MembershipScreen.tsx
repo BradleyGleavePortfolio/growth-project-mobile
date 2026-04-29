@@ -11,7 +11,7 @@
  * loaded, the screen renders a calm "we couldn't reach the server" state.
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -26,12 +26,14 @@ import { useNavigation } from '@react-navigation/native';
 import HapticPressable from '../../components/HapticPressable';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { aiApi, AIStructuredContext, usersApi } from '../../services/api';
-import { Colors } from '../../constants/colors';
-import { colors, typography } from '../../theme/tokens';
 
+import { colors as colorTokens, typography } from '../../theme/tokens';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 type FoundingInfo = { rank: number; total: number; isFoundingMember: boolean };
 
 export default function MembershipScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation<any>();
   const currentUser = useCurrentUser();
   const [coach, setCoach] = useState<AIStructuredContext['coach'] | null>(null);
@@ -104,7 +106,7 @@ export default function MembershipScreen() {
           accessibilityLabel="Back"
           style={styles.backBtn}
         >
-          <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </HapticPressable>
         <Text style={styles.headerTitle} accessibilityRole="header">
           Membership
@@ -118,7 +120,7 @@ export default function MembershipScreen() {
       >
         {loading ? (
           <View style={styles.loadingWrap}>
-            <ActivityIndicator color={Colors.primary} />
+            <ActivityIndicator color={colors.primary} />
           </View>
         ) : (
           <>
@@ -137,7 +139,7 @@ export default function MembershipScreen() {
               </Text>
               {founding?.isFoundingMember && founding.rank > 0 ? (
                 <View style={styles.foundingRow}>
-                  <Ionicons name="bookmark" size={14} color={Colors.warning} />
+                  <Ionicons name="bookmark" size={14} color={colors.warning} />
                   <Text style={styles.foundingText}>
                     Founding member · No. {founding.rank} of {founding.total}
                   </Text>
@@ -212,6 +214,8 @@ export default function MembershipScreen() {
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   return (
     <View style={styles.detailRow}>
       <Text style={styles.detailLabel}>{label}</Text>
@@ -222,8 +226,9 @@ function DetailRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -235,32 +240,32 @@ const styles = StyleSheet.create({
   backBtn: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center' },
   headerTitle: {
     ...typography.h3,
-    color: colors.ink,
+    color: colorTokens.ink,
   },
   content: { padding: 24, paddingBottom: 64, gap: 24 },
   loadingWrap: { paddingVertical: 80, alignItems: 'center' },
   card: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4,
     padding: 24,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
-  eyebrow: { ...typography.eyebrow, color: colors.stone, marginBottom: 8 },
-  statusValue: { ...typography.h2, color: colors.ink, marginBottom: 6 },
-  statusSub: { ...typography.bodySmall, color: colors.charcoal },
+  eyebrow: { ...typography.eyebrow, color: colorTokens.stone, marginBottom: 8 },
+  statusValue: { ...typography.h2, color: colorTokens.ink, marginBottom: 6 },
+  statusSub: { ...typography.bodySmall, color: colorTokens.charcoal },
   foundingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     marginTop: 12,
   },
-  foundingText: { ...typography.caption, color: Colors.warning },
+  foundingText: { ...typography.caption, color: colors.warning },
   detailGroup: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   detailRow: {
     flexDirection: 'row',
@@ -269,35 +274,36 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.divider,
+    borderBottomColor: colors.divider,
   },
-  detailLabel: { ...typography.eyebrow, color: colors.stone },
+  detailLabel: { ...typography.eyebrow, color: colorTokens.stone },
   detailValue: {
     ...typography.bodySmall,
-    color: colors.ink,
+    color: colorTokens.ink,
     maxWidth: '60%',
     textAlign: 'right',
   },
   explainBlock: { gap: 8 },
-  explainTitle: { ...typography.h3, color: colors.ink },
-  explainBody: { ...typography.body, color: colors.charcoal },
+  explainTitle: { ...typography.h3, color: colorTokens.ink },
+  explainBody: { ...typography.body, color: colorTokens.charcoal },
   notice: {
     backgroundColor: 'rgba(176,141,87,0.08)',
     borderLeftWidth: 2,
-    borderLeftColor: colors.camel,
+    borderLeftColor: colorTokens.camel,
     padding: 16,
     borderRadius: 2,
   },
-  noticeText: { ...typography.bodySmall, color: colors.charcoal },
+  noticeText: { ...typography.bodySmall, color: colorTokens.charcoal },
   primaryAction: {
-    backgroundColor: colors.ink,
+    backgroundColor: colorTokens.ink,
     paddingVertical: 18,
     alignItems: 'center',
   },
-  primaryActionLabel: { ...typography.eyebrow, color: colors.bone },
+  primaryActionLabel: { ...typography.eyebrow, color: colorTokens.bone },
   secondaryAction: {
     paddingVertical: 14,
     alignItems: 'center',
   },
-  secondaryActionLabel: { ...typography.bodySmall, color: colors.charcoal },
-});
+  secondaryActionLabel: { ...typography.bodySmall, color: colorTokens.charcoal },
+
+  });

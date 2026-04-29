@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,8 +10,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
-import { Colors } from '../../constants/colors';
+
 import { lessonsApi } from '../../services/api';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import {
   Lesson,
   LessonProgress,
@@ -28,18 +29,23 @@ const CATEGORY_ICONS: Record<string, string> = {
   Lifestyle: 'heart',
 };
 
-const CATEGORY_COLORS: Record<string, string> = {
-  'Nutrition Basics': Colors.primary,
-  'Muscle Building': Colors.info,
-  Fitness: Colors.warning,
-  Lifestyle: Colors.streak,
+function makeCATEGORY_COLORS(colors: ThemeColors): Record<string, string> {
+  return {
+  'Nutrition Basics': colors.primary,
+  'Muscle Building': colors.info,
+  Fitness: colors.warning,
+  Lifestyle: colors.streak,
 };
+}
 
 interface LessonWithProgress extends Lesson {
   completed: boolean;
 }
 
 export default function EducationScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const CATEGORY_COLORS = useMemo(() => makeCATEGORY_COLORS(colors), [colors]);
   const currentUser = useCurrentUser();
   const [mode, setMode] = useState<ScreenMode>('list');
   const [lessons, setLessons] = useState<LessonWithProgress[]>([]);
@@ -157,7 +163,7 @@ export default function EducationScreen() {
       <View style={styles.container}>
         <View style={styles.detailHeader}>
           <TouchableOpacity onPress={goBack} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
           <View style={styles.detailHeaderCenter}>
             <Text style={styles.detailCategory}>{selectedLesson.category}</Text>
@@ -165,7 +171,7 @@ export default function EducationScreen() {
           </View>
           {selectedLesson.completed ? (
             <View style={styles.completedBadge}>
-              <Ionicons name="checkmark-circle" size={24} color={Colors.primary} />
+              <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
             </View>
           ) : (
             <View style={{ width: 24 }} />
@@ -229,14 +235,14 @@ export default function EducationScreen() {
 
           {!selectedLesson.completed && (
             <TouchableOpacity style={styles.completeBtn} onPress={handleComplete}>
-              <Ionicons name="checkmark-circle" size={20} color={Colors.textOnPrimary} />
+              <Ionicons name="checkmark-circle" size={20} color={colors.textOnPrimary} />
               <Text style={styles.completeBtnText}>Mark as Complete</Text>
             </TouchableOpacity>
           )}
 
           {selectedLesson.completed && (
             <View style={styles.completedCard}>
-              <Ionicons name="checkmark-circle" size={24} color={Colors.primary} />
+              <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
               <Text style={styles.completedCardText}>Complete.</Text>
             </View>
           )}
@@ -294,7 +300,7 @@ export default function EducationScreen() {
             <Ionicons
               name={(CATEGORY_ICONS[cat] || 'book') as any}
               size={14}
-              color={filterCategory === cat ? Colors.textOnPrimary : CATEGORY_COLORS[cat] || Colors.textSecondary}
+              color={filterCategory === cat ? colors.textOnPrimary : CATEGORY_COLORS[cat] || colors.textSecondary}
             />
             <Text
               style={[
@@ -316,7 +322,7 @@ export default function EducationScreen() {
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Ionicons name="book-outline" size={40} color={Colors.textMuted} />
+            <Ionicons name="book-outline" size={40} color={colors.textMuted} />
             <Text style={styles.emptyTitle}>No lessons yet</Text>
             <Text style={styles.emptyText}>
               Your coach hasn't published any lessons. When they do, you'll see them here.
@@ -327,12 +333,12 @@ export default function EducationScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={Colors.primary}
-            colors={[Colors.primary]}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
           />
         }
         renderItem={({ item, index }) => {
-          const catColor = CATEGORY_COLORS[item.category] || Colors.primary;
+          const catColor = CATEGORY_COLORS[item.category] || colors.primary;
           return (
             <TouchableOpacity
               style={styles.lessonCard}
@@ -360,9 +366,9 @@ export default function EducationScreen() {
                 </View>
               </View>
               {item.completed ? (
-                <Ionicons name="checkmark-circle" size={24} color={Colors.primary} />
+                <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
               ) : (
-                <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+                <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
               )}
             </TouchableOpacity>
           );
@@ -372,8 +378,9 @@ export default function EducationScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   // ── Header ──
   header: { paddingHorizontal: 24, paddingTop: 60, marginBottom: 16 },
   title: {
@@ -382,7 +389,7 @@ const styles = StyleSheet.create({
     lineHeight: 35,
     letterSpacing: 0.6,
     fontWeight: '400',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   subtitle: {
     fontFamily: 'Inter_500Medium',
@@ -391,18 +398,18 @@ const styles = StyleSheet.create({
     letterSpacing: 1.98,
     fontWeight: '500',
     textTransform: 'uppercase',
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 8,
   },
   // ── Progress Card ──
   progressCard: {
     marginHorizontal: 24,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   progressInfo: {
     flexDirection: 'row',
@@ -416,47 +423,47 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     letterSpacing: 0.4,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
-  progressCount: { fontFamily: 'Inter_400Regular', fontSize: 13, color: Colors.textSecondary },
+  progressCount: { fontFamily: 'Inter_400Regular', fontSize: 13, color: colors.textSecondary },
   progressBarContainer: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   progressBarBg: {
     flex: 1,
     height: 8,
-    backgroundColor: Colors.primaryPale,
+    backgroundColor: colors.primaryPale,
     borderRadius: 4,
     overflow: 'hidden',
   },
-  progressBarFill: { height: '100%', backgroundColor: Colors.primary, borderRadius: 4 },
-  progressPercent: { fontFamily: 'Inter_500Medium', fontSize: 13, fontWeight: '500', color: Colors.primary, minWidth: 36 },
+  progressBarFill: { height: '100%', backgroundColor: colors.primary, borderRadius: 4 },
+  progressPercent: { fontFamily: 'Inter_500Medium', fontSize: 13, fontWeight: '500', color: colors.primary, minWidth: 36 },
   // ── Category Filters ──
   categoryRow: { paddingHorizontal: 24, gap: 8, marginBottom: 12 },
   categoryChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
-  categoryChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  categoryChipText: { fontFamily: 'Inter_500Medium', fontSize: 12, fontWeight: '500', letterSpacing: 0.4, color: Colors.textSecondary },
-  categoryChipTextActive: { color: Colors.textOnPrimary },
+  categoryChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  categoryChipText: { fontFamily: 'Inter_500Medium', fontSize: 12, fontWeight: '500', letterSpacing: 0.4, color: colors.textSecondary },
+  categoryChipTextActive: { color: colors.textOnPrimary },
   // ── Lesson Cards ──
   listContent: { paddingHorizontal: 24, paddingBottom: 100 },
   lessonCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     padding: 14,
     marginBottom: 10,
     gap: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   lessonNumber: {
     width: 40,
@@ -479,14 +486,14 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     letterSpacing: 0.4,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
-  lessonSubtitle: { fontFamily: 'Inter_400Regular', fontSize: 12, color: Colors.textSecondary },
+  lessonSubtitle: { fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textSecondary },
   lessonMeta: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
   lessonCategoryTag: { borderRadius: 0, paddingHorizontal: 8, paddingVertical: 2 },
   lessonCategoryText: { fontFamily: 'Inter_500Medium', fontSize: 10, fontWeight: '500', letterSpacing: 1.5, textTransform: 'uppercase' },
   featuredTag: {
-    backgroundColor: Colors.primaryPale,
+    backgroundColor: colors.primaryPale,
     borderRadius: 4, // radius.lg
     paddingHorizontal: 6,
     paddingVertical: 2,
@@ -497,9 +504,9 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: 1.5,
     textTransform: 'uppercase',
-    color: Colors.primary,
+    color: colors.primary,
   },
-  lessonDuration: { fontFamily: 'Inter_400Regular', fontSize: 11, color: Colors.textMuted },
+  lessonDuration: { fontFamily: 'Inter_400Regular', fontSize: 11, color: colors.textMuted },
   // ── Detail View ──
   detailHeader: {
     flexDirection: 'row',
@@ -508,9 +515,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 56,
     paddingBottom: 12,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   detailHeaderCenter: { alignItems: 'center' },
   detailCategory: {
@@ -519,9 +526,9 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: 1.98,
     textTransform: 'uppercase',
-    color: Colors.primary,
+    color: colors.primary,
   },
-  detailDuration: { fontFamily: 'Inter_400Regular', fontSize: 12, color: Colors.textMuted, marginTop: 4 },
+  detailDuration: { fontFamily: 'Inter_400Regular', fontSize: 12, color: colors.textMuted, marginTop: 4 },
   completedBadge: {},
   detailScroll: { flex: 1 },
   detailContent: { padding: 24 },
@@ -531,13 +538,13 @@ const styles = StyleSheet.create({
     lineHeight: 35,
     letterSpacing: 0.6,
     fontWeight: '400',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginBottom: 6,
   },
-  detailSubtitle: { fontFamily: 'Inter_400Regular', fontSize: 15, color: Colors.textSecondary, marginBottom: 8, lineHeight: 22 },
+  detailSubtitle: { fontFamily: 'Inter_400Regular', fontSize: 15, color: colors.textSecondary, marginBottom: 8, lineHeight: 22 },
   detailDivider: {
     height: 1,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
     marginVertical: 16,
   },
   detailHeading: {
@@ -546,14 +553,14 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     letterSpacing: 0.4,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginTop: 16,
     marginBottom: 8,
   },
   detailParagraph: {
     fontFamily: 'Inter_400Regular',
     fontSize: 15,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     lineHeight: 24,
     marginBottom: 8,
   },
@@ -561,17 +568,17 @@ const styles = StyleSheet.create({
   bulletRow: { flexDirection: 'row', paddingLeft: 4, marginBottom: 6, paddingRight: 16 },
   bulletDot: {
     fontSize: 15,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     width: 20,
     lineHeight: 23,
   },
-  bulletText: { flex: 1, fontSize: 15, color: Colors.textPrimary, lineHeight: 23 },
+  bulletText: { flex: 1, fontSize: 15, color: colors.textPrimary, lineHeight: 23 },
   completeBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     borderRadius: 4, // radius.lg
     paddingVertical: 16,
     marginTop: 24,
@@ -582,14 +589,14 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: 1.2,
     textTransform: 'uppercase',
-    color: Colors.textOnPrimary,
+    color: colors.textOnPrimary,
   },
   completedCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: Colors.primaryPale,
+    backgroundColor: colors.primaryPale,
     borderRadius: 4, // radius.lg
     paddingVertical: 16,
     marginTop: 24,
@@ -600,7 +607,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     letterSpacing: 1.2,
     textTransform: 'uppercase',
-    color: Colors.primary,
+    color: colors.primary,
   },
   emptyContainer: {
     alignItems: 'center',
@@ -614,13 +621,14 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     letterSpacing: 0.4,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   emptyText: {
     fontFamily: 'Inter_400Regular',
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 19,
   },
-});
+
+  });
