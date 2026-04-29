@@ -3,7 +3,7 @@
  * Q1: Primary goal — lose weight / build muscle / maintain
  */
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,11 +13,12 @@ import {
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LeanOnboardingParamList } from '../../navigation/LeanOnboardingNavigator';
-import { Colors } from '../../constants/colors';
+
 import { saveOnboardingData } from '../../utils/onboardingStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { track } from '../../lib/analytics';
 import { authEvents } from '../../utils/authEvents';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 type Props = {
   navigation: NativeStackNavigationProp<LeanOnboardingParamList, 'LeanQ1'>;
@@ -32,6 +33,8 @@ const GOALS: { key: Goal; label: string; sub: string }[] = [
 ];
 
 export default function LeanQ1GoalScreen({ navigation }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [selected, setSelected] = useState<Goal | null>(null);
 
   // Psych Report #4: Analytics — onboarding_started fires on mount of Q1
@@ -101,10 +104,11 @@ export default function LeanQ1GoalScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   inner: {
     flex: 1,
@@ -124,10 +128,10 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
   },
   dotActive: {
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     width: 24,
   },
   headline: {
@@ -136,13 +140,13 @@ const styles = StyleSheet.create({
     lineHeight: 35,
     letterSpacing: 0.6,
     fontWeight: '400',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginBottom: 8,
   },
   subtext: {
     fontFamily: 'Inter_400Regular',
     fontSize: 15,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     lineHeight: 22,
   },
   options: {
@@ -152,15 +156,15 @@ const styles = StyleSheet.create({
   option: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     borderRadius: 4, // radius.lg
     paddingVertical: 22,
     paddingHorizontal: 22,
   },
   optionSelected: {
-    borderColor: Colors.primary,
+    borderColor: colors.primary,
     borderWidth: 1.5,
     backgroundColor: 'rgba(44, 74, 54, 0.04)',
   },
@@ -173,15 +177,15 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '500',
     letterSpacing: 0.4,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   optionLabelSelected: {
-    color: Colors.primary,
+    color: colors.primary,
   },
   optionSub: {
     fontFamily: 'Inter_400Regular',
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     lineHeight: 19,
   },
   skipBtn: {
@@ -193,7 +197,8 @@ const styles = StyleSheet.create({
   skipText: {
     fontFamily: 'Inter_400Regular',
     fontSize: 13,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     letterSpacing: 0.3,
   },
-});
+
+  });

@@ -27,11 +27,12 @@ import {
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as Localization from 'expo-localization';
 import { LeanOnboardingParamList } from '../../navigation/LeanOnboardingNavigator';
-import { Colors } from '../../constants/colors';
+
 import { saveOnboardingData } from '../../utils/onboardingStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { track } from '../../lib/analytics';
 import { authEvents } from '../../utils/authEvents';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 type Props = {
   navigation: NativeStackNavigationProp<LeanOnboardingParamList, 'LeanQ4'>;
@@ -59,6 +60,8 @@ function lbsToKg(lbs: number): number {
 }
 
 export default function LeanQ4MetricsScreen({ navigation }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [units, setUnits] = useState<'imperial' | 'metric'>(defaultUnits());
   const [heightFt, setHeightFt] = useState('');
   const [heightIn, setHeightIn] = useState('');
@@ -193,7 +196,7 @@ export default function LeanQ4MetricsScreen({ navigation }: Props) {
                   value={heightFt}
                   onChangeText={setHeightFt}
                   placeholder="ft"
-                  placeholderTextColor={Colors.textMuted}
+                  placeholderTextColor={colors.textMuted}
                   keyboardType="number-pad"
                   maxLength={1}
                   accessibilityLabel="Height in feet"
@@ -203,7 +206,7 @@ export default function LeanQ4MetricsScreen({ navigation }: Props) {
                   value={heightIn}
                   onChangeText={setHeightIn}
                   placeholder="in"
-                  placeholderTextColor={Colors.textMuted}
+                  placeholderTextColor={colors.textMuted}
                   keyboardType="number-pad"
                   maxLength={2}
                   accessibilityLabel="Height in inches"
@@ -215,7 +218,7 @@ export default function LeanQ4MetricsScreen({ navigation }: Props) {
                 value={heightCm}
                 onChangeText={setHeightCm}
                 placeholder="cm"
-                placeholderTextColor={Colors.textMuted}
+                placeholderTextColor={colors.textMuted}
                 keyboardType="number-pad"
                 maxLength={3}
                 accessibilityLabel="Height in centimetres"
@@ -231,7 +234,7 @@ export default function LeanQ4MetricsScreen({ navigation }: Props) {
               value={weight}
               onChangeText={setWeight}
               placeholder={units === 'imperial' ? 'lbs' : 'kg'}
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={colors.textMuted}
               keyboardType="decimal-pad"
               maxLength={5}
               accessibilityLabel={
@@ -282,8 +285,9 @@ export default function LeanQ4MetricsScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
   inner: {
     flexGrow: 1,
     paddingHorizontal: 24,
@@ -292,22 +296,22 @@ const styles = StyleSheet.create({
   },
   header: { marginBottom: 28 },
   stepIndicator: { flexDirection: 'row', gap: 8, marginBottom: 24 },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.border },
-  dotActive: { backgroundColor: Colors.primary, width: 24 },
-  dotComplete: { backgroundColor: Colors.primary },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.border },
+  dotActive: { backgroundColor: colors.primary, width: 24 },
+  dotComplete: { backgroundColor: colors.primary },
   headline: {
     fontFamily: 'CormorantGaramond_400Regular',
     fontSize: 32,
     lineHeight: 35,
     letterSpacing: 0.6,
     fontWeight: '400',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     marginBottom: 8,
   },
   subtext: {
     fontFamily: 'Inter_400Regular',
     fontSize: 15,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     lineHeight: 22,
   },
   unitRow: {
@@ -320,18 +324,18 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
   },
   unitChipActive: {
-    borderColor: Colors.primary,
+    borderColor: colors.primary,
     backgroundColor: 'rgba(44, 74, 54, 0.04)',
   },
   unitChipText: {
     fontFamily: 'Inter_500Medium',
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
   },
-  unitChipTextActive: { color: Colors.primary },
+  unitChipTextActive: { color: colors.primary },
   fieldGroup: { marginBottom: 16 },
   fieldLabel: {
     fontFamily: 'Inter_500Medium',
@@ -340,24 +344,24 @@ const styles = StyleSheet.create({
     letterSpacing: 1.98,
     fontWeight: '500',
     textTransform: 'uppercase',
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginBottom: 8,
   },
   input: {
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     borderRadius: 2,
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 16,
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     fontFamily: 'Inter_400Regular',
   },
   row2: { flexDirection: 'row', gap: 12 },
   inputHalf: { flex: 1 },
   primaryBtn: {
-    backgroundColor: Colors.primary,
+    backgroundColor: colors.primary,
     paddingVertical: 16,
     alignItems: 'center',
     marginTop: 16,
@@ -366,7 +370,7 @@ const styles = StyleSheet.create({
   primaryBtnText: {
     fontFamily: 'Inter_600SemiBold',
     fontSize: 14,
-    color: Colors.textOnPrimary,
+    color: colors.textOnPrimary,
     letterSpacing: 1.2,
     fontWeight: '600',
   },
@@ -381,7 +385,7 @@ const styles = StyleSheet.create({
   backText: {
     fontFamily: 'Inter_500Medium',
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontWeight: '500',
     letterSpacing: 0.3,
   },
@@ -389,7 +393,8 @@ const styles = StyleSheet.create({
   skipText: {
     fontFamily: 'Inter_400Regular',
     fontSize: 13,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     letterSpacing: 0.3,
   },
-});
+
+  });

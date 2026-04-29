@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,9 +14,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachStore } from '../../store/coachStore';
 import { usePostClientGuidelines } from '../../hooks/useApi';
-import { Colors } from '../../constants/colors';
+
 import { Shadow } from '../../constants/theme';
 import FadeInView from '../../components/FadeInView';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 // ── Program Templates ──────────────────────────────────────────────────────
 
@@ -31,7 +32,8 @@ interface ProgramTemplate {
   color: string;
 }
 
-const PROGRAM_TEMPLATES: ProgramTemplate[] = [
+function makePROGRAM_TEMPLATES(colors: ThemeColors): ProgramTemplate[] {
+  return [
   {
     id: 'fat_loss',
     emoji: 'FL',
@@ -42,7 +44,7 @@ const PROGRAM_TEMPLATES: ProgramTemplate[] = [
     trainingNotes:
       '• 4–5x/week resistance training (compound movements first)\n• 2–3x/week LISS cardio (30–45 min, 60–70% max HR)\n• HIIT 1x/week for metabolic stimulus\n• Prioritize progressive overload to preserve muscle\n• Active recovery on rest days (walking, stretching)',
     tags: ['Fat Loss', 'Deficit', 'High Protein', 'Cardio'],
-    color: Colors.templateFatLoss,
+    color: colors.templateFatLoss,
   },
   {
     id: 'lean_bulk',
@@ -54,7 +56,7 @@ const PROGRAM_TEMPLATES: ProgramTemplate[] = [
     trainingNotes:
       '• 4–5x/week heavy compound lifting\n• Progressive overload: add weight or reps weekly\n• Minimal cardio (1–2x/week maintenance cardio)\n• Prioritize recovery: 7–9 hours sleep\n• Deload every 6–8 weeks',
     tags: ['Lean Bulk', 'Surplus', 'Muscle Gain', 'Strength'],
-    color: Colors.templateLeanBulk,
+    color: colors.templateLeanBulk,
   },
   {
     id: 'recomp',
@@ -66,7 +68,7 @@ const PROGRAM_TEMPLATES: ProgramTemplate[] = [
     trainingNotes:
       '• 3–5x/week resistance training\n• 2–3x/week moderate cardio\n• Focus on form and muscle mind-connection\n• Track body composition (measurements + photos) not just weight\n• Allow 3–6 months to see significant changes',
     tags: ['Recomp', 'Maintenance', 'Balanced', 'Body Composition'],
-    color: Colors.templateRecomp,
+    color: colors.templateRecomp,
   },
   {
     id: 'maintenance',
@@ -78,7 +80,7 @@ const PROGRAM_TEMPLATES: ProgramTemplate[] = [
     trainingNotes:
       '• 3–4x/week training (mix of strength and cardio)\n• Maintain current strength levels — no need to push PRs\n• Try new activities to maintain motivation\n• Prioritize health markers: sleep, stress, energy levels\n• Adjust calories seasonally as activity changes',
     tags: ['Maintenance', 'Sustainable', 'Flexible', 'Lifestyle'],
-    color: Colors.templateMaintenance,
+    color: colors.templateMaintenance,
   },
   {
     id: 'mobility',
@@ -90,13 +92,17 @@ const PROGRAM_TEMPLATES: ProgramTemplate[] = [
     trainingNotes:
       '• Daily mobility work: 15–20 min morning routine\n• 2–3x/week yoga or Pilates\n• 2x/week light strength training\n• Daily step goal: 8,000–10,000 steps\n• Cold/heat therapy for recovery\n• Breathwork and stress management practices',
     tags: ['Mobility', 'Wellness', 'Recovery', 'Anti-Inflammatory'],
-    color: Colors.templateMobility,
+    color: colors.templateMobility,
   },
 ];
+}
 
 // ── Component ─────────────────────────────────────────────────────────────
 
 export default function ProgramTemplatesScreen() {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const PROGRAM_TEMPLATES = useMemo(() => makePROGRAM_TEMPLATES(colors), [colors]);
   const currentUser = useCurrentUser();
   const { clients, loadClients } = useCoachStore();
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -180,7 +186,7 @@ export default function ProgramTemplatesScreen() {
                   <Ionicons
                     name={isExpanded ? 'chevron-up' : 'chevron-down'}
                     size={20}
-                    color={Colors.textMuted}
+                    color={colors.textMuted}
                   />
                 </HapticPressable>
 
@@ -191,7 +197,7 @@ export default function ProgramTemplatesScreen() {
 
                     <View style={styles.notesSection}>
                       <View style={styles.notesSectionHeader}>
-                        <Ionicons name="restaurant-outline" size={16} color={Colors.primary} />
+                        <Ionicons name="restaurant-outline" size={16} color={colors.primary} />
                         <Text style={styles.notesSectionTitle}>Nutrition Plan</Text>
                       </View>
                       <Text style={styles.notesText}>{template.nutritionNotes}</Text>
@@ -199,7 +205,7 @@ export default function ProgramTemplatesScreen() {
 
                     <View style={styles.notesSection}>
                       <View style={styles.notesSectionHeader}>
-                        <Ionicons name="barbell-outline" size={16} color={Colors.primary} />
+                        <Ionicons name="barbell-outline" size={16} color={colors.primary} />
                         <Text style={styles.notesSectionTitle}>Training Plan</Text>
                       </View>
                       <Text style={styles.notesText}>{template.trainingNotes}</Text>
@@ -210,7 +216,7 @@ export default function ProgramTemplatesScreen() {
                       style={[styles.applyBtn, { backgroundColor: template.color }]}
                       onPress={() => handleApply(template)}
                     >
-                      <Ionicons name="person-add-outline" size={18} color={Colors.textOnPrimary} />
+                      <Ionicons name="person-add-outline" size={18} color={colors.textOnPrimary} />
                       <Text style={styles.applyBtnText}>Apply to Client →</Text>
                     </HapticPressable>
                   </View>
@@ -224,7 +230,7 @@ export default function ProgramTemplatesScreen() {
       {/* Loading overlay */}
       {loading && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+          <ActivityIndicator size="large" color={colors.primary} />
           <Text style={styles.loadingText}>Applying template...</Text>
         </View>
       )}
@@ -247,14 +253,14 @@ export default function ProgramTemplatesScreen() {
               )}
             </View>
             <HapticPressable intent="light" onPress={() => setClientModalVisible(false)}>
-              <Ionicons name="close" size={24} color={Colors.textPrimary} />
+              <Ionicons name="close" size={24} color={colors.textPrimary} />
             </HapticPressable>
           </View>
 
           <ScrollView contentContainerStyle={styles.clientList}>
             {activeClients.length === 0 ? (
               <View style={styles.emptyClients}>
-                <Ionicons name="people-outline" size={40} color={Colors.textMuted} />
+                <Ionicons name="people-outline" size={40} color={colors.textMuted} />
                 <Text style={styles.emptyText}>No active clients found</Text>
               </View>
             ) : (
@@ -274,7 +280,7 @@ export default function ProgramTemplatesScreen() {
                     <Text style={styles.clientRowName}>{client.firstName} {client.lastName}</Text>
                     <Text style={styles.clientRowEmail}>{client.email}</Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+                  <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
                 </HapticPressable>
               ))
             )}
@@ -285,14 +291,15 @@ export default function ProgramTemplatesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   content: {
     paddingBottom: 40,
@@ -305,26 +312,26 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 26,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
     letterSpacing: -0.5,
   },
   subtitle: {
     fontSize: 14,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginTop: 4,
   },
   templateCard: {
     marginHorizontal: 20,
     marginBottom: 12,
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     overflow: 'hidden',
     ...Shadow.small,
   },
   templateCardExpanded: {
-    borderColor: Colors.primary,
+    borderColor: colors.primary,
     borderWidth: 1.5,
   },
   cardHeader: {
@@ -351,11 +358,11 @@ const styles = StyleSheet.create({
   templateTitle: {
     fontSize: 16,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   templateSubtitle: {
     fontSize: 12,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     lineHeight: 16,
   },
   tagsRow: {
@@ -381,7 +388,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: Colors.border,
+    backgroundColor: colors.border,
     marginBottom: 16,
   },
   notesSection: {
@@ -396,11 +403,11 @@ const styles = StyleSheet.create({
   notesSectionTitle: {
     fontSize: 14,
     fontWeight: '500',
-    color: Colors.primary,
+    color: colors.primary,
   },
   notesText: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     lineHeight: 22,
   },
   applyBtn: {
@@ -413,7 +420,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   applyBtnText: {
-    color: Colors.textOnPrimary,
+    color: colors.textOnPrimary,
     fontSize: 15,
     fontWeight: '500',
     letterSpacing: 0.3,
@@ -427,13 +434,13 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     fontSize: 15,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     fontWeight: '600',
   },
   // Modal
   modalSafe: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: colors.background,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -442,16 +449,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 20,
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: colors.border,
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   modalSubtitle: {
     fontSize: 13,
-    color: Colors.textSecondary,
+    color: colors.textSecondary,
     marginTop: 3,
   },
   clientList: {
@@ -461,24 +468,24 @@ const styles = StyleSheet.create({
   clientRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    backgroundColor: colors.surface,
     borderRadius: 4, // radius.lg
     padding: 14,
     gap: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: colors.border,
     ...Shadow.small,
   },
   clientAvatar: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: Colors.primaryDark,
+    backgroundColor: colors.primaryDark,
     justifyContent: 'center',
     alignItems: 'center',
   },
   clientAvatarText: {
-    color: Colors.textOnPrimary,
+    color: colors.textOnPrimary,
     fontSize: 15,
     fontWeight: '500',
   },
@@ -488,11 +495,11 @@ const styles = StyleSheet.create({
   clientRowName: {
     fontSize: 15,
     fontWeight: '500',
-    color: Colors.textPrimary,
+    color: colors.textPrimary,
   },
   clientRowEmail: {
     fontSize: 12,
-    color: Colors.textMuted,
+    color: colors.textMuted,
     marginTop: 2,
   },
   emptyClients: {
@@ -502,6 +509,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
-    color: Colors.textMuted,
+    color: colors.textMuted,
   },
-});
+
+  });
