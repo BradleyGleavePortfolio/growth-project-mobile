@@ -221,10 +221,7 @@ export default function FastingScreen() {
       <View style={styles.header}>
         <Text style={styles.title}>Fasting</Text>
         {streak > 0 && (
-          <View style={styles.streakBadge}>
-            <Ionicons name="flame" size={14} color={Colors.warning} />
-            <Text style={styles.streakText}>{streak} streak</Text>
-          </View>
+          <Text style={styles.runText}>Day {streak}</Text>
         )}
       </View>
 
@@ -420,19 +417,11 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: Colors.textPrimary,
   },
-  streakBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: Colors.surface,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 4, // radius.lg
-  },
-  streakText: {
+  runText: {
     fontSize: 13,
-    fontWeight: '500',
-    color: Colors.warning,
+    fontWeight: '400',
+    color: Colors.textSecondary,
+    letterSpacing: 0.4,
   },
   protocolRow: {
     flexDirection: 'row',

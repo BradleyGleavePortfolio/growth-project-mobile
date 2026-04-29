@@ -303,7 +303,6 @@ export const habitsApi = {
   delete: (id: string) => api.delete(`/habits/${id}`),
   getLogs: (date: string) =>
     api.get(`/habits/logs?date=${date}`),
-  getStreaks: () => api.get('/habits/streaks'),
 };
 
 export const coachApi = {
@@ -406,14 +405,11 @@ export const notificationsApi = {
 };
 
 export const communityApi = {
-  getLeaderboard: (period: 'week' | 'month' = 'week') =>
-    api.get(`/community/leaderboard?period=${period}`),
   getFeed: () => api.get('/community/feed'),
   postWin: (data: { title: string; description: string; visibility?: 'circle' | 'public' }) =>
     api.post('/community/wins', data),
   reactToWin: (winId: string, kind: 'fire' | 'clap') =>
     api.post(`/community/wins/${winId}/react`, { kind }),
-  getBadges: () => api.get('/users/me/badges'),
 };
 
 export const waterApi = {

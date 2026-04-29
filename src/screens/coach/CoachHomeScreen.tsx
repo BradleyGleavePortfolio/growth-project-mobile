@@ -160,7 +160,7 @@ export default function CoachHomeScreen() {
           </View>
           <View style={styles.metricCard}>
             <View style={[styles.metricIcon, { backgroundColor: Colors.noticeWarningIconBg }]}>
-              <Ionicons name="flame" size={22} color={Colors.fat} />
+              <Ionicons name="restaurant-outline" size={22} color={Colors.fat} />
             </View>
             {dashboardLoading ? (
                 <View style={{ width: 60, height: 28, backgroundColor: Colors.surface, borderRadius: 4, opacity: 0.4 }} />

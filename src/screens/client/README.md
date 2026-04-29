@@ -118,7 +118,8 @@ npm run typecheck
 
 ## Removed surfaces
 
-- `CommunityFeedScreen` is gone. It was an orphan — `CommunityScreen` already covers Wins + Leaderboard from inside the More stack — and the duplicate route was never reachable from a fresh signup. Do not reintroduce it; if a future feed needs to ship, extend `CommunityScreen`.
+- `CommunityFeedScreen` is gone. It was an orphan — `CommunityScreen` covers Wins from inside the More stack — and the duplicate route was never reachable from a fresh signup. Do not reintroduce it; if a future feed needs to ship, extend `CommunityScreen`.
+- The ranked `Leaderboard` tab inside `CommunityScreen` was excised in the streak/badge/trophy doctrine sweep. Ranked competition is incompatible with the quiet-luxury voice; the Wins feed is the only social surface.
 - `TrophyShareScreen`, the `FirstWinCelebration` overlay, and the `IdentityBadge` / `TrophyArtifact` components were deleted in the wave-5b cleanup (#63). They are not registered as screens, not imported anywhere, and are explicitly forbidden by the doctrine test (`src/__tests__/quietLuxuryDoctrine.test.ts`).
 - The `FloatingChatWidget` and the `RootNavigator.hideWidget` predicate it lived behind are gone. The dedicated AI surface is `AIGuideScreen`, reached from the **Guidance** row on `MoreScreen`.
 

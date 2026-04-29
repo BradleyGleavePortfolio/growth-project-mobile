@@ -2,7 +2,7 @@
  * HabitsScreen — API-first via React Query (Fix #2).
  *
  * Reads come exclusively from the backend through useHabits / useHabitLogs /
- * useHabitStreaks / useTodayCheckIn. Writes use useLogHabit / useCreateHabit /
+ * useTodayCheckIn. Writes use useLogHabit / useCreateHabit /
  * useSaveCheckIn mutations, which auto-invalidate the relevant query keys.
  *
  * The local-SQLite functions (getDailyCheckIn / saveDailyCheckIn / seedHabits)
@@ -28,7 +28,6 @@ import { getTodayString } from '../../utils/date';
 import {
   useHabits,
   useHabitLogs,
-  useHabitStreaks,
   useLogHabit,
   useCreateHabit,
   useDeleteHabit,
@@ -45,7 +44,7 @@ interface HabitView {
   targetCount: number;
   unit: string;
   log: { completed: boolean; count: number } | null;
-  streak: number;
+  runDays: number;
   weekDots: boolean[];
 }
 
@@ -98,7 +97,6 @@ export default function HabitsScreen() {
   // Server reads (React Query)
   const habitsQ = useHabits();
   const logsQ = useHabitLogs(today);
-  const streaksQ = useHabitStreaks();
   const todayCheckInQ = useTodayCheckIn(today);
 
   // Server writes
@@ -151,26 +149,19 @@ export default function HabitsScreen() {
       { completed: l.completed ?? false, count: l.count || 0 },
     ]),
   );
-  const streaksMap = new Map<string, number>(
-    (streaksQ.data || []).map((s: any) => [
-      s.habit_id || s.habitId,
-      s.current_streak ?? s.streak ?? 0,
-    ]),
-  );
   const habits: HabitView[] = allHabits.map((h) => ({
     ...h,
     log: logsMap.get(h.id) || null,
-    streak: streaksMap.get(h.id) || 0,
+    runDays: 0,
     weekDots: [false, false, false, false, false, false, false],
   }));
 
   const refreshing =
-    habitsQ.isRefetching || logsQ.isRefetching || streaksQ.isRefetching || todayCheckInQ.isRefetching;
+    habitsQ.isRefetching || logsQ.isRefetching || todayCheckInQ.isRefetching;
 
   const onRefresh = () => {
     habitsQ.refetch();
     logsQ.refetch();
-    streaksQ.refetch();
     todayCheckInQ.refetch();
   };
 
@@ -364,11 +355,8 @@ export default function HabitsScreen() {
                       {habit.name}
                     </Text>
                     <View style={styles.habitMeta}>
-                      {habit.streak > 0 && (
-                        <View style={styles.streakBadge}>
-                          <Ionicons name="flame" size={12} color={Colors.streak} />
-                          <Text style={styles.streakText}>{habit.streak}d</Text>
-                        </View>
+                      {habit.runDays > 0 && (
+                        <Text style={styles.runText}>· {habit.runDays}d</Text>
                       )}
                       <Text style={styles.habitTarget}>
                         {habit.targetCount > 1
@@ -790,8 +778,7 @@ const styles = StyleSheet.create({
   habitName: { fontFamily: 'Inter_500Medium', fontSize: 15, fontWeight: '500', color: Colors.textPrimary },
   habitNameDone: { textDecorationLine: 'line-through', color: Colors.textMuted },
   habitMeta: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  streakBadge: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  streakText: { fontFamily: 'Inter_500Medium', fontSize: 12, fontWeight: '500', color: Colors.streak },
+  runText: { fontFamily: 'Inter_400Regular', fontSize: 12, color: Colors.textMuted },
   habitTarget: { fontFamily: 'Inter_400Regular', fontSize: 12, color: Colors.textMuted },
   weekDots: { flexDirection: 'row', gap: 6, marginTop: 4 },
   weekDotCol: { alignItems: 'center', gap: 2 },

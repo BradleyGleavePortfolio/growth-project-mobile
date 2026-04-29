@@ -100,8 +100,8 @@ export const colors = {
     fat:     CanonicalColors.fat,
     water:   CanonicalColors.water,
     fiber:   CanonicalColors.fiber,
-    streak:  '#B1A89F',  // stone — neutralised from orange
-    habit:   '#7A6A9B',  // muted lavender
+    consistency: '#B1A89F',  // stone — neutral consecutive-day accent
+    habit:       '#7A6A9B',  // muted lavender
   },
   shadow:      CanonicalColors.cardShadow,
   transparent: 'transparent',

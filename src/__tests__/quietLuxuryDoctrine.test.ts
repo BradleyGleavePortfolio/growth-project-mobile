@@ -95,6 +95,57 @@ describe('Quiet-luxury doctrine (docs/QUIET_LUXURY_DOCTRINE.md)', () => {
     expect(offenders).toEqual([]);
   });
 
+  it('does not use Ionicons name="flame" anywhere in shipped surface', () => {
+    const offenders: string[] = [];
+    const re = /Ionicons[\s\S]*?name\s*=\s*["'`]flame(?:-[a-z]+)?["'`]/;
+    const reInline = /name\s*=\s*["'`]flame(?:-[a-z]+)?["'`]/;
+    for (const file of FILES) {
+      const src = stripComments(fs.readFileSync(file, 'utf8'));
+      if (re.test(src) || reInline.test(src)) offenders.push(path.relative(ROOT, file));
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('does not use Ionicons name="trophy" anywhere in shipped surface', () => {
+    const offenders: string[] = [];
+    const re = /name\s*=\s*["'`]trophy(?:-[a-z]+)?["'`]/;
+    for (const file of FILES) {
+      const src = stripComments(fs.readFileSync(file, 'utf8'));
+      if (re.test(src)) offenders.push(path.relative(ROOT, file));
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('does not reference the legacy BadgeCabinet identifier', () => {
+    const offenders: string[] = [];
+    const re = /BadgeCabinet/;
+    for (const file of FILES) {
+      const src = stripComments(fs.readFileSync(file, 'utf8'));
+      if (re.test(src)) offenders.push(path.relative(ROOT, file));
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("does not include 'streak' as a discriminated-union member in db/notificationsDb.ts", () => {
+    const file = path.join(ROOT, 'db', 'notificationsDb.ts');
+    const src = stripComments(fs.readFileSync(file, 'utf8'));
+    // The forbidden form is the literal string 'streak' inside a union: e.g. | 'streak'
+    const re = /['"]streak['"]/;
+    expect(re.test(src)).toBe(false);
+  });
+
+  it('does not reference Leaderboard in shipped screens', () => {
+    const offenders: string[] = [];
+    const re = /Leaderboard/;
+    for (const file of FILES) {
+      // The doctrine test file itself is allowed to reference the term.
+      if (file === __filename) continue;
+      const src = stripComments(fs.readFileSync(file, 'utf8'));
+      if (re.test(src)) offenders.push(path.relative(ROOT, file));
+    }
+    expect(offenders).toEqual([]);
+  });
+
   it('does not embed pictograph emoji in source', () => {
     const offenders: string[] = [];
     // Pictograph ranges only — bare typographic marks like ✓ (U+2713) and

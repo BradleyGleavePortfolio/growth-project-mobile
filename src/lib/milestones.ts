@@ -6,7 +6,7 @@
  *
  * Usage:
  *   import { resolveNextMilestones } from '../lib/milestones';
- *   const milestones = resolveNextMilestones({ workoutCount: 12, streakDays: 5, identityTitle: 'Iron Apprentice' });
+ *   const milestones = resolveNextMilestones({ workoutCount: 12, consecutiveDays: 5, identityTitle: 'New Member' });
  */
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -14,8 +14,8 @@
 export interface MilestoneInput {
   /** Total lifetime workouts logged */
   workoutCount: number;
-  /** Current daily streak in days */
-  streakDays: number;
+  /** Number of consecutive days the user has logged a session */
+  consecutiveDays: number;
   /** Resolved identity label from identityTitle resolver */
   identityTitle: string;
   /** True when user is a founding member */
@@ -34,86 +34,89 @@ export interface Milestone {
   /** Short reward description shown below the bar */
   unlockReward: string;
   /** Milestone category for grouping */
-  category: 'streak' | 'workouts' | 'identity';
+  category: 'consistency' | 'workouts' | 'identity';
 }
 
 // ─── Milestone definitions ────────────────────────────────────────────────────
 // Ordered by ascending threshold within each category so the first unmet
 // milestone can be found with a simple find().
+//
+// Labels are declarative noun phrases — what the user has done, stated
+// plainly. No earned-status titles; the voice is a quarterly check-in note.
 
 interface MilestoneDef {
   slug: string;
   label: string;
   threshold: number;
   unlockReward: string;
-  category: 'streak' | 'workouts' | 'identity';
+  category: 'consistency' | 'workouts' | 'identity';
 }
 
-const STREAK_MILESTONES: MilestoneDef[] = [
+const CONSISTENCY_MILESTONES: MilestoneDef[] = [
   {
-    slug:          'streak-3',
-    label:         '3-Day Streak',
+    slug:          'consistency-3',
+    label:         'Three Consecutive Days',
     threshold:     3,
-    unlockReward:  '"Habit Seed" — day three.',
-    category:      'streak',
+    unlockReward:  'Three consecutive days.',
+    category:      'consistency',
   },
   {
-    slug:          'streak-7',
-    label:         'Consistency Builder',
+    slug:          'consistency-7',
+    label:         'One Week Sustained',
     threshold:     7,
-    unlockReward:  'Consistency Builder — seven days.',
-    category:      'streak',
+    unlockReward:  'Seven consecutive days.',
+    category:      'consistency',
   },
   {
-    slug:          'streak-14',
-    label:         '2-Week Streak',
+    slug:          'consistency-14',
+    label:         'Two Weeks Sustained',
     threshold:     14,
-    unlockReward:  '"Fortnight Fighter" — two weeks.',
-    category:      'streak',
+    unlockReward:  'Fourteen consecutive days.',
+    category:      'consistency',
   },
   {
-    slug:          'streak-30',
-    label:         '30-Day Streak',
+    slug:          'consistency-30',
+    label:         'Thirty Days Sustained',
     threshold:     30,
-    unlockReward:  '"Iron Discipline" — thirty days.',
-    category:      'streak',
+    unlockReward:  'Thirty consecutive days.',
+    category:      'consistency',
   },
 ];
 
 const WORKOUT_MILESTONES: MilestoneDef[] = [
   {
     slug:          'workouts-10',
-    label:         'Rising Athlete',
+    label:         'Ten Sessions Logged',
     threshold:     10,
-    unlockReward:  '"Rising Athlete" — ten sessions.',
+    unlockReward:  'Ten sessions logged.',
     category:      'workouts',
   },
   {
     slug:          'workouts-30',
-    label:         'Iron Veteran',
+    label:         'Thirty Sessions Logged',
     threshold:     30,
-    unlockReward:  '"Iron Veteran" — thirty sessions.',
+    unlockReward:  'Thirty sessions logged.',
     category:      'workouts',
   },
   {
     slug:          'workouts-50',
-    label:         'Proven Grinder',
+    label:         'Fifty Sessions Logged',
     threshold:     50,
-    unlockReward:  '"Proven Grinder" — fifty sessions.',
+    unlockReward:  'Fifty sessions logged.',
     category:      'workouts',
   },
   {
     slug:          'workouts-90',
-    label:         'Forge Forged',
+    label:         'Ninety Sessions Logged',
     threshold:     90,
-    unlockReward:  '"Forge Forged" — ninety sessions.',
+    unlockReward:  'Ninety sessions logged.',
     category:      'workouts',
   },
   {
     slug:          'workouts-150',
-    label:         'Iron Legend',
+    label:         'One Hundred Fifty Sessions Logged',
     threshold:     150,
-    unlockReward:  '"Iron Legend" — one hundred fifty sessions.',
+    unlockReward:  'One hundred fifty sessions logged.',
     category:      'workouts',
   },
 ];
@@ -121,26 +124,26 @@ const WORKOUT_MILESTONES: MilestoneDef[] = [
 // ─── Resolver ─────────────────────────────────────────────────────────────────
 
 /**
- * Returns the next 3 milestones the user is working toward, across streak and
- * workout categories. Already-completed milestones are excluded.
+ * Returns the next 3 milestones the user is working toward, across consistency
+ * and workout categories. Already-completed milestones are excluded.
  *
  * Each result has `currentValue` clamped to `targetValue` for display purposes.
  */
 export function resolveNextMilestones(input: MilestoneInput): Milestone[] {
-  const { workoutCount, streakDays } = input;
+  const { workoutCount, consecutiveDays } = input;
 
   const milestones: Milestone[] = [];
 
-  // ── Next streak milestone ──────────────────────────────────────────────────
-  const nextStreak = STREAK_MILESTONES.find((m) => streakDays < m.threshold);
-  if (nextStreak) {
+  // ── Next consistency milestone ─────────────────────────────────────────────
+  const nextConsistency = CONSISTENCY_MILESTONES.find((m) => consecutiveDays < m.threshold);
+  if (nextConsistency) {
     milestones.push({
-      slug:         nextStreak.slug,
-      label:        nextStreak.label,
-      currentValue: Math.min(streakDays, nextStreak.threshold),
-      targetValue:  nextStreak.threshold,
-      unlockReward: nextStreak.unlockReward,
-      category:     'streak',
+      slug:         nextConsistency.slug,
+      label:        nextConsistency.label,
+      currentValue: Math.min(consecutiveDays, nextConsistency.threshold),
+      targetValue:  nextConsistency.threshold,
+      unlockReward: nextConsistency.unlockReward,
+      category:     'consistency',
     });
   }
 
@@ -157,7 +160,7 @@ export function resolveNextMilestones(input: MilestoneInput): Milestone[] {
     });
   }
 
-  // Return the top 3 (streak first, then workouts by threshold ascending)
+  // Return the top 3 (consistency first, then workouts by threshold ascending)
   return milestones.slice(0, 3);
 }
 
@@ -165,14 +168,14 @@ export function resolveNextMilestones(input: MilestoneInput): Milestone[] {
 
 /**
  * Returns a human-readable "X more Y to Z" line for display below the bar.
- * e.g. "2 workouts to Iron Veteran."
+ * e.g. "2 workouts to Thirty Sessions Logged."
  */
 export function milestoneRemainingCopy(milestone: Milestone): string {
   const remaining = milestone.targetValue - milestone.currentValue;
   if (remaining <= 0) return `${milestone.label}.`;
 
   const unit =
-    milestone.category === 'streak'
+    milestone.category === 'consistency'
       ? remaining === 1 ? 'day' : 'days'
       : remaining === 1 ? 'workout' : 'workouts';
 

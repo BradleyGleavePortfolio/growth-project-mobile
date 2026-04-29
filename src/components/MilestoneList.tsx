@@ -1,5 +1,5 @@
 /**
- * MilestoneList — Wave 3: replaces TrophyArtifact / BadgeCabinet gamification chrome.
+ * MilestoneList — Wave 3: replaces prior gamified cabinet chrome with a date-annotation list.
  *
  * Renders a date-annotation list:
  *   03 · 04 · 26   first session
