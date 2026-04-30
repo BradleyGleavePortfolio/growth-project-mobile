@@ -72,13 +72,16 @@ describe('validate-app-config --release (repo as-is)', () => {
     expect(result.status).not.toBe(0);
   });
 
-  it('promotes both REPLACE_WITH_* placeholders to errors', () => {
+  it('promotes remaining REPLACE_WITH_* placeholders to errors', () => {
+    // The AASA Team ID placeholder is filled in the checked-in repo; only the
+    // Play app-signing SHA256 fingerprint in assetlinks.json is still a
+    // placeholder (it is only available after Google Play signs the AAB).
     expect(result.parsed.errors.some((e) =>
       /assetlinks\.json:.*REPLACE_WITH_/.test(e),
     )).toBe(true);
     expect(result.parsed.errors.some((e) =>
       /apple-app-site-association:.*REPLACE_WITH_/.test(e),
-    )).toBe(true);
+    )).toBe(false);
   });
 
   it('promotes both null storeListings entries to errors', () => {
