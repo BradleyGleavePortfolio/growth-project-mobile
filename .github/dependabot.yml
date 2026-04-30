@@ -8,6 +8,18 @@ updates:
     groups:
       dev-dependencies:
         dependency-type: development
+        exclude-patterns:
+          # Toolchain majors that are bound to the Expo SDK / RN / React version
+          # currently in use. Bumping these in isolation breaks CI because their
+          # peer ranges require config rewrites or a coordinated SDK upgrade.
+          # Re-enable each one when the corresponding SDK upgrade lands.
+          - "eslint"
+          - "eslint-plugin-react-hooks"
+          - "@typescript-eslint/*"
+          - "typescript"
+          - "jest"
+          - "@types/jest"
+          - "react-test-renderer"
       expo:
         patterns:
           - "expo"
@@ -16,6 +28,36 @@ updates:
       react-navigation:
         patterns:
           - "@react-navigation/*"
+    ignore:
+      # ESLint 9 dropped legacy .eslintrc support; ESLint 10 removes it entirely.
+      # Our config is .eslintrc.js — accept this only as part of a flat-config
+      # migration PR, never as a Dependabot bump.
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      # eslint-plugin-react-hooks v5+ peers on ESLint >=8.57 / React 19 flat config;
+      # v7 requires ESLint 9. Tied to the ESLint upgrade above.
+      - dependency-name: "eslint-plugin-react-hooks"
+        update-types: ["version-update:semver-major"]
+      # @typescript-eslint v8+ requires ESLint 8.57+ / TypeScript >=4.8.4 and ships
+      # rule changes that need triage. Hold until the ESLint flat-config migration.
+      - dependency-name: "@typescript-eslint/eslint-plugin"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@typescript-eslint/parser"
+        update-types: ["version-update:semver-major"]
+      # TypeScript majors are coupled to @types/react and the Expo SDK's tsconfig
+      # base. Move with the SDK upgrade, not on Dependabot's cadence.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      # Jest 30 changes default test environment + drops Node 16 support; jest-expo
+      # ~55 still pins jest 29. Bumping breaks the preset.
+      - dependency-name: "jest"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/jest"
+        update-types: ["version-update:semver-major"]
+      # react-test-renderer is locked to the React version Expo SDK 55 ships
+      # (19.2.0). Patch bumps have a tighter react peer range and must move
+      # with React itself.
+      - dependency-name: "react-test-renderer"
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
