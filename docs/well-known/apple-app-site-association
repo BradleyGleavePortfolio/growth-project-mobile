@@ -4,7 +4,7 @@
     "details": [
       {
         "appIDs": [
-          "REPLACE_WITH_APPLE_TEAM_ID.com.growthproject.app"
+          "F8TL8N7SGQ.com.growthproject.app"
         ],
         "components": [
           {
@@ -21,7 +21,7 @@
   },
   "webcredentials": {
     "apps": [
-      "REPLACE_WITH_APPLE_TEAM_ID.com.growthproject.app"
+      "F8TL8N7SGQ.com.growthproject.app"
     ]
   }
 }
