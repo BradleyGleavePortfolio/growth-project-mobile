@@ -21,11 +21,16 @@ export interface CurrentUser {
     current_weight?: number;
     target_weight?: number;
     height?: number;
+    height_cm?: number;
     sex?: string;
     dob?: string;
     activity_level?: string;
     primary_goal?: string;
     diet_type?: string;
+    diet_restrictions?: string[] | string;
+    workout_days_per_week?: number;
+    gym_membership?: string;
+    onboarding_completed?: boolean;
     tdee?: number;
   };
 }

@@ -30,7 +30,26 @@ import { track } from '../../lib/analytics';
 import { useEffect } from 'react';
 import { colors as colorTokens, typography, radius } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
+import { getProfileCompletion } from '../../lib/profileCompletion';
 type Nav = NativeStackNavigationProp<MoreStackParamList>;
+
+const GYM_LABEL: Record<string, string> = {
+  yes_regular: 'Full gym, regular',
+  yes_occasional: 'Full gym, occasional',
+  home_gym: 'Home setup',
+  no_gym: 'Bodyweight only',
+};
+
+const DIET_LABEL: Record<string, string> = {
+  omnivore: 'Omnivore',
+  vegetarian: 'Vegetarian',
+  vegan: 'Vegan',
+  pescatarian: 'Pescatarian',
+  keto: 'Keto',
+  paleo: 'Paleo',
+  mediterranean: 'Mediterranean',
+  other: 'Other',
+};
 
 export default function ProfileScreen() {
   const { colors } = useTheme();
@@ -58,15 +77,25 @@ export default function ProfileScreen() {
     ]);
   };
 
+  const completion = getProfileCompletion(currentUser);
+  const sexValue = currentUser?.profile?.sex;
+  const dobValue = currentUser?.profile?.dob;
+  const dietValue = currentUser?.profile?.diet_type;
+  const gymValue = currentUser?.profile?.gym_membership;
+  const workoutDaysValue = currentUser?.profile?.workout_days_per_week;
+
   const profileItems = [
-    { label: 'Name',            value: currentUser?.name || 'No name set' },
-    { label: 'Email',           value: currentUser?.email || '' },
-    { label: 'Sex',             value: currentUser?.profile?.sex || 'Not set' },
-    { label: 'Date of Birth',   value: currentUser?.profile?.dob || 'Not set' },
-    { label: 'Current Weight',  value: currentUser?.profile?.current_weight ? `${currentUser.profile.current_weight} lbs` : 'Not set' },
-    { label: 'Target Weight',   value: currentUser?.profile?.target_weight ? `${currentUser.profile.target_weight} lbs` : 'Not set' },
-    { label: 'Activity Level',  value: currentUser?.profile?.activity_level || 'Not set' },
-    { label: 'Goal',            value: currentUser?.profile?.primary_goal || 'Not set' },
+    { label: 'Name',            value: currentUser?.name || 'No name set', missing: !currentUser?.name },
+    { label: 'Email',           value: currentUser?.email || '', missing: false },
+    { label: 'Sex',             value: sexValue ? sexValue.charAt(0).toUpperCase() + sexValue.slice(1) : 'Not set', missing: !sexValue },
+    { label: 'Date of Birth',   value: dobValue || 'Not set', missing: !dobValue },
+    { label: 'Current Weight',  value: currentUser?.profile?.current_weight ? `${currentUser.profile.current_weight} lbs` : 'Not set', missing: !currentUser?.profile?.current_weight },
+    { label: 'Target Weight',   value: currentUser?.profile?.target_weight ? `${currentUser.profile.target_weight} lbs` : 'Not set', missing: !currentUser?.profile?.target_weight },
+    { label: 'Activity Level',  value: currentUser?.profile?.activity_level || 'Not set', missing: !currentUser?.profile?.activity_level },
+    { label: 'Goal',            value: currentUser?.profile?.primary_goal || 'Not set', missing: !currentUser?.profile?.primary_goal },
+    { label: 'Diet',            value: dietValue ? (DIET_LABEL[dietValue] ?? dietValue) : 'Not set', missing: !dietValue },
+    { label: 'Workout Days',    value: workoutDaysValue ? `${workoutDaysValue} per week` : 'Not set', missing: !workoutDaysValue },
+    { label: 'Equipment',       value: gymValue ? (GYM_LABEL[gymValue] ?? gymValue) : 'Not set', missing: !gymValue },
   ];
 
   const targetItems = [
@@ -156,12 +185,43 @@ export default function ProfileScreen() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Personal Info</Text>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>Personal Info</Text>
+          <HapticPressable
+            intent="light"
+            onPress={() => {
+              track('profile_edit_opened', { source: 'profile_section_header' });
+              navigation.navigate('EditProfile');
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Edit personal info"
+          >
+            <Text style={styles.editLink}>Edit</Text>
+          </HapticPressable>
+        </View>
+        {!completion.isComplete ? (
+          <Text style={styles.sectionStatus}>
+            {completion.percentComplete}% complete · {completion.missing.length} field
+            {completion.missing.length === 1 ? '' : 's'} to add
+          </Text>
+        ) : null}
         {profileItems.map((item) => (
-          <View key={item.label} style={styles.row}>
+          <HapticPressable
+            key={item.label}
+            intent="light"
+            style={styles.row}
+            onPress={() => {
+              track('profile_edit_opened', { source: 'profile_row', field: item.label });
+              navigation.navigate('EditProfile');
+            }}
+            accessibilityRole="button"
+            accessibilityLabel={`${item.label}: ${item.value}. Tap to edit.`}
+          >
             <Text style={styles.rowLabel}>{item.label}</Text>
-            <Text style={styles.rowValue}>{item.value}</Text>
-          </View>
+            <Text style={[styles.rowValue, item.missing ? styles.rowValueMissing : null]}>
+              {item.value}
+            </Text>
+          </HapticPressable>
         ))}
       </View>
 
@@ -282,6 +342,29 @@ const styles = StyleSheet.create({
     ...typography.eyebrow,
     color: colorTokens.charcoal,
     marginBottom: 12,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  editLink: {
+    ...typography.bodySmall,
+    color: colorTokens.forest,
+    fontWeight: '600' as const,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+  },
+  sectionStatus: {
+    ...typography.bodySmall,
+    color: colorTokens.stone,
+    marginBottom: 12,
+    fontStyle: 'italic',
+  },
+  rowValueMissing: {
+    color: colorTokens.stone,
+    fontStyle: 'italic',
   },
   row: {
     flexDirection: 'row',
