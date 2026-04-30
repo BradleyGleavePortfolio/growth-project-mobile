@@ -34,12 +34,33 @@ export interface ClientProfile {
   carbTarget?: number;
   fatTarget?: number;
   gymMembership?: 'yes_regular' | 'yes_occasional' | 'home_gym' | 'no_gym';
+  workoutDaysPerWeek?: number;
   fitnessLevel?: 'beginner' | 'intermediate' | 'advanced' | 'athlete';
   preferredSnacks?: string;
   onboardingCompleted: boolean;
   createdAt: string;
   updatedAt: string;
 }
+
+export type DietType =
+  | 'omnivore'
+  | 'vegetarian'
+  | 'vegan'
+  | 'pescatarian'
+  | 'keto'
+  | 'paleo'
+  | 'mediterranean'
+  | 'other';
+
+export type DietRestriction =
+  | 'gluten_free'
+  | 'dairy_free'
+  | 'nut_free'
+  | 'shellfish_free'
+  | 'soy_free'
+  | 'egg_free'
+  | 'halal'
+  | 'kosher';
 
 export interface FoodLog {
   id: string;

@@ -26,6 +26,7 @@ import PrepGuideScreen from '../screens/client/PrepGuideScreen';
 import ProgressScreen from '../screens/client/ProgressScreen';
 import FastingScreen from '../screens/client/FastingScreen';
 import ProfileScreen from '../screens/client/ProfileScreen';
+import EditProfileScreen from '../screens/client/EditProfileScreen';
 import SettingsScreen from '../screens/client/SettingsScreen';
 import ReportScreen from '../screens/client/ReportScreen';
 import WidgetsScreen from '../screens/client/WidgetsScreen';
@@ -77,6 +78,7 @@ export type MoreStackParamList = {
   Community:   undefined;
   Progress:    undefined;
   ProfileMain: undefined;
+  EditProfile: undefined;
   Settings:    undefined;
   Widgets:     undefined;
   Report:      undefined;
@@ -141,6 +143,7 @@ function MoreStackNavigator() {
     >
       <MoreStackNav.Screen name="MoreIndex"    component={MoreScreen} />
       <MoreStackNav.Screen name="ProfileMain"  component={ProfileScreen} />
+      <MoreStackNav.Screen name="EditProfile"  component={EditProfileScreen} />
       <MoreStackNav.Screen name="Recipes"      component={RecipesScreen} />
       <MoreStackNav.Screen name="RecipeDetail" component={RecipeDetailScreen} />
       <MoreStackNav.Screen name="GroceryList"  component={GroceryListScreen} />

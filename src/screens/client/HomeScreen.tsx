@@ -27,6 +27,10 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useClientStore } from '../../store/clientStore';
 import { track } from '../../lib/analytics';
 import { colors, typography } from '../../theme/tokens';
+import {
+  getProfileCompletion,
+  summarizeMissing,
+} from '../../lib/profileCompletion';
 
 // ─── Date-as-poetry helpers ───────────────────────────────────────────────────
 
@@ -204,6 +208,26 @@ export default function HomeScreen() {
     navigation.navigate('Log');
   };
 
+  const completion = getProfileCompletion(currentUser);
+  const showProfileNudge = !completion.isComplete && completion.missing.length > 0;
+  const missingSummary = showProfileNudge ? summarizeMissing(completion.missing) : '';
+
+  // Fire impression once per user/session combination so we can attribute
+  // cold-outbound conversion to nudge exposure later.
+  useEffect(() => {
+    if (showProfileNudge && currentUser?.id) {
+      track('profile_nudge_shown', {
+        missing_count: completion.missing.length,
+        percent_complete: completion.percentComplete,
+      });
+    }
+  }, [currentUser?.id, showProfileNudge, completion.missing.length, completion.percentComplete]);
+
+  const goToEditProfile = () => {
+    track('profile_edit_opened', { source: 'home_nudge' });
+    navigation.navigate('MoreTab', { screen: 'EditProfile' });
+  };
+
   if (!currentUser) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.bone }}>
@@ -225,6 +249,33 @@ export default function HomeScreen() {
           />
         }
       >
+        {showProfileNudge ? (
+          <Pressable
+            onPress={goToEditProfile}
+            accessibilityRole="button"
+            accessibilityLabel={`Complete your profile. Missing ${missingSummary}.`}
+            style={({ pressed }) => ({
+              borderWidth: 0.5,
+              borderColor: colors.stone,
+              backgroundColor: colors.cream,
+              paddingHorizontal: 20,
+              paddingVertical: 18,
+              marginBottom: 24,
+              opacity: pressed ? 0.85 : 1,
+            })}
+          >
+            <Text style={{ ...typography.eyebrow, color: colors.charcoal, marginBottom: 6 }}>
+              FINISH YOUR PROFILE
+            </Text>
+            <Text style={{ ...typography.body, color: colors.ink }}>
+              {`Add ${missingSummary} so your plan reflects you.`}
+            </Text>
+            <Text style={{ ...typography.bodySmall, color: colors.stone, marginTop: 6 }}>
+              {`${completion.percentComplete}% complete`}
+            </Text>
+          </Pressable>
+        ) : null}
+
         {/* Hero */}
         <Text style={{ ...typography.eyebrow, color: colors.charcoal, marginBottom: 24 }}>
           THE GROWTH PROJECT
