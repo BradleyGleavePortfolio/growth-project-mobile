@@ -88,7 +88,7 @@ export default function OnboardingResults() {
           tdee: macros.tdee,
           calorie_target: macros.calories,
           protein_target: macros.protein,
-          carb_target: macros.carbs,
+          carbs_target: macros.carbs,
           fat_target: macros.fat,
           onboarding_completed: true,
         });
