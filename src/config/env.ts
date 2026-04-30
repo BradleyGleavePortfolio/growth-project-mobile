@@ -6,6 +6,7 @@
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 const API_URL_FROM_ENV = process.env.EXPO_PUBLIC_API_URL;
+const HELP_URL_FROM_ENV = process.env.EXPO_PUBLIC_HELP_BASE_URL;
 
 // Fail loudly at module-load if Supabase env is missing. These MUST be set in
 // EAS build env for the app to function — silently falling back to a default
@@ -35,8 +36,22 @@ if (API_URL_FROM_ENV) {
   );
 }
 
+// Help center base URL. Optional; defaults to the public help host on the
+// universal-link domain so an unconfigured build still has a working entry
+// point for coaches and clients. Override with EXPO_PUBLIC_HELP_BASE_URL when
+// the help site moves (e.g. a separate `help.trygrowthproject.com` host).
+const DEFAULT_HELP_BASE_URL = 'https://app.trygrowthproject.com/help';
+const resolvedHelpBaseUrl = (HELP_URL_FROM_ENV || DEFAULT_HELP_BASE_URL).replace(/\/+$/, '');
+
 export const env = {
   SUPABASE_URL,
   SUPABASE_ANON_KEY,
   API_URL: resolvedApiUrl,
+  HELP_BASE_URL: resolvedHelpBaseUrl,
 };
+
+export function helpUrl(pathname?: string): string {
+  if (!pathname) return resolvedHelpBaseUrl;
+  const suffix = pathname.startsWith('/') ? pathname : `/${pathname}`;
+  return `${resolvedHelpBaseUrl}${suffix}`;
+}

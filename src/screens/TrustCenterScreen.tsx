@@ -21,6 +21,7 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import HapticPressable from '../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,6 +30,7 @@ import { Spacing, Radius } from '../theme/index';
 import { typography, shadows } from '../theme/tokens';
 import { track } from '../lib/analytics';
 import api from '../services/api';
+import { helpUrl } from '../config/env';
 import { useTheme, ThemeColors } from '../theme/ThemeProvider';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 
@@ -382,9 +384,21 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
       </View>
 
       <View style={styles.footer}>
-        <Text style={styles.footerText}>
-          Questions? Email{' '}
-          <Text style={styles.footerLink}>support@thegrowthproject.app</Text>
+        <Text style={styles.footerText}>Questions or concerns?</Text>
+        <Text
+          style={styles.footerLink}
+          accessibilityRole="link"
+          accessibilityLabel="Open the help centre"
+          onPress={() => {
+            Linking.openURL(helpUrl('/privacy')).catch(() => {
+              Alert.alert(
+                'Help unavailable',
+                'Could not open the help centre right now. Please try again later.',
+              );
+            });
+          }}
+        >
+          Visit the help centre
         </Text>
       </View>
     </ScrollView>
@@ -533,6 +547,8 @@ const makeStyles = (colors: ThemeColors) =>
   footerLink: {
     color: colors.primary,
     fontWeight: '600',
+    fontSize: typography.bodySmall.fontSize,
+    marginTop: 6,
   },
 
   });

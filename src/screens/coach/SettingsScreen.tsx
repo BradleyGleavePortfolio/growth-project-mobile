@@ -9,6 +9,7 @@ import {
   Alert,
   Modal,
   TextInput,
+  Linking,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +20,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 // side effect and left previous-user data in memory for the next login.
 import { signOut } from '../../services/authActions';
 import { coachApi, profileApi, notificationsApi, usersApi, AccountStatus } from '../../services/api';
+import { helpUrl } from '../../config/env';
 
 import { mediumTap, warningTap, successTap } from '../../utils/haptics';
 import { updateSupabasePassword } from '../../utils/supabaseAuth';
@@ -217,6 +219,22 @@ export default function SettingsScreen() {
   const handleOpenTrustCenter = () => {
     mediumTap();
     navigation.navigate('TrustCenter');
+  };
+
+  const handleOpenHelp = async () => {
+    mediumTap();
+    const url = helpUrl('/coach');
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (!supported) {
+        Alert.alert('Help unavailable', 'Could not open the help centre right now. Please try again later.');
+        return;
+      }
+      await Linking.openURL(url);
+    } catch (err) {
+      console.warn('coach SettingsScreen: failed to open help URL', err);
+      Alert.alert('Help unavailable', 'Could not open the help centre right now. Please try again later.');
+    }
   };
 
   const handleRequestDeletion = () => {
@@ -506,6 +524,25 @@ export default function SettingsScreen() {
             <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
           </TouchableOpacity>
         )}
+      </View>
+
+      {/* Support */}
+      <Text style={styles.sectionHeader}>Support</Text>
+      <View style={styles.section}>
+        <TouchableOpacity
+          style={styles.row}
+          onPress={handleOpenHelp}
+          accessibilityRole="link"
+          accessibilityLabel="Open help centre"
+          accessibilityHint="Opens the help centre in your browser"
+        >
+          <Ionicons name="help-circle-outline" size={20} color={colors.textSecondary} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.rowLabel}>Help centre</Text>
+            <Text style={styles.rowSubLabel}>Guides for inviting clients, billing, and troubleshooting</Text>
+          </View>
+          <Ionicons name="open-outline" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
       </View>
 
       {/* Sign Out */}
