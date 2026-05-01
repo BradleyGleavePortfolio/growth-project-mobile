@@ -173,6 +173,21 @@ spacing, and radii. It exposes both the flat `Colors` palette and grouped
 `colors.{text,brand,feedback,border,data,background}` semantic tokens.
 Never hardcode hex values in components.
 
+## Where the app is heading
+
+[`docs/expansion-map/README.md`](docs/expansion-map/README.md) is the living
+index of what has shipped, what is documented but not yet built, what is
+currently being built, and what is on the horizon. It also lists the
+backend PRs the mobile briefs depend on. It is updated in the same PR that
+changes the underlying state — never as a separate "tracking" doc.
+
+The three pre-build packs that map sits on top of are open as docs-only
+draft PRs and are **not merged**:
+
+- PR #92 — operator-readiness expansion pack (`docs/expansion/`).
+- PR #93 — cross-cutting platform-readiness pack (`docs/platform-readiness/`).
+- PR #94 — coaching feature wave 2 (`docs/expansion-wave-2/`).
+
 ## Contributing
 
 Every PR updates the corresponding README / module documentation. The rule —
