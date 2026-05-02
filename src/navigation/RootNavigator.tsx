@@ -13,6 +13,7 @@ import { secureStorage } from '../services/secureStorage';
 import { Colors } from '../constants/colors';
 import { useNetworkStatus, isEffectivelyOnline } from '../hooks/useNetworkStatus';
 import { flush as flushFoodLogQueue } from '../services/foodLogQueue';
+import { isScreenshotMode } from '../screenshots';
 
 type AuthState = 'loading' | 'unauthenticated' | 'onboarding' | 'coach' | 'student';
 
@@ -36,6 +37,27 @@ const linking: LinkingOptions<Record<string, object | undefined>> = {
         path: 'join/:invite_code?',
         parse: { invite_code: (v: string) => v },
       },
+      // Screenshot-mode-only deep links into authenticated tabs/stacks. They
+      // are inert in production because the harness gates ClientNavigator
+      // mounting on a seeded demo user — no real session ever has these
+      // routes reachable from a `tgp://` URL. The cast is needed because the
+      // generic `Record<string, object | undefined>` linking type does not
+      // know about the nested `screens` config — we accept the cast here
+      // rather than threading a precise nav param tree through this module.
+      ...(isScreenshotMode()
+        ? ({
+            Home: 'home',
+            Log: 'log',
+            MoreTab: {
+              screens: {
+                Plan: 'plan',
+                Recipes: 'recipes',
+                Progress: 'progress',
+                Fast: 'fast',
+              },
+            },
+          } as Record<string, unknown>)
+        : {}),
     },
   },
 };
