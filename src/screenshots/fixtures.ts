@@ -222,11 +222,35 @@ export const DEMO_RECIPES = [
 // ─── /fasting/history ────────────────────────────────────────────────────────
 
 export const DEMO_FASTING_HISTORY = (() => {
-  // A handful of completed 16:8 fasts over the past two weeks.
-  const today = new Date('2026-05-02T07:00:00Z');
-  const out = [];
+  // One in-progress fast (started ~10h ago) plus a handful of completed 16:8
+  // fasts over the past two weeks. FastingScreen reads `start_time` /
+  // `end_time` / `target_hours` (snake_case from API), and treats a row with
+  // no `end_time` as the active session — that's what drives the live timer.
+  const now = new Date('2026-05-02T07:00:00Z');
+  const out: Array<{
+    id: string;
+    user_id: string;
+    start_time: string;
+    end_time: string | null;
+    target_hours: number;
+    completed: boolean;
+    protocol: string;
+  }> = [];
+
+  const activeStart = new Date(now);
+  activeStart.setUTCHours(activeStart.getUTCHours() - 10); // 10h elapsed of a 16h target
+  out.push({
+    id: 'fast-active',
+    user_id: DEMO_USER_ID,
+    start_time: activeStart.toISOString(),
+    end_time: null,
+    target_hours: 16,
+    completed: false,
+    protocol: '16:8',
+  });
+
   for (let i = 1; i <= 8; i++) {
-    const start = new Date(today);
+    const start = new Date(now);
     start.setDate(start.getDate() - i);
     start.setUTCHours(20, 0, 0, 0);
     const end = new Date(start);
@@ -234,10 +258,11 @@ export const DEMO_FASTING_HISTORY = (() => {
     out.push({
       id: `fast-${i}`,
       user_id: DEMO_USER_ID,
-      start_at: start.toISOString(),
-      end_at: end.toISOString(),
+      start_time: start.toISOString(),
+      end_time: end.toISOString(),
+      target_hours: 16,
+      completed: true,
       protocol: '16:8',
-      duration_minutes: 16 * 60,
     });
   }
   return out;

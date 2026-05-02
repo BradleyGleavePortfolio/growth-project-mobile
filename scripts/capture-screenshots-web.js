@@ -26,7 +26,8 @@ const fs = require('node:fs');
 
 const BASE_URL  = process.env.SCREENSHOT_WEB_URL || 'http://localhost:8081';
 const OUT_DIR   = path.resolve(__dirname, '..', 'screenshots', 'web-6.5');
-const SETTLE_MS = Number(process.env.SCREENSHOT_SETTLE_MS || 2000);
+const SETTLE_MS = Number(process.env.SCREENSHOT_SETTLE_MS || 4000);
+const VERBOSE   = process.env.SCREENSHOT_VERBOSE === '1';
 
 // 6.5" target — 1284x2778. We render at the target's actual CSS size
 // (428x926) with deviceScaleFactor 3 so the saved PNG is exactly 1284x2778.
@@ -57,18 +58,36 @@ const ROUTES = [
   });
   const page = await context.newPage();
 
+  page.on('console', (msg) => {
+    if (VERBOSE || msg.type() === 'error' || msg.type() === 'warning') {
+      process.stdout.write(`  [${msg.type()}] ${msg.text()}\n`);
+    }
+  });
+  page.on('pageerror', (err) => {
+    process.stdout.write(`  [pageerror] ${err.message}\n`);
+  });
+
   // Disable CSS animations so captures are deterministic.
   await page.addInitScript(() => {
-    const style = document.createElement('style');
-    style.textContent = `
-      *, *::before, *::after {
-        animation-duration: 0s !important;
-        animation-delay: 0s !important;
-        transition-duration: 0s !important;
-        transition-delay: 0s !important;
-      }
-    `;
-    document.documentElement.appendChild(style);
+    const inject = () => {
+      const root = document.documentElement || document.head || document.body;
+      if (!root) return;
+      const style = document.createElement('style');
+      style.textContent = `
+        *, *::before, *::after {
+          animation-duration: 0s !important;
+          animation-delay: 0s !important;
+          transition-duration: 0s !important;
+          transition-delay: 0s !important;
+        }
+      `;
+      root.appendChild(style);
+    };
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', inject, { once: true });
+    } else {
+      inject();
+    }
   });
 
   for (const r of ROUTES) {

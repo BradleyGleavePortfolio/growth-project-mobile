@@ -52,6 +52,18 @@ const POSTHOG_KEY = process.env.EXPO_PUBLIC_POSTHOG_KEY ?? '';
 const POSTHOG_HOST =
   process.env.EXPO_PUBLIC_POSTHOG_HOST ?? 'https://us.i.posthog.com';
 
+// In screenshot mode the PostHog provider is bypassed: posthog-react-native's
+// web shim throws on construct in some envs, and analytics has no place in a
+// capture run anyway. Production path is unchanged.
+const AnalyticsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) =>
+  isScreenshotMode() ? (
+    <>{children}</>
+  ) : (
+    <PostHogProvider apiKey={POSTHOG_KEY} options={{ host: POSTHOG_HOST }}>
+      {children}
+    </PostHogProvider>
+  );
+
 function App() {
   const [ready, setReady] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
@@ -83,9 +95,12 @@ function App() {
         // Skip notification permission prompts and analytics in screenshot
         // mode — both can throw modal UI on top of the screen we are trying
         // to capture. Seed AsyncStorage so RootNavigator routes the demo user
-        // straight into ClientNavigator.
+        // straight into ClientNavigator. The local SQLite database is also
+        // skipped: none of the marketing-target screens (Home / Log / Plan /
+        // Recipes / Progress / Fast) read from it, and the web build of
+        // expo-sqlite needs cross-origin-isolation that the dev server does
+        // not set, which would hang the boot.
         await seedDemoUser();
-        await initDatabase();
       } else {
         // Initialize SQLite database: create tables, seed exercises (152),
         // recipes, foods, lessons, community data, etc.
@@ -128,10 +143,7 @@ function App() {
         screen views and session recording (when enabled). It no-ops when
         POSTHOG_KEY is an empty string, so no secrets are needed in dev.
       */}
-      <PostHogProvider
-        apiKey={POSTHOG_KEY}
-        options={{ host: POSTHOG_HOST }}
-      >
+      <AnalyticsProvider>
         {/*
           PersistQueryClientProvider wraps the whole app so any screen migrated
           to API-first (Fix #2) can use useQuery/useMutation. We use the
@@ -170,7 +182,7 @@ function App() {
             <RootNavigator />
           </ThemeProvider>
         </PersistQueryClientProvider>
-      </PostHogProvider>
+      </AnalyticsProvider>
     </ErrorBoundary>
   );
 }
