@@ -8,6 +8,7 @@ import {
   TextInput,
   RefreshControl,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
@@ -57,13 +58,25 @@ function RecipeCard({ recipe, onPress }: { recipe: Recipe; onPress: () => void }
   const totalTime = recipe.prep_time_min + recipe.cook_time_min;
   return (
     <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.8}>
-      {/* Placeholder for image — uses colored header */}
-      <View style={styles.cardImagePlaceholder}>
-        <Ionicons name="restaurant-outline" size={32} color={colors.primary + '80'} />
-        <View style={styles.caloriesBadge}>
-          <Text style={styles.caloriesBadgeText}>{Math.round(recipe.calories)} kcal</Text>
+      {recipe.image_url ? (
+        <View style={styles.cardImageWrap}>
+          <Image
+            source={{ uri: recipe.image_url }}
+            style={styles.cardImage}
+            resizeMode="cover"
+          />
+          <View style={styles.caloriesBadge}>
+            <Text style={styles.caloriesBadgeText}>{Math.round(recipe.calories)} kcal</Text>
+          </View>
         </View>
-      </View>
+      ) : (
+        <View style={styles.cardImagePlaceholder}>
+          <Ionicons name="restaurant-outline" size={32} color={colors.primary + '80'} />
+          <View style={styles.caloriesBadge}>
+            <Text style={styles.caloriesBadgeText}>{Math.round(recipe.calories)} kcal</Text>
+          </View>
+        </View>
+      )}
       <View style={styles.cardBody}>
         <Text style={styles.cardTitle} numberOfLines={2}>{recipe.title}</Text>
         {recipe.description ? (
@@ -294,6 +307,14 @@ const makeStyles = (colors: ThemeColors) =>
     backgroundColor: colors.primaryPale,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  cardImageWrap: {
+    height: 160,
+    backgroundColor: colors.primaryPale,
+  },
+  cardImage: {
+    width: '100%',
+    height: '100%',
   },
   caloriesBadge: {
     position: 'absolute',
