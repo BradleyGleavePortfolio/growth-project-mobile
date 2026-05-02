@@ -57,8 +57,21 @@ const ROUTES: Route[] = [
     handler: () => ({ daily_log_reminder: true, fasting_alerts: true }) },
 
   // Daily nutrition log ──────────────────────────────────────────────────────
+  // The store and screens consume `/log/daily` as `data.entries[]` plus
+  // `data.total_calories|protein_g|carbs_g|fat_g` (snake_case from the API).
+  // Returning the older `{ logs, totals }` shape silently zeros the totals
+  // and renders empty meal sections — that's what bit the v1 captures.
   { method: 'GET',  pattern: /^\/log\/daily/,
-    handler: () => ({ logs: DEMO_FOOD_LOGS, totals: totalsFromLogs(DEMO_FOOD_LOGS) }) },
+    handler: () => {
+      const totals = totalsFromLogs(DEMO_FOOD_LOGS);
+      return {
+        entries: DEMO_FOOD_LOGS,
+        total_calories: totals.calories,
+        total_protein_g: totals.protein,
+        total_carbs_g: totals.carbs,
+        total_fat_g: totals.fat,
+      };
+    } },
   { method: 'GET',  pattern: /^\/log\/weekly/,
     handler: () => ({ days: weeklyFromLogs() }) },
 

@@ -42,6 +42,7 @@ export const DEMO_USER: CurrentUser = {
     primary_goal: 'fat_loss_lean_gain',
     diet_type: 'balanced',
     workout_days_per_week: 4,
+    gym_membership: 'full_gym',
     onboarding_completed: true,
     tdee: 2580,
   },
@@ -96,6 +97,21 @@ export const DEMO_FOOD_LOGS = [
       fat_g: 11,
     },
   },
+  {
+    id: 'log-dinner',
+    user_id: DEMO_USER_ID,
+    food_item_id: 'food-salmon',
+    meal_type: 'dinner' as const,
+    quantity_multiplier: 1,
+    logged_at: '2026-05-02T19:15:00Z',
+    food_item: {
+      name: 'Salmon, sweet potato, asparagus',
+      calories: 640,
+      protein_g: 42,
+      carbs_g: 38,
+      fat_g: 28,
+    },
+  },
 ];
 
 export const DEMO_DAILY_TOTAL_ML = 1980;
@@ -103,14 +119,19 @@ export const DEMO_DAILY_TOTAL_ML = 1980;
 // ─── /weight/history ─────────────────────────────────────────────────────────
 
 export const DEMO_WEIGHT_HISTORY = (() => {
-  // 30 days of gentle downward trend, ~1.4 lb / week. Some noise.
+  // 30 days of gentle downward trend, ~1.3 lb / week. Some noise.
+  // i=29 is the oldest entry (start), i=0 is today (current). The trend has
+  // to *decrease* as i decreases so the start is heavier than the current.
   const today = new Date('2026-05-02T07:00:00Z');
   const out: { id: string; user_id: string; weight_lbs: number; date: string }[] = [];
+  const START_LBS = 184;
+  const PER_DAY_LOSS = 0.19; // ~1.3 lb / week
   for (let i = 29; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(d.getDate() - i);
-    const trend = 184 - i * 0.18;
-    const noise = (Math.sin(i * 1.7) + Math.cos(i * 0.6)) * 0.5;
+    // Older entries (large i) sit closer to START_LBS; today (i=0) is lighter.
+    const trend = START_LBS - (29 - i) * PER_DAY_LOSS;
+    const noise = (Math.sin(i * 1.7) + Math.cos(i * 0.6)) * 0.4;
     out.push({
       id: `weight-${i}`,
       user_id: DEMO_USER_ID,
