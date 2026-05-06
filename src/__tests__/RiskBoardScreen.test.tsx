@@ -94,7 +94,9 @@ jest.mock('../services/ptmApi', () => ({
   },
 }));
 jest.mock('../components/HapticPressable', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const RNActual = require('react-native');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const ReactActual = require('react');
   return {
     __esModule: true,
@@ -109,6 +111,7 @@ jest.mock('../components/HapticPressable', () => {
   };
 });
 
+// eslint-disable-next-line @typescript-eslint/no-var-requires
 const RiskBoardScreen = require('../screens/coach/RiskBoardScreen').default;
 
 describe('RiskBoardScreen — non-owner branch', () => {
