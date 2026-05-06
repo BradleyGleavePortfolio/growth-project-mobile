@@ -26,11 +26,21 @@ import {
 import { initSentry, wrap as sentryWrap } from './src/services/sentry';
 import { track } from './src/lib/analytics';
 import { ThemeProvider } from './src/theme/ThemeProvider';
+import {
+  installAxiosMockAdapter,
+  isScreenshotMode,
+  seedDemoUser,
+} from './src/screenshots';
 
 // Initialise Sentry as early as possible so even import-time failures get
 // captured. The function no-ops when EXPO_PUBLIC_SENTRY_DSN is unset, so this
 // line is safe to commit without secrets.
 initSentry();
+
+// Screenshot mode: replace the axios network adapter with a fixture-backed one
+// before any screen module imports `services/api`. No-op when the env flag is
+// off, so production builds are unaffected.
+installAxiosMockAdapter();
 
 // Prevent the native splash from auto-hiding before fonts are ready.
 // We hide it manually once fonts + app init are both complete.
@@ -41,6 +51,18 @@ SplashScreen.preventAutoHideAsync();
 const POSTHOG_KEY = process.env.EXPO_PUBLIC_POSTHOG_KEY ?? '';
 const POSTHOG_HOST =
   process.env.EXPO_PUBLIC_POSTHOG_HOST ?? 'https://us.i.posthog.com';
+
+// In screenshot mode the PostHog provider is bypassed: posthog-react-native's
+// web shim throws on construct in some envs, and analytics has no place in a
+// capture run anyway. Production path is unchanged.
+const AnalyticsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) =>
+  isScreenshotMode() ? (
+    <>{children}</>
+  ) : (
+    <PostHogProvider apiKey={POSTHOG_KEY} options={{ host: POSTHOG_HOST }}>
+      {children}
+    </PostHogProvider>
+  );
 
 function App() {
   const [ready, setReady] = useState(false);
@@ -69,14 +91,26 @@ function App() {
 
   const initApp = async () => {
     try {
-      // Initialize SQLite database: create tables, seed exercises (152),
-      // recipes, foods, lessons, community data, etc.
-      // NOTE: seedCoachIfNeeded() was removed along with the dead SQLite auth path.
-      // Auth lives exclusively on the backend now; the local `users` table is no longer used.
-      await initDatabase();
-      await requestNotificationPermissions();
-      // Psych Report #4: Analytics — fire app_opened on every cold start.
-      track('app_opened');
+      if (isScreenshotMode()) {
+        // Skip notification permission prompts and analytics in screenshot
+        // mode — both can throw modal UI on top of the screen we are trying
+        // to capture. Seed AsyncStorage so RootNavigator routes the demo user
+        // straight into ClientNavigator. The local SQLite database is also
+        // skipped: none of the marketing-target screens (Home / Log / Plan /
+        // Recipes / Progress / Fast) read from it, and the web build of
+        // expo-sqlite needs cross-origin-isolation that the dev server does
+        // not set, which would hang the boot.
+        await seedDemoUser();
+      } else {
+        // Initialize SQLite database: create tables, seed exercises (152),
+        // recipes, foods, lessons, community data, etc.
+        // NOTE: seedCoachIfNeeded() was removed along with the dead SQLite auth path.
+        // Auth lives exclusively on the backend now; the local `users` table is no longer used.
+        await initDatabase();
+        await requestNotificationPermissions();
+        // Psych Report #4: Analytics — fire app_opened on every cold start.
+        track('app_opened');
+      }
     } catch (err) {
       // Round 3: guard production builds — Metro strips __DEV__ at build time.
       if (__DEV__) console.error('App init error:', err);
@@ -91,7 +125,9 @@ function App() {
     return null;
   }
 
-  if (!ready || showSplash) {
+  if (!ready || (showSplash && !isScreenshotMode())) {
+    // Screenshot mode bypasses the AppSplash animation so captures land on
+    // real content immediately rather than the bone splash card.
     return (
       <>
         <AppSplash onFinish={() => setShowSplash(false)} />
@@ -107,10 +143,7 @@ function App() {
         screen views and session recording (when enabled). It no-ops when
         POSTHOG_KEY is an empty string, so no secrets are needed in dev.
       */}
-      <PostHogProvider
-        apiKey={POSTHOG_KEY}
-        options={{ host: POSTHOG_HOST }}
-      >
+      <AnalyticsProvider>
         {/*
           PersistQueryClientProvider wraps the whole app so any screen migrated
           to API-first (Fix #2) can use useQuery/useMutation. We use the
@@ -149,7 +182,7 @@ function App() {
             <RootNavigator />
           </ThemeProvider>
         </PersistQueryClientProvider>
-      </PostHogProvider>
+      </AnalyticsProvider>
     </ErrorBoundary>
   );
 }
