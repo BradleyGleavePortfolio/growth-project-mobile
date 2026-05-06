@@ -8,6 +8,9 @@
  * - Ionicons outline, size 24, no badges
  *
  * Nav structure preserved: all existing screen names remain valid.
+ *
+ * Phase 7B: TimelineScreen added to MoreStackNavigator as 'Timeline'.
+ * Accessible from MoreScreen; no new tab added (avoids 5-tab crowding).
  */
 import React from 'react';
 import { StyleSheet } from 'react-native';
@@ -43,6 +46,8 @@ import TrustCenterScreen from '../screens/TrustCenterScreen';
 import PreferencesScreen from '../screens/client/PreferencesScreen';
 import AIGuideScreen from '../screens/client/AIGuideScreen';
 import MembershipScreen from '../screens/client/MembershipScreen';
+// Phase 7B — Transformation Timeline
+import TimelineScreen from '../screens/client/TimelineScreen';
 import { colors } from '../theme/tokens';
 
 // ─── Param lists ──────────────────────────────────────────────────────────────
@@ -70,6 +75,7 @@ export type WorkoutStackParamList = {
 };
 
 // MoreStack: all non-tab screens live here. Screen names preserved.
+// Phase 7B: Timeline added.
 export type MoreStackParamList = {
   MoreIndex:   undefined;
   Recipes:     undefined;
@@ -91,6 +97,8 @@ export type MoreStackParamList = {
   Preferences: undefined;
   AIGuide:     undefined;
   Membership:  undefined;
+  /** Phase 7B — Transformation Timeline */
+  Timeline:    undefined;
 };
 
 // ─── Stack navigators ─────────────────────────────────────────────────────────
@@ -133,6 +141,7 @@ function WorkoutStackNavigator() {
 }
 
 // MoreStack: Profile + every ex-tab screen. Keeps existing navigate() calls valid.
+// Phase 7B: Timeline screen registered here.
 function MoreStackNavigator() {
   return (
     <MoreStackNav.Navigator
@@ -161,6 +170,8 @@ function MoreStackNavigator() {
       <MoreStackNav.Screen name="Preferences"  component={PreferencesScreen} />
       <MoreStackNav.Screen name="AIGuide"      component={AIGuideScreen} />
       <MoreStackNav.Screen name="Membership"   component={MembershipScreen} />
+      {/* Phase 7B — Transformation Timeline */}
+      <MoreStackNav.Screen name="Timeline"     component={TimelineScreen} />
     </MoreStackNav.Navigator>
   );
 }
