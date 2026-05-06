@@ -17,12 +17,19 @@ import { colors as legacyColors } from '../../theme';
 import { getGreeting } from '../../utils/date';
 import FadeInView from '../../components/FadeInView';
 import { coachApi } from '../../services/api';
+import { ptmApi } from '../../services/ptmApi';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 interface RedFlagClient {
   id: string;
   name: string;
   trend: string;
+}
+
+interface RiskBucketCounts {
+  red: number;
+  amber: number;
+  green: number;
 }
 
 export default function CoachHomeScreen() {
@@ -36,6 +43,8 @@ export default function CoachHomeScreen() {
   const [overdueClients, setOverdueClients] = useState<string[]>([]);
   const [dashboard, setDashboard] = useState<{ logs_today: number; total_kcal: number; logging_rate: number } | null>(null);
   const [dashboardLoading, setDashboardLoading] = useState(true);
+  const [riskCounts, setRiskCounts] = useState<RiskBucketCounts | null>(null);
+  const isOwner = currentUser?.role === 'owner';
 
   const fetchDashboard = useCallback(async () => {
     setDashboardLoading(true);
@@ -85,6 +94,28 @@ export default function CoachHomeScreen() {
   useEffect(() => {
     fetchDashboard();
   }, [fetchDashboard]);
+
+  // PTM Risk-Board widget — OWNER-gated for Phase 1E because the underlying
+  // endpoint is OWNER-only on the backend. A coach-scoped variant lands later.
+  useEffect(() => {
+    if (!isOwner) return;
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await ptmApi.getRiskBoard({ limit: 100 });
+        if (!mounted) return;
+        const counts: RiskBucketCounts = { red: 0, amber: 0, green: 0 };
+        for (const item of res.data.items) counts[item.bucket] += 1;
+        setRiskCounts(counts);
+      } catch (err) {
+        // Widget is supplemental — log and leave the cards hidden on failure.
+        console.error('CoachHomeScreen: risk-board widget fetch failed', err);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [isOwner]);
 
   useEffect(() => {
     if (clients.length > 0) {
@@ -187,6 +218,35 @@ export default function CoachHomeScreen() {
         </View>
       </FadeInView>
 
+      {/* PTM Risk Board widget — OWNER only in Phase 1E */}
+      {isOwner && riskCounts && (
+        <FadeInView>
+          <Text style={styles.sectionTitle}>Risk Board</Text>
+          <HapticPressable
+            intent="medium"
+            style={styles.riskWidgetRow}
+            onPress={() =>
+              navigation.navigate('ClientsStack', { screen: 'RiskBoard' })
+            }
+            accessibilityRole="button"
+            accessibilityLabel="Open Risk Board"
+          >
+            <View style={[styles.riskCard, { borderLeftColor: colors.error }]}>
+              <Text style={styles.riskCount}>{riskCounts.red}</Text>
+              <Text style={styles.riskLabel}>Red</Text>
+            </View>
+            <View style={[styles.riskCard, { borderLeftColor: colors.warning }]}>
+              <Text style={styles.riskCount}>{riskCounts.amber}</Text>
+              <Text style={styles.riskLabel}>Amber</Text>
+            </View>
+            <View style={[styles.riskCard, { borderLeftColor: colors.success }]}>
+              <Text style={styles.riskCount}>{riskCounts.green}</Text>
+              <Text style={styles.riskLabel}>Green</Text>
+            </View>
+          </HapticPressable>
+        </FadeInView>
+      )}
+
       {/* Red flag clients */}
       {redFlagClients.length > 0 && (
         <FadeInView>
@@ -259,6 +319,28 @@ export default function CoachHomeScreen() {
             <Ionicons name="chatbubble-outline" size={22} color={colors.carbs} />
           </View>
           <Text style={styles.actionText}>Messages</Text>
+        </HapticPressable>
+      </View>
+
+      <View style={styles.actionsRow}>
+        <HapticPressable
+          intent="medium"
+          style={styles.actionCard}
+          onPress={() =>
+            navigation.navigate('ClientsStack', { screen: 'RiskBoard' })
+          }
+          accessibilityRole="button"
+          accessibilityLabel="Risk Board"
+        >
+          <View style={[styles.actionIcon, { backgroundColor: colors.primaryPale }]}>
+            <Ionicons name="pulse-outline" size={22} color={colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.actionText}>Risk Board</Text>
+            <Text style={styles.actionSubtext}>
+              Clients sorted by churn risk
+            </Text>
+          </View>
         </HapticPressable>
       </View>
 
@@ -443,6 +525,31 @@ const makeStyles = (colors: ThemeColors) =>
     alignItems: 'center',
   },
   actionText: { fontSize: 14, fontWeight: '500', color: colors.textPrimary },
+  actionSubtext: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+  riskWidgetRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 24,
+    gap: 10,
+    marginBottom: 28,
+  },
+  riskCard: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderRadius: 4,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderLeftWidth: 4,
+    gap: 4,
+  },
+  riskCount: {
+    fontSize: 24,
+    fontWeight: '500',
+    color: colors.textPrimary,
+  },
+  riskLabel: {
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
   clientStatusCard: {
     flexDirection: 'row',
     alignItems: 'center',

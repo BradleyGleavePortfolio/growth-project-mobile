@@ -1,0 +1,81 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`RiskDot honours a custom size 1`] = `
+<View
+  accessibilityLabel="red risk"
+  style={
+    [
+      {
+        "alignSelf": "center",
+      },
+      {
+        "backgroundColor": "#4A0404",
+        "borderRadius": 12,
+        "height": 24,
+        "width": 24,
+      },
+    ]
+  }
+  testID="risk-dot-red"
+/>
+`;
+
+exports[`RiskDot renders the amber bucket 1`] = `
+<View
+  accessibilityLabel="amber risk"
+  style={
+    [
+      {
+        "alignSelf": "center",
+      },
+      {
+        "backgroundColor": "#C5A253",
+        "borderRadius": 6,
+        "height": 12,
+        "width": 12,
+      },
+    ]
+  }
+  testID="risk-dot-amber"
+/>
+`;
+
+exports[`RiskDot renders the green bucket 1`] = `
+<View
+  accessibilityLabel="green risk"
+  style={
+    [
+      {
+        "alignSelf": "center",
+      },
+      {
+        "backgroundColor": "#2C4A36",
+        "borderRadius": 6,
+        "height": 12,
+        "width": 12,
+      },
+    ]
+  }
+  testID="risk-dot-green"
+/>
+`;
+
+exports[`RiskDot renders the red bucket 1`] = `
+<View
+  accessibilityLabel="red risk"
+  style={
+    [
+      {
+        "alignSelf": "center",
+      },
+      {
+        "backgroundColor": "#4A0404",
+        "borderRadius": 6,
+        "height": 12,
+        "width": 12,
+      },
+    ]
+  }
+  testID="risk-dot-red"
+/>
+`;
