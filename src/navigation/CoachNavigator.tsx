@@ -12,6 +12,8 @@ import ClientDetailScreen from '../screens/coach/ClientDetailScreen';
 import ProgramTemplatesScreen from '../screens/coach/ProgramTemplatesScreen';
 import InviteCodesScreen from '../screens/coach/InviteCodesScreen';
 import ClientMessagesScreen from '../screens/coach/ClientMessagesScreen';
+import RiskBoardScreen from '../screens/coach/RiskBoardScreen';
+import ClientRiskDetailScreen from '../screens/coach/ClientRiskDetailScreen';
 import CoachBillingScreen from '../screens/coach/CoachBillingScreen';
 import TrustCenterScreen from '../screens/TrustCenterScreen';
 import { Colors } from '../constants/colors';
@@ -29,6 +31,8 @@ export type ClientsStackParamList = {
   ClientDetail: { clientId: string; clientName: string };
   ClientMessages: { clientId: string; clientName: string };
   InviteCodes: undefined;
+  RiskBoard: undefined;
+  ClientRiskDetail: { userId: string; clientName?: string };
 };
 
 export type SettingsStackParamList = {
@@ -53,6 +57,8 @@ function ClientsStackNavigator() {
       <ClientsStack.Screen name="ClientDetail" component={ClientDetailScreen} />
       <ClientsStack.Screen name="ClientMessages" component={ClientMessagesScreen} />
       <ClientsStack.Screen name="InviteCodes" component={InviteCodesScreen} />
+      <ClientsStack.Screen name="RiskBoard" component={RiskBoardScreen} />
+      <ClientsStack.Screen name="ClientRiskDetail" component={ClientRiskDetailScreen} />
     </ClientsStack.Navigator>
   );
 }

@@ -11,6 +11,7 @@ A React Native nutrition & fitness coaching app built with Expo, TypeScript, and
 - **Intermittent Fasting** — Timer with protocol selection and streak tracking
 - **AI Guide** — Context-aware nutrition chatbot
 - **Coach Dashboard** — Multi-client management, reports, and invite system
+- **Coach Risk Board (OWNER-gated in this release)** — PTM Phase 1E surface that lists clients sorted by churn risk, with a per-client "why" drawer and a one-tap check-in nudge. See `src/screens/coach/RISK_BOARD.md`.
 - **Weekly Reports** — Shareable progress summaries
 
 ## Tech Stack
