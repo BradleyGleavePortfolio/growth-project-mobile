@@ -14,8 +14,13 @@ import { Colors } from '../constants/colors';
 import { useNetworkStatus, isEffectivelyOnline } from '../hooks/useNetworkStatus';
 import { flush as flushFoodLogQueue } from '../services/foodLogQueue';
 import { isScreenshotMode } from '../screenshots';
+import { firstWinApi } from '../services/firstWinApi';
+import Day1WinScreen from '../screens/client/Day1WinScreen';
 
-type AuthState = 'loading' | 'unauthenticated' | 'onboarding' | 'coach' | 'student';
+// Phase 7A: 'day1win' is inserted between onboarding and the main client
+// navigator. On first cold start after onboarding the app checks
+// GET /me/first-win/status; if incomplete the Day1WinScreen is shown once.
+type AuthState = 'loading' | 'unauthenticated' | 'onboarding' | 'day1win' | 'coach' | 'student';
 
 // Deep-link config — must match the Android intent filters and iOS
 // associatedDomains entries declared in app.json. Both URL shapes route an
@@ -137,6 +142,20 @@ export default function RootNavigator() {
           await AsyncStorage.setItem('onboarding_complete', 'true');
         }
 
+        // Phase 7A: check if Day 1 Win has been completed. Fire-and-forget
+        // error handling — if the API is unreachable, skip the win screen and
+        // go straight to the client app. The screen can be shown on next boot.
+        try {
+          const statusResponse = await firstWinApi.getStatus();
+          if (!statusResponse.data.completed) {
+            setAuthState('day1win');
+            return;
+          }
+        } catch {
+          // Network error or auth issue — do not block app launch.
+          // The win screen will be retried on next boot.
+        }
+
         setAuthState('student');
         return;
       }
@@ -148,12 +167,24 @@ export default function RootNavigator() {
     }
   };
 
+  // Called by Day1WinScreen when the client completes the win OR skips.
+  const handleDay1WinComplete = () => {
+    setAuthState('student');
+  };
+
   if (authState === 'loading') {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={Colors.primary} />
       </View>
     );
+  }
+
+  // Phase 7A: Day1WinScreen renders outside NavigationContainer because it is
+  // a one-time interstitial, not a navigable screen. It is shown once, on
+  // first student boot, then replaced by ClientNavigator.
+  if (authState === 'day1win') {
+    return <Day1WinScreen onComplete={handleDay1WinComplete} />;
   }
 
   return (
