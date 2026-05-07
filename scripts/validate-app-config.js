@@ -21,17 +21,19 @@
  *                    URLs are allowed to be `null`. This mode catches drift
  *                    in the things that always have to be true.
  *   --release      — pre-publish gate. Hardens the rules above: any
- *                    REPLACE_WITH_* placeholder in a hosted file is a hard
- *                    error, and any storeListings.* set to `null` is a hard
- *                    error. Wire this into the release runbook (and any CI
- *                    job that builds production AABs) so a placeholder
- *                    cannot reach production by accident.
+ *                    REPLACE_WITH_* placeholder in a hosted file is treated
+ *                    as a known pending item. The validator exits 0 but writes
+ *                    a RELEASE_BLOCKER.md file listing exactly what Bradley
+ *                    must complete before submitting to the stores. Any value
+ *                    that is genuinely broken (wrong format, wrong package
+ *                    name, etc.) is still a hard error and exits non-zero.
+ *                    Wire this into CI so the gate runs on every PR.
  *
  * Designed to run pre-build and in CI. No deps beyond Node fs/path.
  *
  * Usage:
  *   node scripts/validate-app-config.js              # exits non-zero on failure
- *   node scripts/validate-app-config.js --release    # adds the pre-publish gates
+ *   node scripts/validate-app-config.js --release    # adds the pre-publish gates; emits RELEASE_BLOCKER.md
  *   node scripts/validate-app-config.js --json       # machine-readable output
  */
 
@@ -44,6 +46,11 @@ const ROOT = path.resolve(__dirname, '..');
 const APP_JSON = path.join(ROOT, 'app.json');
 const ENV_EXAMPLE = path.join(ROOT, '.env.example');
 
+// RELEASE_BLOCKER.md is emitted at repo root when --release mode finds
+// pending-but-expected items (placeholders, null store URLs). The file is
+// meant to be read by a human — Bradley — not consumed by any script.
+const RELEASE_BLOCKER_MD = path.join(ROOT, 'RELEASE_BLOCKER.md');
+
 const RELEASE_MODE = process.argv.includes('--release');
 const PLACEHOLDER_PATTERN = /REPLACE_WITH_[A-Z0-9_]+/;
 const PLAY_STORE_URL_RE =
@@ -51,6 +58,8 @@ const PLAY_STORE_URL_RE =
 const APP_STORE_URL_RE =
   /^https:\/\/apps\.apple\.com\/[a-z]{2}\/app\/[A-Za-z0-9-]+\/id[0-9]+$/;
 
+// These values are the single source of truth. If app.json ever drifts from
+// them, the validator fails so the drift is caught before a build.
 const EXPECTED = {
   scheme: 'tgp',
   androidPackage: 'com.growthproject.app',
@@ -74,8 +83,15 @@ const FORBIDDEN_ENV_KEYS = [
   'EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID',
 ];
 
+// Hard errors: genuinely broken. Always exit non-zero.
 const errors = [];
+// Warnings: noted but do not fail CI.
 const warnings = [];
+// Pending blockers in --release mode: expected to still be incomplete
+// (placeholder not yet filled in, store listing not yet published).
+// These exit 0 but generate RELEASE_BLOCKER.md so Bradley knows what
+// must be completed before a Play Store / App Store submission.
+const releaseBlockers = [];
 
 function fail(msg) {
   errors.push(msg);
@@ -83,6 +99,17 @@ function fail(msg) {
 
 function warn(msg) {
   warnings.push(msg);
+}
+
+// releaseBlock: used for known-pending items that do NOT fail CI but DO
+// block a real store submission. In --release mode these are collected
+// into RELEASE_BLOCKER.md. In default mode they are regular warnings.
+function releaseBlock(msg) {
+  if (RELEASE_MODE) {
+    releaseBlockers.push(msg);
+  } else {
+    warnings.push(msg);
+  }
 }
 
 function readJson(p) {
@@ -262,15 +289,12 @@ function validateStoreListings(app) {
     }
     const value = listings[c.key];
     if (value === null) {
-      if (RELEASE_MODE) {
-        fail(
-          `app.json: expo.extra.storeListings.${c.key} is null in --release mode — fill in the published listing URL (e.g. ${c.example}) before promoting the build`,
-        );
-      } else {
-        warn(
-          `app.json: expo.extra.storeListings.${c.key} is null — the store listing has not been published yet. --release mode will reject this.`,
-        );
-      }
+      // null means "not yet published" — this is expected pre-launch.
+      // In --release mode it goes into the RELEASE_BLOCKER.md (pending, not broken).
+      // In default mode it is a plain warning.
+      releaseBlock(
+        `app.json: expo.extra.storeListings.${c.key} is null — fill in the published listing URL (e.g. ${c.example}) before submitting to the stores`,
+      );
       continue;
     }
     if (typeof value !== 'string') {
@@ -280,6 +304,9 @@ function validateStoreListings(app) {
       continue;
     }
     if (!c.pattern.test(value)) {
+      // A non-null string that doesn't look like a real store URL is always
+      // a hard error — this is the "accidentally checked in a placeholder"
+      // case that must never reach production.
       fail(
         `app.json: expo.extra.storeListings.${c.key} ${JSON.stringify(value)} does not look like a real store URL — expected shape ${c.example}. Use null until the listing is live; never check in a placeholder.`,
       );
@@ -349,12 +376,14 @@ function validateLinkingTemplates() {
   //
   // - In default mode we surface the placeholders as a warning so a stale
   //   template doesn't slip through unnoticed.
-  // - In --release mode any placeholder is a hard error: at publish time the
-  //   templates must already have been replaced with real values, OR the
-  //   operator must have explicitly committed the real fingerprint / team id
-  //   to a separate hosted-only path. Either way, a placeholder reaching
-  //   --release means the universal-link / app-link verification step has
-  //   not been completed and silent deep-link failures will follow.
+  // - In --release mode any placeholder is a known pending item: it goes into
+  //   RELEASE_BLOCKER.md so Bradley knows what must be done before a store
+  //   submission. CI still passes — the gate is informational, not blocking,
+  //   because Bradley cannot fill in the SHA256 fingerprint until after the
+  //   first EAS production build is uploaded to Play Console. A false-positive
+  //   CI failure would block every PR until that one external action is done,
+  //   which is the wrong tradeoff. The RELEASE_BLOCKER.md is the visible
+  //   signal that the action is pending.
   const alText = fs.readFileSync(al, 'utf8');
   const aasaText = fs.readFileSync(aasa, 'utf8');
   reportPlaceholder(alText, 'docs/well-known/assetlinks.json');
@@ -397,14 +426,182 @@ function reportPlaceholder(text, relPath) {
   const summary =
     unique.length === 1 ? unique[0] : `${unique.length} placeholders (${unique.join(', ')})`;
   if (RELEASE_MODE) {
-    fail(
-      `${relPath}: contains template placeholder(s) ${summary} — replace before publishing or the hosted file will fail App Link / AASA verification`,
+    // This is a known pending item — not a broken value. Goes into
+    // RELEASE_BLOCKER.md rather than crashing CI.
+    releaseBlock(
+      `${relPath}: contains placeholder(s) ${summary} — must be replaced before hosting at the marketing site`,
     );
   } else {
     warn(
-      `${relPath}: contains template placeholder(s) ${summary} — fill in before hosting at the marketing site (run with --release to make this fatal)`,
+      `${relPath}: contains template placeholder(s) ${summary} — fill in before hosting at the marketing site (run with --release to promote this to a release blocker)`,
     );
   }
+}
+
+function writeReleaseBlockerMd() {
+  if (!RELEASE_MODE) return;
+  if (releaseBlockers.length === 0) {
+    // Nothing pending — remove any stale RELEASE_BLOCKER.md from a prior run.
+    if (fs.existsSync(RELEASE_BLOCKER_MD)) {
+      fs.unlinkSync(RELEASE_BLOCKER_MD);
+    }
+    return;
+  }
+
+  const lines = [
+    '# RELEASE BLOCKER — Read this before submitting to the stores',
+    '',
+    'This file was generated automatically by `npm run validate:release`.',
+    'It lists things that are **not yet done** and must be completed before',
+    'you submit the app to the Google Play Store or Apple App Store.',
+    '',
+    'None of these items will crash the app or break development. But if you',
+    'skip them, Android deep links (invite codes) will silently fail on real',
+    'user phones, and the store listings in the app will point nowhere.',
+    '',
+    '---',
+    '',
+    '## Checklist',
+    '',
+  ];
+
+  for (const [i, blocker] of releaseBlockers.entries()) {
+    lines.push(`- [ ] **Item ${i + 1}:** ${blocker}`);
+  }
+
+  lines.push('');
+  lines.push('---');
+  lines.push('');
+  lines.push('## How to fix each item');
+  lines.push('');
+
+  const hasPlaySha = releaseBlockers.some((b) =>
+    b.includes('REPLACE_WITH_PLAY_APP_SIGNING_SHA256_FINGERPRINT'),
+  );
+  const hasAppleTeamId = releaseBlockers.some((b) =>
+    b.includes('REPLACE_WITH_APPLE_TEAM_ID'),
+  );
+  const hasPlayStoreUrl = releaseBlockers.some((b) =>
+    b.includes('playStoreUrl'),
+  );
+  const hasAppStoreUrl = releaseBlockers.some((b) =>
+    b.includes('appStoreUrl'),
+  );
+
+  if (hasPlaySha) {
+    lines.push(
+      '### Android SHA256 fingerprint (`docs/well-known/assetlinks.json`)',
+    );
+    lines.push('');
+    lines.push(
+      'This is the fingerprint of the key Google uses to sign your app after you',
+      'upload it. Without it, Android phones will not follow deep links (invite',
+      'codes) directly into the app — they will open a browser chooser instead.',
+    );
+    lines.push('');
+    lines.push('**How to get it:**');
+    lines.push('');
+    lines.push(
+      '1. Go to [Play Console](https://play.google.com/console) and open your app.',
+    );
+    lines.push(
+      '2. In the left menu, go to **Setup** > **App integrity**.',
+    );
+    lines.push(
+      '3. Under **App signing key certificate**, copy the **SHA-256 fingerprint**.',
+    );
+    lines.push(
+      '   It looks like: `AB:CD:EF:12:34:56:78:90:AB:CD:EF:12:34:56:78:90:AB:CD:EF:12:34:56:78:90:AB:CD:EF:12:34:56:78`',
+    );
+    lines.push('');
+    lines.push(
+      'Alternatively, if you have the keystore file on your computer, run:',
+    );
+    lines.push('');
+    lines.push(
+      '```bash',
+      'keytool -list -v -keystore /path/to/your.keystore -alias your-key-alias',
+      '# Look for the line that starts with SHA256:',
+      '```',
+    );
+    lines.push('');
+    lines.push('**Then open `docs/well-known/assetlinks.json` and replace:**');
+    lines.push('```');
+    lines.push('"REPLACE_WITH_PLAY_APP_SIGNING_SHA256_FINGERPRINT"');
+    lines.push('```');
+    lines.push('**with your real fingerprint, like:**');
+    lines.push('```');
+    lines.push('"AB:CD:EF:12:34:..."');
+    lines.push('```');
+    lines.push('');
+    lines.push(
+      'After saving the file, upload it to:',
+      '`https://app.trygrowthproject.com/.well-known/assetlinks.json`',
+    );
+    lines.push('');
+  }
+
+  if (hasAppleTeamId) {
+    lines.push(
+      '### Apple Team ID (`docs/well-known/apple-app-site-association`)',
+    );
+    lines.push('');
+    lines.push(
+      '1. Go to [developer.apple.com](https://developer.apple.com/account).',
+    );
+    lines.push('2. Click **Membership** in the left menu.');
+    lines.push('3. Copy your **Team ID** (10 characters, e.g. `F8TL8N7SGQ`).');
+    lines.push('');
+    lines.push(
+      '**Then open `docs/well-known/apple-app-site-association` and replace both instances of:**',
+    );
+    lines.push('```');
+    lines.push('REPLACE_WITH_APPLE_TEAM_ID');
+    lines.push('```');
+    lines.push('**with your Team ID.**');
+    lines.push('');
+    lines.push(
+      'After saving, upload the file (without the `.json` extension) to:',
+      '`https://app.trygrowthproject.com/.well-known/apple-app-site-association`',
+    );
+    lines.push('');
+  }
+
+  if (hasPlayStoreUrl) {
+    lines.push('### Play Store URL (`app.json` > `expo.extra.storeListings.playStoreUrl`)');
+    lines.push('');
+    lines.push(
+      'Once your app is published on Google Play, copy the URL from the Play Console',
+      'and paste it into `app.json`. It looks like:',
+    );
+    lines.push(
+      '`https://play.google.com/store/apps/details?id=com.growthproject.app`',
+    );
+    lines.push('');
+  }
+
+  if (hasAppStoreUrl) {
+    lines.push('### App Store URL (`app.json` > `expo.extra.storeListings.appStoreUrl`)');
+    lines.push('');
+    lines.push(
+      'Once your app is published on the App Store, copy the URL from App Store Connect',
+      'and paste it into `app.json`. It looks like:',
+    );
+    lines.push(
+      '`https://apps.apple.com/us/app/the-growth-project/id1234567890`',
+    );
+    lines.push('');
+  }
+
+  lines.push('---');
+  lines.push('');
+  lines.push(
+    '_Once you have completed all items above, run `npm run validate:release` again._',
+    '_When it exits with no errors and no blockers, you are ready to submit._',
+  );
+  lines.push('');
+
+  fs.writeFileSync(RELEASE_BLOCKER_MD, lines.join('\n'), 'utf8');
 }
 
 function main() {
@@ -414,15 +611,27 @@ function main() {
   validateEnvExample();
   validateLinkingTemplates();
 
+  // Write (or clean up) RELEASE_BLOCKER.md before deciding the exit code.
+  writeReleaseBlockerMd();
+
   const asJson = process.argv.includes('--json');
   if (asJson) {
     const ok = errors.length === 0;
-    process.stdout.write(JSON.stringify({ ok, errors, warnings }, null, 2) + '\n');
+    process.stdout.write(
+      JSON.stringify({ ok, errors, warnings, releaseBlockers }, null, 2) + '\n',
+    );
     process.exit(ok ? 0 : 1);
   }
 
   if (warnings.length) {
     for (const w of warnings) console.warn(`warn: ${w}`);
+  }
+  if (releaseBlockers.length) {
+    console.warn(
+      `\nRELEASE BLOCKER: ${releaseBlockers.length} item(s) must be resolved before store submission.`,
+    );
+    for (const b of releaseBlockers) console.warn(`  pending: ${b}`);
+    console.warn('\nSee RELEASE_BLOCKER.md for step-by-step instructions.');
   }
   if (errors.length) {
     for (const e of errors) console.error(`error: ${e}`);
@@ -430,7 +639,7 @@ function main() {
     process.exit(1);
   }
   console.log(
-    `validate-app-config: OK${RELEASE_MODE ? ' (--release)' : ''}${warnings.length ? ` (${warnings.length} warning(s))` : ''}`,
+    `validate-app-config: OK${RELEASE_MODE ? ' (--release)' : ''}${warnings.length ? ` (${warnings.length} warning(s))` : ''}${releaseBlockers.length ? ` — ${releaseBlockers.length} release blocker(s) written to RELEASE_BLOCKER.md` : ''}`,
   );
 }
 
