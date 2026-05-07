@@ -1,103 +1,115 @@
 # Coach Risk Board — PTM Phase 1E
 
-The first time the coach sees PTM (Predictive Tracking Model) scores. Surfaces
-the per-client risk bucket (and, for the OWNER, the underlying %) plus a
-"Send check-in nudge" action so the coach can intervene before a client
-churns.
+The coach risk board is the first surface where PTM (Predictive Transformation Model) scores leave the backend. It lists every client on a coach's roster sorted by churn risk so a coach can intervene before a client drops off. The owner gets a platform-wide view with the raw numeric score; coaches see the traffic-light bucket (red / amber / green) only — the raw float is redacted server-side before the response is sent.
 
-## Screens
+---
 
-- **`RiskBoardScreen.tsx`** — Sorted list of clients by `risk_score DESC`.
-  - Server-side filter chips: All / Red / Amber / Green.
-  - Pull-to-refresh; cursor-paginated (20 per page); infinite scroll.
-  - Row: traffic-light dot, name + email, risk indicator (% for the OWNER,
-    bucket label for a coach — see "Score redaction" below), last-signal
-    "Xd ago".
-  - Empty state: _"No risk data yet — recompute runs nightly at 04:00 UTC."_
-  - Tap → `ClientRiskDetail`.
-- **`ClientRiskDetailScreen.tsx`** — Single-client detail.
-  - Big traffic-light + risk %.
-  - Sorted factor list (the "why" drawer). Positive contribution = red bar
-    (adds risk), negative = green bar (protective).
-  - Last 14 PtmPredictions, one row per recompute.
-  - Outcome label badge if present.
-  - "Send check-in nudge" — POSTs through the existing `coachApi.sendNudge`
-    wire (`POST /coach/clients/:id/nudges`). Lower-friction than dropping the
-    coach into Messages: one tap, templated body.
+## Screens + State Machine
+
+### `RiskBoardScreen.tsx`
+
+| State | Trigger | What renders |
+|---|---|---|
+| `locked` | `currentUser.role` is not `'coach'` or `'owner'` | "Restricted" panel, `testID="risk-board-locked"`, no fetch fires |
+| `loading` (initial) | mount with `canViewBoard=true` | `ActivityIndicator` (large), no list |
+| `loaded` | fetch resolves with items | `FlatList` of client rows, pull-to-refresh active |
+| `empty` | fetch resolves with `items: []` | Inline message — "No risk data yet — recompute runs nightly at 04:00 UTC." |
+| `error` | fetch rejects | `ListEmptyComponent` shows "Could not load risk data" + the error message |
+| `loading-more` | user scrolls to 80% of list | `ActivityIndicator` (small) in list footer |
+| `refreshing` | pull-to-refresh gesture | `RefreshControl` spinner, cursor resets, list replaced |
+
+Filter chip state machine (orthogonal to above):
+
+- Default filter: `'all'`
+- Chips: All / Red / Amber / Green
+- Selecting a chip resets `items`, `cursor`, and re-fetches with the new `bucket` query param
+- The `useEffect` dependency array `[filter, canViewBoard]` ensures re-fetch on both filter change and role arrival
+
+### `ClientRiskDetailScreen.tsx`
+
+Navigated to by tapping a row. Reads `GET /admin/ptm/clients/:id` (OWNER + coach both hit this endpoint via the admin PTM service). Shows:
+
+- Traffic-light dot + risk percentage
+- Sorted factor list ("why" drawer) via `FactorRow` components
+- Last 14 `PtmPrediction` rows
+- Outcome label badge if present
+- "Send check-in nudge" button — fires `POST /coach/clients/:id/nudges`
+
+---
 
 ## Components
 
-- **`src/components/RiskDot.tsx`** — 12 px (default) traffic-light dot. Maps
-  bucket → forest / mutedGold / oxblood from the design tokens.
-- **`src/components/FactorRow.tsx`** — One factor in the "why" drawer. Renders
-  label, optional `observed` count, and signed contribution percentage with a
-  coloured side bar.
+### `src/components/RiskDot.tsx`
 
-## API
+Traffic-light indicator. Maps bucket → theme color token:
 
-Wired through `src/services/ptmApi.ts`:
+| Bucket | Token | Visual |
+|---|---|---|
+| `green` | `colors.success` | Forest green dot |
+| `amber` | `colors.warning` | Muted gold dot |
+| `red` | `colors.error` | Oxblood dot |
 
-| Endpoint                                      | Used by                                           |
-| --------------------------------------------- | ------------------------------------------------- |
-| `GET  /admin/ptm/risk-board?bucket&cursor`    | `RiskBoardScreen` (OWNER branch), home widget     |
-| `GET  /coach/clients/risk-board?bucket&cursor`| `RiskBoardScreen` (coach branch — Phase 1E coach scope wired) |
-| `GET  /admin/ptm/clients/:id`                 | `ClientRiskDetailScreen`                          |
-| `GET  /admin/ptm/outcomes`                    | (reserved for outcome history)                    |
-| `POST /admin/ptm/clients/:id/outcomes`        | (reserved for outcome labels)                     |
+Props: `bucket: PtmRiskBucket`, `size?: number` (default `12`), `testID?: string`.
 
-`ptmApi.getMyRiskBoard()` is the typed wrapper for the coach endpoint;
-both endpoints return the same envelope so the screen renders either
-without conditionals.
+### `src/components/FactorRow.tsx`
 
-## Role gating — coach scope wired
+One factor in the "why" drawer. Renders label, optional `observed` count, and signed contribution as a coloured side-bar percentage. Positive contribution (adds risk) uses `colors.error`; negative (protective) uses `colors.success`.
 
-As of this release the coach branch is real data — **the placeholder is
-gone**.
+---
 
-- **OWNER**: hits `/admin/ptm/risk-board` (platform-wide). Renders the
-  numeric percentage alongside the traffic-light dot.
-- **Coach**: hits `/coach/clients/risk-board` (the calling coach's roster
-  only). Renders the **bucket label** (RED / AMBER / GREEN) where the
-  OWNER row would show a percentage.
-- **Anything else** (student, missing role): renders a "Restricted"
-  screen with `testID="risk-board-locked"`. RootNavigator stops a
-  student long before this screen mounts; the explicit lock is
-  doctrine belt-and-braces.
+## API Endpoints Consumed
 
-### Score redaction (why coaches see a bucket, not a percentage)
+| Endpoint | Method | Caller role | Used by |
+|---|---|---|---|
+| `/admin/ptm/risk-board?bucket&cursor&limit` | GET | OWNER only | `RiskBoardScreen` (owner branch) |
+| `/coach/clients/risk-board?bucket&cursor&limit` | GET | Coach (own roster) | `RiskBoardScreen` (coach branch) |
+| `/admin/ptm/clients/:id` | GET | OWNER + coach | `ClientRiskDetailScreen` |
+| `/admin/ptm/outcomes` | GET | OWNER | (reserved — outcome history) |
+| `/admin/ptm/clients/:id/outcomes` | POST | OWNER | (reserved — outcome labelling) |
+| `/coach/clients/:id/nudges` | POST | Coach | "Send check-in nudge" button |
 
-The PTM `risk_score` is a model internal. A coach is authorised to act on
-the **bucket** (green / amber / red) — that is the triage signal.
-Surfacing the raw float would invite gaming and over-interpretation, and
-the project doctrine pins the score as OWNER-only.
+All requests flow through `src/services/ptmApi.ts`. Both risk-board endpoints return the same envelope shape:
 
-The redaction is enforced **server-side**, not in the UI:
+```ts
+{
+  data: RiskBoardEntry[];  // items array
+  next_cursor: string | null;
+  generated_at?: string;
+}
+```
 
-- `/coach/clients/risk-board` returns `risk_score: null` and
-  `success_score: null` on every row. The bucket is computed by the same
-  `bucketize()` thresholds used by the OWNER endpoint, *before* the score
-  is dropped, so the coach sees the same triage decision the OWNER would.
-- The mobile screen's percentage path (`Math.round(risk_score * 100)`)
-  short-circuits when `risk_score == null`. There is no client-side
-  fallback that re-derives a percentage from the bucket — by design.
+The OWNER endpoint populates `risk_score` and `success_score` as floats. The coach endpoint sets both to `null` — the bucket is pre-computed server-side before the score is dropped, so the coach sees the same triage decision the OWNER would.
 
-## Doctrine
+### Score redaction — why coaches see a bucket, not a percentage
 
-- No raw model internals are exposed. The basis (`heuristic_v1`,
-  `weighted_v2`, `model_v3`) is **not** rendered. Only `risk_score`
-  (OWNER only), the bucket, `factors[].label`, and the sign of
-  `factors[].contribution`.
-- No emoji, no gamification, no confetti.
-- Theme: bone background, ink text, oxblood for risk, forest for protection.
-- TypeScript strict, no `any`.
+`risk_score` is a model internal. Surfacing the raw float invites gaming and over-interpretation. The project doctrine pins the numeric score as OWNER-only.
+
+Redaction is server-side: `/coach/clients/risk-board` returns `risk_score: null`. The mobile screen branches on `item.risk_score == null` — the percentage render path (`Math.round(risk_score * 100)`) is never reached for coach-scope rows. There is no client-side fallback that re-derives a percentage from the bucket.
+
+---
+
+## Env Vars / Feature Flags
+
+| Var | Default | Meaning |
+|---|---|---|
+| `EXPO_PUBLIC_API_URL` | (required) | Base URL for all API calls — consumed by `src/services/api.ts` |
+
+No feature flags gate this screen. Role gating is enforced at the screen level (`currentUser.role`) and on the backend (JWT + CoachGuard / RolesGuard). A student-role token physically cannot reach the risk-board data.
+
+---
 
 ## Tests
 
-- `src/__tests__/RiskDot.test.tsx` — snapshot per bucket.
-- `src/__tests__/RiskBoardScreen.test.tsx` — source-level guards for the
-  role gate, filter chips, cursor pagination, navigation contract, the
-  doctrine that the engine basis is not surfaced, and the
-  null-risk_score → bucket-label render branch. Plus RTL renders that
-  prove (a) the locked branch mounts for non-coach/non-owner roles,
-  (b) the coach role calls `getMyRiskBoard` (never the OWNER endpoint),
-  and (c) the OWNER role calls `getRiskBoard` (never the coach endpoint).
+| File | Assertions |
+|---|---|
+| `src/__tests__/RiskBoardScreen.test.tsx` | Source-level: role gate present, locked `testID`, coach vs owner endpoint routing, filter chip array, `useEffect` dep array, `ClientRiskDetail` navigation, `04:00 UTC` copy, no engine basis exposed, `risk_score == null` branch present. RTL: locked branch mounts for student; coach calls `getMyRiskBoard` (never owner endpoint); empty state renders "04:00 UTC"; loaded-data row renders client name and bucket label; error state renders "Could not load risk data" + error message; owner calls `getRiskBoard`, renders numeric percentage. |
+| `src/__tests__/RiskDot.test.tsx` | Snapshot per bucket (green / amber / red) plus custom `size` prop. |
+
+---
+
+## Known Limits / Future Work
+
+- **`/coach/clients/risk-board` backend endpoint**: this endpoint must exist in `growth-project-backend/src/coach/coach.controller.ts`. It mirrors `GET /admin/ptm/risk-board` but filters to the calling coach's roster and nulls `risk_score` / `success_score` on every row before returning. If the endpoint is not yet deployed, coaches will receive a 404 and the error state will render.
+- **`ClientRiskDetailScreen.tsx`**: referenced in the README and navigation contract but shipped as a separate screen — confirm it exists in the navigator before releasing to production.
+- **Outcome labelling from the risk board**: the spec calls for a one-click "label outcome" flow from the risk board. `ptmApi.labelOutcome` is wired but no UI button exists on this screen yet. Reserved for Phase 1C follow-up.
+- **Admin home widget**: a risk-count widget (red / amber / green totals) on the admin home screen is part of Phase 1E spec. Not in scope for this PR — tracked separately.
