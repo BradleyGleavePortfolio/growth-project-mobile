@@ -24,6 +24,8 @@ import { errorMessage } from '../../types/common';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { AuthStackParamList } from '../../navigation/AuthNavigator';
+import AppleSignInButton from '../../components/AppleSignInButton';
+import { signInWithApple } from '../../utils/appleAuth';
 
 interface Props {
   navigation: NativeStackNavigationProp<AuthStackParamList>;
@@ -36,6 +38,7 @@ export default function LoginScreen({ navigation }: Props) {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [appleLoading, setAppleLoading] = useState(false);
   const [error, setError] = useState('');
 
   const handleLogin = async () => {
@@ -111,6 +114,38 @@ export default function LoginScreen({ navigation }: Props) {
       if (!friendly.cancelled) setError(friendly.message);
     } finally {
       setGoogleLoading(false);
+    }
+  };
+
+  const handleAppleLogin = async () => {
+    setAppleLoading(true);
+    setError('');
+    try {
+      const result = await signInWithApple();
+
+      if (!result.success) {
+        if (result.cancelled) return;
+        const friendly = toFriendlyAuthError(result.error);
+        if (!friendly.cancelled) {
+          setError(friendly.message);
+          Alert.alert('Sign-in', friendly.message);
+        }
+        return;
+      }
+
+      if (result.is_new_user || !result.user?.role) {
+        await AsyncStorage.setItem('needs_role_selection', 'true');
+        navigation.replace('RoleSelection');
+      } else {
+        if (result.user?.id) identify(result.user.id, { role: result.user.role });
+        track('signed_in', { method: 'apple' });
+        authEvents.emit();
+      }
+    } catch (err) {
+      const friendly = toFriendlyAuthError(err);
+      if (!friendly.cancelled) setError(friendly.message);
+    } finally {
+      setAppleLoading(false);
     }
   };
 
@@ -221,6 +256,17 @@ export default function LoginScreen({ navigation }: Props) {
           )}
         </TouchableOpacity>
 
+        {/* Apple Sign-In — required by App Store when any third-party
+            sign-in is offered. AppleSignInButton renders nothing on Android
+            or on iOS devices that don't support Apple sign-in (very old
+            simulators, accounts without Apple ID). */}
+        <View style={styles.appleButtonWrap} pointerEvents={appleLoading ? 'none' : 'auto'}>
+          <AppleSignInButton onPress={handleAppleLogin} label="SIGN_IN" />
+          {appleLoading ? (
+            <ActivityIndicator color={colors.dark} style={styles.appleSpinner} />
+          ) : null}
+        </View>
+
         {/* Sign up link */}
         <View style={styles.signupRow}>
           <Text style={styles.signupText}>Don't have an account? </Text>
@@ -307,6 +353,12 @@ const makeStyles = (colors: ThemeColors) =>
     color: colors.dark,
   },
   googleButtonText: { ...Typography.button, color: colors.dark },
+  appleButtonWrap: {
+    marginTop: Spacing.md,
+    minHeight: 48,
+    justifyContent: 'center',
+  },
+  appleSpinner: { position: 'absolute', alignSelf: 'center' },
   signupRow: {
     flexDirection: 'row',
     justifyContent: 'center',

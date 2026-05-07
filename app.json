@@ -18,11 +18,13 @@
       "buildNumber": "2",
       "infoPlist": {
         "NSCameraUsageDescription": "Used for barcode scanning to log food items",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSFaceIDUsageDescription": "Unlock the app and confirm sensitive actions with Face ID"
       },
       "associatedDomains": [
         "applinks:app.trygrowthproject.com"
-      ]
+      ],
+      "usesAppleSignIn": true
     },
     "android": {
       "adaptiveIcon": {
@@ -59,9 +61,16 @@
     },
     "plugins": [
       "expo-sqlite",
+      "expo-apple-authentication",
       "expo-web-browser",
       "expo-font",
       "expo-localization",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Unlock the app and confirm sensitive actions with Face ID"
+        }
+      ],
       [
         "expo-notifications",
         {

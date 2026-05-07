@@ -25,6 +25,7 @@ import { mediumTap, warningTap, successTap } from '../../utils/haptics';
 import { updateSupabasePassword } from '../../utils/supabaseAuth';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
+import BiometricUnlockSetting from '../../components/BiometricUnlockSetting';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 
 export default function SettingsScreen({ navigation }: { navigation: NavigationProp<ParamListBase> }) {
@@ -313,6 +314,13 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
               thumbColor={colors.textOnPrimary}
             />
           </View>
+        </View>
+
+
+        {/* Security */}
+        <Text style={styles.sectionLabel}>Security</Text>
+        <View style={styles.card}>
+          <BiometricUnlockSetting />
         </View>
 
         {/* Personalization — Psych #4 */}

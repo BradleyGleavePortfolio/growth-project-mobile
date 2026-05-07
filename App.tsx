@@ -26,6 +26,7 @@ import {
 import { initSentry, wrap as sentryWrap } from './src/services/sentry';
 import { track } from './src/lib/analytics';
 import { ThemeProvider } from './src/theme/ThemeProvider';
+import BiometricUnlockGate from './src/components/BiometricUnlockGate';
 import {
   installAxiosMockAdapter,
   isScreenshotMode,
@@ -179,7 +180,12 @@ function App() {
               Must be inside PersistQueryClientProvider so useFoundingNumber()
               (which calls useQuery) works correctly. */}
           <ThemeProvider>
-            <RootNavigator />
+            {/* BiometricUnlockGate is a no-op when the user hasn't opted in.
+                It sits inside ThemeProvider so the locked-state UI uses the
+                same theme as the rest of the app. */}
+            <BiometricUnlockGate>
+              <RootNavigator />
+            </BiometricUnlockGate>
           </ThemeProvider>
         </PersistQueryClientProvider>
       </AnalyticsProvider>

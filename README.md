@@ -74,6 +74,54 @@ Google sign-in is brokered through Supabase OAuth. The mobile build does
 **not** embed any per-platform Google client ID. See `PLAY_STORE_READINESS.md`
 section 7 for the redirect URIs Supabase + Google Cloud Console must allow.
 
+### Sign in with Apple (iOS)
+
+Apple Sign-In is required by App Store Review whenever any third-party
+sign-in (e.g. Google) is offered. The button is wired into `LoginScreen` and
+`CreateAccountScreen` and uses the official
+`<AppleAuthentication.AppleAuthenticationButton>` component (mandatory by
+Apple HIG — do **not** swap in a custom button).
+
+Apple Developer portal steps (one-time, owner only):
+
+1. App IDs → `com.growthproject.app` → enable the **Sign In with Apple**
+   capability. Save.
+2. Regenerate the iOS provisioning profile (EAS handles this automatically
+   on the next `eas build --platform ios --profile production`).
+3. If you serve users via Supabase, enable the **Apple** provider in the
+   Supabase dashboard and paste in the Apple Services ID + key. The mobile
+   client itself does not embed an Apple client ID — the identity token is
+   verified server-side at `POST /auth/apple`.
+
+`app.json` already declares `ios.usesAppleSignIn: true` and includes the
+`expo-apple-authentication` plugin so the entitlement is added to the
+binary at build time.
+
+### Biometric unlock (Face ID / Touch ID / Android biometrics)
+
+`expo-local-authentication` powers an optional biometric unlock that
+re-prompts on cold start and after the app has been backgrounded for more
+than 5 minutes. Users opt in from **Settings → Security → Biometric
+unlock**; the opt-in flag is stored in SecureStore (Keychain / Keystore) at
+key `biometric_unlock_enabled`.
+
+Behaviour rules:
+
+- Opt-in off → the gate is a pass-through.
+- Opt-in on, biometrics enrolled → prompt; failure falls back to device
+  passcode (system fallback). On final failure the app stays locked with a
+  retry button — we never wipe tokens.
+- Opt-in on, biometrics not enrolled or hardware absent → the gate
+  unlocks silently. We never lock a user out because of a hardware change.
+
+iOS requires `NSFaceIDUsageDescription` in `Info.plist`; this is set in
+`app.json` under `ios.infoPlist`.
+
+For EAS builds, either embed these in `eas.json` `env` blocks or store them as
+EAS Secrets (`eas secret:create --scope project --name FOO`). Run
+`npm run validate:config` before `eas build` to catch missing or stale config.
+
+
 For EAS builds, either embed these in `eas.json` `env` blocks or store them as
 EAS Secrets (`eas secret:create --scope project --name FOO`). Run
 `npm run validate:config` before `eas build` to catch missing or stale config.
