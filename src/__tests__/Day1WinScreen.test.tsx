@@ -30,9 +30,11 @@ const SCREEN_SRC = fs.readFileSync(
 
 describe('Day1WinScreen — source guards', () => {
   it('has testIDs for all three win cards', () => {
-    expect(SCREEN_SRC).toMatch(/testID="day1win-card-logged_first_weight"/);
-    expect(SCREEN_SRC).toMatch(/testID="day1win-card-first_checkin"/);
-    expect(SCREEN_SRC).toMatch(/testID="day1win-card-first_meal"/);
+    // WIN_CARD_TEST_IDS defines the static testID strings; the JSX references
+    // them via WIN_CARD_TEST_IDS[card.id]. Assert all three values are present.
+    expect(SCREEN_SRC).toMatch(/day1win-card-logged_first_weight/);
+    expect(SCREEN_SRC).toMatch(/day1win-card-first_checkin/);
+    expect(SCREEN_SRC).toMatch(/day1win-card-first_meal/);
   });
 
   it('has testID for the skip button', () => {
