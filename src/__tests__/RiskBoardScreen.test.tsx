@@ -1,6 +1,6 @@
 // RiskBoardScreen — Phase 1E doctrine guards.
 //
-// We assert the contract that matters most for this screen:
+// Assertions enforced here:
 //   1. The role gate exists in source — students get a "restricted"
 //      screen; both coaches and the OWNER account load real data.
 //   2. The fetch picks /coach/clients/risk-board for coaches and
@@ -80,15 +80,15 @@ describe('RiskBoardScreen — source guards', () => {
   });
 });
 
-// Light RTL renders to prove the role branches mount as expected.
+// ─── Shared mock wiring ──────────────────────────────────────────────────────
 //
-//   * The "locked" branch is reached only by a role outside {coach, owner}.
-//     We use 'student' here as the doctrine belt-and-braces role; in
-//     production RootNavigator stops a student long before this screen
-//     mounts, but the explicit lock keeps the screen safe if that ever
-//     changes.
-//   * The coach branch must hit the new /coach/clients/risk-board fetcher
-//     (`getMyRiskBoard`), NOT the OWNER one. We assert that mock.
+// jest.mock calls are hoisted to the top of the module by Babel/Jest before
+// any imports are evaluated. Referencing the `mockUseCurrentUser` variable
+// from inside a mock factory is safe because:
+//   (a) the factory is lazy — it runs when the module is first required, not
+//       at hoist time, so the var is already assigned.
+//   (b) jest.mock itself is still hoisted but its *factory argument* closes
+//       over the module scope at call time.
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: jest.fn() }),
   useRoute: () => ({ params: {} }),
@@ -153,6 +153,8 @@ jest.mock('../components/HapticPressable', () => {
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const RiskBoardScreen = require('../screens/coach/RiskBoardScreen').default;
 
+// ─── Locked branch ───────────────────────────────────────────────────────────
+
 describe('RiskBoardScreen — locked branch', () => {
   beforeEach(() => {
     mockGetRiskBoard.mockClear();
@@ -173,6 +175,8 @@ describe('RiskBoardScreen — locked branch', () => {
   });
 });
 
+// ─── Coach branch ────────────────────────────────────────────────────────────
+
 describe('RiskBoardScreen — coach branch hits the coach-scoped endpoint', () => {
   beforeEach(() => {
     mockGetRiskBoard.mockClear();
@@ -192,7 +196,51 @@ describe('RiskBoardScreen — coach branch hits the coach-scoped endpoint', () =
     expect(mockGetMyRiskBoard).toHaveBeenCalled();
     expect(mockGetRiskBoard).not.toHaveBeenCalled();
   });
+
+  it('renders the empty state when the API returns an empty list', async () => {
+    mockGetMyRiskBoard.mockResolvedValueOnce({
+      data: { items: [], next_cursor: null },
+    });
+    const { findByText } = render(<RiskBoardScreen />);
+    // Empty-state body text references the nightly recompute window.
+    expect(await findByText(/04:00 UTC/i)).toBeTruthy();
+  });
+
+  it('renders a client row when the API returns data (coach — bucket label only)', async () => {
+    // Coach scope: risk_score is null; the row shows the bucket label, not a %.
+    mockGetMyRiskBoard.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            user_id: 'client-1',
+            name: 'Alex Trent',
+            email: 'alex@example.com',
+            risk_score: null,
+            success_score: null,
+            bucket: 'red',
+            last_signal_at: null,
+            outcome_label: null,
+          },
+        ],
+        next_cursor: null,
+      },
+    });
+    const { findByText } = render(<RiskBoardScreen />);
+    expect(await findByText('Alex Trent')).toBeTruthy();
+    // Coach sees the uppercased bucket label, not a numeric percentage.
+    expect(await findByText('Red')).toBeTruthy();
+  });
+
+  it('renders the error state when the API rejects', async () => {
+    mockGetMyRiskBoard.mockRejectedValueOnce(new Error('Network timeout'));
+    const { findByText } = render(<RiskBoardScreen />);
+    // Error path sets error in state; ListEmptyComponent shows the error title + message.
+    expect(await findByText(/Could not load risk data/i)).toBeTruthy();
+    expect(await findByText(/Network timeout/i)).toBeTruthy();
+  });
 });
+
+// ─── Owner branch ────────────────────────────────────────────────────────────
 
 describe('RiskBoardScreen — owner branch hits the OWNER endpoint', () => {
   beforeEach(() => {
@@ -210,5 +258,30 @@ describe('RiskBoardScreen — owner branch hits the OWNER endpoint', () => {
     await Promise.resolve();
     expect(mockGetRiskBoard).toHaveBeenCalled();
     expect(mockGetMyRiskBoard).not.toHaveBeenCalled();
+  });
+
+  it('renders a client row with a numeric percentage for the owner', async () => {
+    // Owner scope: risk_score is returned as a number and displayed as a %.
+    mockGetRiskBoard.mockResolvedValueOnce({
+      data: {
+        items: [
+          {
+            user_id: 'client-2',
+            name: 'Jordan Miles',
+            email: 'jordan@example.com',
+            risk_score: 0.75,
+            success_score: 0.4,
+            bucket: 'red',
+            last_signal_at: null,
+            outcome_label: null,
+          },
+        ],
+        next_cursor: null,
+      },
+    });
+    const { findByText } = render(<RiskBoardScreen />);
+    expect(await findByText('Jordan Miles')).toBeTruthy();
+    // Owner sees the numeric score: Math.round(0.75 * 100) = 75%.
+    expect(await findByText('75%')).toBeTruthy();
   });
 });
