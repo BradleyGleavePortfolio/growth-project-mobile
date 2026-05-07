@@ -19,6 +19,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import React from 'react';
 import { render } from '@testing-library/react-native';
+import type { RiskBoardEntry } from '../services/ptmApi';
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const SCREEN_SRC = fs.readFileSync(
@@ -121,10 +122,10 @@ jest.mock('../theme/ThemeProvider', () => ({
   }),
 }));
 const mockGetRiskBoard = jest.fn((_q?: unknown) =>
-  Promise.resolve({ data: { items: [], next_cursor: null } }),
+  Promise.resolve({ data: { items: [] as RiskBoardEntry[], next_cursor: null } }),
 );
 const mockGetMyRiskBoard = jest.fn((_q?: unknown) =>
-  Promise.resolve({ data: { items: [], next_cursor: null } }),
+  Promise.resolve({ data: { items: [] as RiskBoardEntry[], next_cursor: null } }),
 );
 jest.mock('../services/ptmApi', () => ({
   ptmApi: {
