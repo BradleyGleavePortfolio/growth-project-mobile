@@ -17,11 +17,15 @@
  *     component never invents an approver.
  *   - When `isStale === true`, the freshness chip flips to "source stale" and
  *     the component refuses to render `groundedAt` as if it were current.
+ *
+ * Security: provider and model are opaque display strings. No PII is rendered
+ * here. Token usage is tracked server-side only. The app never holds provider
+ * keys — all AI calls are proxied through the backend gateway.
  */
 
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Colors } from '../../constants/colors';
+import { useTheme } from '../../theme/ThemeProvider';
 import { Spacing, Radius, Typography } from '../../theme/index';
 import type { AIGatewayDraftOk } from '../../types/aiGateway';
 import { aiGatewayFlags } from '../../config/aiGatewayFlags';
@@ -48,6 +52,7 @@ function formatTimestamp(iso: string): string {
 }
 
 export default function AISourceBadge({ draft, showSourceBadge }: Props) {
+  const { colors } = useTheme();
   const enabled = showSourceBadge ?? aiGatewayFlags.showSourceBadge;
   if (!enabled) return null;
 
@@ -59,7 +64,13 @@ export default function AISourceBadge({ draft, showSourceBadge }: Props) {
 
   return (
     <View
-      style={styles.container}
+      style={[
+        styles.container,
+        {
+          borderColor: colors.divider,
+          backgroundColor: colors.surface,
+        },
+      ]}
       accessible
       accessibilityRole="text"
       accessibilityLabel={[
@@ -78,34 +89,38 @@ export default function AISourceBadge({ draft, showSourceBadge }: Props) {
         .join('. ')}
       testID="ai-source-badge"
     >
-      <Text style={styles.line}>
-        <Text style={styles.label}>AI draft · </Text>
-        <Text style={styles.value}>
+      <Text style={[styles.line, { color: colors.textSecondary }]}>
+        <Text style={{ color: colors.textMuted }}>AI draft · </Text>
+        <Text style={{ color: colors.textSecondary }}>
           {source.provider} {source.model}
         </Text>
       </Text>
-      <Text style={styles.line}>
-        <Text style={styles.label}>Generated · </Text>
-        <Text style={styles.value}>{generatedAt}</Text>
+      <Text style={[styles.line, { color: colors.textSecondary }]}>
+        <Text style={{ color: colors.textMuted }}>Generated · </Text>
+        <Text style={{ color: colors.textSecondary }}>{generatedAt}</Text>
       </Text>
       {groundedAt && (
-        <Text style={styles.line}>
-          <Text style={styles.label}>Grounded in data · </Text>
-          <Text style={[styles.value, isStale && styles.staleValue]}>
+        <Text style={[styles.line, { color: colors.textSecondary }]}>
+          <Text style={{ color: colors.textMuted }}>Grounded in data · </Text>
+          <Text
+            style={{
+              color: isStale ? colors.warning : colors.textSecondary,
+            }}
+          >
             {groundedAt}
             {isStale ? ' (stale)' : ''}
           </Text>
         </Text>
       )}
-      <Text style={styles.line}>
-        <Text style={styles.label}>Status · </Text>
+      <Text style={[styles.line, { color: colors.textSecondary }]}>
+        <Text style={{ color: colors.textMuted }}>Status · </Text>
         {approval.actor ? (
-          <Text style={styles.value}>
+          <Text style={{ color: colors.textSecondary }}>
             approved by {approval.actor.role}
             {approval.actor.name ? ` · ${approval.actor.name}` : ''}
           </Text>
         ) : (
-          <Text style={styles.pendingValue}>pending coach review</Text>
+          <Text style={{ color: colors.warning }}>pending coach review</Text>
         )}
       </Text>
     </View>
@@ -115,26 +130,11 @@ export default function AISourceBadge({ draft, showSourceBadge }: Props) {
 const styles = StyleSheet.create({
   container: {
     borderWidth: 1,
-    borderColor: Colors.divider,
     borderRadius: Radius.md,
     padding: Spacing.sm,
-    backgroundColor: Colors.surface,
   },
   line: {
     ...Typography.caption,
-    color: Colors.textSecondary,
     marginBottom: 2,
-  },
-  label: {
-    color: Colors.textMuted,
-  },
-  value: {
-    color: Colors.textSecondary,
-  },
-  staleValue: {
-    color: Colors.warning,
-  },
-  pendingValue: {
-    color: Colors.warning,
   },
 });
