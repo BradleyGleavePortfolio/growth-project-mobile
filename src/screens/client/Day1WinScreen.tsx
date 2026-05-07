@@ -9,7 +9,7 @@
  * Design doctrine:
  *   - bone/ink/forest palette via useTheme().colors only — no hex codes.
  *   - Cormorant Garamond for display text, Inter for body copy.
- *   - No emoji. No confetti. No trophy icons. No celebration chrome.
+ *   - No emoji. No gamification chrome. No celebration chrome.
  *   - Every interactive element has accessibilityLabel + accessibilityRole.
  */
 
@@ -54,6 +54,15 @@ const WIN_CARDS: WinCard[] = [
     description: 'Three days of honest food data tells your coach more than any intake form.',
   },
 ];
+
+// Static testIDs for each card. Template literals would not be detectable by
+// source-guard tests that scan the file as a plain string.
+const WIN_CARD_TEST_IDS: Record<WinType, string> = {
+  logged_first_weight: 'day1win-card-logged_first_weight',
+  set_first_goal:      'day1win-card-set_first_goal',
+  first_checkin:       'day1win-card-first_checkin',
+  first_meal:          'day1win-card-first_meal',
+};
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -166,7 +175,7 @@ export default function Day1WinScreen({ onComplete }: Day1WinScreenProps) {
                 disabled={loading}
                 accessibilityLabel={card.title}
                 accessibilityRole="button"
-                testID={`day1win-card-${card.id}`}
+                testID={WIN_CARD_TEST_IDS[card.id]}
               >
                 {loading && isSelected ? (
                   <ActivityIndicator
