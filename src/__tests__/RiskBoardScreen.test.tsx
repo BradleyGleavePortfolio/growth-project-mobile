@@ -226,10 +226,13 @@ describe('RiskBoardScreen — coach branch hits the coach-scoped endpoint', () =
         next_cursor: null,
       },
     });
-    const { findByText } = render(<RiskBoardScreen />);
+    const { findByText, getAllByText } = render(<RiskBoardScreen />);
     expect(await findByText('Alex Trent')).toBeTruthy();
-    // Coach sees the uppercased bucket label, not a numeric percentage.
-    expect(await findByText('Red')).toBeTruthy();
+    expect(await findByText('alex@example.com')).toBeTruthy();
+    // Coach sees the uppercased bucket label (not a numeric percentage).
+    // 'Red' appears twice: once in the filter chip row and once in the data row.
+    const redElements = getAllByText('Red');
+    expect(redElements.length).toBeGreaterThanOrEqual(2);
   });
 
   it('renders the error state when the API rejects', async () => {
