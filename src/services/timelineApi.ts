@@ -170,7 +170,7 @@ export function fetchTimeline(query: TimelineQuery = {}): Promise<TimelineRespon
   if (query.lanes && query.lanes.length > 0) {
     params.lanes = query.lanes.join(',');
   }
-  return api.get<TimelineResponse>(`/me/timeline${qs(params)}`);
+  return api.get<TimelineResponse>(`/me/timeline${qs(params)}`).then((r) => r.data);
 }
 
 export const timelineApi = { fetchTimeline };
