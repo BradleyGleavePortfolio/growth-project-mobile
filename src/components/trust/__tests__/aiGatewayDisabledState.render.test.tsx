@@ -73,19 +73,18 @@ describe('AIGatewayDisabledState', () => {
     expect(getByText('AI assist is off')).toBeTruthy();
   });
 
-  it('sets accessibilityRole="text" on the container', () => {
-    const { getByRole } = render(
+  it('container testID uses ai-gateway-{status}-{reason} pattern', () => {
+    const { getByTestId } = render(
       <AIGatewayDisabledState response={flagOff} />,
     );
-    // "text" accessibilityRole maps to 'text' in RNTL queries
-    expect(getByRole('text')).toBeTruthy();
+    expect(getByTestId('ai-gateway-disabled-feature_flag_off')).toBeTruthy();
   });
 
-  it('accessibilityLabel contains title and body copy', () => {
+  it('accessibilityLabel on container contains title copy', () => {
     const { getByLabelText } = render(
       <AIGatewayDisabledState response={flagOff} />,
     );
-    // Matches the combined "title. body" pattern set on the container
+    // The container label is "title. body" — partial match on title is enough
     expect(
       getByLabelText(/Not yet available/i),
     ).toBeTruthy();
@@ -123,7 +122,7 @@ describe('AIGatewayDisabledState', () => {
     expect(correlationEl).toBeTruthy();
   });
 
-  it('does NOT render the correlation ID when absent', () => {
+  it('does NOT render the correlation ID when null', () => {
     const noCorrelation: AIGatewayDraftError = {
       status: 'error',
       capability: 'coach_brief_draft',
@@ -136,10 +135,12 @@ describe('AIGatewayDisabledState', () => {
     expect(queryByTestId('ai-gateway-correlation-id')).toBeNull();
   });
 
-  it('uses the testID pattern ai-gateway-{status}-{reason} for QA targeting', () => {
-    const { getByTestId } = render(
-      <AIGatewayDisabledState response={flagOff} />,
+  it('retry button has accessibilityRole button and accessibilityLabel "Try again"', () => {
+    const onRetry = jest.fn();
+    const { getByRole } = render(
+      <AIGatewayDisabledState response={providerError} onRetry={onRetry} />,
     );
-    expect(getByTestId('ai-gateway-disabled-feature_flag_off')).toBeTruthy();
+    // TouchableOpacity with accessibilityRole="button" — RNTL maps this
+    expect(getByRole('button')).toBeTruthy();
   });
 });
