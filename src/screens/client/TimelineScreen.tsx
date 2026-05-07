@@ -338,6 +338,8 @@ export default function TimelineScreen() {
           ListFooterComponent={ListFooter}
           onEndReached={loadMore}
           onEndReachedThreshold={0.4}
+          onRefresh={refresh}
+          refreshing={state.isRefreshing}
           refreshControl={
             <RefreshControl
               refreshing={state.isRefreshing}
