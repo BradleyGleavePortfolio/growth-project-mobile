@@ -9,11 +9,15 @@
  * Doctrine: never substitute a fabricated answer for a disabled response.
  * The component refuses to render a "result-shaped" treatment — it always
  * renders a clearly-non-content state with a recovery hint.
+ *
+ * Security: no provider keys, no PII, no raw AI output rendered here.
+ * Token usage is tracked server-side; this component only displays
+ * server-returned status codes and operator-owned copy.
  */
 
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { Colors } from '../../constants/colors';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { useTheme } from '../../theme/ThemeProvider';
 import { Spacing, Radius, Typography } from '../../theme/index';
 import type {
   AIGatewayDraftDisabled,
@@ -39,9 +43,9 @@ interface CopyVariant {
 }
 
 // Operator-friendly copy. No "AI is thinking" or "the assistant is working" —
-// the doctrine forbids implying autonomy. Each line states what's missing
+// the doctrine forbids implying autonomy. Each line states what is missing
 // and what the user can do.
-function copyForDisabled(r: AIGatewayDraftDisabled): CopyVariant {
+export function copyForDisabled(r: AIGatewayDraftDisabled): CopyVariant {
   if (r.summary) {
     return { title: 'AI assist is off', body: r.summary };
   }
@@ -69,7 +73,7 @@ function copyForDisabled(r: AIGatewayDraftDisabled): CopyVariant {
     case 'consent_missing':
       return {
         title: 'Consent required',
-        body: 'AI drafting needs your client’s explicit consent. Open the privacy settings to grant or revoke it.',
+        body: "AI drafting needs your client's explicit consent. Open the privacy settings to grant or revoke it.",
       };
     case 'feature_flag_off':
       return {
@@ -84,12 +88,12 @@ function copyForDisabled(r: AIGatewayDraftDisabled): CopyVariant {
   }
 }
 
-function copyForError(r: AIGatewayDraftError): CopyVariant {
+export function copyForError(r: AIGatewayDraftError): CopyVariant {
   switch (r.reason) {
     case 'provider_unavailable':
       return {
-        title: 'Couldn’t reach the AI service',
-        body: 'The model provider didn’t respond. Try again in a moment.',
+        title: "Couldn't reach the AI service",
+        body: "The model provider didn't respond. Try again in a moment.",
       };
     case 'timeout':
       return {
@@ -98,12 +102,12 @@ function copyForError(r: AIGatewayDraftError): CopyVariant {
       };
     case 'content_blocked':
       return {
-        title: 'Couldn’t draft this one',
+        title: "Couldn't draft this one",
         body: 'The model declined this request. Edit the input or write the draft manually.',
       };
     case 'invalid_input':
       return {
-        title: 'Couldn’t draft this one',
+        title: "Couldn't draft this one",
         body: 'Some of the inputs were missing or malformed. Check the form and try again.',
       };
     default:
@@ -115,6 +119,7 @@ function copyForError(r: AIGatewayDraftError): CopyVariant {
 }
 
 export default function AIGatewayDisabledState({ response, onRetry }: Props) {
+  const { colors } = useTheme();
   const copy =
     response.status === 'disabled'
       ? copyForDisabled(response)
@@ -125,29 +130,43 @@ export default function AIGatewayDisabledState({ response, onRetry }: Props) {
 
   return (
     <View
-      style={styles.container}
+      style={[
+        styles.container,
+        {
+          borderColor: colors.border,
+          backgroundColor: colors.surface,
+        },
+      ]}
       accessible
       accessibilityRole="text"
       accessibilityLabel={`${copy.title}. ${copy.body}`}
       testID={`ai-gateway-${response.status}-${response.reason}`}
     >
-      <Text style={styles.title}>{copy.title}</Text>
-      <Text style={styles.body}>{copy.body}</Text>
+      <Text style={[styles.title, { color: colors.textPrimary }]}>
+        {copy.title}
+      </Text>
+      <Text style={[styles.body, { color: colors.textSecondary }]}>
+        {copy.body}
+      </Text>
       {!!correlationId && (
-        <Text style={styles.correlation} testID="ai-gateway-correlation-id">
+        <Text
+          style={[styles.correlation, { color: colors.textMuted }]}
+          testID="ai-gateway-correlation-id"
+        >
           ref: {correlationId}
         </Text>
       )}
       {showRetry && (
-        <Text
+        <TouchableOpacity
           accessibilityRole="button"
           accessibilityLabel="Try again"
           onPress={onRetry}
-          style={styles.retry}
           testID="ai-gateway-retry"
         >
-          Try again
-        </Text>
+          <Text style={[styles.retry, { color: colors.primary }]}>
+            Try again
+          </Text>
+        </TouchableOpacity>
       )}
     </View>
   );
@@ -156,28 +175,22 @@ export default function AIGatewayDisabledState({ response, onRetry }: Props) {
 const styles = StyleSheet.create({
   container: {
     borderWidth: 1,
-    borderColor: Colors.border,
     borderRadius: Radius.lg,
     padding: Spacing.md,
-    backgroundColor: Colors.surface,
   },
   title: {
     ...Typography.h3,
-    color: Colors.textPrimary,
     marginBottom: Spacing.xs,
   },
   body: {
     ...Typography.body,
-    color: Colors.textSecondary,
   },
   correlation: {
     ...Typography.caption,
-    color: Colors.textMuted,
     marginTop: Spacing.sm,
   },
   retry: {
     ...Typography.button,
-    color: Colors.primary,
     marginTop: Spacing.md,
   },
 });
