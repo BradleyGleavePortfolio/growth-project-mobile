@@ -87,10 +87,10 @@ describe('CoachWorkoutBuilderScreen', () => {
   });
 
   it('has correct accessibility labels on primary interactive elements', () => {
-    const { getByA11yLabel } = render(<CoachWorkoutBuilderScreen />);
+    const { getByLabelText } = render(<CoachWorkoutBuilderScreen />);
 
-    expect(getByA11yLabel('Plan name input')).toBeTruthy();
-    expect(getByA11yLabel('Save workout plan')).toBeTruthy();
-    expect(getByA11yLabel('Open exercise search')).toBeTruthy();
+    expect(getByLabelText('Plan name input')).toBeTruthy();
+    expect(getByLabelText('Save workout plan')).toBeTruthy();
+    expect(getByLabelText('Open exercise search')).toBeTruthy();
   });
 });
