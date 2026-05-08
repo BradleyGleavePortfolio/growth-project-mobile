@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 22,
-    fontWeight: '700',
+    fontWeight: '600',
     color: Colors.textPrimary,
     marginBottom: 6,
   },
@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
   },
   checkmarkText: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '600',
     color: Colors.textOnPrimary,
   },
   reasonInput: {
