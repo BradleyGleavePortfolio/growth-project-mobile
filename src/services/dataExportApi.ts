@@ -10,21 +10,14 @@ export interface DataExportRecord {
   download_token: string | null;
 }
 
-interface RequestExportResponse {
-  id: string;
-  status: 'PENDING';
-  created_at: string;
-  message: string;
-}
-
 export const dataExportApi = {
   /**
    * POST /v1/me/data-export/request
    * Enqueue a new export. Returns immediately; poll /status for completion.
    * Throws with err.response.status on HTTP errors (e.g. 409 for rate limit).
    */
-  async requestExport(): Promise<RequestExportResponse> {
-    const { data } = await api.post<RequestExportResponse>(
+  async requestExport(): Promise<DataExportRecord> {
+    const { data } = await api.post<DataExportRecord>(
       '/v1/me/data-export/request',
     );
     return data;
@@ -40,8 +33,16 @@ export const dataExportApi = {
         '/v1/me/data-export/status',
       );
       return data;
-    } catch (err: any) {
-      if (err?.response?.status === 404) return null;
+    } catch (err: unknown) {
+      if (
+        typeof err === 'object' &&
+        err !== null &&
+        'response' in err &&
+        typeof (err as { response?: { status?: number } }).response?.status === 'number' &&
+        (err as { response: { status: number } }).response.status === 404
+      ) {
+        return null;
+      }
       throw err;
     }
   },
