@@ -4,21 +4,31 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   verify:
     name: Typecheck, lint, test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
 
       - name: Install deps
         run: npm ci
+
+      - name: Validate release readiness (placeholders, store URLs, version)
+        # Early-fail gate — runs first so placeholder regressions are caught
+        # before slower typecheck/lint/test steps. In --release mode the
+        # validator exits zero even when known-pending items (SHA256
+        # fingerprint, null store URLs) are present; those are written to
+        # RELEASE_BLOCKER.md instead. Genuinely broken config (wrong package
+        # name, malformed URL, missing plugin) always exits non-zero.
+        run: npm run validate:release
 
       - name: Lint
         run: npm run lint --if-present

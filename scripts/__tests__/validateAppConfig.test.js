@@ -14,6 +14,7 @@ const path = require('path');
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..');
 const VALIDATOR = path.join(REPO_ROOT, 'scripts', 'validate-app-config.js');
+const RELEASE_BLOCKER_MD = path.join(REPO_ROOT, 'RELEASE_BLOCKER.md');
 
 function runJson(args, env = {}) {
   const res = spawnSync('node', [VALIDATOR, '--json', ...args], {
@@ -62,35 +63,111 @@ describe('validate-app-config (default mode, repo as-is)', () => {
   });
 });
 
-describe('validate-app-config --release (repo as-is)', () => {
+describe('validate-app-config --release (repo as-is — placeholder and null store URLs are pending, not broken)', () => {
   let result;
   beforeAll(() => {
     result = runJson(['--release']);
   });
 
-  it('exits non-zero while placeholders / null store URLs remain', () => {
-    expect(result.status).not.toBe(0);
+  afterAll(() => {
+    // Clean up any RELEASE_BLOCKER.md written during this test run.
+    if (fs.existsSync(RELEASE_BLOCKER_MD)) {
+      fs.unlinkSync(RELEASE_BLOCKER_MD);
+    }
   });
 
-  it('promotes remaining REPLACE_WITH_* placeholders to errors', () => {
-    // The AASA Team ID placeholder is filled in the checked-in repo; only the
-    // Play app-signing SHA256 fingerprint in assetlinks.json is still a
-    // placeholder (it is only available after Google Play signs the AAB).
-    expect(result.parsed.errors.some((e) =>
-      /assetlinks\.json:.*REPLACE_WITH_/.test(e),
-    )).toBe(true);
-    expect(result.parsed.errors.some((e) =>
-      /apple-app-site-association:.*REPLACE_WITH_/.test(e),
-    )).toBe(false);
+  it('exits zero — pending items (placeholder, null store URLs) are blockers, not hard errors', () => {
+    // The validator must never produce a false-positive green for genuinely
+    // broken values, but it must not block CI for things that are expected
+    // to be incomplete at this stage (SHA256 not yet in Play Console,
+    // store listings not yet published). Those go into RELEASE_BLOCKER.md.
+    expect(result.status).toBe(0);
   });
 
-  it('promotes both null storeListings entries to errors', () => {
-    expect(result.parsed.errors.some((e) =>
-      /storeListings\.playStoreUrl/.test(e),
+  it('has no hard errors', () => {
+    expect(result.parsed).toBeTruthy();
+    expect(result.parsed.errors).toEqual([]);
+  });
+
+  it('puts the REPLACE_WITH_PLAY_APP_SIGNING_SHA256_FINGERPRINT placeholder into releaseBlockers', () => {
+    expect(result.parsed.releaseBlockers.some((b) =>
+      /assetlinks\.json/.test(b) && /REPLACE_WITH_/.test(b),
     )).toBe(true);
-    expect(result.parsed.errors.some((e) =>
-      /storeListings\.appStoreUrl/.test(e),
+  });
+
+  it('puts both null storeListings entries into releaseBlockers', () => {
+    expect(result.parsed.releaseBlockers.some((b) =>
+      /storeListings.*playStoreUrl/.test(b),
     )).toBe(true);
+    expect(result.parsed.releaseBlockers.some((b) =>
+      /storeListings.*appStoreUrl/.test(b),
+    )).toBe(true);
+  });
+
+  it('writes RELEASE_BLOCKER.md to repo root', () => {
+    expect(fs.existsSync(RELEASE_BLOCKER_MD)).toBe(true);
+    const content = fs.readFileSync(RELEASE_BLOCKER_MD, 'utf8');
+    expect(content).toContain('RELEASE BLOCKER');
+  });
+
+  it('RELEASE_BLOCKER.md contains the exact keytool command Bradley must run', () => {
+    const content = fs.readFileSync(RELEASE_BLOCKER_MD, 'utf8');
+    expect(content).toContain('keytool -list -v -keystore');
+  });
+
+  it('RELEASE_BLOCKER.md contains Play Console navigation path', () => {
+    const content = fs.readFileSync(RELEASE_BLOCKER_MD, 'utf8');
+    expect(content).toContain('App integrity');
+  });
+});
+
+describe('validate-app-config --release with all placeholders filled in', () => {
+  let dir;
+
+  beforeAll(() => {
+    dir = makeWorkspace();
+    // Fill both placeholders and store URLs so the validator has nothing pending.
+    const al = path.join(dir, 'docs', 'well-known', 'assetlinks.json');
+    fs.writeFileSync(
+      al,
+      fs.readFileSync(al, 'utf8').replace(
+        /REPLACE_WITH_PLAY_APP_SIGNING_SHA256_FINGERPRINT/g,
+        'AB:CD:EF:12:34:56:78:90:AB:CD:EF:12:34:56:78:90:AB:CD:EF:12:34:56:78:90:AB:CD:EF:12:34:56:78',
+      ),
+    );
+    const aasa = path.join(dir, 'docs', 'well-known', 'apple-app-site-association');
+    fs.writeFileSync(
+      aasa,
+      fs.readFileSync(aasa, 'utf8').replace(/REPLACE_WITH_APPLE_TEAM_ID/g, 'ABCDE12345'),
+    );
+    const appJsonPath = path.join(dir, 'app.json');
+    const app = JSON.parse(fs.readFileSync(appJsonPath, 'utf8'));
+    app.expo.extra.storeListings = {
+      playStoreUrl: 'https://play.google.com/store/apps/details?id=com.growthproject.app',
+      appStoreUrl: 'https://apps.apple.com/us/app/the-growth-project/id1234567890',
+    };
+    fs.writeFileSync(appJsonPath, JSON.stringify(app, null, 2));
+  });
+
+  afterAll(() => {
+    if (dir) fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('exits zero when everything is filled in', () => {
+    const res = runIn(dir, ['--release']);
+    expect(res.status).toBe(0);
+  });
+
+  it('has no errors and no releaseBlockers when everything is filled in', () => {
+    const res = runIn(dir, ['--release']);
+    expect(res.parsed.errors).toEqual([]);
+    expect(res.parsed.releaseBlockers).toEqual([]);
+  });
+
+  it('does NOT write RELEASE_BLOCKER.md when there are no pending items', () => {
+    const blockerPath = path.join(dir, 'RELEASE_BLOCKER.md');
+    runIn(dir, ['--release']);
+    expect(fs.existsSync(blockerPath)).toBe(false);
   });
 });
 
@@ -250,7 +327,37 @@ describe('validate-app-config — store listings', () => {
     }
   });
 
-  it('--release accepts both real Play and App Store URLs together', () => {
+  it('--release treats null store URLs as pending blockers, not hard errors', () => {
+    // Null = "not yet published" — expected pre-launch. Must not fail CI.
+    const dir = makeWorkspace();
+    try {
+      // Fill placeholders so those don't interfere with this assertion.
+      const al = path.join(dir, 'docs', 'well-known', 'assetlinks.json');
+      fs.writeFileSync(
+        al,
+        fs.readFileSync(al, 'utf8').replace(
+          /REPLACE_WITH_PLAY_APP_SIGNING_SHA256_FINGERPRINT/g,
+          'AB:CD:EF:12:34:56:78:90:AB:CD:EF:12:34:56:78:90:AB:CD:EF:12:34:56:78:90:AB:CD:EF:12:34:56:78',
+        ),
+      );
+      const aasa = path.join(dir, 'docs', 'well-known', 'apple-app-site-association');
+      fs.writeFileSync(
+        aasa,
+        fs.readFileSync(aasa, 'utf8').replace(/REPLACE_WITH_APPLE_TEAM_ID/g, 'ABCDE12345'),
+      );
+
+      const res = runIn(dir, ['--release']);
+      expect(res.status).toBe(0);
+      expect(res.parsed.errors).toEqual([]);
+      expect(res.parsed.releaseBlockers.some((b) =>
+        /playStoreUrl/.test(b),
+      )).toBe(true);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('--release accepts both real Play and App Store URLs together with no blockers', () => {
     const dir = makeWorkspace();
     try {
       const appJsonPath = path.join(dir, 'app.json');
@@ -264,13 +371,13 @@ describe('validate-app-config — store listings', () => {
       };
       fs.writeFileSync(appJsonPath, JSON.stringify(app, null, 2));
 
-      // Also fill the placeholders so --release passes.
+      // Also fill the placeholders so --release has nothing pending.
       const al = path.join(dir, 'docs', 'well-known', 'assetlinks.json');
       fs.writeFileSync(
         al,
         fs.readFileSync(al, 'utf8').replace(
           /REPLACE_WITH_PLAY_APP_SIGNING_SHA256_FINGERPRINT/g,
-          '00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF:00:11:22:33:44:55:66:77:88:99:AA:BB:CC:DD:EE:FF',
+          'AB:CD:EF:12:34:56:78:90:AB:CD:EF:12:34:56:78:90:AB:CD:EF:12:34:56:78:90:AB:CD:EF:12:34:56:78',
         ),
       );
       const aasa = path.join(
@@ -286,7 +393,62 @@ describe('validate-app-config — store listings', () => {
 
       const res = runIn(dir, ['--release']);
       expect(res.parsed.errors).toEqual([]);
+      expect(res.parsed.releaseBlockers).toEqual([]);
       expect(res.status).toBe(0);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('validate-app-config — RELEASE_BLOCKER.md content', () => {
+  it('includes the keytool command with the correct arguments for the SHA256 fingerprint', () => {
+    const dir = makeWorkspace();
+    try {
+      const res = runIn(dir, ['--release']);
+      // Placeholder still present → should have written RELEASE_BLOCKER.md.
+      const blockerPath = path.join(dir, 'RELEASE_BLOCKER.md');
+      expect(fs.existsSync(blockerPath)).toBe(true);
+      const content = fs.readFileSync(blockerPath, 'utf8');
+      expect(content).toContain('keytool -list -v -keystore');
+      expect(content).toContain('App integrity');
+      expect(content).toContain('SHA-256 fingerprint');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('is removed (cleaned up) when --release runs with everything filled in', () => {
+    const dir = makeWorkspace();
+    try {
+      // Write a stale RELEASE_BLOCKER.md first.
+      const blockerPath = path.join(dir, 'RELEASE_BLOCKER.md');
+      fs.writeFileSync(blockerPath, 'stale content');
+
+      // Fill everything.
+      const al = path.join(dir, 'docs', 'well-known', 'assetlinks.json');
+      fs.writeFileSync(
+        al,
+        fs.readFileSync(al, 'utf8').replace(
+          /REPLACE_WITH_PLAY_APP_SIGNING_SHA256_FINGERPRINT/g,
+          'AB:CD:EF:12:34:56:78:90:AB:CD:EF:12:34:56:78:90:AB:CD:EF:12:34:56:78:90:AB:CD:EF:12:34:56:78',
+        ),
+      );
+      const aasa = path.join(dir, 'docs', 'well-known', 'apple-app-site-association');
+      fs.writeFileSync(
+        aasa,
+        fs.readFileSync(aasa, 'utf8').replace(/REPLACE_WITH_APPLE_TEAM_ID/g, 'ABCDE12345'),
+      );
+      const appJsonPath = path.join(dir, 'app.json');
+      const app = JSON.parse(fs.readFileSync(appJsonPath, 'utf8'));
+      app.expo.extra.storeListings = {
+        playStoreUrl: 'https://play.google.com/store/apps/details?id=com.growthproject.app',
+        appStoreUrl: 'https://apps.apple.com/us/app/the-growth-project/id1234567890',
+      };
+      fs.writeFileSync(appJsonPath, JSON.stringify(app, null, 2));
+
+      runIn(dir, ['--release']);
+      expect(fs.existsSync(blockerPath)).toBe(false);
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }

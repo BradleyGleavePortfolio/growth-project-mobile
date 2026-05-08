@@ -128,12 +128,95 @@ if the Sentry account moves.
 
 ## Release readiness
 
-Android-specific:
+Every PR runs `npm run validate:release` as the first CI step. The command
+checks that `app.json`, `.env.example`, and the hosted-file templates are
+consistent. Genuinely broken config (wrong package name, invalid URL format,
+missing plugin) fails CI immediately. Known-pending items that cannot be
+completed until after the first store upload (SHA256 fingerprint, store
+listing URLs) are written to `RELEASE_BLOCKER.md` at repo root instead —
+CI still passes, but the file tells you exactly what must be done before
+submitting to the stores.
+
+Additional references:
 
 - `PLAY_STORE_READINESS.md` — full pre-submission checklist (signing, data safety, deep links, OAuth).
 - `docs/RELEASE_SMOKE.md` — manual smoke checks per build.
 - `scripts/release-smoke.sh` — automated subset, run after `adb install -r build.apk`.
 - `docs/well-known/` — hosted-file templates for Android App Links + iOS Universal Links.
+- `scripts/validate-app-config.js` — the validator; run `node scripts/validate-app-config.js --help` for usage.
+
+### BEFORE PLAY STORE SUBMISSION — required steps
+
+The CI gate passes while the app is in development, but two items must be
+completed before you submit to the Google Play Store. If you see a
+`RELEASE_BLOCKER.md` file in the repo root after a CI run, these are what
+it is telling you to fix.
+
+#### Step 1 — Fill in the Android SHA256 fingerprint
+
+**What it is:** A unique code that proves the app installed on someone's
+Android phone is the real Growth Project app (not a fake copy). Without it,
+invite links sent to Android users will open in a web browser instead of
+opening the app directly.
+
+**Where it lives:** `docs/well-known/assetlinks.json` — look for the line
+that says `REPLACE_WITH_PLAY_APP_SIGNING_SHA256_FINGERPRINT`.
+
+**How to get it:**
+
+Option A — from Play Console (use this after your first production upload):
+
+1. Go to [play.google.com/console](https://play.google.com/console) and open The Growth Project.
+2. In the left-hand menu, go to **Setup** > **App integrity**.
+3. Under **App signing key certificate**, copy the **SHA-256 fingerprint**.
+   It looks like: `AB:CD:EF:12:34:56:78:90:AB:CD:...`
+
+Option B — from the keystore file on your computer (use this before your first upload):
+
+```bash
+keytool -list -v -keystore /path/to/your.keystore -alias your-key-alias
+# Look for the line that starts with SHA256:
+```
+
+**Then replace the placeholder:**
+
+Open `docs/well-known/assetlinks.json` and change:
+```json
+"REPLACE_WITH_PLAY_APP_SIGNING_SHA256_FINGERPRINT"
+```
+to your real fingerprint, e.g.:
+```json
+"AB:CD:EF:12:34:56:78:90:AB:CD:EF:12:34:56:78:90:AB:CD:EF:12:34:56:78:90:AB:CD:EF:12:34:56:78"
+```
+
+After saving, upload the file to:
+`https://app.trygrowthproject.com/.well-known/assetlinks.json`
+
+#### Step 2 — Add store listing URLs
+
+Once the app is published on the Play Store and App Store, open `app.json`
+and fill in the two `null` values under `expo.extra.storeListings`:
+
+```json
+"storeListings": {
+  "playStoreUrl": "https://play.google.com/store/apps/details?id=com.growthproject.app",
+  "appStoreUrl": "https://apps.apple.com/us/app/the-growth-project/id<your-app-id>"
+}
+```
+
+These URLs are used in in-app "Rate us" and share links. They are validated
+by `npm run validate:release` — a fake or wrong-format URL will fail CI.
+
+#### How to confirm you are ready
+
+After completing both steps, run:
+
+```bash
+npm run validate:release
+```
+
+If it exits with no errors and no blockers (no `RELEASE_BLOCKER.md` written),
+you are ready to submit.
 
 ## Project Structure
 
