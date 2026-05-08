@@ -1,21 +1,21 @@
 /**
- * ApplicationStatusScreen — snapshot + interaction tests
+ * talentMarketplace.test.tsx — Phase 11 / Track 8
  *
- * Tests are source-level and import-level — we do not mount the full screen
- * in Jest (heavy RN mocking required) but we validate:
+ * Source-level and import-level guards for ApplicationStatusScreen and
+ * talentMarketplaceApi. We do not mount the full screen in Jest (React Native
+ * renderer setup is tracked for Track 8.5) but we validate:
  *   1. The API module is imported and used correctly.
- *   2. Status label and description maps are exhaustive (both STATUS_LABEL
- *      and STATUS_DESCRIPTION reference every status value).
- *   3. Accessibility attributes are referenced in source.
- *
- * A full interaction test (rendering with mocked provider) is tracked as a
- * follow-up for Track 8.5 once the React Native test renderer is wired up.
+ *   2. Status label and description maps are exhaustive.
+ *   3. Accessibility attributes are present in source.
+ *   4. Quiet-luxury doctrine compliance (no emoji, no forbidden tokens).
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
 
-const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
+// ROOT resolves to the repository root: src/__tests__/ → src/ → project-root.
+const ROOT = path.resolve(__dirname, '..', '..');
+
 const SCREEN_SRC = fs.readFileSync(
   path.join(ROOT, 'src', 'screens', 'applicant', 'ApplicationStatusScreen.tsx'),
   'utf8',
@@ -41,18 +41,18 @@ describe('ApplicationStatusScreen', () => {
 
   it('uses theme tokens and not hardcoded colour hex values', () => {
     // Hardcoded hex values are forbidden by the design doctrine.
-    // The check strips line comments first so colour tokens used in comments
-    // (e.g. JSDoc) do not cause false positives.
-    const nonCommentLines = SCREEN_SRC
-      .split('\n')
-      .filter((l) => !l.trim().startsWith('//') && !l.trim().startsWith('*'));
-    const hexInCode = nonCommentLines.some((l) => /#[0-9a-fA-F]{3,6}\b/.test(l));
+    // Strip line/block comments first so colour tokens mentioned in JSDoc do
+    // not cause false positives.
+    const noComments = SCREEN_SRC
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+    const hexInCode = /#[0-9a-fA-F]{3,6}\b/.test(noComments);
     expect(hexInCode).toBe(false);
   });
 
-  it('has STATUS_LABEL entry for every status value', () => {
+  it('has a STATUS_LABEL entry for every status value', () => {
     for (const status of ALL_STATUSES) {
-      // Object keys may be quoted ('pending':) or unquoted (pending:)
+      // Object keys may be quoted ('pending':) or unquoted (pending:).
       const quotedPattern = new RegExp(`'${status}'\\s*:`);
       const unquotedPattern = new RegExp(`\\b${status}\\s*:`);
       const found = quotedPattern.test(SCREEN_SRC) || unquotedPattern.test(SCREEN_SRC);
@@ -60,9 +60,10 @@ describe('ApplicationStatusScreen', () => {
     }
   });
 
-  it('has STATUS_DESCRIPTION entry for every status value', () => {
+  it('has a STATUS_DESCRIPTION entry for every status value', () => {
+    // Each status should appear as an object key at least twice in the file:
+    // once in STATUS_LABEL and once in STATUS_DESCRIPTION.
     for (const status of ALL_STATUSES) {
-      // Verify the status appears at least twice in the file (once per map).
       const pattern = new RegExp(`(?:'${status}'|\\b${status})\\s*:`, 'g');
       const occurrences = (SCREEN_SRC.match(pattern) ?? []).length;
       expect(occurrences).toBeGreaterThanOrEqual(2);
@@ -77,8 +78,8 @@ describe('ApplicationStatusScreen', () => {
     expect(SCREEN_SRC).toMatch(/accessibilityRole="button"/);
   });
 
-  it('does not contain any emoji characters', () => {
-    // Pictograph ranges only
+  it('does not contain pictograph emoji characters', () => {
+    // Pictograph ranges only — bare typographic marks (✓ etc.) are allowed.
     // eslint-disable-next-line no-control-regex
     const emojiPattern = /[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]/u;
     expect(emojiPattern.test(SCREEN_SRC)).toBe(false);
@@ -111,10 +112,8 @@ describe('talentMarketplaceApi', () => {
     expect(API_SRC).toMatch(/MyCoachApplication/);
   });
 
-  it('does not contain any API keys or hardcoded service URLs', () => {
-    // Stripe keys start with sk_ or pk_
+  it('does not contain API keys or hardcoded service base URLs', () => {
     expect(API_SRC).not.toMatch(/sk_live|pk_live|sk_test|pk_test/);
-    // No hardcoded API base URLs (api.ts handles base URL via env)
     expect(API_SRC).not.toMatch(/https:\/\/api\./);
   });
 });
