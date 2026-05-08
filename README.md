@@ -11,6 +11,7 @@ A React Native nutrition & fitness coaching app built with Expo, TypeScript, and
 - **Intermittent Fasting** — Timer with protocol selection and streak tracking
 - **AI Guide** — Context-aware nutrition chatbot
 - **Coach Dashboard** — Multi-client management, reports, and invite system
+- **Support Inbox** — In-app live support chat via Crisp (accessible from Settings -> Support). Separate from Coach AI and the Client Bot. See `docs/support-inbox.md`.
 - **Coach Risk Board (OWNER-gated in this release)** — PTM Phase 1E surface that lists clients sorted by churn risk, with a per-client "why" drawer and a one-tap check-in nudge. See `src/screens/coach/RISK_BOARD.md`.
 - **Weekly Reports** — Shareable progress summaries
 
@@ -69,6 +70,7 @@ All runtime env vars are read via `expo-constants` / `EXPO_PUBLIC_*`. Copy
 | `SENTRY_AUTH_TOKEN` | no (recommended for prod) | EAS-time secret consumed by `@sentry/react-native/expo`'s release-upload step. When unset the build still succeeds, but no source maps reach Sentry, so production stack traces stay minified. See "Sentry release tracking" below. |
 | `EXPO_PUBLIC_POSTHOG_KEY` | no | PostHog project key. Empty string disables capture. |
 | `EXPO_PUBLIC_POSTHOG_HOST` | no | Defaults to `https://us.i.posthog.com`. |
+| `EXPO_PUBLIC_CRISP_WEBSITE_ID` | yes (support inbox) | Crisp website ID for the in-app support inbox. Found in the Crisp dashboard under **Settings -> Website Settings -> Setup instructions**. Ships in the bundle (public key). See `docs/support-inbox.md`. |
 
 Google sign-in is brokered through Supabase OAuth. The mobile build does
 **not** embed any per-platform Google client ID. See `PLAY_STORE_READINESS.md`
