@@ -21,6 +21,7 @@ import { useCreateWorkout } from '../../hooks/useApi';
 import ExerciseLogModal, { ExerciseLogSaveData } from '../../components/ExerciseLogModal';
 import { track } from '../../lib/analytics';
 import { HapticService } from '../../ui/haptics/haptics.service';
+import { AnalyticsEvents } from '../../analytics/events';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 // Phase 11 / Track 10: offline-first write path.
 // The workout is saved to WatermelonDB first (sync_status='pending').
@@ -412,7 +413,7 @@ export default function ActiveWorkoutScreen() {
                 // Phase 11 / Track 3: heavy haptic on workout completion
                 HapticService.heavyImpact();
                 // Psych Report #4: Analytics — workout_logged
-                track('workout_logged', {
+                track(AnalyticsEvents.WORKOUT_COMPLETED, {
                   duration_minutes: Math.round(timer / 60),
                   sets_completed: completedSets,
                   exercise_count: sessionExercises.filter((e) => e.sets.some((s) => s.completed)).length,
