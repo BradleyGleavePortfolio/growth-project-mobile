@@ -1,11 +1,11 @@
 import React from 'react';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import DataExportScreen from '../DataExportScreen';
-import { dataExportApi } from '../../../api/dataExport';
+import { dataExportApi } from '../../../services/dataExportApi';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
-jest.mock('../../../api/dataExport', () => ({
+jest.mock('../../../services/dataExportApi', () => ({
   dataExportApi: {
     requestExport: jest.fn(),
     getStatus: jest.fn(),
@@ -117,7 +117,8 @@ describe('DataExportScreen', () => {
 
   it('shows an error when request returns 409', async () => {
     mockGetStatus.mockResolvedValue(null);
-    mockRequestExport.mockRejectedValue({ status: 409 });
+    // Axios throws with a response object — { response: { status: 409 } }
+    mockRequestExport.mockRejectedValue({ response: { status: 409 } });
 
     const { findByRole, findByText } = render(<DataExportScreen />);
 
