@@ -15,6 +15,7 @@ import ClientMessagesScreen from '../screens/coach/ClientMessagesScreen';
 import RiskBoardScreen from '../screens/coach/RiskBoardScreen';
 import ClientRiskDetailScreen from '../screens/coach/ClientRiskDetailScreen';
 import CoachBillingScreen from '../screens/coach/CoachBillingScreen';
+import BloodworkReviewQueueScreen from '../screens/coach/BloodworkReviewQueueScreen';
 import TrustCenterScreen from '../screens/TrustCenterScreen';
 import { Colors } from '../constants/colors';
 
@@ -33,6 +34,7 @@ export type ClientsStackParamList = {
   InviteCodes: undefined;
   RiskBoard: undefined;
   ClientRiskDetail: { userId: string; clientName?: string };
+  BloodworkReviewQueue: undefined;
 };
 
 export type SettingsStackParamList = {
@@ -59,6 +61,7 @@ function ClientsStackNavigator() {
       <ClientsStack.Screen name="InviteCodes" component={InviteCodesScreen} />
       <ClientsStack.Screen name="RiskBoard" component={RiskBoardScreen} />
       <ClientsStack.Screen name="ClientRiskDetail" component={ClientRiskDetailScreen} />
+      <ClientsStack.Screen name="BloodworkReviewQueue" component={BloodworkReviewQueueScreen} />
     </ClientsStack.Navigator>
   );
 }

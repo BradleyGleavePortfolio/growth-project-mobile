@@ -12,6 +12,7 @@
  * Phase 7B: TimelineScreen added to MoreStackNavigator as 'Timeline'.
  * Accessible from MoreScreen; no new tab added (avoids 5-tab crowding).
  * Phase 7C: LeaderboardScreen + LeaderboardSettingsScreen added to MoreStack.
+ * Bloodwork: BloodworkEntryScreen added to MoreStack (flag OFF by default).
  */
 import React from 'react';
 import { StyleSheet } from 'react-native';
@@ -52,6 +53,8 @@ import TimelineScreen from '../screens/client/TimelineScreen';
 // Phase 7C — Peer Leaderboard
 import LeaderboardScreen from '../screens/client/LeaderboardScreen';
 import LeaderboardSettingsScreen from '../screens/client/LeaderboardSettingsScreen';
+// Bloodwork — client-entered labs (flag OFF by default)
+import BloodworkEntryScreen from '../screens/client/BloodworkEntryScreen';
 import { colors } from '../theme/tokens';
 
 // ─── Param lists ──────────────────────────────────────────────────────────────
@@ -81,6 +84,7 @@ export type WorkoutStackParamList = {
 // MoreStack: all non-tab screens live here. Screen names preserved.
 // Phase 7B: Timeline added.
 // Phase 7C: Leaderboard + LeaderboardSettings added.
+// Bloodwork: BloodworkEntry added (flag OFF by default).
 export type MoreStackParamList = {
   MoreIndex:   undefined;
   Recipes:     undefined;
@@ -107,6 +111,8 @@ export type MoreStackParamList = {
   /** Phase 7C — Peer Leaderboard (opt-in) */
   Leaderboard:         undefined;
   LeaderboardSettings: undefined;
+  /** Bloodwork — client-entered labs (flag OFF by default) */
+  Bloodwork:   undefined;
 };
 
 // ─── Stack navigators ─────────────────────────────────────────────────────────
@@ -151,6 +157,7 @@ function WorkoutStackNavigator() {
 // MoreStack: Profile + every ex-tab screen. Keeps existing navigate() calls valid.
 // Phase 7B: Timeline screen registered here.
 // Phase 7C: Leaderboard screens registered here.
+// Bloodwork: BloodworkEntry screen registered here.
 function MoreStackNavigator() {
   return (
     <MoreStackNav.Navigator
@@ -184,6 +191,8 @@ function MoreStackNavigator() {
       {/* Phase 7C — Peer Leaderboard (opt-in) */}
       <MoreStackNav.Screen name="Leaderboard"          component={LeaderboardScreen} />
       <MoreStackNav.Screen name="LeaderboardSettings"  component={LeaderboardSettingsScreen} />
+      {/* Bloodwork — client-entered labs (flag OFF by default) */}
+      <MoreStackNav.Screen name="Bloodwork"    component={BloodworkEntryScreen} />
     </MoreStackNav.Navigator>
   );
 }
