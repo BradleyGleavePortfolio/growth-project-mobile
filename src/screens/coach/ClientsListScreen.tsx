@@ -125,6 +125,19 @@ export default function ClientsListScreen({ navigation }: Props) {
         </Text>
       </View>
 
+      {/* Phase 11 / Track 6 — Workout Builder quick-access tile */}
+      <HapticPressable
+        intent="light"
+        style={styles.workoutBuilderTile}
+        onPress={() => navigation.navigate('WorkoutBuilder')}
+        accessibilityLabel="Open Workout Builder"
+        accessibilityRole="button"
+      >
+        <Ionicons name="barbell-outline" size={20} color={colors.primary} />
+        <Text style={styles.workoutBuilderTileText}>Workout Builder</Text>
+        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={{ marginLeft: 'auto' }} />
+      </HapticPressable>
+
       <View style={styles.searchContainer}>
         <Ionicons name="search" size={18} color={colors.textMuted} />
         <TextInput
@@ -390,6 +403,21 @@ const makeStyles = (colors: ThemeColors) =>
     textTransform: 'uppercase',
   },
 
-
-  });
-
+  workoutBuilderTile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 12,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 10,
+    backgroundColor: (colors as ThemeColors).surface,
+    borderWidth: 1,
+    borderColor: (colors as ThemeColors).border,
+  },
+  workoutBuilderTileText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: (colors as ThemeColors).text,
+  },
+});
