@@ -35,7 +35,7 @@ import {
 describe('registerPushChannels — Android', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // @ts-expect-error — mock Platform.OS
+    // @ts-ignore — override Platform.OS for test
     Platform.OS = 'android';
   });
 
@@ -70,7 +70,7 @@ describe('registerPushChannels — Android', () => {
 describe('registerPushChannels — iOS', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // @ts-expect-error — mock Platform.OS
+    // @ts-ignore — override Platform.OS for test
     Platform.OS = 'ios';
   });
 
