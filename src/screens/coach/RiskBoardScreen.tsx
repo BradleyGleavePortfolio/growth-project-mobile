@@ -4,10 +4,11 @@
 // Cursor-paginated; pull-to-refresh.
 //
 // Role gating:
-//   - role==='owner' → full screen (the OWNER bypass on CoachGuard makes
-//     /admin/ptm/* reachable today).
-//   - any other role → placeholder. A coach-scoped /coach/clients/risk-board
-//     endpoint will land in a follow-on PR; until then we don't fake data.
+//   - role==='owner'  → fetches /admin/ptm/risk-board (platform-wide,
+//     numeric percentage rendered alongside the bucket dot).
+//   - role==='coach'  → fetches /coach/clients/risk-board (own roster
+//     only; backend redacts risk_score/success_score so the UI shows
+//     bucket-only and hides the percentage column).
 //   - role==='student' is locked out by RootNavigator long before this
 //     screen mounts. The explicit check below is a doctrine belt-and-braces:
 //     PTM scores must NEVER reach a student device.
@@ -57,6 +58,10 @@ export default function RiskBoardScreen() {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const currentUser = useCurrentUser();
   const isOwner = currentUser?.role === 'owner';
+  const isCoach = currentUser?.role === 'coach';
+  // The screen renders the data path for both owner and coach. Anything
+  // else (no role yet, student) gets the locked screen.
+  const canViewBoard = isOwner || isCoach;
 
   const [filter, setFilter] = useState<Filter>('all');
   const [items, setItems] = useState<RiskBoardEntry[]>([]);
@@ -74,7 +79,11 @@ export default function RiskBoardScreen() {
         if (mode === 'initial') setLoading(true);
         if (mode === 'refresh') setRefreshing(true);
         if (mode === 'next') setLoadingMore(true);
-        const res = await ptmApi.getRiskBoard({
+        // Owner reads the platform-wide /admin endpoint. Coaches read the
+        // coach-scoped endpoint, which is roster-filtered and redacts the
+        // numeric score on the server.
+        const fetcher = isOwner ? ptmApi.getRiskBoard : ptmApi.getMyRiskBoard;
+        const res = await fetcher({
           bucket,
           cursor: useCursor,
           limit: PAGE_SIZE,
@@ -94,17 +103,17 @@ export default function RiskBoardScreen() {
         setLoadingMore(false);
       }
     },
-    [cursor],
+    [cursor, isOwner],
   );
 
   useEffect(() => {
-    if (!isOwner) return;
+    if (!canViewBoard) return;
     setItems([]);
     setCursor(null);
     fetchPage('initial', filter);
     // We intentionally re-fetch on filter change; cursor resets above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filter, isOwner]);
+  }, [filter, canViewBoard]);
 
   const onRefresh = useCallback(() => {
     setCursor(null);
@@ -116,16 +125,16 @@ export default function RiskBoardScreen() {
     fetchPage('next', filter);
   }, [cursor, fetchPage, filter, loadingMore]);
 
-  if (!isOwner) {
+  if (!canViewBoard) {
     return (
       <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.title}>Risk Board</Text>
         </View>
-        <View style={styles.placeholder} testID="risk-board-placeholder">
-          <Text style={styles.placeholderTitle}>Coming soon</Text>
+        <View style={styles.placeholder} testID="risk-board-locked">
+          <Text style={styles.placeholderTitle}>Restricted</Text>
           <Text style={styles.placeholderBody}>
-            Coach risk board coming with the next backend release.
+            The risk board is available to coaches and the operator account.
           </Text>
         </View>
       </View>
@@ -157,7 +166,18 @@ export default function RiskBoardScreen() {
         </Text>
       </View>
       <View style={styles.rowMeta}>
-        <Text style={styles.rowScore}>{Math.round(item.risk_score * 100)}%</Text>
+        {/*
+         * Owner sees the raw percentage; coaches see only the bucket
+         * label (the backend redacts risk_score for non-owners as
+         * Phase 1E doctrine).
+         */}
+        {item.risk_score == null ? (
+          <Text style={styles.rowBucket}>
+            {item.bucket.charAt(0).toUpperCase() + item.bucket.slice(1)}
+          </Text>
+        ) : (
+          <Text style={styles.rowScore}>{Math.round(item.risk_score * 100)}%</Text>
+        )}
         <Text style={styles.rowSignal}>{formatRelative(item.last_signal_at)}</Text>
       </View>
     </HapticPressable>
@@ -326,6 +346,13 @@ const makeStyles = (colors: ThemeColors) =>
       fontFamily: 'Inter_600SemiBold',
       fontSize: 16,
       color: colors.textPrimary,
+    },
+    rowBucket: {
+      fontFamily: 'Inter_500Medium',
+      fontSize: 14,
+      color: colors.textPrimary,
+      textTransform: 'uppercase',
+      letterSpacing: 0.5,
     },
     rowSignal: {
       fontFamily: 'Inter_400Regular',
