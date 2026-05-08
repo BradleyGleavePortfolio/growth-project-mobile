@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Changelog
 
 All notable changes to the Growth Project mobile app are documented here.
@@ -74,3 +75,40 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **`src/navigation/ClientNavigator.tsx`** — `HomeStackParamList` updated to include `NotificationCenter` and `NotificationPreferences`. Bell icon added to `HomeStackNavigator` header. Old stub `Notifications` entry preserved as alias.
 - **`src/navigation/CoachNavigator.tsx`** — `CoachStackParamList` extended with `NotificationCenter` and `NotificationPreferences`. Bell icon added to `ClientsStackNavigator` header.
 - **`src/navigation/README.md`** — Updated to document the bell icon entry points in both navigators.
+
+---
+
+## [Phase 8] — 2025-05 — Coach Command Center
+
+### Added
+
+- **Coach Command Center** (`src/screens/coach/command-center/`) — new top-level coach landing screen replacing `CoachHomeScreen` as the home tab.
+  - 5 tabs: Overview (KPI tiles), At-Risk (clients with amber/red PTM bucket), Win Streaks (clients with active streaks), Inbox (coach message threads), Action Queue (pending coach alerts).
+  - All screens: loading / empty / error states with pull-to-refresh.
+  - Optimistic dismiss on Action Queue items with rollback on error.
+  - Accessible: `accessibilityLabel` + `accessibilityRole` on every interactive element.
+  - `testID` attributes on every key element for future E2E targeting.
+- **`commandCenterApi.ts`** (`src/services/commandCenterApi.ts`) — typed wrappers for 6 backend endpoints. Ships with `__USING_MOCK_DATA = true` (preview mode) until the Phase 8 backend PR is deployed.
+- **Shared components** (`src/components/command-center/`):
+  - `KpiTile` — single numeric KPI tile.
+  - `AlertRow` — client alert row with bucket colour accent.
+  - `MessagePreviewRow` — inbox thread row with unread badge.
+  - `MockDataBanner` — preview mode banner.
+- **Tests**:
+  - `src/__tests__/commandCenterScreens.test.tsx` — render tests for all 5 screens + 3 components.
+  - `src/__tests__/commandCenterNavigation.test.tsx` — file existence + navigator registration + non-regression.
+- **READMEs**:
+  - `src/screens/coach/command-center/README.md` — full feature documentation.
+  - `src/navigation/README.md` — updated to document the new coach landing tab.
+
+### Changed
+
+- **`CoachNavigator.tsx`** — `CommandCenter` tab added as the first tab (home). Old `Dashboard` tab moved into `ClientsStack` as a sub-screen under the route name `Dashboard` to preserve backwards compatibility with any existing `navigate('Dashboard')` calls.
+
+### No breaking changes
+
+The old `CoachHomeScreen` is preserved and reachable via `navigation.navigate('Dashboard')` inside the `ClientsStack`. Sessions screens (PR #104), bloodwork review (PR #103), risk board (PR #106), and wave 11 brief (PR #100) are all unchanged.
+
+---
+
+*Earlier phases will be back-filled as their PRs are reviewed and merged.*
