@@ -72,7 +72,7 @@
     "react-native-view-shot": "4.0.0",
     "react-native-worklets": "0.7.4",
     "zustand": "^5.0.11",
-    "crisp-sdk-react-native": "^1.0.0"
+    "crisp-sdk-react-native": "^0.2.0"
   },
   "devDependencies": {
     "@testing-library/react-native": "^13.3.3",
