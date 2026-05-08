@@ -52,10 +52,12 @@ jest.mock('../theme/ThemeProvider', () => ({
 
 jest.mock('react-native-gesture-handler', () => {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const mockReact = require('react');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { View } = require('react-native');
   return {
-    GestureDetector: ({ children }: { children: React.ReactNode }) =>
-      React.createElement(View, null, children),
+    GestureDetector: ({ children }: { children: unknown }) =>
+      mockReact.createElement(View, null, children),
     Gesture: {
       Pan: () => ({ runOnJS: () => ({ onUpdate: () => ({ onEnd: () => ({}) }) }) }),
       Tap: () => ({ runOnJS: () => ({ onStart: () => ({}) }) }),
@@ -65,12 +67,14 @@ jest.mock('react-native-gesture-handler', () => {
 
 jest.mock('react-native-svg', () => {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const mockReact = require('react');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { View } = require('react-native');
-  const MockSvg = ({ children }: { children?: React.ReactNode }) =>
-    React.createElement(View, { testID: 'svg' }, children);
+  const MockSvg = ({ children }: { children?: unknown }) =>
+    mockReact.createElement(View, { testID: 'svg' }, children);
   const makeMock = (name: string) =>
-    ({ children, ...props }: { children?: React.ReactNode; [key: string]: unknown }) =>
-      React.createElement(View, { testID: name, ...props }, children);
+    ({ children, ...props }: { children?: unknown; [key: string]: unknown }) =>
+      mockReact.createElement(View, { testID: name, ...props }, children);
   return {
     __esModule: true,
     default: MockSvg,
