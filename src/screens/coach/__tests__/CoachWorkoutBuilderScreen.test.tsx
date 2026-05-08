@@ -13,7 +13,7 @@ import { render, fireEvent } from '@testing-library/react-native';
 
 // ── Mock API modules ──────────────────────────────────────────────────────────
 
-jest.mock('../../services/exerciseLibraryApi', () => ({
+jest.mock('../../../services/exerciseLibraryApi', () => ({
   searchExercises: jest.fn().mockResolvedValue({
     items: [
       {
@@ -32,7 +32,7 @@ jest.mock('../../services/exerciseLibraryApi', () => ({
   }),
 }));
 
-jest.mock('../../services/workoutBuilderApi', () => ({
+jest.mock('../../../services/workoutBuilderApi', () => ({
   createWorkoutPlan: jest.fn().mockResolvedValue({
     id: 'plan-1',
     name: 'Push Day',
