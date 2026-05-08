@@ -30,7 +30,7 @@ const INDEX_SRC= fs.readFileSync(path.join(CHARTS_DIR, 'index.ts'),         'utf
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
-jest.mock('../../theme/ThemeProvider', () => ({
+jest.mock('../theme/ThemeProvider', () => ({
   useTheme: () => ({
     colors: {
       primary:       '#2C4A36',
@@ -206,7 +206,7 @@ describe('charts/index.ts — export surface', () => {
 
 // ─── RTL snapshot — TgpLineChart ─────────────────────────────────────────────
 
-import TgpLineChart from '../../ui/charts/TgpLineChart';
+import TgpLineChart from '../ui/charts/TgpLineChart';
 
 const SAMPLE_DATA = [
   { x: 0, y: 180 },
