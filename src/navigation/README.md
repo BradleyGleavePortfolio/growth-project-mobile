@@ -138,3 +138,30 @@ Both navigators use `fetchUnreadCount()` from `src/services/notificationsApi.ts`
 ### Deep-link routing from notification taps
 
 `NotificationCenterScreen` calls `routeNotification()` which calls `navigation.navigate(actionScreen, actionParams)` using the value from `notification.actionScreen`. The routing table is documented in `src/screens/notifications/README.md`.
+## Phase 8 — Coach Command Center (new coach landing)
+
+As of Phase 8, `CoachNavigator` mounts `CommandCenterScreen` as the first tab (`CommandCenter`), replacing the old `Dashboard` (`CoachHomeScreen`) as the coach home tab.
+
+**Before Phase 8:**
+```
+CoachNavigator tabs: ClientsStack | Dashboard | Templates | Messages | Settings
+```
+
+**After Phase 8:**
+```
+CoachNavigator tabs: CommandCenter | ClientsStack | Templates | Messages | Settings
+```
+
+The `CoachHomeScreen` (`Dashboard`) is preserved as a sub-screen inside `ClientsStack` under the route name `Dashboard`, so any existing `navigate('Dashboard')` calls in analytics payloads, push notification handlers, or deep links keep resolving without a crash.
+
+`CommandCenterScreen` lives at `src/screens/coach/command-center/CommandCenterScreen.tsx` and hosts an internal top-tab bar with 5 views:
+
+| Tab key | View | Navigates to |
+| --- | --- | --- |
+| `overview` | KPI tile grid | Internal (switches tabs) |
+| `at-risk` | At-risk client list | `ClientDetail` via `onSelectClient` |
+| `win-streaks` | Active streak list | `ClientDetail` via `onSelectClient` |
+| `inbox` | Message thread list | `ClientMessages` via `onOpenThread` |
+| `action-queue` | Pending alerts | `ClientDetail` via `onSelectClient` |
+
+See `src/screens/coach/command-center/README.md` for full documentation.
