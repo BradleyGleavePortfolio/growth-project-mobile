@@ -21,6 +21,9 @@ import CoachAvailabilityScreen from '../screens/coach/CoachAvailabilityScreen';
 import CoachSessionRequestsScreen from '../screens/coach/CoachSessionRequestsScreen';
 import CoachUpcomingCallsScreen from '../screens/coach/CoachUpcomingCallsScreen';
 import CoachSessionBriefScreen from '../screens/coach/CoachSessionBriefScreen';
+// Wave 11 — runtime scaffolding (flag-gated; safe to mount)
+import CoachBriefScreen from '../screens/coach/CoachBriefScreen';
+import AdminControlRoomScreen from '../screens/coach/AdminControlRoomScreen';
 import { Colors } from '../constants/colors';
 
 export type CoachTabParamList = {
@@ -40,9 +43,6 @@ export type ClientsStackParamList = {
   ClientRiskDetail: { userId: string; clientName?: string };
   BloodworkReviewQueue: undefined;
   // Sessions screens — coach-facing coaching call surfaces.
-  // Entry: CoachHomeScreen / ClientDetail can navigate to these.
-  // SessionRequests and UpcomingCalls are primary queues (pushed from Dashboard).
-  // Availability and Brief are secondary (pushed from individual session items).
   CoachSessionRequests:  { coachId: string };
   CoachUpcomingCalls:    { coachId: string };
   CoachAvailability:     { coachId: string };
@@ -53,6 +53,9 @@ export type SettingsStackParamList = {
   SettingsHome: undefined;
   Billing: undefined;
   TrustCenter: undefined;
+  // Wave 11 — runtime scaffolding (flag-gated; safe to mount).
+  CoachBrief: undefined;
+  AdminControlRoom: undefined;
 };
 
 const Tab = createBottomTabNavigator<CoachTabParamList>();
@@ -107,6 +110,10 @@ function SettingsStackNavigator() {
       <SettingsStack.Screen name="SettingsHome" component={SettingsScreen} />
       <SettingsStack.Screen name="Billing"      component={CoachBillingScreen} />
       <SettingsStack.Screen name="TrustCenter"  component={TrustCenterScreen} />
+      {/* Wave 11 — gated routes. Each screen renders a preview-only empty
+          state when its flag is OFF. */}
+      <SettingsStack.Screen name="CoachBrief" component={CoachBriefScreen} />
+      <SettingsStack.Screen name="AdminControlRoom" component={AdminControlRoomScreen} />
     </SettingsStack.Navigator>
   );
 }

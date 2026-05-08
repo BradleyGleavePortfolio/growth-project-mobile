@@ -14,6 +14,7 @@
  * Phase 7C: LeaderboardScreen + LeaderboardSettingsScreen added to MoreStack.
  * Bloodwork: BloodworkEntryScreen added to MoreStack (flag OFF by default).
  * Sessions: SessionsUpcoming, SessionRequest, SessionPrepare added to MoreStack.
+ * Wave 11: ClientPathCopilotScreen + PrivateCommunityHubScreen added to MoreStack.
  */
 import React from 'react';
 import { StyleSheet } from 'react-native';
@@ -60,6 +61,9 @@ import BloodworkEntryScreen from '../screens/client/BloodworkEntryScreen';
 import SessionsUpcomingScreen from '../screens/client/SessionsUpcomingScreen';
 import SessionRequestScreen from '../screens/client/SessionRequestScreen';
 import SessionPrepareScreen from '../screens/client/SessionPrepareScreen';
+// Wave 11 — runtime scaffolding (flag-gated; safe to mount)
+import ClientPathCopilotScreen from '../screens/client/ClientPathCopilotScreen';
+import PrivateCommunityHubScreen from '../screens/client/PrivateCommunityHubScreen';
 import { colors } from '../theme/tokens';
 
 // ─── Param lists ──────────────────────────────────────────────────────────────
@@ -91,6 +95,7 @@ export type WorkoutStackParamList = {
 // Phase 7C: Leaderboard + LeaderboardSettings added.
 // Bloodwork: BloodworkEntry added (flag OFF by default).
 // Sessions: client-facing coaching call surfaces (flag OFF by default).
+// Wave 11: Copilot + PrivateCommunityHub added (flag-gated).
 export type MoreStackParamList = {
   MoreIndex:   undefined;
   Recipes:     undefined;
@@ -123,6 +128,9 @@ export type MoreStackParamList = {
   SessionsUpcoming:  { clientId: string };
   SessionRequest:    { clientId: string; coachId: string };
   SessionPrepare:    { sessionId: string };
+  /** Wave 11 — gated routes; screens render a preview-only empty state when flag is OFF. */
+  Copilot:           undefined;
+  PrivateCommunityHub: undefined;
 };
 
 // ─── Stack navigators ─────────────────────────────────────────────────────────
@@ -169,6 +177,7 @@ function WorkoutStackNavigator() {
 // Phase 7C: Leaderboard screens registered here.
 // Bloodwork: BloodworkEntry screen registered here.
 // Sessions: client-facing call screens registered here (flags default OFF).
+// Wave 11: Copilot + CommunityHub registered here (flags default OFF in prod).
 function MoreStackNavigator() {
   return (
     <MoreStackNav.Navigator
@@ -218,6 +227,10 @@ function MoreStackNavigator() {
         name="SessionPrepare"
         component={SessionPrepareScreen}
       />
+      {/* Wave 11 — gated routes; the screens themselves render a
+          preview-only empty state when their flag is OFF. */}
+      <MoreStackNav.Screen name="Copilot"           component={ClientPathCopilotScreen} />
+      <MoreStackNav.Screen name="PrivateCommunityHub" component={PrivateCommunityHubScreen} />
     </MoreStackNav.Navigator>
   );
 }
