@@ -15,6 +15,19 @@
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
+// @expo/vector-icons depends on expo-font → expo-asset which is not available
+// in the Jest environment. Provide a lightweight stub.
+jest.mock('@expo/vector-icons', () => {
+  const { Text } = require('react-native');
+  const Icon = (props: { name?: string; size?: number; color?: string }) =>
+    React.createElement(Text, { testID: `icon-${props.name ?? 'unknown'}` });
+  return {
+    Ionicons: Icon,
+    MaterialIcons: Icon,
+    Feather: Icon,
+  };
+});
+
 import NotificationCenterScreen from '../screens/notifications/NotificationCenterScreen';
 import NotificationPreferencesScreen from '../screens/notifications/NotificationPreferencesScreen';
 import NotificationBadge from '../components/NotificationBadge';
