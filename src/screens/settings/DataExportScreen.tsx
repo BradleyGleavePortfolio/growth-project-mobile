@@ -9,28 +9,16 @@ import {
   ScrollView,
 } from 'react-native';
 import { useTheme } from '../../theme';
-import { dataExportApi } from '../../api/dataExport';
+import { dataExportApi, DataExportRecord } from '../../services/dataExportApi';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type ExportStatus = 'PENDING' | 'RUNNING' | 'READY' | 'EXPIRED' | 'FAILED';
-
-interface ExportRecord {
-  id: string;
-  status: ExportStatus;
-  created_at: string;
-  completed_at: string | null;
-  expires_at: string | null;
-  file_size_bytes: number | null;
-  download_token: string | null;
-}
+// ─── Screen state ─────────────────────────────────────────────────────────────
 
 type ScreenState =
   | { phase: 'idle' }
   | { phase: 'loading' }
   | { phase: 'requesting' }
-  | { phase: 'polling'; record: ExportRecord }
-  | { phase: 'ready'; record: ExportRecord }
+  | { phase: 'polling'; record: DataExportRecord }
+  | { phase: 'ready'; record: DataExportRecord }
   | { phase: 'failed'; error: string }
   | { phase: 'expired' };
 
@@ -48,6 +36,15 @@ function formatDate(iso: string): string {
     month: 'long',
     year: 'numeric',
   });
+}
+
+function getResponseStatus(err: unknown): number | undefined {
+  if (typeof err !== 'object' || err === null) return undefined;
+  const e = err as Record<string, unknown>;
+  const resp = e['response'];
+  if (typeof resp !== 'object' || resp === null) return undefined;
+  const status = (resp as Record<string, unknown>)['status'];
+  return typeof status === 'number' ? status : undefined;
 }
 
 // Poll interval: 5 seconds while PENDING or RUNNING
@@ -90,8 +87,8 @@ export default function DataExportScreen() {
         // PENDING or RUNNING — start polling
         setState({ phase: 'polling', record });
       }
-    } catch (err: any) {
-      if (err?.status === 404) {
+    } catch (err: unknown) {
+      if (getResponseStatus(err) === 404) {
         // No export has been requested yet
         setState({ phase: 'idle' });
       } else {
@@ -140,8 +137,8 @@ export default function DataExportScreen() {
     try {
       const record = await dataExportApi.requestExport();
       setState({ phase: 'polling', record });
-    } catch (err: any) {
-      if (err?.status === 409) {
+    } catch (err: unknown) {
+      if (getResponseStatus(err) === 409) {
         setState({
           phase: 'failed',
           error: 'An export is already in progress. Check back shortly.',
@@ -155,7 +152,7 @@ export default function DataExportScreen() {
     }
   }, []);
 
-  const handleDownload = useCallback(async (record: ExportRecord) => {
+  const handleDownload = useCallback(async (record: DataExportRecord) => {
     if (!record.download_token) return;
     const baseUrl = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'https://api.thegrowthproject.app';
     const url = `${baseUrl}/v1/me/data-export/download?token=${record.download_token}`;
