@@ -51,6 +51,7 @@ jest.mock('../../theme/ThemeProvider', () => ({
 }));
 
 jest.mock('react-native-gesture-handler', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { View } = require('react-native');
   return {
     GestureDetector: ({ children }: { children: React.ReactNode }) =>
@@ -63,7 +64,8 @@ jest.mock('react-native-gesture-handler', () => {
 });
 
 jest.mock('react-native-svg', () => {
-  const { View, Text } = require('react-native');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { View } = require('react-native');
   const MockSvg = ({ children }: { children?: React.ReactNode }) =>
     React.createElement(View, { testID: 'svg' }, children);
   const makeMock = (name: string) =>
