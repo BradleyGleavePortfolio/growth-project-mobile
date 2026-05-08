@@ -22,7 +22,7 @@ import {
   ActivityIndicator,
   StyleSheet,
 } from 'react-native';
-import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeProvider';
 import NotificationRow from '../../components/NotificationRow';
@@ -40,18 +40,17 @@ import type { IoniconName } from '../../types/common';
 // Maps notification.actionScreen to a navigate() call. Keep in sync with
 // README.md#deep-link-routing-table.
 
+type NavWithNavigate = { navigate: (screen: string, params?: Record<string, string>) => void };
+
 function routeNotification(
   notification: AppNotification,
-  nav: NavigationProp<ParamListBase>,
+  nav: NavWithNavigate,
 ): void {
   const screen = notification.actionScreen;
   if (!screen) return;
   // Param types are enforced by the navigator param lists. actionScreen values
   // come from a constrained server enum, not user input.
-  (nav.navigate as (screen: string, params?: Record<string, string>) => void)(
-    screen,
-    notification.actionParams,
-  );
+  nav.navigate(screen, notification.actionParams);
 }
 
 // ─── State machine ────────────────────────────────────────────────────────────
@@ -206,7 +205,10 @@ export default function NotificationCenterScreen() {
           // Revert is omitted — the optimistic update is acceptable here.
         }
       }
-      routeNotification(notification, navigation);
+      routeNotification(
+        notification,
+        navigation as unknown as NavWithNavigate,
+      );
     },
     [navigation.navigate],
   );
