@@ -48,7 +48,7 @@ export function Skeleton({ width, height, borderRadius = 2, testID }: SkeletonPr
     opacity.value = withRepeat(
       withTiming(1.0, {
         duration: 1500,
-        easing: Easing.inOut(Easing.sine),
+        easing: Easing.inOut(Easing.sin),
       }),
       -1,   // infinite
       true, // reverse (ping-pong)

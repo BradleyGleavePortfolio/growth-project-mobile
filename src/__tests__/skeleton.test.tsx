@@ -192,7 +192,7 @@ jest.mock('react-native-reanimated', () => {
   return Reanimated;
 });
 
-jest.mock('../../theme/ThemeProvider', () => ({
+jest.mock('../theme/ThemeProvider', () => ({
   useTheme: () => ({
     tokens: {
       colors: { cream: '#F1E8D5' },
@@ -205,7 +205,7 @@ jest.mock('../../theme/ThemeProvider', () => ({
   }),
 }));
 
-import { Skeleton } from '../../ui/skeletons';
+import { Skeleton } from '../ui/skeletons';
 
 describe('Skeleton — RTL render', () => {
   it('renders without throwing', () => {
