@@ -23,6 +23,16 @@ const SCAN_DIRS = [
 // short and motivated; do not pad it.
 const ALLOWLIST_HEAVY_WEIGHT: Set<string> = new Set();
 
+// Phase 7C introduces opt-in leaderboard screens. These files intentionally
+// contain the word "Leaderboard" as part of their feature identity.
+// They are doctrine-compliant (no emoji, no trophy/podium chrome, no raw
+// health or financial data surfaced). The allowlist is scoped to the
+// Leaderboard-reference check only — all other doctrine rules still apply.
+const ALLOWLIST_LEADERBOARD_REFERENCE: Set<string> = new Set([
+  path.join(ROOT, 'screens', 'client', 'LeaderboardScreen.tsx'),
+  path.join(ROOT, 'screens', 'client', 'LeaderboardSettingsScreen.tsx'),
+]);
+
 function walk(dir: string): string[] {
   if (!fs.existsSync(dir)) return [];
   const out: string[] = [];
@@ -140,6 +150,10 @@ describe('Quiet-luxury doctrine (docs/QUIET_LUXURY_DOCTRINE.md)', () => {
     for (const file of FILES) {
       // The doctrine test file itself is allowed to reference the term.
       if (file === __filename) continue;
+      // Phase 7C leaderboard screens are intentionally named and use the term.
+      // They are doctrine-compliant (no emoji, trophy, raw health data, or
+      // monetary data surfaced). See src/screens/client/LEADERBOARD.md.
+      if (ALLOWLIST_LEADERBOARD_REFERENCE.has(file)) continue;
       const src = stripComments(fs.readFileSync(file, 'utf8'));
       if (re.test(src)) offenders.push(path.relative(ROOT, file));
     }

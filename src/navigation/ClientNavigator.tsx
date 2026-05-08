@@ -11,6 +11,7 @@
  *
  * Phase 7B: TimelineScreen added to MoreStackNavigator as 'Timeline'.
  * Accessible from MoreScreen; no new tab added (avoids 5-tab crowding).
+ * Phase 7C: LeaderboardScreen + LeaderboardSettingsScreen added to MoreStack.
  */
 import React from 'react';
 import { StyleSheet } from 'react-native';
@@ -48,6 +49,9 @@ import AIGuideScreen from '../screens/client/AIGuideScreen';
 import MembershipScreen from '../screens/client/MembershipScreen';
 // Phase 7B — Transformation Timeline
 import TimelineScreen from '../screens/client/TimelineScreen';
+// Phase 7C — Peer Leaderboard
+import LeaderboardScreen from '../screens/client/LeaderboardScreen';
+import LeaderboardSettingsScreen from '../screens/client/LeaderboardSettingsScreen';
 import { colors } from '../theme/tokens';
 
 // ─── Param lists ──────────────────────────────────────────────────────────────
@@ -76,6 +80,7 @@ export type WorkoutStackParamList = {
 
 // MoreStack: all non-tab screens live here. Screen names preserved.
 // Phase 7B: Timeline added.
+// Phase 7C: Leaderboard + LeaderboardSettings added.
 export type MoreStackParamList = {
   MoreIndex:   undefined;
   Recipes:     undefined;
@@ -99,6 +104,9 @@ export type MoreStackParamList = {
   Membership:  undefined;
   /** Phase 7B — Transformation Timeline */
   Timeline:    undefined;
+  /** Phase 7C — Peer Leaderboard (opt-in) */
+  Leaderboard:         undefined;
+  LeaderboardSettings: undefined;
 };
 
 // ─── Stack navigators ─────────────────────────────────────────────────────────
@@ -142,6 +150,7 @@ function WorkoutStackNavigator() {
 
 // MoreStack: Profile + every ex-tab screen. Keeps existing navigate() calls valid.
 // Phase 7B: Timeline screen registered here.
+// Phase 7C: Leaderboard screens registered here.
 function MoreStackNavigator() {
   return (
     <MoreStackNav.Navigator
@@ -172,6 +181,9 @@ function MoreStackNavigator() {
       <MoreStackNav.Screen name="Membership"   component={MembershipScreen} />
       {/* Phase 7B — Transformation Timeline */}
       <MoreStackNav.Screen name="Timeline"     component={TimelineScreen} />
+      {/* Phase 7C — Peer Leaderboard (opt-in) */}
+      <MoreStackNav.Screen name="Leaderboard"          component={LeaderboardScreen} />
+      <MoreStackNav.Screen name="LeaderboardSettings"  component={LeaderboardSettingsScreen} />
     </MoreStackNav.Navigator>
   );
 }
