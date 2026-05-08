@@ -142,10 +142,10 @@ describe('KpiTile', () => {
   });
 
   it('exposes correct accessibilityLabel with subtext', () => {
-    const { getByA11yLabel } = render(
+    const { getByLabelText } = render(
       <KpiTile label="Active today" value={8} subtext="of 12 clients" testID="kpi" />,
     );
-    expect(getByA11yLabel('Active today: 8. of 12 clients')).toBeTruthy();
+    expect(getByLabelText('Active today: 8. of 12 clients')).toBeTruthy();
   });
 });
 
