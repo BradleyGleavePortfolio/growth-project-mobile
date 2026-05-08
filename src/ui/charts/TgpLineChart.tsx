@@ -16,7 +16,7 @@
  *   • Do NOT use inside a VirtualizedList without a fixed height.
  */
 
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -90,7 +90,7 @@ export default function TgpLineChart({
   const plotW = W - PAD_L - PAD_R;
   const plotH = H - PAD_T - PAD_B;
 
-  const { minY, maxY, rangeY, toSvgX, toSvgY, points, yTicks, xLabels } = useMemo(() => {
+  const { toSvgX, toSvgY, points, yTicks, xLabels } = useMemo(() => {
     if (data.length === 0) {
       return { minY: 0, maxY: 0, rangeY: 1, toSvgX: () => 0, toSvgY: () => 0, points: '', yTicks: [], xLabels: [] };
     }
