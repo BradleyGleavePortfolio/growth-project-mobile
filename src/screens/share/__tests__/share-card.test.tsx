@@ -26,23 +26,23 @@ jest.mock('expo-sharing', () => ({
   isAvailableAsync: mockIsAvailableAsync,
 }));
 
-jest.mock('../../lib/analytics', () => ({
+jest.mock('../../../lib/analytics', () => ({
   track: mockTrack,
 }));
 
-jest.mock('../../analytics/events', () => ({
+jest.mock('../../../analytics/events', () => ({
   AnalyticsEvents: {
     REFERRAL_SHARE_CARD_SHARED: 'referral_share_card_shared',
     REFERRAL_SHARE_INITIATED: 'referral_share_initiated',
   },
 }));
 
-jest.mock('../../utils/haptics', () => ({
+jest.mock('../../../utils/haptics', () => ({
   successTap: jest.fn(),
   mediumTap: jest.fn(),
 }));
 
-jest.mock('../../theme/ThemeProvider', () => ({
+jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => ({
     colors: {
       background: '#F5EFE4',
@@ -64,7 +64,7 @@ jest.mock('@expo/vector-icons', () => ({
 
 // HapticPressable renders as a TouchableOpacity for tests
 // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
-jest.mock('../../components/HapticPressable', () => {
+jest.mock('../../../components/HapticPressable', () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
   const { TouchableOpacity } = require('react-native');
   return ({ children, onPress, accessibilityLabel, accessibilityRole, ...props }: {
