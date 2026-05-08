@@ -134,7 +134,10 @@ interface ThemeProviderProps {
 
 export function ThemeProvider({ children }: ThemeProviderProps) {
   const { data: foundingData } = useFoundingNumber();
-  const systemScheme = useSystemColorScheme() ?? 'light';
+  // Normalise: React Native's ColorSchemeName includes 'unspecified' on some
+  // platforms; treat anything other than 'dark' as light.
+  const rawScheme = useSystemColorScheme();
+  const systemScheme: 'light' | 'dark' = rawScheme === 'dark' ? 'dark' : 'light';
 
   const [appearanceOverride, setOverrideState] = useState<AppearanceOverride>('system');
   const [overrideLoaded, setOverrideLoaded] = useState(false);

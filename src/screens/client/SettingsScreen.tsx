@@ -29,7 +29,7 @@ import BiometricUnlockSetting from '../../components/BiometricUnlockSetting';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 
 export default function SettingsScreen({ navigation }: { navigation: NavigationProp<ParamListBase> }) {
-  const { colors, appearanceOverride, setAppearanceOverride, colorScheme } = useTheme();
+  const { colors, appearanceOverride, setAppearanceOverride } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();
   // signOut + refreshProfile imported directly — no store wiring needed.

@@ -53,7 +53,7 @@ function ScoreBar({ score, sc }: { score: number; sc: SemanticTokens }) {
   );
   return (
     <View style={barStyles.track} accessibilityLabel={`Score bar: ${score} of 100`}>
-      <View style={[barStyles.fill, { width: `${score}%` as `${number}%` }]} />
+      <View style={[barStyles.fill, { width: `${score}%` }]} />
     </View>
   );
 }
