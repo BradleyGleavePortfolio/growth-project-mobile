@@ -24,6 +24,8 @@ import CoachSessionBriefScreen from '../screens/coach/CoachSessionBriefScreen';
 // Wave 11 — runtime scaffolding (flag-gated; safe to mount)
 import CoachBriefScreen from '../screens/coach/CoachBriefScreen';
 import AdminControlRoomScreen from '../screens/coach/AdminControlRoomScreen';
+// Phase 11 Track 9 — Support Inbox (Crisp)
+import SupportInboxScreen from '../screens/support/SupportInboxScreen';
 import { Colors } from '../constants/colors';
 
 export type CoachTabParamList = {
@@ -56,6 +58,8 @@ export type SettingsStackParamList = {
   // Wave 11 — runtime scaffolding (flag-gated; safe to mount).
   CoachBrief: undefined;
   AdminControlRoom: undefined;
+  // Phase 11 Track 9 — Crisp support inbox.
+  SupportInbox: undefined;
 };
 
 const Tab = createBottomTabNavigator<CoachTabParamList>();
@@ -114,6 +118,8 @@ function SettingsStackNavigator() {
           state when its flag is OFF. */}
       <SettingsStack.Screen name="CoachBrief" component={CoachBriefScreen} />
       <SettingsStack.Screen name="AdminControlRoom" component={AdminControlRoomScreen} />
+      {/* Phase 11 Track 9 — Support Inbox */}
+      <SettingsStack.Screen name="SupportInbox" component={SupportInboxScreen} />
     </SettingsStack.Navigator>
   );
 }
