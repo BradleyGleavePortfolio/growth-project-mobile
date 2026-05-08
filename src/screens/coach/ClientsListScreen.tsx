@@ -418,6 +418,6 @@ const makeStyles = (colors: ThemeColors) =>
   workoutBuilderTileText: {
     fontSize: 15,
     fontWeight: '600',
-    color: (colors as ThemeColors).text,
+    color: (colors as ThemeColors).textPrimary,
   },
 });
