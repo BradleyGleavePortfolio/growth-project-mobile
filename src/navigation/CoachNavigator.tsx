@@ -170,7 +170,7 @@ function ClientsStackNavigator() {
             }
           >
             <View style={styles.bellWrap}>
-              <Ionicons name="notifications-outline" size={24} color={Colors.dark} />
+              <Ionicons name="notifications-outline" size={24} color={Colors.textPrimary} />
               <NotificationBadge count={notifUnread} />
             </View>
           </TouchableOpacity>
