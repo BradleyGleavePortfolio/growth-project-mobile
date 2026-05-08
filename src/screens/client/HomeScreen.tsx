@@ -1,5 +1,6 @@
 /**
  * HomeScreen — Wave 3: Luxury hero rewrite.
+ * Phase 11: Migrated to useTheme() semantic tokens for dark-mode support.
  *
  * One thought. Bone background, editorial serif date headline,
  * charcoal progress line, ink "CONTINUE" CTA, hairline rule,
@@ -26,7 +27,8 @@ import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useClientStore } from '../../store/clientStore';
 import { track } from '../../lib/analytics';
-import { colors, typography } from '../../theme/tokens';
+import { typography } from '../../theme/tokens';
+import { useTheme } from '../../theme/ThemeProvider';
 import {
   getProfileCompletion,
   summarizeMissing,
@@ -89,16 +91,17 @@ interface NumberCellProps {
 }
 
 function NumberCell({ label, value, hint, onPress, accessibilityLabel }: NumberCellProps) {
+  const { semanticColors: sc } = useTheme();
   const Inner = (
     <View style={{ width: '100%', paddingVertical: 20 }}>
-      <Text style={{ ...typography.eyebrow, color: colors.stone, marginBottom: 6 }}>
+      <Text style={{ ...typography.eyebrow, color: sc.textMuted, marginBottom: 6 }}>
         {label}
       </Text>
-      <Text style={{ ...typography.h2, color: colors.ink }}>
+      <Text style={{ ...typography.h2, color: sc.textPrimary }}>
         {value}
       </Text>
       {hint ? (
-        <Text style={{ ...typography.caption, color: colors.stone, marginTop: 4 }}>
+        <Text style={{ ...typography.caption, color: sc.textMuted, marginTop: 4 }}>
           {hint}
         </Text>
       ) : null}
@@ -122,6 +125,7 @@ function NumberCell({ label, value, hint, onPress, accessibilityLabel }: NumberC
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
+  const { semanticColors: sc } = useTheme();
   const currentUser = useCurrentUser();
   const {
     foodLogs,
@@ -230,14 +234,14 @@ export default function HomeScreen() {
 
   if (!currentUser) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: colors.bone }}>
-        <ActivityIndicator size="large" color={colors.ink} style={{ marginTop: 80 }} />
+      <SafeAreaView style={{ flex: 1, backgroundColor: sc.bgPrimary }}>
+        <ActivityIndicator size="large" color={sc.textPrimary} style={{ marginTop: 80 }} />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.bone }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: sc.bgPrimary }}>
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: 32, paddingTop: 64, paddingBottom: 96 }}
         showsVerticalScrollIndicator={false}
@@ -245,7 +249,7 @@ export default function HomeScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={colors.ink}
+            tintColor={sc.textPrimary}
           />
         }
       >
@@ -256,41 +260,41 @@ export default function HomeScreen() {
             accessibilityLabel={`Complete your profile. Missing ${missingSummary}.`}
             style={({ pressed }) => ({
               borderWidth: 0.5,
-              borderColor: colors.stone,
-              backgroundColor: colors.cream,
+              borderColor: sc.border,
+              backgroundColor: sc.bgSurface,
               paddingHorizontal: 20,
               paddingVertical: 18,
               marginBottom: 24,
               opacity: pressed ? 0.85 : 1,
             })}
           >
-            <Text style={{ ...typography.eyebrow, color: colors.charcoal, marginBottom: 6 }}>
+            <Text style={{ ...typography.eyebrow, color: sc.textMuted, marginBottom: 6 }}>
               FINISH YOUR PROFILE
             </Text>
-            <Text style={{ ...typography.body, color: colors.ink }}>
+            <Text style={{ ...typography.body, color: sc.textPrimary }}>
               {`Add ${missingSummary} so your plan reflects you.`}
             </Text>
-            <Text style={{ ...typography.bodySmall, color: colors.stone, marginTop: 6 }}>
+            <Text style={{ ...typography.bodySmall, color: sc.textMuted, marginTop: 6 }}>
               {`${completion.percentComplete}% complete`}
             </Text>
           </Pressable>
         ) : null}
 
         {/* Hero */}
-        <Text style={{ ...typography.eyebrow, color: colors.charcoal, marginBottom: 24 }}>
+        <Text style={{ ...typography.eyebrow, color: sc.textMuted, marginBottom: 24 }}>
           THE GROWTH PROJECT
         </Text>
-        <Text style={{ ...typography.h1, color: colors.ink, marginBottom: 20 }}>
+        <Text style={{ ...typography.h1, color: sc.textPrimary, marginBottom: 20 }}>
           {datePoetry}
         </Text>
-        <Text style={{ ...typography.body, color: colors.charcoal, marginBottom: 56 }}>
+        <Text style={{ ...typography.body, color: sc.textMuted, marginBottom: 56 }}>
           {progressLine}
         </Text>
 
         {/* Single CTA */}
         <Pressable
           style={({ pressed }) => ({
-            backgroundColor: colors.ink,
+            backgroundColor: sc.textPrimary,
             paddingVertical: 20,
             alignItems: 'center',
             opacity: pressed ? 0.85 : 1,
@@ -300,11 +304,11 @@ export default function HomeScreen() {
           accessibilityLabel="Continue"
           accessibilityHint="Opens your workout tracker"
         >
-          <Text style={{ ...typography.eyebrow, color: colors.bone }}>CONTINUE</Text>
+          <Text style={{ ...typography.eyebrow, color: sc.bgPrimary }}>CONTINUE</Text>
         </Pressable>
 
         {/* Below-fold rule + 2×2 numbers grid */}
-        <View style={{ height: 1, backgroundColor: colors.stone, marginTop: 96, marginBottom: 32 }} />
+        <View style={{ height: 1, backgroundColor: sc.border, marginTop: 96, marginBottom: 32 }} />
         <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
           <NumberCell
             label="PROTEIN"
@@ -345,3 +349,4 @@ export default function HomeScreen() {
     </SafeAreaView>
   );
 }
+

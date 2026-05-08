@@ -1,6 +1,7 @@
 /**
  * Design Tokens — The Growth Project
  * Wave 2: Luxury repositioning — bone/cream/ink/forest palette.
+ * Phase 11: Dark mode — semantic token system added on top of existing palette.
  * Single source of truth for the New Shared Design System.
  *
  * ─────────────────────────────────────────────────────────────────────────────
@@ -9,16 +10,20 @@
  * Relative luminance formula: L = 0.2126·R + 0.7152·G + 0.0722·B (linearised)
  * Contrast ratio = (L1 + 0.05) / (L2 + 0.05)  where L1 > L2
  *
- * Required: 4.5:1 body text (< 18pt / < 14pt bold), 3:1 large text (≥ 18pt / ≥ 14pt bold)
+ * Required: 4.5:1 body text (< 18pt / < 14pt bold), 3:1 large text (>= 18pt / >= 14pt bold)
  *
  * Pair                                          Hex pair              Ratio    AA body  AA large
  * ─────────────────────────────────────────────────────────────────────────────────────────────
- * ink (#1A1A18) on bone (#F5EFE4)               ≈ 16.5:1             ✅ PASS  ✅ PASS
- * ink (#1A1A18) on cream (#F1E8D5)              ≈ 15.2:1             ✅ PASS  ✅ PASS
- * charcoal (#3D3D3A) on bone (#F5EFE4)          ≈  8.0:1             ✅ PASS  ✅ PASS
- * forest (#2C4A36) on bone (#F5EFE4)            ≈  7.4:1             ✅ PASS  ✅ PASS
- * stone (#B1A89F) on bone (#F5EFE4)             ≈  2.3:1             ❌ FAIL  ✅ PASS  (caption/meta only ≥ 18pt)
- * mutedGold (#C5A253) on bone (#F5EFE4)         ≈  2.9:1             ❌ FAIL  ✅ PASS  (badge label ≥ 14pt bold only)
+ * ink (#1A1A18) on bone (#F5EFE4)               ~16.5:1              PASS     PASS
+ * ink (#1A1A18) on cream (#F1E8D5)              ~15.2:1              PASS     PASS
+ * charcoal (#3D3D3A) on bone (#F5EFE4)          ~ 8.0:1              PASS     PASS
+ * forest (#2C4A36) on bone (#F5EFE4)            ~ 7.4:1              PASS     PASS
+ * stone (#B1A89F) on bone (#F5EFE4)             ~ 2.3:1              FAIL     PASS (caption/meta only >= 18pt)
+ * mutedGold (#C5A253) on bone (#F5EFE4)         ~ 2.9:1              FAIL     PASS (badge label >= 14pt bold only)
+ *
+ * Dark mode additions:
+ * textPrimary (#EBE6DE) on bgPrimary (#121110)  ~14.2:1              PASS     PASS
+ * textMuted (#A09B94) on bgPrimary (#121110)    ~ 5.9:1              PASS     PASS
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
@@ -267,6 +272,53 @@ export const motion = {
   },
 } as const;
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Phase 11: Semantic dark-mode token layer
+//
+// Usage:
+//   const { colors } = useTheme();
+//   <View style={{ backgroundColor: colors.bgPrimary }} />
+//
+// These are the ONLY tokens that change between light and dark mode.
+// All other design decisions (typography, spacing, radius, motion) are
+// mode-agnostic.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface SemanticTokens {
+  /** Screen/page background */
+  bgPrimary: string;
+  /** Card / surface background */
+  bgSurface: string;
+  /** Primary body text — ink on light, near-white on dark */
+  textPrimary: string;
+  /** Secondary / supporting text */
+  textMuted: string;
+  /** Primary brand accent — oxblood lifted in dark for AA contrast */
+  accent: string;
+  /** Default border / hairline color */
+  border: string;
+}
+
+/** Light-mode semantic tokens (default — matches existing bone/ink palette). */
+export const lightTokens: SemanticTokens = {
+  bgPrimary:   '#F5EFE4',  // bone
+  bgSurface:   '#FFFDF8',
+  textPrimary: '#1A1A18',  // ink
+  textMuted:   '#78736E',
+  accent:      '#4A0404',  // oxblood
+  border:      '#DCD5CC',
+};
+
+/** Dark-mode semantic tokens. */
+export const darkTokens: SemanticTokens = {
+  bgPrimary:   '#121110',
+  bgSurface:   '#1C1A18',
+  textPrimary: '#EBE6DE',
+  textMuted:   '#A09B94',
+  accent:      '#B43C3C',  // oxblood lifted for dark contrast
+  border:      '#2D2A26',
+};
+
 // ─── Composite token export ────────────────────────────────────────────────────
 const tokens = {
   colors,
@@ -279,6 +331,8 @@ const tokens = {
   radius,
   shadows,
   motion,
+  lightTokens,
+  darkTokens,
 } as const;
 
 export type Tokens = typeof tokens;

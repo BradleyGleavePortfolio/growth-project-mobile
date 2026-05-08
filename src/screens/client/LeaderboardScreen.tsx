@@ -1,5 +1,6 @@
 /**
  * LeaderboardScreen — Phase 7C
+ * Phase 11: Migrated to useTheme() semantic tokens for dark-mode support.
  *
  * Displays the combined-score leaderboard for the requesting user's
  * coach roster. Only opted-in peers appear. The requesting user's row
@@ -7,6 +8,7 @@
  *
  * Design doctrine:
  *   - Bone/ink/oxblood palette from tokens.ts.
+ *   - Self-row highlight: sc.accent resolves to #4A0404 (light) / #B43C3C (dark).
  *   - Cormorant Garamond display, Inter body.
  *   - No emoji, no celebration chrome.
  *   - Numbers over adjectives.
@@ -19,7 +21,7 @@
  *   4. Populated — ranked list of rows.
  *   5. Error — minimal error message, retry action.
  */
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -31,7 +33,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { colors } from '../../theme/tokens';
+import { useTheme } from '../../theme/ThemeProvider';
+import type { SemanticTokens } from '../../theme/tokens';
 import {
   getLeaderboard,
   setLeaderboardOptIn,
@@ -39,18 +42,19 @@ import {
   LeaderboardResponse,
 } from '../../services/leaderboardApi';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-// Oxblood used for self-row highlight and negative deltas.
-// Sourced from the bone/ink/oxblood doctrine palette.
-const OXBLOOD = '#4A0404';
-
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function ScoreBar({ score }: { score: number }) {
+function ScoreBar({ score, sc }: { score: number; sc: SemanticTokens }) {
+  const barStyles = useMemo(
+    () => StyleSheet.create({
+      track: { height: 3, backgroundColor: sc.bgSurface, borderRadius: 2, overflow: 'hidden' },
+      fill:  { height: 3, backgroundColor: sc.accent,    borderRadius: 2 },
+    }),
+    [sc],
+  );
   return (
-    <View style={styles.barTrack} accessibilityLabel={`Score bar: ${score} of 100`}>
-      <View style={[styles.barFill, { width: `${score}%` }]} />
+    <View style={barStyles.track} accessibilityLabel={`Score bar: ${score} of 100`}>
+      <View style={[barStyles.fill, { width: `${score}%` }]} />
     </View>
   );
 }
@@ -60,25 +64,51 @@ function ScoreBar({ score }: { score: number }) {
  * The self-row (isRequester) uses a distinct style (oxblood underline)
  * and a stable testID so UI tests can reliably locate it.
  */
-function RankRow({ entry }: { entry: LeaderboardEntry }) {
+function RankRow({ entry, sc }: { entry: LeaderboardEntry; sc: SemanticTokens }) {
   const isMe = entry.isRequester;
   const hasDelta = entry.weekDelta !== null && entry.weekDelta !== 0;
   const deltaSign = (entry.weekDelta ?? 0) > 0 ? '+' : '';
-  const deltaColor = (entry.weekDelta ?? 0) >= 0 ? colors.forest : OXBLOOD;
+  // Positive delta = accent; negative delta = accent (oxblood is the accent in both modes)
+  const deltaColor = sc.accent;
+
+  const rowStyles = useMemo(
+    () => StyleSheet.create({
+      row: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingVertical: 14,
+        borderBottomWidth: 0.5,
+        borderBottomColor: sc.border,
+      },
+      rowHighlighted: {
+        borderBottomWidth: 2,
+        borderBottomColor: sc.accent,
+      },
+      rankText: { fontFamily: 'Inter-Medium', fontSize: 14, color: sc.textMuted, width: 32 },
+      nameText: { fontFamily: 'Inter-Regular', fontSize: 15, color: sc.textPrimary, marginBottom: 5 },
+      nameTextMe: { fontFamily: 'Inter-SemiBold', color: sc.textPrimary },
+      rowMiddle: { flex: 1, marginRight: 12 },
+      scoreBlock: { alignItems: 'flex-end', width: 52 },
+      scoreText: { fontFamily: 'Inter-SemiBold', fontSize: 18, color: sc.textPrimary },
+      deltaText: { fontFamily: 'Inter-Regular', fontSize: 11, marginTop: 2 },
+    }),
+    [sc],
+  );
 
   const inner = (
     <>
-      <Text style={styles.rankText}>{entry.rank}</Text>
-      <View style={styles.rowMiddle}>
-        <Text style={[styles.nameText, isMe && styles.nameTextMe]} numberOfLines={1}>
+      <Text style={rowStyles.rankText}>{entry.rank}</Text>
+      <View style={rowStyles.rowMiddle}>
+        <Text style={[rowStyles.nameText, isMe && rowStyles.nameTextMe]} numberOfLines={1}>
           {entry.displayName}
         </Text>
-        <ScoreBar score={entry.combinedScore} />
+        <ScoreBar score={entry.combinedScore} sc={sc} />
       </View>
-      <View style={styles.scoreBlock}>
-        <Text style={styles.scoreText}>{entry.combinedScore}</Text>
+      <View style={rowStyles.scoreBlock}>
+        <Text style={rowStyles.scoreText}>{entry.combinedScore}</Text>
         {hasDelta && (
-          <Text style={[styles.deltaText, { color: deltaColor }]}>
+          <Text style={[rowStyles.deltaText, { color: deltaColor }]}>
             {deltaSign}{entry.weekDelta}
           </Text>
         )}
@@ -86,11 +116,11 @@ function RankRow({ entry }: { entry: LeaderboardEntry }) {
     </>
   );
 
-  // Self-row: oxblood underline highlight + stable testID for UI tests.
+  // Self-row: accent underline highlight + stable testID for UI tests.
   if (isMe) {
     return (
       <View
-        style={[styles.row, styles.rowHighlighted]}
+        style={[rowStyles.row, rowStyles.rowHighlighted]}
         accessibilityRole="text"
         testID="leaderboard-self-row"
       >
@@ -101,7 +131,7 @@ function RankRow({ entry }: { entry: LeaderboardEntry }) {
 
   return (
     <View
-      style={styles.row}
+      style={rowStyles.row}
       accessibilityRole="text"
       testID={`leaderboard-row-${entry.userId}`}
     >
@@ -113,41 +143,57 @@ function RankRow({ entry }: { entry: LeaderboardEntry }) {
 function OptInCard({
   onOptIn,
   saving,
+  sc,
 }: {
   onOptIn: (displayName: string) => void;
   saving: boolean;
+  sc: SemanticTokens;
 }) {
   const [displayName, setDisplayName] = useState('');
 
+  const cardStyles = useMemo(
+    () => StyleSheet.create({
+      card:        { margin: 20, padding: 24, backgroundColor: sc.bgSurface, borderWidth: 0.5, borderColor: sc.border },
+      heading:     { fontFamily: 'Cormorant-SemiBold', fontSize: 22, color: sc.textPrimary, marginBottom: 12 },
+      body:        { fontFamily: 'Inter-Regular', fontSize: 14, color: sc.textMuted, lineHeight: 22, marginBottom: 12 },
+      nameInput:   { borderWidth: 1, borderColor: sc.border, padding: 12, fontFamily: 'Inter-Regular', fontSize: 14, color: sc.textPrimary, backgroundColor: sc.bgPrimary, marginBottom: 16, marginTop: 4 },
+      btn:         { backgroundColor: sc.textPrimary, paddingVertical: 14, alignItems: 'center' as const },
+      btnDisabled: { backgroundColor: sc.textMuted },
+      btnText:     { fontFamily: 'Inter-Medium', fontSize: 14, color: sc.bgPrimary, letterSpacing: 0.5 },
+    }),
+    [sc],
+  );
+
   return (
-    <View style={styles.optInCard} testID="leaderboard-opt-in-card">
-      <Text style={styles.optInHeading}>Join the leaderboard</Text>
-      <Text style={styles.optInBody}>
+    <View style={cardStyles.card} testID="leaderboard-opt-in-card">
+      <Text style={cardStyles.heading}>Join the leaderboard</Text>
+      <Text style={cardStyles.body}>
         Opt in to your coach's leaderboard. You'll show up as soon as you log activity.
       </Text>
-      <Text style={styles.optInBody}>
+      <Text style={cardStyles.body}>
         Your combined score reflects check-in consistency, workouts logged, meals
         logged, and coach engagement — weight and monetary data are never shared.
       </Text>
       <TextInput
-        style={styles.nameInput}
+        style={cardStyles.nameInput}
         placeholder="Display name (optional)"
-        placeholderTextColor={colors.stone}
+        placeholderTextColor={sc.textMuted}
         value={displayName}
         onChangeText={setDisplayName}
         maxLength={40}
         autoCapitalize="words"
         testID="leaderboard-display-name-input"
+        accessibilityLabel="Display name"
       />
       <Pressable
-        style={[styles.optInButton, saving && styles.optInButtonDisabled]}
+        style={[cardStyles.btn, saving && cardStyles.btnDisabled]}
         onPress={() => onOptIn(displayName)}
         disabled={saving}
         testID="leaderboard-opt-in-button"
         accessibilityRole="button"
         accessibilityLabel="Opt in to leaderboard"
       >
-        <Text style={styles.optInButtonText}>{saving ? 'Saving…' : 'Opt in'}</Text>
+        <Text style={cardStyles.btnText}>{saving ? 'Saving...' : 'Opt in'}</Text>
       </Pressable>
     </View>
   );
@@ -156,10 +202,13 @@ function OptInCard({
 // ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function LeaderboardScreen() {
+  const { semanticColors: sc } = useTheme();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<LeaderboardResponse | null>(null);
+
+  const styles = useMemo(() => makeStyles(sc), [sc]);
 
   const isOptedIn = data?.entries.some((e) => e.isRequester) ?? false;
 
@@ -198,7 +247,7 @@ export default function LeaderboardScreen() {
   if (loading) {
     return (
       <View style={styles.centered} testID="leaderboard-loading">
-        <ActivityIndicator color={colors.ink} size="large" />
+        <ActivityIndicator color={sc.textPrimary} size="large" />
       </View>
     );
   }
@@ -207,7 +256,7 @@ export default function LeaderboardScreen() {
     return (
       <View style={styles.centered} testID="leaderboard-error">
         <Text style={styles.errorText}>{error}</Text>
-        <Pressable onPress={load} style={styles.retryButton} accessibilityRole="button">
+        <Pressable onPress={load} style={styles.retryButton} accessibilityRole="button" accessibilityLabel="Retry loading leaderboard">
           <Text style={styles.retryText}>Try again</Text>
         </Pressable>
       </View>
@@ -242,7 +291,7 @@ export default function LeaderboardScreen() {
       <FlatList
         data={publicEntries}
         keyExtractor={(item) => item.userId}
-        renderItem={({ item }) => <RankRow entry={item} />}
+        renderItem={({ item }) => <RankRow entry={item} sc={sc} />}
         contentContainerStyle={styles.list}
         ListEmptyComponent={
           isOptedIn ? (
@@ -255,7 +304,7 @@ export default function LeaderboardScreen() {
         }
         ListFooterComponent={
           !isOptedIn ? (
-            <OptInCard onOptIn={handleOptIn} saving={saving} />
+            <OptInCard onOptIn={handleOptIn} saving={saving} sc={sc} />
           ) : null
         }
       />
@@ -263,7 +312,7 @@ export default function LeaderboardScreen() {
       {/* Sticky self-row when not already visible at top */}
       {isOptedIn && selfEntry && selfEntry.rank > 5 && (
         <View style={styles.stickyRow} testID="leaderboard-sticky-self-row">
-          <RankRow entry={selfEntry} />
+          <RankRow entry={selfEntry} sc={sc} />
         </View>
       )}
     </KeyboardAvoidingView>
@@ -272,206 +321,105 @@ export default function LeaderboardScreen() {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bone,
-  },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.bone,
-    padding: 24,
-  },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 12,
-    borderBottomWidth: 0.5,
-    borderBottomColor: colors.stone,
-  },
-  title: {
-    fontFamily: 'Cormorant-SemiBold',
-    fontSize: 28,
-    color: colors.ink,
-    letterSpacing: 0.2,
-  },
-  selfRankLabel: {
-    fontFamily: 'Inter-Regular',
-    fontSize: 13,
-    color: colors.charcoal,
-    marginTop: 4,
-  },
-  columnHeaders: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-  },
-  colHeaderRank: {
-    fontFamily: 'Inter-Medium',
-    fontSize: 11,
-    color: colors.stone,
-    width: 32,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
-  colHeaderName: {
-    fontFamily: 'Inter-Medium',
-    fontSize: 11,
-    color: colors.stone,
-    flex: 1,
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
-  colHeaderScore: {
-    fontFamily: 'Inter-Medium',
-    fontSize: 11,
-    color: colors.stone,
-    width: 52,
-    textAlign: 'right',
-    textTransform: 'uppercase',
-    letterSpacing: 0.8,
-  },
-  list: {
-    paddingBottom: 32,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderBottomWidth: 0.5,
-    borderBottomColor: colors.stone,
-  },
-  rowHighlighted: {
-    borderBottomWidth: 2,
-    borderBottomColor: OXBLOOD,
-  },
-  rankText: {
-    fontFamily: 'Inter-Medium',
-    fontSize: 14,
-    color: colors.charcoal,
-    width: 32,
-  },
-  rowMiddle: {
-    flex: 1,
-    marginRight: 12,
-  },
-  nameText: {
-    fontFamily: 'Inter-Regular',
-    fontSize: 15,
-    color: colors.ink,
-    marginBottom: 5,
-  },
-  nameTextMe: {
-    fontFamily: 'Inter-SemiBold',
-    color: colors.ink,
-  },
-  barTrack: {
-    height: 3,
-    backgroundColor: colors.cream,
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  barFill: {
-    height: 3,
-    backgroundColor: colors.forest,
-    borderRadius: 2,
-  },
-  scoreBlock: {
-    alignItems: 'flex-end',
-    width: 52,
-  },
-  scoreText: {
-    fontFamily: 'Inter-SemiBold',
-    fontSize: 18,
-    color: colors.ink,
-  },
-  deltaText: {
-    fontFamily: 'Inter-Regular',
-    fontSize: 11,
-    marginTop: 2,
-  },
-  emptyState: {
-    padding: 32,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontFamily: 'Inter-Regular',
-    fontSize: 14,
-    color: colors.charcoal,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  errorText: {
-    fontFamily: 'Inter-Regular',
-    fontSize: 14,
-    color: colors.charcoal,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 16,
-  },
-  retryButton: {
-    paddingVertical: 10,
-    paddingHorizontal: 24,
-    borderWidth: 1,
-    borderColor: colors.ink,
-  },
-  retryText: {
-    fontFamily: 'Inter-Medium',
-    fontSize: 14,
-    color: colors.ink,
-  },
-  optInCard: {
-    margin: 20,
-    padding: 24,
-    backgroundColor: colors.cream,
-    borderWidth: 0.5,
-    borderColor: colors.stone,
-  },
-  optInHeading: {
-    fontFamily: 'Cormorant-SemiBold',
-    fontSize: 22,
-    color: colors.ink,
-    marginBottom: 12,
-  },
-  optInBody: {
-    fontFamily: 'Inter-Regular',
-    fontSize: 14,
-    color: colors.charcoal,
-    lineHeight: 22,
-    marginBottom: 12,
-  },
-  nameInput: {
-    borderWidth: 1,
-    borderColor: colors.stone,
-    padding: 12,
-    fontFamily: 'Inter-Regular',
-    fontSize: 14,
-    color: colors.ink,
-    backgroundColor: colors.bone,
-    marginBottom: 16,
-    marginTop: 4,
-  },
-  optInButton: {
-    backgroundColor: colors.ink,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  optInButtonDisabled: {
-    backgroundColor: colors.stone,
-  },
-  optInButtonText: {
-    fontFamily: 'Inter-Medium',
-    fontSize: 14,
-    color: colors.bone,
-    letterSpacing: 0.5,
-  },
-  stickyRow: {
-    borderTopWidth: 0.5,
-    borderTopColor: colors.stone,
-    backgroundColor: colors.bone,
-  },
-});
+const makeStyles = (sc: SemanticTokens) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: sc.bgPrimary,
+    },
+    centered: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: sc.bgPrimary,
+      padding: 24,
+    },
+    header: {
+      paddingHorizontal: 20,
+      paddingTop: 20,
+      paddingBottom: 12,
+      borderBottomWidth: 0.5,
+      borderBottomColor: sc.border,
+    },
+    title: {
+      fontFamily: 'Cormorant-SemiBold',
+      fontSize: 28,
+      color: sc.textPrimary,
+      letterSpacing: 0.2,
+    },
+    selfRankLabel: {
+      fontFamily: 'Inter-Regular',
+      fontSize: 13,
+      color: sc.textMuted,
+      marginTop: 4,
+    },
+    columnHeaders: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingHorizontal: 20,
+      paddingVertical: 8,
+    },
+    colHeaderRank: {
+      fontFamily: 'Inter-Medium',
+      fontSize: 11,
+      color: sc.textMuted,
+      width: 32,
+      textTransform: 'uppercase',
+      letterSpacing: 0.8,
+    },
+    colHeaderName: {
+      fontFamily: 'Inter-Medium',
+      fontSize: 11,
+      color: sc.textMuted,
+      flex: 1,
+      textTransform: 'uppercase',
+      letterSpacing: 0.8,
+    },
+    colHeaderScore: {
+      fontFamily: 'Inter-Medium',
+      fontSize: 11,
+      color: sc.textMuted,
+      width: 52,
+      textAlign: 'right',
+      textTransform: 'uppercase',
+      letterSpacing: 0.8,
+    },
+    list: {
+      paddingBottom: 32,
+    },
+    emptyState: {
+      padding: 32,
+      alignItems: 'center',
+    },
+    emptyText: {
+      fontFamily: 'Inter-Regular',
+      fontSize: 14,
+      color: sc.textMuted,
+      textAlign: 'center',
+      lineHeight: 22,
+    },
+    errorText: {
+      fontFamily: 'Inter-Regular',
+      fontSize: 14,
+      color: sc.textMuted,
+      textAlign: 'center',
+      lineHeight: 22,
+      marginBottom: 16,
+    },
+    retryButton: {
+      paddingVertical: 10,
+      paddingHorizontal: 24,
+      borderWidth: 1,
+      borderColor: sc.textPrimary,
+    },
+    retryText: {
+      fontFamily: 'Inter-Medium',
+      fontSize: 14,
+      color: sc.textPrimary,
+    },
+    stickyRow: {
+      borderTopWidth: 0.5,
+      borderTopColor: sc.border,
+      backgroundColor: sc.bgPrimary,
+    },
+  });
