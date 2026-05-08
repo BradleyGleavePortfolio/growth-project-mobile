@@ -8,6 +8,7 @@
  *
  * Design doctrine:
  *   - Bone/ink/oxblood palette from tokens.ts.
+ *   - Self-row highlight: sc.accent resolves to #4A0404 (light) / #B43C3C (dark).
  *   - Cormorant Garamond display, Inter body.
  *   - No emoji, no celebration chrome.
  *   - Numbers over adjectives.
