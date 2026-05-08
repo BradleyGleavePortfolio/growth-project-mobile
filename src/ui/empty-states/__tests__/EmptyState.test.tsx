@@ -19,7 +19,7 @@ import { render, fireEvent } from '@testing-library/react-native';
 
 // ─── Mock theme ───────────────────────────────────────────────────────────────
 
-jest.mock('../../theme/ThemeProvider', () => ({
+jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => ({
     colors: {
       primary:        '#2C4A36',
