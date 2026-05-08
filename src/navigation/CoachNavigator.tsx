@@ -55,6 +55,8 @@ import { fetchUnreadCount } from '../services/notificationsApi';
 // The legacy CoachHomeScreen is preserved in the Clients stack as a sub-screen
 // so existing deep links and navigation.navigate() calls keep working.
 import CommandCenterScreen from '../screens/coach/command-center/CommandCenterScreen';
+// Phase 10 — GDPR Article 20 data portability
+import DataExportScreen from '../screens/settings/DataExportScreen';
 import { Colors } from '../constants/colors';
 
 export type CoachTabParamList = {
@@ -108,6 +110,8 @@ export type SettingsStackParamList = {
   BothPillarsLegacyStub: undefined;
   // Phase 10 — GDPR right to erasure.
   DeleteAccount: undefined;
+  /** Phase 10 — GDPR Article 20 data portability */
+  DataExport: undefined;
 };
 
 /** Phase 11 / Track 7 — team management stack param list. */
@@ -257,6 +261,8 @@ function SettingsStackNavigator() {
       <SettingsStack.Screen name="BothPillarsLegacyStub" component={BothPillarsScreen} />
       {/* Phase 10 — GDPR right to erasure. */}
       <SettingsStack.Screen name="DeleteAccount" component={DeleteAccountScreen} />
+      {/* Phase 10 — GDPR Article 20 data portability */}
+      <SettingsStack.Screen name="DataExport" component={DataExportScreen} />
     </SettingsStack.Navigator>
   );
 }
