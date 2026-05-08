@@ -705,7 +705,7 @@ const styles = StyleSheet.create({
   addExerciseBtnText: {
     ...typography.caption,
     color: tokens.bone,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   // ── Drawer ──
   drawer: {
@@ -740,7 +740,7 @@ const styles = StyleSheet.create({
   drawerCloseText: {
     ...typography.caption,
     color: tokens.forest,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   searchInput: {
     borderWidth: 1,
