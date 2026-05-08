@@ -26,6 +26,10 @@ import Svg, { Circle, G, Polyline, Line as SvgLine, Text as SvgText } from 'reac
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { weightApi, logApi } from '../../services/api';
 import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
+import HapticPressable from '../../components/HapticPressable';
+import { track } from '../../lib/analytics';
+import { AnalyticsEvents } from '../../analytics/events';
+import type { ShareCardMilestone } from '../share/ShareCardScreen';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 import { shadows as shadowTokens } from '../../theme/tokens';
@@ -300,13 +304,33 @@ export default function ProgressScreen() {
             )}
             {/* Round 3: Progress now lives inside MoreStack, so Report is a sibling —
                 navigate directly instead of through the old ProfileStack parent. */}
+            {/* Phase 11: Share streak card when streak >= 3 days */}
+            {loggingStreak >= 3 && (
+              <HapticPressable
+                intent="light"
+                style={{ marginRight: 8, padding: 4 }}
+                onPress={() => {
+                  const milestone: ShareCardMilestone = {
+                    variant: 'streak',
+                    value: String(loggingStreak),
+                    label: loggingStreak === 1 ? 'Day Streak' : 'Day Streak',
+                  };
+                  track(AnalyticsEvents.REFERRAL_SHARE_INITIATED, { source: 'progress_screen' });
+                  navigation.navigate('ShareCard', { milestone } as never);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`Share ${loggingStreak}-day streak`}
+              >
+                <Ionicons name="share-social-outline" size={22} color={colors.primary} />
+              </HapticPressable>
+            )}
             <TouchableOpacity
               onPress={() => navigation.navigate('Report')}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               accessibilityLabel="View progress report"
               accessibilityRole="button"
             >
-              <Ionicons name="share-outline" size={22} color={colors.textSecondary} />
+              <Ionicons name="document-text-outline" size={22} color={colors.textSecondary} />
             </TouchableOpacity>
           </View>
         </View>
