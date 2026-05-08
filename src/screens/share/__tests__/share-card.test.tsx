@@ -84,8 +84,8 @@ jest.mock('../../components/HapticPressable', () => {
 
 // ── Test ──────────────────────────────────────────────────────────────────────
 
-import ShareCardScreen from '../../screens/share/ShareCardScreen';
-import type { ShareCardMilestone } from '../../screens/share/ShareCardScreen';
+import ShareCardScreen from '../ShareCardScreen';
+import type { ShareCardMilestone } from '../ShareCardScreen';
 
 const mockNavigation = {
   goBack: jest.fn(),
@@ -135,14 +135,14 @@ describe('ShareCardScreen', () => {
   });
 
   it('calls captureRef on the card ref when Share is pressed', async () => {
-    const { getByAccessibilityLabel } = renderScreen({
+    const { getByRole } = renderScreen({
       variant: 'streak',
       value: '7',
       label: 'Day Streak',
       coachTenantId: 'coach-abc',
     });
 
-    fireEvent.press(getByAccessibilityLabel('Share milestone card'));
+    fireEvent.press(getByRole('button', { name: 'Share milestone card' }));
 
     await waitFor(() => {
       expect(mockCaptureRef).toHaveBeenCalledTimes(1);
@@ -150,14 +150,14 @@ describe('ShareCardScreen', () => {
   });
 
   it('fires REFERRAL_SHARE_CARD_SHARED after sharing', async () => {
-    const { getByAccessibilityLabel } = renderScreen({
+    const { getByRole: getByRole2 } = renderScreen({
       variant: 'streak',
       value: '7',
       label: 'Day Streak',
       coachTenantId: 'coach-abc',
     });
 
-    fireEvent.press(getByAccessibilityLabel('Share milestone card'));
+    fireEvent.press(getByRole2('button', { name: 'Share milestone card' }));
 
     await waitFor(() => {
       expect(mockTrack).toHaveBeenCalledWith(
