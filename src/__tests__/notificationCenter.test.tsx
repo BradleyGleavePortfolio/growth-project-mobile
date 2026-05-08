@@ -16,16 +16,17 @@ import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 // @expo/vector-icons depends on expo-font → expo-asset which is not available
-// in the Jest environment. Provide a lightweight stub.
+// in the Jest environment. Provide a lightweight stub that renders nothing.
 jest.mock('@expo/vector-icons', () => {
-  const { Text } = require('react-native');
-  const Icon = (props: { name?: string; size?: number; color?: string }) =>
-    React.createElement(Text, { testID: `icon-${props.name ?? 'unknown'}` });
-  return {
-    Ionicons: Icon,
-    MaterialIcons: Icon,
-    Feather: Icon,
-  };
+  function Icon(_props: {
+    name?: string;
+    size?: number;
+    color?: string;
+    accessibilityElementsHidden?: boolean;
+  }) {
+    return null;
+  }
+  return { Ionicons: Icon, MaterialIcons: Icon, Feather: Icon };
 });
 
 import NotificationCenterScreen from '../screens/notifications/NotificationCenterScreen';
