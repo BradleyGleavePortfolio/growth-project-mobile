@@ -16,6 +16,8 @@ import { flush as flushFoodLogQueue } from '../services/foodLogQueue';
 import { isScreenshotMode } from '../screenshots';
 import { firstWinApi } from '../services/firstWinApi';
 import Day1WinScreen from '../screens/client/Day1WinScreen';
+// Phase 11 Track 9 — Support Inbox: init Crisp and sync identity on login
+import { initCrisp, syncCrispIdentity } from '../services/support/crisp.service';
 
 // Phase 7A: 'day1win' is inserted between onboarding and the main client
 // navigator. On first cold start after onboarding the app checks
@@ -70,6 +72,13 @@ const linking: LinkingOptions<Record<string, object | undefined>> = {
 export default function RootNavigator() {
   const [authState, setAuthState] = useState<AuthState>('loading');
 
+  // Initialise the Crisp SDK once at app start. Safe to call before auth
+  // resolves — configure() only registers the website ID and does not
+  // start a session until the chat overlay is opened.
+  useEffect(() => {
+    initCrisp();
+  }, []);
+
   useEffect(() => {
     bootstrapAuth();
     const unsubscribe = authEvents.onAuthChange(bootstrapAuth);
@@ -120,6 +129,12 @@ export default function RootNavigator() {
       const role = user?.role;
 
       if (role === 'coach') {
+        // Sync Crisp identity so operators see the coach's account in the dashboard.
+        syncCrispIdentity({
+          email: user.email ?? '',
+          displayName: user.name,
+          role: 'coach',
+        });
         setAuthState('coach');
         return;
       }
@@ -156,6 +171,12 @@ export default function RootNavigator() {
           // The win screen will be retried on next boot.
         }
 
+        // Sync Crisp identity so operators see the client's account in the dashboard.
+        syncCrispIdentity({
+          email: user.email ?? '',
+          displayName: user.name,
+          role: 'student',
+        });
         setAuthState('student');
         return;
       }
