@@ -155,7 +155,7 @@ export default function NotificationPreferencesScreen({
 
       // Analytics.
       const props: NotificationPreferenceChangedProps = { category, enabled: value };
-      track(AnalyticsEvents.NOTIFICATION_PREFERENCE_CHANGED, props as Record<string, unknown>);
+      track(AnalyticsEvents.NOTIFICATION_PREFERENCE_CHANGED, props as unknown as Record<string, unknown>);
     },
     [prefs],
   );
