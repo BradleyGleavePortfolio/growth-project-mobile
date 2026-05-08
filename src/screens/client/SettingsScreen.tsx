@@ -401,6 +401,21 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </HapticPressable>
+          {/* Phase 10 — GDPR Article 20 data portability */}
+          <HapticPressable
+            intent="light"
+            style={styles.row}
+            onPress={() => navigation.navigate('DataExport')}
+            accessibilityRole="button"
+            accessibilityLabel="Request my data export"
+            accessibilityHint="Download a complete copy of all your personal data"
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+              <Ionicons name="download-outline" size={18} color={colors.primary} />
+              <Text style={styles.rowLabel}>My data</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </HapticPressable>
           <HapticPressable
             intent="warning"
             style={styles.row}
