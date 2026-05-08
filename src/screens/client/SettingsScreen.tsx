@@ -401,6 +401,17 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </HapticPressable>
+          <HapticPressable
+            intent="warning"
+            style={styles.row}
+            onPress={() => navigation.navigate('DeleteAccount')}
+            accessibilityRole="button"
+            accessibilityLabel="Delete my account"
+            accessibilityHint="Opens the account deletion screen with a 14-day grace period"
+          >
+            <Text style={[styles.rowLabel, { color: colors.error }]}>Delete my account</Text>
+            <Ionicons name="trash-outline" size={18} color={colors.error} />
+          </HapticPressable>
           <HapticPressable intent="warning" style={styles.row} onPress={handleResetOnboarding}>
             <Text style={styles.rowLabel}>Reset Onboarding</Text>
             <Ionicons name="refresh-outline" size={18} color={colors.warning} />
