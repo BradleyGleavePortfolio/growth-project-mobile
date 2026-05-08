@@ -23,6 +23,8 @@ import { errorMessage } from '../../types/common';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { AuthStackParamList } from '../../navigation/AuthNavigator';
+import AppleSignInButton from '../../components/AppleSignInButton';
+import { signInWithApple } from '../../utils/appleAuth';
 
 interface Props {
   navigation: NativeStackNavigationProp<AuthStackParamList>;
@@ -206,6 +208,35 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
       }
     } finally {
       setVerifyLoading(false);
+    }
+  };
+
+  const handleAppleSignup = async () => {
+    const trimmedCode = inviteCode.trim();
+    if (requireInviteCode && !trimmedCode) {
+      setError('Enter your coach invite code before continuing with Apple.');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const result = await signInWithApple({ inviteCode: trimmedCode || undefined });
+      if (!result.success) {
+        if (result.cancelled) return;
+        const friendly = toFriendlyAuthError(result.error);
+        if (!friendly.cancelled) {
+          setError(friendly.message);
+          Alert.alert('Sign-in', friendly.message);
+        }
+        return;
+      }
+      await AsyncStorage.setItem('needs_role_selection', 'true');
+      navigation.replace('RoleSelection');
+    } catch (err) {
+      const friendly = toFriendlyAuthError(err);
+      if (!friendly.cancelled) setError(friendly.message);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -443,6 +474,14 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
           </>
         )}
 
+
+        {/* Apple Sign-In — required by App Store policy when any other
+            third-party sign-in is offered. Renders nothing on Android or
+            unsupported iOS configurations. */}
+        <View style={styles.appleButtonWrap}>
+          <AppleSignInButton onPress={handleAppleSignup} label="SIGN_UP" />
+        </View>
+
         <View style={styles.signupRow}>
           <Text style={styles.signupText}>Already have an account? </Text>
           <TouchableOpacity
@@ -520,6 +559,7 @@ const makeStyles = (colors: ThemeColors) =>
   },
   googleG: { fontFamily: 'Inter_600SemiBold', fontSize: 16, fontWeight: '600', marginRight: Spacing.sm, color: colors.dark },
   googleButtonText: { ...Typography.button, color: colors.dark },
+  appleButtonWrap: { marginTop: Spacing.md, minHeight: 48 },
   signupRow: {
     flexDirection: 'row',
     justifyContent: 'center',

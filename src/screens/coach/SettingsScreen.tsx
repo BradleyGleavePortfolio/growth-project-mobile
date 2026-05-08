@@ -27,6 +27,7 @@ import { updateSupabasePassword } from '../../utils/supabaseAuth';
 import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage, errorStatus } from '../../types/common';
+import BiometricUnlockSetting from '../../components/BiometricUnlockSetting';
 
 const COACH_SETTINGS_KEY = 'gp_coach_settings';
 
@@ -466,6 +467,12 @@ export default function SettingsScreen() {
             thumbColor={colors.textOnPrimary}
           />
         </View>
+      </View>
+
+      {/* Security */}
+      <Text style={styles.sectionHeader}>Security</Text>
+      <View style={styles.section}>
+        <BiometricUnlockSetting />
       </View>
 
       {/* Privacy & data */}

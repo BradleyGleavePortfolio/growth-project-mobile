@@ -93,3 +93,79 @@ Tests for the log primitives live alongside the screen-level helpers (`utils/__t
 - The dedicated AI surface is `src/screens/client/AIGuideScreen.tsx`. Reach it from the **Guidance** row on `MoreScreen`. There is no global FAB / floating widget — `docs/QUIET_LUXURY_DOCTRINE.md` §6 forbids reintroducing one.
 - The log primitives in `components/log` are the first thing to rev when the food-search flow changes; the offline queue contract in `services/foodLogQueue` depends on the shape of the payload they construct.
 - `TrustCueRow` copy is part of the privacy review. Editing the explainer text is a release-blocking sync with the marketing privacy page.
+
+### Auth & security
+
+| File | What it does |
+| --- | --- |
+| `AppleSignInButton.tsx` | Thin wrapper around `<AppleAuthentication.AppleAuthenticationButton/>` (mandatory by Apple HIG). Renders nothing on Android or unsupported iOS configurations so call sites can drop it in unconditionally. |
+| `BiometricUnlockGate.tsx` | Wraps the app shell. When the user has opted in, blocks render until `useBiometricGate` reports `unlocked`. Pass-through otherwise. |
+| `BiometricUnlockSetting.tsx` | Settings row that toggles the SecureStore opt-in flag (`biometric_unlock_enabled`). Hides itself when the device has no biometrics. |
+
+### Anticipation, community, trust
+
+| File | What it does |
+| --- | --- |
+| `MilestoneList.tsx`, `HeroAction.tsx` | Home-tab hero composition + milestone list (date · note rows; single fade, no celebration). |
+| `anticipation/CountdownTile.tsx`, `MilestoneProgress.tsx` | "Healthy anticipation" surfaces — the next-milestone preview. |
+| `community/CommunityWinCard.tsx` | Community feed primitive. |
+| `trust/TrustCueRow.tsx`, `TrustExplainerSheet.tsx` | Three-chip trust rail (encrypted, data ownership, no ads). Tap opens explainer; fires `trust_cue_tapped`. |
+
+### Logging primitives
+
+| File | What it does |
+| --- | --- |
+| `log/DailySummaryBar.tsx` | Macro / calorie summary header for the Log screen. |
+| `log/MealSectionCard.tsx` | Per-meal card with add-food and entry list. |
+| `log/FoodSearchModal.tsx`, `FoodSearchView.tsx` | Search-and-pick modal backed by `foodApi.search`. |
+| `log/QuantityPickerModal.tsx` | Quantity multiplier picker after a food is chosen. |
+| `log/ManualFoodEntryForm.tsx` | Free-form entry (name, macros, serving) for foods not in the catalogue. |
+
+### Domain-specific
+
+| File | What it does |
+| --- | --- |
+| `CalorieRing.tsx`, `MacroBar.tsx`, `WaterTracker.tsx` | Hand-rolled SVG charts with no third-party chart lib. |
+| `MealCard.tsx`, `FoodImage.tsx`, `ExerciseLogModal.tsx` | Per-domain primitives. |
+| `DaySelector.tsx` | Horizontal day picker with `getTodayString` ergonomics. |
+
+## Data flow
+
+Components are mostly presentational. The one component that owns data is `OfflineBanner` — it reads `useNetworkStatus` and renders nothing when online. Everything else takes props.
+
+## App-store / deep-link dependencies
+
+- The splash background colour (`#F5EFE4`) declared in `app.json → expo.splash.backgroundColor` and `expo.android.adaptiveIcon.backgroundColor` must match `bone` from the theme. `AppSplash` uses the same value.
+- `TrustCueRow` and `TrustExplainerSheet` provide the in-app surface that mirrors the privacy policy. Whatever copy lives in the explainer must match what the policy says — they are a sync pair.
+
+## Security and tenancy
+
+- Components do not read storage directly. They consume props or call `services/api` through a screen.
+- The AI surface lives in `src/screens/client/AIGuideScreen.tsx` — there is no global widget. The screen sends only the user's message and short history; the backend attaches structured context. PII is never read into a prompt by the client.
+- Analytics events fire from `TrustCueRow` (`trust_cue_tapped`). Payloads are PII-safe — only the cue id / event name go through `track()`.
+
+## Environment variables
+
+None.
+
+## Failure modes
+
+| Symptom | Cause | Recovery |
+| --- | --- | --- |
+| Skeleton loader keeps shimmering forever | Parent never flips `loading={false}` because the underlying query is stuck | Add a 30 s timeout in the parent screen. |
+| OfflineBanner never appears | `useNetworkStatus` reports `isInternetReachable: undefined` on iOS simulator | The hook treats `undefined` as online; the banner only shows on a confirmed offline state. |
+| Component looks "flat" or "too quiet" | The wave-5b cleanup deliberately removed gradients, glows, shimmer, confetti, and trophy chrome | This is by design — see `docs/QUIET_LUXURY_DOCTRINE.md`. The doctrine test (`src/__tests__/quietLuxuryDoctrine.test.ts`) will reject reintroductions. |
+
+## Tests
+
+```bash
+npm test
+```
+
+Tests for the log primitives live alongside the screen-level helpers (`utils/__tests__/log/*`). Visual components are exercised by the smoke matrix.
+
+## Release notes
+
+- The dedicated AI surface is `src/screens/client/AIGuideScreen.tsx`. Reach it from the **Guidance** row on `MoreScreen`. There is no global FAB / floating widget — `docs/QUIET_LUXURY_DOCTRINE.md` §6 forbids reintroducing one.
+- The log primitives in `components/log` are the first thing to rev when the food-search flow changes; the offline queue contract in `services/foodLogQueue` depends on the shape of the payload they construct.
+- `TrustCueRow` copy is part of the privacy review. Editing the explainer text is a release-blocking sync with the marketing privacy page.
