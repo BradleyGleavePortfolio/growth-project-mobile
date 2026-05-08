@@ -26,6 +26,10 @@ import CoachBriefScreen from '../screens/coach/CoachBriefScreen';
 import AdminControlRoomScreen from '../screens/coach/AdminControlRoomScreen';
 // Phase 11 Track 9 — Support Inbox (Crisp)
 import SupportInboxScreen from '../screens/support/SupportInboxScreen';
+// Phase 11 / Track 7 — sub-coach team management (Scale+ tier gate enforced in-screen)
+import TeamManagementScreen from '../screens/coach/TeamManagementScreen';
+import SubCoachDetailScreen from '../screens/coach/SubCoachDetailScreen';
+import ClientReassignModal from '../screens/coach/ClientReassignModal';
 import { Colors } from '../constants/colors';
 
 export type CoachTabParamList = {
@@ -34,6 +38,7 @@ export type CoachTabParamList = {
   Templates: undefined;
   Messages: undefined;
   SettingsStack: undefined;
+  TeamStack: undefined;
 };
 
 export type ClientsStackParamList = {
@@ -62,9 +67,17 @@ export type SettingsStackParamList = {
   SupportInbox: undefined;
 };
 
+/** Phase 11 / Track 7 — team management stack param list. */
+export type TeamStackParamList = {
+  TeamManagement: undefined;
+  SubCoachDetail: { subCoachId: string; subCoachName: string };
+  ClientReassign: { clientId: string; clientName: string; fromSubCoachId: string };
+};
+
 const Tab = createBottomTabNavigator<CoachTabParamList>();
 const ClientsStack = createNativeStackNavigator<ClientsStackParamList>();
 const SettingsStack = createNativeStackNavigator<SettingsStackParamList>();
+const TeamStack = createNativeStackNavigator<TeamStackParamList>();
 
 function ClientsStackNavigator() {
   return (
@@ -121,6 +134,32 @@ function SettingsStackNavigator() {
       {/* Phase 11 Track 9 — Support Inbox */}
       <SettingsStack.Screen name="SupportInbox" component={SupportInboxScreen} />
     </SettingsStack.Navigator>
+  );
+}
+
+/**
+ * TeamStackNavigator
+ *
+ * Phase 11 / Track 7. Scale+ tier gate is enforced inside TeamManagementScreen
+ * so it is safe to mount for all coaches — non-Scale coaches see an upgrade
+ * prompt rather than the roster.
+ */
+function TeamStackNavigator() {
+  return (
+    <TeamStack.Navigator
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: Colors.background },
+      }}
+    >
+      <TeamStack.Screen name="TeamManagement" component={TeamManagementScreen} />
+      <TeamStack.Screen name="SubCoachDetail" component={SubCoachDetailScreen} />
+      <TeamStack.Screen
+        name="ClientReassign"
+        component={ClientReassignModal}
+        options={{ presentation: 'modal' }}
+      />
+    </TeamStack.Navigator>
   );
 }
 
@@ -209,6 +248,17 @@ export default function CoachNavigator() {
           tabBarBadge: unreadCount > 0 ? (unreadCount > 99 ? '99+' : unreadCount) : undefined,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="chatbubble" size={size} color={color} />
+          ),
+        }}
+      />
+      {/* Phase 11 / Track 7 — Team tab. Scale+ tier gate enforced in-screen. */}
+      <Tab.Screen
+        name="TeamStack"
+        component={TeamStackNavigator}
+        options={{
+          tabBarLabel: 'Team',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="people-circle" size={size} color={color} />
           ),
         }}
       />
