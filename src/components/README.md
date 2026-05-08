@@ -169,3 +169,48 @@ Tests for the log primitives live alongside the screen-level helpers (`utils/__t
 - The dedicated AI surface is `src/screens/client/AIGuideScreen.tsx`. Reach it from the **Guidance** row on `MoreScreen`. There is no global FAB / floating widget — `docs/QUIET_LUXURY_DOCTRINE.md` §6 forbids reintroducing one.
 - The log primitives in `components/log` are the first thing to rev when the food-search flow changes; the offline queue contract in `services/foodLogQueue` depends on the shape of the payload they construct.
 - `TrustCueRow` copy is part of the privacy review. Editing the explainer text is a release-blocking sync with the marketing privacy page.
+
+---
+
+## src/ui/skeletons — Phase 11 Skeleton Loader Library
+
+Added in Phase 11 / Track 2. A hand-rolled animated skeleton library built on
+`react-native-reanimated` (already bundled with Expo SDK 51). No additional
+npm dependency is required.
+
+### Design contract
+
+- Pulse animation: opacity oscillates between **0.4** and **1.0** over **1 500 ms**
+  using `withRepeat` / `withTiming` / `Easing.inOut(Easing.sine)`.
+- Colors: `tokens.colors.cream` (`#F1E8D5`) as the skeleton fill — no hardcoded hex.
+- All skeletons set `accessibilityElementsHidden` so VoiceOver / TalkBack
+  skips them entirely.
+
+### Components
+
+| File | Shape it represents |
+| --- | --- |
+| `Skeleton.tsx` | Primitive block — `{ width, height, borderRadius? }` |
+| `SkeletonClientCard.tsx` | Coach client list card (avatar + name + email + status + chevron) |
+| `SkeletonWorkoutRow.tsx` | Workout assignment row (icon + name + sets/reps + badge) |
+| `SkeletonStatTile.tsx` | Dashboard stat card (icon + value + label) |
+| `SkeletonProgressChart.tsx` | Bar chart placeholder (6 bars, varying heights) |
+| `SkeletonProfileHeader.tsx` | Client/coach profile header (avatar + name + role + 2 stat chips) |
+| `index.ts` | Barrel re-exports all six components |
+
+### Wired screens
+
+| Screen | Skeleton used | Condition |
+| --- | --- | --- |
+| `coach/CoachHomeScreen.tsx` | `SkeletonStatTile` | `isLoading && !refreshing`; also inline `dashboardLoading` metric tiles |
+| `coach/ClientsListScreen.tsx` | `SkeletonClientCard` | `isLoading` — replaces `ActivityIndicator` in list area |
+| `coach/ClientDetailScreen.tsx` | `SkeletonProfileHeader`, `SkeletonStatTile`, `SkeletonWorkoutRow` | `isLoading && !refreshing` |
+
+### Tests
+
+`src/__tests__/skeleton.test.tsx` covers:
+- Source-level contract guards (no hardcoded hex, reanimated usage, a11y)
+- Barrel export completeness
+- RTL render of the Skeleton primitive
+- Wiring assertions for all three screens
+

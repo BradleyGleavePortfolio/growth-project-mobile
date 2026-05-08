@@ -23,6 +23,7 @@ import type { JsonRecord, IoniconName } from '../../types/common';
 import { getTodayString } from '../../utils/date';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
+import { SkeletonProfileHeader, SkeletonWorkoutRow, SkeletonStatTile } from '../../ui/skeletons';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface SessionSet {
@@ -652,9 +653,21 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
 
   if (isLoading && !refreshing) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
+      <ScrollView style={styles.container} contentContainerStyle={{ paddingBottom: 40 }}>
+        <SkeletonProfileHeader />
+        <View style={{ paddingHorizontal: 16, gap: 8 }}>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <SkeletonStatTile />
+            <SkeletonStatTile />
+            <SkeletonStatTile />
+          </View>
+        </View>
+        <View style={{ paddingHorizontal: 16, marginTop: 16, gap: 8 }}>
+          <SkeletonWorkoutRow />
+          <SkeletonWorkoutRow />
+          <SkeletonWorkoutRow />
+        </View>
+      </ScrollView>
     );
   }
 
