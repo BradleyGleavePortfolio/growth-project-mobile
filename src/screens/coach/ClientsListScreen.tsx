@@ -16,6 +16,7 @@ import { useCoachStore } from '../../store/coachStore';
 import { User } from '../../types';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { SkeletonClientCard } from '../../ui/skeletons';
+import { EmptyStateNoClients, EmptyStateNoResults } from '../../ui/empty-states';
 
 type Props = {
   navigation: NativeStackNavigationProp<ClientsStackParamList, 'ClientsList'>;
@@ -146,10 +147,9 @@ export default function ClientsListScreen({ navigation }: Props) {
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Ionicons name="people-outline" size={48} color={colors.textMuted} />
-              <Text style={styles.emptyText}>No clients found</Text>
-            </View>
+            searchQuery
+              ? <EmptyStateNoResults query={searchQuery} onClearSearch={() => setSearchQuery('')} />
+              : <EmptyStateNoClients />
           }
         />
       )}
@@ -295,14 +295,7 @@ const makeStyles = (colors: ThemeColors) =>
     color: colors.info,
     fontWeight: '500',
   },
-  emptyContainer: {
-    alignItems: 'center',
-    paddingTop: 60,
-    gap: 12,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: colors.textMuted,
-  },
+
 
   });
+
