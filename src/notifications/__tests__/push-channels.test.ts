@@ -36,7 +36,7 @@ import {
   registerPushChannels,
   PUSH_CHANNEL,
   IOS_CATEGORY,
-} from '../../push-channels';
+} from '../push-channels';
 
 describe('PUSH_CHANNEL constants', () => {
   it('has expected string values', () => {
