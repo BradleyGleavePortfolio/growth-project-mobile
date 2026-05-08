@@ -24,6 +24,8 @@ import CoachSessionBriefScreen from '../screens/coach/CoachSessionBriefScreen';
 // Wave 11 — runtime scaffolding (flag-gated; safe to mount)
 import CoachBriefScreen from '../screens/coach/CoachBriefScreen';
 import AdminControlRoomScreen from '../screens/coach/AdminControlRoomScreen';
+// Phase 11 / Track 6 — Workout Builder
+import CoachWorkoutBuilderScreen from '../screens/coach/CoachWorkoutBuilderScreen';
 import { Colors } from '../constants/colors';
 
 export type CoachTabParamList = {
@@ -47,6 +49,8 @@ export type ClientsStackParamList = {
   CoachUpcomingCalls:    { coachId: string };
   CoachAvailability:     { coachId: string };
   CoachSessionBrief:     { sessionId: string };
+  // Phase 11 / Track 6 — Workout Builder
+  WorkoutBuilder: undefined;
 };
 
 export type SettingsStackParamList = {
@@ -94,6 +98,12 @@ function ClientsStackNavigator() {
       <ClientsStack.Screen
         name="CoachSessionBrief"
         component={CoachSessionBriefScreen}
+      />
+      {/* Phase 11 / Track 6 — Workout Builder. */}
+      <ClientsStack.Screen
+        name="WorkoutBuilder"
+        component={CoachWorkoutBuilderScreen}
+        options={{ title: 'Workout Builder' }}
       />
     </ClientsStack.Navigator>
   );
