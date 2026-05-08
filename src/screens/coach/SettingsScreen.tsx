@@ -538,6 +538,20 @@ export default function SettingsScreen() {
       <View style={styles.section}>
         <TouchableOpacity
           style={styles.row}
+          onPress={() => navigation.navigate('SupportInbox')}
+          accessibilityRole="button"
+          accessibilityLabel="Contact support"
+          accessibilityHint="Opens the live support inbox"
+        >
+          <Ionicons name="chatbubble-ellipses-outline" size={20} color={colors.textSecondary} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.rowLabel}>Support</Text>
+            <Text style={styles.rowSubLabel}>Live chat with the support team</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.row}
           onPress={handleOpenHelp}
           accessibilityRole="link"
           accessibilityLabel="Open help centre"
