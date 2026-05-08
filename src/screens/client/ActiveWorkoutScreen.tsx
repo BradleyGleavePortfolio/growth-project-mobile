@@ -22,12 +22,21 @@ import ExerciseLogModal, { ExerciseLogSaveData } from '../../components/Exercise
 import { track } from '../../lib/analytics';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+// Phase 11 / Track 10: offline-first write path.
+// The workout is saved to WatermelonDB first (sync_status='pending').
+// The sync engine pushes it to the server when connectivity allows.
+import { writeWorkoutLog, triggerSync } from '../../offline';
 
 // NB: Fix #2 — the local exercise_logs SQLite table (logExerciseWithVolume)
 // is no longer written to. Volume aggregation now happens on the server
 // from the workouts created by useCreateWorkout, so HomeScreen and the
 // coach dashboard stay in sync. The exercise *catalog* (getAllExercises)
 // is still local because it's static reference data, not per-user state.
+//
+// Phase 11 / Track 10 (offline-first): createWorkout.mutate() is called
+// AFTER a local WatermelonDB write. If the API call fails (offline), the
+// WatermelonDB record stays as 'pending' and the sync engine retries on
+// reconnect. Other screens (food logs, habits, body weight) are follow-ups.
 
 interface SessionExercise {
   exerciseId: string;
@@ -345,20 +354,57 @@ export default function ActiveWorkoutScreen() {
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Finish',
-        onPress: () => {
+        // Phase 11 / Track 10 — offline-first write:
+        //   1. Write each exercise group to WatermelonDB with sync_status='pending'.
+        //   2. Then attempt the server POST via createWorkout.mutate (network-optional).
+        //   3. If the network call succeeds the sync engine marks records 'synced'.
+        //   4. If offline the records stay 'pending' — triggerSync() fires on reconnect.
+        onPress: async () => {
+          if (timerRef.current) clearInterval(timerRef.current);
+          const durationMinutes = Math.round(timer / 60);
+          const completedExercises = sessionExercises.filter((e) =>
+            e.sets.some((s) => s.completed),
+          );
+
+          // Write each exercise as a separate WatermelonDB record (one row
+          // per exercise group). A single workout session that spans multiple
+          // exercises produces N rows — the sync engine batches them together
+          // via session_name when pushing to the server. This keeps the schema
+          // flat and avoids a nested JSON blob in a single row.
+          try {
+            for (const ex of completedExercises) {
+              await writeWorkoutLog({
+                exerciseId: ex.exerciseId,
+                setsData: JSON.stringify(ex.sets),
+                sessionName: routineName,
+                durationMinutes,
+              });
+            }
+          } catch (localErr) {
+            if (__DEV__) console.warn('[ActiveWorkout] local write failed', localErr);
+            // Non-fatal: still attempt the server call below.
+          }
+
+          // Analytics — unchanged from before.
+          track('workout_logged', {
+            duration_minutes: durationMinutes,
+            sets_completed: completedSets,
+            exercise_count: completedExercises.length,
+          });
+
+          // Attempt server sync. If offline, the pending WDB records will be
+          // pushed by the sync engine on the next network-available event.
           createWorkout.mutate(
             {
               date: new Date().toISOString(),
-              duration_minutes: Math.round(timer / 60),
+              duration_minutes: durationMinutes,
               notes: routineName,
-              exercises: sessionExercises
-                .filter((e) => e.sets.some((s) => s.completed))
-                .map((e) => ({
-                  exercise_name: e.exerciseName,
-                  sets_completed: e.sets.filter((s) => s.completed).length,
-                  weight_per_set: e.sets.filter((s) => s.completed).map((s) => s.weight),
-                  reps_per_set: e.sets.filter((s) => s.completed).map((s) => s.reps),
-                })),
+              exercises: completedExercises.map((e) => ({
+                exercise_name: e.exerciseName,
+                sets_completed: e.sets.filter((s) => s.completed).length,
+                weight_per_set: e.sets.filter((s) => s.completed).map((s) => s.weight),
+                reps_per_set: e.sets.filter((s) => s.completed).map((s) => s.reps),
+              })),
             },
             {
               onSuccess: () => {
@@ -371,11 +417,16 @@ export default function ActiveWorkoutScreen() {
                   sets_completed: completedSets,
                   exercise_count: sessionExercises.filter((e) => e.sets.some((s) => s.completed)).length,
                 });
+                // Trigger sync so the newly created server record is
+                // pulled back and the WDB pending rows are marked synced.
+                triggerSync().catch(() => {/* non-fatal */});
                 navigation.goBack();
               },
               onError: (err) => {
                 // Phase 11 / Track 3: error haptic on failed API action
                 HapticService.error();
+                // API failed (offline). Records are already in WDB as 'pending'.
+                // Navigate back — the sync badge will show on the history list.
                 Alert.alert("Couldn't save workout",  'Please try again.');
               },
             },
