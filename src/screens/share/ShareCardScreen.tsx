@@ -153,7 +153,7 @@ export default function ShareCardScreen({ route, navigation }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeScreenStyles(colors), [colors]);
 
-  const cardRef = useRef<View>(null);
+  const cardRef = useRef<View | null>(null);
   const [sharing, setSharing] = useState(false);
 
   const handleShare = async () => {
@@ -169,7 +169,8 @@ export default function ShareCardScreen({ route, navigation }: Props) {
     successTap();
 
     try {
-      const uri = await captureRef(cardRef, {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const uri = await captureRef(cardRef as any, {
         format: 'png',
         quality: 1.0,
         result: 'tmpfile',
@@ -194,7 +195,7 @@ export default function ShareCardScreen({ route, navigation }: Props) {
         coach_tenant_id: milestone.coachTenantId,
         destination: 'native_share_sheet',
       };
-      track(AnalyticsEvents.REFERRAL_SHARE_CARD_SHARED, props as Record<string, unknown>);
+      track(AnalyticsEvents.REFERRAL_SHARE_CARD_SHARED, props as unknown as Record<string, unknown>);
     } catch (err) {
       if (__DEV__) console.warn('ShareCardScreen: share failed', err);
     } finally {
