@@ -306,12 +306,14 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
             <Text style={styles.rowValueMuted}>Light</Text>
           </View>
           <View style={styles.row}>
-            <Text style={styles.rowLabel}>Haptics</Text>
+            <Text style={styles.rowLabel}>Haptics enabled</Text>
             <Switch
               value={settings.hapticsEnabled}
               onValueChange={(v) => updateSetting('hapticsEnabled', v)}
               trackColor={{ false: colors.border, true: colors.primary }}
               thumbColor={colors.textOnPrimary}
+              accessibilityLabel="Haptics enabled"
+              accessibilityRole="switch"
             />
           </View>
         </View>
