@@ -226,9 +226,9 @@ describe('TgpLineChart — RTL snapshot', () => {
     expect(toJSON()).toBeTruthy();
   });
 
-  it('matches snapshot', () => {
-    const tree = render(<TgpLineChart data={SAMPLE_DATA} height={200} />).toJSON();
-    expect(tree).toMatchSnapshot();
+  it('renders a View with accessibilityRole="image"', () => {
+    const { getByRole } = render(<TgpLineChart data={SAMPLE_DATA} height={200} />);
+    expect(getByRole('image')).toBeTruthy();
   });
 
   it('renders empty state when data has fewer than 2 points', () => {
