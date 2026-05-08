@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
   },
   header: {
     fontSize: 28,
-    fontWeight: '700',
+    fontWeight: '600',
     color: Colors.textPrimary,
     marginBottom: 20,
   },
@@ -278,7 +278,7 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '600',
     color: Colors.textOnPrimary,
   },
   gate: {
@@ -288,7 +288,7 @@ const styles = StyleSheet.create({
   },
   gateTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '600',
     color: Colors.textPrimary,
     marginBottom: 12,
   },
