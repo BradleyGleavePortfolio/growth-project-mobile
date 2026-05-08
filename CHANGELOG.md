@@ -49,3 +49,4 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **README** (`src/screens/settings/README.md`): documents the screen, its API
   surface, navigation wiring, accessibility, theming, doctrine compliance, test
   coverage, and related files.
+
