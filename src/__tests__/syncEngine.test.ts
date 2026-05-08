@@ -3,26 +3,26 @@
  *
  * Strategy:
  *   - Use the LokiJS in-memory WatermelonDB adapter (auto-selected in test env).
- *   - Mock `workoutApi` from ../../services/api so no real network calls fire.
+ *   - Mock `workoutApi` from ../services/api so no real network calls fire.
  *   - Reset the DB singleton between tests via __resetDatabaseForTests().
  */
 
-jest.mock('../../services/api', () => ({
+jest.mock('../services/api', () => ({
   workoutApi: {
     create: jest.fn(),
     getAll: jest.fn(),
   },
 }));
 
-import { workoutApi } from '../../services/api';
-import { __resetDatabaseForTests } from '../../offline/database';
+import { workoutApi } from '../services/api';
+import { __resetDatabaseForTests } from '../offline/database';
 import {
   writeWorkoutLog,
   triggerSync,
   conflictToastEvents,
-} from '../../offline/sync/sync-engine';
-import { getDatabase } from '../../offline/database';
-import WorkoutLog from '../../offline/models/WorkoutLog';
+} from '../offline/sync/sync-engine';
+import { getDatabase } from '../offline/database';
+import WorkoutLog from '../offline/models/WorkoutLog';
 import { Q } from '@nozbe/watermelondb';
 
 const mockedCreate = workoutApi.create as jest.MockedFunction<typeof workoutApi.create>;
@@ -110,9 +110,8 @@ describe('triggerSync — push pending records', () => {
     mockedCreate.mockRejectedValue(conflictErr);
 
     let toastFired = false;
-    conflictToastEvents.once('conflict', () => {
-      toastFired = true;
-    });
+    const onConflict = () => { toastFired = true; };
+    conflictToastEvents.on('conflict', onConflict);
 
     await writeWorkoutLog({
       exerciseId: 'row',
@@ -125,6 +124,8 @@ describe('triggerSync — push pending records', () => {
     const all = await db.get<WorkoutLog>('workout_logs').query().fetch();
     expect(all[0].syncStatus).toBe('conflict');
     expect(toastFired).toBe(true);
+
+    conflictToastEvents.off('conflict', onConflict);
   });
 
   it('does not push records already marked synced', async () => {
