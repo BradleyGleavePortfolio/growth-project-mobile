@@ -47,7 +47,8 @@ function createDatabase(): Database {
 
   return new Database({
     adapter,
-    modelClasses: [WorkoutLog],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    modelClasses: [WorkoutLog as any],
   });
 }
 
