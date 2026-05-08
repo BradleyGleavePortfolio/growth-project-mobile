@@ -19,6 +19,8 @@ import FadeInView from '../../components/FadeInView';
 import { coachApi } from '../../services/api';
 import { ptmApi } from '../../services/ptmApi';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { SkeletonStatTile } from '../../ui/skeletons';
+
 
 interface RedFlagClient {
   id: string;
@@ -138,8 +140,15 @@ export default function CoachHomeScreen() {
 
   if (isLoading && !refreshing) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
+      <View style={[styles.loadingContainer, styles.skeletonContainer]}>
+        <View style={styles.skeletonGrid}>
+          <SkeletonStatTile />
+          <SkeletonStatTile />
+        </View>
+        <View style={styles.skeletonGrid}>
+          <SkeletonStatTile />
+          <SkeletonStatTile />
+        </View>
       </View>
     );
   }
@@ -187,7 +196,7 @@ export default function CoachHomeScreen() {
               <Ionicons name="restaurant" size={22} color={colors.carbs} />
             </View>
             {dashboardLoading ? (
-                <View style={{ width: 40, height: 28, backgroundColor: colors.surface, borderRadius: 4, opacity: 0.4 }} />
+                <SkeletonStatTile />
               ) : (
                 <Text style={styles.metricValue}>{logsToday}</Text>
               )}
@@ -198,7 +207,7 @@ export default function CoachHomeScreen() {
               <Ionicons name="restaurant-outline" size={22} color={colors.fat} />
             </View>
             {dashboardLoading ? (
-                <View style={{ width: 60, height: 28, backgroundColor: colors.surface, borderRadius: 4, opacity: 0.4 }} />
+                <SkeletonStatTile />
               ) : (
                 <Text style={styles.metricValue}>{totalKcal.toLocaleString()}</Text>
               )}
@@ -209,7 +218,7 @@ export default function CoachHomeScreen() {
               <Ionicons name="checkmark-circle" size={22} color={colors.primaryLight} />
             </View>
             {dashboardLoading ? (
-                <View style={{ width: 44, height: 28, backgroundColor: colors.surface, borderRadius: 4, opacity: 0.4 }} />
+                <SkeletonStatTile />
               ) : (
                 <Text style={styles.metricValue}>{loggingRateDisplay}</Text>
               )}
@@ -373,6 +382,15 @@ const makeStyles = (colors: ThemeColors) =>
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: colors.background,
+  },
+  skeletonContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 24,
+    gap: 8,
+  },
+  skeletonGrid: {
+    flexDirection: 'row',
+    gap: 8,
   },
   header: {
     flexDirection: 'row',

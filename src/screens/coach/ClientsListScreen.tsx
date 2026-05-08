@@ -5,7 +5,6 @@ import {
   StyleSheet,
   FlatList,
   TextInput,
-  ActivityIndicator,
 } from 'react-native';
 import HapticPressable from '../../components/HapticPressable';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -16,6 +15,7 @@ import { useCoachStore } from '../../store/coachStore';
 
 import { User } from '../../types';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { SkeletonClientCard } from '../../ui/skeletons';
 
 type Props = {
   navigation: NativeStackNavigationProp<ClientsStackParamList, 'ClientsList'>;
@@ -133,11 +133,11 @@ export default function ClientsListScreen({ navigation }: Props) {
       </View>
 
       {isLoading ? (
-        <ActivityIndicator
-          size="large"
-          color={colors.primary}
-          style={styles.loader}
-        />
+        <>
+          {[0, 1, 2, 3, 4].map((i) => (
+            <SkeletonClientCard key={i} />
+          ))}
+        </>
       ) : (
         <FlatList
           data={filteredClients}
