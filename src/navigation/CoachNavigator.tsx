@@ -17,6 +17,10 @@ import ClientRiskDetailScreen from '../screens/coach/ClientRiskDetailScreen';
 import CoachBillingScreen from '../screens/coach/CoachBillingScreen';
 import BloodworkReviewQueueScreen from '../screens/coach/BloodworkReviewQueueScreen';
 import TrustCenterScreen from '../screens/TrustCenterScreen';
+import CoachAvailabilityScreen from '../screens/coach/CoachAvailabilityScreen';
+import CoachSessionRequestsScreen from '../screens/coach/CoachSessionRequestsScreen';
+import CoachUpcomingCallsScreen from '../screens/coach/CoachUpcomingCallsScreen';
+import CoachSessionBriefScreen from '../screens/coach/CoachSessionBriefScreen';
 import { Colors } from '../constants/colors';
 
 export type CoachTabParamList = {
@@ -35,6 +39,14 @@ export type ClientsStackParamList = {
   RiskBoard: undefined;
   ClientRiskDetail: { userId: string; clientName?: string };
   BloodworkReviewQueue: undefined;
+  // Sessions screens — coach-facing coaching call surfaces.
+  // Entry: CoachHomeScreen / ClientDetail can navigate to these.
+  // SessionRequests and UpcomingCalls are primary queues (pushed from Dashboard).
+  // Availability and Brief are secondary (pushed from individual session items).
+  CoachSessionRequests:  { coachId: string };
+  CoachUpcomingCalls:    { coachId: string };
+  CoachAvailability:     { coachId: string };
+  CoachSessionBrief:     { sessionId: string };
 };
 
 export type SettingsStackParamList = {
@@ -55,13 +67,31 @@ function ClientsStackNavigator() {
         contentStyle: { backgroundColor: Colors.background },
       }}
     >
-      <ClientsStack.Screen name="ClientsList" component={ClientsListScreen} />
-      <ClientsStack.Screen name="ClientDetail" component={ClientDetailScreen} />
-      <ClientsStack.Screen name="ClientMessages" component={ClientMessagesScreen} />
-      <ClientsStack.Screen name="InviteCodes" component={InviteCodesScreen} />
-      <ClientsStack.Screen name="RiskBoard" component={RiskBoardScreen} />
-      <ClientsStack.Screen name="ClientRiskDetail" component={ClientRiskDetailScreen} />
+      <ClientsStack.Screen name="ClientsList"       component={ClientsListScreen} />
+      <ClientsStack.Screen name="ClientDetail"      component={ClientDetailScreen} />
+      <ClientsStack.Screen name="ClientMessages"    component={ClientMessagesScreen} />
+      <ClientsStack.Screen name="InviteCodes"       component={InviteCodesScreen} />
+      <ClientsStack.Screen name="RiskBoard"         component={RiskBoardScreen} />
+      <ClientsStack.Screen name="ClientRiskDetail"  component={ClientRiskDetailScreen} />
       <ClientsStack.Screen name="BloodworkReviewQueue" component={BloodworkReviewQueueScreen} />
+      {/* Sessions — coaching call surfaces. Flags default OFF; screens show
+          calm placeholders when the backend is not yet deployed. */}
+      <ClientsStack.Screen
+        name="CoachSessionRequests"
+        component={CoachSessionRequestsScreen}
+      />
+      <ClientsStack.Screen
+        name="CoachUpcomingCalls"
+        component={CoachUpcomingCallsScreen}
+      />
+      <ClientsStack.Screen
+        name="CoachAvailability"
+        component={CoachAvailabilityScreen}
+      />
+      <ClientsStack.Screen
+        name="CoachSessionBrief"
+        component={CoachSessionBriefScreen}
+      />
     </ClientsStack.Navigator>
   );
 }
@@ -75,8 +105,8 @@ function SettingsStackNavigator() {
       }}
     >
       <SettingsStack.Screen name="SettingsHome" component={SettingsScreen} />
-      <SettingsStack.Screen name="Billing" component={CoachBillingScreen} />
-      <SettingsStack.Screen name="TrustCenter" component={TrustCenterScreen} />
+      <SettingsStack.Screen name="Billing"      component={CoachBillingScreen} />
+      <SettingsStack.Screen name="TrustCenter"  component={TrustCenterScreen} />
     </SettingsStack.Navigator>
   );
 }
