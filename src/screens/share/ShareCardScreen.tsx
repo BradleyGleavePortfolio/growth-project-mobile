@@ -45,27 +45,25 @@ import { AnalyticsEvents } from '../../analytics/events';
 import type { ReferralShareCardSharedProps } from '../../analytics/events';
 import { successTap } from '../../utils/haptics';
 
-// ─── react-native-view-shot (conditional import — graceful degradation) ──────
+// ─── react-native-view-shot (lazy import for testability) ───────────────────
 
 // react-native-view-shot requires a native build; it is not available in Expo
-// Go. We import it at the module level via a type-only import, then access the
-// function at runtime. The try/catch means the share button shows a friendly
-// error in Expo Go instead of crashing.
+// Go. Importing lazily (at call time) means:
+//   1. Jest can mock the module correctly (module-level require fires too early).
+//   2. Expo Go gets a graceful Alert instead of a crash.
 
-// captureRef is typed using the view-shot function signature.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type CaptureRefFn = (ref: React.RefObject<View>, options?: Record<string, unknown>) => Promise<string>;
+type CaptureRefFn = (ref: React.RefObject<View | null>, options?: Record<string, unknown>) => Promise<string>;
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let captureRef: CaptureRefFn | undefined;
-
-/* eslint-disable @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports */
-try {
-  captureRef = (require('react-native-view-shot') as { captureRef: CaptureRefFn }).captureRef;
-} catch {
-  captureRef = undefined;
+/** Lazily resolve captureRef so Jest mocks are applied before the first call. */
+function getCaptureRef(): CaptureRefFn | undefined {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
+    const mod = require('react-native-view-shot') as { captureRef?: CaptureRefFn };
+    return mod.captureRef;
+  } catch {
+    return undefined;
+  }
 }
-/* eslint-enable @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports */
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -157,6 +155,7 @@ export default function ShareCardScreen({ route, navigation }: Props) {
   const [sharing, setSharing] = useState(false);
 
   const handleShare = async () => {
+    const captureRef = getCaptureRef();
     if (!captureRef) {
       Alert.alert(
         'Share unavailable',
