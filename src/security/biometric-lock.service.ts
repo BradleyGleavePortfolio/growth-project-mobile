@@ -5,8 +5,8 @@
  * The existing `useBiometricGate` hook (which pre-existed this track) is NOT
  * replaced — it handles the cold-start gate already. This service adds:
  *
- *   1. `requireAuth()` — imperative call for sensitive in-app actions (e.g.
- *      viewing payment details). Returns a Promise<boolean>.
+ *   1. `requireAuth()` — imperative call for sensitive in-app actions.
+ *      Returns a Promise<AuthResult>.
  *   2. User-configurable lock timeout (1 / 5 / 15 / never minutes).
  *   3. PIN fallback (6-digit) for devices without enrolled biometrics.
  *      PIN is stored as a SHA-256 hex hash in the MMKV encrypted slot.
@@ -56,11 +56,13 @@ const DEFAULT_TIMEOUT: LockTimeoutMinutes = 5;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-/** SHA-256 a string and return lowercase hex. Works on iOS, Android, and web. */
+/**
+ * SHA-256 a string and return a hex-encoded string.
+ * Uses expo-crypto which is already installed in the project.
+ */
 async function sha256(input: string): Promise<string> {
-  const { digest } = await import('expo-crypto');
-  const { CryptoDigestAlgorithm } = await import('expo-crypto');
-  return digest(CryptoDigestAlgorithm.SHA256, input);
+  const { digestStringAsync, CryptoDigestAlgorithm } = await import('expo-crypto');
+  return digestStringAsync(CryptoDigestAlgorithm.SHA256, input);
 }
 
 // ─── Timeout preference ──────────────────────────────────────────────────────
@@ -73,7 +75,7 @@ export async function getBiometricTimeout(): Promise<LockTimeoutMinutes> {
   const raw = await secureStorage.getStringAsync(STORAGE_KEY_TIMEOUT);
   if (raw === null || raw === undefined) return DEFAULT_TIMEOUT;
   const n = parseInt(raw, 10);
-  if ([0, 1, 5, 15].includes(n)) return n as LockTimeoutMinutes;
+  if (([0, 1, 5, 15] as number[]).includes(n)) return n as LockTimeoutMinutes;
   return DEFAULT_TIMEOUT;
 }
 
@@ -152,8 +154,9 @@ export async function getFailedAttemptCount(): Promise<number> {
 async function onLockout(): Promise<void> {
   try {
     // Clear access tokens from native secure storage so the session is invalid.
-    await nativeSecureStorage.deleteItem('supabase_token');
-    await nativeSecureStorage.deleteItem('supabase_refresh_token');
+    // `secureStorage.removeItem` is the correct API (not `deleteItem`).
+    await nativeSecureStorage.removeItem('supabase_token');
+    await nativeSecureStorage.removeItem('supabase_refresh_token');
   } catch {
     // Non-fatal — proceed with the logout event even if delete fails.
   }
@@ -169,11 +172,8 @@ async function onLockout(): Promise<void> {
  *
  *   - On web: always resolves true (no hardware).
  *   - If device has enrolled biometrics: shows Face ID / Touch ID prompt.
- *   - If biometrics unavailable but PIN is set: resolves with the string
- *     'needs_pin'; the caller is responsible for showing a PIN entry UI.
- *     (In the current foundation this is documented as a follow-up — see PR
- *     body. The service returns { success: false, reason: 'needs_pin' } so
- *     callers can branch.)
+ *   - If biometrics unavailable but PIN is set: resolves with
+ *     `{ success: false, reason: 'pin' }` so the caller can show a PIN entry UI.
  *   - After 5 failures: clears session + emits logout.
  *
  * @param promptMessage - String shown in the OS biometric dialog.
