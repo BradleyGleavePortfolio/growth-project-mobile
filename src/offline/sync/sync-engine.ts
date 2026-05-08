@@ -24,7 +24,7 @@
  *
  * @see docs/offline-architecture.md
  */
-import { Q } from '@nozbe/watermelondb';
+import { Q, Model } from '@nozbe/watermelondb';
 import { getDatabase } from '../database';
 import WorkoutLog from '../models/WorkoutLog';
 import { workoutApi } from '../../services/api';
@@ -43,6 +43,13 @@ conflictToastEvents.setMaxListeners(20);
 let syncInProgress = false;
 
 // ---------------------------------------------------------------------------
+// Helper type cast — WatermelonDB's generic constraint is overly strict in
+// some TS configs; cast through Model to satisfy the compiler.
+// ---------------------------------------------------------------------------
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnyModel = any;
+
+// ---------------------------------------------------------------------------
 // Write path
 // ---------------------------------------------------------------------------
 
@@ -59,17 +66,15 @@ export interface WriteWorkoutPayload {
  */
 export async function writeWorkoutLog(payload: WriteWorkoutPayload): Promise<WorkoutLog> {
   const db = getDatabase();
-  const workoutLogs = db.get<WorkoutLog>('workout_logs');
+  const workoutLogs = db.get<AnyModel>('workout_logs');
 
-  const record = await db.write(async () => {
-    return workoutLogs.create((log) => {
+  const record: WorkoutLog = await db.write(async () => {
+    return workoutLogs.create((log: WorkoutLog) => {
       log.exerciseId = payload.exerciseId;
       log.setsData = payload.setsData;
       log.syncStatus = 'pending';
       log.sessionName = payload.sessionName ?? null;
       log.durationMinutes = payload.durationMinutes ?? null;
-      // logged_at is @readonly @date — WatermelonDB sets it from the createdAt
-      // column automatically. We mirror the value for explicit queries.
     });
   });
 
@@ -82,19 +87,21 @@ export async function writeWorkoutLog(payload: WriteWorkoutPayload): Promise<Wor
 
 async function pushPending(): Promise<void> {
   const db = getDatabase();
-  const workoutLogs = db.get<WorkoutLog>('workout_logs');
+  const workoutLogs = db.get<AnyModel>('workout_logs');
 
-  const pending = await workoutLogs
+  const pending: WorkoutLog[] = await workoutLogs
     .query(Q.where('sync_status', 'pending'))
     .fetch();
 
   for (const log of pending) {
     try {
-      const payload = log.toServerPayload();
-      const response = await workoutApi.create(payload as unknown as Record<string, unknown>);
-      const serverId: string =
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (response.data as any)?.id ?? (response.data as any)?.workout?.id ?? '';
+      const serverPayload = log.toServerPayload();
+      const response = await workoutApi.create(
+        serverPayload as unknown as Record<string, unknown>,
+      );
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const data = response.data as any;
+      const serverId: string = data?.id ?? data?.workout?.id ?? '';
       await log.markSynced(serverId);
     } catch (err: unknown) {
       const status = (err as { response?: { status?: number } })?.response?.status;
@@ -140,7 +147,7 @@ export async function pullFromServer(limit = 20): Promise<void> {
     if (!workouts.length) return;
 
     const db = getDatabase();
-    const workoutLogs = db.get<WorkoutLog>('workout_logs');
+    const workoutLogs = db.get<AnyModel>('workout_logs');
 
     await db.write(async () => {
       for (const w of workouts) {
@@ -148,7 +155,7 @@ export async function pullFromServer(limit = 20): Promise<void> {
         if (!serverId) continue;
 
         // Check if we already have this server record.
-        const existing = await workoutLogs
+        const existing: WorkoutLog[] = await workoutLogs
           .query(Q.where('server_id', serverId))
           .fetch();
 
@@ -177,7 +184,7 @@ export async function pullFromServer(limit = 20): Promise<void> {
           })),
         );
 
-        await workoutLogs.create((log) => {
+        await workoutLogs.create((log: WorkoutLog) => {
           log.exerciseId = String(firstExercise.exercise_name ?? '');
           log.setsData = setsData;
           log.syncStatus = 'synced';
