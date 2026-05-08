@@ -20,7 +20,8 @@ import {
   View,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import type { NativeStackNavigationProp, RouteProp } from '@react-navigation/native-stack';
+import type { RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Colors } from '../../constants/colors';
 import { subCoachApi, SubCoachSummary } from '../../api/subCoachApi';
 import type { TeamStackParamList } from '../../navigation/CoachNavigator';
@@ -42,9 +43,8 @@ export default function ClientReassignModal() {
     subCoachApi
       .listSubCoaches()
       .then((res) => {
-        // Exclude the current coach from the destination list.
         const others = (res.data ?? []).filter(
-          (sc) => sc.id !== fromSubCoachId,
+          (sc: SubCoachSummary) => sc.id !== fromSubCoachId,
         );
         setSubCoaches(others);
       })
@@ -81,7 +81,7 @@ export default function ClientReassignModal() {
       {loading ? (
         <ActivityIndicator size="large" color={Colors.primary} style={styles.loader} />
       ) : (
-        <FlatList
+        <FlatList<SubCoachSummary>
           data={subCoaches}
           keyExtractor={(item) => item.id}
           style={styles.list}
