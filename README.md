@@ -284,6 +284,8 @@ src/
 ├── store/            # Zustand state stores
 ├── theme/            # Semantic theme tokens (single source — never hardcode hex)
 ├── types/            # TypeScript type definitions
+├── ui/
+│   └── empty-states/ # Shared Empty State component library (Phase 11)
 └── utils/            # Helpers (date, nutrition, notifications, …)
 ```
 
@@ -313,6 +315,7 @@ template (`.github/pull_request_template.md`) carries the checklist.
 
 Per-module READMEs:
 
+- `src/ui/empty-states/README.md`
 - `src/components/README.md`, `src/db/README.md`, `src/hooks/README.md`,
   `src/navigation/README.md`, `src/services/README.md`, `src/store/README.md`,
   `src/theme/README.md`, `src/utils/README.md`
@@ -320,3 +323,4 @@ Per-module READMEs:
   `src/screens/coach/README.md`, `src/screens/onboarding/README.md`
 - `docs/QUIET_LUXURY_DOCTRINE.md`, `docs/RELEASE_SMOKE.md`,
   `docs/INVITE_DEEPLINK_QA.md`, `docs/well-known/README.md`
+
