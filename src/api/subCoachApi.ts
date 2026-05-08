@@ -12,7 +12,7 @@
  *   GET  /sub-coaches/:id/analytics
  */
 
-import { api } from './api';
+import api from '../services/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
