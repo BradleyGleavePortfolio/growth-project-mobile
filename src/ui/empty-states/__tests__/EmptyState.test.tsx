@@ -34,13 +34,17 @@ jest.mock('../../theme/ThemeProvider', () => ({
   }),
 }));
 
-// ─── Mock react-native-svg (not available in test env) ────────────────────────
+// ─── Mock react-native-svg ────────────────────────────────────────────────────
+// All SVG primitives are replaced with a pass-through View stub so tests run
+// in the Jest environment without a native SVG renderer.
 
 jest.mock('react-native-svg', () => {
-  const React = require('react');
-  const { View } = require('react-native');
+  // jest.mock factories are hoisted by babel-jest; safe to import from
+  // jest-expo's React shim here.
+  const ActualReact = jest.requireActual<typeof import('react')>('react');
+  const { View: RNView } = jest.requireActual<typeof import('react-native')>('react-native');
   const Stub = ({ children }: { children?: React.ReactNode }) =>
-    React.createElement(View, null, children);
+    ActualReact.createElement(RNView, null, children);
   return {
     __esModule: true,
     default: Stub,
@@ -53,7 +57,7 @@ jest.mock('react-native-svg', () => {
   };
 });
 
-// ─── Imports (after mocks) ─────────────────────────────────────────────────────
+// ─── Imports ──────────────────────────────────────────────────────────────────
 
 import { EmptyState } from '../EmptyState';
 import { EmptyStateNoClients } from '../EmptyStateNoClients';

@@ -9,7 +9,7 @@
  */
 
 import React from 'react';
-import Svg, { Path, Circle, Line, Rect, G } from 'react-native-svg';
+import Svg, { Path, Circle, Line, Rect } from 'react-native-svg';
 
 type IconProps = {
   size?: number;
