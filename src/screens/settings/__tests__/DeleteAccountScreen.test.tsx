@@ -10,26 +10,26 @@ import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
-jest.mock('../../services/api', () => ({
+jest.mock('../../../services/api', () => ({
   deletionApi: {
     requestDeletion: jest.fn(),
   },
 }));
 
-jest.mock('../../services/authActions', () => ({
+jest.mock('../../../services/authActions', () => ({
   signOut: jest.fn(),
 }));
 
-jest.mock('../../hooks/useCurrentUser', () => ({
+jest.mock('../../../hooks/useCurrentUser', () => ({
   useCurrentUser: jest.fn(),
 }));
 
-jest.mock('../../utils/haptics', () => ({
+jest.mock('../../../utils/haptics', () => ({
   warningTap: jest.fn(),
 }));
 
 // Provide a minimal theme so styled components don't crash
-jest.mock('../../theme/ThemeProvider', () => ({
+jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => ({
     colors: {
       background: '#F5EFE4',
@@ -53,9 +53,9 @@ jest.mock('../../theme/ThemeProvider', () => ({
 // ─── Import after mocks ────────────────────────────────────────────────────────
 
 import DeleteAccountScreen from '../DeleteAccountScreen';
-import { deletionApi } from '../../services/api';
-import { signOut } from '../../services/authActions';
-import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { deletionApi } from '../../../services/api';
+import { signOut } from '../../../services/authActions';
+import { useCurrentUser } from '../../../hooks/useCurrentUser';
 
 const mockedDeletionApi = deletionApi as jest.Mocked<typeof deletionApi>;
 const mockedSignOut = signOut as jest.Mock;
