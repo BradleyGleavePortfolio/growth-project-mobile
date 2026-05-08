@@ -67,3 +67,17 @@ export type FeatureFlagKey = keyof typeof featureFlags;
 export function isFeatureEnabled(key: FeatureFlagKey): boolean {
   return featureFlags[key];
 }
+
+/**
+ * Phase 9 — Notification center mock flag.
+ * Set to true while the backend Phase 9 PR is not yet merged.
+ * When true, all notification API calls use the in-memory mock store in
+ * src/services/notificationsApi.ts.
+ * When false, calls hit the real backend (EXPO_PUBLIC_API_URL must be set).
+ *
+ * env: EXPO_PUBLIC_NOTIFICATIONS_MOCK (optional — defaults to true)
+ */
+export const NOTIFICATIONS_MOCK_ENABLED: boolean = envBool(
+  'EXPO_PUBLIC_NOTIFICATIONS_MOCK',
+  true,
+);
