@@ -68,6 +68,8 @@ import { HapticService } from '../ui/haptics/haptics.service';
 // Phase 11 — Share Card
 import ShareCardScreen from '../screens/share/ShareCardScreen';
 import type { ShareCardMilestone } from '../screens/share/ShareCardScreen';
+// Phase 11 — Notification Preferences
+import NotificationPreferencesScreen from '../screens/settings/NotificationPreferencesScreen';
 import { colors } from '../theme/tokens';
 
 // ─── Param lists ──────────────────────────────────────────────────────────────
@@ -137,6 +139,8 @@ export type MoreStackParamList = {
   PrivateCommunityHub: undefined;
   /** Phase 11 — Share Card. Entry point: milestone/streak detection adds a Share button. */
   ShareCard: { milestone: ShareCardMilestone };
+  /** Phase 11 — Notification category preferences. Entry: Settings > Notifications > Categories. */
+  NotificationPreferences: undefined;
 };
 
 // ─── Stack navigators ─────────────────────────────────────────────────────────
@@ -239,6 +243,8 @@ function MoreStackNavigator() {
       <MoreStackNav.Screen name="PrivateCommunityHub" component={PrivateCommunityHubScreen} />
       {/* Phase 11 — Share Card. Rendered off-screen; captureRef then opens native share sheet. */}
       <MoreStackNav.Screen name="ShareCard" component={ShareCardScreen} />
+      {/* Phase 11 — Notification category preferences (push taxonomy). */}
+      <MoreStackNav.Screen name="NotificationPreferences" component={NotificationPreferencesScreen} />
     </MoreStackNav.Navigator>
   );
 }
