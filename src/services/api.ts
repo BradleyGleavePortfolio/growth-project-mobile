@@ -634,3 +634,32 @@ export const systemApi = {
       accountDeletionSupported: boolean;
     }>('/system/trust-meta'),
 };
+
+// ── Phase 10 — GDPR right to erasure ────────────────────────────────────────
+// These endpoints drive the two-phase deletion flow introduced in
+// src/account-deletion/. Separate from the legacy usersApi.deleteAccount
+// and usersApi.cancelAccountDeletion which were the earlier 30-day soft-
+// delete stubs. Both sets co-exist; the new flow is the canonical one.
+
+export interface DeletionStatus {
+  state: 'none' | 'requested' | 'confirmed' | 'deleted';
+  requested_at?: string | null;
+  confirmed_at?: string | null;
+  grace_days?: number | null;
+  purge_after?: string | null;
+  deleted_at?: string | null;
+}
+
+export const deletionApi = {
+  /** Request deletion — sends a confirmation email with a single-use 24h link. */
+  requestDeletion: () =>
+    api.post<{ message: string; expires_at: string }>('/me/delete-account'),
+
+  /** Get current deletion state (none | requested | confirmed | deleted). */
+  getDeletionStatus: () =>
+    api.get<DeletionStatus>('/me/delete-account/status'),
+
+  /** Cancel a pending deletion within the 14-day grace period. */
+  cancelDeletion: () =>
+    api.post<{ message: string }>('/me/delete-account/cancel'),
+};
