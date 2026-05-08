@@ -15,6 +15,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { workoutApi } from '../../services/api';
 import FadeInView from '../../components/FadeInView';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { EmptyStateNoWorkouts, EmptyStateNoData } from '../../ui/empty-states';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CHART_WIDTH = SCREEN_WIDTH - 48;
@@ -336,13 +337,7 @@ export default function WorkoutScreen() {
         </View>
 
         {routines.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Ionicons name="barbell-outline" size={32} color={colors.textMuted} />
-            <Text style={styles.emptyText}>No routines yet</Text>
-            <HapticPressable intent="medium" style={styles.emptyBtn} onPress={() => navigation.navigate('RoutineBuilder')}>
-              <Text style={styles.emptyBtnText}>Create Routine</Text>
-            </HapticPressable>
-          </View>
+          <EmptyStateNoWorkouts />
         ) : (
           routines.map((routine) => {
             const exList = routine.exercises || [];
@@ -375,9 +370,10 @@ export default function WorkoutScreen() {
         {/* Recent Workouts */}
         <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Recent Workouts</Text>
         {recentSessions.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>Complete a workout to see your history</Text>
-          </View>
+          <EmptyStateNoData
+            headline="No recent workouts"
+            body="Complete a workout to see your history here."
+          />
         ) : (
           recentSessions.map((session) => (
             <View key={session.id} style={styles.historyCard}>
@@ -629,23 +625,7 @@ const makeStyles = (colors: ThemeColors) =>
     paddingHorizontal: 24,
     marginBottom: 12,
   },
-  emptyCard: {
-    marginHorizontal: 24,
-    backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
-    padding: 32,
-    alignItems: 'center',
-    gap: 10,
-  },
-  emptyText: { fontSize: 14, color: colors.textMuted },
-  emptyBtn: {
-    backgroundColor: colors.primary,
-    borderRadius: 4, // radius.lg
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    marginTop: 4,
-  },
-  emptyBtnText: { color: colors.textOnPrimary, fontSize: 14, fontWeight: '500' },
+
   routineCard: {
     marginHorizontal: 24,
     marginBottom: 10,
@@ -708,3 +688,4 @@ const makeStyles = (colors: ThemeColors) =>
   },
 
   });
+

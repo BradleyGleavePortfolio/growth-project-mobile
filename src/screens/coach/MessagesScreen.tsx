@@ -15,6 +15,7 @@ import { useCoachStore } from '../../store/coachStore';
 import { coachApi } from '../../services/api';
 import { subscribeToMessages } from '../../services/realtime';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { EmptyStateNoClients, EmptyStateNoResults } from '../../ui/empty-states';
 
 // Backstop poll — Realtime broadcasts drive most refreshes now. Was 30s.
 const FALLBACK_POLL_MS = 60000;
@@ -141,13 +142,9 @@ export default function MessagesScreen() {
           />
         }
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <Ionicons name="chatbubble-outline" size={48} color={colors.textMuted} />
-            <Text style={styles.emptyTitle}>No Clients</Text>
-            <Text style={styles.emptyText}>
-              {searchQuery ? 'No clients match your search.' : 'Active clients will appear here.'}
-            </Text>
-          </View>
+          searchQuery
+            ? <EmptyStateNoResults query={searchQuery} onClearSearch={() => setSearchQuery('')} />
+            : <EmptyStateNoClients />
         }
         renderItem={({ item }) => (
           <TouchableOpacity
@@ -247,12 +244,7 @@ const makeStyles = (colors: ThemeColors) =>
     paddingHorizontal: 6,
   },
   unreadBadgeText: { color: colors.textOnPrimary, fontSize: 12, fontWeight: '500' },
-  emptyContainer: {
-    alignItems: 'center',
-    paddingTop: 80,
-    gap: 10,
-  },
-  emptyTitle: { fontFamily: 'CormorantGaramond_500Medium', fontSize: 22, lineHeight: 26, letterSpacing: 0.4, fontWeight: '500', color: colors.textPrimary },
-  emptyText: { fontSize: 14, color: colors.textSecondary, textAlign: 'center', paddingHorizontal: 40 },
+
 
   });
+
