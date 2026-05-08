@@ -33,6 +33,7 @@ import {
   submitManualLogOnline,
 } from '../../utils/log/logSubmit';
 import { track } from '../../lib/analytics';
+import { HapticService } from '../../ui/haptics/haptics.service';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
 
@@ -220,6 +221,8 @@ export default function LogScreen() {
     try {
       await submitSearchLogOnline(args);
       await loadDayData(currentUser.id, selectedDate);
+      // Phase 11 / Track 3: success haptic on food logged
+      HapticService.success();
       // Psych Report #4: Analytics — meal_logged (search flow)
       track('meal_logged', { meal_type: activeMealType, source: 'search' });
       setQuantityModalVisible(false);
@@ -227,6 +230,8 @@ export default function LogScreen() {
       setModalVisible(false);
     } catch (err) {
       console.error('LogScreen: handleConfirmLog failed', err);
+      // Phase 11 / Track 3: error haptic on failed API action
+      HapticService.error();
       Alert.alert("Couldn't log food", errorMessage(err, 'Please try again.'));
     }
   };
@@ -253,11 +258,15 @@ export default function LogScreen() {
     try {
       await submitManualLogOnline(args);
       await loadDayData(currentUser.id, selectedDate);
+      // Phase 11 / Track 3: success haptic on manual food logged
+      HapticService.success();
       // Psych Report #4: Analytics — meal_logged (manual flow)
       track('meal_logged', { meal_type: activeMealType, source: 'manual' });
       setModalVisible(false);
     } catch (err) {
       console.error('LogScreen: handleManualLog failed', err);
+      // Phase 11 / Track 3: error haptic on failed API action
+      HapticService.error();
       Alert.alert("Couldn't log food", errorMessage(err, 'Please try again.'));
     }
   };

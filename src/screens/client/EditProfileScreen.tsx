@@ -32,6 +32,7 @@ import { useCurrentUser, CurrentUser } from '../../hooks/useCurrentUser';
 import { profileApi } from '../../services/api';
 import { errorMessage } from '../../types/common';
 import { track } from '../../lib/analytics';
+import { HapticService } from '../../ui/haptics/haptics.service';
 import { colors, typography, radius, spacing } from '../../theme/tokens';
 import { MoreStackParamList } from '../../navigation/ClientNavigator';
 import {
@@ -149,10 +150,14 @@ export default function EditProfileScreen() {
 
   const handleSave = async () => {
     if (form.dob && !isValidDob(form.dob)) {
+      // Phase 11 / Track 3: warning haptic on form validation error
+      HapticService.warning();
       setDobError('Use the format YYYY-MM-DD.');
       return;
     }
     if (form.targetWeight && !isValidTargetWeight(form.targetWeight)) {
+      // Phase 11 / Track 3: warning haptic on form validation error
+      HapticService.warning();
       setWeightError('Enter a weight between 50 and 700 lbs.');
       return;
     }
@@ -191,8 +196,12 @@ export default function EditProfileScreen() {
         fields: Object.keys(payload),
         previously_missing: completion.missing.length,
       });
+      // Phase 11 / Track 3: success haptic on profile saved
+      HapticService.success();
       navigation.goBack();
     } catch (err) {
+      // Phase 11 / Track 3: error haptic on failed profile save
+      HapticService.error();
       Alert.alert(
         "Couldn't save",
         errorMessage(err, 'Please try again in a moment.'),

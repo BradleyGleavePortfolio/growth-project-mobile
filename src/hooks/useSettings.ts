@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { setHapticsEnabled } from '../ui/haptics/haptics.service';
 
 const SETTINGS_KEY = 'gp_client_settings';
 
@@ -41,7 +42,10 @@ export function useSettings() {
     try {
       const stored = await AsyncStorage.getItem(SETTINGS_KEY);
       if (stored) {
-        setSettings({ ...DEFAULT_SETTINGS, ...JSON.parse(stored) });
+        const parsed: ClientSettings = { ...DEFAULT_SETTINGS, ...JSON.parse(stored) };
+        setSettings(parsed);
+        // Sync haptics service with persisted preference on load
+        setHapticsEnabled(parsed.hapticsEnabled);
       }
     } catch {
       await AsyncStorage.removeItem(SETTINGS_KEY);
@@ -60,6 +64,10 @@ export function useSettings() {
     <K extends keyof ClientSettings>(key: K, value: ClientSettings[K]) => {
       const updated = { ...settings, [key]: value };
       saveSettings(updated);
+      // Keep HapticService in sync whenever hapticsEnabled is toggled
+      if (key === 'hapticsEnabled') {
+        setHapticsEnabled(value as boolean);
+      }
     },
     [settings, saveSettings],
   );

@@ -64,6 +64,7 @@ import SessionPrepareScreen from '../screens/client/SessionPrepareScreen';
 // Wave 11 — runtime scaffolding (flag-gated; safe to mount)
 import ClientPathCopilotScreen from '../screens/client/ClientPathCopilotScreen';
 import PrivateCommunityHubScreen from '../screens/client/PrivateCommunityHubScreen';
+import { HapticService } from '../ui/haptics/haptics.service';
 import { colors } from '../theme/tokens';
 
 // ─── Param lists ──────────────────────────────────────────────────────────────
@@ -251,6 +252,12 @@ export default function ClientNavigator() {
           borderTopWidth: 0.5,
           borderTopColor: colors.stone,
           height: 64,
+        },
+      }}
+      screenListeners={{
+        tabPress: () => {
+          // Phase 11 / Track 3: haptic selection feedback on tab switch
+          HapticService.selection();
         },
       }}
     >

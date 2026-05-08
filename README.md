@@ -324,3 +324,12 @@ Per-module READMEs:
 - `docs/QUIET_LUXURY_DOCTRINE.md`, `docs/RELEASE_SMOKE.md`,
   `docs/INVITE_DEEPLINK_QA.md`, `docs/well-known/README.md`
 
+## Phase 11 / Track 3 — Haptic Feedback Service
+
+Typed singleton (`HapticService`) wrapping `expo-haptics`.
+
+- Respects user preference: **Settings > App Preferences > Haptics enabled**
+- Preference persisted via `useSettings` / AsyncStorage (`gp_client_settings`)
+- Wired into: tab switches, workout completion, food log success/failure, profile save/validation
+
+See [docs/HAPTICS.md](docs/HAPTICS.md) for full API reference and wiring map.
