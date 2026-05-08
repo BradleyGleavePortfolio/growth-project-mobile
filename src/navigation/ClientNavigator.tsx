@@ -15,8 +15,13 @@
  * Bloodwork: BloodworkEntryScreen added to MoreStack (flag OFF by default).
  * Wave 11: ClientPathCopilotScreen + PrivateCommunityHubScreen added to MoreStack.
  * Phase 11 Track 9: SupportInboxScreen added to MoreStack (Crisp support inbox).
+ * Sessions: SessionsUpcoming, SessionRequest, SessionPrepare added to MoreStack.
+ * Phase 9: Bell icon in HomeStack header routes to NotificationCenter.
+ *   NotificationCenter and NotificationPreferences added to HomeStackParamList.
  */
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { AppState, TouchableOpacity, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -64,8 +69,8 @@ import { HapticService } from '../ui/haptics/haptics.service';
 // Phase 11 — Share Card
 import ShareCardScreen from '../screens/share/ShareCardScreen';
 import type { ShareCardMilestone } from '../screens/share/ShareCardScreen';
-// Phase 11 — Notification Preferences
-import NotificationPreferencesScreen from '../screens/settings/NotificationPreferencesScreen';
+// Phase 11 — Notification Preferences (category-level: settings/)
+import NotificationCategoryPreferencesScreen from '../screens/settings/NotificationPreferencesScreen';
 // Phase 11 Track 9 — Support Inbox (Crisp)
 import SupportInboxScreen from '../screens/support/SupportInboxScreen';
 // Sprint B-2 — client surfaces from PR #130 wired here.
@@ -75,6 +80,15 @@ import ClientBookingRequestScreen from '../screens/client/ClientBookingRequestSc
 import ClientUpcomingSessionsScreen from '../screens/client/ClientUpcomingSessionsScreen';
 import ClientDailyMealPlanScreen from '../screens/client/ClientDailyMealPlanScreen';
 import ClientWorkoutViewerScreen from '../screens/client/ClientWorkoutViewerScreen';
+// Sessions — client-facing coaching call surfaces (flag OFF by default)
+import SessionsUpcomingScreen from '../screens/client/SessionsUpcomingScreen';
+import SessionRequestScreen from '../screens/client/SessionRequestScreen';
+import SessionPrepareScreen from '../screens/client/SessionPrepareScreen';
+// Phase 9 — Notification center
+import NotificationCenterScreen from '../screens/notifications/NotificationCenterScreen';
+import NotificationPreferencesScreen from '../screens/notifications/NotificationPreferencesScreen';
+import NotificationBadge from '../components/NotificationBadge';
+import { fetchUnreadCount } from '../services/notificationsApi';
 import { colors } from '../theme/tokens';
 
 // ─── Param lists ──────────────────────────────────────────────────────────────
@@ -82,8 +96,13 @@ import { colors } from '../theme/tokens';
 export type HomeStackParamList = {
   HomeMain: undefined;
   Habits: undefined;
+  /** Legacy stub — kept for backward-compat; routes resolve to NotificationCenter. */
   Notifications: undefined;
   Messages: undefined;
+  /** Phase 9 — Global notification center. */
+  NotificationCenter: undefined;
+  /** Phase 9 — Notification preferences. */
+  NotificationPreferences: undefined;
 };
 
 // Wave 3: 4 tabs — Home / Train / Coach / Profile
@@ -153,6 +172,34 @@ export type MoreStackParamList = {
   ClientUpcomingSessions:  undefined;
 };
 
+// ─── Phase 9: unread count polling for the bell icon ─────────────────────────
+
+function useClientUnreadCount(): number {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    let mounted = true;
+    const refresh = async () => {
+      try {
+        const n = await fetchUnreadCount();
+        if (mounted) setCount(n);
+      } catch {
+        // Silent — badge shows stale count on error.
+      }
+    };
+    refresh();
+    const interval = setInterval(refresh, 30000);
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refresh();
+    });
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+      sub.remove();
+    };
+  }, []);
+  return count;
+}
+
 // ─── Stack navigators ─────────────────────────────────────────────────────────
 
 const Tab           = createBottomTabNavigator<ClientTabParamList>();
@@ -161,17 +208,49 @@ const WorkoutStackNav = createNativeStackNavigator<WorkoutStackParamList>();
 const MoreStackNav  = createNativeStackNavigator<MoreStackParamList>();
 
 function HomeStackNavigator() {
+  const unreadCount = useClientUnreadCount();
   return (
     <HomeStackNav.Navigator
-      screenOptions={{
+      screenOptions={({ navigation }) => ({
         headerShown: false,
         contentStyle: { backgroundColor: colors.bone },
-      }}
+        // Phase 9: bell icon injected into every screen in the Home stack.
+        // We use a custom header right rather than showing the header title,
+        // so each screen continues to render its own title.
+        headerRight: () => (
+          <TouchableOpacity
+            onPress={() => navigation.navigate('NotificationCenter')}
+            style={styles.bellButton}
+            accessibilityRole="button"
+            accessibilityLabel={
+              unreadCount > 0
+                ? `Notifications, ${unreadCount > 99 ? '99+' : unreadCount} unread`
+                : 'Notifications'
+            }
+          >
+            <View style={styles.bellWrap}>
+              <Ionicons name="notifications-outline" size={24} color={colors.ink} />
+              <NotificationBadge count={unreadCount} />
+            </View>
+          </TouchableOpacity>
+        ),
+      })}
     >
-      <HomeStackNav.Screen name="HomeMain"       component={HomeScreen} />
-      <HomeStackNav.Screen name="Habits"         component={HabitsScreen} />
-      <HomeStackNav.Screen name="Notifications"  component={NotificationsScreen} />
-      <HomeStackNav.Screen name="Messages"       component={MessagesScreen} />
+      <HomeStackNav.Screen name="HomeMain"              component={HomeScreen} />
+      <HomeStackNav.Screen name="Habits"                component={HabitsScreen} />
+      <HomeStackNav.Screen name="Notifications"         component={NotificationsScreen} />
+      <HomeStackNav.Screen name="Messages"              component={MessagesScreen} />
+      {/* Phase 9 — Notification center screens */}
+      <HomeStackNav.Screen
+        name="NotificationCenter"
+        component={NotificationCenterScreen}
+        options={{ headerShown: false }}
+      />
+      <HomeStackNav.Screen
+        name="NotificationPreferences"
+        component={NotificationPreferencesScreen}
+        options={{ headerShown: false }}
+      />
     </HomeStackNav.Navigator>
   );
 }
@@ -240,7 +319,7 @@ function MoreStackNavigator() {
       {/* Phase 11 — Share Card. Rendered off-screen; captureRef then opens native share sheet. */}
       <MoreStackNav.Screen name="ShareCard" component={ShareCardScreen} />
       {/* Phase 11 — Notification category preferences (push taxonomy). */}
-      <MoreStackNav.Screen name="NotificationPreferences" component={NotificationPreferencesScreen} />
+      <MoreStackNav.Screen name="NotificationPreferences" component={NotificationCategoryPreferencesScreen} />
       {/* Phase 11 Track 9 — Support Inbox */}
       <MoreStackNav.Screen name="SupportInbox"      component={SupportInboxScreen} />
       {/* Sprint B-2 final wave — client read surfaces. The screens
@@ -332,3 +411,19 @@ export default function ClientNavigator() {
     </Tab.Navigator>
   );
 }
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
+const styles = StyleSheet.create({
+  bellButton: {
+    marginRight: 16,
+    padding: 4,
+  },
+  bellWrap: {
+    position: 'relative',
+    width: 28,
+    height: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+});
