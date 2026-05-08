@@ -19,7 +19,7 @@ jobs:
           cache: npm
 
       - name: Install deps
-        run: npm ci
+        run: npm install
 
       - name: Validate release readiness (placeholders, store URLs, version)
         # Early-fail gate — runs first so placeholder regressions are caught
