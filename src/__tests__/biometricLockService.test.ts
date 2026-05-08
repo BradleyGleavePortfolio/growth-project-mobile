@@ -16,17 +16,24 @@ jest.mock('expo-local-authentication', () => ({
   authenticateAsync: jest.fn(),
 }));
 
+// In-memory store backing the MMKV mock — module-scoped so tests can inspect it.
+const __mockStore: Record<string, string> = {};
+
 jest.mock('../storage/mmkv', () => {
-  const store: Record<string, string> = {};
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const store: Record<string, string> = (global as any).__biometricTestStore ?? {};
   const mockStorage = {
     getString: (key: string) => store[key],
     getStringAsync: async (key: string) => store[key],
     set: async (key: string, value: string | number | boolean) => {
       store[key] = String(value);
     },
-    delete: async (key: string) => { delete store[key]; },
-    clearNamespace: async () => { Object.keys(store).forEach((k) => delete store[k]); },
-    __store: store,
+    delete: async (key: string) => {
+      delete store[key];
+    },
+    clearNamespace: async () => {
+      Object.keys(store).forEach((k) => delete store[k]);
+    },
   };
   return {
     prefsStorage: mockStorage,
@@ -37,7 +44,9 @@ jest.mock('../storage/mmkv', () => {
 });
 
 jest.mock('../utils/authEvents', () => {
-  const EventEmitter = require('events');
+  // EventEmitter imported at the top-level via jest.createMockFromModule
+  // pattern; avoids no-var-requires lint errors.
+  const { EventEmitter } = jest.requireActual('events') as typeof import('events');
   return { authEvents: new EventEmitter() };
 });
 
@@ -56,17 +65,27 @@ jest.mock('expo-crypto', () => ({
 }));
 
 import * as LocalAuthentication from 'expo-local-authentication';
-import { requireAuth, setBiometricTimeout, getBiometricTimeout } from '../security/biometric-lock.service';
+import {
+  requireAuth,
+  setBiometricTimeout,
+  getBiometricTimeout,
+} from '../security/biometric-lock.service';
 import { authEvents } from '../utils/authEvents';
+// Import the mocked storage so we can reset it between tests.
+import { secureStorage as mockSecureStorage } from '../storage/mmkv';
 
-const mockHasHardware = LocalAuthentication.hasHardwareAsync as jest.MockedFunction<typeof LocalAuthentication.hasHardwareAsync>;
-const mockIsEnrolled = LocalAuthentication.isEnrolledAsync as jest.MockedFunction<typeof LocalAuthentication.isEnrolledAsync>;
-const mockAuthenticate = LocalAuthentication.authenticateAsync as jest.MockedFunction<typeof LocalAuthentication.authenticateAsync>;
+const mockHasHardware = LocalAuthentication.hasHardwareAsync as jest.MockedFunction<
+  typeof LocalAuthentication.hasHardwareAsync
+>;
+const mockIsEnrolled = LocalAuthentication.isEnrolledAsync as jest.MockedFunction<
+  typeof LocalAuthentication.isEnrolledAsync
+>;
+const mockAuthenticate = LocalAuthentication.authenticateAsync as jest.MockedFunction<
+  typeof LocalAuthentication.authenticateAsync
+>;
 
-// Helper to clear MMKV store between tests.
 beforeEach(async () => {
-  const { secureStorage } = require('../storage/mmkv');
-  await secureStorage.clearNamespace();
+  await mockSecureStorage.clearNamespace();
   jest.clearAllMocks();
 });
 
@@ -111,9 +130,8 @@ describe('requireAuth', () => {
     mockHasHardware.mockResolvedValue(true);
     mockIsEnrolled.mockResolvedValue(false);
 
-    // Simulate a PIN already set in MMKV.
-    const { secureStorage } = require('../storage/mmkv');
-    await secureStorage.set('secure:biometric_pin_hash', 'sha256:123456');
+    // Simulate a PIN already stored in the MMKV encrypted slot.
+    await mockSecureStorage.set('secure:biometric_pin_hash', 'sha256:123456');
 
     const result = await requireAuth();
 
