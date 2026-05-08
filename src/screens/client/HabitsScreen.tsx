@@ -26,6 +26,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { getTodayString } from '../../utils/date';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import type { SemanticTokens } from '../../theme/tokens';
 import { errorMessage, type IoniconName } from '../../types/common';
 import {useHabits,
   useHabitLogs,
@@ -95,8 +96,8 @@ function makeHABIT_COLORS(colors: ThemeColors) {
 }
 
 export default function HabitsScreen() {
-  const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { colors, semanticColors: sc } = useTheme();
+  const styles = useMemo(() => makeStyles(colors, sc), [colors, sc]);
   const HABIT_COLORS = useMemo(() => makeHABIT_COLORS(colors), [colors]);
   const today = getTodayString();
   const [tab, setTab] = useState<TabMode>('habits');
@@ -662,9 +663,9 @@ export default function HabitsScreen() {
   );
 }
 
-const makeStyles = (colors: ThemeColors) =>
+const makeStyles = (colors: ThemeColors, sc: SemanticTokens) =>
   StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: sc.bgPrimary },
   header: { paddingHorizontal: 24, paddingTop: 60, marginBottom: 8 },
   title: {
     fontFamily: 'CormorantGaramond_400Regular',

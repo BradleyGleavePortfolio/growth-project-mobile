@@ -1,24 +1,37 @@
 /**
- * ThemeProvider — Luxury Visual System (Wave 2)
+ * ThemeProvider — Luxury Visual System (Wave 2) + Phase 11 Dark Mode
  *
- * Reads founding-member status from useFoundingNumber() and
- * vends either freeTheme or founderTheme via useTheme().
+ * Phase 11 additions:
+ *   - Resolves `useColorScheme()` (system preference) into the active
+ *     semantic token map (`lightTokens` or `darkTokens`).
+ *   - User override ('system' | 'light' | 'dark') stored in AsyncStorage
+ *     under the key `gp_appearance` and persisted across sessions.
+ *   - Exposes `colorScheme`, `appearanceOverride`, and `setAppearanceOverride`
+ *     so the Settings screen can render and mutate the Appearance radio.
  *
- * founderTheme = freeTheme + muted-gold accent overrides:
- *   • border tints → gold.border (camel hairline)
- *   • badge highlight → mutedGold typography
- *   • shadow → shadows.sm (no glow)
+ * Existing behaviour preserved:
+ *   - Reads founding-member status from useFoundingNumber() and vends either
+ *     freeTheme or founderTheme via the ThemeColors / tierColors fields.
+ *   - founderTheme = freeTheme + muted-gold accent overrides.
  *
- * Wave 2 changes:
+ * Wave 2 changes preserved:
  *   - heroGradientStop removed (LinearGradient deleted in Wave 1)
  *   - shimmerHighlight removed (shimmer deleted in Wave 1)
  *   - All references updated to new color tokens
  */
 
-import React, { createContext, useContext, ReactNode } from 'react';
-import tokens, { Tokens } from './tokens';
+import React, { createContext, useContext, ReactNode, useState, useEffect, useMemo } from 'react';
+import { useColorScheme as useSystemColorScheme } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import tokens, { Tokens, SemanticTokens, lightTokens, darkTokens } from './tokens';
 import CanonicalColors from '../constants/colors';
 import { useFoundingNumber } from '../hooks/useIdentity';
+
+// ─── Appearance override type ─────────────────────────────────────────────────
+/** 'system' defers to the device colour scheme; 'light' and 'dark' hard-lock it. */
+export type AppearanceOverride = 'system' | 'light' | 'dark';
+
+const APPEARANCE_KEY = 'gp_appearance';
 
 // ─── Tier Type ─────────────────────────────────────────────────────────────────
 export type Tier = 'free' | 'founder';
@@ -63,46 +76,121 @@ export interface Theme {
     accentFg: string;
     badgeShadow: Tokens['shadows']['sm'];
   };
+  /** Phase 11: resolved semantic tokens for the active colour scheme */
+  semanticColors: SemanticTokens;
+  /** Phase 11: the resolved colour scheme ('light' or 'dark') */
+  colorScheme: 'light' | 'dark';
+  /** Phase 11: the user's persisted override (default: 'system') */
+  appearanceOverride: AppearanceOverride;
+  /** Phase 11: updates and persists the user's appearance preference */
+  setAppearanceOverride: (override: AppearanceOverride) => void;
 }
 
-const freeTheme: Theme = {
-  tokens,
-  tier: 'free',
-  colors: baseColors,
-  tierColors: {
-    accentBorder: tokens.colors.forest,
-    accentBg:     'rgba(44,74,54,0.06)',
-    accentFg:     tokens.colors.forest,
-    badgeShadow:  tokens.shadows.sm,
-  },
-};
+// ─── Internal theme builders ──────────────────────────────────────────────────
+function buildTheme(
+  tier: Tier,
+  semanticColors: SemanticTokens,
+  colorScheme: 'light' | 'dark',
+  appearanceOverride: AppearanceOverride,
+  setAppearanceOverride: (o: AppearanceOverride) => void,
+): Theme {
+  const tierColors =
+    tier === 'founder'
+      ? {
+          accentBorder: tokens.gold.border,
+          accentBg:     tokens.gold[100],
+          accentFg:     tokens.gold[700],
+          badgeShadow:  tokens.shadows.sm,
+        }
+      : {
+          accentBorder: tokens.colors.forest,
+          accentBg:     'rgba(44,74,54,0.06)',
+          accentFg:     tokens.colors.forest,
+          badgeShadow:  tokens.shadows.sm,
+        };
 
-const founderTheme: Theme = {
-  tokens,
-  tier: 'founder',
-  colors: baseColors,
-  tierColors: {
-    accentBorder: tokens.gold.border,
-    accentBg:     tokens.gold[100],
-    accentFg:     tokens.gold[700],
-    badgeShadow:  tokens.shadows.sm,
-  },
-};
+  return {
+    tokens,
+    tier,
+    colors: baseColors,
+    tierColors,
+    semanticColors,
+    colorScheme,
+    appearanceOverride,
+    setAppearanceOverride,
+  };
+}
 
-const ThemeContext = createContext<Theme>(freeTheme);
+// ─── Default context (light, free) ────────────────────────────────────────────
+const noop = () => {};
+const defaultTheme = buildTheme('free', lightTokens, 'light', 'system', noop);
 
+const ThemeContext = createContext<Theme>(defaultTheme);
+
+// ─── ThemeProvider ─────────────────────────────────────────────────────────────
 interface ThemeProviderProps {
   children: ReactNode;
 }
 
 export function ThemeProvider({ children }: ThemeProviderProps) {
   const { data: foundingData } = useFoundingNumber();
+  const systemScheme = useSystemColorScheme() ?? 'light';
+
+  const [appearanceOverride, setOverrideState] = useState<AppearanceOverride>('system');
+  const [overrideLoaded, setOverrideLoaded] = useState(false);
+
+  // Load persisted override on mount
+  useEffect(() => {
+    AsyncStorage.getItem(APPEARANCE_KEY)
+      .then((stored) => {
+        if (stored === 'light' || stored === 'dark' || stored === 'system') {
+          setOverrideState(stored);
+        }
+      })
+      .catch(() => {
+        // Silently fall back to 'system'
+      })
+      .finally(() => setOverrideLoaded(true));
+  }, []);
+
+  const setAppearanceOverride = useMemo(
+    () => async (override: AppearanceOverride) => {
+      setOverrideState(override);
+      try {
+        await AsyncStorage.setItem(APPEARANCE_KEY, override);
+      } catch {
+        // Non-fatal — preference will revert on next app launch
+      }
+    },
+    [],
+  );
+
+  const colorScheme: 'light' | 'dark' = useMemo(() => {
+    if (appearanceOverride === 'light') return 'light';
+    if (appearanceOverride === 'dark') return 'dark';
+    return systemScheme;
+  }, [appearanceOverride, systemScheme]);
+
+  const semanticColors: SemanticTokens = colorScheme === 'dark' ? darkTokens : lightTokens;
 
   const isFoundingMember =
     foundingData != null &&
     typeof (foundingData as { founding_number?: unknown }).founding_number === 'number';
 
-  const theme = isFoundingMember ? founderTheme : freeTheme;
+  const tier: Tier = isFoundingMember ? 'founder' : 'free';
+
+  const theme = useMemo(
+    () => buildTheme(tier, semanticColors, colorScheme, appearanceOverride, setAppearanceOverride),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tier, colorScheme, appearanceOverride],
+  );
+
+  // Render children immediately — the override defaults to 'system' so the
+  // first render is correct on initial mount. Once AsyncStorage resolves the
+  // stored preference a re-render adjusts the scheme if needed.
+  // We keep overrideLoaded in scope to silence the lint warning but intentionally
+  // do not gate rendering on it to avoid a flash.
+  void overrideLoaded;
 
   return (
     <ThemeContext.Provider value={theme}>

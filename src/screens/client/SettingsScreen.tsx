@@ -23,13 +23,13 @@ import { authEvents } from '../../utils/authEvents';
 
 import { mediumTap, warningTap, successTap } from '../../utils/haptics';
 import { updateSupabasePassword } from '../../utils/supabaseAuth';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { useTheme, ThemeColors, AppearanceOverride } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
 import BiometricUnlockSetting from '../../components/BiometricUnlockSetting';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 
 export default function SettingsScreen({ navigation }: { navigation: NavigationProp<ParamListBase> }) {
-  const { colors } = useTheme();
+  const { colors, appearanceOverride, setAppearanceOverride, colorScheme } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();
   // signOut + refreshProfile imported directly — no store wiring needed.
@@ -301,9 +301,29 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
         {/* App Preferences */}
         <Text style={styles.sectionLabel}>App Preferences</Text>
         <View style={styles.card}>
-          <View style={styles.row}>
-            <Text style={styles.rowLabel}>Theme</Text>
-            <Text style={styles.rowValueMuted}>Light</Text>
+          {/* Appearance — Phase 11 dark mode */}
+          <View style={[styles.row, { flexDirection: 'column', alignItems: 'flex-start', gap: 10 }]}>
+            <Text style={styles.rowLabel}>Appearance</Text>
+            <View style={styles.appearanceRow}>
+              {(['system', 'light', 'dark'] as const).map((option: AppearanceOverride) => (
+                <HapticPressable
+                  key={option}
+                  intent="light"
+                  style={styles.radioOption}
+                  onPress={() => setAppearanceOverride(option)}
+                  accessibilityRole="radio"
+                  accessibilityLabel={option.charAt(0).toUpperCase() + option.slice(1)}
+                  accessibilityState={{ checked: appearanceOverride === option }}
+                >
+                  <View style={[styles.radioCircle, appearanceOverride === option && styles.radioCircleActive]}>
+                    {appearanceOverride === option && <View style={styles.radioInner} />}
+                  </View>
+                  <Text style={[styles.radioLabel, appearanceOverride === option && styles.radioLabelActive]}>
+                    {option.charAt(0).toUpperCase() + option.slice(1)}
+                  </Text>
+                </HapticPressable>
+              ))}
+            </View>
           </View>
           <View style={styles.row}>
             <Text style={styles.rowLabel}>Haptics enabled</Text>
@@ -652,5 +672,42 @@ const makeStyles = (colors: ThemeColors) =>
     color: colors.textSecondary,
     lineHeight: 20,
   },
+  appearanceRow: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  radioOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  radioCircle: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  radioCircleActive: {
+    borderColor: colors.primary,
+  },
+  radioInner: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
+  },
+  radioLabel: {
+    fontSize: 14,
+    color: colors.textSecondary,
+    fontWeight: '400' as const,
+  },
+  radioLabelActive: {
+    color: colors.textPrimary,
+    fontWeight: '500' as const,
+  },
 
   });
+
