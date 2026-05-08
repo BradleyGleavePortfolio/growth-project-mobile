@@ -23,9 +23,6 @@
     "testPathIgnorePatterns": [
       "/node_modules/",
       "/.expo/"
-    ],
-    "transformIgnorePatterns": [
-      "node_modules/(?!(jest-expo|expo-modules-core|@expo|expo|react-native|@react-native|@nozbe/watermelondb)/)"
     ]
   },
   "dependencies": {
