@@ -17,6 +17,8 @@ import RootNavigator from './src/navigation/RootNavigator';
 import AppSplash from './src/components/AppSplash';
 import ErrorBoundary from './src/components/ErrorBoundary';
 import { requestNotificationPermissions } from './src/utils/notifications';
+// Phase 11: push-channel taxonomy — register Android channels + iOS categories
+import { registerPushChannels } from './src/notifications/push-channels';
 import { initDatabase } from './src/db/database';
 import {
   queryClient,
@@ -24,7 +26,10 @@ import {
   QUERY_CACHE_MAX_AGE,
 } from './src/services/queryClient';
 import { initSentry, wrap as sentryWrap } from './src/services/sentry';
+// Phase 11: typed analytics service replaces the raw lib/analytics track call
+// for app_opened so the typed AnalyticsEvents constant is used.
 import { track } from './src/lib/analytics';
+import { AnalyticsEvents } from './src/analytics/events';
 import { ThemeProvider } from './src/theme/ThemeProvider';
 import BiometricUnlockGate from './src/components/BiometricUnlockGate';
 import {
@@ -48,10 +53,16 @@ installAxiosMockAdapter();
 SplashScreen.preventAutoHideAsync();
 
 // PostHog credentials — loaded from Expo public env vars.
-// When the key is absent (CI, local dev without secrets) the SDK no-ops.
-const POSTHOG_KEY = process.env.EXPO_PUBLIC_POSTHOG_KEY ?? '';
+// EXPO_PUBLIC_POSTHOG_API_KEY is the canonical Phase 11 var name.
+// EXPO_PUBLIC_POSTHOG_KEY is the legacy alias; both are accepted so existing
+// dev setups without the rename continue to work.
+// When both are absent (CI, local dev without secrets) the SDK no-ops.
+const POSTHOG_KEY =
+  process.env.EXPO_PUBLIC_POSTHOG_API_KEY ??
+  process.env.EXPO_PUBLIC_POSTHOG_KEY ??
+  '';
 const POSTHOG_HOST =
-  process.env.EXPO_PUBLIC_POSTHOG_HOST ?? 'https://us.i.posthog.com';
+  process.env.EXPO_PUBLIC_POSTHOG_HOST ?? 'https://app.posthog.com';
 
 // In screenshot mode the PostHog provider is bypassed: posthog-react-native's
 // web shim throws on construct in some envs, and analytics has no place in a
@@ -60,7 +71,11 @@ const AnalyticsProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   isScreenshotMode() ? (
     <>{children}</>
   ) : (
-    <PostHogProvider apiKey={POSTHOG_KEY} options={{ host: POSTHOG_HOST }}>
+    <PostHogProvider
+      apiKey={POSTHOG_KEY}
+      options={{ host: POSTHOG_HOST }}
+      autocapture
+    >
       {children}
     </PostHogProvider>
   );
@@ -108,9 +123,12 @@ function App() {
         // NOTE: seedCoachIfNeeded() was removed along with the dead SQLite auth path.
         // Auth lives exclusively on the backend now; the local `users` table is no longer used.
         await initDatabase();
+        // Phase 11: register push channels BEFORE requesting permission so
+        // Android channels are configured before the system prompt fires.
+        await registerPushChannels();
         await requestNotificationPermissions();
-        // Psych Report #4: Analytics — fire app_opened on every cold start.
-        track('app_opened');
+        // Phase 11: use typed AnalyticsEvents constant for app_opened.
+        track(AnalyticsEvents.APP_OPENED, { cold_start: true });
       }
     } catch (err) {
       // Round 3: guard production builds — Metro strips __DEV__ at build time.
@@ -141,8 +159,9 @@ function App() {
     <ErrorBoundary>
       {/*
         PostHogProvider wraps the whole app so the SDK can auto-capture
-        screen views and session recording (when enabled). It no-ops when
-        POSTHOG_KEY is an empty string, so no secrets are needed in dev.
+        screen views and session recording (when enabled). autocapture is
+        enabled so screen transitions are tracked automatically. It no-ops
+        when POSTHOG_KEY is an empty string, so no secrets are needed in dev.
       */}
       <AnalyticsProvider>
         {/*

@@ -355,3 +355,52 @@ theming rules, performance notes, and the Skia upgrade path.
 
 **Migrated screen:** `src/screens/client/ProgressScreen.tsx` — the inline
 `WeightLineChart` SVG was replaced with `TgpLineChart`.
+
+---
+
+## Phase 11 — Analytics, Push Taxonomy, Share Card
+
+### PostHog Analytics
+
+`posthog-react-native` is installed and the `<PostHogProvider>` wraps `App.tsx` with `autocapture` enabled.
+
+**Env vars (both accepted; canonical name is the first):**
+
+| Variable | Description |
+|---|---|
+| `EXPO_PUBLIC_POSTHOG_API_KEY` | PostHog project API key (public — ships in bundle). |
+| `EXPO_PUBLIC_POSTHOG_KEY` | Legacy alias — both are accepted. |
+| `EXPO_PUBLIC_POSTHOG_HOST` | PostHog ingest host (default: `https://app.posthog.com`). |
+
+The SDK is a silent no-op when the key is absent (CI, dev without secrets).
+
+- Typed event constants: `src/analytics/events.ts`
+- Service wrapper: `src/analytics/posthog.service.ts`
+- Full event catalog: `docs/analytics-events.md`
+
+### Push Notification Taxonomy
+
+Four-tier channel/category system registered at app bootstrap:
+
+| Tier | ID | Importance |
+|---|---|---|
+| Coach messages | `coach-messages` | HIGH |
+| Reminders | `client-bot` | LOW |
+| Milestones | `milestones` | DEFAULT |
+| System | `system` | DEFAULT |
+
+- Implementation: `src/notifications/push-channels.ts`
+- Full taxonomy: `docs/push-taxonomy.md`
+- Per-category preferences: `src/screens/settings/NotificationPreferencesScreen.tsx`
+  (route: `NotificationPreferences` in `MoreStack`)
+
+### Share Card
+
+Three card variants: `streak`, `pr`, `transformation`.
+
+- Screen: `src/screens/share/ShareCardScreen.tsx`
+- Navigation: `MoreStackParamList.ShareCard`
+- Capture: `react-native-view-shot` (requires native build)
+- Share: `expo-sharing`
+- Analytics: fires `REFERRAL_SHARE_CARD_SHARED` on share
+- Full spec: `docs/share-card.md`
