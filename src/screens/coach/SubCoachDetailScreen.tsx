@@ -10,7 +10,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -18,7 +17,8 @@ import {
   View,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import type { NativeStackNavigationProp, RouteProp } from '@react-navigation/native-stack';
+import type { RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Colors } from '../../constants/colors';
 import {
   subCoachApi,
@@ -74,7 +74,7 @@ export default function SubCoachDetailScreen() {
   const route = useRoute<RouteProp<TeamStackParamList, 'SubCoachDetail'>>();
   const navigation =
     useNavigation<NativeStackNavigationProp<TeamStackParamList>>();
-  const { subCoachId, subCoachName } = route.params;
+  const { subCoachId } = route.params;
 
   const [detail, setDetail] = useState<SubCoachDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -116,7 +116,7 @@ export default function SubCoachDetailScreen() {
     );
   }
 
-  if (error || !detail) {
+  if (error !== null || detail === null) {
     return (
       <View style={styles.center}>
         <Text style={styles.errorText}>{error ?? 'Sub-coach not found.'}</Text>
