@@ -81,3 +81,4 @@ export const NOTIFICATIONS_MOCK_ENABLED: boolean = envBool(
   'EXPO_PUBLIC_NOTIFICATIONS_MOCK',
   true,
 );
+
