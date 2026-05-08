@@ -94,8 +94,7 @@ describe('SkeletonClientCard — source contracts', () => {
     expect(CLIENT_CARD_SRC).toMatch(/borderRadius.*999/);
   });
 
-  it('renders two text lines (name + email)', () => {
-    // Two separate Skeleton calls for name and email lines
+  it('renders multiple Skeleton blocks for name and email lines', () => {
     const skeletonMatches = CLIENT_CARD_SRC.match(/<Skeleton /g) ?? [];
     expect(skeletonMatches.length).toBeGreaterThanOrEqual(4);
   });
@@ -140,16 +139,18 @@ describe('ClientsListScreen — skeleton wiring', () => {
     expect(CLIENTS_LIST_SRC).toMatch(/ui\/skeletons/);
   });
 
-  it('replaces ActivityIndicator loading state with SkeletonClientCard', () => {
+  it('renders SkeletonClientCard while loading', () => {
     expect(CLIENTS_LIST_SRC).toMatch(/SkeletonClientCard/);
-    // The old ActivityIndicator full-screen loader should no longer appear
-    // (inline one for FlatList is acceptable, but the big spinner is gone)
-    expect(CLIENTS_LIST_SRC).not.toMatch(/ActivityIndicator/);
   });
 
-  it('renders multiple SkeletonClientCard instances while loading', () => {
-    // Should map over an array (e.g. [0,1,2,3,4].map)
-    expect(CLIENTS_LIST_SRC).toMatch(/\.map.*SkeletonClientCard|SkeletonClientCard.*\.map/s);
+  it('renders multiple SkeletonClientCard instances via map', () => {
+    // Should map over an array and render SkeletonClientCard in each iteration
+    expect(CLIENTS_LIST_SRC).toMatch(/SkeletonClientCard/);
+    expect(CLIENTS_LIST_SRC).toMatch(/\.map\(/);
+  });
+
+  it('no longer uses ActivityIndicator as the primary loading indicator', () => {
+    expect(CLIENTS_LIST_SRC).not.toMatch(/ActivityIndicator/);
   });
 });
 
@@ -162,10 +163,9 @@ describe('CoachHomeScreen — skeleton wiring', () => {
     expect(COACH_HOME_SRC).toMatch(/SkeletonStatTile/);
   });
 
-  it('replaces the full-screen ActivityIndicator loading gate', () => {
-    // Old pattern: if (isLoading && !refreshing) { return <View><ActivityIndicator /></View>; }
-    // New pattern should use SkeletonStatTile instead of ActivityIndicator
-    expect(COACH_HOME_SRC).not.toMatch(/<ActivityIndicator[^>]+size="large"[^>]+\/>/s);
+  it('loading gate no longer uses a full-screen ActivityIndicator spinner', () => {
+    // The old pattern was a standalone large ActivityIndicator in the loading gate
+    expect(COACH_HOME_SRC).not.toMatch(/<ActivityIndicator[^/]*size="large"/);
   });
 });
 
@@ -185,8 +185,8 @@ describe('ClientDetailScreen — skeleton wiring', () => {
 
 // ─── RTL render — Skeleton primitive ─────────────────────────────────────────
 
-// Mocks needed to isolate the component from native modules.
 jest.mock('react-native-reanimated', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const Reanimated = require('react-native-reanimated/mock');
   Reanimated.default.call = () => {};
   return Reanimated;
