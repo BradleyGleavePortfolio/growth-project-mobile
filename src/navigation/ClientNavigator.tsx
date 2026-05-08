@@ -65,6 +65,9 @@ import SessionPrepareScreen from '../screens/client/SessionPrepareScreen';
 import ClientPathCopilotScreen from '../screens/client/ClientPathCopilotScreen';
 import PrivateCommunityHubScreen from '../screens/client/PrivateCommunityHubScreen';
 import { HapticService } from '../ui/haptics/haptics.service';
+// Phase 11 — Share Card
+import ShareCardScreen from '../screens/share/ShareCardScreen';
+import type { ShareCardMilestone } from '../screens/share/ShareCardScreen';
 import { colors } from '../theme/tokens';
 
 // ─── Param lists ──────────────────────────────────────────────────────────────
@@ -132,6 +135,8 @@ export type MoreStackParamList = {
   /** Wave 11 — gated routes; screens render a preview-only empty state when flag is OFF. */
   Copilot:           undefined;
   PrivateCommunityHub: undefined;
+  /** Phase 11 — Share Card. Entry point: milestone/streak detection adds a Share button. */
+  ShareCard: { milestone: ShareCardMilestone };
 };
 
 // ─── Stack navigators ─────────────────────────────────────────────────────────
@@ -232,6 +237,8 @@ function MoreStackNavigator() {
           preview-only empty state when their flag is OFF. */}
       <MoreStackNav.Screen name="Copilot"           component={ClientPathCopilotScreen} />
       <MoreStackNav.Screen name="PrivateCommunityHub" component={PrivateCommunityHubScreen} />
+      {/* Phase 11 — Share Card. Rendered off-screen; captureRef then opens native share sheet. */}
+      <MoreStackNav.Screen name="ShareCard" component={ShareCardScreen} />
     </MoreStackNav.Navigator>
   );
 }
