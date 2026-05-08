@@ -35,8 +35,7 @@ import {
 describe('registerPushChannels — Android', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // @ts-ignore — override Platform.OS for test
-    Platform.OS = 'android';
+    (Platform as unknown as { OS: string }).OS = 'android';
   });
 
   it('registers all four Android channels', async () => {
@@ -70,8 +69,7 @@ describe('registerPushChannels — Android', () => {
 describe('registerPushChannels — iOS', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // @ts-ignore — override Platform.OS for test
-    Platform.OS = 'ios';
+    (Platform as unknown as { OS: string }).OS = 'ios';
   });
 
   it('registers all four iOS categories', async () => {
