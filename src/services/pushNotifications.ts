@@ -82,9 +82,12 @@ export function installForegroundHandler(): () => void {
   foregroundHandlerInstalled = true;
 
   // Tell Expo not to present the system notification while the app is active.
+  // expo-notifications v55+ uses shouldShowBanner / shouldShowList instead of
+  // the deprecated shouldShowAlert.
   Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: false,
+    handleNotification: async (): Promise<Notifications.NotificationBehavior> => ({
+      shouldShowBanner: false,
+      shouldShowList: false,
       shouldPlaySound: false,
       shouldSetBadge: true,
     }),
