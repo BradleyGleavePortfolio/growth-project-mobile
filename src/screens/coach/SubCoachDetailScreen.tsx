@@ -207,7 +207,7 @@ const styles = StyleSheet.create({
   },
   name: {
     fontSize: 26,
-    fontWeight: '700',
+    fontWeight: '600',
     color: Colors.textPrimary,
     marginBottom: 4,
   },
@@ -234,7 +234,7 @@ const styles = StyleSheet.create({
   },
   capacityStat: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '600',
     color: Colors.textPrimary,
   },
   capacityStatLabel: {
@@ -262,7 +262,7 @@ const styles = StyleSheet.create({
   },
   scoreValue: {
     fontSize: 24,
-    fontWeight: '700',
+    fontWeight: '600',
     color: Colors.primary,
   },
   scoreMax: {
@@ -296,7 +296,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '600',
     color: Colors.textPrimary,
     marginBottom: 12,
   },
