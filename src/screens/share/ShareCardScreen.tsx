@@ -45,19 +45,27 @@ import { AnalyticsEvents } from '../../analytics/events';
 import type { ReferralShareCardSharedProps } from '../../analytics/events';
 import { successTap } from '../../utils/haptics';
 
-// ─── react-native-view-shot (lazy require so CI passes without native build) ──
+// ─── react-native-view-shot (conditional import — graceful degradation) ──────
+
+// react-native-view-shot requires a native build; it is not available in Expo
+// Go. We import it at the module level via a type-only import, then access the
+// function at runtime. The try/catch means the share button shows a friendly
+// error in Expo Go instead of crashing.
+
+// captureRef is typed using the view-shot function signature.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type CaptureRefFn = (ref: React.RefObject<View>, options?: Record<string, unknown>) => Promise<string>;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-let captureRef: ((ref: React.RefObject<View>, options?: Record<string, unknown>) => Promise<string>) | undefined;
+let captureRef: CaptureRefFn | undefined;
 
+/* eslint-disable @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports */
 try {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const viewShot = require('react-native-view-shot');
-  captureRef = viewShot.captureRef;
+  captureRef = (require('react-native-view-shot') as { captureRef: CaptureRefFn }).captureRef;
 } catch {
-  // react-native-view-shot not linked (Expo Go / CI) — share is disabled.
   captureRef = undefined;
 }
+/* eslint-enable @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports */
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
