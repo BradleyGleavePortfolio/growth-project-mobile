@@ -22,7 +22,7 @@ import {
   ActivityIndicator,
   StyleSheet,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeProvider';
 import NotificationRow from '../../components/NotificationRow';
@@ -42,14 +42,13 @@ import type { IoniconName } from '../../types/common';
 
 function routeNotification(
   notification: AppNotification,
-  navigate: ReturnType<typeof useNavigation>['navigate'],
+  nav: NavigationProp<ParamListBase>,
 ): void {
   const screen = notification.actionScreen;
   if (!screen) return;
-  // The navigate type is cast here; actual param types are enforced by the
-  // navigator param lists. This call is safe because actionScreen values
+  // Param types are enforced by the navigator param lists. actionScreen values
   // come from a constrained server enum, not user input.
-  (navigate as (screen: string, params?: Record<string, string>) => void)(
+  (nav.navigate as (screen: string, params?: Record<string, string>) => void)(
     screen,
     notification.actionParams,
   );
@@ -207,7 +206,7 @@ export default function NotificationCenterScreen() {
           // Revert is omitted — the optimistic update is acceptable here.
         }
       }
-      routeNotification(notification, navigation.navigate);
+      routeNotification(notification, navigation);
     },
     [navigation.navigate],
   );
