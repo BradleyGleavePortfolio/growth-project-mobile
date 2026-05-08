@@ -18,6 +18,7 @@ import { authApi } from '../../services/api';
 import { secureStorage } from '../../services/secureStorage';
 import { authEvents } from '../../utils/authEvents';
 import { track, identify } from '../../lib/analytics';
+import { AnalyticsEvents } from '../../analytics/events';
 import { toFriendlyAuthError } from '../../utils/authErrorMessage';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
@@ -68,7 +69,7 @@ export default function LoginScreen({ navigation }: Props) {
 
       // Psych Report #4: Analytics — identify + signed_in event
       identify(user.id, { role: user.role });
-      track('signed_in', { method: 'email' });
+      track(AnalyticsEvents.LOGIN_COMPLETED, { method: 'email' });
 
       // Fire auth event — RootNavigator will re-check AsyncStorage and navigate
       authEvents.emit();
@@ -106,7 +107,7 @@ export default function LoginScreen({ navigation }: Props) {
       } else {
         // Psych Report #4: Analytics
         if (result.user?.id) identify(result.user.id, { role: result.user.role });
-        track('signed_in', { method: 'google' });
+        track(AnalyticsEvents.LOGIN_COMPLETED, { method: 'google' });
         authEvents.emit();
       }
     } catch (err) {
@@ -138,7 +139,7 @@ export default function LoginScreen({ navigation }: Props) {
         navigation.replace('RoleSelection');
       } else {
         if (result.user?.id) identify(result.user.id, { role: result.user.role });
-        track('signed_in', { method: 'apple' });
+        track(AnalyticsEvents.LOGIN_COMPLETED, { method: 'apple' });
         authEvents.emit();
       }
     } catch (err) {
