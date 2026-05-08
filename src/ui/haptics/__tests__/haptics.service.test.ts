@@ -10,7 +10,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// ─── Mock expo-haptics ────────────────────────────────────────────────────────
+// ─── Mock expo-haptics before any module import ───────────────────────────────
 const mockSelectionAsync = jest.fn().mockResolvedValue(undefined);
 const mockImpactAsync = jest.fn().mockResolvedValue(undefined);
 const mockNotificationAsync = jest.fn().mockResolvedValue(undefined);
@@ -31,14 +31,14 @@ jest.mock('expo-haptics', () => ({
   },
 }));
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// Import once — use setHapticsEnabled / refreshEnabled to manage state
+import {
+  HapticService,
+  setHapticsEnabled,
+  refreshEnabled,
+} from '../haptics.service';
 
-async function loadService() {
-  // Re-import so module-level bootstrap re-runs after AsyncStorage is set up
-  jest.resetModules();
-  const mod = await import('../haptics.service');
-  return mod;
-}
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function setStoredHaptics(enabled: boolean) {
   (AsyncStorage.getItem as jest.Mock).mockImplementation(async (key: string) => {
@@ -52,71 +52,60 @@ function setStoredHaptics(enabled: boolean) {
 // ─── Tests ────────────────────────────────────────────────────────────────────
 
 describe('HapticService — enabled', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
     setStoredHaptics(true);
+    setHapticsEnabled(true);
   });
 
   it('selection() calls selectionAsync', async () => {
-    const { HapticService, refreshEnabled } = await loadService();
-    await refreshEnabled();
     await HapticService.selection();
     expect(mockSelectionAsync).toHaveBeenCalledTimes(1);
   });
 
   it('softImpact() calls impactAsync with Light', async () => {
-    const { HapticService, refreshEnabled } = await loadService();
-    await refreshEnabled();
     await HapticService.softImpact();
     expect(mockImpactAsync).toHaveBeenCalledWith('Light');
   });
 
   it('mediumImpact() calls impactAsync with Medium', async () => {
-    const { HapticService, refreshEnabled } = await loadService();
-    await refreshEnabled();
     await HapticService.mediumImpact();
     expect(mockImpactAsync).toHaveBeenCalledWith('Medium');
   });
 
   it('heavyImpact() calls impactAsync with Heavy', async () => {
-    const { HapticService, refreshEnabled } = await loadService();
-    await refreshEnabled();
     await HapticService.heavyImpact();
     expect(mockImpactAsync).toHaveBeenCalledWith('Heavy');
   });
 
   it('success() calls notificationAsync with Success', async () => {
-    const { HapticService, refreshEnabled } = await loadService();
-    await refreshEnabled();
     await HapticService.success();
     expect(mockNotificationAsync).toHaveBeenCalledWith('Success');
   });
 
   it('warning() calls notificationAsync with Warning', async () => {
-    const { HapticService, refreshEnabled } = await loadService();
-    await refreshEnabled();
     await HapticService.warning();
     expect(mockNotificationAsync).toHaveBeenCalledWith('Warning');
   });
 
   it('error() calls notificationAsync with Error', async () => {
-    const { HapticService, refreshEnabled } = await loadService();
-    await refreshEnabled();
     await HapticService.error();
     expect(mockNotificationAsync).toHaveBeenCalledWith('Error');
   });
 });
 
-describe('HapticService — disabled via AsyncStorage', () => {
+describe('HapticService — disabled via setHapticsEnabled', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    setStoredHaptics(false);
+    setHapticsEnabled(false);
   });
 
-  it('all methods are no-ops when hapticsEnabled=false in storage', async () => {
-    const { HapticService, refreshEnabled } = await loadService();
-    await refreshEnabled();
+  afterEach(() => {
+    // Restore default enabled state for subsequent suites
+    setHapticsEnabled(true);
+  });
 
+  it('all methods are no-ops when disabled', async () => {
     await HapticService.selection();
     await HapticService.softImpact();
     await HapticService.mediumImpact();
@@ -134,13 +123,14 @@ describe('HapticService — disabled via AsyncStorage', () => {
 describe('HapticService — setHapticsEnabled override', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    setStoredHaptics(true);
+  });
+
+  afterEach(() => {
+    setHapticsEnabled(true);
   });
 
   it('setHapticsEnabled(false) immediately silences all haptics', async () => {
-    const { HapticService, setHapticsEnabled, refreshEnabled } = await loadService();
-    await refreshEnabled(); // start enabled
-
+    setHapticsEnabled(true);
     setHapticsEnabled(false);
 
     await HapticService.mediumImpact();
@@ -149,9 +139,7 @@ describe('HapticService — setHapticsEnabled override', () => {
     expect(mockNotificationAsync).not.toHaveBeenCalled();
   });
 
-  it('setHapticsEnabled(true) re-enables haptics', async () => {
-    const { HapticService, setHapticsEnabled, refreshEnabled } = await loadService();
-    await refreshEnabled();
+  it('setHapticsEnabled(true) re-enables haptics after disable', async () => {
     setHapticsEnabled(false);
     setHapticsEnabled(true);
 
@@ -161,17 +149,33 @@ describe('HapticService — setHapticsEnabled override', () => {
 });
 
 describe('HapticService — refreshEnabled', () => {
+  afterEach(() => {
+    setHapticsEnabled(true);
+  });
+
   it('refreshEnabled() reads from AsyncStorage with key gp_client_settings', async () => {
     setStoredHaptics(true);
-    const { refreshEnabled } = await loadService();
     await refreshEnabled();
     expect(AsyncStorage.getItem).toHaveBeenCalledWith('gp_client_settings');
   });
 
-  it('defaults to enabled when AsyncStorage returns null', async () => {
-    (AsyncStorage.getItem as jest.Mock).mockResolvedValue(null);
-    const { HapticService, refreshEnabled } = await loadService();
+  it('refreshEnabled() disables haptics when stored value is false', async () => {
+    jest.clearAllMocks();
+    setStoredHaptics(false);
     await refreshEnabled();
+
+    await HapticService.selection();
+    expect(mockSelectionAsync).not.toHaveBeenCalled();
+
+    // Restore
+    setHapticsEnabled(true);
+  });
+
+  it('defaults to enabled when AsyncStorage returns null', async () => {
+    jest.clearAllMocks();
+    (AsyncStorage.getItem as jest.Mock).mockResolvedValue(null);
+    await refreshEnabled();
+
     await HapticService.selection();
     expect(mockSelectionAsync).toHaveBeenCalledTimes(1);
   });
