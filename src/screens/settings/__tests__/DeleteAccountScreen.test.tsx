@@ -50,6 +50,8 @@ jest.mock('../../../theme/ThemeProvider', () => ({
   }),
 }));
 
+jest.mock('expo-font', () => ({ isLoaded: () => true, loadAsync: jest.fn() }));
+
 // ─── Import after mocks ────────────────────────────────────────────────────────
 
 import DeleteAccountScreen from '../DeleteAccountScreen';
