@@ -51,11 +51,18 @@ import NotificationCenterScreen from '../screens/notifications/NotificationCente
 import NotificationPreferencesScreen from '../screens/notifications/NotificationPreferencesScreen';
 import NotificationBadge from '../components/NotificationBadge';
 import { fetchUnreadCount } from '../services/notificationsApi';
+// Phase 8 — Coach Command Center. This is the new top-level coach landing.
+// The legacy CoachHomeScreen is preserved in the Clients stack as a sub-screen
+// so existing deep links and navigation.navigate() calls keep working.
+import CommandCenterScreen from '../screens/coach/command-center/CommandCenterScreen';
 import { Colors } from '../constants/colors';
 
 export type CoachTabParamList = {
+  // Phase 8: Command Center replaces the old top-level Dashboard tab.
+  // The 'Dashboard' name is kept in the param list so any existing
+  // navigate('Dashboard') calls in the codebase don't break.
+  CommandCenter: undefined;
   ClientsStack: undefined;
-  Dashboard: undefined;
   Templates: undefined;
   Messages: undefined;
   SettingsStack: undefined;
@@ -82,6 +89,8 @@ export type ClientsStackParamList = {
   NotificationCenter: undefined;
   /** Phase 9 — Notification preferences. */
   NotificationPreferences: undefined;
+  // Phase 8 — Legacy landing — kept so existing navigate('Dashboard') calls resolve.
+  Dashboard: undefined;
 };
 
 export type SettingsStackParamList = {
@@ -175,11 +184,13 @@ function ClientsStackNavigator() {
       <ClientsStack.Screen name="RiskBoard"         component={RiskBoardScreen} />
       <ClientsStack.Screen name="ClientRiskDetail"  component={ClientRiskDetailScreen} />
       <ClientsStack.Screen name="BloodworkReviewQueue" component={BloodworkReviewQueueScreen} />
+      {/* Phase 8: legacy CoachHomeScreen demoted to sub-screen so existing
+          navigate('Dashboard') deep links keep resolving. The home tab is
+          now CommandCenter. */}
+      <ClientsStack.Screen name="Dashboard"         component={CoachHomeScreen} />
       {/* Sprint B-2 final wave — register coach surfaces under
           ClientsStack so navigation.navigate('CoachMacrosReview', {...})
-          works from ClientDetailScreen and ClientsListScreen. The
-          screens themselves were merged in PR #130 (Macros review)
-          and this PR (Workout Builder, Meal Templates, Bulk Invite). */}
+          works from ClientDetailScreen and ClientsListScreen. */}
       <ClientsStack.Screen
         name="CoachMacrosReview"
         component={CoachMacrosReviewScreen}
@@ -325,6 +336,17 @@ export default function CoachNavigator() {
         },
       }}
     >
+      {/* Phase 8: Command Center is the new home tab. */}
+      <Tab.Screen
+        name="CommandCenter"
+        component={CommandCenterScreen}
+        options={{
+          tabBarLabel: 'Overview',
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="grid-outline" size={size} color={color} />
+          ),
+        }}
+      />
       <Tab.Screen
         name="ClientsStack"
         component={ClientsStackNavigator}
@@ -332,15 +354,6 @@ export default function CoachNavigator() {
           tabBarLabel: 'Clients',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="people" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="Dashboard"
-        component={CoachHomeScreen}
-        options={{
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="grid" size={size} color={color} />
           ),
         }}
       />
