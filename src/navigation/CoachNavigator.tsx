@@ -42,6 +42,8 @@ import CoachBulkInviteScreen from '../screens/coach/CoachBulkInviteScreen';
 // Concierge Phase 1 — scheduling coach surfaces.
 import CoachAvailabilityEditorScreen from '../screens/coach/CoachAvailabilityEditorScreen';
 import CoachBookingInboxScreen from '../screens/coach/CoachBookingInboxScreen';
+// Phase 10 — GDPR right to erasure.
+import DeleteAccountScreen from '../screens/settings/DeleteAccountScreen';
 import { Colors } from '../constants/colors';
 
 export type CoachTabParamList = {
@@ -84,6 +86,8 @@ export type SettingsStackParamList = {
   BothPillars: undefined;
   // Legacy stub kept reachable for QA but not surfaced in normal nav.
   BothPillarsLegacyStub: undefined;
+  // Phase 10 — GDPR right to erasure.
+  DeleteAccount: undefined;
 };
 
 /** Phase 11 / Track 7 — team management stack param list. */
@@ -171,6 +175,8 @@ function SettingsStackNavigator() {
       <SettingsStack.Screen name="BothPillars" component={CrossPillarNavigator} />
       {/* Reachable for QA/regression; not navigated to in normal flow. */}
       <SettingsStack.Screen name="BothPillarsLegacyStub" component={BothPillarsScreen} />
+      {/* Phase 10 — GDPR right to erasure. */}
+      <SettingsStack.Screen name="DeleteAccount" component={DeleteAccountScreen} />
     </SettingsStack.Navigator>
   );
 }
