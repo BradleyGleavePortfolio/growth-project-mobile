@@ -13,6 +13,7 @@
  * Accessible from MoreScreen; no new tab added (avoids 5-tab crowding).
  * Phase 7C: LeaderboardScreen + LeaderboardSettingsScreen added to MoreStack.
  * Bloodwork: BloodworkEntryScreen added to MoreStack (flag OFF by default).
+ * Sessions: SessionsUpcoming, SessionRequest, SessionPrepare added to MoreStack.
  */
 import React from 'react';
 import { StyleSheet } from 'react-native';
@@ -55,6 +56,10 @@ import LeaderboardScreen from '../screens/client/LeaderboardScreen';
 import LeaderboardSettingsScreen from '../screens/client/LeaderboardSettingsScreen';
 // Bloodwork — client-entered labs (flag OFF by default)
 import BloodworkEntryScreen from '../screens/client/BloodworkEntryScreen';
+// Sessions — client-facing coaching call surfaces (flag OFF by default)
+import SessionsUpcomingScreen from '../screens/client/SessionsUpcomingScreen';
+import SessionRequestScreen from '../screens/client/SessionRequestScreen';
+import SessionPrepareScreen from '../screens/client/SessionPrepareScreen';
 import { colors } from '../theme/tokens';
 
 // ─── Param lists ──────────────────────────────────────────────────────────────
@@ -85,6 +90,7 @@ export type WorkoutStackParamList = {
 // Phase 7B: Timeline added.
 // Phase 7C: Leaderboard + LeaderboardSettings added.
 // Bloodwork: BloodworkEntry added (flag OFF by default).
+// Sessions: client-facing coaching call surfaces (flag OFF by default).
 export type MoreStackParamList = {
   MoreIndex:   undefined;
   Recipes:     undefined;
@@ -113,6 +119,10 @@ export type MoreStackParamList = {
   LeaderboardSettings: undefined;
   /** Bloodwork — client-entered labs (flag OFF by default) */
   Bloodwork:   undefined;
+  /** Sessions — coaching call surfaces. Entry point: MoreIndex → "Calls". */
+  SessionsUpcoming:  { clientId: string };
+  SessionRequest:    { clientId: string; coachId: string };
+  SessionPrepare:    { sessionId: string };
 };
 
 // ─── Stack navigators ─────────────────────────────────────────────────────────
@@ -158,6 +168,7 @@ function WorkoutStackNavigator() {
 // Phase 7B: Timeline screen registered here.
 // Phase 7C: Leaderboard screens registered here.
 // Bloodwork: BloodworkEntry screen registered here.
+// Sessions: client-facing call screens registered here (flags default OFF).
 function MoreStackNavigator() {
   return (
     <MoreStackNav.Navigator
@@ -193,6 +204,20 @@ function MoreStackNavigator() {
       <MoreStackNav.Screen name="LeaderboardSettings"  component={LeaderboardSettingsScreen} />
       {/* Bloodwork — client-entered labs (flag OFF by default) */}
       <MoreStackNav.Screen name="Bloodwork"    component={BloodworkEntryScreen} />
+      {/* Sessions — coaching call surfaces. Flags default OFF; screens show
+          calm placeholders when the backend is not yet deployed. */}
+      <MoreStackNav.Screen
+        name="SessionsUpcoming"
+        component={SessionsUpcomingScreen}
+      />
+      <MoreStackNav.Screen
+        name="SessionRequest"
+        component={SessionRequestScreen}
+      />
+      <MoreStackNav.Screen
+        name="SessionPrepare"
+        component={SessionPrepareScreen}
+      />
     </MoreStackNav.Navigator>
   );
 }
