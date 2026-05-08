@@ -333,3 +333,25 @@ Typed singleton (`HapticService`) wrapping `expo-haptics`.
 - Wired into: tab switches, workout completion, food log success/failure, profile save/validation
 
 See [docs/HAPTICS.md](docs/HAPTICS.md) for full API reference and wiring map.
+
+## Charts — `src/ui/charts`
+
+Phase 11 / Track 5 introduces a unified chart component library powered by
+`react-native-svg` + `react-native-gesture-handler` with a Victory Native XL
+upgrade path (see `docs/charting.md` for the Skia peer-dependency note).
+
+| Component       | Use case                                      |
+|-----------------|-----------------------------------------------|
+| `TgpLineChart`  | Trend lines with pan tooltip                  |
+| `TgpBarChart`   | Categorical bars with tap tooltip             |
+| `TgpAreaChart`  | Filled area with pan tooltip                  |
+| `TgpSparkline`  | Inline micro-chart for cards (no labels)      |
+
+Import from the barrel: `import { TgpLineChart } from '../ui/charts'`.
+
+All components accept `themeOverride?: Partial<ThemeColors>` and read palette
+tokens from `ThemeProvider` automatically.  See `docs/charting.md` for full
+theming rules, performance notes, and the Skia upgrade path.
+
+**Migrated screen:** `src/screens/client/ProgressScreen.tsx` — the inline
+`WeightLineChart` SVG was replaced with `TgpLineChart`.

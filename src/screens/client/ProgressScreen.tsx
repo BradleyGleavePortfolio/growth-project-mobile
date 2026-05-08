@@ -1,3 +1,13 @@
+/**
+ * ProgressScreen — Client progress dashboard.
+ *
+ * Displays weight trend, macros for today, body stats, and recent log entries.
+ * The weight line chart is rendered via TgpLineChart from src/ui/charts, which
+ * provides the unified Victory Native XL / SVG charting API for this app.
+ *
+ * Phase 11 / Track 5: migrated WeightLineChart to TgpLineChart wrapper.
+ */
+
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
@@ -24,96 +34,11 @@ import { getTodayString } from '../../utils/date';
 import FadeInView from '../../components/FadeInView';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
+import { TgpLineChart } from '../../ui/charts';
 
 type Period = '7D' | '30D' | '90D' | 'All';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
-
-// Pure SVG weight line chart — no Skia dependency
-function WeightLineChart({ data }: { data: { x: number; weight: number; dateLabel: string }[] }) {
-  const { colors } = useTheme();
-  const W = SCREEN_WIDTH - 64;
-  const H = 180;
-  const padL = 40;
-  const padR = 12;
-  const padT = 12;
-  const padB = 28;
-  const plotW = W - padL - padR;
-  const plotH = H - padT - padB;
-
-  const weights = data.map((d) => d.weight);
-  const minW = Math.min(...weights) - 2;
-  const maxW = Math.max(...weights) + 2;
-  const rangeW = maxW - minW || 1;
-
-  const toX = (i: number) => padL + (i / Math.max(data.length - 1, 1)) * plotW;
-  const toY = (w: number) => padT + plotH - ((w - minW) / rangeW) * plotH;
-
-  const points = data.map((d) => `${toX(d.x)},${toY(d.weight)}`).join(' ');
-
-  // Choose up to 5 x-label indices
-  const step = Math.max(1, Math.floor(data.length / 4));
-  const xLabels = data.filter((_, i) => i % step === 0 || i === data.length - 1);
-
-  // Y-axis ticks: 4 labels
-  const yTicks = [0, 1, 2, 3].map((i) => minW + (rangeW * i) / 3);
-
-  return (
-    <Svg width={W} height={H}>
-      {/* Grid lines */}
-      {yTicks.map((v, i) => (
-        <SvgLine
-          key={i}
-          x1={padL}
-          y1={toY(v)}
-          x2={W - padR}
-          y2={toY(v)}
-          stroke={colors.border}
-          strokeWidth={1}
-        />
-      ))}
-      {/* Y-axis labels */}
-      {yTicks.map((v, i) => (
-        <SvgText
-          key={i}
-          x={padL - 4}
-          y={toY(v) + 4}
-          textAnchor="end"
-          fontSize={9}
-          fill={colors.textMuted}
-        >
-          {Math.round(v)}
-        </SvgText>
-      ))}
-      {/* Line */}
-      <Polyline
-        points={points}
-        fill="none"
-        stroke={colors.primary}
-        strokeWidth={2.5}
-        strokeLinejoin="round"
-        strokeLinecap="round"
-      />
-      {/* Dots */}
-      {data.map((d, i) => (
-        <Circle key={i} cx={toX(d.x)} cy={toY(d.weight)} r={4} fill={colors.primary} />
-      ))}
-      {/* X-axis labels */}
-      {xLabels.map((d, i) => (
-        <SvgText
-          key={i}
-          x={toX(d.x)}
-          y={H - 6}
-          textAnchor="middle"
-          fontSize={9}
-          fill={colors.textMuted}
-        >
-          {d.dateLabel}
-        </SvgText>
-      ))}
-    </Svg>
-  );
-}
 
 function CalorieRing({
   eaten,
@@ -345,11 +270,10 @@ export default function ProgressScreen() {
     },
   ];
 
-  // Chart data for weight
+  // Chart data for TgpLineChart — { x: index, y: weight }
   const chartData = weightLogs.map((log, i) => ({
     x: i,
-    weight: log.weight,
-    dateLabel: log.date.slice(5), // MM-DD
+    y: log.weight,
   }));
 
   const periods: Period[] = ['7D', '30D', '90D', 'All'];
@@ -379,6 +303,8 @@ export default function ProgressScreen() {
             <TouchableOpacity
               onPress={() => navigation.navigate('Report')}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityLabel="View progress report"
+              accessibilityRole="button"
             >
               <Ionicons name="share-outline" size={22} color={colors.textSecondary} />
             </TouchableOpacity>
@@ -457,6 +383,8 @@ export default function ProgressScreen() {
               key={p}
               style={[styles.periodBtn, period === p && styles.periodBtnActive]}
               onPress={() => setPeriod(p)}
+              accessibilityLabel={`Show ${p} period`}
+              accessibilityRole="button"
             >
               <Text style={[styles.periodText, period === p && styles.periodTextActive]}>
                 {p}
@@ -494,12 +422,16 @@ export default function ProgressScreen() {
           </FadeInView>
         )}
 
-        {/* Weight Chart */}
+        {/* Weight Chart — Phase 11 Track 5: TgpLineChart replaces inline WeightLineChart */}
         {chartData.length >= 2 ? (
           <View style={styles.chartContainer}>
             <Text style={styles.chartTitle}>Weight Trend</Text>
             <View style={styles.chartInner}>
-              <WeightLineChart data={chartData} />
+              <TgpLineChart
+                data={chartData}
+                height={180}
+                accessibilityLabel="Weight trend line chart"
+              />
             </View>
           </View>
         ) : (
@@ -512,8 +444,6 @@ export default function ProgressScreen() {
             </Text>
           </View>
         )}
-
-        {/* Spacer between chart and body stats */}
 
         {/* Body Stats */}
         <FadeInView delay={200}>
@@ -571,6 +501,8 @@ export default function ProgressScreen() {
         style={styles.fab}
         onPress={() => setShowLogModal(true)}
         activeOpacity={0.85}
+        accessibilityLabel="Log weight"
+        accessibilityRole="button"
       >
         {/* Round 3: hex → theme token */}
         <Ionicons name="add" size={28} color={colors.textOnPrimary} />
@@ -582,7 +514,11 @@ export default function ProgressScreen() {
           <View style={styles.modalSheet}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Log Weight</Text>
-              <TouchableOpacity onPress={() => setShowLogModal(false)}>
+              <TouchableOpacity
+                onPress={() => setShowLogModal(false)}
+                accessibilityLabel="Close log weight modal"
+                accessibilityRole="button"
+              >
                 <Ionicons name="close" size={24} color={colors.textSecondary} />
               </TouchableOpacity>
             </View>
@@ -594,6 +530,7 @@ export default function ProgressScreen() {
               value={newWeight}
               onChangeText={setNewWeight}
               autoFocus
+              accessibilityLabel="Enter weight in pounds"
             />
             <TextInput
               style={[styles.input, { marginTop: 12 }]}
@@ -601,8 +538,14 @@ export default function ProgressScreen() {
               placeholderTextColor={colors.textMuted}
               value={newNotes}
               onChangeText={setNewNotes}
+              accessibilityLabel="Enter optional notes"
             />
-            <TouchableOpacity style={styles.saveBtn} onPress={handleLogWeight}>
+            <TouchableOpacity
+              style={styles.saveBtn}
+              onPress={handleLogWeight}
+              accessibilityLabel="Save weight log entry"
+              accessibilityRole="button"
+            >
               <Text style={styles.saveBtnText}>Save</Text>
             </TouchableOpacity>
           </View>
@@ -659,7 +602,7 @@ const makeStyles = (colors: ThemeColors) =>
     marginHorizontal: 24,
     marginBottom: 16,
     backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
+    borderRadius: 4,
     padding: 16,
     gap: 20,
   },
@@ -711,7 +654,7 @@ const makeStyles = (colors: ThemeColors) =>
   statCard: {
     flex: 1,
     backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
+    borderRadius: 4,
     padding: 14,
     alignItems: 'center',
     gap: 4,
@@ -742,7 +685,7 @@ const makeStyles = (colors: ThemeColors) =>
     flex: 1,
     paddingVertical: 8,
     alignItems: 'center',
-    borderRadius: 0, // radius.sm
+    borderRadius: 0,
     backgroundColor: colors.surface,
   },
   periodBtnActive: {
@@ -756,13 +699,13 @@ const makeStyles = (colors: ThemeColors) =>
     color: colors.textSecondary,
   },
   periodTextActive: {
-    color: colors.textOnPrimary, // Round 3: hex → token
+    color: colors.textOnPrimary,
   },
   goalCard: {
     marginHorizontal: 24,
     marginBottom: 16,
     backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
+    borderRadius: 4,
     padding: 16,
   },
   goalHeader: {
@@ -782,13 +725,13 @@ const makeStyles = (colors: ThemeColors) =>
   goalTrack: {
     height: 10,
     backgroundColor: colors.primaryPale,
-    borderRadius: 2, // radius.md
+    borderRadius: 2,
     overflow: 'hidden',
   },
   goalFill: {
     height: '100%',
     backgroundColor: colors.primary,
-    borderRadius: 2, // radius.md
+    borderRadius: 2,
   },
   goalLabels: {
     flexDirection: 'row',
@@ -806,7 +749,7 @@ const makeStyles = (colors: ThemeColors) =>
     marginHorizontal: 24,
     marginBottom: 24,
     backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
+    borderRadius: 4,
     padding: 16,
     overflow: 'hidden',
   },
@@ -827,7 +770,7 @@ const makeStyles = (colors: ThemeColors) =>
     marginHorizontal: 24,
     marginBottom: 24,
     backgroundColor: colors.surface,
-    borderRadius: 4, // radius.lg
+    borderRadius: 4,
     justifyContent: 'center',
     alignItems: 'center',
     gap: 8,
@@ -858,7 +801,7 @@ const makeStyles = (colors: ThemeColors) =>
   },
   bodyStatCard: {
     backgroundColor: colors.surface,
-    borderRadius: 2, // radius.md
+    borderRadius: 2,
     padding: 16,
     alignItems: 'center',
     minWidth: (SCREEN_WIDTH - 58) / 2,
@@ -924,7 +867,6 @@ const makeStyles = (colors: ThemeColors) =>
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    // Quiet-luxury elevation — replaces the old hand-tuned 0.10 opacity shadow.
     ...shadowTokens.md,
   },
   modalOverlay: {
@@ -955,7 +897,7 @@ const makeStyles = (colors: ThemeColors) =>
   },
   input: {
     backgroundColor: colors.surface,
-    borderRadius: 2, // radius.md
+    borderRadius: 2,
     padding: 14,
     fontSize: 16,
     color: colors.textPrimary,
@@ -965,7 +907,7 @@ const makeStyles = (colors: ThemeColors) =>
   saveBtn: {
     marginTop: 20,
     backgroundColor: colors.primary,
-    borderRadius: 2, // radius.md
+    borderRadius: 2,
     paddingVertical: 14,
     alignItems: 'center',
   },
@@ -975,7 +917,6 @@ const makeStyles = (colors: ThemeColors) =>
     fontWeight: '500',
     letterSpacing: 1.2,
     textTransform: 'uppercase',
-    color: colors.textOnPrimary, // Round 3: hex → token
+    color: colors.textOnPrimary,
   },
-
   });
