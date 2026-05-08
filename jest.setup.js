@@ -48,3 +48,22 @@ jest.mock('@react-native-community/netinfo', () => {
     }),
   };
 });
+
+// Phase 11 Track 9 — Mock crisp-sdk-react-native in all tests.
+// The package bundles native modules that are unavailable in the Jest runner.
+jest.mock('crisp-sdk-react-native', () => ({
+  configure: jest.fn(),
+  show: jest.fn(),
+  hide: jest.fn(),
+  setUserEmail: jest.fn(),
+  setUserNickname: jest.fn(),
+  setUserPhone: jest.fn(),
+  setUserAvatar: jest.fn(),
+  setSessionString: jest.fn(),
+  setSessionBool: jest.fn(),
+  setSessionInt: jest.fn(),
+  setSessionSegment: jest.fn(),
+  setSessionSegments: jest.fn(),
+  getSessionIdentifier: jest.fn(async () => null),
+  resetSession: jest.fn(),
+}));
