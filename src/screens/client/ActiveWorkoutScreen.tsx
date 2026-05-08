@@ -20,6 +20,7 @@ import { getAllExercises } from '../../db/workoutDb';
 import { useCreateWorkout } from '../../hooks/useApi';
 import ExerciseLogModal, { ExerciseLogSaveData } from '../../components/ExerciseLogModal';
 import { track } from '../../lib/analytics';
+import { HapticService } from '../../ui/haptics/haptics.service';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 // NB: Fix #2 — the local exercise_logs SQLite table (logExerciseWithVolume)
@@ -362,6 +363,8 @@ export default function ActiveWorkoutScreen() {
             {
               onSuccess: () => {
                 if (timerRef.current) clearInterval(timerRef.current);
+                // Phase 11 / Track 3: heavy haptic on workout completion
+                HapticService.heavyImpact();
                 // Psych Report #4: Analytics — workout_logged
                 track('workout_logged', {
                   duration_minutes: Math.round(timer / 60),
@@ -371,6 +374,8 @@ export default function ActiveWorkoutScreen() {
                 navigation.goBack();
               },
               onError: (err) => {
+                // Phase 11 / Track 3: error haptic on failed API action
+                HapticService.error();
                 Alert.alert("Couldn't save workout",  'Please try again.');
               },
             },
