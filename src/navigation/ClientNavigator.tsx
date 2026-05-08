@@ -15,6 +15,7 @@
  * Bloodwork: BloodworkEntryScreen added to MoreStack (flag OFF by default).
  * Sessions: SessionsUpcoming, SessionRequest, SessionPrepare added to MoreStack.
  * Wave 11: ClientPathCopilotScreen + PrivateCommunityHubScreen added to MoreStack.
+ * Phase 11 Track 9: SupportInboxScreen added to MoreStack (Crisp support inbox).
  */
 import React from 'react';
 import { StyleSheet } from 'react-native';
@@ -70,6 +71,8 @@ import ShareCardScreen from '../screens/share/ShareCardScreen';
 import type { ShareCardMilestone } from '../screens/share/ShareCardScreen';
 // Phase 11 — Notification Preferences
 import NotificationPreferencesScreen from '../screens/settings/NotificationPreferencesScreen';
+// Phase 11 Track 9 — Support Inbox (Crisp)
+import SupportInboxScreen from '../screens/support/SupportInboxScreen';
 import { colors } from '../theme/tokens';
 
 // ─── Param lists ──────────────────────────────────────────────────────────────
@@ -141,6 +144,8 @@ export type MoreStackParamList = {
   ShareCard: { milestone: ShareCardMilestone };
   /** Phase 11 — Notification category preferences. Entry: Settings > Notifications > Categories. */
   NotificationPreferences: undefined;
+  /** Phase 11 Track 9 — Crisp support inbox. */
+  SupportInbox:      undefined;
 };
 
 // ─── Stack navigators ─────────────────────────────────────────────────────────
@@ -245,6 +250,8 @@ function MoreStackNavigator() {
       <MoreStackNav.Screen name="ShareCard" component={ShareCardScreen} />
       {/* Phase 11 — Notification category preferences (push taxonomy). */}
       <MoreStackNav.Screen name="NotificationPreferences" component={NotificationPreferencesScreen} />
+      {/* Phase 11 Track 9 — Support Inbox */}
+      <MoreStackNav.Screen name="SupportInbox"      component={SupportInboxScreen} />
     </MoreStackNav.Navigator>
   );
 }

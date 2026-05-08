@@ -364,6 +364,25 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
           </HapticPressable>
         </View>
 
+        {/* Support */}
+        <Text style={styles.sectionLabel}>Support</Text>
+        <View style={styles.card}>
+          <HapticPressable
+            intent="light"
+            style={styles.row}
+            onPress={() => navigation.navigate('SupportInbox')}
+            accessibilityRole="button"
+            accessibilityLabel="Support inbox"
+            accessibilityHint="Opens the live support chat"
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+              <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.primary} />
+              <Text style={styles.rowLabel}>Support</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </HapticPressable>
+        </View>
+
         {/* Data & Privacy */}
         <Text style={styles.sectionLabel}>Data & Privacy</Text>
         <View style={styles.card}>
