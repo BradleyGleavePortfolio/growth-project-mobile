@@ -63,7 +63,9 @@ jest.mock('@expo/vector-icons', () => ({
 }));
 
 // HapticPressable renders as a TouchableOpacity for tests
+// eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
 jest.mock('../../components/HapticPressable', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-var-requires
   const { TouchableOpacity } = require('react-native');
   return ({ children, onPress, accessibilityLabel, accessibilityRole, ...props }: {
     children: React.ReactNode; onPress?: () => void; accessibilityLabel?: string; accessibilityRole?: string;
