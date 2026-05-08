@@ -81,7 +81,8 @@ describe('triggerSync — push pending records', () => {
     await triggerSync();
 
     const db = getDatabase();
-    const all = await db.get<WorkoutLog>('workout_logs').query().fetch();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const all: WorkoutLog[] = await (db.get<any>('workout_logs') as any).query().fetch();
     expect(all).toHaveLength(1);
     expect(all[0].syncStatus).toBe('synced');
     expect(all[0].serverId).toBe('srv-001');
@@ -99,7 +100,8 @@ describe('triggerSync — push pending records', () => {
     await triggerSync();
 
     const db = getDatabase();
-    const all = await db.get<WorkoutLog>('workout_logs').query().fetch();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const all: WorkoutLog[] = await (db.get<any>('workout_logs') as any).query().fetch();
     expect(all[0].syncStatus).toBe('pending');
   });
 
@@ -121,7 +123,8 @@ describe('triggerSync — push pending records', () => {
     await triggerSync();
 
     const db = getDatabase();
-    const all = await db.get<WorkoutLog>('workout_logs').query().fetch();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const all: WorkoutLog[] = await (db.get<any>('workout_logs') as any).query().fetch();
     expect(all[0].syncStatus).toBe('conflict');
     expect(toastFired).toBe(true);
 
@@ -155,8 +158,7 @@ describe('triggerSync — push pending records', () => {
     await triggerSync();
 
     const db = getDatabase();
-    const synced = await db
-      .get<WorkoutLog>('workout_logs')
+    const synced: WorkoutLog[] = await (db.get<any>('workout_logs') as any) // eslint-disable-line @typescript-eslint/no-explicit-any
       .query(Q.where('sync_status', 'synced'))
       .fetch();
     expect(synced).toHaveLength(2);
