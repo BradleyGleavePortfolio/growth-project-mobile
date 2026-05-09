@@ -8,9 +8,18 @@
  *   import { writeWorkoutLog, triggerSync, getDatabase } from '../offline';
  */
 export { getDatabase, __resetDatabaseForTests } from './database';
-export { schema } from './schema';
-export type { SyncStatus, ParsedSet, WorkoutPayload } from './models/WorkoutLog';
-export { default as WorkoutLog } from './models/WorkoutLog';
+export type {
+  SyncStatus,
+  ParsedSet,
+  WorkoutPayload,
+  WorkoutLog,
+} from './models/WorkoutLog';
+export {
+  rowToWorkoutLog,
+  parsedSets,
+  toServerPayload,
+} from './models/WorkoutLog';
+export { default as WorkoutLogDefault } from './models/WorkoutLog';
 export {
   writeWorkoutLog,
   triggerSync,

@@ -53,13 +53,15 @@ describe('validate-app-config (default mode, repo as-is)', () => {
     expect(placeholderWarn).toBeDefined();
   });
 
-  it('warns about null storeListings entries in default mode', () => {
+  it('warns about the null playStoreUrl entry in default mode', () => {
+    // appStoreUrl is now populated with the live App Store listing; only
+    // playStoreUrl remains null pending the Play Store submission.
     const w = result.parsed.warnings.filter((m) =>
       m.includes('storeListings'),
     );
-    expect(w.length).toBe(2);
+    expect(w.length).toBe(1);
     expect(w.some((m) => m.includes('playStoreUrl'))).toBe(true);
-    expect(w.some((m) => m.includes('appStoreUrl'))).toBe(true);
+    expect(w.some((m) => m.includes('appStoreUrl'))).toBe(false);
   });
 });
 
@@ -95,13 +97,15 @@ describe('validate-app-config --release (repo as-is — placeholder and null sto
     )).toBe(true);
   });
 
-  it('puts both null storeListings entries into releaseBlockers', () => {
+  it('puts the remaining null playStoreUrl entry into releaseBlockers', () => {
+    // appStoreUrl is live (real App Store URL) so it should NOT be a blocker;
+    // only playStoreUrl remains pending until the Play Store listing is up.
     expect(result.parsed.releaseBlockers.some((b) =>
       /storeListings.*playStoreUrl/.test(b),
     )).toBe(true);
     expect(result.parsed.releaseBlockers.some((b) =>
       /storeListings.*appStoreUrl/.test(b),
-    )).toBe(true);
+    )).toBe(false);
   });
 
   it('writes RELEASE_BLOCKER.md to repo root', () => {

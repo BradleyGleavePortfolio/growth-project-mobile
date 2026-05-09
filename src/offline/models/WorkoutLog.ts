@@ -1,12 +1,18 @@
 /**
- * WatermelonDB model for a locally-logged workout session.
+ * Plain-object model for a locally-logged workout session.
  *
- * Maps to the `workout_logs` table defined in schema.ts.
- * The model exposes typed accessors for each column and a convenience
- * method to serialize into the shape the backend `/workouts` endpoint expects.
+ * Maps 1:1 to a row in the `workout_logs` SQLite table created in
+ * `src/offline/database.ts`. Replaces the previous WatermelonDB Model class
+ * — see migration note in docs/offline-architecture.md.
+ *
+ * Why a plain object + helper functions instead of a class?
+ *   - SQLite returns plain rows, no instance methods. Parsing into a typed
+ *     interface is zero-cost and TS-friendly.
+ *   - Behaviour that used to live on the model (toServerPayload, parsedSets,
+ *     markSynced, markConflict) is now exposed as standalone helper
+ *     functions in this file. Callers compose them explicitly, which is
+ *     easier to test and easier to read.
  */
-import { Model } from '@nozbe/watermelondb';
-import { field, date, writer } from '@nozbe/watermelondb/decorators';
 
 export type SyncStatus = 'pending' | 'synced' | 'conflict';
 
@@ -29,73 +35,90 @@ export interface WorkoutPayload {
   local_id: string;
 }
 
-export default class WorkoutLog extends Model {
-  static table = 'workout_logs';
+/**
+ * Typed shape of a `workout_logs` row.
+ *
+ * `loggedAt` is a JS `Date` object on the in-memory side; on disk it is
+ * stored as a Unix epoch millisecond integer (`logged_at` column) so the
+ * DB stays portable and INTEGER-indexable.
+ */
+export interface WorkoutLog {
+  id: string;
+  exerciseId: string;
+  setsData: string;
+  syncStatus: SyncStatus;
+  loggedAt: Date;
+  serverId: string | null;
+  sessionName: string | null;
+  durationMinutes: number | null;
+}
 
-  @field('exercise_id') exerciseId!: string;
-  @field('sets_data') setsData!: string;
-  /**
-   * WatermelonDB's base Model class defines `syncStatus` as a protected
-   * accessor. We override it here as an instance property via the @field
-   * decorator. The TS2416/TS2610 errors are suppressed because this is
-   * intentional WatermelonDB usage: @field registers a column accessor that
-   * overrides the base class accessor at runtime, which is the expected API.
-   */
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-  // @ts-ignore WatermelonDB accessor override — intentional
-  @field('sync_status') syncStatus!: SyncStatus;
-  @date('logged_at') loggedAt!: Date;
-  @field('server_id') serverId!: string | null;
-  @field('session_name') sessionName!: string | null;
-  @field('duration_minutes') durationMinutes!: number | null;
+// ─── Row <-> object mappers ──────────────────────────────────────────────────
 
-  /** Parse the JSON-serialised sets_data column into a typed array. */
-  get parsedSets(): ParsedSet[] {
-    try {
-      return JSON.parse(this.setsData) as ParsedSet[];
-    } catch {
-      return [];
-    }
-  }
+interface WorkoutLogRow {
+  id: string;
+  exercise_id: string;
+  sets_data: string;
+  sync_status: SyncStatus;
+  logged_at: number;
+  server_id: string | null;
+  session_name: string | null;
+  duration_minutes: number | null;
+}
 
-  /**
-   * Serialize this record into the shape the backend /workouts endpoint expects.
-   * Called by the sync engine when pushing pending records.
-   */
-  toServerPayload(): WorkoutPayload {
-    const sets = this.parsedSets.filter((s) => s.completed);
-    return {
-      date: this.loggedAt?.toISOString() ?? new Date().toISOString(),
-      duration_minutes: this.durationMinutes ?? 0,
-      notes: this.sessionName ?? '',
-      exercises: [
-        {
-          exercise_name: this.exerciseId,
-          sets_completed: sets.length,
-          weight_per_set: sets.map((s) => s.weight),
-          reps_per_set: sets.map((s) => s.reps),
-        },
-      ],
-      local_id: this.id,
-    };
-  }
+/** Convert a raw SQLite row into the typed WorkoutLog shape. */
+export function rowToWorkoutLog(row: WorkoutLogRow): WorkoutLog {
+  return {
+    id: row.id,
+    exerciseId: row.exercise_id,
+    setsData: row.sets_data,
+    syncStatus: row.sync_status,
+    loggedAt: new Date(row.logged_at),
+    serverId: row.server_id,
+    sessionName: row.session_name,
+    durationMinutes: row.duration_minutes,
+  };
+}
 
-  /** Mark this record as successfully synced and store the server-assigned ID. */
-  @writer async markSynced(serverId: string) {
-    await this.update((r) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const record = r as any as WorkoutLog;
-      record.syncStatus = 'synced';
-      record.serverId = serverId;
-    });
-  }
+// ─── Helper functions (replace model instance methods) ──────────────────────
 
-  /** Mark this record as a conflict (server-wins policy). */
-  @writer async markConflict() {
-    await this.update((r) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const record = r as any as WorkoutLog;
-      record.syncStatus = 'conflict';
-    });
+/** Parse the JSON-serialised sets_data column into a typed array. */
+export function parsedSets(log: WorkoutLog): ParsedSet[] {
+  try {
+    return JSON.parse(log.setsData) as ParsedSet[];
+  } catch {
+    return [];
   }
 }
+
+/**
+ * Serialize a record into the shape the backend /workouts endpoint expects.
+ * Called by the sync engine when pushing pending records.
+ */
+export function toServerPayload(log: WorkoutLog): WorkoutPayload {
+  const sets = parsedSets(log).filter((s) => s.completed);
+  return {
+    date: log.loggedAt
+      ? log.loggedAt.toISOString()
+      : new Date().toISOString(),
+    duration_minutes: log.durationMinutes ?? 0,
+    notes: log.sessionName ?? '',
+    exercises: [
+      {
+        exercise_name: log.exerciseId,
+        sets_completed: sets.length,
+        weight_per_set: sets.map((s) => s.weight),
+        reps_per_set: sets.map((s) => s.reps),
+      },
+    ],
+    local_id: log.id,
+  };
+}
+
+// Default export keeps the import-as-default pattern used elsewhere
+// (`import WorkoutLog from '../offline/models/WorkoutLog'`) working as a
+// type-only re-export. Consumers that previously instantiated the class
+// no longer exist — every call site imports the helpers from
+// `../offline` (the barrel) which now exports the helper functions.
+const _default = {} as WorkoutLog;
+export default _default;
