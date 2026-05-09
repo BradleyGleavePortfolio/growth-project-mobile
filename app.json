@@ -15,7 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.growthproject.app",
-      "buildNumber": "2",
+      "buildNumber": "3",
       "infoPlist": {
         "NSCameraUsageDescription": "Used for barcode scanning to log food items",
         "ITSAppUsesNonExemptEncryption": false,
@@ -33,7 +33,7 @@
         "backgroundColor": "#F5EFE4"
       },
       "package": "com.growthproject.app",
-      "versionCode": 2,
+      "versionCode": 3,
       "intentFilters": [
         {
           "action": "VIEW",
