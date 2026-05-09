@@ -406,3 +406,54 @@ Three card variants: `streak`, `pr`, `transformation`.
 - Share: `expo-sharing`
 - Analytics: fires `REFERRAL_SHARE_CARD_SHARED` on share
 - Full spec: `docs/share-card.md`
+
+## Sprint A — Audit fixes
+
+GPT-5.5 client + coach audits ran against the post-Sprint-A merge
+and scored TGP at 71/100 on each side with verdict DO NOT SHIP. This
+section lists the fixes that landed on `feat/sprint-a-audit-fixes`
+to clear those audits before the next TestFlight push. Each item
+cites the audit ID it resolves.
+
+- **CR-1 (client) — Reset-password deep link.** Added
+  `src/screens/auth/ResetPasswordScreen.tsx`, a `ResetPassword`
+  route in `AuthNavigator`, and a `fragmentToQuery` helper in
+  `src/navigation/deepLinkUtils.ts` that hoists the Supabase
+  recovery URL fragment into a query string so React Navigation can
+  parse the access_token + refresh_token pair into `route.params`.
+  The screen primes a Supabase session, lets the user enter a new
+  password, calls `updateUser`, then signs them out and bounces
+  through Login. 15 test cases.
+- **CR-4 / Coach #8 — Invite-code CTAs.** Wired `EmptyStateNoClients`
+  with `onInvite` on `ClientsListScreen` and `MessagesScreen`, added
+  a header-pill CTA on `ClientsListScreen` and `CoachHomeScreen`
+  routing through `ClientsStack -> InviteCodes`. A brand-new coach
+  with zero clients now reaches the invite-codes surface in one tap
+  from any of three primary surfaces. 6 test cases.
+- **H-1 (client) — CoachGuidelinesScreen retry.** The previous
+  `.catch` swallowed errors, hiding network failures behind the
+  empty state. Now distinguishes loading / error / data and renders
+  an `accessibilityRole="alert"` retry surface when the API fails.
+  5 test cases.
+- **H-4 (client) — RoleSelection invite-code error surface.** 4xx
+  responses from `attachInviteCode` are now rethrown so the outer
+  catch shows the server's BadRequest message in the existing
+  Alert + setError UI. 5xx and network failures still fall through
+  to `selectRole` for resilience. 4 test cases.
+- **H-5 (client) — ActiveWorkoutScreen comments.** Stale references
+  to the deleted WatermelonDB stack replaced with comments naming
+  the current expo-sqlite implementation, with a pointer at
+  `docs/offline-architecture.md`. No runtime change.
+
+Tests added: 30 new assertions across 5 spec files, all pass.
+Suite total post-audit-fix: 677 tests, 0 failing.
+Typecheck: clean.
+
+### Items deferred to a follow-up
+
+- **Coach #4 — Practice picker back/skip button.** Audit cites the
+  finance-side picker (`tgp-finance-app/mobile/app/coach/practice/
+  index.tsx`); fitness-side picker
+  (`src/screens/coach/cross-pillar/PracticeSelectionScreen.tsx`)
+  already ships a chevron-back. Fix lives in the finance repo and
+  is being handled by a parallel agent.

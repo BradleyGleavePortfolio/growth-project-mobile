@@ -144,7 +144,17 @@ export default function MessagesScreen() {
         ListEmptyComponent={
           searchQuery
             ? <EmptyStateNoResults query={searchQuery} onClearSearch={() => setSearchQuery('')} />
-            : <EmptyStateNoClients />
+            : (
+              // Audit fix CR-4: wire onInvite so the empty-state CTA
+              // actually renders a button. Without this, EmptyState
+              // guards on ctaLabel && onCta and the button never
+              // mounts. Routes through the ClientsStack to InviteCodes.
+              <EmptyStateNoClients
+                onInvite={() =>
+                  navigation.navigate('ClientsStack', { screen: 'InviteCodes' })
+                }
+              />
+            )
         }
         renderItem={({ item }) => (
           <TouchableOpacity

@@ -20,16 +20,33 @@ export default function CoachGuidelinesScreen() {
   const currentUser = useCurrentUser();
   const [guideline, setGuideline] = useState<{ title?: string; description?: string; created_at?: string } | null>(null);
   const [loading, setLoading] = useState(true);
+  // Audit fix H-1: distinguish "no data" from "failed to load". The
+  // previous implementation swallowed errors silently, so a network
+  // failure rendered identically to a coach who had not yet written
+  // guidelines. Tracking error separately lets us surface a retry
+  // button only when the request actually failed.
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = () => {
     if (!currentUser) return;
-    coachApi.getMyGuidelines()
+    setLoading(true);
+    setError(null);
+    coachApi
+      .getMyGuidelines()
       .then((res) => {
         setGuideline(res.data);
-        setLoading(false);
       })
-      .catch(() => setLoading(false));
-  }, [currentUser]);
+      .catch((err: unknown) => {
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Couldn't load your coach guidelines.";
+        setError(message);
+      })
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(load, [currentUser]);
 
   const formatDate = (iso: string) => {
     const d = new Date(iso);
@@ -50,6 +67,22 @@ export default function CoachGuidelinesScreen() {
         {loading ? (
           <View style={styles.emptyCard}>
             <Text style={styles.emptyText}>Loading...</Text>
+          </View>
+        ) : error ? (
+          <View style={styles.emptyCard} accessibilityRole="alert" accessibilityLiveRegion="assertive">
+            <Ionicons name="alert-circle-outline" size={48} color={colors.error} />
+            <Text style={styles.emptyTitle}>Could not load guidelines</Text>
+            <Text style={styles.emptyText}>{error}</Text>
+            <TouchableOpacity
+              style={styles.retryBtn}
+              onPress={load}
+              accessibilityRole="button"
+              accessibilityLabel="Retry"
+              accessibilityHint="Tries to load your coach guidelines again"
+              testID="coach-guidelines-retry"
+            >
+              <Text style={styles.retryBtnText}>Retry</Text>
+            </TouchableOpacity>
           </View>
         ) : guideline ? (
           <>
@@ -199,5 +232,18 @@ const makeStyles = (colors: ThemeColors) =>
   },
   emptyTitle: { fontSize: 18, fontWeight: '500', color: colors.textPrimary },
   emptyText: { fontSize: 14, color: colors.textMuted, textAlign: 'center', lineHeight: 20 },
+  retryBtn: {
+    marginTop: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
+  },
+  retryBtnText: {
+    color: colors.textOnPrimary,
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 0.4,
+  },
 
   });
