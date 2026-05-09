@@ -177,13 +177,35 @@ export default function CoachHomeScreen() {
           <Text style={styles.greeting}>{getGreeting()}, {currentUser?.firstName || 'Coach'}</Text>
           <Text style={styles.subtitle}>Here's your coaching overview</Text>
         </View>
-        <HapticPressable
-          intent="light"
-          style={styles.settingsBtn}
-          onPress={() => navigation.navigate('SettingsStack')}
-        >
-          <Ionicons name="settings-outline" size={22} color={colors.textSecondary} />
-        </HapticPressable>
+        <View style={styles.headerActions}>
+          {/*
+            Audit fix Coach #8: header pill that lands the coach on
+            the invite-codes screen. Without this, a brand-new coach
+            with zero clients had to find Settings -> Invite Codes
+            manually. Mirrors the finance app's header-pill pattern.
+          */}
+          <HapticPressable
+            intent="light"
+            style={styles.invitePill}
+            onPress={() =>
+              navigation.navigate('ClientsStack', { screen: 'InviteCodes' })
+            }
+            accessibilityRole="button"
+            accessibilityLabel="Invite codes"
+            accessibilityHint="Opens the invite-codes screen so you can add a client"
+            testID="coach-home-invite-pill"
+          >
+            <Ionicons name="person-add-outline" size={16} color={colors.primary} />
+            <Text style={styles.invitePillText}>Invite</Text>
+          </HapticPressable>
+          <HapticPressable
+            intent="light"
+            style={styles.settingsBtn}
+            onPress={() => navigation.navigate('SettingsStack')}
+          >
+            <Ionicons name="settings-outline" size={22} color={colors.textSecondary} />
+          </HapticPressable>
+        </View>
       </View>
 
       {/* Key Metrics */}
@@ -406,6 +428,27 @@ const makeStyles = (colors: ThemeColors) =>
   },
   greeting: { fontSize: 26, fontWeight: '500', color: colors.textPrimary },
   subtitle: { fontSize: 14, color: colors.textSecondary, marginTop: 4 },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 2,
+  },
+  invitePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    height: 40,
+    borderRadius: 999,
+    backgroundColor: colors.primaryPale,
+  },
+  invitePillText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.primary,
+    letterSpacing: 0.2,
+  },
   settingsBtn: {
     width: 40,
     height: 40,
@@ -413,7 +456,6 @@ const makeStyles = (colors: ThemeColors) =>
     backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 2,
   },
   metricsGrid: {
     flexDirection: 'row',

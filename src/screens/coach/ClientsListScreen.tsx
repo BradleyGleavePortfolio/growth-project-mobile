@@ -83,11 +83,37 @@ export default function ClientsListScreen({ navigation }: Props) {
     </HapticPressable>
   );
 
+  // Audit fix CR-4 / Coach #8: a single goToInviteCodes handler
+  // reused by the header pill (always visible) and by
+  // EmptyStateNoClients (zero-clients state). Without these the
+  // brand-new coach has no path to the invite-code surface — the
+  // empty-state CTA renders no button (EmptyState guards on
+  // ctaLabel && onCta) and no header CTA exists. After this change
+  // the path exists from both the empty roster and the populated
+  // roster.
+  const goToInviteCodes = () => navigation.navigate('InviteCodes');
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Clients</Text>
-        <Text style={styles.subtitle}>{filteredClients.length} total</Text>
+        <View style={styles.titleRow}>
+          <View style={styles.titleBlock}>
+            <Text style={styles.title}>Clients</Text>
+            <Text style={styles.subtitle}>{filteredClients.length} total</Text>
+          </View>
+          <HapticPressable
+            intent="light"
+            onPress={goToInviteCodes}
+            style={styles.invitePill}
+            accessibilityRole="button"
+            accessibilityLabel="Invite codes"
+            accessibilityHint="Opens the invite-codes screen so you can add a client"
+            testID="clients-invite-pill"
+          >
+            <Ionicons name="person-add-outline" size={16} color={colors.primary} />
+            <Text style={styles.invitePillText}>Invite</Text>
+          </HapticPressable>
+        </View>
       </View>
 
       {/* Psych #2: Trust as Emotion — coach-side privacy context banner */}
@@ -149,7 +175,7 @@ export default function ClientsListScreen({ navigation }: Props) {
           ListEmptyComponent={
             searchQuery
               ? <EmptyStateNoResults query={searchQuery} onClearSearch={() => setSearchQuery('')} />
-              : <EmptyStateNoClients />
+              : <EmptyStateNoClients onInvite={goToInviteCodes} />
           }
         />
       )}
@@ -168,6 +194,12 @@ const makeStyles = (colors: ThemeColors) =>
     paddingHorizontal: 24,
     marginBottom: 20,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+  },
+  titleBlock: { flex: 1 },
   title: {
     fontSize: 28,
     fontWeight: '500',
@@ -177,6 +209,21 @@ const makeStyles = (colors: ThemeColors) =>
     fontSize: 14,
     color: colors.textSecondary,
     marginTop: 4,
+  },
+  invitePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: colors.primaryPale,
+  },
+  invitePillText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.primary,
+    letterSpacing: 0.2,
   },
   searchContainer: {
     flexDirection: 'row',
