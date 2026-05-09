@@ -24,6 +24,9 @@ import CoachSessionBriefScreen from '../screens/coach/CoachSessionBriefScreen';
 // Wave 11 — runtime scaffolding (flag-gated; safe to mount)
 import CoachBriefScreen from '../screens/coach/CoachBriefScreen';
 import AdminControlRoomScreen from '../screens/coach/AdminControlRoomScreen';
+// Stage 2 (finance OS parity) — placeholder for the cross-pillar coach view.
+// Read-only, no API call. Stage 3 wires the federated roster fetch.
+import BothPillarsScreen from '../screens/coach/BothPillarsScreen';
 // Phase 11 Track 9 — Support Inbox (Crisp)
 import SupportInboxScreen from '../screens/support/SupportInboxScreen';
 // Phase 11 / Track 7 — sub-coach team management (Scale+ tier gate enforced in-screen)
@@ -65,6 +68,8 @@ export type SettingsStackParamList = {
   AdminControlRoom: undefined;
   // Phase 11 Track 9 — Crisp support inbox.
   SupportInbox: undefined;
+  // Stage 2 (finance OS parity) — cross-pillar coach view stub.
+  BothPillars: undefined;
 };
 
 /** Phase 11 / Track 7 — team management stack param list. */
@@ -133,6 +138,9 @@ function SettingsStackNavigator() {
       <SettingsStack.Screen name="AdminControlRoom" component={AdminControlRoomScreen} />
       {/* Phase 11 Track 9 — Support Inbox */}
       <SettingsStack.Screen name="SupportInbox" component={SupportInboxScreen} />
+      {/* Stage 2 (finance OS parity) — cross-pillar stub. Stage 3 wires
+          the federated roster fetch that backs this screen. */}
+      <SettingsStack.Screen name="BothPillars" component={BothPillarsScreen} />
     </SettingsStack.Navigator>
   );
 }
