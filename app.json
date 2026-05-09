@@ -64,6 +64,17 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "newArchEnabled": false
+          },
+          "android": {
+            "newArchEnabled": false
+          }
+        }
+      ],
       "expo-sqlite",
       "expo-apple-authentication",
       "expo-web-browser",
@@ -93,7 +104,7 @@
     ],
     "extra": {
       "storeListings": {
-        "playStoreUrl": {},
+        "playStoreUrl": null,
         "appStoreUrl": "https://apps.apple.com/us/app/the-growth-project/id6765847915"
       },
       "eas": {

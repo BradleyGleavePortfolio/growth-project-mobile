@@ -2,10 +2,10 @@
  * WatermelonDB database singleton for The Growth Project.
  *
  * Adapter selection:
- *   - Native (iOS / Android): ExpoSQLiteAdapter — wraps expo-sqlite which is
- *     already installed and listed in app.json plugins. This avoids the
- *     binary sqlite3 build step that the raw @nozbe/watermelondb SQLiteAdapter
- *     would need via a custom native module.
+ *   - Native (iOS / Android): SQLiteAdapter from @nozbe/watermelondb/adapters/sqlite.
+ *     Uses WatermelonDB's bundled native sqlite module which is autolinked by
+ *     React Native ≥ 0.60 / Expo prebuild. JSI is enabled for synchronous,
+ *     zero-bridge reads on hot paths.
  *   - Web / Jest: LokiJSAdapter — in-memory, no native deps, suitable for
  *     test environments and Expo Go during development.
  *
@@ -34,13 +34,14 @@ function createDatabase(): Database {
       useIncrementalIndexedDB: false,
     });
   } else {
-    // ExpoSQLiteAdapter: uses the expo-sqlite package already in the project.
-    // Requires no additional native module installation for Expo SDK 51+.
+    // SQLiteAdapter: WatermelonDB's bundled native sqlite implementation.
+    // Autolinked via React Native ≥ 0.60 / Expo config plugin during prebuild.
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { ExpoSQLiteAdapter } = require('@nozbe/watermelondb/adapters/expo-sqlite');
-    adapter = new ExpoSQLiteAdapter({
+    const SQLiteAdapter = require('@nozbe/watermelondb/adapters/sqlite').default;
+    adapter = new SQLiteAdapter({
       schema,
       dbName: 'tgp_offline',
+      jsi: true,
       // migrations: [] — add when schema version > 1
     });
   }
