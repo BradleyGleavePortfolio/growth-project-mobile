@@ -12,11 +12,13 @@
  *   - finance_only
  *   - both  (unlocks the cross-pillar UI)
  *
- * Save calls `practiceTypeApi.set` against the fitness backend. Stage 3
- * doesn't auto-mirror the choice into the finance backend — Bradley
- * picks his Wealth coach practice the next time he opens the finance
- * app, where the same enum exists. Cross-mirror is a 30-line follow-up
- * once the federation handshake adds an outbound write surface.
+ * Save calls `practiceTypeApi.set` against the fitness backend. As of
+ * Sprint A the fitness backend mirrors the value to the finance
+ * backend via the existing admin federation surface, so a coach
+ * picking here also updates Wealth in the same request. The response
+ * carries `finance_status` ('ok' | 'skipped' | 'not_found') for
+ * telemetry; on a 503 with code PRACTICE_FEDERATION_FAILED we surface
+ * a "couldn't sync" retry instead of letting the state diverge.
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -179,11 +181,20 @@ export default function PracticeSelectionScreen() {
 }
 
 function toMessage(err: unknown): string {
-  if (!err) return 'Couldn\'t save practice. Try again.';
-  if (err && typeof err === 'object' && 'message' in err) {
-    return String((err as { message?: unknown }).message ?? 'Couldn\'t save practice. Try again.');
+  // Sprint A — give the federation 503 a friendlier surface so coaches
+  // know to retry rather than guessing what went wrong.
+  const status = (err as { response?: { status?: number; data?: { code?: string } } } | undefined)
+    ?.response?.status;
+  const code = (err as { response?: { data?: { code?: string } } } | undefined)?.response?.data
+    ?.code;
+  if (status === 503 || code === 'PRACTICE_FEDERATION_FAILED') {
+    return "We couldn't sync your practice across both products. Try again in a moment.";
   }
-  return 'Couldn\'t save practice. Try again.';
+  if (!err) return "Couldn't save practice. Try again.";
+  if (err && typeof err === 'object' && 'message' in err) {
+    return String((err as { message?: unknown }).message ?? "Couldn't save practice. Try again.");
+  }
+  return "Couldn't save practice. Try again.";
 }
 
 const makeStyles = (colors: ThemeColors) =>
