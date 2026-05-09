@@ -1,0 +1,101 @@
+{
+  "expo": {
+    "name": "The Growth Project",
+    "slug": "tgp-health-and-wellness",
+    "scheme": "tgp",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F5EFE4"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.growthproject.app",
+      "buildNumber": "3",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Used for barcode scanning to log food items",
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSFaceIDUsageDescription": "Unlock the app and confirm sensitive actions with Face ID"
+      },
+      "associatedDomains": [
+        "applinks:app.trygrowthproject.com"
+      ],
+      "usesAppleSignIn": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png",
+        "backgroundColor": "#F5EFE4"
+      },
+      "package": "com.growthproject.app",
+      "versionCode": 3,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "tgp",
+              "host": "join"
+            },
+            {
+              "scheme": "https",
+              "host": "app.trygrowthproject.com",
+              "pathPrefix": "/join"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-sqlite",
+      "expo-apple-authentication",
+      "expo-web-browser",
+      "expo-font",
+      "expo-localization",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Unlock the app and confirm sensitive actions with Face ID"
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#2C4A36",
+          "defaultChannel": "default"
+        }
+      ],
+      [
+        "@sentry/react-native/expo",
+        {
+          "organization": "the-growth-project",
+          "project": "growth-project-mobile",
+          "url": "https://sentry.io/"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "3aeadee6-34c5-4231-85b9-aff9f7ea3c5a"
+      },
+      "storeListings": {
+        "playStoreUrl": null,
+        "appStoreUrl": "https://apps.apple.com/us/app/the-growth-project/id6765847915"
+      }
+    },
+    "owner": "the-growth-project"
+  }
+}
