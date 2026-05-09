@@ -100,7 +100,9 @@
           "project": "growth-project-mobile",
           "url": "https://sentry.io/"
         }
-      ]
+      ],
+      "@sentry/react-native",
+      "expo-sharing"
     ],
     "extra": {
       "storeListings": {
