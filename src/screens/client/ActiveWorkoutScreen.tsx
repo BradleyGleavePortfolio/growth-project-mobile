@@ -23,21 +23,26 @@ import { track } from '../../lib/analytics';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { AnalyticsEvents } from '../../analytics/events';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
-// Phase 11 / Track 10: offline-first write path.
-// The workout is saved to WatermelonDB first (sync_status='pending').
-// The sync engine pushes it to the server when connectivity allows.
+// Offline-first write path (audit fix H-5: comments were left
+// referencing the deleted WatermelonDB stack — current implementation
+// is built on expo-sqlite, see src/offline/database.ts and
+// docs/offline-architecture.md).
+//
+// The workout is saved to the local expo-sqlite store first with
+// sync_status='pending'. The sync engine pushes it to the server when
+// connectivity allows.
 import { writeWorkoutLog, triggerSync } from '../../offline';
 
-// NB: Fix #2 — the local exercise_logs SQLite table (logExerciseWithVolume)
-// is no longer written to. Volume aggregation now happens on the server
+// NB: the local exercise_logs SQLite table (logExerciseWithVolume) is
+// no longer written to. Volume aggregation now happens on the server
 // from the workouts created by useCreateWorkout, so HomeScreen and the
 // coach dashboard stay in sync. The exercise *catalog* (getAllExercises)
-// is still local because it's static reference data, not per-user state.
+// is still local because it is static reference data, not per-user state.
 //
-// Phase 11 / Track 10 (offline-first): createWorkout.mutate() is called
-// AFTER a local WatermelonDB write. If the API call fails (offline), the
-// WatermelonDB record stays as 'pending' and the sync engine retries on
-// reconnect. Other screens (food logs, habits, body weight) are follow-ups.
+// Sync sequence: createWorkout.mutate() is called after the local
+// expo-sqlite write. If the API call fails (offline), the row stays as
+// 'pending' and the sync engine retries on reconnect via NetInfo. Other
+// surfaces (food logs, habits, body weight) are follow-ups.
 
 interface SessionExercise {
   exerciseId: string;
@@ -355,11 +360,18 @@ export default function ActiveWorkoutScreen() {
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Finish',
-        // Phase 11 / Track 10 — offline-first write:
-        //   1. Write each exercise group to WatermelonDB with sync_status='pending'.
-        //   2. Then attempt the server POST via createWorkout.mutate (network-optional).
-        //   3. If the network call succeeds the sync engine marks records 'synced'.
-        //   4. If offline the records stay 'pending' — triggerSync() fires on reconnect.
+        // Offline-first write (audit fix H-5: comments were left
+        // describing the deleted WatermelonDB stack — current
+        // implementation is built on expo-sqlite via src/offline,
+        // see docs/offline-architecture.md):
+        //   1. Write each exercise group as a row in the local
+        //      expo-sqlite store with sync_status='pending'.
+        //   2. Attempt the server POST via createWorkout.mutate
+        //      (network-optional).
+        //   3. If the network call succeeds the sync engine marks
+        //      the row 'synced'.
+        //   4. If offline the rows stay 'pending' and triggerSync()
+        //      fires on reconnect via NetInfo.
         onPress: async () => {
           if (timerRef.current) clearInterval(timerRef.current);
           const durationMinutes = Math.round(timer / 60);
@@ -367,11 +379,12 @@ export default function ActiveWorkoutScreen() {
             e.sets.some((s) => s.completed),
           );
 
-          // Write each exercise as a separate WatermelonDB record (one row
-          // per exercise group). A single workout session that spans multiple
-          // exercises produces N rows — the sync engine batches them together
-          // via session_name when pushing to the server. This keeps the schema
-          // flat and avoids a nested JSON blob in a single row.
+          // Write each exercise as a separate row in the local
+          // expo-sqlite store (one row per exercise group). A
+          // workout session that spans multiple exercises produces N
+          // rows — the sync engine batches them together via
+          // session_name when pushing to the server. Schema stays
+          // flat; no nested JSON blob in a single row.
           try {
             for (const ex of completedExercises) {
               await writeWorkoutLog({
