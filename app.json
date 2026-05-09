@@ -54,6 +54,10 @@
             "DEFAULT"
           ]
         }
+      ],
+      "permissions": [
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
       ]
     },
     "web": {
@@ -88,12 +92,12 @@
       ]
     ],
     "extra": {
-      "eas": {
-        "projectId": "3aeadee6-34c5-4231-85b9-aff9f7ea3c5a"
-      },
       "storeListings": {
-        "playStoreUrl": null,
+        "playStoreUrl": {},
         "appStoreUrl": "https://apps.apple.com/us/app/the-growth-project/id6765847915"
+      },
+      "eas": {
+        "projectId": "a12c3345-cc8c-4c2c-9c57-711c10a57c1c"
       }
     },
     "owner": "the-growth-project"
