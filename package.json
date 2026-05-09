@@ -62,7 +62,7 @@
     "expo-sqlite": "~55.0.15",
     "expo-status-bar": "~55.0.6",
     "expo-web-browser": "~55.0.15",
-    "posthog-react-native": "^4.43.5",
+    "posthog-react-native": "^4.44.4",
     "react": "19.2.0",
     "react-native": "0.83.6",
     "react-native-gesture-handler": "~2.30.0",
