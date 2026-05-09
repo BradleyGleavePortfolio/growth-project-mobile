@@ -28,7 +28,7 @@ import { Q, Model } from '@nozbe/watermelondb';
 import { getDatabase } from '../database';
 import WorkoutLog from '../models/WorkoutLog';
 import { workoutApi } from '../../services/api';
-import { EventEmitter } from 'events';
+import EventEmitter from 'eventemitter3';
 
 // ---------------------------------------------------------------------------
 // Conflict toast event bus
