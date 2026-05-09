@@ -1,6 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
-import { NavigationContainer, DefaultTheme, LinkingOptions } from '@react-navigation/native';
+import {
+  NavigationContainer,
+  DefaultTheme,
+  LinkingOptions,
+  getStateFromPath,
+} from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AuthNavigator from './AuthNavigator';
 import ClientNavigator from './ClientNavigator';
@@ -31,14 +36,26 @@ import { useLeanOnboardingReconcile } from '../hooks/useLeanOnboardingReconcile'
 // GET /me/first-win/status; if incomplete the Day1WinScreen is shown once.
 type AuthState = 'loading' | 'unauthenticated' | 'onboarding' | 'day1win' | 'coach' | 'student';
 
+// Audit fix CR-1: Supabase password-recovery emails carry the
+// access_token + refresh_token pair in the URL fragment (after `#`).
+// React Navigation's linking parser only reads query params (after
+// `?`). `fragmentToQuery` hoists the fragment into the query string
+// for the reset-password path so the ResetPassword screen receives
+// the tokens via `route.params`. See navigation/deepLinkUtils.ts.
+import { fragmentToQuery } from './deepLinkUtils';
+
 // Deep-link config — must match the Android intent filters and iOS
 // associatedDomains entries declared in app.json. Both URL shapes route an
 // invite code straight into the signup screen so the user only sees one form.
 //
 //   tgp://join/<code>
 //   https://app.trygrowthproject.com/join/<code>
+//   tgp://reset-password#access_token=...&refresh_token=...&type=recovery
 const linking: LinkingOptions<Record<string, object | undefined>> = {
   prefixes: ['tgp://', 'https://app.trygrowthproject.com'],
+  getStateFromPath(path, options) {
+    return getStateFromPath(fragmentToQuery(path), options);
+  },
   config: {
     screens: {
       // Only the unauthenticated AuthNavigator owns the signup screen — once a
@@ -50,6 +67,17 @@ const linking: LinkingOptions<Record<string, object | undefined>> = {
       CreateAccount: {
         path: 'join/:invite_code?',
         parse: { invite_code: (v: string) => v },
+      },
+      // Audit fix CR-1: handler for the Supabase password-recovery
+      // deep link. fragmentToQuery() above hoists the URL fragment
+      // into the query string so React Navigation can parse the
+      // access_token + refresh_token pair into route.params.
+      ResetPassword: {
+        path: 'reset-password',
+        parse: {
+          access_token: (v: string) => v,
+          refresh_token: (v: string) => v,
+        },
       },
       // Screenshot-mode-only deep links into authenticated tabs/stacks. They
       // are inert in production because the harness gates ClientNavigator
