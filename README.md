@@ -2,6 +2,23 @@
 
 A React Native nutrition & fitness coaching app built with Expo, TypeScript, and SQLite.
 
+## Current status
+
+| Field | Value |
+|---|---|
+| Repo | `BradleyGleavePortfolio/growth-project-mobile` (public) |
+| Default branch | `main` |
+| Latest commit on `main` | `e18b6c3 feat(stage-3): cross-pillar coach UI — replaces BothPillars stub` |
+| Tests passing | 644 (last verified 2026-05-09) |
+| Expo SDK | ~55 (managed workflow) |
+| EAS project id | `3aeadee6-34c5-4231-85b9-aff9f7ea3c5a` |
+| Bundle id / package | `com.growthproject.app` (immutable) |
+| Slug | `tgp-health-and-wellness` |
+| Stage | Stage 3 federation cross-pillar coach UI shipped. Sprint B in flight on `feat/phase-11-workout-builder` (CoachWorkoutBuilder screen plus typed exercise / workout-builder API clients) |
+| Last verified | 2026-05-09 |
+
+See `EAS-BUILD.md` for production build commands, `PLAY_STORE_READINESS.md` for the Play Store gate (Android SHA-256 fingerprint placeholder plus `storeListings` URLs still pending), and `ONBOARDING.md` for the new-engineer codebase tour.
+
 ## Features
 
 - **Calorie & Macro Tracking** — Log meals with protein, carbs, fat breakdowns
@@ -406,3 +423,52 @@ Three card variants: `streak`, `pr`, `transformation`.
 - Share: `expo-sharing`
 - Analytics: fires `REFERRAL_SHARE_CARD_SHARED` on share
 - Full spec: `docs/share-card.md`
+
+---
+
+## Workflows
+
+| Workflow | Purpose |
+|---|---|
+| `validate:release` | Pre-flight every PR — verifies `app.json` plus `eas.json` plus the Play / App Store listing placeholders. Hard-fails on `null` `storeListings` URLs and on the Android SHA-256 fingerprint placeholder. |
+| `typecheck` | `tsc --noEmit` — strict mode, no `any` |
+| `lint` | ESLint plus Prettier plus the forbidden-tokens guard (no finance-coded vocab leaks) |
+| `test` | Jest plus React Native Testing Library — 644 tests as of 2026-05-09 |
+| EAS build (iOS / Android) | `eas build --platform <ios\|android> --profile production` — see `EAS-BUILD.md` |
+| EAS submit | TestFlight on iOS, Internal Testing on Android — auto-submit via `--auto-submit` |
+
+## Known issues
+
+| ID | Issue | Severity | Tracked in |
+|---|---|---|---|
+| 1 | Android `assetlinks.json` SHA-256 fingerprint is still the `REPLACE_WITH_PLAY_APP_SIGNING_SHA256_FINGERPRINT` placeholder; `npm run validate:release` blocks publish | High | `PLAY_STORE_READINESS.md` §6 |
+| 2 | `app.json → expo.extra.storeListings.playStoreUrl` and `appStoreUrl` are `null` placeholders; `npm run validate:release` rejects `null` so the value cannot be forgotten | High | `PLAY_STORE_READINESS.md` §10 |
+| 3 | Holistic Insights surface (in cross-pillar coach UI) is hardcoded if-statements; Sprint B Build 5 replaces with the real engine | High | Audit, May 8 |
+| 4 | Coach toolset gap: routine builder is client-side only — coaches cannot prescribe / schedule / version a workout from the console | Resolving | PR #123 in flight |
+
+## Roadmap
+
+| Item | T-shirt | Notes |
+|---|---|---|
+| Finish CoachWorkoutBuilder screen and ship PR #123 | M | exerciseLibraryApi plus workoutBuilderApi clients already in place |
+| Macro setter UI in client detail | M | New "Macros" tab plus quick-set presets (cut / maintain / bulk) |
+| Bulk client invite paste-area UI | S | Hits new `/coach/invite-codes/bulk` endpoint |
+| Real meal plan builder UI plus client view | M | Full macro breakdown per meal; date-range assignment |
+| Replace Holistic Insights placeholder with real call | M | Honest empty state when correlation is insufficient |
+| Resolve Android signing fingerprint and publish `assetlinks.json` | S | Required before Play production submission |
+| Publish App Store and Play Store listing URLs to `storeListings` | S | Required before public referral links work |
+| Sentry source-map upload health check | XS | Verify `SENTRY_AUTH_TOKEN` propagation on EAS builds |
+| Audit `forbidden tokens` allow-list for new vocab | XS | Keep finance-coded language out of fitness app |
+| Re-enable New Architecture across remaining native deps | M | `expo-sqlite` migrated; review remaining libs |
+
+## Contribution guide
+
+- Branch naming: `feat/<scope>-<topic>`, `fix/<scope>-<topic>`, `docs/<topic>`. Sprints use `feat/sprint-<letter>-<theme>`.
+- Conventional commits: `feat(scope): subject`, `fix(scope): subject`. No emoji. No exclamation points. Anywhere — code, copy, commits, PRs.
+- Theme tokens only — `src/theme/index.ts` is the single source. Never hardcode hex.
+- Strict TypeScript — no `any`, no `@ts-ignore`. The CI typecheck rejects either.
+- Forbidden tokens — `income`, `finance`, `netWorth`, `confetti`, `trophy`, `revolutionary`, `gamechang*` are blocked by ESLint. Finance-coded vocab does not belong in the fitness app.
+- Every PR updates the matching README or module doc. The rule and rationale live in `docs/QUIET_LUXURY_DOCTRINE.md` §8 and the PR template enforces it.
+- Accessibility — every interactive element carries `accessibilityLabel` plus `accessibilityRole`. The bottom tab bar is icons-only; user-facing labels live in the accessibility props.
+- `npm run validate:release` runs as the first CI step on every PR. It hard-fails on missing or stale config (Play SHA-256, store listing URLs, etc.).
+- Bradley merges. Do not self-merge.

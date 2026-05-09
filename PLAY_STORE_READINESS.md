@@ -4,6 +4,11 @@ This is the working checklist for taking `tgp-health-and-wellness` to the Google
 
 The corresponding iOS notes live alongside each item in parentheses where they differ.
 
+> Note (verified 2026-05-09): Two items remain hard gates on Play Store submission and are enforced by `npm run validate:release`:
+>
+> 1. The Android Play App Signing **SHA-256 fingerprint** placeholder. The `assetlinks.json` template still contains `REPLACE_WITH_PLAY_APP_SIGNING_SHA256_FINGERPRINT`. Resolve by pulling the real fingerprint from `eas credentials → Android → Production → keystore` after the first production AAB upload, then publishing the updated `assetlinks.json` at `https://app.trygrowthproject.com/.well-known/assetlinks.json`. Until then the validator blocks publish.
+> 2. The `app.json → expo.extra.storeListings.playStoreUrl` and `appStoreUrl` values are still `null`. The validator rejects `null` so the placeholder cannot be forgotten — set both after the first approved store listing is published.
+
 ---
 
 ## 1. App identity
