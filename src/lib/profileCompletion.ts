@@ -19,7 +19,20 @@ export type ProfileField =
   | 'target_weight'
   | 'diet_type'
   | 'workout_days_per_week'
-  | 'gym_membership';
+  | 'gym_membership'
+  // TDEE-critical fields added when EditProfile expanded to capture them.
+  // The lean onboarding flow only collects a subset; the rest are surfaced
+  // here so the "Finish your profile" nudge actually leads somewhere
+  // meaningful rather than dead-ending on the first six.
+  | 'current_weight'
+  | 'height_cm'
+  | 'activity_level'
+  | 'primary_goal'
+  // Safety: dietary restrictions / allergies. The recipe engine reads
+  // this; an empty value while a real allergy exists is a liability,
+  // so we count it as required and block "complete" until answered.
+  // The user can still choose "None" — see EditProfileScreen's chip set.
+  | 'diet_restrictions';
 
 export interface ProfileCompletionStatus {
   missing: ProfileField[];
@@ -35,12 +48,19 @@ const REQUIRED_FIELDS: ProfileField[] = [
   'diet_type',
   'workout_days_per_week',
   'gym_membership',
+  // Added Wave 5 (sale-readiness): TDEE inputs + dietary safety.
+  'current_weight',
+  'height_cm',
+  'activity_level',
+  'primary_goal',
+  'diet_restrictions',
 ];
 
 function hasValue(v: unknown): boolean {
   if (v === null || v === undefined) return false;
   if (typeof v === 'string') return v.trim().length > 0;
   if (typeof v === 'number') return Number.isFinite(v) && v > 0;
+  if (Array.isArray(v)) return v.length > 0;
   return true;
 }
 
@@ -53,6 +73,15 @@ export function getProfileCompletion(
 
   for (const field of REQUIRED_FIELDS) {
     const value = profile ? (profile as Record<string, unknown>)[field] : undefined;
+    // diet_restrictions has special semantics: a *present* array — even an
+    // empty one — is an explicit answer ("I have no restrictions"). Only
+    // an undefined / null / non-array value counts as unanswered. This is
+    // the safety gate the Recipes prompt and completion nudge depend on.
+    if (field === 'diet_restrictions') {
+      if (Array.isArray(value)) filled.push(field);
+      else missing.push(field);
+      continue;
+    }
     if (hasValue(value)) {
       filled.push(field);
     } else {
@@ -82,6 +111,11 @@ export const FIELD_LABEL: Record<ProfileField, string> = {
   diet_type: 'Diet preference',
   workout_days_per_week: 'Workout days per week',
   gym_membership: 'Equipment access',
+  current_weight: 'Current weight',
+  height_cm: 'Height',
+  activity_level: 'Activity level',
+  primary_goal: 'Primary goal',
+  diet_restrictions: 'Allergies and restrictions',
 };
 
 export function summarizeMissing(missing: ProfileField[]): string {
@@ -105,6 +139,34 @@ export interface EditProfileFormState {
   dietType: string | null;
   workoutDaysPerWeek: number | null;
   gymMembership: string | null;
+  // Wave 5 expansion — TDEE inputs + dietary safety.
+  currentWeight: string;
+  heightCm: string;
+  activityLevel:
+    | 'sedentary'
+    | 'light'
+    | 'moderate'
+    | 'active'
+    | 'very_active'
+    | null;
+  primaryGoal:
+    | 'lose_fast'
+    | 'lose_moderate'
+    | 'maintain'
+    | 'gain'
+    | 'gain_fast'
+    | 'mobility'
+    | null;
+  /** Multi-select chip set. Empty array means "answered: none". */
+  dietRestrictions: string[];
+  /**
+   * True once the user has explicitly engaged the restrictions section
+   * (saved with selections OR explicitly chose "None"). Without this, an
+   * empty array could mean either "I have none" or "I haven't answered" —
+   * the safety gate (Recipes prompt + completion gate) needs the
+   * difference.
+   */
+  dietRestrictionsAnswered: boolean;
 }
 
 /**
@@ -114,8 +176,8 @@ export interface EditProfileFormState {
  */
 export function buildProfileUpdatePayload(
   form: EditProfileFormState,
-): Record<string, string | number> {
-  const payload: Record<string, string | number> = {};
+): Record<string, string | number | string[]> {
+  const payload: Record<string, string | number | string[]> = {};
   if (form.sex) payload.sex = form.sex;
   if (form.dob.trim()) payload.dob = form.dob.trim();
   if (form.targetWeight.trim()) {
@@ -127,5 +189,21 @@ export function buildProfileUpdatePayload(
     payload.workout_days_per_week = form.workoutDaysPerWeek;
   }
   if (form.gymMembership) payload.gym_membership = form.gymMembership;
+  if (form.currentWeight.trim()) {
+    const n = Number(form.currentWeight);
+    if (Number.isFinite(n) && n > 0) payload.current_weight = n;
+  }
+  if (form.heightCm.trim()) {
+    const n = Number(form.heightCm);
+    if (Number.isFinite(n) && n > 0) payload.height_cm = n;
+  }
+  if (form.activityLevel) payload.activity_level = form.activityLevel;
+  if (form.primaryGoal) payload.primary_goal = form.primaryGoal;
+  if (form.dietRestrictionsAnswered) {
+    // We always send the array (even empty) once the user answered, so the
+    // backend can record "no restrictions" definitively. Recipe engine
+    // treats an empty array as "answered, none" vs absent as "unknown".
+    payload.diet_restrictions = form.dietRestrictions;
+  }
   return payload;
 }

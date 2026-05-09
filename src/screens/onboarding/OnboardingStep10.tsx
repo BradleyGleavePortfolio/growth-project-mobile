@@ -1,3 +1,17 @@
+/**
+ * @deprecated  Kept for reference. The active onboarding flow is the lean
+ *              4-question wizard at `src/screens/onboarding/LeanQ1–Q4*`.
+ *
+ * Why this file is still in the tree
+ * ──────────────────────────────────
+ * The `OnboardingNavigator` that mounts these screens is no longer
+ * routed in `RootNavigator` (see the `authState === 'onboarding'` branch
+ * — it renders `LeanOnboardingNavigator`). We keep the file because
+ * `OnboardingResults.handleStart` is the reference implementation for
+ * the lean→backend wiring (`finalizeLeanOnboarding`). Delete only after
+ * the lean flow has shipped to TestFlight, the reconcile hook is proven
+ * stable, and the legacy field-by-field semantics are no longer needed.
+ */
 import React, { useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';

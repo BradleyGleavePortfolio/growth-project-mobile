@@ -18,6 +18,7 @@ import { saveOnboardingData } from '../../utils/onboardingStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { track } from '../../lib/analytics';
 import { authEvents } from '../../utils/authEvents';
+import { finalizeLeanOnboarding } from '../../lib/finalizeLeanOnboarding';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 type Props = {
@@ -57,6 +58,11 @@ export default function LeanQ1GoalScreen({ navigation }: Props) {
     await AsyncStorage.setItem('onboarding_complete', 'true');
     await AsyncStorage.setItem('lean_onboarding_intent', intent);
     await AsyncStorage.setItem('lean_onboarding_done', 'true');
+    // Even on a Q1 skip, post whatever we have to the backend so the
+    // profile gets `onboarding_completed=true` + activity_level='moderate'
+    // defaults rather than staying empty. Reconcile hook retries on
+    // failure.
+    await finalizeLeanOnboarding();
     // Trigger root re-render via authEvents
     authEvents.emit();
   };

@@ -177,7 +177,12 @@ export default function HomeScreen() {
     if (target && target > 0) {
       return { value: `0 of ${Math.round(target)}g`, hint: undefined, prompt: false };
     }
-    return { value: 'Log to see', hint: undefined, prompt: true };
+    // Dignified placeholder: an em-dash, not "Log to see". After Fix #1
+    // (lean→backend wiring), this state is hit only briefly — between
+    // an offline-finish of onboarding and the reconcile hook's first
+    // successful PUT /profile. The cell stays pressable so the user can
+    // navigate to Log and start populating data.
+    return { value: '—', hint: undefined, prompt: true };
   };
 
   const protein = buildMacro(dailyTotals?.protein, proteinTarget);

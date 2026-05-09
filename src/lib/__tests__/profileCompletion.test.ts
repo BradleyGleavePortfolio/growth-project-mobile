@@ -19,6 +19,12 @@ const fullProfile: NonNullable<CurrentUser['profile']> = {
   diet_type: 'omnivore',
   workout_days_per_week: 4,
   gym_membership: 'home_gym',
+  // Wave 5: TDEE-critical fields + dietary safety required for "complete"
+  current_weight: 172,
+  height_cm: 168,
+  activity_level: 'moderate',
+  primary_goal: 'maintain',
+  diet_restrictions: [],
 };
 
 function userWith(profile: Partial<NonNullable<CurrentUser['profile']>>): CurrentUser {
@@ -47,6 +53,12 @@ describe('getProfileCompletion', () => {
       'diet_type',
       'workout_days_per_week',
       'gym_membership',
+      // Wave 5 additions — TDEE inputs + dietary safety
+      'current_weight',
+      'height_cm',
+      'activity_level',
+      'primary_goal',
+      'diet_restrictions',
     ]);
     expect(r.percentComplete).toBe(0);
   });
@@ -73,8 +85,36 @@ describe('getProfileCompletion', () => {
       userWith({ sex: 'male', dob: '1990-01-01', target_weight: 170 }),
     );
     expect(r.filled).toEqual(['sex', 'dob', 'target_weight']);
-    expect(r.missing).toEqual(['diet_type', 'workout_days_per_week', 'gym_membership']);
-    expect(r.percentComplete).toBe(50);
+    expect(r.missing).toEqual([
+      'diet_type',
+      'workout_days_per_week',
+      'gym_membership',
+      'current_weight',
+      'height_cm',
+      'activity_level',
+      'primary_goal',
+      'diet_restrictions',
+    ]);
+    // 3 of 11 required fields → ~27% (rounded from 27.27)
+    expect(r.percentComplete).toBe(27);
+  });
+
+  it('treats an empty diet_restrictions array as "answered: none"', () => {
+    // Safety gate: undefined = unanswered, [] = explicit "no restrictions".
+    const r = getProfileCompletion(userWith({ diet_restrictions: [] }));
+    expect(r.filled).toContain('diet_restrictions');
+    expect(r.missing).not.toContain('diet_restrictions');
+  });
+
+  it('treats a non-array diet_restrictions value as missing', () => {
+    // Defensive: legacy backend rows occasionally store the field as a
+    // string. Until normalized, we treat it as unanswered so the user is
+    // re-prompted rather than silently shown recipes that may include
+    // their allergens.
+    const r = getProfileCompletion(
+      userWith({ diet_restrictions: 'peanut_allergy' as unknown as string[] }),
+    );
+    expect(r.missing).toContain('diet_restrictions');
   });
 
   it('treats a null user as fully missing', () => {
@@ -114,9 +154,27 @@ describe('summarizeMissing', () => {
   });
 });
 
+// Reusable shell for the now-larger EditProfileFormState. Lets each test
+// override only the keys it cares about.
+const blankForm = {
+  sex: null,
+  dob: '',
+  targetWeight: '',
+  dietType: null,
+  workoutDaysPerWeek: null,
+  gymMembership: null,
+  currentWeight: '',
+  heightCm: '',
+  activityLevel: null,
+  primaryGoal: null,
+  dietRestrictions: [] as string[],
+  dietRestrictionsAnswered: false,
+} as const;
+
 describe('buildProfileUpdatePayload', () => {
   it('emits snake_case keys for every set field', () => {
     const payload = buildProfileUpdatePayload({
+      ...blankForm,
       sex: 'female',
       dob: '1992-04-15',
       targetWeight: '165',
@@ -136,11 +194,7 @@ describe('buildProfileUpdatePayload', () => {
 
   it('omits unset fields so the backend keeps prior values', () => {
     const payload = buildProfileUpdatePayload({
-      sex: null,
-      dob: '',
-      targetWeight: '',
-      dietType: null,
-      workoutDaysPerWeek: null,
+      ...blankForm,
       gymMembership: 'no_gym',
     });
     expect(payload).toEqual({ gym_membership: 'no_gym' });
@@ -148,36 +202,63 @@ describe('buildProfileUpdatePayload', () => {
 
   it('drops a target weight that is empty or non-positive', () => {
     expect(
-      buildProfileUpdatePayload({
-        sex: null,
-        dob: '',
-        targetWeight: '0',
-        dietType: null,
-        workoutDaysPerWeek: null,
-        gymMembership: null,
-      }),
+      buildProfileUpdatePayload({ ...blankForm, targetWeight: '0' }),
     ).toEqual({});
     expect(
-      buildProfileUpdatePayload({
-        sex: null,
-        dob: '',
-        targetWeight: 'abc',
-        dietType: null,
-        workoutDaysPerWeek: null,
-        gymMembership: null,
-      }),
+      buildProfileUpdatePayload({ ...blankForm, targetWeight: 'abc' }),
     ).toEqual({});
   });
 
   it('coerces a numeric string target weight', () => {
     const payload = buildProfileUpdatePayload({
-      sex: null,
-      dob: '',
+      ...blankForm,
       targetWeight: '172.5',
-      dietType: null,
-      workoutDaysPerWeek: null,
-      gymMembership: null,
     });
     expect(payload).toEqual({ target_weight: 172.5 });
+  });
+
+  it('emits TDEE-critical fields when the form supplies them', () => {
+    const payload = buildProfileUpdatePayload({
+      ...blankForm,
+      currentWeight: '180',
+      heightCm: '178',
+      activityLevel: 'moderate',
+      primaryGoal: 'lose_moderate',
+    });
+    expect(payload).toEqual({
+      current_weight: 180,
+      height_cm: 178,
+      activity_level: 'moderate',
+      primary_goal: 'lose_moderate',
+    });
+  });
+
+  it('only emits diet_restrictions once the user has answered', () => {
+    // Unanswered → field absent so backend keeps any prior value.
+    expect(
+      buildProfileUpdatePayload({
+        ...blankForm,
+        dietRestrictions: ['Nut Allergy'],
+        dietRestrictionsAnswered: false,
+      }).diet_restrictions,
+    ).toBeUndefined();
+
+    // Answered "none" → empty array is sent so backend records the answer.
+    expect(
+      buildProfileUpdatePayload({
+        ...blankForm,
+        dietRestrictions: [],
+        dietRestrictionsAnswered: true,
+      }),
+    ).toEqual({ diet_restrictions: [] });
+
+    // Answered with selections → array is sent verbatim.
+    expect(
+      buildProfileUpdatePayload({
+        ...blankForm,
+        dietRestrictions: ['Nut Allergy', 'Vegan'],
+        dietRestrictionsAnswered: true,
+      }),
+    ).toEqual({ diet_restrictions: ['Nut Allergy', 'Vegan'] });
   });
 });

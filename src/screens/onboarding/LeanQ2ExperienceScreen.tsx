@@ -18,6 +18,7 @@ import { saveOnboardingData } from '../../utils/onboardingStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { track } from '../../lib/analytics';
 import { authEvents } from '../../utils/authEvents';
+import { finalizeLeanOnboarding } from '../../lib/finalizeLeanOnboarding';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 type Props = {
@@ -50,6 +51,8 @@ export default function LeanQ2ExperienceScreen({ navigation }: Props) {
     await AsyncStorage.setItem('onboarding_complete', 'true');
     await AsyncStorage.setItem('lean_onboarding_intent', 'explore');
     await AsyncStorage.setItem('lean_onboarding_done', 'true');
+    // Best-effort backend post; reconcile hook retries on failure.
+    await finalizeLeanOnboarding();
     authEvents.emit();
   };
 

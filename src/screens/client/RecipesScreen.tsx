@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,14 +10,20 @@ import {
   ActivityIndicator,
   Image,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useQuery } from '@tanstack/react-query';
-import { recipesApi } from '../../services/api';
+import { recipesApi, profileApi } from '../../services/api';
 
 import FadeInView from '../../components/FadeInView';
 import EmptyState from '../../components/EmptyState';
+import AllergySafetyPrompt from '../../components/AllergySafetyPrompt';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { track } from '../../lib/analytics';
+
+const ALLERGY_PROMPT_FLAG = 'allergy_prompt_shown';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Recipe {
@@ -122,8 +128,80 @@ export default function RecipesScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
+  const currentUser = useCurrentUser();
   const [search, setSearch] = useState('');
   const [activeTag, setActiveTag] = useState('All');
+  // Safety prompt: shown once when a lean-onboarded user opens Recipes
+  // without a `diet_restrictions` answer on their profile. We never re-prompt
+  // — they can revise from Edit Profile.
+  const [allergyPromptVisible, setAllergyPromptVisible] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const shown = await AsyncStorage.getItem(ALLERGY_PROMPT_FLAG);
+        if (shown === 'true') return;
+        const leanDone = await AsyncStorage.getItem('lean_onboarding_done');
+        if (leanDone !== 'true') return;
+        const restrictions = currentUser?.profile?.diet_restrictions;
+        // Only prompt if the field is unanswered (not an array). Empty
+        // array means the user already answered "none" elsewhere.
+        if (Array.isArray(restrictions)) return;
+        if (cancelled) return;
+        setAllergyPromptVisible(true);
+        track('allergy_prompt_shown', { surface: 'recipes_first_open' });
+      } catch {
+        // Best-effort; never block the screen.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.id]);
+
+  const dismissAllergyPromptForever = useCallback(async () => {
+    try {
+      await AsyncStorage.setItem(ALLERGY_PROMPT_FLAG, 'true');
+    } catch {
+      // Best-effort.
+    }
+  }, []);
+
+  const handleAllergySubmit = useCallback(
+    async (restrictions: string[]) => {
+      try {
+        await profileApi.update({ diet_restrictions: restrictions });
+        // Refresh local user_data so Home + Recipes filters see the new value.
+        try {
+          const raw = await AsyncStorage.getItem('user_data');
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            const nextProfile = {
+              ...(parsed.profile ?? {}),
+              diet_restrictions: restrictions,
+            };
+            await AsyncStorage.setItem(
+              'user_data',
+              JSON.stringify({ ...parsed, profile: nextProfile }),
+            );
+          }
+        } catch {
+          // Cache refresh is best-effort.
+        }
+        track('allergy_prompt_answered', { count: restrictions.length });
+      } catch {
+        // Backend save failed — still mark prompt seen so we don't loop;
+        // user can fix from Edit Profile.
+      }
+      await dismissAllergyPromptForever();
+    },
+    [dismissAllergyPromptForever],
+  );
+
+  const handleAllergyLater = useCallback(async () => {
+    track('allergy_prompt_deferred');
+    await dismissAllergyPromptForever();
+  }, [dismissAllergyPromptForever]);
 
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ['recipes'],
@@ -238,6 +316,14 @@ export default function RecipesScreen() {
           ))
         )}
       </ScrollView>
+
+      {/* One-time safety prompt for lean-onboarded users without restrictions. */}
+      <AllergySafetyPrompt
+        visible={allergyPromptVisible}
+        onDismiss={() => setAllergyPromptVisible(false)}
+        onSubmit={handleAllergySubmit}
+        onLater={handleAllergyLater}
+      />
     </View>
   );
 }

@@ -30,7 +30,10 @@ export const Colors = {
   // Semantic
   success: '#2C4A36',  // forest
   warning: '#C5A253',  // mutedGold (was #E9C46A)
-  error:   '#4A0404',  // oxblood (was #E63946)
+  // Wave 5: cross-pillar cohesion — oxblood (#4A0404) is reserved as
+  // the Earnings/Wealth pillar primary brand color. Body pillar uses
+  // #B91C1C as alarm red. Passes WCAG AA on bone bg.
+  error:   '#B91C1C',
   info:    '#457B9D',  // unchanged
 
   // Streak/flame — demoted, kept for back-compat (Wave 3 copy pass will remove)
@@ -56,13 +59,16 @@ export const Colors = {
   offlineBanner:  '#8A6A2A',   // warm gold-brown for offline banner
   primaryTint:    'rgba(44,74,54,0.06)',  // forest soft tint
 
-  // Alert/notice palettes — neutralised to bone system
+  // Alert/notice palettes — neutralised to bone system.
+  // Wave 5: critical text moved off oxblood (#4A0404) — that hex is now
+  // reserved for the Earnings/Wealth pillar primary brand color. The
+  // accent (#9A3030) is a desaturated dark red that works on bone.
   noticeWarningBg:       '#F8F2E5',
   noticeWarningIconBg:   '#F3EBD8',
   noticeWarningText:     '#8A6A2A',
   noticeCriticalBg:      '#F2E0E0',
   noticeCriticalAccent:  '#9A3030',
-  noticeCriticalText:    '#4A0404',
+  noticeCriticalText:    '#7A1F1F',
 
   // Macro chip tints — subtle versions
   macroCarbsChipBg:   '#E3EDF5',

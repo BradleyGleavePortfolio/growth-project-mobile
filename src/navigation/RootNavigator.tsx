@@ -5,6 +5,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import AuthNavigator from './AuthNavigator';
 import ClientNavigator from './ClientNavigator';
 import CoachNavigator from './CoachNavigator';
+// OnboardingNavigator (legacy 10-step) is intentionally imported but not
+// mounted — kept so the legacy screens stay in the build for reference
+// implementation and future rollback. See the file header for context.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 import OnboardingNavigator from './OnboardingNavigator';
 import LeanOnboardingNavigator from './LeanOnboardingNavigator';
 import OfflineBanner from '../components/OfflineBanner';
@@ -18,6 +22,9 @@ import { firstWinApi } from '../services/firstWinApi';
 import Day1WinScreen from '../screens/client/Day1WinScreen';
 // Phase 11 Track 9 — Support Inbox: init Crisp and sync identity on login
 import { initCrisp, syncCrispIdentity } from '../services/support/crisp.service';
+// Reconcile: if the lean onboarding completed but we never confirmed a 200
+// from PUT /profile (offline at finish, etc.), retry once on app open.
+import { useLeanOnboardingReconcile } from '../hooks/useLeanOnboardingReconcile';
 
 // Phase 7A: 'day1win' is inserted between onboarding and the main client
 // navigator. On first cold start after onboarding the app checks
@@ -78,6 +85,11 @@ export default function RootNavigator() {
   useEffect(() => {
     initCrisp();
   }, []);
+
+  // Best-effort retry of the lean → backend sync. No-ops unless the user
+  // finished onboarding AND we never confirmed a successful PUT /profile.
+  // Disabled in screenshot mode where there is no backend.
+  useLeanOnboardingReconcile(!isScreenshotMode());
 
   useEffect(() => {
     bootstrapAuth();

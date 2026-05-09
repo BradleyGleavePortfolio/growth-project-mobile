@@ -11,8 +11,14 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { logApi, weightApi } from '../../services/api';
 import { WeightLog } from '../../types';
 
-import { colors as legacyColors } from '../../theme';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+
+// Pastel feedback backgrounds previously sourced from the legacy `colors`
+// barrel. Inlined as constants so this file no longer depends on the
+// legacy theme/index.ts grouped export. Values match
+// theme/index.ts feedback.* exactly.
+const FEEDBACK_SUCCESS_BG = '#E0EBE4';
+const FEEDBACK_ERROR_TEXT = '#9A3030';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 
 export default function ReportScreen({ navigation }: { navigation: NavigationProp<ParamListBase> }) {
@@ -138,7 +144,7 @@ export default function ReportScreen({ navigation }: { navigation: NavigationPro
             </View>
             {change !== null && (
               <View style={styles.statBox}>
-                <Text style={[styles.statValue, { color: change <= 0 ? colors.primary : legacyColors.feedback.errorText }]}>
+                <Text style={[styles.statValue, { color: change <= 0 ? colors.primary : FEEDBACK_ERROR_TEXT }]}>
                   {change > 0 ? '+' : ''}{change.toFixed(1)}
                 </Text>
                 <Text style={styles.statLabel}>Change</Text>
@@ -228,7 +234,7 @@ const makeStyles = (colors: ThemeColors) =>
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: legacyColors.feedback.successBg,
+    backgroundColor: FEEDBACK_SUCCESS_BG,
     marginHorizontal: 16,
     borderRadius: 4, // radius.lg
     padding: 12,
@@ -359,7 +365,7 @@ const makeStyles = (colors: ThemeColors) =>
   },
   goalBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: legacyColors.feedback.successBg,
+    backgroundColor: FEEDBACK_SUCCESS_BG,
     color: colors.primary,
     fontSize: 13,
     fontWeight: '500',

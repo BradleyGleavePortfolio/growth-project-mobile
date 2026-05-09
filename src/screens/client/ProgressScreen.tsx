@@ -61,8 +61,19 @@ function CalorieRing({
   const dashOffset = circumference * (1 - pct);
   const center = size / 2;
 
+  const pctRound = Math.round(pct * 100);
+  const a11yLabel =
+    target > 0
+      ? `Calories: ${Math.round(eaten)} of ${target}, ${pctRound} percent of target`
+      : `Calories: ${Math.round(eaten)}, no daily target set`;
+
   return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+    <View
+      style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}
+      accessible
+      accessibilityRole="image"
+      accessibilityLabel={a11yLabel}
+    >
       <Svg width={size} height={size}>
         <G rotation="-90" origin={`${center}, ${center}`}>
           <Circle

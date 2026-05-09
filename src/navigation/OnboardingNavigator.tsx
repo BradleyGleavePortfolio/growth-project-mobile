@@ -1,3 +1,15 @@
+/**
+ * @deprecated  Kept for reference. The active onboarding stack is
+ *              `LeanOnboardingNavigator`. `RootNavigator` no longer
+ *              mounts this navigator for any auth state; this file is
+ *              imported only so the legacy tree compiles. The
+ *              `OnboardingStep1..10` + `OnboardingResults` screens it
+ *              registers carry the canonical `profileApi.update` wiring
+ *              that `lib/finalizeLeanOnboarding.ts` was modeled on. Do
+ *              NOT delete until the lean flow has shipped to TestFlight,
+ *              the reconcile hook is stable, and the field-by-field
+ *              semantics are no longer needed for reference.
+ */
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import OnboardingStep1 from '../screens/onboarding/OnboardingStep1';

@@ -45,7 +45,11 @@ export const colors = {
   // Semantic — keep minimal
   success:     '#2C4A36',  // map to forest
   warning:     '#C5A253',  // map to mutedGold
-  error:       '#4A0404',  // oxblood
+  // Cross-pillar brand cohesion (Wave 5): oxblood (#4A0404) is reserved
+  // as the Earnings/Wealth pillar primary brand color. The Body pillar
+  // uses #B91C1C — a clearer alarm red that pairs with bone, passes WCAG
+  // AA on bone background, and reads as "warning" rather than "blood".
+  error:       '#B91C1C',
 } as const;
 
 // ─── Neutrals 0–1000 (10 stops) ───────────────────────────────────────────────

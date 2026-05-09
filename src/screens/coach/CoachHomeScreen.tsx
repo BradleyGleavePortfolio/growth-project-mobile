@@ -13,8 +13,13 @@ import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCoachStore } from '../../store/coachStore';
 
-import { colors as legacyColors } from '../../theme';
 import { getGreeting } from '../../utils/date';
+
+// Pastel chip background for "info" tiles. Was previously imported as
+// `INFO_TILE_BG` — kept as a local constant so the file
+// no longer pulls the legacy theme barrel just for one value. Hex matches
+// theme/index.ts `feedback.infoBg`.
+const INFO_TILE_BG = '#E8F4FD';
 import FadeInView from '../../components/FadeInView';
 import { coachApi } from '../../services/api';
 import { ptmApi } from '../../services/ptmApi';
@@ -192,7 +197,7 @@ export default function CoachHomeScreen() {
             <Text style={styles.metricLabel}>Active Clients</Text>
           </View>
           <View style={styles.metricCard}>
-            <View style={[styles.metricIcon, { backgroundColor: legacyColors.feedback.infoBg }]}>
+            <View style={[styles.metricIcon, { backgroundColor: INFO_TILE_BG }]}>
               <Ionicons name="restaurant" size={22} color={colors.carbs} />
             </View>
             {dashboardLoading ? (
@@ -324,7 +329,7 @@ export default function CoachHomeScreen() {
           style={styles.actionCard}
           onPress={() => navigation.navigate('Messages')}
         >
-          <View style={[styles.actionIcon, { backgroundColor: legacyColors.feedback.infoBg }]}>
+          <View style={[styles.actionIcon, { backgroundColor: INFO_TILE_BG }]}>
             <Ionicons name="chatbubble-outline" size={22} color={colors.carbs} />
           </View>
           <Text style={styles.actionText}>Messages</Text>

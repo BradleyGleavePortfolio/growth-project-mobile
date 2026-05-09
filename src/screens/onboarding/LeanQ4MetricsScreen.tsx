@@ -32,6 +32,7 @@ import { saveOnboardingData } from '../../utils/onboardingStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { track } from '../../lib/analytics';
 import { authEvents } from '../../utils/authEvents';
+import { finalizeLeanOnboarding } from '../../lib/finalizeLeanOnboarding';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 type Props = {
@@ -118,10 +119,16 @@ export default function LeanQ4MetricsScreen({ navigation }: Props) {
       }
       await AsyncStorage.setItem('onboarding_complete', 'true');
       await AsyncStorage.setItem('lean_onboarding_done', 'true');
+      // Push everything captured during LeanQ1–Q4 to the backend (profile
+      // fields + computed macro targets). API failure is non-blocking —
+      // the reconcile hook will retry on next app open.
+      const result = await finalizeLeanOnboarding();
       track(skipped ? 'onboarding_skipped' : 'onboarding_step_completed', {
         step: 4,
         captured_height: !!payload.height,
         captured_weight: !!payload.currentWeight,
+        synced: result.ok,
+        macros_computed: result.computedMacros,
       });
       authEvents.emit();
     } catch {

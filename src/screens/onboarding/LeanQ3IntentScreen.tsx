@@ -23,6 +23,7 @@ import { saveOnboardingData } from '../../utils/onboardingStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { track } from '../../lib/analytics';
 import { authEvents } from '../../utils/authEvents';
+import { finalizeLeanOnboarding } from '../../lib/finalizeLeanOnboarding';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 type Props = {
@@ -44,7 +45,11 @@ export default function LeanQ3IntentScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(false);
 
   const persistIntent = async (intent: TodayIntent) => {
-    await saveOnboardingData({ activityLevel: intent });
+    // IMPORTANT: write to `intent`, not `activityLevel`. The latter is the
+    // 5-bucket TDEE multiplier enum (sedentary..very_active) consumed by
+    // calcTDEE; previously we were poisoning it with 'workout'/'explore'
+    // and breaking macro computation downstream.
+    await saveOnboardingData({ intent });
     await AsyncStorage.setItem('lean_onboarding_intent', intent);
   };
 
@@ -54,6 +59,8 @@ export default function LeanQ3IntentScreen({ navigation }: Props) {
       await persistIntent(intent);
       await AsyncStorage.setItem('onboarding_complete', 'true');
       await AsyncStorage.setItem('lean_onboarding_done', 'true');
+      // Best-effort backend post; reconcile hook retries on failure.
+      await finalizeLeanOnboarding();
       track('onboarding_skipped', { at_step: 3 });
       authEvents.emit();
     } catch {
