@@ -106,12 +106,27 @@ export default function RoleSelectionScreen(_: Props) {
     setLoading(true);
     try {
       // If a code was supplied, attach it before completing role selection.
+      //
+      // Audit fix H-4: the attachInviteCode call used to swallow every
+      // failure silently and rely on the second-line selectRole call
+      // to surface bad-code errors. That worked in practice — the
+      // server re-validates inside selectRole — but if the contracts
+      // ever drift, a partial signup with no coach link goes
+      // undetected. We now special-case 4xx (an invalid / expired /
+      // capped code) and re-throw so the outer catch surfaces the
+      // server message verbatim. Transient failures (5xx, network)
+      // still fall through so selectRole can retry — this preserves
+      // the resilience the comment described.
       if (trimmed) {
         try {
           await authApi.attachInviteCode(trimmed);
         } catch (err) {
-          // Fall through to selectRole — selectRole accepts coach_code and
-          // many backends accept the code in either path.
+          const status =
+            (err as { response?: { status?: number } } | undefined)?.response?.status ?? 0;
+          if (status >= 400 && status < 500) throw err;
+          if (__DEV__) {
+            console.warn('attachInviteCode transient failure, retrying via selectRole', err);
+          }
         }
       }
 
