@@ -475,22 +475,25 @@ export default function SettingsScreen() {
         <BiometricUnlockSetting />
       </View>
 
-      {/* Stage 2 (finance OS parity) — preview the cross-pillar coach view.
-          Stage 3 wires the federated roster fetch. The screen renders a
-          designed empty state + stub roster today. */}
+      {/* Stage 3 — cross-pillar federated coach surface. Settings row
+          enters the nested CrossPillarNavigator, which runs the
+          practice-selection flow on first open and the live dashboard
+          afterwards. */}
       <Text style={styles.sectionHeader}>Cross-pillar practice</Text>
       <View style={styles.section}>
         <TouchableOpacity
           style={styles.row}
           onPress={() => navigation.navigate('BothPillars')}
           accessibilityRole="button"
-          accessibilityLabel="Open both-pillars cross-practice view"
-          accessibilityHint="Preview of the unified Body and Wealth roster (Stage 3 wires real data)"
+          accessibilityLabel="Open the cross-pillar coach surface"
+          accessibilityHint="Unified Body and Wealth roster, universal search, and cross-pillar insights"
         >
           <Ionicons name="git-merge-outline" size={20} color={colors.textSecondary} />
           <View style={{ flex: 1 }}>
             <Text style={styles.rowLabel}>Both pillars view</Text>
-            <Text style={styles.rowSubLabel}>Preview · cross-pillar roster lands in Stage 3</Text>
+            <Text style={styles.rowSubLabel}>
+              Unified roster · universal search · holistic insights
+            </Text>
           </View>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>

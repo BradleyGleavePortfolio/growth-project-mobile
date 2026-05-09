@@ -386,6 +386,51 @@ export const coachApi = {
   },
 };
 
+// ---------------------------------------------------------------------------
+// Stage 3 — coach practice type + cross-pillar federation surfaces.
+//
+// Endpoints implemented in `gpb/src/coach/cross-pillar/*` and
+// `gpb/src/coach/practice-type/*`. Both reuse the existing OWNER
+// federation infrastructure (FederationService, FinanceAdminClient)
+// behind a coach-facing guard chain (JWT + Coach + practice='both').
+//
+// Strict types live in `../types/crossPillar.ts` so the same shapes are
+// rendered everywhere the cross-pillar UI consumes them. No
+// `Record<string, unknown>` on cross-app contracts.
+// ---------------------------------------------------------------------------
+import type {
+  CoachPracticeType,
+  CrossPillarAnalyticsResponse,
+  CrossPillarClientResponse,
+  CrossPillarRosterResponse,
+  CrossPillarSearchResponse,
+  PracticeTypeResponse,
+} from '../types/crossPillar';
+
+export const practiceTypeApi = {
+  get: () => api.get<PracticeTypeResponse>('/coach/practice'),
+  set: (practice_type: CoachPracticeType) =>
+    api.put<PracticeTypeResponse>('/coach/practice', { practice_type }),
+};
+
+export const crossPillarApi = {
+  getAnalytics: () =>
+    api.get<CrossPillarAnalyticsResponse>('/coach/cross-pillar/analytics'),
+  getClients: () =>
+    api.get<CrossPillarRosterResponse>('/coach/cross-pillar/clients'),
+  getClient: (identityKey: string) =>
+    api.get<CrossPillarClientResponse>(
+      `/coach/cross-pillar/clients/${encodeURIComponent(identityKey)}`,
+    ),
+  search: (q: string, limit?: number) => {
+    const params = new URLSearchParams({ q });
+    if (limit) params.set('limit', String(limit));
+    return api.get<CrossPillarSearchResponse>(
+      `/coach/cross-pillar/search?${params.toString()}`,
+    );
+  },
+};
+
 export const messagesApi = {
   list: (params?: { before?: string; limit?: number }) => {
     const q = new URLSearchParams();

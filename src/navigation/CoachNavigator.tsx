@@ -25,8 +25,12 @@ import CoachSessionBriefScreen from '../screens/coach/CoachSessionBriefScreen';
 import CoachBriefScreen from '../screens/coach/CoachBriefScreen';
 import AdminControlRoomScreen from '../screens/coach/AdminControlRoomScreen';
 // Stage 2 (finance OS parity) — placeholder for the cross-pillar coach view.
-// Read-only, no API call. Stage 3 wires the federated roster fetch.
+// Read-only, no API call. Stage 3 replaces this with a nested navigator.
 import BothPillarsScreen from '../screens/coach/BothPillarsScreen';
+// Stage 3 — cross-pillar federated coach surface. Mounted as a nested
+// navigator so the practice-selection picker, dashboard, roster, detail
+// view, messages, and assignments all live under one settings entry.
+import CrossPillarNavigator from '../screens/coach/cross-pillar/CrossPillarNavigator';
 // Phase 11 Track 9 — Support Inbox (Crisp)
 import SupportInboxScreen from '../screens/support/SupportInboxScreen';
 // Phase 11 / Track 7 — sub-coach team management (Scale+ tier gate enforced in-screen)
@@ -68,8 +72,10 @@ export type SettingsStackParamList = {
   AdminControlRoom: undefined;
   // Phase 11 Track 9 — Crisp support inbox.
   SupportInbox: undefined;
-  // Stage 2 (finance OS parity) — cross-pillar coach view stub.
+  // Stage 3 — cross-pillar coach view. Now hosts the full nested navigator.
   BothPillars: undefined;
+  // Legacy stub kept reachable for QA but not surfaced in normal nav.
+  BothPillarsLegacyStub: undefined;
 };
 
 /** Phase 11 / Track 7 — team management stack param list. */
@@ -138,9 +144,13 @@ function SettingsStackNavigator() {
       <SettingsStack.Screen name="AdminControlRoom" component={AdminControlRoomScreen} />
       {/* Phase 11 Track 9 — Support Inbox */}
       <SettingsStack.Screen name="SupportInbox" component={SupportInboxScreen} />
-      {/* Stage 2 (finance OS parity) — cross-pillar stub. Stage 3 wires
-          the federated roster fetch that backs this screen. */}
-      <SettingsStack.Screen name="BothPillars" component={BothPillarsScreen} />
+      {/* Stage 3 — cross-pillar federated coach surface. The Stage-2
+          BothPillarsScreen stub is preserved as a reachable fallback if
+          the nested navigator ever fails to mount, but the live entry
+          point is the nested navigator below. */}
+      <SettingsStack.Screen name="BothPillars" component={CrossPillarNavigator} />
+      {/* Reachable for QA/regression; not navigated to in normal flow. */}
+      <SettingsStack.Screen name="BothPillarsLegacyStub" component={BothPillarsScreen} />
     </SettingsStack.Navigator>
   );
 }
