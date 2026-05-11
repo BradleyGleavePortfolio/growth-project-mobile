@@ -73,6 +73,10 @@ import type { ShareCardMilestone } from '../screens/share/ShareCardScreen';
 import NotificationPreferencesScreen from '../screens/settings/NotificationPreferencesScreen';
 // Phase 11 Track 9 — Support Inbox (Crisp)
 import SupportInboxScreen from '../screens/support/SupportInboxScreen';
+// Sprint B-2 — client surfaces from PR #130 wired here.
+import ClientMacrosScreen from '../screens/client/ClientMacrosScreen';
+import ClientDailyMealPlanScreen from '../screens/client/ClientDailyMealPlanScreen';
+import ClientWorkoutViewerScreen from '../screens/client/ClientWorkoutViewerScreen';
 import { colors } from '../theme/tokens';
 
 // ─── Param lists ──────────────────────────────────────────────────────────────
@@ -146,6 +150,10 @@ export type MoreStackParamList = {
   NotificationPreferences: undefined;
   /** Phase 11 Track 9 — Crisp support inbox. */
   SupportInbox:      undefined;
+  /** Sprint B-2 — client-facing read surfaces over Sprint B v2 backend. */
+  ClientMacros:        undefined;
+  ClientDailyMealPlan: { date?: string } | undefined;
+  ClientWorkoutViewer: { assignmentId: string };
 };
 
 // ─── Stack navigators ─────────────────────────────────────────────────────────
@@ -252,6 +260,14 @@ function MoreStackNavigator() {
       <MoreStackNav.Screen name="NotificationPreferences" component={NotificationPreferencesScreen} />
       {/* Phase 11 Track 9 — Support Inbox */}
       <MoreStackNav.Screen name="SupportInbox"      component={SupportInboxScreen} />
+      {/* Sprint B-2 final wave — client read surfaces. The screens
+          themselves shipped in PR #130 (this PR adds the wiring).
+          Reachable via deep-link and from MoreScreen entries (added
+          in a follow-up; route registration first so deep-links
+          work today). */}
+      <MoreStackNav.Screen name="ClientMacros"        component={ClientMacrosScreen} />
+      <MoreStackNav.Screen name="ClientDailyMealPlan" component={ClientDailyMealPlanScreen} />
+      <MoreStackNav.Screen name="ClientWorkoutViewer" component={ClientWorkoutViewerScreen} />
     </MoreStackNav.Navigator>
   );
 }
