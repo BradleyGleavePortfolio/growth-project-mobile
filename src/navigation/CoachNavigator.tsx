@@ -37,6 +37,12 @@ import SupportInboxScreen from '../screens/support/SupportInboxScreen';
 import TeamManagementScreen from '../screens/coach/TeamManagementScreen';
 import SubCoachDetailScreen from '../screens/coach/SubCoachDetailScreen';
 import ClientReassignModal from '../screens/coach/ClientReassignModal';
+// Sprint B-2 — coach surfaces. Macros review (PR #130), workout
+// builder + meal templates + bulk invite (this PR).
+import CoachMacrosReviewScreen from '../screens/coach/CoachMacrosReviewScreen';
+import CoachWorkoutBuilderScreen from '../screens/coach/CoachWorkoutBuilderScreen';
+import CoachMealTemplatesScreen from '../screens/coach/CoachMealTemplatesScreen';
+import CoachBulkInviteScreen from '../screens/coach/CoachBulkInviteScreen';
 import { Colors } from '../constants/colors';
 
 export type CoachTabParamList = {
@@ -61,6 +67,11 @@ export type ClientsStackParamList = {
   CoachUpcomingCalls:    { coachId: string };
   CoachAvailability:     { coachId: string };
   CoachSessionBrief:     { sessionId: string };
+  // Sprint B-2 coach surfaces — closed by this PR.
+  CoachMacrosReview:    { clientId: string; clientName: string };
+  CoachWorkoutBuilder:  { planId?: string } | undefined;
+  CoachMealTemplates:   undefined;
+  CoachBulkInvite:      undefined;
 };
 
 export type SettingsStackParamList = {
@@ -122,6 +133,27 @@ function ClientsStackNavigator() {
       <ClientsStack.Screen
         name="CoachSessionBrief"
         component={CoachSessionBriefScreen}
+      />
+      {/* Sprint B-2 final wave — register coach surfaces under
+          ClientsStack so navigation.navigate('CoachMacrosReview', {...})
+          works from ClientDetailScreen and ClientsListScreen. The
+          screens themselves were merged in PR #130 (Macros review)
+          and this PR (Workout Builder, Meal Templates, Bulk Invite). */}
+      <ClientsStack.Screen
+        name="CoachMacrosReview"
+        component={CoachMacrosReviewScreen}
+      />
+      <ClientsStack.Screen
+        name="CoachWorkoutBuilder"
+        component={CoachWorkoutBuilderScreen}
+      />
+      <ClientsStack.Screen
+        name="CoachMealTemplates"
+        component={CoachMealTemplatesScreen}
+      />
+      <ClientsStack.Screen
+        name="CoachBulkInvite"
+        component={CoachBulkInviteScreen}
       />
     </ClientsStack.Navigator>
   );
