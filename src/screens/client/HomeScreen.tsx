@@ -29,6 +29,9 @@ import { useClientStore } from '../../store/clientStore';
 import { track } from '../../lib/analytics';
 import { typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
+// Sprint B-2 — cross-pillar holistic insights tile (component shipped
+// in PR #130; this PR places it on HomeScreen).
+import HolisticInsightsTile from '../../components/home/HolisticInsightsTile';
 import {
   getProfileCompletion,
   summarizeMissing,
@@ -350,6 +353,11 @@ export default function HomeScreen() {
           />
           <NumberCell label="WATER" value={waterL} />
         </View>
+        {/* Sprint B-2 — cross-pillar holistic insights tile. Rendered
+            below the macro numbers; quietly returns null while loading
+            and renders honest empty-state copy when there is not yet
+            enough data or the finance pillar is unavailable. */}
+        <HolisticInsightsTile />
       </ScrollView>
     </SafeAreaView>
   );
