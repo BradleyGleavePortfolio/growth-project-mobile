@@ -9,11 +9,10 @@
  * without forcing the user to bail).
  */
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Modal,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -21,7 +20,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import type { CoachingSession } from '../../api/schedulingApi';
 import {
   useCoachAvailability,
@@ -37,7 +35,7 @@ interface Props {
 
 export default function RescheduleSheet({ session, onClose }: Props) {
   const { colors } = useTheme();
-  const oxblood = colors.danger;
+  const oxblood = colors.error;
   const reschedule = useRescheduleSession();
   const { data: windows, isLoading } = useCoachAvailability(session.coach_id);
 
@@ -46,8 +44,18 @@ export default function RescheduleSheet({ session, onClose }: Props) {
     d.setHours(0, 0, 0, 0);
     return d;
   });
-  const [showDatePicker, setShowDatePicker] = useState(false);
   const [reason, setReason] = useState('');
+
+  const dayOptions = useMemo(() => {
+    const out: Date[] = [];
+    for (let i = 0; i < 14; i += 1) {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      d.setDate(d.getDate() + i);
+      out.push(d);
+    }
+    return out;
+  }, []);
 
   const onChooseSlot = useCallback(
     (startAt: Date, endAt: Date) => {
@@ -100,33 +108,48 @@ export default function RescheduleSheet({ session, onClose }: Props) {
         >
           Date
         </Text>
-        <TouchableOpacity
-          accessibilityRole="button"
-          onPress={() => setShowDatePicker(true)}
-          style={[
-            styles.dateBtn,
-            { borderColor: colors.border, backgroundColor: colors.surface },
-          ]}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.dayStrip}
         >
-          <Text style={[typography.body, { color: colors.textPrimary }]}>
-            {pickedDate.toDateString()}
-          </Text>
-        </TouchableOpacity>
-        {showDatePicker ? (
-          <DateTimePicker
-            value={pickedDate}
-            mode="date"
-            display={Platform.OS === 'ios' ? 'inline' : 'default'}
-            onChange={(_e, selected) => {
-              if (Platform.OS === 'android') setShowDatePicker(false);
-              if (selected) {
-                const d = new Date(selected);
-                d.setHours(0, 0, 0, 0);
-                setPickedDate(d);
-              }
-            }}
-          />
-        ) : null}
+          {dayOptions.map((d) => {
+            const selected = d.getTime() === pickedDate.getTime();
+            return (
+              <TouchableOpacity
+                key={d.toISOString()}
+                accessibilityRole="button"
+                accessibilityLabel={`Pick ${d.toDateString()}`}
+                accessibilityState={{ selected }}
+                onPress={() => setPickedDate(d)}
+                style={[
+                  styles.dayChip,
+                  {
+                    borderColor: selected ? oxblood : colors.border,
+                    backgroundColor: selected ? oxblood : colors.surface,
+                  },
+                ]}
+              >
+                <Text
+                  style={[
+                    typography.bodySmall,
+                    { color: selected ? colors.textOnPrimary : colors.textMuted },
+                  ]}
+                >
+                  {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()]}
+                </Text>
+                <Text
+                  style={[
+                    typography.body,
+                    { color: selected ? colors.textOnPrimary : colors.textPrimary },
+                  ]}
+                >
+                  {d.getDate()}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
 
         <Text
           style={[
@@ -242,12 +265,16 @@ const styles = StyleSheet.create({
     minHeight: 44,
     justifyContent: 'center',
   },
-  dateBtn: {
+  dayStrip: { paddingVertical: spacing.xs, paddingRight: spacing.md },
+  dayChip: {
     borderWidth: 1,
-    borderRadius: 10,
-    padding: spacing.md,
-    marginTop: spacing.xs,
-    minHeight: 44,
+    borderRadius: 12,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginRight: spacing.sm,
+    minWidth: 60,
+    alignItems: 'center',
+    minHeight: 60,
     justifyContent: 'center',
   },
   slotBtn: {

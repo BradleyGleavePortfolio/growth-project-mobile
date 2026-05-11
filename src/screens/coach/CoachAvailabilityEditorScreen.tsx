@@ -13,14 +13,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import type { RouteProp } from '@react-navigation/native';
 import {
   useCoachAvailability,
@@ -83,13 +81,10 @@ function toDraft(w: AvailabilityWindow): DraftWindow {
 export default function CoachAvailabilityEditorScreen({ route }: Props) {
   const { coachId } = route.params;
   const { colors } = useTheme();
-  const oxblood = colors.danger;
+  const oxblood = colors.error;
   const { data, isLoading, isError, refetch } = useCoachAvailability(coachId);
   const setAvailability = useSetAvailability(coachId);
   const [draft, setDraft] = useState<DraftWindow[]>([]);
-  const [pickerFor, setPickerFor] = useState<
-    { key: string; field: 'start_minute' | 'end_minute' } | null
-  >(null);
 
   useEffect(() => {
     if (data) setDraft(data.map(toDraft));
@@ -204,39 +199,81 @@ export default function CoachAvailabilityEditorScreen({ route }: Props) {
           ) : null}
           {groupedByDay[dayIdx].map((w) => (
             <View key={w._key} style={styles.windowRow}>
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel={`Edit start time, currently ${minutesToLabel(w.start_minute)}`}
-                onPress={() =>
-                  setPickerFor({ key: w._key, field: 'start_minute' })
-                }
-                style={[styles.timeBtn, { borderColor: colors.border }]}
-              >
-                <Text
-                  style={[typography.body, { color: colors.textPrimary }]}
+              <View style={styles.stepperGroup}>
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel="Start time minus 30 minutes"
+                  onPress={() =>
+                    updateTime(
+                      w._key,
+                      'start_minute',
+                      Math.max(0, w.start_minute - 30),
+                    )
+                  }
+                  style={[styles.stepBtn, { borderColor: colors.border }]}
                 >
-                  {minutesToLabel(w.start_minute)}
-                </Text>
-              </TouchableOpacity>
+                  <Text style={[typography.body, { color: colors.textPrimary }]}>−</Text>
+                </TouchableOpacity>
+                <View style={[styles.timeChip, { borderColor: colors.border }]}>
+                  <Text style={[typography.body, { color: colors.textPrimary }]}>
+                    {minutesToLabel(w.start_minute)}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel="Start time plus 30 minutes"
+                  onPress={() =>
+                    updateTime(
+                      w._key,
+                      'start_minute',
+                      Math.min(w.end_minute - 30, w.start_minute + 30),
+                    )
+                  }
+                  style={[styles.stepBtn, { borderColor: colors.border }]}
+                >
+                  <Text style={[typography.body, { color: colors.textPrimary }]}>+</Text>
+                </TouchableOpacity>
+              </View>
               <Text
                 style={[typography.body, { color: colors.textMuted, marginHorizontal: spacing.xs }]}
               >
                 to
               </Text>
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel={`Edit end time, currently ${minutesToLabel(w.end_minute)}`}
-                onPress={() =>
-                  setPickerFor({ key: w._key, field: 'end_minute' })
-                }
-                style={[styles.timeBtn, { borderColor: colors.border }]}
-              >
-                <Text
-                  style={[typography.body, { color: colors.textPrimary }]}
+              <View style={styles.stepperGroup}>
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel="End time minus 30 minutes"
+                  onPress={() =>
+                    updateTime(
+                      w._key,
+                      'end_minute',
+                      Math.max(w.start_minute + 30, w.end_minute - 30),
+                    )
+                  }
+                  style={[styles.stepBtn, { borderColor: colors.border }]}
                 >
-                  {minutesToLabel(w.end_minute)}
-                </Text>
-              </TouchableOpacity>
+                  <Text style={[typography.body, { color: colors.textPrimary }]}>−</Text>
+                </TouchableOpacity>
+                <View style={[styles.timeChip, { borderColor: colors.border }]}>
+                  <Text style={[typography.body, { color: colors.textPrimary }]}>
+                    {minutesToLabel(w.end_minute)}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  accessibilityLabel="End time plus 30 minutes"
+                  onPress={() =>
+                    updateTime(
+                      w._key,
+                      'end_minute',
+                      Math.min(1440, w.end_minute + 30),
+                    )
+                  }
+                  style={[styles.stepBtn, { borderColor: colors.border }]}
+                >
+                  <Text style={[typography.body, { color: colors.textPrimary }]}>+</Text>
+                </TouchableOpacity>
+              </View>
               <TouchableOpacity
                 accessibilityRole="button"
                 accessibilityLabel="Remove window"
@@ -296,27 +333,6 @@ export default function CoachAvailabilityEditorScreen({ route }: Props) {
         </Text>
       ) : null}
 
-      {pickerFor ? (
-        <DateTimePicker
-          value={(() => {
-            const w = draft.find((x) => x._key === pickerFor.key);
-            const m = w ? w[pickerFor.field] : 540;
-            const d = new Date();
-            d.setHours(Math.floor(m / 60), m % 60, 0, 0);
-            return d;
-          })()}
-          mode="time"
-          is24Hour
-          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-          onChange={(_e, selected) => {
-            if (Platform.OS === 'android') setPickerFor(null);
-            if (selected) {
-              const minute = selected.getHours() * 60 + selected.getMinutes();
-              updateTime(pickerFor.key, pickerFor.field, minute);
-            }
-          }}
-        />
-      ) : null}
     </ScrollView>
   );
 }
@@ -334,13 +350,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: spacing.sm,
   },
-  timeBtn: {
+  stepperGroup: { flexDirection: 'row', alignItems: 'center' },
+  stepBtn: {
+    borderWidth: 1,
+    borderRadius: 8,
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timeChip: {
     borderWidth: 1,
     borderRadius: 8,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     minWidth: 64,
     alignItems: 'center',
+    marginHorizontal: 4,
   },
   removeBtn: {
     marginLeft: 'auto',

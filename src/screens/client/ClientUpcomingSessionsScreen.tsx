@@ -32,7 +32,7 @@ export function isWithinLockout(now: Date, startIso: string): boolean {
 
 export default function ClientUpcomingSessionsScreen() {
   const { colors } = useTheme();
-  const oxblood = colors.danger;
+  const oxblood = colors.error;
   const { data, isLoading, isError, refetch } = useMyUpcomingSessions(50);
   const cancel = useCancelSession();
   const [rescheduling, setRescheduling] = useState<CoachingSession | null>(

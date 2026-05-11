@@ -27,7 +27,7 @@ import { useTheme } from '../../theme/ThemeProvider';
 
 export default function CoachBookingInboxScreen() {
   const { colors } = useTheme();
-  const oxblood = colors.danger;
+  const oxblood = colors.error;
   const { data, isLoading, isError, refetch } = useMyUpcomingSessions(100);
   const approve = useApproveSession();
   const decline = useDeclineSession();

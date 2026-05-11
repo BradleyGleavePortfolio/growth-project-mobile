@@ -11,10 +11,9 @@
  * no coach, render an empty state.
  */
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -22,7 +21,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import {
   useCoachAvailability,
   useRequestSession,
@@ -33,7 +31,7 @@ import { useTheme } from '../../theme/ThemeProvider';
 
 export default function ClientBookingRequestScreen() {
   const { colors } = useTheme();
-  const oxblood = colors.danger;
+  const oxblood = colors.error;
   const user = useCurrentUser();
   const coachId = user?.coach_id;
 
@@ -42,7 +40,6 @@ export default function ClientBookingRequestScreen() {
     d.setHours(0, 0, 0, 0);
     return d;
   });
-  const [showDatePicker, setShowDatePicker] = useState(false);
   const [notes, setNotes] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
@@ -54,16 +51,16 @@ export default function ClientBookingRequestScreen() {
   } = useCoachAvailability(coachId);
   const requestSession = useRequestSession();
 
-  const maxDate = (() => {
-    const d = new Date();
-    d.setDate(d.getDate() + 14);
-    return d;
-  })();
-  const minDate = (() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d;
-  })();
+  const dayOptions = useMemo(() => {
+    const out: Date[] = [];
+    for (let i = 0; i < 14; i += 1) {
+      const d = new Date();
+      d.setHours(0, 0, 0, 0);
+      d.setDate(d.getDate() + i);
+      out.push(d);
+    }
+    return out;
+  }, []);
 
   const onChooseSlot = useCallback(
     (startAt: Date, endAt: Date) => {
@@ -135,35 +132,52 @@ export default function ClientBookingRequestScreen() {
       >
         Date
       </Text>
-      <TouchableOpacity
-        accessibilityRole="button"
-        onPress={() => setShowDatePicker(true)}
-        style={[
-          styles.dateBtn,
-          { borderColor: colors.border, backgroundColor: colors.surface },
-        ]}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.dayStrip}
       >
-        <Text style={[typography.body, { color: colors.textPrimary }]}>
-          {pickedDate.toDateString()}
-        </Text>
-      </TouchableOpacity>
-      {showDatePicker ? (
-        <DateTimePicker
-          value={pickedDate}
-          mode="date"
-          minimumDate={minDate}
-          maximumDate={maxDate}
-          display={Platform.OS === 'ios' ? 'inline' : 'default'}
-          onChange={(_e, selected) => {
-            if (Platform.OS === 'android') setShowDatePicker(false);
-            if (selected) {
-              const d = new Date(selected);
-              d.setHours(0, 0, 0, 0);
-              setPickedDate(d);
-            }
-          }}
-        />
-      ) : null}
+        {dayOptions.map((d) => {
+          const selected = d.getTime() === pickedDate.getTime();
+          return (
+            <TouchableOpacity
+              key={d.toISOString()}
+              accessibilityRole="button"
+              accessibilityLabel={`Pick ${d.toDateString()}`}
+              accessibilityState={{ selected }}
+              onPress={() => setPickedDate(d)}
+              style={[
+                styles.dayChip,
+                {
+                  borderColor: selected ? oxblood : colors.border,
+                  backgroundColor: selected ? oxblood : colors.surface,
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  typography.bodySmall,
+                  {
+                    color: selected ? colors.textOnPrimary : colors.textMuted,
+                  },
+                ]}
+              >
+                {dayShortLabel(d)}
+              </Text>
+              <Text
+                style={[
+                  typography.body,
+                  {
+                    color: selected ? colors.textOnPrimary : colors.textPrimary,
+                  },
+                ]}
+              >
+                {d.getDate()}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
 
       <Text
         style={[
@@ -284,15 +298,23 @@ function formatTime(d: Date): string {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
+function dayShortLabel(d: Date): string {
+  return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()];
+}
+
 const styles = StyleSheet.create({
   container: { padding: spacing.md, paddingBottom: spacing.xl },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
-  dateBtn: {
+  dayStrip: { paddingVertical: spacing.xs, paddingRight: spacing.md },
+  dayChip: {
     borderWidth: 1,
-    borderRadius: 10,
-    padding: spacing.md,
-    marginTop: spacing.xs,
-    minHeight: 44,
+    borderRadius: 12,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginRight: spacing.sm,
+    minWidth: 60,
+    alignItems: 'center',
+    minHeight: 60,
     justifyContent: 'center',
   },
   loadingBox: { paddingVertical: spacing.lg, alignItems: 'center' },

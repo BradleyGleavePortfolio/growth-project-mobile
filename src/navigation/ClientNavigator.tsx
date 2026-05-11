@@ -17,7 +17,6 @@
  * Phase 11 Track 9: SupportInboxScreen added to MoreStack (Crisp support inbox).
  */
 import React from 'react';
-import { StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
