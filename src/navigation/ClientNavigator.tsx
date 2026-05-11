@@ -13,12 +13,10 @@
  * Accessible from MoreScreen; no new tab added (avoids 5-tab crowding).
  * Phase 7C: LeaderboardScreen + LeaderboardSettingsScreen added to MoreStack.
  * Bloodwork: BloodworkEntryScreen added to MoreStack (flag OFF by default).
- * Sessions: SessionsUpcoming, SessionRequest, SessionPrepare added to MoreStack.
  * Wave 11: ClientPathCopilotScreen + PrivateCommunityHubScreen added to MoreStack.
  * Phase 11 Track 9: SupportInboxScreen added to MoreStack (Crisp support inbox).
  */
 import React from 'react';
-import { StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -58,10 +56,6 @@ import LeaderboardScreen from '../screens/client/LeaderboardScreen';
 import LeaderboardSettingsScreen from '../screens/client/LeaderboardSettingsScreen';
 // Bloodwork — client-entered labs (flag OFF by default)
 import BloodworkEntryScreen from '../screens/client/BloodworkEntryScreen';
-// Sessions — client-facing coaching call surfaces (flag OFF by default)
-import SessionsUpcomingScreen from '../screens/client/SessionsUpcomingScreen';
-import SessionRequestScreen from '../screens/client/SessionRequestScreen';
-import SessionPrepareScreen from '../screens/client/SessionPrepareScreen';
 // Wave 11 — runtime scaffolding (flag-gated; safe to mount)
 import ClientPathCopilotScreen from '../screens/client/ClientPathCopilotScreen';
 import PrivateCommunityHubScreen from '../screens/client/PrivateCommunityHubScreen';
@@ -75,6 +69,9 @@ import NotificationPreferencesScreen from '../screens/settings/NotificationPrefe
 import SupportInboxScreen from '../screens/support/SupportInboxScreen';
 // Sprint B-2 — client surfaces from PR #130 wired here.
 import ClientMacrosScreen from '../screens/client/ClientMacrosScreen';
+// Concierge Phase 1 — scheduling client surfaces.
+import ClientBookingRequestScreen from '../screens/client/ClientBookingRequestScreen';
+import ClientUpcomingSessionsScreen from '../screens/client/ClientUpcomingSessionsScreen';
 import ClientDailyMealPlanScreen from '../screens/client/ClientDailyMealPlanScreen';
 import ClientWorkoutViewerScreen from '../screens/client/ClientWorkoutViewerScreen';
 import { colors } from '../theme/tokens';
@@ -107,7 +104,6 @@ export type WorkoutStackParamList = {
 // Phase 7B: Timeline added.
 // Phase 7C: Leaderboard + LeaderboardSettings added.
 // Bloodwork: BloodworkEntry added (flag OFF by default).
-// Sessions: client-facing coaching call surfaces (flag OFF by default).
 // Wave 11: Copilot + PrivateCommunityHub added (flag-gated).
 export type MoreStackParamList = {
   MoreIndex:   undefined;
@@ -137,10 +133,6 @@ export type MoreStackParamList = {
   LeaderboardSettings: undefined;
   /** Bloodwork — client-entered labs (flag OFF by default) */
   Bloodwork:   undefined;
-  /** Sessions — coaching call surfaces. Entry point: MoreIndex → "Calls". */
-  SessionsUpcoming:  { clientId: string };
-  SessionRequest:    { clientId: string; coachId: string };
-  SessionPrepare:    { sessionId: string };
   /** Wave 11 — gated routes; screens render a preview-only empty state when flag is OFF. */
   Copilot:           undefined;
   PrivateCommunityHub: undefined;
@@ -154,6 +146,9 @@ export type MoreStackParamList = {
   ClientMacros:        undefined;
   ClientDailyMealPlan: { date?: string } | undefined;
   ClientWorkoutViewer: { assignmentId: string };
+  /** Concierge Phase 1 — scheduling client surfaces. */
+  ClientBookingRequest:    undefined;
+  ClientUpcomingSessions:  undefined;
 };
 
 // ─── Stack navigators ─────────────────────────────────────────────────────────
@@ -199,7 +194,6 @@ function WorkoutStackNavigator() {
 // Phase 7B: Timeline screen registered here.
 // Phase 7C: Leaderboard screens registered here.
 // Bloodwork: BloodworkEntry screen registered here.
-// Sessions: client-facing call screens registered here (flags default OFF).
 // Wave 11: Copilot + CommunityHub registered here (flags default OFF in prod).
 function MoreStackNavigator() {
   return (
@@ -236,20 +230,6 @@ function MoreStackNavigator() {
       <MoreStackNav.Screen name="LeaderboardSettings"  component={LeaderboardSettingsScreen} />
       {/* Bloodwork — client-entered labs (flag OFF by default) */}
       <MoreStackNav.Screen name="Bloodwork"    component={BloodworkEntryScreen} />
-      {/* Sessions — coaching call surfaces. Flags default OFF; screens show
-          calm placeholders when the backend is not yet deployed. */}
-      <MoreStackNav.Screen
-        name="SessionsUpcoming"
-        component={SessionsUpcomingScreen}
-      />
-      <MoreStackNav.Screen
-        name="SessionRequest"
-        component={SessionRequestScreen}
-      />
-      <MoreStackNav.Screen
-        name="SessionPrepare"
-        component={SessionPrepareScreen}
-      />
       {/* Wave 11 — gated routes; the screens themselves render a
           preview-only empty state when their flag is OFF. */}
       <MoreStackNav.Screen name="Copilot"           component={ClientPathCopilotScreen} />
@@ -268,6 +248,15 @@ function MoreStackNavigator() {
       <MoreStackNav.Screen name="ClientMacros"        component={ClientMacrosScreen} />
       <MoreStackNav.Screen name="ClientDailyMealPlan" component={ClientDailyMealPlanScreen} />
       <MoreStackNav.Screen name="ClientWorkoutViewer" component={ClientWorkoutViewerScreen} />
+      {/* Concierge Phase 1 — scheduling client surfaces. */}
+      <MoreStackNav.Screen
+        name="ClientBookingRequest"
+        component={ClientBookingRequestScreen}
+      />
+      <MoreStackNav.Screen
+        name="ClientUpcomingSessions"
+        component={ClientUpcomingSessionsScreen}
+      />
     </MoreStackNav.Navigator>
   );
 }
