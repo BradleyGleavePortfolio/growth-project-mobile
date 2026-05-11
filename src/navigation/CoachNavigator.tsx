@@ -17,10 +17,6 @@ import ClientRiskDetailScreen from '../screens/coach/ClientRiskDetailScreen';
 import CoachBillingScreen from '../screens/coach/CoachBillingScreen';
 import BloodworkReviewQueueScreen from '../screens/coach/BloodworkReviewQueueScreen';
 import TrustCenterScreen from '../screens/TrustCenterScreen';
-import CoachAvailabilityScreen from '../screens/coach/CoachAvailabilityScreen';
-import CoachSessionRequestsScreen from '../screens/coach/CoachSessionRequestsScreen';
-import CoachUpcomingCallsScreen from '../screens/coach/CoachUpcomingCallsScreen';
-import CoachSessionBriefScreen from '../screens/coach/CoachSessionBriefScreen';
 // Wave 11 — runtime scaffolding (flag-gated; safe to mount)
 import CoachBriefScreen from '../screens/coach/CoachBriefScreen';
 import AdminControlRoomScreen from '../screens/coach/AdminControlRoomScreen';
@@ -62,11 +58,6 @@ export type ClientsStackParamList = {
   RiskBoard: undefined;
   ClientRiskDetail: { userId: string; clientName?: string };
   BloodworkReviewQueue: undefined;
-  // Sessions screens — coach-facing coaching call surfaces.
-  CoachSessionRequests:  { coachId: string };
-  CoachUpcomingCalls:    { coachId: string };
-  CoachAvailability:     { coachId: string };
-  CoachSessionBrief:     { sessionId: string };
   // Sprint B-2 coach surfaces — closed by this PR.
   CoachMacrosReview:    { clientId: string; clientName: string };
   CoachWorkoutBuilder:  { planId?: string } | undefined;
@@ -116,24 +107,6 @@ function ClientsStackNavigator() {
       <ClientsStack.Screen name="RiskBoard"         component={RiskBoardScreen} />
       <ClientsStack.Screen name="ClientRiskDetail"  component={ClientRiskDetailScreen} />
       <ClientsStack.Screen name="BloodworkReviewQueue" component={BloodworkReviewQueueScreen} />
-      {/* Sessions — coaching call surfaces. Flags default OFF; screens show
-          calm placeholders when the backend is not yet deployed. */}
-      <ClientsStack.Screen
-        name="CoachSessionRequests"
-        component={CoachSessionRequestsScreen}
-      />
-      <ClientsStack.Screen
-        name="CoachUpcomingCalls"
-        component={CoachUpcomingCallsScreen}
-      />
-      <ClientsStack.Screen
-        name="CoachAvailability"
-        component={CoachAvailabilityScreen}
-      />
-      <ClientsStack.Screen
-        name="CoachSessionBrief"
-        component={CoachSessionBriefScreen}
-      />
       {/* Sprint B-2 final wave — register coach surfaces under
           ClientsStack so navigation.navigate('CoachMacrosReview', {...})
           works from ClientDetailScreen and ClientsListScreen. The
