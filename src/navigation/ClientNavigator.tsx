@@ -70,6 +70,9 @@ import NotificationPreferencesScreen from '../screens/settings/NotificationPrefe
 import SupportInboxScreen from '../screens/support/SupportInboxScreen';
 // Sprint B-2 — client surfaces from PR #130 wired here.
 import ClientMacrosScreen from '../screens/client/ClientMacrosScreen';
+// Concierge Phase 1 — scheduling client surfaces.
+import ClientBookingRequestScreen from '../screens/client/ClientBookingRequestScreen';
+import ClientUpcomingSessionsScreen from '../screens/client/ClientUpcomingSessionsScreen';
 import ClientDailyMealPlanScreen from '../screens/client/ClientDailyMealPlanScreen';
 import ClientWorkoutViewerScreen from '../screens/client/ClientWorkoutViewerScreen';
 import { colors } from '../theme/tokens';
@@ -144,6 +147,9 @@ export type MoreStackParamList = {
   ClientMacros:        undefined;
   ClientDailyMealPlan: { date?: string } | undefined;
   ClientWorkoutViewer: { assignmentId: string };
+  /** Concierge Phase 1 — scheduling client surfaces. */
+  ClientBookingRequest:    undefined;
+  ClientUpcomingSessions:  undefined;
 };
 
 // ─── Stack navigators ─────────────────────────────────────────────────────────
@@ -243,6 +249,15 @@ function MoreStackNavigator() {
       <MoreStackNav.Screen name="ClientMacros"        component={ClientMacrosScreen} />
       <MoreStackNav.Screen name="ClientDailyMealPlan" component={ClientDailyMealPlanScreen} />
       <MoreStackNav.Screen name="ClientWorkoutViewer" component={ClientWorkoutViewerScreen} />
+      {/* Concierge Phase 1 — scheduling client surfaces. */}
+      <MoreStackNav.Screen
+        name="ClientBookingRequest"
+        component={ClientBookingRequestScreen}
+      />
+      <MoreStackNav.Screen
+        name="ClientUpcomingSessions"
+        component={ClientUpcomingSessionsScreen}
+      />
     </MoreStackNav.Navigator>
   );
 }
