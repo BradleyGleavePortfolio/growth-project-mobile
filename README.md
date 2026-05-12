@@ -457,3 +457,111 @@ Typecheck: clean.
   (`src/screens/coach/cross-pillar/PracticeSelectionScreen.tsx`)
   already ships a chevron-back. Fix lives in the finance repo and
   is being handled by a parallel agent.
+
+## Operator Fill-Ins Required
+
+Operator-action checklist for the TestFlight launch of the fitness mobile app. Every `Used in (file:line)` row was verified by grep against `main` HEAD on 2026-05-12. All values must be set on the EAS project (`a12c3345-cc8c-4c2c-9c57-711c10a57c1c`, owner `the-growth-project`) before building for store distribution.
+
+### TestFlight-blocking EAS secrets
+
+| Variable | Used in (file:line) | Where to set | How to generate / source |
+|---|---|---|---|
+| `EXPO_PUBLIC_API_URL` | `src/config/env.ts:8` | EAS secret (eas.json env block, profile `production`) | Fly host of the backend: `https://backend-spring-lake-3890.fly.dev`. Must include scheme; no trailing slash. |
+| `EXPO_PUBLIC_SUPABASE_URL` | `src/config/env.ts:6` | EAS secret (eas.json env block, profile `production`) | Supabase dashboard → Settings → API → Project URL. Must match the backend's `SUPABASE_URL`. |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | `src/config/env.ts:7` | EAS secret (eas.json env block, profile `production`) | Supabase dashboard → Settings → API → `anon` public key. Safe to ship in the client bundle. |
+| `EXPO_PUBLIC_SENTRY_DSN` | `src/services/sentry.ts:49` | EAS secret (eas.json env block, profile `production`) | Sentry → Project (mobile) → Client Keys (DSN). |
+| `EXPO_PUBLIC_POSTHOG_KEY` | `src/lib/analytics.ts:56` | EAS secret (eas.json env block, profile `production`) | PostHog → Project Settings → Project API Key. |
+| `EXPO_PUBLIC_POSTHOG_HOST` | `src/lib/analytics.ts:58` | EAS secret (eas.json env block, profile `production`) | PostHog instance URL (defaults to `https://us.i.posthog.com`). |
+| `EXPO_PUBLIC_ENVIRONMENT` | `src/services/sentry.ts:76` | EAS secret (eas.json env block, profile `production`) | Static string `production` for store builds; `preview` for internal builds. |
+| `EXPO_PUBLIC_HELP_BASE_URL` | `src/config/env.ts:9` | EAS secret (eas.json env block, profile `production`) | Public help / support URL (e.g. `https://app.trygrowthproject.com/help`). |
+| `EXPO_PUBLIC_CRISP_WEBSITE_ID` | `src/services/support/crisp.service.ts:32` | EAS secret (eas.json env block, profile `production`) | Crisp dashboard → Settings → Website Settings → Website ID. |
+| `SENTRY_AUTH_TOKEN` | EAS build host (sourcemaps upload) | EAS secret (account-level) | Sentry → Settings → Auth Tokens → create with `project:releases` scope. Read by `@sentry/react-native` during the production build's sourcemap upload step. |
+| `EXPO_TOKEN` | EAS build host (CI submit) | GitHub Actions secret + local `~/.netrc` | expo.dev → Settings → Access Tokens → create a personal access token. Only required for non-interactive `eas submit` from CI. |
+
+### Phase 2 / off-by-default (OPTIONAL — do NOT set for the v1 TestFlight)
+
+| Variable | Used in (file:line) | Where to set | How to generate / source |
+|---|---|---|---|
+| `EXPO_PUBLIC_FEATURE_BLOODWORK` | `src/config/featureFlags.ts:42` | EAS secret (eas.json env block, profile `production`) | OPTIONAL — Phase 2. Default `false`. The first version of the app must ship with bloodwork hidden (enforced by `src/__tests__/bloodworkFeatureFlag.test.ts`). |
+| `EXPO_PUBLIC_WAVE11_MOCK` | `src/services/wave11Adapters.ts:25` | EAS secret (eas.json env block, profile `development` only) | OPTIONAL — dev only. Forces wave-11 adapters to return mocked data so screens render without a live backend. Never set in `production`. |
+| `EXPO_PUBLIC_SCREENSHOT_MODE` | `src/screenshots/mode.ts:8` | EAS secret (eas.json env block, profile `preview` only) | OPTIONAL — screenshot capture only. Drives the App Store / Play Store screenshot fixtures. Leave unset in `production`. |
+
+### Currently set (verify, do not introspect)
+
+The variables in the TestFlight-blocking table above were populated for prior internal builds. Before running `eas build --profile production`, re-verify each in the EAS dashboard:
+
+```bash
+npx eas-cli env:list --environment production
+```
+
+Compare against the table above. Add any missing keys with `npx eas-cli env:create`.
+
+## TestFlight Launch Checklist
+
+The fitness mobile app ships from this repo to TestFlight (iOS) and Play Internal Testing (Android). Confirm each step before tagging a build.
+
+### 1. Pre-flight
+
+- [ ] All EAS production-profile secrets in the [Operator Fill-Ins Required](#operator-fill-ins-required) table are set. Verify with `npx eas-cli env:list --environment production`.
+- [ ] Backend Fly app `backend-spring-lake-3890` is deployed at the version this build expects (no breaking schema migration pending).
+- [ ] `app.json` build numbers are correct: `expo.ios.buildNumber = "3"`, `expo.android.versionCode = 3`. **Do NOT bump in this PR** — owner instruction is fitness mobile stays at build 3 until the next release pass.
+- [ ] `expo.extra.eas.projectId` in `app.json` matches the EAS project (`a12c3345-cc8c-4c2c-9c57-711c10a57c1c`). The docs were reconciled in this handoff PR.
+- [ ] `assetlinks.json` and `apple-app-site-association` are reachable on the public marketing host (`app.trygrowthproject.com`).
+- [ ] No `playStoreUrl` is set yet — Android listing setup is a separate workstream and gates Play submission, not TestFlight.
+
+### 2. Build
+
+```bash
+# iOS only — TestFlight target
+npx eas-cli build --platform ios --profile production
+
+# Both platforms (use when Play listing is ready)
+npx eas-cli build --platform all --profile production
+```
+
+The `production` profile is defined in [`eas.json`](eas.json) and sets `distribution: "store"` + `environment: "production"`.
+
+### 3. Submit
+
+```bash
+# Upload the latest production build to App Store Connect
+npx eas-cli submit --platform ios --latest
+```
+
+App Store Connect destination: [The Growth Project, id 6765847915](https://apps.apple.com/us/app/the-growth-project/id6765847915).
+
+### 4. TestFlight verification
+
+Once the build is processed in App Store Connect (typically 5-15 min), assign it to the internal testing group and verify on a physical device:
+
+- [ ] Sign-in with email/password works (Supabase round-trip succeeds).
+- [ ] Sign-in with Apple completes and the backend issues a session.
+- [ ] Home screen loads without crashing; analytics ping fires (verify in PostHog Live Events).
+- [ ] Coach invite deep link (`tgp://invite/<code>`) opens the app from a fresh install path.
+- [ ] Push notification permission prompt appears on first launch; test push from backend `notification.service` round-trips.
+- [ ] Crisp support chat opens from Settings → Support.
+- [ ] No Sentry crashes in the first 5 minutes of use (verify in Sentry mobile project).
+
+## Open PRs by Status
+
+Triage of open PRs as of 2026-05-12 (`gh pr list --state open --limit 100`).
+
+### Bucket B: Stale but relevant (needs rebase before merge)
+
+- **#111** Notification center + preferences — pairs with backend #184.
+- **#112** Coach Command Center — 5-tab coach landing surface. Coaches currently have no purpose-built landing screen.
+- **#113** Delete account screen — pairs with backend #164 (EU compliance UI).
+- **#114** Data export screen — pairs with backend #171.
+
+### Bucket C: N-coach gated (deferred until coach count grows)
+
+- **#123** Workout builder coach screen + exercise search — pairs with backend #182.
+- **#124** Talent marketplace application status screen — pairs with backend #183.
+
+### Bucket D: UNSTABLE dependabots (CI failing, needs code fix)
+
+- **#87** `posthog-react-native` 4.43 → 4.44 — probably trivial.
+- **#88** `axios` 1.13 → 1.16 — likely trivial.
+- **#89** `react-native-worklets` 0.7 → 0.8 — Reanimated 4 compat.
+- **#90** `@react-native-async-storage/async-storage` 2.2 → 3.0 — major API change.
+- **#91** `zustand` 5.0.11 → 5.0.13 — patch, should be safe.

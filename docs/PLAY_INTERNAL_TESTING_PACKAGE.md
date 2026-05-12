@@ -29,7 +29,7 @@ Items 3–7 are the critical path. Items 1–2 are blocked on people, not code.
 | Display name | `The Growth Project` |
 | Package name | `com.growthproject.app` |
 | Slug | `tgp-health-and-wellness` |
-| EAS project id | `3aeadee6-34c5-4231-85b9-aff9f7ea3c5a` |
+| EAS project id | `a12c3345-cc8c-4c2c-9c57-711c10a57c1c` |
 | Marketing host | `app.trygrowthproject.com` (universal links, privacy policy) |
 | API host | `api.trygrowthproject.com` |
 | Auth | Supabase (Google OAuth brokered via Supabase, no native SDK) |
