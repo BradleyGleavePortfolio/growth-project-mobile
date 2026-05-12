@@ -73,3 +73,101 @@ Coverage:
 | `src/navigation/ClientNavigator.tsx` | Route registration (`MoreStack`) |
 | `src/navigation/CoachNavigator.tsx` | Route registration (`SettingsStack`) |
 | Backend: `src/account-deletion/` | State machine, cascade, finalize |
+---
+# Data Export Screen — `src/screens/settings/`
+
+This screen implements GDPR Article 20 (right to data portability) for the mobile app. It lets any user (coach or client) request a complete copy of their personal data, check the status of an in-progress export, and download the finished file when it is ready.
+
+> **GDPR dependency note:** This screen is closely linked to the account deletion flow. If a user intends to delete their account, they should download their data here first. Once deletion is confirmed, the data cannot be recovered. The screen surfaces this warning at the bottom of the page.
+
+---
+
+## Screens
+
+| Screen | File | Purpose |
+|--------|------|---------|
+| `DataExportScreen` | `DataExportScreen.tsx` | Main screen: explanation, request button, status display, download button. |
+
+---
+
+## State machine
+
+```
+         mount
+           │
+           ▼
+        loading  ──loadStatus── ─── 404 ──► idle
+           │                          ├── PENDING/RUNNING ──► polling
+           │                          ├── READY ──────────► ready
+           │                          ├── FAILED ──────────► failed
+           │                          └── EXPIRED ─────────► expired
+           │
+        idle ──press "Request"──► requesting ──success──► polling
+                                              └──error───► failed
+
+        polling ──poll every 5s── ─── READY ──► ready
+                                       ├── FAILED ──► failed
+                                       └── EXPIRED ──► expired
+
+        ready ──press "Download"──► Linking.openURL (external browser)
+              ──press "Request new"──► requesting
+
+        failed ──press "Try again"──► requesting
+               ──press "Cancel"──► idle
+
+        expired ──press "Request new"──► requesting
+```
+
+---
+
+## API endpoints consumed
+
+| Method | Path | Status |
+|--------|------|--------|
+| `POST` | `/v1/me/data-export/request` | LIVE |
+| `GET` | `/v1/me/data-export/status` | LIVE |
+| `GET` | `/v1/me/data-export/download?token=<jwt>` | Opened via `Linking.openURL` (browser) |
+
+---
+
+## Where it is wired
+
+- **Client Settings screen:** `src/screens/settings/ClientSettingsScreen.tsx` — "Data export" row under "Account" section.
+- **Coach Settings screen:** `src/screens/settings/CoachSettingsScreen.tsx` — same placement.
+
+---
+
+## Env vars / feature flags
+
+| Variable | Purpose |
+|----------|---------|
+| `EXPO_PUBLIC_API_BASE_URL` | Base URL for the download redirect. Defaults to `https://api.thegrowthproject.app`. |
+
+---
+
+## Tests
+
+| File | What it asserts |
+|------|----------------|
+| `src/screens/settings/__tests__/DataExportScreen.test.tsx` | Render, request flow, status polling, expired state, accessibility. |
+
+Specific test cases:
+- Heading and included-data list render
+- Request button shown in idle state
+- Moves to polling state after requesting
+- 409 Conflict shows "already in progress" error
+- Generic network error shows error state
+- Polling transitions to READY state
+- File size and expiry date shown when ready
+- Download button present when READY
+- Polling transitions to FAILED state
+- Initial EXPIRED status renders expired state
+- Request new export from expired state works
+- All interactive elements have `accessibilityLabel` + `accessibilityRole`
+
+---
+
+## Future work
+
+- **Push notification on ready:** Rather than polling, the app could receive a push notification when the export completes.
+- **Progress bar:** Show a rough completion percentage during RUNNING state (requires a backend progress field on the export record).

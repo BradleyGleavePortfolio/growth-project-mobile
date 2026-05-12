@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Changelog
 
 All notable changes to the Growth Project mobile app are documented here.
@@ -112,3 +111,23 @@ The old `CoachHomeScreen` is preserved and reachable via `navigation.navigate('D
 ---
 
 *Earlier phases will be back-filled as their PRs are reviewed and merged.*
+
+---
+
+## Phase 10 — Data Export (2026-05-08)
+
+### Added
+
+- **DataExportScreen** (`src/screens/settings/DataExportScreen.tsx`) — GDPR Article 20 right to data portability.
+  - "Request my data" button with plain-English explanation of what is included.
+  - Status display: pending / in-progress (auto-polls every 5 s) / ready / failed / expired.
+  - "Download file" button when ready — opens signed URL in the external browser (no files stored in app).
+  - Legal note reminding users to download before deleting their account.
+  - Wired into both Client and Coach Settings screens under the "Data & Privacy" section.
+
+- **dataExportApi** (`src/services/dataExportApi.ts`) — typed API client for the data export endpoints.
+
+### Navigation
+
+- `ClientNavigator`: `DataExport` route added to `MoreStack`.
+- `CoachNavigator`: `DataExport` route added to `SettingsStack`.

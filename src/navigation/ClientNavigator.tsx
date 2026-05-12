@@ -85,6 +85,8 @@ import NotificationCenterScreen from '../screens/notifications/NotificationCente
 import NotificationPreferencesScreen from '../screens/notifications/NotificationPreferencesScreen';
 import NotificationBadge from '../components/NotificationBadge';
 import { fetchUnreadCount } from '../services/notificationsApi';
+// Phase 10 — GDPR Article 20 data portability
+import DataExportScreen from '../screens/settings/DataExportScreen';
 import { colors } from '../theme/tokens';
 
 // ─── Param lists ──────────────────────────────────────────────────────────────
@@ -166,6 +168,8 @@ export type MoreStackParamList = {
   /** Concierge Phase 1 — scheduling client surfaces. */
   ClientBookingRequest:    undefined;
   ClientUpcomingSessions:  undefined;
+  /** Phase 10 — GDPR Article 20 data portability */
+  DataExport: undefined;
 };
 
 // ─── Phase 9: unread count polling for the bell icon ─────────────────────────
@@ -335,6 +339,8 @@ function MoreStackNavigator() {
         name="ClientUpcomingSessions"
         component={ClientUpcomingSessionsScreen}
       />
+      {/* Phase 10 — GDPR Article 20 data portability */}
+      <MoreStackNav.Screen name="DataExport" component={DataExportScreen} />
     </MoreStackNav.Navigator>
   );
 }

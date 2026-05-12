@@ -222,6 +222,12 @@ export default function SettingsScreen() {
     navigation.navigate('TrustCenter');
   };
 
+  // Phase 10 — GDPR Article 20 data portability
+  const handleOpenDataExport = () => {
+    mediumTap();
+    navigation.navigate('DataExport');
+  };
+
   const handleOpenHelp = async () => {
     mediumTap();
     const url = helpUrl('/coach');
@@ -510,6 +516,19 @@ export default function SettingsScreen() {
         >
           <Ionicons name="shield-checkmark-outline" size={20} color={colors.textSecondary} />
           <Text style={styles.rowLabel}>Trust & Privacy</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+        <View style={styles.divider} />
+        {/* Phase 10 — GDPR Article 20 data portability */}
+        <TouchableOpacity
+          style={styles.row}
+          onPress={handleOpenDataExport}
+          accessibilityRole="button"
+          accessibilityLabel="Request my data export"
+          accessibilityHint="Download a complete copy of all your personal data"
+        >
+          <Ionicons name="download-outline" size={20} color={colors.textSecondary} />
+          <Text style={styles.rowLabel}>My data</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
         <View style={styles.divider} />
