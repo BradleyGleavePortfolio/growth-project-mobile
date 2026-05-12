@@ -197,7 +197,7 @@ export default function DataExportScreen() {
 
       {state.phase === 'loading' && (
         <ActivityIndicator
-          color={colors.ink}
+          color={colors.primary}
           style={styles.spinner}
           accessibilityLabel="Loading export status"
         />
@@ -216,14 +216,14 @@ export default function DataExportScreen() {
 
       {state.phase === 'requesting' && (
         <View style={styles.statusRow}>
-          <ActivityIndicator color={colors.ink} />
+          <ActivityIndicator color={colors.primary} />
           <Text style={styles.statusText}>Sending request...</Text>
         </View>
       )}
 
       {state.phase === 'polling' && (
         <View style={styles.statusCard}>
-          <ActivityIndicator color={colors.ink} />
+          <ActivityIndicator color={colors.primary} />
           <Text style={styles.statusHeading}>Export in progress</Text>
           <Text style={styles.statusBody}>
             We are assembling your file. This usually takes under 60 seconds.
@@ -355,21 +355,21 @@ function makeStyles(colors: ReturnType<typeof useTheme>['colors']) {
     heading: {
       fontFamily: 'CormorantGaramond_600SemiBold',
       fontSize: 28,
-      color: colors.ink,
+      color: colors.textPrimary,
       marginBottom: 16,
     },
     body: {
       fontFamily: 'Inter_400Regular',
       fontSize: 15,
       lineHeight: 22,
-      color: colors.ink,
+      color: colors.textPrimary,
       marginBottom: 16,
     },
     caption: {
       fontFamily: 'Inter_400Regular',
       fontSize: 13,
       lineHeight: 19,
-      color: colors.ink,
+      color: colors.textPrimary,
       opacity: 0.6,
       marginTop: 8,
     },
@@ -385,7 +385,7 @@ function makeStyles(colors: ReturnType<typeof useTheme>['colors']) {
       width: 4,
       height: 4,
       borderRadius: 2,
-      backgroundColor: colors.ink,
+      backgroundColor: colors.textPrimary,
       marginTop: 9,
       marginRight: 10,
       flexShrink: 0,
@@ -394,7 +394,7 @@ function makeStyles(colors: ReturnType<typeof useTheme>['colors']) {
       fontFamily: 'Inter_400Regular',
       fontSize: 15,
       lineHeight: 22,
-      color: colors.ink,
+      color: colors.textPrimary,
       flex: 1,
     },
     spinner: {
@@ -409,34 +409,34 @@ function makeStyles(colors: ReturnType<typeof useTheme>['colors']) {
     statusText: {
       fontFamily: 'Inter_400Regular',
       fontSize: 15,
-      color: colors.ink,
+      color: colors.textPrimary,
     },
     statusCard: {
       marginTop: 24,
       padding: 20,
       borderWidth: 1,
-      borderColor: colors.border ?? colors.ink,
+      borderColor: colors.border,
       borderRadius: 8,
       gap: 12,
     },
     statusHeading: {
       fontFamily: 'CormorantGaramond_600SemiBold',
       fontSize: 20,
-      color: colors.ink,
+      color: colors.textPrimary,
     },
     errorHeading: {
       fontFamily: 'CormorantGaramond_600SemiBold',
       fontSize: 20,
-      color: colors.error ?? colors.ink,
+      color: colors.error,
     },
     statusBody: {
       fontFamily: 'Inter_400Regular',
       fontSize: 15,
       lineHeight: 22,
-      color: colors.ink,
+      color: colors.textPrimary,
     },
     primaryButton: {
-      backgroundColor: colors.ink,
+      backgroundColor: colors.primary,
       paddingVertical: 14,
       paddingHorizontal: 24,
       borderRadius: 8,
@@ -453,19 +453,19 @@ function makeStyles(colors: ReturnType<typeof useTheme>['colors']) {
       paddingHorizontal: 24,
       borderRadius: 8,
       borderWidth: 1,
-      borderColor: colors.ink,
+      borderColor: colors.border,
       alignItems: 'center',
     },
     ghostButtonText: {
       fontFamily: 'Inter_400Regular',
       fontSize: 15,
-      color: colors.ink,
+      color: colors.textPrimary,
     },
     legalNote: {
       fontFamily: 'Inter_400Regular',
       fontSize: 13,
       lineHeight: 19,
-      color: colors.ink,
+      color: colors.textPrimary,
       opacity: 0.5,
       marginTop: 32,
       textAlign: 'center',
