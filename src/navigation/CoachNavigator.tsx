@@ -46,10 +46,6 @@ import CoachAvailabilityEditorScreen from '../screens/coach/CoachAvailabilityEdi
 import CoachBookingInboxScreen from '../screens/coach/CoachBookingInboxScreen';
 // Phase 10 — GDPR right to erasure.
 import DeleteAccountScreen from '../screens/settings/DeleteAccountScreen';
-import CoachAvailabilityScreen from '../screens/coach/CoachAvailabilityScreen';
-import CoachSessionRequestsScreen from '../screens/coach/CoachSessionRequestsScreen';
-import CoachUpcomingCallsScreen from '../screens/coach/CoachUpcomingCallsScreen';
-import CoachSessionBriefScreen from '../screens/coach/CoachSessionBriefScreen';
 // Phase 9 — Notification center
 import NotificationCenterScreen from '../screens/notifications/NotificationCenterScreen';
 import NotificationPreferencesScreen from '../screens/notifications/NotificationPreferencesScreen';
@@ -82,11 +78,6 @@ export type ClientsStackParamList = {
   /** Concierge Phase 1 — scheduling coach surfaces. */
   CoachAvailabilityEditor:  { coachId: string };
   CoachBookingInbox:        undefined;
-  // Sessions screens — coach-facing coaching call surfaces.
-  CoachSessionRequests:  { coachId: string };
-  CoachUpcomingCalls:    { coachId: string };
-  CoachAvailability:     { coachId: string };
-  CoachSessionBrief:     { sessionId: string };
   /** Phase 9 — Global notification center. */
   NotificationCenter: undefined;
   /** Phase 9 — Notification preferences. */

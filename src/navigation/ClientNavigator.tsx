@@ -80,10 +80,6 @@ import ClientBookingRequestScreen from '../screens/client/ClientBookingRequestSc
 import ClientUpcomingSessionsScreen from '../screens/client/ClientUpcomingSessionsScreen';
 import ClientDailyMealPlanScreen from '../screens/client/ClientDailyMealPlanScreen';
 import ClientWorkoutViewerScreen from '../screens/client/ClientWorkoutViewerScreen';
-// Sessions — client-facing coaching call surfaces (flag OFF by default)
-import SessionsUpcomingScreen from '../screens/client/SessionsUpcomingScreen';
-import SessionRequestScreen from '../screens/client/SessionRequestScreen';
-import SessionPrepareScreen from '../screens/client/SessionPrepareScreen';
 // Phase 9 — Notification center
 import NotificationCenterScreen from '../screens/notifications/NotificationCenterScreen';
 import NotificationPreferencesScreen from '../screens/notifications/NotificationPreferencesScreen';
