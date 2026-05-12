@@ -34,6 +34,7 @@ import FastingScreen from '../screens/client/FastingScreen';
 import ProfileScreen from '../screens/client/ProfileScreen';
 import EditProfileScreen from '../screens/client/EditProfileScreen';
 import SettingsScreen from '../screens/client/SettingsScreen';
+import DeleteAccountScreen from '../screens/settings/DeleteAccountScreen';
 import ReportScreen from '../screens/client/ReportScreen';
 import WidgetsScreen from '../screens/client/WidgetsScreen';
 import WorkoutScreen from '../screens/client/WorkoutScreen';
@@ -123,6 +124,7 @@ export type MoreStackParamList = {
   PrepGuide:   undefined;
   Plan:        undefined;
   TrustCenter: undefined;
+  DeleteAccount: undefined;
   Preferences: undefined;
   AIGuide:     undefined;
   Membership:  undefined;
@@ -220,6 +222,7 @@ function MoreStackNavigator() {
       <MoreStackNav.Screen name="Learn"        component={EducationScreen} />
       <MoreStackNav.Screen name="Plan"         component={PlanScreen} />
       <MoreStackNav.Screen name="TrustCenter"  component={TrustCenterScreen} />
+      <MoreStackNav.Screen name="DeleteAccount" component={DeleteAccountScreen} />
       <MoreStackNav.Screen name="Preferences"  component={PreferencesScreen} />
       <MoreStackNav.Screen name="AIGuide"      component={AIGuideScreen} />
       <MoreStackNav.Screen name="Membership"   component={MembershipScreen} />

@@ -545,13 +545,14 @@ export default function SettingsScreen() {
         ) : (
           <TouchableOpacity
             style={styles.row}
-            onPress={handleRequestDeletion}
+            onPress={() => navigation.navigate('DeleteAccount')}
             disabled={deletionBusy}
             accessibilityRole="button"
-            accessibilityLabel="Delete account"
+            accessibilityLabel="Delete my account"
+            accessibilityHint="Opens the account deletion screen with a 14-day grace period"
           >
             <Ionicons name="trash-outline" size={20} color={colors.error} />
-            <Text style={[styles.rowLabel, { color: colors.error }]}>Delete account</Text>
+            <Text style={[styles.rowLabel, { color: colors.error }]}>Delete my account</Text>
             <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
           </TouchableOpacity>
         )}
