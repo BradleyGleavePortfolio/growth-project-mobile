@@ -16,7 +16,7 @@ The corresponding iOS notes live alongside each item in parentheses where they d
 | Android `versionCode` | Must increase monotonically per build. EAS handles this if `appVersionSource: "remote"` is used; we currently use `local`, so bump it manually in `app.json`. |
 | iOS `buildNumber`     | Same convention; bump per upload to TestFlight                                         |
 | Slug             | `tgp-health-and-wellness` (`expo.slug`)                                                    |
-| EAS project id   | `3aeadee6-34c5-4231-85b9-aff9f7ea3c5a`                                                     |
+| EAS project id   | `a12c3345-cc8c-4c2c-9c57-711c10a57c1c`                                                     |
 
 ## 2. Signing
 

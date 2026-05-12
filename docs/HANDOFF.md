@@ -72,7 +72,7 @@ Single source of truth for the native shell. Anything platform-specific is read 
 | `expo.android.versionCode` | positive integer | Must increase monotonically per Play upload. We use `appVersionSource: "local"` so this is bumped manually. |
 | `expo.android.intentFilters` | see below | Declares the deep-link surface on Android. |
 | `expo.plugins` | `expo-sqlite`, `expo-web-browser`, `expo-font`, `expo-localization` | Required for SQLite, the OAuth in-app browser, custom font loading, and locale detection. The validator warns when any of the first three are absent. |
-| `expo.extra.eas.projectId` | `3aeadee6-34c5-4231-85b9-aff9f7ea3c5a` | EAS project binding. |
+| `expo.extra.eas.projectId` | `a12c3345-cc8c-4c2c-9c57-711c10a57c1c` | EAS project binding. |
 | `expo.owner` | `the-growth-project` | EAS account that owns the project. |
 
 ### 3.1 Android intent filters
