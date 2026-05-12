@@ -102,3 +102,39 @@ There are no navigation-level jest tests; the structure is exercised end-to-end 
 - There is no global floating chat widget. The `FloatingChatWidget` and the `RootNavigator.hideWidget` predicate it lived behind were deleted in #63. If a future feature wants a shared AI surface, it must be a real screen registered under the relevant navigator — the doctrine (`docs/QUIET_LUXURY_DOCTRINE.md` §6) forbids reintroducing a global FAB.
 - The `TrophyShare` route was removed from `ClientNavigator` in #63 alongside the `TrophyShareScreen` and `FirstWinCelebration`. Do not reintroduce it; the doctrine test (`src/__tests__/quietLuxuryDoctrine.test.ts`) will fail the build.
 - The `linking` config covers only the unauthenticated path. If a future feature needs to be addressable by a deep link to a signed-in screen, that route must be added under both `ClientNavigator` and `CoachNavigator` configs and the Android intent filter / `applinks:` entry extended in `app.json`.
+
+## Phase 9 — Bell icon entry point (Notification Center)
+
+Both `ClientNavigator` and `CoachNavigator` now inject a bell icon into the header of their respective primary stack navigators.
+
+### ClientNavigator
+
+The bell is rendered as `headerRight` on every screen inside `HomeStackNavigator`. It shows a `NotificationBadge` with the live unread count (polled every 30 s, refreshed on foreground). Tapping navigates to `HomeStack → NotificationCenter`.
+
+New screen names added to `HomeStackParamList`:
+
+| Name | Screen | Purpose |
+| --- | --- | --- |
+| `NotificationCenter` | `NotificationCenterScreen` | Global notification list |
+| `NotificationPreferences` | `NotificationPreferencesScreen` | Per-kind channel toggles + quiet hours |
+
+The legacy `Notifications` screen name (pointing to the old `NotificationsScreen`) is preserved for backward-compat.
+
+### CoachNavigator
+
+The bell is rendered as `headerRight` on every screen inside `ClientsStackNavigator`. Same badge, same 30-second polling via a separate `useCoachNotificationUnreadCount` hook (so it does not interfere with the existing `useCoachUnreadPolling` that powers the message tab badge).
+
+New screen names added to `ClientsStackParamList`:
+
+| Name | Screen | Purpose |
+| --- | --- | --- |
+| `NotificationCenter` | `NotificationCenterScreen` | Global notification list |
+| `NotificationPreferences` | `NotificationPreferencesScreen` | Per-kind channel toggles + quiet hours |
+
+### Unread count polling
+
+Both navigators use `fetchUnreadCount()` from `src/services/notificationsApi.ts`. While `NOTIFICATIONS_MOCK_ENABLED=true` the count is served from the in-memory mock store. When the backend ships, flip the flag to false — the polling hook needs no other change.
+
+### Deep-link routing from notification taps
+
+`NotificationCenterScreen` calls `routeNotification()` which calls `navigation.navigate(actionScreen, actionParams)` using the value from `notification.actionScreen`. The routing table is documented in `src/screens/notifications/README.md`.

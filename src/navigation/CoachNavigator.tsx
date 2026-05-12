@@ -1,5 +1,7 @@
+// Phase 9: Bell icon + NotificationCenter added to CoachNavigator.
+// All existing routes preserved.
 import React, { useEffect, useState } from 'react';
-import { AppState } from 'react-native';
+import { AppState, TouchableOpacity, View, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
@@ -44,6 +46,11 @@ import CoachAvailabilityEditorScreen from '../screens/coach/CoachAvailabilityEdi
 import CoachBookingInboxScreen from '../screens/coach/CoachBookingInboxScreen';
 // Phase 10 — GDPR right to erasure.
 import DeleteAccountScreen from '../screens/settings/DeleteAccountScreen';
+// Phase 9 — Notification center
+import NotificationCenterScreen from '../screens/notifications/NotificationCenterScreen';
+import NotificationPreferencesScreen from '../screens/notifications/NotificationPreferencesScreen';
+import NotificationBadge from '../components/NotificationBadge';
+import { fetchUnreadCount } from '../services/notificationsApi';
 import { Colors } from '../constants/colors';
 
 export type CoachTabParamList = {
@@ -71,6 +78,10 @@ export type ClientsStackParamList = {
   /** Concierge Phase 1 — scheduling coach surfaces. */
   CoachAvailabilityEditor:  { coachId: string };
   CoachBookingInbox:        undefined;
+  /** Phase 9 — Global notification center. */
+  NotificationCenter: undefined;
+  /** Phase 9 — Notification preferences. */
+  NotificationPreferences: undefined;
 };
 
 export type SettingsStackParamList = {
@@ -102,13 +113,60 @@ const ClientsStack = createNativeStackNavigator<ClientsStackParamList>();
 const SettingsStack = createNativeStackNavigator<SettingsStackParamList>();
 const TeamStack = createNativeStackNavigator<TeamStackParamList>();
 
+// ─── Phase 9: unread count polling for the coach bell icon ───────────────────
+
+function useCoachNotificationUnreadCount(): number {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    let mounted = true;
+    const refresh = async () => {
+      try {
+        const n = await fetchUnreadCount();
+        if (mounted) setCount(n);
+      } catch {
+        // Silent — badge shows stale count on error.
+      }
+    };
+    refresh();
+    const interval = setInterval(refresh, 30000);
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') refresh();
+    });
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+      sub.remove();
+    };
+  }, []);
+  return count;
+}
+
 function ClientsStackNavigator() {
+  const notifUnread = useCoachNotificationUnreadCount();
   return (
     <ClientsStack.Navigator
-      screenOptions={{
+      screenOptions={({ navigation }) => ({
         headerShown: false,
         contentStyle: { backgroundColor: Colors.background },
-      }}
+        // Phase 9: bell icon in every screen in the Clients stack.
+        headerRight: () => (
+          <TouchableOpacity
+            onPress={() => navigation.navigate('NotificationCenter')}
+            style={styles.bellButton}
+            accessibilityRole="button"
+            accessibilityLabel={
+              notifUnread > 0
+                ? `Notifications, ${notifUnread > 99 ? '99+' : notifUnread} unread`
+                : 'Notifications'
+            }
+          >
+            <View style={styles.bellWrap}>
+              <Ionicons name="notifications-outline" size={24} color={Colors.textPrimary} />
+              <NotificationBadge count={notifUnread} />
+            </View>
+          </TouchableOpacity>
+        ),
+      })}
     >
       <ClientsStack.Screen name="ClientsList"       component={ClientsListScreen} />
       <ClientsStack.Screen name="ClientDetail"      component={ClientDetailScreen} />
@@ -146,6 +204,17 @@ function ClientsStackNavigator() {
       <ClientsStack.Screen
         name="CoachBookingInbox"
         component={CoachBookingInboxScreen}
+      />
+      {/* Phase 9 — Notification center screens */}
+      <ClientsStack.Screen
+        name="NotificationCenter"
+        component={NotificationCenterScreen}
+        options={{ headerShown: false }}
+      />
+      <ClientsStack.Screen
+        name="NotificationPreferences"
+        component={NotificationPreferencesScreen}
+        options={{ headerShown: false }}
       />
     </ClientsStack.Navigator>
   );
@@ -319,3 +388,17 @@ export default function CoachNavigator() {
     </Tab.Navigator>
   );
 }
+
+const styles = StyleSheet.create({
+  bellButton: {
+    marginRight: 16,
+    padding: 4,
+  },
+  bellWrap: {
+    position: 'relative',
+    width: 28,
+    height: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+});
