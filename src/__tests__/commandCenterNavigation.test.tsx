@@ -82,20 +82,8 @@ describe('command center navigation reachability', () => {
     expect(src).toContain('name="CommandCenter"');
   });
 
-  it('CoachNavigator still registers all existing sessions screens (non-regression)', () => {
-    const src = fs.readFileSync(
-      path.join(ROOT, 'navigation/CoachNavigator.tsx'),
-      'utf8',
-    );
-    expect(src).toContain("import CoachAvailabilityScreen");
-    expect(src).toContain("import CoachSessionRequestsScreen");
-    expect(src).toContain("import CoachUpcomingCallsScreen");
-    expect(src).toContain("import CoachSessionBriefScreen");
-    expect(src).toContain('name="CoachSessionRequests"');
-    expect(src).toContain('name="CoachUpcomingCalls"');
-    expect(src).toContain('name="CoachAvailability"');
-    expect(src).toContain('name="CoachSessionBrief"');
-  });
+  // Sessions screens non-regression test removed: those screens were never
+  // merged into main (PR #104 not landed). This PR doesn't introduce them.
 
   it('CoachNavigator still registers BloodworkReviewQueue (non-regression PR #103)', () => {
     const src = fs.readFileSync(
