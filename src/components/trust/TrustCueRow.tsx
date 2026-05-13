@@ -41,7 +41,7 @@ const TRUST_CUES: TrustCue[] = [
     explainer: {
       title: 'Your data is yours',
       body:
-        'You own everything you log in this app. You can request a full export of your data at any time from the Trust Center in Settings, and you can permanently delete your account with a 30-day grace period. We will never sell, license, or share your personal data with third parties for commercial purposes.',
+        'You own everything you log in this app. You can request a full export of your data at any time from the Trust Center in Settings, and you can permanently delete your account with a 14-day grace period. We will never sell, license, or share your personal data with third parties for commercial purposes.',
     },
   },
   {

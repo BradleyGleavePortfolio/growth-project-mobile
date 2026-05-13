@@ -11,6 +11,8 @@
 
 import React, { useCallback, useMemo } from 'react';
 import {
+  Alert,
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -45,6 +47,30 @@ export default function ClientWorkoutViewerScreen() {
 
   const upcoming = sorted.filter((a) => !a.completed_at);
   const completed = sorted.filter((a) => !!a.completed_at);
+
+  // Follow-up: a dedicated WorkoutAssignmentDetail screen that takes an
+  // assignment id and renders the plan + start-workout CTA is needed.
+  // ActiveWorkoutScreen exists but expects a different param shape
+  // (routineId / routineName / exercises serialized), so it cannot be reused
+  // directly with a coach-assigned plan. Until that screen lands, tapping an
+  // assignment surfaces a short stub Alert so the client knows the action is
+  // recognized rather than swallowed.
+  const handleOpenAssignment = useCallback(
+    (a: ClientWorkoutAssignmentWithPlan) => {
+      if (__DEV__) {
+        console.warn(
+          '[ClientWorkoutViewer] assignment tapped — WorkoutAssignmentDetail screen not yet built',
+          { assignmentId: a.id, planName: a.workout_plan.name },
+        );
+      }
+      Alert.alert(
+        a.workout_plan.name,
+        'The full workout detail and start-workout flow is coming soon. For now, open the Workouts tab to start a workout from your library.',
+        [{ text: 'OK' }],
+      );
+    },
+    [],
+  );
 
   return (
     <ScrollView
@@ -88,7 +114,13 @@ export default function ClientWorkoutViewerScreen() {
                 Upcoming
               </Text>
               {upcoming.map((a) => (
-                <AssignmentCard key={a.id} a={a} styles={styles} sc={sc} />
+                <AssignmentCard
+                  key={a.id}
+                  a={a}
+                  styles={styles}
+                  sc={sc}
+                  onPress={() => handleOpenAssignment(a)}
+                />
               ))}
             </>
           ) : null}
@@ -110,6 +142,7 @@ export default function ClientWorkoutViewerScreen() {
                   styles={styles}
                   sc={sc}
                   faded
+                  onPress={() => handleOpenAssignment(a)}
                 />
               ))}
             </>
@@ -125,15 +158,26 @@ function AssignmentCard({
   styles,
   sc,
   faded,
+  onPress,
 }: {
   a: ClientWorkoutAssignmentWithPlan;
   styles: Styles;
   sc: SemanticTokens;
   faded?: boolean;
+  onPress: () => void;
 }) {
   const plan = a.workout_plan;
   return (
-    <View style={[styles.card, faded ? { opacity: 0.6 } : null]}>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.card,
+        faded ? { opacity: 0.6 } : null,
+        pressed ? { opacity: 0.85 } : null,
+      ]}
+      accessibilityRole="button"
+      accessibilityLabel={`Open workout ${plan.name}`}
+    >
       <View style={styles.headerRow}>
         <Text style={[typography.h3, { color: sc.textPrimary }]}>
           {plan.name}
@@ -155,7 +199,7 @@ function AssignmentCard({
           Completed RPE {a.post_rpe}
         </Text>
       ) : null}
-    </View>
+    </Pressable>
   );
 }
 

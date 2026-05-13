@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp, NavigationProp, ParamListBase } from '@react-navigation/native';
@@ -31,6 +32,7 @@ interface Recipe {
   ingredients: string[];
   instructions: string[];
   tags: string[];
+  image_url?: string;
   isSaved?: boolean;
 }
 
@@ -128,19 +130,36 @@ export default function RecipeDetailScreen() {
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      {/* Hero banner */}
+      {/* Hero banner — recipe image if the API returned one, otherwise the
+          neutral primaryPale placeholder with the restaurant glyph. */}
       <View style={styles.hero}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        {recipe.image_url ? (
+          <Image
+            source={{ uri: recipe.image_url }}
+            style={styles.heroImage}
+            resizeMode="cover"
+            accessibilityIgnoresInvertColors
+          />
+        ) : (
+          <View style={styles.heroIcon}>
+            <Ionicons name="restaurant" size={56} color={colors.primary} />
+          </View>
+        )}
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
-        <View style={styles.heroIcon}>
-          <Ionicons name="restaurant" size={56} color={colors.primary} />
-        </View>
         <TouchableOpacity
           style={styles.saveBtn}
           onPress={handleToggleSave}
           activeOpacity={0.8}
           disabled={saving}
+          accessibilityRole="button"
+          accessibilityLabel={isSaved ? 'Remove from saved recipes' : 'Save recipe'}
         >
           {saving ? (
             <ActivityIndicator size="small" color={colors.primary} />
@@ -248,6 +267,14 @@ const makeStyles = (colors: ThemeColors) =>
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
+    overflow: 'hidden',
+  },
+  heroImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   heroIcon: { opacity: 0.8 },
   backBtn: {

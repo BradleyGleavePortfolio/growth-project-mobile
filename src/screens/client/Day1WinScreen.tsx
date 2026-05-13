@@ -67,7 +67,10 @@ const WIN_CARD_TEST_IDS: Record<WinType, string> = {
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface Day1WinScreenProps {
-  onComplete: () => void;
+  // When invoked with a winType, RootNavigator transitions to the main app
+  // and deep-links into the corresponding logger screen. When invoked without
+  // args (skip / API failure continue), it just transitions to the main app.
+  onComplete: (target?: WinType) => void;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -80,6 +83,7 @@ export default function Day1WinScreen({ onComplete }: Day1WinScreenProps) {
   const [loading, setLoading] = useState(false);
   const [aiMessage, setAiMessage] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [failureCount, setFailureCount] = useState(0);
 
   const handleSelectWin = useCallback(
     async (winType: WinType) => {
@@ -97,18 +101,26 @@ export default function Day1WinScreen({ onComplete }: Day1WinScreenProps) {
         // Surface the error but don't block the user — they can try again.
         setLoading(false);
         setSelectedWin(null);
+        setFailureCount((n) => n + 1);
         Alert.alert(
           'Connection issue',
-          'Could not record your win. Check your connection and try again.',
+          'Could not record your win. Check your connection and try again, or continue without recording.',
         );
       }
     },
     [loading],
   );
 
-  const handleContinue = useCallback(() => {
+  // Continue without selecting a win — used by skip and by the persistent-
+  // failure escape hatch. Routes straight into the main app.
+  const handleSkip = useCallback(() => {
     onComplete();
   }, [onComplete]);
+
+  // Continue from the completion view — routes to the matching logger.
+  const handleContinue = useCallback(() => {
+    onComplete(selectedWin ?? undefined);
+  }, [onComplete, selectedWin]);
 
   // ── Completion state ────────────────────────────────────────────────────────
 
@@ -197,13 +209,30 @@ export default function Day1WinScreen({ onComplete }: Day1WinScreenProps) {
 
         <Pressable
           style={styles.skipButton}
-          onPress={handleContinue}
+          onPress={handleSkip}
           accessibilityLabel="Skip and continue to the app"
           accessibilityRole="button"
           testID="day1win-skip-button"
         >
           <Text style={[styles.skipText, { color: colors.textMuted }]}>Skip for now</Text>
         </Pressable>
+
+        {/* Persistent-API-failure escape hatch: after 2 failed attempts a new
+            client can continue into the main app without their win recorded.
+            The status endpoint will retry on next boot. */}
+        {failureCount >= 2 ? (
+          <Pressable
+            style={styles.skipButton}
+            onPress={handleSkip}
+            accessibilityLabel="Continue without recording, your win can be logged later"
+            accessibilityRole="button"
+            testID="day1win-continue-anyway-button"
+          >
+            <Text style={[styles.skipText, { color: colors.textMuted }]}>
+              Continue anyway — try again later
+            </Text>
+          </Pressable>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );

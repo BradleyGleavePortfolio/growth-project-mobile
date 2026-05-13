@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useTheme } from '../../theme/useTheme';
 import { dataExportApi, DataExportRecord } from '../../services/dataExportApi';
+import { env } from '../../config/env';
 
 // ─── Screen state ─────────────────────────────────────────────────────────────
 
@@ -154,8 +155,7 @@ export default function DataExportScreen() {
 
   const handleDownload = useCallback(async (record: DataExportRecord) => {
     if (!record.download_token) return;
-    const baseUrl = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'https://api.thegrowthproject.app';
-    const url = `${baseUrl}/v1/me/data-export/download?token=${record.download_token}`;
+    const url = `${env.API_URL}/v1/me/data-export/download?token=${record.download_token}`;
     await Linking.openURL(url);
   }, []);
 

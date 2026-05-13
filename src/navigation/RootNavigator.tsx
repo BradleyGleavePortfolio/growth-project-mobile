@@ -5,6 +5,7 @@ import {
   DefaultTheme,
   LinkingOptions,
   getStateFromPath,
+  createNavigationContainerRef,
 } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AuthNavigator from './AuthNavigator';
@@ -23,7 +24,7 @@ import { Colors } from '../constants/colors';
 import { useNetworkStatus, isEffectivelyOnline } from '../hooks/useNetworkStatus';
 import { flush as flushFoodLogQueue } from '../services/foodLogQueue';
 import { isScreenshotMode } from '../screenshots';
-import { firstWinApi } from '../services/firstWinApi';
+import { firstWinApi, WinType } from '../services/firstWinApi';
 import Day1WinScreen from '../screens/client/Day1WinScreen';
 import { signOut } from '../services/authActions';
 // Phase 11 Track 9 — Support Inbox: init Crisp and sync identity on login
@@ -105,8 +106,14 @@ const linking: LinkingOptions<Record<string, object | undefined>> = {
   },
 };
 
+// Module-level navigation ref so RootNavigator can imperatively route into
+// ClientNavigator after Day1WinScreen completes. Only used for the Day 1 Win
+// hand-off; other navigation continues to flow through props/hooks.
+const navigationRef = createNavigationContainerRef<Record<string, object | undefined>>();
+
 export default function RootNavigator() {
   const [authState, setAuthState] = useState<AuthState>('loading');
+  const pendingDay1Target = useRef<WinType | null>(null);
 
   // Initialise the Crisp SDK once at app start. Safe to call before auth
   // resolves — configure() only registers the website ID and does not
@@ -310,9 +317,46 @@ export default function RootNavigator() {
   };
 
   // Called by Day1WinScreen when the client completes the win OR skips.
-  const handleDay1WinComplete = () => {
+  // When `target` is set, the user just completed a win and wants to deep
+  // link into the matching logger; we stash it and route after the
+  // ClientNavigator mounts.
+  const handleDay1WinComplete = (target?: WinType) => {
+    pendingDay1Target.current = target ?? null;
     setAuthState('student');
   };
+
+  // After auth flips to 'student' and the navigator mounts, route the user
+  // into the logger that matches their selected Day 1 Win card.
+  useEffect(() => {
+    if (authState !== 'student' || !pendingDay1Target.current) return;
+    const target = pendingDay1Target.current;
+    pendingDay1Target.current = null;
+    // Two-frame delay lets ClientNavigator finish its first commit before
+    // we issue the imperative navigate — without it, navigationRef.isReady()
+    // can still be false on slower devices.
+    const t = setTimeout(() => {
+      if (!navigationRef.isReady()) return;
+      try {
+        // The container ref is typed with the loose root param map; we cast
+        // each call's args through `never` because the nested ClientNavigator
+        // tab params are not threaded into this module.
+        const nav = navigationRef as unknown as {
+          navigate: (name: string, params?: object) => void;
+        };
+        if (target === 'first_meal') {
+          nav.navigate('Log');
+        } else if (target === 'first_checkin') {
+          nav.navigate('Home', { screen: 'Habits' });
+        } else if (target === 'logged_first_weight') {
+          nav.navigate('MoreTab', { screen: 'Progress' });
+        }
+      } catch {
+        // Navigation can fail in non-production harnesses (screenshot mode,
+        // tests). Silent fallback — the user already sees the main app.
+      }
+    }, 50);
+    return () => clearTimeout(t);
+  }, [authState]);
 
   if (authState === 'loading') {
     return (
@@ -331,6 +375,7 @@ export default function RootNavigator() {
 
   return (
     <NavigationContainer
+      ref={navigationRef}
       linking={linking}
       theme={{
         ...DefaultTheme,
