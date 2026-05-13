@@ -18,18 +18,22 @@ export default function AppSplash({ onFinish }: Props) {
   useEffect(() => {
     Animated.timing(textOpacity, {
       toValue: 1,
-      duration: 600,
-      delay: 200,
+      duration: 400,
+      delay: 100,
       useNativeDriver: true,
     }).start();
 
+    // Audit P0: previously held the splash for 1.8s after app init had already
+    // resolved, adding a ~2s artificial wait to every cold start. Capped to
+    // 600ms so the brand mark still has time to fade in but the user reaches
+    // real content fast.
     const timeout = setTimeout(() => {
       Animated.timing(containerOpacity, {
         toValue: 0,
-        duration: 400,
+        duration: 250,
         useNativeDriver: true,
       }).start(() => onFinish());
-    }, 1800);
+    }, 600);
 
     return () => clearTimeout(timeout);
   }, []);

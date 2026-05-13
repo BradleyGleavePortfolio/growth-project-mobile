@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { ActivityIndicator, View, StyleSheet } from 'react-native';
+import { ActivityIndicator, View, StyleSheet, Linking } from 'react-native';
 import {
   NavigationContainer,
   DefaultTheme,
@@ -25,6 +25,7 @@ import { flush as flushFoodLogQueue } from '../services/foodLogQueue';
 import { isScreenshotMode } from '../screenshots';
 import { firstWinApi } from '../services/firstWinApi';
 import Day1WinScreen from '../screens/client/Day1WinScreen';
+import { signOut } from '../services/authActions';
 // Phase 11 Track 9 — Support Inbox: init Crisp and sync identity on login
 import { initCrisp, syncCrispIdentity } from '../services/support/crisp.service';
 // Reconcile: if the lean onboarding completed but we never confirmed a 200
@@ -123,6 +124,86 @@ export default function RootNavigator() {
     bootstrapAuth();
     const unsubscribe = authEvents.onAuthChange(bootstrapAuth);
     return unsubscribe;
+  }, []);
+
+  // Root-level deep-link guard.
+  //
+  // The React Navigation `linking` config above only routes URLs to screens
+  // that are currently mounted. When the user is authenticated, the
+  // AuthNavigator stack (which owns ResetPassword and CreateAccount) is not
+  // mounted, so a `tgp://reset-password#…` or `https://app.../join/<code>`
+  // arriving from a real link click is silently dropped.
+  //
+  // For reset-password: the Supabase recovery flow assumes the *recipient*
+  // owns the inbox; if a different signed-in user clicks the link, we must
+  // sign them out first so the link's access_token actually replaces their
+  // session. We force signOut() and re-deliver the URL — once the auth state
+  // flips to unauthenticated, AuthNavigator's linking config picks it up.
+  //
+  // For invite links: a signed-in user already has a coach (or doesn't need
+  // one). We do not auto-attach the new code — silently re-pairing the user
+  // is the wrong behavior — but we record it on the screen-less path so the
+  // RoleSelection / settings flow can surface it later. Today that is a
+  // no-op marker in AsyncStorage; the in-app attach flow remains the
+  // canonical entry point. The bare invite path still works for
+  // unauthenticated users via the linking config.
+  useEffect(() => {
+    const handleUrl = async (url: string | null | undefined) => {
+      if (!url) return;
+      // Strip query/fragment for path matching.
+      const lower = url.toLowerCase();
+      const isReset =
+        lower.includes('reset-password') &&
+        (lower.startsWith('tgp://') || lower.includes('app.trygrowthproject.com'));
+      const isInvite =
+        (lower.startsWith('tgp://join/') ||
+          lower.includes('app.trygrowthproject.com/join/')) &&
+        !lower.endsWith('/join/');
+
+      if (!isReset && !isInvite) return;
+
+      const authed = await secureStorage.getItem('supabase_token');
+      if (!authed) return; // unauthenticated → linking config handles it natively.
+
+      if (isReset) {
+        // Force full sign-out so the recovery deep link can land on
+        // AuthNavigator's ResetPassword route with a clean session.
+        await signOut();
+        // Replay the URL so AuthNavigator picks it up via Linking once
+        // unauthenticated. RN dedupes back-to-back identical openURL
+        // events, so a microtask delay is enough.
+        setTimeout(() => {
+          Linking.openURL(url).catch(() => {});
+        }, 50);
+        return;
+      }
+
+      if (isInvite) {
+        const match = url.match(/\/join\/([^/?#]+)/i);
+        const code = match?.[1];
+        if (code) {
+          // Stash the inbound code so RoleSelection (or a future settings
+          // surface) can offer to attach it. The owner can wire surface-up
+          // when the in-app attach UI is built; for now we just don't lose
+          // the code.
+          try {
+            await AsyncStorage.setItem('pending_invite_code', code);
+          } catch {
+            // best-effort
+          }
+        }
+      }
+    };
+
+    // Cold-start URL.
+    Linking.getInitialURL().then(handleUrl).catch(() => {});
+    // Foreground URL events.
+    const sub = Linking.addEventListener('url', (event) => {
+      handleUrl(event.url);
+    });
+    return () => {
+      sub.remove();
+    };
   }, []);
 
   // Flush the offline food-log queue whenever the network comes back online.

@@ -52,15 +52,17 @@ export default function RoleSelectionScreen(_: Props) {
       }
 
       // If the user already has a coach attached (e.g. they signed up with
-      // an invite code, or it was attached during Google sign-in), they can
-      // continue without re-entering it.
+      // an invite code, or it was attached during Google sign-in), skip role
+      // selection entirely — the backend already knows their coach and the
+      // form would just re-collect a code we no longer need.
       try {
         const raw = await AsyncStorage.getItem('user_data');
         if (raw) {
           const u = JSON.parse(raw);
-          if (u?.coach_id) {
-            // Auto-continue silently; the screen still renders briefly to
-            // avoid flashing.
+          if (mounted && u?.coach_id) {
+            await AsyncStorage.removeItem('needs_role_selection');
+            authEvents.emit();
+            return;
           }
         }
       } catch {

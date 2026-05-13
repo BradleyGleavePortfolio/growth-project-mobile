@@ -5,32 +5,33 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authEvents } from '../utils/authEvents';
 import { profileApi } from './api';
+import { secureStorage } from './secureStorage';
 import { setSentryUser } from './sentry';
 import { reset as analyticsReset } from '../lib/analytics';
 
-// Keys owned by the app. `needs_role_selection` is cleared here because it is
-// a per-session flag from the Supabase flow; `onboarding_complete`, `user_data`,
-// and `macro_targets` are intentionally left alone unless the caller is wiping
-// the whole account — see the security/critical-fixes-round-1 branch for why
-// we now keep those across 401s.
-export const SIGN_OUT_KEYS = [
-  'supabase_token',
-  'supabase_refresh_token',
+// Tokens live in SecureStore; everything else is plain AsyncStorage.
+const SECURE_SIGN_OUT_KEYS = ['supabase_token', 'supabase_refresh_token'];
+const ASYNC_SIGN_OUT_KEYS = [
   'user_data',
   'needs_role_selection',
   'onboarding_complete',
   'macro_targets',
   'pending_email',
 ];
+// Exported for any caller that wants the full list of session keys.
+export const SIGN_OUT_KEYS = [...SECURE_SIGN_OUT_KEYS, ...ASYNC_SIGN_OUT_KEYS];
 
 export async function signOut(): Promise<void> {
   // Clear all auth + session state and notify the root navigator.
   // We surface failures via console.error instead of Alert because a sign-out
   // button that appears to do nothing is worse than one that logs a warning.
   try {
-    await AsyncStorage.multiRemove(SIGN_OUT_KEYS);
+    await Promise.all([
+      ...SECURE_SIGN_OUT_KEYS.map((k) => secureStorage.removeItem(k)),
+      AsyncStorage.multiRemove(ASYNC_SIGN_OUT_KEYS),
+    ]);
   } catch (err) {
-    console.error('signOut: multiRemove failed', err);
+    console.error('signOut: clear failed', err);
   }
   // Clear Sentry user binding so post-logout errors aren't tagged with the
   // previous user's id. No-ops when Sentry is not configured.

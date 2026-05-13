@@ -22,17 +22,41 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  // Minimal email shape check — full validation lives on the backend, but a
+  // pre-flight gate keeps users from chasing typos through a fake "sent"
+  // screen.
+  const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
   const handleReset = async () => {
-    if (!email.trim()) return;
+    const trimmed = email.trim();
+    setError('');
+    if (!trimmed) {
+      setError('Enter your email to continue.');
+      return;
+    }
+    if (!isValidEmail(trimmed)) {
+      setError('Enter a valid email address.');
+      return;
+    }
     setLoading(true);
     try {
-      await authApi.forgotPassword(email.trim());
-    } catch {
-      // Still show success — don't reveal if email exists
+      await authApi.forgotPassword(trimmed);
+      // Only show the success screen if the request actually completed.
+      // Previously `setSent(true)` ran in `finally`, so a network failure
+      // looked identical to a successful send and silently dropped the
+      // request. The success copy still hides whether the email exists.
+      setSent(true);
+    } catch (err) {
+      const msg =
+        (err as { response?: { data?: { message?: string } }; message?: string })?.response
+          ?.data?.message ||
+        (err as { message?: string })?.message ||
+        'Could not send reset email. Please try again.';
+      setError(msg);
     } finally {
       setLoading(false);
-      setSent(true);
     }
   };
 
@@ -81,7 +105,10 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
             <TextInput
               style={styles.input}
               value={email}
-              onChangeText={setEmail}
+              onChangeText={(v) => {
+                setEmail(v);
+                if (error) setError('');
+              }}
               placeholder="your@email.com"
               placeholderTextColor={colors.textMuted}
               keyboardType="email-address"
@@ -90,6 +117,11 @@ export default function ForgotPasswordScreen({ navigation }: Props) {
               accessibilityLabel="Email"
               textContentType="emailAddress"
             />
+            {error ? (
+              <Text style={styles.errorText} accessibilityRole="alert">
+                {error}
+              </Text>
+            ) : null}
           </View>
 
           <TouchableOpacity
@@ -195,6 +227,11 @@ const makeStyles = (colors: ThemeColors) =>
     color: colors.primary,
     fontSize: 16,
     fontWeight: '600',
+  },
+  errorText: {
+    fontSize: 13,
+    color: colors.error,
+    marginTop: 4,
   },
 
   });

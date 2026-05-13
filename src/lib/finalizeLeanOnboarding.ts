@@ -39,6 +39,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { profileApi } from '../services/api';
 import { calcBMR, calcTDEE, calcMacros, calculateAge } from '../utils/nutrition';
 import { getOnboardingData } from '../utils/onboardingStore';
+import { track } from './analytics';
+import { AnalyticsEvents } from '../analytics/events';
 
 // ─── Public types ────────────────────────────────────────────────────────────
 
@@ -232,6 +234,22 @@ export async function finalizeLeanOnboarding(): Promise<FinalizeResult> {
     await AsyncStorage.setItem('lean_onboarding_synced', 'true');
   } catch {
     // Non-fatal.
+  }
+
+  // Fire ONBOARDING_COMPLETED exactly once per device. The flag is checked
+  // before track() so reconcile retries do not double-fire the funnel event.
+  try {
+    const fired = await AsyncStorage.getItem('analytics_onboarding_completed_fired');
+    if (fired !== 'true') {
+      track(AnalyticsEvents.ONBOARDING_COMPLETED, {
+        computed_macros: !!macros,
+        primary_goal: primary_goal ?? null,
+        fitness_level: fitness_level ?? null,
+      });
+      await AsyncStorage.setItem('analytics_onboarding_completed_fired', 'true');
+    }
+  } catch {
+    // analytics is best-effort; do not fail finalize on tracker errors.
   }
 
   return { ok: true, computedMacros: !!macros };
