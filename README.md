@@ -1,5 +1,29 @@
 # The Growth Project
 
+
+> Status: pre-TestFlight audit complete; coach-facing beta blocked by mock Command Center, auth refresh, invite links, onboarding, messaging push; see /audits/00_MASTER_REPORT.md
+
+## Placeholders / TODO env vars
+
+The pre-TestFlight audit landed several fixes that gate on env vars the
+owner must populate before promoting an installed build past the
+internal-testers ring. Configure these via `eas env:create` (or in `.env`
+for local dev) before inviting external coaches or clients.
+
+| Env var | Profile(s) | Why it matters | Example shape |
+|---|---|---|---|
+| `EXPO_PUBLIC_API_URL` | development, preview, production | Base URL for all API calls (auth, messaging, billing, trust center, deletion, data export). The audit removed direct stale handlers; everything now routes through this. | `https://growth-project-backend.fly.dev/api` |
+| `EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER` | preview, production | When `false` and live endpoints are absent, the coach is routed to the real `ClientsStack` instead of the mock dashboard. **Must be `false` for any coach-facing build.** | `false` |
+| `EXPO_PUBLIC_NOTIFICATIONS_MOCK` | preview, production | When `false`, notifications API talks to the backend. Default is now `false`; only flip to `true` for offline UI work. | `false` |
+| `EXPO_PUBLIC_SUPABASE_URL` | all | Supabase project URL used by `supabaseAuth`. | `https://<ref>.supabase.co` |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | all | Supabase anon key. | `eyJhbG…` |
+
+The release build now fails fast if any of the required vars above are
+missing — there is no silent fallback. See `src/config/env.ts` for the
+exact required-var list and `.env.example` for the full inventory plus
+inline `eas env:create` invocations.
+
+
 A React Native nutrition & fitness coaching app built with Expo, TypeScript, and SQLite.
 
 ## Features
