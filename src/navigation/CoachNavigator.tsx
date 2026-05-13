@@ -44,6 +44,10 @@ import CoachBulkInviteScreen from '../screens/coach/CoachBulkInviteScreen';
 // Concierge Phase 1 — scheduling coach surfaces.
 import CoachAvailabilityEditorScreen from '../screens/coach/CoachAvailabilityEditorScreen';
 import CoachBookingInboxScreen from '../screens/coach/CoachBookingInboxScreen';
+// Coach AI v1 — generate/edit/approve workout, meal, insight drafts per client.
+import AIWorkoutDraftScreen from '../screens/coach/AIWorkoutDraftScreen';
+import AIMealPlanDraftScreen from '../screens/coach/AIMealPlanDraftScreen';
+import ClientInsightScreen from '../screens/coach/ClientInsightScreen';
 // Phase 10 — GDPR right to erasure.
 import DeleteAccountScreen from '../screens/settings/DeleteAccountScreen';
 // Phase 9 — Notification center
@@ -75,7 +79,13 @@ export type CoachTabParamList = {
 export type ClientsStackParamList = {
   ClientsList: undefined;
   ClientDetail: { clientId: string; clientName: string };
-  ClientMessages: { clientId: string; clientName: string };
+  /**
+   * `initialDraft` is consumed by ClientMessagesScreen to prefill the
+   * composer — used by Coach AI v1's "Send check-in" action on the
+   * weekly insight screen. Optional and ignored on screens that don't
+   * support it.
+   */
+  ClientMessages: { clientId: string; clientName: string; initialDraft?: string };
   InviteCodes: undefined;
   RiskBoard: undefined;
   ClientRiskDetail: { userId: string; clientName?: string };
@@ -88,6 +98,12 @@ export type ClientsStackParamList = {
   /** Concierge Phase 1 — scheduling coach surfaces. */
   CoachAvailabilityEditor:  { coachId: string };
   CoachBookingInbox:        undefined;
+  /** Coach AI v1 — review/edit/approve AI-generated workout program draft. */
+  AIWorkoutDraft:  { draftId: string; clientId: string; clientName: string };
+  /** Coach AI v1 — review/edit/approve AI-generated meal plan draft. */
+  AIMealPlanDraft: { draftId: string; clientId: string; clientName: string };
+  /** Coach AI v1 — render an AI-generated weekly insight for a client. */
+  ClientInsight:   { draftId: string; clientId: string; clientName: string };
   /** Phase 9 — Global notification center. */
   NotificationCenter: undefined;
   /** Phase 9 — Notification preferences. */
@@ -220,6 +236,19 @@ function ClientsStackNavigator() {
       <ClientsStack.Screen
         name="CoachBookingInbox"
         component={CoachBookingInboxScreen}
+      />
+      {/* Coach AI v1 — companion routes for the per-client generate/edit/approve flow. */}
+      <ClientsStack.Screen
+        name="AIWorkoutDraft"
+        component={AIWorkoutDraftScreen}
+      />
+      <ClientsStack.Screen
+        name="AIMealPlanDraft"
+        component={AIMealPlanDraftScreen}
+      />
+      <ClientsStack.Screen
+        name="ClientInsight"
+        component={ClientInsightScreen}
       />
       {/* Phase 9 — Notification center screens */}
       <ClientsStack.Screen

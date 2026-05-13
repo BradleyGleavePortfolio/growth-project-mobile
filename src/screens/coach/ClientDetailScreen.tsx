@@ -24,6 +24,7 @@ import { getTodayString } from '../../utils/date';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
 import { SkeletonProfileHeader, SkeletonWorkoutRow, SkeletonStatTile } from '../../ui/skeletons';
+import CoachAiSection from '../../components/coach/CoachAiSection';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface SessionSet {
@@ -856,6 +857,10 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
                 <Text style={styles.successBannerText}>Nudge sent</Text>
               </View>
             )}
+
+            {/* Coach AI v1 — generate workout / meal plan / weekly insight drafts.
+                Hides the CTAs when /coach/ai/status reports ready=false. */}
+            <CoachAiSection clientId={clientId} clientName={route.params.clientName} />
           </>
         )}
 
