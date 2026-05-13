@@ -28,7 +28,7 @@ A React Native nutrition & fitness coaching app built with Expo, TypeScript, and
 
 ## Features
 
-- **Calorie & Macro Tracking** — Log meals with protein, carbs, fat breakdowns
+- **Calorie & Macro Tracking** — Log meals with protein, carbs, fat breakdowns. Macros are stored on a strict **per-100g** canonical basis (see "Food logger math" below).
 - **Meal Plans** — Coach-assigned weekly meal plans with daily targets
 - **Recipe Library** — Searchable recipe database with filters
 - **Progress Tracking** — Weight logging with trend charts
@@ -332,6 +332,40 @@ The route names (`Home` / `WorkoutTab` / `Log` / `MoreTab`) are what `navigate()
 spacing, and radii. It exposes both the flat `Colors` palette and grouped
 `colors.{text,brand,feedback,border,data,background}` semantic tokens.
 Never hardcode hex values in components.
+
+## Food logger math
+
+The food logger (LogScreen + QuantityPickerModal + `src/utils/log/macros.ts`)
+treats every `FoodItem` as having **per-100g macros** (`nutrient_basis:
+'PER_100G'`). The backend normalises USDA FDC and OpenFoodFacts rows to that
+basis at import time. `calcMacros(food, qty, unit)` produces a single scalar
+multiplier:
+
+- `g` → `qty / 100`
+- `oz` → `qty * 28.3495 / 100`
+- `serving` → `qty * food.serving_size_grams / 100` (defaults to 100 g when
+  the field is missing). This is the fix for the "1 serving of 28 g almonds
+  credits 579 kcal" regression — see `src/__tests__/foodMacros.test.ts`.
+- `cup` / `tbsp` / `tsp` → use the per-food gram weights (`cup_grams`,
+  `tbsp_grams`, `tsp_grams`) when the backend supplies them, falling back to
+  a small category-keyed density table in `macros.ts`.
+
+The picker's `cup` / `tbsp` / `tsp` chips are gated behind the FoodItem's
+`supports_volume_units` flag. When the backend has no density entry for the
+food's category, those chips are hidden so the user can't pick a unit that
+produces wrong numbers (graceful degradation). See `unitOptionsFor()` in
+`src/utils/log/types.ts`.
+
+Log writes send both the derived `quantity_multiplier` and the literal
+`original_quantity` + `original_unit` the user picked (e.g. `6`, `'oz'`).
+Coaches reading the timeline see "6 oz", not "1.7008".
+
+Legacy `FoodItem` rows produced before this fix may carry
+`nutrient_basis: 'PER_SERVING'`. `calcMacros` honours that flag by treating
+the per-100g fields as per-serving macros and scaling by `qty` directly.
+
+Companion backend PR (server-side normalisation, density table, NL parser):
+see PR linked from `fix/food-logger-trainerize-floor`.
 
 ## Contributing
 

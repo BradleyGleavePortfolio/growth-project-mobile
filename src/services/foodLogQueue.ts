@@ -49,6 +49,8 @@ export interface PendingSearchLog {
     date: string;
     meal_type: 'breakfast' | 'lunch' | 'dinner' | 'snack';
     quantity_multiplier: number;
+    original_quantity?: number;
+    original_unit?: string;
   };
 }
 
@@ -122,6 +124,8 @@ export async function flush(): Promise<{ flushed: number; remaining: number }> {
         meal_type: item.log.meal_type,
         food_item_id: foodItemId,
         quantity_multiplier: item.log.quantity_multiplier,
+        original_quantity: item.log.original_quantity,
+        original_unit: item.log.original_unit,
       });
       flushed++;
       // Remove this entry from the queue and persist after each success so we
