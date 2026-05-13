@@ -41,6 +41,11 @@ export default function MessagesScreen() {
   const currentUser = useCurrentUser();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  // null = unknown (haven't loaded yet); true = at least one page returned
+  // exactly the requested limit, meaning more messages may exist; false = the
+  // last fetch came back short, so we've reached the start of the thread.
+  const [hasMoreOlder, setHasMoreOlder] = useState<boolean>(true);
   const [inputText, setInputText] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
@@ -48,10 +53,14 @@ export default function MessagesScreen() {
   const flatListRef = useRef<FlatList<Message>>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const PAGE_LIMIT = 100;
+
   const load = useCallback(async () => {
     try {
-      const res = await messagesApi.list({ limit: 100 });
-      setMessages(normalizeList(res.data));
+      const res = await messagesApi.list({ limit: PAGE_LIMIT });
+      const list = normalizeList(res.data);
+      setMessages(list);
+      setHasMoreOlder(list.length >= PAGE_LIMIT);
       setError('');
       setNoCoach(false);
     } catch (err) {
@@ -67,6 +76,26 @@ export default function MessagesScreen() {
       setLoading(false);
     }
   }, []);
+
+  const loadOlder = useCallback(async () => {
+    if (loadingOlder || !hasMoreOlder || messages.length === 0) return;
+    setLoadingOlder(true);
+    try {
+      const oldest = messages[0];
+      const res = await messagesApi.list({ before: oldest.created_at, limit: PAGE_LIMIT });
+      const page = normalizeList(res.data);
+      if (page.length === 0) {
+        setHasMoreOlder(false);
+      } else {
+        setMessages((prev) => mergeById(page, prev));
+        setHasMoreOlder(page.length >= PAGE_LIMIT);
+      }
+    } catch (err) {
+      console.error('client MessagesScreen: loadOlder failed', err);
+    } finally {
+      setLoadingOlder(false);
+    }
+  }, [loadingOlder, hasMoreOlder, messages]);
 
   const markRead = useCallback(async () => {
     try {
@@ -199,6 +228,25 @@ export default function MessagesScreen() {
         contentContainerStyle={styles.chatList}
         showsVerticalScrollIndicator={false}
         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+        ListHeaderComponent={
+          hasMoreOlder && messages.length > 0 ? (
+            <TouchableOpacity
+              onPress={loadOlder}
+              disabled={loadingOlder}
+              accessibilityRole="button"
+              accessibilityLabel="Load older messages"
+              style={{ paddingVertical: 12, alignItems: 'center' }}
+            >
+              {loadingOlder ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <Text style={{ color: colors.primary, fontSize: 13, fontWeight: '600' }}>
+                  Load older
+                </Text>
+              )}
+            </TouchableOpacity>
+          ) : null
+        }
         ListEmptyComponent={
           <View style={styles.chatEmpty}>
             <Ionicons name="chatbubbles-outline" size={40} color={colors.textMuted} />

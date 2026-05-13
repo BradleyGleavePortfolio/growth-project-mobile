@@ -43,23 +43,26 @@ export default function CoachHomeScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();
-  const { clients, isLoading, loadClients } = useCoachStore();
+  const { clients, isLoading, loadError, loadClients } = useCoachStore();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const [refreshing, setRefreshing] = useState(false);
   const [redFlagClients, setRedFlagClients] = useState<RedFlagClient[]>([]);
   const [overdueClients, setOverdueClients] = useState<string[]>([]);
   const [dashboard, setDashboard] = useState<{ logs_today: number; total_kcal: number; logging_rate: number } | null>(null);
   const [dashboardLoading, setDashboardLoading] = useState(true);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
   const [riskCounts, setRiskCounts] = useState<RiskBucketCounts | null>(null);
   const isOwner = currentUser?.role === 'owner';
 
   const fetchDashboard = useCallback(async () => {
     setDashboardLoading(true);
+    setDashboardError(null);
     try {
       const res = await coachApi.getDashboard();
       setDashboard(res.data);
     } catch (err) {
       console.error('CoachHomeScreen: fetchDashboard failed', err);
+      setDashboardError('Could not load dashboard.');
     } finally {
       setDashboardLoading(false);
     }
@@ -154,6 +157,41 @@ export default function CoachHomeScreen() {
           <SkeletonStatTile />
           <SkeletonStatTile />
         </View>
+      </View>
+    );
+  }
+
+  // Audit P1: error/retry surface for the cold-start failure case. If both
+  // the clients load and the dashboard load failed AND we have nothing
+  // cached to show, render a retry block instead of an empty layout.
+  const hasNothing = clients.length === 0 && !dashboard;
+  if (hasNothing && (loadError || dashboardError)) {
+    return (
+      <View style={[styles.loadingContainer, { paddingHorizontal: 32, gap: 12 }]}>
+        <Ionicons name="cloud-offline-outline" size={32} color={colors.textMuted} />
+        <Text style={{ color: colors.textSecondary, textAlign: 'center' }}>
+          {loadError ?? dashboardError}
+        </Text>
+        <HapticPressable
+          intent="medium"
+          onPress={() => {
+            load();
+            fetchDashboard();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Retry"
+          style={{
+            backgroundColor: colors.primary,
+            paddingVertical: 12,
+            paddingHorizontal: 24,
+            borderRadius: 4,
+            marginTop: 8,
+          }}
+        >
+          <Text style={{ color: colors.textOnPrimary, fontWeight: '600', letterSpacing: 1.1, textTransform: 'uppercase' }}>
+            Try again
+          </Text>
+        </HapticPressable>
       </View>
     );
   }

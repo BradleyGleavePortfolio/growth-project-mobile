@@ -70,14 +70,17 @@ export function isFeatureEnabled(key: FeatureFlagKey): boolean {
 
 /**
  * Phase 9 — Notification center mock flag.
- * Set to true while the backend Phase 9 PR is not yet merged.
  * When true, all notification API calls use the in-memory mock store in
- * src/services/notificationsApi.ts.
- * When false, calls hit the real backend (EXPO_PUBLIC_API_URL must be set).
+ * src/services/notificationsApi.ts. When false, calls hit the real backend
+ * at EXPO_PUBLIC_API_URL.
  *
- * env: EXPO_PUBLIC_NOTIFICATIONS_MOCK (optional — defaults to true)
+ * Default OFF (production-safe). Demo / screenshot builds opt in via the env
+ * var. Production is hard-pinned to "false" in eas.json so a release binary
+ * can never accidentally ship with the mock store.
+ *
+ * env: EXPO_PUBLIC_NOTIFICATIONS_MOCK
  */
 export const NOTIFICATIONS_MOCK_ENABLED: boolean = readFlag(
   'EXPO_PUBLIC_NOTIFICATIONS_MOCK',
-  true,
+  false,
 );

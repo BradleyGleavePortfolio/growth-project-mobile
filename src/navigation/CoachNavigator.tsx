@@ -55,6 +55,7 @@ import { fetchUnreadCount } from '../services/notificationsApi';
 // The legacy CoachHomeScreen is preserved in the Clients stack as a sub-screen
 // so existing deep links and navigation.navigate() calls keep working.
 import CommandCenterScreen from '../screens/coach/command-center/CommandCenterScreen';
+import { __USING_MOCK_DATA } from '../services/commandCenterApi';
 // Phase 10 — GDPR Article 20 data portability
 import DataExportScreen from '../screens/settings/DataExportScreen';
 import { Colors } from '../constants/colors';
@@ -322,8 +323,14 @@ function useCoachUnreadPolling(): number {
 
 export default function CoachNavigator() {
   const unreadCount = useCoachUnreadPolling();
+  // Audit P0: while the Command Center API still ships only mock data
+  // (__USING_MOCK_DATA driven by EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER), the
+  // initial tab for a real coach is ClientsStack. Mock-mode builds (demo,
+  // screenshots) keep the CommandCenter landing surface.
+  const initialTab = __USING_MOCK_DATA ? 'CommandCenter' : 'ClientsStack';
   return (
     <Tab.Navigator
+      initialRouteName={initialTab}
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: Colors.primary,

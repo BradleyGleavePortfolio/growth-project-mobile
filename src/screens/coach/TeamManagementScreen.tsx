@@ -21,11 +21,42 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/colors';
 import { subCoachApi, SubCoachSummary } from '../../api/subCoachApi';
+import { authApi } from '../../services/api';
 import type { TeamStackParamList } from '../../navigation/CoachNavigator';
 
 const SCALE_TIERS = ['scale', 'enterprise'];
+
+// Read the head coach's own plan tier from /auth/me, falling back to the
+// cached user_data blob if the network call fails. The previous code inferred
+// tier from `data[0].coach_profile.plan_tier`, which broke on the empty case
+// (head coach with zero sub-coaches saw the upgrade gate even on Scale).
+async function resolveHeadCoachTier(): Promise<string> {
+  try {
+    const me = await authApi.me();
+    const tier =
+      (me.data as { plan_tier?: string; profile?: { plan_tier?: string } } | undefined)
+        ?.plan_tier ||
+      (me.data as { profile?: { plan_tier?: string } } | undefined)?.profile?.plan_tier;
+    if (tier) return tier;
+  } catch {
+    // fall through to cache
+  }
+  try {
+    const raw = await AsyncStorage.getItem('user_data');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const cached: string | undefined =
+        parsed?.plan_tier || parsed?.profile?.plan_tier;
+      if (cached) return cached;
+    }
+  } catch {
+    // ignore
+  }
+  return 'flat_300';
+}
 
 function CapacityBar({
   assigned,
@@ -124,15 +155,13 @@ export default function TeamManagementScreen() {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
+    // Always resolve the head coach's tier from their own profile, regardless
+    // of whether sub-coaches exist yet.
+    const tier = await resolveHeadCoachTier();
+    setPlanTier(tier);
     try {
       const res = await subCoachApi.listSubCoaches();
-      const data: SubCoachSummary[] = res.data ?? [];
-      setSubCoaches(data);
-      // Infer the head coach's tier from the first sub-coach's profile
-      // (all share the same billing plan) or fall back to a default.
-      if (data.length > 0 && data[0].coach_profile?.plan_tier) {
-        setPlanTier(data[0].coach_profile.plan_tier);
-      }
+      setSubCoaches(res.data ?? []);
     } catch {
       setError('Could not load team. Please try again.');
     } finally {

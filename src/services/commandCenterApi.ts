@@ -15,8 +15,12 @@
 import api from './api';
 
 // ─── Flag ─────────────────────────────────────────────────────────────────────
-// Flip to false once the Phase 8 backend PR is merged and the endpoint is live.
-export const __USING_MOCK_DATA = true;
+// Driven by EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER. Defaults OFF (false) — only
+// dev/preview builds that opt in via env get the bundled mock fixtures.
+// Production builds set this to "false" in eas.json so a release binary can
+// never accidentally ship with the demo roster.
+const RAW = (process.env.EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER || '').trim().toLowerCase();
+export const __USING_MOCK_DATA: boolean = RAW === '1' || RAW === 'true';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 

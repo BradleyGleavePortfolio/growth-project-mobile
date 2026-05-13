@@ -28,6 +28,7 @@ export default function ClientsListScreen({ navigation }: Props) {
   const currentUser = useCurrentUser();
   const {
     isLoading,
+    loadError,
     searchQuery,
     filterStatus,
     loadClients,
@@ -165,6 +166,26 @@ export default function ClientsListScreen({ navigation }: Props) {
             <SkeletonClientCard key={i} />
           ))}
         </>
+      ) : loadError && filteredClients.length === 0 ? (
+        // Network/server failure with no prior data — show an explicit error
+        // surface with a retry button instead of falling through to the
+        // empty-roster CTA (which falsely implied the coach had no clients).
+        <View style={styles.errorContainer}>
+          <Ionicons name="cloud-offline-outline" size={32} color={colors.textMuted} />
+          <Text style={styles.errorText}>{loadError}</Text>
+          <HapticPressable
+            intent="medium"
+            style={styles.retryButton}
+            onPress={() =>
+              currentUser &&
+              loadClients(currentUser.id, filterStatus === 'all' ? undefined : filterStatus)
+            }
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading clients"
+          >
+            <Text style={styles.retryButtonText}>Try again</Text>
+          </HapticPressable>
+        </View>
       ) : (
         <FlatList
           data={filteredClients}
@@ -341,6 +362,32 @@ const makeStyles = (colors: ThemeColors) =>
     lineHeight: 19,
     color: colors.info,
     fontWeight: '500',
+  },
+  errorContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+    gap: 12,
+  },
+  errorText: {
+    fontSize: 15,
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+  retryButton: {
+    backgroundColor: colors.primary,
+    borderRadius: 4,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    marginTop: 8,
+  },
+  retryButtonText: {
+    color: colors.textOnPrimary,
+    fontSize: 14,
+    fontWeight: '600',
+    letterSpacing: 1.1,
+    textTransform: 'uppercase',
   },
 
 

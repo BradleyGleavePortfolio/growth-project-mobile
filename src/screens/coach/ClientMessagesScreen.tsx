@@ -44,17 +44,22 @@ export default function ClientMessagesScreen() {
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [hasMoreOlder, setHasMoreOlder] = useState(true);
   const [inputText, setInputText] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const flatListRef = useRef<FlatList<Message>>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  const PAGE_LIMIT = 100;
+
   const loadInitial = useCallback(async () => {
     try {
-      const res = await coachApi.getClientMessages(clientId, { limit: 100 });
+      const res = await coachApi.getClientMessages(clientId, { limit: PAGE_LIMIT });
       const list: Message[] = normalizeList(res.data);
       setMessages(list);
+      setHasMoreOlder(list.length >= PAGE_LIMIT);
       setError('');
     } catch (err) {
       console.error('ClientMessagesScreen: load failed', err);
@@ -63,6 +68,29 @@ export default function ClientMessagesScreen() {
       setLoading(false);
     }
   }, [clientId]);
+
+  const loadOlder = useCallback(async () => {
+    if (loadingOlder || !hasMoreOlder || messages.length === 0) return;
+    setLoadingOlder(true);
+    try {
+      const oldest = messages[0];
+      const res = await coachApi.getClientMessages(clientId, {
+        before: oldest.created_at,
+        limit: PAGE_LIMIT,
+      });
+      const page: Message[] = normalizeList(res.data);
+      if (page.length === 0) {
+        setHasMoreOlder(false);
+      } else {
+        setMessages((prev) => mergeById(page, prev));
+        setHasMoreOlder(page.length >= PAGE_LIMIT);
+      }
+    } catch (err) {
+      console.error('ClientMessagesScreen: loadOlder failed', err);
+    } finally {
+      setLoadingOlder(false);
+    }
+  }, [clientId, loadingOlder, hasMoreOlder, messages]);
 
   const loadSinceNewest = useCallback(async () => {
     // We just refetch the tail window; backend supports `before` not `after`,
@@ -184,6 +212,25 @@ export default function ClientMessagesScreen() {
         contentContainerStyle={styles.chatList}
         showsVerticalScrollIndicator={false}
         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
+        ListHeaderComponent={
+          hasMoreOlder && messages.length > 0 ? (
+            <TouchableOpacity
+              onPress={loadOlder}
+              disabled={loadingOlder}
+              accessibilityRole="button"
+              accessibilityLabel="Load older messages"
+              style={{ paddingVertical: 12, alignItems: 'center' }}
+            >
+              {loadingOlder ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <Text style={{ color: colors.primary, fontSize: 13, fontWeight: '600' }}>
+                  Load older
+                </Text>
+              )}
+            </TouchableOpacity>
+          ) : null
+        }
         ListEmptyComponent={
           <View style={styles.chatEmpty}>
             <Ionicons name="chatbubbles-outline" size={40} color={colors.textMuted} />

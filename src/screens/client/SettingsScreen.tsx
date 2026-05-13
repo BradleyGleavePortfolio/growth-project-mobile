@@ -362,6 +362,24 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </HapticPressable>
+          {/* Audit P1: surface the canonical NotificationPreferences screen
+              from Settings. The local Notifications switches above only
+              control the legacy useSettings flags; full channel + quiet-hour
+              control lives here. */}
+          <HapticPressable
+            intent="light"
+            style={styles.row}
+            onPress={() => navigation.navigate('NotificationPreferences')}
+            accessibilityRole="button"
+            accessibilityLabel="Notification preferences"
+            accessibilityHint="Opens detailed channel and quiet-hour controls"
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+              <Ionicons name="notifications-outline" size={18} color={colors.primary} />
+              <Text style={styles.rowLabel}>Notification preferences</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </HapticPressable>
         </View>
 
         {/* Support */}

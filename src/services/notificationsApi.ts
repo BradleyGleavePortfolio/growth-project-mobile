@@ -18,6 +18,7 @@
 // See README.md for the full routing table.
 
 import { NOTIFICATIONS_MOCK_ENABLED } from '../config/featureFlags';
+import api from './api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -197,8 +198,14 @@ export async function fetchNotifications(
   limit = 25,
 ): Promise<NotificationPage> {
   if (!NOTIFICATIONS_MOCK_ENABLED) {
-    // Live path — import api from './api' and call real endpoint.
-    throw new Error('Live notifications API not yet wired. Set NOTIFICATIONS_MOCK_ENABLED=true.');
+    const q = new URLSearchParams();
+    if (cursor) q.set('cursor', cursor);
+    if (limit) q.set('limit', String(limit));
+    const qs = q.toString();
+    const res = await api.get<NotificationPage>(
+      `/notifications${qs ? `?${qs}` : ''}`,
+    );
+    return res.data;
   }
 
   await simulateLatency();
@@ -229,7 +236,13 @@ export async function fetchNotifications(
  */
 export async function fetchUnreadCount(): Promise<number> {
   if (!NOTIFICATIONS_MOCK_ENABLED) {
-    throw new Error('Live notifications API not yet wired.');
+    try {
+      const res = await api.get<{ count: number }>('/notifications/unread-count');
+      return Number(res.data?.count ?? 0);
+    } catch {
+      // Badge polling must never throw — a zero count is a safe fallback.
+      return 0;
+    }
   }
   await simulateLatency();
   return MOCK_STORE.notifications.filter((n) => !n.read).length;
@@ -240,7 +253,8 @@ export async function fetchUnreadCount(): Promise<number> {
  */
 export async function markNotificationRead(notificationId: string): Promise<void> {
   if (!NOTIFICATIONS_MOCK_ENABLED) {
-    throw new Error('Live notifications API not yet wired.');
+    await api.patch(`/notifications/${encodeURIComponent(notificationId)}/read`);
+    return;
   }
   await simulateLatency();
   const notif = MOCK_STORE.notifications.find((n) => n.id === notificationId);
@@ -254,7 +268,8 @@ export async function markNotificationRead(notificationId: string): Promise<void
  */
 export async function markAllNotificationsRead(): Promise<void> {
   if (!NOTIFICATIONS_MOCK_ENABLED) {
-    throw new Error('Live notifications API not yet wired.');
+    await api.patch('/notifications/read-all');
+    return;
   }
   await simulateLatency();
   MOCK_STORE.notifications.forEach((n) => {
@@ -267,7 +282,8 @@ export async function markAllNotificationsRead(): Promise<void> {
  */
 export async function fetchNotificationPreferences(): Promise<NotificationPreferences> {
   if (!NOTIFICATIONS_MOCK_ENABLED) {
-    throw new Error('Live notifications API not yet wired.');
+    const res = await api.get<NotificationPreferences>('/notifications/preferences');
+    return res.data;
   }
   await simulateLatency();
   // Deep-clone so callers cannot mutate the store directly.
@@ -282,7 +298,11 @@ export async function saveNotificationPreferences(
   updates: Partial<NotificationPreferences>,
 ): Promise<NotificationPreferences> {
   if (!NOTIFICATIONS_MOCK_ENABLED) {
-    throw new Error('Live notifications API not yet wired.');
+    const res = await api.put<NotificationPreferences>(
+      '/notifications/preferences',
+      updates,
+    );
+    return res.data;
   }
   await simulateLatency();
   MOCK_STORE.preferences = {
