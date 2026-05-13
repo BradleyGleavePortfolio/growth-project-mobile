@@ -29,7 +29,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Spacing, Radius } from '../theme/index';
 import { typography, shadows } from '../theme/tokens';
 import { track } from '../lib/analytics';
-import api from '../services/api';
+import api, { deletionApi } from '../services/api';
+import { dataExportApi } from '../services/dataExportApi';
 import { helpUrl } from '../config/env';
 import { useTheme, ThemeColors } from '../theme/ThemeProvider';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
@@ -190,10 +191,10 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
     track('data_export_requested');
     setExportBusy(true);
     try {
-      await api.post('/users/me/data-export');
+      await dataExportApi.requestExport();
       Alert.alert(
         'Export Requested',
-        'Your data export has been queued. You will receive an email within 24 hours.',
+        'Your data export has been queued. Open Data & Privacy in Settings to track progress and download the file when ready.',
         [{ text: 'OK' }],
       );
     } catch {
@@ -206,7 +207,7 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
   const handleDeleteAccount = useCallback(() => {
     Alert.alert(
       'Delete My Account',
-      'This will schedule your account for permanent deletion after a 30-day grace period. You can cancel within that window by contacting support.',
+      'This will schedule your account for permanent deletion after a 14-day grace period. You can cancel within that window from Settings.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -216,10 +217,10 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
             track('account_deletion_requested');
             setDeleteBusy(true);
             try {
-              await api.delete('/users/me/account');
+              await deletionApi.requestDeletion();
               Alert.alert(
-                'Account Scheduled for Deletion',
-                'Your account will be permanently deleted in 30 days. Contact support within this window to cancel.',
+                'Confirmation email sent',
+                'We have emailed a confirmation link. After you confirm, your account enters a 14-day grace period during which you can cancel from Settings.',
               );
             } catch {
               Alert.alert('Request Failed', 'Could not schedule account deletion. Please try again later.');
@@ -351,7 +352,7 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
             </View>
             <View style={styles.actionBtnText}>
               <Text style={[styles.actionBtnLabel, styles.dangerText]}>Delete my account</Text>
-              <Text style={styles.actionBtnSub}>30-day grace period before permanent deletion</Text>
+              <Text style={styles.actionBtnSub}>14-day grace period before permanent deletion</Text>
             </View>
             {deleteBusy ? (
               <ActivityIndicator size="small" color={colors.error} />

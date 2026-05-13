@@ -9,6 +9,8 @@ import {
   RefreshControl,
   ActivityIndicator,
   Image,
+  FlatList,
+  ListRenderItem,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,7 +18,6 @@ import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/
 import { useQuery } from '@tanstack/react-query';
 import { recipesApi, profileApi } from '../../services/api';
 
-import FadeInView from '../../components/FadeInView';
 import EmptyState from '../../components/EmptyState';
 import AllergySafetyPrompt from '../../components/AllergySafetyPrompt';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
@@ -229,6 +230,14 @@ export default function RecipesScreen() {
     [navigation],
   );
 
+  const keyExtractor = useCallback((item: Recipe) => item.id, []);
+  const renderItem = useCallback<ListRenderItem<Recipe>>(
+    ({ item }) => (
+      <RecipeCard recipe={item} onPress={() => handleRecipePress(item)} />
+    ),
+    [handleRecipePress],
+  );
+
   return (
     <View style={styles.container}>
       {/* Header */}
@@ -274,48 +283,56 @@ export default function RecipesScreen() {
         ))}
       </ScrollView>
 
-      {/* Content */}
-      <ScrollView
-        style={styles.list}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={isRefetching}
-            onRefresh={refetch}
-            tintColor={colors.primary}
-          />
-        }
-      >
-        {isLoading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={colors.primary} />
-            <Text style={styles.loadingText}>Loading recipes…</Text>
-          </View>
-        ) : isError ? (
-          <EmptyState
-            icon="alert-circle-outline"
-            title="Couldn't load recipes"
-            subtitle="Pull down to try again."
-          />
-        ) : filtered.length === 0 ? (
-          <EmptyState
-            icon="restaurant-outline"
-            title={search || activeTag !== 'All' ? 'No matches' : 'No recipes yet'}
-            subtitle={
-              search || activeTag !== 'All'
-                ? 'Try a different search or filter.'
-                : 'Recipes added by your coach will appear here.'
-            }
-          />
-        ) : (
-          filtered.map((recipe, i) => (
-            <FadeInView key={recipe.id} delay={i * 40}>
-              <RecipeCard recipe={recipe} onPress={() => handleRecipePress(recipe)} />
-            </FadeInView>
-          ))
-        )}
-      </ScrollView>
+      {/* Content — FlatList instead of ScrollView so 75+ recipe rows
+          virtualize. FadeInView is dropped for off-screen rows because
+          FlatList recycles cells and a per-row animation on a recycled cell
+          flickers; the perceived win from virtualization is bigger than the
+          mount-in animation. */}
+      {isLoading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Loading recipes…</Text>
+        </View>
+      ) : (
+        <FlatList<Recipe>
+          style={styles.list}
+          contentContainerStyle={styles.listContent}
+          data={filtered}
+          keyExtractor={keyExtractor}
+          renderItem={renderItem}
+          showsVerticalScrollIndicator={false}
+          initialNumToRender={8}
+          maxToRenderPerBatch={8}
+          windowSize={7}
+          removeClippedSubviews
+          refreshControl={
+            <RefreshControl
+              refreshing={isRefetching}
+              onRefresh={refetch}
+              tintColor={colors.primary}
+            />
+          }
+          ListEmptyComponent={
+            isError ? (
+              <EmptyState
+                icon="alert-circle-outline"
+                title="Couldn't load recipes"
+                subtitle="Pull down to try again."
+              />
+            ) : (
+              <EmptyState
+                icon="restaurant-outline"
+                title={search || activeTag !== 'All' ? 'No matches' : 'No recipes yet'}
+                subtitle={
+                  search || activeTag !== 'All'
+                    ? 'Try a different search or filter.'
+                    : 'Recipes added by your coach will appear here.'
+                }
+              />
+            )
+          }
+        />
+      )}
 
       {/* One-time safety prompt for lean-onboarded users without restrictions. */}
       <AllergySafetyPrompt
