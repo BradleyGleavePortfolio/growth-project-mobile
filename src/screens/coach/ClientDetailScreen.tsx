@@ -156,6 +156,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
   const [selectedDays, setSelectedDays] = useState<7 | 30 | 90>(90);
   const [expandedWeeks, setExpandedWeeks] = useState<Set<string>>(new Set());
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [showNudgeModal, setShowNudgeModal] = useState(false);
   const [nudgeTitle, setNudgeTitle] = useState('');
@@ -184,6 +185,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
   const loadData = useCallback(async () => {
     try {
       if (!refreshing) setIsLoading(true);
+      setLoadError(null);
       const today = getTodayString();
 
       const res = await coachApi.getClientSummary(clientId);
@@ -255,9 +257,11 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
       setWorkoutSessions(sessions as unknown as WorkoutSession[]);
 
     } catch (err) {
-      // Read-only client detail load — we log and let the UI render whatever
-      // partial state we accumulated before the throw. User can pull-to-refresh.
+      // If we have no profile yet, expose the failure so the screen can render
+      // an explicit error/retry block instead of leaving the user staring at
+      // the skeleton header forever.
       console.error('ClientDetailScreen: load failed', err);
+      setLoadError(errorMessage(err, 'Could not load this client. Please try again.'));
     } finally {
       setIsLoading(false);
     }
@@ -671,6 +675,36 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
     );
   }
 
+  // Audit P1: explicit error + retry surface when the summary load fails and
+  // we have no profile to show. Previously the screen fell through with an
+  // empty layout that looked indistinguishable from a brand-new client with
+  // no logs yet.
+  if (loadError && !profile) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', paddingHorizontal: 32 }]}>
+        <Ionicons name="cloud-offline-outline" size={36} color={colors.textMuted} />
+        <Text style={{ color: colors.textSecondary, textAlign: 'center', marginTop: 12, marginBottom: 16 }}>
+          {loadError}
+        </Text>
+        <TouchableOpacity
+          onPress={loadData}
+          accessibilityRole="button"
+          accessibilityLabel="Retry"
+          style={{
+            backgroundColor: colors.primary,
+            paddingVertical: 12,
+            paddingHorizontal: 24,
+            borderRadius: 4,
+          }}
+        >
+          <Text style={{ color: colors.textOnPrimary, fontWeight: '600', letterSpacing: 1.1, textTransform: 'uppercase' }}>
+            Try again
+          </Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   const calTarget = profile?.calorieTarget || 0;
   const calPct = calTarget > 0 ? Math.min(100, Math.round((totals.calories / calTarget) * 100)) : 0;
 
@@ -698,7 +732,11 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
           style={styles.msgIconBtn}
           onPress={() => {
             if (!currentUser) return;
-            navigation.getParent()?.navigate('Messages', { clientId, clientName });
+            // Audit P1: route to the specific client thread, not the Messages
+            // tab (which is the global inbox and ignored the params we were
+            // passing). ClientMessages lives inside ClientsStack, the same
+            // navigator as ClientDetail, so a direct .navigate works.
+            navigation.navigate('ClientMessages', { clientId, clientName });
           }}
         >
           <Ionicons name="chatbubble-outline" size={20} color={colors.primary} />

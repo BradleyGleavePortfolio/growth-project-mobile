@@ -458,6 +458,19 @@ export default function SettingsScreen() {
             thumbColor={colors.textOnPrimary}
           />
         </View>
+        <View style={styles.divider} />
+        {/* Audit P1: surface the canonical NotificationPreferences screen. */}
+        <TouchableOpacity
+          style={styles.row}
+          onPress={() => navigation.navigate('NotificationPreferences')}
+          accessibilityRole="button"
+          accessibilityLabel="Notification preferences"
+          accessibilityHint="Channel and quiet-hour controls"
+        >
+          <Ionicons name="notifications-outline" size={20} color={colors.textSecondary} />
+          <Text style={styles.rowLabel}>Notification preferences</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
       </View>
 
       {/* App Preferences */}

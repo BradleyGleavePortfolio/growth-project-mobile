@@ -5,6 +5,10 @@ import { coachApi } from '../services/api';
 interface CoachStore {
   clients: User[];
   isLoading: boolean;
+  // null when the last load succeeded or has not yet run. Holds a non-empty
+  // message after a failed load so callers can render an error/retry block
+  // instead of the empty state.
+  loadError: string | null;
   searchQuery: string;
   filterStatus: 'all' | 'active' | 'archived';
 
@@ -20,6 +24,7 @@ interface CoachStore {
 const initialCoachState = {
   clients: [] as User[],
   isLoading: false,
+  loadError: null as string | null,
   searchQuery: '',
   filterStatus: 'all' as const,
 };
@@ -33,7 +38,7 @@ export const useCoachStore = create<CoachStore>((set, get) => ({
     const { filterStatus } = get();
     const effectiveStatus = status ?? filterStatus ?? 'all';
     try {
-      set({ isLoading: true });
+      set({ isLoading: true, loadError: null });
       const res = await coachApi.getClients(effectiveStatus === 'all' ? undefined : effectiveStatus);
       // Backend coach-clients row shape. Field names mirror the
       // /v1/coach/me/clients DTO; `role` arrives as the wire `student`
@@ -64,12 +69,16 @@ export const useCoachStore = create<CoachStore>((set, get) => ({
           updatedAt: u.created_at || new Date().toISOString(),
         };
       });
-      set({ clients, isLoading: false });
+      set({ clients, isLoading: false, loadError: null });
     } catch (err) {
-      // Read-only client list load. Existing state stays; user can retry
-      // via the coach-home pull-to-refresh.
+      // Read-only client list load. Existing state stays so the previous
+      // roster remains visible if the user already loaded once; the new
+      // loadError flag lets the screen render an error/retry block.
       console.error('coachStore: loadClients failed', err);
-      set({ isLoading: false });
+      set({
+        isLoading: false,
+        loadError: 'Could not load clients. Please try again.',
+      });
     }
   },
 
