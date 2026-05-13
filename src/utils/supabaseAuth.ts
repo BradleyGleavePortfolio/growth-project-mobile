@@ -6,7 +6,6 @@
 // not inventing a new auth scheme — we're calling supabase-js with the
 // already-signed-in session.
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { secureStorage } from '../services/secureStorage';
 import { env } from '../config/env';
 import { errorMessage } from '../types/common';
@@ -18,7 +17,7 @@ export async function updateSupabasePassword(newPassword: string): Promise<{ ok:
   try {
     const [accessToken, refreshToken] = await Promise.all([
       secureStorage.getItem('supabase_token'),
-      AsyncStorage.getItem('supabase_refresh_token'),
+      secureStorage.getItem('supabase_refresh_token'),
     ]);
     if (!accessToken) {
       return { ok: false, message: 'You are not signed in. Please sign in again and retry.' };

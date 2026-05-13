@@ -18,11 +18,19 @@
       "environment": "preview",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER": "false",
+        "EXPO_PUBLIC_NOTIFICATIONS_MOCK": "false"
       }
     },
     "production": {
       "distribution": "store",
-      "environment": "production"
+      "environment": "production",
+      "env": {
+        "EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER": "false",
+        "EXPO_PUBLIC_NOTIFICATIONS_MOCK": "false"
+      }
     }
   }
 }

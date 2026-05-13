@@ -17,6 +17,7 @@ import { Typography, Spacing, Radius, Shadow } from '../../theme';
 import { authApi, InvitePreview } from '../../services/api';
 import { secureStorage } from '../../services/secureStorage';
 import { track } from '../../lib/analytics';
+import { AnalyticsEvents } from '../../analytics/events';
 import { toFriendlyAuthError } from '../../utils/authErrorMessage';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
@@ -171,7 +172,10 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
       }
 
       await AsyncStorage.setItem('pending_email', email);
-      track('signed_up', { method: 'email', has_invite_code: !!trimmedCode });
+      track(AnalyticsEvents.SIGNUP_COMPLETED, {
+        method: 'email',
+        has_invite_code: !!trimmedCode,
+      });
       setStep('verify');
     } catch (err) {
       // Map raw upstream strings (Supabase / backend / network) into quiet,

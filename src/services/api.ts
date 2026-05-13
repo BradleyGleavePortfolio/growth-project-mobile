@@ -30,7 +30,6 @@
 // ============================================================================
 
 import axios, { AxiosError, AxiosRequestConfig } from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authEvents } from '../utils/authEvents';
 import { secureStorage } from './secureStorage';
 import { env } from '../config/env';
@@ -74,7 +73,12 @@ let refreshPromise: Promise<string> | null = null;
 let loggedOutOnce = false;
 
 async function performRefresh(): Promise<string> {
-  const refreshToken = await AsyncStorage.getItem('supabase_refresh_token');
+  // Read refresh token from the SAME store the writers use (SecureStore via
+  // secureStorage). Previously this read AsyncStorage while LoginScreen /
+  // CreateAccountScreen / appleAuth / googleAuth all wrote to SecureStore —
+  // the mismatch meant the refresh token was never found and every user got
+  // signed out at the first 401 after access-token expiry (≈1 hour).
+  const refreshToken = await secureStorage.getItem('supabase_refresh_token');
   if (!refreshToken) throw new Error('No refresh token');
 
   // Dynamic import keeps the supabase-js bundle out of the cold-start path for
@@ -87,8 +91,8 @@ async function performRefresh(): Promise<string> {
   if (refreshError || !data.session) {
     throw refreshError || new Error('Refresh returned no session');
   }
-  await AsyncStorage.setItem('supabase_token', data.session.access_token);
-  await AsyncStorage.setItem('supabase_refresh_token', data.session.refresh_token);
+  await secureStorage.setItem('supabase_token', data.session.access_token);
+  await secureStorage.setItem('supabase_refresh_token', data.session.refresh_token);
   return data.session.access_token;
 }
 
@@ -97,15 +101,17 @@ async function handleRefreshFailure(): Promise<void> {
   // emission so a subsequent successful login → 401 cycle still works.
   if (loggedOutOnce) return;
   loggedOutOnce = true;
+  // Full sign-out on refresh failure: clears all auth keys (both stores),
+  // resets analytics/Sentry, and emits logout. Lazy import avoids a require
+  // cycle between api.ts and authActions.ts (authActions imports profileApi
+  // from this file).
   try {
-    // Clear token but KEEP user_data / onboarding_complete — matches the
-    // behavior introduced in security/critical-fixes-round-1 (commit 4816d54).
-    await AsyncStorage.removeItem('supabase_token');
-    await AsyncStorage.removeItem('needs_role_selection');
+    const { signOut } = await import('./authActions');
+    await signOut();
   } catch (err) {
-    console.error('api: failed to clear tokens on logout', err);
+    console.error('api: signOut on refresh failure threw', err);
+    authEvents.emit('logout');
   }
-  authEvents.emit('logout');
   // Reset the one-shot guard after the emit so we don't permanently suppress
   // future logouts. The next refresh attempt starts fresh.
   setTimeout(() => {

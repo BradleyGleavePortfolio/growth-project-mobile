@@ -19,6 +19,8 @@ import { mediumTap, successTap, warningTap } from '../../utils/haptics';
 import { buildInviteUniversalLink } from '../../utils/deepLink';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
+import { track } from '../../lib/analytics';
+import { AnalyticsEvents } from '../../analytics/events';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 
 interface InviteCode {
@@ -93,6 +95,10 @@ export default function InviteCodesScreen({ navigation }: { navigation: Navigati
       const created: InviteCode = res.data;
       successTap();
       setCodes((prev) => [created, ...prev]);
+      track(AnalyticsEvents.COACH_CLIENT_INVITED, {
+        has_max_uses: body.max_uses != null,
+        has_expiry: body.expires_at != null,
+      });
       setShowCreateModal(false);
       setMaxUsesText('');
       setExpiresInDaysText('');
