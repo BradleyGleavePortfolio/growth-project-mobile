@@ -8,6 +8,11 @@ interface SearchLogArgs {
   date: string;
   mealType: MealType;
   multiplier: number;
+  // Optional: the literal qty + unit the user picked (e.g. 6, 'oz'). Stored
+  // on LoggedFoodEntry so coaches can read the original intent rather than
+  // a derived multiplier.
+  originalQuantity?: number;
+  originalUnit?: string;
 }
 
 interface ManualLogArgs {
@@ -38,17 +43,37 @@ export function buildFoodPayload(food: SearchResult) {
   };
 }
 
-export async function submitSearchLogOffline({ food, date, mealType, multiplier }: SearchLogArgs) {
+export async function submitSearchLogOffline({
+  food,
+  date,
+  mealType,
+  multiplier,
+  originalQuantity,
+  originalUnit,
+}: SearchLogArgs) {
   const needsCreate = !food.id || food.id.startsWith('off_');
   await enqueueFoodLog({
     kind: 'search',
     foodItemId: needsCreate ? undefined : food.id,
     food: needsCreate ? buildFoodPayload(food) : undefined,
-    log: { date, meal_type: mealType, quantity_multiplier: multiplier },
+    log: {
+      date,
+      meal_type: mealType,
+      quantity_multiplier: multiplier,
+      original_quantity: originalQuantity,
+      original_unit: originalUnit,
+    },
   });
 }
 
-export async function submitSearchLogOnline({ food, date, mealType, multiplier }: SearchLogArgs) {
+export async function submitSearchLogOnline({
+  food,
+  date,
+  mealType,
+  multiplier,
+  originalQuantity,
+  originalUnit,
+}: SearchLogArgs) {
   let foodItemId = food.id || '';
   if (!foodItemId || foodItemId.startsWith('off_')) {
     const createRes = await foodApi.create(buildFoodPayload(food));
@@ -59,6 +84,8 @@ export async function submitSearchLogOnline({ food, date, mealType, multiplier }
     meal_type: mealType,
     food_item_id: foodItemId,
     quantity_multiplier: multiplier,
+    original_quantity: originalQuantity,
+    original_unit: originalUnit,
   });
 }
 
@@ -76,10 +103,13 @@ function buildManualPayload(args: ManualLogArgs) {
     tags: [],
     search_aliases: [],
   };
+  const qty = parseFloat(args.quantity) || 1;
   const logPayload = {
     date: args.date,
     meal_type: args.mealType,
-    quantity_multiplier: parseFloat(args.quantity) || 1,
+    quantity_multiplier: qty,
+    original_quantity: qty,
+    original_unit: args.unit || 'serving',
   };
   return { foodPayload, logPayload };
 }

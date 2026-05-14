@@ -14,7 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Radius, colors } from '../../theme/index';
 import FoodImage from '../FoodImage';
-import { SearchResult, UNIT_OPTIONS } from '../../utils/log/types';
+import { SearchResult, unitOptionsFor } from '../../utils/log/types';
 import { calcMacros } from '../../utils/log/macros';
 
 interface Props {
@@ -106,7 +106,7 @@ export default function QuantityPickerModal({
 
           <Text style={styles.quantitySectionLabel}>Unit</Text>
           <View style={styles.unitChipRow}>
-            {UNIT_OPTIONS.map((u) => (
+            {unitOptionsFor(selectedFood).map((u) => (
               <TouchableOpacity
                 key={u}
                 style={[styles.unitChip, selectedUnit === u && styles.unitChipActive]}

@@ -79,6 +79,13 @@ export default function LogScreen() {
   const [quantityInput, setQuantityInput] = useState('1');
   const [selectedUnit, setSelectedUnit] = useState('serving');
 
+  // NL parse hints from the most recent /foods/search response. When the
+  // backend parses "6oz chicken breast" it returns parsed_quantity=6 and
+  // parsed_unit='oz' at the top level; we pre-fill the picker so the user
+  // doesn't have to re-enter what they already typed.
+  const [parsedQuantity, setParsedQuantity] = useState<number | null>(null);
+  const [parsedUnit, setParsedUnit] = useState<string | null>(null);
+
   // Manual entry fields
   const [manualFields, setManualFields] = useState<ManualFields>({
     foodName: '',
@@ -165,6 +172,12 @@ export default function LogScreen() {
         const suggestions: RawFoodItem[] = Array.isArray(data?.suggestions)
           ? data.suggestions
           : [];
+        // NL parse hints (post-Trainerize-floor backend). Optional — old
+        // backends just won't include them.
+        const pq = typeof data?.parsed_quantity === 'number' ? data.parsed_quantity : null;
+        const pu = typeof data?.parsed_unit === 'string' ? data.parsed_unit.toLowerCase() : null;
+        setParsedQuantity(pq);
+        setParsedUnit(pu);
 
         const mapped = results.map(mapFoodItem);
         setSearchResults(mapped);
@@ -186,8 +199,17 @@ export default function LogScreen() {
 
   const handleSelectFood = (food: SearchResult) => {
     setSelectedFood(food);
-    setQuantityInput('1');
-    setSelectedUnit('serving');
+    // Pre-fill from NL parse when present, falling back to sensible defaults.
+    // If the parsed unit is one the picker no longer offers for this food
+    // (e.g. parsed 'cup' but the food has no density), fall through to
+    // 'serving' so the picker stays in a valid state.
+    const allowedUnits = food.supports_volume_units === false
+      ? ['serving', 'g', 'oz']
+      : ['serving', 'g', 'oz', 'cup', 'tbsp', 'tsp'];
+    const unit = parsedUnit && allowedUnits.includes(parsedUnit) ? parsedUnit : 'serving';
+    const qty = parsedQuantity && parsedQuantity > 0 ? String(parsedQuantity) : '1';
+    setQuantityInput(qty);
+    setSelectedUnit(unit);
     setQuantityModalVisible(true);
   };
 
@@ -199,8 +221,15 @@ export default function LogScreen() {
   const handleConfirmLog = async () => {
     if (!currentUser || !selectedFood) return;
     const qty = parseFloat(quantityInput) || 1;
-    const multiplier = quantityMultiplier(qty, selectedUnit);
-    const args = { food: selectedFood, date: selectedDate, mealType: activeMealType, multiplier };
+    const multiplier = quantityMultiplier(selectedFood, qty, selectedUnit);
+    const args = {
+      food: selectedFood,
+      date: selectedDate,
+      mealType: activeMealType,
+      multiplier,
+      originalQuantity: qty,
+      originalUnit: selectedUnit,
+    };
 
     if (!online) {
       try {
