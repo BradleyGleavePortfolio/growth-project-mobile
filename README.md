@@ -367,6 +367,105 @@ the per-100g fields as per-serving macros and scaling by `qty` directly.
 Companion backend PR (server-side normalisation, density table, NL parser):
 see PR linked from `fix/food-logger-trainerize-floor`.
 
+## Coach AI
+
+Coach AI v1 is the per-client generate / edit / approve flow for workout
+programs, meal plans, and weekly insights. The mobile half lives in
+`src/screens/coach/AIWorkoutDraftScreen.tsx`,
+`src/screens/coach/AIMealPlanDraftScreen.tsx`,
+`src/screens/coach/ClientInsightScreen.tsx`, and the entry point
+`src/components/coach/CoachAiSection.tsx` mounted inside
+`ClientDetailScreen`. The typed client is `src/api/coachAi.ts`; the
+shared shapes are `src/types/coachAi.ts`.
+
+### WHY
+Today a coach can only PUT a hand-typed workout or meal plan
+(`/coach/clients/:id/meal-plans`, `/workout-plans`). The audit
+(`audits/coach_ai_capability_audit.md`, 2026-05-13) called out that the
+AI rails were real but the train was not on them. Coach AI v1 wires
+the train: per-client AI generation with coach review, edit, and
+approval before anything materializes as a `WorkoutPlan` /
+`MealPlan` row.
+
+### WHEN
+Visible to coaches on the Summary tab of `ClientDetailScreen`. The
+section probes `GET /coach/ai/status` on mount; if the backend has no
+`ANTHROPIC_API_KEY` set in Fly secrets the CTAs render disabled with a
+caption "AI offline — owner action required". The 503 contract from the
+backend (`{ error: 'ai_disabled', action: 'set ANTHROPIC_API_KEY in
+Fly secrets' }`) is detected by `isAiDisabledError` for any generate
+call that races past the status gate.
+
+### WHERE
+- Entry: `src/components/coach/CoachAiSection.tsx` on
+  `src/screens/coach/ClientDetailScreen.tsx` (Summary tab).
+- Workout draft: `src/screens/coach/AIWorkoutDraftScreen.tsx`.
+- Meal plan draft: `src/screens/coach/AIMealPlanDraftScreen.tsx`.
+- Insight digest: `src/screens/coach/ClientInsightScreen.tsx`.
+- Navigation registered in `src/navigation/CoachNavigator.tsx` under
+  `ClientsStack` (routes `AIWorkoutDraft`, `AIMealPlanDraft`,
+  `ClientInsight`).
+
+### HOW
+1. Coach taps one of the three CTAs on `ClientDetailScreen`.
+2. A bottom sheet collects inputs:
+   - Workout — weeks (1-12 stepper), days per week (1-7 chips), focus
+     (Strength / Hypertrophy / Endurance / Mobility chips), notes.
+   - Meal plan — days (1-14 stepper), notes.
+   - Insight — windowDays chip (7 / 14 / 30, default 7).
+3. The mobile POSTs to one of:
+   - `POST /coach/ai/workout-program`
+   - `POST /coach/ai/meal-plan`
+   - `POST /coach/ai/client-insight`
+4. The returned `draftId` is handed to the matching draft screen.
+5. The draft screen loads `GET /coach/ai/drafts/:draftId`, renders an
+   editable structured view, and ships:
+   - `POST /coach/ai/drafts/:draftId/edit { patch }` on Save.
+   - `POST /coach/ai/drafts/:draftId/approve` on Approve & assign.
+   - `POST /coach/ai/drafts/:draftId/reject { reason }` on Reject.
+6. The footer of every draft shows model + token usage + cost so the
+   coach can see what they're paying for each call.
+
+The insight screen offers a one-tap "Send check-in" that prefills the
+coach-to-client messaging composer with a templated note built from
+the insight's first two wins and first concern. "Schedule call" is
+stubbed pending a coach-to-client booking surface (see Deferred below).
+
+### WHO
+- Coaches on `ClientDetailScreen`.
+- Backend gates the route behind `requireCoach` (or equivalent) and
+  the client must be owned by the calling coach. The mobile does not
+  duplicate that check beyond the route mount path.
+
+### WHAT (data shapes)
+- `WorkoutPayload` — `weeks[] → days[] → exercises[]` with optional
+  RIR / RPE / notes.
+- `MealPlanPayload` — `days[] → meals[] → items[]` with optional
+  per-item macros and per-day totals.
+- `InsightPayload` — `{ summary, wins[], concerns[], suggested_actions[],
+  questions_for_coach[] }`.
+
+### Deferred — "Schedule call" deep link
+The insight screen's "Schedule call" button is intentionally a toast for
+v1. The existing `CoachBookingInboxScreen` handles inbound bookings;
+there is no first-class coach-to-client "schedule a call with X"
+composer to deep-link to. A follow-up should ship the booking composer
+and wire the button into it. The button is left present so the surface
+is complete and the wiring is one diff away.
+
+### Backend disabled state
+When the backend cannot reach Anthropic the generate routes return
+HTTP 503:
+
+```
+{ "error": "ai_disabled", "action": "set ANTHROPIC_API_KEY in Fly secrets" }
+```
+
+Mobile detects this via `isAiDisabledError(err)` and re-runs the status
+probe so subsequent CTAs reflect the disabled state without a reload.
+Coaches see the disabled CTAs and the caption "AI offline — owner
+action required" instead of a stack trace.
+
 ## Contributing
 
 Every PR updates the corresponding README / module documentation. The rule —

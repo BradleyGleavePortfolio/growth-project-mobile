@@ -39,14 +39,17 @@ export default function ClientMessagesScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const route = useRoute<RouteProp<ClientsStackParamList, 'ClientMessages'>>();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
-  const { clientId, clientName } = route.params;
+  const { clientId, clientName, initialDraft } = route.params;
   const currentUser = useCurrentUser();
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasMoreOlder, setHasMoreOlder] = useState(true);
-  const [inputText, setInputText] = useState('');
+  // Coach AI v1: support a templated check-in prefill from the insight
+  // screen. The composer respects this only once on mount so navigating
+  // back-and-forth doesn't clobber an in-progress draft.
+  const [inputText, setInputText] = useState<string>(initialDraft ?? '');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const flatListRef = useRef<FlatList<Message>>(null);
