@@ -343,6 +343,7 @@ export default function SettingsScreen() {
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
         <View style={styles.divider} />
+        {/* Email Pipeline v1 — new bulk-invite + per-recipient delivery view. */}
         <TouchableOpacity
           style={styles.row}
           onPress={handleOpenBulkInvite}

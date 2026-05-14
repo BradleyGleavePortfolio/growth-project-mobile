@@ -80,16 +80,14 @@ jest.mock('expo-document-picker', () => ({
   getDocumentAsync: jest.fn(),
 }));
 
-// BulkInviteScreen calls bulkInviteApi.submit(rows) where rows is
-// Array<{ email, name?, note? }>. Backend returns { created, rejected }.
-const mockBulkInviteSubmit = jest.fn();
-jest.mock('../api/bulkInviteApi', () => {
-  const actual = jest.requireActual('../api/bulkInviteApi');
+const mockBulkInvite = jest.fn();
+jest.mock('../api/invites', () => {
+  // Re-export the real helpers but stub the network surface.
+  const actual = jest.requireActual('../api/invites');
   return {
     ...actual,
-    bulkInviteApi: {
-      submit: (...args: unknown[]) => mockBulkInviteSubmit(...args),
-      parse: jest.fn(),
+    invitesApi: {
+      bulkInvite: (...args: unknown[]) => mockBulkInvite(...args),
     },
   };
 });
@@ -123,14 +121,12 @@ describe('BulkInviteScreen — RTL', () => {
   });
 
   it('submits the parsed valid emails and renders per-email statuses', async () => {
-    mockBulkInviteSubmit.mockResolvedValueOnce({
-      data: {
-        created: [
-          { email: 'a@ex.com', code: 'AAA', invite_code_id: 'i1' },
-          { email: 'b@ex.com', code: 'BBB', invite_code_id: 'i2' },
-        ],
-        rejected: [{ email: 'c@ex.com', reason: 'invalid' }],
-      },
+    mockBulkInvite.mockResolvedValueOnce({
+      results: [
+        { email: 'a@ex.com', status: 'created', emailQueued: true, inviteId: 'i1' },
+        { email: 'b@ex.com', status: 'reused', emailQueued: true, inviteId: 'i2' },
+        { email: 'c@ex.com', status: 'failed', emailQueued: false, error: 'x' },
+      ],
     });
 
     const { getByTestId, getAllByTestId } = render(<BulkInviteScreen />);
@@ -141,18 +137,18 @@ describe('BulkInviteScreen — RTL', () => {
     fireEvent.press(getByTestId('bulk-submit'));
 
     await waitFor(() => {
-      expect(mockBulkInviteSubmit).toHaveBeenCalledWith([
-        { email: 'a@ex.com' },
-        { email: 'b@ex.com' },
-        { email: 'c@ex.com' },
-      ]);
+      expect(mockBulkInvite).toHaveBeenCalledWith(
+        ['a@ex.com', 'b@ex.com', 'c@ex.com'],
+        undefined,
+      );
     });
 
     await waitFor(() => {
       expect(getByTestId('bulk-results')).toBeTruthy();
     });
 
-    expect(getAllByTestId('bulk-result-created')).toHaveLength(2);
+    expect(getAllByTestId('bulk-result-created')).toHaveLength(1);
+    expect(getAllByTestId('bulk-result-reused')).toHaveLength(1);
     expect(getAllByTestId('bulk-result-failed')).toHaveLength(1);
     expect(getByTestId('bulk-copy-failed')).toBeTruthy();
     expect(getByTestId('bulk-retry-failed')).toBeTruthy();

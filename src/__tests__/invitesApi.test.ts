@@ -179,21 +179,19 @@ describe('invitesApi.resendInvite', () => {
 
   it('returns { supported: true } on success', async () => {
     mockedApi.post.mockResolvedValueOnce({ data: {} });
-    const out = await invitesApi.resendInvite('inv_1', 'alice@ex.com');
+    const out = await invitesApi.resendInvite('inv_1');
     expect(out).toEqual({ supported: true });
   });
 
   it('returns { supported: false } on 404', async () => {
     mockedApi.post.mockRejectedValueOnce({ response: { status: 404 } });
-    const out = await invitesApi.resendInvite('inv_1', 'alice@ex.com');
+    const out = await invitesApi.resendInvite('inv_1');
     expect(out).toEqual({ supported: false });
   });
 
   it('re-throws on non-404 errors', async () => {
     mockedApi.post.mockRejectedValueOnce({ response: { status: 500 } });
-    await expect(
-      invitesApi.resendInvite('inv_1', 'alice@ex.com'),
-    ).rejects.toBeTruthy();
+    await expect(invitesApi.resendInvite('inv_1')).rejects.toBeTruthy();
   });
 });
 
