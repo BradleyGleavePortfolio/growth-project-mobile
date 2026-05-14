@@ -70,6 +70,16 @@ const linking: LinkingOptions<Record<string, object | undefined>> = {
         path: 'join/:invite_code?',
         parse: { invite_code: (v: string) => v },
       },
+      // Email Pipeline v1 — public accept entry point. Both the custom
+      // scheme (tgp://invite/accept/:token) and universal link
+      // (https://app.trygrowthproject.com/invite/accept/:token) resolve
+      // to this screen when the user is unauthenticated. RootNavigator's
+      // foreground URL guard (below) handles the signed-in case by
+      // routing it through the same path after signOut where required.
+      AcceptInvite: {
+        path: 'invite/accept/:token',
+        parse: { token: (v: string) => v },
+      },
       // Audit fix CR-1: handler for the Supabase password-recovery
       // deep link. fragmentToQuery() above hoists the URL fragment
       // into the query string so React Navigation can parse the
@@ -166,15 +176,23 @@ export default function RootNavigator() {
         (lower.startsWith('tgp://join/') ||
           lower.includes('app.trygrowthproject.com/join/')) &&
         !lower.endsWith('/join/');
+      // Email Pipeline v1 — public accept link. Distinct from `/join/<code>`
+      // (signup-gating code) because it carries a single-use accept token
+      // and must POST to /invites/accept on landing. We treat it the same
+      // way as a reset link: force signOut so the public AcceptInvite
+      // screen mounts cleanly, then replay the URL to AuthNavigator.
+      const isAcceptInvite =
+        lower.startsWith('tgp://invite/accept/') ||
+        lower.includes('app.trygrowthproject.com/invite/accept/');
 
-      if (!isReset && !isInvite) return;
+      if (!isReset && !isInvite && !isAcceptInvite) return;
 
       const authed = await secureStorage.getItem('supabase_token');
       if (!authed) return; // unauthenticated → linking config handles it natively.
 
-      if (isReset) {
-        // Force full sign-out so the recovery deep link can land on
-        // AuthNavigator's ResetPassword route with a clean session.
+      if (isReset || isAcceptInvite) {
+        // Force full sign-out so the deep link can land on AuthNavigator's
+        // ResetPassword or AcceptInvite route with a clean session.
         await signOut();
         // Replay the URL so AuthNavigator picks it up via Linking once
         // unauthenticated. RN dedupes back-to-back identical openURL
