@@ -78,6 +78,8 @@ import ClientMacrosScreen from '../screens/client/ClientMacrosScreen';
 // Concierge Phase 1 — scheduling client surfaces.
 import ClientBookingRequestScreen from '../screens/client/ClientBookingRequestScreen';
 import ClientUpcomingSessionsScreen from '../screens/client/ClientUpcomingSessionsScreen';
+// Payments — checkout surface for a coach's package share link.
+import PackageCheckoutScreen from '../screens/client/PackageCheckoutScreen';
 import ClientDailyMealPlanScreen from '../screens/client/ClientDailyMealPlanScreen';
 import ClientWorkoutViewerScreen from '../screens/client/ClientWorkoutViewerScreen';
 // Phase 9 — Notification center
@@ -170,6 +172,8 @@ export type MoreStackParamList = {
   ClientUpcomingSessions:  undefined;
   /** Phase 10 — GDPR Article 20 data portability */
   DataExport: undefined;
+  /** Client-facing checkout for a coach's package share link. */
+  PackageCheckout: { shareToken: string };
 };
 
 // ─── Phase 9: unread count polling for the bell icon ─────────────────────────
@@ -341,6 +345,14 @@ function MoreStackNavigator() {
       />
       {/* Phase 10 — GDPR Article 20 data portability */}
       <MoreStackNav.Screen name="DataExport" component={DataExportScreen} />
+      {/* Client-facing checkout for a coach's package share link. Reachable
+          via deep-link (tgp://p/:token, https://app.trygrowthproject.com/p/:token)
+          and from the MembershipScreen. */}
+      <MoreStackNav.Screen
+        name="PackageCheckout"
+        component={PackageCheckoutScreen}
+        options={{ presentation: 'modal' }}
+      />
     </MoreStackNav.Navigator>
   );
 }

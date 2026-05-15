@@ -14,6 +14,10 @@
           {
             "/": "/join",
             "comment": "Universal link without invite code (manual entry)"
+          },
+          {
+            "/": "/p/*",
+            "comment": "Universal link to a coach's package share/checkout"
           }
         ]
       }
