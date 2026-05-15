@@ -1,7 +1,7 @@
 # The Growth Project
 
 
-> Status: pre-TestFlight audit complete; coach-facing beta blocked by mock Command Center, auth refresh, invite links, onboarding, messaging push; see /audits/00_MASTER_REPORT.md
+> Status: TestFlight candidate ready (build 4). Pre-TestFlight audit + follow-up landed (#135 / #136 / #137); food logger rebuild (#138) and Coach AI v1 (#139) merged. Owner action items live in [Operator Fill-Ins Required](#operator-fill-ins-required); the real-device smoke checklist for this candidate is in [docs/RELEASE_SMOKE.md](docs/RELEASE_SMOKE.md). See `/audits/00_MASTER_REPORT.md` for prior audit context.
 
 ## Placeholders / TODO env vars
 
@@ -617,21 +617,21 @@ Typecheck: clean.
 
 ## Operator Fill-Ins Required
 
-Operator-action checklist for the TestFlight launch of the fitness mobile app. Every `Used in (file:line)` row was verified by grep against `main` HEAD on 2026-05-12. All values must be set on the EAS project (`a12c3345-cc8c-4c2c-9c57-711c10a57c1c`, owner `the-growth-project`) before building for store distribution.
+Operator-action checklist for the TestFlight launch of the fitness mobile app. Every `Used in (file:line)` row was re-verified by grep against `main` HEAD on 2026-05-15 (build 4 candidate). All values must be set on the EAS project (`a12c3345-cc8c-4c2c-9c57-711c10a57c1c`, owner `the-growth-project`) before building for store distribution. `npm run validate:release` enforces that each var listed below is at least documented in `.env.example` so an operator running the file as a checklist sees the full set.
 
 ### TestFlight-blocking EAS secrets
 
 | Variable | Used in (file:line) | Where to set | How to generate / source |
 |---|---|---|---|
-| `EXPO_PUBLIC_API_URL` | `src/config/env.ts:8` | EAS secret (eas.json env block, profile `production`) | Fly host of the backend: `https://backend-spring-lake-3890.fly.dev`. Must include scheme; no trailing slash. |
-| `EXPO_PUBLIC_SUPABASE_URL` | `src/config/env.ts:6` | EAS secret (eas.json env block, profile `production`) | Supabase dashboard → Settings → API → Project URL. Must match the backend's `SUPABASE_URL`. |
-| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | `src/config/env.ts:7` | EAS secret (eas.json env block, profile `production`) | Supabase dashboard → Settings → API → `anon` public key. Safe to ship in the client bundle. |
-| `EXPO_PUBLIC_SENTRY_DSN` | `src/services/sentry.ts:49` | EAS secret (eas.json env block, profile `production`) | Sentry → Project (mobile) → Client Keys (DSN). |
-| `EXPO_PUBLIC_POSTHOG_KEY` | `src/lib/analytics.ts:56` | EAS secret (eas.json env block, profile `production`) | PostHog → Project Settings → Project API Key. |
-| `EXPO_PUBLIC_POSTHOG_HOST` | `src/lib/analytics.ts:58` | EAS secret (eas.json env block, profile `production`) | PostHog instance URL (defaults to `https://us.i.posthog.com`). |
-| `EXPO_PUBLIC_ENVIRONMENT` | `src/services/sentry.ts:76` | EAS secret (eas.json env block, profile `production`) | Static string `production` for store builds; `preview` for internal builds. |
-| `EXPO_PUBLIC_HELP_BASE_URL` | `src/config/env.ts:9` | EAS secret (eas.json env block, profile `production`) | Public help / support URL (e.g. `https://app.trygrowthproject.com/help`). |
-| `EXPO_PUBLIC_CRISP_WEBSITE_ID` | `src/services/support/crisp.service.ts:32` | EAS secret (eas.json env block, profile `production`) | Crisp dashboard → Settings → Website Settings → Website ID. |
+| `EXPO_PUBLIC_API_URL` | `src/config/env.ts:13` | EAS secret (eas.json env block, profile `production`) | Fly host of the backend: `https://backend-spring-lake-3890.fly.dev/api`. Must include scheme and `/api` suffix; no trailing slash. |
+| `EXPO_PUBLIC_SUPABASE_URL` | `src/config/env.ts:11` | EAS secret (eas.json env block, profile `production`) | Supabase dashboard → Settings → API → Project URL (e.g. `https://abcdwxyz.supabase.co`). Must match the backend's `SUPABASE_URL`. |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | `src/config/env.ts:12` | EAS secret (eas.json env block, profile `production`) | Supabase dashboard → Settings → API → `anon` public key. Safe to ship in the client bundle (RLS gates all data). |
+| `EXPO_PUBLIC_SENTRY_DSN` | `src/services/sentry.ts:49` | EAS secret (eas.json env block, profile `production`) | Sentry → Project (mobile) → Client Keys (DSN). Looks like `https://<32-hex>@oXXXXXX.ingest.sentry.io/<project-id>`. |
+| `EXPO_PUBLIC_POSTHOG_KEY` | `src/lib/analytics.ts:56` | EAS secret (eas.json env block, profile `production`) | PostHog → Project Settings → Project API Key. Starts with `phc_`. |
+| `EXPO_PUBLIC_POSTHOG_HOST` | `src/lib/analytics.ts:58` | EAS secret (eas.json env block, profile `production`) | PostHog instance URL (defaults to `https://us.i.posthog.com`). Set to `https://eu.i.posthog.com` if the project is in the EU region. |
+| `EXPO_PUBLIC_ENVIRONMENT` | `src/services/sentry.ts:76` | EAS secret (eas.json env block, profile `production` AND `preview`) | Static string `production` for store builds; `preview` for internal builds. Leaving this unset on a preview build silently tags QA crashes as `production` in Sentry. |
+| `EXPO_PUBLIC_HELP_BASE_URL` | `src/config/env.ts:14` | EAS secret (eas.json env block, profile `production`) — OPTIONAL | Public help / support URL. Defaults to `https://app.trygrowthproject.com/help`; only set this if the help site moves to its own host. |
+| `EXPO_PUBLIC_CRISP_WEBSITE_ID` | `src/services/support/crisp.service.ts:32` | EAS secret (eas.json env block, profile `production`) | Crisp dashboard → Settings → Website Settings → Setup instructions → Website ID. UUID-shaped. Safe to ship in the client bundle (it's the public site key, not the secret API key). |
 | `SENTRY_AUTH_TOKEN` | EAS build host (sourcemaps upload) | EAS secret (account-level) | Sentry → Settings → Auth Tokens → create with `project:releases` scope. Read by `@sentry/react-native` during the production build's sourcemap upload step. |
 | `EXPO_TOKEN` | EAS build host (CI submit) | GitHub Actions secret + local `~/.netrc` | expo.dev → Settings → Access Tokens → create a personal access token. Only required for non-interactive `eas submit` from CI. |
 
@@ -661,7 +661,7 @@ The fitness mobile app ships from this repo to TestFlight (iOS) and Play Interna
 
 - [ ] All EAS production-profile secrets in the [Operator Fill-Ins Required](#operator-fill-ins-required) table are set. Verify with `npx eas-cli env:list --environment production`.
 - [ ] Backend Fly app `backend-spring-lake-3890` is deployed at the version this build expects (no breaking schema migration pending).
-- [ ] `app.json` build numbers are correct: `expo.ios.buildNumber = "3"`, `expo.android.versionCode = 3`. **Do NOT bump in this PR** — owner instruction is fitness mobile stays at build 3 until the next release pass.
+- [ ] `app.json` build numbers are correct: `expo.ios.buildNumber = "4"`, `expo.android.versionCode = 4`. Bumped past the build-3 candidate to take in #135 / #136 / #137 / #138 / #139. Bump both together on every subsequent release — Play rejects a versionCode <= the last upload and App Store Connect rejects a duplicate buildNumber for the same version.
 - [ ] `expo.extra.eas.projectId` in `app.json` matches the EAS project (`a12c3345-cc8c-4c2c-9c57-711c10a57c1c`). The docs were reconciled in this handoff PR.
 - [ ] `assetlinks.json` and `apple-app-site-association` are reachable on the public marketing host (`app.trygrowthproject.com`).
 - [ ] No `playStoreUrl` is set yet — Android listing setup is a separate workstream and gates Play submission, not TestFlight.

@@ -458,3 +458,69 @@ describe('validate-app-config — RELEASE_BLOCKER.md content', () => {
     }
   });
 });
+
+describe('validate-app-config — TestFlight-recommended env vars', () => {
+  it('puts EXPO_PUBLIC_CRISP_WEBSITE_ID into releaseBlockers when missing from .env.example', () => {
+    const dir = makeWorkspace();
+    try {
+      const envExamplePath = path.join(dir, '.env.example');
+      const text = fs
+        .readFileSync(envExamplePath, 'utf8')
+        // Remove every mention of the Crisp var (assignment, comment, eas
+        // env:create example) so the validator sees it as undocumented.
+        .replace(/.*EXPO_PUBLIC_CRISP_WEBSITE_ID.*\n?/g, '');
+      fs.writeFileSync(envExamplePath, text);
+
+      const res = runIn(dir, ['--release']);
+      expect(res.status).toBe(0); // soft signal, not a hard error
+      expect(res.parsed.releaseBlockers.some((b) =>
+        /EXPO_PUBLIC_CRISP_WEBSITE_ID/.test(b) && /Support overlay/.test(b),
+      )).toBe(true);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('accepts EXPO_PUBLIC_POSTHOG_KEY (legacy alias) in place of EXPO_PUBLIC_POSTHOG_API_KEY', () => {
+    // App.tsx reads either name, so either should satisfy the documented-in-
+    // env-example check. Strip the canonical name and leave only the legacy
+    // alias — the validator should not flag PostHog as missing.
+    const dir = makeWorkspace();
+    try {
+      const envExamplePath = path.join(dir, '.env.example');
+      const text = fs
+        .readFileSync(envExamplePath, 'utf8')
+        .replace(/EXPO_PUBLIC_POSTHOG_API_KEY/g, 'EXPO_PUBLIC_POSTHOG_KEY');
+      fs.writeFileSync(envExamplePath, text);
+
+      const res = runIn(dir, ['--release']);
+      expect(res.parsed.releaseBlockers.some((b) =>
+        /EXPO_PUBLIC_POSTHOG/.test(b),
+      )).toBe(false);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('default mode demotes the same missing-env signal to a plain warning', () => {
+    const dir = makeWorkspace();
+    try {
+      const envExamplePath = path.join(dir, '.env.example');
+      fs.writeFileSync(
+        envExamplePath,
+        fs
+          .readFileSync(envExamplePath, 'utf8')
+          .replace(/.*EXPO_PUBLIC_CRISP_WEBSITE_ID.*\n?/g, ''),
+      );
+
+      const res = runIn(dir, []);
+      expect(res.status).toBe(0);
+      expect(res.parsed.errors).toEqual([]);
+      expect(res.parsed.warnings.some((w) =>
+        /EXPO_PUBLIC_CRISP_WEBSITE_ID/.test(w),
+      )).toBe(true);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
