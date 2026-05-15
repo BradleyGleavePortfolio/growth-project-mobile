@@ -1,7 +1,7 @@
 # The Growth Project
 
 
-> Status: TestFlight candidate ready (build 4). Pre-TestFlight audit + follow-up landed (#135 / #136 / #137); food logger rebuild (#138) and Coach AI v1 (#139) merged. Owner action items live in [Operator Fill-Ins Required](#operator-fill-ins-required); the real-device smoke checklist for this candidate is in [docs/RELEASE_SMOKE.md](docs/RELEASE_SMOKE.md). See `/audits/00_MASTER_REPORT.md` for prior audit context.
+> Status: TestFlight candidate ready (iOS build 5; build 4 was rejected by App Store Connect as a duplicate). Pre-TestFlight audit + follow-up landed (#135 / #136 / #137); food logger rebuild (#138) and Coach AI v1 (#139) merged. Owner action items live in [Operator Fill-Ins Required](#operator-fill-ins-required); the real-device smoke checklist for this candidate is in [docs/RELEASE_SMOKE.md](docs/RELEASE_SMOKE.md). See `/audits/00_MASTER_REPORT.md` for prior audit context.
 
 ## Placeholders / TODO env vars
 
@@ -661,7 +661,7 @@ The fitness mobile app ships from this repo to TestFlight (iOS) and Play Interna
 
 - [ ] All EAS production-profile secrets in the [Operator Fill-Ins Required](#operator-fill-ins-required) table are set. Verify with `npx eas-cli env:list --environment production`.
 - [ ] Backend Fly app `backend-spring-lake-3890` is deployed at the version this build expects (no breaking schema migration pending).
-- [ ] `app.json` build numbers are correct: `expo.ios.buildNumber = "4"`, `expo.android.versionCode = 4`. Bumped past the build-3 candidate to take in #135 / #136 / #137 / #138 / #139. Bump both together on every subsequent release — Play rejects a versionCode <= the last upload and App Store Connect rejects a duplicate buildNumber for the same version.
+- [ ] `app.json` build numbers are correct: `expo.ios.buildNumber = "5"`, `expo.android.versionCode = 4`. iOS bumped to 5 to clear an App Store Connect duplicate-build rejection on the build-4 upload; Android versionCode unchanged since no Play upload has occurred for build 4. Bump both together on every subsequent release where both platforms are being submitted — Play rejects a versionCode <= the last upload and App Store Connect rejects a duplicate buildNumber for the same version.
 - [ ] `expo.extra.eas.projectId` in `app.json` matches the EAS project (`a12c3345-cc8c-4c2c-9c57-711c10a57c1c`). The docs were reconciled in this handoff PR.
 - [ ] `assetlinks.json` and `apple-app-site-association` are reachable on the public marketing host (`app.trygrowthproject.com`).
 - [ ] No `playStoreUrl` is set yet — Android listing setup is a separate workstream and gates Play submission, not TestFlight.
