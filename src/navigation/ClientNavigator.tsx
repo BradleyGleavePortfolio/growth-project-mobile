@@ -46,6 +46,10 @@ import WorkoutScreen from '../screens/client/WorkoutScreen';
 import ActiveWorkoutScreen from '../screens/client/ActiveWorkoutScreen';
 import RoutineBuilderScreen from '../screens/client/RoutineBuilderScreen';
 import CoachGuidelinesScreen from '../screens/client/CoachGuidelinesScreen';
+// Mux video + exercise library v1 (feat/video-library-v1-mobile).
+// Library lists from /exercise-catalog; Detail mints a signed Mux HLS URL.
+import ExerciseLibraryScreen from '../screens/client/ExerciseLibraryScreen';
+import ExerciseDetailScreen from '../screens/client/ExerciseDetailScreen';
 import NotificationsScreen from '../screens/client/NotificationsScreen';
 import MessagesScreen from '../screens/client/MessagesScreen';
 import EducationScreen from '../screens/client/EducationScreen';
@@ -120,6 +124,14 @@ export type WorkoutStackParamList = {
   ActiveWorkout: { routineId?: string; routineName: string; exercises: string };
   RoutineBuilder: { routineId?: string } | undefined;
   CoachGuidelines: undefined;
+  /**
+   * Mux video + exercise library v1.
+   * Library is a regular push; Detail is registered with a modal
+   * presentation so it can be presented either from the library
+   * (push-feel via the stack's default) or from in-workout (modal).
+   */
+  ExerciseLibrary: undefined;
+  ExerciseDetail: { idOrSlug: string };
 };
 
 // MoreStack: all non-tab screens live here. Screen names preserved.
@@ -280,6 +292,24 @@ function WorkoutStackNavigator() {
       <WorkoutStackNav.Screen name="ActiveWorkout"   component={ActiveWorkoutScreen} />
       <WorkoutStackNav.Screen name="RoutineBuilder"  component={RoutineBuilderScreen} />
       <WorkoutStackNav.Screen name="CoachGuidelines" component={CoachGuidelinesScreen} />
+      {/* Mux video + exercise library v1. */}
+      <WorkoutStackNav.Screen
+        name="ExerciseLibrary"
+        component={ExerciseLibraryScreen}
+        options={{ headerShown: true, title: 'Exercise Library' }}
+      />
+      <WorkoutStackNav.Screen
+        name="ExerciseDetail"
+        component={ExerciseDetailScreen}
+        options={{
+          headerShown: true,
+          title: 'Exercise',
+          // Modal presentation makes this screen usable both as a push
+          // from the library AND as an in-workout overlay from
+          // ActiveWorkoutScreen without re-registering it elsewhere.
+          presentation: 'modal',
+        }}
+      />
     </WorkoutStackNav.Navigator>
   );
 }

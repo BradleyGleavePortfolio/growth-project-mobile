@@ -504,9 +504,33 @@ export default function ActiveWorkoutScreen() {
           <View key={`${exercise.exerciseId}-${exIdx}`} style={styles.exerciseCard}>
             <View style={styles.exerciseHeader}>
               <Text style={styles.exerciseName}>{exercise.exerciseName}</Text>
-              <HapticPressable intent="warning" onPress={() => removeExercise(exIdx)}>
-                <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
-              </HapticPressable>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                {/* Mux video v1 — tap to open the catalog detail (modal). The
+                    legacy exercise id ≠ catalog id, so we open by slug
+                    derived from the name. Detail screen handles the
+                    "Exercise not found" case gracefully if it doesn't
+                    resolve. v2 will store a stable catalog ref on the
+                    session exercise so this is exact. */}
+                <HapticPressable
+                  intent="light"
+                  onPress={() => {
+                    const slug = exercise.exerciseName
+                      .toLowerCase()
+                      .replace(/[^a-z0-9]+/g, '-')
+                      .replace(/^-+|-+$/g, '');
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    (navigation as any).navigate('ExerciseDetail', {
+                      idOrSlug: slug,
+                    });
+                  }}
+                  accessibilityLabel={`Watch video for ${exercise.exerciseName}`}
+                >
+                  <Ionicons name="play-circle-outline" size={22} color={colors.textMuted} />
+                </HapticPressable>
+                <HapticPressable intent="warning" onPress={() => removeExercise(exIdx)}>
+                  <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
+                </HapticPressable>
+              </View>
             </View>
 
             {/* Set Headers */}

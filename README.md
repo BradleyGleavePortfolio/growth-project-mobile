@@ -722,3 +722,31 @@ Triage of open PRs as of 2026-05-12 (`gh pr list --state open --limit 100`).
 - **#89** `react-native-worklets` 0.7 → 0.8 — Reanimated 4 compat.
 - **#90** `@react-native-async-storage/async-storage` 2.2 → 3.0 — major API change.
 - **#91** `zustand` 5.0.11 → 5.0.13 — patch, should be safe.
+
+## Exercise library + video (Mux v1)
+
+**WHY.** Coach + client both need a browsable catalog of exercises with reference video. v1 ships a search-and-chip-filter list plus a detail screen that plays a signed Mux HLS clip when one is attached.
+
+**WHEN.** Pairs with backend PR `feat/video-library-v1-backend`. The mobile only consumes the two new GETs and treats `playbackUrl: null` as "video not yet available" — no video equals no broken player.
+
+**WHERE.**
+- `src/types/exerciseCatalog.ts` — `Exercise`, `ExerciseDetail`, list params + response.
+- `src/api/exerciseCatalog.ts` — typed client.
+- `src/screens/client/ExerciseLibraryScreen.tsx` — search bar, chip filters (Category / Muscle / Equipment), infinite-scroll FlatList over the response's `nextCursor`.
+- `src/screens/client/ExerciseDetailScreen.tsx` — name, meta, optional `expo-video` player (16:9), instructions list. Renders a small "Video not yet available" caption when `playbackUrl` is null.
+- Registered in `ClientNavigator` `WorkoutStack` as `ExerciseLibrary` and `ExerciseDetail`. `ExerciseDetail` uses `presentation: 'modal'` so the in-workout entry from `ActiveWorkoutScreen` opens as an overlay.
+
+**Endpoints consumed.**
+- `GET /exercise-catalog` — query: `q`, `category`, `primaryMuscle`, `equipment`, `cursor`, `limit`. Returns `{ items, nextCursor, total }`.
+- `GET /exercise-catalog/:idOrSlug` — returns the full Exercise plus a `playbackUrl: string | null` (signed Mux HLS URL, short-lived).
+
+**In-workout integration.** `ActiveWorkoutScreen` adds a small play-icon next to each session exercise. Tapping it derives a slug from the exercise name (legacy session `exerciseId` does not match catalog ids in v1) and pushes `ExerciseDetail` modally. If the slug doesn't resolve the detail screen shows a graceful "Exercise not found." v2 will store a stable `catalogId` on the session row so this is exact.
+
+**v1 limitations.**
+- An owner attaches Mux assets to exercises via the backend's internal owner API; the coach-side upload UI is v2.
+- The chip facets are hardcoded (most common categories / muscles / equipment). Free-text search still hits the backend for everything else.
+- Pagination is forward-only via `nextCursor`.
+
+**Mux setup.** See the backend README ("Mux video + exercise library v1") for the Fly secrets and webhook wiring required to mint signed playback URLs.
+
+**Tests.** `src/__tests__/exerciseCatalog.test.tsx` covers the API client query-string serialisation, library screen rendering, and the detail screen's player-vs-caption branch.
