@@ -52,6 +52,9 @@ import ClientInsightScreen from '../screens/coach/ClientInsightScreen';
 import DeleteAccountScreen from '../screens/settings/DeleteAccountScreen';
 // TestFlight coach SaaS — new business & team surfaces + invite redeemer drilldown.
 import CoachBusinessMetricsScreen from '../screens/coach/CoachBusinessMetricsScreen';
+// Payments — backend PRs #215 (package CRUD) and #216 (earnings/payouts).
+import CoachPackagesScreen from '../screens/coach/CoachPackagesScreen';
+import CoachEarningsScreen from '../screens/coach/CoachEarningsScreen';
 import CoachTeamProfileScreen from '../screens/coach/CoachTeamProfileScreen';
 import InviteCodeRedeemersScreen from '../screens/coach/InviteCodeRedeemersScreen';
 // Phase 9 — Notification center
@@ -139,6 +142,10 @@ export type SettingsStackParamList = {
   CoachBusinessMetrics: undefined;
   /** TestFlight coach SaaS — team/gym profile and team code. */
   CoachTeamProfile: undefined;
+  /** Payments — package CRUD (backend PR #215). */
+  CoachPackages: undefined;
+  /** Payments — earnings, payout readiness, reconciliation, refunds (backend PR #216). */
+  CoachEarnings: undefined;
 };
 
 /** Phase 11 / Track 7 — team management stack param list. */
@@ -317,6 +324,16 @@ function SettingsStackNavigator() {
       <SettingsStack.Screen
         name="CoachTeamProfile"
         component={CoachTeamProfileScreen}
+      />
+      {/* Payments — package CRUD (backend PR #215). */}
+      <SettingsStack.Screen
+        name="CoachPackages"
+        component={CoachPackagesScreen}
+      />
+      {/* Payments — earnings, payout readiness, reconciliation, refunds (backend PR #216). */}
+      <SettingsStack.Screen
+        name="CoachEarnings"
+        component={CoachEarningsScreen}
       />
     </SettingsStack.Navigator>
   );

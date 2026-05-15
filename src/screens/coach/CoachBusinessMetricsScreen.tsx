@@ -239,14 +239,12 @@ export default function CoachBusinessMetricsScreen() {
                   label="Revenue · 30d"
                   value={formatMoney(metrics.data.revenue_30d, metrics.data.currency)}
                   hint={`Net ${formatMoney(metrics.data.net_30d, metrics.data.currency)}`}
-                  colors={colors}
                   styles={styles}
                 />
                 <MetricCard
                   label="MRR"
                   value={formatMoney(metrics.data.mrr, metrics.data.currency)}
                   hint={`Total ${formatMoney(metrics.data.total_revenue, metrics.data.currency)}`}
-                  colors={colors}
                   styles={styles}
                 />
               </View>
@@ -257,7 +255,6 @@ export default function CoachBusinessMetricsScreen() {
                   label="Active clients"
                   value={String(metrics.data.active_clients)}
                   hint={`+${metrics.data.clients_added_30d} this month`}
-                  colors={colors}
                   styles={styles}
                 />
                 <MetricCard
@@ -267,30 +264,32 @@ export default function CoachBusinessMetricsScreen() {
                     metrics.data.clients_churned_30d,
                     metrics.data.active_clients + metrics.data.clients_churned_30d,
                   )}
-                  colors={colors}
                   styles={styles}
                 />
               </View>
 
-              {/* Sub-coach attribution */}
+              {/* Sub-coach attribution. Numbers are gross — the 5% head-coach
+                  override and the 2% TGP platform fee are deducted on the
+                  earnings screen, not here. */}
               <Text style={styles.sectionTitle}>Sub-coach attribution · 30d</Text>
+              <Text style={styles.sectionHint}>
+                Gross sub-coach revenue. 5% head coach / gym override and 2%
+                TGP platform fee are deducted in your Earnings screen.
+              </Text>
               <View style={styles.cardRow}>
                 <MetricCard
                   label="Revenue"
                   value={formatMoney(metrics.data.sub_coach_revenue_30d, metrics.data.currency)}
-                  colors={colors}
                   styles={styles}
                 />
                 <MetricCard
                   label="Acquired"
                   value={`+${metrics.data.sub_coach_acquisition_30d}`}
-                  colors={colors}
                   styles={styles}
                 />
                 <MetricCard
                   label="Churned"
                   value={String(metrics.data.sub_coach_churn_30d)}
-                  colors={colors}
                   styles={styles}
                 />
               </View>
@@ -386,6 +385,12 @@ const makeStyles = (colors: ThemeColors) =>
       marginBottom: 10,
       textTransform: 'uppercase',
       letterSpacing: 0.4,
+    },
+    sectionHint: {
+      fontSize: 12,
+      color: colors.textMuted,
+      lineHeight: 16,
+      marginBottom: 10,
     },
     cardRow: { flexDirection: 'row', gap: 12, flexWrap: 'wrap' },
     metricCard: {

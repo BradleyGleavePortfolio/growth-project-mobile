@@ -523,6 +523,36 @@ export default function SettingsScreen() {
           <Text style={styles.rowLabel}>Revenue & metrics</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
+        <View style={styles.divider} />
+        {/* Packages CRUD — backend PR #215. */}
+        <TouchableOpacity
+          style={styles.row}
+          onPress={() => {
+            mediumTap();
+            navigation.navigate('CoachPackages');
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Open packages"
+        >
+          <Ionicons name="pricetags-outline" size={20} color={colors.textSecondary} />
+          <Text style={styles.rowLabel}>Packages</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+        <View style={styles.divider} />
+        {/* Earnings + payout readiness — backend PR #216. */}
+        <TouchableOpacity
+          style={styles.row}
+          onPress={() => {
+            mediumTap();
+            navigation.navigate('CoachEarnings');
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Open earnings and payouts"
+        >
+          <Ionicons name="cash-outline" size={20} color={colors.textSecondary} />
+          <Text style={styles.rowLabel}>Earnings & payouts</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
       </View>
 
       {/* Subscription & access */}

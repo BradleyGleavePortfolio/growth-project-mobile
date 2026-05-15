@@ -163,11 +163,25 @@ export default function MembershipScreen() {
               <Text style={styles.explainTitle}>How access works</Text>
               <Text style={styles.explainBody}>
                 The Growth Project is a coach-managed platform. Your coach
-                invites you, sets your training and nutrition plan, and
-                handles billing outside the app. To pause, change tier, or
+                invites you, sets your training and nutrition plan, and may
+                offer self-serve plans below. To pause, change tier, or
                 cancel, message your coach directly.
               </Text>
             </View>
+
+            {/* In-app self-serve plans — backend PR #215. The plans screen
+                handles its own honest empty state when the coach has not
+                published packages or Stripe Connect isn't onboarded. */}
+            <HapticPressable
+              intent="light"
+              style={styles.secondaryAction}
+              onPress={() => navigation.navigate('ClientPackages' as never)}
+              accessibilityRole="button"
+              accessibilityLabel="View coaching plans"
+              accessibilityHint="Opens self-serve plans your coach offers, if any"
+            >
+              <Text style={styles.secondaryActionLabel}>VIEW COACHING PLANS</Text>
+            </HapticPressable>
 
             {!reachable ? (
               <View style={styles.notice}>
