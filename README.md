@@ -750,3 +750,36 @@ Triage of open PRs as of 2026-05-12 (`gh pr list --state open --limit 100`).
 **Mux setup.** See the backend README ("Mux video + exercise library v1") for the Fly secrets and webhook wiring required to mint signed playback URLs.
 
 **Tests.** `src/__tests__/exerciseCatalog.test.tsx` covers the API client query-string serialisation, library screen rendering, and the detail screen's player-vs-caption branch.
+
+## Invites & email (Email Pipeline v1)
+
+**WHY.** Coaches need a fast way to onboard a list of clients. Before this feature, the only path was a single-use invite code per client, copied to share-sheet by hand. Email Pipeline v1 adds bulk-create + email delivery + per-recipient delivery status so a coach can paste a CSV and watch deliveries land.
+
+**WHEN.** Pairs with backend PR `feat/email-pipeline-v1-backend`. The mobile contract is intentionally narrow; new fields the backend ships (e.g. richer `lastEmailStatus` values) flow through `src/types/invites.ts` without breaking existing surfaces.
+
+**WHERE.**
+- `src/api/invites.ts` — typed client + paste/CSV parsing helpers.
+- `src/screens/coach/BulkInviteScreen.tsx` — paste-or-CSV bulk-send with per-row status.
+- `src/screens/coach/CoachInvitesScreen.tsx` — invite list with status + lastEmailStatus, filter chips, resend / copy-link / revoke.
+- `src/screens/auth/AcceptInviteScreen.tsx` — PUBLIC accept landing for the email link.
+- Wired into `CoachNavigator` (`BulkInvite`, `CoachInvites`) and `AuthNavigator` (`AcceptInvite`). Settings → Account adds the two coach CTAs.
+
+**HOW (deep links).**
+- Custom scheme: `tgp://invite/accept/:token`
+- Universal link: `https://app.trygrowthproject.com/invite/accept/:token`
+- Configured in `app.json` (Android intent filters) and `docs/well-known/apple-app-site-association` (iOS Universal Links). The path `invite/accept/:token` is added alongside the existing `join/:invite_code` path so both shapes resolve.
+- `RootNavigator` foreground guard routes already-signed-in users through `signOut()` before replaying the accept URL, so the public `AcceptInviteScreen` always mounts cleanly.
+
+**WHO.**
+- Coach builds the invite list and triggers send (auth gated — coach role).
+- Backend queues + sends emails. Mobile reads delivery status via `GET /coach/invite-codes`.
+- Invitee opens the email link → `AcceptInviteScreen` calls `POST /invites/accept/:token` with NO auth header.
+
+**WHAT happens when `RESEND_API_KEY` is unset on the backend.** Invite creation still succeeds; the backend marks each invite as `lastEmailStatus: FAILED` (or omits the field). The mobile reads this and the row's status badge surfaces it. Coaches can fall back to **Copy link** to share the invite manually. The mobile gracefully degrades without raising errors.
+
+**Resend availability.** `POST /coach/invite-codes/:id/resend` is OPTIONAL. The mobile probes it on first use; if the backend returns 404 the resend affordance hides for the rest of the session. No further action required from the coach.
+
+**Tests.**
+- `src/__tests__/invitesApi.test.ts` — paste/CSV helpers, bulk-cap guard, resend 404 fallback, list filter, accept fetch contract.
+- `src/__tests__/bulkInviteScreen.test.tsx` — paste parsing, dedupe, result pills, copy/retry CTAs.
+- `src/__tests__/acceptInviteScreen.test.tsx` — happy path (auth + unauth), expired, already_accepted, invalid, network retry.

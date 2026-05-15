@@ -41,6 +41,12 @@ import CoachMacrosReviewScreen from '../screens/coach/CoachMacrosReviewScreen';
 import CoachWorkoutBuilderScreen from '../screens/coach/CoachWorkoutBuilderScreen';
 import CoachMealTemplatesScreen from '../screens/coach/CoachMealTemplatesScreen';
 import CoachBulkInviteScreen from '../screens/coach/CoachBulkInviteScreen';
+// Email Pipeline v1 — bulk-invite + invites list (per-recipient delivery view).
+// These complement the legacy CoachBulkInviteScreen / InviteCodesScreen;
+// the v1 surfaces target the email-delivery contract on
+// feat/email-pipeline-v1-backend.
+import BulkInviteScreen from '../screens/coach/BulkInviteScreen';
+import CoachInvitesScreen from '../screens/coach/CoachInvitesScreen';
 // Concierge Phase 1 — scheduling coach surfaces.
 import CoachAvailabilityEditorScreen from '../screens/coach/CoachAvailabilityEditorScreen';
 import CoachBookingInboxScreen from '../screens/coach/CoachBookingInboxScreen';
@@ -102,6 +108,10 @@ export type ClientsStackParamList = {
   CoachWorkoutBuilder:  { planId?: string } | undefined;
   CoachMealTemplates:   undefined;
   CoachBulkInvite:      undefined;
+  /** Email Pipeline v1 — bulk invite v2 surface (per-recipient delivery). */
+  BulkInvite:           undefined;
+  /** Email Pipeline v1 — invites list with delivery + resend / revoke. */
+  CoachInvites:         undefined;
   /** Concierge Phase 1 — scheduling coach surfaces. */
   CoachAvailabilityEditor:  { coachId: string };
   CoachBookingInbox:        undefined;
@@ -244,6 +254,15 @@ function ClientsStackNavigator() {
       <ClientsStack.Screen
         name="CoachBulkInvite"
         component={CoachBulkInviteScreen}
+      />
+      {/* Email Pipeline v1 — v2 bulk invite surface + invites list. */}
+      <ClientsStack.Screen
+        name="BulkInvite"
+        component={BulkInviteScreen}
+      />
+      <ClientsStack.Screen
+        name="CoachInvites"
+        component={CoachInvitesScreen}
       />
       {/* Concierge Phase 1 — scheduling coach surfaces. */}
       <ClientsStack.Screen

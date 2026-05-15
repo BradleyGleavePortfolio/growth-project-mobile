@@ -44,9 +44,18 @@
               "host": "join"
             },
             {
+              "scheme": "tgp",
+              "host": "invite"
+            },
+            {
               "scheme": "https",
               "host": "app.trygrowthproject.com",
               "pathPrefix": "/join"
+            },
+            {
+              "scheme": "https",
+              "host": "app.trygrowthproject.com",
+              "pathPrefix": "/invite/accept"
             }
           ],
           "category": [

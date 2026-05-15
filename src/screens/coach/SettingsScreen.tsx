@@ -212,6 +212,17 @@ export default function SettingsScreen() {
     navigation.navigate('ClientsStack', { screen: 'InviteCodes' });
   };
 
+  // Email Pipeline v1 — new bulk-invite + delivery surface.
+  const handleOpenInvitesAndEmail = () => {
+    mediumTap();
+    navigation.navigate('ClientsStack', { screen: 'CoachInvites' });
+  };
+
+  const handleOpenBulkInvite = () => {
+    mediumTap();
+    navigation.navigate('ClientsStack', { screen: 'BulkInvite' });
+  };
+
   const handleOpenBilling = () => {
     mediumTap();
     navigation.navigate('Billing');
@@ -409,15 +420,25 @@ export default function SettingsScreen() {
         <View style={styles.divider} />
         <TouchableOpacity
           style={styles.row}
-          onPress={() => {
-            mediumTap();
-            navigation.navigate('ClientsStack', { screen: 'CoachBulkInvite' });
-          }}
+          onPress={handleOpenBulkInvite}
           accessibilityRole="button"
-          accessibilityLabel="Bulk invite clients"
+          accessibilityLabel="Bulk invite clients by email"
+          testID="settings-bulk-invite"
         >
-          <Ionicons name="people-circle-outline" size={20} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>Bulk Invite</Text>
+          <Ionicons name="mail-outline" size={20} color={colors.textSecondary} />
+          <Text style={styles.rowLabel}>Bulk invite clients</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+        <View style={styles.divider} />
+        <TouchableOpacity
+          style={styles.row}
+          onPress={handleOpenInvitesAndEmail}
+          accessibilityRole="button"
+          accessibilityLabel="Invites and email delivery"
+          testID="settings-invites-and-email"
+        >
+          <Ionicons name="paper-plane-outline" size={20} color={colors.textSecondary} />
+          <Text style={styles.rowLabel}>Invites & email</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
       </View>
