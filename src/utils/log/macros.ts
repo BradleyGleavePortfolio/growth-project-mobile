@@ -104,10 +104,31 @@ export interface MacroBundle {
 
 export function calcMacros(food: SearchResult, qty: number, unit: string): MacroBundle {
   const multiplier = quantityMultiplier(food, qty, unit);
+  // B4: NaN-safe — when an upstream macro is unknown the bundle exposes NaN
+  // so the caller (logSubmit / UI) can refuse the save instead of writing 0.
+  const scale = (v: number) =>
+    Number.isFinite(v) ? Math.round(v * multiplier) : NaN;
+  const scale1 = (v: number) =>
+    Number.isFinite(v) ? Math.round(v * multiplier * 10) / 10 : NaN;
   return {
-    calories: Math.round(food.calories * multiplier),
-    protein: Math.round(food.protein * multiplier * 10) / 10,
-    carbs: Math.round(food.carbs * multiplier * 10) / 10,
-    fat: Math.round(food.fat * multiplier * 10) / 10,
+    calories: scale(food.calories),
+    protein: scale1(food.protein),
+    carbs: scale1(food.carbs),
+    fat: scale1(food.fat),
   };
+}
+
+// B4: parse a user-typed quantity string ("1.5", "0,75", " 2 ") into a
+// finite number, or null when the input cannot be turned into a positive
+// quantity. Accepts comma-as-decimal for locales that use it. Centralising
+// this means manual entry, search-log, and the AI-prefill path all agree on
+// what "no value" means.
+export function parseQuantityInput(raw: string | number | null | undefined): number | null {
+  if (raw == null) return null;
+  if (typeof raw === 'number') return Number.isFinite(raw) && raw > 0 ? raw : null;
+  const trimmed = raw.trim().replace(',', '.');
+  if (!trimmed) return null;
+  const n = Number.parseFloat(trimmed);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return n;
 }

@@ -387,8 +387,19 @@ export default function ActiveWorkoutScreen() {
           // flat; no nested JSON blob in a single row.
           try {
             for (const ex of completedExercises) {
+              // B2: never write an empty exerciseId — fall back to a stable
+              // session-scoped slug derived from the exercise name. The
+              // server route will still receive the human-readable name via
+              // the createWorkout payload below.
+              const slug = (ex.exerciseName || 'exercise')
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-+|-+$/g, '') || 'exercise';
+              const exerciseId =
+                (ex.exerciseId && ex.exerciseId.trim()) ||
+                `session:${routineName || 'workout'}/${slug}`;
               await writeWorkoutLog({
-                exerciseId: ex.exerciseId,
+                exerciseId,
                 setsData: JSON.stringify(ex.sets),
                 sessionName: routineName,
                 durationMinutes,

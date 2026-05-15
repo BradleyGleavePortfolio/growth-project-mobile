@@ -13,6 +13,7 @@ import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 import { workoutApi } from '../../services/api';
+import { routineExerciseId } from '../../utils/workout/exerciseId';
 import FadeInView from '../../components/FadeInView';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { EmptyStateNoWorkouts, EmptyStateNoData } from '../../ui/empty-states';
@@ -225,9 +226,11 @@ export default function WorkoutScreen() {
   });
 
   const startRoutine = (routine: ApiRoutine) => {
-    // Convert API routine exercises to the format ActiveWorkoutScreen expects
+    // Convert API routine exercises to the format ActiveWorkoutScreen expects.
+    // The API routine does not carry catalog ids — synthesize a deterministic
+    // fallback so downstream writes never persist an empty exerciseId (B2).
     const exercisesForSession = routine.exercises.map((e) => ({
-      exerciseId: '',
+      exerciseId: routineExerciseId(routine.id, e.exercise_name),
       exerciseName: e.exercise_name,
       sets: e.sets_target || 3,
       reps: e.reps_target || 10,

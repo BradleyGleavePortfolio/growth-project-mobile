@@ -80,6 +80,7 @@ import ClientBookingRequestScreen from '../screens/client/ClientBookingRequestSc
 import ClientUpcomingSessionsScreen from '../screens/client/ClientUpcomingSessionsScreen';
 import ClientDailyMealPlanScreen from '../screens/client/ClientDailyMealPlanScreen';
 import ClientWorkoutViewerScreen from '../screens/client/ClientWorkoutViewerScreen';
+import WorkoutAssignmentDetailScreen from '../screens/client/WorkoutAssignmentDetailScreen';
 // Phase 9 — Notification center
 import NotificationCenterScreen from '../screens/notifications/NotificationCenterScreen';
 import NotificationPreferencesScreen from '../screens/notifications/NotificationPreferencesScreen';
@@ -87,6 +88,9 @@ import NotificationBadge from '../components/NotificationBadge';
 import { fetchUnreadCount } from '../services/notificationsApi';
 // Phase 10 — GDPR Article 20 data portability
 import DataExportScreen from '../screens/settings/DataExportScreen';
+// Payments — client-facing packages + checkout return (backend PR #215).
+import ClientPackagesScreen from '../screens/client/ClientPackagesScreen';
+import CheckoutReturnScreen from '../screens/client/CheckoutReturnScreen';
 import { colors } from '../theme/tokens';
 
 // ─── Param lists ──────────────────────────────────────────────────────────────
@@ -165,11 +169,20 @@ export type MoreStackParamList = {
   ClientMacros:        undefined;
   ClientDailyMealPlan: { date?: string } | undefined;
   ClientWorkoutViewer: { assignmentId: string };
+  WorkoutAssignmentDetail: { assignmentId: string };
   /** Concierge Phase 1 — scheduling client surfaces. */
   ClientBookingRequest:    undefined;
   ClientUpcomingSessions:  undefined;
   /** Phase 10 — GDPR Article 20 data portability */
   DataExport: undefined;
+  /** Payments — client-facing packages list (backend PR #215). */
+  ClientPackages: undefined;
+  /**
+   * Payments — Stripe Checkout return.
+   *   outcome: 'success' | 'cancel'
+   *   session_id: present when outcome === 'success' (Stripe template token).
+   */
+  CheckoutReturn: { outcome?: 'success' | 'cancel'; session_id?: string };
 };
 
 // ─── Phase 9: unread count polling for the bell icon ─────────────────────────
@@ -330,6 +343,7 @@ function MoreStackNavigator() {
       <MoreStackNav.Screen name="ClientMacros"        component={ClientMacrosScreen} />
       <MoreStackNav.Screen name="ClientDailyMealPlan" component={ClientDailyMealPlanScreen} />
       <MoreStackNav.Screen name="ClientWorkoutViewer" component={ClientWorkoutViewerScreen} />
+      <MoreStackNav.Screen name="WorkoutAssignmentDetail" component={WorkoutAssignmentDetailScreen} />
       {/* Concierge Phase 1 — scheduling client surfaces. */}
       <MoreStackNav.Screen
         name="ClientBookingRequest"
@@ -341,6 +355,11 @@ function MoreStackNavigator() {
       />
       {/* Phase 10 — GDPR Article 20 data portability */}
       <MoreStackNav.Screen name="DataExport" component={DataExportScreen} />
+      {/* Payments — client-facing packages list + Stripe Checkout return
+          (backend PR #215). The return screen is the deep-link target for
+          tgp://checkout/{success,cancel}; see RootNavigator.linking. */}
+      <MoreStackNav.Screen name="ClientPackages"  component={ClientPackagesScreen} />
+      <MoreStackNav.Screen name="CheckoutReturn"  component={CheckoutReturnScreen} />
     </MoreStackNav.Navigator>
   );
 }

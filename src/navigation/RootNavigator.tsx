@@ -92,16 +92,35 @@ const linking: LinkingOptions<Record<string, object | undefined>> = {
         ? ({
             Home: 'home',
             Log: 'log',
-            MoreTab: {
-              screens: {
+          } as Record<string, unknown>)
+        : {}),
+      // MoreTab linking — combines screenshot-mode deep links (only mounted
+      // in screenshot harness) with the Stripe Checkout return route, which
+      // is reachable in real builds via tgp://checkout/{success,cancel}.
+      // Stripe redirects to:
+      //   tgp://checkout/success?session_id=cs_xxx   (paid)
+      //   tgp://checkout/cancel                       (canceled)
+      // The return screen confirms the session against the backend before
+      // showing a celebratory state.
+      MoreTab: {
+        screens: {
+          ...(isScreenshotMode()
+            ? {
                 Plan: 'plan',
                 Recipes: 'recipes',
                 Progress: 'progress',
                 Fast: 'fast',
-              },
+              }
+            : {}),
+          CheckoutReturn: {
+            path: 'checkout/:outcome',
+            parse: {
+              outcome: (v: string) => (v === 'cancel' ? 'cancel' : 'success'),
+              session_id: (v: string) => v,
             },
-          } as Record<string, unknown>)
-        : {}),
+          },
+        },
+      } as unknown as Record<string, unknown>,
     },
   },
 };
@@ -189,12 +208,15 @@ export default function RootNavigator() {
         const match = url.match(/\/join\/([^/?#]+)/i);
         const code = match?.[1];
         if (code) {
-          // Stash the inbound code so RoleSelection (or a future settings
-          // surface) can offer to attach it. The owner can wire surface-up
-          // when the in-app attach UI is built; for now we just don't lose
-          // the code.
+          // B5/B6: stash the inbound code so the in-app banner (HomeScreen)
+          // can offer to claim it via authApi.attachInviteCode. The banner
+          // is the consent surface — we do NOT auto-attach because it would
+          // silently re-pair the client to a different coach.
           try {
             await AsyncStorage.setItem('pending_invite_code', code);
+            // Fire an authEvent so any mounted banner re-reads storage on
+            // foreground without waiting for a manual refresh.
+            authEvents.emit();
           } catch {
             // best-effort
           }

@@ -225,6 +225,15 @@ beforeEach(async () => {
 // ─── writeWorkoutLog ─────────────────────────────────────────────────────────
 
 describe('writeWorkoutLog', () => {
+  it('B2: refuses to write a row with an empty exerciseId', async () => {
+    await expect(
+      writeWorkoutLog({ exerciseId: '', setsData: '[]' }),
+    ).rejects.toThrow(/exerciseId is required/);
+    await expect(
+      writeWorkoutLog({ exerciseId: '   ', setsData: '[]' }),
+    ).rejects.toThrow(/exerciseId is required/);
+  });
+
   it('creates a workout_logs row with sync_status=pending', async () => {
     const record = await writeWorkoutLog({
       exerciseId: 'bench-press',

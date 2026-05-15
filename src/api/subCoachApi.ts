@@ -76,6 +76,21 @@ export interface ReassignResult {
 
 // ─── API ──────────────────────────────────────────────────────────────────────
 
+export interface SubCoachInviteResult {
+  inviteId: string;
+  email: string;
+  inviteUrl: string;
+  expires_at: string;
+}
+
+export interface SubCoachInvitePayload {
+  email: string;
+  /** Optional name to pre-fill the sub-coach's profile on accept. */
+  name?: string;
+  /** Optional ceiling on how many clients the sub-coach may take. */
+  maxClients?: number;
+}
+
 export const subCoachApi = {
   /** List all sub-coaches under the calling head coach. */
   listSubCoaches: () =>
@@ -100,6 +115,29 @@ export const subCoachApi = {
   ) =>
     api.post<ReassignResult>(
       `/sub-coaches/${toSubCoachId}/reassign-client`,
+      payload,
+    ),
+
+  /**
+   * Invite a sub-coach by email. Backend creates a sub-coach invite and
+   * emails an accept link. Returns the invite metadata plus a shareable URL
+   * so the head coach can fall back to copy/paste if email fails.
+   */
+  invite: (payload: SubCoachInvitePayload) =>
+    api.post<SubCoachInviteResult>('/sub-coaches/invites', {
+      email: payload.email,
+      name: payload.name ?? null,
+      max_clients: payload.maxClients ?? null,
+    }),
+
+  /**
+   * Revoke a sub-coach. The backend reassigns any active clients back to the
+   * head coach as part of the transaction; we surface the count returned in
+   * `reassignedClientCount` to the caller for the confirmation toast.
+   */
+  revoke: (subCoachId: string, payload: { reason?: string } = {}) =>
+    api.post<{ ok: true; reassignedClientCount: number }>(
+      `/sub-coaches/${subCoachId}/revoke`,
       payload,
     ),
 };

@@ -43,9 +43,24 @@ const INSIGHT_WINDOWS = [7, 14, 30] as const;
 interface Props {
   clientId: string;
   clientName: string;
+  /**
+   * B14: Client safety context for the meal-plan generator. Always pass
+   * these from ClientDetailScreen so the AI request carries the user's
+   * stored allergies/restrictions. An undefined value means "not yet
+   * loaded" and the meal-plan CTA is disabled to prevent a generator
+   * call that misses safety constraints; an empty array means "loaded
+   * and the user has none".
+   */
+  clientAllergies?: string[];
+  clientDietaryRestrictions?: string[];
 }
 
-export default function CoachAiSection({ clientId, clientName }: Props) {
+export default function CoachAiSection({
+  clientId,
+  clientName,
+  clientAllergies,
+  clientDietaryRestrictions,
+}: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation =
@@ -125,12 +140,38 @@ export default function CoachAiSection({ clientId, clientName }: Props) {
 
   const handleSubmitMealPlan = async () => {
     setSubmitError(null);
+    // B14: refuse to generate a meal plan when we have not been told what the
+    // client's allergies are. `undefined` means the caller has not loaded the
+    // profile yet; the array semantics (empty = none, present = these) match
+    // profileCompletion.ts. This is the difference between "asked and said
+    // none" vs. "we never asked" — the latter is unsafe input for the AI.
+    if (clientAllergies === undefined || clientDietaryRestrictions === undefined) {
+      setSubmitError(
+        'Allergy and dietary info has not loaded yet. Reopen this client to retry.',
+      );
+      return;
+    }
     setSubmitting(true);
     try {
+      // Mirror safety fields into the user-facing notes so the LLM cannot
+      // miss them even if the backend prompt template forgets a field.
+      const composedNotes = [
+        mealNotes.trim() || null,
+        clientAllergies.length
+          ? `Allergies: ${clientAllergies.join(', ')}.`
+          : null,
+        clientDietaryRestrictions.length
+          ? `Dietary restrictions: ${clientDietaryRestrictions.join(', ')}.`
+          : null,
+      ]
+        .filter(Boolean)
+        .join(' ');
       const res = await coachAiApi.generateMealPlan({
         clientId,
         days,
-        notes: mealNotes.trim() || undefined,
+        notes: composedNotes || undefined,
+        allergies: clientAllergies,
+        dietary_restrictions: clientDietaryRestrictions,
       });
       const draftId = res.data.draftId;
       closeModal();
