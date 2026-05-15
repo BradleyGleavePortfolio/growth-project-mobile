@@ -2,7 +2,7 @@
 
 A single document covering the variables, configuration, runtime contracts, and known gaps a new engineer needs to pick up `growth-project-mobile` cold. Module-level READMEs cover deeper behavior; this file is the index that ties them together.
 
-Last refreshed: 2026-05-15. Current TestFlight candidate: `expo.version 1.0.0`, `expo.ios.buildNumber "4"`, `expo.android.versionCode 4`. The build-3 candidate covered the pre-TestFlight audit; build 4 takes in the audit follow-up (#137), the food logger rebuild (#138), and Coach AI v1 (#139).
+Last refreshed: 2026-05-15. Current TestFlight candidate: `expo.version 1.0.0`, `expo.ios.buildNumber "5"`, `expo.android.versionCode 4`. The build-3 candidate covered the pre-TestFlight audit; build 4 took in the audit follow-up (#137), the food logger rebuild (#138), and Coach AI v1 (#139); build 5 is a no-code resubmit after App Store Connect rejected build 4 as a duplicate. Android versionCode is unchanged because no Play upload has occurred for build 4.
 
 ## 1. Repo at a glance
 
