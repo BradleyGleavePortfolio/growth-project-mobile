@@ -898,6 +898,29 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
                 <Ionicons name="notifications-outline" size={18} color={colors.primary} />
                 <Text style={styles.actionPillText}>Send Nudge</Text>
               </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionPill}
+                onPress={() =>
+                  navigation.navigate('CoachMacrosReview', {
+                    clientId,
+                    clientName: route.params.clientName,
+                  })
+                }
+                accessibilityRole="button"
+                accessibilityLabel="Review client macros"
+              >
+                <Ionicons name="nutrition-outline" size={18} color={colors.primary} />
+                <Text style={styles.actionPillText}>Macros</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.actionPill}
+                onPress={() => navigation.navigate('CoachWorkoutBuilder', undefined)}
+                accessibilityRole="button"
+                accessibilityLabel="Open workout builder"
+              >
+                <Ionicons name="barbell-outline" size={18} color={colors.primary} />
+                <Text style={styles.actionPillText}>Workouts</Text>
+              </TouchableOpacity>
             </View>
             {nudgeSuccess && (
               <View style={styles.successBanner} accessibilityLiveRegion="polite">

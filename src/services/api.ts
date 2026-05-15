@@ -358,6 +358,24 @@ export const coachApi = {
     api.post('/coach/invite-codes', data),
   revokeInviteCode: (id: string) =>
     api.delete(`/coach/invite-codes/${id}`),
+  // ── Invite code redeemer drilldown ─────────────────────────────────────
+  // Backend contract: GET /coach/invite-codes/:id/redeemers returns the
+  // accounts that signed up using a specific invite code, sorted newest
+  // first. 404 from the endpoint means the backend hasn't shipped the
+  // route yet — the screen renders an honest "not available" state rather
+  // than a fabricated list.
+  getInviteCodeRedeemers: (
+    inviteCodeId: string,
+  ) =>
+    api.get<{
+      redeemers: Array<{
+        user_id: string;
+        name: string;
+        email: string;
+        redeemed_at: string;
+        last_active_at: string | null;
+      }>;
+    }>(`/coach/invite-codes/${inviteCodeId}/redeemers`),
   // ── Messaging (coach → client thread) ──
   getClientMessages: (clientId: string, params?: { before?: string; limit?: number }) => {
     const q = new URLSearchParams();

@@ -406,6 +406,123 @@ export default function SettingsScreen() {
           <Text style={styles.rowLabel}>Invite Codes</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
+        <View style={styles.divider} />
+        <TouchableOpacity
+          style={styles.row}
+          onPress={() => {
+            mediumTap();
+            navigation.navigate('ClientsStack', { screen: 'CoachBulkInvite' });
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Bulk invite clients"
+        >
+          <Ionicons name="people-circle-outline" size={20} color={colors.textSecondary} />
+          <Text style={styles.rowLabel}>Bulk Invite</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Coach Tools — surfaces the per-coach building tools that previously
+          had no inbound nav (audit P0: 6 dead routes).  */}
+      <Text style={styles.sectionHeader}>Coach Tools</Text>
+      <View style={styles.section}>
+        <TouchableOpacity
+          style={styles.row}
+          onPress={() => {
+            mediumTap();
+            navigation.navigate('ClientsStack', { screen: 'CoachWorkoutBuilder' });
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Open workout builder"
+        >
+          <Ionicons name="barbell-outline" size={20} color={colors.textSecondary} />
+          <Text style={styles.rowLabel}>Workout Builder</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+        <View style={styles.divider} />
+        <TouchableOpacity
+          style={styles.row}
+          onPress={() => {
+            mediumTap();
+            navigation.navigate('ClientsStack', { screen: 'CoachMealTemplates' });
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Open meal templates"
+        >
+          <Ionicons name="restaurant-outline" size={20} color={colors.textSecondary} />
+          <Text style={styles.rowLabel}>Meal Templates</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+        <View style={styles.divider} />
+        <TouchableOpacity
+          style={styles.row}
+          onPress={() => {
+            mediumTap();
+            navigation.navigate('ClientsStack', { screen: 'CoachBookingInbox' });
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Open booking inbox"
+        >
+          <Ionicons name="calendar-outline" size={20} color={colors.textSecondary} />
+          <Text style={styles.rowLabel}>Booking Inbox</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+        <View style={styles.divider} />
+        <TouchableOpacity
+          style={styles.row}
+          onPress={() => {
+            mediumTap();
+            const coachId = currentUser?.id;
+            if (!coachId) {
+              Alert.alert('Not signed in', 'Could not resolve your coach profile.');
+              return;
+            }
+            navigation.navigate('ClientsStack', {
+              screen: 'CoachAvailabilityEditor',
+              params: { coachId },
+            });
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Open availability editor"
+        >
+          <Ionicons name="time-outline" size={20} color={colors.textSecondary} />
+          <Text style={styles.rowLabel}>Availability</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Business — Stripe Connect-backed business metrics + team profile.
+          Both screens render honest empty states when the backend hasn't
+          provisioned the relevant endpoints. */}
+      <Text style={styles.sectionHeader}>Business</Text>
+      <View style={styles.section}>
+        <TouchableOpacity
+          style={styles.row}
+          onPress={() => {
+            mediumTap();
+            navigation.navigate('CoachTeamProfile');
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Open team profile"
+        >
+          <Ionicons name="business-outline" size={20} color={colors.textSecondary} />
+          <Text style={styles.rowLabel}>Team / Gym profile</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+        <View style={styles.divider} />
+        <TouchableOpacity
+          style={styles.row}
+          onPress={() => {
+            mediumTap();
+            navigation.navigate('CoachBusinessMetrics');
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Open business metrics"
+        >
+          <Ionicons name="trending-up-outline" size={20} color={colors.textSecondary} />
+          <Text style={styles.rowLabel}>Revenue & metrics</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
       </View>
 
       {/* Subscription & access */}

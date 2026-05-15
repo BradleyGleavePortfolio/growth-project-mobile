@@ -126,9 +126,9 @@ export default function ProgramTemplatesScreen() {
     try {
       await postGuidelines.mutateAsync({ clientId, guidelines: content });
       Alert.alert(
-        'Template Applied',
-        `"${selectedTemplate.title}" has been assigned to ${clientName}.`,
-        [{ text: 'Great' }]
+        'Guidelines posted',
+        `${clientName} can see the "${selectedTemplate.title}" nutrition and training notes in their guidelines tab.`,
+        [{ text: 'Great' }],
       );
     } catch (err) {
       Alert.alert('Error', 'Could not apply template. Please try again.');
@@ -151,8 +151,12 @@ export default function ProgramTemplatesScreen() {
         {/* Header */}
         <FadeInView>
           <View style={styles.header}>
-            <Text style={styles.title}>Program Templates</Text>
-            <Text style={styles.subtitle}>Apply proven protocols to your clients</Text>
+            <Text style={styles.title}>Guideline Templates</Text>
+            <Text style={styles.subtitle}>
+              Prefilled nutrition + training notes you can post as guidelines to
+              a client. Does not create a workout or meal plan — use Workout
+              Builder or Meal Templates for those.
+            </Text>
           </View>
         </FadeInView>
 
@@ -216,8 +220,8 @@ export default function ProgramTemplatesScreen() {
                       style={[styles.applyBtn, { backgroundColor: template.color }]}
                       onPress={() => handleApply(template)}
                     >
-                      <Ionicons name="person-add-outline" size={18} color={colors.textOnPrimary} />
-                      <Text style={styles.applyBtnText}>Apply to Client →</Text>
+                      <Ionicons name="document-text-outline" size={18} color={colors.textOnPrimary} />
+                      <Text style={styles.applyBtnText}>Post as guidelines →</Text>
                     </HapticPressable>
                   </View>
                 )}
@@ -231,7 +235,7 @@ export default function ProgramTemplatesScreen() {
       {loading && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>Applying template...</Text>
+          <Text style={styles.loadingText}>Posting guidelines...</Text>
         </View>
       )}
 
@@ -248,7 +252,7 @@ export default function ProgramTemplatesScreen() {
               <Text style={styles.modalTitle}>Select Client</Text>
               {selectedTemplate && (
                 <Text style={styles.modalSubtitle}>
-                  Applying: {selectedTemplate.emoji} {selectedTemplate.title}
+                  Posting: {selectedTemplate.emoji} {selectedTemplate.title}
                 </Text>
               )}
             </View>

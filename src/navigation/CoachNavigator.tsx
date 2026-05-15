@@ -50,6 +50,10 @@ import AIMealPlanDraftScreen from '../screens/coach/AIMealPlanDraftScreen';
 import ClientInsightScreen from '../screens/coach/ClientInsightScreen';
 // Phase 10 — GDPR right to erasure.
 import DeleteAccountScreen from '../screens/settings/DeleteAccountScreen';
+// TestFlight coach SaaS — new business & team surfaces + invite redeemer drilldown.
+import CoachBusinessMetricsScreen from '../screens/coach/CoachBusinessMetricsScreen';
+import CoachTeamProfileScreen from '../screens/coach/CoachTeamProfileScreen';
+import InviteCodeRedeemersScreen from '../screens/coach/InviteCodeRedeemersScreen';
 // Phase 9 — Notification center
 import NotificationCenterScreen from '../screens/notifications/NotificationCenterScreen';
 import NotificationPreferencesScreen from '../screens/notifications/NotificationPreferencesScreen';
@@ -110,6 +114,8 @@ export type ClientsStackParamList = {
   NotificationPreferences: undefined;
   // Phase 8 — Legacy landing — kept so existing navigate('Dashboard') calls resolve.
   Dashboard: undefined;
+  /** TestFlight coach SaaS — invite code redeemer drilldown. */
+  InviteCodeRedeemers: { inviteCodeId: string; code: string };
 };
 
 export type SettingsStackParamList = {
@@ -129,6 +135,10 @@ export type SettingsStackParamList = {
   DeleteAccount: undefined;
   /** Phase 10 — GDPR Article 20 data portability */
   DataExport: undefined;
+  /** TestFlight coach SaaS — business metrics / Stripe Connect surface. */
+  CoachBusinessMetrics: undefined;
+  /** TestFlight coach SaaS — team/gym profile and team code. */
+  CoachTeamProfile: undefined;
 };
 
 /** Phase 11 / Track 7 — team management stack param list. */
@@ -261,6 +271,11 @@ function ClientsStackNavigator() {
         component={NotificationPreferencesScreen}
         options={{ headerShown: false }}
       />
+      {/* TestFlight coach SaaS — invite code redeemer drilldown. */}
+      <ClientsStack.Screen
+        name="InviteCodeRedeemers"
+        component={InviteCodeRedeemersScreen}
+      />
     </ClientsStack.Navigator>
   );
 }
@@ -293,6 +308,16 @@ function SettingsStackNavigator() {
       <SettingsStack.Screen name="DeleteAccount" component={DeleteAccountScreen} />
       {/* Phase 10 — GDPR Article 20 data portability */}
       <SettingsStack.Screen name="DataExport" component={DataExportScreen} />
+      {/* TestFlight coach SaaS — Stripe-Connect-backed business metrics. */}
+      <SettingsStack.Screen
+        name="CoachBusinessMetrics"
+        component={CoachBusinessMetricsScreen}
+      />
+      {/* TestFlight coach SaaS — team / gym / organization profile. */}
+      <SettingsStack.Screen
+        name="CoachTeamProfile"
+        component={CoachTeamProfileScreen}
+      />
     </SettingsStack.Navigator>
   );
 }

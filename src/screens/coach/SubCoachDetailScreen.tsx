@@ -10,6 +10,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -108,6 +109,54 @@ export default function SubCoachDetailScreen() {
     [navigation, subCoachId],
   );
 
+  const [revoking, setRevoking] = useState(false);
+
+  const handleRevoke = useCallback(() => {
+    if (!detail) return;
+    const assigned = detail.capacity.assignedClients;
+    const reassignWarning =
+      assigned > 0
+        ? ` Their ${assigned} client${assigned === 1 ? '' : 's'} will be reassigned to you.`
+        : '';
+    Alert.alert(
+      'Revoke sub-coach?',
+      `${detail.name} will lose access to all clients.${reassignWarning} This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Revoke',
+          style: 'destructive',
+          onPress: async () => {
+            setRevoking(true);
+            try {
+              const res = await subCoachApi.revoke(subCoachId);
+              const moved = res.data?.reassignedClientCount ?? 0;
+              Alert.alert(
+                'Sub-coach revoked',
+                moved > 0
+                  ? `${moved} client${moved === 1 ? '' : 's'} reassigned to you.`
+                  : 'Sub-coach access has been removed.',
+                [{ text: 'OK', onPress: () => navigation.goBack() }],
+              );
+            } catch (err) {
+              const status = (err as { response?: { status?: number } })?.response?.status;
+              if (status === 404 || status === 501) {
+                Alert.alert(
+                  'Not enabled yet',
+                  'Sub-coach revocation is not enabled on your plan yet.',
+                );
+              } else {
+                Alert.alert('Could not revoke', 'Please try again. If this keeps failing, contact support.');
+              }
+            } finally {
+              setRevoking(false);
+            }
+          },
+        },
+      ],
+    );
+  }, [detail, subCoachId, navigation]);
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -161,6 +210,23 @@ export default function SubCoachDetailScreen() {
         score={detail.engagement.score}
         breakdown={detail.engagement.breakdown}
       />
+
+      {/* Revoke action — destructive but with reassignment surfaced in the
+          confirmation copy. Lives below the engagement card so it's never
+          the first tap target. */}
+      <Pressable
+        onPress={handleRevoke}
+        style={styles.revokeBtn}
+        disabled={revoking}
+        accessibilityRole="button"
+        accessibilityLabel={`Revoke ${detail.name} as sub-coach`}
+      >
+        {revoking ? (
+          <ActivityIndicator color={Colors.error} />
+        ) : (
+          <Text style={styles.revokeBtnText}>Revoke sub-coach access</Text>
+        )}
+      </Pressable>
 
       {/* Client list */}
       <Text style={styles.sectionTitle}>Clients</Text>
@@ -331,6 +397,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: Colors.textOnPrimary,
+  },
+  revokeBtn: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: Colors.error,
+    marginBottom: 24,
+  },
+  revokeBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.error,
   },
   errorText: {
     fontSize: 15,
