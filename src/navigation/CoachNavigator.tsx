@@ -17,6 +17,15 @@ import ClientMessagesScreen from '../screens/coach/ClientMessagesScreen';
 import RiskBoardScreen from '../screens/coach/RiskBoardScreen';
 import ClientRiskDetailScreen from '../screens/coach/ClientRiskDetailScreen';
 import CoachBillingScreen from '../screens/coach/CoachBillingScreen';
+// Payments — coach Stripe Connect onboarding/dashboard, packages CRUD,
+// per-package subscribers, and net earnings. All wired to real backend
+// endpoints; surfaces a config-required state when backend modules aren't
+// deployed in the environment.
+import CoachConnectScreen from '../screens/coach/payments/CoachConnectScreen';
+import CoachPackagesListScreen from '../screens/coach/payments/CoachPackagesListScreen';
+import CoachPackageEditScreen from '../screens/coach/payments/CoachPackageEditScreen';
+import CoachPackageSubscribersScreen from '../screens/coach/payments/CoachPackageSubscribersScreen';
+import CoachEarningsScreen from '../screens/coach/payments/CoachEarningsScreen';
 import BloodworkReviewQueueScreen from '../screens/coach/BloodworkReviewQueueScreen';
 import TrustCenterScreen from '../screens/TrustCenterScreen';
 // Wave 11 — runtime scaffolding (flag-gated; safe to mount)
@@ -129,6 +138,12 @@ export type SettingsStackParamList = {
   DeleteAccount: undefined;
   /** Phase 10 — GDPR Article 20 data portability */
   DataExport: undefined;
+  // Payments — Stripe Connect + coach package marketplace.
+  CoachConnect: undefined;
+  CoachPackagesList: undefined;
+  CoachPackageEdit: { packageId: string | null };
+  CoachPackageSubscribers: { packageId: string; title: string };
+  CoachEarnings: undefined;
 };
 
 /** Phase 11 / Track 7 — team management stack param list. */
@@ -293,6 +308,15 @@ function SettingsStackNavigator() {
       <SettingsStack.Screen name="DeleteAccount" component={DeleteAccountScreen} />
       {/* Phase 10 — GDPR Article 20 data portability */}
       <SettingsStack.Screen name="DataExport" component={DataExportScreen} />
+      {/* Payments — Connect, packages, subscribers, earnings. */}
+      <SettingsStack.Screen name="CoachConnect" component={CoachConnectScreen} />
+      <SettingsStack.Screen name="CoachPackagesList" component={CoachPackagesListScreen} />
+      <SettingsStack.Screen name="CoachPackageEdit" component={CoachPackageEditScreen} />
+      <SettingsStack.Screen
+        name="CoachPackageSubscribers"
+        component={CoachPackageSubscribersScreen}
+      />
+      <SettingsStack.Screen name="CoachEarnings" component={CoachEarningsScreen} />
     </SettingsStack.Navigator>
   );
 }

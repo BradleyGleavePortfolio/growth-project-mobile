@@ -217,6 +217,20 @@ export default function SettingsScreen() {
     navigation.navigate('Billing');
   };
 
+  // Payments surface — packages marketplace, Connect onboarding, earnings.
+  const handleOpenPackages = () => {
+    mediumTap();
+    navigation.navigate('CoachPackagesList');
+  };
+  const handleOpenConnect = () => {
+    mediumTap();
+    navigation.navigate('CoachConnect');
+  };
+  const handleOpenEarnings = () => {
+    mediumTap();
+    navigation.navigate('CoachEarnings');
+  };
+
   const handleOpenTrustCenter = () => {
     mediumTap();
     navigation.navigate('TrustCenter');
@@ -419,6 +433,46 @@ export default function SettingsScreen() {
         >
           <Ionicons name="card-outline" size={20} color={colors.textSecondary} />
           <Text style={styles.rowLabel}>Billing & access</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+      </View>
+
+      {/* Payments — Coach marketplace + payouts. Each leaf screen renders an
+          actionable config-required state if the backend module isn't
+          deployed in this env, so it's safe to keep these rows visible
+          unconditionally. */}
+      <Text style={styles.sectionHeader}>Payments</Text>
+      <View style={styles.section}>
+        <TouchableOpacity
+          style={styles.row}
+          onPress={handleOpenPackages}
+          accessibilityRole="button"
+          accessibilityLabel="Manage packages"
+        >
+          <Ionicons name="pricetags-outline" size={20} color={colors.textSecondary} />
+          <Text style={styles.rowLabel}>Packages</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+        <View style={styles.divider} />
+        <TouchableOpacity
+          style={styles.row}
+          onPress={handleOpenConnect}
+          accessibilityRole="button"
+          accessibilityLabel="Set up Stripe payouts"
+        >
+          <Ionicons name="wallet-outline" size={20} color={colors.textSecondary} />
+          <Text style={styles.rowLabel}>Payouts (Stripe Connect)</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+        <View style={styles.divider} />
+        <TouchableOpacity
+          style={styles.row}
+          onPress={handleOpenEarnings}
+          accessibilityRole="button"
+          accessibilityLabel="View earnings"
+        >
+          <Ionicons name="cash-outline" size={20} color={colors.textSecondary} />
+          <Text style={styles.rowLabel}>Earnings</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
       </View>

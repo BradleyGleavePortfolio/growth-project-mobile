@@ -81,25 +81,41 @@ const linking: LinkingOptions<Record<string, object | undefined>> = {
           refresh_token: (v: string) => v,
         },
       },
-      // Screenshot-mode-only deep links into authenticated tabs/stacks. They
-      // are inert in production because the harness gates ClientNavigator
-      // mounting on a seeded demo user — no real session ever has these
-      // routes reachable from a `tgp://` URL. The cast is needed because the
-      // generic `Record<string, object | undefined>` linking type does not
-      // know about the nested `screens` config — we accept the cast here
-      // rather than threading a precise nav param tree through this module.
-      ...(isScreenshotMode()
-        ? ({
-            Home: 'home',
-            Log: 'log',
-            MoreTab: {
-              screens: {
+      // Client-facing package share links + screenshot-mode-only routes
+      // share a single `MoreTab` entry — the linking config rejects
+      // duplicate sibling keys, so we merge the screenshot routes (when
+      // enabled) into the same screens object instead of declaring it
+      // twice. The cast preserves the loose `Record<string, object | undefined>`
+      // type of the outer ParamList.
+      MoreTab: {
+        screens: {
+          // Universal-link path for a coach's package share link. Inert
+          // when the user is unauthenticated — the deep-link prefixes
+          // still fire, but the matching screen isn't mounted under
+          // AuthNavigator; the link is queued until login lands them in
+          // ClientNavigator.
+          PackageCheckout: {
+            path: 'p/:shareToken',
+            parse: { shareToken: (v: string) => v },
+          },
+          // Screenshot-mode-only deep links into authenticated tabs/stacks.
+          // Inert in production because the harness gates ClientNavigator
+          // mounting on a seeded demo user — no real session ever has
+          // these routes reachable from a `tgp://` URL.
+          ...(isScreenshotMode()
+            ? ({
                 Plan: 'plan',
                 Recipes: 'recipes',
                 Progress: 'progress',
                 Fast: 'fast',
-              },
-            },
+              } as Record<string, unknown>)
+            : {}),
+        },
+      } as unknown as Record<string, object | undefined>,
+      ...(isScreenshotMode()
+        ? ({
+            Home: 'home',
+            Log: 'log',
           } as Record<string, unknown>)
         : {}),
     },
