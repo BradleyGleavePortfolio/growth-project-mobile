@@ -1,7 +1,7 @@
 # The Growth Project
 
 
-> Status: pre-TestFlight audit complete; coach-facing beta blocked by mock Command Center, auth refresh, invite links, onboarding, messaging push; see /audits/00_MASTER_REPORT.md
+> Status: TestFlight candidate ready (build 4). Pre-TestFlight audit + follow-up landed (#135 / #136 / #137); food logger rebuild (#138) and Coach AI v1 (#139) merged. Owner action items live in [Operator Fill-Ins Required](#operator-fill-ins-required); the real-device smoke checklist for this candidate is in [docs/RELEASE_SMOKE.md](docs/RELEASE_SMOKE.md). See `/audits/00_MASTER_REPORT.md` for prior audit context.
 
 ## Placeholders / TODO env vars
 
@@ -617,21 +617,21 @@ Typecheck: clean.
 
 ## Operator Fill-Ins Required
 
-Operator-action checklist for the TestFlight launch of the fitness mobile app. Every `Used in (file:line)` row was verified by grep against `main` HEAD on 2026-05-12. All values must be set on the EAS project (`a12c3345-cc8c-4c2c-9c57-711c10a57c1c`, owner `the-growth-project`) before building for store distribution.
+Operator-action checklist for the TestFlight launch of the fitness mobile app. Every `Used in (file:line)` row was re-verified by grep against `main` HEAD on 2026-05-15 (build 4 candidate). All values must be set on the EAS project (`a12c3345-cc8c-4c2c-9c57-711c10a57c1c`, owner `the-growth-project`) before building for store distribution. `npm run validate:release` enforces that each var listed below is at least documented in `.env.example` so an operator running the file as a checklist sees the full set.
 
 ### TestFlight-blocking EAS secrets
 
 | Variable | Used in (file:line) | Where to set | How to generate / source |
 |---|---|---|---|
-| `EXPO_PUBLIC_API_URL` | `src/config/env.ts:8` | EAS secret (eas.json env block, profile `production`) | Fly host of the backend: `https://backend-spring-lake-3890.fly.dev`. Must include scheme; no trailing slash. |
-| `EXPO_PUBLIC_SUPABASE_URL` | `src/config/env.ts:6` | EAS secret (eas.json env block, profile `production`) | Supabase dashboard → Settings → API → Project URL. Must match the backend's `SUPABASE_URL`. |
-| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | `src/config/env.ts:7` | EAS secret (eas.json env block, profile `production`) | Supabase dashboard → Settings → API → `anon` public key. Safe to ship in the client bundle. |
-| `EXPO_PUBLIC_SENTRY_DSN` | `src/services/sentry.ts:49` | EAS secret (eas.json env block, profile `production`) | Sentry → Project (mobile) → Client Keys (DSN). |
-| `EXPO_PUBLIC_POSTHOG_KEY` | `src/lib/analytics.ts:56` | EAS secret (eas.json env block, profile `production`) | PostHog → Project Settings → Project API Key. |
-| `EXPO_PUBLIC_POSTHOG_HOST` | `src/lib/analytics.ts:58` | EAS secret (eas.json env block, profile `production`) | PostHog instance URL (defaults to `https://us.i.posthog.com`). |
-| `EXPO_PUBLIC_ENVIRONMENT` | `src/services/sentry.ts:76` | EAS secret (eas.json env block, profile `production`) | Static string `production` for store builds; `preview` for internal builds. |
-| `EXPO_PUBLIC_HELP_BASE_URL` | `src/config/env.ts:9` | EAS secret (eas.json env block, profile `production`) | Public help / support URL (e.g. `https://app.trygrowthproject.com/help`). |
-| `EXPO_PUBLIC_CRISP_WEBSITE_ID` | `src/services/support/crisp.service.ts:32` | EAS secret (eas.json env block, profile `production`) | Crisp dashboard → Settings → Website Settings → Website ID. |
+| `EXPO_PUBLIC_API_URL` | `src/config/env.ts:13` | EAS secret (eas.json env block, profile `production`) | Fly host of the backend: `https://backend-spring-lake-3890.fly.dev/api`. Must include scheme and `/api` suffix; no trailing slash. |
+| `EXPO_PUBLIC_SUPABASE_URL` | `src/config/env.ts:11` | EAS secret (eas.json env block, profile `production`) | Supabase dashboard → Settings → API → Project URL (e.g. `https://abcdwxyz.supabase.co`). Must match the backend's `SUPABASE_URL`. |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | `src/config/env.ts:12` | EAS secret (eas.json env block, profile `production`) | Supabase dashboard → Settings → API → `anon` public key. Safe to ship in the client bundle (RLS gates all data). |
+| `EXPO_PUBLIC_SENTRY_DSN` | `src/services/sentry.ts:49` | EAS secret (eas.json env block, profile `production`) | Sentry → Project (mobile) → Client Keys (DSN). Looks like `https://<32-hex>@oXXXXXX.ingest.sentry.io/<project-id>`. |
+| `EXPO_PUBLIC_POSTHOG_KEY` | `src/lib/analytics.ts:56` | EAS secret (eas.json env block, profile `production`) | PostHog → Project Settings → Project API Key. Starts with `phc_`. |
+| `EXPO_PUBLIC_POSTHOG_HOST` | `src/lib/analytics.ts:58` | EAS secret (eas.json env block, profile `production`) | PostHog instance URL (defaults to `https://us.i.posthog.com`). Set to `https://eu.i.posthog.com` if the project is in the EU region. |
+| `EXPO_PUBLIC_ENVIRONMENT` | `src/services/sentry.ts:76` | EAS secret (eas.json env block, profile `production` AND `preview`) | Static string `production` for store builds; `preview` for internal builds. Leaving this unset on a preview build silently tags QA crashes as `production` in Sentry. |
+| `EXPO_PUBLIC_HELP_BASE_URL` | `src/config/env.ts:14` | EAS secret (eas.json env block, profile `production`) — OPTIONAL | Public help / support URL. Defaults to `https://app.trygrowthproject.com/help`; only set this if the help site moves to its own host. |
+| `EXPO_PUBLIC_CRISP_WEBSITE_ID` | `src/services/support/crisp.service.ts:32` | EAS secret (eas.json env block, profile `production`) | Crisp dashboard → Settings → Website Settings → Setup instructions → Website ID. UUID-shaped. Safe to ship in the client bundle (it's the public site key, not the secret API key). |
 | `SENTRY_AUTH_TOKEN` | EAS build host (sourcemaps upload) | EAS secret (account-level) | Sentry → Settings → Auth Tokens → create with `project:releases` scope. Read by `@sentry/react-native` during the production build's sourcemap upload step. |
 | `EXPO_TOKEN` | EAS build host (CI submit) | GitHub Actions secret + local `~/.netrc` | expo.dev → Settings → Access Tokens → create a personal access token. Only required for non-interactive `eas submit` from CI. |
 
@@ -661,7 +661,7 @@ The fitness mobile app ships from this repo to TestFlight (iOS) and Play Interna
 
 - [ ] All EAS production-profile secrets in the [Operator Fill-Ins Required](#operator-fill-ins-required) table are set. Verify with `npx eas-cli env:list --environment production`.
 - [ ] Backend Fly app `backend-spring-lake-3890` is deployed at the version this build expects (no breaking schema migration pending).
-- [ ] `app.json` build numbers are correct: `expo.ios.buildNumber = "3"`, `expo.android.versionCode = 3`. **Do NOT bump in this PR** — owner instruction is fitness mobile stays at build 3 until the next release pass.
+- [ ] `app.json` build numbers are correct: `expo.ios.buildNumber = "4"`, `expo.android.versionCode = 4`. Bumped past the build-3 candidate to take in #135 / #136 / #137 / #138 / #139. Bump both together on every subsequent release — Play rejects a versionCode <= the last upload and App Store Connect rejects a duplicate buildNumber for the same version.
 - [ ] `expo.extra.eas.projectId` in `app.json` matches the EAS project (`a12c3345-cc8c-4c2c-9c57-711c10a57c1c`). The docs were reconciled in this handoff PR.
 - [ ] `assetlinks.json` and `apple-app-site-association` are reachable on the public marketing host (`app.trygrowthproject.com`).
 - [ ] No `playStoreUrl` is set yet — Android listing setup is a separate workstream and gates Play submission, not TestFlight.
@@ -722,3 +722,64 @@ Triage of open PRs as of 2026-05-12 (`gh pr list --state open --limit 100`).
 - **#89** `react-native-worklets` 0.7 → 0.8 — Reanimated 4 compat.
 - **#90** `@react-native-async-storage/async-storage` 2.2 → 3.0 — major API change.
 - **#91** `zustand` 5.0.11 → 5.0.13 — patch, should be safe.
+
+## Exercise library + video (Mux v1)
+
+**WHY.** Coach + client both need a browsable catalog of exercises with reference video. v1 ships a search-and-chip-filter list plus a detail screen that plays a signed Mux HLS clip when one is attached.
+
+**WHEN.** Pairs with backend PR `feat/video-library-v1-backend`. The mobile only consumes the two new GETs and treats `playbackUrl: null` as "video not yet available" — no video equals no broken player.
+
+**WHERE.**
+- `src/types/exerciseCatalog.ts` — `Exercise`, `ExerciseDetail`, list params + response.
+- `src/api/exerciseCatalog.ts` — typed client.
+- `src/screens/client/ExerciseLibraryScreen.tsx` — search bar, chip filters (Category / Muscle / Equipment), infinite-scroll FlatList over the response's `nextCursor`.
+- `src/screens/client/ExerciseDetailScreen.tsx` — name, meta, optional `expo-video` player (16:9), instructions list. Renders a small "Video not yet available" caption when `playbackUrl` is null.
+- Registered in `ClientNavigator` `WorkoutStack` as `ExerciseLibrary` and `ExerciseDetail`. `ExerciseDetail` uses `presentation: 'modal'` so the in-workout entry from `ActiveWorkoutScreen` opens as an overlay.
+
+**Endpoints consumed.**
+- `GET /exercise-catalog` — query: `q`, `category`, `primaryMuscle`, `equipment`, `cursor`, `limit`. Returns `{ items, nextCursor, total }`.
+- `GET /exercise-catalog/:idOrSlug` — returns the full Exercise plus a `playbackUrl: string | null` (signed Mux HLS URL, short-lived).
+
+**In-workout integration.** `ActiveWorkoutScreen` adds a small play-icon next to each session exercise. Tapping it derives a slug from the exercise name (legacy session `exerciseId` does not match catalog ids in v1) and pushes `ExerciseDetail` modally. If the slug doesn't resolve the detail screen shows a graceful "Exercise not found." v2 will store a stable `catalogId` on the session row so this is exact.
+
+**v1 limitations.**
+- An owner attaches Mux assets to exercises via the backend's internal owner API; the coach-side upload UI is v2.
+- The chip facets are hardcoded (most common categories / muscles / equipment). Free-text search still hits the backend for everything else.
+- Pagination is forward-only via `nextCursor`.
+
+**Mux setup.** See the backend README ("Mux video + exercise library v1") for the Fly secrets and webhook wiring required to mint signed playback URLs.
+
+**Tests.** `src/__tests__/exerciseCatalog.test.tsx` covers the API client query-string serialisation, library screen rendering, and the detail screen's player-vs-caption branch.
+
+## Invites & email (Email Pipeline v1)
+
+**WHY.** Coaches need a fast way to onboard a list of clients. Before this feature, the only path was a single-use invite code per client, copied to share-sheet by hand. Email Pipeline v1 adds bulk-create + email delivery + per-recipient delivery status so a coach can paste a CSV and watch deliveries land.
+
+**WHEN.** Pairs with backend PR `feat/email-pipeline-v1-backend`. The mobile contract is intentionally narrow; new fields the backend ships (e.g. richer `lastEmailStatus` values) flow through `src/types/invites.ts` without breaking existing surfaces.
+
+**WHERE.**
+- `src/api/invites.ts` — typed client + paste/CSV parsing helpers.
+- `src/screens/coach/BulkInviteScreen.tsx` — paste-or-CSV bulk-send with per-row status.
+- `src/screens/coach/CoachInvitesScreen.tsx` — invite list with status + lastEmailStatus, filter chips, resend / copy-link / revoke.
+- `src/screens/auth/AcceptInviteScreen.tsx` — PUBLIC accept landing for the email link.
+- Wired into `CoachNavigator` (`BulkInvite`, `CoachInvites`) and `AuthNavigator` (`AcceptInvite`). Settings → Account adds the two coach CTAs.
+
+**HOW (deep links).**
+- Custom scheme: `tgp://invite/accept/:token`
+- Universal link: `https://app.trygrowthproject.com/invite/accept/:token`
+- Configured in `app.json` (Android intent filters) and `docs/well-known/apple-app-site-association` (iOS Universal Links). The path `invite/accept/:token` is added alongside the existing `join/:invite_code` path so both shapes resolve.
+- `RootNavigator` foreground guard routes already-signed-in users through `signOut()` before replaying the accept URL, so the public `AcceptInviteScreen` always mounts cleanly.
+
+**WHO.**
+- Coach builds the invite list and triggers send (auth gated — coach role).
+- Backend queues + sends emails. Mobile reads delivery status via `GET /coach/invite-codes`.
+- Invitee opens the email link → `AcceptInviteScreen` calls `POST /invites/accept/:token` with NO auth header.
+
+**WHAT happens when `RESEND_API_KEY` is unset on the backend.** Invite creation still succeeds; the backend marks each invite as `lastEmailStatus: FAILED` (or omits the field). The mobile reads this and the row's status badge surfaces it. Coaches can fall back to **Copy link** to share the invite manually. The mobile gracefully degrades without raising errors.
+
+**Resend availability.** `POST /coach/invite-codes/:id/resend` is OPTIONAL. The mobile probes it on first use; if the backend returns 404 the resend affordance hides for the rest of the session. No further action required from the coach.
+
+**Tests.**
+- `src/__tests__/invitesApi.test.ts` — paste/CSV helpers, bulk-cap guard, resend 404 fallback, list filter, accept fetch contract.
+- `src/__tests__/bulkInviteScreen.test.tsx` — paste parsing, dedupe, result pills, copy/retry CTAs.
+- `src/__tests__/acceptInviteScreen.test.tsx` — happy path (auth + unauth), expired, already_accepted, invalid, network retry.

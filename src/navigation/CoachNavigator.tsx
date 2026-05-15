@@ -41,6 +41,12 @@ import CoachMacrosReviewScreen from '../screens/coach/CoachMacrosReviewScreen';
 import CoachWorkoutBuilderScreen from '../screens/coach/CoachWorkoutBuilderScreen';
 import CoachMealTemplatesScreen from '../screens/coach/CoachMealTemplatesScreen';
 import CoachBulkInviteScreen from '../screens/coach/CoachBulkInviteScreen';
+// Email Pipeline v1 — bulk-invite + invites list (per-recipient delivery view).
+// These complement the legacy CoachBulkInviteScreen / InviteCodesScreen;
+// the v1 surfaces target the email-delivery contract on
+// feat/email-pipeline-v1-backend.
+import BulkInviteScreen from '../screens/coach/BulkInviteScreen';
+import CoachInvitesScreen from '../screens/coach/CoachInvitesScreen';
 // Concierge Phase 1 — scheduling coach surfaces.
 import CoachAvailabilityEditorScreen from '../screens/coach/CoachAvailabilityEditorScreen';
 import CoachBookingInboxScreen from '../screens/coach/CoachBookingInboxScreen';
@@ -50,6 +56,13 @@ import AIMealPlanDraftScreen from '../screens/coach/AIMealPlanDraftScreen';
 import ClientInsightScreen from '../screens/coach/ClientInsightScreen';
 // Phase 10 — GDPR right to erasure.
 import DeleteAccountScreen from '../screens/settings/DeleteAccountScreen';
+// TestFlight coach SaaS — new business & team surfaces + invite redeemer drilldown.
+import CoachBusinessMetricsScreen from '../screens/coach/CoachBusinessMetricsScreen';
+// Payments — backend PRs #215 (package CRUD) and #216 (earnings/payouts).
+import CoachPackagesScreen from '../screens/coach/CoachPackagesScreen';
+import CoachEarningsScreen from '../screens/coach/CoachEarningsScreen';
+import CoachTeamProfileScreen from '../screens/coach/CoachTeamProfileScreen';
+import InviteCodeRedeemersScreen from '../screens/coach/InviteCodeRedeemersScreen';
 // Phase 9 — Notification center
 import NotificationCenterScreen from '../screens/notifications/NotificationCenterScreen';
 import NotificationPreferencesScreen from '../screens/notifications/NotificationPreferencesScreen';
@@ -95,6 +108,10 @@ export type ClientsStackParamList = {
   CoachWorkoutBuilder:  { planId?: string } | undefined;
   CoachMealTemplates:   undefined;
   CoachBulkInvite:      undefined;
+  /** Email Pipeline v1 — bulk invite v2 surface (per-recipient delivery). */
+  BulkInvite:           undefined;
+  /** Email Pipeline v1 — invites list with delivery + resend / revoke. */
+  CoachInvites:         undefined;
   /** Concierge Phase 1 — scheduling coach surfaces. */
   CoachAvailabilityEditor:  { coachId: string };
   CoachBookingInbox:        undefined;
@@ -110,6 +127,8 @@ export type ClientsStackParamList = {
   NotificationPreferences: undefined;
   // Phase 8 — Legacy landing — kept so existing navigate('Dashboard') calls resolve.
   Dashboard: undefined;
+  /** TestFlight coach SaaS — invite code redeemer drilldown. */
+  InviteCodeRedeemers: { inviteCodeId: string; code: string };
 };
 
 export type SettingsStackParamList = {
@@ -129,6 +148,14 @@ export type SettingsStackParamList = {
   DeleteAccount: undefined;
   /** Phase 10 — GDPR Article 20 data portability */
   DataExport: undefined;
+  /** TestFlight coach SaaS — business metrics / Stripe Connect surface. */
+  CoachBusinessMetrics: undefined;
+  /** TestFlight coach SaaS — team/gym profile and team code. */
+  CoachTeamProfile: undefined;
+  /** Payments — package CRUD (backend PR #215). */
+  CoachPackages: undefined;
+  /** Payments — earnings, payout readiness, reconciliation, refunds (backend PR #216). */
+  CoachEarnings: undefined;
 };
 
 /** Phase 11 / Track 7 — team management stack param list. */
@@ -228,6 +255,15 @@ function ClientsStackNavigator() {
         name="CoachBulkInvite"
         component={CoachBulkInviteScreen}
       />
+      {/* Email Pipeline v1 — v2 bulk invite surface + invites list. */}
+      <ClientsStack.Screen
+        name="BulkInvite"
+        component={BulkInviteScreen}
+      />
+      <ClientsStack.Screen
+        name="CoachInvites"
+        component={CoachInvitesScreen}
+      />
       {/* Concierge Phase 1 — scheduling coach surfaces. */}
       <ClientsStack.Screen
         name="CoachAvailabilityEditor"
@@ -261,6 +297,11 @@ function ClientsStackNavigator() {
         component={NotificationPreferencesScreen}
         options={{ headerShown: false }}
       />
+      {/* TestFlight coach SaaS — invite code redeemer drilldown. */}
+      <ClientsStack.Screen
+        name="InviteCodeRedeemers"
+        component={InviteCodeRedeemersScreen}
+      />
     </ClientsStack.Navigator>
   );
 }
@@ -293,6 +334,26 @@ function SettingsStackNavigator() {
       <SettingsStack.Screen name="DeleteAccount" component={DeleteAccountScreen} />
       {/* Phase 10 — GDPR Article 20 data portability */}
       <SettingsStack.Screen name="DataExport" component={DataExportScreen} />
+      {/* TestFlight coach SaaS — Stripe-Connect-backed business metrics. */}
+      <SettingsStack.Screen
+        name="CoachBusinessMetrics"
+        component={CoachBusinessMetricsScreen}
+      />
+      {/* TestFlight coach SaaS — team / gym / organization profile. */}
+      <SettingsStack.Screen
+        name="CoachTeamProfile"
+        component={CoachTeamProfileScreen}
+      />
+      {/* Payments — package CRUD (backend PR #215). */}
+      <SettingsStack.Screen
+        name="CoachPackages"
+        component={CoachPackagesScreen}
+      />
+      {/* Payments — earnings, payout readiness, reconciliation, refunds (backend PR #216). */}
+      <SettingsStack.Screen
+        name="CoachEarnings"
+        component={CoachEarningsScreen}
+      />
     </SettingsStack.Navigator>
   );
 }

@@ -19,6 +19,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -26,6 +27,7 @@ import { Colors } from '../../constants/colors';
 import { subCoachApi, SubCoachSummary } from '../../api/subCoachApi';
 import { authApi } from '../../services/api';
 import type { TeamStackParamList } from '../../navigation/CoachNavigator';
+import SubCoachInviteModal from './SubCoachInviteModal';
 
 const SCALE_TIERS = ['scale', 'enterprise'];
 
@@ -151,6 +153,7 @@ export default function TeamManagementScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [planTier, setPlanTier] = useState<string>('flat_300');
+  const [inviteOpen, setInviteOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -204,7 +207,18 @@ export default function TeamManagementScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>Team</Text>
+      <View style={styles.headerRow}>
+        <Text style={styles.header}>Team</Text>
+        <Pressable
+          onPress={() => setInviteOpen(true)}
+          style={styles.addBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Invite sub-coach"
+        >
+          <Ionicons name="add" size={18} color={Colors.textOnPrimary} />
+          <Text style={styles.addBtnText}>Invite</Text>
+        </Pressable>
+      </View>
 
       {error != null && (
         <Pressable
@@ -223,9 +237,24 @@ export default function TeamManagementScreen() {
           <SubCoachRow item={item} onPress={handlePress} />
         )}
         ListEmptyComponent={
-          <Text style={styles.emptyText}>No sub-coaches yet.</Text>
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyText}>
+              No sub-coaches yet. Tap Invite to add your first one.
+            </Text>
+          </View>
         }
         contentContainerStyle={styles.list}
+      />
+
+      <SubCoachInviteModal
+        visible={inviteOpen}
+        onDismiss={() => setInviteOpen(false)}
+        onInvited={() => {
+          // Refresh the roster — newly invited sub-coaches appear once they
+          // accept, but we still re-fetch in case the backend pre-creates a
+          // pending row.
+          void load();
+        }}
       />
     </View>
   );
@@ -248,7 +277,30 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '600',
     color: Colors.textPrimary,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 20,
+  },
+  addBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 4,
+    gap: 4,
+  },
+  addBtnText: {
+    color: Colors.textOnPrimary,
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  emptyState: {
+    paddingVertical: 24,
+    alignItems: 'center',
   },
   list: {
     paddingBottom: 24,

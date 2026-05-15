@@ -46,6 +46,10 @@ import WorkoutScreen from '../screens/client/WorkoutScreen';
 import ActiveWorkoutScreen from '../screens/client/ActiveWorkoutScreen';
 import RoutineBuilderScreen from '../screens/client/RoutineBuilderScreen';
 import CoachGuidelinesScreen from '../screens/client/CoachGuidelinesScreen';
+// Mux video + exercise library v1 (feat/video-library-v1-mobile).
+// Library lists from /exercise-catalog; Detail mints a signed Mux HLS URL.
+import ExerciseLibraryScreen from '../screens/client/ExerciseLibraryScreen';
+import ExerciseDetailScreen from '../screens/client/ExerciseDetailScreen';
 import NotificationsScreen from '../screens/client/NotificationsScreen';
 import MessagesScreen from '../screens/client/MessagesScreen';
 import EducationScreen from '../screens/client/EducationScreen';
@@ -80,6 +84,7 @@ import ClientBookingRequestScreen from '../screens/client/ClientBookingRequestSc
 import ClientUpcomingSessionsScreen from '../screens/client/ClientUpcomingSessionsScreen';
 import ClientDailyMealPlanScreen from '../screens/client/ClientDailyMealPlanScreen';
 import ClientWorkoutViewerScreen from '../screens/client/ClientWorkoutViewerScreen';
+import WorkoutAssignmentDetailScreen from '../screens/client/WorkoutAssignmentDetailScreen';
 // Phase 9 — Notification center
 import NotificationCenterScreen from '../screens/notifications/NotificationCenterScreen';
 import NotificationPreferencesScreen from '../screens/notifications/NotificationPreferencesScreen';
@@ -87,6 +92,9 @@ import NotificationBadge from '../components/NotificationBadge';
 import { fetchUnreadCount } from '../services/notificationsApi';
 // Phase 10 — GDPR Article 20 data portability
 import DataExportScreen from '../screens/settings/DataExportScreen';
+// Payments — client-facing packages + checkout return (backend PR #215).
+import ClientPackagesScreen from '../screens/client/ClientPackagesScreen';
+import CheckoutReturnScreen from '../screens/client/CheckoutReturnScreen';
 import { colors } from '../theme/tokens';
 
 // ─── Param lists ──────────────────────────────────────────────────────────────
@@ -116,6 +124,14 @@ export type WorkoutStackParamList = {
   ActiveWorkout: { routineId?: string; routineName: string; exercises: string };
   RoutineBuilder: { routineId?: string } | undefined;
   CoachGuidelines: undefined;
+  /**
+   * Mux video + exercise library v1.
+   * Library is a regular push; Detail is registered with a modal
+   * presentation so it can be presented either from the library
+   * (push-feel via the stack's default) or from in-workout (modal).
+   */
+  ExerciseLibrary: undefined;
+  ExerciseDetail: { idOrSlug: string };
 };
 
 // MoreStack: all non-tab screens live here. Screen names preserved.
@@ -165,11 +181,20 @@ export type MoreStackParamList = {
   ClientMacros:        undefined;
   ClientDailyMealPlan: { date?: string } | undefined;
   ClientWorkoutViewer: { assignmentId: string };
+  WorkoutAssignmentDetail: { assignmentId: string };
   /** Concierge Phase 1 — scheduling client surfaces. */
   ClientBookingRequest:    undefined;
   ClientUpcomingSessions:  undefined;
   /** Phase 10 — GDPR Article 20 data portability */
   DataExport: undefined;
+  /** Payments — client-facing packages list (backend PR #215). */
+  ClientPackages: undefined;
+  /**
+   * Payments — Stripe Checkout return.
+   *   outcome: 'success' | 'cancel'
+   *   session_id: present when outcome === 'success' (Stripe template token).
+   */
+  CheckoutReturn: { outcome?: 'success' | 'cancel'; session_id?: string };
 };
 
 // ─── Phase 9: unread count polling for the bell icon ─────────────────────────
@@ -267,6 +292,24 @@ function WorkoutStackNavigator() {
       <WorkoutStackNav.Screen name="ActiveWorkout"   component={ActiveWorkoutScreen} />
       <WorkoutStackNav.Screen name="RoutineBuilder"  component={RoutineBuilderScreen} />
       <WorkoutStackNav.Screen name="CoachGuidelines" component={CoachGuidelinesScreen} />
+      {/* Mux video + exercise library v1. */}
+      <WorkoutStackNav.Screen
+        name="ExerciseLibrary"
+        component={ExerciseLibraryScreen}
+        options={{ headerShown: true, title: 'Exercise Library' }}
+      />
+      <WorkoutStackNav.Screen
+        name="ExerciseDetail"
+        component={ExerciseDetailScreen}
+        options={{
+          headerShown: true,
+          title: 'Exercise',
+          // Modal presentation makes this screen usable both as a push
+          // from the library AND as an in-workout overlay from
+          // ActiveWorkoutScreen without re-registering it elsewhere.
+          presentation: 'modal',
+        }}
+      />
     </WorkoutStackNav.Navigator>
   );
 }
@@ -330,6 +373,7 @@ function MoreStackNavigator() {
       <MoreStackNav.Screen name="ClientMacros"        component={ClientMacrosScreen} />
       <MoreStackNav.Screen name="ClientDailyMealPlan" component={ClientDailyMealPlanScreen} />
       <MoreStackNav.Screen name="ClientWorkoutViewer" component={ClientWorkoutViewerScreen} />
+      <MoreStackNav.Screen name="WorkoutAssignmentDetail" component={WorkoutAssignmentDetailScreen} />
       {/* Concierge Phase 1 — scheduling client surfaces. */}
       <MoreStackNav.Screen
         name="ClientBookingRequest"
@@ -341,6 +385,11 @@ function MoreStackNavigator() {
       />
       {/* Phase 10 — GDPR Article 20 data portability */}
       <MoreStackNav.Screen name="DataExport" component={DataExportScreen} />
+      {/* Payments — client-facing packages list + Stripe Checkout return
+          (backend PR #215). The return screen is the deep-link target for
+          tgp://checkout/{success,cancel}; see RootNavigator.linking. */}
+      <MoreStackNav.Screen name="ClientPackages"  component={ClientPackagesScreen} />
+      <MoreStackNav.Screen name="CheckoutReturn"  component={CheckoutReturnScreen} />
     </MoreStackNav.Navigator>
   );
 }

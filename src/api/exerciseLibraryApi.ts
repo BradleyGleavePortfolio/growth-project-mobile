@@ -30,6 +30,16 @@ export interface Exercise {
   secondaryMuscles: string[];
   instructions: string[];
   gifUrl: string;
+  /**
+   * Optional mp4 demo URL. Present once the backend video pipeline
+   * (Mux / signed URL) lands — mobile already wires through to the
+   * appropriate player. Until then the client falls back to gifUrl
+   * and, finally, a static placeholder + instruction text. The
+   * mobile NEVER fabricates a video URL.
+   */
+  video_url?: string | null;
+  /** Mux playback id, when the backend opts to serve via HLS instead of a direct mp4. */
+  mux_playback_id?: string | null;
 }
 
 export interface ExerciseSearchParams {

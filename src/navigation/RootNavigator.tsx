@@ -70,6 +70,16 @@ const linking: LinkingOptions<Record<string, object | undefined>> = {
         path: 'join/:invite_code?',
         parse: { invite_code: (v: string) => v },
       },
+      // Email Pipeline v1 — public accept entry point. Both the custom
+      // scheme (tgp://invite/accept/:token) and universal link
+      // (https://app.trygrowthproject.com/invite/accept/:token) resolve
+      // to this screen when the user is unauthenticated. RootNavigator's
+      // foreground URL guard (below) handles the signed-in case by
+      // routing it through the same path after signOut where required.
+      AcceptInvite: {
+        path: 'invite/accept/:token',
+        parse: { token: (v: string) => v },
+      },
       // Audit fix CR-1: handler for the Supabase password-recovery
       // deep link. fragmentToQuery() above hoists the URL fragment
       // into the query string so React Navigation can parse the
@@ -92,16 +102,35 @@ const linking: LinkingOptions<Record<string, object | undefined>> = {
         ? ({
             Home: 'home',
             Log: 'log',
-            MoreTab: {
-              screens: {
+          } as Record<string, unknown>)
+        : {}),
+      // MoreTab linking — combines screenshot-mode deep links (only mounted
+      // in screenshot harness) with the Stripe Checkout return route, which
+      // is reachable in real builds via tgp://checkout/{success,cancel}.
+      // Stripe redirects to:
+      //   tgp://checkout/success?session_id=cs_xxx   (paid)
+      //   tgp://checkout/cancel                       (canceled)
+      // The return screen confirms the session against the backend before
+      // showing a celebratory state.
+      MoreTab: {
+        screens: {
+          ...(isScreenshotMode()
+            ? {
                 Plan: 'plan',
                 Recipes: 'recipes',
                 Progress: 'progress',
                 Fast: 'fast',
-              },
+              }
+            : {}),
+          CheckoutReturn: {
+            path: 'checkout/:outcome',
+            parse: {
+              outcome: (v: string) => (v === 'cancel' ? 'cancel' : 'success'),
+              session_id: (v: string) => v,
             },
-          } as Record<string, unknown>)
-        : {}),
+          },
+        },
+      } as unknown as Record<string, unknown>,
     },
   },
 };
@@ -166,15 +195,23 @@ export default function RootNavigator() {
         (lower.startsWith('tgp://join/') ||
           lower.includes('app.trygrowthproject.com/join/')) &&
         !lower.endsWith('/join/');
+      // Email Pipeline v1 — public accept link. Distinct from `/join/<code>`
+      // (signup-gating code) because it carries a single-use accept token
+      // and must POST to /invites/accept on landing. We treat it the same
+      // way as a reset link: force signOut so the public AcceptInvite
+      // screen mounts cleanly, then replay the URL to AuthNavigator.
+      const isAcceptInvite =
+        lower.startsWith('tgp://invite/accept/') ||
+        lower.includes('app.trygrowthproject.com/invite/accept/');
 
-      if (!isReset && !isInvite) return;
+      if (!isReset && !isInvite && !isAcceptInvite) return;
 
       const authed = await secureStorage.getItem('supabase_token');
       if (!authed) return; // unauthenticated → linking config handles it natively.
 
-      if (isReset) {
-        // Force full sign-out so the recovery deep link can land on
-        // AuthNavigator's ResetPassword route with a clean session.
+      if (isReset || isAcceptInvite) {
+        // Force full sign-out so the deep link can land on AuthNavigator's
+        // ResetPassword or AcceptInvite route with a clean session.
         await signOut();
         // Replay the URL so AuthNavigator picks it up via Linking once
         // unauthenticated. RN dedupes back-to-back identical openURL
@@ -189,12 +226,15 @@ export default function RootNavigator() {
         const match = url.match(/\/join\/([^/?#]+)/i);
         const code = match?.[1];
         if (code) {
-          // Stash the inbound code so RoleSelection (or a future settings
-          // surface) can offer to attach it. The owner can wire surface-up
-          // when the in-app attach UI is built; for now we just don't lose
-          // the code.
+          // B5/B6: stash the inbound code so the in-app banner (HomeScreen)
+          // can offer to claim it via authApi.attachInviteCode. The banner
+          // is the consent surface — we do NOT auto-attach because it would
+          // silently re-pair the client to a different coach.
           try {
             await AsyncStorage.setItem('pending_invite_code', code);
+            // Fire an authEvent so any mounted banner re-reads storage on
+            // foreground without waiting for a manual refresh.
+            authEvents.emit();
           } catch {
             // best-effort
           }

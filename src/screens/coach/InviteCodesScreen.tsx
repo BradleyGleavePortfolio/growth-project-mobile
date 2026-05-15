@@ -213,6 +213,16 @@ export default function InviteCodesScreen({ navigation }: { navigation: Navigati
           <Text style={styles.createBtnText}>Create new invite code</Text>
         </TouchableOpacity>
 
+        <TouchableOpacity
+          style={styles.secondaryBtn}
+          onPress={() => navigation.navigate('CoachBulkInvite')}
+          accessibilityRole="button"
+          accessibilityLabel="Bulk invite clients"
+        >
+          <Ionicons name="people-circle-outline" size={20} color={colors.primary} />
+          <Text style={styles.secondaryBtnText}>Bulk invite from a list</Text>
+        </TouchableOpacity>
+
         {codes.length === 0 ? (
           <View style={styles.emptyState}>
             <Ionicons name="key-outline" size={48} color={colors.textMuted} />
@@ -258,6 +268,24 @@ export default function InviteCodesScreen({ navigation }: { navigation: Navigati
                     <Ionicons name="share-outline" size={16} color={colors.primary} />
                     <Text style={styles.actionBtnText}>Share</Text>
                   </TouchableOpacity>
+                  {c.used_count > 0 && (
+                    <TouchableOpacity
+                      style={styles.actionBtn}
+                      onPress={() =>
+                        navigation.navigate('InviteCodeRedeemers', {
+                          inviteCodeId: c.id,
+                          code: c.code,
+                        })
+                      }
+                      accessibilityRole="button"
+                      accessibilityLabel={`View redeemers of code ${c.code}`}
+                    >
+                      <Ionicons name="people-outline" size={16} color={colors.primary} />
+                      <Text style={styles.actionBtnText}>
+                        Redeemers ({c.used_count})
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                   {isActive && (
                     <TouchableOpacity
                       style={[styles.actionBtn, styles.actionBtnDanger]}
@@ -377,6 +405,20 @@ const makeStyles = (colors: ThemeColors) =>
     marginBottom: 24,
   },
   createBtnText: { color: colors.textOnPrimary, fontSize: 15, fontWeight: '500' },
+  secondaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: 2,
+    paddingVertical: 14,
+    gap: 8,
+    marginTop: -16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  secondaryBtnText: { color: colors.primary, fontSize: 15, fontWeight: '500' },
   emptyState: { alignItems: 'center', paddingTop: 40, gap: 8 },
   emptyTitle: { fontSize: 16, fontWeight: '500', color: colors.textPrimary },
   emptyText: { fontSize: 13, color: colors.textSecondary },

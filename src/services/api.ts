@@ -358,6 +358,24 @@ export const coachApi = {
     api.post('/coach/invite-codes', data),
   revokeInviteCode: (id: string) =>
     api.delete(`/coach/invite-codes/${id}`),
+  // ── Invite code redeemer drilldown ─────────────────────────────────────
+  // Backend contract: GET /coach/invite-codes/:id/redeemers returns the
+  // accounts that signed up using a specific invite code, sorted newest
+  // first. 404 from the endpoint means the backend hasn't shipped the
+  // route yet — the screen renders an honest "not available" state rather
+  // than a fabricated list.
+  getInviteCodeRedeemers: (
+    inviteCodeId: string,
+  ) =>
+    api.get<{
+      redeemers: Array<{
+        user_id: string;
+        name: string;
+        email: string;
+        redeemed_at: string;
+        last_active_at: string | null;
+      }>;
+    }>(`/coach/invite-codes/${inviteCodeId}/redeemers`),
   // ── Messaging (coach → client thread) ──
   getClientMessages: (clientId: string, params?: { before?: string; limit?: number }) => {
     const q = new URLSearchParams();
@@ -383,6 +401,21 @@ export const coachApi = {
     api.patch(`/coach/meal-plans/${planId}`, data),
   archiveMealPlan: (planId: string) =>
     api.delete(`/coach/meal-plans/${planId}`),
+  // ── Food log review (coach read) ──
+  // B15: backend exposes the client's food entries via the timeline endpoint
+  // (which interleaves food/weight/workout/check-in events). The mobile fans
+  // out from there. If the backend later ships a dedicated /food-logs route
+  // for coaches, swap the call here and the screen stays put.
+  getClientFoodLogs: (
+    clientId: string,
+    params?: { days?: number; limit?: number },
+  ) => {
+    const q = new URLSearchParams();
+    const days = params?.days ?? 7;
+    q.set('days', String(days));
+    if (params?.limit) q.set('limit', String(params.limit));
+    return api.get(`/coach/clients/${clientId}/timeline?${q.toString()}`);
+  },
   // ── Check-ins (coach read) ──
   getClientCheckIns: (
     clientId: string,
@@ -520,6 +553,10 @@ export const checkInsApi = {
     mood?: number | null;
     energy?: number | null;
     sleep_hours?: number | null;
+    /** B10: 1–5 self-reported sleep quality (separate from sleep_hours). */
+    sleep_quality?: number | null;
+    /** B10: 1–5 self-reported stress level. */
+    stress?: number | null;
     weight_kg?: number | null;
     notes?: string | null;
   }) => api.post('/check-ins', data),

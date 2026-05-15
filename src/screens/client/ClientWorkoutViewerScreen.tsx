@@ -11,7 +11,6 @@
 
 import React, { useCallback, useMemo } from 'react';
 import {
-  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -19,6 +18,11 @@ import {
   Text,
   View,
 } from 'react-native';
+import {
+  useNavigation,
+  type NavigationProp,
+  type ParamListBase,
+} from '@react-navigation/native';
 import type { ClientWorkoutAssignmentWithPlan } from '../../api/workoutBuilderApi';
 import { useMyWorkoutAssignments } from '../../hooks/useWorkoutBuilder';
 import { spacing, typography } from '../../theme/tokens';
@@ -28,6 +32,7 @@ import type { SemanticTokens } from '../../theme/tokens';
 export default function ClientWorkoutViewerScreen() {
   const { semanticColors: sc } = useTheme();
   const styles = makeStyles(sc);
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const { data, isLoading, isError, refetch, isRefetching } =
     useMyWorkoutAssignments();
 
@@ -48,28 +53,11 @@ export default function ClientWorkoutViewerScreen() {
   const upcoming = sorted.filter((a) => !a.completed_at);
   const completed = sorted.filter((a) => !!a.completed_at);
 
-  // Follow-up: a dedicated WorkoutAssignmentDetail screen that takes an
-  // assignment id and renders the plan + start-workout CTA is needed.
-  // ActiveWorkoutScreen exists but expects a different param shape
-  // (routineId / routineName / exercises serialized), so it cannot be reused
-  // directly with a coach-assigned plan. Until that screen lands, tapping an
-  // assignment surfaces a short stub Alert so the client knows the action is
-  // recognized rather than swallowed.
   const handleOpenAssignment = useCallback(
     (a: ClientWorkoutAssignmentWithPlan) => {
-      if (__DEV__) {
-        console.warn(
-          '[ClientWorkoutViewer] assignment tapped — WorkoutAssignmentDetail screen not yet built',
-          { assignmentId: a.id, planName: a.workout_plan.name },
-        );
-      }
-      Alert.alert(
-        a.workout_plan.name,
-        'The full workout detail and start-workout flow is coming soon. For now, open the Workouts tab to start a workout from your library.',
-        [{ text: 'OK' }],
-      );
+      navigation.navigate('WorkoutAssignmentDetail', { assignmentId: a.id });
     },
-    [],
+    [navigation],
   );
 
   return (

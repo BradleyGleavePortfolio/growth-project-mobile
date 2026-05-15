@@ -76,6 +76,16 @@ export interface WriteWorkoutPayload {
 export async function writeWorkoutLog(
   payload: WriteWorkoutPayload,
 ): Promise<WorkoutLog> {
+  // B2: refuse to persist an empty / whitespace exerciseId — rows like that
+  // poisoned the local volume aggregations and produced bare-id sessions that
+  // the sync engine could not correlate with the server catalog.
+  const trimmedExerciseId = (payload.exerciseId ?? '').trim();
+  if (!trimmedExerciseId) {
+    throw new Error(
+      'writeWorkoutLog: exerciseId is required (refusing to write empty row)',
+    );
+  }
+
   const db = await getDatabase();
   const id = generateId();
   const loggedAt = Date.now();
@@ -87,7 +97,7 @@ export async function writeWorkoutLog(
      VALUES (?, ?, ?, 'pending', ?, NULL, ?, ?)`,
     [
       id,
-      payload.exerciseId,
+      trimmedExerciseId,
       payload.setsData,
       loggedAt,
       payload.sessionName ?? null,
@@ -97,7 +107,7 @@ export async function writeWorkoutLog(
 
   return {
     id,
-    exerciseId: payload.exerciseId,
+    exerciseId: trimmedExerciseId,
     setsData: payload.setsData,
     syncStatus: 'pending',
     loggedAt: new Date(loggedAt),

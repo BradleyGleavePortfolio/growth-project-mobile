@@ -83,6 +83,50 @@ const FORBIDDEN_ENV_KEYS = [
   'EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID',
 ];
 
+// Soft-required for a TestFlight / Play Internal candidate: the app boots
+// without these (env.ts does not throw), but the build is functionally
+// incomplete in ways the QA matrix will catch. Each must be *mentioned* in
+// .env.example (even as a commented-out line) so an EAS operator running
+// `eas env:list` against the file as a checklist sees the full set.
+//
+//   - SENTRY_DSN     — crashes go uncaptured, post-release triage blind
+//   - POSTHOG_API_KEY / POSTHOG_KEY — analytics silently no-op
+//   - CRISP_WEBSITE_ID — Settings → Support tab renders an empty overlay
+//   - ENVIRONMENT     — Sentry events default-tag as 'production' even on
+//                       preview / internal builds, polluting the prod board
+//   - HELP_BASE_URL   — defaults to https://app.trygrowthproject.com/help;
+//                       fine to omit, but the EAS operator should know it
+//                       exists so a future help-host move doesn't surprise
+//                       anyone
+//
+// In default mode the validator warns when any are missing from .env.example.
+// In --release mode they become release blockers in RELEASE_BLOCKER.md.
+//
+// PostHog is satisfied by either the canonical EXPO_PUBLIC_POSTHOG_API_KEY
+// or the legacy alias EXPO_PUBLIC_POSTHOG_KEY (App.tsx reads both).
+const RELEASE_RECOMMENDED_ENV = [
+  {
+    key: 'EXPO_PUBLIC_SENTRY_DSN',
+    why: 'crashes go uncaptured in production',
+  },
+  {
+    keys: ['EXPO_PUBLIC_POSTHOG_API_KEY', 'EXPO_PUBLIC_POSTHOG_KEY'],
+    why: 'analytics silently no-op without a key',
+  },
+  {
+    key: 'EXPO_PUBLIC_CRISP_WEBSITE_ID',
+    why: 'Settings → Support overlay opens empty without the website id',
+  },
+  {
+    key: 'EXPO_PUBLIC_ENVIRONMENT',
+    why: 'Sentry events default to environment="production" even on preview / internal builds',
+  },
+  {
+    key: 'EXPO_PUBLIC_HELP_BASE_URL',
+    why: 'help center URL defaults to app.trygrowthproject.com/help; document for the operator even if accepting the default',
+  },
+];
+
 // Hard errors: genuinely broken. Always exit non-zero.
 const errors = [];
 // Warnings: noted but do not fail CI.
@@ -332,9 +376,16 @@ function validateEnvExample() {
   }
   const text = fs.readFileSync(ENV_EXAMPLE, 'utf8');
   const declaredKeys = new Set();
+  // "Mentioned" = declared as an assignment OR referenced anywhere in the
+  // file (including commented-out lines and inline `eas env:create` examples).
+  // Required vars use the strict declared-key set; recommended vars use the
+  // looser mentioned set, because they ship commented-out by design.
+  const mentionedKeys = new Set();
   for (const line of text.split(/\r?\n/)) {
-    const m = /^\s*([A-Z0-9_]+)\s*=/.exec(line);
-    if (m) declaredKeys.add(m[1]);
+    const decl = /^\s*([A-Z0-9_]+)\s*=/.exec(line);
+    if (decl) declaredKeys.add(decl[1]);
+    const refs = line.match(/EXPO_PUBLIC_[A-Z0-9_]+/g) || [];
+    for (const r of refs) mentionedKeys.add(r);
   }
 
   for (const key of REQUIRED_ENV) {
@@ -350,6 +401,17 @@ function validateEnvExample() {
     if (declaredKeys.has(key)) {
       fail(
         `.env.example: stale key ${key} declared — auth is brokered through Supabase, this var is no longer read by the codebase. Remove the assignment (the explanatory comment can stay).`,
+      );
+    }
+  }
+
+  for (const entry of RELEASE_RECOMMENDED_ENV) {
+    const keys = entry.keys || [entry.key];
+    const documented = keys.some((k) => mentionedKeys.has(k));
+    if (!documented) {
+      const shown = keys.join(' or ');
+      releaseBlock(
+        `.env.example: missing TestFlight-recommended env var ${shown} — ${entry.why}. Add a commented-out reference (e.g. "# ${keys[0]}=...") so an EAS operator reading the file sees the full set.`,
       );
     }
   }

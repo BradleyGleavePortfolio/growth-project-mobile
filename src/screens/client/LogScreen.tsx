@@ -24,7 +24,7 @@ import { ManualFields } from '../../components/log/ManualFoodEntryForm';
 import { useMacroTargets } from '../../hooks/useMacroTargets';
 import { useFoodBrowse } from '../../hooks/useFoodBrowse';
 import { SearchResult, MEAL_SECTIONS } from '../../utils/log/types';
-import { quantityMultiplier } from '../../utils/log/macros';
+import { quantityMultiplier, parseQuantityInput } from '../../utils/log/macros';
 import { mapFoodItem, type RawFoodItem } from '../../utils/log/mapFoodItem';
 import {
   submitSearchLogOffline,
@@ -220,7 +220,9 @@ export default function LogScreen() {
   // the log to AsyncStorage and close cleanly with a confirmation.
   const handleConfirmLog = async () => {
     if (!currentUser || !selectedFood) return;
-    const qty = parseFloat(quantityInput) || 1;
+    // B4: locale-aware decimal parsing — "1.5", "0,5" and "  2  " all valid;
+    // blank/garbage falls back to 1 (the existing "one serving" default).
+    const qty = parseQuantityInput(quantityInput) ?? 1;
     const multiplier = quantityMultiplier(selectedFood, qty, selectedUnit);
     const args = {
       food: selectedFood,

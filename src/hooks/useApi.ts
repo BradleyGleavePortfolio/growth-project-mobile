@@ -426,6 +426,8 @@ export function useSaveCheckIn() {
       mood?: number | null;
       energy?: number | null;
       sleep_hours?: number | null;
+      sleep_quality?: number | null;
+      stress?: number | null;
       weight_kg?: number | null;
       notes?: string | null;
     }) => checkInsApi.save(data).then((r) => r.data),

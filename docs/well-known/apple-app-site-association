@@ -14,6 +14,10 @@
           {
             "/": "/join",
             "comment": "Universal link without invite code (manual entry)"
+          },
+          {
+            "/": "/invite/accept/*",
+            "comment": "Email Pipeline v1 — public invite-accept entry point"
           }
         ]
       }

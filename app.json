@@ -15,7 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.growthproject.app",
-      "buildNumber": "3",
+      "buildNumber": "4",
       "infoPlist": {
         "NSCameraUsageDescription": "Used for barcode scanning to log food items",
         "ITSAppUsesNonExemptEncryption": false,
@@ -33,7 +33,7 @@
         "backgroundColor": "#F5EFE4"
       },
       "package": "com.growthproject.app",
-      "versionCode": 3,
+      "versionCode": 4,
       "intentFilters": [
         {
           "action": "VIEW",
@@ -44,9 +44,18 @@
               "host": "join"
             },
             {
+              "scheme": "tgp",
+              "host": "invite"
+            },
+            {
               "scheme": "https",
               "host": "app.trygrowthproject.com",
               "pathPrefix": "/join"
+            },
+            {
+              "scheme": "https",
+              "host": "app.trygrowthproject.com",
+              "pathPrefix": "/invite/accept"
             }
           ],
           "category": [

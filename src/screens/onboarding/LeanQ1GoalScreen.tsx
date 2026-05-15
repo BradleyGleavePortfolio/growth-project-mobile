@@ -5,6 +5,7 @@
 
 import React, { useState, useMemo } from 'react';
 import {
+  Alert,
   View,
   Text,
   StyleSheet,
@@ -49,9 +50,28 @@ export default function LeanQ1GoalScreen({ navigation }: Props) {
     navigation.navigate('LeanQ2');
   };
 
-  const handleSkip = async () => {
-    track('onboarding_skipped', { at_step: 1 });
-    await markOnboardingComplete('explore');
+  const handleSkip = () => {
+    // B13: Skip used to silently mark onboarding complete and drop the user
+    // onto Home with `activity_level=moderate` defaults. That is a real
+    // safety hazard for the recipe / meal-plan engines (no goal, no
+    // allergies/restrictions, no body metrics). Surface a confirmation so
+    // the user knows they're opting out of a personalised plan AND so they
+    // can change their mind without re-running signup.
+    Alert.alert(
+      'Skip personalisation?',
+      "We won't know your goal, body metrics, or any allergies — meal and workout suggestions will use generic defaults until you finish your profile from Settings.",
+      [
+        { text: 'Back', style: 'cancel' },
+        {
+          text: 'Skip anyway',
+          style: 'destructive',
+          onPress: async () => {
+            track('onboarding_skipped', { at_step: 1 });
+            await markOnboardingComplete('explore');
+          },
+        },
+      ],
+    );
   };
 
   const markOnboardingComplete = async (intent: string) => {
