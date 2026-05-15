@@ -18,6 +18,10 @@
           {
             "/": "/invite/accept/*",
             "comment": "Email Pipeline v1 — public invite-accept entry point"
+          },
+          {
+            "/": "/p/*",
+            "comment": "Universal link to a coach's package share/checkout"
           }
         ]
       }

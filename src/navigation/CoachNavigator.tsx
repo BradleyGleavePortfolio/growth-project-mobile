@@ -17,6 +17,15 @@ import ClientMessagesScreen from '../screens/coach/ClientMessagesScreen';
 import RiskBoardScreen from '../screens/coach/RiskBoardScreen';
 import ClientRiskDetailScreen from '../screens/coach/ClientRiskDetailScreen';
 import CoachBillingScreen from '../screens/coach/CoachBillingScreen';
+// Payments — coach Stripe Connect onboarding/dashboard, packages CRUD,
+// per-package subscribers, and net earnings. All wired to real backend
+// endpoints; surfaces a config-required state when backend modules aren't
+// deployed in the environment.
+import CoachConnectScreen from '../screens/coach/payments/CoachConnectScreen';
+import CoachPackagesListScreen from '../screens/coach/payments/CoachPackagesListScreen';
+import CoachPackageEditScreen from '../screens/coach/payments/CoachPackageEditScreen';
+import CoachPackageSubscribersScreen from '../screens/coach/payments/CoachPackageSubscribersScreen';
+import PaymentsCoachEarningsScreen from '../screens/coach/payments/CoachEarningsScreen';
 import BloodworkReviewQueueScreen from '../screens/coach/BloodworkReviewQueueScreen';
 import TrustCenterScreen from '../screens/TrustCenterScreen';
 // Wave 11 — runtime scaffolding. The screen registrations below only mount
@@ -168,6 +177,11 @@ export type SettingsStackParamList = {
   CoachTeamProfile: undefined;
   /** Payments — package CRUD (backend PR #215). */
   CoachPackages: undefined;
+  // Payments — Stripe Connect + coach package marketplace.
+  CoachConnect: undefined;
+  CoachPackagesList: undefined;
+  CoachPackageEdit: { packageId: string | null };
+  CoachPackageSubscribers: { packageId: string; title: string };
   /** Payments — earnings, payout readiness, reconciliation, refunds (backend PR #216). */
   CoachEarnings: undefined;
   /** iMessage-grade DM — manage blocked users from coach Settings. */
@@ -369,10 +383,18 @@ function SettingsStackNavigator() {
         name="CoachPackages"
         component={CoachPackagesScreen}
       />
-      {/* Payments — earnings, payout readiness, reconciliation, refunds (backend PR #216). */}
+      {/* Payments — Connect, packages, subscribers, earnings (this branch). */}
+      <SettingsStack.Screen name="CoachConnect" component={CoachConnectScreen} />
+      <SettingsStack.Screen name="CoachPackagesList" component={CoachPackagesListScreen} />
+      <SettingsStack.Screen name="CoachPackageEdit" component={CoachPackageEditScreen} />
+      <SettingsStack.Screen
+        name="CoachPackageSubscribers"
+        component={CoachPackageSubscribersScreen}
+      />
+      {/* Payments — earnings, payout readiness, reconciliation, refunds (this branch overrides main's). */}
       <SettingsStack.Screen
         name="CoachEarnings"
-        component={CoachEarningsScreen}
+        component={PaymentsCoachEarningsScreen}
       />
       {/* iMessage-grade DM — Apple 1.2 compliance blocked-users management. */}
       <SettingsStack.Screen name="BlockedUsers" component={BlockedUsersScreen} />

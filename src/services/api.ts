@@ -796,8 +796,39 @@ export interface CoachBillingStatus {
   summary?: string | null;
 }
 
+// Invoice row as exposed by GET /v1/coach/me/billing — shape mirrors what
+// the backend BFF returns from `prisma.invoice.findMany`.
+export interface CoachInvoice {
+  id: string;
+  stripe_invoice_id: string;
+  amount_due_cents: number;
+  amount_paid_cents: number;
+  currency: string;
+  status: string; // 'paid' | 'open' | 'void' | 'uncollectible' | …
+  invoice_pdf?: string | null;
+  hosted_invoice_url?: string | null;
+  created_at: string;
+}
+
+// Full billing payload from GET /v1/coach/me/billing — the BFF route used by
+// the admin console. Mobile uses it to render the invoice list; the compact
+// pill keeps coming from /coach/billing/status (cheaper for cold start).
+export interface CoachBillingFull {
+  subscription: {
+    status: string;
+    stripe_price_id: string | null;
+    current_period_end: string | null;
+    cancel_at_period_end: boolean;
+    trial_end: string | null;
+  } | null;
+  invoices: CoachInvoice[];
+}
+
 export const coachBillingApi = {
   getStatus: () => api.get<CoachBillingStatus>('/coach/billing/status'),
+  // Full billing payload incl. last 24 invoices. The mobile billing screen
+  // uses this so a coach can pull up invoice PDFs without leaving the app.
+  getFull: () => api.get<CoachBillingFull>('/v1/coach/me/billing'),
   // POST returns { url } — a one-time Stripe billing portal URL. The app
   // opens it in a browser sheet; the portal handles checkout / card update /
   // cancel. The endpoint accepts an optional return path so the portal can

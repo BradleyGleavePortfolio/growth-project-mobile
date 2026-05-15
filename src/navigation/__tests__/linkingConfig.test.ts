@@ -107,3 +107,48 @@ describe('hosted association templates match app.json', () => {
     expect(paths).toEqual(expect.arrayContaining(['/join/*', '/join']));
   });
 });
+
+// Package share surface — every layer (app.json, RootNavigator, AASA) must
+// declare /p/<shareToken> for the universal-link to land in the PackageCheckout
+// screen. Regression coverage for the same drift class we already catch on
+// /join above.
+describe('app.json + RootNavigator + AASA declare the /p/<token> package surface', () => {
+  it('Android intent filter routes https://<host>/p with autoVerify', () => {
+    const filters = APP_JSON.expo.android.intentFilters;
+    const hasHttpsP = filters.some((f: any) =>
+      (f.data || []).some(
+        (d: any) =>
+          d.scheme === 'https' &&
+          d.host === INVITE_UNIVERSAL_HOST &&
+          d.pathPrefix === '/p',
+      ),
+    );
+    expect(hasHttpsP).toBe(true);
+  });
+
+  it('Android intent filter also routes the tgp://p custom scheme', () => {
+    const filters = APP_JSON.expo.android.intentFilters;
+    const hasCustomP = filters.some((f: any) =>
+      (f.data || []).some(
+        (d: any) => d.scheme === INVITE_CUSTOM_SCHEME && d.host === 'p',
+      ),
+    );
+    expect(hasCustomP).toBe(true);
+  });
+
+  it('RootNavigator linking config routes p/:shareToken', () => {
+    expect(ROOT_NAV_SRC).toMatch(/path:\s*'p\/:shareToken'/);
+  });
+
+  it('apple-app-site-association covers /p/*', () => {
+    const aasa = JSON.parse(
+      fs.readFileSync(
+        path.join(ROOT, 'docs', 'well-known', 'apple-app-site-association'),
+        'utf8',
+      ),
+    );
+    const components = aasa.applinks.details.flatMap((d: any) => d.components || []);
+    const paths = components.map((c: any) => c['/']);
+    expect(paths).toEqual(expect.arrayContaining(['/p/*']));
+  });
+});

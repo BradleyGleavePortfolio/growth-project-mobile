@@ -166,16 +166,24 @@ const linking: LinkingOptions<Record<string, object | undefined>> = {
             Log: 'log',
           } as Record<string, unknown>)
         : {}),
-      // MoreTab linking — combines screenshot-mode deep links (only mounted
-      // in screenshot harness) with the Stripe Checkout return route, which
-      // is reachable in real builds via tgp://checkout/{success,cancel}.
-      // Stripe redirects to:
-      //   tgp://checkout/success?session_id=cs_xxx   (paid)
-      //   tgp://checkout/cancel                       (canceled)
-      // The return screen confirms the session against the backend before
-      // showing a celebratory state.
+      // MoreTab linking — combines:
+      //   • PackageCheckout (`tgp://p/:token`, `https://app.trygrowthproject.com/p/:token`)
+      //     — universal-link entry for a coach's package share link. Inert
+      //     when unauthenticated; the deep-link is queued until login lands
+      //     in ClientNavigator.
+      //   • Screenshot-mode deep links (only mounted in screenshot harness).
+      //   • Stripe Checkout return route, reachable in real builds via
+      //     tgp://checkout/{success,cancel}. Stripe redirects to:
+      //       tgp://checkout/success?session_id=cs_xxx   (paid)
+      //       tgp://checkout/cancel                       (canceled)
+      //     The return screen confirms the session against the backend
+      //     before showing a celebratory state.
       MoreTab: {
         screens: {
+          PackageCheckout: {
+            path: 'p/:shareToken',
+            parse: { shareToken: (v: string) => v },
+          },
           ...(isScreenshotMode()
             ? {
                 Plan: 'plan',
