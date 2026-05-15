@@ -189,12 +189,15 @@ export default function RootNavigator() {
         const match = url.match(/\/join\/([^/?#]+)/i);
         const code = match?.[1];
         if (code) {
-          // Stash the inbound code so RoleSelection (or a future settings
-          // surface) can offer to attach it. The owner can wire surface-up
-          // when the in-app attach UI is built; for now we just don't lose
-          // the code.
+          // B5/B6: stash the inbound code so the in-app banner (HomeScreen)
+          // can offer to claim it via authApi.attachInviteCode. The banner
+          // is the consent surface — we do NOT auto-attach because it would
+          // silently re-pair the client to a different coach.
           try {
             await AsyncStorage.setItem('pending_invite_code', code);
+            // Fire an authEvent so any mounted banner re-reads storage on
+            // foreground without waiting for a manual refresh.
+            authEvents.emit();
           } catch {
             // best-effort
           }

@@ -80,6 +80,7 @@ import ClientBookingRequestScreen from '../screens/client/ClientBookingRequestSc
 import ClientUpcomingSessionsScreen from '../screens/client/ClientUpcomingSessionsScreen';
 import ClientDailyMealPlanScreen from '../screens/client/ClientDailyMealPlanScreen';
 import ClientWorkoutViewerScreen from '../screens/client/ClientWorkoutViewerScreen';
+import WorkoutAssignmentDetailScreen from '../screens/client/WorkoutAssignmentDetailScreen';
 // Phase 9 — Notification center
 import NotificationCenterScreen from '../screens/notifications/NotificationCenterScreen';
 import NotificationPreferencesScreen from '../screens/notifications/NotificationPreferencesScreen';
@@ -165,6 +166,7 @@ export type MoreStackParamList = {
   ClientMacros:        undefined;
   ClientDailyMealPlan: { date?: string } | undefined;
   ClientWorkoutViewer: { assignmentId: string };
+  WorkoutAssignmentDetail: { assignmentId: string };
   /** Concierge Phase 1 — scheduling client surfaces. */
   ClientBookingRequest:    undefined;
   ClientUpcomingSessions:  undefined;
@@ -330,6 +332,7 @@ function MoreStackNavigator() {
       <MoreStackNav.Screen name="ClientMacros"        component={ClientMacrosScreen} />
       <MoreStackNav.Screen name="ClientDailyMealPlan" component={ClientDailyMealPlanScreen} />
       <MoreStackNav.Screen name="ClientWorkoutViewer" component={ClientWorkoutViewerScreen} />
+      <MoreStackNav.Screen name="WorkoutAssignmentDetail" component={WorkoutAssignmentDetailScreen} />
       {/* Concierge Phase 1 — scheduling client surfaces. */}
       <MoreStackNav.Screen
         name="ClientBookingRequest"

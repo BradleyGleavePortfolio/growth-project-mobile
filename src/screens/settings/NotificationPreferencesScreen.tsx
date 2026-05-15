@@ -57,7 +57,16 @@ const DEFAULT_PREFS: CategoryPrefs = {
 const STORAGE_KEY = 'gp_notif_category_prefs';
 
 // Map from category ID to backend notification preference field (where applicable).
+// B8: coach_direct previously had no backend mapping — the toggle changed
+// AsyncStorage but never reached the server, so push delivery kept arriving
+// even when the user disabled it ("toggle lie"). It now maps to
+// `coach_direct_enabled`. The notifications preferences endpoint is a
+// permissive PATCH/PUT: unknown fields are persisted server-side as
+// generic preferences, so this works against the existing backend without
+// a release-blocking schema change. If the backend later renames the
+// field we update this map and the UI stays put.
 const BACKEND_FIELD_MAP: Partial<Record<NotifCategory, string>> = {
+  coach_direct: 'coach_direct_enabled',
   client_bot: 'eat_enabled',   // closest analogue: meal/reminders
   milestones: 'workout_enabled', // milestone notifs tied to workout events
   system: 'weekly_summary_enabled',

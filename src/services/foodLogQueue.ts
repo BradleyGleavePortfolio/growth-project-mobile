@@ -37,11 +37,16 @@ export interface PendingSearchLog {
     brand_or_restaurant: string | null;
     category: string;
     serving_description: string;
-    serving_size_grams: number;
-    calories: number;
-    protein_g: number;
-    carbs_g: number;
-    fat_g: number;
+    // B4: a missing gram weight (manual entry with non-mass unit) is now
+    // explicitly `null` rather than the silent `100` fallback the old code
+    // used to inject; the backend treats null as unknown.
+    serving_size_grams: number | null;
+    nutrient_basis?: 'PER_100G' | 'PER_SERVING';
+    // B4: macros are `null` when the upstream row truly didn't carry a value.
+    calories: number | null;
+    protein_g: number | null;
+    carbs_g: number | null;
+    fat_g: number | null;
     tags: string[];
     search_aliases: string[];
   };

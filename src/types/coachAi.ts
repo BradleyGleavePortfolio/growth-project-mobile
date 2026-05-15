@@ -156,6 +156,19 @@ export interface GenerateMealPlanInput {
   /** 1-14 inclusive. */
   days: number;
   notes?: string;
+  /**
+   * B14: explicit safety fields. The backend already reads the client's
+   * stored profile, but a missing-by-default field in a prompt is a silent
+   * way to drop an allergy on the floor. We mirror these into the request
+   * so:
+   *   - the generator sees them in the API contract (not just from a DB
+   *     side-channel),
+   *   - the values are auditable on the wire (Sentry / server logs),
+   *   - any field added on mobile is immediately usable without a backend
+   *     deploy.
+   */
+  allergies?: string[];
+  dietary_restrictions?: string[];
 }
 
 export interface GenerateInsightInput {

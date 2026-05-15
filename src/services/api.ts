@@ -383,6 +383,21 @@ export const coachApi = {
     api.patch(`/coach/meal-plans/${planId}`, data),
   archiveMealPlan: (planId: string) =>
     api.delete(`/coach/meal-plans/${planId}`),
+  // ── Food log review (coach read) ──
+  // B15: backend exposes the client's food entries via the timeline endpoint
+  // (which interleaves food/weight/workout/check-in events). The mobile fans
+  // out from there. If the backend later ships a dedicated /food-logs route
+  // for coaches, swap the call here and the screen stays put.
+  getClientFoodLogs: (
+    clientId: string,
+    params?: { days?: number; limit?: number },
+  ) => {
+    const q = new URLSearchParams();
+    const days = params?.days ?? 7;
+    q.set('days', String(days));
+    if (params?.limit) q.set('limit', String(params.limit));
+    return api.get(`/coach/clients/${clientId}/timeline?${q.toString()}`);
+  },
   // ── Check-ins (coach read) ──
   getClientCheckIns: (
     clientId: string,
@@ -520,6 +535,10 @@ export const checkInsApi = {
     mood?: number | null;
     energy?: number | null;
     sleep_hours?: number | null;
+    /** B10: 1–5 self-reported sleep quality (separate from sleep_hours). */
+    sleep_quality?: number | null;
+    /** B10: 1–5 self-reported stress level. */
+    stress?: number | null;
     weight_kg?: number | null;
     notes?: string | null;
   }) => api.post('/check-ins', data),

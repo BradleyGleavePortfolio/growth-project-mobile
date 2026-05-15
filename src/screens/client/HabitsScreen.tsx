@@ -134,13 +134,23 @@ export default function HabitsScreen() {
   // Hydrate the form from today's check-in once the query resolves.
   useEffect(() => {
     const row = todayCheckInQ.data as
-      | { mood?: number; energy?: number; sleep_hours?: number; notes?: string; date?: string }
+      | {
+          mood?: number;
+          energy?: number;
+          sleep_hours?: number;
+          sleep_quality?: number;
+          stress?: number;
+          notes?: string;
+          date?: string;
+        }
       | null
       | undefined;
     if (!row) return;
     if (row.mood != null) setMood(Number(row.mood));
     if (row.energy != null) setEnergy(Number(row.energy));
     if (row.sleep_hours != null) setSleepHours(Number(row.sleep_hours));
+    if (row.sleep_quality != null) setSleepQuality(Number(row.sleep_quality));
+    if (row.stress != null) setStress(Number(row.stress));
     if (row.notes) setNotes(String(row.notes));
     if (row.date) setLastCheckInDate(String(row.date).slice(0, 10));
   }, [todayCheckInQ.data]);
@@ -260,6 +270,11 @@ export default function HabitsScreen() {
         mood,
         energy,
         sleep_hours: sleepHours,
+        // B10: previously dropped on the floor; the form collected these
+        // values but the mutation payload omitted them, so the coach
+        // dashboard never saw stress/sleep_quality.
+        sleep_quality: sleepQuality,
+        stress,
         notes: notes || null,
       },
       {

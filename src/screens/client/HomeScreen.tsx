@@ -32,6 +32,8 @@ import { useTheme } from '../../theme/ThemeProvider';
 // Sprint B-2 — cross-pillar holistic insights tile (component shipped
 // in PR #130; this PR places it on HomeScreen).
 import HolisticInsightsTile from '../../components/home/HolisticInsightsTile';
+import PendingInviteBanner from '../../components/PendingInviteBanner';
+import { workoutApi } from '../../services/api';
 import {
   getProfileCompletion,
   summarizeMissing,
@@ -150,9 +152,35 @@ export default function HomeScreen() {
     return mealTypes.size;
   })();
 
-  // Workout: derive from foodLogs length as a proxy — if the user has 0 food logs
-  // for the day assume workout not done. In a future pass wire to workout endpoint.
-  const workoutDone = false; // conservative default — no workout endpoint on home
+  // B11: workoutDone now comes from /workouts (most recent N sessions). A
+  // session with `date` in today's local calendar day satisfies the
+  // "workout complete" copy. Falling back to `false` on network error so
+  // the home line never claims a workout was done when we couldn't verify.
+  const [workoutDone, setWorkoutDone] = useState<boolean>(false);
+  useEffect(() => {
+    let cancelled = false;
+    if (!currentUser) return;
+    (async () => {
+      try {
+        const res = await workoutApi.getAll(5);
+        const rows = (res.data as Array<{ date?: string; completed?: boolean }> | undefined) || [];
+        const todayStr = new Date().toDateString();
+        const done = rows.some((r) => {
+          if (!r?.date) return false;
+          const d = new Date(r.date);
+          if (Number.isNaN(d.getTime())) return false;
+          // A row counts when it is today AND not explicitly marked incomplete.
+          return d.toDateString() === todayStr && r.completed !== false;
+        });
+        if (!cancelled) setWorkoutDone(done);
+      } catch {
+        if (!cancelled) setWorkoutDone(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.id, refreshing]);
 
   const datePoetry = buildDateAsPoetry(today);
   const progressLine = buildProgressLine(mealsLogged, workoutDone);
@@ -261,6 +289,7 @@ export default function HomeScreen() {
           />
         }
       >
+        <PendingInviteBanner />
         {showProfileNudge ? (
           <Pressable
             onPress={goToEditProfile}
