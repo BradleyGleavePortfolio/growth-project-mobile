@@ -137,6 +137,41 @@ async function markConflict(id: string): Promise<void> {
   );
 }
 
+/**
+ * Mark every pending row that belongs to the same session as synced after
+ * the parent API mutate succeeded. Without this, the local rows the
+ * ActiveWorkout screen wrote stay pending and the next `triggerSync()` call
+ * re-POSTs them as N additional single-exercise workouts on the server (the
+ * W-1 duplication bug in the audit).
+ *
+ * Correlation key is `session_name` — every row written from a single
+ * ActiveWorkout finish carries the same routine name and was written within
+ * a few milliseconds of each other. We additionally bound the match window
+ * by `logged_at` to avoid accidentally synthesising a sync confirmation for
+ * unrelated older rows the user happened to log under a routine with the
+ * same name.
+ */
+export async function markSessionSyncedBySessionName(
+  sessionName: string,
+  serverId: string,
+  windowMs = 60_000,
+): Promise<number> {
+  if (!sessionName) return 0;
+  const db = await getDatabase();
+  const since = Date.now() - windowMs;
+  const result = await db.runAsync(
+    `UPDATE workout_logs
+        SET sync_status = 'synced', server_id = ?
+      WHERE sync_status = 'pending'
+        AND session_name = ?
+        AND logged_at >= ?`,
+    [serverId, sessionName, since],
+  );
+  // expo-sqlite's runAsync returns { changes } via the result handle.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (result as any)?.changes ?? 0;
+}
+
 // ---------------------------------------------------------------------------
 // Push pending records
 // ---------------------------------------------------------------------------
@@ -222,45 +257,73 @@ export async function pullFromServer(limit = 20): Promise<void> {
         continue;
       }
 
-      // Derive a representative sets_data blob from the server shape.
+      // W-6 fix: a server workout row may carry multiple exercises.
+      // Persist one local row per exercise so the offline read path mirrors
+      // what was sent in (the old implementation kept exercises[0] only and
+      // silently dropped the rest, corrupting history the moment any local
+      // read surface lands).
       const exercises: Array<Record<string, unknown>> = Array.isArray(
         w.exercises,
       )
         ? (w.exercises as Array<Record<string, unknown>>)
         : [];
-      const firstExercise = exercises[0] ?? {};
-      const repsPerSet = Array.isArray(firstExercise.reps_per_set)
-        ? (firstExercise.reps_per_set as number[])
-        : [];
-      const weightPerSet = Array.isArray(firstExercise.weight_per_set)
-        ? (firstExercise.weight_per_set as number[])
-        : [];
 
-      const setsData = JSON.stringify(
-        repsPerSet.map((reps, i) => ({
-          reps,
-          weight: weightPerSet[i] ?? 0,
-          completed: true,
-        })),
-      );
+      const durationMinutes =
+        typeof w.duration_minutes === 'number' ? w.duration_minutes : null;
+      const sessionName = String(w.notes ?? '');
 
-      await db.runAsync(
-        `INSERT INTO workout_logs
-           (id, exercise_id, sets_data, sync_status, logged_at,
-            server_id, session_name, duration_minutes)
-         VALUES (?, ?, ?, 'synced', ?, ?, ?, ?)`,
-        [
-          generateId(),
-          String(firstExercise.exercise_name ?? ''),
-          setsData,
-          Date.now(),
-          serverId,
-          String(w.notes ?? ''),
-          typeof w.duration_minutes === 'number'
-            ? w.duration_minutes
-            : null,
-        ],
-      );
+      if (exercises.length === 0) {
+        // Defensive: a workout with no exercises is still recorded so the
+        // pull-skip-existing guard above will short-circuit on next pull.
+        await db.runAsync(
+          `INSERT INTO workout_logs
+             (id, exercise_id, sets_data, sync_status, logged_at,
+              server_id, session_name, duration_minutes)
+           VALUES (?, ?, ?, 'synced', ?, ?, ?, ?)`,
+          [
+            generateId(),
+            '',
+            JSON.stringify([]),
+            Date.now(),
+            serverId,
+            sessionName,
+            durationMinutes,
+          ],
+        );
+        continue;
+      }
+
+      for (const ex of exercises) {
+        const repsPerSet = Array.isArray(ex.reps_per_set)
+          ? (ex.reps_per_set as number[])
+          : [];
+        const weightPerSet = Array.isArray(ex.weight_per_set)
+          ? (ex.weight_per_set as number[])
+          : [];
+        const setsData = JSON.stringify(
+          repsPerSet.map((reps, i) => ({
+            reps,
+            weight: weightPerSet[i] ?? 0,
+            completed: true,
+          })),
+        );
+
+        await db.runAsync(
+          `INSERT INTO workout_logs
+             (id, exercise_id, sets_data, sync_status, logged_at,
+              server_id, session_name, duration_minutes)
+           VALUES (?, ?, ?, 'synced', ?, ?, ?, ?)`,
+          [
+            generateId(),
+            String(ex.exercise_name ?? ''),
+            setsData,
+            Date.now(),
+            serverId,
+            sessionName,
+            durationMinutes,
+          ],
+        );
+      }
     }
   } catch (err) {
     // Pull failures are non-fatal — local data remains usable.

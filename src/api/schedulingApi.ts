@@ -149,12 +149,25 @@ export interface RequestSessionInput {
   title: string;
   start_at: string; // ISO 8601
   end_at: string; // ISO 8601
+  // V-4: optional free-text the client wants their coach to read before
+  // the session. The backend stores this on the CoachingSession row; an
+  // older backend that does not yet accept the field ignores it without
+  // error (extra-keys-whitelisted).
+  notes?: string;
+  // V-5: the IANA timezone the start_at/end_at were composed in. The
+  // backend uses this to disambiguate when the client's device TZ does
+  // not match the coach's `CoachProfile.timezone` — the booking should
+  // resolve to the coach's wall clock, not the client's. Backwards
+  // compatible: omitting it keeps the old behaviour.
+  client_timezone?: string;
 }
 
 export interface RescheduleSessionInput {
   start_at: string;
   end_at: string;
   reason?: string;
+  // V-5 (see RequestSessionInput).
+  client_timezone?: string;
 }
 
 export interface CancelSessionInput {

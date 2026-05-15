@@ -176,7 +176,14 @@ export default function CoachAvailabilityEditorScreen({ route }: Props) {
           { color: colors.textMuted, marginBottom: spacing.md },
         ]}
       >
-        Times shown in {deviceTimezone()}.
+        {/* V-5 fix: the previous copy claimed "Times shown in
+            <deviceTZ>" but the editor stores minute-of-day that the
+            backend interprets relative to the coach's profile timezone,
+            not the device TZ. That's correct behaviour (DST-stable, no
+            client-clock drift) but the label was misleading and the
+            audit caught it. Make the contract explicit. */}
+        Times are stored in your coach profile timezone. Your device shows{' '}
+        {deviceTimezone()}.
       </Text>
 
       {DAY_LABELS.map((label, dayIdx) => (

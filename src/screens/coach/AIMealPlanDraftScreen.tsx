@@ -133,15 +133,21 @@ export default function AIMealPlanDraftScreen() {
     setDirty(true);
   };
 
-  const handleSave = async () => {
-    if (!draft) return;
+  // C-2: see AIWorkoutDraftScreen — return boolean so 'Save and approve'
+  // can short-circuit when the save itself failed. Otherwise the coach
+  // sees 'Save failed' immediately followed by 'Approved' and ships the
+  // pre-edit server draft to the client.
+  const handleSave = async (): Promise<boolean> => {
+    if (!draft) return false;
     setSaving(true);
     try {
       await coachAiApi.editDraft<MealPlanPayload>(draft.draftId, payload);
       setDirty(false);
       Alert.alert('Saved', 'Edits saved to the draft.');
+      return true;
     } catch (err) {
       Alert.alert('Save failed', errorMessage(err, 'Try again.'));
+      return false;
     } finally {
       setSaving(false);
     }
@@ -160,10 +166,13 @@ export default function AIMealPlanDraftScreen() {
             style: 'destructive',
             onPress: () => performApprove(),
           },
-          { text: 'Save and approve', onPress: async () => {
-            await handleSave();
-            performApprove();
-          } },
+          {
+            text: 'Save and approve',
+            onPress: async () => {
+              const ok = await handleSave();
+              if (ok) performApprove();
+            },
+          },
         ],
       );
       return;
@@ -387,7 +396,9 @@ export default function AIMealPlanDraftScreen() {
         <View style={styles.footerBtns}>
           <TouchableOpacity
             style={[styles.btnSecondary, !dirty && { opacity: 0.5 }]}
-            onPress={handleSave}
+            onPress={() => {
+              void handleSave();
+            }}
             disabled={!dirty || saving}
             accessibilityRole="button"
             accessibilityLabel="Save edits"

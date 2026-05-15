@@ -25,6 +25,7 @@ export {
   triggerSync,
   pullFromServer,
   conflictToastEvents,
+  markSessionSyncedBySessionName,
   __isSyncInProgress,
 } from './sync/sync-engine';
 export type { WriteWorkoutPayload } from './sync/sync-engine';

@@ -140,15 +140,23 @@ export default function AIWorkoutDraftScreen() {
     setDirty(true);
   };
 
-  const handleSave = async () => {
-    if (!draft) return;
+  // C-2: handleSave returns a boolean so the "Save and approve" path can
+  // gate `performApprove()` on the save actually succeeding. Without
+  // this, a coach who hits "Save and approve" while the server save
+  // fails sees "Save failed" immediately followed by "Approved" — and
+  // the pre-edit server draft is what gets assigned. Surfaces look
+  // green; the wrong plan ships.
+  const handleSave = async (): Promise<boolean> => {
+    if (!draft) return false;
     setSaving(true);
     try {
       await coachAiApi.editDraft<WorkoutPayload>(draft.draftId, payload);
       setDirty(false);
       Alert.alert('Saved', 'Edits saved to the draft.');
+      return true;
     } catch (err) {
       Alert.alert('Save failed', errorMessage(err, 'Try again.'));
+      return false;
     } finally {
       setSaving(false);
     }
@@ -167,10 +175,15 @@ export default function AIWorkoutDraftScreen() {
             style: 'destructive',
             onPress: () => performApprove(),
           },
-          { text: 'Save and approve', onPress: async () => {
-            await handleSave();
-            performApprove();
-          } },
+          {
+            text: 'Save and approve',
+            onPress: async () => {
+              const ok = await handleSave();
+              if (ok) performApprove();
+              // else: stay on the screen with the edits in place; the
+              // 'Save failed' alert from handleSave is already on screen.
+            },
+          },
         ],
       );
       return;
@@ -377,7 +390,9 @@ export default function AIWorkoutDraftScreen() {
         <View style={styles.footerBtns}>
           <TouchableOpacity
             style={[styles.btnSecondary, !dirty && { opacity: 0.5 }]}
-            onPress={handleSave}
+            onPress={() => {
+              void handleSave();
+            }}
             disabled={!dirty || saving}
             accessibilityRole="button"
             accessibilityLabel="Save edits"

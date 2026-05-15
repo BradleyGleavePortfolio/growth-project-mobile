@@ -65,19 +65,34 @@ export default function ClientBookingRequestScreen() {
   const onChooseSlot = useCallback(
     (startAt: Date, endAt: Date) => {
       if (!coachId) return;
+      // V-5 mitigation: pass the device IANA timezone alongside the ISO
+      // timestamps so the backend can resolve to the coach's wall clock
+      // when the two diverge. Defensive fallback for older runtimes that
+      // do not expose Intl.DateTimeFormat.
+      let clientTz: string | undefined;
+      try {
+        clientTz =
+          Intl?.DateTimeFormat?.().resolvedOptions?.().timeZone || undefined;
+      } catch {
+        clientTz = undefined;
+      }
       requestSession.mutate(
         {
           coach_id: coachId,
           title: 'Coaching session',
           start_at: startAt.toISOString(),
           end_at: endAt.toISOString(),
+          // V-4: forward the multi-line note the user typed. Empty string
+          // becomes undefined so the backend sees a clean absent field.
+          notes: notes.trim() ? notes.trim() : undefined,
+          client_timezone: clientTz,
         },
         {
           onSuccess: () => setSubmitted(true),
         },
       );
     },
-    [coachId, requestSession],
+    [coachId, notes, requestSession],
   );
 
   if (!coachId) {

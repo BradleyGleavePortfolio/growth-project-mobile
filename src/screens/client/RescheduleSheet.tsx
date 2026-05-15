@@ -59,6 +59,15 @@ export default function RescheduleSheet({ session, onClose }: Props) {
 
   const onChooseSlot = useCallback(
     (startAt: Date, endAt: Date) => {
+      // V-5 mitigation: pass the device IANA timezone so the backend can
+      // resolve cross-tz reschedules against the coach's wall clock.
+      let clientTz: string | undefined;
+      try {
+        clientTz =
+          Intl?.DateTimeFormat?.().resolvedOptions?.().timeZone || undefined;
+      } catch {
+        clientTz = undefined;
+      }
       reschedule.mutate(
         {
           id: session.id,
@@ -66,6 +75,7 @@ export default function RescheduleSheet({ session, onClose }: Props) {
             start_at: startAt.toISOString(),
             end_at: endAt.toISOString(),
             reason: reason.trim() === '' ? undefined : reason.trim(),
+            client_timezone: clientTz,
           },
         },
         {

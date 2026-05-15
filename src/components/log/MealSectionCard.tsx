@@ -14,6 +14,10 @@ interface Props {
   mealCalories: number;
   onAddPress: (mealType: MealType) => void;
   onDeletePress: (log: FoodLog) => void;
+  // F-2: invoked on tap when the parent wants to surface an edit flow for a
+  // logged entry. Optional so older parents that haven't wired editing yet
+  // keep working unchanged.
+  onEditPress?: (log: FoodLog) => void;
 }
 
 export default function MealSectionCard({
@@ -24,6 +28,7 @@ export default function MealSectionCard({
   mealCalories,
   onAddPress,
   onDeletePress,
+  onEditPress,
 }: Props) {
   return (
     <View style={styles.mealSection}>
@@ -41,29 +46,50 @@ export default function MealSectionCard({
         <Text style={styles.emptyMealText}>No foods logged yet</Text>
       )}
 
-      {logs.map((log) => (
-        <HapticPressable
-          key={log.id}
-          intent="light"
-          style={styles.foodItem}
-          onLongPress={() => onDeletePress(log)}
-        >
-          <View style={styles.foodItemLeft}>
-            <Text style={styles.foodName}>
-              {log.foodName}
-              {log.quantity > 1 && (
-                <Text style={styles.foodQuantityMuted}>
-                  {' '}· ×{log.quantity}
-                </Text>
-              )}
-            </Text>
-            <Text style={styles.foodMacros}>
-              P: {Math.round(log.protein)}g · C: {Math.round(log.carbs)}g · F: {Math.round(log.fat)}g
-            </Text>
-          </View>
-          <Text style={styles.foodCals}>{Math.round(log.calories)}</Text>
-        </HapticPressable>
-      ))}
+      {logs.map((log) => {
+        // F-3: prefer the original entered quantity/unit pair when the
+        // backend row carries it. Falls back to the multiplier × serving
+        // legacy rendering for older rows.
+        const hasOriginal =
+          typeof log.originalQuantity === 'number' &&
+          !!log.originalUnit &&
+          (log.originalUnit || '').trim().length > 0;
+        const qtyLabel = hasOriginal
+          ? `${log.originalQuantity} ${log.originalUnit}`
+          : log.quantity > 1
+            ? `×${log.quantity}`
+            : '';
+        return (
+          <HapticPressable
+            key={log.id}
+            intent="light"
+            style={styles.foodItem}
+            // F-2: tap = edit (when wired by parent), long-press = delete.
+            // Falling back to delete-on-long-press preserves the legacy
+            // gesture so existing users do not lose the path they know.
+            onPress={onEditPress ? () => onEditPress(log) : undefined}
+            onLongPress={() => onDeletePress(log)}
+            accessibilityLabel={
+              onEditPress
+                ? `${log.foodName}, ${qtyLabel || 'one serving'}. Tap to edit, long-press to delete.`
+                : `${log.foodName}, ${qtyLabel || 'one serving'}. Long-press to delete.`
+            }
+          >
+            <View style={styles.foodItemLeft}>
+              <Text style={styles.foodName}>
+                {log.foodName}
+                {qtyLabel ? (
+                  <Text style={styles.foodQuantityMuted}> · {qtyLabel}</Text>
+                ) : null}
+              </Text>
+              <Text style={styles.foodMacros}>
+                P: {Math.round(log.protein)}g · C: {Math.round(log.carbs)}g · F: {Math.round(log.fat)}g
+              </Text>
+            </View>
+            <Text style={styles.foodCals}>{Math.round(log.calories)}</Text>
+          </HapticPressable>
+        );
+      })}
 
       <HapticPressable
         intent="medium"

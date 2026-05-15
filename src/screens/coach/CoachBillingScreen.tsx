@@ -115,13 +115,20 @@ export default function CoachBillingScreen({ navigation }: Props) {
       const url = res.data?.url;
       if (!url) throw new Error('No portal URL returned');
       track('coach_billing_portal_opened');
-      const result = await WebBrowser.openBrowserAsync(url, {
-        presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
-      });
-      // After the sheet closes, refresh the status so any state change made
-      // inside the portal (subscribe, update card, cancel) is visible
-      // immediately.
-      if (result.type === 'cancel' || result.type === 'dismiss' || result.type === 'opened') {
+      // Use openAuthSessionAsync so the sheet closes the moment the
+      // portal redirects back to the app's tgp:// return URL. The old
+      // openBrowserAsync path stayed open until the user tapped Done.
+      const result = await WebBrowser.openAuthSessionAsync(url, 'tgp://');
+      // After the sheet closes, refresh the status so any state change
+      // made inside the portal (subscribe, update card, cancel) is
+      // visible immediately. `openAuthSessionAsync` returns `success`
+      // when the deep-link fires and `cancel`/`dismiss` otherwise; in
+      // every case we want to refresh.
+      if (
+        result.type === 'success' ||
+        result.type === 'cancel' ||
+        result.type === 'dismiss'
+      ) {
         await load();
       }
     } catch (err) {

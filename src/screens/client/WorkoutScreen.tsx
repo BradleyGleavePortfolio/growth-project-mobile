@@ -17,6 +17,11 @@ import { routineExerciseId } from '../../utils/workout/exerciseId';
 import FadeInView from '../../components/FadeInView';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { EmptyStateNoWorkouts, EmptyStateNoData } from '../../ui/empty-states';
+// W-3: client needs an entry point to coach-assigned workouts. The
+// ClientWorkoutViewer + WorkoutAssignmentDetail screens have been
+// registered in MoreStack for a while but no UI surfaced a navigate call,
+// so this build hid them from the user entirely.
+import { useMyWorkoutAssignments } from '../../hooks/useWorkoutBuilder';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CHART_WIDTH = SCREEN_WIDTH - 48;
@@ -245,6 +250,42 @@ export default function WorkoutScreen() {
 
   const totalVolumeThisWeek = weeklyVolume[weeklyVolume.length - 1]?.volume || 0;
 
+  // W-3: surface coach-assigned workouts. Falls back to silent when the
+  // assignment list is empty / the hook is still loading. Tapping routes
+  // through the tab navigator into MoreTab's ClientWorkoutViewer because
+  // both the list and detail screens live in MoreStack.
+  const assignmentsQuery = useMyWorkoutAssignments();
+  const assignmentsList: Array<{
+    id: string;
+    completed_at: string | null;
+    workout_plan?: { name?: string } | null;
+  }> = Array.isArray(assignmentsQuery.data)
+    ? (assignmentsQuery.data as Array<{
+        id: string;
+        completed_at: string | null;
+        workout_plan?: { name?: string } | null;
+      }>)
+    : [];
+  const pendingAssignments = assignmentsList.filter((a) => !a.completed_at);
+  const openAssignedList = () => {
+    // Cross-tab navigate: WorkoutScreen lives in WorkoutTab; the assignment
+    // viewer lives in MoreTab. Same shape as the W-4 fix.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parentAny = (navigation as any).getParent?.();
+    if (parentAny?.navigate) {
+      parentAny.navigate('MoreTab', {
+        screen:
+          pendingAssignments.length === 1
+            ? 'WorkoutAssignmentDetail'
+            : 'ClientWorkoutViewer',
+        params:
+          pendingAssignments.length === 1
+            ? { assignmentId: pendingAssignments[0].id }
+            : undefined,
+      });
+    }
+  };
+
   return (
     <View style={styles.container}>
       <ScrollView
@@ -258,6 +299,30 @@ export default function WorkoutScreen() {
             <Ionicons name="clipboard-outline" size={22} color={colors.textSecondary} />
           </HapticPressable>
         </View>
+
+        {pendingAssignments.length > 0 ? (
+          <HapticPressable
+            intent="medium"
+            onPress={openAssignedList}
+            accessibilityRole="button"
+            accessibilityLabel={
+              pendingAssignments.length === 1
+                ? `Open assigned workout: ${pendingAssignments[0].workout_plan?.name ?? 'Coach-assigned workout'}`
+                : `View ${pendingAssignments.length} coach-assigned workouts`
+            }
+            style={styles.assignedCta}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={styles.assignedCtaLabel}>From your coach</Text>
+              <Text style={styles.assignedCtaTitle}>
+                {pendingAssignments.length === 1
+                  ? (pendingAssignments[0].workout_plan?.name ?? 'New workout assigned')
+                  : `${pendingAssignments.length} workouts waiting`}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={22} color={colors.primary} />
+          </HapticPressable>
+        ) : null}
 
         {/* Weekly Stats */}
         <FadeInView>
@@ -515,6 +580,30 @@ const makeStyles = (colors: ThemeColors) =>
     marginBottom: 20,
   },
   title: { fontSize: 28, fontWeight: '500', color: colors.textPrimary },
+  assignedCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 24,
+    marginBottom: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 4,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  assignedCtaLabel: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 2,
+  },
+  assignedCtaTitle: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: colors.textPrimary,
+  },
   statsRow: {
     flexDirection: 'row',
     paddingHorizontal: 24,

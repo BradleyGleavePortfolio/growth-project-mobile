@@ -17,7 +17,6 @@
       "bundleIdentifier": "com.growthproject.app",
       "buildNumber": "5",
       "infoPlist": {
-        "NSCameraUsageDescription": "Used for barcode scanning to log food items",
         "ITSAppUsesNonExemptEncryption": false,
         "NSFaceIDUsageDescription": "Unlock the app and confirm sensitive actions with Face ID"
       },
@@ -48,6 +47,10 @@
               "host": "invite"
             },
             {
+              "scheme": "tgp",
+              "host": "reset-password"
+            },
+            {
               "scheme": "https",
               "host": "app.trygrowthproject.com",
               "pathPrefix": "/join"
@@ -56,6 +59,11 @@
               "scheme": "https",
               "host": "app.trygrowthproject.com",
               "pathPrefix": "/invite/accept"
+            },
+            {
+              "scheme": "https",
+              "host": "app.trygrowthproject.com",
+              "pathPrefix": "/reset-password"
             }
           ],
           "category": [

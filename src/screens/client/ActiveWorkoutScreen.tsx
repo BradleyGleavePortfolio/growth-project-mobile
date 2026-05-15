@@ -31,7 +31,11 @@ import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 // The workout is saved to the local expo-sqlite store first with
 // sync_status='pending'. The sync engine pushes it to the server when
 // connectivity allows.
-import { writeWorkoutLog, triggerSync } from '../../offline';
+import {
+  writeWorkoutLog,
+  triggerSync,
+  markSessionSyncedBySessionName,
+} from '../../offline';
 
 // NB: the local exercise_logs SQLite table (logExerciseWithVolume) is
 // no longer written to. Volume aggregation now happens on the server
@@ -432,7 +436,7 @@ export default function ActiveWorkoutScreen() {
               })),
             },
             {
-              onSuccess: () => {
+              onSuccess: (data: unknown) => {
                 if (timerRef.current) clearInterval(timerRef.current);
                 // Phase 11 / Track 3: heavy haptic on workout completion
                 HapticService.heavyImpact();
@@ -442,8 +446,22 @@ export default function ActiveWorkoutScreen() {
                   sets_completed: completedSets,
                   exercise_count: sessionExercises.filter((e) => e.sets.some((s) => s.completed)).length,
                 });
+                // W-1 fix: the parent mutate just succeeded, so the N
+                // pending local rows we wrote in the loop above must be
+                // marked synced — otherwise the next `triggerSync()` cycle
+                // re-POSTs each of them as an additional single-exercise
+                // workout on the server. Correlate by `session_name`
+                // (= routineName, which both write paths share).
+                const d = (data ?? {}) as { id?: string; workout?: { id?: string } };
+                const serverId = String(d?.id ?? d?.workout?.id ?? '');
+                if (serverId && routineName) {
+                  markSessionSyncedBySessionName(routineName, serverId).catch(() => {
+                    /* best-effort; pending rows will reconcile on next pull */
+                  });
+                }
                 // Trigger sync so the newly created server record is
-                // pulled back and the WDB pending rows are marked synced.
+                // pulled back. Pending rows have been marked above so this
+                // is now a one-way pull.
                 triggerSync().catch(() => {/* non-fatal */});
                 navigation.goBack();
               },
@@ -514,13 +532,23 @@ export default function ActiveWorkoutScreen() {
                 <HapticPressable
                   intent="light"
                   onPress={() => {
-                    const slug = exercise.exerciseName
-                      .toLowerCase()
-                      .replace(/[^a-z0-9]+/g, '-')
-                      .replace(/^-+|-+$/g, '');
+                    // W-5 fix: prefer the catalog id when the upstream
+                    // routine carries it (coach-assigned workouts always
+                    // do; legacy local routines may not). Falling back to a
+                    // slug derived from the human-readable name only when
+                    // no id is present — the slug hit the "Exercise not
+                    // found" path for almost every entry because the
+                    // backend catalog is keyed on the real exercise id, not
+                    // a name slug.
+                    const idOrSlug =
+                      (exercise.exerciseId && exercise.exerciseId.trim()) ||
+                      exercise.exerciseName
+                        .toLowerCase()
+                        .replace(/[^a-z0-9]+/g, '-')
+                        .replace(/^-+|-+$/g, '');
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     (navigation as any).navigate('ExerciseDetail', {
-                      idOrSlug: slug,
+                      idOrSlug,
                     });
                   }}
                   accessibilityLabel={`Watch video for ${exercise.exerciseName}`}
