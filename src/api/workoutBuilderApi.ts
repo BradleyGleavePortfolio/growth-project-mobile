@@ -56,6 +56,9 @@ export interface CompleteAssignmentInput {
   /** RPE 1-10. */
   post_rpe?: number;
   post_notes?: string;
+  idempotency_key?: string;
+  completion_payload?: Record<string, any>;
+  started_at?: string;
 }
 
 // ─── Response shapes ─────────────────────────────────────────────────────────

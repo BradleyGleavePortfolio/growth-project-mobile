@@ -20,6 +20,7 @@ import { track } from '../../lib/analytics';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { AnalyticsEvents } from '../../analytics/events';
 import { useTheme } from '../../theme/ThemeProvider';
+import { workoutBuilderApi } from '../../api/workoutBuilderApi';
 // Offline-first write path (audit fix H-5: comments were left
 // referencing the deleted WatermelonDB stack — current implementation
 // is built on expo-sqlite, see src/offline/database.ts and
@@ -62,11 +63,17 @@ export default function ActiveWorkoutScreen() {
   const muscleColors = useMemo(() => makeMuscleColors(colors), [colors]);
   const route = useRoute<RouteProp<RouteParams, 'ActiveWorkout'>>();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
-  const { routineName, exercises: exercisesJson } = route.params;
+  const { routineName, exercises: exercisesJson, assignmentId } = route.params;
 
   const [sessionExercises, setSessionExercises] = useState<SessionExercise[]>([]);
   const [timer, setTimer] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Track session start time for assignment completion payload.
+  const sessionStartTimeRef = useRef<Date>(new Date());
+  // Stable idempotency key generated once at session start.
+  const idempotencyKeyRef = useRef<string>(
+    assignmentId ? `${assignmentId}:${Date.now()}` : ''
+  );
   const [restSeconds, setRestSeconds] = useState(0);
   const [restActive, setRestActive] = useState(false);
   const [restTotal, setRestTotal] = useState(0);
@@ -89,6 +96,7 @@ export default function ActiveWorkoutScreen() {
         exerciseName: re.exerciseName,
         sets: Array.from({ length: re.sets }, () => ({ reps: re.reps, weight: 0, completed: false })),
         restSec: re.restSec,
+        workoutPlanExerciseId: re.workoutPlanExerciseId,
       }));
       setSessionExercises(sessionExs);
     } catch (err) {
@@ -357,10 +365,13 @@ export default function ActiveWorkoutScreen() {
           createWorkout.mutate(
             {
               date: new Date().toISOString(),
+              workout_name: routineName || 'Workout',
+              workout_type: 'strength',
               duration_minutes: durationMinutes,
               notes: routineName,
               exercises: completedExercises.map((e) => ({
                 exercise_name: e.exerciseName,
+                muscle_group: 'full_body',
                 sets_completed: e.sets.filter((s) => s.completed).length,
                 weight_per_set: e.sets.filter((s) => s.completed).map((s) => s.weight),
                 reps_per_set: e.sets.filter((s) => s.completed).map((s) => s.reps),
@@ -394,6 +405,33 @@ export default function ActiveWorkoutScreen() {
                 // pulled back. Pending rows have been marked above so this
                 // is now a one-way pull.
                 triggerSync().catch(() => {/* non-fatal */});
+
+                // If this workout is linked to a coach assignment, call the
+                // assignment completion endpoint with the full exercise/set
+                // payload. Non-fatal — the generic workout is already saved.
+                if (assignmentId) {
+                  const completionPayload = {
+                    exercises: sessionExercises.map((ex) => ({
+                      exerciseName: ex.exerciseName,
+                      workoutPlanExerciseId: ex.workoutPlanExerciseId ?? null,
+                      sets: ex.sets.map((s, i) => ({
+                        set_index: i + 1,
+                        status: s.completed ? 'completed' : 'skipped',
+                        actual_reps: s.reps,
+                        actual_weight_lbs: s.weight,
+                      })),
+                    })),
+                  };
+                  workoutBuilderApi.completeMyAssignment(assignmentId, {
+                    completion_payload: completionPayload,
+                    idempotency_key: idempotencyKeyRef.current,
+                    started_at: sessionStartTimeRef.current.toISOString(),
+                  }).catch((e: unknown) => {
+                    // Non-fatal: generic workout already saved above.
+                    console.warn('[ActiveWorkout] Assignment completion sync failed', e);
+                  });
+                }
+
                 navigation.goBack();
               },
               onError: (err) => {

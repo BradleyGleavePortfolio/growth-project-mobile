@@ -91,6 +91,7 @@ export default function AIGuideScreen() {
   const [contextReady, setContextReady] = useState(false);
   const [coachName, setCoachName] = useState<string | undefined>(undefined);
   const [isOffline, setIsOffline] = useState(false);
+  const [isDegraded, setIsDegraded] = useState(false);
   const listRef = useRef<FlatList>(null);
 
   const userId = currentUser?.id || '';
@@ -164,6 +165,8 @@ export default function AIGuideScreen() {
 
         // Successful network call — clear any previous offline state.
         setIsOffline(false);
+        // Show degraded banner when the backend served a deterministic fallback.
+        setIsDegraded(response.data?.degraded === true);
       } catch (err) {
         // Detect network-level failures (no response from server) separately
         // from API errors so we can surface an offline banner and keep the
@@ -258,6 +261,14 @@ export default function AIGuideScreen() {
           <Ionicons name="cloud-offline-outline" size={14} color={colors.textOnPrimary} />
           <Text style={styles.offlineBannerText}>
             You’re offline. Message will send when connection returns.
+          </Text>
+        </View>
+      )}
+      {/* Degraded banner — shown when backend served deterministic fallback */}
+      {isDegraded && !isOffline && (
+        <View style={styles.degradedBanner}>
+          <Text style={styles.degradedBannerText}>
+            AI guidance is running in offline mode — responses may be limited.
           </Text>
         </View>
       )}
@@ -546,6 +557,18 @@ const makeStyles = (colors: ThemeColors) =>
     fontWeight: '500',
     color: colors.textOnPrimary,
     flex: 1,
+  },
+  degradedBanner: {
+    backgroundColor: colors.surface,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  degradedBannerText: {
+    fontSize: 11,
+    color: colors.textMuted,
+    letterSpacing: 0.2,
   },
 
   });

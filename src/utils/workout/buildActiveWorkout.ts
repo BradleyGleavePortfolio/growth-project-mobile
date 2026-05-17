@@ -16,6 +16,7 @@ export interface SessionExerciseSeed {
   sets: number;
   reps: number;
   restSec: number;
+  workoutPlanExerciseId?: string;
 }
 
 export function buildActiveWorkoutExercises(
@@ -34,6 +35,7 @@ function exerciseToSessionSeed(ex: WorkoutPlanExercise): SessionExerciseSeed {
     sets: ex.sets,
     reps: ex.reps_or_duration_seconds,
     restSec: ex.rest_seconds ?? 60,
+    workoutPlanExerciseId: ex.id,
   };
 }
 

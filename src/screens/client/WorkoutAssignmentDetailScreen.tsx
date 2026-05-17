@@ -60,6 +60,7 @@ export default function WorkoutAssignmentDetailScreen() {
       routineId: data.workout_plan.id,
       routineName: data.workout_plan.name,
       exercises: JSON.stringify(exercises),
+      assignmentId: data.id,
     };
     // W-4 fix: this screen lives in MoreStack; `ActiveWorkout` lives in
     // WorkoutStack. A plain `navigation.navigate('ActiveWorkout', ...)`

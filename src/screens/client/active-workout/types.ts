@@ -3,6 +3,7 @@ export interface SessionExercise {
   exerciseName: string;
   sets: SessionSet[];
   restSec?: number;
+  workoutPlanExerciseId?: string;
 }
 
 export interface SessionSet {
@@ -17,6 +18,7 @@ export interface RoutineExercise {
   sets: number;
   reps: number;
   restSec: number;
+  workoutPlanExerciseId?: string;
 }
 
 export interface Exercise {
@@ -32,5 +34,6 @@ export type RouteParams = {
     routineId?: string;
     routineName: string;
     exercises: string;
+    assignmentId?: string;
   };
 };

@@ -164,6 +164,19 @@ export const aiGatewayClient = {
         },
       );
       const data = resp.data;
+      // Backend returns enabled:false and/or provider:'stub' for degraded/stub
+      // responses as HTTP 200. Surface these as disabled so callers render the
+      // correct degraded UX instead of showing [ai-disabled] stub text as a
+      // normal draft.
+      if (data.enabled === false || data.provider === 'stub') {
+        return {
+          status: 'disabled',
+          capability: req.capability,
+          reason: (data.meta as { reason?: string } | undefined)?.reason ?? 'ai_unavailable',
+          summary: null,
+          retryAfter: null,
+        };
+      }
       const draftId = data.approval.draft_id ?? data.request_id;
       const okResponse: import('../types/aiGateway').AIGatewayDraftOk = {
         status: 'ok',
