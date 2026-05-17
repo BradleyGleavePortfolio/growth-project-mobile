@@ -33,6 +33,12 @@ import axios, { AxiosError, AxiosRequestConfig } from 'axios';
 import { authEvents } from '../utils/authEvents';
 import { secureStorage } from './secureStorage';
 import { env } from '../config/env';
+import { entitlementEvents } from '../entitlements/entitlementEvents';
+
+function isEntitlementEndpoint(url?: string): boolean {
+  if (!url) return false;
+  return url.includes('/v1/checkout') || url.includes('/v1/clients/me/coach/packages');
+}
 
 // Security: API base URL is read from EXPO_PUBLIC_API_URL so staging/prod can
 // diverge without code changes. A dev-only fallback keeps local RN boots
@@ -128,6 +134,31 @@ api.interceptors.response.use(
     // Do NOT log the user out; just surface a friendly message.
     if (!error.response) {
       error.message = 'Cannot reach server. Please check your connection and try again.';
+      return Promise.reject(error);
+    }
+
+    // 402 — entitlement required. Emit an event so the EntitlementProvider
+    // can show the paywall, then reject. Skip emission for checkout endpoints
+    // themselves (they are expected to return 402 as part of normal flow).
+    if (error.response?.status === 402) {
+      const data = error.response.data as {
+        error?: string;
+        message?: string;
+        action?: string;
+      } | undefined;
+
+      if (data?.error === 'CLIENT_ENTITLEMENT_REQUIRED') {
+        const requestUrl = (error.config as { url?: string })?.url;
+        if (!isEntitlementEndpoint(requestUrl)) {
+          entitlementEvents.emitRequired({
+            status: 402,
+            code: data.error,
+            message: data.message ?? 'Choose a plan to continue.',
+            action: data.action,
+            requestUrl,
+          });
+        }
+      }
       return Promise.reject(error);
     }
 
@@ -514,15 +545,13 @@ export const preferencesApi = {
 export const notificationsApi = {
   getPreferences: () => api.get('/notifications/preferences'),
   updatePreferences: (data: Record<string, unknown>) =>
-    api.put('/notifications/preferences', data),
+    api.patch('/notifications/preferences', data),
 };
 
 export const communityApi = {
   getFeed: () => api.get('/community/feed'),
   postWin: (data: { title: string; description: string; visibility?: 'circle' | 'public' }) =>
     api.post('/community/wins', data),
-  reactToWin: (winId: string, kind: 'fire' | 'clap') =>
-    api.post(`/community/wins/${winId}/react`, { kind }),
 };
 
 export const waterApi = {

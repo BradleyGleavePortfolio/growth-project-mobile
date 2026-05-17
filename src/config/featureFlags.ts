@@ -80,7 +80,4 @@ export function isFeatureEnabled(key: FeatureFlagKey): boolean {
  *
  * env: EXPO_PUBLIC_NOTIFICATIONS_MOCK
  */
-export const NOTIFICATIONS_MOCK_ENABLED: boolean = readFlag(
-  'EXPO_PUBLIC_NOTIFICATIONS_MOCK',
-  false,
-);
+export const NOTIFICATIONS_MOCK_ENABLED = __DEV__ && readFlag('EXPO_PUBLIC_NOTIFICATIONS_MOCK', false);

@@ -28,6 +28,10 @@ import { QueryClient } from '@tanstack/react-query';
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+function getHttpStatus(err: unknown): number | undefined {
+  return (err as { response?: { status?: number } })?.response?.status;
+}
+
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -41,7 +45,10 @@ export const queryClient = new QueryClient({
       // Mobile-first: do not auto-refetch on window focus. RN re-mounts on
       // focus already and we don't want a screen tab swipe to fire a fan-out.
       refetchOnWindowFocus: false,
-      retry: 2,
+      retry: (failureCount: number, error: unknown) => {
+        if (getHttpStatus(error) === 402) return false;
+        return failureCount < 2;
+      },
       retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 8000),
     },
     mutations: {

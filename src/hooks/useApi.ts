@@ -152,16 +152,6 @@ export function usePostWin() {
   });
 }
 
-export function useReactToWin() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ winId, kind }: { winId: string; kind: 'fire' | 'clap' }) =>
-      communityApi.reactToWin(winId, kind).then((r) => r.data as { fire: number; clap: number }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['community', 'feed'] });
-    },
-  });
-}
 
 export type ApiMilestone = {
   slug: string;

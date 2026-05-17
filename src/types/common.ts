@@ -32,21 +32,22 @@ export interface ApiErrorLike {
 }
 
 // Extract a human-readable message from an unknown error without using `any`.
-// Falls back to the provided default when the value doesn't look like an
-// axios error or a standard Error.
+// Axios response body wins over Error.message — the backend message is more
+// specific than the generic JS error message.
 export function errorMessage(err: unknown, fallback = 'Something went wrong'): string {
-  if (err instanceof Error && err.message) return err.message;
-  if (typeof err === 'string') return err;
   if (err && typeof err === 'object') {
-    const e = err as ApiErrorLike;
+    const e = err as { response?: { data?: unknown }; message?: string };
     const data = e.response?.data;
     if (data && typeof data === 'object') {
-      if (typeof data.message === 'string') return data.message;
-      if (typeof data.error === 'string') return data.error;
+      const d = data as Record<string, unknown>;
+      if (typeof d.message === 'string') return d.message;
+      if (typeof d.error === 'string') return d.error;
     }
     if (typeof data === 'string') return data;
     if (typeof e.message === 'string') return e.message;
   }
+  if (err instanceof Error && err.message) return err.message;
+  if (typeof err === 'string') return err;
   return fallback;
 }
 

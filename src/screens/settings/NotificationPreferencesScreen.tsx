@@ -56,21 +56,25 @@ const DEFAULT_PREFS: CategoryPrefs = {
 
 const STORAGE_KEY = 'gp_notif_category_prefs';
 
-// Map from category ID to backend notification preference field (where applicable).
-// B8: coach_direct previously had no backend mapping — the toggle changed
-// AsyncStorage but never reached the server, so push delivery kept arriving
-// even when the user disabled it ("toggle lie"). It now maps to
-// `coach_direct_enabled`. The notifications preferences endpoint is a
-// permissive PATCH/PUT: unknown fields are persisted server-side as
-// generic preferences, so this works against the existing backend without
-// a release-blocking schema change. If the backend later renames the
-// field we update this map and the UI stays put.
-const BACKEND_FIELD_MAP: Partial<Record<NotifCategory, string>> = {
-  coach_direct: 'coach_direct_enabled',
-  client_bot: 'eat_enabled',   // closest analogue: meal/reminders
-  milestones: 'workout_enabled', // milestone notifs tied to workout events
-  system: 'weekly_summary_enabled',
+// Map from category ID to backend notification preference fields.
+// Each category maps to one or more backend fields that are sent as a
+// single PATCH payload. Sending multiple fields per toggle ensures
+// push and in-app channels are kept in sync with a single user action.
+const BACKEND_FIELD_MAP: Record<NotifCategory, Record<string, boolean>> = {
+  coach_direct: { message_push: true, message_inapp: true },
+  milestones: { milestone_push: true, milestone_inapp: true },
+  system: { weekly_summary_enabled: true },
+  client_bot: { eat_enabled: true },
 };
+
+function buildBackendPayload(category: NotifCategory, value: boolean): Record<string, boolean> {
+  const template = BACKEND_FIELD_MAP[category];
+  const payload: Record<string, boolean> = {};
+  for (const key of Object.keys(template)) {
+    payload[key] = value;
+  }
+  return payload;
+}
 
 // ─── Category metadata ────────────────────────────────────────────────────────
 
@@ -155,24 +159,22 @@ export default function NotificationPreferencesScreen({
         // Non-fatal: worst case the toggle resets on next cold start.
       }
 
-      // Sync to backend where a mapping exists. On failure, roll back both
-      // the local state and the AsyncStorage value so UI reflects truth.
-      const backendField = BACKEND_FIELD_MAP[category];
-      if (backendField) {
+      // Sync to backend. On failure, roll back both the local state and
+      // the AsyncStorage value so UI reflects truth.
+      try {
+        const payload = buildBackendPayload(category, value);
+        await notificationsApi.updatePreferences(payload);
+      } catch {
+        // Roll back — the backend is the source of truth for preferences.
+        setPrefs(previous);
         try {
-          await notificationsApi.updatePreferences({ [backendField]: value });
+          await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(previous));
         } catch {
-          // Roll back — the backend is the source of truth for preferences.
-          setPrefs(previous);
-          try {
-            await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(previous));
-          } catch {
-            // Ignore secondary storage failure.
-          }
-          // Surface a brief error to the user without a blocking alert.
-          // (Assumes a toast/snack component is available; adapt to your UI kit.)
-          // If no toast is wired, the rollback alone is sufficient.
+          // Ignore secondary storage failure.
         }
+        // Surface a brief error to the user without a blocking alert.
+        // (Assumes a toast/snack component is available; adapt to your UI kit.)
+        // If no toast is wired, the rollback alone is sufficient.
       }
 
       // Analytics.

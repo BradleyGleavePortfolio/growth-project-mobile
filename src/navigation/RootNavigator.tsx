@@ -61,6 +61,7 @@ type AuthState =
 // the tokens via `route.params`. See navigation/deepLinkUtils.ts.
 import { fragmentToQuery } from './deepLinkUtils';
 import { readUserCache, clearUserCache } from '../lib/userCache';
+import { EntitlementProvider } from '../entitlements/EntitlementProvider';
 
 // A-2 helper. Convert `https://app.trygrowthproject.com/<path>` to its
 // `tgp://<path>` equivalent so the post-signOut replay never escapes to
@@ -552,16 +553,40 @@ export default function RootNavigator() {
         // Re-surface the package sheet after 24h on top of the client app.
         // PackageSelectionSheet renders as a Modal so ClientNavigator underneath
         // is fully mounted and ready when the sheet is dismissed.
-        <>
+        <EntitlementProvider
+          onOpenPlans={() => {
+            try {
+              const nav = navigationRef as unknown as {
+                navigate: (name: string, params?: object) => void;
+              };
+              nav.navigate('MoreTab', { screen: 'ClientPackages' });
+            } catch {
+              // Navigation may not be ready; ignore.
+            }
+          }}
+        >
           <ClientNavigator />
           <PackageSelectionSheet
             visible
             onDismiss={() => setAuthState('student')}
             onPaymentSuccess={() => setAuthState('student')}
           />
-        </>
+        </EntitlementProvider>
       ) : (
-        <ClientNavigator />
+        <EntitlementProvider
+          onOpenPlans={() => {
+            try {
+              const nav = navigationRef as unknown as {
+                navigate: (name: string, params?: object) => void;
+              };
+              nav.navigate('MoreTab', { screen: 'ClientPackages' });
+            } catch {
+              // Navigation may not be ready; ignore.
+            }
+          }}
+        >
+          <ClientNavigator />
+        </EntitlementProvider>
       )}
     </NavigationContainer>
   );

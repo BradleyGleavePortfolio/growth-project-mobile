@@ -249,6 +249,15 @@ export const clientPaymentsApi = {
   },
 
   /**
+   * Returns the client's current entitlement status. Used by
+   * EntitlementProvider to gate paid features.
+   */
+  async getEntitlement(): Promise<{ active: boolean; reason?: string }> {
+    const res = await api.get('/v1/checkout/entitlement');
+    return res.data;
+  },
+
+  /**
    * Called on the checkout success deep-link to confirm the session
    * actually granted entitlement before the UI flips to "access granted".
    *

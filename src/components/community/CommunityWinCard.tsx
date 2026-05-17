@@ -1,13 +1,11 @@
 /**
  * CommunityWinCard — Contribution Loops (UX Psych #5)
  *
- * Displays an anonymised community win with fire  and clap  reaction
- * buttons. Taps trigger HapticPressable for tactile feedback and call the
- * reactToWin mutation. Counts update optimistically via React Query.
+ * Displays an anonymised community win. Reaction buttons have been removed
+ * as the reactToWin API has been deprecated.
  */
-import React, { useState } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import HapticPressable from '../HapticPressable';
 import { ApiCommunityWin } from '../../hooks/useApi';
 import { Colors } from '../../constants/colors';
 
@@ -27,28 +25,13 @@ function formatTimeAgo(iso: string | undefined): string {
 // ─── Props ────────────────────────────────────────────────────────────────────
 interface CommunityWinCardProps {
   win: ApiCommunityWin;
-  onReact: (winId: string, kind: 'fire' | 'clap') => void;
-  isPending?: boolean;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
-export default function CommunityWinCard({ win, onReact, isPending }: CommunityWinCardProps) {
-  // Local optimistic counts until React Query re-fetches
-  const [localReactions, setLocalReactions] = useState<{ fire: number; clap: number } | null>(
-    null,
-  );
-
-  const reactions = localReactions ?? win.reactions ?? { fire: 0, clap: 0 };
+export default function CommunityWinCard({ win }: CommunityWinCardProps) {
   const displayName = win.displayName ?? win.user?.name ?? 'A member';
   const action = win.action ?? win.title ?? '';
   const timestamp = win.createdAt ?? win.created_at;
-
-  const handleReact = (kind: 'fire' | 'clap') => {
-    if (isPending) return;
-    // Optimistic update
-    setLocalReactions({ ...reactions, [kind]: reactions[kind] + 1 });
-    onReact(win.id, kind);
-  };
 
   return (
     <View style={styles.card}>
@@ -68,29 +51,6 @@ export default function CommunityWinCard({ win, onReact, isPending }: CommunityW
       {win.description && win.description !== action ? (
         <Text style={styles.description}>{win.description}</Text>
       ) : null}
-
-      {/* Reaction buttons */}
-      <View style={styles.reactionRow}>
-        <HapticPressable
-          style={styles.reactionBtn}
-          onPress={() => handleReact('fire')}
-          accessibilityLabel={`Fire reaction, ${reactions.fire} so far`}
-          accessibilityRole="button"
-        >
-          <Text style={styles.reactionEmoji}></Text>
-          <Text style={styles.reactionCount}>{reactions.fire}</Text>
-        </HapticPressable>
-
-        <HapticPressable
-          style={styles.reactionBtn}
-          onPress={() => handleReact('clap')}
-          accessibilityLabel={`Clap reaction, ${reactions.clap} so far`}
-          accessibilityRole="button"
-        >
-          <Text style={styles.reactionEmoji}></Text>
-          <Text style={styles.reactionCount}>{reactions.clap}</Text>
-        </HapticPressable>
-      </View>
     </View>
   );
 }
@@ -147,29 +107,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.textSecondary,
     lineHeight: 18,
-  },
-  reactionRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 4,
-  },
-  reactionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: Colors.background,
-    borderRadius: 4, // radius.lg
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  reactionEmoji: {
-    fontSize: 16,
-  },
-  reactionCount: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.textPrimary,
   },
 });
