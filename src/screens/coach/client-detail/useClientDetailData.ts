@@ -148,7 +148,7 @@ export function useClientDetailData(clientId: string, colors: ThemeColors) {
       // Food events grouped by date
       const mealsByDate = new Map<string, { count: number; totalCals: number }>();
       for (const meal of (data.meals || [])) {
-        const dateStr = (meal.logged_at || '').slice(0, 10);
+        const dateStr = (meal.date || meal.logged_at || '').slice(0, 10);
         if (!dateStr) continue;
         const existing = mealsByDate.get(dateStr) || { count: 0, totalCals: 0 };
         existing.count += 1;
@@ -272,7 +272,7 @@ export function useClientDetailData(clientId: string, colors: ThemeColors) {
       // Aggregate food logs
       if (Array.isArray(meals)) {
         for (const meal of meals) {
-          const dateStr = (meal.logged_at || meal.date || '').slice(0, 10);
+          const dateStr = (meal.date || meal.logged_at || '').slice(0, 10);
           if (!dateStr) continue;
           const week = ensureWeek(dateStr);
           week.totalCalories += meal.calories || meal.food_item?.calories || 0;

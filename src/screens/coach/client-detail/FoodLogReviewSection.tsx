@@ -72,7 +72,7 @@ export function FoodLogReviewSection({
           protein: Math.round(pro * 10) / 10,
           carbs: Math.round(car * 10) / 10,
           fat: Math.round(fat * 10) / 10,
-          loggedAt: m.logged_at ?? m.date ?? '',
+          loggedAt: m.date ?? m.logged_at ?? '',
           originalQuantity: m.original_quantity,
           originalUnit: m.original_unit,
         };
