@@ -72,10 +72,10 @@ export default function FastingScreen() {
   const setProtocol = (hours: number) => setSelectedProtocol(hours);
 
   const loadAll = useCallback(async () => {
-    if (!currentUser) return;
     setIsLoading(true);
     setLoadError(false);
     try {
+      if (!currentUser) return;
       const histRes = await fastingApi.getHistory(50);
       type SessionRow = { id: string; start_time?: string; end_time?: string | null; target_hours?: number; completed?: boolean; startTime?: string; endTime?: string | null; targetHours?: number };
       const sessions: FastSession[] = ((histRes.data as SessionRow[] | undefined) || []).map((s) => ({

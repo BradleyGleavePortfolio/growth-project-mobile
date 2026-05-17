@@ -271,34 +271,12 @@ export default function WorkoutScreen() {
 
   const totalVolumeThisWeek = weeklyVolume[weeklyVolume.length - 1]?.volume || 0;
 
-  if (isLoading) {
-    return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
-
-  if (loadError) {
-    return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
-        <Text style={{ fontSize: 16, color: colors.textPrimary, marginBottom: 16, textAlign: 'center' }}>
-          Could not load workout data.
-        </Text>
-        <TouchableOpacity
-          style={{ backgroundColor: colors.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 }}
-          onPress={() => { setLoadError(false); setIsLoading(true); loadData(); }}
-        >
-          <Text style={{ color: colors.textOnPrimary, fontWeight: '500' }}>Retry</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
   // W-3: surface coach-assigned workouts. Falls back to silent when the
   // assignment list is empty / the hook is still loading. Tapping routes
   // through the tab navigator into MoreTab's ClientWorkoutViewer because
   // both the list and detail screens live in MoreStack.
+  // NOTE: hook must be called unconditionally before any conditional returns
+  // (Rules of Hooks).
   const assignmentsQuery = useMyWorkoutAssignments();
   const assignmentsList: Array<{
     id: string;
@@ -330,6 +308,30 @@ export default function WorkoutScreen() {
       });
     }
   };
+
+  if (isLoading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
+        <Text style={{ fontSize: 16, color: colors.textPrimary, marginBottom: 16, textAlign: 'center' }}>
+          Could not load workout data.
+        </Text>
+        <TouchableOpacity
+          style={{ backgroundColor: colors.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 }}
+          onPress={() => { setLoadError(false); setIsLoading(true); loadData(); }}
+        >
+          <Text style={{ color: colors.textOnPrimary, fontWeight: '500' }}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>

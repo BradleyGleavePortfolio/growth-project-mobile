@@ -99,6 +99,7 @@ export function EntitlementProvider({ children, onOpenPlans }: EntitlementProvid
   // Listen for 402 entitlement events
   useEffect(() => {
     const unsub = entitlementEvents.onRequired((payload: EntitlementRequiredPayload) => {
+      if (!isStudent) return; // coaches/owners never get paywalled
       setStatus('inactive');
       setPaywallMessage(payload.message);
       setPaywallVisible(true);
@@ -106,7 +107,7 @@ export function EntitlementProvider({ children, onOpenPlans }: EntitlementProvid
       queryClient.invalidateQueries();
     });
     return unsub;
-  }, []);
+  }, [isStudent]);
 
   const entitlementActive = status === 'active' ? true : status === 'inactive' ? false : null;
 
