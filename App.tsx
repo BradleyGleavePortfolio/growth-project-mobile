@@ -32,11 +32,15 @@ import { track } from './src/lib/analytics';
 import { AnalyticsEvents } from './src/analytics/events';
 import { ThemeProvider } from './src/theme/ThemeProvider';
 import BiometricUnlockGate from './src/components/BiometricUnlockGate';
-import {
-  installAxiosMockAdapter,
-  isScreenshotMode,
-  seedDemoUser,
-} from './src/screenshots';
+
+// Screenshots module — static import so Metro's resolver alias works correctly.
+// In production EAS builds, metro.config.js resolveRequest hook redirects this
+// import to src/screenshots/index.stub.ts (empty no-ops), so no fixture data
+// or mock adapters ever reach the production bundle.
+// In development and screenshot capture runs, the real module is used.
+// Do NOT use a dynamic require() guarded by __DEV__ here — __DEV__ is a
+// runtime constant and Metro cannot tree-shake dynamic requires at bundle time.
+import { installAxiosMockAdapter, isScreenshotMode, seedDemoUser } from './src/screenshots';
 
 // Initialise Sentry as early as possible so even import-time failures get
 // captured. The function no-ops when EXPO_PUBLIC_SENTRY_DSN is unset, so this
