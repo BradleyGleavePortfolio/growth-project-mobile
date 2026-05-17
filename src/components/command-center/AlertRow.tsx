@@ -15,14 +15,15 @@ import {
   ViewStyle,
 } from 'react-native';
 import { colors, spacing, typography, radius } from '../../theme/tokens';
+import { Colors } from '../../constants/colors';
 import type { RiskBucket } from '../../services/commandCenterApi';
 
 // Bucket → left-border accent only.
 // Red = oxblood, Amber = mutedGold, Green = forest.
 const BUCKET_ACCENT: Record<RiskBucket, string> = {
-  red:   '#4A0404',  // oxblood
-  amber: '#C5A253',  // mutedGold
-  green: '#2C4A36',  // forest
+  red:   Colors.earningsAccent,  // oxblood
+  amber: Colors.warning,  // mutedGold
+  green: Colors.primary,  // forest
 };
 
 const BUCKET_LABEL: Record<RiskBucket, string> = {

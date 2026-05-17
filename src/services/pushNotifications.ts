@@ -17,6 +17,7 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { foregroundBannerStore } from '../store/foregroundBannerStore';
+import { Colors } from '../constants/colors';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -51,7 +52,7 @@ export async function registerForPushNotifications(): Promise<PushRegistrationRe
       name: 'Default',
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#2C4A36', // forest — theme primary
+      lightColor: Colors.primary, // forest — theme primary
     });
   }
 

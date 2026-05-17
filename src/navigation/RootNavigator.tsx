@@ -527,9 +527,9 @@ export default function RootNavigator() {
         ...DefaultTheme,
         colors: {
           ...DefaultTheme.colors,
-          background: '#F5EFE4',  // bone — Wave 2 global bg
-          card: '#F5EFE4',
-          text: '#1A1A18',        // ink
+          background: Colors.background,  // bone — Wave 2 global bg
+          card: Colors.background,
+          text: Colors.textPrimary,        // ink
           border: 'rgba(176,141,87,0.2)',  // camel divider
         },
       }}

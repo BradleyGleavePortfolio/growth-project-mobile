@@ -39,7 +39,7 @@ export interface SkeletonProps {
 export function Skeleton({ width, height, borderRadius = 2, testID }: SkeletonProps) {
   const { tokens } = useTheme();
 
-  // bone = '#F5EFE4' — lighter shimmer stays close to bone, darker shimmer
+  // bone = Colors.background — lighter shimmer stays close to bone, darker shimmer
   // steps slightly toward cream (#F1E8D5). We express this purely via opacity
   // over a cream-tinted background so we never hardcode hex values.
   const opacity = useSharedValue(0.4);

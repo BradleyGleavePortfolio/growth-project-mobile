@@ -17,9 +17,10 @@ import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 // barrel. Inlined as constants so this file no longer depends on the
 // legacy theme/index.ts grouped export. Values match
 // theme/index.ts feedback.* exactly.
-const FEEDBACK_SUCCESS_BG = '#E0EBE4';
-const FEEDBACK_ERROR_TEXT = '#9A3030';
+const FEEDBACK_SUCCESS_BG = Colors.feedbackSuccessBg;
+const FEEDBACK_ERROR_TEXT = Colors.noticeCriticalAccent;
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
+import { Colors } from '../../constants/colors';
 
 export default function ReportScreen({ navigation }: { navigation: NavigationProp<ParamListBase> }) {
   const { colors } = useTheme();

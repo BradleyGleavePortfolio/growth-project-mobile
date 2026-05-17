@@ -36,6 +36,19 @@ export const Colors = {
   error:   '#B91C1C',
   info:    '#457B9D',  // unchanged
 
+  // Earnings/Wealth pillar — oxblood is reserved for finance/earnings brand color
+  earningsAccent: '#4A0404',  // oxblood — Earnings pillar primary
+
+  // Pure white — for surfaces that need true white (e.g. chart tooltip bg on dark)
+  white: '#FFFFFF',
+
+  // Extended notice palette
+  noticeCriticalFaintBg:  '#FEF2F2',  // very faint red — error state banners
+  noticeCriticalUltraBg:  '#FDF0F0',  // ultra-faint red — settings destructive zone
+
+  // Feedback / success tints
+  feedbackSuccessBg: '#E0EBE4',  // light forest tint — success toast/banner bg
+
   // Streak/flame — demoted, kept for back-compat (Wave 3 copy pass will remove)
   streak: '#B1A89F',   // stone — neutralised (was #E76F51)
 

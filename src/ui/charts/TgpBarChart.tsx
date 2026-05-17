@@ -26,13 +26,14 @@ import Svg, {
 } from 'react-native-svg';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { Colors } from '../../constants/colors';
 
 const FALLBACK: Partial<ThemeColors> = {
-  primary:       '#2C4A36',
-  surface:       '#F1E8D5',
-  textPrimary:   '#1A1A18',
-  textMuted:     '#B1A89F',
-  border:        '#B08D57',
+  primary:       Colors.primary,
+  surface:       Colors.surface,
+  textPrimary:   Colors.textPrimary,
+  textMuted:     Colors.textMuted,
+  border:        Colors.border,
 };
 
 export interface ChartDataPoint {
@@ -197,8 +198,8 @@ export default function TgpBarChart({
                 width={56}
                 height={22}
                 rx={1}
-                fill="#F5EFE4"
-                stroke="#4A0404"
+                fill={Colors.background}
+                stroke={Colors.earningsAccent}
                 strokeWidth={0.5}
               />
               <SvgText
@@ -206,7 +207,7 @@ export default function TgpBarChart({
                 y={tooltip.by - 13}
                 textAnchor="middle"
                 fontSize={10}
-                fill="#1A1A18"
+                fill={Colors.textPrimary}
               >
                 {tooltip.value.toFixed(1)}
               </SvgText>

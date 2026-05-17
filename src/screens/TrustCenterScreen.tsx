@@ -33,6 +33,7 @@ import api, { deletionApi } from '../services/api';
 import { dataExportApi } from '../services/dataExportApi';
 import { helpUrl } from '../config/env';
 import { useTheme, ThemeColors } from '../theme/ThemeProvider';
+import { Colors } from '../constants/colors';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -492,7 +493,7 @@ const makeStyles = (colors: ThemeColors) =>
     alignItems: 'center',
   },
   actionIconDanger: {
-    backgroundColor: '#FEF2F2',
+    backgroundColor: Colors.noticeCriticalFaintBg,
   },
   actionInfoText: {
     flex: 1,

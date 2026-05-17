@@ -33,17 +33,18 @@ import Svg, {
 } from 'react-native-svg';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { Colors } from '../../constants/colors';
 
 // ─── Fallback tokens (used when ThemeProvider is not mounted) ─────────────────
 const FALLBACK: Partial<ThemeColors> = {
-  primary:       '#2C4A36',
-  background:    '#F5EFE4',
-  surface:       '#F1E8D5',
-  textPrimary:   '#1A1A18',
-  textMuted:     '#B1A89F',
-  border:        '#B08D57',
-  textOnPrimary: '#F5EFE4',
-  error:         '#4A0404',
+  primary:       Colors.primary,
+  background:    Colors.background,
+  surface:       Colors.surface,
+  textPrimary:   Colors.textPrimary,
+  textMuted:     Colors.textMuted,
+  border:        Colors.border,
+  textOnPrimary: Colors.background,
+  error:         Colors.earningsAccent,
 };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -241,8 +242,8 @@ export default function TgpLineChart({
                 width={56}
                 height={22}
                 rx={1}
-                fill="#F5EFE4"
-                stroke="#4A0404"
+                fill={Colors.background}
+                stroke={Colors.earningsAccent}
                 strokeWidth={0.5}
               />
               <SvgText
@@ -250,7 +251,7 @@ export default function TgpLineChart({
                 y={tooltip.y - 15}
                 textAnchor="middle"
                 fontSize={10}
-                fill="#1A1A18"
+                fill={Colors.textPrimary}
               >
                 {tooltip.value.toFixed(1)}
               </SvgText>

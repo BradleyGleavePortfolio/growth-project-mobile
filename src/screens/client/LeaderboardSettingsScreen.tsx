@@ -26,12 +26,13 @@ import {
   View,
 } from 'react-native';
 import { colors } from '../../theme/tokens';
+import { Colors } from '../../constants/colors';
 import {
   getLeaderboard,
   setLeaderboardOptIn,
 } from '../../services/leaderboardApi';
 
-const OXBLOOD = '#4A0404';
+const OXBLOOD = Colors.earningsAccent;
 
 // ─── Explainer component ──────────────────────────────────────────────────────
 
@@ -346,7 +347,7 @@ const styles = StyleSheet.create({
   errorBanner: {
     marginHorizontal: 20,
     marginTop: 12,
-    backgroundColor: '#FDF0F0',
+    backgroundColor: Colors.noticeCriticalUltraBg,
     borderLeftWidth: 3,
     borderLeftColor: OXBLOOD,
     padding: 12,

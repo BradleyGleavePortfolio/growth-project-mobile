@@ -28,7 +28,9 @@ import { getTodayString } from '../../utils/date';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import type { SemanticTokens } from '../../theme/tokens';
 import { errorMessage, type IoniconName } from '../../types/common';
-import {useHabits,
+import { Colors } from '../../constants/colors';
+import {
+  useHabits,
   useHabitLogs,
   useLogHabit,
   useCreateHabit,
@@ -85,13 +87,13 @@ function makeHABIT_COLORS(colors: ThemeColors) {
   colors.primaryLight,   // pale forest
   colors.info,           // muted blue
   colors.warning,        // mutedGold
-  '#B08D57',             // camel
-  '#7A6A9B',             // muted lavender
-  '#9A3030',             // muted oxblood
-  '#264653',             // deep teal
-  '#5A5A56',             // charcoal grey
-  '#B1A89F',             // stone
-  '#4D7059',             // mid forest
+  Colors.border,             // camel
+  Colors.templateMobility,             // muted lavender
+  Colors.noticeCriticalAccent,             // muted oxblood
+  Colors.muscleCore,             // deep teal
+  Colors.textSecondary, // charcoal grey
+  Colors.textMuted,             // stone
+  Colors.primaryLight,             // mid forest
 ];
 }
 

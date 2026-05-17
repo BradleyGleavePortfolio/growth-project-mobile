@@ -50,7 +50,7 @@ export async function initHabitsTables(): Promise<void> {
       userId TEXT NOT NULL,
       name TEXT NOT NULL,
       icon TEXT NOT NULL DEFAULT 'checkmark-circle',
-      color TEXT NOT NULL DEFAULT '#2D6A4F',
+      color TEXT NOT NULL DEFAULT '#2C4A36' /* Colors.primary — forest */,
       frequency TEXT NOT NULL DEFAULT 'daily',
       targetCount INTEGER NOT NULL DEFAULT 1,
       unit TEXT NOT NULL DEFAULT 'times',
