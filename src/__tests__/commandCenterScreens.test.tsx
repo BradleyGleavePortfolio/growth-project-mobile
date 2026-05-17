@@ -39,6 +39,7 @@ jest.mock('../services/commandCenterApi', () => {
           estimated_ltv_label: '$0',
           churn_rate_pct: 0,
           net_revenue_retention_pct: 100,
+          nrr_is_stub: false,
           projected_annual_revenue_cents: 0,
           projected_annual_revenue_label: '$0',
           mrr_trend: 'flat',
@@ -432,3 +433,4 @@ describe('ActionQueueScreen', () => {
     });
   });
 });
+
