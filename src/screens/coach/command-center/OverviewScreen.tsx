@@ -28,7 +28,6 @@ import {
 } from '../../../services/commandCenterApi';
 import KpiTile from '../../../components/command-center/KpiTile';
 import CoachLtvDashboard from '../../../components/command-center/CoachLtvDashboard';
-import api from '../../../services/api';
 import CommandCenterMockDataBanner from '../../../components/command-center/MockDataBanner';
 
 type LoadState = 'idle' | 'loading' | 'refreshing' | 'data' | 'error';
@@ -221,7 +220,10 @@ export default function OverviewScreen({
       {/* ── Revenue & LTV dashboard ────────────────────────────────────── */}
       {/* Added: feat/coach-ltv-dashboard — see CoachLtvDashboard.tsx */}
       <View style={styles.ltvSection}>
-        <CoachLtvDashboard apiGet={api.get.bind(api)} inlineMode />
+        <CoachLtvDashboard
+          apiGet={(_path: string) => commandCenterApi.getLtvMetrics()}
+          inlineMode
+        />
       </View>
     </ScrollView>
   );
