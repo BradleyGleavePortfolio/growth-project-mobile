@@ -17,7 +17,7 @@
  *   Tooltip   → bone bg (#F5EFE4), ink text (#1A1A18), oxblood border (#4A0404)
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Dimensions, Platform } from 'react-native';
 import Svg, {
   Rect,
@@ -71,6 +71,15 @@ export default function TgpBarChart({
   const colors: ThemeColors = { ...themeColors, ...themeOverride };
 
   const [tooltip, setTooltip] = useState<{ bx: number; by: number; bh: number; value: number } | null>(null);
+  // Store the auto-dismiss timer ref so it can be cancelled on unmount,
+  // preventing a setState call on a dead component.
+  const tooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (tooltipTimerRef.current !== null) clearTimeout(tooltipTimerRef.current);
+    };
+  }, []);
 
   const W = SCREEN_WIDTH - 32;
   const H = height;
@@ -106,7 +115,8 @@ export default function TgpBarChart({
       if (ix >= 0 && ix < bars.length) {
         const b = bars[ix];
         setTooltip({ bx: b.x + barWidth / 2, by: b.y, bh: b.height, value: b.value });
-        setTimeout(() => setTooltip(null), 1500);
+        if (tooltipTimerRef.current !== null) clearTimeout(tooltipTimerRef.current);
+        tooltipTimerRef.current = setTimeout(() => setTooltip(null), 1500);
       }
     });
 

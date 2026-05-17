@@ -142,7 +142,10 @@ export default function NotificationPreferencesScreen({
   const handleToggle = useCallback(
     async (category: NotifCategory, value: boolean) => {
       mediumTap();
+      const previous = prefs;
       const updated = { ...prefs, [category]: value };
+
+      // Optimistic update — show immediately.
       setPrefs(updated);
 
       // Persist locally.
@@ -152,14 +155,24 @@ export default function NotificationPreferencesScreen({
         // Non-fatal: worst case the toggle resets on next cold start.
       }
 
-      // Sync to backend where a mapping exists.
+      // Sync to backend where a mapping exists. On failure, roll back both
+      // the local state and the AsyncStorage value so UI reflects truth.
       const backendField = BACKEND_FIELD_MAP[category];
       if (backendField) {
-        notificationsApi
-          .updatePreferences({ [backendField]: value })
-          .catch(() => {
-            // Best-effort: backend sync failure doesn't roll back the UI toggle.
-          });
+        try {
+          await notificationsApi.updatePreferences({ [backendField]: value });
+        } catch {
+          // Roll back — the backend is the source of truth for preferences.
+          setPrefs(previous);
+          try {
+            await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(previous));
+          } catch {
+            // Ignore secondary storage failure.
+          }
+          // Surface a brief error to the user without a blocking alert.
+          // (Assumes a toast/snack component is available; adapt to your UI kit.)
+          // If no toast is wired, the rollback alone is sufficient.
+        }
       }
 
       // Analytics.

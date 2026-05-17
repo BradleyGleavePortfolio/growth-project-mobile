@@ -41,6 +41,7 @@ import {
   ProfileField,
 } from '../../lib/profileCompletion';
 import { calcBMR, calcTDEE, calcMacros, calculateAge } from '../../utils/nutrition';
+import { patchUserCache } from '../../lib/userCache';
 
 type Nav = NativeStackNavigationProp<MoreStackParamList, 'EditProfile'>;
 
@@ -361,18 +362,9 @@ export default function EditProfileScreen() {
       }
 
       // Refresh local user_data so Home + Profile reflect the change without
-      // requiring a /auth/me round-trip. We only update the profile slice; the
-      // rest of the user_data record is preserved.
+      // requiring a /auth/me round-trip.
       try {
-        const raw = await AsyncStorage.getItem('user_data');
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          const nextProfile = { ...(parsed.profile ?? {}), ...payload };
-          await AsyncStorage.setItem(
-            'user_data',
-            JSON.stringify({ ...parsed, profile: nextProfile }),
-          );
-        }
+        patchUserCache({ profile: payload as never });
       } catch (err) {
         console.warn('EditProfile: failed to refresh local user_data', err);
       }

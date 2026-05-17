@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authEvents } from '../utils/authEvents';
 import { setSentryUser } from '../services/sentry';
+import { readUserCache } from '../lib/userCache';
 
 export interface CurrentUser {
   id: string;
@@ -45,9 +45,10 @@ export function useCurrentUser(): CurrentUser | null {
 
   const loadUser = async () => {
     try {
-      const raw = await AsyncStorage.getItem('user_data');
-      if (raw) {
-        const parsed = JSON.parse(raw);
+      // readUserCache handles the one-time AsyncStorage → MMKV migration
+      // transparently on first call.
+      const parsed = await readUserCache();
+      if (parsed) {
         setUser(parsed);
         // Tag Sentry events with the current user so crash reports are
         // attributable. No-op when Sentry is not configured.

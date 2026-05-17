@@ -27,6 +27,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { AuthStackParamList } from '../../navigation/AuthNavigator';
 import AppleSignInButton from '../../components/AppleSignInButton';
 import { signInWithApple } from '../../utils/appleAuth';
+import { setUserCache } from '../../lib/userCache';
 
 interface Props {
   navigation: NativeStackNavigationProp<AuthStackParamList>;
@@ -60,7 +61,7 @@ export default function LoginScreen({ navigation }: Props) {
       // readable from the plain app sandbox.
       await secureStorage.setItem('supabase_token', access_token);
       if (refresh_token) await secureStorage.setItem('supabase_refresh_token', refresh_token);
-      await AsyncStorage.setItem('user_data', JSON.stringify(user));
+      setUserCache(user);
 
       // Restore onboarding status from backend profile — prevents re-onboarding on re-login
       if (user.profile?.onboarding_completed) {

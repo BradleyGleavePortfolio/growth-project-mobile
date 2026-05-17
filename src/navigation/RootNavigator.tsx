@@ -60,6 +60,7 @@ type AuthState =
 // for the reset-password path so the ResetPassword screen receives
 // the tokens via `route.params`. See navigation/deepLinkUtils.ts.
 import { fragmentToQuery } from './deepLinkUtils';
+import { readUserCache, clearUserCache } from '../lib/userCache';
 
 // A-2 helper. Convert `https://app.trygrowthproject.com/<path>` to its
 // `tgp://<path>` equivalent so the post-signOut replay never escapes to
@@ -345,7 +346,7 @@ export default function RootNavigator() {
       // secureStorage.getItem migrates any legacy AsyncStorage token into
       // SecureStore on first read, so existing users stay logged in.
       const token = await secureStorage.getItem('supabase_token');
-      const userRaw = await AsyncStorage.getItem('user_data');
+      const parsedUser = await readUserCache();
       const needsRoleSelection = await AsyncStorage.getItem('needs_role_selection');
 
       if (!token || !userRaw) {
@@ -361,10 +362,10 @@ export default function RootNavigator() {
 
       let user = null;
       try {
-        user = JSON.parse(userRaw);
+        user = parsedUser;
       } catch {
         // Corrupted storage — treat as logged out
-        await AsyncStorage.removeItem('user_data');
+        clearUserCache();
         setAuthState('unauthenticated');
         return;
       }
