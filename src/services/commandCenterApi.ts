@@ -101,6 +101,45 @@ export interface ActionQueueResponse {
   items: ActionQueueItem[];
   total_pending: number;
 }
+// ─── LTV Metrics types ─────────────────────────────────────────────────────────
+
+export interface LtvNextMilestone {
+  clients_needed: number;
+  mrr_target_cents: number;
+  mrr_target_label: string;
+}
+
+export interface LtvMetrics {
+  mrr_cents: number;
+  mrr_label: string;
+  active_client_count: number;
+  revenue_per_client_month_cents: number;
+  revenue_per_client_month_label: string;
+  avg_client_lifespan_months: number;
+  estimated_ltv_cents: number;
+  estimated_ltv_label: string;
+  churn_rate_pct: number;
+  net_revenue_retention_pct: number;
+  projected_annual_revenue_cents: number;
+  projected_annual_revenue_label: string;
+  /** "up" | "flat" | "down" — drives colour coding in the UI */
+  mrr_trend: 'up' | 'flat' | 'down';
+  mrr_30d_ago_cents: number;
+  /** Consecutive months of zero churn — Duolingo-style streak */
+  zero_churn_streak_months: number;
+  all_time_peak_rpcm_cents: number;
+  all_time_peak_rpcm_label: string;
+  is_new_rpcm_record: boolean;
+  /** null until CAC manual input is wired in Settings */
+  ltv_cac_ratio: number | null;
+  /** True when NRR is approximated from churn rate rather than actual expansion MRR */
+  nrr_is_stub: boolean;
+  next_milestone: LtvNextMilestone;
+  currency: string;
+  computed_at: string;
+}
+
+
 
 // ─── Mock data ────────────────────────────────────────────────────────────────
 // Replaced by live API calls once backend ships.
@@ -272,6 +311,37 @@ const MOCK_ACTION_QUEUE: ActionQueueResponse = {
   total_pending: 3,
 };
 
+
+const MOCK_LTV_METRICS: LtvMetrics = {
+  mrr_cents: 250000,
+  mrr_label: '$2,500',
+  active_client_count: 12,
+  revenue_per_client_month_cents: 20833,
+  revenue_per_client_month_label: '$208',
+  avg_client_lifespan_months: 7.2,
+  estimated_ltv_cents: 150000,
+  estimated_ltv_label: '$1,500',
+  churn_rate_pct: 8.3,
+  net_revenue_retention_pct: 91.7,
+  projected_annual_revenue_cents: 3000000,
+  projected_annual_revenue_label: '$30,000',
+  mrr_trend: 'up',
+  mrr_30d_ago_cents: 230000,
+  zero_churn_streak_months: 3,
+  all_time_peak_rpcm_cents: 22500,
+  all_time_peak_rpcm_label: '$225',
+  is_new_rpcm_record: false,
+  ltv_cac_ratio: null,
+  nrr_is_stub: false,
+  next_milestone: {
+    clients_needed: 2,
+    mrr_target_cents: 300000,
+    mrr_target_label: '$3,000 / mo',
+  },
+  currency: 'usd',
+  computed_at: new Date().toISOString(),
+};
+
 // ─── API wrappers ─────────────────────────────────────────────────────────────
 
 const BASE = '/coach/command-center';
@@ -340,5 +410,17 @@ export const commandCenterApi = {
       `${BASE}/action-queue/${encodeURIComponent(alertId)}/dismiss`,
       {},
     );
+  },
+
+  /**
+   * GET /coach/command-center/ltv-metrics
+   * Returns the full LTV metrics suite — MRR, RPCM, LTV, churn rate, NRR,
+   * projected annual revenue, MRR trend, zero-churn streak, all-time peak
+   * RPCM, and the next MRR milestone nudge.
+   * Monetary values: raw cents (integer) + formatted label string.
+   */
+  getLtvMetrics: async (): Promise<{ data: LtvMetrics }> => {
+    if (__USING_MOCK_DATA) return mockDelay(MOCK_LTV_METRICS);
+    return api.get<LtvMetrics>(`${BASE}/ltv-metrics`);
   },
 };

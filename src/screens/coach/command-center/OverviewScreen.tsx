@@ -27,6 +27,7 @@ import {
   CommandCenterOverview,
 } from '../../../services/commandCenterApi';
 import KpiTile from '../../../components/command-center/KpiTile';
+import CoachLtvDashboard from '../../../components/command-center/CoachLtvDashboard';
 import CommandCenterMockDataBanner from '../../../components/command-center/MockDataBanner';
 
 type LoadState = 'idle' | 'loading' | 'refreshing' | 'data' | 'error';
@@ -215,6 +216,15 @@ export default function OverviewScreen({
           />
         </TouchableOpacity>
       </View>
+
+      {/* ── Revenue & LTV dashboard ────────────────────────────────────── */}
+      {/* Added: feat/coach-ltv-dashboard — see CoachLtvDashboard.tsx */}
+      <View style={styles.ltvSection}>
+        <CoachLtvDashboard
+          apiGet={(_path: string) => commandCenterApi.getLtvMetrics()}
+          inlineMode
+        />
+      </View>
     </ScrollView>
   );
 }
@@ -267,6 +277,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.md,
     borderRadius: radius.sm,
+  },
+  ltvSection: {
+    marginTop: spacing.xl,
+    paddingTop: spacing.lg,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.camel,
   },
   retryText: {
     ...typography.caption,
