@@ -52,6 +52,7 @@ interface SessionExercise {
   exerciseId: string;
   exerciseName: string;
   sets: SessionSet[];
+  restSec?: number;
 }
 
 interface SessionSet {
@@ -202,6 +203,10 @@ export default function ActiveWorkoutScreen() {
   const [sessionExercises, setSessionExercises] = useState<SessionExercise[]>([]);
   const [timer, setTimer] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [restSeconds, setRestSeconds] = useState(0);
+  const [restActive, setRestActive] = useState(false);
+  const [restTotal, setRestTotal] = useState(0);
+  const restIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [allExercises, setAllExercises] = useState<Exercise[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -219,6 +224,7 @@ export default function ActiveWorkoutScreen() {
         exerciseId: re.exerciseId,
         exerciseName: re.exerciseName,
         sets: Array.from({ length: re.sets }, () => ({ reps: re.reps, weight: 0, completed: false })),
+        restSec: re.restSec,
       }));
       setSessionExercises(sessionExs);
     } catch (err) {
@@ -239,6 +245,33 @@ export default function ActiveWorkoutScreen() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, []);
 
+  // Rest timer cleanup.
+  useEffect(() => {
+    return () => {
+      if (restIntervalRef.current) clearInterval(restIntervalRef.current);
+    };
+  }, []);
+
+  const startRest = (seconds: number) => {
+    if (seconds <= 0) return;
+    if (restIntervalRef.current) clearInterval(restIntervalRef.current);
+    setRestTotal(seconds);
+    setRestSeconds(seconds);
+    setRestActive(true);
+    restIntervalRef.current = setInterval(() => {
+      setRestSeconds((prev) => {
+        if (prev <= 1) {
+          if (restIntervalRef.current) clearInterval(restIntervalRef.current);
+          restIntervalRef.current = null;
+          setRestActive(false);
+          HapticService.heavyImpact();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
   const formatTime = (sec: number): string => {
     const h = Math.floor(sec / 3600);
     const m = Math.floor((sec % 3600) / 60);
@@ -258,7 +291,20 @@ export default function ActiveWorkoutScreen() {
   };
 
   const toggleSetComplete = (exIdx: number, setIdx: number) => {
-    updateSet(exIdx, setIdx, 'completed', !sessionExercises[exIdx].sets[setIdx].completed);
+    const wasCompleted = sessionExercises[exIdx].sets[setIdx].completed;
+    updateSet(exIdx, setIdx, 'completed', !wasCompleted);
+    if (!wasCompleted) {
+      // Set just marked complete — start rest timer.
+      const rest = sessionExercises[exIdx].restSec ?? 0;
+      startRest(rest);
+    } else {
+      // Toggling back to incomplete — cancel rest timer.
+      if (restActive) {
+        if (restIntervalRef.current) clearInterval(restIntervalRef.current);
+        restIntervalRef.current = null;
+        setRestActive(false);
+      }
+    }
   };
 
   const addSet = (exIdx: number) => {
@@ -719,6 +765,31 @@ export default function ActiveWorkoutScreen() {
         </View>
       </Modal>
 
+      {/* Rest Timer Overlay */}
+      {restActive && (
+        <View style={styles.restOverlay}>
+          <View style={styles.restLeft}>
+            <Ionicons name="timer-outline" size={20} color={colors.primary} />
+            <Text style={styles.restLabel}>Rest</Text>
+          </View>
+          <Text style={styles.restCountdown}>
+            {Math.floor(restSeconds / 60).toString().padStart(2, '0')}
+            :{(restSeconds % 60).toString().padStart(2, '0')}
+          </Text>
+          <TouchableOpacity
+            onPress={() => {
+              if (restIntervalRef.current) clearInterval(restIntervalRef.current);
+              restIntervalRef.current = null;
+              setRestActive(false);
+              HapticService.softImpact();
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Skip rest timer"
+          >
+            <Text style={styles.restSkip}>Skip</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }
@@ -924,6 +995,48 @@ const makeStyles = (colors: ThemeColors) =>
     color: colors.textMuted,
     textAlign: 'center',
     paddingHorizontal: 32,
+  },
+
+  // Rest Timer Overlay
+  restOverlay: {
+    position: 'absolute',
+    bottom: 100,
+    left: 16,
+    right: 16,
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  restLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  restLabel: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    color: colors.textSecondary,
+    fontWeight: '500',
+  },
+  restCountdown: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: colors.textPrimary,
+  },
+  restSkip: {
+    fontSize: 13,
+    color: colors.primary,
+    fontWeight: '600',
   },
 
   });

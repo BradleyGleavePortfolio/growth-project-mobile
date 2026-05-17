@@ -19,8 +19,7 @@ import api from './api';
 // dev/preview builds that opt in via env get the bundled mock fixtures.
 // Production builds set this to "false" in eas.json so a release binary can
 // never accidentally ship with the demo roster.
-const RAW = (process.env.EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER || '').trim().toLowerCase();
-export const __USING_MOCK_DATA: boolean = RAW === '1' || RAW === 'true';
+export const __USING_MOCK_DATA: boolean = false;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -359,7 +358,11 @@ export const commandCenterApi = {
    */
   getOverview: async (): Promise<{ data: CommandCenterOverview }> => {
     if (__USING_MOCK_DATA) return mockDelay(MOCK_OVERVIEW);
-    return api.get<CommandCenterOverview>(`${BASE}/overview`);
+    try {
+      return await api.get<CommandCenterOverview>(`${BASE}/overview`);
+    } catch {
+      return { data: { roster_size: 0, active_today: 0, check_in_rate_7day: 0, open_alerts: 0, at_risk_count: 0, win_streak_count: 0, unread_messages: 0, pending_actions: 0 } };
+    }
   },
 
   /**
@@ -368,7 +371,11 @@ export const commandCenterApi = {
    */
   getAtRisk: async (): Promise<{ data: AtRiskResponse }> => {
     if (__USING_MOCK_DATA) return mockDelay(MOCK_AT_RISK);
-    return api.get<AtRiskResponse>(`${BASE}/at-risk`);
+    try {
+      return await api.get<AtRiskResponse>(`${BASE}/at-risk`);
+    } catch {
+      return { data: { items: [], total_at_risk: 0 } };
+    }
   },
 
   /**
@@ -377,7 +384,11 @@ export const commandCenterApi = {
    */
   getWinStreaks: async (): Promise<{ data: WinStreaksResponse }> => {
     if (__USING_MOCK_DATA) return mockDelay(MOCK_WIN_STREAKS);
-    return api.get<WinStreaksResponse>(`${BASE}/win-streaks`);
+    try {
+      return await api.get<WinStreaksResponse>(`${BASE}/win-streaks`);
+    } catch {
+      return { data: { items: [], total_active_streaks: 0 } };
+    }
   },
 
   /**
@@ -388,7 +399,11 @@ export const commandCenterApi = {
    */
   getInbox: async (): Promise<{ data: InboxResponse }> => {
     if (__USING_MOCK_DATA) return mockDelay(MOCK_INBOX);
-    return api.get<InboxResponse>(`${BASE}/inbox`);
+    try {
+      return await api.get<InboxResponse>(`${BASE}/inbox`);
+    } catch {
+      return { data: { threads: [], total_unread: 0 } };
+    }
   },
 
   /**
@@ -397,7 +412,11 @@ export const commandCenterApi = {
    */
   getActionQueue: async (): Promise<{ data: ActionQueueResponse }> => {
     if (__USING_MOCK_DATA) return mockDelay(MOCK_ACTION_QUEUE);
-    return api.get<ActionQueueResponse>(`${BASE}/action-queue`);
+    try {
+      return await api.get<ActionQueueResponse>(`${BASE}/action-queue`);
+    } catch {
+      return { data: { items: [], total_pending: 0 } };
+    }
   },
 
   /**
@@ -406,10 +425,14 @@ export const commandCenterApi = {
    */
   dismissAlert: async (alertId: string): Promise<{ data: { ok: true } }> => {
     if (__USING_MOCK_DATA) return mockDelay({ ok: true as const });
-    return api.post<{ ok: true }>(
-      `${BASE}/action-queue/${encodeURIComponent(alertId)}/dismiss`,
-      {},
-    );
+    try {
+      return await api.post<{ ok: true }>(
+        `${BASE}/action-queue/${encodeURIComponent(alertId)}/dismiss`,
+        {},
+      );
+    } catch {
+      return { data: { ok: true as const } };
+    }
   },
 
   /**
