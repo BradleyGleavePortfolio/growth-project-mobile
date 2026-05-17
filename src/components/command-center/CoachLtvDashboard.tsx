@@ -68,6 +68,8 @@ export interface LtvMetrics {
   all_time_peak_rpcm_label: string;
   is_new_rpcm_record: boolean;
   ltv_cac_ratio: number | null;
+  /** True when NRR is approximated from churn rate rather than actual expansion MRR */
+  nrr_is_stub: boolean;
   next_milestone: LtvNextMilestone;
   currency: string;
   computed_at: string;
@@ -98,6 +100,7 @@ const MOCK_LTV: LtvMetrics = {
   all_time_peak_rpcm_label: '$225',
   is_new_rpcm_record: false,
   ltv_cac_ratio: null,
+  nrr_is_stub: false,
   next_milestone: {
     clients_needed: 2,
     mrr_target_cents: 300000,
@@ -622,10 +625,12 @@ function LtvContent({
           hint="Recurring clients canceled this month"
         />
         <StatRow
-          label="Net Revenue Retention"
+          label={metrics.nrr_is_stub ? 'Net Revenue Retention (est.)' : 'Net Revenue Retention'}
           value={`${metrics.net_revenue_retention_pct}%`}
           hint={
-            metrics.net_revenue_retention_pct >= 100
+            metrics.nrr_is_stub
+              ? 'Approximated from churn rate — connect billing for an exact figure'
+              : metrics.net_revenue_retention_pct >= 100
               ? 'Expansion > churn — strong'
               : 'Below 100% — churn is outpacing growth'
           }

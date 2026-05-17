@@ -35,6 +35,7 @@ const MOCK_METRICS: LtvMetrics = {
   all_time_peak_rpcm_label: '$225',
   is_new_rpcm_record: false,
   ltv_cac_ratio: null,
+  nrr_is_stub: false,
   next_milestone: {
     clients_needed: 2,
     mrr_target_cents: 300000,
@@ -145,7 +146,7 @@ describe('CoachLtvDashboard', () => {
       const data = { ...MOCK_METRICS, is_new_rpcm_record: true };
       renderDashboard(makeApiGet(data));
       await waitFor(() => {
-        expect(screen.getByText('★ Record')).toBeTruthy();
+        expect(screen.getByText('RECORD')).toBeTruthy();
       });
     });
 
@@ -154,7 +155,7 @@ describe('CoachLtvDashboard', () => {
       await waitFor(() => {
         expect(screen.getByTestId('ltv-hero-rpcm')).toBeTruthy();
       });
-      expect(() => screen.getByText('★ Record')).toThrow();
+      expect(() => screen.getByText('RECORD')).toThrow();
     });
   });
 

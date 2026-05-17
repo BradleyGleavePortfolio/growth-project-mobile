@@ -132,6 +132,8 @@ export interface LtvMetrics {
   is_new_rpcm_record: boolean;
   /** null until CAC manual input is wired in Settings */
   ltv_cac_ratio: number | null;
+  /** True when NRR is approximated from churn rate rather than actual expansion MRR */
+  nrr_is_stub: boolean;
   next_milestone: LtvNextMilestone;
   currency: string;
   computed_at: string;
@@ -330,6 +332,7 @@ const MOCK_LTV_METRICS: LtvMetrics = {
   all_time_peak_rpcm_label: '$225',
   is_new_rpcm_record: false,
   ltv_cac_ratio: null,
+  nrr_is_stub: false,
   next_milestone: {
     clients_needed: 2,
     mrr_target_cents: 300000,
