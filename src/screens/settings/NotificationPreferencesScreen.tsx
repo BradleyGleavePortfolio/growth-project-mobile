@@ -24,6 +24,7 @@ import {
   ScrollView,
   Switch,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import HapticPressable from '../../components/HapticPressable';
@@ -172,9 +173,7 @@ export default function NotificationPreferencesScreen({
         } catch {
           // Ignore secondary storage failure.
         }
-        // Surface a brief error to the user without a blocking alert.
-        // (Assumes a toast/snack component is available; adapt to your UI kit.)
-        // If no toast is wired, the rollback alone is sufficient.
+        Alert.alert('Could not save preference', 'Please check your connection and try again.');
       }
 
       // Analytics.

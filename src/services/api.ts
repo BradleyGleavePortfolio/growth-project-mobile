@@ -34,6 +34,7 @@ import { authEvents } from '../utils/authEvents';
 import { secureStorage } from './secureStorage';
 import { env } from '../config/env';
 import { entitlementEvents } from '../entitlements/entitlementEvents';
+import { logger } from '../utils/logger';
 
 function isEntitlementEndpoint(url?: string): boolean {
   if (!url) return false;
@@ -115,7 +116,7 @@ async function handleRefreshFailure(): Promise<void> {
     const { signOut } = await import('./authActions');
     await signOut();
   } catch (err) {
-    console.error('api: signOut on refresh failure threw', err);
+    logger.error('API', 'signOut on refresh failure threw', err);
     authEvents.emit('logout');
   }
   // Reset the one-shot guard after the emit so we don't permanently suppress

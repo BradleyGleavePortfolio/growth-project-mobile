@@ -4,6 +4,7 @@ import { clientPaymentsApi } from '../api/clientPaymentsApi';
 import { useCurrentUser } from '../hooks/useCurrentUser';
 import { entitlementEvents, EntitlementRequiredPayload } from './entitlementEvents';
 import { queryClient } from '../services/queryClient';
+import { logger } from '../utils/logger';
 
 type EntitlementStatus = 'unknown' | 'checking' | 'active' | 'inactive' | 'unavailable';
 
@@ -57,7 +58,8 @@ export function EntitlementProvider({ children, onOpenPlans }: EntitlementProvid
         setPaywallMessage(null);
       }
       return active;
-    } catch {
+    } catch (err) {
+      logger.error('EntitlementProvider', 'refreshEntitlement failed', err);
       setStatus('unavailable');
       return false;
     }
@@ -75,7 +77,7 @@ export function EntitlementProvider({ children, onOpenPlans }: EntitlementProvid
   // Bootstrap on login
   useEffect(() => {
     if (isStudent) {
-      refreshEntitlement();
+      void refreshEntitlement();
     } else {
       setStatus('active');
     }
@@ -87,7 +89,7 @@ export function EntitlementProvider({ children, onOpenPlans }: EntitlementProvid
     if (!isStudent) return;
     const sub = AppState.addEventListener('change', (nextState: AppStateStatus) => {
       if (appStateRef.current.match(/inactive|background/) && nextState === 'active') {
-        refreshEntitlement();
+        void refreshEntitlement();
       }
       appStateRef.current = nextState;
     });

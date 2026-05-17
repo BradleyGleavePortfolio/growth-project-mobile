@@ -8,6 +8,7 @@ import { profileApi, usersApi } from './api';
 import { secureStorage } from './secureStorage';
 import { setSentryUser } from './sentry';
 import { reset as analyticsReset } from '../lib/analytics';
+import { logger } from '../utils/logger';
 
 // Tokens live in SecureStore; everything else is plain AsyncStorage.
 const SECURE_SIGN_OUT_KEYS = ['supabase_token', 'supabase_refresh_token'];
@@ -41,7 +42,7 @@ export async function signOut(): Promise<void> {
       AsyncStorage.multiRemove(ASYNC_SIGN_OUT_KEYS),
     ]);
   } catch (err) {
-    console.error('signOut: clear failed', err);
+    logger.error('AuthActions', 'signOut: clear failed', err);
   }
   // Clear Sentry user binding so post-logout errors aren't tagged with the
   // previous user's id. No-ops when Sentry is not configured.
@@ -59,6 +60,6 @@ export async function refreshProfile(): Promise<void> {
     await profileApi.get();
   } catch (err) {
     // Non-critical: the next screen that reads profile will hit the same endpoint.
-    console.error('refreshProfile failed', err);
+    logger.error('AuthActions', 'refreshProfile failed', err);
   }
 }

@@ -9,7 +9,6 @@
 
 import React, { useMemo } from 'react';
 import {
-  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,

@@ -6,6 +6,8 @@ import {
   ScrollView,
   RefreshControl,
   Dimensions,
+  ActivityIndicator,
+  TouchableOpacity,
 } from 'react-native';
 import HapticPressable from '../../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,6 +16,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 import { workoutApi } from '../../services/api';
 import { routineExerciseId } from '../../utils/workout/exerciseId';
+import { logger } from '../../utils/logger';
 import FadeInView from '../../components/FadeInView';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { EmptyStateNoWorkouts, EmptyStateNoData } from '../../ui/empty-states';
@@ -139,7 +142,6 @@ interface ApiSession {
 
 export default function WorkoutScreen() {
   const { colors } = useTheme();
-  const chart = useMemo(() => makeChart(colors), [colors]);
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
@@ -148,6 +150,8 @@ export default function WorkoutScreen() {
   const [weeklyVolume, setWeeklyVolume] = useState<WeeklyVolume[]>([]);
   const [muscleVolume, setMuscleVolume] = useState<MuscleVolume[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   // Number of weeks shown in the volume chart.
   const CHART_WEEKS = 8;
@@ -200,7 +204,7 @@ export default function WorkoutScreen() {
       setWeeklyVolume(weeks);
     } catch (err) {
       // Chart read-only: a failed volume aggregation just shows an empty chart.
-      console.error('WorkoutScreen: loadVolumeData failed', err);
+      logger.error('WorkoutScreen', 'loadVolumeData failed', err);
     }
   }, [currentUser]);
 
@@ -214,14 +218,20 @@ export default function WorkoutScreen() {
       setRoutines(rRes.data || []);
       setRecentSessions(sRes.data || []);
     } catch (err) {
-      // Read-only data load for the workout landing screen; empty list is the
-      // graceful degrade. Retry via pull-to-refresh.
-      console.error('WorkoutScreen: loadData failed', err);
+      // Read-only data load for the workout landing screen; error state shown.
+      logger.error('WorkoutScreen', 'loadData failed', err);
+      setLoadError(true);
+    } finally {
+      setIsLoading(false);
     }
     await loadVolumeData();
   }, [currentUser, loadVolumeData]);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => {
+    setIsLoading(true);
+    setLoadError(false);
+    loadData();
+  }, [loadData]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -260,6 +270,30 @@ export default function WorkoutScreen() {
   };
 
   const totalVolumeThisWeek = weeklyVolume[weeklyVolume.length - 1]?.volume || 0;
+
+  if (isLoading) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
+        <Text style={{ fontSize: 16, color: colors.textPrimary, marginBottom: 16, textAlign: 'center' }}>
+          Could not load workout data.
+        </Text>
+        <TouchableOpacity
+          style={{ backgroundColor: colors.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 }}
+          onPress={() => { setLoadError(false); setIsLoading(true); loadData(); }}
+        >
+          <Text style={{ color: colors.textOnPrimary, fontWeight: '500' }}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   // W-3: surface coach-assigned workouts. Falls back to silent when the
   // assignment list is empty / the hook is still loading. Tapping routes

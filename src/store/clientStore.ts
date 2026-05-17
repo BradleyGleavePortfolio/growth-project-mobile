@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { logApi, waterApi } from '../services/api';
 import { getTodayString } from '../utils/date';
 import { MealType, FoodLog } from '../types';
+import { logger } from '../utils/logger';
 
 interface DailyTotals {
   calories: number;
@@ -142,7 +143,7 @@ export const useClientStore = create<ClientStore>((set, get) => ({
     } catch (err) {
       // Read-only day data aggregation. Empty totals are acceptable; the
       // UI falls back to zeros and the user can retry via pull-to-refresh.
-      console.error('clientStore: loadDayData failed', err);
+      logger.error('ClientStore', 'loadDayData failed', err);
       set({ isLoading: false });
     }
   },
@@ -177,7 +178,7 @@ export const useClientStore = create<ClientStore>((set, get) => ({
       // Revert optimistic bump on failure. We don't Alert here because
       // WaterTracker's UI shows the revert instantly; logging for telemetry
       // preserves visibility into transient failures.
-      console.error('clientStore: logWater failed', err);
+      logger.error('ClientStore', 'logWater failed', err);
       set((state) => ({ waterOz: Math.max(0, state.waterOz - amountOz) }));
     }
   },

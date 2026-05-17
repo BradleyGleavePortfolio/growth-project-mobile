@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { ActivityIndicator, View, StyleSheet, Linking, AppState } from 'react-native';
+import { logger } from '../utils/logger';
 import { triggerSync as triggerWorkoutSync } from '../offline';
 import {
   NavigationContainer,
@@ -283,9 +284,7 @@ export default function RootNavigator() {
             // Fire an authEvent so any mounted banner re-reads storage on
             // foreground without waiting for a manual refresh.
             authEvents.emit();
-          } catch {
-            // best-effort
-          }
+          } catch (err) { logger.warn('RootNavigator', 'non-fatal', err); }
         }
       }
     };
@@ -294,7 +293,7 @@ export default function RootNavigator() {
     Linking.getInitialURL().then(handleUrl).catch(() => {});
     // Foreground URL events.
     const sub = Linking.addEventListener('url', (event) => {
-      handleUrl(event.url);
+      void handleUrl(event.url).catch((err) => logger.error('RootNavigator', 'handleUrl failed', err));
     });
     return () => {
       sub.remove();
@@ -309,7 +308,7 @@ export default function RootNavigator() {
   useEffect(() => {
     const online = isEffectivelyOnline(network);
     if (online && !wasOnlineRef.current) {
-      flushFoodLogQueue().catch((err) => console.error('flushFoodLogQueue failed', err));
+      flushFoodLogQueue().catch((err) => logger.warn('RootNavigator', 'flushFoodLogQueue failed', err));
       // W-2 fix: also reconcile the workout-log sync queue when we cross
       // offline → online. Without this, pending rows written while the app
       // was offline stay 'pending' forever because the only call site for
@@ -364,8 +363,8 @@ export default function RootNavigator() {
       let user = null;
       try {
         user = parsedUser;
-      } catch {
-        // Corrupted storage — treat as logged out
+      } catch (err) {
+        logger.warn('RootNavigator', 'non-fatal', err);
         clearUserCache();
         setAuthState('unauthenticated');
         return;
@@ -387,9 +386,7 @@ export default function RootNavigator() {
             setAuthState('coach_wizard');
             return;
           }
-        } catch {
-          // Network / 404 / 500 — fall through to coach dashboard
-        }
+        } catch (err) { logger.warn('RootNavigator', 'non-fatal', err); }
         setAuthState('coach');
         return;
       }
@@ -421,10 +418,7 @@ export default function RootNavigator() {
             setAuthState('day1win');
             return;
           }
-        } catch {
-          // Network error or auth issue — do not block app launch.
-          // The win screen will be retried on next boot.
-        }
+        } catch (err) { logger.warn('RootNavigator', 'non-fatal', err); }
 
         // Sync Crisp identity so operators see the client's account in the dashboard.
         syncCrispIdentity({
@@ -448,9 +442,7 @@ export default function RootNavigator() {
               return;
             }
           }
-        } catch {
-          // best-effort; fall through to student
-        }
+        } catch (err) { logger.warn('RootNavigator', 'non-fatal', err); }
 
         setAuthState('student');
         return;
@@ -458,7 +450,8 @@ export default function RootNavigator() {
 
       // Token exists but no role yet
       setAuthState('unauthenticated');
-    } catch {
+    } catch (err) {
+      logger.warn('RootNavigator', 'non-fatal', err);
       setAuthState('unauthenticated');
     }
   };
@@ -497,9 +490,8 @@ export default function RootNavigator() {
         } else if (target === 'logged_first_weight') {
           nav.navigate('MoreTab', { screen: 'Progress' });
         }
-      } catch {
-        // Navigation can fail in non-production harnesses (screenshot mode,
-        // tests). Silent fallback — the user already sees the main app.
+      } catch (err) {
+        logger.warn('RootNavigator', 'non-fatal', err);
       }
     }, 50);
     return () => clearTimeout(t);
@@ -560,9 +552,7 @@ export default function RootNavigator() {
                 navigate: (name: string, params?: object) => void;
               };
               nav.navigate('MoreTab', { screen: 'ClientPackages' });
-            } catch {
-              // Navigation may not be ready; ignore.
-            }
+            } catch (err) { logger.warn('RootNavigator', 'non-fatal', err); }
           }}
         >
           <ClientNavigator />
@@ -580,9 +570,7 @@ export default function RootNavigator() {
                 navigate: (name: string, params?: object) => void;
               };
               nav.navigate('MoreTab', { screen: 'ClientPackages' });
-            } catch {
-              // Navigation may not be ready; ignore.
-            }
+            } catch (err) { logger.warn('RootNavigator', 'non-fatal', err); }
           }}
         >
           <ClientNavigator />

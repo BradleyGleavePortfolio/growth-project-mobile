@@ -7,12 +7,14 @@ import {
   TouchableOpacity,
   Alert,
   RefreshControl,
+  ActivityIndicator,
 } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { fastingApi } from '../../services/api';
+import { logger } from '../../utils/logger';
 
 import EmptyState from '../../components/EmptyState';
 import FadeInView from '../../components/FadeInView';
@@ -63,12 +65,16 @@ export default function FastingScreen() {
   const [streak, setStreak] = useState(0);
   const [stats, setStats] = useState({ longestHours: 0, averageHours: 0, totalCompleted: 0 });
   const [refreshing, setRefreshing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const setProtocol = (hours: number) => setSelectedProtocol(hours);
 
   const loadAll = useCallback(async () => {
     if (!currentUser) return;
+    setIsLoading(true);
+    setLoadError(false);
     try {
       const histRes = await fastingApi.getHistory(50);
       type SessionRow = { id: string; start_time?: string; end_time?: string | null; target_hours?: number; completed?: boolean; startTime?: string; endTime?: string | null; targetHours?: number };
@@ -115,8 +121,10 @@ export default function FastingScreen() {
       }
       setStreak(s);
     } catch (err) {
-      // Read-only streak aggregation; streak stays at its last good value.
-      console.error('FastingScreen: loadAll failed', err);
+      logger.error('FastingScreen', err);
+      setLoadError(true);
+    } finally {
+      setIsLoading(false);
     }
   }, [currentUser]);
 
@@ -160,7 +168,7 @@ export default function FastingScreen() {
       Alert.alert("Couldn't start fast", errorMessage(err, 'Please try again.'));
       return;
     }
-    loadAll();
+    void loadAll();
   };
 
   const doEndFast = async () => {
@@ -173,7 +181,7 @@ export default function FastingScreen() {
       console.error('FastingScreen: doEndFast failed', err);
       Alert.alert("Couldn't end fast", errorMessage(err, 'Please try again.'));
     }
-    loadAll();
+    void loadAll();
   };
 
   const handleEnd = async () => {
@@ -201,6 +209,30 @@ export default function FastingScreen() {
     await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     await doEndFast();
   };
+
+  if (isLoading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background, padding: 24 }}>
+        <Text style={{ fontSize: 16, color: colors.textPrimary, marginBottom: 16, textAlign: 'center' }}>
+          Could not load fasting data.
+        </Text>
+        <TouchableOpacity
+          style={{ backgroundColor: colors.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 }}
+          onPress={() => void loadAll()}
+        >
+          <Text style={{ color: colors.textOnPrimary, fontWeight: '500' }}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   // Timer progress
   const targetMs = activeFast ? activeFast.targetHours * 60 * 60 * 1000 : selectedProtocol * 60 * 60 * 1000;

@@ -5,6 +5,7 @@
 
 import { useEffect, useState } from 'react';
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
+import { logger } from '../utils/logger';
 
 export interface NetworkStatus {
   // `isOnline`: the device reports a connected interface. Defaults to true until
@@ -39,7 +40,7 @@ export function useNetworkStatus(): NetworkStatus {
       .catch((err) => {
         // NetInfo.fetch can reject on certain platforms during early boot.
         // Non-critical: the listener below will populate status on next change.
-        console.error('useNetworkStatus: initial fetch failed', err);
+        logger.log('NetworkStatus', 'initial fetch failed', err);
       });
     const unsubscribe = NetInfo.addEventListener((state) => {
       if (mounted) setStatus(toStatus(state));

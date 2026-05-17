@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { User } from '../types';
 import { coachApi } from '../services/api';
+import { logger } from '../utils/logger';
 
 interface CoachStore {
   clients: User[];
@@ -74,7 +75,7 @@ export const useCoachStore = create<CoachStore>((set, get) => ({
       // Read-only client list load. Existing state stays so the previous
       // roster remains visible if the user already loaded once; the new
       // loadError flag lets the screen render an error/retry block.
-      console.error('coachStore: loadClients failed', err);
+      logger.error('CoachStore', 'loadClients failed', err);
       set({
         isLoading: false,
         loadError: 'Could not load clients. Please try again.',

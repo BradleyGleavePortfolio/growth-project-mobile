@@ -25,6 +25,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { foodApi, logApi } from './api';
 import { readUserCacheSync } from '../lib/userCache';
+import { logger } from '../utils/logger';
 
 // Queue key is namespaced by userId so that if two accounts share a device
 // their pending logs don't cross-contaminate and a logout + login as a
@@ -83,7 +84,7 @@ async function readQueue(): Promise<PendingFoodLog[]> {
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : [];
   } catch (err) {
-    console.error('foodLogQueue: readQueue failed', err);
+    logger.warn('FoodLogQueue', 'readQueue failed', err);
     return [];
   }
 }
@@ -149,7 +150,7 @@ export async function flush(): Promise<{ flushed: number; remaining: number }> {
       queue = queue.filter((q) => q.id !== item.id);
       await writeQueue(queue);
     } catch (err) {
-      console.error('foodLogQueue: flush stopped on error', err);
+      logger.warn('FoodLogQueue', 'flush stopped on error', err);
       break;
     }
   }
