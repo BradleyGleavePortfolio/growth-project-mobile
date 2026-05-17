@@ -24,8 +24,13 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { foodApi, logApi } from './api';
+import { readUserCacheSync } from '../lib/userCache';
 
-const QUEUE_KEY = 'pending_food_logs';
+// Queue key is namespaced by userId so that if two accounts share a device
+// their pending logs don't cross-contaminate and a logout + login as a
+// different user starts with a clean queue.
+const getQueueKey = (userId?: string): string =>
+  userId ? `pending_food_logs_${userId}` : 'pending_food_logs_anonymous';
 
 export interface PendingSearchLog {
   kind: 'search';
@@ -71,8 +76,9 @@ export type PendingFoodLog = (PendingSearchLog | PendingManualLog) & {
 };
 
 async function readQueue(): Promise<PendingFoodLog[]> {
+  const key = getQueueKey(readUserCacheSync()?.id);
   try {
-    const raw = await AsyncStorage.getItem(QUEUE_KEY);
+    const raw = await AsyncStorage.getItem(key);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : [];
@@ -83,7 +89,8 @@ async function readQueue(): Promise<PendingFoodLog[]> {
 }
 
 async function writeQueue(queue: PendingFoodLog[]): Promise<void> {
-  await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+  const key = getQueueKey(readUserCacheSync()?.id);
+  await AsyncStorage.setItem(key, JSON.stringify(queue));
 }
 
 export async function enqueue(entry: PendingSearchLog | PendingManualLog): Promise<void> {
@@ -102,7 +109,8 @@ export async function getQueueLength(): Promise<number> {
 }
 
 export async function clearQueue(): Promise<void> {
-  await AsyncStorage.removeItem(QUEUE_KEY);
+  const key = getQueueKey(readUserCacheSync()?.id);
+  await AsyncStorage.removeItem(key);
 }
 
 // Flush the queue to the backend. Returns the number of successfully flushed
@@ -131,6 +139,9 @@ export async function flush(): Promise<{ flushed: number; remaining: number }> {
         quantity_multiplier: item.log.quantity_multiplier,
         original_quantity: item.log.original_quantity,
         original_unit: item.log.original_unit,
+        // Pass the queue entry's client-side id as the idempotency key so
+        // the backend upserts on retry rather than creating a duplicate row.
+        client_uuid: item.id,
       });
       flushed++;
       // Remove this entry from the queue and persist after each success so we

@@ -4,7 +4,7 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authEvents } from '../utils/authEvents';
-import { profileApi } from './api';
+import { profileApi, usersApi } from './api';
 import { secureStorage } from './secureStorage';
 import { setSentryUser } from './sentry';
 import { reset as analyticsReset } from '../lib/analytics';
@@ -25,6 +25,16 @@ export async function signOut(): Promise<void> {
   // Clear all auth + session state and notify the root navigator.
   // We surface failures via console.error instead of Alert because a sign-out
   // button that appears to do nothing is worse than one that logs a warning.
+
+  // Best-effort: clear the push token on the backend before wiping local auth
+  // state so the PATCH /users/me/push-token request can still attach a JWT.
+  try {
+    await usersApi.updatePushToken(null);
+  } catch {
+    // Non-fatal: the token will remain on the backend but will be inert once
+    // the Expo token expires or the device is re-registered on next login.
+  }
+
   try {
     await Promise.all([
       ...SECURE_SIGN_OUT_KEYS.map((k) => secureStorage.removeItem(k)),

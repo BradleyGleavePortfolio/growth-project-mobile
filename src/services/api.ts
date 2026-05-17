@@ -253,6 +253,9 @@ export const logApi = {
     original_quantity?: number;
     original_unit?: string;
     notes?: string;
+    // Idempotency key from the offline queue so a flush retry doesn't create
+    // a duplicate LoggedFoodEntry. Optional — direct (non-queued) logs omit it.
+    client_uuid?: string;
   }) => api.post('/log/food', data),
   getDaily: (date: string) =>
     api.get(`/log/daily?date=${date}`),
@@ -620,6 +623,8 @@ export const usersApi = {
     api.get<{ trainedTodayCount: number; totalMembers: number }>(
       '/users/me/circle-stats',
     ),
+  updatePushToken: (token: string | null) =>
+    api.patch('/users/me/push-token', { token }),
   // Psych #2: Trust as Emotion
   requestDataExport: () =>
     api.post<{ requested: boolean; eta: string }>('/users/me/data-export'),

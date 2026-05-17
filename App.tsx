@@ -19,6 +19,10 @@ import ErrorBoundary from './src/components/ErrorBoundary';
 import { requestNotificationPermissions } from './src/utils/notifications';
 // Phase 11: push-channel taxonomy — register Android channels + iOS categories
 import { registerPushChannels } from './src/notifications/push-channels';
+import { registerForPushNotifications } from './src/services/pushNotifications';
+import { usersApi } from './src/services/api';
+import { authEvents } from './src/utils/authEvents';
+import { secureStorage } from './src/services/secureStorage';
 import { initDatabase } from './src/db/database';
 import {
   queryClient,
@@ -107,6 +111,34 @@ function App() {
 
   useEffect(() => {
     initApp();
+  }, []);
+
+  // Register the Expo push token with the backend whenever the user signs in.
+  // authEvents fires after every successful auth state change (login, token
+  // refresh, etc.). We gate on a valid supabase_token so we don't fire on
+  // the unauthenticated path. Best-effort: push registration failure must
+  // never block the app boot.
+  useEffect(() => {
+    const tryRegisterPushToken = async () => {
+      try {
+        const token = await secureStorage.getItem('supabase_token');
+        if (!token) return; // not authenticated
+        const result = await registerForPushNotifications();
+        if (result.token) {
+          await usersApi.updatePushToken(result.token);
+        }
+      } catch (e) {
+        if (__DEV__) console.warn('Failed to register push token', e);
+      }
+    };
+
+    // Run once on mount in case the user is already logged in (warm start).
+    tryRegisterPushToken();
+
+    // Also run on every auth change so newly signed-in users register immediately.
+    const unsubscribe = authEvents.onAuthChange(tryRegisterPushToken);
+    return unsubscribe;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const initApp = async () => {
