@@ -39,7 +39,7 @@ import {
   summarizeMissing,
 } from '../../lib/profileCompletion';
 
-// ─── Date-as-poetry helpers ───────────────────────────────────────────────────
+// ─── Date-as-poetry helpers ──────────────────────────────────────────────────
 
 const ORDINAL_WORDS: Record<number, string> = {
   1:  'the first',   2:  'the second', 3:  'the third',   4:  'the fourth',
@@ -85,7 +85,7 @@ function buildProgressLine(mealsLogged: number, workoutDone: boolean): string {
   return parts.join(' ');
 }
 
-// ─── NumberCell ───────────────────────────────────────────────────────────────
+// ─── NumberCell ────────────────────────────────────────────────────────────────
 
 interface NumberCellProps {
   label: string;
@@ -170,7 +170,7 @@ export default function HomeScreen() {
           const d = new Date(r.date);
           if (Number.isNaN(d.getTime())) return false;
           // A row counts when it is today AND not explicitly marked incomplete.
-          return d.toDateString() === todayStr && r.completed !== false;
+          return d.toDateString() === todayStr && r.completed === true;
         });
         if (!cancelled) setWorkoutDone(done);
       } catch {
