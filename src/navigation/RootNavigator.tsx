@@ -350,7 +350,7 @@ export default function RootNavigator() {
       const parsedUser = await readUserCache();
       const needsRoleSelection = await AsyncStorage.getItem('needs_role_selection');
 
-      if (!token || !userRaw) {
+      if (!token || !parsedUser) {
         setAuthState('unauthenticated');
         return;
       }
