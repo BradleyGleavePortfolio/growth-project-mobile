@@ -150,11 +150,15 @@ export default function SettingsScreen() {
   }, [loadAccountStatus]);
 
   const updateSetting = async <K extends keyof CoachSettings>(key: K, value: CoachSettings[K]) => {
+    const previous = settings;
     const updated = { ...settings, [key]: value };
+
+    // Optimistic update — instant UI response.
     setSettings(updated);
     if (updated.hapticsEnabled) mediumTap();
-    await AsyncStorage.setItem(COACH_SETTINGS_KEY + '_' + userId, JSON.stringify(updated));
-    // Sync notification toggles to backend
+
+    // Sync notification toggles to backend. On failure, roll back both
+    // the in-memory state and the AsyncStorage cache so UI matches server.
     const notifFieldMap: Partial<Record<keyof CoachSettings, string>> = {
       dailyCheckin: 'daily_checkin_enabled',
       newClientAlerts: 'new_client_alerts',
@@ -164,9 +168,19 @@ export default function SettingsScreen() {
     if (notifField) {
       try {
         await notificationsApi.updatePreferences({ [notifField]: value });
+        // Only persist locally after backend confirms. This ensures
+        // AsyncStorage never drifts ahead of the source of truth.
+        await AsyncStorage.setItem(COACH_SETTINGS_KEY + '_' + userId, JSON.stringify(updated));
       } catch (err) {
-        console.warn('coach SettingsScreen: failed to sync notification pref to backend', err);
+        // Roll back to previous state — server rejected the change.
+        setSettings(previous);
+        // AsyncStorage still holds previous value (we didn’t write yet),
+        // so no rollback write needed here.
+        console.warn('coach SettingsScreen: notification sync failed — rolled back', err);
       }
+    } else {
+      // Non-backend settings (haptics, display prefs) — persist locally only.
+      await AsyncStorage.setItem(COACH_SETTINGS_KEY + '_' + userId, JSON.stringify(updated));
     }
   };
 
