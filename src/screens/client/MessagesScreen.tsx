@@ -39,6 +39,8 @@ const CACHE_KEY = 'messages_thread_client';
 export default function MessagesScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const textOnPrimaryDim = colors.textOnPrimary + 'B3';   // 70% opacity
+  const textOnPrimaryFaint = colors.textOnPrimary + '80'; // 50% opacity
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const currentUser = useCurrentUser();
   const [messages, setMessages] = useState<Message[]>([]);
