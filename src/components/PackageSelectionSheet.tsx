@@ -192,6 +192,17 @@ export default function PackageSelectionSheet({
     setError(null);
     setPaying(true);
 
+    // Refuse to proceed when the native Stripe SDK is not available in this
+    // build — previously this path stubbed out the payment by calling
+    // onPaymentSuccess() without charging the card, which would silently
+    // grant access in any environment that hadn't compiled in
+    // @stripe/stripe-react-native.
+    if (!stripe) {
+      setError('Payment is not available in this build. Please contact support.');
+      setPaying(false);
+      return;
+    }
+
     try {
       const intentRes = await api.post<PaymentIntentResponse>(
         '/v1/checkout/payment-intent',
@@ -199,16 +210,6 @@ export default function PackageSelectionSheet({
       );
       const { client_secret, ephemeral_key, customer_id, publishable_key } =
         intentRes.data;
-
-      if (!stripe) {
-        // Stripe not installed — log and treat as success for dev purposes
-        console.log('[PackageSelectionSheet] stripe not installed, stubbing payment', {
-          client_secret,
-          publishable_key,
-        });
-        onPaymentSuccess();
-        return;
-      }
 
       const { error: initError } = await stripe.initPaymentSheet({
         merchantDisplayName: 'The Growth Project',
