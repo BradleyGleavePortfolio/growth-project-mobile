@@ -40,6 +40,8 @@ import {
   parseCsvEmails,
   tokeniseEmails,
 } from '../../api/invites';
+import { bulkInviteApi } from '../../api/bulkInviteApi';
+import type { BulkInviteRow } from '../../api/bulkInviteApi';
 import type {
   BulkInviteResult,
   BulkInviteResultStatus,
@@ -126,11 +128,25 @@ export default function BulkInviteScreen() {
     if (parsed.valid.length === 0) return;
     setSubmitting(true);
     try {
-      const res = await invitesApi.bulkInvite(
-        parsed.valid,
-        message.trim() ? message.trim() : undefined,
-      );
-      setResults(res.results);
+      const rows: BulkInviteRow[] = parsed.valid.map((email) => ({ email }));
+      const res = await bulkInviteApi.submit(rows);
+      const data = res.data;
+      // Map created + rejected arrays into the BulkInviteResult[] shape
+      // expected by the results renderer.
+      const mappedResults: BulkInviteResult[] = [
+        ...data.created.map((r) => ({
+          email: r.email,
+          status: 'created' as BulkInviteResultStatus,
+          emailQueued: true,
+        })),
+        ...data.rejected.map((r) => ({
+          email: r.email,
+          status: 'failed' as BulkInviteResultStatus,
+          emailQueued: false,
+          error: r.reason,
+        })),
+      ];
+      setResults(mappedResults);
       // Clear the input on a successful send so the coach can start fresh.
       setPaste('');
       setCsvEmails([]);

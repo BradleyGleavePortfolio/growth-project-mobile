@@ -20,6 +20,8 @@
 import { NOTIFICATIONS_MOCK_ENABLED } from '../config/featureFlags';
 import api from './api';
 
+let _lastKnownUnreadCount = 0;
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type NotificationKind =
@@ -238,10 +240,12 @@ export async function fetchUnreadCount(): Promise<number> {
   if (!NOTIFICATIONS_MOCK_ENABLED) {
     try {
       const res = await api.get<{ count: number }>('/notifications/unread-count');
-      return Number(res.data?.count ?? 0);
+      _lastKnownUnreadCount = Number(res.data?.count ?? 0);
+      return _lastKnownUnreadCount;
     } catch {
-      // Badge polling must never throw — a zero count is a safe fallback.
-      return 0;
+      // Badge polling must never throw — return the last known count so the
+      // badge does not reset silently on a transient network error.
+      return _lastKnownUnreadCount;
     }
   }
   await simulateLatency();
@@ -253,7 +257,7 @@ export async function fetchUnreadCount(): Promise<number> {
  */
 export async function markNotificationRead(notificationId: string): Promise<void> {
   if (!NOTIFICATIONS_MOCK_ENABLED) {
-    await api.patch(`/notifications/${encodeURIComponent(notificationId)}/read`);
+    await api.post(`/notifications/${encodeURIComponent(notificationId)}/read`);
     return;
   }
   await simulateLatency();
@@ -268,7 +272,7 @@ export async function markNotificationRead(notificationId: string): Promise<void
  */
 export async function markAllNotificationsRead(): Promise<void> {
   if (!NOTIFICATIONS_MOCK_ENABLED) {
-    await api.patch('/notifications/read-all');
+    await api.post('/notifications/mark-all-read');
     return;
   }
   await simulateLatency();
@@ -298,7 +302,7 @@ export async function saveNotificationPreferences(
   updates: Partial<NotificationPreferences>,
 ): Promise<NotificationPreferences> {
   if (!NOTIFICATIONS_MOCK_ENABLED) {
-    const res = await api.put<NotificationPreferences>(
+    const res = await api.patch<NotificationPreferences>(
       '/notifications/preferences',
       updates,
     );

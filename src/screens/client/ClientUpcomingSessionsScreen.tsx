@@ -21,6 +21,7 @@ import {
   useMyUpcomingSessions,
 } from '../../hooks/useScheduling';
 import type { CoachingSession } from '../../api/schedulingApi';
+import { resolveVideoUrl } from '../../api/schedulingApi';
 import { spacing, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import RescheduleSheet from './RescheduleSheet';
@@ -142,13 +143,11 @@ export default function ClientUpcomingSessionsScreen() {
             >
               {new Date(s.start_at).toLocaleString()}
             </Text>
-            {/* V-3: Join CTA. The API contract on `CoachingSession`
-                already carries video_url + video_provider, but the screen
-                rendered no surface for it — clients literally could not
-                open their Meet/Zoom links. We only render the button when
-                the URL is present and looks like a real http(s) link
-                (defensive: the backend returns null for stub provider). */}
-            {s.video_url && /^https?:\/\//i.test(s.video_url) ? (
+            {/* V-3 / C9: Join CTA. Only rendered when there is a real
+                http(s) video link. resolveVideoUrl filters out null,
+                tgp-stub:// URLs, and any non-http(s) scheme so stub
+                sessions never show a Join button. */}
+            {resolveVideoUrl(s.video_url) ? (
               <TouchableOpacity
                 accessibilityRole="button"
                 accessibilityLabel={`Join ${s.title}${
@@ -157,7 +156,7 @@ export default function ClientUpcomingSessionsScreen() {
                     : ''
                 }`}
                 onPress={() => {
-                  const url = s.video_url as string;
+                  const url = resolveVideoUrl(s.video_url) as string;
                   Linking.openURL(url).catch(() => {
                     Alert.alert(
                       'Could not open link',

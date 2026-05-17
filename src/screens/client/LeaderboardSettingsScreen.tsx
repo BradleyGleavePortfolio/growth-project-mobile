@@ -98,11 +98,11 @@ export default function LeaderboardSettingsScreen() {
     setLoading(true);
     try {
       const result = await getLeaderboard();
-      const selfEntry = result.entries.find((e) => e.isRequester);
-      const currentlyIn = selfEntry?.isRequester && result.entries.some((e) => e.isRequester);
-      // isRequester is always true for the self entry; opted-in users appear in the list
-      const optedIn = result.entries.some((e) => e.isRequester);
+      // Use the explicit backend field — never infer from entries list membership.
+      const optedIn = result.viewer.is_opted_in;
       setIsOptedIn(optedIn);
+      // When opted in the self entry is in the ranked list; populate the display name from it.
+      const selfEntry = result.entries.find((e) => e.isRequester);
       if (selfEntry) {
         setSavedName(selfEntry.displayName ?? '');
         setDisplayName(selfEntry.displayName ?? '');

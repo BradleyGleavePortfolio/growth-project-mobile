@@ -224,8 +224,8 @@ export default function DataExportScreen() {
           <Text style={styles.statusHeading}>Export in progress</Text>
           <Text style={styles.statusBody}>
             We are assembling your file. This usually takes under 60 seconds.
-            You will receive an email when it is ready. You can also keep this
-            screen open and it will update automatically.
+            Your export will be available to download from this screen when it
+            is ready. This screen updates automatically.
           </Text>
           <Text style={styles.caption}>
             Requested {formatDate(state.record.created_at)}
@@ -242,21 +242,37 @@ export default function DataExportScreen() {
               ? ` File size: ${formatFileSize(state.record.file_size_bytes)}.`
               : ''}
             {state.record.expires_at
-              ? ` This link expires on ${formatDate(state.record.expires_at)}.`
+              ? ` Available until ${formatDate(state.record.expires_at)}.`
               : ''}
           </Text>
-          <TouchableOpacity
-            style={styles.primaryButton}
-            onPress={() => handleDownload(state.record)}
-            accessibilityLabel="Download your data file"
-            accessibilityRole="button"
-          >
-            <Text style={styles.primaryButtonText}>Download file</Text>
-          </TouchableOpacity>
-          <Text style={styles.caption}>
-            The download opens in your browser. The file is not stored inside
-            the app.
-          </Text>
+          {/*
+            Guard: only show the Download button when the backend signals that
+            the file is hosted at a remotely accessible URL (download_available).
+            While S3 storage is not yet configured the backend stores files on
+            the local filesystem (local://) which cannot be opened in a browser.
+            In that case show an honest message instead of a broken button.
+            Remove this guard (use download_available directly) once S3 is wired.
+          */}
+          {state.record.download_available && state.record.download_token ? (
+            <>
+              <TouchableOpacity
+                style={styles.primaryButton}
+                onPress={() => handleDownload(state.record)}
+                accessibilityLabel="Download your data file"
+                accessibilityRole="button"
+              >
+                <Text style={styles.primaryButtonText}>Download file</Text>
+              </TouchableOpacity>
+              <Text style={styles.caption}>
+                The download opens in your browser. The file is not stored inside
+                the app.
+              </Text>
+            </>
+          ) : (
+            <Text style={styles.statusBody}>
+              Your export is ready. Contact support to receive your data file.
+            </Text>
+          )}
           <TouchableOpacity
             style={styles.ghostButton}
             onPress={handleRequest}

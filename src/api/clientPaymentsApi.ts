@@ -89,6 +89,23 @@ export type PaymentsResult<T> =
   | { ok: false; reason: 'not_configured' }
   | { ok: false; reason: 'error'; message: string };
 
+function normalizeClientPackage(raw: Record<string, unknown>): ClientCoachPackage {
+  const amountCents = typeof raw.amount_cents === 'number' ? raw.amount_cents : null;
+  const price = typeof raw.price === 'number' ? raw.price : (amountCents != null ? amountCents / 100 : 0);
+  return {
+    id: String(raw.id ?? ''),
+    name: String(raw.name ?? ''),
+    description: (raw.description as string | null) ?? null,
+    type: (raw.type as 'one_time' | 'recurring') ?? (raw.billing_type as 'one_time' | 'recurring') ?? 'one_time',
+    price,
+    currency: String(raw.currency ?? 'usd'),
+    interval: (raw.interval as 'month' | 'year' | null) ?? null,
+    trial_days: null,
+    features: Array.isArray(raw.features) ? (raw.features as string[]) : [],
+    is_current: Boolean(raw.is_current ?? false),
+  };
+}
+
 function isNotConfigured(err: unknown): boolean {
   const e = err as { response?: { status?: number } } | undefined;
   const status = e?.response?.status;
@@ -143,15 +160,20 @@ export const clientPaymentsApi = {
   getPackages: (): Promise<PaymentsResult<ClientCoachPackage[]>> =>
     wrap(
       api
-        .get<{ packages: ClientCoachPackage[] } | ClientCoachPackage[]>(
+        .get<{ packages: unknown[] } | unknown[]>(
           '/v1/clients/me/coach/packages',
         )
-        .then((r) => ({
-          ...r,
-          data: Array.isArray(r.data)
+        .then((r) => {
+          const raw: unknown[] = Array.isArray(r.data)
             ? r.data
-            : (r.data as { packages: ClientCoachPackage[] }).packages ?? [],
-        })),
+            : (r.data as { packages: unknown[] }).packages ?? [];
+          return {
+            ...r,
+            data: raw.map((item) =>
+              normalizeClientPackage(item as Record<string, unknown>),
+            ),
+          };
+        }),
     ),
 
   /**

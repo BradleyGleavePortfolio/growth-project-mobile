@@ -143,6 +143,26 @@ export interface DashboardLink {
   expires_at: string;
 }
 
+function normalizePackageRecord(raw: Record<string, unknown>): CoachPackageRecord {
+  const amountCents = typeof raw.amount_cents === 'number' ? raw.amount_cents : null;
+  const price = typeof raw.price === 'number' ? raw.price : (amountCents != null ? amountCents / 100 : 0);
+  return {
+    id: String(raw.id ?? ''),
+    name: String(raw.name ?? ''),
+    description: (raw.description as string | null) ?? null,
+    type: (raw.type as 'one_time' | 'recurring') ?? (raw.billing_type as 'one_time' | 'recurring') ?? 'one_time',
+    price,
+    currency: String(raw.currency ?? 'usd'),
+    interval: (raw.interval as 'month' | 'year' | null) ?? null,
+    trial_days: null,
+    features: [],
+    active: typeof raw.active === 'boolean' ? raw.active : Boolean(raw.is_active ?? true),
+    active_subscribers: typeof raw.active_subscribers === 'number' ? raw.active_subscribers : 0,
+    created_at: String(raw.created_at ?? ''),
+    updated_at: String(raw.updated_at ?? ''),
+  };
+}
+
 function isNotConfigured(err: unknown): boolean {
   const e = err as { response?: { status?: number } } | undefined;
   const status = e?.response?.status;
@@ -195,15 +215,20 @@ export const coachPaymentsApi = {
   listPackages: (): Promise<ConnectResult<CoachPackageRecord[]>> =>
     wrap(
       api
-        .get<{ packages: CoachPackageRecord[] } | CoachPackageRecord[]>(
+        .get<{ packages: unknown[] } | unknown[]>(
           '/v1/coach/packages',
         )
-        .then((r) => ({
-          ...r,
-          data: Array.isArray(r.data)
+        .then((r) => {
+          const raw: unknown[] = Array.isArray(r.data)
             ? r.data
-            : (r.data as { packages: CoachPackageRecord[] }).packages ?? [],
-        })),
+            : (r.data as { packages: unknown[] }).packages ?? [];
+          return {
+            ...r,
+            data: raw.map((item) =>
+              normalizePackageRecord(item as Record<string, unknown>),
+            ),
+          };
+        }),
     ),
 
   createPackage: (input: CoachPackageInput): Promise<ConnectResult<CoachPackageRecord>> =>

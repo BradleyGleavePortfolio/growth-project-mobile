@@ -77,8 +77,8 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
       // alert so the auth-event navigation reset does not race with the Alert
       // dismissal on older React Navigation versions.
       Alert.alert(
-        'Account scheduled for deletion',
-        'Your account is scheduled for deletion. We have emailed a confirmation link. You have 14 days to cancel from Settings.',
+        'Deletion request received',
+        'Your deletion request has been received. You have 14 days to cancel from Settings. Contact support if you need immediate confirmation.',
         [{ text: 'OK', onPress: () => signOut() }],
         { cancelable: false },
       );
@@ -120,13 +120,15 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
         <Text style={styles.sectionHeading}>What happens when you delete your account</Text>
         <View style={styles.card}>
           <Text style={styles.bodyText}>
-            When you tap "Confirm deletion" below, we send a confirmation link to{' '}
+            When you tap "Confirm deletion" below, your deletion request is
+            registered for account{' '}
             <Text style={styles.bodyBold}>{userEmail}</Text>.
           </Text>
           <Text style={[styles.bodyText, { marginTop: 12 }]}>
-            After you click that link, your account enters a{' '}
+            Your account will enter a{' '}
             <Text style={styles.bodyBold}>14-day grace period</Text>. During those
             14 days you can cancel deletion at any time from the Settings screen.
+            Contact support if you need immediate confirmation.
           </Text>
           <Text style={[styles.bodyText, { marginTop: 12 }]}>
             After 14 days, your personal data is permanently and irreversibly
@@ -229,7 +231,7 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
           disabled={!confirmTextIsValid || busy}
           accessibilityRole="button"
           accessibilityLabel="Confirm account deletion"
-          accessibilityHint="Sends a confirmation email and starts the 14-day grace period"
+          accessibilityHint="Registers your deletion request and starts the 14-day grace period"
           testID="confirm-button"
         >
           {busy ? (

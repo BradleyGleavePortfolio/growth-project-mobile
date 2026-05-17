@@ -53,6 +53,9 @@ export interface AIGatewayDraftRequest {
   // new generation. The mobile client generates this; backend persists for a
   // short window.
   idempotencyKey: string;
+  // Optional structured action payload forwarded to the backend as
+  // `proposed_action`. Required for approval-gated capabilities.
+  proposedAction?: Record<string, unknown>;
 }
 
 // ─── Response DTOs ─────────────────────────────────────────────────────────

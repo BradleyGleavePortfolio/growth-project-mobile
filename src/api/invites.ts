@@ -220,15 +220,18 @@ export const invitesApi = {
   },
 
   /**
-   * Re-queue the invite email for a PENDING invite. Returns
-   * `{ supported: false }` when the backend does not implement the
-   * endpoint (404) so the UI can hide the action.
+   * Re-queue the invite email for a PENDING invite. Calls
+   * POST /coach/invite-codes/:id/send with { email } matching the
+   * backend's sendOne endpoint signature. Returns
+   * `{ supported: false }` when the backend returns 404 so the UI
+   * can hide the affordance instead of erroring out.
    */
   resendInvite: async (
     id: string,
+    email: string,
   ): Promise<{ supported: true } | { supported: false }> => {
     try {
-      await api.post(`/coach/invite-codes/${id}/resend`, {});
+      await api.post(`/coach/invite-codes/${id}/send`, { email });
       return { supported: true };
     } catch (err) {
       if (isNotFound(err)) return { supported: false };

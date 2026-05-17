@@ -29,6 +29,7 @@ import api from '../services/api';
 import type {
   ApproveResult,
   CoachAiDisabledError,
+  CoachAiDraftType,
   CoachAiStatus,
   Draft,
   EditInput,
@@ -41,6 +42,23 @@ import type {
   RejectInput,
   WorkoutPayload,
 } from '../types/coachAi';
+
+// ─── listDrafts response shape ────────────────────────────────────────────────
+// Matches the backend's SELECT projection in CoachAIService.listDrafts().
+// Only summary fields are returned (no generatedPayload) so the inbox list
+// stays lightweight. Navigate to the per-type draft screen to load the full
+// payload when the coach taps a row.
+export interface PendingDraftSummary {
+  id: string;
+  type: CoachAiDraftType;
+  clientId: string;
+  status: string;
+  modelUsed: string;
+  tokensIn: number;
+  tokensOut: number;
+  costCents: number;
+  createdAt: string;
+}
 
 // C-1: a 4-week workout / 7-day meal plan generation typically takes
 // 25–60 s on Anthropic + a Fly cold start. The shared axios client
@@ -109,6 +127,24 @@ export const coachAiApi = {
       `/coach/ai/drafts/${encodeURIComponent(draftId)}/reject`,
       { reason } satisfies RejectInput,
     ),
+
+  /**
+   * List pending (status=DRAFT) AI drafts for this coach.
+   *
+   * Used by the "Pending AI drafts" inbox and the post-timeout background
+   * poll. Pass `clientId` to narrow results to a single client so the poll
+   * only surfaces a draft for the client the coach was actively generating
+   * content for when the 120-second timeout fired.
+   */
+  listDrafts: (opts: { clientId?: string; limit?: number } = {}) => {
+    const params = new URLSearchParams();
+    if (opts.clientId) params.set('clientId', opts.clientId);
+    if (opts.limit != null) params.set('limit', String(opts.limit));
+    const qs = params.toString();
+    return api.get<PendingDraftSummary[]>(
+      `/coach/ai/drafts${qs ? `?${qs}` : ''}`,
+    );
+  },
 };
 
 /**
@@ -121,6 +157,22 @@ export function isAiDisabledError(err: unknown): err is AxiosError<CoachAiDisabl
   if (ax.response?.status !== 503) return false;
   const body = ax.response?.data;
   return !!body && typeof body === 'object' && body.error === 'ai_disabled';
+}
+
+/**
+ * Type guard: was this error caused by the 120-second axios timeout?
+ *
+ * Axios sets `code = 'ECONNABORTED'` and `message` containing 'timeout'
+ * when the request duration exceeds the configured `timeout` option.
+ * This is distinct from a network connectivity failure (no `response`).
+ *
+ * Use this to show the "Still generating — check your drafts inbox"
+ * message instead of a generic error banner.
+ */
+export function isTimeoutError(err: unknown): err is AxiosError {
+  if (!err || typeof err !== 'object') return false;
+  const ax = err as AxiosError;
+  return ax.code === 'ECONNABORTED' || (typeof ax.message === 'string' && ax.message.toLowerCase().includes('timeout'));
 }
 
 export default coachAiApi;

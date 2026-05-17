@@ -51,6 +51,53 @@ function emptyPayload(): WorkoutPayload {
   return { title: null, summary: null, weeks: [] };
 }
 
+/**
+ * H1 fix: the backend WorkoutProgramPayload uses a flat `days[]` where each
+ * entry carries `{ week, day, name, type, exercises }`. The mobile
+ * WorkoutPayload type wraps them as `weeks[{ week, days[] }]`. This adapter
+ * converts the backend shape so the draft screen can render all days across
+ * all weeks without requiring a backend schema change.
+ *
+ * If the payload already has `weeks[]` (future-proof), it is returned as-is.
+ */
+function adaptPayload(raw: WorkoutPayload | Record<string, unknown>): WorkoutPayload {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const r = raw as any;
+  // Already the right shape.
+  if (Array.isArray(r?.weeks) && r.weeks.length > 0) return raw as WorkoutPayload;
+  // Backend flat days[] shape.
+  if (Array.isArray(r?.days) && r.days.length > 0) {
+    const weekMap = new Map<number, { week: number; notes?: string | null; days: AiWorkoutDay[] }>();
+    for (const d of r.days) {
+      const wNum: number = typeof d.week === 'number' ? d.week : 1;
+      if (!weekMap.has(wNum)) weekMap.set(wNum, { week: wNum, days: [] });
+      weekMap.get(wNum)!.days.push({
+        day: typeof d.day === 'number' ? d.day : 1,
+        focus: typeof d.name === 'string' ? d.name : null,
+        exercises: Array.isArray(d.exercises)
+          ? d.exercises.map((e: Record<string, unknown>) => ({
+              name: typeof e.name === 'string' ? e.name : String(e.exercise_external_id ?? ''),
+              sets: typeof e.sets === 'number' ? e.sets : null,
+              reps: typeof e.reps_or_duration_seconds === 'number'
+                ? String(e.reps_or_duration_seconds)
+                : null,
+              rir: null,
+              rpe: null,
+              notes: typeof e.notes === 'string' ? e.notes : null,
+            }))
+          : [],
+      });
+    }
+    const weeks = Array.from(weekMap.values()).sort((a, b) => a.week - b.week);
+    return {
+      title: typeof r.summary === 'string' ? r.summary.slice(0, 60) : null,
+      summary: typeof r.summary === 'string' ? r.summary : null,
+      weeks,
+    };
+  }
+  return raw as WorkoutPayload;
+}
+
 export default function AIWorkoutDraftScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -75,7 +122,9 @@ export default function AIWorkoutDraftScreen() {
     try {
       const res = await coachAiApi.getDraft<WorkoutPayload>(draftId);
       setDraft(res.data);
-      setPayload(res.data.generatedPayload || emptyPayload());
+      // H1 fix: adapt the backend flat-days[] shape to the mobile weeks[]
+      // shape so all days across all weeks are visible in the draft screen.
+      setPayload(adaptPayload(res.data.generatedPayload || emptyPayload()));
       setDirty(false);
     } catch (err) {
       setLoadError(errorMessage(err, 'Could not load draft.'));

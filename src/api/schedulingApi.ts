@@ -52,8 +52,34 @@ export type SchedulingSessionStatus =
  * `'manual_link'` for the user-pasted case; the backend uses
  * `'manual'`. Translate at the call site if surfacing into a screen
  * that expects the mobile shape.
+ *
+ * C9: google_meet and zoom are NOT available for selection. The backend
+ * will reject them with 400 if supplied as default_video_provider.
+ * Only 'manual' should be offered in any provider picker UI.
  */
 export type SchedulingVideoProvider = 'stub' | 'google_meet' | 'zoom' | 'manual';
+
+/**
+ * Helper: resolves a raw video_url from a CoachingSession to a
+ * displayable URL, or null if no real link is present.
+ *
+ * The stub adapter used to emit `tgp-stub://session/<key>` URLs which
+ * are not openable. Treat them — and any other non-http(s) URL — as
+ * "no link yet" so the UI can show the manual-link prompt instead.
+ */
+export function resolveVideoUrl(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  if (raw.startsWith('tgp-stub://')) return null;
+  if (!/^https?:\/\//i.test(raw)) return null;
+  return raw;
+}
+
+/** Shape returned by GET /scheduling/providers */
+export interface SchedulingProviders {
+  video: string[];
+  calendar: string[];
+  note: string;
+}
 
 // ─── Session types (the coach's offerings, e.g. "30-min check-in") ──────────
 
@@ -186,6 +212,14 @@ export interface AttachManualVideoLinkInput {
 // ─── Client methods ─────────────────────────────────────────────────────────
 
 export const schedulingApi = {
+  // Provider capabilities
+  // C9: Returns manual-only until real adapters ship. Use this to
+  // populate any provider picker so UI always reflects backend state.
+  getProviders: async (): Promise<SchedulingProviders> => {
+    const res = await api.get<SchedulingProviders>('/scheduling/providers');
+    return res.data;
+  },
+
   // Session types
   listSessionTypes: async (coachId: string): Promise<SessionType[]> => {
     const res = await api.get<SessionType[]>(

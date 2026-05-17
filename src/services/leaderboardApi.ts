@@ -20,10 +20,21 @@ export interface LeaderboardEntry {
   isRequester: boolean;
 }
 
+export interface LeaderboardViewer {
+  /** Explicit opt-in state from the backend DB field. Never inferred from entries. */
+  is_opted_in: boolean;
+  /** The requester's current rank. Null when not opted in. */
+  rank: number | null;
+  /** The requester's combined score (0–100). Null when not opted in. */
+  score: number | null;
+}
+
 export interface LeaderboardResponse {
   entries: LeaderboardEntry[];
-  /** The requesting user's current rank. Null if no coach assigned. */
+  /** The requesting user's current rank. Null if no coach assigned or not opted in. */
   selfRank: number | null;
+  /** Explicit viewer state — always present. Use this for opt-in checks, not entries membership. */
+  viewer: LeaderboardViewer;
 }
 
 export interface OptInPayload {

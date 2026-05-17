@@ -24,6 +24,10 @@ import { errorMessage, type JsonRecord } from '../../types/common';
 // return a flat array of { name, calories?, protein?, notes?, time_of_day? }.
 // We read it defensively and fall back to an empty list when fields are
 // missing so a malformed plan never blanks the screen.
+//
+// H2 fix: when the server returns `days` (AI-generated plans), we render
+// meals grouped by day. Legacy plans without `days` continue to use the
+// flat `items` + `groupItems()` path.
 
 interface MealItem {
   name: string;
@@ -33,11 +37,35 @@ interface MealItem {
   time_of_day?: string | null;
 }
 
+// Structured per-day shape stored in MealPlan.days (AI plans only).
+interface MealDayItem {
+  name: string;
+  serving?: string | null;
+  calories?: number | null;
+  protein_g?: number | null;
+  carbs_g?: number | null;
+  fat_g?: number | null;
+}
+interface MealDayMeal {
+  slot: string;
+  items: MealDayItem[];
+}
+interface MealDay {
+  day: number;
+  meals: MealDayMeal[];
+  daily_totals?: {
+    calories?: number | null;
+    protein_g?: number | null;
+  } | null;
+}
+
 interface MealPlan {
   id: string;
   title: string;
   notes?: string | null;
   items: MealItem[];
+  // Present only for AI-generated plans (H2 fix).
+  days?: MealDay[] | null;
   created_at?: string | null;
 }
 
@@ -76,7 +104,8 @@ function groupItems(items: MealItem[]): { key: string; label: string; rows: Meal
 
 // Normalise whatever the backend returns into a MealPlan[]. Handles both
 // `{ plans: [...] }` and bare arrays; tolerates camelCase or snake_case keys
-// on items.
+// on items. When the backend returns a `days` field (AI plans, H2 fix), it
+// is preserved so the render path can group by day.
 function normalisePlans(payload: unknown): MealPlan[] {
   const root = (payload && typeof payload === 'object' && !Array.isArray(payload))
     ? (payload as JsonRecord)
@@ -101,11 +130,40 @@ function normalisePlans(payload: unknown): MealPlan[] {
       notes: (it.notes as string | null | undefined) ?? null,
       time_of_day: (it.time_of_day as string | null | undefined) ?? (it.timeOfDay as string | null | undefined) ?? null,
     }));
+    // H2: read structured days[] when present (AI-generated plans).
+    const daysRaw = Array.isArray(p.days) ? (p.days as JsonRecord[]) : null;
+    const days: MealDay[] | null = daysRaw
+      ? daysRaw.map((d) => ({
+          day: typeof d.day === 'number' ? d.day : 1,
+          meals: Array.isArray(d.meals)
+            ? (d.meals as JsonRecord[]).map((m) => ({
+                slot: typeof m.slot === 'string' ? m.slot : 'meal',
+                items: Array.isArray(m.items)
+                  ? (m.items as JsonRecord[]).map((it) => ({
+                      name: typeof it.name === 'string' ? it.name : '',
+                      serving: (it.serving as string | null | undefined) ?? null,
+                      calories: (it.calories as number | null | undefined) ?? null,
+                      protein_g: (it.protein_g as number | null | undefined) ?? null,
+                      carbs_g: (it.carbs_g as number | null | undefined) ?? null,
+                      fat_g: (it.fat_g as number | null | undefined) ?? null,
+                    }))
+                  : [],
+              }))
+            : [],
+          daily_totals: d.daily_totals && typeof d.daily_totals === 'object'
+            ? {
+                calories: ((d.daily_totals as JsonRecord).calories as number | null | undefined) ?? null,
+                protein_g: ((d.daily_totals as JsonRecord).protein_g as number | null | undefined) ?? null,
+              }
+            : null,
+        }))
+      : null;
     return {
       id: String(p.id),
       title: typeof p.title === 'string' && p.title ? p.title : 'Meal plan',
       notes: (p.notes as string | null | undefined) ?? null,
       items,
+      days,
       created_at: (p.created_at as string | null | undefined) ?? (p.createdAt as string | null | undefined) ?? null,
     };
   });
@@ -205,9 +263,15 @@ export default function PlanScreen() {
         ) : (
           <View style={styles.planList}>
             {plans!.map((plan) => {
-              const groups = groupItems(plan.items);
-              const totalCals = plan.items.reduce((s, it) => s + (Number(it.calories) || 0), 0);
-              const totalProtein = plan.items.reduce((s, it) => s + (Number(it.protein) || 0), 0);
+              // H2: prefer structured per-day rendering when days[] is available.
+              const hasDays = Array.isArray(plan.days) && plan.days.length > 0;
+              const groups = hasDays ? [] : groupItems(plan.items);
+              const totalCals = hasDays
+                ? 0
+                : plan.items.reduce((s, it) => s + (Number(it.calories) || 0), 0);
+              const totalProtein = hasDays
+                ? 0
+                : plan.items.reduce((s, it) => s + (Number(it.protein) || 0), 0);
               return (
                 <FadeInView key={plan.id}>
                   <View style={styles.planCard}>
@@ -219,6 +283,11 @@ export default function PlanScreen() {
                             Assigned {new Date(plan.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                           </Text>
                         )}
+                        {hasDays && (
+                          <Text style={styles.planMeta}>
+                            {plan.days!.length}-day program
+                          </Text>
+                        )}
                       </View>
                     </View>
 
@@ -228,9 +297,58 @@ export default function PlanScreen() {
                       </View>
                     ) : null}
 
-                    {plan.items.length === 0 ? (
+                    {hasDays ? (
+                      // Per-day rendering for AI-generated plans.
+                      plan.days!.map((dayData) => (
+                        <View key={`day-${dayData.day}`} style={styles.daySection}>
+                          <View style={styles.dayHeaderRow}>
+                            <Text style={styles.dayLabel}>Day {dayData.day}</Text>
+                            {dayData.daily_totals && (
+                              <Text style={styles.dayTotals}>
+                                {dayData.daily_totals.calories != null
+                                  ? `${Math.round(dayData.daily_totals.calories)} kcal`
+                                  : ''}
+                                {dayData.daily_totals.calories != null &&
+                                dayData.daily_totals.protein_g != null
+                                  ? ' · '
+                                  : ''}
+                                {dayData.daily_totals.protein_g != null
+                                  ? `P ${Math.round(dayData.daily_totals.protein_g)}g`
+                                  : ''}
+                              </Text>
+                            )}
+                          </View>
+                          {dayData.meals.map((meal, mIdx) => (
+                            <View key={mIdx} style={styles.group}>
+                              <Text style={styles.groupLabel}>
+                                {timeIcon(meal.slot)} {meal.slot.toUpperCase()}
+                              </Text>
+                              {meal.items.map((it, iIdx) => (
+                                <View key={iIdx} style={styles.itemRow}>
+                                  <View style={{ flex: 1 }}>
+                                    <Text style={styles.itemName}>{it.name || '—'}</Text>
+                                    {it.serving ? (
+                                      <Text style={styles.itemNotes}>{it.serving}</Text>
+                                    ) : null}
+                                  </View>
+                                  <View style={styles.itemMacros}>
+                                    {it.calories != null && (
+                                      <Text style={styles.itemCal}>{Math.round(Number(it.calories))} kcal</Text>
+                                    )}
+                                    {it.protein_g != null && (
+                                      <Text style={styles.itemProtein}>P {Math.round(Number(it.protein_g))}g</Text>
+                                    )}
+                                  </View>
+                                </View>
+                              ))}
+                            </View>
+                          ))}
+                        </View>
+                      ))
+                    ) : plan.items.length === 0 ? (
                       <Text style={styles.emptyItemsText}>No meals listed in this plan.</Text>
                     ) : (
+                      // Legacy flat-items rendering.
                       <>
                         {groups.map((g) => (
                           <View key={g.key} style={styles.group}>
@@ -476,6 +594,30 @@ const makeStyles = (colors: ThemeColors) =>
     fontSize: 13,
     fontWeight: '500',
     color: colors.textPrimary,
+  },
+  // H2: per-day section styles
+  daySection: {
+    marginTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: 10,
+  },
+  dayHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  dayLabel: {
+    fontFamily: 'CormorantGaramond_500Medium',
+    fontSize: 16,
+    fontWeight: '500',
+    color: colors.textPrimary,
+  },
+  dayTotals: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 12,
+    color: colors.textSecondary,
   },
 
   });

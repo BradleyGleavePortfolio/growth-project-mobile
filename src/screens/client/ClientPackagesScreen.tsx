@@ -149,14 +149,14 @@ export default function ClientPackagesScreen() {
         // Use `openAuthSessionAsync` instead of `openBrowserAsync` for
         // Stripe Checkout. The former is the OAuth-style sheet that
         // actively listens for the configured deep-link callback (here
-        // `tgp://checkout/return` and `https://app.trygrowthproject.com/
-        // checkout/return`) and resolves the moment Stripe redirects
-        // back to the app's return URL. `openBrowserAsync` is fire-and-
-        // forget; the sheet stays open after Stripe issues the redirect
-        // unless the user manually taps Done, which silently strands
-        // users on the success page wondering if their subscription is
-        // active.
-        await WebBrowser.openAuthSessionAsync(res.data.url, 'tgp://');
+        // `com.growthproject.app://checkout/success` and
+        // `com.growthproject.app://checkout/cancel`) and resolves the
+        // moment Stripe redirects back to the app's return URL.
+        // `openBrowserAsync` is fire-and-forget; the sheet stays open
+        // after Stripe issues the redirect unless the user manually taps
+        // Done, which silently strands users on the success page
+        // wondering if their subscription is active.
+        await WebBrowser.openAuthSessionAsync(res.data.url, 'com.growthproject.app://');
         // The sheet is closed — useFocusEffect will refresh status, but
         // also do an immediate reload so the UI is current if the user
         // came back via the cancel deep link (which won't re-focus).
@@ -175,12 +175,12 @@ export default function ClientPackagesScreen() {
   const handleUpdateCard = useCallback(async () => {
     if (!status?.ok || !status.data.dunning?.update_card_url) return;
     // Same reasoning as handleBuy: Stripe Billing Portal redirects to a
-    // tgp:// return URL on save; openAuthSessionAsync is the listener that
-    // actually closes the sheet on that redirect. openBrowserAsync would
-    // leave the user staring at the post-save page.
+    // com.growthproject.app:// return URL on save; openAuthSessionAsync is
+    // the listener that actually closes the sheet on that redirect.
+    // openBrowserAsync would leave the user staring at the post-save page.
     await WebBrowser.openAuthSessionAsync(
       status.data.dunning.update_card_url,
-      'tgp://',
+      'com.growthproject.app://',
     );
     await load();
   }, [status, load]);
@@ -244,10 +244,20 @@ export default function ClientPackagesScreen() {
       ) : null}
 
       {checkoutError ? (
-        <View style={styles.errorBanner}>
-          <Ionicons name="alert-circle-outline" size={18} color="#fff" />
-          <Text style={styles.errorBannerText}>{checkoutError}</Text>
-        </View>
+        <>
+          <View style={styles.errorBanner}>
+            <Ionicons name="alert-circle-outline" size={18} color="#fff" />
+            <Text style={styles.errorBannerText}>{checkoutError}</Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => void load()}
+            accessibilityRole="button"
+            accessibilityLabel="Refresh access"
+            style={styles.refreshLink}
+          >
+            <Text style={styles.refreshLinkText}>Already completed payment? Tap to refresh your access.</Text>
+          </TouchableOpacity>
+        </>
       ) : null}
 
       {/* Packages list */}
@@ -301,7 +311,7 @@ export default function ClientPackagesScreen() {
                   ) : null}
                 </View>
                 <Text style={styles.pkgPrice}>
-                  {formatMoney(pkg.price, pkg.currency)}
+                  {formatMoney(pkg.price ?? 0, pkg.currency)}
                   {pkg.type === 'recurring' && pkg.interval ? (
                     <Text style={styles.pkgInterval}> / {pkg.interval}</Text>
                   ) : null}
@@ -312,9 +322,9 @@ export default function ClientPackagesScreen() {
                 {pkg.description ? (
                   <Text style={styles.pkgDesc}>{pkg.description}</Text>
                 ) : null}
-                {pkg.features.length > 0 ? (
+                {(pkg.features?.length ?? 0) > 0 ? (
                   <View style={styles.pkgFeatures}>
-                    {pkg.features.map((feat, i) => (
+                    {(pkg.features ?? []).map((feat, i) => (
                       <View key={i} style={styles.pkgFeatureRow}>
                         <Ionicons name="checkmark" size={14} color={colors.primary} />
                         <Text style={styles.pkgFeatureText}>{feat}</Text>
@@ -487,5 +497,15 @@ const makeStyles = (colors: ThemeColors) =>
       textAlign: 'center',
       marginTop: 20,
       lineHeight: 16,
+    },
+    refreshLink: {
+      alignSelf: 'center',
+      marginBottom: 12,
+      paddingVertical: 4,
+    },
+    refreshLinkText: {
+      fontSize: 13,
+      color: colors.primary,
+      textAlign: 'center',
     },
   });

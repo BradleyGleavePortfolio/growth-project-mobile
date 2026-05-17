@@ -23,8 +23,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle, G, Polyline, Line as SvgLine, Text as SvgText } from 'react-native-svg';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { weightApi, logApi } from '../../services/api';
+import { useMacroTargets } from '../../hooks/useMacroTargets';
 import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import HapticPressable from '../../components/HapticPressable';
 import { track } from '../../lib/analytics';
@@ -134,7 +134,8 @@ export default function ProgressScreen() {
   const currentUser = useCurrentUser();
   const userId = currentUser?.id ?? null;
 
-  const [macroTargets, setMacroTargets] = useState<{ calories?: number; protein?: number; carbs?: number; fat?: number; goalWeight?: number; height?: number; tdee?: number } | null>(null);
+  // Server-authoritative macro targets (AsyncStorage used only as cache).
+  const macroTargets = useMacroTargets();
   const [weightLogs, setWeightLogs] = useState<WeightLog[]>([]);
   const [period, setPeriod] = useState<Period>('30D');
   const [showLogModal, setShowLogModal] = useState(false);
@@ -143,12 +144,6 @@ export default function ProgressScreen() {
   const [todayMacros, setTodayMacros] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0 });
   const [loggingStreak, setLoggingStreak] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
-
-  useEffect(() => {
-    AsyncStorage.getItem('macro_targets').then((raw) => {
-      if (raw) setMacroTargets(JSON.parse(raw));
-    }).catch(() => {});
-  }, []);
 
   const loadData = useCallback(async () => {
     if (!userId) return;

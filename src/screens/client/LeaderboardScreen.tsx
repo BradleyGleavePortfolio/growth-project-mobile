@@ -210,7 +210,8 @@ export default function LeaderboardScreen() {
 
   const styles = useMemo(() => makeStyles(sc), [sc]);
 
-  const isOptedIn = data?.entries.some((e) => e.isRequester) ?? false;
+  // Use the explicit backend field — never infer from entries list membership.
+  const isOptedIn = data?.viewer.is_opted_in ?? false;
 
   const load = useCallback(async () => {
     setError(null);

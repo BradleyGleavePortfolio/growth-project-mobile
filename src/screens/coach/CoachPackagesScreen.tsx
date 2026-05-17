@@ -64,8 +64,6 @@ const DEFAULT_INPUT: CoachPackageInput = {
   price: 0,
   currency: 'USD',
   interval: 'month',
-  trial_days: null,
-  features: [],
   active: true,
 };
 
@@ -88,15 +86,11 @@ function PackageEditor({
 }) {
   const [input, setInput] = useState<CoachPackageInput>(initial);
   const [priceText, setPriceText] = useState<string>(String(initial.price ?? ''));
-  const [featuresText, setFeaturesText] = useState<string>(
-    (initial.features ?? []).join('\n'),
-  );
 
   useEffect(() => {
     if (visible) {
       setInput(initial);
       setPriceText(String(initial.price ?? ''));
-      setFeaturesText((initial.features ?? []).join('\n'));
     }
   }, [visible, initial]);
 
@@ -115,12 +109,7 @@ function PackageEditor({
       name: input.name.trim(),
       description: input.description?.trim() || null,
       price,
-      features: featuresText
-        .split('\n')
-        .map((s) => s.trim())
-        .filter(Boolean),
       interval: input.type === 'recurring' ? input.interval ?? 'month' : null,
-      trial_days: input.type === 'recurring' ? input.trial_days ?? null : null,
     });
   };
 
@@ -252,34 +241,8 @@ function PackageEditor({
                     </TouchableOpacity>
                   ))}
                 </View>
-
-                <Text style={styles.fieldLabel}>Trial days (optional)</Text>
-                <TextInput
-                  style={styles.input}
-                  value={input.trial_days != null ? String(input.trial_days) : ''}
-                  onChangeText={(t) => {
-                    const n = Number(t.replace(/[^0-9]/g, ''));
-                    setInput((s) => ({
-                      ...s,
-                      trial_days: t === '' ? null : Math.min(60, Math.max(0, n)),
-                    }));
-                  }}
-                  placeholder="0"
-                  placeholderTextColor={colors.textMuted}
-                  keyboardType="number-pad"
-                />
               </>
             ) : null}
-
-            <Text style={styles.fieldLabel}>Features (one per line, optional)</Text>
-            <TextInput
-              style={[styles.input, { minHeight: 96, textAlignVertical: 'top' }]}
-              value={featuresText}
-              onChangeText={setFeaturesText}
-              placeholder={'Weekly check-ins\nCustom macros\nUnlimited messaging'}
-              placeholderTextColor={colors.textMuted}
-              multiline
-            />
 
             <View style={styles.toggleRow}>
               <Text style={styles.fieldLabel}>Visible to clients</Text>
@@ -361,8 +324,6 @@ export default function CoachPackagesScreen() {
       price: pkg.price,
       currency: pkg.currency,
       interval: pkg.interval,
-      trial_days: pkg.trial_days ?? null,
-      features: pkg.features ?? [],
       active: pkg.active,
     });
     setEditorTargetId(pkg.id);

@@ -29,10 +29,15 @@ import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
-import coachAiApi, { isAiDisabledError } from '../../api/coachAi';
+import coachAiApi, { isAiDisabledError, isTimeoutError } from '../../api/coachAi';
+import type { PendingDraftSummary } from '../../api/coachAi';
 import type { ClientsStackParamList } from '../../navigation/CoachNavigator';
-import type { CoachAiStatus } from '../../types/coachAi';
+import type { CoachAiDraftType, CoachAiStatus } from '../../types/coachAi';
 import { errorMessage } from '../../types/common';
+
+// How long the post-timeout poll runs (2 extra minutes) and the interval.
+const POLL_INTERVAL_MS = 10_000;
+const POLL_MAX_DURATION_MS = 120_000;
 
 type Mode = 'workout' | 'meal' | 'insight' | null;
 
@@ -73,6 +78,17 @@ export default function CoachAiSection({
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
+  // Post-timeout state: message shown while background poll is active,
+  // and the draft that appeared (if any) so we can prompt the coach to review.
+  const [timeoutMessage, setTimeoutMessage] = useState<string | null>(null);
+  const [readyDraft, setReadyDraft] = useState<PendingDraftSummary | null>(null);
+
+  // Pending AI drafts inbox — shown when coach explicitly checks or after timeout.
+  const [inboxOpen, setInboxOpen] = useState(false);
+  const [inboxDrafts, setInboxDrafts] = useState<PendingDraftSummary[]>([]);
+  const [inboxLoading, setInboxLoading] = useState(false);
+  const [inboxError, setInboxError] = useState<string | null>(null);
+
   // Workout form state
   const [weeks, setWeeks] = useState<number>(4);
   const [daysPerWeek, setDaysPerWeek] = useState<number>(4);
@@ -107,6 +123,70 @@ export default function CoachAiSection({
     fetchStatus();
   }, [fetchStatus]);
 
+  // ─── Post-timeout background poll ──────────────────────────────────────────────
+  // When the 120-second axios timeout fires, the backend continues working.
+  // Start polling GET /coach/ai/drafts?clientId=<id> every 10 s for 2 minutes
+  // so if the draft completes we can surface it immediately.
+  const startBackgroundPoll = useCallback((activeClientId: string) => {
+    setTimeoutMessage('Still generating \u2014 this can take up to 2 minutes. Check your drafts inbox once ready.');
+    setReadyDraft(null);
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const res = await coachAiApi.listDrafts({ clientId: activeClientId, limit: 1 });
+        const drafts = res.data;
+        if (drafts.length > 0) {
+          clearInterval(pollInterval);
+          setTimeoutMessage(null);
+          setReadyDraft(drafts[0]);
+        }
+      } catch {
+        // Poll silently; don't surface transient errors during background polling.
+      }
+    }, POLL_INTERVAL_MS);
+
+    // Stop after 2 extra minutes regardless.
+    const stopTimer = setTimeout(() => {
+      clearInterval(pollInterval);
+      setTimeoutMessage(null);
+    }, POLL_MAX_DURATION_MS);
+
+    // Return cleanup so callers can cancel early (e.g. component unmount).
+    return () => {
+      clearInterval(pollInterval);
+      clearTimeout(stopTimer);
+    };
+  }, []);
+
+  // ─── Pending drafts inbox ─────────────────────────────────────────────────────
+  const openInbox = useCallback(async () => {
+    setInboxOpen(true);
+    setInboxLoading(true);
+    setInboxError(null);
+    try {
+      const res = await coachAiApi.listDrafts({ clientId, limit: 20 });
+      setInboxDrafts(res.data);
+    } catch (err) {
+      setInboxError(errorMessage(err, 'Could not load pending drafts.'));
+    } finally {
+      setInboxLoading(false);
+    }
+  }, [clientId]);
+
+  // Navigate to the correct draft screen based on draft type.
+  const navigateToDraft = useCallback(
+    (draft: PendingDraftSummary) => {
+      setInboxOpen(false);
+      setReadyDraft(null);
+      const draftId = draft.id;
+      const screen = draftTypeToScreen(draft.type);
+      if (screen) {
+        navigation.navigate(screen as any, { draftId, clientId, clientName });
+      }
+    },
+    [clientId, clientName, navigation],
+  );
+
   const closeModal = () => {
     setMode(null);
     setSubmitError(null);
@@ -114,6 +194,8 @@ export default function CoachAiSection({
 
   const handleSubmitWorkout = async () => {
     setSubmitError(null);
+    setTimeoutMessage(null);
+    setReadyDraft(null);
     setSubmitting(true);
     try {
       const res = await coachAiApi.generateWorkout({
@@ -127,7 +209,11 @@ export default function CoachAiSection({
       closeModal();
       navigation.navigate('AIWorkoutDraft', { draftId, clientId, clientName });
     } catch (err) {
-      if (isAiDisabledError(err)) {
+      if (isTimeoutError(err)) {
+        // Backend may still be generating. Close the form and start polling.
+        closeModal();
+        startBackgroundPoll(clientId);
+      } else if (isAiDisabledError(err)) {
         setSubmitError('AI is offline — owner action required (set ANTHROPIC_API_KEY).');
         await fetchStatus();
       } else {
@@ -140,6 +226,8 @@ export default function CoachAiSection({
 
   const handleSubmitMealPlan = async () => {
     setSubmitError(null);
+    setTimeoutMessage(null);
+    setReadyDraft(null);
     // B14: refuse to generate a meal plan when we have not been told what the
     // client's allergies are. `undefined` means the caller has not loaded the
     // profile yet; the array semantics (empty = none, present = these) match
@@ -177,7 +265,10 @@ export default function CoachAiSection({
       closeModal();
       navigation.navigate('AIMealPlanDraft', { draftId, clientId, clientName });
     } catch (err) {
-      if (isAiDisabledError(err)) {
+      if (isTimeoutError(err)) {
+        closeModal();
+        startBackgroundPoll(clientId);
+      } else if (isAiDisabledError(err)) {
         setSubmitError('AI is offline — owner action required (set ANTHROPIC_API_KEY).');
         await fetchStatus();
       } else {
@@ -190,6 +281,8 @@ export default function CoachAiSection({
 
   const handleSubmitInsight = async () => {
     setSubmitError(null);
+    setTimeoutMessage(null);
+    setReadyDraft(null);
     setSubmitting(true);
     try {
       const res = await coachAiApi.generateInsight({ clientId, windowDays });
@@ -197,7 +290,10 @@ export default function CoachAiSection({
       closeModal();
       navigation.navigate('ClientInsight', { draftId, clientId, clientName });
     } catch (err) {
-      if (isAiDisabledError(err)) {
+      if (isTimeoutError(err)) {
+        closeModal();
+        startBackgroundPoll(clientId);
+      } else if (isAiDisabledError(err)) {
         setSubmitError('AI is offline — owner action required (set ANTHROPIC_API_KEY).');
         await fetchStatus();
       } else {
@@ -265,6 +361,97 @@ export default function CoachAiSection({
           testID="coach-ai-cta-insight"
         />
       </View>
+
+      {/* Post-timeout banners */}
+      {timeoutMessage ? (
+        <View style={styles.timeoutBanner} testID="coach-ai-timeout-banner">
+          <Ionicons name="time-outline" size={14} color={colors.textMuted} />
+          <Text style={styles.timeoutBannerText}>{timeoutMessage}</Text>
+          <TouchableOpacity
+            onPress={openInbox}
+            accessibilityRole="button"
+            accessibilityLabel="View pending drafts"
+            style={styles.timeoutInboxBtn}
+          >
+            <Text style={styles.timeoutInboxBtnText}>View pending drafts</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
+      {readyDraft ? (
+        <TouchableOpacity
+          style={styles.draftReadyBanner}
+          onPress={() => navigateToDraft(readyDraft)}
+          accessibilityRole="button"
+          accessibilityLabel="Your draft is ready — tap to review"
+          testID="coach-ai-draft-ready-banner"
+        >
+          <Ionicons name="checkmark-circle-outline" size={14} color={colors.success ?? colors.primary} />
+          <Text style={styles.draftReadyText}>Your draft is ready — tap to review.</Text>
+        </TouchableOpacity>
+      ) : null}
+
+      {/* Pending AI drafts inbox button */}
+      {ready && !timeoutMessage && !readyDraft ? (
+        <TouchableOpacity
+          style={styles.inboxBtn}
+          onPress={openInbox}
+          accessibilityRole="button"
+          accessibilityLabel="Check pending drafts"
+          testID="coach-ai-inbox-btn"
+        >
+          <Ionicons name="albums-outline" size={14} color={colors.textMuted} />
+          <Text style={styles.inboxBtnText}>Pending AI drafts</Text>
+        </TouchableOpacity>
+      ) : null}
+
+      {/* Pending drafts inbox modal */}
+      <Modal
+        visible={inboxOpen}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setInboxOpen(false)}
+      >
+        <View style={styles.modalContainer}>
+          <ModalHeader
+            title="Pending AI drafts"
+            onClose={() => setInboxOpen(false)}
+          />
+          <ScrollView contentContainerStyle={styles.modalContent}>
+            {inboxLoading ? (
+              <ActivityIndicator
+                size="small"
+                color={colors.textMuted}
+                style={{ marginTop: 32 }}
+              />
+            ) : inboxError ? (
+              <Text style={styles.formError}>{inboxError}</Text>
+            ) : inboxDrafts.length === 0 ? (
+              <Text style={styles.inboxEmpty}>
+                No pending drafts for this client.
+              </Text>
+            ) : (
+              inboxDrafts.map((draft) => (
+                <TouchableOpacity
+                  key={draft.id}
+                  style={styles.inboxRow}
+                  onPress={() => navigateToDraft(draft)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open ${draftTypeLabel(draft.type)} draft`}
+                >
+                  <View style={styles.inboxRowContent}>
+                    <Text style={styles.inboxRowType}>{draftTypeLabel(draft.type)}</Text>
+                    <Text style={styles.inboxRowMeta}>
+                      {new Date(draft.createdAt).toLocaleString()}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                </TouchableOpacity>
+              ))
+            )}
+          </ScrollView>
+        </View>
+      </Modal>
 
       {/* Workout modal */}
       <Modal
@@ -429,6 +616,29 @@ export default function CoachAiSection({
 }
 
 // ─── Subcomponents ───────────────────────────────────────────────────────────
+
+
+// ─── Pure helpers (no React) ──────────────────────────────────────────────────
+
+function draftTypeLabel(type: CoachAiDraftType): string {
+  switch (type) {
+    case 'WORKOUT_PROGRAM': return 'Workout program';
+    case 'MEAL_PLAN':       return 'Meal plan';
+    case 'INSIGHT':         return 'Weekly insight';
+    default:                return type;
+  }
+}
+
+function draftTypeToScreen(
+  type: CoachAiDraftType,
+): 'AIWorkoutDraft' | 'AIMealPlanDraft' | 'ClientInsight' | null {
+  switch (type) {
+    case 'WORKOUT_PROGRAM': return 'AIWorkoutDraft';
+    case 'MEAL_PLAN':       return 'AIMealPlanDraft';
+    case 'INSIGHT':         return 'ClientInsight';
+    default:                return null;
+  }
+}
 
 function CoachAiCta({
   icon,
@@ -754,5 +964,92 @@ const makeStyles = (colors: ThemeColors) =>
       letterSpacing: 1.2,
       textTransform: 'uppercase',
       color: colors.textOnPrimary,
+    },
+    // ── Post-timeout & inbox ────────────────────────────────────────────────────
+    timeoutBanner: {
+      flexDirection: 'column' as const,
+      gap: 6,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      backgroundColor: colors.surfaceElevated,
+      borderRadius: 4,
+      marginBottom: 8,
+    },
+    timeoutBannerText: {
+      fontFamily: 'Inter_400Regular',
+      fontSize: 12,
+      color: colors.textMuted,
+      flex: 1,
+    },
+    timeoutInboxBtn: {
+      alignSelf: 'flex-start' as const,
+      marginTop: 4,
+    },
+    timeoutInboxBtnText: {
+      fontFamily: 'Inter_500Medium',
+      fontSize: 12,
+      fontWeight: '500',
+      color: colors.primary,
+      letterSpacing: 0.4,
+    },
+    draftReadyBanner: {
+      flexDirection: 'row' as const,
+      alignItems: 'center',
+      gap: 8,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      backgroundColor: colors.primaryPale,
+      borderRadius: 4,
+      marginBottom: 8,
+    },
+    draftReadyText: {
+      fontFamily: 'Inter_500Medium',
+      fontSize: 13,
+      fontWeight: '500',
+      color: colors.primary,
+      flex: 1,
+    },
+    inboxBtn: {
+      flexDirection: 'row' as const,
+      alignItems: 'center',
+      gap: 6,
+      paddingVertical: 8,
+      paddingHorizontal: 2,
+      marginBottom: 4,
+    },
+    inboxBtnText: {
+      fontFamily: 'Inter_400Regular',
+      fontSize: 12,
+      color: colors.textMuted,
+    },
+    inboxEmpty: {
+      fontFamily: 'Inter_400Regular',
+      fontSize: 14,
+      color: colors.textMuted,
+      textAlign: 'center' as const,
+      marginTop: 32,
+    },
+    inboxRow: {
+      flexDirection: 'row' as const,
+      alignItems: 'center',
+      paddingVertical: 14,
+      paddingHorizontal: 0,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    inboxRowContent: {
+      flex: 1,
+      gap: 2,
+    },
+    inboxRowType: {
+      fontFamily: 'Inter_500Medium',
+      fontSize: 14,
+      fontWeight: '500',
+      color: colors.textPrimary,
+    },
+    inboxRowMeta: {
+      fontFamily: 'Inter_400Regular',
+      fontSize: 12,
+      color: colors.textMuted,
     },
   });

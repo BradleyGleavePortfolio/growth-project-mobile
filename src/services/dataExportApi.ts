@@ -7,6 +7,13 @@ export interface DataExportRecord {
   completed_at: string | null;
   expires_at: string | null;
   file_size_bytes: number | null;
+  /**
+   * True only when the file is stored in a remote location (S3/CDN) and can
+   * be served via the /download?token= redirect. False when the backend is
+   * using local filesystem storage (DATA_EXPORT_BUCKET not configured).
+   * The UI must check this flag before showing a download button.
+   */
+  download_available: boolean;
   download_token: string | null;
 }
 
