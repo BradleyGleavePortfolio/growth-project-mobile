@@ -68,7 +68,7 @@ describe('CoachLtvDashboard', () => {
   describe('skeleton loading state', () => {
     it('renders the skeleton while data is loading', () => {
       // apiGet never resolves so we stay in loading state
-      const apiGet = jest.fn(() => new Promise(() => {}));
+      const apiGet = jest.fn((): Promise<{ data: unknown }> => new Promise(() => {}));
       const { getByTestId } = render(
         <CoachLtvDashboard apiGet={apiGet} inlineMode />,
       );
