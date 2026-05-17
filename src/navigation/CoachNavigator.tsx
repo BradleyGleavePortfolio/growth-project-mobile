@@ -19,12 +19,12 @@ import ClientRiskDetailScreen from '../screens/coach/ClientRiskDetailScreen';
 import CoachBillingScreen from '../screens/coach/CoachBillingScreen';
 import BloodworkReviewQueueScreen from '../screens/coach/BloodworkReviewQueueScreen';
 import TrustCenterScreen from '../screens/TrustCenterScreen';
-// Wave 11 — runtime scaffolding (flag-gated; safe to mount)
+// Wave 11 — runtime scaffolding. The screen registrations below only mount
+// when the matching feature flag is explicitly true, so stub surfaces never
+// reach production binaries.
 import CoachBriefScreen from '../screens/coach/CoachBriefScreen';
 import AdminControlRoomScreen from '../screens/coach/AdminControlRoomScreen';
-// Stage 2 (finance OS parity) — placeholder for the cross-pillar coach view.
-// Read-only, no API call. Stage 3 replaces this with a nested navigator.
-import BothPillarsScreen from '../screens/coach/BothPillarsScreen';
+import { featureFlags } from '../config/featureFlags';
 // Stage 3 — cross-pillar federated coach surface. Mounted as a nested
 // navigator so the practice-selection picker, dashboard, roster, detail
 // view, messages, and assignments all live under one settings entry.
@@ -142,8 +142,6 @@ export type SettingsStackParamList = {
   SupportInbox: undefined;
   // Stage 3 — cross-pillar coach view. Now hosts the full nested navigator.
   BothPillars: undefined;
-  // Legacy stub kept reachable for QA but not surfaced in normal nav.
-  BothPillarsLegacyStub: undefined;
   // Phase 10 — GDPR right to erasure.
   DeleteAccount: undefined;
   /** Phase 10 — GDPR Article 20 data portability */
@@ -317,19 +315,21 @@ function SettingsStackNavigator() {
       <SettingsStack.Screen name="SettingsHome" component={SettingsScreen} />
       <SettingsStack.Screen name="Billing"      component={CoachBillingScreen} />
       <SettingsStack.Screen name="TrustCenter"  component={TrustCenterScreen} />
-      {/* Wave 11 — gated routes. Each screen renders a preview-only empty
-          state when its flag is OFF. */}
-      <SettingsStack.Screen name="CoachBrief" component={CoachBriefScreen} />
-      <SettingsStack.Screen name="AdminControlRoom" component={AdminControlRoomScreen} />
+      {/* Wave 11 — gated routes. Only registered when the matching feature
+          flag is explicitly true, so stub/coming-soon surfaces never reach
+          production binaries. */}
+      {featureFlags.coachBrief && (
+        <SettingsStack.Screen name="CoachBrief" component={CoachBriefScreen} />
+      )}
+      {featureFlags.adminControlRoom && (
+        <SettingsStack.Screen name="AdminControlRoom" component={AdminControlRoomScreen} />
+      )}
       {/* Phase 11 Track 9 — Support Inbox */}
       <SettingsStack.Screen name="SupportInbox" component={SupportInboxScreen} />
-      {/* Stage 3 — cross-pillar federated coach surface. The Stage-2
-          BothPillarsScreen stub is preserved as a reachable fallback if
-          the nested navigator ever fails to mount, but the live entry
-          point is the nested navigator below. */}
+      {/* Stage 3 — cross-pillar federated coach surface. The nested
+          navigator handles practice-selection, dashboard, roster, detail,
+          messages, and assignments under one settings entry. */}
       <SettingsStack.Screen name="BothPillars" component={CrossPillarNavigator} />
-      {/* Reachable for QA/regression; not navigated to in normal flow. */}
-      <SettingsStack.Screen name="BothPillarsLegacyStub" component={BothPillarsScreen} />
       {/* Phase 10 — GDPR right to erasure. */}
       <SettingsStack.Screen name="DeleteAccount" component={DeleteAccountScreen} />
       {/* Phase 10 — GDPR Article 20 data portability */}

@@ -3,9 +3,8 @@
 // Source-level reads to guarantee:
 //   1. The cross-pillar API client is typed (no `Record<string, unknown>`)
 //      and lives where the screens import from.
-//   2. The Settings entry navigates to the live nested navigator, not
-//      the Stage-2 stub (the stub remains reachable at `BothPillarsLegacyStub`
-//      for QA but is intentionally not the user-facing path).
+//   2. The Settings entry navigates to the live nested navigator. The
+//      Stage-2 stub route has been removed from production builds.
 //   3. The Stage-3 `coach_practice_type` enum is present on both Prisma
 //      schemas (fitness mobile imports it through the typed contract).
 //
@@ -73,10 +72,10 @@ describe('Coach navigator wiring — live cross-pillar surface', () => {
   });
 
   it('mounts CrossPillarNavigator at the BothPillars route (not the stub)', () => {
-    // The Stage-2 stub remains importable but is mounted at the legacy
-    // route name only.
+    // The Stage-2 stub has been removed from production builds; only the
+    // live navigator remains.
     expect(navSrc).toMatch(/<SettingsStack\.Screen\s+name="BothPillars"\s+component=\{CrossPillarNavigator\}/);
-    expect(navSrc).toMatch(/BothPillarsLegacyStub/);
+    expect(navSrc).not.toMatch(/BothPillarsLegacyStub/);
   });
 });
 
