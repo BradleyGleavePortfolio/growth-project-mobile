@@ -424,8 +424,8 @@ describe('markSessionSyncedBySessionName (W-1 fix)', () => {
 
     // Sanity: all pending.
     const db = await getDatabase();
-    let rows = await db.getAllAsync<{ sync_status: string }>(
-      'SELECT sync_status FROM workout_logs WHERE session_name = ?',
+    let rows = await db.getAllAsync<{ sync_status: string; server_id: string }>(
+      'SELECT sync_status, server_id FROM workout_logs WHERE session_name = ?',
       ['Chest Day'],
     );
     expect(rows.every((r) => r.sync_status === 'pending')).toBe(true);
