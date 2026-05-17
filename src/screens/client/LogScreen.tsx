@@ -6,6 +6,11 @@ import {
   ScrollView,
   Alert,
   RefreshControl,
+  Modal,
+  TextInput,
+  TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useClientStore } from '../../store/clientStore';
@@ -72,6 +77,14 @@ export default function LogScreen() {
   const [didYouMean, setDidYouMean] = useState<SearchResult[]>([]);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [showSlowMessage, setShowSlowMessage] = useState(false);
+
+  // F-2: inline edit-log modal state. Keeps the edit UX a single tap
+  // away from the entry row without dragging in another component, and
+  // works on iOS + Android (Alert.prompt is iOS-only).
+  const [editLog, setEditLog] = useState<FoodLog | null>(null);
+  const [editQty, setEditQty] = useState<string>('');
+  const [editUnit, setEditUnit] = useState<string>('');
+  const [editSaving, setEditSaving] = useState(false);
 
   // Quantity modal state
   const [selectedFood, setSelectedFood] = useState<SearchResult | null>(null);
@@ -303,6 +316,68 @@ export default function LogScreen() {
     }
   };
 
+  // F-2: open the inline edit modal for a logged entry, pre-filled with
+  // whichever (originalQuantity, originalUnit) pair the backend sent back,
+  // falling back to the multiplier when the row is a legacy one without
+  // the original_* columns persisted.
+  const handleEditFood = (log: FoodLog) => {
+    setEditLog(log);
+    const hasOriginal =
+      typeof log.originalQuantity === 'number' &&
+      !!log.originalUnit &&
+      (log.originalUnit || '').trim().length > 0;
+    setEditQty(
+      hasOriginal
+        ? String(log.originalQuantity)
+        : String(log.quantity || 1),
+    );
+    setEditUnit(hasOriginal ? (log.originalUnit as string) : 'serving');
+  };
+
+  const handleEditCancel = () => {
+    if (editSaving) return;
+    setEditLog(null);
+    setEditQty('');
+    setEditUnit('');
+  };
+
+  const handleEditSave = async () => {
+    if (!editLog || !currentUser || editSaving) return;
+    const parsed = parseQuantityInput(editQty);
+    if (!parsed || parsed <= 0) {
+      Alert.alert('Invalid quantity', 'Enter a number greater than zero.');
+      return;
+    }
+    const unitTrim = editUnit.trim() || 'serving';
+    // Compute the new multiplier the same way logSubmit does so totals
+    // stay consistent with the create path. We don't carry the SearchResult
+    // for an already-logged entry, so pass `null` — `quantityMultiplier`
+    // falls back to a 100g-equivalent for grams/oz and treats `serving` /
+    // volume units as 1×100g, which is the same legacy floor the create
+    // path uses when food metadata is missing.
+    const multiplier = quantityMultiplier(null, parsed, unitTrim);
+    setEditSaving(true);
+    try {
+      await logApi.updateEntry(editLog.id, {
+        quantity_multiplier: multiplier,
+        original_quantity: parsed,
+        original_unit: unitTrim,
+      });
+      setEditLog(null);
+      setEditQty('');
+      setEditUnit('');
+      await loadDayData(currentUser.id, selectedDate);
+    } catch (err) {
+      console.error('LogScreen: handleEditSave failed', err);
+      Alert.alert(
+        "Couldn't update food",
+        errorMessage(err, 'Please try again.'),
+      );
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
   const handleDeleteFood = async (log: FoodLog) => {
     if (!currentUser) return;
     Alert.alert('Delete Food', `Remove ${log.foodName}?`, [
@@ -398,6 +473,7 @@ export default function LogScreen() {
             mealCalories={getMealCalories(section.type)}
             onAddPress={openAddFood}
             onDeletePress={handleDeleteFood}
+            onEditPress={handleEditFood}
           />
         ))}
 
@@ -445,6 +521,75 @@ export default function LogScreen() {
           setSelectedFood(null);
         }}
       />
+
+      {/* F-2: edit-log modal. Inline so it works on iOS + Android without
+          relying on Alert.prompt (iOS-only). Saves through the existing
+          logApi.updateEntry endpoint and triggers loadDayData on success. */}
+      <Modal
+        visible={!!editLog}
+        animationType="fade"
+        transparent
+        onRequestClose={handleEditCancel}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.editModalBackdrop}
+        >
+          <View style={styles.editModalCard}>
+            <Text style={styles.editModalTitle} numberOfLines={1}>
+              {editLog?.foodName || 'Edit entry'}
+            </Text>
+            <Text style={styles.editModalSubtitle}>Quantity</Text>
+            <TextInput
+              accessibilityLabel="Edit quantity"
+              value={editQty}
+              onChangeText={setEditQty}
+              keyboardType="decimal-pad"
+              style={styles.editModalInput}
+            />
+            <Text style={styles.editModalSubtitle}>Unit</Text>
+            <TextInput
+              accessibilityLabel="Edit unit"
+              value={editUnit}
+              onChangeText={setEditUnit}
+              autoCapitalize="none"
+              style={styles.editModalInput}
+            />
+            <View style={styles.editModalActions}>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Cancel edit"
+                disabled={editSaving}
+                onPress={handleEditCancel}
+                style={[
+                  styles.editModalBtn,
+                  { borderColor: colors.border, opacity: editSaving ? 0.5 : 1 },
+                ]}
+              >
+                <Text style={{ color: colors.textPrimary }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Save edit"
+                disabled={editSaving}
+                onPress={handleEditSave}
+                style={[
+                  styles.editModalBtn,
+                  styles.editModalBtnPrimary,
+                  {
+                    backgroundColor: colors.primary,
+                    opacity: editSaving ? 0.6 : 1,
+                  },
+                ]}
+              >
+                <Text style={{ color: colors.textOnPrimary }}>
+                  {editSaving ? 'Saving…' : 'Save'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -474,6 +619,61 @@ const makeStyles = (colors: ThemeColors) =>
   waterSection: {
     paddingHorizontal: Spacing.lg,
     marginBottom: 20,
+  },
+  editModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: Spacing.lg,
+  },
+  editModalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    padding: Spacing.lg,
+  },
+  editModalTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginBottom: 12,
+  },
+  editModalSubtitle: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  editModalInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: colors.textPrimary,
+    fontSize: 16,
+  },
+  editModalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+    marginTop: 16,
+  },
+  editModalBtn: {
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  editModalBtnPrimary: {
+    borderColor: 'transparent',
   },
 
   });

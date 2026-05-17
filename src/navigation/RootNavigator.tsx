@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { ActivityIndicator, View, StyleSheet, Linking } from 'react-native';
+import { ActivityIndicator, View, StyleSheet, Linking, AppState } from 'react-native';
+import { triggerSync as triggerWorkoutSync } from '../offline';
 import {
   NavigationContainer,
   DefaultTheme,
@@ -45,6 +46,28 @@ type AuthState = 'loading' | 'unauthenticated' | 'onboarding' | 'day1win' | 'coa
 // for the reset-password path so the ResetPassword screen receives
 // the tokens via `route.params`. See navigation/deepLinkUtils.ts.
 import { fragmentToQuery } from './deepLinkUtils';
+
+// A-2 helper. Convert `https://app.trygrowthproject.com/<path>` to its
+// `tgp://<path>` equivalent so the post-signOut replay never escapes to
+// Safari. Returns the input unchanged when it does not look like a
+// known TGP host.
+function rewriteHttpsToScheme(url: string): string {
+  try {
+    const u = new URL(url);
+    if (
+      u.protocol === 'https:' &&
+      u.hostname === 'app.trygrowthproject.com'
+    ) {
+      // Drop the leading `/` so `tgp://<host-segment>/<rest>` mirrors the
+      // intent-filter `host` + `pathPrefix` we declare in app.json.
+      const path = (u.pathname + u.search + u.hash).replace(/^\//, '');
+      return `tgp://${path}`;
+    }
+  } catch {
+    // Malformed URL — replay verbatim; caller catches errors.
+  }
+  return url;
+}
 
 // Deep-link config — must match the Android intent filters and iOS
 // associatedDomains entries declared in app.json. Both URL shapes route an
@@ -213,11 +236,20 @@ export default function RootNavigator() {
         // Force full sign-out so the deep link can land on AuthNavigator's
         // ResetPassword or AcceptInvite route with a clean session.
         await signOut();
-        // Replay the URL so AuthNavigator picks it up via Linking once
-        // unauthenticated. RN dedupes back-to-back identical openURL
-        // events, so a microtask delay is enough.
+        // A-2 fix: the previous implementation called
+        // `Linking.openURL(url)` where `url` was the original https://
+        // universal link. On iOS that re-issues the URL to the OS, which
+        // routes it to Safari instead of back to this app (the receiving
+        // process is already the same TGP app that owns the AASA entry,
+        // so the OS resolves "open URL" against the next available
+        // handler — the browser). The fix is to rewrite the URL to its
+        // custom-scheme (`tgp://…`) equivalent before re-delivery so the
+        // dispatch stays in-process. React Navigation's linking config
+        // picks up the tgp:// form against the unauthenticated stack
+        // once auth state flips.
+        const replayUrl = rewriteHttpsToScheme(url);
         setTimeout(() => {
-          Linking.openURL(url).catch(() => {});
+          Linking.openURL(replayUrl).catch(() => {});
         }, 50);
         return;
       }
@@ -262,9 +294,37 @@ export default function RootNavigator() {
     const online = isEffectivelyOnline(network);
     if (online && !wasOnlineRef.current) {
       flushFoodLogQueue().catch((err) => console.error('flushFoodLogQueue failed', err));
+      // W-2 fix: also reconcile the workout-log sync queue when we cross
+      // offline → online. Without this, pending rows written while the app
+      // was offline stay 'pending' forever because the only call site for
+      // triggerSync() was ActiveWorkout.onSuccess (which itself doesn't
+      // fire when the original POST failed).
+      triggerWorkoutSync().catch(() => {/* non-fatal */});
     }
     wasOnlineRef.current = online;
   }, [network.isOnline, network.isInternetReachable]);
+
+  // W-2 fix continued: also reconcile the workout-sync queue on background
+  // → active foreground transitions and on an auth-state change (login,
+  // logout-then-login). These are the other moments at which a pending row
+  // may finally have a route to the server. We listen to the generic
+  // onAuthChange because every login screen path fires the unnamed
+  // `authEvents.emit()` after writing user_data — `emit('login')` is not
+  // emitted by all screens today.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        triggerWorkoutSync().catch(() => {/* non-fatal */});
+      }
+    });
+    const unsubAuth = authEvents.onAuthChange(() => {
+      triggerWorkoutSync().catch(() => {/* non-fatal */});
+    });
+    return () => {
+      sub.remove();
+      unsubAuth();
+    };
+  }, []);
 
   const bootstrapAuth = async () => {
     try {

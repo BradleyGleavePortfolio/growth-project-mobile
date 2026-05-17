@@ -55,11 +55,30 @@ export default function WorkoutAssignmentDetailScreen() {
   const handleStart = useCallback(() => {
     if (!data) return;
     const exercises = buildActiveWorkoutExercises(data.workout_plan);
-    navigation.navigate('ActiveWorkout', {
+    const params = {
       routineId: data.workout_plan.id,
       routineName: data.workout_plan.name,
       exercises: JSON.stringify(exercises),
-    });
+    };
+    // W-4 fix: this screen lives in MoreStack; `ActiveWorkout` lives in
+    // WorkoutStack. A plain `navigation.navigate('ActiveWorkout', ...)`
+    // throws "screen not found" under React Navigation v7 because the
+    // target is not registered in the current navigator. Jump up to the
+    // tab navigator and re-enter the Workout tab targeting the right
+    // nested screen. Fallback to the local navigator only if the parent
+    // chain isn't mounted yet (defensive — should not happen in practice).
+    const tabNav = navigation.getParent()?.getParent?.();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parentAny = tabNav as any;
+    if (parentAny?.navigate) {
+      parentAny.navigate('WorkoutTab', {
+        screen: 'ActiveWorkout',
+        params,
+      });
+      return;
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (navigation as any).navigate('ActiveWorkout', params);
   }, [data, navigation]);
 
   if (isLoading) {

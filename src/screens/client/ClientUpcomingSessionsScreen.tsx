@@ -9,6 +9,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Linking,
   ScrollView,
   StyleSheet,
   Text,
@@ -141,6 +142,44 @@ export default function ClientUpcomingSessionsScreen() {
             >
               {new Date(s.start_at).toLocaleString()}
             </Text>
+            {/* V-3: Join CTA. The API contract on `CoachingSession`
+                already carries video_url + video_provider, but the screen
+                rendered no surface for it — clients literally could not
+                open their Meet/Zoom links. We only render the button when
+                the URL is present and looks like a real http(s) link
+                (defensive: the backend returns null for stub provider). */}
+            {s.video_url && /^https?:\/\//i.test(s.video_url) ? (
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={`Join ${s.title}${
+                  s.video_provider && s.video_provider !== 'stub'
+                    ? ` on ${s.video_provider.replace(/_/g, ' ')}`
+                    : ''
+                }`}
+                onPress={() => {
+                  const url = s.video_url as string;
+                  Linking.openURL(url).catch(() => {
+                    Alert.alert(
+                      'Could not open link',
+                      'Copy the link from your email or message your coach.',
+                    );
+                  });
+                }}
+                style={[
+                  styles.joinBtn,
+                  { backgroundColor: oxblood, marginTop: spacing.sm },
+                ]}
+              >
+                <Text
+                  style={[typography.body, { color: colors.textOnPrimary }]}
+                >
+                  Join session
+                  {s.video_provider && s.video_provider !== 'stub'
+                    ? ` (${s.video_provider.replace(/_/g, ' ')})`
+                    : ''}
+                </Text>
+              </TouchableOpacity>
+            ) : null}
             <View style={styles.actions}>
               <TouchableOpacity
                 accessibilityRole="button"
@@ -246,6 +285,14 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
+    alignItems: 'center',
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  joinBtn: {
+    borderRadius: 10,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
     alignItems: 'center',
     minHeight: 44,
     justifyContent: 'center',

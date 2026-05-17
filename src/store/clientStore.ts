@@ -68,6 +68,8 @@ export const useClientStore = create<ClientStore>((set, get) => ({
         user_id: string;
         meal_type: FoodLog['mealType'];
         quantity_multiplier: number;
+        original_quantity?: number | null;
+        original_unit?: string | null;
         logged_at?: string;
         created_at?: string;
         food_item?: {
@@ -86,23 +88,40 @@ export const useClientStore = create<ClientStore>((set, get) => ({
       // re-introducing `any`.
       // TODO(types): drop the duplicate `name` field once all consumers
       // read `foodName` directly.
-      const logs: FoodLog[] = entries.map<FoodLog>((e) => ({
-        id: e.id,
-        foodItemId: e.food_item_id,
-        foodName: e.food_item?.name || '',
-        name: e.food_item?.name || '',
-        calories: Math.round((e.food_item?.calories || 0) * e.quantity_multiplier),
-        protein: Math.round((e.food_item?.protein_g || 0) * e.quantity_multiplier),
-        carbs: Math.round((e.food_item?.carbs_g || 0) * e.quantity_multiplier),
-        fat: Math.round((e.food_item?.fat_g || 0) * e.quantity_multiplier),
-        mealType: e.meal_type,
-        date: d,
-        quantity: e.quantity_multiplier,
-        unit: 'serving',
-        userId: e.user_id,
-        coachId: '',
-        createdAt: e.logged_at || e.created_at || new Date().toISOString(),
-      } as FoodLog & { name: string }));
+      const logs: FoodLog[] = entries.map<FoodLog>((e) => {
+        // F-3 fix: surface original_quantity/original_unit so meal cards
+        // can render "6 oz chicken" instead of the hardcoded
+        // "1 serving" placeholder. Falls back to the multiplier when the
+        // backend row is legacy and has no original_* fields.
+        const hasOriginal =
+          typeof e.original_quantity === 'number' &&
+          !!e.original_unit &&
+          (e.original_unit || '').trim().length > 0;
+        return ({
+          id: e.id,
+          foodItemId: e.food_item_id,
+          foodName: e.food_item?.name || '',
+          name: e.food_item?.name || '',
+          calories: Math.round((e.food_item?.calories || 0) * e.quantity_multiplier),
+          protein: Math.round((e.food_item?.protein_g || 0) * e.quantity_multiplier),
+          carbs: Math.round((e.food_item?.carbs_g || 0) * e.quantity_multiplier),
+          fat: Math.round((e.food_item?.fat_g || 0) * e.quantity_multiplier),
+          mealType: e.meal_type,
+          date: d,
+          quantity: hasOriginal
+            ? (e.original_quantity as number)
+            : e.quantity_multiplier,
+          unit: hasOriginal ? (e.original_unit as string) : 'serving',
+          originalQuantity:
+            typeof e.original_quantity === 'number'
+              ? e.original_quantity
+              : undefined,
+          originalUnit: e.original_unit ? e.original_unit : undefined,
+          userId: e.user_id,
+          coachId: '',
+          createdAt: e.logged_at || e.created_at || new Date().toISOString(),
+        } as FoodLog & { name: string });
+      });
 
       // Convert ml to oz for display (1 oz = 29.5735 ml)
       const totalMl = waterResponse.data?.total_ml || 0;

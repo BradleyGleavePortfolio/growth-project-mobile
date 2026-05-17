@@ -42,6 +42,15 @@ import type {
   WorkoutPayload,
 } from '../types/coachAi';
 
+// C-1: a 4-week workout / 7-day meal plan generation typically takes
+// 25–60 s on Anthropic + a Fly cold start. The shared axios client
+// defaults to 30 s, so the mobile aborts on the slow path; the backend
+// completes regardless and persists an orphan draft the coach has no
+// way to recover (no `listDrafts` surface). Bump the per-call timeout
+// for the three generate endpoints only — the rest of the AI surface
+// (status, get/edit/approve/reject) stays on the global 30 s.
+const AI_GENERATE_TIMEOUT_MS = 120_000;
+
 export const coachAiApi = {
   /**
    * Probe whether the AI engine is wired. Mobile calls this on
@@ -52,15 +61,21 @@ export const coachAiApi = {
 
   /** Generate a workout program draft for a client. */
   generateWorkout: (input: GenerateWorkoutInput) =>
-    api.post<Draft<WorkoutPayload>>('/coach/ai/workout-program', input),
+    api.post<Draft<WorkoutPayload>>('/coach/ai/workout-program', input, {
+      timeout: AI_GENERATE_TIMEOUT_MS,
+    }),
 
   /** Generate a meal plan draft for a client. */
   generateMealPlan: (input: GenerateMealPlanInput) =>
-    api.post<Draft<MealPlanPayload>>('/coach/ai/meal-plan', input),
+    api.post<Draft<MealPlanPayload>>('/coach/ai/meal-plan', input, {
+      timeout: AI_GENERATE_TIMEOUT_MS,
+    }),
 
   /** Generate a weekly insight digest for a client. */
   generateInsight: (input: GenerateInsightInput) =>
-    api.post<Draft<InsightPayload>>('/coach/ai/client-insight', input),
+    api.post<Draft<InsightPayload>>('/coach/ai/client-insight', input, {
+      timeout: AI_GENERATE_TIMEOUT_MS,
+    }),
 
   /** Load a draft by id. */
   getDraft: <T extends GeneratedPayload = GeneratedPayload>(draftId: string) =>

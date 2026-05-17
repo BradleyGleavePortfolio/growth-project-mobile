@@ -76,6 +76,12 @@ export interface FoodLog {
   quantity: number;
   unit: string;
   createdAt: string;
+  // F-3: the original user-entered quantity/unit pair the backend stores
+  // alongside `quantity_multiplier` (e.g. "6 oz chicken" not
+  // "1.7008x chicken"). Both are optional because legacy rows do not
+  // carry them; consumers fall back to `quantity` + `unit` when absent.
+  originalQuantity?: number;
+  originalUnit?: string;
 }
 
 export interface WeightLog {

@@ -145,9 +145,17 @@ export default function ClientPackagesScreen() {
           );
           return;
         }
-        await WebBrowser.openBrowserAsync(res.data.url, {
-          presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
-        });
+        // Use `openAuthSessionAsync` instead of `openBrowserAsync` for
+        // Stripe Checkout. The former is the OAuth-style sheet that
+        // actively listens for the configured deep-link callback (here
+        // `tgp://checkout/return` and `https://app.trygrowthproject.com/
+        // checkout/return`) and resolves the moment Stripe redirects
+        // back to the app's return URL. `openBrowserAsync` is fire-and-
+        // forget; the sheet stays open after Stripe issues the redirect
+        // unless the user manually taps Done, which silently strands
+        // users on the success page wondering if their subscription is
+        // active.
+        await WebBrowser.openAuthSessionAsync(res.data.url, 'tgp://');
         // The sheet is closed — useFocusEffect will refresh status, but
         // also do an immediate reload so the UI is current if the user
         // came back via the cancel deep link (which won't re-focus).
@@ -165,9 +173,14 @@ export default function ClientPackagesScreen() {
 
   const handleUpdateCard = useCallback(async () => {
     if (!status?.ok || !status.data.dunning?.update_card_url) return;
-    await WebBrowser.openBrowserAsync(status.data.dunning.update_card_url, {
-      presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
-    });
+    // Same reasoning as handleBuy: Stripe Billing Portal redirects to a
+    // tgp:// return URL on save; openAuthSessionAsync is the listener that
+    // actually closes the sheet on that redirect. openBrowserAsync would
+    // leave the user staring at the post-save page.
+    await WebBrowser.openAuthSessionAsync(
+      status.data.dunning.update_card_url,
+      'tgp://',
+    );
     await load();
   }, [status, load]);
 

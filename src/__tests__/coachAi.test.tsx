@@ -95,7 +95,10 @@ describe('coachAiApi', () => {
     expect(res.data.ready).toBe(true);
   });
 
-  it('generateWorkout() POSTs to /coach/ai/workout-program with the input', async () => {
+  it('generateWorkout() POSTs to /coach/ai/workout-program with the input and a long timeout', async () => {
+    // C-1: generate endpoints carry a 120 s axios timeout to survive a
+    // Fly cold start + multi-week Anthropic call. Keep the assertion
+    // explicit so a regression here is loud.
     mockedPost.mockResolvedValueOnce(
       ok({ draftId: 'd1', type: 'WORKOUT_PROGRAM', clientId: 'c1', generatedPayload: { weeks: [] }, modelUsed: 'claude-opus-4-7', tokensIn: 1, tokensOut: 1, costCents: 1 }),
     );
@@ -106,31 +109,43 @@ describe('coachAiApi', () => {
       focus: 'Hypertrophy',
       notes: 'no knee impact',
     });
-    expect(mockedPost).toHaveBeenCalledWith('/coach/ai/workout-program', {
-      clientId: 'c1',
-      weeks: 4,
-      daysPerWeek: 5,
-      focus: 'Hypertrophy',
-      notes: 'no knee impact',
-    });
+    expect(mockedPost).toHaveBeenCalledWith(
+      '/coach/ai/workout-program',
+      {
+        clientId: 'c1',
+        weeks: 4,
+        daysPerWeek: 5,
+        focus: 'Hypertrophy',
+        notes: 'no knee impact',
+      },
+      { timeout: 120000 },
+    );
   });
 
-  it('generateMealPlan() POSTs to /coach/ai/meal-plan', async () => {
+  it('generateMealPlan() POSTs to /coach/ai/meal-plan with a long timeout', async () => {
     mockedPost.mockResolvedValueOnce(ok({ draftId: 'd1' }));
     await coachAiApi.generateMealPlan({ clientId: 'c1', days: 7 });
-    expect(mockedPost).toHaveBeenCalledWith('/coach/ai/meal-plan', {
-      clientId: 'c1',
-      days: 7,
-    });
+    expect(mockedPost).toHaveBeenCalledWith(
+      '/coach/ai/meal-plan',
+      {
+        clientId: 'c1',
+        days: 7,
+      },
+      { timeout: 120000 },
+    );
   });
 
-  it('generateInsight() POSTs to /coach/ai/client-insight', async () => {
+  it('generateInsight() POSTs to /coach/ai/client-insight with a long timeout', async () => {
     mockedPost.mockResolvedValueOnce(ok({ draftId: 'd1' }));
     await coachAiApi.generateInsight({ clientId: 'c1', windowDays: 14 });
-    expect(mockedPost).toHaveBeenCalledWith('/coach/ai/client-insight', {
-      clientId: 'c1',
-      windowDays: 14,
-    });
+    expect(mockedPost).toHaveBeenCalledWith(
+      '/coach/ai/client-insight',
+      {
+        clientId: 'c1',
+        windowDays: 14,
+      },
+      { timeout: 120000 },
+    );
   });
 
   it('getDraft() URL-encodes the draftId', async () => {
