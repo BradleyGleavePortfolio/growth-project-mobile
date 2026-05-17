@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+// Requires: npx playwright install chromium (not installed by default)
 /**
  * Capture screenshots from the Expo web preview at iPhone 6.5" viewport.
  *
