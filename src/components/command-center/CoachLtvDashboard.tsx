@@ -189,7 +189,7 @@ const heroStyles = StyleSheet.create({
   },
   value: {
     fontSize: 36,
-    fontWeight: '700',
+    fontWeight: '600',
     color: colors.ink,
     letterSpacing: -0.5,
     flexShrink: 1,
@@ -223,9 +223,9 @@ function ZeroChurnBadge({ months }: { months: number }) {
       accessibilityRole="text"
       accessibilityLabel={`${months}-month zero-churn streak`}
     >
-      <Text style={badgeStyles.fire}>🔥</Text>
+      <Text style={badgeStyles.streakLabel}>STREAK</Text>
       <Text style={badgeStyles.count}>{months}</Text>
-      <Text style={badgeStyles.label}>mo streak</Text>
+      <Text style={badgeStyles.label}>mo</Text>
     </Animated.View>
   );
 }
@@ -240,10 +240,15 @@ const badgeStyles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
-  fire: { fontSize: 13 },
+  streakLabel: {
+    fontSize: 9,
+    fontWeight: '600',
+    color: colors.bone,
+    letterSpacing: 1.2,
+  },
   count: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '600',
     color: colors.bone,
   },
   label: {
@@ -258,7 +263,7 @@ const badgeStyles = StyleSheet.create({
 function RecordBadge() {
   return (
     <View style={recStyles.container}>
-      <Text style={recStyles.text}>★ Record</Text>
+      <Text style={recStyles.text}>RECORD</Text>
     </View>
   );
 }
@@ -272,9 +277,9 @@ const recStyles = StyleSheet.create({
   },
   text: {
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '600',
     color: colors.bone,
-    letterSpacing: 0.2,
+    letterSpacing: 1.1,
   },
 });
 
@@ -301,7 +306,7 @@ const trendStyles = StyleSheet.create({
     paddingVertical: 3,
     alignSelf: 'flex-start',
   },
-  arrow: { fontSize: 13, fontWeight: '700' },
+  arrow: { fontSize: 13, fontWeight: '600' },
   text: { fontSize: 12, fontWeight: '600' },
 });
 
@@ -757,7 +762,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
   },
   milestoneHighlight: {
-    fontWeight: '700',
+    fontWeight: '600',
     color: colors.bone,
   },
 
