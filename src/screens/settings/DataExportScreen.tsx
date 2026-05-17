@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
+import { SkeletonList } from '../../ui/skeletons/Skeleton';
 import { useTheme } from '../../theme/useTheme';
 import { dataExportApi, DataExportRecord } from '../../services/dataExportApi';
 import { env } from '../../config/env';
@@ -196,11 +197,7 @@ export default function DataExportScreen() {
       {/* ── State-specific UI ── */}
 
       {state.phase === 'loading' && (
-        <ActivityIndicator
-          color={colors.primary}
-          style={styles.spinner}
-          accessibilityLabel="Loading export status"
-        />
+        <SkeletonList count={4} />
       )}
 
       {state.phase === 'idle' && (

@@ -16,6 +16,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
 import {
   useApproveSession,
   useDeclineSession,
@@ -38,11 +39,7 @@ export default function CoachBookingInboxScreen() {
   );
 
   if (isLoading) {
-    return (
-      <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <ActivityIndicator color={oxblood} />
-      </View>
-    );
+    return <SkeletonScreen count={5} />;
   }
 
   if (isError) {

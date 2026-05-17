@@ -28,6 +28,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 import { useFocusEffect, useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
@@ -194,11 +195,7 @@ export default function ClientPackagesScreen() {
   }, [navigation]);
 
   if (!packages || !status) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
+    return <SkeletonScreen count={5} />;
   }
 
   const packagesNotConfigured = !packages.ok && packages.reason === 'not_configured';

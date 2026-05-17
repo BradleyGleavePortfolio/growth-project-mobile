@@ -17,6 +17,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
 import HapticPressable from '../../components/HapticPressable';
 import {
   RouteProp,
@@ -82,11 +83,7 @@ export default function WorkoutAssignmentDetailScreen() {
   }, [data, navigation]);
 
   if (isLoading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color={sc.accent} />
-      </View>
-    );
+    return <SkeletonScreen count={5} />;
   }
 
   if (isError || !data) {

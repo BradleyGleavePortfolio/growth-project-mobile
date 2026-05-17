@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Image,
 } from 'react-native';
+import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute, RouteProp, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -106,11 +107,7 @@ export default function RecipeDetailScreen() {
   }, [isSaved, saving, recipe]);
 
   if (isLoading && !recipe) {
-    return (
-      <View style={styles.errorContainer}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
+    return <SkeletonScreen count={6} />;
   }
 
   if (isError || !recipe) {

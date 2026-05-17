@@ -21,8 +21,8 @@ import {
   ScrollView,
   SafeAreaView,
   RefreshControl,
-  ActivityIndicator,
 } from 'react-native';
+import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
 import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useClientStore } from '../../store/clientStore';
@@ -280,11 +280,7 @@ export default function HomeScreen() {
   };
 
   if (!currentUser) {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: sc.bgPrimary }}>
-        <ActivityIndicator size="large" color={sc.textPrimary} style={{ marginTop: 80 }} />
-      </SafeAreaView>
-    );
+    return <SkeletonScreen />;
   }
 
   return (

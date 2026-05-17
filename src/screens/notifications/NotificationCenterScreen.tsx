@@ -22,6 +22,7 @@ import {
   ActivityIndicator,
   StyleSheet,
 } from 'react-native';
+import { SkeletonList } from '../../ui/skeletons/Skeleton';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -305,11 +306,7 @@ export default function NotificationCenterScreen() {
 
       {/* Loading skeleton */}
       {state.isLoadingFirst && (
-        <ActivityIndicator
-          style={styles.loadingFirst}
-          color={colors.primary}
-          accessibilityLabel="Loading notifications"
-        />
+        <SkeletonList count={8} />
       )}
 
       {/* List */}
