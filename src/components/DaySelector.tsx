@@ -14,13 +14,19 @@ export default function DaySelector({
   onDateChange,
 }: DaySelectorProps) {
   const isToday = selectedDate === getTodayString();
+  const displayLabel = isToday ? 'Today' : formatDate(selectedDate);
 
   return (
-    <View style={styles.container}>
+    <View
+      style={styles.container}
+      accessible={false}
+    >
       <TouchableOpacity
         style={styles.arrow}
         onPress={() => onDateChange(addDays(selectedDate, -1))}
         hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        accessibilityRole="button"
+        accessibilityLabel="Previous day"
       >
         <Ionicons name="chevron-back" size={22} color={Colors.textSecondary} />
       </TouchableOpacity>
@@ -28,10 +34,11 @@ export default function DaySelector({
       <TouchableOpacity
         onPress={() => onDateChange(getTodayString())}
         activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel={isToday ? 'Viewing today' : `Viewing ${displayLabel}, tap to go to today`}
+        accessibilityHint={isToday ? undefined : 'Double tap to jump back to today'}
       >
-        <Text style={styles.dateText}>
-          {isToday ? 'Today' : formatDate(selectedDate)}
-        </Text>
+        <Text style={styles.dateText}>{displayLabel}</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -41,6 +48,9 @@ export default function DaySelector({
         }}
         hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         disabled={isToday}
+        accessibilityRole="button"
+        accessibilityLabel="Next day"
+        accessibilityState={{ disabled: isToday }}
       >
         <Ionicons
           name="chevron-forward"

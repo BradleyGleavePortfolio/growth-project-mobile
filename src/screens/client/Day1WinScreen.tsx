@@ -13,14 +13,13 @@
  *   - Every interactive element has accessibilityLabel + accessibilityRole.
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
   Pressable,
   ScrollView,
   SafeAreaView,
-  ActivityIndicator,
   StyleSheet,
   Alert,
 } from 'react-native';
@@ -28,6 +27,9 @@ import { useTheme } from '../../theme/ThemeProvider';
 import { firstWinApi, WinType } from '../../services/firstWinApi';
 import { track } from '../../lib/analytics';
 import { typography } from '../../theme/tokens';
+import PackageSelectionSheet from '../../components/PackageSelectionSheet';
+import { prefsStorage } from '../../storage/mmkv';
+import api from '../../services/api';
 
 // ── Win card definitions ──────────────────────────────────────────────────────
 
@@ -77,13 +79,15 @@ interface Day1WinScreenProps {
 
 export default function Day1WinScreen({ onComplete }: Day1WinScreenProps) {
   const { colors } = useTheme();
-  const styles = makeStyles(colors);
+  const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const [selectedWin, setSelectedWin] = useState<WinType | null>(null);
   const [loading, setLoading] = useState(false);
   const [aiMessage, setAiMessage] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const [failureCount, setFailureCount] = useState(0);
+  // Task 10: PackageSelectionSheet gate
+  const [showPackageSheet, setShowPackageSheet] = useState(false);
 
   const handleSelectWin = useCallback(
     async (winType: WinType) => {
@@ -111,22 +115,71 @@ export default function Day1WinScreen({ onComplete }: Day1WinScreenProps) {
     [loading],
   );
 
-  // Continue without selecting a win — used by skip and by the persistent-
-  // failure escape hatch. Routes straight into the main app.
-  const handleSkip = useCallback(() => {
-    onComplete();
+  // Check the 24h gate and package availability, then either show sheet or call onComplete.
+  const maybeShowPackageSheet = useCallback(async (target?: WinType) => {
+    const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+    try {
+      const dismissedAt = await prefsStorage.getStringAsync(
+        'onboarding.package_prompt_dismissed_at',
+      );
+      if (dismissedAt) {
+        const elapsed = Date.now() - new Date(dismissedAt).getTime();
+        if (elapsed < TWENTY_FOUR_HOURS) {
+          // Still within 24h window — skip sheet
+          onComplete(target);
+          return;
+        }
+      }
+    } catch {
+      // MMKV error — proceed to check packages
+    }
+
+    // Check whether packages exist before showing sheet
+    try {
+      const res = await api.get<{ packages: unknown[] } | unknown[]>(
+        '/v1/clients/me/coach/packages',
+      );
+      const data = res.data;
+      const list: unknown[] = Array.isArray(data)
+        ? data
+        : (data as { packages: unknown[] }).packages ?? [];
+      if (list.length === 0) {
+        onComplete(target);
+        return;
+      }
+    } catch {
+      // API error — skip sheet, call onComplete directly
+      onComplete(target);
+      return;
+    }
+
+    // Packages exist and 24h gate passed — show sheet
+    // Stash the target so the sheet callbacks can forward it
+    setShowPackageSheet(true);
   }, [onComplete]);
 
-  // Continue from the completion view — routes to the matching logger.
+  // Continue without selecting a win — used by skip and by the persistent-
+  // failure escape hatch. Routes straight into the main app (via package gate).
+  const handleSkip = useCallback(() => {
+    maybeShowPackageSheet(undefined);
+  }, [maybeShowPackageSheet]);
+
+  // Continue from the completion view — routes to the matching logger (via package gate).
   const handleContinue = useCallback(() => {
-    onComplete(selectedWin ?? undefined);
-  }, [onComplete, selectedWin]);
+    maybeShowPackageSheet(selectedWin ?? undefined);
+  }, [maybeShowPackageSheet, selectedWin]);
 
   // ── Completion state ────────────────────────────────────────────────────────
 
   if (done && aiMessage) {
     return (
       <SafeAreaView style={[styles.root, { backgroundColor: colors.background }]}>
+        {/* PackageSelectionSheet — shown as Modal overlay on top of Day1WinScreen */}
+        <PackageSelectionSheet
+          visible={showPackageSheet}
+          onDismiss={() => { setShowPackageSheet(false); onComplete(selectedWin ?? undefined); }}
+          onPaymentSuccess={() => { setShowPackageSheet(false); onComplete(selectedWin ?? undefined); }}
+        />
         <ScrollView
           contentContainerStyle={styles.completionContainer}
           testID="day1win-complete-view"
@@ -160,6 +213,12 @@ export default function Day1WinScreen({ onComplete }: Day1WinScreenProps) {
 
   return (
     <SafeAreaView style={[styles.root, { backgroundColor: colors.background }]}>
+      {/* PackageSelectionSheet — shown as Modal overlay on top of Day1WinScreen */}
+      <PackageSelectionSheet
+        visible={showPackageSheet}
+        onDismiss={() => { setShowPackageSheet(false); onComplete(undefined); }}
+        onPaymentSuccess={() => { setShowPackageSheet(false); onComplete(undefined); }}
+      />
       <ScrollView
         contentContainerStyle={styles.selectionContainer}
         testID="day1win-selection-view"
@@ -190,11 +249,7 @@ export default function Day1WinScreen({ onComplete }: Day1WinScreenProps) {
                 testID={WIN_CARD_TEST_IDS[card.id]}
               >
                 {loading && isSelected ? (
-                  <ActivityIndicator
-                    size="small"
-                    color={colors.primary}
-                    style={styles.cardSpinner}
-                  />
+                  <View style={styles.cardLoadingSkeleton} />
                 ) : null}
                 <Text style={[styles.cardTitle, { color: colors.textPrimary }]}>
                   {card.title}
@@ -283,7 +338,11 @@ function makeStyles(colors: ReturnType<typeof useTheme>['colors']) {
       borderWidth: 1,
       borderRadius: 2,
     },
-    cardSpinner: {
+    cardLoadingSkeleton: {
+      width: 72,
+      height: 10,
+      borderRadius: 2,
+      backgroundColor: colors.border,
       marginBottom: 8,
       alignSelf: 'flex-start',
     },

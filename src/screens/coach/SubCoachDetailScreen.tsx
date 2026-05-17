@@ -17,6 +17,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -158,11 +159,7 @@ export default function SubCoachDetailScreen() {
   }, [detail, subCoachId, navigation]);
 
   if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-      </View>
-    );
+    return <SkeletonScreen count={5} />;
   }
 
   if (error !== null || detail === null) {

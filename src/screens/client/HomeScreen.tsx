@@ -21,8 +21,8 @@ import {
   ScrollView,
   SafeAreaView,
   RefreshControl,
-  ActivityIndicator,
 } from 'react-native';
+import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
 import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useClientStore } from '../../store/clientStore';
@@ -33,6 +33,7 @@ import { useTheme } from '../../theme/ThemeProvider';
 // in PR #130; this PR places it on HomeScreen).
 import HolisticInsightsTile from '../../components/home/HolisticInsightsTile';
 import PendingInviteBanner from '../../components/PendingInviteBanner';
+import CoachIntroductionBanner from '../../components/home/CoachIntroductionBanner';
 import { workoutApi } from '../../services/api';
 import {
   getProfileCompletion,
@@ -157,6 +158,9 @@ export default function HomeScreen() {
   // "workout complete" copy. Falling back to `false` on network error so
   // the home line never claims a workout was done when we couldn't verify.
   const [workoutDone, setWorkoutDone] = useState<boolean>(false);
+  // Task 9: workoutExists drives conditional CTA.
+  // 'loading' while fetching, true when rows exist, false when empty/error.
+  const [workoutExists, setWorkoutExists] = useState<boolean | 'loading'>('loading');
   useEffect(() => {
     let cancelled = false;
     if (!currentUser) return;
@@ -172,9 +176,16 @@ export default function HomeScreen() {
           // A row counts when it is today AND not explicitly marked incomplete.
           return d.toDateString() === todayStr && r.completed === true;
         });
-        if (!cancelled) setWorkoutDone(done);
+        if (!cancelled) {
+          setWorkoutDone(done);
+          setWorkoutExists(rows.length > 0);
+        }
       } catch {
-        if (!cancelled) setWorkoutDone(false);
+        if (!cancelled) {
+          setWorkoutDone(false);
+          // On error, assume workouts exist so we don’t hide the CTA unnecessarily
+          setWorkoutExists(true);
+        }
       }
     })();
     return () => {
@@ -269,11 +280,7 @@ export default function HomeScreen() {
   };
 
   if (!currentUser) {
-    return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: sc.bgPrimary }}>
-        <ActivityIndicator size="large" color={sc.textPrimary} style={{ marginTop: 80 }} />
-      </SafeAreaView>
-    );
+    return <SkeletonScreen />;
   }
 
   return (
@@ -328,21 +335,48 @@ export default function HomeScreen() {
           {progressLine}
         </Text>
 
-        {/* Single CTA */}
-        <Pressable
-          style={({ pressed }) => ({
-            backgroundColor: sc.textPrimary,
-            paddingVertical: 20,
-            alignItems: 'center',
-            opacity: pressed ? 0.85 : 1,
-          })}
-          onPress={onContinue}
-          accessibilityRole="button"
-          accessibilityLabel="Continue"
-          accessibilityHint="Opens your workout tracker"
-        >
-          <Text style={{ ...typography.eyebrow, color: sc.bgPrimary }}>CONTINUE</Text>
-        </Pressable>
+        {/* Coach introduction banner — shown once, dismissible */}
+        <CoachIntroductionBanner />
+
+        {/* Single CTA — conditional on whether workouts exist */}
+        {workoutExists === 'loading' ? (
+          // Skeleton placeholder while loading — no ActivityIndicator
+          <View
+            style={{
+              height: 60,
+              backgroundColor: sc.bgSurface,
+              borderRadius: 2,
+            }}
+            testID="cta-skeleton"
+          />
+        ) : workoutExists ? (
+          <Pressable
+            style={({ pressed }) => ({
+              backgroundColor: sc.textPrimary,
+              paddingVertical: 20,
+              alignItems: 'center',
+              opacity: pressed ? 0.85 : 1,
+            })}
+            onPress={onContinue}
+            accessibilityRole="button"
+            accessibilityLabel="Continue"
+            accessibilityHint="Opens your workout tracker"
+            testID="home-continue-cta"
+          >
+            <Text style={{ ...typography.eyebrow, color: sc.bgPrimary }}>CONTINUE</Text>
+          </Pressable>
+        ) : (
+          // No workout assigned yet — soft explore link instead of disabled CTA
+          <Pressable
+            onPress={() => navigation.navigate('Log')}
+            accessibilityRole="button"
+            accessibilityLabel="Explore the app"
+            testID="home-explore-cta"
+            style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1, alignSelf: 'flex-start' })}
+          >
+            <Text style={{ ...typography.body, color: sc.textMuted }}>Explore the app →</Text>
+          </Pressable>
+        )}
 
         {/* Below-fold rule + 2×2 numbers grid */}
         <View style={{ height: 1, backgroundColor: sc.border, marginTop: 96, marginBottom: 32 }} />

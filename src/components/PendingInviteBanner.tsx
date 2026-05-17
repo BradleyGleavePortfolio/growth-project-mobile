@@ -9,7 +9,7 @@
  * foreground URL event.
  */
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import HapticPressable from './HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
@@ -28,6 +28,8 @@ export default function PendingInviteBanner() {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<'idle' | 'ok' | 'err'>('idle');
   const [errMessage, setErrMessage] = useState<string | null>(null);
+  // Refs to clear timers on unmount — prevents setState on dead component.
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const refresh = useCallback(async () => {
     setCode(await readPendingInviteCode());
@@ -36,7 +38,10 @@ export default function PendingInviteBanner() {
   useEffect(() => {
     refresh();
     const unsub = authEvents.onAuthChange(refresh);
-    return unsub;
+    return () => {
+      unsub();
+      if (refreshTimerRef.current !== null) clearTimeout(refreshTimerRef.current);
+    };
   }, [refresh]);
 
   if (!code) return null;
@@ -50,12 +55,12 @@ export default function PendingInviteBanner() {
     if (result.ok) {
       setStatus('ok');
       // refresh from storage so we hide the banner
-      setTimeout(refresh, 1500);
+      refreshTimerRef.current = setTimeout(refresh, 1500);
     } else {
       setStatus('err');
       setErrMessage(result.message ?? null);
       // 4xx codes were already cleared by claimPendingInviteCode
-      setTimeout(refresh, 1500);
+      refreshTimerRef.current = setTimeout(refresh, 1500);
     }
   };
 

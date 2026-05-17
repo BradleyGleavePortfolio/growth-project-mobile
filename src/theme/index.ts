@@ -80,14 +80,14 @@ export const colors = {
   },
   feedback: {
     success:    CanonicalColors.success,
-    successBg:  '#E0EBE4',
+    successBg:  CanonicalColors.feedbackSuccessBg,
     warning:    CanonicalColors.warning,
-    warningBg:  '#F8F2E5',
+    warningBg:  CanonicalColors.noticeWarningBg,
     error:      CanonicalColors.error,
-    errorBg:    '#F2E0E0',
-    errorText:  '#9A3030',
+    errorBg:    CanonicalColors.noticeCriticalBg,
+    errorText:  CanonicalColors.noticeCriticalAccent,
     info:       CanonicalColors.info,
-    infoBg:     '#E8F4FD',
+    infoBg:     '#E8F4FD',  // light info blue — no token yet
   },
   border: {
     default: CanonicalColors.border,
@@ -100,8 +100,8 @@ export const colors = {
     fat:     CanonicalColors.fat,
     water:   CanonicalColors.water,
     fiber:   CanonicalColors.fiber,
-    consistency: '#B1A89F',  // stone — neutral consecutive-day accent
-    habit:       '#7A6A9B',  // muted lavender
+    consistency: CanonicalColors.textMuted,  // stone — neutral consecutive-day accent
+    habit:       CanonicalColors.templateMobility,  // muted lavender
   },
   shadow:      CanonicalColors.cardShadow,
   transparent: 'transparent',
@@ -113,13 +113,13 @@ export const colors = {
 export const Typography = {
   // Map legacy keys → new token values
   hero:     { fontFamily: 'CormorantGaramond_400Regular', fontSize: 44, lineHeight: 46, fontWeight: '400' as const, letterSpacing: 0.4 },
-  h1:       { fontFamily: 'CormorantGaramond_400Regular', fontSize: 32, lineHeight: 35, fontWeight: '400' as const, letterSpacing: 0.6, color: Colors.dark },
-  h2:       { fontFamily: 'CormorantGaramond_400Regular', fontSize: 24, lineHeight: 29, fontWeight: '400' as const, letterSpacing: 0.5, color: Colors.dark },
-  h3:       { fontFamily: 'CormorantGaramond_500Medium',  fontSize: 20, lineHeight: 24, fontWeight: '500' as const, letterSpacing: 0.4, color: Colors.dark },
-  body:     { fontFamily: 'Inter_400Regular',             fontSize: 16, lineHeight: 26, fontWeight: '400' as const, letterSpacing: -0.16, color: Colors.textMuted },
-  bodyDark: { fontFamily: 'Inter_400Regular',             fontSize: 16, lineHeight: 26, fontWeight: '400' as const, letterSpacing: -0.16, color: Colors.dark },
-  label:    { fontFamily: 'Inter_500Medium',              fontSize: 11, lineHeight: 13, fontWeight: '500' as const, letterSpacing: 1.98, textTransform: 'uppercase' as const, color: Colors.primary },
-  caption:  { fontFamily: 'Inter_500Medium',              fontSize: 12, lineHeight: 18, fontWeight: '500' as const, letterSpacing: 0.96, color: Colors.textMuted },
+  h1:       { fontFamily: 'CormorantGaramond_400Regular', fontSize: 32, lineHeight: 35, fontWeight: '400' as const, letterSpacing: 0.6, color: CanonicalColors.textPrimary },
+  h2:       { fontFamily: 'CormorantGaramond_400Regular', fontSize: 24, lineHeight: 29, fontWeight: '400' as const, letterSpacing: 0.5, color: CanonicalColors.textPrimary },
+  h3:       { fontFamily: 'CormorantGaramond_500Medium',  fontSize: 20, lineHeight: 24, fontWeight: '500' as const, letterSpacing: 0.4, color: CanonicalColors.textPrimary },
+  body:     { fontFamily: 'Inter_400Regular',             fontSize: 16, lineHeight: 26, fontWeight: '400' as const, letterSpacing: -0.16, color: CanonicalColors.textMuted },
+  bodyDark: { fontFamily: 'Inter_400Regular',             fontSize: 16, lineHeight: 26, fontWeight: '400' as const, letterSpacing: -0.16, color: CanonicalColors.textPrimary },
+  label:    { fontFamily: 'Inter_500Medium',              fontSize: 11, lineHeight: 13, fontWeight: '500' as const, letterSpacing: 1.98, textTransform: 'uppercase' as const, color: CanonicalColors.primary },
+  caption:  { fontFamily: 'Inter_500Medium',              fontSize: 12, lineHeight: 18, fontWeight: '500' as const, letterSpacing: 0.96, color: CanonicalColors.textMuted },
   button:   { fontFamily: 'Inter_600SemiBold',            fontSize: 14, lineHeight: 18, fontWeight: '600' as const, letterSpacing: 1.2, textTransform: 'uppercase' as const },
 };
 
@@ -145,14 +145,14 @@ export const Radius = {
 // ─── Legacy Shadow export (Wave 2: luxury opacity caps) ───────────────────────
 export const Shadow = {
   card: {
-    shadowColor:   '#1A1A18',
+    shadowColor:   CanonicalColors.textPrimary,
     shadowOffset:  { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius:  6,
     elevation:     2,
   },
   button: {
-    shadowColor:   '#2C4A36',
+    shadowColor:   CanonicalColors.primary,
     shadowOffset:  { width: 0, height: 1 },
     shadowOpacity: 0.04,
     shadowRadius:  2,

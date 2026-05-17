@@ -66,9 +66,12 @@ import LeaderboardScreen from '../screens/client/LeaderboardScreen';
 import LeaderboardSettingsScreen from '../screens/client/LeaderboardSettingsScreen';
 // Bloodwork — client-entered labs (flag OFF by default)
 import BloodworkEntryScreen from '../screens/client/BloodworkEntryScreen';
-// Wave 11 — runtime scaffolding (flag-gated; safe to mount)
+// Wave 11 — runtime scaffolding (flag-gated; the screen registrations below
+// only mount when the matching feature flag is explicitly true so the stub
+// "Coming soon" surfaces never reach production).
 import ClientPathCopilotScreen from '../screens/client/ClientPathCopilotScreen';
 import PrivateCommunityHubScreen from '../screens/client/PrivateCommunityHubScreen';
+import { featureFlags } from '../config/featureFlags';
 import { HapticService } from '../ui/haptics/haptics.service';
 // Phase 11 — Share Card
 import ShareCardScreen from '../screens/share/ShareCardScreen';
@@ -355,10 +358,16 @@ function MoreStackNavigator() {
       <MoreStackNav.Screen name="LeaderboardSettings"  component={LeaderboardSettingsScreen} />
       {/* Bloodwork — client-entered labs (flag OFF by default) */}
       <MoreStackNav.Screen name="Bloodwork"    component={BloodworkEntryScreen} />
-      {/* Wave 11 — gated routes; the screens themselves render a
-          preview-only empty state when their flag is OFF. */}
-      <MoreStackNav.Screen name="Copilot"           component={ClientPathCopilotScreen} />
-      <MoreStackNav.Screen name="PrivateCommunityHub" component={PrivateCommunityHubScreen} />
+      {/* Wave 11 — gated routes. Only registered when the matching feature
+          flag is explicitly true, so stub/coming-soon copy never ships to
+          production binaries (the screens still render an empty state if
+          they ever do mount). */}
+      {featureFlags.clientPathCopilot && (
+        <MoreStackNav.Screen name="Copilot"           component={ClientPathCopilotScreen} />
+      )}
+      {featureFlags.privateCommunityHub && (
+        <MoreStackNav.Screen name="PrivateCommunityHub" component={PrivateCommunityHubScreen} />
+      )}
       {/* Phase 11 — Share Card. Rendered off-screen; captureRef then opens native share sheet. */}
       <MoreStackNav.Screen name="ShareCard" component={ShareCardScreen} />
       {/* Phase 11 — Notification category preferences (push taxonomy). */}

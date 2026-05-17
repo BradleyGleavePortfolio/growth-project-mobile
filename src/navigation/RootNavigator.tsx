@@ -12,6 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import AuthNavigator from './AuthNavigator';
 import ClientNavigator from './ClientNavigator';
 import CoachNavigator from './CoachNavigator';
+import CoachWizardNavigator from './CoachWizardNavigator';
 // OnboardingNavigator (legacy 10-step) is intentionally imported but not
 // mounted — kept so the legacy screens stay in the build for reference
 // implementation and future rollback. See the file header for context.
@@ -27,7 +28,10 @@ import { flush as flushFoodLogQueue } from '../services/foodLogQueue';
 import { isScreenshotMode } from '../screenshots';
 import { firstWinApi, WinType } from '../services/firstWinApi';
 import Day1WinScreen from '../screens/client/Day1WinScreen';
+import PackageSelectionSheet from '../components/PackageSelectionSheet';
+import { prefsStorage } from '../storage/mmkv';
 import { signOut } from '../services/authActions';
+import api from '../services/api';
 // Phase 11 Track 9 — Support Inbox: init Crisp and sync identity on login
 import { initCrisp, syncCrispIdentity } from '../services/support/crisp.service';
 // Reconcile: if the lean onboarding completed but we never confirmed a 200
@@ -37,7 +41,17 @@ import { useLeanOnboardingReconcile } from '../hooks/useLeanOnboardingReconcile'
 // Phase 7A: 'day1win' is inserted between onboarding and the main client
 // navigator. On first cold start after onboarding the app checks
 // GET /me/first-win/status; if incomplete the Day1WinScreen is shown once.
-type AuthState = 'loading' | 'unauthenticated' | 'onboarding' | 'day1win' | 'coach' | 'student';
+// 'coach_wizard' — shown when GET /coach/onboarding returns is_complete:false.
+// 'package_prompt' — re-surfaces PackageSelectionSheet after 24h dismissal gap.
+type AuthState =
+  | 'loading'
+  | 'unauthenticated'
+  | 'onboarding'
+  | 'day1win'
+  | 'coach_wizard'
+  | 'coach'
+  | 'package_prompt'
+  | 'student';
 
 // Audit fix CR-1: Supabase password-recovery emails carry the
 // access_token + refresh_token pair in the URL fragment (after `#`).
@@ -46,6 +60,7 @@ type AuthState = 'loading' | 'unauthenticated' | 'onboarding' | 'day1win' | 'coa
 // for the reset-password path so the ResetPassword screen receives
 // the tokens via `route.params`. See navigation/deepLinkUtils.ts.
 import { fragmentToQuery } from './deepLinkUtils';
+import { readUserCache, clearUserCache } from '../lib/userCache';
 
 // A-2 helper. Convert `https://app.trygrowthproject.com/<path>` to its
 // `tgp://<path>` equivalent so the post-signOut replay never escapes to
@@ -331,7 +346,7 @@ export default function RootNavigator() {
       // secureStorage.getItem migrates any legacy AsyncStorage token into
       // SecureStore on first read, so existing users stay logged in.
       const token = await secureStorage.getItem('supabase_token');
-      const userRaw = await AsyncStorage.getItem('user_data');
+      const parsedUser = await readUserCache();
       const needsRoleSelection = await AsyncStorage.getItem('needs_role_selection');
 
       if (!token || !userRaw) {
@@ -347,10 +362,10 @@ export default function RootNavigator() {
 
       let user = null;
       try {
-        user = JSON.parse(userRaw);
+        user = parsedUser;
       } catch {
         // Corrupted storage — treat as logged out
-        await AsyncStorage.removeItem('user_data');
+        clearUserCache();
         setAuthState('unauthenticated');
         return;
       }
@@ -363,6 +378,17 @@ export default function RootNavigator() {
           displayName: user.name,
           role: 'coach',
         });
+        // Check coach onboarding wizard gate.
+        // On API failure (404/500) fall through to 'coach' — never hard-block.
+        try {
+          const onboardingRes = await api.get<{ is_complete: boolean }>('/coach/onboarding');
+          if (onboardingRes.data.is_complete === false) {
+            setAuthState('coach_wizard');
+            return;
+          }
+        } catch {
+          // Network / 404 / 500 — fall through to coach dashboard
+        }
         setAuthState('coach');
         return;
       }
@@ -405,6 +431,26 @@ export default function RootNavigator() {
           displayName: user.name,
           role: 'student',
         });
+
+        // Re-surface PackageSelectionSheet if dismissed > 24h ago.
+        // Only triggers on authenticated re-boots, not the first post-onboarding flow
+        // (that is handled inside Day1WinScreen itself).
+        try {
+          const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+          const dismissedAt = await prefsStorage.getStringAsync(
+            'onboarding.package_prompt_dismissed_at',
+          );
+          if (dismissedAt) {
+            const elapsed = Date.now() - new Date(dismissedAt).getTime();
+            if (elapsed > TWENTY_FOUR_HOURS) {
+              setAuthState('package_prompt');
+              return;
+            }
+          }
+        } catch {
+          // best-effort; fall through to student
+        }
+
         setAuthState('student');
         return;
       }
@@ -481,9 +527,9 @@ export default function RootNavigator() {
         ...DefaultTheme,
         colors: {
           ...DefaultTheme.colors,
-          background: '#F5EFE4',  // bone — Wave 2 global bg
-          card: '#F5EFE4',
-          text: '#1A1A18',        // ink
+          background: Colors.background,  // bone — Wave 2 global bg
+          card: Colors.background,
+          text: Colors.textPrimary,        // ink
           border: 'rgba(176,141,87,0.2)',  // camel divider
         },
       }}
@@ -497,8 +543,23 @@ export default function RootNavigator() {
         // Psych Report #1: 3-question lean flow (< 60 s to first win).
         // Original OnboardingNavigator is preserved; route around it here.
         <LeanOnboardingNavigator />
+      ) : authState === 'coach_wizard' ? (
+        // New coach — onboarding wizard before full coach dashboard.
+        <CoachWizardNavigator />
       ) : authState === 'coach' ? (
         <CoachNavigator />
+      ) : authState === 'package_prompt' ? (
+        // Re-surface the package sheet after 24h on top of the client app.
+        // PackageSelectionSheet renders as a Modal so ClientNavigator underneath
+        // is fully mounted and ready when the sheet is dismissed.
+        <>
+          <ClientNavigator />
+          <PackageSelectionSheet
+            visible
+            onDismiss={() => setAuthState('student')}
+            onPaymentSuccess={() => setAuthState('student')}
+          />
+        </>
       ) : (
         <ClientNavigator />
       )}

@@ -22,6 +22,7 @@ import {
   RefreshControl,
   ActivityIndicator,
 } from 'react-native';
+import { SkeletonList } from '../../ui/skeletons/Skeleton';
 import HapticPressable from '../../components/HapticPressable';
 import RiskDot from '../../components/RiskDot';
 import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
@@ -215,11 +216,7 @@ export default function RiskBoardScreen() {
       </View>
 
       {loading && items.length === 0 ? (
-        <ActivityIndicator
-          size="large"
-          color={colors.primary}
-          style={styles.loader}
-        />
+        <SkeletonList count={7} />
       ) : (
         <FlatList
           data={items}

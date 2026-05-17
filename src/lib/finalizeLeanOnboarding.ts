@@ -41,6 +41,7 @@ import { calcBMR, calcTDEE, calcMacros, calculateAge } from '../utils/nutrition'
 import { getOnboardingData } from '../utils/onboardingStore';
 import { track } from './analytics';
 import { AnalyticsEvents } from '../analytics/events';
+import { readUserCache, patchUserCache } from './userCache';
 
 // ─── Public types ────────────────────────────────────────────────────────────
 
@@ -126,14 +127,9 @@ function tryComputeMacros(d: {
 // ─── Internal: refresh the local user_data cache so Home reflects targets ─────
 async function refreshLocalProfile(payload: Record<string, unknown>): Promise<void> {
   try {
-    const raw = await AsyncStorage.getItem('user_data');
-    if (!raw) return;
-    const parsed = JSON.parse(raw);
-    const nextProfile = { ...(parsed.profile ?? {}), ...payload };
-    await AsyncStorage.setItem(
-      'user_data',
-      JSON.stringify({ ...parsed, profile: nextProfile }),
-    );
+    // patchUserCache deep-merges profile fields without overwriting unrelated
+    // user fields and writes synchronously to MMKV — no async/bridge required.
+    patchUserCache({ profile: payload as never });
   } catch {
     // Cache refresh is best-effort; the next /auth/me will resync.
   }

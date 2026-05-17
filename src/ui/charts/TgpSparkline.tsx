@@ -21,10 +21,11 @@ import React, { useMemo } from 'react';
 import { View } from 'react-native';
 import Svg, { Polyline, Path } from 'react-native-svg';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { Colors } from '../../constants/colors';
 
 const FALLBACK: Partial<ThemeColors> = {
-  primary:     '#2C4A36',
-  primaryPale: '#D6E4DA',
+  primary:     Colors.primary,
+  primaryPale: Colors.primaryPale,
 };
 
 export interface ChartDataPoint {
@@ -59,7 +60,7 @@ export default function TgpSparkline({
   }
   const colors: ThemeColors = { ...themeColors, ...themeOverride };
   const strokeColor = color ?? colors.primary;
-  const areaColor = colors.primaryPale || '#D6E4DA';
+  const areaColor = colors.primaryPale || Colors.primaryPale;
 
   const { linePts, areaPath } = useMemo(() => {
     if (data.length < 2) return { linePts: '', areaPath: '' };

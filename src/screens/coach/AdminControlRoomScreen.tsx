@@ -19,9 +19,9 @@ import {
   View,
   Text,
   StyleSheet,
-  ActivityIndicator,
   RefreshControl,
 } from 'react-native';
+import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
 import { Ionicons } from '@expo/vector-icons';
 import { colors as tokens, typography, spacing, semantic } from '../../theme/tokens';
 import { fetchAdminControlRoom } from '../../services/wave11Adapters';
@@ -65,15 +65,7 @@ export default function AdminControlRoomScreen() {
   }
 
   if (loading && !payload) {
-    return (
-      <View
-        style={styles.center}
-        accessibilityLabel="Loading control room"
-        accessibilityRole="none"
-      >
-        <ActivityIndicator color={tokens.forest} />
-      </View>
-    );
+    return <SkeletonScreen count={6} />;
   }
 
   const onRefresh = () => {

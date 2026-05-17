@@ -28,6 +28,7 @@ import {
   Pressable,
   AccessibilityInfo,
 } from 'react-native';
+import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, typography, spacing, radius } from '../../theme/tokens';
 import { timelineApi, fetchTimeline, TimelineEvent, TimelineLane } from '../../services/timelineApi';
@@ -287,9 +288,7 @@ export default function TimelineScreen() {
     return (
       <View style={[styles.root, { paddingTop: insets.top }]}>
         <Text style={styles.screenTitle}>Timeline</Text>
-        <View style={styles.centred}>
-          <ActivityIndicator size="large" color={colors.ink} />
-        </View>
+        <SkeletonScreen count={8} />
       </View>
     );
   }

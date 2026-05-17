@@ -17,6 +17,7 @@ import { errorMessage } from '../../types/common';
 import { authApi, InvitePreview } from '../../services/api';
 import { authEvents } from '../../utils/authEvents';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { readUserCache, setUserCache } from '../../lib/userCache';
 
 type Props = {
   navigation: NativeStackNavigationProp<AuthStackParamList, 'RoleSelection'>;
@@ -56,9 +57,8 @@ export default function RoleSelectionScreen(_: Props) {
       // selection entirely — the backend already knows their coach and the
       // form would just re-collect a code we no longer need.
       try {
-        const raw = await AsyncStorage.getItem('user_data');
-        if (raw) {
-          const u = JSON.parse(raw);
+        const u = await readUserCache();
+      if (u) {
           if (mounted && u?.coach_id) {
             await AsyncStorage.removeItem('needs_role_selection');
             authEvents.emit();
@@ -133,12 +133,11 @@ export default function RoleSelectionScreen(_: Props) {
       }
 
       const res = await authApi.selectRole('student', trimmed || undefined);
-      const raw = await AsyncStorage.getItem('user_data');
-      if (raw) {
-        const user = JSON.parse(raw);
+      const user = await readUserCache();
+      if (user) {
         user.role = res.data.role;
         if (res.data.coach_id) user.coach_id = res.data.coach_id;
-        await AsyncStorage.setItem('user_data', JSON.stringify(user));
+        setUserCache(user);
       }
       await AsyncStorage.removeItem('needs_role_selection');
       authEvents.emit();

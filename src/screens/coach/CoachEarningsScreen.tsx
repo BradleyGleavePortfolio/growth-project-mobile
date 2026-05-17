@@ -22,7 +22,6 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Linking,
   RefreshControl,
   ScrollView,
@@ -30,7 +29,9 @@ import {
   Text,
   TouchableOpacity,
   View,
+  ActivityIndicator,
 } from 'react-native';
+import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 
@@ -163,11 +164,7 @@ export default function CoachEarningsScreen() {
   }, []);
 
   if (!earnings || !readiness || !payouts || !recon || !refunds) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
+    return <SkeletonScreen count={7} />;
   }
 
   // Top-level not-configured: every endpoint is 404 / 501.

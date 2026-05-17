@@ -21,8 +21,8 @@ import {
   Text,
   StyleSheet,
   RefreshControl,
-  ActivityIndicator,
 } from 'react-native';
+import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
 import { Ionicons } from '@expo/vector-icons';
 import { colors as tokens, typography, spacing } from '../../theme/tokens';
 import { fetchClientPathCopilot } from '../../services/wave11Adapters';
@@ -73,15 +73,7 @@ export default function ClientPathCopilotScreen() {
   }
 
   if (loading && !payload) {
-    return (
-      <View
-        style={styles.center}
-        accessibilityLabel="Loading your path data"
-        accessibilityRole="none"
-      >
-        <ActivityIndicator color={tokens.forest} />
-      </View>
-    );
+    return <SkeletonScreen count={5} />;
   }
 
   const empty = !payload || payload.suggestions.length === 0;

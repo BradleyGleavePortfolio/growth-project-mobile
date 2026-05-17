@@ -31,13 +31,14 @@ import Svg, {
 } from 'react-native-svg';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { Colors } from '../../constants/colors';
 
 const FALLBACK: Partial<ThemeColors> = {
-  primary:     '#2C4A36',
-  primaryPale: '#D6E4DA',
-  surface:     '#F1E8D5',
-  textMuted:   '#B1A89F',
-  border:      '#B08D57',
+  primary:     Colors.primary,
+  primaryPale: Colors.primaryPale,
+  surface:     Colors.surface,
+  textMuted:   Colors.textMuted,
+  border:      Colors.border,
 };
 
 export interface ChartDataPoint {
@@ -183,7 +184,7 @@ export default function TgpAreaChart({
           {/* Filled area */}
           <Path
             d={areaPath}
-            fill={colors.primaryPale || '#D6E4DA'}
+            fill={colors.primaryPale || Colors.primaryPale}
             fillOpacity={0.5}
           />
           {/* Line */}
@@ -237,8 +238,8 @@ export default function TgpAreaChart({
                 width={56}
                 height={22}
                 rx={1}
-                fill="#F5EFE4"
-                stroke="#4A0404"
+                fill={Colors.background}
+                stroke={Colors.earningsAccent}
                 strokeWidth={0.5}
               />
               <SvgText
@@ -246,7 +247,7 @@ export default function TgpAreaChart({
                 y={tooltip.y - 15}
                 textAnchor="middle"
                 fontSize={10}
-                fill="#1A1A18"
+                fill={Colors.textPrimary}
               >
                 {tooltip.value.toFixed(1)}
               </SvgText>

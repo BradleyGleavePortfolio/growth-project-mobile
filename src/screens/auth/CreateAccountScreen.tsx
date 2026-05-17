@@ -26,6 +26,8 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { AuthStackParamList } from '../../navigation/AuthNavigator';
 import AppleSignInButton from '../../components/AppleSignInButton';
 import { signInWithApple } from '../../utils/appleAuth';
+import { setUserCache } from '../../lib/userCache';
+import { Colors } from '../../constants/colors';
 
 interface Props {
   navigation: NativeStackNavigationProp<AuthStackParamList>;
@@ -198,7 +200,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
 
       await secureStorage.setItem('supabase_token', access_token);
       if (refresh_token) await secureStorage.setItem('supabase_refresh_token', refresh_token);
-      await AsyncStorage.setItem('user_data', JSON.stringify(user));
+      setUserCache(user);
 
       await AsyncStorage.setItem('needs_role_selection', 'true');
 
@@ -509,7 +511,7 @@ const makeStyles = (colors: ThemeColors) =>
   title: { ...Typography.h1, marginBottom: Spacing.xs },
   subtitle: { ...Typography.body },
   errorBox: {
-    backgroundColor: '#F2E0E0',
+    backgroundColor: Colors.noticeCriticalBg,
     borderRadius: Radius.sm,
     padding: Spacing.md,
     marginBottom: Spacing.md,

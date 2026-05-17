@@ -9,6 +9,7 @@
  */
 
 import React from 'react';
+import { Colors } from '../../constants/colors';
 import Svg, { Path, Circle, Line, Rect } from 'react-native-svg';
 
 type IconProps = {
@@ -17,7 +18,7 @@ type IconProps = {
 };
 
 /** Two silhouette figures — represents a client list or roster. */
-export function IconPeople({ size = 64, color = '#B1A89F' }: IconProps) {
+export function IconPeople({ size = 64, color = Colors.textMuted }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 64 64" fill="none">
       <Circle cx="24" cy="20" r="9" stroke={color} strokeWidth="2" />
@@ -40,7 +41,7 @@ export function IconPeople({ size = 64, color = '#B1A89F' }: IconProps) {
 }
 
 /** Clipboard with a checkmark placeholder — represents workouts / plans. */
-export function IconClipboard({ size = 64, color = '#B1A89F' }: IconProps) {
+export function IconClipboard({ size = 64, color = Colors.textMuted }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 64 64" fill="none">
       <Rect x="12" y="14" width="40" height="44" rx="2" stroke={color} strokeWidth="2" />
@@ -53,7 +54,7 @@ export function IconClipboard({ size = 64, color = '#B1A89F' }: IconProps) {
 }
 
 /** Bar chart with an upward arrow — represents data / analytics. */
-export function IconChartEmpty({ size = 64, color = '#B1A89F' }: IconProps) {
+export function IconChartEmpty({ size = 64, color = Colors.textMuted }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 64 64" fill="none">
       <Rect x="10" y="38" width="10" height="16" rx="1" stroke={color} strokeWidth="2" />
@@ -65,7 +66,7 @@ export function IconChartEmpty({ size = 64, color = '#B1A89F' }: IconProps) {
 }
 
 /** Magnifying glass with a small X — represents no search results. */
-export function IconSearchEmpty({ size = 64, color = '#B1A89F' }: IconProps) {
+export function IconSearchEmpty({ size = 64, color = Colors.textMuted }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 64 64" fill="none">
       <Circle cx="27" cy="27" r="16" stroke={color} strokeWidth="2" />
@@ -77,7 +78,7 @@ export function IconSearchEmpty({ size = 64, color = '#B1A89F' }: IconProps) {
 }
 
 /** Signal bars with a diagonal cross — represents offline / no network. */
-export function IconOffline({ size = 64, color = '#B1A89F' }: IconProps) {
+export function IconOffline({ size = 64, color = Colors.textMuted }: IconProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 64 64" fill="none">
       <Path

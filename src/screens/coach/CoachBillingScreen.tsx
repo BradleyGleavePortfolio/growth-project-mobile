@@ -9,6 +9,7 @@ import {
   Alert,
   RefreshControl,
 } from 'react-native';
+import { SkeletonList } from '../../ui/skeletons/Skeleton';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 
@@ -142,11 +143,7 @@ export default function CoachBillingScreen({ navigation }: Props) {
 
   const renderBody = () => {
     if (loading) {
-      return (
-        <View style={styles.loadingWrap}>
-          <ActivityIndicator color={colors.primary} />
-        </View>
-      );
+      return <SkeletonList count={5} />;
     }
     if (error) {
       return (

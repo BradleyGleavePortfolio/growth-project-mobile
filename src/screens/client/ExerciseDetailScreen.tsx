@@ -25,6 +25,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { exerciseCatalogApi } from '../../api/exerciseCatalog';
@@ -77,14 +78,7 @@ export default function ExerciseDetailScreen({ route }: Props) {
   });
 
   if (loading) {
-    return (
-      <View
-        style={[styles.screen, styles.center]}
-        testID="exercise-detail-loading"
-      >
-        <ActivityIndicator color={sc.accent} />
-      </View>
-    );
+    return <SkeletonScreen testID="exercise-detail-loading" count={5} />;
   }
 
   if (error || !detail) {

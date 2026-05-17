@@ -17,7 +17,7 @@
  *   Tooltip   → bone bg (#F5EFE4), ink text (#1A1A18), oxblood border (#4A0404)
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Dimensions, Platform } from 'react-native';
 import Svg, {
   Rect,
@@ -26,13 +26,14 @@ import Svg, {
 } from 'react-native-svg';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { Colors } from '../../constants/colors';
 
 const FALLBACK: Partial<ThemeColors> = {
-  primary:       '#2C4A36',
-  surface:       '#F1E8D5',
-  textPrimary:   '#1A1A18',
-  textMuted:     '#B1A89F',
-  border:        '#B08D57',
+  primary:       Colors.primary,
+  surface:       Colors.surface,
+  textPrimary:   Colors.textPrimary,
+  textMuted:     Colors.textMuted,
+  border:        Colors.border,
 };
 
 export interface ChartDataPoint {
@@ -71,6 +72,15 @@ export default function TgpBarChart({
   const colors: ThemeColors = { ...themeColors, ...themeOverride };
 
   const [tooltip, setTooltip] = useState<{ bx: number; by: number; bh: number; value: number } | null>(null);
+  // Store the auto-dismiss timer ref so it can be cancelled on unmount,
+  // preventing a setState call on a dead component.
+  const tooltipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (tooltipTimerRef.current !== null) clearTimeout(tooltipTimerRef.current);
+    };
+  }, []);
 
   const W = SCREEN_WIDTH - 32;
   const H = height;
@@ -106,7 +116,8 @@ export default function TgpBarChart({
       if (ix >= 0 && ix < bars.length) {
         const b = bars[ix];
         setTooltip({ bx: b.x + barWidth / 2, by: b.y, bh: b.height, value: b.value });
-        setTimeout(() => setTooltip(null), 1500);
+        if (tooltipTimerRef.current !== null) clearTimeout(tooltipTimerRef.current);
+        tooltipTimerRef.current = setTimeout(() => setTooltip(null), 1500);
       }
     });
 
@@ -187,8 +198,8 @@ export default function TgpBarChart({
                 width={56}
                 height={22}
                 rx={1}
-                fill="#F5EFE4"
-                stroke="#4A0404"
+                fill={Colors.background}
+                stroke={Colors.earningsAccent}
                 strokeWidth={0.5}
               />
               <SvgText
@@ -196,7 +207,7 @@ export default function TgpBarChart({
                 y={tooltip.by - 13}
                 textAnchor="middle"
                 fontSize={10}
-                fill="#1A1A18"
+                fill={Colors.textPrimary}
               >
                 {tooltip.value.toFixed(1)}
               </SvgText>

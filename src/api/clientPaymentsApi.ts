@@ -3,17 +3,18 @@
  * surface from backend PR #215 (packages + checkout + dunning).
  *
  * Endpoints consumed:
- *   GET  /v1/clients/me/coach/packages          — packages the coach offers this client
- *   POST /v1/clients/me/coach/checkout          — create Stripe Checkout session
- *   GET  /v1/clients/me/payment-status          — current subscription / dunning state
+ *   GET  /v1/clients/me/coach/packages   — packages the coach offers this client
+ *   POST /v1/checkout/sessions           — create Stripe Checkout session
+ *   GET  /v1/checkout/entitlement        — current entitlement_active flag
+ *   GET  /v1/checkout/purchases          — recent purchases (for status mapping)
  *
  * Same envelope convention as `coachConnectApi`: 404 / 501 collapses into
  * `{ ok: false, reason: 'not_configured' }` so the screen renders a calm
  * "your coach has not enabled checkout yet" empty state instead of a crash.
  *
  * Checkout return / cancel deep-links are handled by the navigator
- * (`tgp://checkout/success` and `tgp://checkout/cancel`); this module only
- * speaks HTTP.
+ * (`com.growthproject.app://checkout/success` and
+ * `com.growthproject.app://checkout/cancel`); this module only speaks HTTP.
  */
 
 import api from '../services/api';
@@ -105,43 +106,120 @@ function wrap<T>(p: Promise<AxiosResponse<T>>): Promise<PaymentsResult<T>> {
     });
 }
 
+// Shape of a row in the backend's GET /v1/checkout/purchases response. The
+// purchase `status` field is mapped to `ClientPaymentStatus.state` in
+// `getPaymentStatus()` below.
+interface RawPurchase {
+  id?: string;
+  status?: string;
+  package_name?: string | null;
+  current_period_end?: string | null;
+  trial_ends_at?: string | null;
+}
+
+interface RawPurchaseListResponse {
+  purchases?: RawPurchase[];
+  next_cursor?: string | null;
+}
+
+function mapPurchaseToStatus(p: RawPurchase | undefined): ClientPaymentStatus {
+  const known = new Set(['active', 'trialing', 'past_due', 'canceled']);
+  const raw = (p?.status ?? 'none').toLowerCase();
+  const state: ClientPaymentStatus['state'] = known.has(raw)
+    ? (raw as ClientPaymentStatus['state'])
+    : raw === 'payment_failed'
+      ? 'past_due'
+      : 'none';
+  return {
+    state,
+    package_name: p?.package_name ?? null,
+    current_period_end: p?.current_period_end ?? null,
+    trial_ends_at: p?.trial_ends_at ?? null,
+    dunning: null,
+  };
+}
+
 export const clientPaymentsApi = {
   getPackages: (): Promise<PaymentsResult<ClientCoachPackage[]>> =>
-    wrap(api.get<ClientCoachPackage[]>('/v1/clients/me/coach/packages')),
+    wrap(
+      api
+        .get<{ packages: ClientCoachPackage[] } | ClientCoachPackage[]>(
+          '/v1/clients/me/coach/packages',
+        )
+        .then((r) => ({
+          ...r,
+          data: Array.isArray(r.data)
+            ? r.data
+            : (r.data as { packages: ClientCoachPackage[] }).packages ?? [],
+        })),
+    ),
 
   /**
    * Creates a Stripe Checkout session for the given package. The caller
    * opens the returned URL in a browser sheet; on success Stripe redirects
-   * to `tgp://checkout/success?session_id=...`, on cancel to
-   * `tgp://checkout/cancel`. The navigator handles both deep links.
+   * to `com.growthproject.app://checkout/success?session_id=...`, on cancel
+   * to `com.growthproject.app://checkout/cancel`. The navigator handles
+   * both deep links.
    */
   createCheckoutSession: (
     packageId: string,
   ): Promise<PaymentsResult<CheckoutSession>> =>
     wrap(
-      api.post<CheckoutSession>('/v1/clients/me/coach/checkout', {
+      api.post<CheckoutSession>('/v1/checkout/sessions', {
         package_id: packageId,
-        success_url: 'tgp://checkout/success?session_id={CHECKOUT_SESSION_ID}',
-        cancel_url: 'tgp://checkout/cancel',
+        success_url:
+          'com.growthproject.app://checkout/success?session_id={CHECKOUT_SESSION_ID}',
+        cancel_url: 'com.growthproject.app://checkout/cancel',
       }),
     ),
 
+  /**
+   * Returns the client's current subscription status. The backend exposes
+   * the most recent purchase via GET /v1/checkout/purchases?limit=1; we
+   * map the row's `status` field to ClientPaymentStatus.state. Empty
+   * purchase list → state: 'none'. The dunning sub-object is not currently
+   * surfaced by the entitlement / purchases endpoints, so we return null
+   * here; the screen falls back to the generic past_due copy.
+   */
   getPaymentStatus: (): Promise<PaymentsResult<ClientPaymentStatus>> =>
-    wrap(api.get<ClientPaymentStatus>('/v1/clients/me/payment-status')),
+    wrap(
+      api
+        .get<RawPurchaseListResponse>('/v1/checkout/purchases?limit=1')
+        .then((r) => ({
+          ...r,
+          data: mapPurchaseToStatus(r.data?.purchases?.[0]),
+        })),
+    ),
 
   /**
-   * Fetched on the checkout success deep-link to confirm the session
-   * actually completed (Stripe redirects with `session_id` in the URL but
-   * the client should still ask the backend to verify before showing
-   * "access granted" copy — webhooks may not have landed yet).
+   * Called on the checkout success deep-link to confirm the session
+   * actually granted entitlement before the UI flips to "access granted".
+   * Stripe webhooks may lag the redirect by a beat — the entitlement
+   * endpoint is the source of truth. We then surface the most recent
+   * purchase shape so the screen can render `package_name` etc.
+   *
+   * If entitlement is still pending, we collapse to state 'none' so the
+   * caller can render the "payment received — pending" copy instead of
+   * "active".
    */
-  confirmCheckoutSession: (
-    sessionId: string,
-  ): Promise<PaymentsResult<ClientPaymentStatus>> =>
-    wrap(
-      api.post<ClientPaymentStatus>(
-        '/v1/clients/me/coach/checkout/confirm',
-        { session_id: sessionId },
-      ),
-    ),
+  confirmCheckoutSession: async (
+    _sessionId: string,
+  ): Promise<PaymentsResult<ClientPaymentStatus>> => {
+    const entitlement = await wrap(
+      api.get<{ entitlement_active: boolean }>('/v1/checkout/entitlement'),
+    );
+    if (!entitlement.ok) return entitlement;
+    const purchases = await wrap(
+      api.get<RawPurchaseListResponse>('/v1/checkout/purchases?limit=1'),
+    );
+    if (!purchases.ok) return purchases;
+    const mapped = mapPurchaseToStatus(purchases.data?.purchases?.[0]);
+    // If Stripe accepted the charge but the backend hasn't flipped the
+    // entitlement yet, force state 'none' so the screen renders the
+    // "payment received — confirmation pending" path rather than "active".
+    if (!entitlement.data.entitlement_active) {
+      return { ok: true, data: { ...mapped, state: 'none' } };
+    }
+    return { ok: true, data: mapped };
+  },
 };

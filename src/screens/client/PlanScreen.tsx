@@ -7,8 +7,8 @@ import {
   Platform,
   SafeAreaView,
   RefreshControl,
-  ActivityIndicator,
 } from 'react-native';
+import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 
@@ -155,13 +155,7 @@ export default function PlanScreen() {
   }, [loadPlans]);
 
   if (loading && plans === null) {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.centered}>
-          <ActivityIndicator color={colors.primary} size="large" />
-        </View>
-      </SafeAreaView>
-    );
+    return <SkeletonScreen count={6} />;
   }
 
   const hasPlans = (plans?.length || 0) > 0;
