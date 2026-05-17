@@ -1,38 +1,287 @@
 /**
  * EmptyStateNoClients — Empty state for the coach's client roster screen.
  *
- * Shown in CoachHomeScreen / ClientsListScreen when the coach has no active
- * clients. The CTA triggers the invite flow.
+ * When the coach has no clients, shows a prominent invite-code block with:
+ * - Optimistic MMKV hydration from 'coach.wizard.step_2_invite_code'
+ * - Background fetch from GET /coach/invite-codes
+ * - Share + Copy actions
+ * - Skeleton while loading (no ActivityIndicator)
+ * - Graceful fallback to Settings nudge on 404
  *
  * @module src/ui/empty-states/EmptyStateNoClients
  */
 
-import React from 'react';
-import { useTheme } from '../../theme/ThemeProvider';
-import EmptyState from './EmptyState';
-import { IconPeople } from './icons';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Share,
+  Clipboard,
+} from 'react-native';
+import * as Haptics from 'expo-haptics';
+import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { prefsStorage } from '../../storage/mmkv';
+import { coachApi } from '../../services/api';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface InviteCode {
+  id: string;
+  code: string;
+  deep_link_url?: string;
+}
 
 interface Props {
-  /** Handler called when "Invite your first client" is pressed. */
-  onInvite?: () => void;
+  /** Called when "Set up your invite code in Settings" CTA is pressed */
+  onGoToSettings?: () => void;
 }
 
-/**
- * Coach home — no clients onboarded yet.
- * Prompts the coach to send an invite code.
- */
-export function EmptyStateNoClients({ onInvite }: Props) {
-  const { colors } = useTheme();
+// ─── Constants ────────────────────────────────────────────────────────────────
 
+const MMKV_CODE_KEY = 'coach.wizard.step_2_invite_code';
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export function EmptyStateNoClients({ onGoToSettings }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  const [code, setCode] = useState<string | null>(null);
+  const [deepLink, setDeepLink] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  // 'notfound' means the API returned 404 — show Settings nudge
+  const [state, setState] = useState<'loading' | 'loaded' | 'notfound'>('loading');
+
+  // ── Hydrate from MMKV optimistically ──────────────────────────────────────
+  useEffect(() => {
+    (async () => {
+      try {
+        const cached = await prefsStorage.getStringAsync(MMKV_CODE_KEY);
+        if (cached) {
+          setCode(cached);
+          setState('loaded');
+        }
+      } catch {
+        // best-effort; background fetch will fill in
+      }
+
+      // Background refresh
+      try {
+        const res = await coachApi.listInviteCodes();
+        const list = (res.data as InviteCode[] | undefined) ?? [];
+        if (list.length === 0) {
+          setState('notfound');
+          return;
+        }
+        const first = list[0];
+        setCode(first.code);
+        setDeepLink(first.deep_link_url ?? null);
+        setState('loaded');
+        // Cache for next render
+        prefsStorage.set(MMKV_CODE_KEY, first.code).catch(() => {});
+      } catch (err) {
+        const status = (err as { response?: { status?: number } })?.response?.status;
+        if (status === 404) {
+          setState('notfound');
+        } else {
+          // Network error — if we have an optimistic code, stay 'loaded'
+          if (!code) setState('notfound');
+        }
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
+  const handleShare = useCallback(() => {
+    if (!code) return;
+    const message = deepLink
+      ? `Join me on Growth Project. Use code ${code} or tap: ${deepLink}`
+      : `Join me on Growth Project. Use code ${code}`;
+    Share.share({ message }).catch(() => {});
+  }, [code, deepLink]);
+
+  const handleCopyCode = useCallback(async () => {
+    if (!code) return;
+    try {
+      await Clipboard.setStringAsync(code);
+    } catch {
+      // Clipboard API fallback for older RN versions
+      (Clipboard as unknown as { setString: (s: string) => void }).setString(code);
+    }
+    try {
+      await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch {
+      // haptics not available (simulator / older device)
+    }
+  }, [code]);
+
+  // ── Not found — nudge to Settings ─────────────────────────────────────────
+  if (state === 'notfound') {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.headline}>Your first client is one link away.</Text>
+        <Text style={styles.body}>Set up your invite code in Settings to get started.</Text>
+        {onGoToSettings ? (
+          <TouchableOpacity
+            style={styles.primaryBtn}
+            onPress={onGoToSettings}
+            accessibilityRole="button"
+            accessibilityLabel="Go to Settings to create an invite code"
+            testID="empty-no-clients-settings-btn"
+          >
+            <Text style={styles.primaryBtnText}>GO TO SETTINGS</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+    );
+  }
+
+  // ── Loading skeleton ───────────────────────────────────────────────────────
+  if (state === 'loading') {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.headline}>Your first client is one link away.</Text>
+        <View style={styles.skeletonCode} />
+        <View style={[styles.skeletonLine, { width: '70%', marginTop: 8 }]} />
+        <View style={[styles.skeletonBtn, { marginTop: 24 }]} />
+      </View>
+    );
+  }
+
+  // ── Loaded ─────────────────────────────────────────────────────────────────
   return (
-    <EmptyState
-      icon={<IconPeople size={64} color={colors.textMuted} />}
-      headline="No clients yet"
-      body="Your client roster is empty. Send an invite code to get started."
-      ctaLabel="Invite your first client"
-      onCta={onInvite}
-    />
+    <View style={styles.container}>
+      <Text style={styles.headline}>Your first client is one link away.</Text>
+
+      {/* Code block */}
+      <View style={styles.codeBlock} testID="invite-code-block">
+        <Text style={styles.codeText} testID="invite-code-text">{code}</Text>
+      </View>
+
+      {/* Deep link */}
+      {deepLink ? (
+        <Text style={styles.deepLinkText} numberOfLines={1} testID="invite-deep-link">
+          {deepLink}
+        </Text>
+      ) : null}
+
+      {/* Share button */}
+      <TouchableOpacity
+        style={styles.primaryBtn}
+        onPress={handleShare}
+        accessibilityRole="button"
+        accessibilityLabel="Share your invite code"
+        testID="share-code-btn"
+      >
+        <Text style={styles.primaryBtnText}>SHARE YOUR CODE</Text>
+      </TouchableOpacity>
+
+      {/* Copy link */}
+      <TouchableOpacity
+        style={styles.copyBtn}
+        onPress={handleCopyCode}
+        accessibilityRole="button"
+        accessibilityLabel="Copy invite code to clipboard"
+        testID="copy-code-btn"
+      >
+        <Text style={styles.copyBtnText}>Copy code</Text>
+      </TouchableOpacity>
+    </View>
   );
 }
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      alignItems: 'center',
+      paddingVertical: 48,
+      paddingHorizontal: 24,
+    },
+    headline: {
+      fontFamily: 'CormorantGaramond_400Regular',
+      fontSize: 28,
+      lineHeight: 34,
+      color: colors.textPrimary,
+      textAlign: 'center',
+      marginBottom: 24,
+    },
+    body: {
+      fontFamily: 'Inter_400Regular',
+      fontSize: 15,
+      color: colors.textSecondary,
+      textAlign: 'center',
+      lineHeight: 22,
+      marginBottom: 16,
+    },
+    codeBlock: {
+      width: '100%',
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 2,
+      paddingVertical: 12,
+      paddingHorizontal: 16,
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+      marginBottom: 8,
+    },
+    codeText: {
+      fontFamily: 'Inter_500Medium',
+      fontSize: 20,
+      letterSpacing: 3,
+      color: colors.textPrimary,
+    },
+    deepLinkText: {
+      fontFamily: 'Inter_400Regular',
+      fontSize: 13,
+      color: colors.textMuted,
+      marginBottom: 24,
+      textAlign: 'center',
+    },
+    primaryBtn: {
+      width: '100%',
+      backgroundColor: colors.primary,
+      paddingVertical: 16,
+      alignItems: 'center',
+      marginTop: 8,
+    },
+    primaryBtnText: {
+      fontFamily: 'Inter_600SemiBold',
+      fontSize: 14,
+      color: colors.textOnPrimary,
+      letterSpacing: 1.2,
+    },
+    copyBtn: {
+      paddingVertical: 12,
+      marginTop: 4,
+    },
+    copyBtnText: {
+      fontFamily: 'Inter_400Regular',
+      fontSize: 13,
+      color: colors.textMuted,
+    },
+    // Skeletons
+    skeletonCode: {
+      width: '100%',
+      height: 44,
+      borderRadius: 2,
+      backgroundColor: colors.surface,
+    },
+    skeletonLine: {
+      height: 12,
+      borderRadius: 2,
+      backgroundColor: colors.surface,
+    },
+    skeletonBtn: {
+      width: '100%',
+      height: 48,
+      borderRadius: 2,
+      backgroundColor: colors.surface,
+    },
+  });
 
 export default EmptyStateNoClients;
