@@ -565,7 +565,7 @@ const makeStyles = (colors: ThemeColors) => {
   messageBubbleRow: { marginBottom: 6 },
   messageBubbleRowRight: { alignItems: 'flex-end' },
   messageBubbleRowLeft: { alignItems: 'flex-start' },
-  messageBubble: { maxWidth: '78%', borderRadius: 4, paddingHorizontal: 14, paddingVertical: 10 },
+  messageBubble: { maxWidth: '78%', borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10 },
   messageBubbleMe: { backgroundColor: colors.primary, borderBottomRightRadius: 4 },
   messageBubbleCoach: {
     backgroundColor: colors.surface,

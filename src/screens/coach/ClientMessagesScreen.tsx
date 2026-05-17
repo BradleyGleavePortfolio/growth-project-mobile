@@ -370,7 +370,7 @@ const makeStyles = (colors: ThemeColors) =>
   chatAvatar: {
     width: 36,
     height: 36,
-    borderRadius: 4, // radius.lg
+    borderRadius: 18,
     backgroundColor: colors.primaryDark,
     justifyContent: 'center',
     alignItems: 'center',
@@ -388,7 +388,7 @@ const makeStyles = (colors: ThemeColors) =>
   messageBubbleRowLeft: { alignItems: 'flex-start' },
   messageBubble: {
     maxWidth: '78%',
-    borderRadius: 4, // radius.lg
+    borderRadius: 18,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
@@ -432,7 +432,7 @@ const makeStyles = (colors: ThemeColors) =>
   sendBtn: {
     width: 40,
     height: 40,
-    borderRadius: 4, // radius.lg
+    borderRadius: 20,
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
