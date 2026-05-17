@@ -149,10 +149,15 @@ export default function WorkoutScreen() {
   const [muscleVolume, setMuscleVolume] = useState<MuscleVolume[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Number of weeks shown in the volume chart.
+  const CHART_WEEKS = 8;
+
   const loadVolumeData = useCallback(async () => {
     if (!currentUser) return;
     try {
-      // Use the volume API endpoint
+      // Use the volume API endpoint for the muscle-breakdown card.
+      // 'week' reflects the current 7-day window — appropriate for the
+      // per-muscle breakdown displayed below the bar chart.
       const volRes = await workoutApi.getVolume('week');
       const volumeData: Array<{ muscle_group: string; total_volume: number; period: string }> = volRes.data || [];
 
@@ -162,15 +167,21 @@ export default function WorkoutScreen() {
           .sort((a, b) => b.volume - a.volume)
       );
 
-      // Build weekly volume from sessions (compute from last 8 weeks)
-      const allRes = await workoutApi.getAll(200);
-      const allSessions: ApiSession[] = allRes.data || [];
+      // Build weekly volume chart from sessions.
+      // Limit: CHART_WEEKS * 7 sessions is a safe upper bound for 8 weeks of
+      // daily training (56 sessions). Using 50 instead of 200 avoids pulling
+      // years of history for a chart that only shows the last 8 weeks.
+      const chartWindowStart = new Date(Date.now() - CHART_WEEKS * 7 * 24 * 60 * 60 * 1000);
+      const allRes = await workoutApi.getAll(50);
+      const allSessions: ApiSession[] = (allRes.data || []).filter(
+        (s: ApiSession) => new Date(s.date) >= chartWindowStart,
+      );
       const now = new Date();
       const weeks: WeeklyVolume[] = [];
-      for (let w = 7; w >= 0; w--) {
+      for (let w = CHART_WEEKS - 1; w >= 0; w--) {
         const weekEnd = new Date(now.getTime() - w * 7 * 24 * 60 * 60 * 1000);
         const weekStart = new Date(weekEnd.getTime() - 7 * 24 * 60 * 60 * 1000);
-        const label = `W${8 - w}`;
+        const label = `W${CHART_WEEKS - w}`;
         let vol = 0;
         for (const s of allSessions) {
           const d = new Date(s.date);

@@ -352,6 +352,8 @@ export const coachApi = {
     api.post(`/coach/guidelines/${clientId}`, { guidelines }),
   getAlerts: () => api.get('/coach/alerts'),
   getDashboard: () => api.get('/coach/dashboard'),
+  /** Pre-aggregated summary endpoint — scales to 100+ clients via parallel aggregations. */
+  getDashboardSummary: () => api.get('/coach/dashboard/summary'),
   // ── Invite codes ──
   listInviteCodes: () => api.get('/coach/invite-codes'),
   createInviteCode: (data: { expires_at?: string | null; max_uses?: number | null }) =>

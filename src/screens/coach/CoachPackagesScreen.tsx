@@ -41,6 +41,7 @@ import {
   coachPaymentsApi,
   type CoachPackageRecord,
   type CoachPackageInput,
+  type PayoutReadiness,
 } from '../../api/coachPaymentsApi';
 import { coachConnectApi, type ConnectResult } from '../../api/coachConnectApi';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
@@ -278,6 +279,9 @@ export default function CoachPackagesScreen() {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
 
   const [packages, setPackages] = useState<ConnectResult<CoachPackageRecord[]> | null>(null);
+  // M12: track payout readiness separately so we can show a banner when
+  // charges_enabled is false even if the packages list loaded fine.
+  const [payoutReadiness, setPayoutReadiness] = useState<ConnectResult<PayoutReadiness> | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editorInitial, setEditorInitial] = useState<CoachPackageInput>(DEFAULT_INPUT);
@@ -286,8 +290,12 @@ export default function CoachPackagesScreen() {
   const [connecting, setConnecting] = useState(false);
 
   const load = useCallback(async () => {
-    const res = await coachPaymentsApi.listPackages();
-    setPackages(res);
+    const [pkgRes, readinessRes] = await Promise.all([
+      coachPaymentsApi.listPackages(),
+      coachPaymentsApi.getPayoutReadiness(),
+    ]);
+    setPackages(pkgRes);
+    setPayoutReadiness(readinessRes);
   }, []);
 
   useEffect(() => {
@@ -299,6 +307,10 @@ export default function CoachPackagesScreen() {
     await load();
     setRefreshing(false);
   }, [load]);
+
+  // M12: true when Stripe Connect is linked but charges are not yet enabled.
+  const showConnectReadinessBanner =
+    payoutReadiness?.ok === true && !payoutReadiness.data.charges_enabled;
 
   const handleConnect = useCallback(async () => {
     setConnecting(true);
@@ -416,12 +428,12 @@ export default function CoachPackagesScreen() {
           style={styles.iconBtn}
           accessibilityRole="button"
           accessibilityLabel="New package"
-          disabled={notConfigured}
+          disabled={notConfigured || showConnectReadinessBanner}
         >
           <Ionicons
             name="add"
             size={26}
-            color={notConfigured ? colors.textMuted : colors.textPrimary}
+            color={(notConfigured || showConnectReadinessBanner) ? colors.textMuted : colors.textPrimary}
           />
         </TouchableOpacity>
       </View>
@@ -432,6 +444,30 @@ export default function CoachPackagesScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
         }
       >
+        {/* M12: Connect readiness banner — shown when Stripe is linked but
+            charges_enabled is still false (KYC/requirements pending). */}
+        {showConnectReadinessBanner ? (
+          <View style={styles.readinessBanner}>
+            <Ionicons name="warning-outline" size={18} color="#92400e" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.readinessBannerText}>
+                Connect Stripe to activate packages — clients can’t check out until your account is ready.
+              </Text>
+            </View>
+            <TouchableOpacity
+              onPress={handleConnect}
+              disabled={connecting}
+              accessibilityRole="button"
+              accessibilityLabel="Set up payments"
+              style={styles.readinessBannerBtn}
+            >
+              <Text style={styles.readinessBannerBtnText}>
+                {connecting ? '…' : 'Set up payments'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
         {notConfigured ? (
           <View style={styles.gate}>
             <Ionicons name="card-outline" size={36} color={colors.textMuted} />
@@ -590,6 +626,36 @@ const makeStyles = (colors: ThemeColors) =>
       borderRadius: 8,
     },
     errorBannerText: { color: '#fff', fontSize: 13, flex: 1 },
+    // M12: Connect readiness banner styles
+    readinessBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      backgroundColor: '#fef3c7',
+      borderWidth: 1,
+      borderColor: '#f59e0b',
+      borderRadius: 8,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      marginBottom: 16,
+    },
+    readinessBannerText: {
+      fontSize: 13,
+      color: '#92400e',
+      lineHeight: 18,
+      flex: 1,
+    },
+    readinessBannerBtn: {
+      backgroundColor: '#f59e0b',
+      borderRadius: 6,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+    },
+    readinessBannerBtnText: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: '#fff',
+    },
     modalBackdrop: {
       flex: 1,
       backgroundColor: 'rgba(0,0,0,0.4)',

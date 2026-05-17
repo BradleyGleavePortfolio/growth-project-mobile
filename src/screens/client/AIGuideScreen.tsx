@@ -90,27 +90,19 @@ export default function AIGuideScreen() {
   const [isTyping, setIsTyping] = useState(false);
   const [contextReady, setContextReady] = useState(false);
   const [coachName, setCoachName] = useState<string | undefined>(undefined);
+  const [isOffline, setIsOffline] = useState(false);
   const listRef = useRef<FlatList>(null);
 
   const userId = currentUser?.id || '';
+  // M4 — Lazy context load. We no longer prefetch structured context on
+  // mount because most users open the screen without typing a message.
+  // Instead, context is fetched on the first send and the result cached via
+  // this ref so subsequent messages in the same session skip the round-trip.
+  const contextLoadedRef = useRef(false);
 
   useEffect(() => {
     if (userId) {
       loadChat();
-      // Pull structured context once on mount so the screen can show what the
-      // backend will relay. The mobile app does NOT use these fields to build
-      // a prompt — the backend is the only place that touches the AI provider.
-      // This call is purely informational for the UI.
-      (async () => {
-        try {
-          const res = await aiApi.getStructuredContext();
-          const ctx: AIStructuredContext | undefined = res.data;
-          setCoachName(ctx?.coach?.name || ctx?.coach?.business_name);
-          setContextReady(true);
-        } catch {
-          setContextReady(false);
-        }
-      })();
     }
   }, [userId]);
 
@@ -122,6 +114,22 @@ export default function AIGuideScreen() {
   const sendMessage = useCallback(
     async (text: string) => {
       if (!text.trim() || !userId) return;
+
+      // M4 — Lazy context load: fetch structured context before the first
+      // message so the welcome header shows coach name without an eager
+      // mount-time network call. The ref prevents re-fetching on subsequent
+      // messages in the same session.
+      if (!contextLoadedRef.current) {
+        contextLoadedRef.current = true;
+        try {
+          const res = await aiApi.getStructuredContext();
+          const ctx: AIStructuredContext | undefined = res.data;
+          setCoachName(ctx?.coach?.name || ctx?.coach?.business_name);
+          setContextReady(true);
+        } catch {
+          setContextReady(false);
+        }
+      }
 
       const userMsg: ChatMessage = {
         id: 'msg_' + generateId(),
@@ -135,7 +143,7 @@ export default function AIGuideScreen() {
       setInput('');
       setIsTyping(true);
 
-      let aiText: string;
+      let aiText = '';
 
       try {
         // Build short conversation history for short-term continuity. The
@@ -153,10 +161,35 @@ export default function AIGuideScreen() {
         if (!aiText) {
           throw new Error('Empty API response');
         }
-      } catch {
-        // Offline-only fallback: local keyword matcher. This is intentionally
-        // kept minimal and only fires when the backend cannot be reached.
-        // Surfacing this lets the user notice they are offline.
+
+        // Successful network call — clear any previous offline state.
+        setIsOffline(false);
+      } catch (err) {
+        // Detect network-level failures (no response from server) separately
+        // from API errors so we can surface an offline banner and keep the
+        // draft message in the input field rather than swallowing it.
+        const isNetworkError =
+          err != null &&
+          typeof err === 'object' &&
+          // axios network error: no response received
+          (('code' in err && (err as { code: string }).code === 'ERR_NETWORK') ||
+            ('response' in err && (err as { response: unknown }).response == null));
+
+        if (isNetworkError) {
+          setIsOffline(true);
+          setIsTyping(false);
+          // Keep the draft in the input field — don't clear it — so the user
+          // can resend once connectivity is restored.
+          setInput(text.trim());
+          // Remove the optimistic user message we already added since we're
+          // not completing the round-trip.
+          setMessages((prev) => prev.filter((m) => m.id !== userMsg.id));
+          return;
+        }
+
+        // Non-network error (e.g. empty API response, server error):
+        // fall back to the offline keyword matcher so the user sees a reply
+        // rather than a spinner.
         const daysSinceStart = currentUser?.createdAt
           ? Math.floor((Date.now() - new Date(currentUser.createdAt).getTime()) / (1000 * 60 * 60 * 24))
           : 1;
@@ -219,6 +252,15 @@ export default function AIGuideScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={0}
     >
+      {/* Offline banner — shown when a network error is detected */}
+      {isOffline && (
+        <View style={styles.offlineBanner}>
+          <Ionicons name="cloud-offline-outline" size={14} color={colors.textOnPrimary} />
+          <Text style={styles.offlineBannerText}>
+            You’re offline. Message will send when connection returns.
+          </Text>
+        </View>
+      )}
       <FadeInView>
         <View style={styles.header}>
           <Text style={styles.title}>Guidance</Text>
@@ -293,9 +335,10 @@ export default function AIGuideScreen() {
           blurOnSubmit
         />
         <TouchableOpacity
-          style={[styles.sendBtn, !input.trim() && styles.sendBtnDisabled]}
+          style={[styles.sendBtn, (!input.trim() || isOffline) && styles.sendBtnDisabled]}
           onPress={() => sendMessage(input)}
-          disabled={!input.trim()}
+          disabled={!input.trim() || isOffline}
+          accessibilityLabel={isOffline ? 'Send disabled — you are offline' : 'Send message'}
         >
           <Ionicons
             name="send"
@@ -489,6 +532,20 @@ const makeStyles = (colors: ThemeColors) =>
   },
   sendBtnDisabled: {
     backgroundColor: colors.surfaceElevated,
+  },
+  offlineBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.primaryDark,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  offlineBannerText: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: colors.textOnPrimary,
+    flex: 1,
   },
 
   });

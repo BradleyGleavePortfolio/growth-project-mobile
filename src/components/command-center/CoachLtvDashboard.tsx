@@ -55,6 +55,10 @@ export interface LtvMetrics {
   revenue_per_client_month_cents: number;
   revenue_per_client_month_label: string;
   avg_client_lifespan_months: number;
+  /** True when avg lifespan uses the 6-month industry-average stub (< 3 cancellations) */
+  lifespan_is_estimate?: boolean;
+  /** Explains why the lifespan is estimated; only present when lifespan_is_estimate is true */
+  lifespan_estimate_note?: string | null;
   estimated_ltv_cents: number;
   estimated_ltv_label: string;
   churn_rate_pct: number;
@@ -66,6 +70,8 @@ export interface LtvMetrics {
   zero_churn_streak_months: number;
   all_time_peak_rpcm_cents: number;
   all_time_peak_rpcm_label: string;
+  /** True when all-time peak RPCM is a heuristic estimate rather than a persisted record */
+  peak_rpcm_is_estimate?: boolean;
   is_new_rpcm_record: boolean;
   ltv_cac_ratio: number | null;
   /** True when NRR is approximated from churn rate rather than actual expansion MRR */
@@ -577,7 +583,7 @@ function LtvContent({
         />
         <View style={styles.heroSpacer} />
         <HeroNumber
-          label="Avg client LTV"
+          label={metrics.lifespan_is_estimate ? 'Avg client LTV (est.)' : 'Avg client LTV'}
           value={metrics.estimated_ltv_label}
           sub={`${(metrics.avg_client_lifespan_months ?? 0).toFixed(1)} mo avg life`}
           testID="ltv-hero-ltv"
@@ -611,7 +617,17 @@ function LtvContent({
         </View>
       )}
 
-      {/* ── Stats block ───────────────────────────────────────────────── */}
+      {/* ── Estimate disclaimer banner ──────────────────────────────────── */}
+      {(metrics.lifespan_is_estimate || metrics.nrr_is_stub || metrics.peak_rpcm_is_estimate) && (
+        <View style={styles.estimateDisclaimer} testID="ltv-estimate-disclaimer">
+          <Text style={styles.estimateDisclaimerText}>
+            Some metrics are based on available data and may not reflect exact figures.
+            Values marked “(est.)” will update automatically as more data is collected.
+          </Text>
+        </View>
+      )}
+
+      {/* ── Stats block ─────────────────────────────────────────────────── */}
       <View style={styles.statsCard} testID="ltv-stats-card">
         <Text style={styles.statsTitle}>Metrics detail</Text>
         <StatRow
@@ -633,6 +649,19 @@ function LtvContent({
               : metrics.net_revenue_retention_pct >= 100
               ? 'Expansion > churn — strong'
               : 'Below 100% — churn is outpacing growth'
+          }
+        />
+        <StatRow
+          label={
+            metrics.lifespan_is_estimate
+              ? 'Avg client lifespan (est.)'
+              : 'Avg client lifespan'
+          }
+          value={`${(metrics.avg_client_lifespan_months ?? 0).toFixed(1)} mo`}
+          hint={
+            metrics.lifespan_is_estimate && metrics.lifespan_estimate_note
+              ? metrics.lifespan_estimate_note
+              : 'Mean duration of active recurring subscriptions'
           }
         />
         <StatRow
@@ -783,6 +812,21 @@ const styles = StyleSheet.create({
   cacNoteLink: {
     color: colors.forest,
     fontWeight: '500',
+  },
+  // Estimate disclaimer banner — shown when any metric is approximate.
+  estimateDisclaimer: {
+    backgroundColor: colors.camel + '33', // 20% opacity camel
+    borderLeftWidth: 3,
+    borderLeftColor: colors.mutedGold,
+    borderRadius: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    marginBottom: spacing.md,
+  },
+  estimateDisclaimerText: {
+    ...typography.caption,
+    color: colors.charcoal,
+    lineHeight: 16,
   },
 });
 

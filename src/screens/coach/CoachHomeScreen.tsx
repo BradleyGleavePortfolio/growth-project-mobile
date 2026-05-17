@@ -67,25 +67,45 @@ export default function CoachHomeScreen() {
 
   const detectRedFlags = useCallback(async () => {
     try {
-      const alertsRes = await coachApi.getAlerts();
-      type Alert = { type: string; client_id: string; client_name: string; message: string };
-      const alerts: Alert[] = (alertsRes.data as Alert[] | undefined) || [];
-      const flags: RedFlagClient[] = alerts
-        .filter((a) => a.type === 'weight_increasing')
+      // Use the pre-aggregated summary endpoint — it scales to 100+ clients
+      // via parallel Prisma aggregations rather than loading all client rows.
+      // Falls back to the legacy alerts endpoint if the summary endpoint is
+      // unavailable (e.g. older backend deployment).
+      type SummaryItem = { client_id: string; client_name: string; reason: string };
+      type Summary = { attention_needed: SummaryItem[] };
+
+      let attentionNeeded: SummaryItem[] = [];
+      try {
+        const summaryRes = await coachApi.getDashboardSummary();
+        attentionNeeded = (summaryRes.data as Summary)?.attention_needed || [];
+      } catch {
+        // Summary endpoint not yet available — fall back to legacy alerts.
+        const alertsRes = await coachApi.getAlerts();
+        type Alert = { type: string; client_id: string; client_name: string; message: string };
+        const alerts: Alert[] = (alertsRes.data as Alert[] | undefined) || [];
+        attentionNeeded = alerts.map((a) => ({
+          client_id: a.client_id,
+          client_name: a.client_name,
+          reason: a.type === 'weight_increasing' ? 'weight_flag' : 'missed_workout',
+        }));
+      }
+
+      const flags: RedFlagClient[] = attentionNeeded
+        .filter((a) => a.reason === 'weight_flag')
         .map((a) => ({
           id: a.client_id,
           name: a.client_name,
-          trend: a.message,
+          trend: `${a.client_name} weight has increased 3+ consecutive days`,
         }));
       setRedFlagClients(flags);
 
-      const missed = alerts
-        .filter((a) => a.type === 'missed_workouts')
+      const missed = attentionNeeded
+        .filter((a) => a.reason === 'missed_workout')
         .map((a) => a.client_name);
       setOverdueClients(missed);
     } catch (err) {
       // Alerts tile stays empty on failure — not a destructive write.
-      console.error('CoachHomeScreen: loadClients alerts failed', err);
+      console.error('CoachHomeScreen: detectRedFlags failed', err);
     }
   }, []);
 

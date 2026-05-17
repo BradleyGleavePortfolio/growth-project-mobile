@@ -157,6 +157,17 @@ function mapPurchaseToStatus(p: RawPurchase | undefined): ClientPaymentStatus {
 }
 
 export const clientPaymentsApi = {
+  /**
+   * Creates a Stripe Billing Portal session for the signed-in client.
+   * Returns a Stripe-hosted URL the app should open in an in-app browser.
+   *
+   * M10 fix: used by `handleUpdateCard` when `dunning.update_card_url` is
+   * null — the backend generates a fresh portal URL on demand rather than
+   * pre-baking a stale URL into the dunning state.
+   */
+  createBillingPortalSession: (): Promise<PaymentsResult<{ url: string }>> =>
+    wrap(api.post<{ url: string }>('/v1/checkout/billing-portal', {})),
+
   getPackages: (): Promise<PaymentsResult<ClientCoachPackage[]>> =>
     wrap(
       api
@@ -199,49 +210,97 @@ export const clientPaymentsApi = {
    * Returns the client's current subscription status. The backend exposes
    * the most recent purchase via GET /v1/checkout/purchases?limit=1; we
    * map the row's `status` field to ClientPaymentStatus.state. Empty
-   * purchase list → state: 'none'. The dunning sub-object is not currently
-   * surfaced by the entitlement / purchases endpoints, so we return null
-   * here; the screen falls back to the generic past_due copy.
+   * purchase list → state: 'none'.
+   *
+   * When the client is past_due, we mint a fresh Stripe Billing Portal URL
+   * on demand so the dunning banner always has a working update-card link.
    */
-  getPaymentStatus: (): Promise<PaymentsResult<ClientPaymentStatus>> =>
-    wrap(
+  getPaymentStatus: async (): Promise<PaymentsResult<ClientPaymentStatus>> => {
+    const purchasesResult = await wrap(
       api
         .get<RawPurchaseListResponse>('/v1/checkout/purchases?limit=1')
-        .then((r) => ({
-          ...r,
-          data: mapPurchaseToStatus(r.data?.purchases?.[0]),
-        })),
-    ),
+        .then((r) => ({ ...r, data: mapPurchaseToStatus(r.data?.purchases?.[0]) })),
+    );
+    if (!purchasesResult.ok) return purchasesResult;
+    const status = purchasesResult.data;
+
+    // When past_due, fetch a fresh billing portal URL so the dunning banner
+    // has a real update-card link — never stale, never null for past-due clients.
+    if (status.state === 'past_due' && !status.dunning?.update_card_url) {
+      const portal = await wrap(
+        api.post<{ url: string }>('/v1/checkout/billing-portal', {}),
+      );
+      const updateCardUrl = portal.ok ? portal.data.url : null;
+      return {
+        ok: true,
+        data: {
+          ...status,
+          dunning: {
+            summary:
+              'Your last payment failed. Update your card to keep access.',
+            update_card_url: updateCardUrl,
+            grace_until: null,
+          },
+        },
+      };
+    }
+
+    return purchasesResult;
+  },
 
   /**
    * Called on the checkout success deep-link to confirm the session
    * actually granted entitlement before the UI flips to "access granted".
-   * Stripe webhooks may lag the redirect by a beat — the entitlement
-   * endpoint is the source of truth. We then surface the most recent
-   * purchase shape so the screen can render `package_name` etc.
    *
-   * If entitlement is still pending, we collapse to state 'none' so the
-   * caller can render the "payment received — pending" copy instead of
-   * "active".
+   * M9 fix: previously this method ignored the `sessionId` parameter and
+   * just polled the generic entitlement endpoint. It now calls the
+   * session-specific confirm endpoint so the backend can verify the
+   * session belongs to this user and return the real payment status
+   * directly from Stripe, bypassing any webhook lag.
    */
   confirmCheckoutSession: async (
-    _sessionId: string,
+    sessionId: string,
   ): Promise<PaymentsResult<ClientPaymentStatus>> => {
-    const entitlement = await wrap(
-      api.get<{ entitlement_active: boolean }>('/v1/checkout/entitlement'),
+    // Primary path: confirm via the specific session id.
+    const confirmation = await wrap(
+      api.get<{ paid: boolean; status: string; package_name: string | null }>(
+        `/v1/checkout/sessions/${sessionId}/confirm`,
+      ),
     );
-    if (!entitlement.ok) return entitlement;
-    const purchases = await wrap(
-      api.get<RawPurchaseListResponse>('/v1/checkout/purchases?limit=1'),
-    );
-    if (!purchases.ok) return purchases;
-    const mapped = mapPurchaseToStatus(purchases.data?.purchases?.[0]);
-    // If Stripe accepted the charge but the backend hasn't flipped the
-    // entitlement yet, force state 'none' so the screen renders the
-    // "payment received — confirmation pending" path rather than "active".
-    if (!entitlement.data.entitlement_active) {
-      return { ok: true, data: { ...mapped, state: 'none' } };
+    if (!confirmation.ok) {
+      // Fallback: session-specific endpoint unavailable — fall back to
+      // the generic entitlement check so the screen still works on older
+      // backend versions.
+      const entitlement = await wrap(
+        api.get<{ entitlement_active: boolean }>('/v1/checkout/entitlement'),
+      );
+      if (!entitlement.ok) return entitlement;
+      const purchases = await wrap(
+        api.get<RawPurchaseListResponse>('/v1/checkout/purchases?limit=1'),
+      );
+      if (!purchases.ok) return purchases;
+      const mapped = mapPurchaseToStatus(purchases.data?.purchases?.[0]);
+      if (!entitlement.data.entitlement_active) {
+        return { ok: true, data: { ...mapped, state: 'none' } };
+      }
+      return { ok: true, data: mapped };
     }
-    return { ok: true, data: mapped };
+    // Map the session-specific response to ClientPaymentStatus shape.
+    const { paid, status, package_name } = confirmation.data;
+    const known = new Set(['active', 'trialing', 'past_due', 'canceled']);
+    const rawState = paid ? 'active' : status === 'unpaid' ? 'none' : 'none';
+    const state: ClientPaymentStatus['state'] = known.has(rawState)
+      ? (rawState as ClientPaymentStatus['state'])
+      : 'none';
+    return {
+      ok: true,
+      data: {
+        state,
+        package_name,
+        current_period_end: null,
+        trial_ends_at: null,
+        dunning: null,
+      },
+    };
   },
 };
