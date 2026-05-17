@@ -15,16 +15,13 @@ import { useCoachStore } from '../../store/coachStore';
 
 import { getGreeting } from '../../utils/date';
 
-// Pastel chip background for "info" tiles. Was previously imported as
-// `INFO_TILE_BG` — kept as a local constant so the file
-// no longer pulls the legacy theme barrel just for one value. Hex matches
-// theme/index.ts `feedback.infoBg`.
-const INFO_TILE_BG = '#E8F4FD';
 import FadeInView from '../../components/FadeInView';
 import { coachApi } from '../../services/api';
 import { ptmApi } from '../../services/ptmApi';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { SkeletonStatTile } from '../../ui/skeletons';
+import StripeSetupBanner from '../../components/coach/StripeSetupBanner';
+import NewClientBanner from '../../components/coach/NewClientBanner';
 
 
 interface RedFlagClient {
@@ -210,6 +207,11 @@ export default function CoachHomeScreen() {
         />
       }
     >
+      {/* Stripe setup banner — only shows when Stripe not yet configured */}
+      <StripeSetupBanner />
+      {/* Post-Stripe-return detection banner — auto-dismisses after 4s */}
+      <NewClientBanner />
+
       <View style={styles.header}>
         <View>
           <Text style={styles.greeting}>{getGreeting()}, {currentUser?.firstName || 'Coach'}</Text>
@@ -240,6 +242,9 @@ export default function CoachHomeScreen() {
             intent="light"
             style={styles.settingsBtn}
             onPress={() => navigation.navigate('SettingsStack')}
+            accessibilityRole="button"
+            accessibilityLabel="Open settings"
+            testID="coach-home-settings-button"
           >
             <Ionicons name="settings-outline" size={22} color={colors.textSecondary} />
           </HapticPressable>
@@ -257,7 +262,7 @@ export default function CoachHomeScreen() {
             <Text style={styles.metricLabel}>Active Clients</Text>
           </View>
           <View style={styles.metricCard}>
-            <View style={[styles.metricIcon, { backgroundColor: INFO_TILE_BG }]}>
+            <View style={[styles.metricIcon, { backgroundColor: colors.macroCarbsChipBg }]}>
               <Ionicons name="restaurant" size={22} color={colors.carbs} />
             </View>
             {dashboardLoading ? (
@@ -336,6 +341,9 @@ export default function CoachHomeScreen() {
                   params: { clientId: rf.id, clientName: rf.name },
                 })
               }
+              accessibilityRole="button"
+              accessibilityLabel={`View client ${rf.name}, weight trending up`}
+              testID={`coach-home-red-flag-${rf.id}`}
             >
               <View style={styles.redFlagLeft}>
                 <Ionicons name="warning" size={22} color={colors.warning} />
@@ -378,6 +386,9 @@ export default function CoachHomeScreen() {
           intent="medium"
           style={styles.actionCard}
           onPress={() => navigation.navigate('ClientsStack')}
+          accessibilityRole="button"
+          accessibilityLabel="View clients"
+          testID="coach-home-view-clients"
         >
           <View style={[styles.actionIcon, { backgroundColor: colors.primaryPale }]}>
             <Ionicons name="people-outline" size={22} color={colors.primary} />
@@ -388,8 +399,11 @@ export default function CoachHomeScreen() {
           intent="medium"
           style={styles.actionCard}
           onPress={() => navigation.navigate('Messages')}
+          accessibilityRole="button"
+          accessibilityLabel="Open messages"
+          testID="coach-home-messages"
         >
-          <View style={[styles.actionIcon, { backgroundColor: INFO_TILE_BG }]}>
+          <View style={[styles.actionIcon, { backgroundColor: colors.macroCarbsChipBg }]}>
             <Ionicons name="chatbubble-outline" size={22} color={colors.carbs} />
           </View>
           <Text style={styles.actionText}>Messages</Text>

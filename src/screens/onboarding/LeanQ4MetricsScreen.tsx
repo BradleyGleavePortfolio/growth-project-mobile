@@ -29,10 +29,7 @@ import * as Localization from 'expo-localization';
 import { LeanOnboardingParamList } from '../../navigation/LeanOnboardingNavigator';
 
 import { saveOnboardingData } from '../../utils/onboardingStore';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { track } from '../../lib/analytics';
-import { authEvents } from '../../utils/authEvents';
-import { finalizeLeanOnboarding } from '../../lib/finalizeLeanOnboarding';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 type Props = {
@@ -117,20 +114,14 @@ export default function LeanQ4MetricsScreen({ navigation }: Props) {
       if (Object.keys(payload).length > 0) {
         await saveOnboardingData(payload);
       }
-      await AsyncStorage.setItem('onboarding_complete', 'true');
-      await AsyncStorage.setItem('lean_onboarding_done', 'true');
-      // Push everything captured during LeanQ1–Q4 to the backend (profile
-      // fields + computed macro targets). API failure is non-blocking —
-      // the reconcile hook will retry on next app open.
-      const result = await finalizeLeanOnboarding();
       track(skipped ? 'onboarding_skipped' : 'onboarding_step_completed', {
         step: 4,
         captured_height: !!payload.height,
         captured_weight: !!payload.currentWeight,
-        synced: result.ok,
-        macros_computed: result.computedMacros,
       });
-      authEvents.emit();
+      // Q4 no longer finalizes — navigate to Q5 (birth year + target weight).
+      // finalizeLeanOnboarding() and authEvents.emit() have moved to Q6.
+      navigation.navigate('LeanQ5');
     } catch {
       setSubmitting(false);
     }
@@ -165,6 +156,7 @@ export default function LeanQ4MetricsScreen({ navigation }: Props) {
               accessibilityRole="button"
               accessibilityLabel="Use imperial units"
               accessibilityState={{ selected: units === 'imperial' }}
+              testID="lean-q4-units-imperial"
             >
               <Text
                 style={[
@@ -181,6 +173,7 @@ export default function LeanQ4MetricsScreen({ navigation }: Props) {
               accessibilityRole="button"
               accessibilityLabel="Use metric units"
               accessibilityState={{ selected: units === 'metric' }}
+              testID="lean-q4-units-metric"
             >
               <Text
                 style={[
@@ -264,6 +257,7 @@ export default function LeanQ4MetricsScreen({ navigation }: Props) {
             disabled={!isValid || submitting}
             accessibilityRole="button"
             accessibilityLabel="Save and continue"
+            testID="lean-q4-save-continue"
           >
             <Text style={styles.primaryBtnText}>SAVE AND CONTINUE</Text>
           </TouchableOpacity>
@@ -274,6 +268,9 @@ export default function LeanQ4MetricsScreen({ navigation }: Props) {
               style={styles.backBtn}
               activeOpacity={0.6}
               disabled={submitting}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+              testID="lean-q4-back"
             >
               <Text style={styles.backText}>← Back</Text>
             </TouchableOpacity>
@@ -282,6 +279,9 @@ export default function LeanQ4MetricsScreen({ navigation }: Props) {
               style={styles.skipBtn}
               activeOpacity={0.6}
               disabled={submitting}
+              accessibilityRole="button"
+              accessibilityLabel="Skip metrics, add later"
+              testID="lean-q4-skip"
             >
               <Text style={styles.skipText}>Skip — I’ll add later</Text>
             </TouchableOpacity>
@@ -335,7 +335,7 @@ const makeStyles = (colors: ThemeColors) =>
   },
   unitChipActive: {
     borderColor: colors.primary,
-    backgroundColor: 'rgba(44, 74, 54, 0.04)',
+    backgroundColor: colors.primaryPale,
   },
   unitChipText: {
     fontFamily: 'Inter_500Medium',
