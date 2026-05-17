@@ -39,8 +39,6 @@ const CACHE_KEY = 'messages_thread_client';
 export default function MessagesScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const textOnPrimaryDim = colors.textOnPrimary + 'B3';   // 70% opacity
-  const textOnPrimaryFaint = colors.textOnPrimary + '80'; // 50% opacity
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const currentUser = useCurrentUser();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -376,21 +374,21 @@ export default function MessagesScreen() {
               // F. Pending indicator.
               receiptNode = (
                 <View style={styles.receiptRow}>
-                  <Ionicons name="time-outline" size={10} color={textOnPrimaryFaint} />
+                  <Ionicons name="time-outline" size={10} color="rgba(255,255,255,0.5)" />
                   <Text style={styles.receiptTextPending}>Sending</Text>
                 </View>
               );
             } else if (item.read_at) {
               receiptNode = (
                 <View style={styles.receiptRow}>
-                  <Ionicons name="checkmark-done" size={12} color={textOnPrimaryDim} />
+                  <Ionicons name="checkmark-done" size={12} color="rgba(255,255,255,0.7)" />
                   <Text style={styles.receiptText}>Read</Text>
                 </View>
               );
             } else if (index === lastClientMsgIdx) {
               receiptNode = (
                 <View style={styles.receiptRow}>
-                  <Ionicons name="checkmark" size={12} color={textOnPrimaryFaint} />
+                  <Ionicons name="checkmark" size={12} color="rgba(255,255,255,0.5)" />
                   <Text style={styles.receiptTextPending}>Sent</Text>
                 </View>
               );
@@ -497,10 +495,8 @@ function mergeById(existing: Message[], incoming: Message[]): Message[] {
   );
 }
 
-const makeStyles = (colors: ThemeColors) => {
-  const textOnPrimaryDim = colors.textOnPrimary + 'B3';   // 70% opacity
-  const textOnPrimaryFaint = colors.textOnPrimary + '80'; // 50% opacity
-  return StyleSheet.create({
+const makeStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   noCoachContainer: { flex: 1, backgroundColor: colors.background },
   noCoachHeader: {
@@ -576,7 +572,7 @@ const makeStyles = (colors: ThemeColors) => {
   messageText: { fontSize: 15, color: colors.textPrimary, lineHeight: 21 },
   messageTextMe: { color: colors.textOnPrimary },
   messageTime: { fontSize: 11, color: colors.textMuted, marginTop: 4, alignSelf: 'flex-end' },
-  messageTimeMe: { color: textOnPrimaryDim },
+  messageTimeMe: { color: 'rgba(255,255,255,0.7)' },
   // C. Read receipt styles
   receiptRow: {
     flexDirection: 'row',
@@ -587,11 +583,11 @@ const makeStyles = (colors: ThemeColors) => {
   },
   receiptText: {
     fontSize: 10,
-    color: textOnPrimaryDim,
+    color: 'rgba(255,255,255,0.7)',
   },
   receiptTextPending: {
     fontSize: 10,
-    color: textOnPrimaryFaint,
+    color: 'rgba(255,255,255,0.5)',
   },
   inputBar: {
     flexDirection: 'row',
@@ -627,4 +623,3 @@ const makeStyles = (colors: ThemeColors) => {
   },
   sendBtnDisabled: { backgroundColor: colors.surface },
   });
-};
