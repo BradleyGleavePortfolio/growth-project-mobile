@@ -233,7 +233,7 @@ function ZeroChurnBadge({ months }: { months: number }) {
 const badgeStyles = StyleSheet.create({
   container: {
     backgroundColor: colors.forest,
-    borderRadius: radius.full ?? 999,
+    borderRadius: radius.pill,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     flexDirection: 'row',
@@ -571,7 +571,7 @@ function LtvContent({
         <HeroNumber
           label="Avg client LTV"
           value={metrics.estimated_ltv_label}
-          sub={`${metrics.avg_client_lifespan_months.toFixed(1)} mo avg life`}
+          sub={`${(metrics.avg_client_lifespan_months ?? 0).toFixed(1)} mo avg life`}
           testID="ltv-hero-ltv"
         />
       </View>
