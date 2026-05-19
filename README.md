@@ -292,6 +292,37 @@ npm run validate:release
 If it exits with no errors and no blockers (no `RELEASE_BLOCKER.md` written),
 you are ready to submit.
 
+
+## Phase 11 / Track 8 — Talent Marketplace (applicant screen)
+
+Adds the coach application status screen. The public application form is on the marketing site (out of scope for this PR — the backend `POST /apply/coach` endpoint is ready).
+
+### New files
+
+| Path | Purpose |
+|------|---------|
+| `src/screens/applicant/ApplicationStatusScreen.tsx` | Shows current `CoachApplication.status` and reviewer notes |
+| `src/services/talentMarketplaceApi.ts` | Typed API client: `GET /applications/me` |
+| `src/screens/applicant/__tests__/ApplicationStatusScreen.test.tsx` | Source-level + import tests |
+
+### Design tokens
+
+- All colors sourced from `useTheme().colors` — no hardcoded hex values.
+- Status accent color mapped through a token lookup function; each status maps to an existing semantic token (`success`, `warning`, `primary`, `textMuted`).
+
+### Accessibility
+
+- Status badge carries `accessibilityLabel` and `accessibilityRole="text"`.
+- Retry button carries `accessibilityLabel` and `accessibilityRole="button"`.
+- `AccessibilityInfo.announceForAccessibility` announces status changes when the screen receives new data.
+
+### Out of scope this PR
+
+- Head-coach browse UI (Track 8.5)
+- Offer acceptance flow (Track 8.5)
+- Stripe Connect onboarding redirect (Track 8.5)
+- Navigator registration — `ApplicationStatusScreen` is built but not yet wired into the navigator; that registration is deferred to Track 8.5 when the full marketplace tab lands.
+
 ## Project Structure
 
 ```
