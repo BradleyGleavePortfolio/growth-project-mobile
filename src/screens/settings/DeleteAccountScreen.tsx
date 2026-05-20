@@ -77,8 +77,8 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
       // alert so the auth-event navigation reset does not race with the Alert
       // dismissal on older React Navigation versions.
       Alert.alert(
-        'Deletion request received',
-        'Your deletion request has been received. You have 14 days to cancel from Settings. Contact support if you need immediate confirmation.',
+        'Account scheduled for deletion',
+        'Your account is scheduled for deletion in 14 days. You can cancel anytime before then from Settings. Contact support if you need immediate confirmation.',
         [{ text: 'OK', onPress: () => signOut() }],
         { cancelable: false },
       );

@@ -15,7 +15,7 @@
  *   3. Generate idempotency keys when the caller doesn't supply one.
  *
  * Backend contract (from the AI Gateway design doc):
- *   POST /ai/gateway/invoke        → AIGatewayDraftResponse (mapped from invoke response shape)
+ *   POST /ai/gateway/drafts        → AIGatewayDraftOk on 200; mapped to disabled/error on 4xx/5xx
  *   GET  /ai/gateway/status        → AIGatewayStatusResponse
  *
  * Until the backend ships, all calls return `disabled.feature_flag_off` when
@@ -143,58 +143,17 @@ export const aiGatewayClient = {
     }
     const idempotencyKey = req.idempotencyKey ?? generateIdempotencyKey();
     try {
-      const resp = await api.post<{
-        request_id: string;
-        audit_id: string;
-        approval: { required: boolean; status: string; draft_id: string | null };
-        enabled: boolean;
-        provider: string;
-        model: string;
-        reply: string;
-        draft_mode: boolean;
-        provenance: unknown;
-        redactions_applied: unknown;
-      }>(
-        '/ai/gateway/invoke',
+      const resp = await api.post<import('../types/aiGateway').AIGatewayDraftOk>(
+        '/ai/gateway/drafts',
         {
           capability: req.capability,
-          message: req.userIntent ?? '',
+          user_intent: req.userIntent ?? '',
           subject_user_id: req.subjectRef?.id,
           proposed_action: req.proposedAction,
+          idempotency_key: idempotencyKey,
         },
       );
-      const data = resp.data;
-      // Backend returns enabled:false and/or provider:'stub' for degraded/stub
-      // responses as HTTP 200. Surface these as disabled so callers render the
-      // correct degraded UX instead of showing [ai-disabled] stub text as a
-      // normal draft.
-      if (data.enabled === false || data.provider === 'stub') {
-        return {
-          status: 'disabled',
-          capability: req.capability,
-          reason: (data.meta as { reason?: string } | undefined)?.reason ?? 'ai_unavailable',
-          summary: null,
-          retryAfter: null,
-        };
-      }
-      const draftId = data.approval.draft_id ?? data.request_id;
-      const okResponse: import('../types/aiGateway').AIGatewayDraftOk = {
-        status: 'ok',
-        draftId,
-        capability: req.capability,
-        text: data.reply,
-        source: {
-          provider: data.provider,
-          model: data.model,
-          generatedAt: new Date().toISOString(),
-        },
-        approval: {
-          actor: null,
-          approvedAt: null,
-        },
-        isStale: false,
-      };
-      return okResponse;
+      return resp.data;
     } catch (err) {
       return networkErrorResponse(req.capability, err as AxiosError);
     }
