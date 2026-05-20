@@ -172,8 +172,15 @@ export default function CoachWorkoutBuilderScreen() {
     [],
   );
 
+  // ── FIX 3: reject zero/negative for sets and reps fields ──────────────────
+  // rest_seconds is allowed to be 0 (no-rest exercises are valid).
+  const rowsHaveInvalidNumeric = rows.some(
+    (r) => r.sets < 1 || r.reps_or_duration_seconds < 1,
+  );
+
   const canSave =
     name.trim().length > 0 &&
+    !rowsHaveInvalidNumeric &&
     !createMut.isPending &&
     !updateMut.isPending &&
     !setExercisesMut.isPending;
@@ -181,6 +188,15 @@ export default function CoachWorkoutBuilderScreen() {
   const onSave = useCallback(async () => {
     const trimmedName = name.trim();
     if (!trimmedName) return;
+    // Secondary guard: reject if any row still has invalid numeric values.
+    const invalidRow = rows.find((r) => r.sets < 1 || r.reps_or_duration_seconds < 1);
+    if (invalidRow) {
+      Alert.alert(
+        'Invalid exercise values',
+        `"${invalidRow.display_name}" has sets or reps set to zero. Minimum value is 1.`,
+      );
+      return;
+    }
     const durationParsed = duration.trim() ? parseInt(duration.trim(), 10) : undefined;
     const cleanDuration =
       typeof durationParsed === 'number' &&
@@ -364,12 +380,14 @@ export default function CoachWorkoutBuilderScreen() {
                   value={row.sets}
                   onChange={(v) => updateRow(idx, { sets: v })}
                   sc={sc}
+                  minValue={1}
                 />
                 <NumberField
                   label="Reps / sec"
                   value={row.reps_or_duration_seconds}
                   onChange={(v) => updateRow(idx, { reps_or_duration_seconds: v })}
                   sc={sc}
+                  minValue={1}
                 />
                 <NumberField
                   label="Rest (s)"
@@ -445,8 +463,12 @@ function NumberField(props: {
   value: number;
   onChange: (n: number) => void;
   sc: SemanticTokens;
+  /** When set, values strictly below minValue show an inline validation error
+   *  and a red border. Pass minValue={1} for sets/reps; omit for rest. */
+  minValue?: number;
 }) {
-  const { label, value, onChange, sc } = props;
+  const { label, value, onChange, sc, minValue } = props;
+  const isInvalid = minValue !== undefined && value < minValue;
   return (
     <View style={{ flex: 1 }}>
       <Text style={[typography.caption, { color: sc.textMuted }]}>{label}</Text>
@@ -460,7 +482,7 @@ function NumberField(props: {
         keyboardType="number-pad"
         style={{
           borderWidth: 1,
-          borderColor: sc.border,
+          borderColor: isInvalid ? '#C0392B' : sc.border,
           borderRadius: 6,
           paddingHorizontal: spacing.sm,
           paddingVertical: spacing.xs,
@@ -469,6 +491,14 @@ function NumberField(props: {
         }}
         maxLength={4}
       />
+      {isInvalid ? (
+        <Text
+          accessibilityRole="alert"
+          style={[typography.caption, { color: '#C0392B', marginTop: 2 }]}
+        >
+          {`Must be ≥ ${minValue}`}
+        </Text>
+      ) : null}
     </View>
   );
 }

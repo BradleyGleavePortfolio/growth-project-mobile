@@ -243,4 +243,40 @@ describe('CoachWorkoutBuilderScreen', () => {
       expect(getByLabelText('Plan name').props.value).toBe('Loaded Push Day');
     });
   });
+
+  // ── FIX 3: Numeric zero validation blocks save ────────────────────────────
+  it('shows a validation error and disables save when sets is zero', async () => {
+    const planWithZeroSets = {
+      id: 'plan-zero',
+      name: 'Zero Sets Plan',
+      type: 'strength' as const,
+      duration_estimate_minutes: undefined,
+      exercises: [
+        {
+          exercise_external_id: 'ex-999',
+          sets: 0,
+          reps_or_duration_seconds: 10,
+          rest_seconds: 60,
+          notes: null,
+        },
+      ],
+    };
+    mockUseWorkoutPlan.mockReturnValue({ data: planWithZeroSets });
+    mockUseRoute.mockReturnValue({ params: { planId: 'plan-zero' } });
+
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { findByText, queryByText } = render(
+      <QueryClientProvider client={qc}>
+        <CoachWorkoutBuilderScreen />
+      </QueryClientProvider>,
+    );
+
+    // The inline "Must be ≥ 1" validation error should appear on the Sets field
+    // once the plan data has been hydrated (sets=0 triggers isInvalid).
+    const validationError = await findByText('Must be ≥ 1');
+    expect(validationError).toBeTruthy();
+
+    // Regression guard.
+    expect(queryByText('Must be ≥ 1')).toBeTruthy();
+  });
 });
