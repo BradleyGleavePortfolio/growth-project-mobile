@@ -15,8 +15,8 @@
  * "your coach has not enabled checkout yet" empty state instead of a crash.
  *
  * Checkout return / cancel deep-links are handled by the navigator
- * (`tgp://checkout/success` and `tgp://checkout/cancel`); this module only
- * speaks HTTP.
+ * (`com.growthproject.app://checkout/success` and
+ * `com.growthproject.app://checkout/cancel`); this module only speaks HTTP.
  */
 
 import api from '../services/api';
@@ -155,8 +155,11 @@ export const clientPaymentsApi = {
   /**
    * Creates a Stripe Checkout session for the given package. The caller
    * opens the returned URL in a browser sheet; on success Stripe redirects
-   * to `tgp://checkout/success?session_id={CHECKOUT_SESSION_ID}`, on cancel
-   * to `tgp://checkout/cancel`. The navigator handles both deep links.
+   * to `com.growthproject.app://checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+   * on cancel to `com.growthproject.app://checkout/cancel`. The deep-link
+   * scheme must match the WebBrowser.openAuthSessionAsync callback in
+   * ClientPackagesScreen so the in-app browser sheet auto-dismisses on
+   * return; if these drift, payment looks "stuck" after a successful charge.
    */
   createCheckoutSession: (
     packageId: string,
@@ -165,8 +168,8 @@ export const clientPaymentsApi = {
       api.post<CheckoutSession>('/v1/clients/me/coach/checkout', {
         package_id: packageId,
         success_url:
-          'tgp://checkout/success?session_id={CHECKOUT_SESSION_ID}',
-        cancel_url: 'tgp://checkout/cancel',
+          'com.growthproject.app://checkout/success?session_id={CHECKOUT_SESSION_ID}',
+        cancel_url: 'com.growthproject.app://checkout/cancel',
       }),
     ),
 
@@ -174,9 +177,40 @@ export const clientPaymentsApi = {
    * Returns the client's current subscription + dunning status. Backend
    * renders the dunning summary copy verbatim; the app does not assemble
    * any client-side billing copy.
+   *
+   * Past-due fallback (audit M10): when the backend reports past_due but
+   * omits a Stripe-hosted update_card_url, mint a Billing Portal URL on
+   * demand so the dunning banner always has a working "Update card" link.
+   * Without this, paying customers with a failed invoice see the dunning
+   * banner with no actionable CTA.
    */
-  getPaymentStatus: (): Promise<PaymentsResult<ClientPaymentStatus>> =>
-    wrap(api.get<ClientPaymentStatus>('/v1/clients/me/coach/payment-status')),
+  getPaymentStatus: async (): Promise<PaymentsResult<ClientPaymentStatus>> => {
+    const statusResult = await wrap(
+      api.get<ClientPaymentStatus>('/v1/clients/me/coach/payment-status'),
+    );
+    if (!statusResult.ok) return statusResult;
+    const status = statusResult.data;
+    if (status.state === 'past_due' && !status.dunning?.update_card_url) {
+      const portal = await wrap(
+        api.post<{ url: string }>('/v1/clients/me/coach/billing-portal', {}),
+      );
+      const updateCardUrl = portal.ok ? portal.data.url : null;
+      return {
+        ok: true,
+        data: {
+          ...status,
+          dunning: {
+            summary:
+              status.dunning?.summary ??
+              'Your last payment failed. Update your card to keep access.',
+            update_card_url: updateCardUrl,
+            grace_until: status.dunning?.grace_until ?? null,
+          },
+        },
+      };
+    }
+    return statusResult;
+  },
 
   /**
    * Returns the client's current entitlement status. Used by

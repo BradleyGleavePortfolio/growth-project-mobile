@@ -87,6 +87,46 @@ describe('aiGatewayClient.createDraft — fail-closed flag gates', () => {
     expect(axiosMock.__instance.post).not.toHaveBeenCalled();
   });
 
+  it('surfaces enabled:false on a 200 as disabled (fail-closed stub detection)', async () => {
+    axiosMock.__instance.post.mockResolvedValue({
+      data: {
+        enabled: false,
+        provider: 'stub',
+        meta: { reason: 'no_provider_key' },
+      },
+    });
+    const r = await aiGatewayClient.createDraft(
+      { capability: 'coach_brief_draft' },
+      { flags: flagsFor(true, ['coach_brief_draft']) },
+    );
+    expect(r.status).toBe('disabled');
+    expect((r as AIGatewayDraftDisabled).reason).toBe('no_provider_key');
+  });
+
+  it('surfaces source.provider === "stub" on a 200 as disabled', async () => {
+    axiosMock.__instance.post.mockResolvedValue({
+      data: {
+        status: 'ok',
+        draftId: 'd-1',
+        capability: 'coach_brief_draft',
+        text: '[ai-disabled]',
+        source: {
+          provider: 'stub',
+          model: 'stub',
+          generatedAt: '2026-05-01T00:00:00Z',
+          groundedAt: null,
+        },
+        approval: { actor: null, approvedAt: null },
+        isStale: false,
+      },
+    });
+    const r = await aiGatewayClient.createDraft(
+      { capability: 'coach_brief_draft' },
+      { flags: flagsFor(true, ['coach_brief_draft']) },
+    );
+    expect(r.status).toBe('disabled');
+  });
+
   it('issues the request with an auto-generated idempotency key when flags allow', async () => {
     axiosMock.__instance.post.mockResolvedValue({
       data: {

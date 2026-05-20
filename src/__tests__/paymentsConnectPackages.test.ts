@@ -10,7 +10,10 @@
  *      and surfaces dunning state when present.
  *   2. The checkout session POST sends the correct success / cancel
  *      deep-link URLs so the Stripe redirect lands on
- *      tgp://checkout/{success,cancel}.
+ *      com.growthproject.app://checkout/{success,cancel}. This must match
+ *      the openAuthSessionAsync callback in ClientPackagesScreen — if the
+ *      schemes drift, the browser sheet does not dismiss on return and the
+ *      checkout appears stuck (audit C11).
  *   3. coachPaymentsApi CRUD calls hit the right paths + verbs.
  *   4. The coach earnings response exposes the documented fee split
  *      shape (2% TGP platform fee + 5% head coach override + Stripe).
@@ -121,6 +124,33 @@ describe('clientPaymentsApi', () => {
     }
   });
 
+  it('mints a billing-portal URL when past_due lacks update_card_url (audit M10)', async () => {
+    mockedApi.get.mockResolvedValueOnce({
+      data: {
+        state: 'past_due',
+        package_name: '1:1 Coaching',
+        current_period_end: '2026-05-31T00:00:00Z',
+        trial_ends_at: null,
+        dunning: null,
+      },
+    });
+    mockedApi.post.mockResolvedValueOnce({
+      data: { url: 'https://billing.stripe.com/p/session/portal_fresh' },
+    });
+    const res = await clientPaymentsApi.getPaymentStatus();
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.data.state).toBe('past_due');
+      expect(res.data.dunning?.update_card_url).toBe(
+        'https://billing.stripe.com/p/session/portal_fresh',
+      );
+    }
+    expect(mockedApi.post).toHaveBeenCalledWith(
+      '/v1/clients/me/coach/billing-portal',
+      expect.any(Object),
+    );
+  });
+
   it('createCheckoutSession sends Stripe template tokens for success / cancel', async () => {
     mockedApi.post.mockResolvedValueOnce({
       data: {
@@ -134,8 +164,8 @@ describe('clientPaymentsApi', () => {
       '/v1/clients/me/coach/checkout',
       expect.objectContaining({
         package_id: 'pkg_1',
-        success_url: expect.stringMatching(/^tgp:\/\/checkout\/success/),
-        cancel_url: 'tgp://checkout/cancel',
+        success_url: expect.stringMatching(/^com\.growthproject\.app:\/\/checkout\/success/),
+        cancel_url: 'com.growthproject.app://checkout/cancel',
       }),
     );
     // The success URL must include the Stripe session-id template token

@@ -143,17 +143,54 @@ export const aiGatewayClient = {
     }
     const idempotencyKey = req.idempotencyKey ?? generateIdempotencyKey();
     try {
-      const resp = await api.post<import('../types/aiGateway').AIGatewayDraftOk>(
-        '/ai/gateway/drafts',
-        {
+      const resp = await api.post<
+        import('../types/aiGateway').AIGatewayDraftOk & {
+          enabled?: boolean;
+          provider?: string;
+          meta?: { reason?: string };
+        }
+      >('/ai/gateway/drafts', {
+        capability: req.capability,
+        user_intent: req.userIntent ?? '',
+        subject_user_id: req.subjectRef?.id,
+        proposed_action: req.proposedAction,
+        idempotency_key: idempotencyKey,
+      });
+      const data = resp.data;
+      // Fail-closed stub detection (audit d613ff0): the backend can return
+      // HTTP 200 with enabled:false or a stub provider when the model
+      // pathway is degraded — surface these as `disabled` so the UI shows
+      // the "AI temporarily unavailable" state instead of rendering the
+      // stub placeholder text as if it were a real draft.
+      const allowedReasons: AIGatewayDraftDisabled['reason'][] = [
+        'kill_switch',
+        'no_provider_key',
+        'rate_limited',
+        'role_denied',
+        'consent_missing',
+        'feature_flag_off',
+      ];
+      const metaReason = data.meta?.reason;
+      const topLevelProvider = data.provider;
+      const nestedProvider = data.source?.provider;
+      if (
+        data.enabled === false ||
+        topLevelProvider === 'stub' ||
+        nestedProvider === 'stub'
+      ) {
+        const reason: AIGatewayDraftDisabled['reason'] =
+          metaReason && (allowedReasons as string[]).includes(metaReason)
+            ? (metaReason as AIGatewayDraftDisabled['reason'])
+            : 'no_provider_key';
+        return {
+          status: 'disabled',
           capability: req.capability,
-          user_intent: req.userIntent ?? '',
-          subject_user_id: req.subjectRef?.id,
-          proposed_action: req.proposedAction,
-          idempotency_key: idempotencyKey,
-        },
-      );
-      return resp.data;
+          reason,
+          summary: null,
+          retryAfter: null,
+        };
+      }
+      return data;
     } catch (err) {
       return networkErrorResponse(req.capability, err as AxiosError);
     }
