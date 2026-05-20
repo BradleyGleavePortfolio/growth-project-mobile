@@ -6,6 +6,7 @@
  *   - Workout type chips (Strength / Cardio / Mobility)
  *   - Save Plan / Create plan button
  *   - Correct accessibility labels on primary controls
+ *   - Edit-mode form hydration after async plan load  (FIX 2)
  *
  * The component uses useRoute, useNavigation, React Query hooks, and
  * useTheme. All are mocked below so no network traffic or native
@@ -13,7 +14,7 @@
  */
 
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
+import { act, render, waitFor } from '@testing-library/react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -87,9 +88,32 @@ jest.mock('../../../hooks/useExerciseLibrary', () => ({
   }),
 }));
 
+// ── Mock @react-navigation/native hooks ──────────────────────────────────────
+// We mock useRoute/useNavigation so the component can also be rendered
+// directly (without a NavigationContainer) in the hydration test.
+
+const mockGoBack = jest.fn();
+
+jest.mock('@react-navigation/native', () => {
+  const actual = jest.requireActual('@react-navigation/native');
+  return {
+    ...actual,
+    useRoute: jest.fn(() => ({ params: {} })),
+    useNavigation: jest.fn(() => ({ goBack: mockGoBack })),
+  };
+});
+
 // ── Import the component under test ──────────────────────────────────────────
 
 import CoachWorkoutBuilderScreen from '../CoachWorkoutBuilderScreen';
+
+// ── Typed references to mocked hooks ─────────────────────────────────────────
+
+import { useWorkoutPlan as _useWorkoutPlan } from '../../../hooks/useWorkoutBuilder';
+import { useRoute as _useRoute } from '@react-navigation/native';
+
+const mockUseWorkoutPlan = _useWorkoutPlan as jest.Mock;
+const mockUseRoute = _useRoute as jest.Mock;
 
 // ── Test helpers ──────────────────────────────────────────────────────────────
 
@@ -115,6 +139,11 @@ function renderInNav(params?: Record<string, unknown>) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('CoachWorkoutBuilderScreen', () => {
+  beforeEach(() => {
+    mockUseWorkoutPlan.mockReturnValue({ data: undefined });
+    mockGoBack.mockReset();
+  });
+
   it('renders the plan name input and Create plan button', () => {
     const { getByLabelText, getByText } = renderInNav();
 
@@ -148,5 +177,70 @@ describe('CoachWorkoutBuilderScreen', () => {
     expect(getByLabelText('Plan name')).toBeTruthy();
     expect(getByLabelText('Search exercise catalog')).toBeTruthy();
     expect(getByLabelText('Create plan')).toBeTruthy();
+  });
+
+  // ── FIX 2: Edit-mode hydration after async plan load ──────────────────────
+  it('hydrates form fields when edit-mode plan data arrives asynchronously', async () => {
+    const loadedPlan = {
+      id: 'plan-abc',
+      name: 'Loaded Push Day',
+      type: 'cardio' as const,
+      duration_estimate_minutes: 45,
+      exercises: [
+        {
+          exercise_external_id: 'ex-001',
+          sets: 4,
+          reps_or_duration_seconds: 12,
+          rest_seconds: 90,
+          notes: null,
+        },
+      ],
+    };
+
+    // Start with no data (query still pending).
+    mockUseWorkoutPlan.mockReturnValue({ data: undefined });
+
+    // A wrapper component that owns a "dataReady" flag. When flipped, it
+    // switches the mock to return the loaded plan — keeping the same
+    // CoachWorkoutBuilderScreen instance alive so the useEffect can fire.
+    let deliverPlan!: () => void;
+    function HydrationDriver() {
+      const [dataReady, setDataReady] = React.useState(false);
+
+      if (dataReady) {
+        mockUseWorkoutPlan.mockReturnValue({ data: loadedPlan });
+      } else {
+        mockUseWorkoutPlan.mockReturnValue({ data: undefined });
+      }
+
+      deliverPlan = () => setDataReady(true);
+
+      const qc = React.useMemo(
+        () => new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+        [],
+      );
+
+      return (
+        <QueryClientProvider client={qc}>
+          <CoachWorkoutBuilderScreen />
+        </QueryClientProvider>
+      );
+    }
+
+    mockUseRoute.mockReturnValue({ params: { planId: 'plan-abc' } });
+    const { getByLabelText } = render(<HydrationDriver />);
+
+    // Initially blank — data not yet loaded.
+    expect(getByLabelText('Plan name').props.value).toBe('');
+
+    // Simulate the query resolving.
+    await act(async () => {
+      deliverPlan();
+    });
+
+    // The useEffect watching existingPlan should populate the name field.
+    await waitFor(() => {
+      expect(getByLabelText('Plan name').props.value).toBe('Loaded Push Day');
+    });
   });
 });

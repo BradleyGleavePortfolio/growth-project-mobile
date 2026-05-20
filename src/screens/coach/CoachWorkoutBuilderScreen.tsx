@@ -21,7 +21,7 @@
  * screens follow the same convention; we mirror it here.
  */
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import {
   Alert,
@@ -96,6 +96,33 @@ export default function CoachWorkoutBuilderScreen() {
       notes: e.notes,
     })),
   );
+
+  // ── FIX 2: Hydrate local draft state when the async plan query resolves ───
+  // Guard with a ref so in-progress dirty edits are never clobbered by a
+  // background refetch — only the first successful load for this planId seeds
+  // the form.
+  const hydratedPlanIdRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!existingPlan || hydratedPlanIdRef.current === existingPlan.id) return;
+    hydratedPlanIdRef.current = existingPlan.id;
+    setName(existingPlan.name ?? '');
+    setType(existingPlan.type ?? 'strength');
+    setDuration(
+      existingPlan.duration_estimate_minutes != null
+        ? String(existingPlan.duration_estimate_minutes)
+        : '',
+    );
+    setRows(
+      (existingPlan.exercises ?? []).map((e) => ({
+        exercise_external_id: e.exercise_external_id,
+        display_name: e.exercise_external_id,
+        sets: e.sets,
+        reps_or_duration_seconds: e.reps_or_duration_seconds,
+        rest_seconds: e.rest_seconds,
+        notes: e.notes,
+      })),
+    );
+  }, [existingPlan]);
 
   // Search box state — local-only.
   const [search, setSearch] = useState<string>('');
