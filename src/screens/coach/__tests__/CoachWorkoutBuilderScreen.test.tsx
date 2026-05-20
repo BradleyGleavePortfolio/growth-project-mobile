@@ -140,7 +140,31 @@ function renderInNav(params?: Record<string, unknown>) {
 
 describe('CoachWorkoutBuilderScreen', () => {
   beforeEach(() => {
-    mockUseWorkoutPlan.mockReturnValue({ data: undefined });
+    // Reset hook mocks to their default-shape between tests so per-test
+    // mock customizations (e.g. swapping mutateAsync) don't bleed across
+    // tests. The mocks defined at the module top level set the canonical
+    // "happy-path" defaults; we re-apply them here for safety.
+    mockUseWorkoutPlan.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isError: false,
+      error: null,
+      refetch: jest.fn(),
+    });
+    const hook = jest.requireMock('../../../hooks/useWorkoutBuilder');
+    hook.useCreateWorkoutPlan.mockReturnValue({
+      mutateAsync: jest.fn().mockResolvedValue({ id: 'plan-1', name: 'Push Day' }),
+      isPending: false,
+    });
+    hook.useUpdateWorkoutPlan.mockReturnValue({
+      mutateAsync: jest.fn().mockResolvedValue({}),
+      isPending: false,
+    });
+    hook.useSetWorkoutExercises.mockReturnValue({
+      mutateAsync: jest.fn().mockResolvedValue([]),
+      isPending: false,
+    });
+    mockUseRoute.mockReturnValue({ params: {} });
     mockGoBack.mockReset();
   });
 
@@ -265,7 +289,7 @@ describe('CoachWorkoutBuilderScreen', () => {
     mockUseRoute.mockReturnValue({ params: { planId: 'plan-zero' } });
 
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const { findByText, queryByText } = render(
+    const { findByText, queryByText, getByLabelText } = render(
       <QueryClientProvider client={qc}>
         <CoachWorkoutBuilderScreen />
       </QueryClientProvider>,
@@ -278,5 +302,227 @@ describe('CoachWorkoutBuilderScreen', () => {
 
     // Regression guard.
     expect(queryByText('Must be ≥ 1')).toBeTruthy();
+
+    // Save button must be disabled while validation fails (Finding 3 ask).
+    const saveBtn = getByLabelText('Save changes');
+    expect(saveBtn.props.accessibilityState?.disabled).toBe(true);
+  });
+
+  // ── Boundary coverage for numeric validation — Finding 3 ask ───────────────
+  it('blocks save when reps_or_duration_seconds is zero', async () => {
+    const plan = {
+      id: 'plan-zero-reps',
+      name: 'Zero Reps Plan',
+      type: 'strength' as const,
+      duration_estimate_minutes: undefined,
+      exercises: [
+        {
+          exercise_external_id: 'ex-1',
+          sets: 3,
+          reps_or_duration_seconds: 0,
+          rest_seconds: 60,
+          notes: null,
+        },
+      ],
+    };
+    mockUseWorkoutPlan.mockReturnValue({ data: plan });
+    mockUseRoute.mockReturnValue({ params: { planId: 'plan-zero-reps' } });
+
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { findAllByText, getByLabelText } = render(
+      <QueryClientProvider client={qc}>
+        <CoachWorkoutBuilderScreen />
+      </QueryClientProvider>,
+    );
+    const errors = await findAllByText('Must be ≥ 1');
+    expect(errors.length).toBeGreaterThanOrEqual(1);
+    const saveBtn = getByLabelText('Save changes');
+    expect(saveBtn.props.accessibilityState?.disabled).toBe(true);
+  });
+
+  it('blocks save when sets is negative (−1) and mutations never fire', async () => {
+    const updateMutateAsync = jest.fn();
+    const setExercisesMutateAsync = jest.fn();
+    const hook = jest.requireMock('../../../hooks/useWorkoutBuilder');
+    hook.useUpdateWorkoutPlan.mockReturnValue({
+      mutateAsync: updateMutateAsync,
+      isPending: false,
+    });
+    hook.useSetWorkoutExercises.mockReturnValue({
+      mutateAsync: setExercisesMutateAsync,
+      isPending: false,
+    });
+
+    const plan = {
+      id: 'plan-neg',
+      name: 'Negative Sets Plan',
+      type: 'strength' as const,
+      duration_estimate_minutes: undefined,
+      exercises: [
+        {
+          exercise_external_id: 'ex-neg',
+          sets: -1,
+          reps_or_duration_seconds: 10,
+          rest_seconds: 60,
+          notes: null,
+        },
+      ],
+    };
+    mockUseWorkoutPlan.mockReturnValue({ data: plan });
+    mockUseRoute.mockReturnValue({ params: { planId: 'plan-neg' } });
+
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { findByText, getByLabelText } = render(
+      <QueryClientProvider client={qc}>
+        <CoachWorkoutBuilderScreen />
+      </QueryClientProvider>,
+    );
+
+    expect(await findByText('Must be ≥ 1')).toBeTruthy();
+    const saveBtn = getByLabelText('Save changes');
+    expect(saveBtn.props.accessibilityState?.disabled).toBe(true);
+    expect(updateMutateAsync).not.toHaveBeenCalled();
+    expect(setExercisesMutateAsync).not.toHaveBeenCalled();
+  });
+
+  it('allows save when all numeric values are valid positive integers', async () => {
+    const updateMutateAsync = jest.fn().mockResolvedValue({});
+    const setExercisesMutateAsync = jest.fn().mockResolvedValue([]);
+    const hook = jest.requireMock('../../../hooks/useWorkoutBuilder');
+    hook.useUpdateWorkoutPlan.mockReturnValue({
+      mutateAsync: updateMutateAsync,
+      isPending: false,
+    });
+    hook.useSetWorkoutExercises.mockReturnValue({
+      mutateAsync: setExercisesMutateAsync,
+      isPending: false,
+    });
+
+    const plan = {
+      id: 'plan-valid',
+      name: 'Valid Plan',
+      type: 'strength' as const,
+      duration_estimate_minutes: 45,
+      exercises: [
+        {
+          exercise_external_id: 'ex-valid',
+          sets: 3,
+          reps_or_duration_seconds: 10,
+          rest_seconds: 60,
+          notes: null,
+          order: 1,
+        },
+      ],
+    };
+    mockUseWorkoutPlan.mockReturnValue({ data: plan });
+    mockUseRoute.mockReturnValue({ params: { planId: 'plan-valid' } });
+
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { getByLabelText, queryByText } = render(
+      <QueryClientProvider client={qc}>
+        <CoachWorkoutBuilderScreen />
+      </QueryClientProvider>,
+    );
+
+    await waitFor(() => {
+      expect(queryByText('Must be ≥ 1')).toBeNull();
+    });
+
+    const saveBtn = getByLabelText('Save changes');
+    expect(saveBtn.props.accessibilityState?.disabled).toBeFalsy();
+  });
+
+  // ── Finding 1 — HIGH severity data-loss bug guard ─────────────────────
+  it('blocks save in edit mode while the plan is still loading (no data wipe)', async () => {
+    const updateMutateAsync = jest.fn();
+    const setExercisesMutateAsync = jest.fn();
+    const hook = jest.requireMock('../../../hooks/useWorkoutBuilder');
+    hook.useUpdateWorkoutPlan.mockReturnValue({
+      mutateAsync: updateMutateAsync,
+      isPending: false,
+    });
+    hook.useSetWorkoutExercises.mockReturnValue({
+      mutateAsync: setExercisesMutateAsync,
+      isPending: false,
+    });
+
+    mockUseWorkoutPlan.mockReturnValue({
+      data: undefined,
+      isLoading: true,
+      isError: false,
+      error: null,
+      refetch: jest.fn(),
+    });
+    mockUseRoute.mockReturnValue({ params: { planId: 'plan-loading' } });
+
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { getByLabelText, getAllByText } = render(
+      <QueryClientProvider client={qc}>
+        <CoachWorkoutBuilderScreen />
+      </QueryClientProvider>,
+    );
+
+    // Loading copy appears in BOTH the banner and the save button label — both
+    // are part of the same hydration UX. We assert at least one is visible.
+    expect(getAllByText('Loading plan…').length).toBeGreaterThanOrEqual(1);
+
+    // Save button is disabled and labelled to reflect hydration.
+    const saveBtn = getByLabelText('Save changes');
+    expect(saveBtn.props.accessibilityState?.disabled).toBe(true);
+
+    // Mutations must NOT have fired.
+    expect(updateMutateAsync).not.toHaveBeenCalled();
+    expect(setExercisesMutateAsync).not.toHaveBeenCalled();
+  });
+
+  // ── Finding 2 — hydration sorts exercises by `order` ───────────────────
+  it('hydrates exercises by `order` even when API returns them unsorted', async () => {
+    const plan = {
+      id: 'plan-unsorted',
+      name: 'Unsorted Plan',
+      type: 'strength' as const,
+      duration_estimate_minutes: undefined,
+      exercises: [
+        {
+          exercise_external_id: 'ex-B',
+          sets: 3,
+          reps_or_duration_seconds: 10,
+          rest_seconds: 60,
+          notes: null,
+          order: 2,
+        },
+        {
+          exercise_external_id: 'ex-A',
+          sets: 3,
+          reps_or_duration_seconds: 10,
+          rest_seconds: 60,
+          notes: null,
+          order: 1,
+        },
+        {
+          exercise_external_id: 'ex-C',
+          sets: 3,
+          reps_or_duration_seconds: 10,
+          rest_seconds: 60,
+          notes: null,
+          order: 3,
+        },
+      ],
+    };
+    mockUseWorkoutPlan.mockReturnValue({ data: plan });
+    mockUseRoute.mockReturnValue({ params: { planId: 'plan-unsorted' } });
+
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { findByText } = render(
+      <QueryClientProvider client={qc}>
+        <CoachWorkoutBuilderScreen />
+      </QueryClientProvider>,
+    );
+
+    // Row header text is "{idx + 1}. {display_name}". After sort by `order`,
+    // ex-A should render as row 1, ex-B as row 2, ex-C as row 3.
+    expect(await findByText('1. ex-A')).toBeTruthy();
+    expect(await findByText('2. ex-B')).toBeTruthy();
+    expect(await findByText('3. ex-C')).toBeTruthy();
   });
 });

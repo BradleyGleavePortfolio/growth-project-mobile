@@ -72,7 +72,17 @@ export default function CoachWorkoutBuilderScreen() {
   const { semanticColors: sc } = useTheme();
   const styles = useMemo(() => makeStyles(sc), [sc]);
 
-  const { data: existingPlan } = useWorkoutPlan(planId);
+  const {
+    data: existingPlan,
+    isLoading: isPlanLoading,
+    isError: isPlanError,
+    error: planError,
+    refetch: refetchPlan,
+  } = useWorkoutPlan(planId);
+  // In edit mode, hydration completes only after the async plan query resolves.
+  // Until then, save MUST be blocked or we can wipe the plan's exercise rows.
+  // (Finding 1 in the GPT-5.5 audit, 2026-05-20.)
+  const isHydrating = isEditing && (isPlanLoading || !existingPlan);
   const createMut = useCreateWorkoutPlan();
   const updateMut = useUpdateWorkoutPlan();
   const setExercisesMut = useSetWorkoutExercises();
@@ -112,8 +122,15 @@ export default function CoachWorkoutBuilderScreen() {
         ? String(existingPlan.duration_estimate_minutes)
         : '',
     );
+    // Defensively sort by `order` — other consumers in the codebase already do
+    // this (see buildActiveWorkout.ts, WorkoutAssignmentDetailScreen.tsx). If
+    // we trusted API order and the backend returned rows out-of-order even
+    // once, edit/save would silently renumber them. (Finding 2.)
+    const sortedExercises = [...(existingPlan.exercises ?? [])].sort(
+      (a, b) => (a.order ?? 0) - (b.order ?? 0),
+    );
     setRows(
-      (existingPlan.exercises ?? []).map((e) => ({
+      sortedExercises.map((e) => ({
         exercise_external_id: e.exercise_external_id,
         display_name: e.exercise_external_id,
         sets: e.sets,
@@ -172,15 +189,21 @@ export default function CoachWorkoutBuilderScreen() {
     [],
   );
 
-  // ── FIX 3: reject zero/negative for sets and reps fields ──────────────────
-  // rest_seconds is allowed to be 0 (no-rest exercises are valid).
+  // ── FIX 3: reject zero/negative/non-finite for sets and reps fields ───────
+  // rest_seconds is allowed to be 0 (no-rest exercises are valid). Use
+  // Number.isFinite to also catch NaN, which can sneak in if the input parser
+  // upstream ever changes. (Finding 3 partial / Finding 4 robustness.)
+  const isInvalidPositiveInt = (n: number) => !Number.isFinite(n) || n < 1;
   const rowsHaveInvalidNumeric = rows.some(
-    (r) => r.sets < 1 || r.reps_or_duration_seconds < 1,
+    (r) =>
+      isInvalidPositiveInt(r.sets) ||
+      isInvalidPositiveInt(r.reps_or_duration_seconds),
   );
 
   const canSave =
     name.trim().length > 0 &&
     !rowsHaveInvalidNumeric &&
+    !isHydrating &&
     !createMut.isPending &&
     !updateMut.isPending &&
     !setExercisesMut.isPending;
@@ -188,12 +211,30 @@ export default function CoachWorkoutBuilderScreen() {
   const onSave = useCallback(async () => {
     const trimmedName = name.trim();
     if (!trimmedName) return;
+    // Guard: never save while edit-mode hydration is still pending. Without
+    // this, a coach could enter a name and hit save before the existing
+    // plan's exercises have loaded, then setExercises([]) would wipe them.
+    // (Finding 1 — HIGH severity data-loss bug.)
+    if (isEditing && !existingPlan) {
+      Alert.alert(
+        'Still loading',
+        'Wait for the plan to finish loading before saving.',
+      );
+      return;
+    }
     // Secondary guard: reject if any row still has invalid numeric values.
-    const invalidRow = rows.find((r) => r.sets < 1 || r.reps_or_duration_seconds < 1);
+    // Pinpoint the specific invalid field so coaches know what to fix.
+    // (Finding 4 — copy accuracy for negative values.)
+    const invalidRow = rows.find(
+      (r) =>
+        isInvalidPositiveInt(r.sets) ||
+        isInvalidPositiveInt(r.reps_or_duration_seconds),
+    );
     if (invalidRow) {
+      const badField = isInvalidPositiveInt(invalidRow.sets) ? 'sets' : 'reps/duration';
       Alert.alert(
         'Invalid exercise values',
-        `"${invalidRow.display_name}" has sets or reps set to zero. Minimum value is 1.`,
+        `"${invalidRow.display_name}" has an invalid ${badField} value. Sets and reps/duration must be at least 1.`,
       );
       return;
     }
@@ -250,6 +291,7 @@ export default function CoachWorkoutBuilderScreen() {
   }, [
     createMut,
     duration,
+    existingPlan,
     isEditing,
     name,
     navigation,
@@ -269,6 +311,49 @@ export default function CoachWorkoutBuilderScreen() {
         <Text style={[typography.h2, { color: sc.textPrimary }]}>
           {isEditing ? 'Edit workout plan' : 'New workout plan'}
         </Text>
+
+        {/* Edit-mode hydration banner — Finding 1 fix UX. Shows the coach that
+            the plan is loading so they know not to bash Save. Banner disappears
+            as soon as existingPlan resolves and the form hydrates. */}
+        {isEditing && isPlanLoading ? (
+          <View
+            accessibilityLiveRegion="polite"
+            style={[styles.statusBanner, { borderColor: sc.border, backgroundColor: sc.bgSurface }]}
+          >
+            <Text style={[typography.body, { color: sc.textPrimary }]}>
+              Loading plan…
+            </Text>
+            <Text style={[typography.caption, { color: sc.textMuted, marginTop: 2 }]}>
+              Editing is disabled until the plan finishes loading so we don’t overwrite your exercises.
+            </Text>
+          </View>
+        ) : null}
+
+        {/* Error banner with retry. If the plan fetch fails, save MUST remain
+            blocked or we’d overwrite with empty state. */}
+        {isEditing && isPlanError ? (
+          <View
+            accessibilityLiveRegion="assertive"
+            style={[styles.statusBanner, { borderColor: '#C0392B', backgroundColor: sc.bgSurface }]}
+          >
+            <Text style={[typography.body, { color: '#C0392B' }]}>
+              Could not load this plan.
+            </Text>
+            <Text style={[typography.caption, { color: sc.textMuted, marginTop: 2 }]}>
+              {planError instanceof Error ? planError.message : 'Unknown error.'}
+            </Text>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Retry loading plan"
+              onPress={() => {
+                void refetchPlan();
+              }}
+              style={[styles.retryBtn, { borderColor: sc.accent }]}
+            >
+              <Text style={[typography.body, { color: sc.accent }]}>Retry</Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         <Text style={[typography.caption, styles.label, { color: sc.textMuted }]}>
           Plan name
@@ -448,9 +533,11 @@ export default function CoachWorkoutBuilderScreen() {
           <Text style={[typography.h4, { color: sc.bgPrimary }]}>
             {createMut.isPending || updateMut.isPending || setExercisesMut.isPending
               ? 'Saving...'
-              : isEditing
-                ? 'Save changes'
-                : 'Create plan'}
+              : isHydrating
+                ? 'Loading plan…'
+                : isEditing
+                  ? 'Save changes'
+                  : 'Create plan'}
           </Text>
         </Pressable>
       </ScrollView>
@@ -551,6 +638,20 @@ function makeStyles(sc: SemanticTokens) {
       borderRadius: 12,
       paddingVertical: spacing.md,
       alignItems: 'center',
+    },
+    statusBanner: {
+      borderWidth: 1,
+      borderRadius: 8,
+      padding: spacing.md,
+      marginTop: spacing.md,
+    },
+    retryBtn: {
+      borderWidth: 1,
+      borderRadius: 8,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.xs,
+      marginTop: spacing.sm,
+      alignSelf: 'flex-start',
     },
   });
 }
