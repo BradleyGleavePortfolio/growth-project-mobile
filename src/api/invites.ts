@@ -221,17 +221,20 @@ export const invitesApi = {
 
   /**
    * Re-queue the invite email for a PENDING invite. Calls
-   * POST /coach/invite-codes/:id/send with { email } matching the
-   * backend's sendOne endpoint signature. Returns
-   * `{ supported: false }` when the backend returns 404 so the UI
-   * can hide the affordance instead of erroring out.
+   * POST /coach/invite-codes/:id/send. The backend resolves the
+   * recipient from the invite record itself; `email` is an optional
+   * override (e.g. when the coach is correcting a typo and re-sending
+   * to a different address). Returns `{ supported: false }` when the
+   * backend returns 404 so the UI can hide the affordance instead of
+   * erroring out.
    */
   resendInvite: async (
     id: string,
-    email: string,
+    email?: string,
   ): Promise<{ supported: true } | { supported: false }> => {
     try {
-      await api.post(`/coach/invite-codes/${id}/send`, { email });
+      const body = email ? { email } : {};
+      await api.post(`/coach/invite-codes/${id}/send`, body);
       return { supported: true };
     } catch (err) {
       if (isNotFound(err)) return { supported: false };

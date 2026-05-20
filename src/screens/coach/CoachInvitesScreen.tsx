@@ -143,7 +143,7 @@ export default function CoachInvitesScreen({
     async (invite: Invite) => {
       mediumTap();
       try {
-        const result = await invitesApi.resendInvite(invite.id);
+        const result = await invitesApi.resendInvite(invite.id, invite.clientEmail);
         if (!result.supported) {
           setResendSupported(false);
           Alert.alert(

@@ -48,6 +48,27 @@ function generateIdempotencyKey(): string {
   return `mob-${Date.now().toString(36)}-${rand}`;
 }
 
+// Narrow a server-supplied `meta.reason` string into the
+// `AIGatewayDraftDisabled.reason` enum. Anything we don't recognise is
+// reported as `feature_flag_off` — the most conservative state (matches
+// the mobile fail-closed default) so the UI never invents a "kill switch"
+// or "rate limited" copy from a typoed backend value.
+function narrowDisabledReason(
+  raw: string | undefined,
+): AIGatewayDraftDisabled['reason'] {
+  switch (raw) {
+    case 'kill_switch':
+    case 'no_provider_key':
+    case 'rate_limited':
+    case 'role_denied':
+    case 'consent_missing':
+    case 'feature_flag_off':
+      return raw;
+    default:
+      return 'feature_flag_off';
+  }
+}
+
 // ─── Synthesised fail-closed responses ─────────────────────────────────────
 // When the mobile flag is off we never touch the network. Callers still get a
 // typed response so the UI's switch over `status` covers every path.
@@ -154,6 +175,11 @@ export const aiGatewayClient = {
         draft_mode: boolean;
         provenance: unknown;
         redactions_applied: unknown;
+        // Optional meta block populated by the backend when the gateway
+        // returns a degraded / stub response. `reason` mirrors the
+        // `AIGatewayDraftDisabled.reason` enum; we still narrow it at
+        // the call site since the backend may extend it.
+        meta?: { reason?: string };
       }>(
         '/ai/gateway/invoke',
         {
@@ -172,7 +198,7 @@ export const aiGatewayClient = {
         return {
           status: 'disabled',
           capability: req.capability,
-          reason: (data.meta as { reason?: string } | undefined)?.reason ?? 'ai_unavailable',
+          reason: narrowDisabledReason(data.meta?.reason),
           summary: null,
           retryAfter: null,
         };

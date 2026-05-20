@@ -38,6 +38,33 @@ jest.mock('../../../theme/ThemeProvider', () => ({
 // All SVG primitives are replaced with a pass-through View stub so tests run
 // in the Jest environment without a native SVG renderer.
 
+// ─── Mock side-effects of EmptyStateNoClients ────────────────────────────────
+// The variant talks to coachApi.listInviteCodes() on mount, reads MMKV, and
+// uses expo-clipboard. Stub these so the component renders deterministically
+// in Jest without spinning up Expo native modules or hitting the network.
+
+jest.mock('../../../services/api', () => ({
+  coachApi: {
+    listInviteCodes: jest.fn().mockResolvedValue({ data: [] }),
+  },
+}));
+
+jest.mock('../../../storage/mmkv', () => ({
+  prefsStorage: {
+    getStringAsync: jest.fn().mockResolvedValue(null),
+    set: jest.fn().mockResolvedValue(undefined),
+  },
+}));
+
+jest.mock('expo-clipboard', () => ({
+  setStringAsync: jest.fn().mockResolvedValue(true),
+}));
+
+jest.mock('expo-haptics', () => ({
+  impactAsync: jest.fn().mockResolvedValue(undefined),
+  ImpactFeedbackStyle: { Light: 'light', Medium: 'medium', Heavy: 'heavy' },
+}));
+
 jest.mock('react-native-svg', () => {
   // jest.mock factories are hoisted by babel-jest; safe to import from
   // jest-expo's React shim here.
@@ -147,15 +174,17 @@ describe('EmptyState — base component', () => {
 // ─── Variant: EmptyStateNoClients ─────────────────────────────────────────────
 
 describe('EmptyStateNoClients', () => {
-  it('renders "No clients yet" headline', () => {
-    const { getByTestId } = render(<EmptyStateNoClients />);
-    expect(getByTestId('empty-state-headline').props.children).toBe('No clients yet');
+  it('renders the headline copy', async () => {
+    const { findByTestId } = render(<EmptyStateNoClients />);
+    const h = await findByTestId('empty-state-headline');
+    expect(h.props.children).toBe('Your first client is one link away.');
   });
 
-  it('fires onInvite when CTA pressed', () => {
+  it('fires onInvite when CTA pressed (notfound branch)', async () => {
     const onInvite = jest.fn();
-    const { getByTestId } = render(<EmptyStateNoClients onInvite={onInvite} />);
-    fireEvent.press(getByTestId('empty-state-cta'));
+    const { findByTestId } = render(<EmptyStateNoClients onInvite={onInvite} />);
+    const cta = await findByTestId('empty-state-cta');
+    fireEvent.press(cta);
     expect(onInvite).toHaveBeenCalledTimes(1);
   });
 });

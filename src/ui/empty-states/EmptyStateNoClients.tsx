@@ -11,15 +11,15 @@
  * @module src/ui/empty-states/EmptyStateNoClients
  */
 
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   Share,
-  Clipboard,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { prefsStorage } from '../../storage/mmkv';
@@ -34,8 +34,14 @@ interface InviteCode {
 }
 
 interface Props {
-  /** Called when "Set up your invite code in Settings" CTA is pressed */
-  onGoToSettings?: () => void;
+  /**
+   * Called when the invite-related CTA is pressed. In the `notfound`
+   * branch this fires from the "GO TO SETTINGS" button; in the loaded
+   * branch the share/copy actions remain self-contained, but consumers
+   * may still pass this prop so a parent screen can additionally route
+   * the coach into a dedicated invite-codes flow.
+   */
+  onInvite?: () => void;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -44,23 +50,33 @@ const MMKV_CODE_KEY = 'coach.wizard.step_2_invite_code';
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function EmptyStateNoClients({ onGoToSettings }: Props) {
+export function EmptyStateNoClients({ onInvite }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const [code, setCode] = useState<string | null>(null);
   const [deepLink, setDeepLink] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   // 'notfound' means the API returned 404 — show Settings nudge
   const [state, setState] = useState<'loading' | 'loaded' | 'notfound'>('loading');
 
+  // Mirror of `code` for the mount-only effect below. Reading state via a
+  // ref keeps the effect's deps array empty (this is a one-shot hydrator,
+  // not a re-runner) while still letting the catch-branch see whether an
+  // optimistic MMKV value has already been written.
+  const codeRef = useRef<string | null>(null);
+  useEffect(() => {
+    codeRef.current = code;
+  }, [code]);
+
   // ── Hydrate from MMKV optimistically ──────────────────────────────────────
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       try {
         const cached = await prefsStorage.getStringAsync(MMKV_CODE_KEY);
-        if (cached) {
+        if (!cancelled && cached) {
           setCode(cached);
+          codeRef.current = cached;
           setState('loaded');
         }
       } catch {
@@ -70,6 +86,7 @@ export function EmptyStateNoClients({ onGoToSettings }: Props) {
       // Background refresh
       try {
         const res = await coachApi.listInviteCodes();
+        if (cancelled) return;
         const list = (res.data as InviteCode[] | undefined) ?? [];
         if (list.length === 0) {
           setState('notfound');
@@ -77,22 +94,26 @@ export function EmptyStateNoClients({ onGoToSettings }: Props) {
         }
         const first = list[0];
         setCode(first.code);
+        codeRef.current = first.code;
         setDeepLink(first.deep_link_url ?? null);
         setState('loaded');
         // Cache for next render
         prefsStorage.set(MMKV_CODE_KEY, first.code).catch(() => {});
       } catch (err) {
+        if (cancelled) return;
         const status = (err as { response?: { status?: number } })?.response?.status;
         if (status === 404) {
           setState('notfound');
-        } else {
-          // Network error — if we have an optimistic code, stay 'loaded'
-          if (!code) setState('notfound');
+        } else if (!codeRef.current) {
+          // Network error — only fall back to the "notfound" nudge when
+          // we have no optimistic MMKV value to display.
+          setState('notfound');
         }
-      } finally {
-        setLoading(false);
       }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const handleShare = useCallback(() => {
@@ -108,8 +129,9 @@ export function EmptyStateNoClients({ onGoToSettings }: Props) {
     try {
       await Clipboard.setStringAsync(code);
     } catch {
-      // Clipboard API fallback for older RN versions
-      (Clipboard as unknown as { setString: (s: string) => void }).setString(code);
+      // expo-clipboard occasionally rejects on the iOS simulator —
+      // copying is best-effort, so swallow rather than surface a
+      // raw error to the user. The Share affordance remains.
     }
     try {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -122,15 +144,15 @@ export function EmptyStateNoClients({ onGoToSettings }: Props) {
   if (state === 'notfound') {
     return (
       <View style={styles.container}>
-        <Text style={styles.headline}>Your first client is one link away.</Text>
+        <Text style={styles.headline} testID="empty-state-headline">Your first client is one link away.</Text>
         <Text style={styles.body}>Set up your invite code in Settings to get started.</Text>
-        {onGoToSettings ? (
+        {onInvite ? (
           <TouchableOpacity
             style={styles.primaryBtn}
-            onPress={onGoToSettings}
+            onPress={onInvite}
             accessibilityRole="button"
             accessibilityLabel="Go to Settings to create an invite code"
-            testID="empty-no-clients-settings-btn"
+            testID="empty-state-cta"
           >
             <Text style={styles.primaryBtnText}>GO TO SETTINGS</Text>
           </TouchableOpacity>
@@ -143,7 +165,7 @@ export function EmptyStateNoClients({ onGoToSettings }: Props) {
   if (state === 'loading') {
     return (
       <View style={styles.container}>
-        <Text style={styles.headline}>Your first client is one link away.</Text>
+        <Text style={styles.headline} testID="empty-state-headline">Your first client is one link away.</Text>
         <View style={styles.skeletonCode} />
         <View style={[styles.skeletonLine, { width: '70%', marginTop: 8 }]} />
         <View style={[styles.skeletonBtn, { marginTop: 24 }]} />

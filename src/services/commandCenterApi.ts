@@ -13,6 +13,7 @@
 //   POST /coach/command-center/action-queue/:alertId/dismiss — dismiss an alert
 
 import api from './api';
+import type { LtvMetrics } from '../components/command-center/CoachLtvDashboard';
 
 // ─── Flag ─────────────────────────────────────────────────────────────────────
 // Driven by EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER. Defaults OFF (false) — only
@@ -346,6 +347,55 @@ export const commandCenterApi = {
       return await api.get<ActionQueueResponse>(`${BASE}/action-queue`);
     } catch {
       return { data: { items: [], total_pending: 0 } };
+    }
+  },
+
+  /**
+   * GET /coach/command-center/ltv-metrics
+   * Returns the coach's revenue & LTV tiles (rendered by CoachLtvDashboard).
+   * Mirrors the failure posture of the other getters: a network failure
+   * falls back to an empty, zero-valued dataset so the dashboard renders
+   * its "no data yet" state instead of a raw error chip.
+   */
+  getLtvMetrics: async (): Promise<{ data: LtvMetrics }> => {
+    try {
+      return await api.get<LtvMetrics>(`${BASE}/ltv-metrics`);
+    } catch (err) {
+      // Matches CoachLtvDashboard.tsx — dev-only breadcrumb so a coach
+      // reporting "my LTV tiles are zero" gives us a starting point.
+      // Stays silent in production builds.
+      if (__DEV__) console.warn('[commandCenterApi.getLtvMetrics]', err);
+      return {
+        data: {
+          mrr_cents: 0,
+          mrr_label: '$0',
+          active_client_count: 0,
+          revenue_per_client_month_cents: 0,
+          revenue_per_client_month_label: '$0',
+          avg_client_lifespan_months: 0,
+          estimated_ltv_cents: 0,
+          estimated_ltv_label: '$0',
+          churn_rate_pct: 0,
+          net_revenue_retention_pct: 0,
+          projected_annual_revenue_cents: 0,
+          projected_annual_revenue_label: '$0',
+          mrr_trend: 'flat',
+          mrr_30d_ago_cents: 0,
+          zero_churn_streak_months: 0,
+          all_time_peak_rpcm_cents: 0,
+          all_time_peak_rpcm_label: '$0',
+          is_new_rpcm_record: false,
+          ltv_cac_ratio: null,
+          nrr_is_stub: true,
+          next_milestone: {
+            clients_needed: 0,
+            mrr_target_cents: 0,
+            mrr_target_label: '$0',
+          },
+          currency: 'usd',
+          computed_at: new Date().toISOString(),
+        },
+      };
     }
   },
 
