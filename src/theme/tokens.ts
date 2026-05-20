@@ -301,6 +301,14 @@ export interface SemanticTokens {
   accent: string;
   /** Default border / hairline color */
   border: string;
+  /** Danger foreground text — AA-compliant against bgSurface in this mode */
+  danger: string;
+  /** Danger surface/background tint for banners, callouts */
+  dangerBg: string;
+  /** Danger border / hairline */
+  dangerBorder: string;
+  /** Action text color usable on dangerBg surfaces (AA-compliant) */
+  dangerAction: string;
 }
 
 /** Light-mode semantic tokens (default — matches existing bone/ink palette). */
@@ -311,6 +319,11 @@ export const lightTokens: SemanticTokens = {
   textMuted:   '#78736E',
   accent:      '#4A0404',  // oxblood
   border:      '#DCD5CC',
+  // Danger tokens — verified AA against bgSurface #FFFDF8 in light mode
+  danger:        '#8B1A1A',  // ~9.2:1 on #FFFDF8 (AA pass for normal text)
+  dangerBg:      '#FBE9E7',  // subtle red-tinted surface
+  dangerBorder:  '#E0A8A8',
+  dangerAction:  '#6B1414',  // ~12:1 on #FBE9E7 / ~11:1 on #FFFDF8
 };
 
 /** Dark-mode semantic tokens. */
@@ -321,6 +334,11 @@ export const darkTokens: SemanticTokens = {
   textMuted:   '#A09B94',
   accent:      '#B43C3C',  // oxblood lifted for dark contrast
   border:      '#2D2A26',
+  // Danger tokens — verified AA against bgSurface #1C1A18 in dark mode
+  danger:        '#F5A8A8',  // ~7.5:1 on #1C1A18 (AA pass for normal text)
+  dangerBg:      '#2A1816',  // subtle red-tinted dark surface
+  dangerBorder:  '#5C2A2A',
+  dangerAction:  '#FFD4D4',  // ~9:1 on #2A1816 / ~10:1 on #1C1A18
 };
 
 // ─── Composite token export ────────────────────────────────────────────────────

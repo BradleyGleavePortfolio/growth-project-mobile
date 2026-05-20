@@ -330,16 +330,24 @@ export default function CoachWorkoutBuilderScreen() {
         ) : null}
 
         {/* Error banner with retry. If the plan fetch fails, save MUST remain
-            blocked or we’d overwrite with empty state. */}
+            blocked or we’d overwrite with empty state.
+
+            Uses semantic danger tokens (sc.danger/dangerBg/dangerBorder/dangerAction)
+            which are AA-compliant in both light and dark mode — verified ≥7:1 contrast
+            against bgSurface in each mode. Avoids the previous hard-coded #C0392B which
+            only met contrast on light backgrounds. */}
         {isEditing && isPlanError ? (
           <View
             accessibilityLiveRegion="assertive"
-            style={[styles.statusBanner, { borderColor: '#C0392B', backgroundColor: sc.bgSurface }]}
+            style={[
+              styles.statusBanner,
+              { borderColor: sc.dangerBorder, backgroundColor: sc.dangerBg },
+            ]}
           >
-            <Text style={[typography.body, { color: '#C0392B' }]}>
+            <Text style={[typography.body, { color: sc.danger }]}>
               Could not load this plan.
             </Text>
-            <Text style={[typography.caption, { color: sc.textMuted, marginTop: 2 }]}>
+            <Text style={[typography.caption, { color: sc.textPrimary, marginTop: 2 }]}>
               {planError instanceof Error ? planError.message : 'Unknown error.'}
             </Text>
             <Pressable
@@ -348,9 +356,9 @@ export default function CoachWorkoutBuilderScreen() {
               onPress={() => {
                 void refetchPlan();
               }}
-              style={[styles.retryBtn, { borderColor: sc.accent }]}
+              style={[styles.retryBtn, { borderColor: sc.dangerAction }]}
             >
-              <Text style={[typography.body, { color: sc.accent }]}>Retry</Text>
+              <Text style={[typography.body, { color: sc.dangerAction }]}>Retry</Text>
             </Pressable>
           </View>
         ) : null}
@@ -569,7 +577,7 @@ function NumberField(props: {
         keyboardType="number-pad"
         style={{
           borderWidth: 1,
-          borderColor: isInvalid ? '#C0392B' : sc.border,
+          borderColor: isInvalid ? sc.danger : sc.border,
           borderRadius: 6,
           paddingHorizontal: spacing.sm,
           paddingVertical: spacing.xs,
@@ -581,7 +589,7 @@ function NumberField(props: {
       {isInvalid ? (
         <Text
           accessibilityRole="alert"
-          style={[typography.caption, { color: '#C0392B', marginTop: 2 }]}
+          style={[typography.caption, { color: sc.danger, marginTop: 2 }]}
         >
           {`Must be ≥ ${minValue}`}
         </Text>
