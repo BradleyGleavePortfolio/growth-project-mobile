@@ -169,9 +169,19 @@ function validateAppJson(app) {
   if (!app) return;
   const expo = app.expo || {};
 
-  if (expo.scheme !== EXPECTED.scheme) {
+  // expo.scheme may be a string OR an array. Array form is required so the
+  // app registers multiple URL schemes with the OS — the legacy `tgp://` for
+  // invite deep links, plus `com.growthproject.app://` for the Stripe
+  // checkout return URL. Validate that the legacy scheme is still present in
+  // either shape; the bundle-id scheme is checked separately below.
+  const schemes = Array.isArray(expo.scheme)
+    ? expo.scheme
+    : expo.scheme === undefined
+    ? []
+    : [expo.scheme];
+  if (!schemes.includes(EXPECTED.scheme)) {
     fail(
-      `app.json: expo.scheme is ${JSON.stringify(expo.scheme)}, expected ${JSON.stringify(EXPECTED.scheme)} — custom scheme deep links will not fire`,
+      `app.json: expo.scheme is ${JSON.stringify(expo.scheme)}, expected ${JSON.stringify(EXPECTED.scheme)} (string or array entry) — custom scheme deep links will not fire`,
     );
   }
 
