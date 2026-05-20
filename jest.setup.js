@@ -2,6 +2,18 @@
 // jest-expo handles most RN/Expo shims; we only add mocks for modules that
 // tests touch explicitly.
 
+// react-native-worklets throws at module-load when `global.__workletsModuleProxy`
+// is undefined (NativeWorklets initializes during top-level import via
+// reanimated → Skeleton → screen tests). The native TurboModule isn't present
+// under Jest, so we install a Proxy that returns a jest.fn() for any method
+// the wrapper invokes — enough to satisfy the init check.
+global.__workletsModuleProxy = new Proxy(
+  {},
+  {
+    get: () => jest.fn(() => ({})),
+  },
+);
+
 // env.ts throws at module-load when these aren't set; provide deterministic
 // stubs so tests that transitively import it (e.g. via services/api) can run.
 process.env.EXPO_PUBLIC_SUPABASE_URL =
