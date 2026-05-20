@@ -20,7 +20,7 @@
  *   Written on "Skip for now" tap.
  */
 
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import {
   Modal,
   View,
@@ -172,6 +172,17 @@ export default function PackageSelectionSheet({
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false); // passed 24h suppression check
 
+  // Latest-ref pattern: callers may pass an inline onDismiss that re-creates
+  // every render. Subscribing the effects below to `onDismiss` directly would
+  // cause them to re-run (and re-fetch packages) on every parent re-render.
+  // Storing it in a ref lets the effects always invoke the freshest callback
+  // while depending only on the actual triggers (`visible`, `ready`). This
+  // satisfies react-hooks/exhaustive-deps without changing runtime semantics.
+  const onDismissRef = useRef(onDismiss);
+  useEffect(() => {
+    onDismissRef.current = onDismiss;
+  }, [onDismiss]);
+
   // ── 24h suppression gate ──────────────────────────────────────────────────
   useEffect(() => {
     if (!visible) return;
@@ -183,7 +194,7 @@ export default function PackageSelectionSheet({
           const elapsed = Date.now() - new Date(dismissedAt).getTime();
           if (elapsed < TWENTY_FOUR_HOURS) {
             // Suppressed — dismiss immediately
-            if (!cancelled) onDismiss();
+            if (!cancelled) onDismissRef.current();
             return;
           }
         }
@@ -214,7 +225,7 @@ export default function PackageSelectionSheet({
           : (data as { packages: CoachPackage[] }).packages ?? [];
         if (!cancelled) {
           if (list.length === 0) {
-            onDismiss();
+            onDismissRef.current();
             return;
           }
           setPackages(list);
@@ -223,7 +234,7 @@ export default function PackageSelectionSheet({
       } catch {
         if (!cancelled) {
           // API error — dismiss quietly
-          onDismiss();
+          onDismissRef.current();
         }
       }
     })();
