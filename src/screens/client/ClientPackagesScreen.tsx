@@ -157,21 +157,35 @@ export default function ClientPackagesScreen() {
           );
           return;
         }
-        // Use `openAuthSessionAsync` instead of `openBrowserAsync` for
-        // Stripe Checkout. The former is the OAuth-style sheet that
-        // actively listens for the configured deep-link callback (here
-        // `com.growthproject.app://checkout/success` and
-        // `com.growthproject.app://checkout/cancel`) and resolves the
-        // moment Stripe redirects back to the app's return URL.
-        // `openBrowserAsync` is fire-and-forget; the sheet stays open
-        // after Stripe issues the redirect unless the user manually taps
-        // Done, which silently strands users on the success page
-        // wondering if their subscription is active.
-        await WebBrowser.openAuthSessionAsync(res.data.url, 'com.growthproject.app://');
-        // The sheet is closed — useFocusEffect will refresh status, but
-        // also do an immediate reload so the UI is current if the user
-        // came back via the cancel deep link (which won't re-focus).
-        await load();
+        // Apple Rule 3.1.3(b)/(e) B2B exemption: open Stripe Checkout in
+        // a branded in-app webview rather than the system browser sheet.
+        // The webview screen handles its own success / cancel deep-link
+        // short-circuit and routes through CheckoutReturn, which already
+        // refreshes payment-status on mount. We do NOT call `load()`
+        // here — that ran for the legacy `WebBrowser.openAuthSessionAsync`
+        // path which blocked until the sheet closed; navigation is
+        // fire-and-forget so any post-checkout refresh has to happen on
+        // the destination screen.
+        // The typed-nav approach for cross-stack pushes is to cast both
+        // args together so the union-of-screens overload resolves. Until
+        // we wire a typed root navigator hook, this is the convention
+        // used elsewhere in this file (see `getParent().navigate(...)`).
+        (
+          navigation as unknown as {
+            navigate: (
+              name: string,
+              params: {
+                checkoutUrl: string;
+                packageName: string;
+                returnScheme: string;
+              },
+            ) => void;
+          }
+        ).navigate('BrandedCheckoutWebView', {
+          checkoutUrl: res.data.url,
+          packageName: pkg.name,
+          returnScheme: 'com.growthproject.app',
+        });
       } catch (err) {
         setCheckoutError(
           (err as { message?: string })?.message || 'Could not open checkout.',
