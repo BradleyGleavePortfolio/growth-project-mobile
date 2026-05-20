@@ -106,6 +106,8 @@ export type ClientsStackParamList = {
   // Sprint B-2 coach surfaces — closed by this PR.
   CoachMacrosReview:    { clientId: string; clientName: string };
   CoachWorkoutBuilder:  { planId?: string } | undefined;
+  /** Phase 11 / Track 6 — alias used by ClientsListScreen tile. */
+  WorkoutBuilder:       { planId?: string } | undefined;
   CoachMealTemplates:   undefined;
   CoachBulkInvite:      undefined;
   /** Email Pipeline v1 — bulk invite v2 surface (per-recipient delivery). */
@@ -244,6 +246,14 @@ function ClientsStackNavigator() {
       <ClientsStack.Screen
         name="CoachWorkoutBuilder"
         component={CoachWorkoutBuilderScreen}
+      />
+      {/* Phase 11 / Track 6 — alias registered so ClientsListScreen tile can
+          navigate('WorkoutBuilder') without a type error. Both names resolve
+          to the same screen. */}
+      <ClientsStack.Screen
+        name="WorkoutBuilder"
+        component={CoachWorkoutBuilderScreen}
+        options={{ title: 'Workout Builder' }}
       />
       <ClientsStack.Screen
         name="CoachMealTemplates"
