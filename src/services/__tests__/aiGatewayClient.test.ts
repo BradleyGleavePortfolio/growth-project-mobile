@@ -35,7 +35,11 @@ const axiosMock = jest.requireMock('axios') as {
 };
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const { aiGatewayClient, generateIdempotencyKey } = require('../aiGatewayClient');
+const {
+  aiGatewayClient,
+  generateIdempotencyKey,
+  AIUnavailableError,
+} = require('../aiGatewayClient');
 import type {
   AIGatewayCapability,
   AIGatewayDraftOk,
@@ -87,23 +91,48 @@ describe('aiGatewayClient.createDraft — fail-closed flag gates', () => {
     expect(axiosMock.__instance.post).not.toHaveBeenCalled();
   });
 
-  it('surfaces enabled:false on a 200 as disabled (fail-closed stub detection)', async () => {
+  // ── Fail-closed stub detection: each variant must THROW an
+  // AIUnavailableError. A return-based discriminated union member can be
+  // silently ignored by a forgetful caller; an exception forces handling.
+
+  it('throws AIUnavailableError when top-level enabled:false on a 200', async () => {
+    axiosMock.__instance.post.mockResolvedValue({
+      data: { enabled: false, meta: { reason: 'no_provider_key' } },
+    });
+    await expect(
+      aiGatewayClient.createDraft(
+        { capability: 'coach_brief_draft' },
+        { flags: flagsFor(true, ['coach_brief_draft']) },
+      ),
+    ).rejects.toBeInstanceOf(AIUnavailableError);
+  });
+
+  it('throws AIUnavailableError when top-level provider:"stub" on a 200 (enabled absent)', async () => {
     axiosMock.__instance.post.mockResolvedValue({
       data: {
-        enabled: false,
         provider: 'stub',
         meta: { reason: 'no_provider_key' },
       },
     });
-    const r = await aiGatewayClient.createDraft(
-      { capability: 'coach_brief_draft' },
-      { flags: flagsFor(true, ['coach_brief_draft']) },
+    let caught: unknown = null;
+    try {
+      await aiGatewayClient.createDraft(
+        { capability: 'coach_brief_draft' },
+        { flags: flagsFor(true, ['coach_brief_draft']) },
+      );
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(AIUnavailableError);
+    expect((caught as InstanceType<typeof AIUnavailableError>).reason).toBe(
+      'no_provider_key',
     );
-    expect(r.status).toBe('disabled');
-    expect((r as AIGatewayDraftDisabled).reason).toBe('no_provider_key');
+    expect((caught as InstanceType<typeof AIUnavailableError>).capability).toBe(
+      'coach_brief_draft',
+    );
   });
 
-  it('surfaces source.provider === "stub" on a 200 as disabled', async () => {
+  it('throws AIUnavailableError when nested source.provider:"stub" on a 200', async () => {
     axiosMock.__instance.post.mockResolvedValue({
       data: {
         status: 'ok',
@@ -120,11 +149,41 @@ describe('aiGatewayClient.createDraft — fail-closed flag gates', () => {
         isStale: false,
       },
     });
-    const r = await aiGatewayClient.createDraft(
-      { capability: 'coach_brief_draft' },
-      { flags: flagsFor(true, ['coach_brief_draft']) },
+    await expect(
+      aiGatewayClient.createDraft(
+        { capability: 'coach_brief_draft' },
+        { flags: flagsFor(true, ['coach_brief_draft']) },
+      ),
+    ).rejects.toBeInstanceOf(AIUnavailableError);
+  });
+
+  it('throws AIUnavailableError when nested source.provider:"stub" AND enabled:false', async () => {
+    axiosMock.__instance.post.mockResolvedValue({
+      data: {
+        enabled: false,
+        status: 'ok',
+        source: {
+          provider: 'stub',
+          model: 'stub',
+          generatedAt: '2026-05-01T00:00:00Z',
+          groundedAt: null,
+        },
+        meta: { reason: 'kill_switch' },
+      },
+    });
+    let caught: unknown = null;
+    try {
+      await aiGatewayClient.createDraft(
+        { capability: 'check_in_summary' },
+        { flags: flagsFor(true, ['check_in_summary']) },
+      );
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(AIUnavailableError);
+    expect((caught as InstanceType<typeof AIUnavailableError>).reason).toBe(
+      'kill_switch',
     );
-    expect(r.status).toBe('disabled');
   });
 
   it('issues the request with an auto-generated idempotency key when flags allow', async () => {
@@ -251,7 +310,10 @@ describe('aiGatewayClient.createDraft — HTTP error mapping', () => {
     expect(r.reason).toBe('provider_unavailable');
   });
 
-  it('never throws — every failure path returns a typed response', async () => {
+  it('does not throw on HTTP/transport failures — those still map to typed responses', async () => {
+    // Stub-detection on a 200 is the only path that throws (see fail-closed
+    // suite above). HTTP errors continue to map into the discriminated union
+    // so the UI can branch on `status` + `reason`.
     axiosMock.__instance.post.mockRejectedValue(new Error('boom'));
     await expect(
       aiGatewayClient.createDraft(

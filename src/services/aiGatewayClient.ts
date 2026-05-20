@@ -39,6 +39,7 @@ import type {
   AIGatewayDraftError,
   AIGatewayStatusResponse,
 } from '../types/aiGateway';
+import { AIUnavailableError } from './aiGatewayErrors';
 
 // ─── Idempotency key ───────────────────────────────────────────────────────
 // Cheap, collision-resistant enough for short-window dedupe. Backend persists
@@ -127,9 +128,16 @@ export interface AIGatewayClientDeps {
 
 export const aiGatewayClient = {
   /**
-   * Generate an unsigned draft. Always returns one of the three discriminated
-   * shapes; never throws for HTTP/transport errors. Callers must `switch` on
-   * `status` and render the matching UX state.
+   * Generate an unsigned draft.
+   *
+   * Returns one of `AIGatewayDraftResponse`'s discriminated shapes for the
+   * cases the UI can branch on (flag-off, HTTP error mapping). THROWS
+   * `AIUnavailableError` when the gateway returns HTTP 200 with a degraded
+   * pathway (`enabled:false`, top-level or nested `provider:'stub'`). The
+   * throw is the runtime fail-closed guarantee from Rule 9 — a discriminated
+   * union member can be silently ignored at a call site; an exception cannot.
+   * Callers must catch `AIUnavailableError` and render the "AI temporarily
+   * unavailable" UX.
    */
   async createDraft(
     req: Omit<AIGatewayDraftRequest, 'idempotencyKey'> & {
@@ -142,8 +150,9 @@ export const aiGatewayClient = {
       return flagOffResponse(req.capability);
     }
     const idempotencyKey = req.idempotencyKey ?? generateIdempotencyKey();
+    let resp;
     try {
-      const resp = await api.post<
+      resp = await api.post<
         import('../types/aiGateway').AIGatewayDraftOk & {
           enabled?: boolean;
           provider?: string;
@@ -156,44 +165,44 @@ export const aiGatewayClient = {
         proposed_action: req.proposedAction,
         idempotency_key: idempotencyKey,
       });
-      const data = resp.data;
-      // Fail-closed stub detection (audit d613ff0): the backend can return
-      // HTTP 200 with enabled:false or a stub provider when the model
-      // pathway is degraded — surface these as `disabled` so the UI shows
-      // the "AI temporarily unavailable" state instead of rendering the
-      // stub placeholder text as if it were a real draft.
-      const allowedReasons: AIGatewayDraftDisabled['reason'][] = [
-        'kill_switch',
-        'no_provider_key',
-        'rate_limited',
-        'role_denied',
-        'consent_missing',
-        'feature_flag_off',
-      ];
-      const metaReason = data.meta?.reason;
-      const topLevelProvider = data.provider;
-      const nestedProvider = data.source?.provider;
-      if (
-        data.enabled === false ||
-        topLevelProvider === 'stub' ||
-        nestedProvider === 'stub'
-      ) {
-        const reason: AIGatewayDraftDisabled['reason'] =
-          metaReason && (allowedReasons as string[]).includes(metaReason)
-            ? (metaReason as AIGatewayDraftDisabled['reason'])
-            : 'no_provider_key';
-        return {
-          status: 'disabled',
-          capability: req.capability,
-          reason,
-          summary: null,
-          retryAfter: null,
-        };
-      }
-      return data;
     } catch (err) {
       return networkErrorResponse(req.capability, err as AxiosError);
     }
+    const data = resp.data;
+    // Fail-closed stub detection (audit d613ff0 + round-3 contract change):
+    // when the backend returns HTTP 200 with enabled:false or any stub
+    // provider, throw a structured AIUnavailableError. The previous round
+    // returned a `disabled` union member here, but callers had to opt in to
+    // handling it — any caller that forgot would silently render the stub
+    // placeholder as a real draft. An exception forces handling.
+    const allowedReasons: AIGatewayDraftDisabled['reason'][] = [
+      'kill_switch',
+      'no_provider_key',
+      'rate_limited',
+      'role_denied',
+      'consent_missing',
+      'feature_flag_off',
+    ];
+    const metaReason = data.meta?.reason;
+    const topLevelProvider = data.provider;
+    const nestedProvider = data.source?.provider;
+    if (
+      data.enabled === false ||
+      topLevelProvider === 'stub' ||
+      nestedProvider === 'stub'
+    ) {
+      const reason: AIGatewayDraftDisabled['reason'] =
+        metaReason && (allowedReasons as string[]).includes(metaReason)
+          ? (metaReason as AIGatewayDraftDisabled['reason'])
+          : 'no_provider_key';
+      throw new AIUnavailableError({
+        capability: req.capability,
+        reason,
+        summary: null,
+        retryAfter: null,
+      });
+    }
+    return data;
   },
 
   /**
@@ -235,3 +244,4 @@ export const aiGatewayClient = {
 // Exported for tests and any caller that needs to short-circuit on flags
 // without invoking the client.
 export { generateIdempotencyKey };
+export { AIUnavailableError, isAIUnavailableError } from './aiGatewayErrors';

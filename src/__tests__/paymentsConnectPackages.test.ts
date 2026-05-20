@@ -151,6 +151,32 @@ describe('clientPaymentsApi', () => {
     );
   });
 
+  it('marks dunning.portal_unavailable when past_due AND billing-portal mint fails (round-3 residual fix)', async () => {
+    mockedApi.get.mockResolvedValueOnce({
+      data: {
+        state: 'past_due',
+        package_name: '1:1 Coaching',
+        current_period_end: '2026-05-31T00:00:00Z',
+        trial_ends_at: null,
+        dunning: null,
+      },
+    });
+    mockedApi.post.mockRejectedValueOnce({
+      response: { status: 500, data: {} },
+      message: 'Server error',
+    });
+    const res = await clientPaymentsApi.getPaymentStatus();
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.data.state).toBe('past_due');
+      expect(res.data.dunning).not.toBeNull();
+      expect(res.data.dunning?.update_card_url).toBeNull();
+      expect(res.data.dunning?.portal_unavailable).toBe(true);
+      // Summary must still be present so the banner has something to render.
+      expect(typeof res.data.dunning?.summary).toBe('string');
+    }
+  });
+
   it('createCheckoutSession sends Stripe template tokens for success / cancel', async () => {
     mockedApi.post.mockResolvedValueOnce({
       data: {

@@ -83,6 +83,14 @@ export interface ClientPaymentStatus {
     update_card_url: string | null;
     /** ISO timestamp the coach loses access if the card isn't updated. */
     grace_until: string | null;
+    /**
+     * Client-side flag set when the past-due Billing-Portal mint fallback
+     * failed (network / 5xx / 404). The UI uses this to render a
+     * "Update card unavailable — contact support" notice instead of
+     * silently dropping the CTA, which would leave the user with a past-due
+     * banner and no recovery path (audit round 3 residual).
+     */
+    portal_unavailable?: boolean;
   } | null;
 }
 
@@ -195,6 +203,11 @@ export const clientPaymentsApi = {
         api.post<{ url: string }>('/v1/clients/me/coach/billing-portal', {}),
       );
       const updateCardUrl = portal.ok ? portal.data.url : null;
+      // Round-3 residual fix: when the portal mint itself fails, the
+      // dunning banner previously rendered with no Update CTA — a true
+      // dead-end. Mark `portal_unavailable` so the screen can render a
+      // "Update card unavailable — contact support" notice instead.
+      const portalUnavailable = !portal.ok;
       return {
         ok: true,
         data: {
@@ -205,6 +218,7 @@ export const clientPaymentsApi = {
               'Your last payment failed. Update your card to keep access.',
             update_card_url: updateCardUrl,
             grace_until: status.dunning?.grace_until ?? null,
+            portal_unavailable: portalUnavailable,
           },
         },
       };
