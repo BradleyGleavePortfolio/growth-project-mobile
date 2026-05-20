@@ -57,7 +57,7 @@ export interface CompleteAssignmentInput {
   post_rpe?: number;
   post_notes?: string;
   idempotency_key?: string;
-  completion_payload?: Record<string, any>;
+  completion_payload?: Record<string, unknown>;
   started_at?: string;
 }
 

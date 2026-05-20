@@ -173,15 +173,28 @@ export default function CoachAiSection({
     }
   }, [clientId]);
 
-  // Navigate to the correct draft screen based on draft type.
+  // Navigate to the correct draft screen based on draft type. All three
+  // candidate routes (AIWorkoutDraft, AIMealPlanDraft, ClientInsight) accept
+  // the same `{ draftId, clientId, clientName }` param shape per
+  // ClientsStackParamList, so we can dispatch via a typed switch instead of
+  // an `as any` cast — satisfies @typescript-eslint/no-explicit-any.
   const navigateToDraft = useCallback(
     (draft: PendingDraftSummary) => {
       setInboxOpen(false);
       setReadyDraft(null);
-      const draftId = draft.id;
       const screen = draftTypeToScreen(draft.type);
-      if (screen) {
-        navigation.navigate(screen as any, { draftId, clientId, clientName });
+      if (!screen) return;
+      const params = { draftId: draft.id, clientId, clientName };
+      switch (screen) {
+        case 'AIWorkoutDraft':
+          navigation.navigate('AIWorkoutDraft', params);
+          return;
+        case 'AIMealPlanDraft':
+          navigation.navigate('AIMealPlanDraft', params);
+          return;
+        case 'ClientInsight':
+          navigation.navigate('ClientInsight', params);
+          return;
       }
     },
     [clientId, clientName, navigation],
