@@ -34,12 +34,11 @@ const axiosMock = jest.requireMock('axios') as {
   };
 };
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const {
+import {
   aiGatewayClient,
   generateIdempotencyKey,
   AIUnavailableError,
-} = require('../aiGatewayClient');
+} from '../aiGatewayClient';
 import type {
   AIGatewayCapability,
   AIGatewayDraftOk,
