@@ -140,12 +140,19 @@ describe('Day1WinScreen — RTL mount', () => {
     expect(getByTestId('day1win-card-first_meal')).toBeTruthy();
   });
 
-  it('skip button calls onComplete without an API call', () => {
+  it('skip button calls onComplete without recording a win', async () => {
     const onComplete = jest.fn();
     const { getByTestId } = render(<Day1WinScreen onComplete={onComplete} />);
 
     fireEvent.press(getByTestId('day1win-skip-button'));
-    expect(onComplete).toHaveBeenCalledTimes(1);
+    // The skip path runs maybeShowPackageSheet(undefined) which is async — it
+    // reads the 24h-gate from MMKV and probes the packages endpoint. Both can
+    // resolve to "no sheet" paths that synchronously call onComplete inside
+    // the awaited body, so wait for the callback rather than asserting
+    // synchronously.
+    await waitFor(() => {
+      expect(onComplete).toHaveBeenCalledTimes(1);
+    });
     expect(mockComplete).not.toHaveBeenCalled();
   });
 
@@ -186,6 +193,9 @@ describe('Day1WinScreen — RTL mount', () => {
     });
 
     fireEvent.press(getByTestId('day1win-continue-button'));
-    expect(onComplete).toHaveBeenCalledTimes(1);
+    // handleContinue → maybeShowPackageSheet is async (MMKV + api.get).
+    await waitFor(() => {
+      expect(onComplete).toHaveBeenCalledTimes(1);
+    });
   });
 });
