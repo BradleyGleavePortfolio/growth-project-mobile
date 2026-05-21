@@ -47,7 +47,12 @@ export interface ClientCoachPackage {
 }
 
 export interface CheckoutSession {
-  /** Stripe-hosted Checkout URL — open in a system browser sheet. */
+  /**
+   * Stripe-hosted Checkout URL — must be opened in the branded in-app
+   * `BrandedCheckoutWebView` so the flow stays inside the app (Rule 8 /
+   * Apple Rule 3.1.3(b)/(e) B2B exemption). Never open a payment URL
+   * outside the branded webview on a payment surface.
+   */
   url: string;
   /** Session id, surfaced for logging only. */
   session_id: string;
@@ -162,12 +167,14 @@ export const clientPaymentsApi = {
 
   /**
    * Creates a Stripe Checkout session for the given package. The caller
-   * opens the returned URL in a browser sheet; on success Stripe redirects
-   * to `com.growthproject.app://checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+   * opens the returned URL in the branded in-app `BrandedCheckoutWebView`
+   * screen; on success Stripe redirects to
+   * `com.growthproject.app://checkout/success?session_id={CHECKOUT_SESSION_ID}`,
    * on cancel to `com.growthproject.app://checkout/cancel`. The deep-link
-   * scheme must match the WebBrowser.openAuthSessionAsync callback in
-   * ClientPackagesScreen so the in-app browser sheet auto-dismisses on
-   * return; if these drift, payment looks "stuck" after a successful charge.
+   * scheme must match the exact-match gate in
+   * `BrandedCheckoutWebViewScreen.parseReturnDeepLink` so the webview
+   * dismisses on return; if these drift, payment looks "stuck" after a
+   * successful charge.
    */
   createCheckoutSession: (
     packageId: string,

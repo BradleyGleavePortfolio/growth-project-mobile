@@ -98,6 +98,9 @@ import DataExportScreen from '../screens/settings/DataExportScreen';
 // Payments — client-facing packages + checkout return (backend PR #215).
 import ClientPackagesScreen from '../screens/client/ClientPackagesScreen';
 import CheckoutReturnScreen from '../screens/client/CheckoutReturnScreen';
+import BrandedCheckoutWebViewScreen, {
+  type BrandedCheckoutWebViewParams,
+} from '../screens/client/BrandedCheckoutWebViewScreen';
 import { colors } from '../theme/tokens';
 
 // ─── Param lists ──────────────────────────────────────────────────────────────
@@ -198,6 +201,11 @@ export type MoreStackParamList = {
    *   session_id: present when outcome === 'success' (Stripe template token).
    */
   CheckoutReturn: { outcome?: 'success' | 'cancel'; session_id?: string };
+  /**
+   * Payments — branded in-app Stripe Checkout webview. See screen docstring
+   * for the Apple Rule 3.1.3(b)/(e) B2B exemption rationale.
+   */
+  BrandedCheckoutWebView: BrandedCheckoutWebViewParams;
 };
 
 // ─── Phase 9: unread count polling for the bell icon ─────────────────────────
@@ -399,6 +407,12 @@ function MoreStackNavigator() {
           tgp://checkout/{success,cancel}; see RootNavigator.linking. */}
       <MoreStackNav.Screen name="ClientPackages"  component={ClientPackagesScreen} />
       <MoreStackNav.Screen name="CheckoutReturn"  component={CheckoutReturnScreen} />
+      {/* Branded in-app webview checkout (Apple B2B exemption — see screen docstring). */}
+      <MoreStackNav.Screen
+        name="BrandedCheckoutWebView"
+        component={BrandedCheckoutWebViewScreen}
+        options={{ presentation: 'modal', headerShown: false, gestureEnabled: false }}
+      />
     </MoreStackNav.Navigator>
   );
 }
