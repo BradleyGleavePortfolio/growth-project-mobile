@@ -10,7 +10,7 @@
  *   - Report — opens the ReportMessageSheet to capture a reason + free text.
  */
 import React, { useEffect, useMemo, useCallback } from 'react';
-import { ActionSheetIOS, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActionSheetIOS, Modal, Platform, Pressable, StyleSheet, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 

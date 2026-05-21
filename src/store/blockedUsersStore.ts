@@ -61,16 +61,19 @@ export const useBlockedUsersStore = create<BlockedUsersState>((set, get) => ({
         if (Array.isArray(parsed)) {
           const cleaned: BlockedUser[] = parsed
             .filter((u): u is Record<string, unknown> => !!u && typeof u === 'object')
-            .map((u) => ({
-              id: String(u.id ?? ''),
-              displayName: typeof u.displayName === 'string' ? u.displayName : '',
-              role:
+            .map((u): BlockedUser => {
+              const role: BlockedUser['role'] =
                 u.role === 'coach' || u.role === 'client' || u.role === 'student'
                   ? u.role
-                  : 'other',
-              blockedAt:
-                typeof u.blockedAt === 'string' ? u.blockedAt : new Date().toISOString(),
-            }))
+                  : 'other';
+              return {
+                id: String(u.id ?? ''),
+                displayName: typeof u.displayName === 'string' ? u.displayName : '',
+                role,
+                blockedAt:
+                  typeof u.blockedAt === 'string' ? u.blockedAt : new Date().toISOString(),
+              };
+            })
             .filter((u) => u.id.length > 0);
           set({ blocked: cleaned });
         }
