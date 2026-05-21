@@ -54,13 +54,14 @@ jest.mock('../services/queryClient', () => ({
 import {
   EntitlementProvider,
   useEntitlement,
+  type EntitlementContextValue,
 } from '../entitlements/EntitlementProvider';
 import { entitlementEvents } from '../entitlements/entitlementEvents';
 import { clientPaymentsApi } from '../api/clientPaymentsApi';
 
 const mockedGetEntitlement = clientPaymentsApi.getEntitlement as jest.Mock;
 
-function Probe({ onCtx }: { onCtx: (c: ReturnType<typeof useEntitlement>) => void }) {
+function Probe({ onCtx }: { onCtx: (c: EntitlementContextValue) => void }) {
   const ctx = useEntitlement();
   onCtx(ctx);
   return <View testID="probe"><Text>{ctx.status}</Text></View>;
@@ -73,7 +74,7 @@ beforeEach(() => {
 describe('EntitlementProvider', () => {
   it('402 emission flips paywallVisible=true', async () => {
     mockedGetEntitlement.mockResolvedValue({ ok: true, data: { active: true } });
-    let latest: ReturnType<typeof useEntitlement> | null = null;
+    let latest: EntitlementContextValue | null = null;
     render(
       <EntitlementProvider>
         <Probe onCtx={(c) => { latest = c; }} />
@@ -89,7 +90,7 @@ describe('EntitlementProvider', () => {
       });
     });
     await waitFor(() => expect(latest?.paywallVisible).toBe(true));
-    expect(latest?.paywallMessage).toBe('Choose a plan to continue.');
+    expect((latest as EntitlementContextValue | null)?.paywallMessage).toBe('Choose a plan to continue.');
   });
 
   it('refreshEntitlement returning active=true clears paywallVisible', async () => {
@@ -98,7 +99,7 @@ describe('EntitlementProvider', () => {
       .mockResolvedValueOnce({ ok: true, data: { active: false } })
       .mockResolvedValueOnce({ ok: true, data: { active: true } });
 
-    let latest: ReturnType<typeof useEntitlement> | null = null;
+    let latest: EntitlementContextValue | null = null;
     render(
       <EntitlementProvider>
         <Probe onCtx={(c) => { latest = c; }} />
@@ -121,7 +122,7 @@ describe('EntitlementProvider', () => {
       await latest!.refreshEntitlement();
     });
     await waitFor(() => expect(latest?.paywallVisible).toBe(false));
-    expect(latest?.status).toBe('active');
+    expect((latest as EntitlementContextValue | null)?.status).toBe('active');
   });
 
   it('network failure on getEntitlement → status=unavailable (fail closed)', async () => {
@@ -130,7 +131,7 @@ describe('EntitlementProvider', () => {
       reason: 'error',
       message: 'Network down',
     });
-    let latest: ReturnType<typeof useEntitlement> | null = null;
+    let latest: EntitlementContextValue | null = null;
     render(
       <EntitlementProvider>
         <Probe onCtx={(c) => { latest = c; }} />
@@ -139,7 +140,7 @@ describe('EntitlementProvider', () => {
     await waitFor(() => expect(latest?.status).toBe('unavailable'));
     // entitlementActive null means ProtectedScreen renders the paywall (verified
     // separately in protectedScreenFailClosed.test.tsx).
-    expect(latest?.entitlementActive).toBeNull();
+    expect((latest as EntitlementContextValue | null)?.entitlementActive).toBeNull();
   });
 
 });

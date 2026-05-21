@@ -15,7 +15,7 @@ export type EntitlementStatus =
   | 'inactive'
   | 'unavailable';
 
-interface EntitlementContextValue {
+export interface EntitlementContextValue {
   entitlementActive: boolean | null;
   checking: boolean;
   /** Raw status — needed by ProtectedScreen to distinguish first-fetch spinner from fail-closed. */
