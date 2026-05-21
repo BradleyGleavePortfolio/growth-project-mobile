@@ -34,8 +34,9 @@ import { useTheme, ThemeColors } from '../theme/ThemeProvider';
 import { prefsStorage } from '../storage/mmkv';
 import api from '../services/api';
 
-// TODO: install @stripe/stripe-react-native when native build is configured.
-// If the package is available, import { useStripe } from '@stripe/stripe-react-native'.
+// Deferred: install @stripe/stripe-react-native when the native build is
+// configured. When the package is available, replace this dynamic resolver
+// with `import { useStripe } from '@stripe/stripe-react-native'`.
 //
 // IMPORTANT: this local binding intentionally does NOT start with `use` so it
 // is not treated as a React Hook by `react-hooks/rules-of-hooks`. The hook,
