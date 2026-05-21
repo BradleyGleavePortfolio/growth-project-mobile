@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { coachApi } from '../../../services/api';
 import { errorMessage } from '../../../types/common';
 import { getTodayString } from '../../../utils/date';
@@ -23,6 +23,14 @@ export function useClientDetailData(clientId: string, colors: ThemeColors) {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  // Mirror `refreshing` into a ref so loadData can read the latest value
+  // without listing it as a useCallback dep. Including it in deps re-identifies
+  // loadData on every pull-to-refresh tick, which refires the screen's
+  // [clientId, loadData] effect and produces 2–3x duplicate fetches.
+  const refreshingRef = useRef(refreshing);
+  useEffect(() => {
+    refreshingRef.current = refreshing;
+  }, [refreshing]);
   const [isArchived, setIsArchived] = useState(false);
 
   const [serverMealPlans, setServerMealPlans] = useState<CoachMealPlan[]>([]);
@@ -31,7 +39,7 @@ export function useClientDetailData(clientId: string, colors: ThemeColors) {
 
   const loadData = useCallback(async () => {
     try {
-      if (!refreshing) setIsLoading(true);
+      if (!refreshingRef.current) setIsLoading(true);
       setLoadError(null);
       const today = getTodayString();
 
@@ -121,7 +129,7 @@ export function useClientDetailData(clientId: string, colors: ThemeColors) {
     } finally {
       setIsLoading(false);
     }
-  }, [clientId, refreshing]);
+  }, [clientId]);
 
   const loadServerMealPlans = useCallback(async () => {
     setMealPlansLoading(true);

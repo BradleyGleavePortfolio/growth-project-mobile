@@ -170,4 +170,34 @@ describe('signOut → store resets (Hunter #2 P1-7)', () => {
     // restore so later tests aren't affected
     useCoachStore.setState({ reset: original });
   });
+
+  it('isolates per-store reset failures so the remaining stores still reset', () => {
+    // Audit follow-up: outer try/catch used to short-circuit at the first
+    // throw, leaving subsequent stores holding the previous user's state.
+    // Each reset must now be wrapped individually.
+    const originalCoachReset = useCoachStore.getState().reset;
+    useCoachStore.setState({
+      reset: () => {
+        throw new Error('coach reset boom');
+      },
+    });
+
+    expect(() => resetUserScopedStores()).not.toThrow();
+
+    // Coach store still holds the seeded state because its reset threw…
+    expect(useCoachStore.getState().clients.length).toBe(1);
+    // …but every other user-scoped store was reset to initial state.
+    expect(useClientStore.getState().foodLogs).toEqual([]);
+    expect(useClientStore.getState().dailyTotals).toEqual({
+      calories: 0,
+      protein: 0,
+      carbs: 0,
+      fat: 0,
+    });
+    expect(useFastingStore.getState().activeFast).toBeNull();
+    expect(useFastingStore.getState().history).toEqual([]);
+    expect(foregroundBannerStore.getState().banner).toBeNull();
+
+    useCoachStore.setState({ reset: originalCoachReset });
+  });
 });

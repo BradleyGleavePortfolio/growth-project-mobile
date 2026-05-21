@@ -149,16 +149,22 @@ export async function signOut(): Promise<void> {
 // Exported so the next-user sign-in path (or tests) can re-assert a clean
 // slate without duplicating the store list. Order is intentional: pure
 // in-memory `set()` calls; no awaits, no I/O.
+// Each reset() is isolated in its own try/catch so a throw from one store
+// (e.g. a bad slice or test stub) does not short-circuit the remaining
+// resets and leak the previous user's state across signOut.
 export function resetUserScopedStores(): void {
-  try {
-    useCoachStore.getState().reset();
-    useClientStore.getState().reset();
-    useFastingStore.getState().reset();
-    foregroundBannerStore.getState().reset();
-  } catch (err) {
-    // Store resets are pure set() calls — a throw here is unexpected, but we
-    // never want a store-reset failure to swallow the logout event itself.
-    logger.warn('AuthActions', 'resetUserScopedStores failed', err);
+  const stores: Array<readonly [string, () => void]> = [
+    ['coachStore', () => useCoachStore.getState().reset()],
+    ['clientStore', () => useClientStore.getState().reset()],
+    ['fastingStore', () => useFastingStore.getState().reset()],
+    ['foregroundBannerStore', () => foregroundBannerStore.getState().reset()],
+  ];
+  for (const [name, reset] of stores) {
+    try {
+      reset();
+    } catch (err) {
+      logger.warn('AuthActions', `resetUserScopedStores: ${name} reset failed`, err);
+    }
   }
 }
 
