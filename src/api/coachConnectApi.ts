@@ -20,6 +20,7 @@
 
 import api from '../services/api';
 import type { AxiosResponse } from 'axios';
+import { randomUUID } from 'expo-crypto';
 
 export interface ConnectStatus {
   configured: boolean;
@@ -120,6 +121,71 @@ function wrap<T>(p: Promise<AxiosResponse<T>>): Promise<ConnectResult<T>> {
     });
 }
 
+/**
+ * Validate a Stripe-hosted URL before handing it to `Linking.openURL`.
+ *
+ * H3-P1-2 (Hunter #3): the backend-supplied Connect URL was previously
+ * passed verbatim to `Linking.openURL` with no allow-list check. If the
+ * backend is compromised, or a MITM on a misconfigured TLS endpoint
+ * substitutes the JSON payload, the coach is silently redirected to an
+ * attacker-controlled domain. The mitigation here is a strict scheme +
+ * hostname allow-list applied at every call site before the URL leaves
+ * the app:
+ *
+ *   - Scheme must be exactly `https:` — refuses `http:`, `javascript:`,
+ *     `tgp:` (custom scheme), and any other protocol.
+ *   - Hostname must be exactly `stripe.com` or end with `.stripe.com`
+ *     (`connect.stripe.com`, `dashboard.stripe.com`, etc.). The leading
+ *     dot is important — `endsWith('stripe.com')` alone would also
+ *     accept `evilstripe.com`.
+ *
+ * Returns `false` for malformed URLs, non-HTTPS schemes, and any host
+ * outside the allow-list. The caller surfaces a structured user-facing
+ * error and does NOT open the URL.
+ */
+export function isTrustedStripeUrl(rawUrl: string): boolean {
+  if (typeof rawUrl !== 'string' || rawUrl.length === 0) return false;
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return false;
+  }
+  if (parsed.protocol !== 'https:') return false;
+  const host = parsed.hostname.toLowerCase();
+  if (host === 'stripe.com') return true;
+  if (host.endsWith('.stripe.com')) return true;
+  return false;
+}
+
+/**
+ * In-flight Promise cache for `createOnboardingLink`, keyed by `returnPath`.
+ *
+ * H3-P1-1 (Hunter #3): the `onboardBusy` UI flag does not cover the network
+ * race that opens between a first tap on "Connect Stripe" firing a POST and
+ * the second tap arriving before React has re-rendered with the disabled
+ * state. Without an in-flight cache the second tap minted a second
+ * onboarding URL on the backend — duplicate account-link requests are
+ * wasteful (Stripe rate-limits) and create UX confusion ("which link is
+ * canonical?"). The Idempotency-Key header gives the backend a way to
+ * deduplicate; the in-flight Promise cache short-circuits the redundant
+ * call entirely on the client side so the second tap awaits the same
+ * Promise the first tap is already awaiting.
+ *
+ * Keyed by `returnPath` so two callers asking for different return paths
+ * still each get their own link.
+ */
+const onboardingLinkInflight = new Map<
+  string,
+  Promise<ConnectResult<OnboardingLink>>
+>();
+
+/** Build a stable idempotency key per onboarding attempt. RFC 4122 UUID v4
+ *  produced by `expo-crypto`; Stripe treats it as opaque and dedupes on it. */
+function newOnboardingIdempotencyKey(): string {
+  return `coach-connect-onboarding-${randomUUID()}`;
+}
+
 export const coachConnectApi = {
   getStatus: (): Promise<ConnectResult<ConnectStatus>> =>
     wrap(api.get<ConnectStatus>('/coach/connect/status')),
@@ -133,11 +199,50 @@ export const coachConnectApi = {
   getPackages: (): Promise<ConnectResult<CoachPackage[]>> =>
     wrap(api.get<CoachPackage[]>('/coach/connect/packages')),
 
-  createOnboardingLink: (returnPath?: string): Promise<ConnectResult<OnboardingLink>> =>
-    wrap(
+  /**
+   * Mint a Stripe-hosted onboarding URL for the coach to complete KYC.
+   *
+   * H3-P1-1: idempotent under rapid double-tap. The function caches the
+   * in-flight Promise keyed by `returnPath`, so a second concurrent call
+   * with the same `returnPath` returns the same Promise as the first.
+   * It also forwards an `Idempotency-Key` header so the backend can
+   * deduplicate on its side even when concurrent calls come from
+   * different React renders (or, in dev, a Fast Refresh-triggered
+   * remount). The key is generated once per first call and reused
+   * implicitly by any callers awaiting the same in-flight Promise.
+   */
+  createOnboardingLink: (
+    returnPath?: string,
+  ): Promise<ConnectResult<OnboardingLink>> => {
+    const cacheKey = returnPath ?? '';
+    const existing = onboardingLinkInflight.get(cacheKey);
+    if (existing) return existing;
+    const idempotencyKey = newOnboardingIdempotencyKey();
+    const inflight = wrap(
       api.post<OnboardingLink>(
         '/coach/connect/onboarding-link',
         returnPath ? { return_path: returnPath } : {},
+        { headers: { 'Idempotency-Key': idempotencyKey } },
       ),
-    ),
+    ).finally(() => {
+      // Clear the in-flight slot once the request settles. A failed mint
+      // must not poison subsequent retries; a successful mint already
+      // returned a URL the screen can act on. The 0ms timeout pushes the
+      // clear past the resolve/reject so concurrent awaits see the same
+      // settled Promise.
+      onboardingLinkInflight.delete(cacheKey);
+    });
+    onboardingLinkInflight.set(cacheKey, inflight);
+    return inflight;
+  },
 };
+
+/**
+ * Test-only hook. Production code MUST NOT call this. Imported by screen
+ * tests to reset the in-flight Promise cache between cases without
+ * resorting to module-reset shenanigans that would also blow away the
+ * axios mock state.
+ */
+export function __resetOnboardingInflightForTests(): void {
+  onboardingLinkInflight.clear();
+}
