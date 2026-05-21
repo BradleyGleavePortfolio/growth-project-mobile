@@ -30,6 +30,14 @@ const Q4_SRC = fs.readFileSync(
   path.join(SRC_ROOT, 'screens', 'onboarding', 'LeanQ4MetricsScreen.tsx'),
   'utf8',
 );
+// The Lean onboarding flow was extended past Q4 — Q5 captures birth year +
+// target weight, Q6 is the terminal screen that flips the
+// `onboarding_complete` flag and fires `authEvents.emit()`. The original
+// finalize logic lived in Q4 (3-step flow). It now lives in Q6 (5-step flow).
+const Q6_SRC = fs.readFileSync(
+  path.join(SRC_ROOT, 'screens', 'onboarding', 'LeanQ6Screen.tsx'),
+  'utf8',
+);
 
 describe('LeanOnboardingNavigator includes the metrics step', () => {
   it('declares LeanQ4 in LeanOnboardingParamList', () => {
@@ -55,17 +63,17 @@ describe('LeanQ3 routes onward to LeanQ4 on selection', () => {
   });
 });
 
-describe('LeanQ4 finalises onboarding and persists captured metrics', () => {
+describe('LeanQ4 persists captured metrics (finalize moved to LeanQ6)', () => {
   it('persists captured height and currentWeight via the onboarding store', () => {
     expect(Q4_SRC).toMatch(/saveOnboardingData\(payload\)/);
     expect(Q4_SRC).toMatch(/payload\.height\s*=/);
     expect(Q4_SRC).toMatch(/payload\.currentWeight\s*=/);
   });
 
-  it('marks onboarding_complete + lean_onboarding_done and emits an authEvent', () => {
-    expect(Q4_SRC).toMatch(/onboarding_complete['"],\s*['"]true['"]/);
-    expect(Q4_SRC).toMatch(/lean_onboarding_done['"],\s*['"]true['"]/);
-    expect(Q4_SRC).toMatch(/authEvents\.emit\(\)/);
+  it('LeanQ6 marks onboarding_complete + lean_onboarding_done and emits an authEvent', () => {
+    expect(Q6_SRC).toMatch(/onboarding_complete['"],\s*['"]true['"]/);
+    expect(Q6_SRC).toMatch(/lean_onboarding_done['"],\s*['"]true['"]/);
+    expect(Q6_SRC).toMatch(/authEvents\.emit\(\)/);
   });
 
   it('imperial → cm conversion is correct (5ft 10in ≈ 178 cm)', () => {

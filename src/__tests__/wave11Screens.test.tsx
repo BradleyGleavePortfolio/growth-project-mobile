@@ -47,8 +47,12 @@ describe('ClientPathCopilotScreen — source guards', () => {
     expect(COPILOT_SRC).toMatch(/featureFlags\.clientPathCopilot/);
   });
 
-  it('renders loading indicator while fetching', () => {
-    expect(COPILOT_SRC).toMatch(/ActivityIndicator/);
+  it('renders a loading placeholder while fetching', () => {
+    // ClientPathCopilotScreen migrated from <ActivityIndicator/> to the
+    // shared <SkeletonScreen/> primitive (Phase 11 visual-language sweep).
+    // The contract here is "screen renders a non-empty loading state on
+    // first mount", which is now satisfied by SkeletonScreen.
+    expect(COPILOT_SRC).toMatch(/SkeletonScreen/);
     expect(COPILOT_SRC).toMatch(/loading && !payload/);
   });
 
