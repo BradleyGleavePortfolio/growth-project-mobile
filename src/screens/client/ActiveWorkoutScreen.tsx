@@ -88,6 +88,14 @@ export default function ActiveWorkoutScreen() {
   // Wallclock anchor for the running timer. A resumed session carries
   // forward the original start instant; a fresh session anchors to now.
   const sessionStartMsRef = useRef<number>(Date.now());
+  // Tracks the most recently computed elapsed value (in milliseconds) so
+  // we can re-anchor `sessionStartMsRef` if the device wallclock moves
+  // backwards (NTP correction, manual user change) while the screen is
+  // mounted. Without this, `Date.now() - sessionStartMsRef.current` would
+  // clamp to 0 via Math.max and the timer would appear to freeze until
+  // real time catches back up. See the AppState 'active' handler for the
+  // re-anchor branch.
+  const lastKnownElapsedMsRef = useRef<number>(0);
   // Track session start time for assignment completion payload.
   const sessionStartTimeRef = useRef<Date>(new Date());
   // Stable idempotency key generated once at session start. Held in a
@@ -105,6 +113,18 @@ export default function ActiveWorkoutScreen() {
   const finishingRef = useRef(false);
   // Debounce timer for the persistence write effect.
   const persistDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Latest payload the debounced persistence effect would have written.
+  // Refreshed at the top of every persistence-effect run; consumed by
+  // the background-flush path so backgrounding the app immediately writes
+  // the most recent mutation to AsyncStorage instead of losing it if the
+  // OS kills the process before the debounce fires.
+  const pendingPersistPayloadRef = useRef<Parameters<typeof saveActiveWorkoutSession>[0] | null>(null);
+  // StrictMode hygiene — under React 18 dev double-invoke the mount-time
+  // restore effect would run twice and stack two "Resume?" prompts on
+  // first foreground. The ref short-circuits the second invocation. No
+  // effect in production (StrictMode does not ship), but the dev surface
+  // is cleaner and the guard is essentially free.
+  const promptShownRef = useRef(false);
   const [restSeconds, setRestSeconds] = useState(0);
   const [restActive, setRestActive] = useState(false);
   const [restTotal, setRestTotal] = useState(0);
@@ -143,9 +163,12 @@ export default function ActiveWorkoutScreen() {
   // Recompute elapsed seconds from the wallclock anchor. Called by the
   // interval tick AND on every foreground transition — the anchor is
   // the source of truth, the `timer` state is just a render trigger.
+  // Also caches the latest elapsed-ms value so the AppState 'active'
+  // handler can re-anchor if the wallclock has moved backwards.
   const recomputeElapsed = useCallback(() => {
-    const elapsed = Math.max(0, Math.floor((Date.now() - sessionStartMsRef.current) / 1000));
-    setTimer(elapsed);
+    const elapsedMs = Math.max(0, Date.now() - sessionStartMsRef.current);
+    lastKnownElapsedMsRef.current = elapsedMs;
+    setTimer(Math.floor(elapsedMs / 1000));
   }, []);
 
   // Adopt a persisted session into local state.
@@ -155,8 +178,9 @@ export default function ActiveWorkoutScreen() {
       sessionStartTimeRef.current = new Date(session.startedAtMs);
       idempotencyKeyRef.current = session.idempotencyKey;
       setSessionExercises(session.sessionExercises);
-      const elapsed = Math.max(0, Math.floor((Date.now() - session.startedAtMs) / 1000));
-      setTimer(elapsed);
+      const elapsedMs = Math.max(0, Date.now() - session.startedAtMs);
+      lastKnownElapsedMsRef.current = elapsedMs;
+      setTimer(Math.floor(elapsedMs / 1000));
     },
     [],
   );
@@ -168,6 +192,13 @@ export default function ActiveWorkoutScreen() {
   //      explicit so they don't accidentally resume a workout from
   //      yesterday with mismatched timing.
   useEffect(() => {
+    // StrictMode double-invoke guard: the dev runtime re-runs mount-time
+    // effects twice, which without this short-circuit would stack two
+    // copies of the "Resume?" Alert. The first invocation gets to do the
+    // load + prompt; subsequent invocations exit immediately. No effect
+    // in production builds.
+    if (promptShownRef.current) return;
+    promptShownRef.current = true;
     let cancelled = false;
     (async () => {
       let result: Awaited<ReturnType<typeof loadActiveWorkoutSession>> = null;
@@ -249,38 +280,74 @@ export default function ActiveWorkoutScreen() {
     return () => stopTimerInterval();
   }, [startTimerInterval, stopTimerInterval]);
 
-  // AppState handling. On background we drop the interval (RN already
-  // throttles JS timers in the background, but freeing the interval is
-  // explicit and avoids burning a wakeup on iOS). On foreground we
-  // recompute elapsed from the anchor and restart the tick.
+  // Force-flush the pending debounced persistence write. Called from the
+  // AppState background branch so the last mutation reaches AsyncStorage
+  // before the OS gets a chance to kill the process — without this, a
+  // user logging a set and then immediately backgrounding the app loses
+  // that set if the OS reclaims the process within the 500ms debounce
+  // window. Idempotent: clears the debounce timer either way, no-ops if
+  // there is no pending payload.
+  const flushPendingPersist = useCallback(() => {
+    if (persistDebounceRef.current) {
+      clearTimeout(persistDebounceRef.current);
+      persistDebounceRef.current = null;
+    }
+    const payload = pendingPersistPayloadRef.current;
+    if (!payload || finishingRef.current) return;
+    saveActiveWorkoutSession(payload).catch((err) => {
+      if (__DEV__) console.warn('[ActiveWorkout] background flush failed', err);
+    });
+  }, []);
+
+  // AppState handling.
+  //   - background / inactive: flush any pending debounced write, then
+  //     drop the interval. RN already throttles JS timers in the
+  //     background, but freeing the interval is explicit and avoids
+  //     burning a wakeup on iOS.
+  //   - active: detect a wallclock rollback (NTP correction, manual user
+  //     change moving the clock backwards) and re-anchor so the timer
+  //     doesn't appear to freeze; recompute elapsed; restart the tick.
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next: AppStateStatus) => {
       if (next === 'active') {
+        // Clock-rollback detection: if Date.now() is earlier than our
+        // anchor the elapsed math would clamp to 0 and the timer would
+        // look frozen. Re-anchor to "now minus last known elapsed" so
+        // the displayed value is continuous from the user's POV.
+        if (Date.now() < sessionStartMsRef.current) {
+          sessionStartMsRef.current = Date.now() - lastKnownElapsedMsRef.current;
+        }
         recomputeElapsed();
         startTimerInterval();
       } else if (next === 'background' || next === 'inactive') {
+        flushPendingPersist();
         stopTimerInterval();
       }
     });
     return () => sub.remove();
-  }, [recomputeElapsed, startTimerInterval, stopTimerInterval]);
+  }, [recomputeElapsed, startTimerInterval, stopTimerInterval, flushPendingPersist]);
 
   // Debounced persistence. Fires on every mutation of working state.
   // We re-arm the timer on every change so several mutations within
   // the PERSIST_DEBOUNCE_MS window collapse into a single write that
-  // captures the latest value.
+  // captures the latest value. The "pending payload" is captured into
+  // a ref synchronously at the top of each effect run so the
+  // background-flush path always has the latest mutation to write
+  // even if it fires between debounce-arm and debounce-fire.
   useEffect(() => {
     if (!hydrated || finishingRef.current) return;
+    const payload = {
+      startedAtMs: sessionStartMsRef.current,
+      routineName,
+      exercisesJson,
+      assignmentId,
+      idempotencyKey: idempotencyKeyRef.current,
+      sessionExercises,
+    };
+    pendingPersistPayloadRef.current = payload;
     if (persistDebounceRef.current) clearTimeout(persistDebounceRef.current);
     persistDebounceRef.current = setTimeout(() => {
-      saveActiveWorkoutSession({
-        startedAtMs: sessionStartMsRef.current,
-        routineName,
-        exercisesJson,
-        assignmentId,
-        idempotencyKey: idempotencyKeyRef.current,
-        sessionExercises,
-      }).catch((err) => {
+      saveActiveWorkoutSession(payload).catch((err) => {
         if (__DEV__) console.warn('[ActiveWorkout] persistence write failed', err);
       });
     }, PERSIST_DEBOUNCE_MS);
@@ -493,11 +560,14 @@ export default function ActiveWorkoutScreen() {
         onPress: async () => {
           // Suppress the debounced persistence write that would
           // otherwise race the clear() below and re-create the entry.
+          // Also null the pending payload ref so the background-flush
+          // path can't write between this tap and the clear completing.
           finishingRef.current = true;
           if (persistDebounceRef.current) {
             clearTimeout(persistDebounceRef.current);
             persistDebounceRef.current = null;
           }
+          pendingPersistPayloadRef.current = null;
           await clearActiveWorkoutSession();
           if (timerRef.current) clearInterval(timerRef.current);
           const durationMinutes = Math.round(timer / 60);
@@ -637,15 +707,26 @@ export default function ActiveWorkoutScreen() {
       {
         text: 'Cancel',
         style: 'destructive',
-        onPress: () => {
+        onPress: async () => {
           // User explicitly abandoned the session — drop the persisted
           // copy so it doesn't show up as a "Resume?" prompt later.
+          //
+          // We set finishingRef synchronously so any concurrent effect
+          // tick (debounce fire, AppState background flush) bails out,
+          // then await the clear so the next mount cannot race a still-
+          // in-flight removeItem and read the just-deleted entry back.
           finishingRef.current = true;
           if (persistDebounceRef.current) {
             clearTimeout(persistDebounceRef.current);
             persistDebounceRef.current = null;
           }
-          clearActiveWorkoutSession().catch(() => { /* best-effort */ });
+          pendingPersistPayloadRef.current = null;
+          try {
+            await clearActiveWorkoutSession();
+          } catch {
+            // Best-effort — if clearing fails the next mount still has
+            // the "Resume?" prompt to safely back out of.
+          }
           if (timerRef.current) clearInterval(timerRef.current);
           navigation.goBack();
         },
