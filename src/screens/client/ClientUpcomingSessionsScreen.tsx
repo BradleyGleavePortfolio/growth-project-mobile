@@ -32,6 +32,22 @@ export function isWithinLockout(now: Date, startIso: string): boolean {
   return new Date(startIso).getTime() - now.getTime() < LOCKOUT_MS;
 }
 
+/**
+ * P3-3 / R16: never trust the device clock for authoritative lockout
+ * decisions. When the backend returns a `cancellable` flag on the
+ * session row, that is the truth — a user who has backdated their
+ * device clock cannot bypass the lockout. Falls back to the
+ * device-clock lockout only when the server omitted the flag (e.g.
+ * during the rollout window before the backend ships the field).
+ */
+export function isSessionLocked(
+  session: { start_at: string; cancellable?: boolean },
+  now: Date = new Date(),
+): boolean {
+  if (typeof session.cancellable === 'boolean') return !session.cancellable;
+  return isWithinLockout(now, session.start_at);
+}
+
 export default function ClientUpcomingSessionsScreen() {
   const { colors } = useTheme();
   const oxblood = colors.error;
@@ -122,7 +138,7 @@ export default function ClientUpcomingSessionsScreen() {
       ) : null}
 
       {upcoming.map((s) => {
-        const locked = isWithinLockout(new Date(), s.start_at);
+        const locked = isSessionLocked(s);
         const busy = cancel.isPending && cancel.variables?.id === s.id;
         return (
           <View
