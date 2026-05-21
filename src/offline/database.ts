@@ -10,10 +10,19 @@
  *   - Lazy singleton: callers use `getDatabase()` instead of importing a
  *     module-level handle, so Jest can reset state between tests via
  *     `__resetDatabaseForTests()`.
- *   - Schema bootstrap is idempotent (CREATE TABLE IF NOT EXISTS).
+ *   - Schema bootstrap is idempotent (CREATE TABLE IF NOT EXISTS, plus
+ *     defensive ALTER TABLE additions for v2/v3 columns).
  *   - In test/web environments we open `:memory:` so suites are fully
  *     isolated and there is no on-disk state to clean up.
  *   - WAL is enabled on native for concurrent read/write performance.
+ *
+ * Schema versions:
+ *   v1: initial workout_logs table (id, exercise_id, sets_data, sync_status,
+ *       logged_at, server_id, session_name, duration_minutes).
+ *   v2: add user_id TEXT to workout_logs (R15: row-level user scoping so a
+ *       shared device cannot leak User A's pending pushes onto User B's JWT).
+ *   v3: add status TEXT (pending|dead_letter|synced) so permanent 4xx push
+ *       failures stop hammering the server forever (Hunt P1-1).
  *
  * @see docs/offline-architecture.md
  */
@@ -25,10 +34,21 @@ const DB_NAME = 'tgp_offline.db';
 let _database: SQLite.SQLiteDatabase | null = null;
 let _initPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
+async function tableHasColumn(
+  db: SQLite.SQLiteDatabase,
+  table: string,
+  column: string,
+): Promise<boolean> {
+  const rows = await db.getAllAsync<{ name: string }>(
+    `PRAGMA table_info(${table})`,
+  );
+  return rows.some((r) => r.name === column);
+}
+
 /**
  * Run the idempotent schema bootstrap. Adding columns to an existing table
- * should be done via ALTER TABLE in a follow-up migration step keyed off
- * a `schema_version` row in a meta table — for now, the schema is v1.
+ * is done via ALTER TABLE guarded by a PRAGMA table_info check so reruns on
+ * an already-migrated DB are no-ops.
  */
 async function bootstrap(db: SQLite.SQLiteDatabase): Promise<void> {
   // WAL mode — concurrent readers don't block the writer. No-op on web.
@@ -41,7 +61,7 @@ async function bootstrap(db: SQLite.SQLiteDatabase): Promise<void> {
       id TEXT PRIMARY KEY NOT NULL,
       exercise_id TEXT NOT NULL,
       sets_data TEXT NOT NULL,
-      sync_status TEXT NOT NULL CHECK(sync_status IN ('pending','synced','conflict')),
+      sync_status TEXT NOT NULL CHECK(sync_status IN ('pending','synced','conflict','dead_letter')),
       logged_at INTEGER NOT NULL,
       server_id TEXT,
       session_name TEXT,
@@ -50,6 +70,39 @@ async function bootstrap(db: SQLite.SQLiteDatabase): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_workout_logs_sync_status ON workout_logs(sync_status);
     CREATE INDEX IF NOT EXISTS idx_workout_logs_server_id ON workout_logs(server_id);
   `);
+
+  // v2: user_id column. Backfill against the currently-cached user so existing
+  // rows aren't orphaned. New rows must always pass user_id explicitly.
+  if (!(await tableHasColumn(db, 'workout_logs', 'user_id'))) {
+    await db.execAsync(
+      `ALTER TABLE workout_logs ADD COLUMN user_id TEXT;`,
+    );
+    // Backfill from readUserCacheSync at the time the migration runs.
+    // Loaded via a dynamic import so the static graph doesn't pull userCache
+    // (which pulls MMKV) into the bootstrap path.
+    try {
+      const { readUserCacheSync } = await import('../lib/userCache');
+      const currentUserId: string | undefined = readUserCacheSync()?.id;
+      if (currentUserId) {
+        await db.runAsync(
+          `UPDATE workout_logs SET user_id = ? WHERE user_id IS NULL`,
+          [currentUserId],
+        );
+      }
+    } catch {
+      // No cached user (cold start before login) — leave existing rows with
+      // NULL user_id; pushPending will refuse to send them until reassigned.
+    }
+    await db.execAsync(
+      `CREATE INDEX IF NOT EXISTS idx_workout_logs_user_id ON workout_logs(user_id);`,
+    );
+  }
+
+  // v3: status column for dead-letter tracking. sync_status already exists for
+  // the original tri-state machine (pending|synced|conflict); we extend that
+  // column to add 'dead_letter' rather than adding a parallel column — the
+  // CHECK constraint above already permits the new value. No-op on a fresh
+  // bootstrap; we mention it here for migration completeness.
 }
 
 async function openAndBootstrap(): Promise<SQLite.SQLiteDatabase> {

@@ -9,29 +9,29 @@
 //     Acceptable for v1; a client-side dedupe key can come later.
 //
 // AsyncStorage schema:
-//   Key:   `pending_food_logs`
+//   Key:   `pending_food_logs_${userId}`  (or `pending_food_logs_anonymous`)
 //   Value: JSON string of PendingFoodLog[]
 //
 //   interface PendingFoodLog {
-//     id: string;        // client-side uuid so UI can track the pending row
+//     id: string;        // crypto.randomUUID — idempotency key for the server
 //     createdAt: number; // Date.now() when enqueued
 //     kind: 'search' | 'manual';
-//     // For 'search' writes: the already-resolved food_item_id OR the full
-//     // food payload if this was an OpenFoodFacts item that needs creating.
-//     // For 'manual' writes: the raw manual-entry payload.
 //     payload: Record<string, unknown>;
 //   }
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { randomUUID } from 'expo-crypto';
 import { foodApi, logApi } from './api';
 import { readUserCacheSync } from '../lib/userCache';
 import { logger } from '../utils/logger';
+
+const ANONYMOUS_QUEUE_KEY = 'pending_food_logs_anonymous';
 
 // Queue key is namespaced by userId so that if two accounts share a device
 // their pending logs don't cross-contaminate and a logout + login as a
 // different user starts with a clean queue.
 const getQueueKey = (userId?: string): string =>
-  userId ? `pending_food_logs_${userId}` : 'pending_food_logs_anonymous';
+  userId ? `pending_food_logs_${userId}` : ANONYMOUS_QUEUE_KEY;
 
 export interface PendingSearchLog {
   kind: 'search';
@@ -76,8 +76,9 @@ export type PendingFoodLog = (PendingSearchLog | PendingManualLog) & {
   createdAt: number;
 };
 
-async function readQueue(): Promise<PendingFoodLog[]> {
-  const key = getQueueKey(readUserCacheSync()?.id);
+// ─── Low-level helpers (always take an explicit key) ──────────────────────
+
+async function readQueueForKey(key: string): Promise<PendingFoodLog[]> {
   try {
     const raw = await AsyncStorage.getItem(key);
     if (!raw) return [];
@@ -89,16 +90,30 @@ async function readQueue(): Promise<PendingFoodLog[]> {
   }
 }
 
-async function writeQueue(queue: PendingFoodLog[]): Promise<void> {
-  const key = getQueueKey(readUserCacheSync()?.id);
+async function writeQueueForKey(
+  key: string,
+  queue: PendingFoodLog[],
+): Promise<void> {
   await AsyncStorage.setItem(key, JSON.stringify(queue));
 }
 
-export async function enqueue(entry: PendingSearchLog | PendingManualLog): Promise<void> {
+async function readQueue(): Promise<PendingFoodLog[]> {
+  return readQueueForKey(getQueueKey(readUserCacheSync()?.id));
+}
+
+async function writeQueue(queue: PendingFoodLog[]): Promise<void> {
+  await writeQueueForKey(getQueueKey(readUserCacheSync()?.id), queue);
+}
+
+export async function enqueue(
+  entry: PendingSearchLog | PendingManualLog,
+): Promise<void> {
   const queue = await readQueue();
   const item: PendingFoodLog = {
     ...entry,
-    id: `pfl_${Date.now()}_${Math.floor(Math.random() * 1e6)}`,
+    // Crypto UUID instead of Math.random so two parallel enqueues on a fast
+    // device can never collide and produce duplicate idempotency keys (R19).
+    id: `pfl_${randomUUID()}`,
     createdAt: Date.now(),
   };
   queue.push(item);
@@ -114,16 +129,75 @@ export async function clearQueue(): Promise<void> {
   await AsyncStorage.removeItem(key);
 }
 
+// ─── Anonymous-queue handover ─────────────────────────────────────────────
+
+/**
+ * On successful login, fold any items that were enqueued before the user was
+ * known (the `pending_food_logs_anonymous` queue) into the freshly-signed-in
+ * user's queue. The anonymous key is removed once the merge is durable.
+ *
+ * Silent deletion would lose user data — keep this behaviour explicit so any
+ * future contributor can grep for the merge path.
+ */
+export async function mergeAnonymousQueueIntoUser(userId: string): Promise<{
+  merged: number;
+}> {
+  if (!userId) return { merged: 0 };
+  const anonymous = await readQueueForKey(ANONYMOUS_QUEUE_KEY);
+  if (anonymous.length === 0) return { merged: 0 };
+
+  const userKey = getQueueKey(userId);
+  const userQueue = await readQueueForKey(userKey);
+  // Anonymous items come first (FIFO); they were created before any of the
+  // user's items by definition.
+  const merged = [...anonymous, ...userQueue];
+  await writeQueueForKey(userKey, merged);
+  await AsyncStorage.removeItem(ANONYMOUS_QUEUE_KEY);
+  return { merged: anonymous.length };
+}
+
+// ─── Error classification ─────────────────────────────────────────────────
+
+type FlushErrorClass = 'drop' | 'stop';
+
+function classifyFlushError(err: unknown): FlushErrorClass {
+  const status = (err as { response?: { status?: number } })?.response?.status;
+  if (typeof status === 'number') {
+    // 401 → keep the item, refresh-and-retry next cycle.
+    if (status === 401) return 'stop';
+    // 5xx → backend hiccup, retry next cycle.
+    if (status >= 500) return 'stop';
+    // Any other 4xx is a permanent rejection of this payload; drop the item
+    // so a single bad row can't freeze the entire queue.
+    if (status >= 400) return 'drop';
+  }
+  // Network / timeout / unknown shape → stop so we don't drop on a flaky
+  // connection.
+  return 'stop';
+}
+
+// ─── Flush ────────────────────────────────────────────────────────────────
+
 // Flush the queue to the backend. Returns the number of successfully flushed
-// entries. On failure, the remaining entries stay in the queue for the next
-// attempt. We stop flushing on the first failure to preserve ordering and to
-// avoid a cascade if the backend is temporarily unhappy.
-export async function flush(): Promise<{ flushed: number; remaining: number }> {
-  let queue = await readQueue();
-  if (queue.length === 0) return { flushed: 0, remaining: 0 };
+// entries. On transient failure (401, 5xx, network) we stop flushing and
+// leave the remaining items in the queue. On permanent failure (4xx other
+// than 401) we drop the offending item and continue with the next one so a
+// single broken payload can't freeze the queue indefinitely.
+export async function flush(): Promise<{ flushed: number; remaining: number; dropped: number }> {
+  // P2-1: capture the userId once at the top of flush so a sign-out mid-flush
+  // cannot cause us to read from user A's key and write back into user B's.
+  const userId = readUserCacheSync()?.id;
+  const key = getQueueKey(userId);
+
+  let queue = await readQueueForKey(key);
+  if (queue.length === 0) return { flushed: 0, remaining: 0, dropped: 0 };
 
   let flushed = 0;
+  let dropped = 0;
+  let stopped = false;
+
   for (const item of [...queue]) {
+    if (stopped) break;
     try {
       let foodItemId: string | undefined;
       if (item.kind === 'search' && item.foodItemId) {
@@ -145,14 +219,23 @@ export async function flush(): Promise<{ flushed: number; remaining: number }> {
         client_uuid: item.id,
       });
       flushed++;
-      // Remove this entry from the queue and persist after each success so we
-      // don't re-send on crash.
       queue = queue.filter((q) => q.id !== item.id);
-      await writeQueue(queue);
+      await writeQueueForKey(key, queue);
     } catch (err) {
-      logger.warn('FoodLogQueue', 'flush stopped on error', err);
-      break;
+      const cls = classifyFlushError(err);
+      if (cls === 'drop') {
+        logger.warn('FoodLogQueue', 'flush: dropping item on permanent error', {
+          id: item.id,
+          err,
+        });
+        queue = queue.filter((q) => q.id !== item.id);
+        await writeQueueForKey(key, queue);
+        dropped++;
+        continue;
+      }
+      logger.warn('FoodLogQueue', 'flush stopped on transient error', err);
+      stopped = true;
     }
   }
-  return { flushed, remaining: queue.length };
+  return { flushed, remaining: queue.length, dropped };
 }
