@@ -45,6 +45,7 @@ import {
 } from '../../api/coachPaymentsApi';
 import { coachConnectApi, type ConnectResult } from '../../api/coachConnectApi';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { colors as paletteColors } from '../../theme/tokens';
 
 function formatMoney(amount: number, currency: string): string {
   try {
@@ -448,7 +449,7 @@ export default function CoachPackagesScreen() {
             charges_enabled is still false (KYC/requirements pending). */}
         {showConnectReadinessBanner ? (
           <View style={styles.readinessBanner}>
-            <Ionicons name="warning-outline" size={18} color="#92400e" />
+            <Ionicons name="warning-outline" size={18} color={paletteColors.warningInk} />
             <View style={{ flex: 1 }}>
               <Text style={styles.readinessBannerText}>
                 Connect Stripe to activate packages — clients can’t check out until your account is ready.
@@ -631,9 +632,9 @@ const makeStyles = (colors: ThemeColors) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: 10,
-      backgroundColor: '#fef3c7',
+      backgroundColor: paletteColors.warningBg,
       borderWidth: 1,
-      borderColor: '#f59e0b',
+      borderColor: paletteColors.warningBorder,
       borderRadius: 8,
       paddingVertical: 10,
       paddingHorizontal: 12,
@@ -641,12 +642,12 @@ const makeStyles = (colors: ThemeColors) =>
     },
     readinessBannerText: {
       fontSize: 13,
-      color: '#92400e',
+      color: paletteColors.warningInk,
       lineHeight: 18,
       flex: 1,
     },
     readinessBannerBtn: {
-      backgroundColor: '#f59e0b',
+      backgroundColor: paletteColors.warningBorder,
       borderRadius: 6,
       paddingHorizontal: 10,
       paddingVertical: 6,

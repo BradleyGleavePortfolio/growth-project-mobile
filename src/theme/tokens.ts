@@ -45,6 +45,15 @@ export const colors = {
   // Semantic — keep minimal
   success:     '#2C4A36',  // map to forest
   warning:     '#C5A253',  // map to mutedGold
+  // Warning band used for "needs attention" surfaces (e.g. Stripe
+  // Connect readiness banner). Pulled from the existing
+  // `semantic.warning` triad so the values stay coherent with the
+  // old-money palette and pass AA contrast on bone — see the
+  // contrast matrix at the top of this file. Surfaces previously
+  // hardcoded the Tailwind amber-100/500/700 hex equivalents.
+  warningBg:     '#F8F2E5',
+  warningBorder: '#C5A253',
+  warningInk:    '#8A6A2A',
   // Cross-pillar brand cohesion (Wave 5): oxblood (#4A0404) is reserved
   // as the Earnings/Wealth pillar primary brand color. The Body pillar
   // uses #B91C1C — a clearer alarm red that pairs with bone, passes WCAG

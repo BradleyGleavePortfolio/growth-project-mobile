@@ -109,6 +109,25 @@ const linking: LinkingOptions<Record<string, object | undefined>> = {
       // attach an invite code via the in-app flow on RoleSelection.
       Welcome: 'welcome',
       Login: 'login',
+      // P3-4 / R21: `tgp://auth/callback` is the Google OAuth redirect
+      // URI declared in `src/utils/googleAuth.ts`. Day-to-day the URL
+      // is consumed in-process by WebBrowser.openAuthSessionAsync and
+      // never reaches the navigator. But if a stray click from outside
+      // the auth-session flow arrives (re-opened email link, OS
+      // handoff after the session has closed) the URL previously had
+      // no screen mapping at all and the user landed nowhere.
+      //
+      // Mapping the path to the dedicated `AuthCallback` screen makes
+      // the URL routable. The screen lives at
+      // `src/screens/auth/AuthCallbackScreen.tsx` as an idempotent
+      // landing stub — on mount it inspects the auth state and
+      // dispatches to Home (authenticated) or Login (not). The screen
+      // is intentionally not yet mounted under AuthNavigator (which
+      // is owned by another lane); when the auth stack is next
+      // refactored, mount the component under this route name. Until
+      // then the linking entry alone is enough to give the parser a
+      // legitimate target so the URL does not silently fail.
+      AuthCallback: 'auth/callback',
       CreateAccount: {
         path: 'join/:invite_code?',
         parse: { invite_code: (v: string) => v },

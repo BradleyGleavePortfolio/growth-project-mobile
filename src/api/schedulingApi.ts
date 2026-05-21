@@ -74,6 +74,24 @@ export function resolveVideoUrl(raw: string | null | undefined): string | null {
   return raw;
 }
 
+/**
+ * Resolve the IANA timezone the device is currently in (e.g.
+ * "America/New_York"). Sent on every requestSession / rescheduleSession
+ * call so the backend can disambiguate cross-TZ bookings. Falls back to
+ * 'UTC' on the rare runtime where Intl is unavailable; the backend
+ * treats this as a hard error response signal rather than silently
+ * accepting client wall-clock.
+ */
+export function resolveClientTimezone(): string {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (tz && typeof tz === 'string') return tz;
+  } catch {
+    // ignore — fall through to UTC
+  }
+  return 'UTC';
+}
+
 /** Shape returned by GET /scheduling/providers */
 export interface SchedulingProviders {
   video: string[];
@@ -167,6 +185,13 @@ export interface CoachingSession {
   end_reason: string | null;
   created_at: string;
   updated_at: string;
+  // Server-authoritative cancellation flag (R16). When the backend
+  // includes this, clients must prefer it over any device-clock check
+  // because a user with a backdated device clock could otherwise cancel
+  // inside the lockout window. Optional during the rollout window where
+  // older backend builds may omit it; the client falls back to the
+  // device-clock lockout only when this is undefined.
+  cancellable?: boolean;
 }
 
 export interface RequestSessionInput {
@@ -180,11 +205,17 @@ export interface RequestSessionInput {
   // older backend that does not yet accept the field ignores it without
   // error (extra-keys-whitelisted).
   notes?: string;
-  // V-5: the IANA timezone the start_at/end_at were composed in. The
-  // backend uses this to disambiguate when the client's device TZ does
-  // not match the coach's `CoachProfile.timezone` — the booking should
-  // resolve to the coach's wall clock, not the client's. Backwards
-  // compatible: omitting it keeps the old behaviour.
+  // V-5 / P1-6: the IANA timezone the start_at/end_at were composed in.
+  // The backend uses this to disambiguate when the client's device TZ
+  // does not match the coach's `CoachProfile.timezone` — the booking
+  // must resolve to the coach's wall clock, not the client's.
+  //
+  // Required at runtime: `schedulingApi.requestSession` force-resolves
+  // a value via `resolveClientTimezone()` when callers omit it or pass
+  // undefined, so a payload that reaches the wire ALWAYS carries this
+  // field. The TS type is still ?-optional during the rollout window
+  // to keep older internal call sites compiling without a coordinated
+  // edit; treat omission as a programmer error.
   client_timezone?: string;
 }
 
@@ -192,7 +223,8 @@ export interface RescheduleSessionInput {
   start_at: string;
   end_at: string;
   reason?: string;
-  // V-5 (see RequestSessionInput).
+  // V-5 / P1-6 (see RequestSessionInput) — required at runtime; force-
+  // resolved inside `rescheduleSession`.
   client_timezone?: string;
 }
 
@@ -284,9 +316,16 @@ export const schedulingApi = {
   requestSession: async (
     input: RequestSessionInput,
   ): Promise<CoachingSession> => {
+    // P1-6: client_timezone is required on the contract; force-resolve
+    // here so an older call site that passes an empty string (or that
+    // bypasses the type — e.g. through `as`) cannot ship an unset TZ.
+    const payload: RequestSessionInput = {
+      ...input,
+      client_timezone: input.client_timezone || resolveClientTimezone(),
+    };
     const res = await api.post<CoachingSession>(
       '/scheduling/sessions',
-      input,
+      payload,
     );
     return res.data;
   },
@@ -313,9 +352,14 @@ export const schedulingApi = {
     id: string,
     input: RescheduleSessionInput,
   ): Promise<CoachingSession> => {
+    // P1-6: see requestSession.
+    const payload: RescheduleSessionInput = {
+      ...input,
+      client_timezone: input.client_timezone || resolveClientTimezone(),
+    };
     const res = await api.post<CoachingSession>(
       `/scheduling/sessions/${encodeURIComponent(id)}/reschedule`,
-      input,
+      payload,
     );
     return res.data;
   },
