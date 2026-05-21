@@ -22,6 +22,7 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   Linking,
   RefreshControl,
   ScrollView,
@@ -43,7 +44,11 @@ import {
   type ReconciliationHealth,
   type RefundRow,
 } from '../../api/coachPaymentsApi';
-import { coachConnectApi, type ConnectResult } from '../../api/coachConnectApi';
+import {
+  coachConnectApi,
+  isTrustedStripeUrl,
+  type ConnectResult,
+} from '../../api/coachConnectApi';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
 function formatMoney(amount: number, currency: string): string {
@@ -144,7 +149,22 @@ export default function CoachEarningsScreen() {
     setOnboardBusy(true);
     try {
       const res = await coachConnectApi.createOnboardingLink('earnings');
-      if (res.ok) await Linking.openURL(res.data.url);
+      if (res.ok) {
+        // H3-P1-2: validate the backend-supplied URL against a strict
+        // scheme + Stripe hostname allow-list before opening it. A
+        // compromised backend (or a MITM substituting the JSON payload)
+        // could otherwise redirect the coach to a phishing domain. On
+        // failure we show a structured user-facing alert and refuse to
+        // open the URL — never a raw error code (Rule 9).
+        if (!isTrustedStripeUrl(res.data.url)) {
+          Alert.alert(
+            "Couldn't open Stripe",
+            "We received a setup link that doesn't look like it came from Stripe, so we didn't open it. Please contact support if this keeps happening.",
+          );
+        } else {
+          await Linking.openURL(res.data.url);
+        }
+      }
       await load();
     } finally {
       setOnboardBusy(false);
