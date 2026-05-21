@@ -79,3 +79,25 @@ jest.mock('crisp-sdk-react-native', () => ({
   getSessionIdentifier: jest.fn(async () => null),
   resetSession: jest.fn(),
 }));
+
+// Skeleton primitives read from the real ThemeProvider's `tokens` map. Most
+// screen-level tests stub useTheme() to return only `{ colors: {...} }` and
+// don't care about Skeleton's pixel-perfect appearance — they just need
+// the screen's loading state to render without crashing. Replace Skeleton
+// and its composites with lightweight placeholder Views so those tests
+// don't have to keep theme mocks in lock-step with the Skeleton internals.
+// Tests that DO want to assert on Skeleton's real behaviour can call
+// jest.unmock('./src/ui/skeletons/Skeleton') and provide a complete theme.
+jest.mock('./src/ui/skeletons/Skeleton', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  const stub = (props) => React.createElement(View, props);
+  return {
+    __esModule: true,
+    default: stub,
+    Skeleton: stub,
+    SkeletonRow: stub,
+    SkeletonList: stub,
+    SkeletonScreen: stub,
+  };
+});
