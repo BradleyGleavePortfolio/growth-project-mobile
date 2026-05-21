@@ -165,3 +165,49 @@ The `CoachHomeScreen` (`Dashboard`) is preserved as a sub-screen inside `Clients
 | `action-queue` | Pending alerts | `ClientDetail` via `onSelectClient` |
 
 See `src/screens/coach/command-center/README.md` for full documentation.
+
+## Day-1 onboarding navigator (final first-run experience)
+
+`Day1OnboardingNavigator` (`src/navigation/Day1OnboardingNavigator.tsx`) is the
+new authenticated-but-not-yet-onboarded surface for fresh accounts. It runs in
+front of `ClientNavigator` until `profile.day_one_completed === true` is
+returned from the backend.
+
+Stack order:
+
+```
+Welcome → CoachPairing → Goals → Notifications → CheckInTime → Ready
+```
+
+| Screen | Purpose | Persistence | Skip allowed |
+| --- | --- | --- | --- |
+| `Welcome` | Brand fade, greet by first name | none (cover) | n/a |
+| `CoachPairing` | Pair via invite code (manual or deep-link prefill) | `POST /auth/attach-invite-code` | Yes — unless arrived via deep link |
+| `Goals` | Multi-select coaching goals | `PUT /profile { day_one_goals: [...] }` | Yes |
+| `Notifications` | Permission ask with value-prop context | `PATCH /users/me/preferences { notif_permission_state }` | Yes — denial does NOT block |
+| `CheckInTime` | Pick daily check-in (default 9:00 AM local) | `PUT /profile + PATCH /notifications/preferences { daily_checkin_time }` | Yes |
+| `Ready` | Terminal screen, calls `completeDayOne()` + `authEvents.emit()` | `PUT /profile { day_one_completed: true }` | n/a |
+
+All step persistence runs through `src/screens/day-one/api.ts`, which applies
+exponential-backoff retry with jitter for transient failures and classifies
+4xx errors into a `DayOneError` discriminated union so the UI surfaces
+structured copy instead of axios strings (Rule 9 — no raw error codes).
+
+This navigator is wired into `RootNavigator` as the `day1onboarding` auth
+state. The gate checks `profile.day_one_completed`, the legacy
+`profile.onboarding_completed` flag (so existing users aren't re-prompted),
+and an AsyncStorage `day_one_completed` fallback so a user who finished the
+flow once is never asked again — even if the backend hasn't propagated the
+flag yet.
+
+In-flight resume + offline save: the flow writes a checkpoint per advance to
+AsyncStorage (`day_one_onboarding_state_v1`). Force-close or "Continue
+offline" both serialise the current step + draft + pending sync queue; the
+navigator picks the saved step as `initialRouteName` on the next launch, and
+ReadyScreen's `flushPendingSync()` drains the queue before flipping the
+terminal flag. See `src/screens/day-one/resume.ts`.
+
+Backend follow-ups: `profile.day_one_completed` (boolean) and
+`profile.day_one_completed_at` (ISO timestamp) need to be returned by
+`GET /profile` and persisted by `PUT /profile`. Until the API returns them,
+the client falls back to the local AsyncStorage flag (fail-open).

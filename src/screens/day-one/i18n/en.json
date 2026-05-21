@@ -1,0 +1,85 @@
+{
+  "common": {
+    "back": "Back",
+    "skip": "Skip",
+    "continue": "Continue",
+    "retry": "Retry",
+    "getStarted": "Get started",
+    "savingProgress": "Saving your progress…",
+    "saveFailed": {
+      "title": "Couldn't save your progress",
+      "body": "Check your connection and tap Retry. Nothing you typed is lost.",
+      "cta": "Retry"
+    },
+    "saveLater": "Continue offline. We'll save when you're back online.",
+    "progressLabel": "Step {current} of {total}"
+  },
+  "welcome": {
+    "greetingWithName": "Welcome, {firstName}",
+    "greetingFallback": "Welcome",
+    "subtitle": "Your coaching journey starts now. Let's set you up in under 60 seconds.",
+    "cta": "Get started",
+    "logoA11y": "The Growth Project logo"
+  },
+  "coachPairing": {
+    "title": "Have a coach?",
+    "subtitle": "Enter the invite code your coach sent you to pair instantly.",
+    "inputLabel": "Invite code",
+    "inputPlaceholder": "e.g. TGP-7XQ9",
+    "submit": "Pair with my coach",
+    "skip": "I don't have a code yet",
+    "deepLinkBanner": "Pairing with the invite from your link…",
+    "errors": {
+      "notRecognized": "Invite code not recognized. Double-check with your coach.",
+      "expired": "This invite code has expired. Ask your coach to send a fresh one.",
+      "maxUses": "This invite code has already been used to the maximum number of times.",
+      "network": "Couldn't reach our servers. Check your connection and try again.",
+      "tooShort": "Codes are at least 4 characters."
+    },
+    "successToast": "Paired with your coach"
+  },
+  "goals": {
+    "title": "What are you here to grow?",
+    "subtitle": "Pick everything that fits. You can adjust this any time.",
+    "categories": {
+      "fitness": { "label": "Fitness", "sub": "Strength, conditioning, body composition." },
+      "business": { "label": "Business", "sub": "Revenue, leadership, focus." },
+      "personalGrowth": { "label": "Personal Growth", "sub": "Habits, discipline, identity." },
+      "relationships": { "label": "Relationships", "sub": "Family, partners, network." },
+      "mentalHealth": { "label": "Mental Health", "sub": "Calm, sleep, resilience." },
+      "custom": { "label": "Something else", "sub": "Tell your coach in your own words." }
+    },
+    "continue": "Continue",
+    "skip": "Skip for now"
+  },
+  "notifications": {
+    "title": "Stay close to your coach",
+    "subtitle": "We'll only ping you for coach messages and your daily check-in. Never spam.",
+    "bullets": [
+      "Coach replies the moment they arrive",
+      "A gentle daily check-in nudge",
+      "Nothing else. Promise."
+    ],
+    "enable": "Turn on notifications",
+    "skip": "Not now",
+    "deniedNotice": "No problem. You can turn these on later from Settings."
+  },
+  "checkInTime": {
+    "title": "Pick your daily check-in",
+    "subtitle": "We'll remind you once a day at this time. Mornings work best for most.",
+    "defaultLabel": "Default: 9:00 AM",
+    "continue": "Save check-in time",
+    "skip": "Skip. I'll set this later.",
+    "hourLabel": "Hour",
+    "minuteLabel": "Minute",
+    "amLabel": "AM",
+    "pmLabel": "PM"
+  },
+  "ready": {
+    "title": "Welcome to TGP, {firstName}.",
+    "titleFallback": "Welcome to TGP.",
+    "subtitle": "Your coach has been notified you've joined. The work starts now.",
+    "cta": "Open my dashboard",
+    "badgeA11y": "Onboarding complete"
+  }
+}

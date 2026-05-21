@@ -31,6 +31,10 @@ export interface CurrentUser {
     workout_days_per_week?: number;
     gym_membership?: string;
     onboarding_completed?: boolean;
+    /** Day-1 onboarding terminal flag. Set by the final Ready screen. */
+    day_one_completed?: boolean;
+    /** ISO timestamp the Day-1 flow finished. Source of truth on the server. */
+    day_one_completed_at?: string;
     tdee?: number;
   };
 }

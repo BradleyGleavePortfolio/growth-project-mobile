@@ -20,6 +20,8 @@ import CoachWizardNavigator from './CoachWizardNavigator';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import OnboardingNavigator from './OnboardingNavigator';
 import LeanOnboardingNavigator from './LeanOnboardingNavigator';
+import Day1OnboardingNavigator from './Day1OnboardingNavigator';
+import { readResumeState as readDay1ResumeState } from '../screens/day-one/resume';
 import OfflineBanner from '../components/OfflineBanner';
 import { authEvents } from '../utils/authEvents';
 import { secureStorage } from '../services/secureStorage';
@@ -48,6 +50,7 @@ type AuthState =
   | 'loading'
   | 'unauthenticated'
   | 'onboarding'
+  | 'day1onboarding'
   | 'day1win'
   | 'coach_wizard'
   | 'coach'
@@ -409,6 +412,31 @@ export default function RootNavigator() {
           await AsyncStorage.setItem('onboarding_complete', 'true');
         }
 
+        // Day-1 final onboarding gate. Decacorn-quality flow shown to every
+        // student who has not yet completed it. Backend source of truth is
+        // `profile.day_one_completed`; we also accept the legacy
+        // `onboarding_completed` flag so existing users who already finished
+        // the old flow are not asked to redo it. A local AsyncStorage flag
+        // and an in-progress resume checkpoint keep the flow alive across
+        // reinstalls when the backend hasn't caught up (fail-open).
+        try {
+          const day1ServerDone = !!user?.profile?.day_one_completed;
+          const day1LocalDone = (await AsyncStorage.getItem('day_one_completed')) === 'true';
+          const legacyOnboardingDone = !!user?.profile?.onboarding_completed;
+          const day1ResumeState = await readDay1ResumeState();
+          if (
+            !day1ServerDone &&
+            !day1LocalDone &&
+            (!legacyOnboardingDone || day1ResumeState !== null)
+          ) {
+            setAuthState('day1onboarding');
+            return;
+          }
+          if (day1ServerDone && !day1LocalDone) {
+            await AsyncStorage.setItem('day_one_completed', 'true');
+          }
+        } catch (err) { logger.warn('RootNavigator', 'non-fatal', err); }
+
         // Phase 7A: check if Day 1 Win has been completed. Fire-and-forget
         // error handling — if the API is unreachable, skip the win screen and
         // go straight to the client app. The screen can be shown on next boot.
@@ -536,6 +564,11 @@ export default function RootNavigator() {
         // Psych Report #1: 3-question lean flow (< 60 s to first win).
         // Original OnboardingNavigator is preserved; route around it here.
         <LeanOnboardingNavigator />
+      ) : authState === 'day1onboarding' ? (
+        // Day-1 final onboarding. Mounts after signup + lean for any student
+        // who has not yet flipped `profile.day_one_completed`. The Ready
+        // screen calls authEvents.emit() to bounce us back to bootstrapAuth.
+        <Day1OnboardingNavigator />
       ) : authState === 'coach_wizard' ? (
         // New coach — onboarding wizard before full coach dashboard.
         <CoachWizardNavigator />
