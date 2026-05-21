@@ -90,9 +90,34 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
   const [planSaving, setPlanSaving] = useState(false);
   const [planFormError, setPlanFormError] = useState('');
 
+  // Hunter #2 P2-7: previously the route param `clientId` was only consumed
+  // on first mount because the load effect had an empty dep array. The
+  // ClientsStack reuses the same screen instance when a coach taps from one
+  // client straight into another (deep link, "view next client" CTA, etc.),
+  // so the screen would render Client B's avatar/header bound to Client A's
+  // profile / food logs / workouts until pull-to-refresh.
+  //
+  // Keying off `clientId` (with the memoised loaders from useClientDetailData,
+  // which themselves regenerate when `clientId` changes) makes the screen
+  // always reload when the routed client switches under us. The transient UI
+  // state (active tab, expanded weeks, draft nudge text, plan-form modal) is
+  // also reset to its initial shape so we don't briefly render Client B's
+  // profile under Client A's selected tab or half-typed nudge.
+  useEffect(() => {
+    setActiveTab('summary');
+    setExpandedWeeks(new Set());
+    setShowNudgeModal(false);
+    setNudgeTitle('');
+    setNudgeBody('');
+    setNudgeError('');
+    setShowPlanModal(false);
+    setEditingPlan(null);
+    setPlanFormError('');
+  }, [clientId]);
+
   useEffect(() => {
     loadData();
-  }, []);
+  }, [clientId, loadData]);
 
   useEffect(() => {
     if (activeTab === 'timeline') {
@@ -104,7 +129,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
     if (activeTab === 'mealplan') {
       loadServerMealPlans();
     }
-  }, [activeTab, selectedDays]);
+  }, [activeTab, selectedDays, clientId, loadTimeline, loadWeeklySummaries, loadServerMealPlans]);
 
   const openCreatePlan = () => {
     setEditingPlan(null);

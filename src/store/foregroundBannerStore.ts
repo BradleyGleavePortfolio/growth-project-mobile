@@ -20,12 +20,21 @@ interface ForegroundBannerState {
   banner: BannerPayload | null;
   showBanner: (payload: BannerPayload) => void;
   dismissBanner: () => void;
+  // Security (Hunter #2 P1-7): clear any visible/in-flight banner on logout so
+  // the next user on the same device never sees a previous user's push
+  // payload flash through before the navigator tears down.
+  reset: () => void;
 }
 
+const initialBannerState = {
+  banner: null as BannerPayload | null,
+};
+
 export const foregroundBannerStore = create<ForegroundBannerState>((set) => ({
-  banner: null,
+  ...initialBannerState,
   showBanner: (payload) => set({ banner: payload }),
   dismissBanner: () => set({ banner: null }),
+  reset: () => set({ ...initialBannerState }),
 }));
 
 /** Hook alias for component use. */

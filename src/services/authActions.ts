@@ -13,6 +13,10 @@ import { logger } from '../utils/logger';
 import { readUserCacheSync } from '../lib/userCache';
 import { clearAllStorage } from '../storage/mmkv';
 import { deleteWorkoutLogsForUser } from '../offline/sync/sync-engine';
+import { useCoachStore } from '../store/coachStore';
+import { useClientStore } from '../store/clientStore';
+import { useFastingStore } from '../store/fastingStore';
+import { foregroundBannerStore } from '../store/foregroundBannerStore';
 
 // Tokens live in SecureStore; everything else is plain AsyncStorage.
 const SECURE_SIGN_OUT_KEYS = ['supabase_token', 'supabase_refresh_token'];
@@ -130,7 +134,38 @@ export async function signOut(): Promise<void> {
   setSentryUser(null);
   // Psych Report #4: Reset PostHog anonymous ID on sign-out
   analyticsReset();
+
+  // Hunter #2 P1-7 (R15): wipe every zustand store that carries user-scoped
+  // state. AsyncStorage + MMKV are wiped above, but the zustand stores live
+  // in module memory and survive the navigator teardown, so without an
+  // explicit reset the next user on the same device sees the previous
+  // user's clients/foodLogs/active fast/notification banner flash through
+  // before the post-login fetches complete.
+  resetUserScopedStores();
+
   authEvents.emit('logout');
+}
+
+// Exported so the next-user sign-in path (or tests) can re-assert a clean
+// slate without duplicating the store list. Order is intentional: pure
+// in-memory `set()` calls; no awaits, no I/O.
+// Each reset() is isolated in its own try/catch so a throw from one store
+// (e.g. a bad slice or test stub) does not short-circuit the remaining
+// resets and leak the previous user's state across signOut.
+export function resetUserScopedStores(): void {
+  const stores: Array<readonly [string, () => void]> = [
+    ['coachStore', () => useCoachStore.getState().reset()],
+    ['clientStore', () => useClientStore.getState().reset()],
+    ['fastingStore', () => useFastingStore.getState().reset()],
+    ['foregroundBannerStore', () => foregroundBannerStore.getState().reset()],
+  ];
+  for (const [name, reset] of stores) {
+    try {
+      reset();
+    } catch (err) {
+      logger.warn('AuthActions', `resetUserScopedStores: ${name} reset failed`, err);
+    }
+  }
 }
 
 // Used by the Settings screen's "Reset Onboarding" action. Previously lived on
