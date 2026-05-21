@@ -2,16 +2,16 @@ import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { Colors } from '../constants/colors';
 
-// Configure how notifications are handled when app is in foreground
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+// NOTE: foreground notification behavior is owned exclusively by
+// installForegroundHandler() in src/services/pushNotifications.ts, which
+// App.tsx calls once during initApp. Do NOT register a module-load
+// setNotificationHandler here — that previously raced with the service
+// module and silently won, killing the in-app banner store. (Hunt P0-4)
+
+// Module-local set of scheduled water-reminder IDs. scheduleWaterReminder
+// cancels only IDs it owns so coach session reminders (T-24h/T-1h/T-10m)
+// scheduled elsewhere are not nuked. (Hunt P3-2)
+const scheduledWaterIds = new Set<string>();
 
 export async function requestNotificationPermissions(): Promise<boolean> {
   try {
@@ -52,7 +52,17 @@ export async function requestNotificationPermissions(): Promise<boolean> {
 
 export async function scheduleWaterReminder(intervalHours = 2): Promise<string | null> {
   try {
-    await Notifications.cancelAllScheduledNotificationsAsync();
+    // Cancel ONLY previously scheduled water reminders — not coach session
+    // reminders or fasting alerts.
+    for (const id of scheduledWaterIds) {
+      try {
+        await Notifications.cancelScheduledNotificationAsync(id);
+      } catch {
+        // Already fired or removed by the OS — fine to ignore.
+      }
+    }
+    scheduledWaterIds.clear();
+
     const id = await Notifications.scheduleNotificationAsync({
       content: {
         title: 'Time to Hydrate',
@@ -66,10 +76,22 @@ export async function scheduleWaterReminder(intervalHours = 2): Promise<string |
         repeats: true,
       },
     });
+    scheduledWaterIds.add(id);
     return id;
   } catch (err) {
     return null;
   }
+}
+
+export async function cancelWaterReminders(): Promise<void> {
+  for (const id of scheduledWaterIds) {
+    try {
+      await Notifications.cancelScheduledNotificationAsync(id);
+    } catch {
+      // ignore
+    }
+  }
+  scheduledWaterIds.clear();
 }
 
 export async function scheduleFastingAlert(fastEndTime: Date): Promise<string | null> {
@@ -140,6 +162,7 @@ export async function sendMotivationNotification(message: string): Promise<strin
 export async function cancelAllNotifications(): Promise<void> {
   try {
     await Notifications.cancelAllScheduledNotificationsAsync();
+    scheduledWaterIds.clear();
   } catch (err) {
     // Not user-facing — failing to cancel notifications shouldn't break
     // sign-out or any flow that calls this; surface via console for telemetry.

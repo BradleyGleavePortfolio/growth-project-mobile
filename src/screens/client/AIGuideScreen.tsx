@@ -20,7 +20,7 @@ import Animated, {
 import { Ionicons } from '@expo/vector-icons';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { getChatHistory, saveChatMessage } from '../../db/chatDb';
-import { getAIResponse } from '../../utils/aiGuide';
+import NetInfo from '@react-native-community/netinfo';
 import { aiApi, AIStructuredContext } from '../../services/api';
 
 import { ChatMessage } from '../../types';
@@ -168,17 +168,28 @@ export default function AIGuideScreen() {
         // Show degraded banner when the backend served a deterministic fallback.
         setIsDegraded(response.data?.degraded === true);
       } catch (err) {
-        // Detect network-level failures (no response from server) separately
-        // from API errors so we can surface an offline banner and keep the
-        // draft message in the input field rather than swallowing it.
-        const isNetworkError =
+        // Detect axios network-level failures (no response from server). These
+        // can happen on a flaky connection even when NetInfo still reports
+        // reachable, so we treat them as the "offline" branch.
+        const isAxiosNetworkError =
           err != null &&
           typeof err === 'object' &&
-          // axios network error: no response received
           (('code' in err && (err as { code: string }).code === 'ERR_NETWORK') ||
             ('response' in err && (err as { response: unknown }).response == null));
 
-        if (isNetworkError) {
+        // Cross-check with NetInfo — if the device is genuinely offline we
+        // also want the offline branch even if axios surfaced a different
+        // error shape (e.g. an Empty API response while the radio was off).
+        let isDeviceOffline = false;
+        try {
+          const state = await NetInfo.fetch();
+          isDeviceOffline =
+            state.isConnected === false || state.isInternetReachable === false;
+        } catch {
+          // NetInfo can reject on early boot — treat as unknown (not offline).
+        }
+
+        if (isAxiosNetworkError || isDeviceOffline) {
           setIsOffline(true);
           setIsTyping(false);
           // Keep the draft in the input field — don't clear it — so the user
@@ -190,30 +201,15 @@ export default function AIGuideScreen() {
           return;
         }
 
-        // Non-network error (e.g. empty API response, server error):
-        // fall back to the offline keyword matcher so the user sees a reply
-        // rather than a spinner.
-        const daysSinceStart = currentUser?.createdAt
-          ? Math.floor((Date.now() - new Date(currentUser.createdAt).getTime()) / (1000 * 60 * 60 * 24))
-          : 1;
-
-        const profileAsClientProfile = currentUser?.profile ? {
-          id: '',
-          userId: currentUser.id,
-          coachId: currentUser.coach_id || '',
-          onboardingCompleted: true,
-          createdAt: currentUser.createdAt || new Date().toISOString(),
-          updatedAt: currentUser.createdAt || new Date().toISOString(),
-          ...currentUser.profile,
-        } as import('../../types').ClientProfile : null;
-
-        const offlineReply = getAIResponse(text, {
-          firstName: currentUser?.firstName || currentUser?.name || 'there',
-          profile: profileAsClientProfile,
-          daysSinceStart,
-          loggingStreak: 0,
-        });
-        aiText = `(Offline reply — connect to receive your coach's full guidance.)\n\n${offlineReply}`;
+        // Non-network error (backend 5xx, empty/malformed response). The AI
+        // gateway doctrine (src/types/aiGateway.ts) requires the UI to render
+        // a fail-closed state and NEVER substitute a fabricated answer for a
+        // disabled response. Previously we ran a hardcoded keyword matcher
+        // labelled "Offline reply" — a lie when the user was online. (Hunt
+        // P0-aiGuide / R18)
+        aiText =
+          "Your coach's guidance is briefly unavailable — please try again in a minute.";
+        setIsDegraded(true);
       }
 
       const aiMsg: ChatMessage = {
