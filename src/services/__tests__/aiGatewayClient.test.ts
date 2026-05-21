@@ -71,20 +71,20 @@ describe('aiGatewayClient.createDraft — fail-closed flag gates', () => {
   });
 
   it('returns disabled.feature_flag_off when master flag is off, without hitting the network', async () => {
-    const r: AIGatewayDraftDisabled = await aiGatewayClient.createDraft(
+    const r = (await aiGatewayClient.createDraft(
       { capability: 'coach_brief_draft' },
       { flags: flagsFor(false, ['coach_brief_draft']) },
-    );
+    )) as AIGatewayDraftDisabled;
     expect(r.status).toBe('disabled');
     expect(r.reason).toBe('feature_flag_off');
     expect(axiosMock.__instance.post).not.toHaveBeenCalled();
   });
 
   it('returns disabled.feature_flag_off when capability flag is off even if master is on', async () => {
-    const r: AIGatewayDraftDisabled = await aiGatewayClient.createDraft(
+    const r = (await aiGatewayClient.createDraft(
       { capability: 'coach_brief_draft' },
       { flags: flagsFor(true, []) },
-    );
+    )) as AIGatewayDraftDisabled;
     expect(r.status).toBe('disabled');
     expect(r.reason).toBe('feature_flag_off');
     expect(axiosMock.__instance.post).not.toHaveBeenCalled();
@@ -227,10 +227,10 @@ describe('aiGatewayClient.createDraft — HTTP error mapping', () => {
       isAxiosError: true,
       response: { status: 401, headers: {}, data: {} },
     });
-    const r: AIGatewayDraftDisabled = await aiGatewayClient.createDraft(
+    const r = (await aiGatewayClient.createDraft(
       { capability: 'coach_brief_draft' },
       { flags },
-    );
+    )) as AIGatewayDraftDisabled;
     expect(r.status).toBe('disabled');
     expect(r.reason).toBe('role_denied');
   });
@@ -240,10 +240,10 @@ describe('aiGatewayClient.createDraft — HTTP error mapping', () => {
       isAxiosError: true,
       response: { status: 403, headers: {}, data: {} },
     });
-    const r: AIGatewayDraftDisabled = await aiGatewayClient.createDraft(
+    const r = (await aiGatewayClient.createDraft(
       { capability: 'coach_brief_draft' },
       { flags },
-    );
+    )) as AIGatewayDraftDisabled;
     expect(r.reason).toBe('role_denied');
   });
 
@@ -256,10 +256,10 @@ describe('aiGatewayClient.createDraft — HTTP error mapping', () => {
         data: {},
       },
     });
-    const r: AIGatewayDraftDisabled = await aiGatewayClient.createDraft(
+    const r = (await aiGatewayClient.createDraft(
       { capability: 'coach_brief_draft' },
       { flags },
-    );
+    )) as AIGatewayDraftDisabled;
     expect(r.status).toBe('disabled');
     expect(r.reason).toBe('rate_limited');
     expect(r.retryAfter).toBe('60');
@@ -274,10 +274,10 @@ describe('aiGatewayClient.createDraft — HTTP error mapping', () => {
         data: { correlation_id: 'corr-abc' },
       },
     });
-    const r: AIGatewayDraftError = await aiGatewayClient.createDraft(
+    const r = (await aiGatewayClient.createDraft(
       { capability: 'coach_brief_draft' },
       { flags },
-    );
+    )) as AIGatewayDraftError;
     expect(r.status).toBe('error');
     expect(r.reason).toBe('provider_unavailable');
     expect(r.correlationId).toBe('corr-abc');
@@ -288,10 +288,10 @@ describe('aiGatewayClient.createDraft — HTTP error mapping', () => {
       isAxiosError: true,
       response: { status: 400, headers: {}, data: {} },
     });
-    const r: AIGatewayDraftError = await aiGatewayClient.createDraft(
+    const r = (await aiGatewayClient.createDraft(
       { capability: 'coach_brief_draft' },
       { flags },
-    );
+    )) as AIGatewayDraftError;
     expect(r.status).toBe('error');
     expect(r.reason).toBe('invalid_input');
   });
@@ -301,10 +301,10 @@ describe('aiGatewayClient.createDraft — HTTP error mapping', () => {
       isAxiosError: true,
       response: undefined,
     });
-    const r: AIGatewayDraftError = await aiGatewayClient.createDraft(
+    const r = (await aiGatewayClient.createDraft(
       { capability: 'coach_brief_draft' },
       { flags },
-    );
+    )) as AIGatewayDraftError;
     expect(r.status).toBe('error');
     expect(r.reason).toBe('provider_unavailable');
   });
