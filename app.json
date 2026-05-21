@@ -2,7 +2,7 @@
   "expo": {
     "name": "The Growth Project",
     "slug": "tgp-health-and-wellness",
-    "scheme": "tgp",
+    "scheme": ["tgp", "com.growthproject.app"],
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",

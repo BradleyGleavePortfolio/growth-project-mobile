@@ -52,8 +52,20 @@ describe('app.json declares the invite deep-link surface', () => {
     expect(data.host).toBe('join');
   });
 
-  it('expo.scheme matches the deep-link parser constant', () => {
-    expect(APP_JSON.expo.scheme).toBe(INVITE_CUSTOM_SCHEME);
+  it('expo.scheme declares both the legacy tgp scheme and the bundle-id scheme', () => {
+    // expo.scheme may be a string (legacy single-scheme) or an array (multiple
+    // schemes registered with the OS — required so Stripe's checkout return URL
+    // `com.growthproject.app://...` deep-links back into the app while existing
+    // `tgp://join/<code>` invite links keep working). Normalise then assert
+    // both are present: the legacy scheme (matches INVITE_CUSTOM_SCHEME, used
+    // by the deep-link parser) AND the bundle-id scheme (matches
+    // expo.android.package / expo.ios.bundleIdentifier, used by Stripe).
+    const schemes = Array.isArray(APP_JSON.expo.scheme)
+      ? APP_JSON.expo.scheme
+      : [APP_JSON.expo.scheme];
+    expect(schemes).toContain(INVITE_CUSTOM_SCHEME);
+    expect(schemes).toContain(APP_JSON.expo.android.package);
+    expect(schemes).toContain(APP_JSON.expo.ios.bundleIdentifier);
   });
 });
 

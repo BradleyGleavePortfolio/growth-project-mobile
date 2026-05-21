@@ -89,6 +89,17 @@ function DunningBanner({
         >
           <Text style={styles.dunningBtnText}>Update</Text>
         </TouchableOpacity>
+      ) : dunning.portal_unavailable ? (
+        // Round-3 fix: surface mint failure so the past-due banner is not
+        // a dead-end. Mirrors the AI-gateway fail-closed posture — show a
+        // clear notice rather than a missing CTA.
+        <Text
+          style={styles.dunningSub}
+          accessibilityLabel="Update card unavailable, contact support"
+          testID="dunning-portal-unavailable"
+        >
+          Update card unavailable — contact support
+        </Text>
       ) : null}
     </View>
   );

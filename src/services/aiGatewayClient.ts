@@ -15,7 +15,7 @@
  *   3. Generate idempotency keys when the caller doesn't supply one.
  *
  * Backend contract (from the AI Gateway design doc):
- *   POST /ai/gateway/invoke        → AIGatewayDraftResponse (mapped from invoke response shape)
+ *   POST /ai/gateway/drafts        → AIGatewayDraftOk on 200; mapped to disabled/error on 4xx/5xx
  *   GET  /ai/gateway/status        → AIGatewayStatusResponse
  *
  * Until the backend ships, all calls return `disabled.feature_flag_off` when
@@ -39,6 +39,7 @@ import type {
   AIGatewayDraftError,
   AIGatewayStatusResponse,
 } from '../types/aiGateway';
+import { AIUnavailableError } from './aiGatewayErrors';
 
 // ─── Idempotency key ───────────────────────────────────────────────────────
 // Cheap, collision-resistant enough for short-window dedupe. Backend persists
@@ -127,9 +128,16 @@ export interface AIGatewayClientDeps {
 
 export const aiGatewayClient = {
   /**
-   * Generate an unsigned draft. Always returns one of the three discriminated
-   * shapes; never throws for HTTP/transport errors. Callers must `switch` on
-   * `status` and render the matching UX state.
+   * Generate an unsigned draft.
+   *
+   * Returns one of `AIGatewayDraftResponse`'s discriminated shapes for the
+   * cases the UI can branch on (flag-off, HTTP error mapping). THROWS
+   * `AIUnavailableError` when the gateway returns HTTP 200 with a degraded
+   * pathway (`enabled:false`, top-level or nested `provider:'stub'`). The
+   * throw is the runtime fail-closed guarantee from Rule 9 — a discriminated
+   * union member can be silently ignored at a call site; an exception cannot.
+   * Callers must catch `AIUnavailableError` and render the "AI temporarily
+   * unavailable" UX.
    */
   async createDraft(
     req: Omit<AIGatewayDraftRequest, 'idempotencyKey'> & {
@@ -142,62 +150,59 @@ export const aiGatewayClient = {
       return flagOffResponse(req.capability);
     }
     const idempotencyKey = req.idempotencyKey ?? generateIdempotencyKey();
+    let resp;
     try {
-      const resp = await api.post<{
-        request_id: string;
-        audit_id: string;
-        approval: { required: boolean; status: string; draft_id: string | null };
-        enabled: boolean;
-        provider: string;
-        model: string;
-        reply: string;
-        draft_mode: boolean;
-        provenance: unknown;
-        redactions_applied: unknown;
-      }>(
-        '/ai/gateway/invoke',
-        {
-          capability: req.capability,
-          message: req.userIntent ?? '',
-          subject_user_id: req.subjectRef?.id,
-          proposed_action: req.proposedAction,
-        },
-      );
-      const data = resp.data;
-      // Backend returns enabled:false and/or provider:'stub' for degraded/stub
-      // responses as HTTP 200. Surface these as disabled so callers render the
-      // correct degraded UX instead of showing [ai-disabled] stub text as a
-      // normal draft.
-      if (data.enabled === false || data.provider === 'stub') {
-        return {
-          status: 'disabled',
-          capability: req.capability,
-          reason: (data.meta as { reason?: string } | undefined)?.reason ?? 'ai_unavailable',
-          summary: null,
-          retryAfter: null,
-        };
-      }
-      const draftId = data.approval.draft_id ?? data.request_id;
-      const okResponse: import('../types/aiGateway').AIGatewayDraftOk = {
-        status: 'ok',
-        draftId,
+      resp = await api.post<
+        import('../types/aiGateway').AIGatewayDraftOk & {
+          enabled?: boolean;
+          provider?: string;
+          meta?: { reason?: string };
+        }
+      >('/ai/gateway/drafts', {
         capability: req.capability,
-        text: data.reply,
-        source: {
-          provider: data.provider,
-          model: data.model,
-          generatedAt: new Date().toISOString(),
-        },
-        approval: {
-          actor: null,
-          approvedAt: null,
-        },
-        isStale: false,
-      };
-      return okResponse;
+        user_intent: req.userIntent ?? '',
+        subject_user_id: req.subjectRef?.id,
+        proposed_action: req.proposedAction,
+        idempotency_key: idempotencyKey,
+      });
     } catch (err) {
       return networkErrorResponse(req.capability, err as AxiosError);
     }
+    const data = resp.data;
+    // Fail-closed stub detection (audit d613ff0 + round-3 contract change):
+    // when the backend returns HTTP 200 with enabled:false or any stub
+    // provider, throw a structured AIUnavailableError. The previous round
+    // returned a `disabled` union member here, but callers had to opt in to
+    // handling it — any caller that forgot would silently render the stub
+    // placeholder as a real draft. An exception forces handling.
+    const allowedReasons: AIGatewayDraftDisabled['reason'][] = [
+      'kill_switch',
+      'no_provider_key',
+      'rate_limited',
+      'role_denied',
+      'consent_missing',
+      'feature_flag_off',
+    ];
+    const metaReason = data.meta?.reason;
+    const topLevelProvider = data.provider;
+    const nestedProvider = data.source?.provider;
+    if (
+      data.enabled === false ||
+      topLevelProvider === 'stub' ||
+      nestedProvider === 'stub'
+    ) {
+      const reason: AIGatewayDraftDisabled['reason'] =
+        metaReason && (allowedReasons as string[]).includes(metaReason)
+          ? (metaReason as AIGatewayDraftDisabled['reason'])
+          : 'no_provider_key';
+      throw new AIUnavailableError({
+        capability: req.capability,
+        reason,
+        summary: null,
+        retryAfter: null,
+      });
+    }
+    return data;
   },
 
   /**
@@ -239,3 +244,4 @@ export const aiGatewayClient = {
 // Exported for tests and any caller that needs to short-circuit on flags
 // without invoking the client.
 export { generateIdempotencyKey };
+export { AIUnavailableError, isAIUnavailableError } from './aiGatewayErrors';
