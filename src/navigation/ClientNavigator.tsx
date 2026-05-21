@@ -102,6 +102,25 @@ import BrandedCheckoutWebViewScreen, {
   type BrandedCheckoutWebViewParams,
 } from '../screens/client/BrandedCheckoutWebViewScreen';
 import { colors } from '../theme/tokens';
+// Defense-in-depth client paywall (Option B): paid screens are wrapped so
+// the entitlement gate runs before the screen body. Server-side
+// ClientEntitlementGuard remains canonical (Rule 20).
+import { withProtectedScreen } from '../entitlements/withProtectedScreen';
+
+const ProtectedWorkoutScreen = withProtectedScreen(WorkoutScreen);
+const ProtectedActiveWorkoutScreen = withProtectedScreen(ActiveWorkoutScreen);
+const ProtectedClientWorkoutViewerScreen = withProtectedScreen(ClientWorkoutViewerScreen);
+const ProtectedWorkoutAssignmentDetailScreen = withProtectedScreen(WorkoutAssignmentDetailScreen);
+const ProtectedPlanScreen = withProtectedScreen(PlanScreen);
+const ProtectedClientDailyMealPlanScreen = withProtectedScreen(ClientDailyMealPlanScreen);
+const ProtectedFastingScreen = withProtectedScreen(FastingScreen);
+const ProtectedLogScreen = withProtectedScreen(LogScreen);
+const ProtectedClientMacrosScreen = withProtectedScreen(ClientMacrosScreen);
+const ProtectedCommunityScreen = withProtectedScreen(CommunityScreen);
+const ProtectedAIGuideScreen = withProtectedScreen(AIGuideScreen);
+const ProtectedMessagesScreen = withProtectedScreen(MessagesScreen);
+const ProtectedClientBookingRequestScreen = withProtectedScreen(ClientBookingRequestScreen);
+const ProtectedClientUpcomingSessionsScreen = withProtectedScreen(ClientUpcomingSessionsScreen);
 
 // ─── Param lists ──────────────────────────────────────────────────────────────
 
@@ -275,7 +294,7 @@ function HomeStackNavigator() {
       <HomeStackNav.Screen name="HomeMain"              component={HomeScreen} />
       <HomeStackNav.Screen name="Habits"                component={HabitsScreen} />
       <HomeStackNav.Screen name="Notifications"         component={NotificationsScreen} />
-      <HomeStackNav.Screen name="Messages"              component={MessagesScreen} />
+      <HomeStackNav.Screen name="Messages"              component={ProtectedMessagesScreen} />
       {/* Phase 9 — Notification center screens */}
       <HomeStackNav.Screen
         name="NotificationCenter"
@@ -299,8 +318,8 @@ function WorkoutStackNavigator() {
         contentStyle: { backgroundColor: colors.bone },
       }}
     >
-      <WorkoutStackNav.Screen name="WorkoutMain"     component={WorkoutScreen} />
-      <WorkoutStackNav.Screen name="ActiveWorkout"   component={ActiveWorkoutScreen} />
+      <WorkoutStackNav.Screen name="WorkoutMain"     component={ProtectedWorkoutScreen} />
+      <WorkoutStackNav.Screen name="ActiveWorkout"   component={ProtectedActiveWorkoutScreen} />
       <WorkoutStackNav.Screen name="RoutineBuilder"  component={RoutineBuilderScreen} />
       <WorkoutStackNav.Screen name="CoachGuidelines" component={CoachGuidelinesScreen} />
       {/* Mux video + exercise library v1. */}
@@ -346,18 +365,18 @@ function MoreStackNavigator() {
       <MoreStackNav.Screen name="GroceryList"  component={GroceryListScreen} />
       <MoreStackNav.Screen name="ShoppingList" component={ShoppingListScreen} />
       <MoreStackNav.Screen name="PrepGuide"    component={PrepGuideScreen} />
-      <MoreStackNav.Screen name="Fast"         component={FastingScreen} />
-      <MoreStackNav.Screen name="Community"    component={CommunityScreen} />
+      <MoreStackNav.Screen name="Fast"         component={ProtectedFastingScreen} />
+      <MoreStackNav.Screen name="Community"    component={ProtectedCommunityScreen} />
       <MoreStackNav.Screen name="Progress"     component={ProgressScreen} />
       <MoreStackNav.Screen name="Settings"     component={SettingsScreen} />
       <MoreStackNav.Screen name="Widgets"      component={WidgetsScreen} />
       <MoreStackNav.Screen name="Report"       component={ReportScreen} />
       <MoreStackNav.Screen name="Learn"        component={EducationScreen} />
-      <MoreStackNav.Screen name="Plan"         component={PlanScreen} />
+      <MoreStackNav.Screen name="Plan"         component={ProtectedPlanScreen} />
       <MoreStackNav.Screen name="TrustCenter"  component={TrustCenterScreen} />
       <MoreStackNav.Screen name="DeleteAccount" component={DeleteAccountScreen} />
       <MoreStackNav.Screen name="Preferences"  component={PreferencesScreen} />
-      <MoreStackNav.Screen name="AIGuide"      component={AIGuideScreen} />
+      <MoreStackNav.Screen name="AIGuide"      component={ProtectedAIGuideScreen} />
       <MoreStackNav.Screen name="Membership"   component={MembershipScreen} />
       {/* Phase 7B — Transformation Timeline */}
       <MoreStackNav.Screen name="Timeline"     component={TimelineScreen} />
@@ -387,18 +406,18 @@ function MoreStackNavigator() {
           Reachable via deep-link and from MoreScreen entries (added
           in a follow-up; route registration first so deep-links
           work today). */}
-      <MoreStackNav.Screen name="ClientMacros"        component={ClientMacrosScreen} />
-      <MoreStackNav.Screen name="ClientDailyMealPlan" component={ClientDailyMealPlanScreen} />
-      <MoreStackNav.Screen name="ClientWorkoutViewer" component={ClientWorkoutViewerScreen} />
-      <MoreStackNav.Screen name="WorkoutAssignmentDetail" component={WorkoutAssignmentDetailScreen} />
+      <MoreStackNav.Screen name="ClientMacros"        component={ProtectedClientMacrosScreen} />
+      <MoreStackNav.Screen name="ClientDailyMealPlan" component={ProtectedClientDailyMealPlanScreen} />
+      <MoreStackNav.Screen name="ClientWorkoutViewer" component={ProtectedClientWorkoutViewerScreen} />
+      <MoreStackNav.Screen name="WorkoutAssignmentDetail" component={ProtectedWorkoutAssignmentDetailScreen} />
       {/* Concierge Phase 1 — scheduling client surfaces. */}
       <MoreStackNav.Screen
         name="ClientBookingRequest"
-        component={ClientBookingRequestScreen}
+        component={ProtectedClientBookingRequestScreen}
       />
       <MoreStackNav.Screen
         name="ClientUpcomingSessions"
-        component={ClientUpcomingSessionsScreen}
+        component={ProtectedClientUpcomingSessionsScreen}
       />
       {/* Phase 10 — GDPR Article 20 data portability */}
       <MoreStackNav.Screen name="DataExport" component={DataExportScreen} />
@@ -464,7 +483,7 @@ export default function ClientNavigator() {
       />
       <Tab.Screen
         name="Log"
-        component={LogScreen}
+        component={ProtectedLogScreen}
         options={{
           tabBarAccessibilityLabel: 'Log food',
           tabBarIcon: ({ color }) => (
