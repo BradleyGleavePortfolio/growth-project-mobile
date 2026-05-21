@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,8 @@ import {
   Alert,
   Modal,
   FlatList,
+  AppState,
+  AppStateStatus,
 } from 'react-native';
 import HapticPressable from '../../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +23,12 @@ import { HapticService } from '../../ui/haptics/haptics.service';
 import { AnalyticsEvents } from '../../analytics/events';
 import { useTheme } from '../../theme/ThemeProvider';
 import { workoutBuilderApi } from '../../api/workoutBuilderApi';
+import {
+  loadActiveWorkoutSession,
+  saveActiveWorkoutSession,
+  clearActiveWorkoutSession,
+  type PersistedActiveWorkoutSession,
+} from '../../storage/activeWorkoutSession';
 // Offline-first write path (audit fix H-5: comments were left
 // referencing the deleted WatermelonDB stack — current implementation
 // is built on expo-sqlite, see src/offline/database.ts and
@@ -57,6 +65,12 @@ import type {
 import { ExerciseImage, MUSCLES, lookupMuscleColor, makeMuscleColors } from './active-workout/ExerciseImage';
 import { ExerciseCard } from './active-workout/ExerciseCard';
 
+// Debounce window for persistence writes. Mutations happen rapidly while
+// the user is logging sets; coalescing them into a single AsyncStorage
+// write keeps the storage layer cheap while never losing more than
+// ~500ms of state if the process is killed mid-set.
+const PERSIST_DEBOUNCE_MS = 500;
+
 export default function ActiveWorkoutScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -66,14 +80,31 @@ export default function ActiveWorkoutScreen() {
   const { routineName, exercises: exercisesJson, assignmentId } = route.params;
 
   const [sessionExercises, setSessionExercises] = useState<SessionExercise[]>([]);
+  // Elapsed seconds is always recomputed from a wallclock anchor — the
+  // setInterval tick only forces a re-render. This is what makes the
+  // timer robust to JS-thread suspension when the app is backgrounded.
   const [timer, setTimer] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Wallclock anchor for the running timer. A resumed session carries
+  // forward the original start instant; a fresh session anchors to now.
+  const sessionStartMsRef = useRef<number>(Date.now());
   // Track session start time for assignment completion payload.
   const sessionStartTimeRef = useRef<Date>(new Date());
-  // Stable idempotency key generated once at session start.
+  // Stable idempotency key generated once at session start. Held in a
+  // ref so it can be swapped on resume without re-rendering.
   const idempotencyKeyRef = useRef<string>(
     assignmentId ? `${assignmentId}:${Date.now()}` : ''
   );
+  // Gates the persistence effect until we've decided whether we are
+  // creating a fresh session or restoring a stored one. Without this
+  // gate the initial empty `sessionExercises` value would overwrite a
+  // real stored session before we got a chance to load it.
+  const [hydrated, setHydrated] = useState(false);
+  // Suppresses the persistence write between the user tapping "Finish"
+  // (where we clear the stored session) and the navigation completing.
+  const finishingRef = useRef(false);
+  // Debounce timer for the persistence write effect.
+  const persistDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [restSeconds, setRestSeconds] = useState(0);
   const [restActive, setRestActive] = useState(false);
   const [restTotal, setRestTotal] = useState(0);
@@ -87,35 +118,179 @@ export default function ActiveWorkoutScreen() {
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
   const createWorkout = useCreateWorkout();
 
-  useEffect(() => {
-    // Parse routine exercises into session format
+  // Default (fresh) session exercises derived from the routine param.
+  // Pulled out so the restore effect can fall back to it cleanly when
+  // no stored session is found.
+  const defaultSessionExercises = useMemo<SessionExercise[]>(() => {
     try {
       const routineExs: RoutineExercise[] = JSON.parse(exercisesJson);
-      const sessionExs: SessionExercise[] = routineExs.map((re) => ({
+      return routineExs.map((re) => ({
         exerciseId: re.exerciseId,
         exerciseName: re.exerciseName,
         sets: Array.from({ length: re.sets }, () => ({ reps: re.reps, weight: 0, completed: false })),
         restSec: re.restSec,
         workoutPlanExerciseId: re.workoutPlanExerciseId,
       }));
-      setSessionExercises(sessionExs);
     } catch (err) {
-      // Best-effort parse of the routine JSON on screen mount. An empty list
-      // lets the user add exercises manually instead of crashing the screen.
+      // Best-effort parse of the routine JSON on screen mount. An empty
+      // list lets the user add exercises manually instead of crashing
+      // the screen.
       console.error('ActiveWorkoutScreen: routine exercises parse failed', err);
-      setSessionExercises([]);
+      return [];
     }
+  }, [exercisesJson]);
+
+  // Recompute elapsed seconds from the wallclock anchor. Called by the
+  // interval tick AND on every foreground transition — the anchor is
+  // the source of truth, the `timer` state is just a render trigger.
+  const recomputeElapsed = useCallback(() => {
+    const elapsed = Math.max(0, Math.floor((Date.now() - sessionStartMsRef.current) / 1000));
+    setTimer(elapsed);
+  }, []);
+
+  // Adopt a persisted session into local state.
+  const adoptPersistedSession = useCallback(
+    (session: PersistedActiveWorkoutSession) => {
+      sessionStartMsRef.current = session.startedAtMs;
+      sessionStartTimeRef.current = new Date(session.startedAtMs);
+      idempotencyKeyRef.current = session.idempotencyKey;
+      setSessionExercises(session.sessionExercises);
+      const elapsed = Math.max(0, Math.floor((Date.now() - session.startedAtMs) / 1000));
+      setTimer(elapsed);
+    },
+    [],
+  );
+
+  // Restore-on-mount. Decides between three states:
+  //   1. No stored session → start a fresh one.
+  //   2. Stored session, fresh (< 12h) → prompt the user to resume.
+  //   3. Stored session, stale (>= 12h) → still prompt, but make it
+  //      explicit so they don't accidentally resume a workout from
+  //      yesterday with mismatched timing.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      let result: Awaited<ReturnType<typeof loadActiveWorkoutSession>> = null;
+      try {
+        result = await loadActiveWorkoutSession();
+      } catch {
+        // Even on a load failure we still mount a usable screen.
+        result = null;
+      }
+      if (cancelled) return;
+      if (!result) {
+        setSessionExercises(defaultSessionExercises);
+        setHydrated(true);
+        return;
+      }
+      const { session, isStale } = result;
+      const promptTitle = isStale ? 'Resume earlier workout?' : 'Resume workout?';
+      const promptBody = isStale
+        ? `Found an unfinished workout from over 12 hours ago${
+            session.routineName ? ` ("${session.routineName}")` : ''
+          }. Resume it, or start fresh?`
+        : `Found an unfinished workout${
+            session.routineName ? ` ("${session.routineName}")` : ''
+          }. Resume it, or start fresh?`;
+      Alert.alert(
+        promptTitle,
+        promptBody,
+        [
+          {
+            text: 'Start Fresh',
+            style: 'destructive',
+            onPress: () => {
+              clearActiveWorkoutSession().catch(() => { /* best-effort */ });
+              setSessionExercises(defaultSessionExercises);
+              setHydrated(true);
+            },
+          },
+          {
+            text: 'Resume',
+            onPress: () => {
+              adoptPersistedSession(session);
+              setHydrated(true);
+            },
+          },
+        ],
+        { cancelable: false },
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // We intentionally only run this once per screen mount. Route params
+    // are stable for the lifetime of the navigator entry.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // (Fix #2) Removed AsyncStorage user_data read — the backend resolves the
   // current user from the JWT, so we don't need a local user_id to write
   // workouts anymore.
 
-  useEffect(() => {
-    // Start timer
-    timerRef.current = setInterval(() => setTimer((t) => t + 1), 1000);
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  // Foreground tick. The interval is purely a render driver — the
+  // actual elapsed value is always derived from the wallclock anchor,
+  // so any drift from background suspension is corrected on the next
+  // tick.
+  const startTimerInterval = useCallback(() => {
+    if (timerRef.current) return;
+    timerRef.current = setInterval(recomputeElapsed, 1000);
+  }, [recomputeElapsed]);
+
+  const stopTimerInterval = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
   }, []);
+
+  useEffect(() => {
+    startTimerInterval();
+    return () => stopTimerInterval();
+  }, [startTimerInterval, stopTimerInterval]);
+
+  // AppState handling. On background we drop the interval (RN already
+  // throttles JS timers in the background, but freeing the interval is
+  // explicit and avoids burning a wakeup on iOS). On foreground we
+  // recompute elapsed from the anchor and restart the tick.
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next: AppStateStatus) => {
+      if (next === 'active') {
+        recomputeElapsed();
+        startTimerInterval();
+      } else if (next === 'background' || next === 'inactive') {
+        stopTimerInterval();
+      }
+    });
+    return () => sub.remove();
+  }, [recomputeElapsed, startTimerInterval, stopTimerInterval]);
+
+  // Debounced persistence. Fires on every mutation of working state.
+  // We re-arm the timer on every change so several mutations within
+  // the PERSIST_DEBOUNCE_MS window collapse into a single write that
+  // captures the latest value.
+  useEffect(() => {
+    if (!hydrated || finishingRef.current) return;
+    if (persistDebounceRef.current) clearTimeout(persistDebounceRef.current);
+    persistDebounceRef.current = setTimeout(() => {
+      saveActiveWorkoutSession({
+        startedAtMs: sessionStartMsRef.current,
+        routineName,
+        exercisesJson,
+        assignmentId,
+        idempotencyKey: idempotencyKeyRef.current,
+        sessionExercises,
+      }).catch((err) => {
+        if (__DEV__) console.warn('[ActiveWorkout] persistence write failed', err);
+      });
+    }, PERSIST_DEBOUNCE_MS);
+    return () => {
+      if (persistDebounceRef.current) {
+        clearTimeout(persistDebounceRef.current);
+        persistDebounceRef.current = null;
+      }
+    };
+  }, [hydrated, sessionExercises, routineName, exercisesJson, assignmentId]);
 
   // Rest timer cleanup.
   useEffect(() => {
@@ -316,6 +491,14 @@ export default function ActiveWorkoutScreen() {
         //   4. If offline the rows stay 'pending' and triggerSync()
         //      fires on reconnect via NetInfo.
         onPress: async () => {
+          // Suppress the debounced persistence write that would
+          // otherwise race the clear() below and re-create the entry.
+          finishingRef.current = true;
+          if (persistDebounceRef.current) {
+            clearTimeout(persistDebounceRef.current);
+            persistDebounceRef.current = null;
+          }
+          await clearActiveWorkoutSession();
           if (timerRef.current) clearInterval(timerRef.current);
           const durationMinutes = Math.round(timer / 60);
           const completedExercises = sessionExercises.filter((e) =>
@@ -455,6 +638,14 @@ export default function ActiveWorkoutScreen() {
         text: 'Cancel',
         style: 'destructive',
         onPress: () => {
+          // User explicitly abandoned the session — drop the persisted
+          // copy so it doesn't show up as a "Resume?" prompt later.
+          finishingRef.current = true;
+          if (persistDebounceRef.current) {
+            clearTimeout(persistDebounceRef.current);
+            persistDebounceRef.current = null;
+          }
+          clearActiveWorkoutSession().catch(() => { /* best-effort */ });
           if (timerRef.current) clearInterval(timerRef.current);
           navigation.goBack();
         },
