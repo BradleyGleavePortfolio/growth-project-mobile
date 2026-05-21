@@ -110,9 +110,13 @@ describe('TgpLineChart — source guards', () => {
   });
 
   it('tooltip uses Quiet Luxury palette: bone bg, ink text, oxblood border', () => {
-    expect(LINE_SRC).toMatch(/#F5EFE4/);    // bone background
-    expect(LINE_SRC).toMatch(/#1A1A18/);    // ink text
-    expect(LINE_SRC).toMatch(/#4A0404/);    // oxblood border
+    // The tooltip Rect references canonical-Colors tokens rather than hex
+    // literals — the same tokens that resolve to #F5EFE4 (bone),
+    // #1A1A18 (ink), #4A0404 (oxblood / earningsAccent). Test the token
+    // contract, not the resolved hex.
+    expect(LINE_SRC).toMatch(/fill=\{Colors\.background\}/);
+    expect(LINE_SRC).toMatch(/fill=\{Colors\.textPrimary\}/);
+    expect(LINE_SRC).toMatch(/stroke=\{Colors\.earningsAccent\}/);
   });
 
   it('uses react-native-gesture-handler for pan', () => {
@@ -136,8 +140,8 @@ describe('TgpBarChart — source guards', () => {
   });
 
   it('has tooltip with Quiet Luxury styling', () => {
-    expect(BAR_SRC).toMatch(/#F5EFE4/);
-    expect(BAR_SRC).toMatch(/#4A0404/);
+    expect(BAR_SRC).toMatch(/fill=\{Colors\.background\}/);
+    expect(BAR_SRC).toMatch(/stroke=\{Colors\.earningsAccent\}/);
   });
 
   it('uses GestureDetector', () => {
@@ -164,8 +168,8 @@ describe('TgpAreaChart — source guards', () => {
   });
 
   it('has tooltip with Quiet Luxury styling', () => {
-    expect(AREA_SRC).toMatch(/#F5EFE4/);
-    expect(AREA_SRC).toMatch(/#4A0404/);
+    expect(AREA_SRC).toMatch(/fill=\{Colors\.background\}/);
+    expect(AREA_SRC).toMatch(/stroke=\{Colors\.earningsAccent\}/);
   });
 });
 
