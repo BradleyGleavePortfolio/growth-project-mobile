@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   Keyboard,
   Alert,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRoute, useNavigation, RouteProp, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { coachApi } from '../../services/api';
@@ -21,6 +22,13 @@ import { subscribeToMessages } from '../../services/realtime';
 import type { ClientsStackParamList } from '../../navigation/CoachNavigator';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
+import { useBlockedUsersStore, filterOutBlocked } from '../../store/blockedUsersStore';
+import { messagesModerationApi, ReportReason } from '../../api/messagesApi';
+import MessageBubble, { BubbleMessage } from '../../components/messaging/MessageBubble';
+import MessageActionSheet from '../../components/messaging/MessageActionSheet';
+import ReplyComposer, { ReplyTarget } from '../../components/messaging/ReplyComposer';
+import ReportMessageSheet from '../../components/messaging/ReportMessageSheet';
+import { track } from '../../lib/analytics';
 
 interface Message {
   id: string;
@@ -29,6 +37,7 @@ interface Message {
   body: string;
   created_at: string;
   read_at?: string | null;
+  parent_message_id?: string | null;
 }
 
 // Realtime drives most refreshes; this is just a backstop. Was 15s.
@@ -46,14 +55,23 @@ export default function ClientMessagesScreen() {
   const [loading, setLoading] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [hasMoreOlder, setHasMoreOlder] = useState(true);
-  // Coach AI v1: support a templated check-in prefill from the insight
-  // screen. The composer respects this only once on mount so navigating
-  // back-and-forth doesn't clobber an in-progress draft.
   const [inputText, setInputText] = useState<string>(initialDraft ?? '');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const flatListRef = useRef<FlatList<Message>>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // iMessage-grade action state.
+  const [actionTarget, setActionTarget] = useState<Message | null>(null);
+  const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null);
+  const [reportTarget, setReportTarget] = useState<Message | null>(null);
+
+  const blockStore = useBlockedUsersStore();
+  const blockedIds = useMemo(() => blockStore.blocked.map((b) => b.id), [blockStore.blocked]);
+
+  useEffect(() => {
+    if (!blockStore.hydrated) void blockStore.hydrate();
+  }, [blockStore]);
 
   const PAGE_LIMIT = 100;
 
@@ -96,15 +114,12 @@ export default function ClientMessagesScreen() {
   }, [clientId, loadingOlder, hasMoreOlder, messages]);
 
   const loadSinceNewest = useCallback(async () => {
-    // We just refetch the tail window; backend supports `before` not `after`,
-    // and the message volumes are small — simpler to refetch top 100 than to
-    // keep cursors on both ends.
     try {
       const res = await coachApi.getClientMessages(clientId, { limit: 100 });
       const list: Message[] = normalizeList(res.data);
       setMessages((prev) => mergeById(prev, list));
-    } catch (err) {
-      // Silent — poll retries next tick.
+    } catch {
+      /* silent — poll retries next tick */
     }
   }, [clientId]);
 
@@ -120,10 +135,6 @@ export default function ClientMessagesScreen() {
     useCallback(() => {
       loadInitial().then(markRead);
 
-      // Subscribe to BOTH ends of the conversation:
-      //  - the client's channel (refresh when the client posts)
-      //  - the coach's own channel (refresh when their own send is mirrored
-      //    back, e.g. delivered ack)
       const unsubClient = subscribeToMessages(clientId, () => {
         loadSinceNewest().then(markRead);
       });
@@ -149,7 +160,14 @@ export default function ClientMessagesScreen() {
     try {
       const res = await coachApi.sendClientMessage(clientId, text);
       const created: Message = normalizeMessage(res.data);
+      if (replyTarget) {
+        // The legacy coach send endpoint doesn't carry parent_message_id yet,
+        // so the parent is captured locally on the message until the backend
+        // adds the field (same Apple-1.2 backend ticket).
+        created.parent_message_id = replyTarget.id;
+      }
       setInputText('');
+      setReplyTarget(null);
       setMessages((prev) => mergeById(prev, [created]));
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
     } catch (err) {
@@ -159,11 +177,58 @@ export default function ClientMessagesScreen() {
     }
   };
 
-  const formatTime = (iso: string): string => {
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) return '';
-    return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-  };
+  const handleLongPress = useCallback((m: BubbleMessage) => {
+    const found = messages.find((x) => x.id === m.id);
+    setActionTarget(found ?? null);
+  }, [messages]);
+
+  const handleReply = useCallback(() => {
+    if (!actionTarget) return;
+    setReplyTarget({
+      id: actionTarget.id,
+      body: actionTarget.body,
+      authorLabel: actionTarget.sender_role === 'coach' ? 'You' : clientName,
+    });
+    setActionTarget(null);
+  }, [actionTarget, clientName]);
+
+  const handleCopy = useCallback(async () => {
+    if (!actionTarget) return;
+    try {
+      await Clipboard.setStringAsync(actionTarget.body);
+    } catch {
+      /* non-fatal */
+    }
+    setActionTarget(null);
+  }, [actionTarget]);
+
+  const handleOpenReport = useCallback(() => {
+    if (!actionTarget) return;
+    setReportTarget(actionTarget);
+    setActionTarget(null);
+  }, [actionTarget]);
+
+  const handleSubmitReport = useCallback(
+    async (payload: { reason: ReportReason; details?: string }) => {
+      if (!reportTarget) return;
+      await messagesModerationApi.report(reportTarget.id, payload);
+      track('dm_message_reported', { reason: payload.reason, surface: 'coach' });
+      setReportTarget(null);
+      Alert.alert(
+        'Reported',
+        'Our team will review within 24 hours. Thanks for keeping the community safe.',
+      );
+    },
+    [reportTarget],
+  );
+
+  const visibleMessages = useMemo(
+    () => filterOutBlocked(messages, blockedIds),
+    [messages, blockedIds],
+  );
+
+  const parentLookup = new Map<string, Message>();
+  visibleMessages.forEach((m) => parentLookup.set(m.id, m));
 
   if (loading) {
     return (
@@ -188,7 +253,20 @@ export default function ClientMessagesScreen() {
         >
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
-        <View style={styles.chatHeaderInfo}>
+        <TouchableOpacity
+          onPress={() => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (navigation as any).navigate('ContactView', {
+              contactId: clientId,
+              displayName: clientName,
+              role: 'client',
+            });
+          }}
+          accessibilityRole="button"
+          accessibilityLabel={`View ${clientName} contact details`}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          style={styles.chatHeaderInfo}
+        >
           <View style={styles.chatAvatar}>
             <Text style={styles.chatAvatarText}>
               {clientName.split(' ').map((n) => n[0]).join('')}
@@ -196,9 +274,9 @@ export default function ClientMessagesScreen() {
           </View>
           <View>
             <Text style={styles.chatHeaderName}>{clientName}</Text>
-            <Text style={styles.chatHeaderStatus}>Client</Text>
+            <Text style={styles.chatHeaderStatus}>Client · Tap for details</Text>
           </View>
-        </View>
+        </TouchableOpacity>
         <View style={{ width: 24 }} />
       </View>
 
@@ -210,13 +288,13 @@ export default function ClientMessagesScreen() {
 
       <FlatList
         ref={flatListRef}
-        data={messages}
+        data={visibleMessages}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.chatList}
         showsVerticalScrollIndicator={false}
         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
         ListHeaderComponent={
-          hasMoreOlder && messages.length > 0 ? (
+          hasMoreOlder && visibleMessages.length > 0 ? (
             <TouchableOpacity
               onPress={loadOlder}
               disabled={loadingOlder}
@@ -247,7 +325,21 @@ export default function ClientMessagesScreen() {
           const showDateSep =
             index === 0 ||
             new Date(item.created_at).toDateString() !==
-              new Date(messages[index - 1].created_at).toDateString();
+              new Date(visibleMessages[index - 1].created_at).toDateString();
+
+          const parent =
+            item.parent_message_id ? parentLookup.get(item.parent_message_id) : null;
+
+          const bubbleMsg: BubbleMessage = {
+            id: item.id,
+            body: item.body,
+            created_at: item.created_at,
+            read_at: item.read_at,
+            parent: parent
+              ? { id: parent.id, body: parent.body, sender_role: parent.sender_role }
+              : null,
+          };
+
           return (
             <View>
               {showDateSep && (
@@ -261,35 +353,22 @@ export default function ClientMessagesScreen() {
                   </Text>
                 </View>
               )}
-              <View
-                style={[
-                  styles.messageBubbleRow,
-                  isCoach ? styles.messageBubbleRowRight : styles.messageBubbleRowLeft,
-                ]}
-              >
-                <View
-                  style={[
-                    styles.messageBubble,
-                    isCoach ? styles.messageBubbleCoach : styles.messageBubbleClient,
-                  ]}
-                >
-                  <Text style={[styles.messageText, isCoach && styles.messageTextCoach]}>
-                    {item.body}
-                  </Text>
-                  <Text style={[styles.messageTime, isCoach && styles.messageTimeCoach]}>
-                    {formatTime(item.created_at)}
-                  </Text>
-                </View>
-              </View>
+              <MessageBubble
+                message={bubbleMsg}
+                isMe={isCoach}
+                onLongPress={handleLongPress}
+              />
             </View>
           );
         }}
       />
 
+      <ReplyComposer target={replyTarget} onCancel={() => setReplyTarget(null)} />
+
       <View style={styles.inputBar}>
         <TextInput
           style={styles.chatInput}
-          placeholder="Type a message..."
+          placeholder={replyTarget ? 'Reply…' : 'Type a message...'}
           placeholderTextColor={colors.textMuted}
           value={inputText}
           onChangeText={setInputText}
@@ -311,6 +390,22 @@ export default function ClientMessagesScreen() {
           />
         </TouchableOpacity>
       </View>
+
+      <MessageActionSheet
+        visible={!!actionTarget}
+        messagePreview={actionTarget?.body}
+        onReply={handleReply}
+        onCopy={handleCopy}
+        onReport={handleOpenReport}
+        onClose={() => setActionTarget(null)}
+      />
+
+      <ReportMessageSheet
+        visible={!!reportTarget}
+        messagePreview={reportTarget?.body ?? ''}
+        onSubmit={handleSubmitReport}
+        onClose={() => setReportTarget(null)}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -335,6 +430,7 @@ function normalizeMessage(raw: unknown): Message {
     body: String(r.body ?? ''),
     created_at: typeof r.created_at === 'string' ? r.created_at : new Date().toISOString(),
     read_at: (r.read_at as string | null | undefined) ?? null,
+    parent_message_id: typeof r.parent_message_id === 'string' ? r.parent_message_id : null,
   };
 }
 
@@ -383,29 +479,6 @@ const makeStyles = (colors: ThemeColors) =>
   chatEmptyText: { fontSize: 14, color: colors.textMuted },
   dateSep: { alignItems: 'center', marginVertical: 16 },
   dateSepText: { fontSize: 12, color: colors.textMuted, backgroundColor: colors.background, paddingHorizontal: 12 },
-  messageBubbleRow: { marginBottom: 6 },
-  messageBubbleRowRight: { alignItems: 'flex-end' },
-  messageBubbleRowLeft: { alignItems: 'flex-start' },
-  messageBubble: {
-    maxWidth: '78%',
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  messageBubbleCoach: {
-    backgroundColor: colors.primary,
-    borderBottomRightRadius: 4,
-  },
-  messageBubbleClient: {
-    backgroundColor: colors.surface,
-    borderBottomLeftRadius: 4,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  messageText: { fontSize: 15, color: colors.textPrimary, lineHeight: 21 },
-  messageTextCoach: { color: colors.textOnPrimary },
-  messageTime: { fontSize: 11, color: colors.textMuted, marginTop: 4, alignSelf: 'flex-end' },
-  messageTimeCoach: { color: 'rgba(255,255,255,0.7)' },
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -438,5 +511,4 @@ const makeStyles = (colors: ThemeColors) =>
     alignItems: 'center',
   },
   sendBtnDisabled: { backgroundColor: colors.surface },
-
   });
