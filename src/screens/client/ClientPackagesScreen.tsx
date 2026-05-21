@@ -186,7 +186,7 @@ export default function ClientPackagesScreen() {
           return;
         }
         // Apple Rule 3.1.3(b)/(e) B2B exemption: open Stripe Checkout in
-        // a branded in-app webview rather than the system browser sheet.
+        // a branded in-app webview so the user never leaves the app.
         navigateToBrandedCheckout({
           checkoutUrl: res.data.url,
           packageName: pkg.name,
@@ -206,8 +206,8 @@ export default function ClientPackagesScreen() {
   const handleUpdateCard = useCallback(() => {
     if (!status?.ok || !status.data.dunning?.update_card_url) return;
     // Stripe Billing Portal is a payment surface (Rule 8 / Apple B2B
-    // exemption): keep it inside the branded in-app webview instead of
-    // launching a system browser sheet. The portal redirects back to
+    // exemption): keep it inside the branded in-app webview so the user
+    // never leaves the app. The portal redirects back to
     // `com.growthproject.app://` on save, which the webview's deep-link
     // gate intercepts and routes to CheckoutReturn — payment-status is
     // refreshed there and again when this screen regains focus.

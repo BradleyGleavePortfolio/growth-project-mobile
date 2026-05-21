@@ -50,8 +50,8 @@ export interface CheckoutSession {
   /**
    * Stripe-hosted Checkout URL — must be opened in the branded in-app
    * `BrandedCheckoutWebView` so the flow stays inside the app (Rule 8 /
-   * Apple Rule 3.1.3(b)/(e) B2B exemption). Never pass this to a system
-   * browser sheet on a payment surface.
+   * Apple Rule 3.1.3(b)/(e) B2B exemption). Never open a payment URL
+   * outside the branded webview on a payment surface.
    */
   url: string;
   /** Session id, surfaced for logging only. */

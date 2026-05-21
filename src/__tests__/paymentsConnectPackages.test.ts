@@ -11,9 +11,9 @@
  *   2. The checkout session POST sends the correct success / cancel
  *      deep-link URLs so the Stripe redirect lands on
  *      com.growthproject.app://checkout/{success,cancel}. This must match
- *      the openAuthSessionAsync callback in ClientPackagesScreen — if the
- *      schemes drift, the browser sheet does not dismiss on return and the
- *      checkout appears stuck (audit C11).
+ *      the deep-link gate in BrandedCheckoutWebView — if the schemes drift,
+ *      the in-app webview does not settle on return and the checkout
+ *      appears stuck (audit C11).
  *   3. coachPaymentsApi CRUD calls hit the right paths + verbs.
  *   4. The coach earnings response exposes the documented fee split
  *      shape (2% TGP platform fee + 5% head coach override + Stripe).
