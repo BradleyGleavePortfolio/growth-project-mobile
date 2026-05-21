@@ -272,6 +272,61 @@ describe('BrandedCheckoutWebViewScreen — deep link short-circuit', () => {
   });
 });
 
+// ── Dunning update-card flow — Stripe Billing Portal in branded webview ──────
+
+describe('BrandedCheckoutWebViewScreen — dunning update-card via Stripe Billing Portal', () => {
+  // The past-due dunning flow routes `dunning.update_card_url` (a
+  // billing.stripe.com URL) into this screen. The audit (round-2 check
+  // C12) caught that the allow-list did not include billing.stripe.com,
+  // so the webview blocked the navigation and the recovery flow
+  // dead-ended.
+  it('onShouldStartLoadWithRequest ALLOWS a billing.stripe.com portal URL (no error rendered)', () => {
+    const { queryByTestId } = render(<BrandedCheckoutWebViewScreen />);
+    const onShouldStart = capturedWebViewProps.onShouldStartLoadWithRequest as (r: {
+      url: string;
+    }) => boolean;
+    act(() => {
+      expect(
+        onShouldStart({
+          url: 'https://billing.stripe.com/p/session/test_YWNjdF8xRXhhbXBsZQ',
+        }),
+      ).toBe(true);
+    });
+    // No blocked-origin error and no navigation away.
+    expect(queryByTestId('branded-checkout-error')).toBeNull();
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
+  it('returns to the app via deep-link after the user saves a new card in the portal', () => {
+    // Stripe Customer Portal redirects to the configured return URL after
+    // a successful card update. In our flow that URL is the same checkout
+    // success deep-link, which the screen intercepts and routes through
+    // CheckoutReturn so payment-status is re-fetched.
+    render(<BrandedCheckoutWebViewScreen />);
+    const onShouldStart = capturedWebViewProps.onShouldStartLoadWithRequest as (r: {
+      url: string;
+    }) => boolean;
+    // 1) Portal loads inside the branded webview.
+    expect(
+      onShouldStart({
+        url: 'https://billing.stripe.com/p/session/test_YWNjdF8xRXhhbXBsZQ',
+      }),
+    ).toBe(true);
+    // 2) User saves the new card → portal redirects to the return URL.
+    //    The webview gate intercepts it, blocks the navigation, and
+    //    settles via CheckoutReturn (so the dunning state refreshes).
+    expect(
+      onShouldStart({
+        url: 'com.growthproject.app://checkout/success?session_id=cs_billing_xyz',
+      }),
+    ).toBe(false);
+    expect(mockNavigate).toHaveBeenCalledWith('CheckoutReturn', {
+      outcome: 'success',
+      session_id: 'cs_billing_xyz',
+    });
+  });
+});
+
 describe('BrandedCheckoutWebViewScreen — structured error states (Rule 9)', () => {
   it('renders a 5xx-specific TGPError with Try again + Cancel CTAs', () => {
     const { getByTestId, queryByTestId, getByText } = render(<BrandedCheckoutWebViewScreen />);
@@ -361,6 +416,14 @@ describe('isOriginAllowed', () => {
     expect(isOriginAllowed('https://m.stripe.network/inner.html')).toBe(true);
   });
 
+  it('accepts Stripe Customer Billing Portal (dunning update-card flow)', () => {
+    // Past-due clients tap "Update card" and the backend mints a
+    // billing.stripe.com session URL. The branded webview must allow it
+    // or the dunning recovery flow dead-ends (audit C12).
+    expect(isOriginAllowed('https://billing.stripe.com/p/session/test_xyz')).toBe(true);
+    expect(isOriginAllowed('https://billing.stripe.com/p/login/test_abc')).toBe(true);
+  });
+
   it('rejects http:// (HTTPS-only for checkout)', () => {
     expect(isOriginAllowed('http://app.bradleytgpcoaching.com/checkout')).toBe(false);
     expect(isOriginAllowed('http://checkout.stripe.com/c/pay')).toBe(false);
@@ -380,6 +443,7 @@ describe('isOriginAllowed', () => {
     expect(CHECKOUT_ALLOWED_HOSTS.length).toBeGreaterThanOrEqual(8);
     expect(CHECKOUT_ALLOWED_HOSTS).toContain('checkout.stripe.com');
     expect(CHECKOUT_ALLOWED_HOSTS).toContain('app.bradleytgpcoaching.com');
+    expect(CHECKOUT_ALLOWED_HOSTS).toContain('billing.stripe.com');
   });
 });
 

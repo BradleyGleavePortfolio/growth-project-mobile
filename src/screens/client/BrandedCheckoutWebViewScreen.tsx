@@ -107,6 +107,11 @@ export const CHECKOUT_ALLOWED_HOSTS: readonly string[] = [
   'r.stripe.com',
   'b.stripecdn.com',
   'hooks.stripe.com',
+  // Stripe Customer Billing Portal — past-due clients tap "Update card"
+  // in the dunning banner and the backend mints a billing.stripe.com
+  // session URL. Keeping this in the branded webview avoids punting to
+  // Safari and preserves the Apple B2B exemption posture.
+  'billing.stripe.com',
 ];
 
 export function isOriginAllowed(url: string): boolean {
