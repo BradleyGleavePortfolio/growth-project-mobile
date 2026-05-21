@@ -35,9 +35,11 @@
  *     All error copy is structured per Rule 9 — never a raw error code.
  */
 
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
+  AccessibilityInfo,
+  Animated,
+  Easing,
   Platform,
   StatusBar,
   StyleSheet,
@@ -458,16 +460,7 @@ export default function BrandedCheckoutWebViewScreen() {
                 : {})}
               style={styles.webview}
             />
-            {loading ? (
-              <View
-                style={styles.skeleton}
-                pointerEvents="none"
-                testID="branded-checkout-skeleton"
-              >
-                <ActivityIndicator size="large" color={colors.primary} />
-                <Text style={styles.skeletonText}>Loading secure checkout…</Text>
-              </View>
-            ) : null}
+            {loading ? <CheckoutLoadingSkeleton colors={colors} styles={styles} /> : null}
           </>
         )}
       </View>
@@ -483,6 +476,142 @@ function safeHostFor(url: string): string {
   } catch {
     return 'unknown';
   }
+}
+
+// ─── branded loading skeleton ─────────────────────────────────────────────────
+
+/**
+ * TGP-branded loading skeleton that previews the Stripe Checkout layout
+ * (header bar + amount + 2 input fields + submit button) with a gold TGP
+ * logo that softly pulses. Replaces the previous generic spinner overlay
+ * so the loading state feels like an extension of the branded header,
+ * not a third-party iframe still booting.
+ *
+ * Accessibility:
+ *   - Respects `AccessibilityInfo.isReduceMotionEnabled()` — when on, the
+ *     logo and bars render in their resting state with no animation.
+ *   - Announced as a single status region ("Loading secure checkout")
+ *     rather than spamming each bar to VoiceOver.
+ */
+type SkeletonStyles = ReturnType<typeof makeStyles>;
+
+function CheckoutLoadingSkeleton({
+  colors,
+  styles,
+}: {
+  colors: ThemeColors;
+  styles: SkeletonStyles;
+}) {
+  const [reduceMotion, setReduceMotion] = useState<boolean>(false);
+  const pulse = useRef(new Animated.Value(0)).current;
+  const shimmer = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    let cancelled = false;
+    const probe = AccessibilityInfo.isReduceMotionEnabled?.();
+    if (probe && typeof probe.then === 'function') {
+      probe
+        .then((v) => {
+          if (cancelled) return;
+          setReduceMotion(Boolean(v));
+        })
+        .catch(() => {
+          // Default to motion enabled if the platform can't answer.
+        });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (reduceMotion) return;
+    const loop = Animated.loop(
+      Animated.parallel([
+        Animated.sequence([
+          Animated.timing(pulse, {
+            toValue: 1,
+            duration: 750,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulse, {
+            toValue: 0,
+            duration: 750,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.sequence([
+          Animated.timing(shimmer, {
+            toValue: 1,
+            duration: 1500,
+            easing: Easing.inOut(Easing.quad),
+            useNativeDriver: false,
+          }),
+          Animated.timing(shimmer, {
+            toValue: 0,
+            duration: 0,
+            useNativeDriver: false,
+          }),
+        ]),
+      ]),
+    );
+    loop.start();
+    return () => {
+      loop.stop();
+    };
+  }, [reduceMotion, pulse, shimmer]);
+
+  const logoOpacity = reduceMotion
+    ? 1
+    : pulse.interpolate({ inputRange: [0, 1], outputRange: [0.55, 1] });
+  const logoScale = reduceMotion
+    ? 1
+    : pulse.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1.04] });
+  const barOpacity = reduceMotion
+    ? 0.55
+    : shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.4, 0.75] });
+
+  return (
+    <View
+      style={styles.skeleton}
+      pointerEvents="none"
+      accessible
+      accessibilityRole="progressbar"
+      accessibilityLabel="Loading secure checkout"
+      testID="branded-checkout-skeleton"
+    >
+      <Animated.View
+        style={[
+          styles.skeletonLogo,
+          { opacity: logoOpacity, transform: [{ scale: logoScale }] },
+        ]}
+        testID="branded-checkout-skeleton-logo"
+      >
+        <Text style={styles.skeletonLogoText}>TGP</Text>
+      </Animated.View>
+
+      <View style={styles.skeletonCard} testID="branded-checkout-skeleton-card">
+        <Animated.View style={[styles.skeletonHeaderBar, { opacity: barOpacity }]} />
+        <Animated.View style={[styles.skeletonAmountBar, { opacity: barOpacity }]} />
+        <View style={styles.skeletonFieldRow}>
+          <Animated.View style={[styles.skeletonInputBar, { opacity: barOpacity }]} />
+        </View>
+        <View style={styles.skeletonFieldRow}>
+          <Animated.View style={[styles.skeletonInputBar, { opacity: barOpacity }]} />
+        </View>
+        <Animated.View
+          style={[
+            styles.skeletonButton,
+            { backgroundColor: colors.primary, opacity: reduceMotion ? 0.85 : barOpacity },
+          ]}
+        />
+      </View>
+
+      <Text style={styles.skeletonText}>Loading secure checkout</Text>
+    </View>
+  );
 }
 
 // ─── styles ───────────────────────────────────────────────────────────────────
@@ -554,13 +683,68 @@ function makeStyles(colors: ThemeColors) {
     skeleton: {
       ...StyleSheet.absoluteFillObject,
       alignItems: 'center',
-      justifyContent: 'center',
+      justifyContent: 'flex-start',
+      paddingTop: 48,
+      paddingHorizontal: 24,
       backgroundColor: colors.background,
-      gap: 12,
+      gap: 24,
+    },
+    skeletonLogo: {
+      width: 56,
+      height: 56,
+      borderRadius: 14,
+      backgroundColor: colors.gold,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    skeletonLogoText: {
+      color: colors.primaryDark,
+      fontWeight: '800',
+      fontSize: 18,
+      letterSpacing: 0.5,
+    },
+    skeletonCard: {
+      width: '100%',
+      maxWidth: 420,
+      backgroundColor: colors.surface,
+      borderRadius: 16,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      padding: 20,
+      gap: 14,
+    },
+    skeletonHeaderBar: {
+      height: 14,
+      width: '55%',
+      borderRadius: 6,
+      backgroundColor: colors.primaryPale,
+    },
+    skeletonAmountBar: {
+      height: 28,
+      width: '40%',
+      borderRadius: 8,
+      backgroundColor: colors.primaryPale,
+      marginBottom: 4,
+    },
+    skeletonFieldRow: {
+      width: '100%',
+    },
+    skeletonInputBar: {
+      height: 44,
+      width: '100%',
+      borderRadius: 10,
+      backgroundColor: colors.primaryPale,
+    },
+    skeletonButton: {
+      height: 48,
+      width: '100%',
+      borderRadius: 12,
+      marginTop: 4,
     },
     skeletonText: {
       color: colors.textSecondary,
-      fontSize: 14,
+      fontSize: 13,
+      letterSpacing: 0.2,
     },
     errorWrap: {
       flex: 1,

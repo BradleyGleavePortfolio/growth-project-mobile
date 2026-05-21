@@ -48,7 +48,8 @@
 //        expo-web-browser anywhere (surgical grep).
 
 import React from 'react';
-import { act, fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { AccessibilityInfo } from 'react-native';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -147,7 +148,9 @@ describe('BrandedCheckoutWebViewScreen — header', () => {
   it('renders TGP brand badge, "Secure Checkout" title, and package subtitle', () => {
     const { getByTestId, getByText } = render(<BrandedCheckoutWebViewScreen />);
     expect(getByTestId('branded-checkout-header')).toBeTruthy();
-    expect(getByText('TGP')).toBeTruthy();
+    // The branded skeleton also renders a "TGP" logo, so scope the badge
+    // assertion to the header testID rather than a global text query.
+    expect(getByTestId('branded-checkout-logo')).toBeTruthy();
     expect(getByText('Secure Checkout')).toBeTruthy();
     expect(getByText('Elite Coaching')).toBeTruthy();
   });
@@ -205,6 +208,39 @@ describe('BrandedCheckoutWebViewScreen — webview lifecycle', () => {
     expect(typeof onLoadEnd).toBe('function');
     act(() => onLoadEnd());
     expect(queryByTestId('branded-checkout-skeleton')).toBeNull();
+  });
+
+  it('loading skeleton is TGP-branded (logo + card preview, not a generic spinner)', () => {
+    const { getByTestId } = render(<BrandedCheckoutWebViewScreen />);
+    // Visible branded logo and a card-shaped layout preview must render
+    // — the previous generic ActivityIndicator is gone.
+    expect(getByTestId('branded-checkout-skeleton-logo')).toBeTruthy();
+    expect(getByTestId('branded-checkout-skeleton-card')).toBeTruthy();
+    expect(getByTestId('branded-checkout-skeleton').props.accessibilityRole).toBe(
+      'progressbar',
+    );
+    expect(getByTestId('branded-checkout-skeleton').props.accessibilityLabel).toBe(
+      'Loading secure checkout',
+    );
+  });
+
+  it('respects Reduce Motion — no looping animation when the user has it enabled', async () => {
+    const spy = jest
+      .spyOn(AccessibilityInfo, 'isReduceMotionEnabled')
+      .mockResolvedValue(true);
+    const { getByTestId } = render(<BrandedCheckoutWebViewScreen />);
+    // After AccessibilityInfo resolves, the logo's opacity must be the
+    // static resting value (1), not an Animated interpolation. If the
+    // pulse loop were still running, opacity would be an
+    // AnimatedInterpolation node, not a primitive number.
+    await waitFor(() => {
+      const logo = getByTestId('branded-checkout-skeleton-logo');
+      const flat = Array.isArray(logo.props.style)
+        ? Object.assign({}, ...logo.props.style)
+        : logo.props.style;
+      expect(flat.opacity).toBe(1);
+    });
+    spy.mockRestore();
   });
 });
 
