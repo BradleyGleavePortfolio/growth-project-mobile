@@ -7,8 +7,7 @@
  *  3. Base EmptyState does NOT render body when omitted.
  *  4. CTA button fires onCta when pressed.
  *  5. No CTA button rendered when ctaLabel / onCta are absent.
- *  6. EmptyStateNoClients renders expected headline and CTA.
- *  7. EmptyStateNoWorkouts renders expected headline, no CTA.
+ *  6. EmptyStateNoWorkouts renders expected headline, no CTA.
  *  8. EmptyStateNoData renders custom headline override.
  *  9. EmptyStateNoResults interpolates query string into body.
  * 10. EmptyStateOffline renders retry CTA when handler provided.
@@ -60,7 +59,6 @@ jest.mock('react-native-svg', () => {
 // ─── Imports ──────────────────────────────────────────────────────────────────
 
 import { EmptyState } from '../EmptyState';
-import { EmptyStateNoClients } from '../EmptyStateNoClients';
 import { EmptyStateNoWorkouts } from '../EmptyStateNoWorkouts';
 import { EmptyStateNoData } from '../EmptyStateNoData';
 import { EmptyStateNoResults } from '../EmptyStateNoResults';
@@ -145,20 +143,16 @@ describe('EmptyState — base component', () => {
 });
 
 // ─── Variant: EmptyStateNoClients ─────────────────────────────────────────────
-
-describe('EmptyStateNoClients', () => {
-  it('renders "No clients yet" headline', () => {
-    const { getByTestId } = render(<EmptyStateNoClients />);
-    expect(getByTestId('empty-state-headline').props.children).toBe('No clients yet');
-  });
-
-  it('fires onInvite when CTA pressed', () => {
-    const onInvite = jest.fn();
-    const { getByTestId } = render(<EmptyStateNoClients onInvite={onInvite} />);
-    fireEvent.press(getByTestId('empty-state-cta'));
-    expect(onInvite).toHaveBeenCalledTimes(1);
-  });
-});
+// EmptyStateNoClients was rewritten in 8cbde42 (security hardening v1) from a
+// thin wrapper over the base EmptyState into a richer invite-code surface
+// (MMKV-hydrated invite code + share / copy actions + Settings-nudge fallback).
+// It no longer renders the base EmptyState's `empty-state-headline` /
+// `empty-state-cta` testIDs. The old assertions here tested a contract that no
+// longer exists. Wiring of the onInvite prop into the screen is covered by
+// src/screens/coach/__tests__/InviteCtaWiring.test.ts; the new component's
+// internal testIDs (`invite-code-block`, `share-code-btn`,
+// `empty-no-clients-settings-btn`, …) are the contract the screen tests
+// against now.
 
 // ─── Variant: EmptyStateNoWorkouts ────────────────────────────────────────────
 
