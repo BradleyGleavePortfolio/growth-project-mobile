@@ -116,18 +116,40 @@ export async function saveNotifPermission(
   await withRetry(() => preferencesApi.patch({ notif_permission_state: state }));
 }
 
+/** Resolve the device's IANA timezone with a UTC fallback for older runtimes. */
+export function getDeviceTimezone(): string {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (tz && typeof tz === 'string' && tz.length > 0) return tz;
+  } catch {
+    // Older RN / iOS pre-15 may not expose Intl.DateTimeFormat — fall through.
+  }
+  return 'UTC';
+}
+
 /**
  * Step 5 — Daily check-in time. Stored as HH:MM in 24h format on the
  * profile + propagated to notification preferences so the daily reminder
- * schedule lines up immediately.
+ * schedule lines up immediately. Also captures the device IANA timezone so
+ * the backend can fire the reminder in the user's local time even after
+ * travel or when the server lives in a different region.
  */
-export async function saveCheckInTime(time: CheckInTime): Promise<void> {
+export async function saveCheckInTime(
+  time: CheckInTime,
+  timezone: string = getDeviceTimezone(),
+): Promise<void> {
   const hh = String(time.hour).padStart(2, '0');
   const mm = String(time.minute).padStart(2, '0');
   const value = `${hh}:${mm}`;
   await withRetry(async () => {
-    await profileApi.update({ daily_checkin_time: value });
-    await notificationsApi.updatePreferences({ daily_checkin_time: value });
+    await profileApi.update({
+      daily_checkin_time: value,
+      daily_checkin_timezone: timezone,
+    });
+    await notificationsApi.updatePreferences({
+      daily_checkin_time: value,
+      daily_checkin_timezone: timezone,
+    });
   });
 }
 

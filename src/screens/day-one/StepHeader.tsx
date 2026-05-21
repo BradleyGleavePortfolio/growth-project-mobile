@@ -11,6 +11,7 @@ import {
   AccessibilityInfo,
   Animated,
   StyleSheet,
+  Text,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -18,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { t } from './i18n/strings';
 
-export const DAY_ONE_TOTAL_STEPS = 5;
+export const DAY_ONE_TOTAL_STEPS = 6;
 
 interface Props {
   /** 1-indexed current step. Pass 0 to hide both bar and back button (Welcome). */
@@ -88,6 +89,9 @@ export default function StepHeader({ step, onBack }: Props) {
           <View style={styles.backBtn} />
         )}
         <View style={styles.spacer} />
+        <Text style={styles.stepText} testID="day-one-step-text">
+          {`${step}/${DAY_ONE_TOTAL_STEPS}`}
+        </Text>
       </View>
       <View style={styles.track}>
         <Animated.View style={[styles.fill, { width }]} testID="day-one-progress-fill" />
@@ -115,6 +119,12 @@ const makeStyles = (colors: ThemeColors) =>
       alignItems: 'flex-start',
     },
     spacer: { flex: 1 },
+    stepText: {
+      fontFamily: 'Inter_500Medium',
+      fontSize: 12,
+      letterSpacing: 1.2,
+      color: colors.textMuted,
+    },
     track: {
       height: 3,
       backgroundColor: colors.border,

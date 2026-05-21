@@ -23,6 +23,7 @@ import { track } from '../../lib/analytics';
 import { t } from './i18n/strings';
 import type { Day1OnboardingParamList } from '../../navigation/Day1OnboardingNavigator';
 import StepHeader from './StepHeader';
+import { writeResumeState } from './resume';
 
 type Props = {
   navigation: NativeStackNavigationProp<Day1OnboardingParamList, 'Welcome'>;
@@ -70,12 +71,13 @@ export default function WelcomeScreen({ navigation }: Props) {
 
   const handleStart = () => {
     track('day_one_step_completed', { step: 1, screen: 'welcome' });
+    writeResumeState({ step: 'CoachPairing' });
     navigation.navigate('CoachPairing');
   };
 
   return (
     <SafeAreaView style={styles.container} testID="day-one-welcome">
-      <StepHeader step={0} />
+      <StepHeader step={1} />
       <View style={styles.inner}>
         <Animated.View
           style={[styles.logoBlock, { opacity, transform: [{ translateY }] }]}

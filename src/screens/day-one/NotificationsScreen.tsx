@@ -24,6 +24,7 @@ import { track } from '../../lib/analytics';
 import { t, tList } from './i18n/strings';
 import StepHeader from './StepHeader';
 import { saveNotifPermission } from './api';
+import { writeResumeState } from './resume';
 import type { Day1OnboardingParamList } from '../../navigation/Day1OnboardingNavigator';
 
 type Props = {
@@ -37,13 +38,17 @@ export default function NotificationsScreen({ navigation }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [denied, setDenied] = useState(false);
 
-  const advance = () => navigation.navigate('CheckInTime');
+  const advance = () => {
+    writeResumeState({ step: 'CheckInTime' });
+    navigation.navigate('CheckInTime');
+  };
 
   const recordOutcome = async (state: 'granted' | 'denied' | 'skipped') => {
     // Persistence failure is intentionally non-blocking: the funnel must
     // never be held hostage by a backend wobble (Rule 6 — root-fix the
     // backend later; do NOT trap the user here).
     try { await saveNotifPermission(state); } catch { /* logged below */ }
+    await writeResumeState({ draft: { notifState: state } });
     track('day_one_step_completed', { step: 4, screen: 'notifications', state });
   };
 
@@ -71,7 +76,7 @@ export default function NotificationsScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.container} testID="day-one-notifications">
-      <StepHeader step={3} onBack={() => navigation.goBack()} />
+      <StepHeader step={4} onBack={() => navigation.goBack()} />
       <View style={styles.inner}>
         <View style={styles.iconHeader}>
           <View style={styles.iconCircle}>

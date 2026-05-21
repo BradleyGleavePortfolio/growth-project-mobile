@@ -33,6 +33,7 @@ import { writePendingInviteCode } from '../../lib/pendingInviteCode';
 import { t } from './i18n/strings';
 import { pairWithCoach, type DayOneError } from './api';
 import StepHeader from './StepHeader';
+import { writeResumeState } from './resume';
 import type { Day1OnboardingParamList } from '../../navigation/Day1OnboardingNavigator';
 
 type Props = {
@@ -81,6 +82,7 @@ export default function CoachPairingScreen({ navigation, route }: Props) {
     setSubmitting(false);
     if (result.ok) {
       track('day_one_step_completed', { step: 2, screen: 'coach_pairing', method: fromDeepLink ? 'deep_link' : 'manual' });
+      writeResumeState({ step: 'Goals', draft: { inviteCode: trimmed } });
       navigation.navigate('Goals');
       return;
     }
@@ -92,12 +94,13 @@ export default function CoachPairingScreen({ navigation, route }: Props) {
 
   const handleSkip = () => {
     track('day_one_step_skipped', { step: 2, screen: 'coach_pairing' });
+    writeResumeState({ step: 'Goals' });
     navigation.navigate('Goals');
   };
 
   return (
     <SafeAreaView style={styles.container} testID="day-one-coach-pairing">
-      <StepHeader step={1} onBack={() => navigation.goBack()} />
+      <StepHeader step={2} onBack={() => navigation.goBack()} />
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}

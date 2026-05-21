@@ -6,7 +6,7 @@
  * (Rule 8 in-app feel). Default is 9:00 AM local; persists on Continue.
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   SafeAreaView,
@@ -21,7 +21,8 @@ import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { track } from '../../lib/analytics';
 import { t } from './i18n/strings';
 import StepHeader from './StepHeader';
-import { saveCheckInTime } from './api';
+import { getDeviceTimezone, saveCheckInTime } from './api';
+import { enqueuePending, readResumeState, writeResumeState } from './resume';
 import type { Day1OnboardingParamList } from '../../navigation/Day1OnboardingNavigator';
 
 type Props = {
@@ -53,6 +54,21 @@ export default function CheckInTimeScreen({ navigation }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [retryError, setRetryError] = useState(false);
 
+  useEffect(() => {
+    let cancelled = false;
+    readResumeState().then((s) => {
+      if (cancelled || !s?.draft.checkInTime) return;
+      const { hour, minute: m } = s.draft.checkInTime;
+      const t12 = to12h(hour);
+      setHour12(t12.hour12);
+      setPeriod(t12.period);
+      setMinute(m);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const bumpHour = (delta: number) => {
     setRetryError(false);
     setHour12((h) => {
@@ -69,9 +85,20 @@ export default function CheckInTimeScreen({ navigation }: Props) {
     setRetryError(false);
     setSubmitting(true);
     const h24 = to24h(hour12, period);
+    const tz = getDeviceTimezone();
     try {
-      await saveCheckInTime({ hour: h24, minute });
-      track('day_one_step_completed', { step: 5, screen: 'checkin_time', hour: h24, minute });
+      await saveCheckInTime({ hour: h24, minute }, tz);
+      track('day_one_step_completed', {
+        step: 5,
+        screen: 'checkin_time',
+        hour: h24,
+        minute,
+        timezone: tz,
+      });
+      await writeResumeState({
+        step: 'Ready',
+        draft: { checkInTime: { hour: h24, minute }, checkInTimezone: tz },
+      });
       setSubmitting(false);
       navigation.navigate('Ready');
     } catch {
@@ -80,8 +107,21 @@ export default function CheckInTimeScreen({ navigation }: Props) {
     }
   };
 
+  const handleContinueOffline = async () => {
+    const h24 = to24h(hour12, period);
+    const tz = getDeviceTimezone();
+    await writeResumeState({
+      draft: { checkInTime: { hour: h24, minute }, checkInTimezone: tz },
+    });
+    await enqueuePending({ kind: 'checkin', time: { hour: h24, minute }, timezone: tz });
+    track('day_one_step_offline', { step: 5, screen: 'checkin_time' });
+    await writeResumeState({ step: 'Ready' });
+    navigation.navigate('Ready');
+  };
+
   const handleSkip = () => {
     track('day_one_step_skipped', { step: 5, screen: 'checkin_time' });
+    writeResumeState({ step: 'Ready' });
     navigation.navigate('Ready');
   };
 
@@ -89,7 +129,7 @@ export default function CheckInTimeScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.container} testID="day-one-checkin">
-      <StepHeader step={4} onBack={() => navigation.goBack()} />
+      <StepHeader step={5} onBack={() => navigation.goBack()} />
       <View style={styles.inner}>
         <View style={styles.copy}>
           <Text style={styles.headline} accessibilityRole="header">
@@ -144,14 +184,24 @@ export default function CheckInTimeScreen({ navigation }: Props) {
           <View style={styles.errorBanner} accessibilityRole="alert" testID="day-one-checkin-error">
             <Text style={styles.errorTitle}>{t('common.saveFailed.title')}</Text>
             <Text style={styles.errorBody}>{t('common.saveFailed.body')}</Text>
-            <TouchableOpacity
-              onPress={advance}
-              accessibilityRole="button"
-              accessibilityLabel={t('common.retry')}
-              testID="day-one-checkin-retry"
-            >
-              <Text style={styles.errorCta}>{t('common.retry')}</Text>
-            </TouchableOpacity>
+            <View style={styles.errorActions}>
+              <TouchableOpacity
+                onPress={advance}
+                accessibilityRole="button"
+                accessibilityLabel={t('common.retry')}
+                testID="day-one-checkin-retry"
+              >
+                <Text style={styles.errorCta}>{t('common.retry')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleContinueOffline}
+                accessibilityRole="button"
+                accessibilityLabel={t('common.saveLater')}
+                testID="day-one-checkin-offline"
+              >
+                <Text style={styles.errorCtaSecondary}>{t('common.saveLater')}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         ) : null}
 
@@ -341,6 +391,14 @@ const makeStyles = (colors: ThemeColors) =>
       letterSpacing: 1.2,
       textTransform: 'uppercase',
       color: colors.noticeCriticalAccent,
+    },
+    errorActions: { gap: 10 },
+    errorCtaSecondary: {
+      fontFamily: 'Inter_500Medium',
+      fontSize: 13,
+      lineHeight: 19,
+      color: colors.noticeCriticalAccent,
+      opacity: 0.85,
     },
     actions: { gap: 8, marginTop: 'auto' },
     cta: {

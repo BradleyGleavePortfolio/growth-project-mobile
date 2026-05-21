@@ -193,5 +193,21 @@ exponential-backoff retry with jitter for transient failures and classifies
 4xx errors into a `DayOneError` discriminated union so the UI surfaces
 structured copy instead of axios strings (Rule 9 — no raw error codes).
 
-This navigator is currently NOT wired into `RootNavigator` — the integration
-PR follows after GPT-5.5 audit.
+This navigator is wired into `RootNavigator` as the `day1onboarding` auth
+state. The gate checks `profile.day_one_completed`, the legacy
+`profile.onboarding_completed` flag (so existing users aren't re-prompted),
+and an AsyncStorage `day_one_completed` fallback so a user who finished the
+flow once is never asked again — even if the backend hasn't propagated the
+flag yet.
+
+In-flight resume + offline save: the flow writes a checkpoint per advance to
+AsyncStorage (`day_one_onboarding_state_v1`). Force-close or "Continue
+offline" both serialise the current step + draft + pending sync queue; the
+navigator picks the saved step as `initialRouteName` on the next launch, and
+ReadyScreen's `flushPendingSync()` drains the queue before flipping the
+terminal flag. See `src/screens/day-one/resume.ts`.
+
+Backend follow-ups: `profile.day_one_completed` (boolean) and
+`profile.day_one_completed_at` (ISO timestamp) need to be returned by
+`GET /profile` and persisted by `PUT /profile`. Until the API returns them,
+the client falls back to the local AsyncStorage flag (fail-open).

@@ -5,7 +5,7 @@
  * — keeps the brand-feel guarantee (Rule 8).
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   SafeAreaView,
@@ -22,6 +22,7 @@ import { track } from '../../lib/analytics';
 import { t } from './i18n/strings';
 import StepHeader from './StepHeader';
 import { saveGoals, type GoalKey } from './api';
+import { enqueuePending, readResumeState, writeResumeState } from './resume';
 import type { Day1OnboardingParamList } from '../../navigation/Day1OnboardingNavigator';
 
 type Props = {
@@ -42,7 +43,7 @@ const GOALS: GoalRow[] = [
   { key: 'personal_growth', i18nBase: 'goals.categories.personalGrowth', icon: 'leaf-outline' },
   { key: 'relationships',   i18nBase: 'goals.categories.relationships',  icon: 'people-outline' },
   { key: 'mental_health',   i18nBase: 'goals.categories.mentalHealth',   icon: 'pulse-outline' },
-  { key: 'custom',          i18nBase: 'goals.categories.custom',         icon: 'sparkles-outline' },
+  { key: 'custom',          i18nBase: 'goals.categories.custom',         icon: 'create-outline' },
 ];
 
 export default function GoalsScreen({ navigation }: Props) {
@@ -52,6 +53,17 @@ export default function GoalsScreen({ navigation }: Props) {
   const [selected, setSelected] = useState<Set<GoalKey>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [retryError, setRetryError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    readResumeState().then((s) => {
+      if (cancelled || !s?.draft.goals?.length) return;
+      setSelected(new Set(s.draft.goals));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const toggle = (k: GoalKey) => {
     setRetryError(false);
@@ -65,6 +77,7 @@ export default function GoalsScreen({ navigation }: Props) {
 
   const advance = (chosen: GoalKey[]) => {
     track('day_one_step_completed', { step: 3, screen: 'goals', count: chosen.length });
+    writeResumeState({ step: 'Notifications', draft: { goals: chosen } });
     navigation.navigate('Notifications');
   };
 
@@ -83,14 +96,23 @@ export default function GoalsScreen({ navigation }: Props) {
     }
   };
 
+  const handleContinueOffline = async () => {
+    const chosen = Array.from(selected);
+    await writeResumeState({ draft: { goals: chosen } });
+    await enqueuePending({ kind: 'goals', goals: chosen });
+    track('day_one_step_offline', { step: 3, screen: 'goals' });
+    advance(chosen);
+  };
+
   const handleSkip = () => {
     track('day_one_step_skipped', { step: 3, screen: 'goals' });
+    writeResumeState({ step: 'Notifications' });
     navigation.navigate('Notifications');
   };
 
   return (
     <SafeAreaView style={styles.container} testID="day-one-goals">
-      <StepHeader step={2} onBack={() => navigation.goBack()} />
+      <StepHeader step={3} onBack={() => navigation.goBack()} />
       <View style={styles.inner}>
         <View style={styles.copy}>
           <Text style={styles.headline} accessibilityRole="header">
@@ -141,14 +163,24 @@ export default function GoalsScreen({ navigation }: Props) {
           <View style={styles.errorBanner} accessibilityRole="alert" testID="day-one-goals-error">
             <Text style={styles.errorTitle}>{t('common.saveFailed.title')}</Text>
             <Text style={styles.errorBody}>{t('common.saveFailed.body')}</Text>
-            <TouchableOpacity
-              onPress={handleContinue}
-              accessibilityRole="button"
-              accessibilityLabel={t('common.retry')}
-              testID="day-one-goals-retry"
-            >
-              <Text style={styles.errorCta}>{t('common.retry')}</Text>
-            </TouchableOpacity>
+            <View style={styles.errorActions}>
+              <TouchableOpacity
+                onPress={handleContinue}
+                accessibilityRole="button"
+                accessibilityLabel={t('common.retry')}
+                testID="day-one-goals-retry"
+              >
+                <Text style={styles.errorCta}>{t('common.retry')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleContinueOffline}
+                accessibilityRole="button"
+                accessibilityLabel={t('common.saveLater')}
+                testID="day-one-goals-offline"
+              >
+                <Text style={styles.errorCtaSecondary}>{t('common.saveLater')}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         ) : null}
 
@@ -279,6 +311,14 @@ const makeStyles = (colors: ThemeColors) =>
       letterSpacing: 1.2,
       textTransform: 'uppercase',
       color: colors.noticeCriticalAccent,
+    },
+    errorActions: { gap: 10 },
+    errorCtaSecondary: {
+      fontFamily: 'Inter_500Medium',
+      fontSize: 13,
+      lineHeight: 19,
+      color: colors.noticeCriticalAccent,
+      opacity: 0.85,
     },
     actions: { gap: 8, marginTop: 8 },
     cta: {

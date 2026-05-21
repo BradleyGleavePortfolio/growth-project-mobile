@@ -11,6 +11,7 @@
       "body": "Check your connection and tap Retry. Nothing you typed is lost.",
       "cta": "Retry"
     },
+    "saveLater": "Continue offline. We'll save when you're back online.",
     "progressLabel": "Step {current} of {total}"
   },
   "welcome": {
@@ -29,7 +30,7 @@
     "skip": "I don't have a code yet",
     "deepLinkBanner": "Pairing with the invite from your link…",
     "errors": {
-      "notRecognized": "Invite code not recognized — double-check with your coach.",
+      "notRecognized": "Invite code not recognized. Double-check with your coach.",
       "expired": "This invite code has expired. Ask your coach to send a fresh one.",
       "maxUses": "This invite code has already been used to the maximum number of times.",
       "network": "Couldn't reach our servers. Check your connection and try again.",
@@ -53,22 +54,22 @@
   },
   "notifications": {
     "title": "Stay close to your coach",
-    "subtitle": "We'll only ping you for coach messages and your daily check-in — never spam.",
+    "subtitle": "We'll only ping you for coach messages and your daily check-in. Never spam.",
     "bullets": [
       "Coach replies the moment they arrive",
       "A gentle daily check-in nudge",
-      "Nothing else — promise"
+      "Nothing else. Promise."
     ],
     "enable": "Turn on notifications",
     "skip": "Not now",
-    "deniedNotice": "No problem — you can turn these on later from Settings."
+    "deniedNotice": "No problem. You can turn these on later from Settings."
   },
   "checkInTime": {
     "title": "Pick your daily check-in",
     "subtitle": "We'll remind you once a day at this time. Mornings work best for most.",
     "defaultLabel": "Default: 9:00 AM",
     "continue": "Save check-in time",
-    "skip": "Skip — I'll set this later",
+    "skip": "Skip. I'll set this later.",
     "hourLabel": "Hour",
     "minuteLabel": "Minute",
     "amLabel": "AM",

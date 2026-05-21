@@ -22,14 +22,23 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { track } from '../../lib/analytics';
 import { authEvents } from '../../utils/authEvents';
+import { patchUserCache } from '../../lib/userCache';
 import { t } from './i18n/strings';
 import { completeDayOne } from './api';
+import StepHeader from './StepHeader';
+import {
+  clearResumeState,
+  enqueuePending,
+  flushPendingSync,
+  writeResumeState,
+} from './resume';
 import type { Day1OnboardingParamList } from '../../navigation/Day1OnboardingNavigator';
 
 type Props = {
@@ -75,11 +84,22 @@ export default function ReadyScreen(_props: Props) {
     ? t('ready.title', { firstName })
     : t('ready.titleFallback');
 
+  const markLocalComplete = async () => {
+    await AsyncStorage.setItem('day_one_completed', 'true');
+    patchUserCache({ profile: { day_one_completed: true } });
+  };
+
   const handleFinish = async () => {
     setRetryError(false);
     setSubmitting(true);
     try {
+      // Drain anything the user queued via "Continue offline" before flipping
+      // the terminal flag — order matters so the backend sees the per-step
+      // payloads before day_one_completed.
+      await flushPendingSync();
       await completeDayOne();
+      await markLocalComplete();
+      await clearResumeState();
       track('day_one_completed');
       setSubmitting(false);
       // Root navigator listens for this and re-renders into the dashboard.
@@ -90,12 +110,24 @@ export default function ReadyScreen(_props: Props) {
     }
   };
 
+  const handleFinishOffline = async () => {
+    await writeResumeState({ step: 'Ready' });
+    await enqueuePending({ kind: 'complete' });
+    // Mark local-done so the next boot bypasses Day-1 even if the backend
+    // never received the flip. The queued `complete` item will be flushed
+    // when connectivity returns.
+    await markLocalComplete();
+    track('day_one_offline_complete');
+    authEvents.emit();
+  };
+
   // reduceMotion is read for its setter side-effect; the JSX below already
   // reflects the final state because we set opacity to 1 inside the effect.
   void reduceMotion;
 
   return (
     <SafeAreaView style={styles.container} testID="day-one-ready">
+      <StepHeader step={6} />
       <View style={styles.inner}>
         <Animated.View style={[styles.center, { opacity }]}>
           <View
@@ -120,6 +152,14 @@ export default function ReadyScreen(_props: Props) {
           >
             <Text style={styles.errorTitle}>{t('common.saveFailed.title')}</Text>
             <Text style={styles.errorBody}>{t('common.saveFailed.body')}</Text>
+            <TouchableOpacity
+              onPress={handleFinishOffline}
+              accessibilityRole="button"
+              accessibilityLabel={t('common.saveLater')}
+              testID="day-one-ready-offline"
+            >
+              <Text style={styles.errorCtaSecondary}>{t('common.saveLater')}</Text>
+            </TouchableOpacity>
           </View>
         ) : null}
 
@@ -199,6 +239,14 @@ const makeStyles = (colors: ThemeColors) =>
       fontSize: 13,
       lineHeight: 19,
       color: colors.noticeCriticalText,
+      marginBottom: 8,
+    },
+    errorCtaSecondary: {
+      fontFamily: 'Inter_500Medium',
+      fontSize: 13,
+      lineHeight: 19,
+      color: colors.noticeCriticalAccent,
+      opacity: 0.85,
     },
     cta: {
       backgroundColor: colors.primary,
