@@ -33,10 +33,10 @@ Everything a signed-in `student` user sees. Mounted under `ClientNavigator`, whi
 
 | File | What it does |
 | --- | --- |
-| `PlanScreen.tsx` | Read-only view of the meal plan the coach has assigned (`mealPlansApi.list`). |
+| `PlanScreen.tsx` | Read-only view of the meal plan the coach has assigned. Reads from BOTH `mealPlansApi.list` (Sprint-A) and `mealTemplatesApi.todayForClient` (Sprint-B canonical) and merges them so a coach assigning via either path lands on the same screen (P0-1 unification). |
 | `RecipesScreen.tsx`, `RecipeDetailScreen.tsx` | Browse and save recipes (`recipesApi`). The list passes `{ recipeId }` (a serialisable string) when navigating, never the full recipe object — `RecipeDetailScreen` reads from the React Query cache for synchronous paint and falls back to `recipesApi.getById(recipeId)`. This eliminates React Navigation's non-serializable-params warning and keeps state rehydration intact. New recipe-aware screens must follow the same id-only param pattern. |
 | `GroceryListScreen.tsx`, `ShoppingListScreen.tsx`, `PrepGuideScreen.tsx` | List management + weekly prep guide (`listsApi`, `prepGuideApi`). |
-| `FastingScreen.tsx` | Start/end fasting timer (`fastingApi`); state persists in `store/fastingStore`. |
+| `FastingScreen.tsx` | Start/end fasting timer (`fastingApi`); backend is the source of truth, no intermediate local store. |
 | `HabitsScreen.tsx` | Daily habit check-ins (`habitsApi`). |
 
 ### Profile, settings, and trust

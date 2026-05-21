@@ -78,10 +78,9 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
   const [nudgeSuccess, setNudgeSuccess] = useState(false);
   const [archiveBusy, setArchiveBusy] = useState(false);
 
-  // Server-side meal plans (Tier 2). The local-SQLite `planData` above is now
-  // legacy — kept only because GroceryListScreen / PrepGuideScreen still read
-  // from mealPlanDb on the client side. When those move to server-sourced
-  // plans the local block can go.
+  // Server-side meal plans (Tier 2). The legacy local-SQLite `mealPlanDb`
+  // shim was removed in the nutrition P0 cleanup — Grocery / Shopping /
+  // PrepGuide all read from the server (`listsApi`, `prepGuideApi`) now.
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [editingPlan, setEditingPlan] = useState<CoachMealPlan | null>(null);
   const [planTitle, setPlanTitle] = useState('');

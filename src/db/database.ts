@@ -1,7 +1,13 @@
 import * as SQLite from 'expo-sqlite';
 // Auth + demo-seed imports removed: the old mock-SQLite auth path is gone.
 // Backend JWT is the single source of truth for identity now.
-import { seedFoodsIfNeeded, seedRecipesIfNeeded } from './recipesDb';
+// recipesDb / mealPlanDb / fastingDb / shoppingListDb were deleted in the
+// nutrition P0 cleanup — all four shipped as orphan code with zero call
+// sites from any screen. Recipes / shopping / fasting / meal-plans are
+// 100% server-driven via recipesApi / listsApi / fastingApi / mealTemplatesApi
+// + mealPlansApi. The CREATE TABLE statements for `recipes`, `meal_plans`,
+// and `fasting_sessions` are retained below for older builds that may still
+// reference them; nothing in the current build writes to them.
 import { initWorkoutTables, seedExercisesIfNeeded } from './workoutDb';
 import { initNotificationsTable } from './notificationsDb';
 import { initHabitsTables } from './habitsDb';
@@ -173,10 +179,12 @@ export async function initDatabase(): Promise<void> {
   }
   await initEducationTables();
   await initCommunityTables();
-  await seedFoodsIfNeeded();
+  // seedFoodsIfNeeded / seedRecipesIfNeeded removed — recipesDb was orphan
+  // code re-seeding 200 foods + 75 recipes (with hotlinked Unsplash URLs and
+  // a malformed slug) on every cold start while no screen ever read the rows.
+  // Foods and recipes are now fetched live via the server API.
   await seedLessonsIfNeeded();
   // seedCommunityIfNeeded() removed — community feed is now backend-driven (see useCommunityFeed).
-  await seedRecipesIfNeeded();
   await seedExercisesIfNeeded();
 }
 

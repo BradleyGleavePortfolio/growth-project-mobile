@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { macrosApi } from '../api/macrosApi';
+import { useCurrentUser } from './useCurrentUser';
 
 export interface MacroTargets {
   calories: number;
@@ -13,32 +14,62 @@ export interface MacroTargets {
   tdee?: number;
 }
 
-const CACHE_KEY = 'macro_targets';
+// Legacy global key from before per-user scoping landed. Removed on first
+// authenticated read so it can't leak across users on shared devices (P0-5).
+const LEGACY_GLOBAL_CACHE_KEY = 'macro_targets';
+
+function cacheKeyFor(userId: string): string {
+  return `macro_targets:${userId}`;
+}
 
 /**
  * useMacroTargets — server-authoritative macro targets with AsyncStorage cache.
  *
  * Load order:
- *  1. Immediately read the AsyncStorage cache so the UI shows data at once
- *     (no blank flash on mount).
+ *  1. Immediately read the AsyncStorage cache (scoped to the current user)
+ *     so the UI shows data at once — no blank flash on mount.
  *  2. Fetch the current target from GET /me/macros/current so coach-set
  *     values always win over any locally-stored defaults.
- *  3. Persist the server response back to AsyncStorage so the next cold
- *     mount is still fast.
+ *  3. Persist the server response back to the per-user cache key so the next
+ *     cold mount is still fast.
  *
- * If the server call fails the cached value remains in state — the user
- * sees potentially-stale data rather than a blank screen.
+ * Cross-user safety: the cache key is `macro_targets:${userId}`. When the
+ * signed-in user changes (logout → login, account switch, or first mount
+ * after restore) the hook re-runs against the new id and never paints the
+ * previous user's macros. This matters on shared/gym-kiosk devices where
+ * user A's coach-prescribed macros must not flash on user B's screen.
  */
 export function useMacroTargets(): MacroTargets | null {
+  const currentUser = useCurrentUser();
+  const userId = currentUser?.id ?? null;
   const [macroTargets, setMacroTargets] = useState<MacroTargets | null>(null);
 
   useEffect(() => {
+    // Reset state immediately on user change so the previous user's value
+    // can't render for one frame while the new fetch is in flight (P0-5).
+    setMacroTargets(null);
+
+    if (!userId) {
+      // No authenticated user → nothing to load.
+      return;
+    }
+
     let cancelled = false;
+    const cacheKey = cacheKeyFor(userId);
 
     async function load() {
-      // Step 1 — warm the UI from cache immediately.
+      // One-time cleanup: nuke the legacy global key on the way through so
+      // stale cross-user data can't be revived by a future build that
+      // accidentally reads it. Best-effort.
       try {
-        const raw = await AsyncStorage.getItem(CACHE_KEY);
+        await AsyncStorage.removeItem(LEGACY_GLOBAL_CACHE_KEY);
+      } catch {
+        // ignore — the leak is the only reason the key exists.
+      }
+
+      // Step 1 — warm the UI from the per-user cache.
+      try {
+        const raw = await AsyncStorage.getItem(cacheKey);
         if (raw && !cancelled) {
           setMacroTargets(JSON.parse(raw));
         }
@@ -66,7 +97,7 @@ export function useMacroTargets(): MacroTargets | null {
           // existing cache so we don't lose them when the server target is null
           // for those fields.
           try {
-            const raw = await AsyncStorage.getItem(CACHE_KEY);
+            const raw = await AsyncStorage.getItem(cacheKey);
             if (raw) {
               const cached: MacroTargets = JSON.parse(raw);
               if (cached.goalWeight != null) merged.goalWeight = cached.goalWeight;
@@ -80,7 +111,7 @@ export function useMacroTargets(): MacroTargets | null {
           setMacroTargets(merged);
 
           // Step 3 — update the cache with the latest server value.
-          await AsyncStorage.setItem(CACHE_KEY, JSON.stringify(merged));
+          await AsyncStorage.setItem(cacheKey, JSON.stringify(merged));
         }
         // If serverTarget is null (no coach-set target yet), keep whatever
         // the cache provided — could be onboarding-derived defaults.
@@ -94,7 +125,7 @@ export function useMacroTargets(): MacroTargets | null {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [userId]);
 
   return macroTargets;
 }

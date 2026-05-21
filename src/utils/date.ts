@@ -104,3 +104,27 @@ export function getLocalWeekStart(offset = 0, timeZone?: string): string {
   const d = String(anchor.getUTCDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
 }
+
+/**
+ * bucketDateLocal — returns a YYYY-MM-DD key in the **user's local time zone**.
+ *
+ * Why this exists: `Date#toISOString()` always emits UTC, which silently shifts
+ * the calendar day for users west of UTC late at night and east of UTC early in
+ * the morning. Code that buckets timestamped events into "days" (fasting
+ * streaks, weekly summaries) MUST use a local-tz key, otherwise a Hawaii user
+ * who starts a fast at 7pm gets bucketed into tomorrow's UTC date and the
+ * streak math reports zero progress.
+ *
+ * Optional `timeZone` lets tests pin a specific IANA zone deterministically;
+ * production callers should omit it and pick up the device's resolved zone.
+ */
+export function bucketDateLocal(date: Date, timeZone?: string): string {
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  // en-CA emits YYYY-MM-DD natively, which is what we want for bucket keys.
+  return fmt.format(date);
+}
