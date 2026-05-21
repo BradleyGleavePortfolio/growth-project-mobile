@@ -32,8 +32,10 @@ describe('ClientNavigator — sale-readiness completion', () => {
   });
 
   it('registers AIGuide and Membership as named stack screens', () => {
-    expect(NAV_SRC).toMatch(/name=["']AIGuide["']\s+component=\{AIGuideScreen\}/);
-    expect(NAV_SRC).toMatch(/name=["']Membership["']\s+component=\{MembershipScreen\}/);
+    // Components may be wrapped with withProtectedScreen (paywall gating), so
+    // accept either the raw screen import or a Protected* wrapper of it.
+    expect(NAV_SRC).toMatch(/name=["']AIGuide["']\s+component=\{(?:Protected)?AIGuideScreen\}/);
+    expect(NAV_SRC).toMatch(/name=["']Membership["']\s+component=\{(?:Protected)?MembershipScreen\}/);
   });
 
   it('declares AIGuide and Membership in MoreStackParamList', () => {

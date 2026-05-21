@@ -235,12 +235,13 @@ export const clientPaymentsApi = {
 
   /**
    * Returns the client's current entitlement status. Used by
-   * EntitlementProvider to gate paid features.
+   * EntitlementProvider to gate paid features. Conforms to the standard
+   * PaymentsResult envelope so callers can distinguish a configured-but-
+   * inactive state from a transport failure (the latter must fail closed —
+   * see ProtectedScreen).
    */
-  async getEntitlement(): Promise<{ active: boolean; reason?: string }> {
-    const res = await api.get('/v1/clients/me/coach/entitlement');
-    return res.data;
-  },
+  getEntitlement: (): Promise<PaymentsResult<{ active: boolean; reason?: string }>> =>
+    wrap(api.get<{ active: boolean; reason?: string }>('/v1/clients/me/coach/entitlement')),
 
   /**
    * Called on the checkout success deep-link to confirm the session

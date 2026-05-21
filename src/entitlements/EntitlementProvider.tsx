@@ -5,12 +5,21 @@ import { useCurrentUser } from '../hooks/useCurrentUser';
 import { entitlementEvents, EntitlementRequiredPayload } from './entitlementEvents';
 import { queryClient } from '../services/queryClient';
 import { logger } from '../utils/logger';
+import { PaywallSheet } from './PaywallSheet';
 
-type EntitlementStatus = 'unknown' | 'checking' | 'active' | 'inactive' | 'unavailable';
+export type EntitlementStatus =
+  | 'unknown'
+  | 'checking'
+  | 'loading'
+  | 'active'
+  | 'inactive'
+  | 'unavailable';
 
-interface EntitlementContextValue {
+export interface EntitlementContextValue {
   entitlementActive: boolean | null;
   checking: boolean;
+  /** Raw status — needed by ProtectedScreen to distinguish first-fetch spinner from fail-closed. */
+  status: EntitlementStatus;
   refreshEntitlement: () => Promise<boolean>;
   openPlans: () => void;
   paywallVisible: boolean;
@@ -21,6 +30,7 @@ interface EntitlementContextValue {
 const EntitlementContext = createContext<EntitlementContextValue>({
   entitlementActive: null,
   checking: false,
+  status: 'unknown',
   refreshEntitlement: async () => false,
   openPlans: () => {},
   paywallVisible: false,
@@ -43,26 +53,32 @@ export function EntitlementProvider({ children, onOpenPlans }: EntitlementProvid
   const [paywallVisible, setPaywallVisible] = useState(false);
   const [paywallMessage, setPaywallMessage] = useState<string | null>(null);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const hasSettledRef = useRef(false);
 
   const isStudent = user?.role === 'student';
 
   const refreshEntitlement = useCallback(async (): Promise<boolean> => {
     if (!isStudent) return true;
-    try {
-      setStatus('checking');
-      const result = await clientPaymentsApi.getEntitlement();
-      const active = result?.active === true;
-      setStatus(active ? 'active' : 'inactive');
-      if (active) {
-        setPaywallVisible(false);
-        setPaywallMessage(null);
+    setStatus(hasSettledRef.current ? 'checking' : 'loading');
+    const result = await clientPaymentsApi.getEntitlement();
+    hasSettledRef.current = true;
+    if (!result.ok) {
+      // Defense in depth (Option B): transport / config failures must fail
+      // closed at the gate. We expose `unavailable` so ProtectedScreen can
+      // render the paywall and refuse to leak paid surfaces on network errors.
+      if (result.reason === 'error') {
+        logger.error('EntitlementProvider', 'refreshEntitlement failed', result.message);
       }
-      return active;
-    } catch (err) {
-      logger.error('EntitlementProvider', 'refreshEntitlement failed', err);
       setStatus('unavailable');
       return false;
     }
+    const active = result.data.active === true;
+    setStatus(active ? 'active' : 'inactive');
+    if (active) {
+      setPaywallVisible(false);
+      setPaywallMessage(null);
+    }
+    return active;
   }, [isStudent]);
 
   const openPlans = useCallback(() => {
@@ -111,11 +127,20 @@ export function EntitlementProvider({ children, onOpenPlans }: EntitlementProvid
 
   const entitlementActive = status === 'active' ? true : status === 'inactive' ? false : null;
 
+  const handleSubscribe = useCallback(
+    (_packageId?: string) => {
+      setPaywallVisible(false);
+      if (onOpenPlans) onOpenPlans();
+    },
+    [onOpenPlans],
+  );
+
   return (
     <EntitlementContext.Provider
       value={{
         entitlementActive,
-        checking: status === 'checking',
+        checking: status === 'checking' || status === 'loading',
+        status,
         refreshEntitlement,
         openPlans,
         paywallVisible,
@@ -124,6 +149,12 @@ export function EntitlementProvider({ children, onOpenPlans }: EntitlementProvid
       }}
     >
       {children}
+      <PaywallSheet
+        visible={paywallVisible}
+        message={paywallMessage}
+        onClose={dismissPaywall}
+        onSubscribe={handleSubscribe}
+      />
     </EntitlementContext.Provider>
   );
 }
