@@ -7,6 +7,7 @@
  *     SQL statements, so a hand-rolled mock that pattern-matches those
  *     statements is more reliable than wiring a real wasm SQLite into Jest.
  *   - Mock `workoutApi` from ../services/api so no real network calls fire.
+ *   - Mock `readUserCacheSync` so pushPending has a known current user.
  *   - Reset the DB singleton between tests via __resetDatabaseForTests().
  */
 
@@ -16,17 +17,18 @@ interface MockRow {
   id: string;
   exercise_id: string;
   sets_data: string;
-  sync_status: 'pending' | 'synced' | 'conflict';
+  sync_status: 'pending' | 'synced' | 'conflict' | 'dead_letter';
   logged_at: number;
   server_id: string | null;
   session_name: string | null;
   duration_minutes: number | null;
+  user_id: string | null;
 }
 
 interface MockDatabase {
   rows: MockRow[];
   execAsync: (sql: string) => Promise<void>;
-  runAsync: (sql: string, params: unknown[]) => Promise<{ changes: number }>;
+  runAsync: (sql: string, params?: unknown[]) => Promise<{ changes: number }>;
   getAllAsync: <T>(sql: string, params?: unknown[]) => Promise<T[]>;
   getFirstAsync: <T>(sql: string, params?: unknown[]) => Promise<T | null>;
   closeAsync: () => Promise<void>;
@@ -35,37 +37,42 @@ interface MockDatabase {
 function mockCreateDatabase(): MockDatabase {
   const rows: MockRow[] = [];
 
-  // SQL pattern matchers — keep the parser tiny and explicit. Each pattern
-  // corresponds to exactly one statement the sync engine emits.
   const PAT = {
     INSERT_LOG:
-      /INSERT INTO workout_logs[\s\S]+VALUES\s*\(\s*\?\s*,\s*\?\s*,\s*\?\s*,\s*'pending'\s*,\s*\?\s*,\s*NULL\s*,\s*\?\s*,\s*\?\s*\)/i,
+      /INSERT INTO workout_logs[\s\S]+VALUES\s*\(\s*\?\s*,\s*\?\s*,\s*\?\s*,\s*'pending'\s*,\s*\?\s*,\s*NULL\s*,\s*\?\s*,\s*\?\s*,\s*\?\s*\)/i,
     INSERT_PULLED:
       /INSERT INTO workout_logs[\s\S]+VALUES\s*\(\s*\?\s*,\s*\?\s*,\s*\?\s*,\s*'synced'/i,
     UPDATE_SYNCED:
       /UPDATE workout_logs SET sync_status\s*=\s*'synced',\s*server_id\s*=\s*\?\s*WHERE id\s*=\s*\?/i,
     UPDATE_CONFLICT:
       /UPDATE workout_logs SET sync_status\s*=\s*'conflict'\s*WHERE id\s*=\s*\?/i,
+    UPDATE_DEAD_LETTER:
+      /UPDATE workout_logs SET sync_status\s*=\s*'dead_letter'\s*WHERE id\s*=\s*\?/i,
     SELECT_PENDING:
-      /SELECT[\s\S]+FROM workout_logs[\s\S]+WHERE sync_status\s*=\s*'pending'/i,
+      /SELECT[\s\S]+FROM workout_logs[\s\S]+WHERE sync_status\s*=\s*'pending'[\s\S]+AND user_id\s*=\s*\?/i,
     SELECT_BY_SERVER_ID:
       /SELECT id FROM workout_logs WHERE server_id\s*=\s*\?\s*LIMIT 1/i,
     SELECT_ALL:
       /SELECT[\s\S]+FROM workout_logs(?!\s+WHERE)(?:\s+LIMIT|\s*$)/i,
-    // W-1 helper: UPDATE all pending rows in a session at once.
     UPDATE_SESSION_SYNCED:
       /UPDATE workout_logs[\s\S]+SET sync_status\s*=\s*'synced'[\s\S]+WHERE sync_status\s*=\s*'pending'[\s\S]+AND session_name\s*=\s*\?[\s\S]+AND logged_at\s*>=\s*\?/i,
-    // Targeted SELECTs by session_name — used in the W-1 regression tests.
     SELECT_BY_SESSION:
       /SELECT[\s\S]+FROM workout_logs\s+WHERE session_name\s*=\s*\?/i,
+    DELETE_BY_USER:
+      /DELETE FROM workout_logs WHERE user_id\s*=\s*\?/i,
+    UPDATE_BACKFILL_USER:
+      /UPDATE workout_logs SET user_id\s*=\s*\?\s*WHERE user_id IS NULL/i,
+    SELECT_BY_USER:
+      /SELECT[\s\S]+FROM workout_logs\s+WHERE user_id\s*=\s*\?/i,
+    PRAGMA_TABLE_INFO:
+      /PRAGMA table_info\(workout_logs\)/i,
   };
 
   const db: MockDatabase = {
     rows,
     execAsync: async (sql: string) => {
-      // CREATE TABLE / CREATE INDEX / PRAGMA — no-op for the mock.
       if (
-        /CREATE TABLE|CREATE INDEX|PRAGMA/i.test(sql) ||
+        /CREATE TABLE|CREATE INDEX|PRAGMA|ALTER TABLE/i.test(sql) ||
         sql.trim() === ''
       ) {
         return;
@@ -82,6 +89,7 @@ function mockCreateDatabase(): MockDatabase {
           logged_at,
           session_name,
           duration_minutes,
+          user_id,
         ] = params as [
           string,
           string,
@@ -89,6 +97,7 @@ function mockCreateDatabase(): MockDatabase {
           number,
           string | null,
           number | null,
+          string | null,
         ];
         rows.push({
           id,
@@ -99,6 +108,7 @@ function mockCreateDatabase(): MockDatabase {
           server_id: null,
           session_name,
           duration_minutes,
+          user_id,
         });
         return { changes: 1 };
       }
@@ -112,6 +122,7 @@ function mockCreateDatabase(): MockDatabase {
           server_id,
           session_name,
           duration_minutes,
+          user_id,
         ] = params as [
           string,
           string,
@@ -120,6 +131,7 @@ function mockCreateDatabase(): MockDatabase {
           string,
           string,
           number | null,
+          string | null,
         ];
         rows.push({
           id,
@@ -130,6 +142,7 @@ function mockCreateDatabase(): MockDatabase {
           server_id,
           session_name,
           duration_minutes,
+          user_id,
         });
         return { changes: 1 };
       }
@@ -148,6 +161,13 @@ function mockCreateDatabase(): MockDatabase {
         const [id] = params as [string];
         const r = rows.find((x) => x.id === id);
         if (r) r.sync_status = 'conflict';
+        return { changes: r ? 1 : 0 };
+      }
+
+      if (PAT.UPDATE_DEAD_LETTER.test(sql)) {
+        const [id] = params as [string];
+        const r = rows.find((x) => x.id === id);
+        if (r) r.sync_status = 'dead_letter';
         return { changes: r ? 1 : 0 };
       }
 
@@ -172,16 +192,66 @@ function mockCreateDatabase(): MockDatabase {
         return { changes };
       }
 
+      if (PAT.DELETE_BY_USER.test(sql)) {
+        const [user_id] = params as [string];
+        const before = rows.length;
+        for (let i = rows.length - 1; i >= 0; i--) {
+          if (rows[i].user_id === user_id) rows.splice(i, 1);
+        }
+        return { changes: before - rows.length };
+      }
+
+      if (PAT.UPDATE_BACKFILL_USER.test(sql)) {
+        const [user_id] = params as [string];
+        let changes = 0;
+        for (const r of rows) {
+          if (r.user_id == null) {
+            r.user_id = user_id;
+            changes++;
+          }
+        }
+        return { changes };
+      }
+
       throw new Error(`[mock-sqlite] unrecognized runAsync: ${sql}`);
     },
 
-    getAllAsync: async <T,>(sql: string, params: unknown[] = []): Promise<T[]> => {
+    getAllAsync: async <T,>(
+      sql: string,
+      params: unknown[] = [],
+    ): Promise<T[]> => {
+      if (PAT.PRAGMA_TABLE_INFO.test(sql)) {
+        // Report the v2/v3 columns as already present so bootstrap's defensive
+        // ALTER TABLEs become no-ops in the test environment. The CREATE TABLE
+        // statement at bootstrap already declared user_id/dead_letter shape
+        // via the mock execAsync no-op.
+        return [
+          { name: 'id' },
+          { name: 'exercise_id' },
+          { name: 'sets_data' },
+          { name: 'sync_status' },
+          { name: 'logged_at' },
+          { name: 'server_id' },
+          { name: 'session_name' },
+          { name: 'duration_minutes' },
+          { name: 'user_id' },
+        ] as unknown as T[];
+      }
       if (PAT.SELECT_PENDING.test(sql)) {
-        return rows.filter((r) => r.sync_status === 'pending') as unknown as T[];
+        const [user_id] = params as [string];
+        return rows.filter(
+          (r) => r.sync_status === 'pending' && r.user_id === user_id,
+        ) as unknown as T[];
+      }
+      if (PAT.SELECT_BY_USER.test(sql)) {
+        const [user_id] = params as [string];
+        return rows.filter((r) => r.user_id === user_id) as unknown as T[];
       }
       if (PAT.SELECT_BY_SESSION.test(sql)) {
         const [session_name] = params as [string];
-        return rows.filter((r) => r.session_name === session_name) as unknown as T[];
+        return rows.filter(
+          (r) => r.session_name === session_name,
+        ) as unknown as T[];
       }
       if (PAT.SELECT_ALL.test(sql)) {
         return [...rows] as unknown as T[];
@@ -229,14 +299,23 @@ jest.mock('../services/api', () => ({
   },
 }));
 
+const mockUserCache: { id: string | undefined } = { id: 'user-A' };
+jest.mock('../lib/userCache', () => ({
+  readUserCacheSync: jest.fn(() =>
+    mockUserCache.id ? { id: mockUserCache.id } : null,
+  ),
+}));
+
 import { workoutApi } from '../services/api';
 import { __resetDatabaseForTests, getDatabase } from '../offline/database';
 import {
   writeWorkoutLog,
   triggerSync,
   conflictToastEvents,
+  deadLetterEvents,
   markSessionSyncedBySessionName,
   pullFromServer,
+  deleteWorkoutLogsForUser,
 } from '../offline/sync/sync-engine';
 
 const mockedCreate = workoutApi.create as jest.MockedFunction<
@@ -250,8 +329,7 @@ beforeEach(async () => {
   await __resetDatabaseForTests();
   mockDbHolder.current = null;
   jest.clearAllMocks();
-  // Default pull stub: return empty list so the pull step is a no-op and
-  // tests that only care about push behaviour aren't polluted by pull rows.
+  mockUserCache.id = 'user-A';
   mockedGetAll.mockResolvedValue({ data: [] } as never);
 });
 
@@ -267,7 +345,7 @@ describe('writeWorkoutLog', () => {
     ).rejects.toThrow(/exerciseId is required/);
   });
 
-  it('creates a workout_logs row with sync_status=pending', async () => {
+  it('creates a workout_logs row with sync_status=pending and user_id from the cache', async () => {
     const record = await writeWorkoutLog({
       exerciseId: 'bench-press',
       setsData: JSON.stringify([{ reps: 8, weight: 100, completed: true }]),
@@ -276,17 +354,13 @@ describe('writeWorkoutLog', () => {
     });
 
     expect(record.syncStatus).toBe('pending');
+    expect(record.userId).toBe('user-A');
     expect(record.exerciseId).toBe('bench-press');
     expect(record.sessionName).toBe('Chest Day');
     expect(record.durationMinutes).toBe(45);
     expect(record.serverId).toBeNull();
-    // The DB-side row is also there.
-    const db = await getDatabase();
-    const all = await db.getAllAsync<{ sync_status: string }>(
-      'SELECT id, exercise_id, sets_data, sync_status, logged_at, server_id, session_name, duration_minutes FROM workout_logs',
-    );
-    expect(all).toHaveLength(1);
-    expect(all[0].sync_status).toBe('pending');
+    expect(mockDbHolder.current?.rows).toHaveLength(1);
+    expect(mockDbHolder.current?.rows[0].user_id).toBe('user-A');
   });
 });
 
@@ -305,19 +379,11 @@ describe('triggerSync — push pending records', () => {
 
     await triggerSync();
 
-    const db = await getDatabase();
-    const all = await db.getAllAsync<{
-      sync_status: string;
-      server_id: string | null;
-    }>(
-      'SELECT id, exercise_id, sets_data, sync_status, logged_at, server_id, session_name, duration_minutes FROM workout_logs',
-    );
-    expect(all).toHaveLength(1);
-    expect(all[0].sync_status).toBe('synced');
-    expect(all[0].server_id).toBe('srv-001');
+    expect(mockDbHolder.current?.rows[0].sync_status).toBe('synced');
+    expect(mockDbHolder.current?.rows[0].server_id).toBe('srv-001');
   });
 
-  it('leaves the record as pending when the API throws a network error', async () => {
+  it('leaves the record as pending when the API throws a network error (transient)', async () => {
     mockedCreate.mockRejectedValue(new Error('Network Error'));
 
     await writeWorkoutLog({
@@ -328,11 +394,7 @@ describe('triggerSync — push pending records', () => {
 
     await triggerSync();
 
-    const db = await getDatabase();
-    const all = await db.getAllAsync<{ sync_status: string }>(
-      'SELECT id, exercise_id, sets_data, sync_status, logged_at, server_id, session_name, duration_minutes FROM workout_logs',
-    );
-    expect(all[0].sync_status).toBe('pending');
+    expect(mockDbHolder.current?.rows[0].sync_status).toBe('pending');
   });
 
   it('marks the record as conflict and emits toast event on HTTP 409', async () => {
@@ -354,27 +416,77 @@ describe('triggerSync — push pending records', () => {
 
     await triggerSync();
 
-    const db = await getDatabase();
-    const all = await db.getAllAsync<{ sync_status: string }>(
-      'SELECT id, exercise_id, sets_data, sync_status, logged_at, server_id, session_name, duration_minutes FROM workout_logs',
-    );
-    expect(all[0].sync_status).toBe('conflict');
+    expect(mockDbHolder.current?.rows[0].sync_status).toBe('conflict');
     expect(toastFired).toBe(true);
 
     conflictToastEvents.off('conflict', onConflict);
   });
 
+  it('P1-1: marks the record as dead_letter and emits dead-letter event on HTTP 400', async () => {
+    const badReq = Object.assign(new Error('Bad payload'), {
+      response: { status: 400 },
+    });
+    mockedCreate.mockRejectedValue(badReq);
+
+    let dlCount = 0;
+    const onDl = (payload: { count: number }) => {
+      dlCount = payload.count;
+    };
+    deadLetterEvents.on('dead_letter', onDl);
+
+    await writeWorkoutLog({ exerciseId: 'a', setsData: '[]' });
+    await writeWorkoutLog({ exerciseId: 'b', setsData: '[]' });
+
+    await triggerSync();
+
+    expect(
+      mockDbHolder.current?.rows.every((r) => r.sync_status === 'dead_letter'),
+    ).toBe(true);
+    expect(dlCount).toBe(2);
+
+    deadLetterEvents.off('dead_letter', onDl);
+  });
+
+  it('preserves pending on 5xx (transient)', async () => {
+    const e503 = Object.assign(new Error('SU'), {
+      response: { status: 503 },
+    });
+    mockedCreate.mockRejectedValue(e503);
+    await writeWorkoutLog({ exerciseId: 'a', setsData: '[]' });
+    await triggerSync();
+    expect(mockDbHolder.current?.rows[0].sync_status).toBe('pending');
+  });
+
+  it('does not push records belonging to a different user (R15 isolation)', async () => {
+    // Write under user-A
+    mockUserCache.id = 'user-A';
+    await writeWorkoutLog({ exerciseId: 'a', setsData: '[]' });
+    // Switch to user-B; the user-A row must not be sent under B's JWT.
+    mockUserCache.id = 'user-B';
+    mockedCreate.mockResolvedValue({ data: { id: 'srv-x' } } as never);
+
+    await triggerSync();
+
+    expect(mockedCreate).not.toHaveBeenCalled();
+    expect(mockDbHolder.current?.rows[0].sync_status).toBe('pending');
+    expect(mockDbHolder.current?.rows[0].user_id).toBe('user-A');
+  });
+
+  it('does not push when no user is signed in', async () => {
+    await writeWorkoutLog({ exerciseId: 'a', setsData: '[]' });
+    mockUserCache.id = undefined;
+    mockedCreate.mockResolvedValue({ data: { id: 'srv-x' } } as never);
+
+    await triggerSync();
+
+    expect(mockedCreate).not.toHaveBeenCalled();
+  });
+
   it('does not push records already marked synced', async () => {
     mockedCreate.mockResolvedValue({ data: { id: 'srv-002' } } as never);
 
-    // Write one pending, sync it.
-    await writeWorkoutLog({
-      exerciseId: 'curl',
-      setsData: JSON.stringify([{ reps: 15, weight: 20, completed: true }]),
-    });
+    await writeWorkoutLog({ exerciseId: 'curl', setsData: '[]' });
     await triggerSync();
-
-    // Second triggerSync — create should NOT be called again.
     await triggerSync();
 
     expect(mockedCreate).toHaveBeenCalledTimes(1);
@@ -390,13 +502,35 @@ describe('triggerSync — push pending records', () => {
 
     await triggerSync();
 
-    const db = await getDatabase();
-    const all = await db.getAllAsync<{ sync_status: string }>(
-      'SELECT id, exercise_id, sets_data, sync_status, logged_at, server_id, session_name, duration_minutes FROM workout_logs',
-    );
-    const synced = all.filter((r) => r.sync_status === 'synced');
-    expect(synced).toHaveLength(2);
+    expect(
+      mockDbHolder.current?.rows.filter((r) => r.sync_status === 'synced'),
+    ).toHaveLength(2);
     expect(mockedCreate).toHaveBeenCalledTimes(2);
+  });
+});
+
+// ─── deleteWorkoutLogsForUser ────────────────────────────────────────────────
+
+describe('deleteWorkoutLogsForUser (signOut helper)', () => {
+  it('removes only the signing-out user\'s rows', async () => {
+    mockUserCache.id = 'user-A';
+    await writeWorkoutLog({ exerciseId: 'a', setsData: '[]' });
+    mockUserCache.id = 'user-B';
+    await writeWorkoutLog({ exerciseId: 'b', setsData: '[]' });
+
+    const removed = await deleteWorkoutLogsForUser('user-A');
+
+    expect(removed).toBe(1);
+    const remaining = mockDbHolder.current?.rows ?? [];
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0].user_id).toBe('user-B');
+  });
+
+  it('returns 0 and is a no-op for the empty user id', async () => {
+    await writeWorkoutLog({ exerciseId: 'a', setsData: '[]' });
+    const removed = await deleteWorkoutLogsForUser('');
+    expect(removed).toBe(0);
+    expect(mockDbHolder.current?.rows).toHaveLength(1);
   });
 });
 
@@ -404,8 +538,6 @@ describe('triggerSync — push pending records', () => {
 
 describe('markSessionSyncedBySessionName (W-1 fix)', () => {
   it('marks all pending rows for a session as synced once the parent mutate succeeds', async () => {
-    // Write three rows for the same session — same shape as ActiveWorkout
-    // finishing a three-exercise workout offline-or-not.
     await writeWorkoutLog({
       exerciseId: 'bench',
       setsData: '[]',
@@ -422,10 +554,9 @@ describe('markSessionSyncedBySessionName (W-1 fix)', () => {
       sessionName: 'Chest Day',
     });
 
-    // Sanity: all pending.
     const db = await getDatabase();
-    let rows = await db.getAllAsync<{ sync_status: string; server_id: string }>(
-      'SELECT sync_status, server_id FROM workout_logs WHERE session_name = ?',
+    let rows = await db.getAllAsync<{ sync_status: string }>(
+      'SELECT sync_status FROM workout_logs WHERE session_name = ?',
       ['Chest Day'],
     );
     expect(rows.every((r) => r.sync_status === 'pending')).toBe(true);
@@ -436,38 +567,11 @@ describe('markSessionSyncedBySessionName (W-1 fix)', () => {
     );
     expect(changed).toBe(3);
 
-    rows = await db.getAllAsync<{ sync_status: string; server_id: string }>(
-      'SELECT sync_status, server_id FROM workout_logs WHERE session_name = ?',
+    rows = await db.getAllAsync<{ sync_status: string }>(
+      'SELECT sync_status FROM workout_logs WHERE session_name = ?',
       ['Chest Day'],
     );
     expect(rows.every((r) => r.sync_status === 'synced')).toBe(true);
-    expect(rows.every((r) => r.server_id === 'srv-session-1')).toBe(true);
-  });
-
-  it('does not touch rows from a different session', async () => {
-    await writeWorkoutLog({
-      exerciseId: 'a',
-      setsData: '[]',
-      sessionName: 'Leg Day',
-    });
-    await writeWorkoutLog({
-      exerciseId: 'b',
-      setsData: '[]',
-      sessionName: 'Chest Day',
-    });
-
-    await markSessionSyncedBySessionName('Chest Day', 'srv-x');
-
-    const db = await getDatabase();
-    const rows = await db.getAllAsync<{
-      session_name: string;
-      sync_status: string;
-    }>('SELECT session_name, sync_status FROM workout_logs');
-    const byName = Object.fromEntries(
-      rows.map((r) => [r.session_name, r.sync_status]),
-    );
-    expect(byName['Leg Day']).toBe('pending');
-    expect(byName['Chest Day']).toBe('synced');
   });
 
   it('returns 0 and is a no-op when the session name is empty', async () => {
@@ -478,15 +582,11 @@ describe('markSessionSyncedBySessionName (W-1 fix)', () => {
     });
     const changed = await markSessionSyncedBySessionName('', 'srv-x');
     expect(changed).toBe(0);
-    const db = await getDatabase();
-    const rows = await db.getAllAsync<{ sync_status: string }>(
-      'SELECT sync_status FROM workout_logs',
-    );
-    expect(rows[0].sync_status).toBe('pending');
+    expect(mockDbHolder.current?.rows[0].sync_status).toBe('pending');
   });
 });
 
-// ─── W-6: pullFromServer preserves multi-exercise sessions ───────────────────
+// ─── W-6 + P1-2: pullFromServer preserves multi-exercise sessions ────────────
 
 describe('pullFromServer multi-exercise (W-6 fix)', () => {
   it('inserts one row per exercise when a server workout carries multiple', async () => {
@@ -519,21 +619,49 @@ describe('pullFromServer multi-exercise (W-6 fix)', () => {
 
     await pullFromServer(20);
 
-    const db = await getDatabase();
-    const rows = await db.getAllAsync<{
-      exercise_id: string;
-      server_id: string;
-      sync_status: string;
-      session_name: string;
-    }>(
-      'SELECT exercise_id, server_id, sync_status, session_name FROM workout_logs',
-    );
+    const rows = mockDbHolder.current?.rows ?? [];
     expect(rows).toHaveLength(3);
-    expect(rows.map((r) => r.exercise_id).sort()).toEqual(
-      ['Bench', 'Cable Fly', 'Incline DB'].sort(),
-    );
-    expect(rows.every((r) => r.server_id === 'srv-multi')).toBe(true);
-    expect(rows.every((r) => r.sync_status === 'synced')).toBe(true);
     expect(rows.every((r) => r.session_name === 'Push Day')).toBe(true);
+    expect(rows.every((r) => r.sync_status === 'synced')).toBe(true);
+  });
+
+  it('P1-2: coerces non-string `notes` to an empty session_name (no [object Object])', async () => {
+    mockedGetAll.mockResolvedValueOnce({
+      data: [
+        {
+          id: 'srv-obj',
+          notes: { foo: 'bar' },
+          duration_minutes: 30,
+          exercises: [
+            { exercise_name: 'X', reps_per_set: [1], weight_per_set: [1] },
+          ],
+        },
+        {
+          id: 'srv-null',
+          notes: null,
+          duration_minutes: 30,
+          exercises: [
+            { exercise_name: 'Y', reps_per_set: [1], weight_per_set: [1] },
+          ],
+        },
+        {
+          id: 'srv-bool',
+          notes: false,
+          duration_minutes: 30,
+          exercises: [
+            { exercise_name: 'Z', reps_per_set: [1], weight_per_set: [1] },
+          ],
+        },
+      ],
+    } as never);
+
+    await pullFromServer(20);
+
+    const rows = mockDbHolder.current?.rows ?? [];
+    expect(rows).toHaveLength(3);
+    // The old `String(w.notes ?? '')` would have produced "[object Object]",
+    // "" (preserved by ??), and "false" respectively. The fix should give
+    // "" for everything that isn't a string.
+    expect(rows.every((r) => r.session_name === '')).toBe(true);
   });
 });

@@ -14,7 +14,7 @@
  *     easier to test and easier to read.
  */
 
-export type SyncStatus = 'pending' | 'synced' | 'conflict';
+export type SyncStatus = 'pending' | 'synced' | 'conflict' | 'dead_letter';
 
 export interface ParsedSet {
   reps: number;
@@ -51,6 +51,7 @@ export interface WorkoutLog {
   serverId: string | null;
   sessionName: string | null;
   durationMinutes: number | null;
+  userId: string | null;
 }
 
 // ─── Row <-> object mappers ──────────────────────────────────────────────────
@@ -64,6 +65,7 @@ interface WorkoutLogRow {
   server_id: string | null;
   session_name: string | null;
   duration_minutes: number | null;
+  user_id: string | null;
 }
 
 /** Convert a raw SQLite row into the typed WorkoutLog shape. */
@@ -77,6 +79,7 @@ export function rowToWorkoutLog(row: WorkoutLogRow): WorkoutLog {
     serverId: row.server_id,
     sessionName: row.session_name,
     durationMinutes: row.duration_minutes,
+    userId: row.user_id ?? null,
   };
 }
 

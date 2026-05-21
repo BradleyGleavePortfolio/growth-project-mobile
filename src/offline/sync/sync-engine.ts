@@ -10,7 +10,9 @@
  *   2. Push: iterate every `pending` workout_log and POST it to the backend.
  *      On success → mark `synced` + store server ID.
  *      On conflict (409) → server-wins: mark `conflict`, surface a toast.
- *      On network error → leave `pending`, retry next time.
+ *      On other 4xx (non-401) → permanent: mark `dead_letter` so we stop
+ *        hammering the server on every triggerSync (Hunt P1-1).
+ *      On 401 / 5xx / network error → leave `pending`, retry next time.
  *
  * Conflict policy (server wins):
  *   When the server returns HTTP 409 for a record, the local copy is marked
@@ -37,6 +39,7 @@ import {
 } from '../models/WorkoutLog';
 import { workoutApi } from '../../services/api';
 import { generateId } from '../../utils/date';
+import { readUserCacheSync } from '../../lib/userCache';
 
 // ---------------------------------------------------------------------------
 // Conflict toast event bus
@@ -48,6 +51,13 @@ export const conflictToastEvents = new EventEmitter();
 // used the Node `events` module. Safe and idempotent.
 (conflictToastEvents as unknown as { setMaxListeners?: (n: number) => void })
   .setMaxListeners?.(20);
+
+// Dead-letter toast: emitted when a row is permanently rejected by the server
+// (4xx other than 401/409). UI can subscribe to surface a "we couldn't sync"
+// banner; the existing conflict-toast subscriber is the documented anchor for
+// any future UI work in this area. Until a dedicated UI lands, the count is
+// visible via Sentry breadcrumbs (logged in pushPending below).
+export const deadLetterEvents = new EventEmitter();
 
 // ---------------------------------------------------------------------------
 // Internal state
@@ -89,12 +99,13 @@ export async function writeWorkoutLog(
   const db = await getDatabase();
   const id = generateId();
   const loggedAt = Date.now();
+  const userId = readUserCacheSync()?.id ?? null;
 
   await db.runAsync(
     `INSERT INTO workout_logs
        (id, exercise_id, sets_data, sync_status, logged_at,
-        server_id, session_name, duration_minutes)
-     VALUES (?, ?, ?, 'pending', ?, NULL, ?, ?)`,
+        server_id, session_name, duration_minutes, user_id)
+     VALUES (?, ?, ?, 'pending', ?, NULL, ?, ?, ?)`,
     [
       id,
       trimmedExerciseId,
@@ -102,6 +113,7 @@ export async function writeWorkoutLog(
       loggedAt,
       payload.sessionName ?? null,
       payload.durationMinutes ?? null,
+      userId,
     ],
   );
 
@@ -114,6 +126,7 @@ export async function writeWorkoutLog(
     serverId: null,
     sessionName: payload.sessionName ?? null,
     durationMinutes: payload.durationMinutes ?? null,
+    userId,
   };
 }
 
@@ -133,6 +146,14 @@ async function markConflict(id: string): Promise<void> {
   const db = await getDatabase();
   await db.runAsync(
     `UPDATE workout_logs SET sync_status = 'conflict' WHERE id = ?`,
+    [id],
+  );
+}
+
+async function markDeadLetter(id: string): Promise<void> {
+  const db = await getDatabase();
+  await db.runAsync(
+    `UPDATE workout_logs SET sync_status = 'dead_letter' WHERE id = ?`,
     [id],
   );
 }
@@ -167,9 +188,52 @@ export async function markSessionSyncedBySessionName(
         AND logged_at >= ?`,
     [serverId, sessionName, since],
   );
-  // expo-sqlite's runAsync returns { changes } via the result handle.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return (result as any)?.changes ?? 0;
+  return (result as unknown as { changes?: number })?.changes ?? 0;
+}
+
+// ---------------------------------------------------------------------------
+// Per-user cleanup (called from signOut)
+// ---------------------------------------------------------------------------
+
+/**
+ * Delete every workout_logs row belonging to a single user. Used by signOut
+ * to scrub the signing-out account's offline data without touching rows
+ * belonging to other accounts that might share the device. Rows with NULL
+ * user_id (rows written before the v2 migration that could not be
+ * backfilled) are not deleted here — they are orphaned, not leaked, and the
+ * push gate refuses to send them under another user's JWT.
+ */
+export async function deleteWorkoutLogsForUser(userId: string): Promise<number> {
+  if (!userId) return 0;
+  const db = await getDatabase();
+  const result = await db.runAsync(
+    `DELETE FROM workout_logs WHERE user_id = ?`,
+    [userId],
+  );
+  return (result as unknown as { changes?: number })?.changes ?? 0;
+}
+
+// ---------------------------------------------------------------------------
+// Error classification
+// ---------------------------------------------------------------------------
+
+type PushErrorClass = 'conflict' | 'permanent' | 'transient';
+
+function classifyPushError(err: unknown): PushErrorClass {
+  const status = (err as { response?: { status?: number } })?.response?.status;
+  if (status === 409) return 'conflict';
+  if (typeof status === 'number') {
+    // 401 → bubble back as transient; the request layer will refresh the
+    // session and the next triggerSync cycle re-pushes.
+    if (status === 401) return 'transient';
+    // 5xx → transient by definition.
+    if (status >= 500) return 'transient';
+    // Any other 4xx (400/403/404/422/etc.) means the server has rejected
+    // this payload permanently. Don't loop on it.
+    if (status >= 400) return 'permanent';
+  }
+  // No status (network / timeout) → transient.
+  return 'transient';
 }
 
 // ---------------------------------------------------------------------------
@@ -179,13 +243,27 @@ export async function markSessionSyncedBySessionName(
 async function pushPending(): Promise<void> {
   const db = await getDatabase();
 
+  // R15: only push rows belonging to the currently-signed-in user. Rows
+  // with a foreign user_id stay in the DB (we want account switching to
+  // resume gracefully), but they must never be POSTed under another user's
+  // JWT.
+  const currentUserId = readUserCacheSync()?.id;
+  if (!currentUserId) {
+    // No signed-in user → nothing to push. Don't even read the table.
+    return;
+  }
+
   const rows = await db.getAllAsync<Parameters<typeof rowToWorkoutLog>[0]>(
     `SELECT id, exercise_id, sets_data, sync_status, logged_at,
-            server_id, session_name, duration_minutes
+            server_id, session_name, duration_minutes, user_id
        FROM workout_logs
-      WHERE sync_status = 'pending'`,
+      WHERE sync_status = 'pending'
+        AND user_id = ?`,
+    [currentUserId],
   );
   const pending: WorkoutLog[] = rows.map(rowToWorkoutLog);
+
+  let deadLettered = 0;
 
   for (const log of pending) {
     try {
@@ -193,28 +271,38 @@ async function pushPending(): Promise<void> {
       const response = await workoutApi.create(
         serverPayload as unknown as Record<string, unknown>,
       );
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const data = response.data as any;
+      const data = response.data as { id?: string; workout?: { id?: string } };
       const serverId: string = data?.id ?? data?.workout?.id ?? '';
       await markSynced(log.id, serverId);
     } catch (err: unknown) {
-      const status =
-        (err as { response?: { status?: number } })?.response?.status;
-      if (status === 409) {
-        // Conflict: server has a newer version — mark local as conflict.
+      const errorClass = classifyPushError(err);
+      if (errorClass === 'conflict') {
         await markConflict(log.id);
         conflictToastEvents.emit('conflict', {
           localId: log.id,
           message:
             'A workout was updated elsewhere. Your local version has been marked as conflicting.',
         });
+      } else if (errorClass === 'permanent') {
+        await markDeadLetter(log.id);
+        deadLettered++;
+        if (__DEV__) {
+          console.warn(
+            '[SyncEngine] push dead-lettered (permanent 4xx)',
+            log.id,
+            (err as { response?: { status?: number } })?.response?.status,
+          );
+        }
       }
-      // For all other errors (network timeout, 5xx, etc.) leave as pending.
-      // The engine will retry on the next triggerSync() call.
+      // transient errors (401/5xx/network): leave `pending` for the next cycle.
       if (__DEV__) {
         console.warn('[SyncEngine] push failed for record', log.id, err);
       }
     }
+  }
+
+  if (deadLettered > 0) {
+    deadLetterEvents.emit('dead_letter', { count: deadLettered });
   }
 }
 
@@ -233,15 +321,20 @@ async function pushPending(): Promise<void> {
 export async function pullFromServer(limit = 20): Promise<void> {
   try {
     const response = await workoutApi.getAll(limit);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const raw = response.data as any;
+    const raw = response.data as
+      | Array<Record<string, unknown>>
+      | { workouts?: Array<Record<string, unknown>> }
+      | null
+      | undefined;
     const workouts: Array<Record<string, unknown>> = Array.isArray(raw)
       ? raw
-      : (raw?.workouts ?? []);
+      : ((raw as { workouts?: Array<Record<string, unknown>> } | null)
+          ?.workouts ?? []);
 
     if (!workouts.length) return;
 
     const db = await getDatabase();
+    const currentUserId = readUserCacheSync()?.id ?? null;
 
     for (const w of workouts) {
       const serverId = String(w.id ?? '');
@@ -270,16 +363,19 @@ export async function pullFromServer(limit = 20): Promise<void> {
 
       const durationMinutes =
         typeof w.duration_minutes === 'number' ? w.duration_minutes : null;
-      const sessionName = String(w.notes ?? '');
+      // P1-2: only treat `notes` as a session name if it's actually a string.
+      // The previous `String(w.notes ?? '')` coerced objects to
+      // "[object Object]" and the bool false → "false", which poisoned the
+      // session_name index used by markSessionSyncedBySessionName.
+      const sessionName: string =
+        typeof w.notes === 'string' ? w.notes : '';
 
       if (exercises.length === 0) {
-        // Defensive: a workout with no exercises is still recorded so the
-        // pull-skip-existing guard above will short-circuit on next pull.
         await db.runAsync(
           `INSERT INTO workout_logs
              (id, exercise_id, sets_data, sync_status, logged_at,
-              server_id, session_name, duration_minutes)
-           VALUES (?, ?, ?, 'synced', ?, ?, ?, ?)`,
+              server_id, session_name, duration_minutes, user_id)
+           VALUES (?, ?, ?, 'synced', ?, ?, ?, ?, ?)`,
           [
             generateId(),
             '',
@@ -288,6 +384,7 @@ export async function pullFromServer(limit = 20): Promise<void> {
             serverId,
             sessionName,
             durationMinutes,
+            currentUserId,
           ],
         );
         continue;
@@ -311,8 +408,8 @@ export async function pullFromServer(limit = 20): Promise<void> {
         await db.runAsync(
           `INSERT INTO workout_logs
              (id, exercise_id, sets_data, sync_status, logged_at,
-              server_id, session_name, duration_minutes)
-           VALUES (?, ?, ?, 'synced', ?, ?, ?, ?)`,
+              server_id, session_name, duration_minutes, user_id)
+           VALUES (?, ?, ?, 'synced', ?, ?, ?, ?, ?)`,
           [
             generateId(),
             String(ex.exercise_name ?? ''),
@@ -321,6 +418,7 @@ export async function pullFromServer(limit = 20): Promise<void> {
             serverId,
             sessionName,
             durationMinutes,
+            currentUserId,
           ],
         );
       }
@@ -361,3 +459,6 @@ export async function triggerSync(): Promise<void> {
 export function __isSyncInProgress(): boolean {
   return syncInProgress;
 }
+
+/** Exposed for tests so they can drive the classifier directly. */
+export const __classifyPushErrorForTests = classifyPushError;

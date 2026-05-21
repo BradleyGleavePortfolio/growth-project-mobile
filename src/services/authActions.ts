@@ -3,12 +3,16 @@
 // helpers only touch AsyncStorage + the authEvents emitter.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
 import { authEvents } from '../utils/authEvents';
 import { profileApi, usersApi } from './api';
 import { secureStorage } from './secureStorage';
 import { setSentryUser } from './sentry';
 import { reset as analyticsReset } from '../lib/analytics';
 import { logger } from '../utils/logger';
+import { readUserCacheSync } from '../lib/userCache';
+import { clearAllStorage } from '../storage/mmkv';
+import { deleteWorkoutLogsForUser } from '../offline/sync/sync-engine';
 
 // Tokens live in SecureStore; everything else is plain AsyncStorage.
 const SECURE_SIGN_OUT_KEYS = ['supabase_token', 'supabase_refresh_token'];
@@ -18,14 +22,47 @@ const ASYNC_SIGN_OUT_KEYS = [
   'onboarding_complete',
   'macro_targets',
   'pending_email',
+  'day_one_completed',
+  'lean_onboarding_done',
+  'lean_onboarding_intent',
+  'lean_onboarding_synced',
+  'analytics_onboarding_completed_fired',
+  'pending_invite_code',
 ];
-// Exported for any caller that wants the full list of session keys.
+
+// Prefixes whose every matching AsyncStorage key should be wiped on signOut.
+// Per-user namespaced data lives behind these prefixes; without enumeration the
+// per-user suffixed keys persist across sign-outs and a second user on the
+// same device inherits them (R15 / R16).
+const ASYNC_SIGN_OUT_PREFIXES = [
+  'pending_food_logs_',
+  'gp_coach_bio_',
+];
+
+// Exported for any caller that wants the full list of session keys (does not
+// include the prefix-matched keys, which are enumerated at signOut time).
 export const SIGN_OUT_KEYS = [...SECURE_SIGN_OUT_KEYS, ...ASYNC_SIGN_OUT_KEYS];
+
+async function collectPrefixedKeys(): Promise<string[]> {
+  try {
+    const allKeys = await AsyncStorage.getAllKeys();
+    return allKeys.filter((k) =>
+      ASYNC_SIGN_OUT_PREFIXES.some((prefix) => k.startsWith(prefix)),
+    );
+  } catch (err) {
+    logger.warn('AuthActions', 'collectPrefixedKeys failed', err);
+    return [];
+  }
+}
 
 export async function signOut(): Promise<void> {
   // Clear all auth + session state and notify the root navigator.
   // We surface failures via console.error instead of Alert because a sign-out
   // button that appears to do nothing is worse than one that logs a warning.
+
+  // Capture the signing-out user BEFORE we wipe state so we can scope the
+  // offline workout-log delete to just their rows.
+  const signingOutUserId = readUserCacheSync()?.id;
 
   // Best-effort: clear the push token on the backend before wiping local auth
   // state so the PATCH /users/me/push-token request can still attach a JWT.
@@ -36,10 +73,32 @@ export async function signOut(): Promise<void> {
     // the Expo token expires or the device is re-registered on next login.
   }
 
+  // Best-effort: unregister this device's push registration so notifications
+  // queued for the signing-out user can't deliver to a subsequent signed-in
+  // user on the same hardware. Idempotent if already unregistered.
+  try {
+    await Notifications.unregisterForNotificationsAsync();
+  } catch {
+    // Non-fatal — see comment above.
+  }
+
+  // Drop the signing-out user's offline workout rows (keeps other users'
+  // rows intact for the shared-device account-switching scenario).
+  if (signingOutUserId) {
+    try {
+      await deleteWorkoutLogsForUser(signingOutUserId);
+    } catch (err) {
+      logger.warn('AuthActions', 'deleteWorkoutLogsForUser failed', err);
+    }
+  }
+
+  const prefixedKeys = await collectPrefixedKeys();
+
   try {
     await Promise.all([
       ...SECURE_SIGN_OUT_KEYS.map((k) => secureStorage.removeItem(k)),
-      AsyncStorage.multiRemove(ASYNC_SIGN_OUT_KEYS),
+      AsyncStorage.multiRemove([...ASYNC_SIGN_OUT_KEYS, ...prefixedKeys]),
+      clearAllStorage(),
     ]);
   } catch (err) {
     logger.error('AuthActions', 'signOut: clear failed', err);

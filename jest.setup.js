@@ -27,6 +27,33 @@ jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
 );
 
+// expo-crypto: counter-backed UUID so tests get distinct ids without pulling
+// in the native module. Format matches the v4-UUID shape we use for the
+// food-log idempotency keys.
+jest.mock('expo-crypto', () => {
+  let counter = 0;
+  return {
+    randomUUID: jest.fn(() => {
+      counter += 1;
+      const hex = counter.toString(16).padStart(12, '0');
+      return `00000000-0000-4000-8000-${hex}`;
+    }),
+    digestStringAsync: jest.fn(async (_alg, input) => `digest:${input}`),
+    CryptoDigestAlgorithm: { SHA256: 'SHA-256' },
+  };
+});
+
+// expo-notifications: just enough surface for the auth/signOut path. Tests
+// that need richer behaviour can call jest.requireMock to access the mocks.
+jest.mock('expo-notifications', () => ({
+  unregisterForNotificationsAsync: jest.fn(async () => undefined),
+  setNotificationHandler: jest.fn(),
+  setNotificationChannelAsync: jest.fn(async () => undefined),
+  getPermissionsAsync: jest.fn(async () => ({ status: 'undetermined' })),
+  requestPermissionsAsync: jest.fn(async () => ({ status: 'granted' })),
+  AndroidImportance: { MAX: 5, HIGH: 4, DEFAULT: 3, LOW: 2, MIN: 1 },
+}));
+
 jest.mock('expo-secure-store', () => {
   const store = new Map();
   return {
