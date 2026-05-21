@@ -91,6 +91,38 @@ describe('signOut', () => {
     expect(mmkvMock.clearAllStorage).toHaveBeenCalledTimes(1);
   });
 
+  it('wipes shim-namespaced messages_thread_* and pending_* cache keys (Hunt #2 P0-1)', async () => {
+    // The cacheStorage shim stores under `cache:<key>` in AsyncStorage when
+    // MMKV native isn't available (Expo Go / Jest). signOut must drop these
+    // even if clearAllStorage() is a no-op mock (which it is in this suite).
+    await AsyncStorage.setItem(
+      'cache:messages_thread_client_user-A',
+      '[{"id":"m1"}]',
+    );
+    await AsyncStorage.setItem(
+      'cache:messages_thread_client_user-B',
+      '[{"id":"m2"}]',
+    );
+    await AsyncStorage.setItem('cache:pending_food_logs_user-A', '[]');
+    await AsyncStorage.setItem('cache:last_sync_ts', 'keep-me');
+    await AsyncStorage.setItem('cache:unrelated', 'keep-me');
+
+    await signOut();
+
+    expect(
+      await AsyncStorage.getItem('cache:messages_thread_client_user-A'),
+    ).toBeNull();
+    expect(
+      await AsyncStorage.getItem('cache:messages_thread_client_user-B'),
+    ).toBeNull();
+    expect(
+      await AsyncStorage.getItem('cache:pending_food_logs_user-A'),
+    ).toBeNull();
+    // Unrelated cache keys are left alone — we only drop the targeted prefixes.
+    expect(await AsyncStorage.getItem('cache:last_sync_ts')).toBe('keep-me');
+    expect(await AsyncStorage.getItem('cache:unrelated')).toBe('keep-me');
+  });
+
   it('unregisters expo-notifications on signOut (idempotent)', async () => {
     const Notifications = jest.requireMock('expo-notifications') as {
       unregisterForNotificationsAsync: jest.Mock;

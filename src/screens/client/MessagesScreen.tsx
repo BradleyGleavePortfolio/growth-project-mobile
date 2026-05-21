@@ -34,7 +34,15 @@ interface Message {
 // case the WebSocket is dropped (background → foreground transitions, mobile
 // data dead zones). Without realtime this used to be 15s.
 const FALLBACK_POLL_MS = 60000;
-const CACHE_KEY = 'messages_thread_client';
+// Per-user cache key. A previous version used a fixed global key, which let
+// User-A's last DM thread render in User-B's UI for ~200–800ms after a fast
+// account switch on the same device (Hunt #2 P0-1, R15 + R16). Reads/writes
+// now require a userId; when it's unavailable (sign-out transition) we bail
+// rather than risk a cross-user read.
+export const CACHE_KEY_PREFIX = 'messages_thread_client_';
+export function cacheKeyFor(userId: string): string {
+  return `${CACHE_KEY_PREFIX}${userId}`;
+}
 
 export default function MessagesScreen() {
   const { colors } = useTheme();
@@ -60,10 +68,13 @@ export default function MessagesScreen() {
 
   const PAGE_LIMIT = 100;
 
-  // A. MMKV hydration on mount — synchronous read so the screen never shows
-  // blank on cold load (MMKV is synchronous; shim returns undefined).
+  // A. MMKV hydration — synchronous read so the screen never shows blank on
+  // cold load (MMKV is synchronous; shim returns undefined). Keyed by the
+  // current user's id so the previous account's thread can't surface here.
+  // Re-runs when the userId resolves because useCurrentUser is async on mount.
   useEffect(() => {
-    const cached = cacheStorage.getString(CACHE_KEY);
+    if (!currentUser?.id) return;
+    const cached = cacheStorage.getString(cacheKeyFor(currentUser.id));
     if (cached) {
       try {
         const parsed = JSON.parse(cached) as Message[];
@@ -75,7 +86,7 @@ export default function MessagesScreen() {
         // Corrupt cache — ignore, real load will follow.
       }
     }
-  }, []);
+  }, [currentUser?.id]);
 
   // B. Load real coach name from profile.
   useEffect(() => {
@@ -92,22 +103,20 @@ export default function MessagesScreen() {
     try {
       const res = await messagesApi.list({ limit: PAGE_LIMIT });
       const list = normalizeList(res.data);
-      setMessages((prev) => {
-        // Preserve any pending (local-only) messages that haven't been
-        // replaced by a real server message yet.
-        const pending = prev.filter(
-          (m) => m.pending && !list.some((s) => s.body === m.body),
-        );
-        return mergeById(list, pending);
-      });
+      setMessages((prev) => mergeById(list, reconcilePending(prev, list)));
       setHasMoreOlder(list.length >= PAGE_LIMIT);
       setError('');
       setNoCoach(false);
-      // Write to MMKV cache after successful load.
-      setMessages((current) => {
-        cacheStorage.set(CACHE_KEY, JSON.stringify(current));
-        return current;
-      });
+      // Write to MMKV cache after successful load. Bail when the userId is
+      // unknown (sign-out transition) rather than risk persisting under any
+      // key that could be misattributed on the next sign-in.
+      const uid = currentUser?.id;
+      if (uid) {
+        setMessages((current) => {
+          cacheStorage.set(cacheKeyFor(uid), JSON.stringify(current));
+          return current;
+        });
+      }
     } catch (err) {
       const code = errorCode(err);
       if (errorStatus(err) === 409 || code === 'NO_COACH_ASSIGNED') {
@@ -120,7 +129,7 @@ export default function MessagesScreen() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [currentUser?.id]);
 
   const loadOlder = useCallback(async () => {
     if (loadingOlder || !hasMoreOlder || messages.length === 0) return;
@@ -186,9 +195,10 @@ export default function MessagesScreen() {
       const res = await messagesApi.send(text);
       const created = normalizeMessage(res.data);
       setInputText('');
+      const uid = currentUser?.id;
       setMessages((prev) => {
         const next = mergeById(prev, [created]);
-        cacheStorage.set(CACHE_KEY, JSON.stringify(next));
+        if (uid) cacheStorage.set(cacheKeyFor(uid), JSON.stringify(next));
         return next;
       });
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
@@ -206,9 +216,10 @@ export default function MessagesScreen() {
           read_at: null,
           pending: true,
         };
+        const uid = currentUser?.id;
         setMessages((prev) => {
           const next = [...prev, pendingMsg];
-          cacheStorage.set(CACHE_KEY, JSON.stringify(next));
+          if (uid) cacheStorage.set(cacheKeyFor(uid), JSON.stringify(next));
           return next;
         });
         setInputText('');
@@ -486,6 +497,32 @@ function normalizeMessage(raw: unknown): Message {
     created_at: typeof r.created_at === 'string' ? r.created_at : new Date().toISOString(),
     read_at: (r.read_at as string | null | undefined) ?? null,
   };
+}
+
+/**
+ * Drop any pending (local-only) messages that the server roundtrip has
+ * superseded — either because a server row with the same body has come back,
+ * or because the pending row's timestamp is older than the oldest server
+ * message in the page (so the thread has demonstrably moved past it). This
+ * closes Hunt #2 P1-2 — orphan `pending_<ts>` bubbles that would otherwise
+ * linger forever in the FlatList because their synthetic ids never appear in
+ * server responses.
+ */
+export function reconcilePending(prev: Message[], serverList: Message[]): Message[] {
+  const oldestServerTs = serverList.length > 0
+    ? new Date(serverList[0].created_at).getTime()
+    : null;
+  return prev.filter((m) => {
+    if (!m.pending) return false;
+    if (serverList.some((s) => s.body === m.body)) return false;
+    if (oldestServerTs !== null) {
+      const pendingTs = new Date(m.created_at).getTime();
+      if (Number.isFinite(pendingTs) && pendingTs < oldestServerTs) {
+        return false;
+      }
+    }
+    return true;
+  });
 }
 
 function mergeById(existing: Message[], incoming: Message[]): Message[] {
