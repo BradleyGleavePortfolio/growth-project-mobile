@@ -1,66 +1,95 @@
 /**
- * TGP Charts — snapshot + source-level contract tests.
+ * TGP Charts — render-output contract tests.
  *
- * Tests:
- *  1. TgpLineChart — snapshot with sample data
- *  2. TgpBarChart  — source-level contracts
- *  3. TgpAreaChart — source-level contracts
- *  4. TgpSparkline — source-level contracts
- *  5. index.ts     — export surface contracts
+ * Asserts on the resolved props of the rendered SVG primitives (fill, stroke,
+ * `d`, dimensions) — not on the source text of the chart files. Theme tokens
+ * may be refactored freely as long as the rendered output preserves the
+ * contract.
  *
- * Source-level guards verify the documented API surface without requiring
- * a full Skia/native render environment (which is unavailable in CI Jest).
+ * The remaining source-grep tests target the `index.ts` export surface and
+ * the structural shape of `TgpSparkline`, where the contract under test
+ * (no axes / no tooltips / public exports) has no equivalent runtime
+ * assertion.
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
-import React from 'react';
+import React, { act } from 'react';
 import { render } from '@testing-library/react-native';
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const CHARTS_DIR = path.join(ROOT, 'src', 'ui', 'charts');
 
-// ─── Source paths ─────────────────────────────────────────────────────────────
-
-const LINE_SRC = fs.readFileSync(path.join(CHARTS_DIR, 'TgpLineChart.tsx'), 'utf8');
-const BAR_SRC  = fs.readFileSync(path.join(CHARTS_DIR, 'TgpBarChart.tsx'),  'utf8');
-const AREA_SRC = fs.readFileSync(path.join(CHARTS_DIR, 'TgpAreaChart.tsx'), 'utf8');
-const SPARK_SRC= fs.readFileSync(path.join(CHARTS_DIR, 'TgpSparkline.tsx'), 'utf8');
-const INDEX_SRC= fs.readFileSync(path.join(CHARTS_DIR, 'index.ts'),         'utf8');
+const SPARK_SRC = fs.readFileSync(path.join(CHARTS_DIR, 'TgpSparkline.tsx'), 'utf8');
+const INDEX_SRC = fs.readFileSync(path.join(CHARTS_DIR, 'index.ts'), 'utf8');
 
 // ─── Mocks ────────────────────────────────────────────────────────────────────
 
 jest.mock('../theme/ThemeProvider', () => ({
   useTheme: () => ({
     colors: {
-      primary:       '#2C4A36',
-      primaryPale:   '#D6E4DA',
-      surface:       '#F1E8D5',
+      primary:         '#2C4A36',
+      primaryPale:     '#D6E4DA',
+      surface:         '#F1E8D5',
       surfaceElevated: '#F1E8D5',
-      background:    '#F5EFE4',
-      textPrimary:   '#1A1A18',
-      textSecondary: '#3D3D3A',
-      textMuted:     '#B1A89F',
-      textOnPrimary: '#F5EFE4',
-      border:        '#B08D57',
-      success:       '#2C4A36',
-      warning:       '#C5A253',
-      error:         '#4A0404',
+      background:      '#F5EFE4',
+      textPrimary:     '#1A1A18',
+      textSecondary:   '#3D3D3A',
+      textMuted:       '#B1A89F',
+      textOnPrimary:   '#F5EFE4',
+      border:          '#B08D57',
+      success:         '#2C4A36',
+      warning:         '#C5A253',
+      error:           '#4A0404',
     },
   }),
 }));
+
+// Capture the gesture callbacks so tests can drive them synchronously and
+// force the chart into its tooltip-visible state. Each test resets the
+// captured handlers before rendering.
+type GestureHandlers = {
+  panUpdate?: (evt: { x: number; y: number }) => void;
+  panEnd?: () => void;
+  tapStart?: (evt: { x: number; y: number }) => void;
+};
+const gestureHandlers: GestureHandlers = {};
 
 jest.mock('react-native-gesture-handler', () => {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const mockReact = require('react');
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { View } = require('react-native');
+  const makePanBuilder = () => {
+    const builder = {
+      runOnJS: () => builder,
+      onUpdate: (fn: (evt: { x: number; y: number }) => void) => {
+        gestureHandlers.panUpdate = fn;
+        return builder;
+      },
+      onEnd: (fn: () => void) => {
+        gestureHandlers.panEnd = fn;
+        return builder;
+      },
+    };
+    return builder;
+  };
+  const makeTapBuilder = () => {
+    const builder = {
+      runOnJS: () => builder,
+      onStart: (fn: (evt: { x: number; y: number }) => void) => {
+        gestureHandlers.tapStart = fn;
+        return builder;
+      },
+    };
+    return builder;
+  };
   return {
     GestureDetector: ({ children }: { children: unknown }) =>
       mockReact.createElement(View, null, children),
     Gesture: {
-      Pan: () => ({ runOnJS: () => ({ onUpdate: () => ({ onEnd: () => ({}) }) }) }),
-      Tap: () => ({ runOnJS: () => ({ onStart: () => ({}) }) }),
+      Pan: () => makePanBuilder(),
+      Tap: () => makeTapBuilder(),
     },
   };
 });
@@ -89,89 +118,169 @@ jest.mock('react-native-svg', () => {
   };
 });
 
-// ─── Source-level contracts ───────────────────────────────────────────────────
+// ─── Imports under test ───────────────────────────────────────────────────────
 
-describe('TgpLineChart — source guards', () => {
-  it('accepts data: Array<{x, y}> prop', () => {
-    expect(LINE_SRC).toMatch(/data:\s*ChartDataPoint\[\]/);
+import TgpLineChart from '../ui/charts/TgpLineChart';
+import TgpBarChart from '../ui/charts/TgpBarChart';
+import TgpAreaChart from '../ui/charts/TgpAreaChart';
+
+// ─── Shared fixtures ──────────────────────────────────────────────────────────
+
+// Quiet Luxury palette — what the rendered tooltip must use, regardless of
+// which token in src/constants/colors.ts resolves to each value.
+const BONE = '#F5EFE4';
+const INK = '#1A1A18';
+const OXBLOOD = '#4A0404';
+
+const SAMPLE = [
+  { x: 0, y: 180 },
+  { x: 1, y: 179.5 },
+  { x: 2, y: 179 },
+  { x: 3, y: 178 },
+  { x: 4, y: 177.5 },
+];
+
+beforeEach(() => {
+  gestureHandlers.panUpdate = undefined;
+  gestureHandlers.panEnd = undefined;
+  gestureHandlers.tapStart = undefined;
+});
+
+// The tooltip Rect/SvgText in all three charts share the same dimensions
+// (width=56, height=22, rx=1; fontSize=10, textAnchor="middle"). These
+// selectors locate that specific Rect/SvgText among grid/axis siblings.
+type Rendered = { props: Record<string, unknown> };
+const isTooltipRect = (r: Rendered) =>
+  r.props.width === 56 && r.props.height === 22 && r.props.rx === 1;
+const isTooltipText = (t: Rendered) =>
+  t.props.fontSize === 10 && t.props.textAnchor === 'middle';
+
+// ─── TgpLineChart ─────────────────────────────────────────────────────────────
+
+describe('TgpLineChart — render output', () => {
+  it('renders the Svg primitives expected for a multi-point line', () => {
+    const { getAllByTestId } = render(<TgpLineChart data={SAMPLE} height={200} />);
+    expect(getAllByTestId('Polyline').length).toBeGreaterThan(0);
+    expect(getAllByTestId('Circle').length).toBe(SAMPLE.length);
   });
 
-  it('accepts optional height prop', () => {
-    expect(LINE_SRC).toMatch(/height\?.*number/);
+  it('line stroke resolves to the theme primary color', () => {
+    const { getAllByTestId } = render(<TgpLineChart data={SAMPLE} height={200} />);
+    const polyline = getAllByTestId('Polyline')[0];
+    expect(polyline.props.stroke).toBe('#2C4A36');
   });
 
-  it('accepts optional themeOverride prop', () => {
-    expect(LINE_SRC).toMatch(/themeOverride\?.*Partial<ThemeColors>/);
+  it('tooltip renders with Quiet Luxury palette: bone fill, oxblood stroke, ink text', () => {
+    const { getAllByTestId } = render(<TgpLineChart data={SAMPLE} height={200} />);
+    // Drive the pan gesture so the chart enters its tooltip-visible state.
+    expect(gestureHandlers.panUpdate).toBeDefined();
+    act(() => {
+      gestureHandlers.panUpdate!({ x: 100, y: 50 });
+    });
+    const rects = getAllByTestId('Rect').map((n) => n as unknown as Rendered);
+    const tooltipRect = rects.find(isTooltipRect);
+    expect(tooltipRect).toBeDefined();
+    expect(tooltipRect!.props.fill).toBe(BONE);
+    expect(tooltipRect!.props.stroke).toBe(OXBLOOD);
+    const texts = getAllByTestId('SvgText').map((n) => n as unknown as Rendered);
+    const tooltipText = texts.find(isTooltipText);
+    expect(tooltipText).toBeDefined();
+    expect(tooltipText!.props.fill).toBe(INK);
   });
 
-  it('falls back to FALLBACK tokens when ThemeProvider is absent', () => {
-    expect(LINE_SRC).toMatch(/FALLBACK/);
-    expect(LINE_SRC).toMatch(/catch/);
+  it('renders an accessible root with role="image"', () => {
+    const { getByLabelText } = render(<TgpLineChart data={SAMPLE} height={200} />);
+    const root = getByLabelText('Line chart');
+    expect(root.props.accessibilityRole).toBe('image');
   });
 
-  it('tooltip uses Quiet Luxury palette: bone bg, ink text, oxblood border', () => {
-    // The tooltip Rect references canonical-Colors tokens rather than hex
-    // literals — the same tokens that resolve to #F5EFE4 (bone),
-    // #1A1A18 (ink), #4A0404 (oxblood / earningsAccent). Test the token
-    // contract, not the resolved hex.
-    expect(LINE_SRC).toMatch(/fill=\{Colors\.background\}/);
-    expect(LINE_SRC).toMatch(/fill=\{Colors\.textPrimary\}/);
-    expect(LINE_SRC).toMatch(/stroke=\{Colors\.earningsAccent\}/);
-  });
-
-  it('uses react-native-gesture-handler for pan', () => {
-    expect(LINE_SRC).toMatch(/GestureDetector/);
-    expect(LINE_SRC).toMatch(/Gesture\.Pan/);
-  });
-
-  it('has accessibilityLabel and accessibilityRole on root', () => {
-    expect(LINE_SRC).toMatch(/accessibilityLabel/);
-    expect(LINE_SRC).toMatch(/accessibilityRole="image"/);
-  });
-
-  it('has JSDoc block at the top of the file', () => {
-    expect(LINE_SRC.trimStart()).toMatch(/^\/\*\*/);
+  it('renders empty state when data has fewer than 2 points', () => {
+    const { getByText } = render(<TgpLineChart data={[{ x: 0, y: 100 }]} />);
+    expect(getByText('Not enough data points')).toBeTruthy();
   });
 });
 
-describe('TgpBarChart — source guards', () => {
-  it('accepts data: Array<{x, y}> prop', () => {
-    expect(BAR_SRC).toMatch(/data:\s*ChartDataPoint\[\]/);
+// ─── TgpBarChart ──────────────────────────────────────────────────────────────
+
+describe('TgpBarChart — render output', () => {
+  it('renders one Rect per bar', () => {
+    const { getAllByTestId } = render(<TgpBarChart data={SAMPLE} height={200} />);
+    const bars = getAllByTestId('Rect').filter(
+      (r) => !isTooltipRect(r as unknown as Rendered),
+    );
+    expect(bars.length).toBe(SAMPLE.length);
   });
 
-  it('has tooltip with Quiet Luxury styling', () => {
-    expect(BAR_SRC).toMatch(/fill=\{Colors\.background\}/);
-    expect(BAR_SRC).toMatch(/stroke=\{Colors\.earningsAccent\}/);
+  it('bar fill resolves to the theme primary color', () => {
+    const { getAllByTestId } = render(<TgpBarChart data={SAMPLE} height={200} />);
+    const bars = getAllByTestId('Rect').filter(
+      (r) => !isTooltipRect(r as unknown as Rendered),
+    );
+    bars.forEach((bar) => expect(bar.props.fill).toBe('#2C4A36'));
   });
 
-  it('uses GestureDetector', () => {
-    expect(BAR_SRC).toMatch(/GestureDetector/);
+  it('tooltip renders with Quiet Luxury palette: bone fill, oxblood stroke, ink text', () => {
+    const { getAllByTestId } = render(<TgpBarChart data={SAMPLE} height={200} />);
+    expect(gestureHandlers.tapStart).toBeDefined();
+    act(() => {
+      gestureHandlers.tapStart!({ x: 80, y: 100 });
+    });
+    const rects = getAllByTestId('Rect').map((n) => n as unknown as Rendered);
+    const tooltipRect = rects.find(isTooltipRect);
+    expect(tooltipRect).toBeDefined();
+    expect(tooltipRect!.props.fill).toBe(BONE);
+    expect(tooltipRect!.props.stroke).toBe(OXBLOOD);
+    const texts = getAllByTestId('SvgText').map((n) => n as unknown as Rendered);
+    const tooltipText = texts.find(isTooltipText);
+    expect(tooltipText).toBeDefined();
+    expect(tooltipText!.props.fill).toBe(INK);
   });
 
-  it('has accessibilityRole="image"', () => {
-    expect(BAR_SRC).toMatch(/accessibilityRole="image"/);
+  it('renders an accessible root with role="image"', () => {
+    const { getByLabelText } = render(<TgpBarChart data={SAMPLE} height={200} />);
+    const root = getByLabelText('Bar chart');
+    expect(root.props.accessibilityRole).toBe('image');
   });
 });
 
-describe('TgpAreaChart — source guards', () => {
-  it('accepts data: Array<{x, y}> prop', () => {
-    expect(AREA_SRC).toMatch(/data:\s*ChartDataPoint\[\]/);
+// ─── TgpAreaChart ─────────────────────────────────────────────────────────────
+
+describe('TgpAreaChart — render output', () => {
+  it('renders a filled area Path', () => {
+    const { getAllByTestId } = render(<TgpAreaChart data={SAMPLE} height={200} />);
+    const paths = getAllByTestId('Path');
+    expect(paths.length).toBeGreaterThan(0);
+    const area = paths[0];
+    expect(typeof area.props.d).toBe('string');
+    expect((area.props.d as string).length).toBeGreaterThan(0);
+    expect(area.props.fill).toBeTruthy();
   });
 
-  it('renders a filled area Path element', () => {
-    expect(AREA_SRC).toMatch(/areaPath/);
-    expect(AREA_SRC).toMatch(/<Path/);
+  it('renders the line Polyline and one Circle per data point', () => {
+    const { getAllByTestId } = render(<TgpAreaChart data={SAMPLE} height={200} />);
+    expect(getAllByTestId('Polyline').length).toBe(1);
+    expect(getAllByTestId('Circle').length).toBe(SAMPLE.length);
   });
 
-  it('has pan gesture support', () => {
-    expect(AREA_SRC).toMatch(/Gesture\.Pan/);
-  });
-
-  it('has tooltip with Quiet Luxury styling', () => {
-    expect(AREA_SRC).toMatch(/fill=\{Colors\.background\}/);
-    expect(AREA_SRC).toMatch(/stroke=\{Colors\.earningsAccent\}/);
+  it('tooltip renders with Quiet Luxury palette: bone fill, oxblood stroke, ink text', () => {
+    const { getAllByTestId } = render(<TgpAreaChart data={SAMPLE} height={200} />);
+    expect(gestureHandlers.panUpdate).toBeDefined();
+    act(() => {
+      gestureHandlers.panUpdate!({ x: 100, y: 50 });
+    });
+    const rects = getAllByTestId('Rect').map((n) => n as unknown as Rendered);
+    const tooltipRect = rects.find(isTooltipRect);
+    expect(tooltipRect).toBeDefined();
+    expect(tooltipRect!.props.fill).toBe(BONE);
+    expect(tooltipRect!.props.stroke).toBe(OXBLOOD);
+    const texts = getAllByTestId('SvgText').map((n) => n as unknown as Rendered);
+    const tooltipText = texts.find(isTooltipText);
+    expect(tooltipText).toBeDefined();
+    expect(tooltipText!.props.fill).toBe(INK);
   });
 });
+
+// ─── TgpSparkline (structural shape — no runtime contract to assert) ──────────
 
 describe('TgpSparkline — source guards', () => {
   it('accepts width and height props', () => {
@@ -188,11 +297,12 @@ describe('TgpSparkline — source guards', () => {
   });
 
   it('is label-free (no axes, grid, or tooltips)', () => {
-    // Sparkline must not have y-axis labels or grid lines
     expect(SPARK_SRC).not.toMatch(/yTicks/);
     expect(SPARK_SRC).not.toMatch(/SvgText/);
   });
 });
+
+// ─── charts/index.ts export surface ───────────────────────────────────────────
 
 describe('charts/index.ts — export surface', () => {
   it('exports TgpLineChart', () => {
@@ -209,37 +319,5 @@ describe('charts/index.ts — export surface', () => {
   });
   it('re-exports ChartDataPoint type', () => {
     expect(INDEX_SRC).toMatch(/export type.*ChartDataPoint/);
-  });
-});
-
-// ─── RTL snapshot — TgpLineChart ─────────────────────────────────────────────
-
-import TgpLineChart from '../ui/charts/TgpLineChart';
-
-const SAMPLE_DATA = [
-  { x: 0, y: 180 },
-  { x: 1, y: 179.5 },
-  { x: 2, y: 179 },
-  { x: 3, y: 178 },
-  { x: 4, y: 177.5 },
-];
-
-describe('TgpLineChart — RTL snapshot', () => {
-  it('renders without crashing', () => {
-    const { toJSON } = render(<TgpLineChart data={SAMPLE_DATA} height={200} />);
-    expect(toJSON()).toBeTruthy();
-  });
-
-  it('renders non-null JSON tree (structural render check)', () => {
-    const { toJSON } = render(<TgpLineChart data={SAMPLE_DATA} height={200} />);
-    // The rendered tree should be non-null and contain at least one child
-    const tree = toJSON() as { children: unknown[] } | null;
-    expect(tree).not.toBeNull();
-    expect(tree?.children?.length).toBeGreaterThan(0);
-  });
-
-  it('renders empty state when data has fewer than 2 points', () => {
-    const { getByText } = render(<TgpLineChart data={[{ x: 0, y: 100 }]} />);
-    expect(getByText('Not enough data points')).toBeTruthy();
   });
 });

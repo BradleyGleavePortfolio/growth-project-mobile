@@ -14,7 +14,7 @@
  *   Bar fill  → colors.primary
  *   Axis text → colors.textMuted
  *   Grid      → colors.border (hairline, dashed)
- *   Tooltip   → bone bg (#F5EFE4), ink text (#1A1A18), oxblood border (#4A0404)
+ *   Tooltip   → Colors.background / Colors.textPrimary / Colors.earningsAccent
  */
 
 import React, { useMemo, useRef, useState, useEffect } from 'react';
