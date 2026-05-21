@@ -30,6 +30,20 @@ jest.mock('@expo/vector-icons', () => {
   return { Ionicons: Icon, MaterialIcons: Icon, Feather: Icon };
 });
 
+// SkeletonScreen pulls in react-native-reanimated which requires native
+// initialisation. Replace with a lightweight testID-bearing View stub.
+jest.mock('../ui/skeletons/Skeleton', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const ReactLib = require('react');
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { View } = require('react-native');
+  return {
+    __esModule: true,
+    SkeletonScreen: (props: { testID?: string }) =>
+      ReactLib.createElement(View, { testID: props.testID ?? 'skeleton-screen' }),
+  };
+});
+
 // expo-video pulls in native bindings; replace with a minimal RN stub.
 jest.mock('expo-video', () => {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
