@@ -13,6 +13,30 @@
 //   through to the logout block — so a single successful refresh would still
 //   force-log-out the user because of the concurrent 401 path.
 //
+// A later iteration replaced that with a shared `refreshPromise` plus a
+// per-request `_retry` boolean. That handled the N-concurrent-401s case but
+// introduced a second bug (Lane-2 P0-3): `_retry` was stamped on the config
+// BEFORE the refresh awaited, so if the retried request hit 401 a SECOND time
+// (clock skew, a stale-token rejection arriving slightly later, brief server
+// rejection of the just-issued token) the interceptor refused to refresh
+// again and silently rejected the request. Scenario 5 in the previous comment
+// claimed "two refreshes over a few seconds is acceptable" but the code path
+// forbade it.
+//
+// Cycle-counter model (current contract):
+//   * `currentCycleId` is a monotonically increasing module-level counter.
+//     It bumps once after every successful refresh. The token most recently
+//     written to SecureStore is "the cycle N token" where N == currentCycleId
+//     at the moment the write completed.
+//   * Each request config is stamped with `_refreshAttempts` (default 0) and
+//     `_lastUsedCycleId` (the cycle whose token the most recent retry used).
+//   * On 401, the interceptor allows up to MAX_REFRESH_ATTEMPTS retries per
+//     request. Each retry coalesces onto the in-flight `refreshPromise` if one
+//     exists; otherwise it starts a fresh refresh. This means scenario (c)
+//     below — 5 concurrent 401s whose retries ALSO 401 — triggers exactly two
+//     refresh calls (the second cycle starts only after the first cycle has
+//     settled, and the second round of failures all coalesce on it).
+//
 // Scenarios this implementation handles:
 //   1. Single 401 → refresh OK → retry → caller gets 200.
 //   2. 5 simultaneous 401s → ONE refresh call in flight; requests 2–5 queue,
@@ -25,8 +49,22 @@
 //      data / onboarding keys are NOT cleared — see the security/critical-
 //      fixes-round-1 branch for why we kept that behavior.
 //   5. A 401 arrives AFTER a refresh has already completed → a fresh refresh
-//      kicks off; this is unavoidable without deeper request-token tracking
-//      and is acceptable: worst case is two refreshes over a few seconds.
+//      kicks off. With the cycle counter this is now a first-class case, not
+//      an "acceptable side-effect": a request that retried with cycle-N's
+//      token and 401'd again is allowed exactly one more refresh (cycle N+1).
+//   6. Genuinely bad credentials → `performRefresh` itself rejects on the
+//      FIRST attempt. `handleRefreshFailure` runs once, signOut emits logout,
+//      and no second refresh kicks off because the failed refresh resolved
+//      the promise. The `_refreshAttempts` cap is a belt-and-suspenders
+//      backstop for the pathological case where every refresh succeeds yet
+//      every subsequent request still 401s; after MAX_REFRESH_ATTEMPTS the
+//      request rejects and we stop hammering the refresh endpoint.
+//
+// `loggedOutOnce` is reset inside `refreshPromise.finally()` rather than on a
+// wall-clock timer. The previous setTimeout(…, 1000) was decoupled from the
+// promise it guarded — a 401 cascade longer than one second could trigger a
+// second sign-out emit. The flag is now tied to the same lifecycle as the
+// in-flight refresh promise.
 // ============================================================================
 
 import axios, { AxiosError, AxiosRequestConfig } from 'axios';
@@ -75,9 +113,24 @@ api.interceptors.request.use(async (config) => {
 // off a second refresh. The promise resolves with the new access token on
 // success, or rejects on failure — callers await it and either retry or bubble
 // the error up. `authEvents.emit('logout')` is guarded by `loggedOutOnce` so a
-// fleet of concurrent 401s produces one sign-out, not N.
+// fleet of concurrent 401s produces one sign-out, not N. The cycle counter
+// tracks which generation of token a given retry used so a SECOND 401 (after a
+// successful refresh) can still drive a follow-up refresh — see the contract
+// header at the top of this file.
 let refreshPromise: Promise<string> | null = null;
 let loggedOutOnce = false;
+let currentCycleId = 0;
+
+// Hard cap on per-request refresh retries. Two is enough to cover the
+// realistic case (a request used cycle-N's token, server still 401'd, give it
+// one more cycle) without enabling an infinite-loop if the server is
+// pathologically rejecting every freshly-issued token.
+const MAX_REFRESH_ATTEMPTS = 2;
+
+type RetryableConfig = AxiosRequestConfig & {
+  _refreshAttempts?: number;
+  _lastUsedCycleId?: number;
+};
 
 async function performRefresh(): Promise<string> {
   // Read refresh token from the SAME store the writers use (SecureStore via
@@ -89,10 +142,17 @@ async function performRefresh(): Promise<string> {
   if (!refreshToken) throw new Error('No refresh token');
 
   // Dynamic import keeps the supabase-js bundle out of the cold-start path for
-  // apps that never hit a 401.
-  const { createClient } = await import('@supabase/supabase-js');
-  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  const { data, error: refreshError } = await supabase.auth.refreshSession({
+  // apps that never hit a 401. The `__testRefreshSession` seam exists only so
+  // unit tests can sidestep the dynamic import — see the test-only block
+  // below for the contract.
+  const refreshSession: RefreshSessionFn = __testRefreshSession
+    ? __testRefreshSession
+    : await (async () => {
+        const { createClient } = await import('@supabase/supabase-js');
+        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        return (args) => supabase.auth.refreshSession(args) as ReturnType<RefreshSessionFn>;
+      })();
+  const { data, error: refreshError } = await refreshSession({
     refresh_token: refreshToken,
   });
   if (refreshError || !data.session) {
@@ -100,36 +160,39 @@ async function performRefresh(): Promise<string> {
   }
   await secureStorage.setItem('supabase_token', data.session.access_token);
   await secureStorage.setItem('supabase_refresh_token', data.session.refresh_token);
+  // Bump only on success — failures must not advance the cycle, otherwise a
+  // stale request would think the next cycle's token is in play and ask for
+  // a third refresh.
+  currentCycleId += 1;
   return data.session.access_token;
 }
 
 async function handleRefreshFailure(): Promise<void> {
-  // Fire exactly once per refresh-failure cascade. The flag is reset after
-  // emission so a subsequent successful login → 401 cycle still works.
+  // Fire exactly once per refresh-failure cascade. The flag is reset in the
+  // refreshPromise.finally() chain so a subsequent successful login → 401
+  // cycle still works without depending on a wall-clock timer.
   if (loggedOutOnce) return;
   loggedOutOnce = true;
   // Full sign-out on refresh failure: clears all auth keys (both stores),
   // resets analytics/Sentry, and emits logout. Lazy import avoids a require
   // cycle between api.ts and authActions.ts (authActions imports profileApi
-  // from this file).
+  // from this file). The `__testSignOut` seam exists only so unit tests can
+  // sidestep the dynamic import — production goes through `await import(...)`.
   try {
-    const { signOut } = await import('./authActions');
+    const signOut = __testSignOut
+      ? __testSignOut
+      : (await import('./authActions')).signOut;
     await signOut();
   } catch (err) {
     logger.error('API', 'signOut on refresh failure threw', err);
     authEvents.emit('logout');
   }
-  // Reset the one-shot guard after the emit so we don't permanently suppress
-  // future logouts. The next refresh attempt starts fresh.
-  setTimeout(() => {
-    loggedOutOnce = false;
-  }, 1000);
 }
 
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
-    const originalConfig = error.config as (AxiosRequestConfig & { _retry?: boolean }) | undefined;
+    const originalConfig = error.config as RetryableConfig | undefined;
 
     // Network error — no response from server (cold start, no wifi, etc.).
     // Do NOT log the user out; just surface a friendly message.
@@ -163,14 +226,22 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    // Only 401s trigger refresh. `_retry` guards against an infinite loop if
-    // the retried request also returns 401 (server-side token rejection).
-    if (error.response.status !== 401 || !originalConfig || originalConfig._retry) {
+    if (error.response.status !== 401 || !originalConfig) {
       return Promise.reject(error);
     }
-    originalConfig._retry = true;
 
-    // If a refresh is already in flight, await it. Otherwise start one.
+    // Per-request retry cap. The first 401 has attempts=0; each successful
+    // refresh + retry increments. After MAX_REFRESH_ATTEMPTS the request
+    // rejects (and, because the latest refresh succeeded, no logout fires —
+    // logout is reserved for the refresh-itself-failing path).
+    const attempts = originalConfig._refreshAttempts ?? 0;
+    if (attempts >= MAX_REFRESH_ATTEMPTS) {
+      return Promise.reject(error);
+    }
+
+    // If a refresh is already in flight, await it. Otherwise start one. The
+    // promise is shared across all concurrent 401s so N parallel requests
+    // produce a single refresh call per cycle.
     if (!refreshPromise) {
       refreshPromise = performRefresh()
         .catch(async (err) => {
@@ -178,14 +249,18 @@ api.interceptors.response.use(
           throw err;
         })
         .finally(() => {
-          // Clear the promise so the next 401 burst (e.g. after re-login) can
-          // trigger a fresh refresh instead of reusing a resolved one.
+          // Clear the promise so the next 401 burst can trigger a fresh
+          // refresh. Reset `loggedOutOnce` on the SAME chain so the guard's
+          // lifetime is bound to the refresh attempt, not a wall-clock timer.
           refreshPromise = null;
+          loggedOutOnce = false;
         });
     }
 
     try {
       const newToken = await refreshPromise;
+      originalConfig._refreshAttempts = attempts + 1;
+      originalConfig._lastUsedCycleId = currentCycleId;
       originalConfig.headers = originalConfig.headers || {};
       (originalConfig.headers as Record<string, string>).Authorization = `Bearer ${newToken}`;
       return api.request(originalConfig);
@@ -194,6 +269,33 @@ api.interceptors.response.use(
     }
   },
 );
+
+// Test-only seams. Production code never reads these — they exist so the
+// jest suite can stub the two dynamic imports inside performRefresh /
+// handleRefreshFailure without needing Node's --experimental-vm-modules flag
+// (which is what unmocked dynamic `import()` requires under jest). The
+// production path goes through `await import(...)` unchanged.
+type RefreshSessionFn = (args: { refresh_token: string }) => Promise<{
+  data: { session: { access_token: string; refresh_token: string } | null };
+  error: unknown;
+}>;
+let __testRefreshSession: RefreshSessionFn | null = null;
+let __testSignOut: (() => Promise<void>) | null = null;
+
+export function __setRefreshSessionForTests(fn: RefreshSessionFn | null): void {
+  __testRefreshSession = fn;
+}
+export function __setSignOutForTests(fn: (() => Promise<void>) | null): void {
+  __testSignOut = fn;
+}
+
+export function __resetRefreshStateForTests(): void {
+  refreshPromise = null;
+  loggedOutOnce = false;
+  currentCycleId = 0;
+  __testRefreshSession = null;
+  __testSignOut = null;
+}
 
 export default api;
 
