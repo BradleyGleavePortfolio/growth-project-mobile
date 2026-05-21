@@ -25,6 +25,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/colors';
 import { subCoachApi, SubCoachSummary } from '../../api/subCoachApi';
+import { coachTeamApi } from '../../api/coachTeamApi';
 import { authApi } from '../../services/api';
 import type { TeamStackParamList } from '../../navigation/CoachNavigator';
 import SubCoachInviteModal from './SubCoachInviteModal';
@@ -154,6 +155,11 @@ export default function TeamManagementScreen() {
   const [error, setError] = useState<string | null>(null);
   const [planTier, setPlanTier] = useState<string>('flat_300');
   const [inviteOpen, setInviteOpen] = useState(false);
+  // P0-3 — remaining seat headroom for the invite modal's `maxClients`
+  // clamp. `null` means "unknown" (team profile not yet loaded / endpoint
+  // not configured); the modal skips the clamp in that case rather than
+  // blocking.
+  const [remainingSeats, setRemainingSeats] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -162,6 +168,19 @@ export default function TeamManagementScreen() {
     // of whether sub-coaches exist yet.
     const tier = await resolveHeadCoachTier();
     setPlanTier(tier);
+    // P0-3 — fetch seat headroom in parallel with the roster. A failure here
+    // is non-fatal: the modal degrades to "no clamp" rather than blocking
+    // invites, but on the happy path we surface the exact remaining-seat
+    // count so the head coach sees structured headroom feedback.
+    void coachTeamApi.getProfile().then((profileResult) => {
+      if (profileResult.ok) {
+        const headroom =
+          profileResult.data.client_capacity - profileResult.data.clients_assigned;
+        setRemainingSeats(headroom >= 0 ? headroom : 0);
+      } else {
+        setRemainingSeats(null);
+      }
+    });
     try {
       const res = await subCoachApi.listSubCoaches();
       setSubCoaches(res.data ?? []);
@@ -255,6 +274,8 @@ export default function TeamManagementScreen() {
           // pending row.
           void load();
         }}
+        existingEmails={subCoaches.map((s) => s.email)}
+        remainingSeats={remainingSeats ?? undefined}
       />
     </View>
   );

@@ -101,6 +101,14 @@ export default function CoachInvitesScreen({
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   /**
+   * P0-5 — distinguish "empty" from "load failed". The previous
+   * implementation swallowed every error with `console.error` and rendered
+   * the empty-state, which led head coaches on a backend outage to
+   * conclude their invites had vanished and re-send everyone. The error
+   * state surfaces a structured message + retry button per Rule 9.
+   */
+  const [loadError, setLoadError] = useState<string | null>(null);
+  /**
    * Tri-state per backend support: `null` = unknown, `true` = endpoint
    * works, `false` = endpoint returned 404. Once we know the backend
    * doesn't implement resend we hide the affordance for every row.
@@ -111,8 +119,16 @@ export default function CoachInvitesScreen({
     try {
       const next = await invitesApi.listInvites('all');
       setInvites(next);
+      setLoadError(null);
     } catch (err) {
-      console.error('CoachInvitesScreen: load failed', err);
+      // P0-5 — backend outage / 5xx must NOT render as an empty list.
+      // Capture a structured message so the screen can show a retry CTA.
+      setLoadError(
+        errorMessage(
+          err,
+          'We couldn\'t load your invites. Check your connection and try again.',
+        ),
+      );
     } finally {
       setLoading(false);
     }
@@ -179,32 +195,53 @@ export default function CoachInvitesScreen({
     Alert.alert('Copied', 'Invite link copied to clipboard.');
   }, []);
 
-  const handleRevoke = useCallback((invite: Invite) => {
-    Alert.alert(
-      'Revoke invite?',
-      `Revoke invite for ${invite.clientEmail ?? invite.code}? They can no longer accept it.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Revoke',
-          style: 'destructive',
-          onPress: async () => {
-            warningTap();
-            try {
-              await invitesApi.revokeInvite(invite.id);
-              setInvites((prev) =>
-                prev.map((i) =>
-                  i.id === invite.id ? { ...i, status: 'REVOKED' } : i,
-                ),
-              );
-            } catch (err) {
-              Alert.alert('Revoke failed', errorMessage(err, 'Unknown error'));
-            }
+  const handleRevoke = useCallback(
+    (invite: Invite) => {
+      Alert.alert(
+        'Revoke invite?',
+        `Revoke invite for ${invite.clientEmail ?? invite.code}? They can no longer accept it.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Revoke',
+            style: 'destructive',
+            onPress: async () => {
+              warningTap();
+              try {
+                await invitesApi.revokeInvite(invite.id);
+                setInvites((prev) =>
+                  prev.map((i) =>
+                    i.id === invite.id ? { ...i, status: 'REVOKED' } : i,
+                  ),
+                );
+              } catch (err) {
+                // P0-4 — revoke can race with the invitee accepting. The
+                // backend returns 409 in that case. Surface a clear
+                // structured message rather than "Unknown error" and
+                // refresh the list so the head coach sees the now-accepted
+                // row instead of a stale pending one.
+                const status = (err as { response?: { status?: number } })
+                  ?.response?.status;
+                if (status === 409) {
+                  Alert.alert(
+                    'Already accepted',
+                    'This invite was already accepted by someone else — refreshing your list.',
+                  );
+                  void load();
+                  return;
+                }
+                Alert.alert(
+                  'Revoke failed',
+                  errorMessage(err, 'We couldn\'t revoke this invite. Try again in a moment.'),
+                );
+              }
+            },
           },
-        },
-      ],
-    );
-  }, []);
+        ],
+      );
+    },
+    [load],
+  );
 
   if (loading) {
     return (
@@ -267,6 +304,25 @@ export default function CoachInvitesScreen({
         })}
       </View>
 
+      {loadError !== null && invites.length > 0 && (
+        <View
+          style={styles.errorBanner}
+          accessibilityLiveRegion="polite"
+          testID="coach-invites-error-banner"
+        >
+          <Text style={styles.errorBannerText}>{loadError}</Text>
+          <Pressable
+            onPress={() => void load()}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading invites"
+            testID="coach-invites-error-retry"
+            style={styles.errorBannerBtn}
+          >
+            <Text style={styles.errorBannerBtnText}>Retry</Text>
+          </Pressable>
+        </View>
+      )}
+
       <FlatList
         data={filtered}
         keyExtractor={(item) => item.id}
@@ -279,13 +335,42 @@ export default function CoachInvitesScreen({
         }
         contentContainerStyle={styles.list}
         ListEmptyComponent={
-          <View style={styles.empty}>
-            <Ionicons name="mail-outline" size={42} color={colors.textMuted} />
-            <Text style={styles.emptyTitle}>No invites</Text>
-            <Text style={styles.emptyText}>
-              Send your first invite from the bulk-invite screen.
-            </Text>
-          </View>
+          loadError !== null ? (
+            // P0-5 — surface the load failure as its own state. We never
+            // render the "No invites" empty-state on a backend error
+            // because head coaches mistake it for "their invites vanished"
+            // and re-send everyone.
+            <View
+              style={styles.empty}
+              accessibilityLiveRegion="polite"
+              testID="coach-invites-error-state"
+            >
+              <Ionicons
+                name="cloud-offline-outline"
+                size={42}
+                color={colors.error}
+              />
+              <Text style={styles.emptyTitle}>Couldn't load invites</Text>
+              <Text style={styles.emptyText}>{loadError}</Text>
+              <Pressable
+                onPress={() => void load()}
+                accessibilityRole="button"
+                accessibilityLabel="Retry loading invites"
+                testID="coach-invites-error-state-retry"
+                style={styles.errorRetryBtn}
+              >
+                <Text style={styles.errorRetryBtnText}>Retry</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View style={styles.empty} testID="coach-invites-empty">
+              <Ionicons name="mail-outline" size={42} color={colors.textMuted} />
+              <Text style={styles.emptyTitle}>No invites</Text>
+              <Text style={styles.emptyText}>
+                Send your first invite from the bulk-invite screen.
+              </Text>
+            </View>
+          )
         }
         renderItem={({ item }) => {
           const isPending = item.status === 'PENDING';
@@ -516,6 +601,46 @@ function makeStyles(colors: ThemeColors) {
       alignItems: 'center',
     },
     actionBtnDanger: { backgroundColor: `${colors.error}1A` },
+    errorBanner: {
+      marginHorizontal: 16,
+      marginBottom: 8,
+      padding: 12,
+      borderRadius: 8,
+      backgroundColor: `${colors.error}1A`,
+      borderWidth: 1,
+      borderColor: `${colors.error}33`,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+    },
+    errorBannerText: {
+      flex: 1,
+      fontSize: 13,
+      color: colors.error,
+    },
+    errorBannerBtn: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 6,
+      backgroundColor: colors.error,
+    },
+    errorBannerBtnText: {
+      color: colors.textOnPrimary,
+      fontSize: 13,
+      fontWeight: '600',
+    },
+    errorRetryBtn: {
+      marginTop: 12,
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      borderRadius: 6,
+      backgroundColor: colors.primary,
+    },
+    errorRetryBtnText: {
+      color: colors.textOnPrimary,
+      fontSize: 13,
+      fontWeight: '600',
+    },
   });
 }
 

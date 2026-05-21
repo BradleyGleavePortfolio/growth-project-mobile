@@ -27,6 +27,7 @@ import {
   SubCoachDetail,
   EngagementBreakdown,
 } from '../../api/subCoachApi';
+import { errorMessage } from '../../types/common';
 import type { TeamStackParamList } from '../../navigation/CoachNavigator';
 
 function BreakdownRow({
@@ -146,8 +147,27 @@ export default function SubCoachDetailScreen() {
                   'Not enabled yet',
                   'Sub-coach revocation is not enabled on your plan yet.',
                 );
+              } else if (status === 409) {
+                // P0-4 — concurrent revoke / capacity conflict. The backend
+                // returns 409 when the sub-coach was already revoked in
+                // another session, or when reassigning their clients back
+                // to the head coach would exceed the head coach's seat
+                // capacity. Surface the structured `response.data.message`
+                // per Rule 9 and refresh the detail so the head coach sees
+                // current state instead of a stale "Please try again".
+                Alert.alert(
+                  'Already changed',
+                  errorMessage(
+                    err,
+                    'This sub-coach was already revoked, or reassigning their clients would exceed your seat capacity. Refreshing.',
+                  ),
+                  [{ text: 'OK', onPress: () => void load() }],
+                );
               } else {
-                Alert.alert('Could not revoke', 'Please try again. If this keeps failing, contact support.');
+                Alert.alert(
+                  'Could not revoke',
+                  errorMessage(err, 'Please try again. If this keeps failing, contact support.'),
+                );
               }
             } finally {
               setRevoking(false);
@@ -156,7 +176,7 @@ export default function SubCoachDetailScreen() {
         },
       ],
     );
-  }, [detail, subCoachId, navigation]);
+  }, [detail, subCoachId, navigation, load]);
 
   if (loading) {
     return <SkeletonScreen count={5} />;
