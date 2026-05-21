@@ -11,6 +11,23 @@
  * surface instead of a raw error. If the package list can't be loaded
  * (offline, server down), the "Subscribe" CTA falls back to the full
  * ClientPackages screen.
+ *
+ * Accessibility (Hunter #3 P0-2, WCAG 2.1 AA + Apple App Review):
+ *   - Every tappable element (package row, "See all plans" CTA, "Maybe
+ *     later" close) declares accessibilityRole + accessibilityLabel +
+ *     accessibilityHint so VoiceOver / TalkBack announce them as
+ *     buttons with the right action and outcome.
+ *   - Package rows declare accessibilityState.selected and .disabled
+ *     when the row represents the user's current plan, so screen-reader
+ *     users can tell which plan they already have.
+ *   - The composite cell's <Text> children are marked decorative
+ *     (accessibilityElementsHidden + importantForAccessibility) so
+ *     VoiceOver does not announce the row's name, description, and
+ *     price as three separate elements after the row's computed label.
+ *   - The sheet container is marked accessibilityViewIsModal so iOS
+ *     traps focus inside the dialog while it's open.
+ *   - The title declares accessibilityRole="header" so the first
+ *     focused element announces as "heading, Choose a Plan".
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import {
@@ -72,19 +89,25 @@ export function PaywallSheet({ visible, message, onClose, onSubscribe }: Paywall
   const renderPackages = () => {
     if (pkgState.kind === 'loading') {
       return (
-        <View style={styles.loadingRow} testID="paywall-loading">
+        <View
+          style={styles.loadingRow}
+          testID="paywall-loading"
+          accessible
+          accessibilityRole="progressbar"
+          accessibilityLabel="Loading coaching plans"
+        >
           <ActivityIndicator color={colors.primary} />
         </View>
       );
     }
     if (pkgState.kind === 'unavailable') {
-      // Structured copy (Rule 9): one clear sentence + one explicit action.
       const copy =
         pkgState.reason === 'not_configured'
           ? 'Your coach has not enabled plans yet. Please reach out to them.'
           : "We couldn't load plans right now. Tap Subscribe to keep trying.";
       return (
         <Text
+          accessibilityRole="alert"
           style={[
             styles.unavailable,
             { color: colors.textSecondary, ...tokens.typography.bodySmall },
@@ -98,6 +121,7 @@ export function PaywallSheet({ visible, message, onClose, onSubscribe }: Paywall
     if (pkgState.kind === 'ready' && pkgState.packages.length === 0) {
       return (
         <Text
+          accessibilityRole="alert"
           style={[
             styles.unavailable,
             { color: colors.textSecondary, ...tokens.typography.bodySmall },
@@ -122,8 +146,15 @@ export function PaywallSheet({ visible, message, onClose, onSubscribe }: Paywall
               },
             ]}
             testID={`paywall-package-${pkg.id}`}
+            accessible
+            accessibilityRole="button"
+            accessibilityLabel={packageAccessibilityLabel(pkg)}
+            accessibilityHint="Double tap to start checkout for this plan"
+            accessibilityState={{ selected: pkg.is_current, disabled: pkg.is_current }}
           >
             <Text
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
               style={[
                 styles.packageName,
                 { color: colors.textPrimary, ...tokens.typography.h4 },
@@ -133,6 +164,8 @@ export function PaywallSheet({ visible, message, onClose, onSubscribe }: Paywall
             </Text>
             {pkg.description ? (
               <Text
+                accessibilityElementsHidden
+                importantForAccessibility="no-hide-descendants"
                 style={[
                   styles.packageDescription,
                   { color: colors.textSecondary, ...tokens.typography.bodySmall },
@@ -142,6 +175,8 @@ export function PaywallSheet({ visible, message, onClose, onSubscribe }: Paywall
               </Text>
             ) : null}
             <Text
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
               style={[
                 styles.packagePrice,
                 { color: colors.primary, ...tokens.typography.bodyMd },
@@ -164,6 +199,8 @@ export function PaywallSheet({ visible, message, onClose, onSubscribe }: Paywall
     >
       <View style={[styles.backdrop, { backgroundColor: colors.cardShadow }]} testID="paywall-sheet">
         <View
+          accessibilityViewIsModal
+          accessibilityLabel="Choose a Plan"
           style={[
             styles.sheet,
             {
@@ -174,6 +211,7 @@ export function PaywallSheet({ visible, message, onClose, onSubscribe }: Paywall
         >
           <ScrollView contentContainerStyle={styles.scroll}>
             <Text
+              accessibilityRole="header"
               style={[
                 styles.title,
                 { color: colors.textPrimary, ...tokens.typography.h2 },
@@ -196,9 +234,14 @@ export function PaywallSheet({ visible, message, onClose, onSubscribe }: Paywall
               style={[styles.subscribeCta, { backgroundColor: colors.primary }]}
               onPress={() => onSubscribe()}
               testID="paywall-subscribe"
+              accessible
               accessibilityRole="button"
+              accessibilityLabel="See all plans"
+              accessibilityHint="Double tap to open the full list of available coaching packages"
             >
               <Text
+                accessibilityElementsHidden
+                importantForAccessibility="no-hide-descendants"
                 style={[
                   styles.subscribeText,
                   { color: colors.textOnPrimary, ...tokens.typography.bodyMd },
@@ -212,9 +255,14 @@ export function PaywallSheet({ visible, message, onClose, onSubscribe }: Paywall
               style={styles.closeCta}
               onPress={onClose}
               testID="paywall-close"
+              accessible
               accessibilityRole="button"
+              accessibilityLabel="Maybe later"
+              accessibilityHint="Double tap to dismiss this plan picker"
             >
               <Text
+                accessibilityElementsHidden
+                importantForAccessibility="no-hide-descendants"
                 style={[
                   styles.closeText,
                   { color: colors.textSecondary, ...tokens.typography.bodySmall },
@@ -237,6 +285,27 @@ function formatPrice(pkg: ClientCoachPackage): string {
     return `${currency} ${amount} / ${pkg.interval}`;
   }
   return `${currency} ${amount}`;
+}
+
+/**
+ * Build the VoiceOver / TalkBack announcement for a package row.
+ *
+ * Composed of (in order): package name, price + interval (for recurring),
+ * billing period, and the current-plan state suffix. The state suffix is
+ * critical — without it a screen-reader user cannot tell which plan they
+ * already have, defeating the purpose of the picker.
+ */
+export function packageAccessibilityLabel(pkg: ClientCoachPackage): string {
+  const currency = (pkg.currency || 'usd').toUpperCase();
+  const amount = pkg.price.toFixed(2);
+  const isRecurring = pkg.type === 'recurring' && !!pkg.interval;
+  const priceClause = isRecurring
+    ? `${currency} ${amount} per ${pkg.interval}, billed ${pkg.interval}ly`
+    : `${currency} ${amount}, one-time payment`;
+  const stateClause = pkg.is_current
+    ? 'Current plan'
+    : 'Not currently subscribed';
+  return `${pkg.name}, ${priceClause}. ${stateClause}.`;
 }
 
 const styles = StyleSheet.create({
