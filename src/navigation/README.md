@@ -165,3 +165,33 @@ The `CoachHomeScreen` (`Dashboard`) is preserved as a sub-screen inside `Clients
 | `action-queue` | Pending alerts | `ClientDetail` via `onSelectClient` |
 
 See `src/screens/coach/command-center/README.md` for full documentation.
+
+## Day-1 onboarding navigator (final first-run experience)
+
+`Day1OnboardingNavigator` (`src/navigation/Day1OnboardingNavigator.tsx`) is the
+new authenticated-but-not-yet-onboarded surface for fresh accounts. It runs in
+front of `ClientNavigator` until `profile.day_one_completed === true` is
+returned from the backend.
+
+Stack order:
+
+```
+Welcome → CoachPairing → Goals → Notifications → CheckInTime → Ready
+```
+
+| Screen | Purpose | Persistence | Skip allowed |
+| --- | --- | --- | --- |
+| `Welcome` | Brand fade, greet by first name | none (cover) | n/a |
+| `CoachPairing` | Pair via invite code (manual or deep-link prefill) | `POST /auth/attach-invite-code` | Yes — unless arrived via deep link |
+| `Goals` | Multi-select coaching goals | `PUT /profile { day_one_goals: [...] }` | Yes |
+| `Notifications` | Permission ask with value-prop context | `PATCH /users/me/preferences { notif_permission_state }` | Yes — denial does NOT block |
+| `CheckInTime` | Pick daily check-in (default 9:00 AM local) | `PUT /profile + PATCH /notifications/preferences { daily_checkin_time }` | Yes |
+| `Ready` | Terminal screen, calls `completeDayOne()` + `authEvents.emit()` | `PUT /profile { day_one_completed: true }` | n/a |
+
+All step persistence runs through `src/screens/day-one/api.ts`, which applies
+exponential-backoff retry with jitter for transient failures and classifies
+4xx errors into a `DayOneError` discriminated union so the UI surfaces
+structured copy instead of axios strings (Rule 9 — no raw error codes).
+
+This navigator is currently NOT wired into `RootNavigator` — the integration
+PR follows after GPT-5.5 audit.
