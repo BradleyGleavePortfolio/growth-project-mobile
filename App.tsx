@@ -16,10 +16,12 @@ import * as SplashScreen from 'expo-splash-screen';
 import RootNavigator from './src/navigation/RootNavigator';
 import AppSplash from './src/components/AppSplash';
 import ErrorBoundary from './src/components/ErrorBoundary';
-import { requestNotificationPermissions } from './src/utils/notifications';
 // Phase 11: push-channel taxonomy — register Android channels + iOS categories
 import { registerPushChannels } from './src/notifications/push-channels';
-import { registerForPushNotifications } from './src/services/pushNotifications';
+import {
+  registerForPushNotifications,
+  installForegroundHandler,
+} from './src/services/pushNotifications';
 import { usersApi } from './src/services/api';
 import { authEvents } from './src/utils/authEvents';
 import { secureStorage } from './src/services/secureStorage';
@@ -29,7 +31,7 @@ import {
   asyncStoragePersister,
   QUERY_CACHE_MAX_AGE,
 } from './src/services/queryClient';
-import { initSentry, wrap as sentryWrap } from './src/services/sentry';
+import { initSentry, wrap as sentryWrap, captureError } from './src/services/sentry';
 // Phase 11: typed analytics service replaces the raw lib/analytics track call
 // for app_opened so the typed AnalyticsEvents constant is used.
 import { track } from './src/lib/analytics';
@@ -102,12 +104,14 @@ function App() {
     Inter_600SemiBold,
   });
 
-  // Hide native splash once fonts are loaded.
+  // Hide native splash once fonts AND initApp are ready. Hiding on fontsLoaded
+  // alone exposed a blank-screen window between native-splash dismiss and
+  // AppSplash mount when ready was still false. (Hunt P2-splash)
   useEffect(() => {
-    if (fontsLoaded) {
+    if (fontsLoaded && ready) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded]);
+  }, [fontsLoaded, ready]);
 
   useEffect(() => {
     initApp();
@@ -143,15 +147,21 @@ function App() {
 
   const initApp = async () => {
     try {
+      // Single source of truth for foreground push behaviour. Wired here
+      // (after initSentry at module load) and before any other notification
+      // setup so the in-app banner store owns the foreground surface.
+      // (Hunt P0-4)
+      installForegroundHandler();
+
       if (isScreenshotMode()) {
-        // Skip notification permission prompts and analytics in screenshot
-        // mode — both can throw modal UI on top of the screen we are trying
-        // to capture. Seed AsyncStorage so RootNavigator routes the demo user
-        // straight into ClientNavigator. The local SQLite database is also
-        // skipped: none of the marketing-target screens (Home / Log / Plan /
-        // Recipes / Progress / Fast) read from it, and the web build of
-        // expo-sqlite needs cross-origin-isolation that the dev server does
-        // not set, which would hang the boot.
+        // Skip analytics in screenshot mode — it can throw modal UI on top of
+        // the screen we are trying to capture. Seed AsyncStorage so
+        // RootNavigator routes the demo user straight into ClientNavigator.
+        // The local SQLite database is also skipped: none of the
+        // marketing-target screens (Home / Log / Plan / Recipes / Progress /
+        // Fast) read from it, and the web build of expo-sqlite needs
+        // cross-origin-isolation that the dev server does not set, which
+        // would hang the boot.
         await seedDemoUser();
       } else {
         // Initialize SQLite database: create tables, seed exercises (152),
@@ -159,15 +169,21 @@ function App() {
         // NOTE: seedCoachIfNeeded() was removed along with the dead SQLite auth path.
         // Auth lives exclusively on the backend now; the local `users` table is no longer used.
         await initDatabase();
-        // Phase 11: register push channels BEFORE requesting permission so
-        // Android channels are configured before the system prompt fires.
+        // Phase 11: register push channels (Android + iOS categories) at boot
+        // so the four-tier taxonomy is in place before any notification
+        // arrives. The user-facing permission prompt itself is gated to the
+        // Day-1 onboarding "Notifications" step (R29 — ask at the value
+        // moment, not at cold start).
         await registerPushChannels();
-        await requestNotificationPermissions();
         // Phase 11: use typed AnalyticsEvents constant for app_opened.
         track(AnalyticsEvents.APP_OPENED, { cold_start: true });
       }
     } catch (err) {
-      // Round 3: guard production builds — Metro strips __DEV__ at build time.
+      // initSentry has already run at module load, so we can capture in any
+      // build profile — previously this was gated to __DEV__ and silently
+      // swallowed in production while setReady(true) still flipped the UI.
+      // (Hunt P1-init)
+      captureError(err, { phase: 'initApp' });
       if (__DEV__) console.error('App init error:', err);
     } finally {
       setReady(true);
