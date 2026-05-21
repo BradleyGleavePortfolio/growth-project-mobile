@@ -32,9 +32,33 @@ interface Props {
   visible: boolean;
   onDismiss: () => void;
   onInvited: () => void;
+  /**
+   * P0-2 — emails already present on the head coach's roster (active or
+   * pending). Used for client-side dedupe before we POST, so a head coach
+   * can't double-invite the same person and trigger duplicate Stripe seat
+   * billing if the backend dedupe lags. Compared case-insensitively.
+   */
+  existingEmails?: ReadonlyArray<string>;
+  /**
+   * P0-3 — remaining seat headroom on the head coach's plan
+   * (`client_capacity - clients_assigned`). When provided, the `maxClients`
+   * field is bounded by this value so a head coach with 5 seats can't
+   * provision a sub-coach with 99999 and break the seat-based pricing
+   * model. `undefined` means "unknown" (team profile not yet loaded) — we
+   * skip the clamp in that case rather than block the invite, because
+   * blocking on an unknown denominator would lock head coaches out on a
+   * flaky team-profile fetch.
+   */
+  remainingSeats?: number;
 }
 
-export default function SubCoachInviteModal({ visible, onDismiss, onInvited }: Props) {
+export default function SubCoachInviteModal({
+  visible,
+  onDismiss,
+  onInvited,
+  existingEmails,
+  remainingSeats,
+}: Props) {
   const { colors } = useTheme();
   const styles = makeStyles(colors);
   const [email, setEmail] = useState('');
@@ -60,17 +84,58 @@ export default function SubCoachInviteModal({ visible, onDismiss, onInvited }: P
   };
 
   const handleInvite = async () => {
+    // P0-2 — re-entrancy guard. The disabled button covers the spinner
+    // state, but double-taps that arrive in the same render tick before
+    // React commits `submitting=true` still reach the press handler. Bail
+    // immediately if a submit is already in flight.
+    if (submitting) return;
+
     setError('');
     const trimmedEmail = email.trim();
     if (!trimmedEmail || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(trimmedEmail)) {
       setError('Enter a valid email address.');
       return;
     }
+
+    // P0-2 — dedupe against the roster. If the email is already invited or
+    // active, refuse client-side rather than letting the backend create a
+    // duplicate pending row + double-charge a Stripe seat once accepted.
+    if (existingEmails && existingEmails.length > 0) {
+      const lowerEmail = trimmedEmail.toLowerCase();
+      const isDuplicate = existingEmails.some(
+        (e) => e.trim().toLowerCase() === lowerEmail,
+      );
+      if (isDuplicate) {
+        setError(
+          'A sub-coach with this email already exists on your team. ' +
+            'Revoke them first or invite a different address.',
+        );
+        return;
+      }
+    }
+
     let maxClientsNum: number | undefined;
     if (maxClients.trim()) {
       const n = parseInt(maxClients.trim(), 10);
       if (isNaN(n) || n < 1) {
         setError('Seat ceiling must be a positive number.');
+        return;
+      }
+      // P0-3 — clamp to remaining plan seats. Without this a head coach with
+      // 5 seats can type 99999 and provision a sub-coach beyond the billed
+      // ceiling. Surface a structured Rule-9 message naming the exact
+      // headroom so the head coach knows what to do.
+      if (typeof remainingSeats === 'number' && n > remainingSeats) {
+        if (remainingSeats <= 0) {
+          setError(
+            'No seats available on your plan. Upgrade or revoke an existing sub-coach to free a seat.',
+          );
+        } else {
+          setError(
+            `Only ${remainingSeats} seat${remainingSeats === 1 ? '' : 's'} available on your plan. ` +
+              `Lower the ceiling or upgrade to add more.`,
+          );
+        }
         return;
       }
       maxClientsNum = n;
@@ -88,6 +153,14 @@ export default function SubCoachInviteModal({ visible, onDismiss, onInvited }: P
       const status = (err as { response?: { status?: number } })?.response?.status;
       if (status === 404 || status === 501) {
         setError('Sub-coach invites are not enabled on this account yet.');
+      } else if (status === 409) {
+        // P0-2 — backend dedupe path. Surface a clear structured message
+        // rather than raw axios text so the head coach knows the invite
+        // already exists.
+        setError(
+          'This email already has a pending or active sub-coach invite. ' +
+            'Refresh the team list to see the existing entry.',
+        );
       } else {
         setError(errorMessage(err, 'Could not send invite. Try again.'));
       }
@@ -203,7 +276,9 @@ export default function SubCoachInviteModal({ visible, onDismiss, onInvited }: P
                   onPress={handleInvite}
                   disabled={submitting}
                   accessibilityRole="button"
+                  accessibilityState={{ busy: submitting, disabled: submitting }}
                   accessibilityLabel="Send invite"
+                  testID="sub-coach-invite-submit"
                   style={[styles.primaryBtn, submitting && styles.primaryBtnDisabled]}
                 >
                   {submitting ? (

@@ -76,6 +76,7 @@ import { __USING_MOCK_DATA } from '../services/commandCenterApi';
 // Phase 10 — GDPR Article 20 data portability
 import DataExportScreen from '../screens/settings/DataExportScreen';
 import { Colors } from '../constants/colors';
+import { useCoachRoleType } from '../hooks/useCoachRoleType';
 
 export type CoachTabParamList = {
   // Phase 8: Command Center replaces the old top-level Dashboard tab.
@@ -413,6 +414,14 @@ function useCoachUnreadPolling(): number {
 
 export default function CoachNavigator() {
   const unreadCount = useCoachUnreadPolling();
+  // P0-1: TeamStack must only mount for head coaches. Sub-coaches who land
+  // on team-management surfaces hit `/sub-coaches` 403s the screen treats as
+  // a permanent retry-error — a feature they don't own. The hook fails
+  // closed (returns 'unknown' until a positive head-coach signal), so the
+  // tab disappears for sub-coaches and during the initial resolution
+  // window.
+  const coachRoleType = useCoachRoleType();
+  const showTeamTab = coachRoleType === 'head_coach';
   // Audit P0: while the Command Center API still ships only mock data
   // (__USING_MOCK_DATA driven by EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER), the
   // initial tab for a real coach is ClientsStack. Mock-mode builds (demo,
@@ -480,17 +489,21 @@ export default function CoachNavigator() {
           ),
         }}
       />
-      {/* Phase 11 / Track 7 — Team tab. Scale+ tier gate enforced in-screen. */}
-      <Tab.Screen
-        name="TeamStack"
-        component={TeamStackNavigator}
-        options={{
-          tabBarLabel: 'Team',
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="people-circle" size={size} color={color} />
-          ),
-        }}
-      />
+      {/* P0-1 + Phase 11 / Track 7 — Team tab. Scale+ tier gate enforced
+          in-screen, role gate enforced here: sub-coaches and unresolved
+          sessions never see the tab. */}
+      {showTeamTab && (
+        <Tab.Screen
+          name="TeamStack"
+          component={TeamStackNavigator}
+          options={{
+            tabBarLabel: 'Team',
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="people-circle" size={size} color={color} />
+            ),
+          }}
+        />
+      )}
       <Tab.Screen
         name="SettingsStack"
         component={SettingsStackNavigator}
