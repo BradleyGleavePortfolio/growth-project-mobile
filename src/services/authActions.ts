@@ -39,6 +39,19 @@ const ASYNC_SIGN_OUT_PREFIXES = [
   'gp_coach_bio_',
 ];
 
+// Belt-and-braces wipe for the cacheStorage MMKV namespace. clearAllStorage()
+// (called below) already drops the entire cache namespace at runtime, but in
+// the Expo Go / Jest AsyncStorage shim the cache lives behind `cache:` keys in
+// the same AsyncStorage backing store — enumerating those keys here ensures
+// any `messages_thread_*` (Hunt #2 P0-1) or stray `pending_*` cache rows are
+// gone even if clearNamespace partial-fails or a refactor changes the surface.
+// Hunt #2 specifically calls out the messages thread surface as R15 + R16.
+const CACHE_SHIM_PREFIX = 'cache:';
+const CACHE_SIGN_OUT_SUBPREFIXES = [
+  'messages_thread_',
+  'pending_',
+];
+
 // Exported for any caller that wants the full list of session keys (does not
 // include the prefix-matched keys, which are enumerated at signOut time).
 export const SIGN_OUT_KEYS = [...SECURE_SIGN_OUT_KEYS, ...ASYNC_SIGN_OUT_KEYS];
@@ -46,9 +59,18 @@ export const SIGN_OUT_KEYS = [...SECURE_SIGN_OUT_KEYS, ...ASYNC_SIGN_OUT_KEYS];
 async function collectPrefixedKeys(): Promise<string[]> {
   try {
     const allKeys = await AsyncStorage.getAllKeys();
-    return allKeys.filter((k) =>
-      ASYNC_SIGN_OUT_PREFIXES.some((prefix) => k.startsWith(prefix)),
-    );
+    return allKeys.filter((k) => {
+      if (ASYNC_SIGN_OUT_PREFIXES.some((prefix) => k.startsWith(prefix))) {
+        return true;
+      }
+      // Also pick up cache-namespaced keys the shim writes; on MMKV native
+      // they live in a separate store and are cleared by clearAllStorage().
+      if (k.startsWith(CACHE_SHIM_PREFIX)) {
+        const rest = k.slice(CACHE_SHIM_PREFIX.length);
+        return CACHE_SIGN_OUT_SUBPREFIXES.some((p) => rest.startsWith(p));
+      }
+      return false;
+    });
   } catch (err) {
     logger.warn('AuthActions', 'collectPrefixedKeys failed', err);
     return [];
