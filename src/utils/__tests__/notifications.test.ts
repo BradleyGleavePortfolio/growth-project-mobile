@@ -37,6 +37,7 @@ describe('utils/notifications — Hunt P0-4 / P3-2', () => {
       .mockResolvedValueOnce('water-id-1')
       .mockResolvedValueOnce('water-id-2');
 
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { scheduleWaterReminder } = require('../notifications');
 
     const first = await scheduleWaterReminder(2);
