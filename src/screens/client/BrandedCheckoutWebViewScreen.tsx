@@ -645,7 +645,7 @@ function makeStyles(colors: ThemeColors) {
     },
     logoBadgeText: {
       color: colors.primaryDark,
-      fontWeight: '800',
+      fontWeight: '600',
       fontSize: 12,
       letterSpacing: 0.5,
     },
@@ -657,7 +657,7 @@ function makeStyles(colors: ThemeColors) {
     headerTitle: {
       color: colors.textOnPrimary,
       fontSize: 17,
-      fontWeight: '700',
+      fontWeight: '600',
     },
     headerSubtitle: {
       color: colors.textOnPrimary,
@@ -699,7 +699,7 @@ function makeStyles(colors: ThemeColors) {
     },
     skeletonLogoText: {
       color: colors.primaryDark,
-      fontWeight: '800',
+      fontWeight: '600',
       fontSize: 18,
       letterSpacing: 0.5,
     },
@@ -760,7 +760,7 @@ function makeStyles(colors: ThemeColors) {
     errorTitle: {
       color: colors.textPrimary,
       fontSize: 18,
-      fontWeight: '700',
+      fontWeight: '600',
       textAlign: 'center',
     },
     errorBody: {
@@ -788,7 +788,7 @@ function makeStyles(colors: ThemeColors) {
     },
     errorBtnText: {
       color: colors.textOnPrimary,
-      fontWeight: '700',
+      fontWeight: '600',
       fontSize: 15,
     },
     errorBtnSecondary: {
