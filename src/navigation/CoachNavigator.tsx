@@ -75,6 +75,11 @@ import CommandCenterScreen from '../screens/coach/command-center/CommandCenterSc
 import { __USING_MOCK_DATA } from '../services/commandCenterApi';
 // Phase 10 — GDPR Article 20 data portability
 import DataExportScreen from '../screens/settings/DataExportScreen';
+// iMessage-grade DM — Apple App Review 1.2 compliance. ContactView lives in
+// the Clients stack (reachable from ClientMessagesScreen header); BlockedUsers
+// lives in the Settings stack (reachable from coach Settings).
+import ContactView from '../screens/messaging/ContactView';
+import BlockedUsersScreen from '../screens/settings/BlockedUsersScreen';
 import { Colors } from '../constants/colors';
 import { useCoachRoleType } from '../hooks/useCoachRoleType';
 
@@ -130,6 +135,16 @@ export type ClientsStackParamList = {
   Dashboard: undefined;
   /** TestFlight coach SaaS — invite code redeemer drilldown. */
   InviteCodeRedeemers: { inviteCodeId: string; code: string };
+  /**
+   * iMessage-grade DM — Apple 1.2 compliance contact details surface.
+   * Reachable from ClientMessagesScreen header tap.
+   */
+  ContactView: {
+    contactId: string;
+    displayName: string;
+    role?: 'coach' | 'client' | 'student' | 'other';
+    avatarUrl?: string | null;
+  };
 };
 
 export type SettingsStackParamList = {
@@ -155,6 +170,8 @@ export type SettingsStackParamList = {
   CoachPackages: undefined;
   /** Payments — earnings, payout readiness, reconciliation, refunds (backend PR #216). */
   CoachEarnings: undefined;
+  /** iMessage-grade DM — manage blocked users from coach Settings. */
+  BlockedUsers: undefined;
 };
 
 /** Phase 11 / Track 7 — team management stack param list. */
@@ -301,6 +318,8 @@ function ClientsStackNavigator() {
         name="InviteCodeRedeemers"
         component={InviteCodeRedeemersScreen}
       />
+      {/* iMessage-grade DM — Apple 1.2 contact details surface. */}
+      <ClientsStack.Screen name="ContactView" component={ContactView} />
     </ClientsStack.Navigator>
   );
 }
@@ -355,6 +374,8 @@ function SettingsStackNavigator() {
         name="CoachEarnings"
         component={CoachEarningsScreen}
       />
+      {/* iMessage-grade DM — Apple 1.2 compliance blocked-users management. */}
+      <SettingsStack.Screen name="BlockedUsers" component={BlockedUsersScreen} />
     </SettingsStack.Navigator>
   );
 }
