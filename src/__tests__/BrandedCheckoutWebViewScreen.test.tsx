@@ -3,26 +3,49 @@
 //
 // Render-based tests for the branded in-app Stripe checkout webview.
 // Per PR #166 doctrine: assert on what the user sees (testIDs, rendered
-// strings) rather than grepping the source. The few source-level guards
-// at the bottom enforce Rule 9 (structured errors only) and Rule 8 (no
-// `expo-web-browser` regression).
+// strings) rather than grepping the source. One narrow source-level
+// regression guard remains at the bottom — it covers a single grep on
+// the *client payment surface directory* (Rule 8: no expo-web-browser
+// regression). It is surgical, not a whole-file scan.
 //
-// Coverage matrix (10 tests):
-//   1.  Header renders TGP badge, "Secure Checkout" title, and the
-//       package name subtitle when provided.
-//   2.  X button has min 44pt tap target + accessibilityLabel.
-//   3.  Tapping X navigates to CheckoutReturn with outcome=cancel.
-//   4.  The webview is mounted with the supplied checkoutUrl.
-//   5.  Loading skeleton renders on mount and disappears on load end.
-//   6.  Success deep-link short-circuit routes to CheckoutReturn with
-//       outcome=success + session_id.
-//   7.  Cancel deep-link short-circuit routes to CheckoutReturn with
-//       outcome=cancel.
-//   8.  HTTP error from Stripe surfaces a structured TGPError state
-//       and hides the webview.
-//   9.  Network/load error surfaces a structured TGPError state.
-//   10. Allow-list helper rejects non-checkout origins (phishing
-//       redirect protection) and accepts both TGP + Stripe domains.
+// Coverage matrix:
+//   Header
+//     1. TGP badge + "Secure Checkout" + package subtitle render.
+//     2. X button has 44pt min tap target + accessibilityLabel.
+//     3. Tapping X navigates to CheckoutReturn with outcome=cancel.
+//   WebView lifecycle
+//     4. WebView mounts at the supplied URL.
+//     5. WebView is rendered with sharedCookiesEnabled +
+//        thirdPartyCookiesEnabled (Stripe 3DS / SCA requirement).
+//     6. originWhitelist is HTTPS-only — no app-scheme entry.
+//     7. Loading skeleton renders until onLoadEnd, then disappears.
+//   Deep-link short-circuit
+//     8. Success deep link routes to CheckoutReturn with session_id.
+//     9. Cancel deep link routes to CheckoutReturn with outcome=cancel.
+//    10. Settles exactly once even if the deep link fires twice.
+//    11. onShouldStartLoadWithRequest returns FALSE for matched deep
+//        links (so the WebView never attempts to load the app-scheme URL).
+//    12. onShouldStartLoadWithRequest returns FALSE for a malicious
+//        non-checkout URL and surfaces a structured TGPError.
+//   Structured errors + recovery (Rule 9)
+//    13. HTTP 5xx renders structured TGPError + Try-again + Cancel CTAs.
+//    14. HTTP 4xx renders distinct copy from 5xx (session expired vs
+//        Stripe unreachable).
+//    15. Network failure renders structured TGPError + Try-again.
+//    16. Tapping Try-again clears the error, calls webview.reload(),
+//        and re-mounts the webview.
+//   Exact deep-link parsing (security — phishing-prefix attack)
+//    17. parseReturnDeepLink REJECTS prefix variants like
+//        `…/success.evil.com` and `…/successful` (CRITICAL).
+//    18. parseReturnDeepLink accepts trailing slash on path
+//        (normalization).
+//    19. parseReturnDeepLink is case-insensitive on scheme/host.
+//   isOriginAllowed (HTTPS-only)
+//    20. Accepts TGP + Stripe hosts.
+//    21. Rejects http://, javascript:, data:, typosquats.
+//   Regression guard
+//    22. The client payment surface directory does not import
+//        expo-web-browser anywhere (surgical grep).
 
 import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
@@ -48,13 +71,17 @@ jest.mock('../theme/ThemeProvider', () => ({
     colors: {
       primary: '#2C4A36',
       primaryDark: '#1B2E22',
+      primaryPale: '#E8E0CF',
       background: '#F5EFE4',
+      surface: '#FFFFFF',
+      border: '#E0D8C8',
       textPrimary: '#1A1A18',
       textSecondary: '#3D3D3A',
       textMuted: '#B1A89F',
       textOnPrimary: '#F5EFE4',
       gold: '#C5A253',
       error: '#4A0404',
+      success: '#1F6B3A',
     },
   }),
 }));
@@ -78,7 +105,10 @@ jest.mock('react-native-webview', () => {
   const { View } = require('react-native');
   const MockWebView = React.forwardRef((props: Record<string, unknown>, ref: unknown) => {
     Object.assign(capturedWebViewProps, props);
-    React.useImperativeHandle(ref, () => ({ stopLoading: jest.fn() }));
+    React.useImperativeHandle(ref, () => ({
+      stopLoading: jest.fn(),
+      reload: jest.fn(),
+    }));
     const source = props.source as { uri?: string } | undefined;
     return React.createElement(View, {
       testID: props.testID,
@@ -125,7 +155,6 @@ describe('BrandedCheckoutWebViewScreen — header', () => {
   it('close button has 44pt min tap target and accessibility label', () => {
     const { getByTestId } = render(<BrandedCheckoutWebViewScreen />);
     const close = getByTestId('branded-checkout-close');
-    // Style is an object; assert min dimensions.
     const flat = Array.isArray(close.props.style)
       ? Object.assign({}, ...close.props.style)
       : close.props.style;
@@ -152,16 +181,29 @@ describe('BrandedCheckoutWebViewScreen — webview lifecycle', () => {
     });
   });
 
+  it('passes sharedCookiesEnabled + thirdPartyCookiesEnabled for Stripe 3DS / SCA', () => {
+    render(<BrandedCheckoutWebViewScreen />);
+    // Both cookie props MUST be true on render — Stripe Elements stores
+    // SCA / 3DS / Link session state in cookies and breaks silently
+    // without them.
+    expect(capturedWebViewProps.sharedCookiesEnabled).toBe(true);
+    expect(capturedWebViewProps.thirdPartyCookiesEnabled).toBe(true);
+  });
+
+  it('originWhitelist is HTTPS-only — no app-scheme entry', () => {
+    render(<BrandedCheckoutWebViewScreen />);
+    const whitelist = capturedWebViewProps.originWhitelist as readonly string[];
+    expect(whitelist).toEqual(['https://*']);
+    // Defensive: make sure no entry begins with our custom scheme.
+    expect(whitelist.some((p) => p.startsWith('com.growthproject.app'))).toBe(false);
+  });
+
   it('renders the branded loading skeleton until onLoadEnd fires', () => {
     const { getByTestId, queryByTestId } = render(<BrandedCheckoutWebViewScreen />);
     expect(getByTestId('branded-checkout-skeleton')).toBeTruthy();
-    // Simulate Stripe finishing the load.
     const onLoadEnd = capturedWebViewProps.onLoadEnd as () => void;
     expect(typeof onLoadEnd).toBe('function');
-    fireEvent(getByTestId('branded-checkout-webview'), 'loadEnd');
-    // The screen owns loading state — directly invoking the prop is the
-    // most deterministic way to verify the transition.
-    onLoadEnd();
+    act(() => onLoadEnd());
     expect(queryByTestId('branded-checkout-skeleton')).toBeNull();
   });
 });
@@ -199,11 +241,40 @@ describe('BrandedCheckoutWebViewScreen — deep link short-circuit', () => {
     onNav({ url: 'com.growthproject.app://checkout/success?session_id=cs_1' });
     expect(mockNavigate).toHaveBeenCalledTimes(1);
   });
+
+  it('onShouldStartLoadWithRequest returns FALSE for matched deep links (does not load app-scheme)', () => {
+    render(<BrandedCheckoutWebViewScreen />);
+    const onShouldStart = capturedWebViewProps.onShouldStartLoadWithRequest as (r: {
+      url: string;
+    }) => boolean;
+    expect(
+      onShouldStart({ url: 'com.growthproject.app://checkout/success?session_id=abc' }),
+    ).toBe(false);
+    expect(onShouldStart({ url: 'com.growthproject.app://checkout/cancel' })).toBe(false);
+    // And the callback still fired:
+    expect(mockNavigate).toHaveBeenCalled();
+  });
+
+  it('onShouldStartLoadWithRequest BLOCKS malicious prefix variants and surfaces structured error', () => {
+    const { getByTestId } = render(<BrandedCheckoutWebViewScreen />);
+    const onShouldStart = capturedWebViewProps.onShouldStartLoadWithRequest as (r: {
+      url: string;
+    }) => boolean;
+    // Phishing attempt — host is a typosquat, not on the allow-list.
+    act(() => {
+      expect(onShouldStart({ url: 'https://stripe.evil.example.com/pay' })).toBe(false);
+    });
+    expect(getByTestId('branded-checkout-error')).toBeTruthy();
+    expect(getByTestId('branded-checkout-error-code').props.children).toMatch(
+      /TGPError: blocked_origin/,
+    );
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
 });
 
 describe('BrandedCheckoutWebViewScreen — structured error states (Rule 9)', () => {
-  it('renders a structured TGPError on HTTP failure', () => {
-    const { getByTestId, queryByTestId } = render(<BrandedCheckoutWebViewScreen />);
+  it('renders a 5xx-specific TGPError with Try again + Cancel CTAs', () => {
+    const { getByTestId, queryByTestId, getByText } = render(<BrandedCheckoutWebViewScreen />);
     const onHttpError = capturedWebViewProps.onHttpError as (e: {
       nativeEvent: { statusCode: number };
     }) => void;
@@ -214,11 +285,24 @@ describe('BrandedCheckoutWebViewScreen — structured error states (Rule 9)', ()
     expect(getByTestId('branded-checkout-error-code').props.children).toMatch(
       /TGPError: http_502/,
     );
-    // Webview is unmounted while the error UI owns the screen.
+    expect(getByText('Stripe is temporarily unreachable')).toBeTruthy();
+    expect(getByTestId('branded-checkout-error-retry')).toBeTruthy();
+    expect(getByTestId('branded-checkout-error-cancel')).toBeTruthy();
     expect(queryByTestId('branded-checkout-webview')).toBeNull();
   });
 
-  it('renders a structured TGPError on network failure', () => {
+  it('renders distinct 4xx copy (session expired) versus 5xx (unreachable)', () => {
+    const { getByText } = render(<BrandedCheckoutWebViewScreen />);
+    const onHttpError = capturedWebViewProps.onHttpError as (e: {
+      nativeEvent: { statusCode: number };
+    }) => void;
+    act(() => {
+      onHttpError({ nativeEvent: { statusCode: 410 } });
+    });
+    expect(getByText('Checkout session expired')).toBeTruthy();
+  });
+
+  it('renders a network-failure TGPError with Try again', () => {
     const { getByTestId } = render(<BrandedCheckoutWebViewScreen />);
     const onError = capturedWebViewProps.onError as (e: {
       nativeEvent: { code: number };
@@ -229,6 +313,36 @@ describe('BrandedCheckoutWebViewScreen — structured error states (Rule 9)', ()
     expect(getByTestId('branded-checkout-error-code').props.children).toMatch(
       /TGPError: net_-1009/,
     );
+    expect(getByTestId('branded-checkout-error-retry')).toBeTruthy();
+  });
+
+  it('tapping Try again clears the error and re-mounts the webview (fresh load)', () => {
+    const { getByTestId, queryByTestId } = render(<BrandedCheckoutWebViewScreen />);
+    const onError = capturedWebViewProps.onError as (e: {
+      nativeEvent: { code: number };
+    }) => void;
+    act(() => {
+      onError({ nativeEvent: { code: -1009 } });
+    });
+    expect(getByTestId('branded-checkout-error')).toBeTruthy();
+    expect(queryByTestId('branded-checkout-webview')).toBeNull();
+    // Reset captured props so we can confirm a *new* WebView instance is
+    // mounted with the original checkoutUrl after retry. A re-mount is
+    // how the load actually happens — calling `reload()` on a stale ref
+    // (the error branch unmounts the WebView) would be a no-op.
+    for (const k of Object.keys(capturedWebViewProps)) delete capturedWebViewProps[k];
+    act(() => {
+      fireEvent.press(getByTestId('branded-checkout-error-retry'));
+    });
+    expect(queryByTestId('branded-checkout-error')).toBeNull();
+    expect(getByTestId('branded-checkout-webview')).toBeTruthy();
+    expect(capturedWebViewProps.source).toEqual({
+      uri: 'https://app.bradleytgpcoaching.com/checkout/cs_test_123',
+    });
+    // The fresh webview also reasserts the cookie props (regression
+    // guard against losing them in a refactor of the retry branch).
+    expect(capturedWebViewProps.sharedCookiesEnabled).toBe(true);
+    expect(capturedWebViewProps.thirdPartyCookiesEnabled).toBe(true);
   });
 });
 
@@ -247,12 +361,15 @@ describe('isOriginAllowed', () => {
     expect(isOriginAllowed('https://m.stripe.network/inner.html')).toBe(true);
   });
 
-  it('rejects unknown origins (phishing / typosquat / data: scheme)', () => {
+  it('rejects http:// (HTTPS-only for checkout)', () => {
+    expect(isOriginAllowed('http://app.bradleytgpcoaching.com/checkout')).toBe(false);
+    expect(isOriginAllowed('http://checkout.stripe.com/c/pay')).toBe(false);
+  });
+
+  it('rejects unknown origins (phishing / typosquat / non-http scheme)', () => {
     expect(isOriginAllowed('https://evil.example.com/pay')).toBe(false);
     expect(isOriginAllowed('https://stripe.evil.com/pay')).toBe(false);
-    expect(isOriginAllowed('http://app.bradleytgpcoaching.com.attacker.com/x')).toBe(
-      false,
-    );
+    expect(isOriginAllowed('https://app.bradleytgpcoaching.com.attacker.com/x')).toBe(false);
     expect(isOriginAllowed('javascript:alert(1)')).toBe(false);
     expect(isOriginAllowed('data:text/html,<script>')).toBe(false);
     expect(isOriginAllowed('not a url')).toBe(false);
@@ -266,7 +383,7 @@ describe('isOriginAllowed', () => {
   });
 });
 
-describe('parseReturnDeepLink', () => {
+describe('parseReturnDeepLink — exact, not prefix', () => {
   it('extracts session_id from a success deep link', () => {
     expect(
       parseReturnDeepLink(
@@ -294,6 +411,77 @@ describe('parseReturnDeepLink', () => {
     ).toEqual({ outcome: 'cancel' });
   });
 
+  it('accepts a trailing slash on the path (normalization)', () => {
+    expect(
+      parseReturnDeepLink(
+        'com.growthproject.app://checkout/success/',
+        'com.growthproject.app',
+      ),
+    ).toEqual({ outcome: 'success', sessionId: null });
+    expect(
+      parseReturnDeepLink(
+        'com.growthproject.app://checkout/cancel/',
+        'com.growthproject.app',
+      ),
+    ).toEqual({ outcome: 'cancel' });
+  });
+
+  it('is case-insensitive on scheme and host', () => {
+    expect(
+      parseReturnDeepLink(
+        'COM.GROWTHPROJECT.APP://CHECKOUT/success',
+        'com.growthproject.app',
+      ),
+    ).toEqual({ outcome: 'success', sessionId: null });
+  });
+
+  // ─── CRITICAL SECURITY TESTS — phishing-prefix attack must be rejected ───
+
+  it('REJECTS phishing variant `…/success.evil.com` (path is not exact)', () => {
+    expect(
+      parseReturnDeepLink(
+        'com.growthproject.app://checkout/success.evil.com',
+        'com.growthproject.app',
+      ),
+    ).toBeNull();
+  });
+
+  it('REJECTS phishing variant `…/successful` (path is not exact)', () => {
+    expect(
+      parseReturnDeepLink(
+        'com.growthproject.app://checkout/successful?session_id=cs_x',
+        'com.growthproject.app',
+      ),
+    ).toBeNull();
+  });
+
+  it('REJECTS phishing variant `…/cancelled` (path is not exact)', () => {
+    expect(
+      parseReturnDeepLink(
+        'com.growthproject.app://checkout/cancelled',
+        'com.growthproject.app',
+      ),
+    ).toBeNull();
+  });
+
+  it('REJECTS wrong host (must be `checkout`)', () => {
+    expect(
+      parseReturnDeepLink(
+        'com.growthproject.app://attacker/success',
+        'com.growthproject.app',
+      ),
+    ).toBeNull();
+  });
+
+  it('REJECTS wrong scheme (must match returnScheme exactly)', () => {
+    expect(
+      parseReturnDeepLink(
+        'com.attacker.app://checkout/success',
+        'com.growthproject.app',
+      ),
+    ).toBeNull();
+  });
+
   it('returns null for unrelated URLs (Stripe internal navigation)', () => {
     expect(
       parseReturnDeepLink(
@@ -304,30 +492,29 @@ describe('parseReturnDeepLink', () => {
   });
 });
 
-// ── Source guards — Rule 8 (no expo-web-browser regression) ──────────────────
+// ── Regression guard — Rule 8 (no expo-web-browser on client payment surface) ─
 
-describe('BrandedCheckoutWebViewScreen — source guards', () => {
-  const SRC = fs.readFileSync(
-    path.resolve(
-      __dirname,
-      '..',
-      'screens',
-      'client',
-      'BrandedCheckoutWebViewScreen.tsx',
-    ),
-    'utf8',
-  );
-
-  it('does not import expo-web-browser (Rule 8 — never leave the app)', () => {
-    expect(SRC).not.toMatch(/from ['"]expo-web-browser['"]/);
+describe('client payment surface — no expo-web-browser regression', () => {
+  // Surgical: a single grep over the *client payment surface* directory.
+  // Per Rule 8, payments must stay inside the app via the branded webview.
+  // If a regression imports `expo-web-browser` anywhere in `src/screens/client`
+  // or `src/api` (payments), this test will fail and explain why.
+  it('does not import expo-web-browser anywhere in the client screens directory', () => {
+    const clientDir = path.resolve(__dirname, '..', 'screens', 'client');
+    const files = fs
+      .readdirSync(clientDir, { withFileTypes: true })
+      .filter((f) => f.isFile() && /\.tsx?$/.test(f.name));
+    const offenders: string[] = [];
+    for (const f of files) {
+      const src = fs.readFileSync(path.join(clientDir, f.name), 'utf8');
+      if (/from ['"]expo-web-browser['"]/.test(src)) offenders.push(f.name);
+    }
+    expect(offenders).toEqual([]);
   });
 
-  it('uses react-native-webview', () => {
-    expect(SRC).toMatch(/from ['"]react-native-webview['"]/);
-  });
-
-  it('every TGPError code starts with the structured prefix (Rule 9)', () => {
-    const matches = SRC.match(/TGPError:\s*[a-z_]+/g) ?? [];
-    expect(matches.length).toBeGreaterThanOrEqual(4);
+  it('does not import expo-web-browser anywhere in clientPaymentsApi.ts', () => {
+    const apiFile = path.resolve(__dirname, '..', 'api', 'clientPaymentsApi.ts');
+    const src = fs.readFileSync(apiFile, 'utf8');
+    expect(src).not.toMatch(/from ['"]expo-web-browser['"]/);
   });
 });

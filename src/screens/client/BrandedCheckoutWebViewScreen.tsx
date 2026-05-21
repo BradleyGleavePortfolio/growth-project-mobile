@@ -112,8 +112,9 @@ export const CHECKOUT_ALLOWED_HOSTS: readonly string[] = [
 export function isOriginAllowed(url: string): boolean {
   try {
     const parsed = new URL(url);
-    // Only http(s) — anything else (about:, data:, javascript:, file:) is rejected.
-    if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return false;
+    // HTTPS-only — checkout must never run over plaintext (Rule 8 / Rule 9).
+    // Anything else (about:, data:, javascript:, file:, http:) is rejected.
+    if (parsed.protocol !== 'https:') return false;
     const host = parsed.hostname.toLowerCase();
     return CHECKOUT_ALLOWED_HOSTS.some(
       (allowed) => host === allowed || host.endsWith(`.${allowed}`),
@@ -129,22 +130,42 @@ export type CheckoutDeepLinkOutcome =
   | { outcome: 'success'; sessionId: string | null }
   | { outcome: 'cancel' };
 
+/**
+ * Exact, normalized match for our return deep links. We parse the URL and
+ * require the scheme, host, AND path to match one of the two known entries
+ * in the allow-list — `<scheme>://checkout/success` or `<scheme>://checkout/cancel`.
+ *
+ * Prefix matching (the previous implementation) was unsafe: a malicious or
+ * misconfigured page could redirect to `<scheme>://checkout/success.evil.com`
+ * or `<scheme>://checkout/successful` and we would treat it as a real
+ * outcome. With exact matching:
+ *   - scheme is case-insensitive (URL standard)
+ *   - host MUST be exactly `checkout`
+ *   - path MUST be exactly `/success` or `/cancel` (trailing slash stripped)
+ *   - query string (e.g. `?session_id=...`) is allowed, fragment ignored
+ *
+ * Tests: see `src/__tests__/BrandedCheckoutWebViewScreen.test.tsx`.
+ */
 export function parseReturnDeepLink(
   url: string,
   returnScheme: string,
 ): CheckoutDeepLinkOutcome | null {
-  const successPrefix = `${returnScheme}://checkout/success`;
-  const cancelPrefix = `${returnScheme}://checkout/cancel`;
-  if (url.startsWith(successPrefix)) {
-    let sessionId: string | null = null;
-    const qIdx = url.indexOf('?');
-    if (qIdx >= 0) {
-      const qs = new URLSearchParams(url.slice(qIdx + 1));
-      sessionId = qs.get('session_id');
-    }
-    return { outcome: 'success', sessionId };
+  const expectedScheme = `${returnScheme.toLowerCase()}:`;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
   }
-  if (url.startsWith(cancelPrefix)) {
+  if (parsed.protocol.toLowerCase() !== expectedScheme) return null;
+  if (parsed.hostname.toLowerCase() !== 'checkout') return null;
+  // Strip a single trailing slash so `/success/` matches `/success`.
+  const path = parsed.pathname.replace(/\/+$/, '');
+  if (path === '/success') {
+    const sessionId = parsed.searchParams.get('session_id');
+    return { outcome: 'success', sessionId: sessionId || null };
+  }
+  if (path === '/cancel') {
     return { outcome: 'cancel' };
   }
   return null;
@@ -211,10 +232,14 @@ export default function BrandedCheckoutWebViewScreen() {
 
   const handleNavigationStateChange = useCallback(
     (nav: WebViewNavigation) => {
+      // Defence-in-depth: `onShouldStartLoadWithRequest` is the primary
+      // gate (returns `false` so the WebView never attempts to load the
+      // app-scheme URL), but on some Android versions navigation-state
+      // changes can race ahead of the should-start gate. Re-checking
+      // here means a deep-link that slipped through is still routed
+      // exactly once via `settleAndPop`.
       const deepLink = parseReturnDeepLink(nav.url, returnScheme);
       if (deepLink) {
-        // Cancel further loads first — Stripe's redirect HTML may try to
-        // race the JS bridge if we don't.
         webviewRef.current?.stopLoading?.();
         settleAndPop(deepLink);
       }
@@ -224,13 +249,17 @@ export default function BrandedCheckoutWebViewScreen() {
 
   const handleShouldStartLoadWithRequest = useCallback(
     (request: { url: string }) => {
-      // Always allow our own deep-link return URLs — they're not navigable
-      // origins, they're scheme matches we intercept above.
-      if (parseReturnDeepLink(request.url, returnScheme) !== null) {
-        return true;
+      // Deep-link return URLs are the success/cancel outcomes. We route
+      // the screen ourselves and MUST return `false` so the WebView does
+      // not also attempt to load the custom-scheme URL (which would
+      // surface as a navigation error and a brief broken-page flash).
+      const deepLink = parseReturnDeepLink(request.url, returnScheme);
+      if (deepLink) {
+        webviewRef.current?.stopLoading?.();
+        settleAndPop(deepLink);
+        return false;
       }
       if (!isOriginAllowed(request.url)) {
-        // Block & surface a structured error. No silent redirect-eating.
         setError({
           title: 'Checkout link not allowed',
           body:
@@ -241,7 +270,7 @@ export default function BrandedCheckoutWebViewScreen() {
       }
       return true;
     },
-    [returnScheme],
+    [returnScheme, settleAndPop],
   );
 
   // ── error handlers ────────────────────────────────────────────────────────
@@ -249,10 +278,19 @@ export default function BrandedCheckoutWebViewScreen() {
   const handleHttpError = useCallback(
     (nativeEvent: { statusCode?: number; description?: string }) => {
       const code = nativeEvent.statusCode ?? 0;
+      // 4xx vs 5xx get distinct copy per Rule 9 (recovery action matched
+      // to the failure mode). 4xx is most often a stale / expired
+      // Checkout session — re-creating the session is the right fix; the
+      // user can also try again or message their coach. 5xx is a Stripe
+      // outage — retry is the right recovery.
+      const is4xx = code >= 400 && code < 500;
       setError({
-        title: 'Checkout temporarily unavailable',
-        body:
-          'Stripe could not load the secure checkout page. Please check your connection and try again — if it keeps happening, message your coach.',
+        title: is4xx
+          ? 'Checkout session expired'
+          : 'Stripe is temporarily unreachable',
+        body: is4xx
+          ? 'This checkout link is no longer valid. Tap “Try again” to start a fresh checkout — if it keeps happening, message your coach.'
+          : 'Stripe could not load the secure checkout page. Tap “Try again” in a moment, or come back later.',
         code: `TGPError: http_${code || 'unknown'}`,
       });
     },
@@ -264,12 +302,20 @@ export default function BrandedCheckoutWebViewScreen() {
       setError({
         title: 'Checkout could not connect',
         body:
-          'We could not reach the secure checkout server. Please check your internet connection and try again.',
+          'We could not reach the secure checkout server. Check your internet connection and tap “Try again”.',
         code: `TGPError: net_${nativeEvent.code ?? 'unknown'}`,
       });
     },
     [],
   );
+
+  const handleRetry = useCallback(() => {
+    // Clearing the error re-mounts the WebView, which fires its own
+    // load against `source.uri`. We don't call `reload()` on the
+    // current ref because the error branch has already unmounted it.
+    setError(null);
+    setLoading(true);
+  }, []);
 
   const handleMessage = useCallback(
     (_event: WebViewMessageEvent) => {
@@ -349,14 +395,26 @@ export default function BrandedCheckoutWebViewScreen() {
             <Text style={styles.errorCode} testID="branded-checkout-error-code">
               {error.code}
             </Text>
+            {checkoutUrl ? (
+              <TouchableOpacity
+                onPress={handleRetry}
+                accessibilityRole="button"
+                accessibilityLabel="Try again"
+                accessibilityHint="Reloads secure checkout."
+                style={styles.errorBtn}
+                testID="branded-checkout-error-retry"
+              >
+                <Text style={styles.errorBtnText}>Try again</Text>
+              </TouchableOpacity>
+            ) : null}
             <TouchableOpacity
               onPress={handleClose}
               accessibilityRole="button"
-              accessibilityLabel="Go back"
-              style={styles.errorBtn}
-              testID="branded-checkout-error-back"
+              accessibilityLabel="Cancel checkout"
+              style={styles.errorBtnSecondary}
+              testID="branded-checkout-error-cancel"
             >
-              <Text style={styles.errorBtnText}>Go back</Text>
+              <Text style={styles.errorBtnSecondaryText}>Cancel checkout</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -365,7 +423,9 @@ export default function BrandedCheckoutWebViewScreen() {
               ref={webviewRef}
               testID="branded-checkout-webview"
               source={{ uri: checkoutUrl }}
-              originWhitelist={['https://*', `${returnScheme}://*`]}
+              // HTTPS-only — deep-link returns are intercepted in
+              // `onShouldStartLoadWithRequest` and never loaded.
+              originWhitelist={['https://*']}
               onNavigationStateChange={handleNavigationStateChange}
               onShouldStartLoadWithRequest={handleShouldStartLoadWithRequest}
               onLoadStart={() => setLoading(true)}
@@ -375,6 +435,12 @@ export default function BrandedCheckoutWebViewScreen() {
               onMessage={handleMessage}
               javaScriptEnabled
               domStorageEnabled
+              // Stripe Elements (3DS / SCA / Apple Pay / Link) maintains
+              // session state in an iframe — without shared cookies and
+              // (on Android) third-party cookies, 3DS authentication
+              // breaks silently mid-flow. These props are mandatory.
+              sharedCookiesEnabled
+              thirdPartyCookiesEnabled
               startInLoadingState={false}
               // Stripe sets `Strict-Transport-Security` and may block
               // mixed content; defaults are fine, but be explicit so
@@ -527,13 +593,31 @@ function makeStyles(colors: ThemeColors) {
       borderRadius: 10,
       backgroundColor: colors.primary,
       minHeight: 44,
-      minWidth: 120,
+      minWidth: 160,
       alignItems: 'center',
       justifyContent: 'center',
     },
     errorBtnText: {
       color: colors.textOnPrimary,
       fontWeight: '700',
+      fontSize: 15,
+    },
+    errorBtnSecondary: {
+      marginTop: 10,
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: 'transparent',
+      minHeight: 44,
+      minWidth: 160,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    errorBtnSecondaryText: {
+      color: colors.textPrimary,
+      fontWeight: '600',
       fontSize: 15,
     },
   });
