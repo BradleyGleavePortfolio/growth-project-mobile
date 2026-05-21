@@ -18,8 +18,8 @@ import {
   StyleSheet,
   TouchableOpacity,
   Share,
-  Clipboard,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { prefsStorage } from '../../storage/mmkv';
@@ -36,6 +36,13 @@ interface InviteCode {
 interface Props {
   /** Called when "Set up your invite code in Settings" CTA is pressed */
   onGoToSettings?: () => void;
+  /**
+   * Alias for the primary invite CTA. Equivalent to `onGoToSettings`
+   * — both navigate the coach to the invite-management surface.
+   * Kept so callers using the v1 EmptyState API (`onInvite`) continue
+   * to compile and behave correctly.
+   */
+  onInvite?: () => void;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -44,9 +51,10 @@ const MMKV_CODE_KEY = 'coach.wizard.step_2_invite_code';
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function EmptyStateNoClients({ onGoToSettings }: Props) {
+export function EmptyStateNoClients({ onGoToSettings, onInvite }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const handleInviteCta = onGoToSettings ?? onInvite;
 
   const [code, setCode] = useState<string | null>(null);
   const [deepLink, setDeepLink] = useState<string | null>(null);
@@ -108,8 +116,8 @@ export function EmptyStateNoClients({ onGoToSettings }: Props) {
     try {
       await Clipboard.setStringAsync(code);
     } catch {
-      // Clipboard API fallback for older RN versions
-      (Clipboard as unknown as { setString: (s: string) => void }).setString(code);
+      // best-effort copy; if expo-clipboard is unavailable we silently skip
+      // rather than crash the empty-state render
     }
     try {
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -124,10 +132,10 @@ export function EmptyStateNoClients({ onGoToSettings }: Props) {
       <View style={styles.container}>
         <Text style={styles.headline}>Your first client is one link away.</Text>
         <Text style={styles.body}>Set up your invite code in Settings to get started.</Text>
-        {onGoToSettings ? (
+        {handleInviteCta ? (
           <TouchableOpacity
             style={styles.primaryBtn}
-            onPress={onGoToSettings}
+            onPress={handleInviteCta}
             accessibilityRole="button"
             accessibilityLabel="Go to Settings to create an invite code"
             testID="empty-no-clients-settings-btn"

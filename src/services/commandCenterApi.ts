@@ -13,6 +13,9 @@
 //   POST /coach/command-center/action-queue/:alertId/dismiss — dismiss an alert
 
 import api from './api';
+// `LtvMetrics` is currently defined alongside the dashboard component; the
+// `import type` ensures no runtime cycle.
+import type { LtvMetrics } from '../components/command-center/CoachLtvDashboard';
 
 // ─── Flag ─────────────────────────────────────────────────────────────────────
 // Driven by EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER. Defaults OFF (false) — only
@@ -347,6 +350,17 @@ export const commandCenterApi = {
     } catch {
       return { data: { items: [], total_pending: 0 } };
     }
+  },
+
+  /**
+   * GET /coach/command-center/ltv-metrics
+   * Returns MRR / LTV / RPCM / churn / streak metrics for the coach roster.
+   * Surfaced by CoachLtvDashboard. Errors are re-thrown so the dashboard
+   * can render its built-in retry CTA — we do NOT swallow with zeros here,
+   * since fabricated revenue numbers would be misleading.
+   */
+  getLtvMetrics: async (): Promise<{ data: LtvMetrics }> => {
+    return api.get<LtvMetrics>(`${BASE}/ltv-metrics`);
   },
 
   /**

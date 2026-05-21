@@ -60,6 +60,10 @@ function readyRecord() {
     expires_at: '2026-01-08T00:01:00Z',
     file_size_bytes: 45678,
     download_token: 'jwt-token-abc',
+    // download_available was added when the screen gained an S3-availability
+    // guard around the Download button. Without it, READY records render
+    // without a download CTA — the user sees the metadata but can't act.
+    download_available: true,
   };
 }
 
@@ -167,9 +171,11 @@ describe('DataExportScreen', () => {
     const { findByText } = render(<DataExportScreen />);
 
     await findByText('Your file is ready');
+    // The status body is a single Text node interpolating
+    // "File size: 44.6 KB." and "Available until 8 January 2026." together —
+    // findByText needs a matcher that scans the combined string.
     await findByText(/44\.6 KB/);
-    // Expiry date formatted as "8 January 2026"
-    await findByText(/expires on/i);
+    await findByText(/available until/i);
   });
 
   it('shows Download button when READY', async () => {

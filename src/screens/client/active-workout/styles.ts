@@ -237,7 +237,7 @@ export const makeStyles = (colors: ThemeColors) =>
   },
   restCountdown: {
     fontSize: 28,
-    fontWeight: '700',
+    fontWeight: '600',
     color: colors.textPrimary,
   },
   restSkip: {

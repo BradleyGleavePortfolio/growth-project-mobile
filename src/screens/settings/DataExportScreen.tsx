@@ -59,7 +59,7 @@ const POLL_INTERVAL_MS = 5000;
  *
  * Shows the user what data is included, lets them request an export, and
  * polls for completion. When ready, a button opens the signed download URL
- * in the external browser. No files are streamed through the app.
+ * in the system browser. No files are streamed through the app.
  *
  * Note: per doctrine, no emoji, no confetti, no inline hex colours.
  * All colours come from useTheme().colors.

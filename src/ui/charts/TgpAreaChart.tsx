@@ -12,7 +12,7 @@
  * Theming:
  *   Line stroke  → colors.primary
  *   Area fill    → colors.primaryPale (semi-transparent)
- *   Tooltip      → bone bg (#F5EFE4), ink text (#1A1A18), oxblood border (#4A0404)
+ *   Tooltip      → Colors.background / Colors.textPrimary / Colors.earningsAccent
  *
  * Performance:
  *   SVG path rendered via react-native-svg; runs synchronously on the JS thread.

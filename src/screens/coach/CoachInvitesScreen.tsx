@@ -142,8 +142,18 @@ export default function CoachInvitesScreen({
   const handleResend = useCallback(
     async (invite: Invite) => {
       mediumTap();
+      if (!invite.clientEmail) {
+        Alert.alert(
+          'No email on file',
+          'This invite has no email address attached. Use "Copy link" to share the invite directly.',
+        );
+        return;
+      }
       try {
-        const result = await invitesApi.resendInvite(invite.id);
+        const result = await invitesApi.resendInvite(
+          invite.id,
+          invite.clientEmail,
+        );
         if (!result.supported) {
           setResendSupported(false);
           Alert.alert(

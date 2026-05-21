@@ -12,10 +12,11 @@
  *    No fake packages, no placeholder prices.
  *  - 'past_due' from payment-status => dunning banner at top with the
  *    backend-supplied summary verbatim and an "Update card" button that
- *    opens the Stripe-hosted URL.
- *  - Tapping a package opens Stripe Checkout in a browser sheet. The
- *    success / cancel deep links are handled by RootNavigator; this screen
- *    refreshes payment-status when it regains focus.
+ *    opens the Stripe billing portal in the branded in-app webview.
+ *  - Tapping a package opens Stripe Checkout in the branded in-app
+ *    webview (Apple Rule 3.1.3(b)/(e) B2B exemption). The success /
+ *    cancel deep links are intercepted by the webview screen and routed
+ *    via `CheckoutReturn`; this screen refreshes payment-status on focus.
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -30,7 +31,6 @@ import {
 } from 'react-native';
 import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
 import { Ionicons } from '@expo/vector-icons';
-import * as WebBrowser from 'expo-web-browser';
 import { useFocusEffect, useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 
 import {
@@ -89,6 +89,17 @@ function DunningBanner({
         >
           <Text style={styles.dunningBtnText}>Update</Text>
         </TouchableOpacity>
+      ) : dunning.portal_unavailable ? (
+        // Round-3 fix: surface mint failure so the past-due banner is not
+        // a dead-end. Mirrors the AI-gateway fail-closed posture — show a
+        // clear notice rather than a missing CTA.
+        <Text
+          style={styles.dunningSub}
+          accessibilityLabel="Update card unavailable, contact support"
+          testID="dunning-portal-unavailable"
+        >
+          Update card unavailable — contact support
+        </Text>
       ) : null}
     </View>
   );
@@ -132,6 +143,34 @@ export default function ClientPackagesScreen() {
     setRefreshing(false);
   }, [load]);
 
+  // Typed-nav helper: route into the BrandedCheckoutWebView screen
+  // registered on ClientNavigator. The branded webview screen handles
+  // its own success / cancel deep-link short-circuit and routes through
+  // CheckoutReturn, which refreshes payment-status on mount. Navigation
+  // is fire-and-forget; post-checkout refresh happens on the destination
+  // screen and via `useFocusEffect` when the user returns here.
+  const navigateToBrandedCheckout = useCallback(
+    (params: {
+      checkoutUrl: string;
+      packageName: string;
+      returnScheme: string;
+    }) => {
+      (
+        navigation as unknown as {
+          navigate: (
+            name: string,
+            params: {
+              checkoutUrl: string;
+              packageName: string;
+              returnScheme: string;
+            },
+          ) => void;
+        }
+      ).navigate('BrandedCheckoutWebView', params);
+    },
+    [navigation],
+  );
+
   const handleBuy = useCallback(
     async (pkg: ClientCoachPackage) => {
       setCheckoutError(null);
@@ -146,21 +185,13 @@ export default function ClientPackagesScreen() {
           );
           return;
         }
-        // Use `openAuthSessionAsync` instead of `openBrowserAsync` for
-        // Stripe Checkout. The former is the OAuth-style sheet that
-        // actively listens for the configured deep-link callback (here
-        // `com.growthproject.app://checkout/success` and
-        // `com.growthproject.app://checkout/cancel`) and resolves the
-        // moment Stripe redirects back to the app's return URL.
-        // `openBrowserAsync` is fire-and-forget; the sheet stays open
-        // after Stripe issues the redirect unless the user manually taps
-        // Done, which silently strands users on the success page
-        // wondering if their subscription is active.
-        await WebBrowser.openAuthSessionAsync(res.data.url, 'com.growthproject.app://');
-        // The sheet is closed — useFocusEffect will refresh status, but
-        // also do an immediate reload so the UI is current if the user
-        // came back via the cancel deep link (which won't re-focus).
-        await load();
+        // Apple Rule 3.1.3(b)/(e) B2B exemption: open Stripe Checkout in
+        // a branded in-app webview so the user never leaves the app.
+        navigateToBrandedCheckout({
+          checkoutUrl: res.data.url,
+          packageName: pkg.name,
+          returnScheme: 'com.growthproject.app',
+        });
       } catch (err) {
         setCheckoutError(
           (err as { message?: string })?.message || 'Could not open checkout.',
@@ -169,21 +200,23 @@ export default function ClientPackagesScreen() {
         setCheckoutBusyId(null);
       }
     },
-    [load],
+    [navigateToBrandedCheckout],
   );
 
-  const handleUpdateCard = useCallback(async () => {
+  const handleUpdateCard = useCallback(() => {
     if (!status?.ok || !status.data.dunning?.update_card_url) return;
-    // Same reasoning as handleBuy: Stripe Billing Portal redirects to a
-    // com.growthproject.app:// return URL on save; openAuthSessionAsync is
-    // the listener that actually closes the sheet on that redirect.
-    // openBrowserAsync would leave the user staring at the post-save page.
-    await WebBrowser.openAuthSessionAsync(
-      status.data.dunning.update_card_url,
-      'com.growthproject.app://',
-    );
-    await load();
-  }, [status, load]);
+    // Stripe Billing Portal is a payment surface (Rule 8 / Apple B2B
+    // exemption): keep it inside the branded in-app webview so the user
+    // never leaves the app. The portal redirects back to
+    // `com.growthproject.app://` on save, which the webview's deep-link
+    // gate intercepts and routes to CheckoutReturn — payment-status is
+    // refreshed there and again when this screen regains focus.
+    navigateToBrandedCheckout({
+      checkoutUrl: status.data.dunning.update_card_url,
+      packageName: 'Update payment method',
+      returnScheme: 'com.growthproject.app',
+    });
+  }, [status, navigateToBrandedCheckout]);
 
   const handleMessageCoach = useCallback(() => {
     const parent = navigation.getParent?.();
@@ -213,8 +246,9 @@ export default function ClientPackagesScreen() {
     >
       <Text style={styles.header}>Coaching plans</Text>
       <Text style={styles.subheader}>
-        Your coach's plans are listed below. Payment is handled by Stripe in a
-        secure browser sheet — your card never touches the app.
+        Your coach's plans are listed below. Payment is handled inside The
+        Growth Project by Stripe's secure checkout — your card never touches
+        our servers.
       </Text>
 
       {/* Past-due / dunning banner */}
