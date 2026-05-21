@@ -34,7 +34,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 import { shadows as shadowTokens } from '../../theme/tokens';
 import { WeightLog } from '../../types';
-import { getTodayString } from '../../utils/date';
+import { getTodayString, bucketDateLocal } from '../../utils/date';
 import FadeInView from '../../components/FadeInView';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
@@ -154,26 +154,38 @@ export default function ProgressScreen() {
     try {
       const res = await weightApi.getHistory(days);
       type WeightRow = { id: string; user_id?: string; date?: string; created_at?: string; weight_lbs?: number; weight?: number; notes?: string };
-      const logs = (((res.data as WeightRow[] | undefined) || []).map((w) => ({
-        id: w.id,
-        userId: w.user_id || userId,
-        coachId: '',
-        date: (w.date || w.created_at || '').split('T')[0],
-        weight: w.weight_lbs || w.weight,
-        unit: 'lbs' as const,
-        notes: w.notes || '',
-      }))) as unknown as WeightLog[];
+      const logs = (((res.data as WeightRow[] | undefined) || []).map((w) => {
+        // Server may send either a bare `YYYY-MM-DD` (already a calendar day)
+        // or a full ISO timestamp from `created_at`. We normalise both into
+        // the user's *local* calendar day so the streak compare below is
+        // tz-correct on either side of the date line. See audit P0-3.
+        const rawDate = w.date || w.created_at || '';
+        const normDate = /^\d{4}-\d{2}-\d{2}/.test(rawDate)
+          ? rawDate.slice(0, 10)
+          : bucketDateLocal(new Date(rawDate));
+        return {
+          id: w.id,
+          userId: w.user_id || userId,
+          coachId: '',
+          date: normDate,
+          weight: w.weight_lbs || w.weight,
+          unit: 'lbs' as const,
+          notes: w.notes || '',
+        };
+      })) as unknown as WeightLog[];
       // Sort by date ascending
       logs.sort((a, b) => a.date.localeCompare(b.date));
       setWeightLogs(logs);
 
-      // Calculate logging streak
+      // Calculate logging streak — bucket every comparison day in the user's
+      // local timezone so a Sydney user who logs at 09:00 local doesn't see
+      // the streak reset because UTC is still on yesterday's date.
       let streak = 0;
       const now = new Date();
       for (let i = 0; i < 60; i++) {
         const d = new Date(now);
         d.setDate(d.getDate() - i);
-        const dateStr = d.toISOString().split('T')[0];
+        const dateStr = bucketDateLocal(d);
         if (logs.some((l) => l.date === dateStr)) {
           streak++;
         } else if (i > 0) {
@@ -280,11 +292,29 @@ export default function ProgressScreen() {
     },
   ];
 
-  // Chart data for TgpLineChart — { x: index, y: weight }
-  const chartData = weightLogs.map((log, i) => ({
-    x: i,
-    y: log.weight,
-  }));
+  // Chart data for TgpLineChart — x is the *epoch milliseconds* of the log
+  // day (parsed as midnight local) so the x-axis can render real, locale-
+  // formatted dates instead of meaningless integer indices. See audit P0-6.
+  const chartData = useMemo(
+    () =>
+      weightLogs.map((log) => ({
+        x: new Date(`${log.date}T00:00:00`).getTime(),
+        y: log.weight,
+      })),
+    [weightLogs],
+  );
+
+  // Compact, locale-aware date formatter for the chart axis + tooltip.
+  // Memoised so we don't allocate a new Intl object on every render — Intl
+  // formatter construction is one of the more expensive things in JS.
+  const chartDateFormatter = useMemo(
+    () => new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }),
+    [],
+  );
+  const formatChartX = useCallback(
+    (ms: number) => chartDateFormatter.format(new Date(ms)),
+    [chartDateFormatter],
+  );
 
   const periods: Period[] = ['7D', '30D', '90D', 'All'];
 
@@ -461,6 +491,7 @@ export default function ProgressScreen() {
                 data={chartData}
                 height={180}
                 accessibilityLabel="Weight trend line chart"
+                xFormatter={formatChartX}
               />
             </View>
           </View>

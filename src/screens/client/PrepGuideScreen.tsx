@@ -18,6 +18,7 @@ import { prepGuideApi, listsApi } from '../../services/api';
 import FadeInView from '../../components/FadeInView';
 import EmptyState from '../../components/EmptyState';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { getLocalWeekStart } from '../../utils/date';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface PrepRecipe {
@@ -48,15 +49,6 @@ interface PrepGuideData {
 }
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
-function getWeekStart(offset = 0): string {
-  const today = new Date();
-  const day = today.getDay();
-  const diff = today.getDate() - day + (day === 0 ? -6 : 1) + offset * 7;
-  const monday = new Date(today);
-  monday.setDate(diff);
-  return monday.toISOString().split('T')[0];
-}
-
 function formatWeekLabel(weekStart: string): string {
   const date = new Date(weekStart + 'T00:00:00');
   const end = new Date(date);
@@ -74,7 +66,7 @@ export default function PrepGuideScreen() {
   const queryClient = useQueryClient();
   const [weekOffset, setWeekOffset] = useState(0);
 
-  const weekStart = getWeekStart(weekOffset);
+  const weekStart = getLocalWeekStart(weekOffset);
 
   const { data, isLoading, isError, refetch, isRefetching } = useQuery({
     queryKey: ['prep-guide', weekStart],

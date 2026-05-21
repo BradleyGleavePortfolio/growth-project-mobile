@@ -10,8 +10,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { logApi, weightApi } from '../../services/api';
 import { WeightLog } from '../../types';
-
+import { getTodayString } from '../../utils/date';
+import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { Colors } from '../../constants/colors';
 
 // Pastel feedback backgrounds previously sourced from the legacy `colors`
 // barrel. Inlined as constants so this file no longer depends on the
@@ -19,8 +21,6 @@ import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 // theme/index.ts feedback.* exactly.
 const FEEDBACK_SUCCESS_BG = Colors.feedbackSuccessBg;
 const FEEDBACK_ERROR_TEXT = Colors.noticeCriticalAccent;
-import type { NavigationProp, ParamListBase } from '@react-navigation/native';
-import { Colors } from '../../constants/colors';
 
 export default function ReportScreen({ navigation }: { navigation: NavigationProp<ParamListBase> }) {
   const { colors } = useTheme();
@@ -45,7 +45,9 @@ export default function ReportScreen({ navigation }: { navigation: NavigationPro
       setWeeklyWeights([]);
     }
     try {
-      const today = new Date().toISOString().split('T')[0];
+      // Use the local-tz bucket so this matches the day the user is actually
+      // looking at on their device.
+      const today = getTodayString();
       const logRes = await logApi.getDaily(today);
       type Entry = {
         food_item?: { calories?: number; protein_g?: number; carbs_g?: number; fat_g?: number };

@@ -41,20 +41,9 @@ import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { Colors } from '../../constants/colors';
 
-// ─── Fallback tokens (used when ThemeProvider is not mounted) ─────────────────
-const FALLBACK: Partial<ThemeColors> = {
-  primary:       Colors.primary,
-  background:    Colors.background,
-  surface:       Colors.surface,
-  textPrimary:   Colors.textPrimary,
-  textMuted:     Colors.textMuted,
-  border:        Colors.border,
-  textOnPrimary: Colors.background,
-  error:         Colors.earningsAccent,
-};
-
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface ChartDataPoint {
+  /** Numeric x value. For time-series charts, pass epoch milliseconds. */
   x: number;
   y: number;
 }
@@ -64,6 +53,11 @@ export interface TgpLineChartProps {
   height?: number;
   themeOverride?: Partial<ThemeColors>;
   accessibilityLabel?: string;
+  /**
+   * Optional formatter for x-axis tick labels and the tooltip header.
+   * When omitted the raw rounded x value is rendered (back-compat).
+   */
+  xFormatter?: (x: number) => string;
 }
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -78,17 +72,12 @@ export default function TgpLineChart({
   height = 200,
   themeOverride,
   accessibilityLabel = 'Line chart',
+  xFormatter,
 }: TgpLineChartProps) {
-  // Graceful fallback when ThemeProvider is absent (e.g. in tests)
-  let themeColors: ThemeColors;
-  try {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    const theme = useTheme();
-    themeColors = theme.colors;
-  } catch {
-    themeColors = FALLBACK as ThemeColors;
-  }
-  const colors: ThemeColors = { ...themeColors, ...themeOverride };
+  // ThemeProvider exposes a sensible default via createContext(defaultTheme),
+  // so useTheme() is always safe to call unconditionally — no try/catch needed.
+  const theme = useTheme();
+  const colors: ThemeColors = { ...theme.colors, ...themeOverride };
 
   const [tooltip, setTooltip] = useState<{ x: number; y: number; value: number; label: string } | null>(null);
 
@@ -144,7 +133,7 @@ export default function TgpLineChart({
         x: toSvgX(nearest.x),
         y: toSvgY(nearest.y),
         value: nearest.y,
-        label: String(Math.round(nearest.x)),
+        label: xFormatter ? xFormatter(nearest.x) : String(Math.round(nearest.x)),
       });
     })
     .onEnd(() => setTooltip(null));
@@ -206,16 +195,20 @@ export default function TgpLineChart({
             strokeLinejoin="round"
             strokeLinecap="round"
           />
-          {/* Dots */}
-          {data.map((d, i) => (
-            <Circle
-              key={i}
-              cx={toSvgX(d.x)}
-              cy={toSvgY(d.y)}
-              r={3.5}
-              fill={colors.primary}
-            />
-          ))}
+          {/* Dots — only when the series is small enough that per-point
+              markers stay readable. Above ~30 points the dots blur into a
+              solid stripe along the line and tank fps on low-end Android,
+              so the line alone is the better signal. */}
+          {data.length <= 30 &&
+            data.map((d, i) => (
+              <Circle
+                key={i}
+                cx={toSvgX(d.x)}
+                cy={toSvgY(d.y)}
+                r={3.5}
+                fill={colors.primary}
+              />
+            ))}
           {/* X-axis labels */}
           {xLabels.map((d, i) => (
             <SvgText
@@ -226,7 +219,7 @@ export default function TgpLineChart({
               fontSize={9}
               fill={colors.textMuted}
             >
-              {String(Math.round(d.x))}
+              {xFormatter ? xFormatter(d.x) : String(Math.round(d.x))}
             </SvgText>
           ))}
           {/* Tooltip — Quiet Luxury: bone bg, ink text, oxblood hairline */}
@@ -243,20 +236,29 @@ export default function TgpLineChart({
               />
               <Circle cx={tooltip.x} cy={tooltip.y} r={5} fill={colors.primary} />
               <Rect
-                x={Math.min(tooltip.x - 28, W - PAD_R - 56)}
-                y={tooltip.y - 30}
-                width={56}
-                height={22}
+                x={Math.min(tooltip.x - 36, W - PAD_R - 72)}
+                y={tooltip.y - 42}
+                width={72}
+                height={34}
                 rx={1}
                 fill={Colors.background}
                 stroke={Colors.earningsAccent}
                 strokeWidth={0.5}
               />
               <SvgText
-                x={Math.min(tooltip.x, W - PAD_R - 28)}
+                x={Math.min(tooltip.x, W - PAD_R - 36)}
+                y={tooltip.y - 28}
+                textAnchor="middle"
+                fontSize={9}
+                fill={Colors.textMuted}
+              >
+                {tooltip.label}
+              </SvgText>
+              <SvgText
+                x={Math.min(tooltip.x, W - PAD_R - 36)}
                 y={tooltip.y - 15}
                 textAnchor="middle"
-                fontSize={10}
+                fontSize={11}
                 fill={Colors.textPrimary}
               >
                 {tooltip.value.toFixed(1)}

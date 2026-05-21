@@ -23,11 +23,6 @@ import Svg, { Polyline, Path } from 'react-native-svg';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { Colors } from '../../constants/colors';
 
-const FALLBACK: Partial<ThemeColors> = {
-  primary:     Colors.primary,
-  primaryPale: Colors.primaryPale,
-};
-
 export interface ChartDataPoint {
   x: number;
   y: number;
@@ -50,15 +45,10 @@ export default function TgpSparkline({
   themeOverride,
   accessibilityLabel = 'Trend sparkline',
 }: TgpSparklineProps) {
-  let themeColors: ThemeColors;
-  try {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    const theme = useTheme();
-    themeColors = theme.colors;
-  } catch {
-    themeColors = FALLBACK as ThemeColors;
-  }
-  const colors: ThemeColors = { ...themeColors, ...themeOverride };
+  // ThemeProvider's context default supplies safe values when no provider
+  // is mounted (e.g. tests), so useTheme() is unconditional.
+  const theme = useTheme();
+  const colors: ThemeColors = { ...theme.colors, ...themeOverride };
   const strokeColor = color ?? colors.primary;
   const areaColor = colors.primaryPale || Colors.primaryPale;
 
