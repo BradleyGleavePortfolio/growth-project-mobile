@@ -310,7 +310,12 @@ export function useWeeklyVolumeBreakdown(weekStart: string, weekEnd: string, lim
       let total = 0;
       for (const s of inRange) {
         const stamp = s.date || s.created_at || '';
-        const day = bucketDateLocal(new Date(stamp));
+        // A bare YYYY-MM-DD is already a calendar day — feeding it through
+        // `new Date()` parses as UTC midnight and would shift west-of-UTC
+        // users back a day. Only call `bucketDateLocal` on real timestamps.
+        const day = /^\d{4}-\d{2}-\d{2}$/.test(stamp)
+          ? stamp
+          : bucketDateLocal(new Date(stamp));
         let sessionVol = 0;
         for (const ex of (s.exercises || [])) {
           const sets = Number(ex.sets || 0);

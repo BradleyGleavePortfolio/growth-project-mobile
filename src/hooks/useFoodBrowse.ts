@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { logApi } from '../services/api';
 import { SearchResult } from '../utils/log/types';
 import { mapLogEntryToFood, RawLogEntry } from '../utils/log/mapFoodItem';
-import { bucketDateLocal } from '../utils/date';
+import { addDays } from '../utils/date';
 
 export function useFoodBrowse(currentUserId: string | undefined, selectedDate: string) {
   const [recentFoods, setRecentFoods] = useState<SearchResult[]>([]);
@@ -37,12 +37,13 @@ export function useFoodBrowse(currentUserId: string | undefined, selectedDate: s
   const loadFrequentFoods = useCallback(async () => {
     if (!currentUserId) return;
     try {
-      const today = new Date(selectedDate);
+      // `selectedDate` is a bare YYYY-MM-DD; constructing `new Date(selectedDate)`
+      // would parse as UTC midnight and then `bucketDateLocal` for a user west
+      // of UTC would shift to the previous calendar day. Use string-level
+      // arithmetic via `addDays` so the calendar walk stays in local space.
       const dateStrings: string[] = [];
       for (let i = 0; i < 7; i++) {
-        const d = new Date(today);
-        d.setDate(d.getDate() - i);
-        dateStrings.push(bucketDateLocal(d));
+        dateStrings.push(addDays(selectedDate, -i));
       }
       const settled = await Promise.allSettled(dateStrings.map((ds) => logApi.getDaily(ds)));
       const foodCount: Record<string, { count: number; food: SearchResult }> = {};
