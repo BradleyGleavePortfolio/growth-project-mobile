@@ -3,10 +3,16 @@
 // background → foreground transitions where the JS runtime may have
 // been torn down (Android low-memory, iOS task suspension).
 //
-// The session is keyed by a single AsyncStorage entry. We don't keep
-// a history of past in-progress sessions — only the latest one. If
-// the user opens a new workout the existing entry is overwritten;
-// once the workout is finished or cancelled, the entry is cleared.
+// The session is keyed per-user (R15): a global key would let User B
+// resume User A's workout if they signed out and a different account
+// signed in on the same device. The key takes the form
+//   active_workout_session:<userId>
+// and is wiped on signOut by the prefix-sweep in src/services/authActions.ts.
+//
+// We don't keep a history of past in-progress sessions — only the latest
+// one per user. If the user opens a new workout the existing entry is
+// overwritten; once the workout is finished or cancelled, the entry is
+// cleared.
 //
 // Staleness: sessions older than ACTIVE_WORKOUT_STALE_MS are treated
 // as abandoned. We still hand them to the screen so it can render a
@@ -17,7 +23,24 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import type { SessionExercise } from '../screens/client/active-workout/types';
 
-export const ACTIVE_WORKOUT_SESSION_KEY = '@activeWorkoutSession/v1';
+// Prefix used for user-scoped session keys. The signOut sweep in
+// authActions.ts removes every AsyncStorage key starting with this
+// prefix so a second user on the same device cannot inherit the first
+// user's in-progress workout.
+export const ACTIVE_WORKOUT_SESSION_KEY_PREFIX = 'active_workout_session:';
+
+// Build the per-user storage key. Exported for tests + the signOut
+// sweep so the prefix lives in exactly one place.
+export function activeWorkoutSessionKey(userId: string): string {
+  return `${ACTIVE_WORKOUT_SESSION_KEY_PREFIX}${userId}`;
+}
+
+// Legacy global key used by the pre-R15 implementation. Read once at
+// load time so an already-running workout that started before this
+// patch shipped doesn't lose state — we migrate it forward into the
+// per-user namespace, then delete the legacy entry. The migration is
+// idempotent: after the first successful load the legacy key is gone.
+export const LEGACY_ACTIVE_WORKOUT_SESSION_KEY = '@activeWorkoutSession/v1';
 
 // 12 hours — anything older is almost certainly an abandoned session.
 export const ACTIVE_WORKOUT_STALE_MS = 12 * 60 * 60 * 1000;
@@ -73,49 +96,101 @@ export function isSessionStale(
   return now - session.updatedAtMs > ACTIVE_WORKOUT_STALE_MS;
 }
 
-export async function loadActiveWorkoutSession(
-  now: number = Date.now(),
-): Promise<ActiveWorkoutLoadResult | null> {
+// Internal: parse a stored payload and either return it or drop it if
+// the shape is wrong / version mismatched / corrupt. Returns null in
+// every "we don't have a usable session" case so callers don't have to
+// branch on error types.
+async function readAndValidate(
+  storageKey: string,
+): Promise<PersistedActiveWorkoutSession | null> {
+  let raw: string | null;
   try {
-    const raw = await AsyncStorage.getItem(ACTIVE_WORKOUT_SESSION_KEY);
-    if (!raw) return null;
+    raw = await AsyncStorage.getItem(storageKey);
+  } catch {
+    return null;
+  }
+  if (!raw) return null;
+  try {
     const parsed: unknown = JSON.parse(raw);
     if (!isPersistedSession(parsed)) {
-      // Wrong shape or wrong version — drop it so the screen starts
-      // clean rather than crashing while restoring.
-      await AsyncStorage.removeItem(ACTIVE_WORKOUT_SESSION_KEY);
+      await AsyncStorage.removeItem(storageKey).catch(() => {
+        /* best-effort */
+      });
       return null;
     }
-    return { session: parsed, isStale: isSessionStale(parsed, now) };
+    return parsed;
   } catch {
-    // Corrupt payload — discard.
-    try {
-      await AsyncStorage.removeItem(ACTIVE_WORKOUT_SESSION_KEY);
-    } catch {
-      // best-effort; nothing else to do
-    }
+    await AsyncStorage.removeItem(storageKey).catch(() => {
+      /* best-effort */
+    });
     return null;
   }
 }
 
+export async function loadActiveWorkoutSession(
+  userId: string,
+  now: number = Date.now(),
+): Promise<ActiveWorkoutLoadResult | null> {
+  if (!userId) return null;
+  const userKey = activeWorkoutSessionKey(userId);
+
+  // Read the per-user key first; if absent, try the legacy global key
+  // and migrate it into the user namespace so an in-flight workout
+  // doesn't get orphaned by this rename.
+  const userScoped = await readAndValidate(userKey);
+  if (userScoped) {
+    return { session: userScoped, isStale: isSessionStale(userScoped, now) };
+  }
+
+  const legacy = await readAndValidate(LEGACY_ACTIVE_WORKOUT_SESSION_KEY);
+  if (legacy) {
+    // Migrate forward into the per-user namespace. The legacy global
+    // key represents the only previously-signed-in user's session, so
+    // attributing it to the now-current user is the correct (and only)
+    // move — they were the user who created it.
+    try {
+      await AsyncStorage.setItem(userKey, JSON.stringify(legacy));
+    } catch {
+      // If the migration write fails we still hand back the legacy
+      // payload so the user can resume; we just won't have it in the
+      // new namespace until the next save.
+    }
+    await AsyncStorage.removeItem(LEGACY_ACTIVE_WORKOUT_SESSION_KEY).catch(
+      () => {
+        /* best-effort */
+      },
+    );
+    return { session: legacy, isStale: isSessionStale(legacy, now) };
+  }
+
+  return null;
+}
+
 export async function saveActiveWorkoutSession(
+  userId: string,
   session: Omit<PersistedActiveWorkoutSession, 'version' | 'updatedAtMs'>,
   now: number = Date.now(),
 ): Promise<void> {
+  if (!userId) {
+    // Refuse to write a global key — that would re-introduce the R15
+    // cross-user leak this prefix was added to close.
+    throw new Error('activeWorkoutSession: userId required to save');
+  }
   const payload: PersistedActiveWorkoutSession = {
     ...session,
     version: ACTIVE_WORKOUT_SESSION_VERSION,
     updatedAtMs: now,
   };
   await AsyncStorage.setItem(
-    ACTIVE_WORKOUT_SESSION_KEY,
+    activeWorkoutSessionKey(userId),
     JSON.stringify(payload),
   );
 }
 
-export async function clearActiveWorkoutSession(): Promise<void> {
+export async function clearActiveWorkoutSession(userId: string): Promise<void> {
+  if (!userId) return;
   try {
-    await AsyncStorage.removeItem(ACTIVE_WORKOUT_SESSION_KEY);
+    await AsyncStorage.removeItem(activeWorkoutSessionKey(userId));
   } catch {
     // best-effort
   }

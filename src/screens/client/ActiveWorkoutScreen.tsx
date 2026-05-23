@@ -29,6 +29,7 @@ import {
   clearActiveWorkoutSession,
   type PersistedActiveWorkoutSession,
 } from '../../storage/activeWorkoutSession';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 // Offline-first write path (audit fix H-5: comments were left
 // referencing the deleted WatermelonDB stack — current implementation
 // is built on expo-sqlite, see src/offline/database.ts and
@@ -78,6 +79,13 @@ export default function ActiveWorkoutScreen() {
   const route = useRoute<RouteProp<RouteParams, 'ActiveWorkout'>>();
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const { routineName, exercises: exercisesJson, assignmentId } = route.params;
+  // Per-R15 the persisted session key is scoped to the current user
+  // (`active_workout_session:<userId>`). The user id resolves
+  // asynchronously on cold start (useCurrentUser reads from MMKV/Async),
+  // so the persistence effect and the restore-on-mount effect both
+  // wait on it before touching storage.
+  const currentUser = useCurrentUser();
+  const userId = currentUser?.id ?? '';
 
   const [sessionExercises, setSessionExercises] = useState<SessionExercise[]>([]);
   // Elapsed seconds is always recomputed from a wallclock anchor — the
@@ -118,7 +126,7 @@ export default function ActiveWorkoutScreen() {
   // the background-flush path so backgrounding the app immediately writes
   // the most recent mutation to AsyncStorage instead of losing it if the
   // OS kills the process before the debounce fires.
-  const pendingPersistPayloadRef = useRef<Parameters<typeof saveActiveWorkoutSession>[0] | null>(null);
+  const pendingPersistPayloadRef = useRef<Parameters<typeof saveActiveWorkoutSession>[1] | null>(null);
   // StrictMode hygiene — under React 18 dev double-invoke the mount-time
   // restore effect would run twice and stack two "Resume?" prompts on
   // first foreground. The ref short-circuits the second invocation. No
@@ -192,18 +200,23 @@ export default function ActiveWorkoutScreen() {
   //      explicit so they don't accidentally resume a workout from
   //      yesterday with mismatched timing.
   useEffect(() => {
+    // Wait for the userId to resolve before reading from storage —
+    // the persisted key is scoped to the current user (R15). On cold
+    // start useCurrentUser is async; we re-run when it resolves.
+    if (!userId) return;
     // StrictMode double-invoke guard: the dev runtime re-runs mount-time
     // effects twice, which without this short-circuit would stack two
     // copies of the "Resume?" Alert. The first invocation gets to do the
     // load + prompt; subsequent invocations exit immediately. No effect
-    // in production builds.
+    // in production builds. Placed after the userId gate so the guard
+    // isn't burned by an early empty-userId render.
     if (promptShownRef.current) return;
     promptShownRef.current = true;
     let cancelled = false;
     (async () => {
       let result: Awaited<ReturnType<typeof loadActiveWorkoutSession>> = null;
       try {
-        result = await loadActiveWorkoutSession();
+        result = await loadActiveWorkoutSession(userId);
       } catch {
         // Even on a load failure we still mount a usable screen.
         result = null;
@@ -231,7 +244,7 @@ export default function ActiveWorkoutScreen() {
             text: 'Start Fresh',
             style: 'destructive',
             onPress: () => {
-              clearActiveWorkoutSession().catch(() => { /* best-effort */ });
+              clearActiveWorkoutSession(userId).catch(() => { /* best-effort */ });
               setSessionExercises(defaultSessionExercises);
               setHydrated(true);
             },
@@ -250,10 +263,12 @@ export default function ActiveWorkoutScreen() {
     return () => {
       cancelled = true;
     };
-    // We intentionally only run this once per screen mount. Route params
-    // are stable for the lifetime of the navigator entry.
+    // Re-runs when userId resolves on cold start. Other inputs
+    // (route params, defaultSessionExercises) are stable for the
+    // lifetime of the navigator entry; the promptShownRef guard
+    // above makes the body idempotent regardless.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [userId]);
 
   // (Fix #2) Removed AsyncStorage user_data read — the backend resolves the
   // current user from the JWT, so we don't need a local user_id to write
@@ -293,11 +308,11 @@ export default function ActiveWorkoutScreen() {
       persistDebounceRef.current = null;
     }
     const payload = pendingPersistPayloadRef.current;
-    if (!payload || finishingRef.current) return;
-    saveActiveWorkoutSession(payload).catch((err) => {
+    if (!payload || finishingRef.current || !userId) return;
+    saveActiveWorkoutSession(userId, payload).catch((err) => {
       if (__DEV__) console.warn('[ActiveWorkout] background flush failed', err);
     });
-  }, []);
+  }, [userId]);
 
   // AppState handling.
   //   - background / inactive: flush any pending debounced write, then
@@ -335,7 +350,7 @@ export default function ActiveWorkoutScreen() {
   // background-flush path always has the latest mutation to write
   // even if it fires between debounce-arm and debounce-fire.
   useEffect(() => {
-    if (!hydrated || finishingRef.current) return;
+    if (!hydrated || finishingRef.current || !userId) return;
     const payload = {
       startedAtMs: sessionStartMsRef.current,
       routineName,
@@ -347,7 +362,7 @@ export default function ActiveWorkoutScreen() {
     pendingPersistPayloadRef.current = payload;
     if (persistDebounceRef.current) clearTimeout(persistDebounceRef.current);
     persistDebounceRef.current = setTimeout(() => {
-      saveActiveWorkoutSession(payload).catch((err) => {
+      saveActiveWorkoutSession(userId, payload).catch((err) => {
         if (__DEV__) console.warn('[ActiveWorkout] persistence write failed', err);
       });
     }, PERSIST_DEBOUNCE_MS);
@@ -357,7 +372,7 @@ export default function ActiveWorkoutScreen() {
         persistDebounceRef.current = null;
       }
     };
-  }, [hydrated, sessionExercises, routineName, exercisesJson, assignmentId]);
+  }, [hydrated, sessionExercises, routineName, exercisesJson, assignmentId, userId]);
 
   // Rest timer cleanup.
   useEffect(() => {
@@ -568,7 +583,7 @@ export default function ActiveWorkoutScreen() {
             persistDebounceRef.current = null;
           }
           pendingPersistPayloadRef.current = null;
-          await clearActiveWorkoutSession();
+          if (userId) await clearActiveWorkoutSession(userId);
           if (timerRef.current) clearInterval(timerRef.current);
           const durationMinutes = Math.round(timer / 60);
           const completedExercises = sessionExercises.filter((e) =>
@@ -722,7 +737,7 @@ export default function ActiveWorkoutScreen() {
           }
           pendingPersistPayloadRef.current = null;
           try {
-            await clearActiveWorkoutSession();
+            if (userId) await clearActiveWorkoutSession(userId);
           } catch {
             // Best-effort — if clearing fails the next mount still has
             // the "Resume?" prompt to safely back out of.

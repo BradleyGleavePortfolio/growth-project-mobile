@@ -37,6 +37,12 @@ const ASYNC_SIGN_OUT_KEYS = [
 const ASYNC_SIGN_OUT_PREFIXES = [
   'pending_food_logs_',
   'gp_coach_bio_',
+  // Per-user in-progress workout sessions (R15). The active workout
+  // persistence layer keys entries as `active_workout_session:<userId>`;
+  // sweeping the prefix on signOut prevents a second user on the same
+  // device from inheriting the previous user's session and seeing a
+  // "Resume?" prompt with someone else's working state.
+  'active_workout_session:',
 ];
 
 // Belt-and-braces wipe for the cacheStorage MMKV namespace. clearAllStorage()

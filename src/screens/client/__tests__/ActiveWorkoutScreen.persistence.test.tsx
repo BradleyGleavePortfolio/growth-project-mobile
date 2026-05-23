@@ -1,16 +1,18 @@
 // Unit tests for the ActiveWorkout persistence + AppState behaviours
-// added for Hunter #2 P1-5 and P1-6.
+// added for Hunter #2 P1-5 and P1-6 + the R15 user-scope follow-up.
 //
 // We test two layers:
 //   1. The pure helpers in src/storage/activeWorkoutSession.ts —
 //      load/save/clear/isSessionStale, with AsyncStorage mocked.
-//      This is where the staleness rule and version-discard logic
-//      live, so it's the right place to assert them directly.
+//      This is where the staleness rule, version-discard logic, and
+//      per-user keying live, so it's the right place to assert them
+//      directly. Cross-user isolation is asserted here.
 //   2. The screen's wiring — we don't render the screen (it pulls in
 //      reanimated, expo-sqlite, and a whole navigator), but we do
 //      verify at the source level that the screen subscribes to
-//      AppState, persists on mutation, and clears on finish/cancel.
-//      A source-pattern check is the same approach used by sibling
+//      AppState, persists on mutation, clears on finish/cancel, and
+//      gates every storage call on the resolved userId. A
+//      source-pattern check is the same approach used by sibling
 //      tests in this directory (see CoachGuidelinesScreen.test.ts).
 
 import * as fs from 'fs';
@@ -19,9 +21,11 @@ import * as path from 'path';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import {
-  ACTIVE_WORKOUT_SESSION_KEY,
+  ACTIVE_WORKOUT_SESSION_KEY_PREFIX,
   ACTIVE_WORKOUT_STALE_MS,
   ACTIVE_WORKOUT_SESSION_VERSION,
+  LEGACY_ACTIVE_WORKOUT_SESSION_KEY,
+  activeWorkoutSessionKey,
   clearActiveWorkoutSession,
   isSessionStale,
   loadActiveWorkoutSession,
@@ -36,6 +40,8 @@ const SCREEN_SRC = fs.readFileSync(
 );
 
 const NOW = 1_700_000_000_000;
+const USER_A = 'user_aaaa-1111';
+const USER_B = 'user_bbbb-2222';
 
 const baseSession = (
   overrides: Partial<PersistedActiveWorkoutSession> = {},
@@ -64,9 +70,15 @@ describe('activeWorkoutSession helpers', () => {
     jest.clearAllMocks();
   });
 
-  it('saveActiveWorkoutSession writes a versioned, timestamped payload', async () => {
-    await saveActiveWorkoutSession(baseSession(), NOW);
-    const raw = await AsyncStorage.getItem(ACTIVE_WORKOUT_SESSION_KEY);
+  it('activeWorkoutSessionKey composes the per-user key', () => {
+    expect(activeWorkoutSessionKey(USER_A)).toBe(
+      `${ACTIVE_WORKOUT_SESSION_KEY_PREFIX}${USER_A}`,
+    );
+  });
+
+  it('saveActiveWorkoutSession writes a versioned, timestamped payload at the per-user key', async () => {
+    await saveActiveWorkoutSession(USER_A, baseSession(), NOW);
+    const raw = await AsyncStorage.getItem(activeWorkoutSessionKey(USER_A));
     expect(raw).toBeTruthy();
     const parsed = JSON.parse(raw as string) as PersistedActiveWorkoutSession;
     expect(parsed.version).toBe(ACTIVE_WORKOUT_SESSION_VERSION);
@@ -75,23 +87,44 @@ describe('activeWorkoutSession helpers', () => {
     expect(parsed.sessionExercises).toHaveLength(1);
   });
 
+  it('saveActiveWorkoutSession refuses an empty userId so the global-key R15 leak cannot regress', async () => {
+    await expect(saveActiveWorkoutSession('', baseSession(), NOW)).rejects.toThrow(
+      /userId required/i,
+    );
+  });
+
   it('loadActiveWorkoutSession returns null when nothing is stored', async () => {
-    const result = await loadActiveWorkoutSession(NOW);
+    const result = await loadActiveWorkoutSession(USER_A, NOW);
+    expect(result).toBeNull();
+  });
+
+  it('loadActiveWorkoutSession returns null when userId is empty', async () => {
+    // Even if a legacy key exists, no userId means we can't safely
+    // attribute the session — return null instead of leaking.
+    await AsyncStorage.setItem(
+      LEGACY_ACTIVE_WORKOUT_SESSION_KEY,
+      JSON.stringify({
+        ...baseSession(),
+        version: ACTIVE_WORKOUT_SESSION_VERSION,
+        updatedAtMs: NOW,
+      }),
+    );
+    const result = await loadActiveWorkoutSession('', NOW);
     expect(result).toBeNull();
   });
 
   it('loadActiveWorkoutSession returns a fresh session as non-stale', async () => {
-    await saveActiveWorkoutSession(baseSession(), NOW);
-    const result = await loadActiveWorkoutSession(NOW);
+    await saveActiveWorkoutSession(USER_A, baseSession(), NOW);
+    const result = await loadActiveWorkoutSession(USER_A, NOW);
     expect(result).not.toBeNull();
     expect(result!.isStale).toBe(false);
     expect(result!.session.routineName).toBe('Push Day');
   });
 
   it('loadActiveWorkoutSession flags sessions older than 12h as stale', async () => {
-    await saveActiveWorkoutSession(baseSession(), NOW);
+    await saveActiveWorkoutSession(USER_A, baseSession(), NOW);
     const future = NOW + ACTIVE_WORKOUT_STALE_MS + 1000;
-    const result = await loadActiveWorkoutSession(future);
+    const result = await loadActiveWorkoutSession(USER_A, future);
     expect(result).not.toBeNull();
     expect(result!.isStale).toBe(true);
   });
@@ -107,46 +140,108 @@ describe('activeWorkoutSession helpers', () => {
 
   it('loadActiveWorkoutSession discards payloads with a wrong version', async () => {
     await AsyncStorage.setItem(
-      ACTIVE_WORKOUT_SESSION_KEY,
+      activeWorkoutSessionKey(USER_A),
       JSON.stringify({
         ...baseSession(),
         version: 999,
         updatedAtMs: NOW,
       }),
     );
-    const result = await loadActiveWorkoutSession(NOW);
+    const result = await loadActiveWorkoutSession(USER_A, NOW);
     expect(result).toBeNull();
     // Bad payloads are cleared so they don't keep crashing the load.
-    const raw = await AsyncStorage.getItem(ACTIVE_WORKOUT_SESSION_KEY);
+    const raw = await AsyncStorage.getItem(activeWorkoutSessionKey(USER_A));
     expect(raw).toBeNull();
   });
 
   it('loadActiveWorkoutSession discards corrupt JSON', async () => {
-    await AsyncStorage.setItem(ACTIVE_WORKOUT_SESSION_KEY, '{ not json');
-    const result = await loadActiveWorkoutSession(NOW);
+    await AsyncStorage.setItem(activeWorkoutSessionKey(USER_A), '{ not json');
+    const result = await loadActiveWorkoutSession(USER_A, NOW);
     expect(result).toBeNull();
-    const raw = await AsyncStorage.getItem(ACTIVE_WORKOUT_SESSION_KEY);
+    const raw = await AsyncStorage.getItem(activeWorkoutSessionKey(USER_A));
     expect(raw).toBeNull();
   });
 
-  it('clearActiveWorkoutSession removes the stored entry', async () => {
-    await saveActiveWorkoutSession(baseSession(), NOW);
-    await clearActiveWorkoutSession();
-    const raw = await AsyncStorage.getItem(ACTIVE_WORKOUT_SESSION_KEY);
-    expect(raw).toBeNull();
+  it('clearActiveWorkoutSession removes the stored entry for that user only', async () => {
+    await saveActiveWorkoutSession(USER_A, baseSession(), NOW);
+    await saveActiveWorkoutSession(USER_B, baseSession({ routineName: 'Pull Day' }), NOW);
+    await clearActiveWorkoutSession(USER_A);
+    expect(await AsyncStorage.getItem(activeWorkoutSessionKey(USER_A))).toBeNull();
+    // User B's session is untouched.
+    expect(await AsyncStorage.getItem(activeWorkoutSessionKey(USER_B))).toBeTruthy();
   });
 
   it('clearActiveWorkoutSession does not throw when nothing is stored', async () => {
-    await expect(clearActiveWorkoutSession()).resolves.toBeUndefined();
+    await expect(clearActiveWorkoutSession(USER_A)).resolves.toBeUndefined();
+  });
+
+  it('clearActiveWorkoutSession no-ops on empty userId', async () => {
+    await saveActiveWorkoutSession(USER_A, baseSession(), NOW);
+    await clearActiveWorkoutSession('');
+    expect(await AsyncStorage.getItem(activeWorkoutSessionKey(USER_A))).toBeTruthy();
   });
 
   it('save/load round-trips the assignment idempotency key', async () => {
     await saveActiveWorkoutSession(
+      USER_A,
       baseSession({ idempotencyKey: 'asg_42:xyz' }),
       NOW,
     );
-    const result = await loadActiveWorkoutSession(NOW);
+    const result = await loadActiveWorkoutSession(USER_A, NOW);
     expect(result!.session.idempotencyKey).toBe('asg_42:xyz');
+  });
+
+  it('cross-user isolation: user B never sees user A`s session', async () => {
+    // R15: a second user on the same device must NOT see the first
+    // user's in-progress session. Without per-user keying the resume
+    // prompt would surface User A's working set state to User B.
+    await saveActiveWorkoutSession(USER_A, baseSession(), NOW);
+    const resultB = await loadActiveWorkoutSession(USER_B, NOW);
+    expect(resultB).toBeNull();
+    // And User A is still able to load their own session.
+    const resultA = await loadActiveWorkoutSession(USER_A, NOW);
+    expect(resultA).not.toBeNull();
+  });
+
+  it('migrates a legacy global session into the per-user namespace on first load', async () => {
+    // An in-flight workout that started before this patch shipped
+    // lives under the legacy global key. The first load after the
+    // upgrade must move it into the per-user namespace and remove
+    // the legacy entry so it doesn't leak to a future signed-in user.
+    await AsyncStorage.setItem(
+      LEGACY_ACTIVE_WORKOUT_SESSION_KEY,
+      JSON.stringify({
+        ...baseSession(),
+        version: ACTIVE_WORKOUT_SESSION_VERSION,
+        updatedAtMs: NOW,
+      }),
+    );
+    const result = await loadActiveWorkoutSession(USER_A, NOW);
+    expect(result).not.toBeNull();
+    expect(result!.session.routineName).toBe('Push Day');
+    // Legacy key is gone.
+    expect(
+      await AsyncStorage.getItem(LEGACY_ACTIVE_WORKOUT_SESSION_KEY),
+    ).toBeNull();
+    // New per-user key has the payload.
+    expect(
+      await AsyncStorage.getItem(activeWorkoutSessionKey(USER_A)),
+    ).toBeTruthy();
+  });
+
+  it('legacy migration is idempotent across reloads', async () => {
+    await AsyncStorage.setItem(
+      LEGACY_ACTIVE_WORKOUT_SESSION_KEY,
+      JSON.stringify({
+        ...baseSession(),
+        version: ACTIVE_WORKOUT_SESSION_VERSION,
+        updatedAtMs: NOW,
+      }),
+    );
+    await loadActiveWorkoutSession(USER_A, NOW);
+    const second = await loadActiveWorkoutSession(USER_A, NOW);
+    expect(second).not.toBeNull();
+    expect(second!.session.routineName).toBe('Push Day');
   });
 });
 
@@ -159,6 +254,33 @@ describe('ActiveWorkoutScreen wiring (source-level)', () => {
     expect(SCREEN_SRC).toMatch(/loadActiveWorkoutSession/);
     expect(SCREEN_SRC).toMatch(/saveActiveWorkoutSession/);
     expect(SCREEN_SRC).toMatch(/clearActiveWorkoutSession/);
+  });
+
+  it('imports useCurrentUser to obtain the userId for the per-user storage key', () => {
+    expect(SCREEN_SRC).toMatch(/from '\.\.\/\.\.\/hooks\/useCurrentUser'/);
+    expect(SCREEN_SRC).toMatch(/useCurrentUser\(\)/);
+  });
+
+  it('passes the userId into every storage call', () => {
+    // Belt-and-braces: every call to a persistence helper inside the
+    // screen body must thread userId through as the first argument.
+    expect(SCREEN_SRC).toMatch(/loadActiveWorkoutSession\(userId\)/);
+    expect(SCREEN_SRC).toMatch(/saveActiveWorkoutSession\(userId,/);
+    expect(SCREEN_SRC).toMatch(/clearActiveWorkoutSession\(userId\)/);
+  });
+
+  it('gates the persistence effect on a non-empty userId', () => {
+    // Without this guard the debounced save effect would fire with
+    // an empty userId during the brief window before useCurrentUser
+    // resolves, and would have thrown from the storage helper.
+    expect(SCREEN_SRC).toMatch(/!hydrated \|\| finishingRef\.current \|\| !userId/);
+  });
+
+  it('gates the restore-on-mount effect on userId so it re-runs once useCurrentUser resolves', () => {
+    expect(SCREEN_SRC).toMatch(/if \(!userId\) return;/);
+    // The effect's dep array includes userId so it re-runs when
+    // useCurrentUser resolves on cold start.
+    expect(SCREEN_SRC).toMatch(/}, \[userId\]\);/);
   });
 
   it('uses a wallclock anchor for the elapsed timer', () => {
@@ -181,7 +303,7 @@ describe('ActiveWorkoutScreen wiring (source-level)', () => {
     expect(SCREEN_SRC).toMatch(/PERSIST_DEBOUNCE_MS\s*=\s*500/);
     // The screen builds the payload locally, populates the pending-payload
     // ref, then arms the debounce timer that calls saveActiveWorkoutSession.
-    expect(SCREEN_SRC).toMatch(/saveActiveWorkoutSession\(payload\)/);
+    expect(SCREEN_SRC).toMatch(/saveActiveWorkoutSession\(userId, payload\)/);
   });
 
   it('gates persistence on a hydrated flag so the load wins the mount race', () => {
@@ -250,7 +372,9 @@ describe('ActiveWorkoutScreen wiring (source-level)', () => {
   it('guards the Resume prompt with promptShownRef under StrictMode dev double-invoke', () => {
     expect(SCREEN_SRC).toMatch(/const promptShownRef = useRef\(false\)/);
     // The guard must early-return before any state mutation in the mount
-    // effect (i.e. before setSessionExercises / setHydrated).
+    // effect (i.e. before setSessionExercises / setHydrated). The userId
+    // gate sits above it; the guard itself must still run before
+    // setHydrated.
     const guard = SCREEN_SRC.indexOf('if (promptShownRef.current) return');
     const setHydrated = SCREEN_SRC.indexOf('setHydrated(true)');
     expect(guard).toBeGreaterThan(-1);
@@ -263,7 +387,7 @@ describe('ActiveWorkoutScreen wiring (source-level)', () => {
     //   - be async
     //   - set finishingRef.current = true synchronously
     //   - null pendingPersistPayloadRef.current
-    //   - await clearActiveWorkoutSession()
+    //   - await clearActiveWorkoutSession(userId)
     //   - navigation.goBack() last
     const cancelBlock = SCREEN_SRC.match(
       /text: 'Cancel',\s*style: 'destructive',[\s\S]*?onPress: async \(\) => \{[\s\S]*?navigation\.goBack\(\);\s*\}/,
@@ -272,7 +396,7 @@ describe('ActiveWorkoutScreen wiring (source-level)', () => {
     const body = cancelBlock![0];
     expect(body).toMatch(/finishingRef\.current = true/);
     expect(body).toMatch(/pendingPersistPayloadRef\.current = null/);
-    expect(body).toMatch(/await clearActiveWorkoutSession\(\)/);
+    expect(body).toMatch(/await clearActiveWorkoutSession\(userId\)/);
   });
 });
 

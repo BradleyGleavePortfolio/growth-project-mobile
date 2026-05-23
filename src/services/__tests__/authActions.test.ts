@@ -80,6 +80,28 @@ describe('signOut', () => {
     expect(await AsyncStorage.getItem('something_else')).toBe('keep');
   });
 
+  it('wipes per-user active_workout_session:* keys so the next user cannot resume the previous user\'s in-flight workout (R15)', async () => {
+    // The active workout persistence layer keys entries as
+    // `active_workout_session:<userId>`. Without the prefix sweep, User
+    // B signing in on the same device would see User A's "Resume?" prompt
+    // and could adopt their working set state.
+    await AsyncStorage.setItem('active_workout_session:user-A', '{"v":1}');
+    await AsyncStorage.setItem('active_workout_session:user-B', '{"v":1}');
+    await AsyncStorage.setItem('active_workout_unrelated', 'keep');
+
+    await signOut();
+
+    expect(
+      await AsyncStorage.getItem('active_workout_session:user-A'),
+    ).toBeNull();
+    expect(
+      await AsyncStorage.getItem('active_workout_session:user-B'),
+    ).toBeNull();
+    // Keys that share the broader stem but not the colon-terminated prefix
+    // are left alone — we only target the exact namespace.
+    expect(await AsyncStorage.getItem('active_workout_unrelated')).toBe('keep');
+  });
+
   it('wipes the signing-out user\'s offline workout rows but not others\'', async () => {
     await signOut();
     expect(syncEngineMock.deleteWorkoutLogsForUser).toHaveBeenCalledWith('user-A');
