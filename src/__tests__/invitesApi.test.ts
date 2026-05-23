@@ -147,7 +147,9 @@ describe('invitesApi.bulkInvite', () => {
       { length: MAX_BULK_EMAILS + 1 },
       (_, i) => `u${i}@ex.com`,
     );
-    await expect(invitesApi.bulkInvite(emails)).rejects.toThrow(/max/i);
+    await expect(invitesApi.bulkInvite(emails)).rejects.toThrow(
+      `Too many emails — max ${MAX_BULK_EMAILS} per request`,
+    );
     expect(mockedApi.post).not.toHaveBeenCalled();
   });
 

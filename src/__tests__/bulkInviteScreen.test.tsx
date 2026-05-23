@@ -137,8 +137,8 @@ describe('BulkInviteScreen — RTL', () => {
     const args = alertSpy.mock.calls[alertSpy.mock.calls.length - 1];
     expect(args[0]).toBe('Could not send invites');
     expect(args[1]).toBe('Please try again.');
-    // Never leak the raw error string.
-    expect(JSON.stringify(args)).not.toMatch(/_TOKEN/);
-    expect(JSON.stringify(args)).not.toMatch(/postgres/i);
+    // Never leak the raw error string. Alert.alert only receives the safe
+    // title + message; no extra args carry the underlying error.
+    expect(args.length).toBeLessThanOrEqual(2);
   });
 });
