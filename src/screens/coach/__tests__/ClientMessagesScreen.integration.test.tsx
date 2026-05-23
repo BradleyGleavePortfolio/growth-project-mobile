@@ -83,12 +83,12 @@ jest.mock('../../../storage/mmkv', () => {
   };
 });
 
-const messagesByClient: Record<string, Array<Record<string, unknown>>> = {};
-const getClientMessagesMock = jest.fn(async (clientId: string) => ({
-  data: { messages: messagesByClient[clientId] ?? [] },
+const mockMessagesByClient: Record<string, Array<Record<string, unknown>>> = {};
+const mockGetClientMessages = jest.fn(async (clientId: string) => ({
+  data: { messages: mockMessagesByClient[clientId] ?? [] },
 }));
-const markClientThreadReadMock = jest.fn(async () => ({ data: {} }));
-const sendClientMessageMock = jest.fn(async (_id: string, body: string) => ({
+const mockMarkClientThreadRead = jest.fn(async (..._args: unknown[]) => ({ data: {} }));
+const mockSendClientMessage = jest.fn(async (_id: string, body: string) => ({
   data: { id: 'srv-new', sender_role: 'coach', body, created_at: new Date().toISOString() },
 }));
 
@@ -104,10 +104,10 @@ jest.mock('../../../services/api', () => {
     __esModule: true,
     default: stub,
     coachApi: {
-      getClientMessages: (...args: unknown[]) => getClientMessagesMock(...(args as [string])),
-      markClientThreadRead: (...args: unknown[]) => markClientThreadReadMock(...args),
+      getClientMessages: (...args: unknown[]) => mockGetClientMessages(...(args as [string])),
+      markClientThreadRead: (...args: unknown[]) => mockMarkClientThreadRead(...args),
       sendClientMessage: (...args: unknown[]) =>
-        sendClientMessageMock(...(args as [string, string])),
+        mockSendClientMessage(...(args as [string, string])),
     },
   };
 });
@@ -159,10 +159,10 @@ const getMock = api.get as unknown as jest.Mock;
 const deleteMock = api.delete as unknown as jest.Mock;
 
 beforeEach(async () => {
-  Object.keys(messagesByClient).forEach((k) => delete messagesByClient[k]);
-  getClientMessagesMock.mockClear();
-  markClientThreadReadMock.mockClear();
-  sendClientMessageMock.mockClear();
+  Object.keys(mockMessagesByClient).forEach((k) => delete mockMessagesByClient[k]);
+  mockGetClientMessages.mockClear();
+  mockMarkClientThreadRead.mockClear();
+  mockSendClientMessage.mockClear();
   postMock.mockReset();
   getMock.mockReset();
   deleteMock.mockReset();
@@ -176,7 +176,7 @@ beforeEach(async () => {
 
 describe('ClientMessagesScreen — full-screen report integration (P1-B)', () => {
   it('long-press → open report sheet → submit calls POST /messages/report with the full body', async () => {
-    messagesByClient['client-1'] = [
+    mockMessagesByClient['client-1'] = [
       {
         id: 'msg-123',
         sender_role: 'client',
@@ -264,7 +264,7 @@ describe('ClientMessagesScreen — server block hydration filters the DM list (P
       }
       return { data: {} };
     });
-    messagesByClient['client-1'] = [
+    mockMessagesByClient['client-1'] = [
       {
         id: 'msg-a',
         sender_role: 'client',
@@ -319,7 +319,7 @@ describe('ClientMessagesScreen — server block hydration filters the DM list (P
       }
       return { data: {} };
     });
-    messagesByClient['client-1'] = [];
+    mockMessagesByClient['client-1'] = [];
 
     render(<ClientMessagesScreen />);
 
