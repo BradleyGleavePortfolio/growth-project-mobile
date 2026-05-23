@@ -135,10 +135,11 @@ jest.mock('@react-navigation/native', () => {
       params: { clientId: 'client-1', clientName: 'Alice Smith' },
     }),
     // useFocusEffect normally only runs on focus; in tests we want it to run
-    // synchronously on mount.
+    // synchronously on mount and return the cleanup the screen provides.
     useFocusEffect: (cb: () => () => void) => {
       const React = require('react');
-      React.useEffect(() => cb(), []);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+      React.useEffect(() => cb(), [cb]);
     },
   };
 });
