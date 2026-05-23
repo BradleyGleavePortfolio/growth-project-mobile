@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { AppState, TouchableOpacity, View, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import type { NavigatorScreenParams } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { coachApi } from '../services/api';
 import ClientsListScreen from '../screens/coach/ClientsListScreen';
@@ -103,7 +104,11 @@ export type CoachTabParamList = {
   ClientsStack: undefined;
   Templates: undefined;
   Messages: undefined;
-  SettingsStack: undefined;
+  // R27: typed nested nav so navigate('SettingsStack', { screen: 'Billing' })
+  // type-checks against SettingsStackParamList. Plain `undefined` left
+  // navigate('SettingsStack', ... as never) as the only way to deep-link
+  // into a settings sub-screen, which silently broke when names changed.
+  SettingsStack: NavigatorScreenParams<SettingsStackParamList> | undefined;
   TeamStack: undefined;
 };
 

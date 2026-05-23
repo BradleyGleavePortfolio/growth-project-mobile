@@ -580,14 +580,35 @@ export default function RootNavigator() {
           role: 'coach',
         });
         // Check coach onboarding wizard gate.
-        // On API failure (404/500) fall through to 'coach' — never hard-block.
+        // Backend contract: 404 means the wizard row has not been initialised
+        // yet, and the mobile client is expected to POST /coach/onboarding/start
+        // before entering the wizard. Any other failure (network, 5xx) falls
+        // through to the dashboard so a flaky API can never hard-block an
+        // already-onboarded coach from reaching their clients.
         try {
           const onboardingRes = await api.get<{ is_complete: boolean }>('/coach/onboarding');
           if (onboardingRes.data.is_complete === false) {
             setAuthState('coach_wizard');
             return;
           }
-        } catch (err) { logger.warn('RootNavigator', 'non-fatal', err); }
+        } catch (err) {
+          const status = (err as { response?: { status?: number } })?.response?.status;
+          if (status === 404) {
+            // Wizard row missing — start it and enter the wizard.
+            try {
+              await api.post('/coach/onboarding/start', {});
+              setAuthState('coach_wizard');
+              return;
+            } catch (startErr) {
+              // If start fails too, fail open to the dashboard rather than
+              // trap the coach behind an un-startable wizard.
+              logger.warn('RootNavigator', 'onboarding/start failed', startErr);
+            }
+          } else {
+            // Network / 5xx / unknown — fail open to coach dashboard.
+            logger.warn('RootNavigator', 'non-fatal', err);
+          }
+        }
         setAuthState('coach');
         return;
       }
