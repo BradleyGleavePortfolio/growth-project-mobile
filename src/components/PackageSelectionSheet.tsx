@@ -8,13 +8,18 @@
  * Payment flow:
  *   1. On visible: GET /v1/clients/me/coach/packages
  *   2. User selects a package
- *   3. POST /v1/checkout/payment-intent → { client_secret, ephemeral_key,
- *      customer_id, publishable_key }
+ *   3. POST /v1/checkout/sessions { package_id, idempotency_key } →
+ *        { stripe_client_secret, stripe_ephemeral_key }
+ *      (publishable key comes from EXPO_PUBLIC_STRIPE_PK env)
  *   4. stripe.initPaymentSheet() + stripe.presentPaymentSheet()
  *   5. Completed → onPaymentSuccess(); Cancel → stay on sheet; Error → inline
  *
+ * R18: payment success is only fired after Stripe confirms the PaymentSheet.
+ * R19: every checkout session POST carries a client-generated idempotency key.
+ * R17: raw Stripe/backend error strings are scrubbed; users see safe copy.
+ *
  * 24-hour re-surface logic:
- *   MMKV key 'onboarding.package_prompt_dismissed_at' (ISO string).
+ *   MMKV key 'onboarding.package_prompt_dismissed_at:<userId>' (ISO string).
  *   If set and < 24h ago → call onDismiss() immediately.
  *   If set and > 24h ago (or not set) → show sheet.
  *   Written on "Skip for now" tap.
@@ -33,6 +38,8 @@ import {
 import { useTheme, ThemeColors } from '../theme/ThemeProvider';
 import { prefsStorage } from '../storage/mmkv';
 import api from '../services/api';
+import { useCurrentUser } from '../hooks/useCurrentUser';
+import { generateIdempotencyKey } from '../utils/idempotency';
 
 // Deferred: install @stripe/stripe-react-native when the native build is
 // configured. When the package is available, replace this dynamic resolver
@@ -55,7 +62,8 @@ try {
   const stripeModule = require('@stripe/stripe-react-native');
   stripeHookFactory = stripeModule.useStripe ?? null;
 } catch {
-  // @stripe/stripe-react-native not yet installed — payment sheet stubbed.
+  // Native module missing — handled at handleSelectPlan time with a user-safe
+  // error. We deliberately do NOT proceed past this point in that case.
 }
 
 // Stable no-op shape returned when the native module is unavailable.
@@ -103,11 +111,9 @@ export interface CoachPackage {
   interval?: 'month' | 'year';
 }
 
-interface PaymentIntentResponse {
-  client_secret: string;
-  ephemeral_key: string;
-  customer_id: string;
-  publishable_key: string;
+interface CheckoutSessionResponse {
+  stripe_client_secret: string;
+  stripe_ephemeral_key: string;
 }
 
 export interface PackageSelectionSheetProps {
@@ -118,7 +124,7 @@ export interface PackageSelectionSheetProps {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const DISMISSED_KEY = 'onboarding.package_prompt_dismissed_at';
+const DISMISSED_KEY_BASE = 'onboarding.package_prompt_dismissed_at';
 const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -161,6 +167,11 @@ export default function PackageSelectionSheet({
 }: PackageSelectionSheetProps) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const currentUser = useCurrentUser();
+  const dismissedKey = useMemo(
+    () => (currentUser?.id ? `${DISMISSED_KEY_BASE}:${currentUser.id}` : null),
+    [currentUser?.id],
+  );
 
   // Always called unconditionally; returns no-op shape when Stripe isn’t
   // installed (e.g. Expo Go). Preserves all existing behavior at call sites.
@@ -187,10 +198,11 @@ export default function PackageSelectionSheet({
   // ── 24h suppression gate ──────────────────────────────────────────────────
   useEffect(() => {
     if (!visible) return;
+    if (!dismissedKey) return; // wait for user id to resolve
     let cancelled = false;
     (async () => {
       try {
-        const dismissedAt = await prefsStorage.getStringAsync(DISMISSED_KEY);
+        const dismissedAt = await prefsStorage.getStringAsync(dismissedKey);
         if (dismissedAt) {
           const elapsed = Date.now() - new Date(dismissedAt).getTime();
           if (elapsed < TWENTY_FOUR_HOURS) {
@@ -205,7 +217,7 @@ export default function PackageSelectionSheet({
       if (!cancelled) setReady(true);
     })();
     return () => { cancelled = true; };
-  }, [visible]);
+  }, [visible, dismissedKey]);
 
   // ── Fetch packages when ready ─────────────────────────────────────────────
   useEffect(() => {
@@ -248,39 +260,47 @@ export default function PackageSelectionSheet({
     setError(null);
     setPaying(true);
 
-    // Refuse to proceed when the native Stripe SDK is not available in this
-    // build — previously this path stubbed out the payment by calling
-    // onPaymentSuccess() without charging the card, which would silently
-    // grant access in any environment that hadn't compiled in
-    // @stripe/stripe-react-native.
-    // Equivalent of the previous `if (!stripe)` gate. The hook now ALWAYS
-    // returns an object (real Stripe or a tagged no-op) so we detect the
-    // stub via its discriminator field. Refuse the charge under stub mode.
+    // R18: refuse to proceed when the native Stripe SDK isn't available — the
+    // hook now ALWAYS returns an object (real Stripe or a tagged no-op), so
+    // detect the stub via its discriminator field and fail closed rather than
+    // fabricate success.
     if (isStripeStub(stripe)) {
-      setError('Payment is not available in this build. Please contact support.');
+      setError('Payment is not available on this device. Please update the app and try again.');
+      setPaying(false);
+      return;
+    }
+
+    // R29: backend contract is POST /v1/checkout/sessions with
+    // { package_id, idempotency_key }; response is
+    // { stripe_client_secret, stripe_ephemeral_key }. Publishable key
+    // comes from EXPO_PUBLIC_STRIPE_PK.
+    const publishableKey = process.env.EXPO_PUBLIC_STRIPE_PK ?? '';
+    if (!publishableKey) {
+      setError('Payment is not available right now. Please try again later.');
       setPaying(false);
       return;
     }
 
     try {
-      const intentRes = await api.post<PaymentIntentResponse>(
-        '/v1/checkout/payment-intent',
-        { package_id: selectedId },
+      const idempotencyKey = generateIdempotencyKey();
+      const sessionRes = await api.post<CheckoutSessionResponse>(
+        '/v1/checkout/sessions',
+        { package_id: selectedId, idempotency_key: idempotencyKey },
       );
-      const { client_secret, ephemeral_key, customer_id, publishable_key } =
-        intentRes.data;
+      const { stripe_client_secret, stripe_ephemeral_key } = sessionRes.data;
 
       const { error: initError } = await stripe.initPaymentSheet({
         merchantDisplayName: 'The Growth Project',
-        customerId: customer_id,
-        customerEphemeralKeySecret: ephemeral_key,
-        paymentIntentClientSecret: client_secret,
-        publishableKey: publishable_key,
+        customerEphemeralKeySecret: stripe_ephemeral_key,
+        paymentIntentClientSecret: stripe_client_secret,
+        publishableKey,
         allowsDelayedPaymentMethods: false,
       });
 
       if (initError) {
-        setError(initError.message ?? 'Could not initialise payment sheet.');
+        // R17: never surface raw Stripe error strings — they can include
+        // backend identifiers or environment hints.
+        setError('Payment failed. Please try again.');
         setPaying(false);
         return;
       }
@@ -288,32 +308,34 @@ export default function PackageSelectionSheet({
       const { error: presentError } = await stripe.presentPaymentSheet();
 
       if (presentError) {
-        // User cancelled — no error shown; stay on sheet
-        const isCancelled =
-          presentError.message?.toLowerCase().includes('cancel') ||
-          presentError.message?.toLowerCase().includes('dismiss');
+        // Cancellations come back as a present error with a "canceled" /
+        // "dismissed" message — treat as a no-op so the user can retry from
+        // the same sheet without seeing a scary error string.
+        const msg = presentError.message?.toLowerCase() ?? '';
+        const isCancelled = msg.includes('cancel') || msg.includes('dismiss');
         if (!isCancelled) {
-          setError(presentError.message ?? 'Payment failed. Please try again.');
+          setError('Payment failed. Please try again.');
         }
         setPaying(false);
         return;
       }
 
       onPaymentSuccess();
-    } catch (err) {
-      const msg = (err as { message?: string })?.message ?? 'Payment failed. Please try again.';
-      setError(msg);
+    } catch {
+      setError('Payment failed. Please try again.');
       setPaying(false);
     }
   }, [selectedId, paying, stripe, onPaymentSuccess]);
 
   // ── Skip ──────────────────────────────────────────────────────────────────
   const handleSkip = useCallback(() => {
-    prefsStorage
-      .set(DISMISSED_KEY, new Date().toISOString())
-      .catch(() => {});
+    if (dismissedKey) {
+      prefsStorage
+        .set(dismissedKey, new Date().toISOString())
+        .catch(() => {});
+    }
     onDismiss();
-  }, [onDismiss]);
+  }, [onDismiss, dismissedKey]);
 
   if (!visible || !ready) return null;
 
