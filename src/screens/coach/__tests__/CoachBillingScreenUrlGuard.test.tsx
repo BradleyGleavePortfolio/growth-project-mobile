@@ -13,9 +13,11 @@ import { Alert } from 'react-native';
 import { render, fireEvent, act, waitFor } from '@testing-library/react-native';
 
 const mockOpenBrowserAsync = jest.fn().mockResolvedValue({ type: 'dismiss' });
+const mockOpenAuthSessionAsync = jest.fn().mockResolvedValue({ type: 'dismiss' });
 jest.mock('expo-web-browser', () => ({
   __esModule: true,
   openBrowserAsync: (...a: unknown[]) => mockOpenBrowserAsync(...a),
+  openAuthSessionAsync: (...a: unknown[]) => mockOpenAuthSessionAsync(...a),
   WebBrowserPresentationStyle: { PAGE_SHEET: 'pageSheet' },
 }));
 
@@ -68,6 +70,7 @@ let alertSpy: jest.SpyInstance;
 
 beforeEach(() => {
   mockOpenBrowserAsync.mockClear();
+  mockOpenAuthSessionAsync.mockClear();
   mockGetStatus.mockReset();
   mockGetFull.mockReset();
   mockCreatePortalSession.mockReset();
@@ -108,7 +111,7 @@ describe('CoachBillingScreen URL guard (real validator)', () => {
     );
     // Returning a non-standard result type sidesteps the post-sheet reload
     // branch so the test boundary is deterministic.
-    mockOpenBrowserAsync.mockResolvedValueOnce({ type: 'locked' });
+    mockOpenAuthSessionAsync.mockResolvedValueOnce({ type: 'locked' } as never);
 
     const { findByLabelText } = render(
       <CoachBillingScreen navigation={{ goBack: jest.fn() } as never} />,
@@ -117,10 +120,10 @@ describe('CoachBillingScreen URL guard (real validator)', () => {
     const portalBtn = await findByLabelText('Manage billing');
     fireEvent.press(portalBtn);
 
-    await waitFor(() => expect(mockOpenBrowserAsync).toHaveBeenCalled());
-    expect(mockOpenBrowserAsync).toHaveBeenCalledWith(
+    await waitFor(() => expect(mockOpenAuthSessionAsync).toHaveBeenCalled());
+    expect(mockOpenAuthSessionAsync).toHaveBeenCalledWith(
       'https://billing.stripe.com/p/session_abc',
-      expect.any(Object),
+      expect.any(String),
     );
     expect(alertSpy).not.toHaveBeenCalled();
   });
@@ -138,6 +141,7 @@ describe('CoachBillingScreen URL guard (real validator)', () => {
 
     await waitFor(() => expect(mockCreatePortalSession).toHaveBeenCalled());
     expect(mockOpenBrowserAsync).not.toHaveBeenCalled();
+    expect(mockOpenAuthSessionAsync).not.toHaveBeenCalled();
     expect(alertSpy).toHaveBeenCalledWith(
       'Billing portal unavailable',
       expect.stringMatching(/invalid/i),

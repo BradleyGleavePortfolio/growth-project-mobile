@@ -30,7 +30,10 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as WebBrowser from 'expo-web-browser';
+// Apple Rule 3.1.3(b)/(e) B2B exemption — Stripe checkout opens inside the
+// in-app branded webview, NOT expo-web-browser. The BrandedCheckoutWebView
+// screen owns the URL allow-list, deep-link short-circuit, and the
+// CheckoutReturn refresh that keeps webhook-derived state authoritative.
 import type { NavigationProp, ParamListBase, RouteProp } from '@react-navigation/native';
 
 import { publicPackagesApi, PublicPackageView, CheckoutSessionResponse } from '../../api/packagesApi';
@@ -162,20 +165,24 @@ export default function PackageCheckoutScreen({ navigation, route }: Props) {
         );
         return;
       }
-      const result = await WebBrowser.openBrowserAsync(data.url, {
-        presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
+      // Apple Rule 3.1.3(b)/(e) B2B exemption — open Stripe Checkout in the
+      // branded in-app webview rather than expo-web-browser. The webview owns
+      // the URL allow-list, deep-link short-circuit, and refresh; webhooks
+      // remain the source of truth for subscription state.
+      successTap();
+      track('package_checkout_returned', { share_token: shareToken });
+      (
+        navigation as unknown as {
+          navigate: (
+            name: string,
+            params: { checkoutUrl: string; packageName: string; returnScheme: string },
+          ) => void;
+        }
+      ).navigate('BrandedCheckoutWebView', {
+        checkoutUrl: data.url,
+        packageName: pkg?.name ?? 'Coaching package',
+        returnScheme: 'tgp',
       });
-      // The webhook is the source of truth for subscription state. We
-      // don't claim success based on the sheet closing — we just refresh
-      // and trust the next /me load to reflect the new subscription.
-      if (
-        result.type === 'cancel' ||
-        result.type === 'dismiss' ||
-        result.type === 'opened'
-      ) {
-        successTap();
-        track('package_checkout_returned', { share_token: shareToken });
-      }
     } catch (err) {
       const code = errorCode(err);
       if (code === 'PACKAGES_NOT_CONFIGURED' || code === 'STRIPE_NOT_CONFIGURED') {

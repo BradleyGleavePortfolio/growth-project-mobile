@@ -25,7 +25,10 @@ import CoachConnectScreen from '../screens/coach/payments/CoachConnectScreen';
 import CoachPackagesListScreen from '../screens/coach/payments/CoachPackagesListScreen';
 import CoachPackageEditScreen from '../screens/coach/payments/CoachPackageEditScreen';
 import CoachPackageSubscribersScreen from '../screens/coach/payments/CoachPackageSubscribersScreen';
-import PaymentsCoachEarningsScreen from '../screens/coach/payments/CoachEarningsScreen';
+// NOTE: payments/CoachEarningsScreen exists on disk (from feat branch) but
+// is intentionally not imported — the main `CoachEarningsScreen` (imported
+// below from `../screens/coach/CoachEarningsScreen`) is the production
+// surface for the `CoachEarnings` route.
 import BloodworkReviewQueueScreen from '../screens/coach/BloodworkReviewQueueScreen';
 import TrustCenterScreen from '../screens/TrustCenterScreen';
 // Wave 11 — runtime scaffolding. The screen registrations below only mount
@@ -391,10 +394,10 @@ function SettingsStackNavigator() {
         name="CoachPackageSubscribers"
         component={CoachPackageSubscribersScreen}
       />
-      {/* Payments — earnings, payout readiness, reconciliation, refunds (this branch overrides main's). */}
+      {/* Payments — earnings, payout readiness, reconciliation, refunds (backend PR #216). */}
       <SettingsStack.Screen
         name="CoachEarnings"
-        component={PaymentsCoachEarningsScreen}
+        component={CoachEarningsScreen}
       />
       {/* iMessage-grade DM — Apple 1.2 compliance blocked-users management. */}
       <SettingsStack.Screen name="BlockedUsers" component={BlockedUsersScreen} />
