@@ -205,6 +205,14 @@ const navigationRef = createNavigationContainerRef<Record<string, object | undef
 export default function RootNavigator() {
   const [authState, setAuthState] = useState<AuthState>('loading');
   const pendingDay1Target = useRef<WinType | null>(null);
+  // Deep-link replay state for the public accept-invite path. When a
+  // signed-in user clicks an accept-invite URL we sign them out and then
+  // navigate to AcceptInvite ONLY after authState flips to
+  // 'unauthenticated' AND the NavigationContainer is ready. Using a state
+  // value (not a timer) eliminates the race the audit flagged.
+  const [pendingAcceptUrl, setPendingAcceptUrl] = useState<string | null>(null);
+  // The reset-password flow follows the same pattern.
+  const [pendingResetUrl, setPendingResetUrl] = useState<string | null>(null);
 
   // Initialise the Crisp SDK once at app start. Safe to call before auth
   // resolves — configure() only registers the website ID and does not
@@ -269,27 +277,30 @@ export default function RootNavigator() {
       if (!isReset && !isInvite && !isAcceptInvite) return;
 
       const authed = await secureStorage.getItem('supabase_token');
-      if (!authed) return; // unauthenticated → linking config handles it natively.
+      if (!authed) {
+        // Unauthenticated → React Navigation's native linking config will
+        // route this URL when AuthNavigator mounts. No replay/sign-out
+        // needed; just record the pending URL so the state-driven watcher
+        // can still re-deliver it if the linking config races mount.
+        if (isAcceptInvite) {
+          setPendingAcceptUrl(url);
+        }
+        return;
+      }
 
       if (isReset || isAcceptInvite) {
-        // Force full sign-out so the deep link can land on AuthNavigator's
-        // ResetPassword or AcceptInvite route with a clean session.
+        // Stash the URL FIRST, then force sign-out. The
+        // `pendingAcceptUrl`/`pendingResetUrl` watcher below replays the
+        // URL only once authState has flipped to 'unauthenticated' AND
+        // the NavigationContainer ref reports ready — preventing the
+        // race where the prior authed navigator is still mounted when
+        // the replay fires.
+        if (isAcceptInvite) {
+          setPendingAcceptUrl(url);
+        } else {
+          setPendingResetUrl(url);
+        }
         await signOut();
-        // A-2 fix: the previous implementation called
-        // `Linking.openURL(url)` where `url` was the original https://
-        // universal link. On iOS that re-issues the URL to the OS, which
-        // routes it to Safari instead of back to this app (the receiving
-        // process is already the same TGP app that owns the AASA entry,
-        // so the OS resolves "open URL" against the next available
-        // handler — the browser). The fix is to rewrite the URL to its
-        // custom-scheme (`tgp://…`) equivalent before re-delivery so the
-        // dispatch stays in-process. React Navigation's linking config
-        // picks up the tgp:// form against the unauthenticated stack
-        // once auth state flips.
-        const replayUrl = rewriteHttpsToScheme(url);
-        setTimeout(() => {
-          Linking.openURL(replayUrl).catch(() => {});
-        }, 50);
         return;
       }
 
@@ -321,6 +332,40 @@ export default function RootNavigator() {
       sub.remove();
     };
   }, []);
+
+  // Pending accept/reset URL replay.
+  //
+  // Fires after `authState === 'unauthenticated'` so the AuthNavigator
+  // stack is guaranteed to be mounted. We waitFor `navigationRef.isReady()`
+  // before replaying — on slow devices the container can lag the auth
+  // flip by a frame or two. `Linking.openURL` re-enters the foreground URL
+  // handler, which now sees an unauthenticated state and lets the linking
+  // config route the URL natively to AcceptInvite / ResetPassword.
+  useEffect(() => {
+    if (authState !== 'unauthenticated') return;
+    if (!pendingAcceptUrl && !pendingResetUrl) return;
+    let cancelled = false;
+    const tryReplay = () => {
+      if (cancelled) return;
+      if (!navigationRef.isReady()) {
+        requestAnimationFrame(tryReplay);
+        return;
+      }
+      if (pendingAcceptUrl) {
+        const url = pendingAcceptUrl;
+        setPendingAcceptUrl(null);
+        Linking.openURL(url).catch(() => {});
+      } else if (pendingResetUrl) {
+        const url = pendingResetUrl;
+        setPendingResetUrl(null);
+        Linking.openURL(url).catch(() => {});
+      }
+    };
+    tryReplay();
+    return () => {
+      cancelled = true;
+    };
+  }, [authState, pendingAcceptUrl, pendingResetUrl]);
 
   // Flush the offline food-log queue whenever the network comes back online.
   // Only fires on the offline → online transition; repeated online events are

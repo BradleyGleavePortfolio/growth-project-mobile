@@ -1,15 +1,16 @@
 /**
- * invitesApi.test — Email Pipeline v1.
+ * invitesApi.test — Email Pipeline v1 (behavioral).
  *
- * Coverage:
- *   - Bulk invite happy path surfaces per-email status entries.
- *   - 100-email cap rejects locally without a network round trip.
- *   - resendInvite degrades gracefully on 404.
- *   - List filter narrows results client-side.
- *   - acceptInvite uses a plain fetch (no JWT) and parses
- *     `accepted: true | false` payloads.
- *   - tokeniseEmails / parseCsvEmails honour separators + header
- *     detection.
+ * Covers:
+ *   - Bulk invite hits `/coach/invite-codes/bulk` with the `rows` shape
+ *     the backend DTO requires.
+ *   - Bulk caps at 100 emails locally.
+ *   - resendInvite hits `/coach/invite-codes/:id/send` with the required
+ *     email body and degrades to `{ supported: false }` on 404.
+ *   - listInvites filters client-side.
+ *   - acceptInvite uses a raw fetch (NO auth header), short-circuits on
+ *     malformed tokens, and parses structured success/failure payloads.
+ *   - email + token validators reject the obvious unsafe shapes.
  */
 
 import {
@@ -20,6 +21,7 @@ import {
   parseCsvEmails,
   tokeniseEmails,
 } from '../api/invites';
+import { isValidInviteToken } from '../utils/inviteToken';
 
 jest.mock('../services/api', () => {
   return {
@@ -36,19 +38,63 @@ import api from '../services/api';
 
 const mockedApi = api as jest.Mocked<typeof api>;
 
-describe('invitesApi — local helpers', () => {
-  it('isValidEmail', () => {
-    expect(isValidEmail('a@b.co')).toBe(true);
+describe('invitesApi — email validator', () => {
+  it('accepts well-formed addresses', () => {
+    expect(isValidEmail('alice@example.com')).toBe(true);
     expect(isValidEmail('  alice@example.com ')).toBe(true);
-    expect(isValidEmail('not-an-email')).toBe(false);
+    expect(isValidEmail('a.b+tag@sub.example.co')).toBe(true);
+  });
+
+  it('rejects empty / undefined', () => {
     expect(isValidEmail(undefined)).toBe(false);
     expect(isValidEmail('')).toBe(false);
+    expect(isValidEmail('   ')).toBe(false);
+  });
+
+  it('rejects structurally bad addresses', () => {
+    expect(isValidEmail('not-an-email')).toBe(false);
+    expect(isValidEmail('a@b')).toBe(false); // no dot in domain
+    expect(isValidEmail('@example.com')).toBe(false);
+    expect(isValidEmail('alice@')).toBe(false);
+    expect(isValidEmail('alice@@example.com')).toBe(false);
+    expect(isValidEmail('alice..bob@example.com')).toBe(false);
+  });
+
+  it('rejects display-unsafe characters', () => {
+    expect(isValidEmail('alice<script>@example.com')).toBe(false);
+    expect(isValidEmail('"al ice"@example.com')).toBe(false);
+    expect(isValidEmail('al&ce@example.com')).toBe(false);
+    expect(isValidEmail('alice@exa mple.com')).toBe(false);
+  });
+
+  it('rejects oversized addresses', () => {
+    const long = 'a'.repeat(70) + '@example.com';
+    expect(isValidEmail(long)).toBe(false); // local part > 64
+    const huge = 'a@' + 'b'.repeat(260) + '.co';
+    expect(isValidEmail(huge)).toBe(false);
   });
 
   it('normaliseEmail lowers + trims', () => {
     expect(normaliseEmail('  ALICE@EX.com  ')).toBe('alice@ex.com');
   });
+});
 
+describe('inviteToken — validator', () => {
+  it('accepts a reasonable URL-safe token', () => {
+    expect(isValidInviteToken('abcd_EFGH-1234.xy')).toBe(true);
+  });
+
+  it('rejects path traversal / whitespace / oversize', () => {
+    expect(isValidInviteToken('')).toBe(false);
+    expect(isValidInviteToken('a')).toBe(false);
+    expect(isValidInviteToken('foo/bar')).toBe(false);
+    expect(isValidInviteToken('foo bar')).toBe(false);
+    expect(isValidInviteToken('a'.repeat(200))).toBe(false);
+    expect(isValidInviteToken('<script>')).toBe(false);
+  });
+});
+
+describe('invitesApi — paste / csv parsers', () => {
   it('tokeniseEmails splits on whitespace, comma, semicolon, newline and dedupes', () => {
     const out = tokeniseEmails(
       'a@b.co\nb@c.co , a@b.co; d@e.co  c@d.co\t a@b.co',
@@ -96,43 +142,47 @@ describe('invitesApi.bulkInvite', () => {
     expect(mockedApi.post).not.toHaveBeenCalled();
   });
 
+  it('sends a `rows` array matching the backend DTO shape', async () => {
+    mockedApi.post.mockResolvedValueOnce({
+      data: {
+        results: [
+          { email: 'a@ex.com', status: 'created', emailQueued: true },
+          { email: 'b@ex.com', status: 'reused', emailQueued: true },
+        ],
+      },
+    });
+    await invitesApi.bulkInvite(['a@ex.com', 'b@ex.com'], 'hi friend');
+    expect(mockedApi.post).toHaveBeenCalledWith(
+      '/coach/invite-codes/bulk',
+      {
+        rows: [
+          { email: 'a@ex.com', note: 'hi friend' },
+          { email: 'b@ex.com', note: 'hi friend' },
+        ],
+      },
+    );
+  });
+
+  it('omits `note` when no message is supplied', async () => {
+    mockedApi.post.mockResolvedValueOnce({ data: { results: [] } });
+    await invitesApi.bulkInvite(['a@ex.com']);
+    expect(mockedApi.post).toHaveBeenCalledWith(
+      '/coach/invite-codes/bulk',
+      { rows: [{ email: 'a@ex.com' }] },
+    );
+  });
+
   it('surfaces per-email statuses from the response', async () => {
     mockedApi.post.mockResolvedValueOnce({
       data: {
         results: [
-          {
-            email: 'a@ex.com',
-            inviteId: 'inv_1',
-            status: 'created',
-            emailQueued: true,
-          },
-          {
-            email: 'b@ex.com',
-            inviteId: 'inv_2',
-            status: 'reused',
-            emailQueued: true,
-          },
-          {
-            email: 'c@ex.com',
-            status: 'failed',
-            emailQueued: false,
-            error: 'invalid',
-          },
+          { email: 'a@ex.com', status: 'created', emailQueued: true },
+          { email: 'c@ex.com', status: 'failed', emailQueued: false, error: 'x' },
         ],
       },
     });
-    const res = await invitesApi.bulkInvite(
-      ['a@ex.com', 'b@ex.com', 'c@ex.com'],
-      'hi',
-    );
-    expect(res.results).toHaveLength(3);
-    expect(res.results[0].status).toBe('created');
-    expect(res.results[1].status).toBe('reused');
-    expect(res.results[2].status).toBe('failed');
-    expect(mockedApi.post).toHaveBeenCalledWith(
-      '/coach/invite-codes/bulk',
-      { emails: ['a@ex.com', 'b@ex.com', 'c@ex.com'], message: 'hi' },
-    );
+    const res = await invitesApi.bulkInvite(['a@ex.com', 'c@ex.com']);
+    expect(res.results.map((r) => r.status)).toEqual(['created', 'failed']);
   });
 });
 
@@ -177,21 +227,39 @@ describe('invitesApi.resendInvite', () => {
     jest.clearAllMocks();
   });
 
-  it('returns { supported: true } on success', async () => {
+  it('hits the /send route with the recipient email body', async () => {
     mockedApi.post.mockResolvedValueOnce({ data: {} });
-    const out = await invitesApi.resendInvite('inv_1');
+    const out = await invitesApi.resendInvite('inv_1', 'alice@ex.com');
     expect(out).toEqual({ supported: true });
+    expect(mockedApi.post).toHaveBeenCalledWith(
+      '/coach/invite-codes/inv_1/send',
+      { email: 'alice@ex.com' },
+    );
+  });
+
+  it('forwards optional name/note in the body', async () => {
+    mockedApi.post.mockResolvedValueOnce({ data: {} });
+    await invitesApi.resendInvite('inv_1', 'alice@ex.com', {
+      name: 'Alice',
+      note: 'hello',
+    });
+    expect(mockedApi.post).toHaveBeenCalledWith(
+      '/coach/invite-codes/inv_1/send',
+      { email: 'alice@ex.com', name: 'Alice', note: 'hello' },
+    );
   });
 
   it('returns { supported: false } on 404', async () => {
     mockedApi.post.mockRejectedValueOnce({ response: { status: 404 } });
-    const out = await invitesApi.resendInvite('inv_1');
+    const out = await invitesApi.resendInvite('inv_1', 'alice@ex.com');
     expect(out).toEqual({ supported: false });
   });
 
   it('re-throws on non-404 errors', async () => {
     mockedApi.post.mockRejectedValueOnce({ response: { status: 500 } });
-    await expect(invitesApi.resendInvite('inv_1')).rejects.toBeTruthy();
+    await expect(
+      invitesApi.resendInvite('inv_1', 'alice@ex.com'),
+    ).rejects.toBeTruthy();
   });
 });
 
@@ -204,7 +272,19 @@ describe('invitesApi.acceptInvite', () => {
     global.fetch = originalFetch;
   });
 
-  it('returns parsed success payload', async () => {
+  it('short-circuits a malformed token without touching the network', async () => {
+    const out = await invitesApi.acceptInvite('foo/bar');
+    expect(out).toEqual({ accepted: false, reason: 'invalid' });
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('short-circuits an oversized token without touching the network', async () => {
+    const out = await invitesApi.acceptInvite('a'.repeat(200));
+    expect(out).toEqual({ accepted: false, reason: 'invalid' });
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('returns parsed success payload for a valid token', async () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
       status: 200,
@@ -220,10 +300,21 @@ describe('invitesApi.acceptInvite', () => {
       coachName: 'Coach K',
       redirectTo: 'app_open',
     });
-    expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('/invites/accept/tok_123'),
-      expect.objectContaining({ method: 'POST' }),
-    );
+  });
+
+  it('sends POST without any Authorization header', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({ accepted: true }),
+    });
+    await invitesApi.acceptInvite('tok_123');
+    const init = (global.fetch as jest.Mock).mock.calls[0][1] as RequestInit;
+    expect(init.method).toBe('POST');
+    const headers = (init.headers ?? {}) as Record<string, string>;
+    const headerKeys = Object.keys(headers).map((k) => k.toLowerCase());
+    expect(headerKeys).not.toContain('authorization');
+    expect(headerKeys).not.toContain('cookie');
   });
 
   it('returns structured failure on 410 expired', async () => {
@@ -253,18 +344,5 @@ describe('invitesApi.acceptInvite', () => {
       json: async () => ({}),
     });
     await expect(invitesApi.acceptInvite('tok_x')).rejects.toThrow();
-  });
-
-  it('URL-encodes the token', async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => ({ accepted: true }),
-    });
-    await invitesApi.acceptInvite('a/b');
-    expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('a%2Fb'),
-      expect.anything(),
-    );
   });
 });

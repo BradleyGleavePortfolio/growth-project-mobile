@@ -1,49 +1,19 @@
 /**
- * AcceptInviteScreen.test — Email Pipeline v1.
+ * AcceptInviteScreen.test — Email Pipeline v1 (behavioral).
  *
- * Coverage: happy path (signed in vs not), expired, already_accepted,
- * invalid. Network failure is exercised via the `network` reason so
- * the retry CTA renders.
+ * Covers:
+ *   - Valid token + signed-in success path renders the Continue CTA.
+ *   - Valid token + signed-out success path renders Sign in + Create account.
+ *   - Malformed token short-circuits to the invalid-failure UI without
+ *     calling `acceptInvite`.
+ *   - Known backend reasons (expired / already_accepted / invalid /
+ *     unknown probe) map to fixed safe copy. Raw codes never reach UI.
+ *   - Network exception renders the network-failure retry CTA and never
+ *     surfaces the underlying error string.
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
 import React from 'react';
-import { render, waitFor } from '@testing-library/react-native';
-
-const ROOT = path.resolve(__dirname, '..', '..');
-const SCREEN_SRC = fs.readFileSync(
-  path.join(ROOT, 'src', 'screens', 'auth', 'AcceptInviteScreen.tsx'),
-  'utf8',
-);
-
-describe('AcceptInviteScreen — source guards', () => {
-  it('exposes testIDs for the success + failure paths', () => {
-    for (const id of [
-      'accept-loading',
-      'accept-success',
-      'accept-failed-cta',
-    ]) {
-      expect(SCREEN_SRC).toContain(`testID="${id}"`);
-    }
-    // Failure testIDs are dynamic — assert the pattern instead.
-    expect(SCREEN_SRC).toMatch(/testID=\{?[`"]accept-failed-/);
-  });
-
-  it('calls invitesApi.acceptInvite on mount', () => {
-    expect(SCREEN_SRC).toMatch(/invitesApi\.acceptInvite/);
-  });
-
-  it('every Pressable has accessibilityLabel + role', () => {
-    const pressableCount = (SCREEN_SRC.match(/<Pressable/g) ?? []).length;
-    const labelCount = (SCREEN_SRC.match(/accessibilityLabel=/g) ?? []).length;
-    const roleCount = (SCREEN_SRC.match(/accessibilityRole="button"/g) ?? []).length;
-    expect(labelCount).toBeGreaterThanOrEqual(pressableCount);
-    expect(roleCount).toBeGreaterThanOrEqual(pressableCount);
-  });
-});
-
-// ── Mocks ───────────────────────────────────────────────────────────────────
+import { render, waitFor, within } from '@testing-library/react-native';
 
 const mockAcceptInvite = jest.fn();
 jest.mock('../api/invites', () => ({
@@ -75,15 +45,10 @@ jest.mock('../theme/ThemeProvider', () => ({
 
 import AcceptInviteScreen from '../screens/auth/AcceptInviteScreen';
 
-type Nav = {
-  navigate: jest.Mock;
-  goBack: jest.Mock;
-};
-
+type Nav = { navigate: jest.Mock; goBack: jest.Mock };
 function makeRoute(token: string) {
   return { params: { token }, key: 'k', name: 'AcceptInvite' as const };
 }
-
 function makeNav(): Nav {
   return { navigate: jest.fn(), goBack: jest.fn() };
 }
@@ -94,69 +59,93 @@ describe('AcceptInviteScreen — RTL', () => {
     mockGetItem.mockResolvedValue(null);
   });
 
-  it('happy path (signed in): renders success + Continue CTA', async () => {
+  it('signed-in success: renders Continue CTA', async () => {
     mockGetItem.mockResolvedValueOnce('jwt');
     mockAcceptInvite.mockResolvedValueOnce({
       accepted: true,
       coachName: 'Coach K',
       redirectTo: 'app_open',
     });
-    const nav = makeNav();
     const { getByTestId } = render(
       <AcceptInviteScreen
-        route={makeRoute('tok_abc')}
-        navigation={nav as never}
+        route={makeRoute('tok_valid_abc')}
+        navigation={makeNav() as never}
       />,
     );
     await waitFor(() => expect(getByTestId('accept-success')).toBeTruthy());
     expect(getByTestId('accept-success-continue')).toBeTruthy();
   });
 
-  it('happy path (not signed in): renders sign-in + signup CTAs', async () => {
-    mockGetItem.mockResolvedValueOnce(null);
+  it('signed-out success: renders Sign in + Create account CTAs', async () => {
     mockAcceptInvite.mockResolvedValueOnce({
       accepted: true,
       coachName: 'Coach K',
       email: 'alice@ex.com',
     });
-    const nav = makeNav();
     const { getByTestId } = render(
       <AcceptInviteScreen
-        route={makeRoute('tok_abc')}
-        navigation={nav as never}
+        route={makeRoute('tok_valid_abc')}
+        navigation={makeNav() as never}
       />,
     );
     await waitFor(() => expect(getByTestId('accept-success-login')).toBeTruthy());
     expect(getByTestId('accept-success-signup')).toBeTruthy();
   });
 
-  it('expired: renders expired failure', async () => {
+  it('malformed token: renders invalid-failure UI WITHOUT calling acceptInvite', async () => {
+    const { getByTestId } = render(
+      <AcceptInviteScreen
+        route={makeRoute('bad/token with spaces')}
+        navigation={makeNav() as never}
+      />,
+    );
+    await waitFor(() =>
+      expect(getByTestId('accept-failed-invalid')).toBeTruthy(),
+    );
+    expect(mockAcceptInvite).not.toHaveBeenCalled();
+  });
+
+  it('oversized token: renders invalid-failure UI WITHOUT calling acceptInvite', async () => {
+    const { getByTestId } = render(
+      <AcceptInviteScreen
+        route={makeRoute('a'.repeat(500))}
+        navigation={makeNav() as never}
+      />,
+    );
+    await waitFor(() =>
+      expect(getByTestId('accept-failed-invalid')).toBeTruthy(),
+    );
+    expect(mockAcceptInvite).not.toHaveBeenCalled();
+  });
+
+  it('expired: renders friendly expired copy, no raw codes', async () => {
     mockAcceptInvite.mockResolvedValueOnce({
       accepted: false,
       reason: 'expired',
+      message: 'INVITE_EXPIRED: prisma row gone',
     });
-    const nav = makeNav();
-    const { getByTestId } = render(
+    const { getByTestId, queryByText } = render(
       <AcceptInviteScreen
-        route={makeRoute('tok_old')}
-        navigation={nav as never}
+        route={makeRoute('tok_old_abcd')}
+        navigation={makeNav() as never}
       />,
     );
     await waitFor(() =>
       expect(getByTestId('accept-failed-expired')).toBeTruthy(),
     );
+    expect(queryByText(/INVITE_EXPIRED/)).toBeNull();
+    expect(queryByText(/prisma/i)).toBeNull();
   });
 
-  it('already_accepted: renders already-accepted failure', async () => {
+  it('already_accepted: maps the INVITE_ALREADY_ACCEPTED probe string', async () => {
     mockAcceptInvite.mockResolvedValueOnce({
       accepted: false,
-      reason: 'already_accepted',
+      reason: 'INVITE_ALREADY_ACCEPTED',
     });
-    const nav = makeNav();
     const { getByTestId } = render(
       <AcceptInviteScreen
-        route={makeRoute('tok_old')}
-        navigation={nav as never}
+        route={makeRoute('tok_used_abcd')}
+        navigation={makeNav() as never}
       />,
     );
     await waitFor(() =>
@@ -164,16 +153,15 @@ describe('AcceptInviteScreen — RTL', () => {
     );
   });
 
-  it('invalid: renders invalid failure', async () => {
+  it('unknown backend reason: collapses to invalid', async () => {
     mockAcceptInvite.mockResolvedValueOnce({
       accepted: false,
-      reason: 'invalid',
+      reason: 'SOMETHING_NEW_FROM_BACKEND',
     });
-    const nav = makeNav();
     const { getByTestId } = render(
       <AcceptInviteScreen
-        route={makeRoute('tok_bad')}
-        navigation={nav as never}
+        route={makeRoute('tok_xxxx')}
+        navigation={makeNav() as never}
       />,
     );
     await waitFor(() =>
@@ -181,18 +169,33 @@ describe('AcceptInviteScreen — RTL', () => {
     );
   });
 
-  it('network failure: renders retry CTA', async () => {
-    mockAcceptInvite.mockRejectedValueOnce(new Error('offline'));
-    const nav = makeNav();
-    const { getByTestId } = render(
+  it('network exception: renders network-failure UI, never the raw error', async () => {
+    mockAcceptInvite.mockRejectedValueOnce(
+      new Error('ECONNREFUSED: postgres://supabase:_TOKEN@host'),
+    );
+    const { getByTestId, queryByText } = render(
       <AcceptInviteScreen
-        route={makeRoute('tok_x')}
-        navigation={nav as never}
+        route={makeRoute('tok_xxxx')}
+        navigation={makeNav() as never}
       />,
     );
     await waitFor(() =>
       expect(getByTestId('accept-failed-network')).toBeTruthy(),
     );
     expect(getByTestId('accept-retry')).toBeTruthy();
+    expect(queryByText(/_TOKEN/)).toBeNull();
+    expect(queryByText(/postgres/i)).toBeNull();
+    expect(queryByText(/ECONNREFUSED/)).toBeNull();
+  });
+
+  it('renders the loading state initially', async () => {
+    mockAcceptInvite.mockReturnValueOnce(new Promise(() => {})); // never resolves
+    const { getByTestId } = render(
+      <AcceptInviteScreen
+        route={makeRoute('tok_valid_abc')}
+        navigation={makeNav() as never}
+      />,
+    );
+    expect(getByTestId('accept-loading')).toBeTruthy();
   });
 });

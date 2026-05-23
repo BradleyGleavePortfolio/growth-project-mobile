@@ -142,8 +142,18 @@ export default function CoachInvitesScreen({
   const handleResend = useCallback(
     async (invite: Invite) => {
       mediumTap();
+      if (!invite.clientEmail) {
+        Alert.alert(
+          'No recipient',
+          'This invite is missing an email address. Use "Copy link" to share it directly.',
+        );
+        return;
+      }
       try {
-        const result = await invitesApi.resendInvite(invite.id);
+        const result = await invitesApi.resendInvite(
+          invite.id,
+          invite.clientEmail,
+        );
         if (!result.supported) {
           setResendSupported(false);
           Alert.alert(
@@ -154,9 +164,16 @@ export default function CoachInvitesScreen({
         }
         setResendSupported(true);
         successTap();
-        Alert.alert('Queued', `Invite re-sent to ${invite.clientEmail ?? 'invitee'}.`);
+        Alert.alert('Queued', `Invite re-sent to ${invite.clientEmail}.`);
       } catch (err) {
-        Alert.alert('Resend failed', errorMessage(err, 'Unknown error'));
+        console.error(
+          'CoachInvitesScreen: resend failed',
+          errorMessage(err),
+        );
+        Alert.alert(
+          'Could not complete this action',
+          'Please try again.',
+        );
       }
     },
     [],
@@ -188,7 +205,14 @@ export default function CoachInvitesScreen({
                 ),
               );
             } catch (err) {
-              Alert.alert('Revoke failed', errorMessage(err, 'Unknown error'));
+              console.error(
+                'CoachInvitesScreen: revoke failed',
+                errorMessage(err),
+              );
+              Alert.alert(
+                'Could not complete this action',
+                'Please try again.',
+              );
             }
           },
         },

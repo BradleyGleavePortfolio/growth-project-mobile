@@ -62,6 +62,23 @@ function parsePaste(raw: string): ParsedInput {
   return splitValid(tokens);
 }
 
+/**
+ * Sanitize an invalid row for display: strip control chars and shorten
+ * to a hard cap. React Native `Text` is not HTML, but we still don't
+ * want to surface raw `<script>` markers or 10kB pasted blobs in the
+ * "invalid" preview list.
+ */
+function sanitizeForDisplay(raw: string): string {
+  const MAX = 120;
+  let out = '';
+  for (let i = 0; i < raw.length && out.length < MAX; i++) {
+    const c = raw.charCodeAt(i);
+    if (c < 0x20 || c === 0x7f) continue;
+    out += raw[i];
+  }
+  return out;
+}
+
 function splitValid(tokens: string[]): ParsedInput {
   const valid: string[] = [];
   const invalid: string[] = [];
@@ -73,7 +90,7 @@ function splitValid(tokens: string[]): ParsedInput {
       seen.add(n);
       valid.push(n);
     } else {
-      invalid.push(t);
+      invalid.push(sanitizeForDisplay(t));
     }
   }
   return { valid, invalid };
@@ -116,7 +133,11 @@ export default function BulkInviteScreen() {
       setCsvEmails(emails);
       setCsvSummary(`${asset.name ?? 'CSV'} — ${emails.length} rows`);
     } catch (err) {
-      Alert.alert('Could not read CSV', errorMessage(err, 'Unknown error'));
+      console.error('BulkInviteScreen: CSV import failed', errorMessage(err));
+      Alert.alert(
+        'Could not read CSV',
+        'We could not read that file. Please pick a .csv file and try again.',
+      );
     } finally {
       setPickingCsv(false);
     }
@@ -137,10 +158,8 @@ export default function BulkInviteScreen() {
       setCsvSummary(null);
       setMessage('');
     } catch (err) {
-      Alert.alert(
-        'Could not send invites',
-        errorMessage(err, 'Unknown error'),
-      );
+      console.error('BulkInviteScreen: bulk send failed', errorMessage(err));
+      Alert.alert('Could not send invites', 'Please try again.');
     } finally {
       setSubmitting(false);
     }
