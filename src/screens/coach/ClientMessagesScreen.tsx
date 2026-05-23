@@ -74,7 +74,10 @@ export default function ClientMessagesScreen() {
   // Hydrate the block store: local MMKV first (instant paint) then layer
   // GET /users/blocks on top so blocks made on another device or after a
   // cache wipe still filter the DM list before the user opens Settings.
-  useBlockedUsersHydration(currentUser?.id);
+  // `serverHydrationComplete` gates the message list render — until the
+  // server block list arrives, a sender blocked on another device could
+  // otherwise flash through. Fails open on API failure.
+  const { serverHydrationComplete } = useBlockedUsersHydration(currentUser?.id);
 
   const PAGE_LIMIT = 100;
 
@@ -233,7 +236,11 @@ export default function ClientMessagesScreen() {
   const parentLookup = new Map<string, Message>();
   visibleMessages.forEach((m) => parentLookup.set(m.id, m));
 
-  if (loading) {
+  // Block the message list render until messages have loaded AND the initial
+  // server block-list hydration has resolved. Without the second gate, a
+  // sender blocked on another device could appear briefly between the
+  // messages payload landing and GET /users/blocks resolving.
+  if (loading || !serverHydrationComplete) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={colors.primary} />

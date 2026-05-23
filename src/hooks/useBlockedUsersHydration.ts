@@ -14,7 +14,7 @@
  * `store.addFromServer()` rather than stamping `new Date().toISOString()` —
  * the original block timestamp is what Settings → Blocked Users should show.
  */
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useBlockedUsersStore } from '../store/blockedUsersStore';
 import { messagesModerationApi } from '../api/messagesApi';
 
@@ -27,6 +27,14 @@ export interface UseBlockedUsersHydrationOptions {
 
 export interface UseBlockedUsersHydrationResult {
   hydrated: boolean;
+  /** True once the initial GET /users/blocks has resolved (success or failure)
+   *  — DM surfaces gate message rendering on this flag so a sender blocked on
+   *  another device can never flash through before the authoritative server
+   *  list arrives. Fails open: a network/API failure still flips this to true
+   *  so the UI doesn't hang. When `fetchServer` is false (BlockedUsersScreen
+   *  owns its own fetch), this also resolves to true once local hydration is
+   *  done, since this hook isn't responsible for server state in that mode. */
+  serverHydrationComplete: boolean;
 }
 
 export function useBlockedUsersHydration(
@@ -35,16 +43,22 @@ export function useBlockedUsersHydration(
 ): UseBlockedUsersHydrationResult {
   const fetchServer = options.fetchServer ?? true;
   const hydrated = useBlockedUsersStore((s) => s.hydrated);
+  const [serverHydrationComplete, setServerHydrationComplete] = useState(false);
 
   useEffect(() => {
     if (!userId) return;
     let cancelled = false;
+    setServerHydrationComplete(false);
     (async () => {
       const s = useBlockedUsersStore.getState();
       if (!s.hydrated || s.userId !== userId) {
         await s.hydrate(userId);
       }
-      if (cancelled || !fetchServer) return;
+      if (cancelled) return;
+      if (!fetchServer) {
+        setServerHydrationComplete(true);
+        return;
+      }
       try {
         const res = await messagesModerationApi.listBlocked();
         if (cancelled) return;
@@ -53,6 +67,10 @@ export function useBlockedUsersHydration(
         }
       } catch {
         // Non-fatal — local cache + server-side enforcement still apply.
+        // Fail open: we still flip serverHydrationComplete to true so the DM
+        // surfaces don't hang on a network failure.
+      } finally {
+        if (!cancelled) setServerHydrationComplete(true);
       }
     })();
     return () => {
@@ -60,5 +78,5 @@ export function useBlockedUsersHydration(
     };
   }, [userId, fetchServer]);
 
-  return { hydrated };
+  return { hydrated, serverHydrationComplete };
 }

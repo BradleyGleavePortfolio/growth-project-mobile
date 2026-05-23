@@ -85,7 +85,10 @@ export default function MessagesScreen() {
   // Hydrate the block store: local MMKV first (instant paint) then layer
   // GET /users/blocks on top so blocks made on another device or after a
   // cache wipe still filter the DM list before the user opens Settings.
-  useBlockedUsersHydration(currentUser?.id);
+  // `serverHydrationComplete` gates the message list render — until the
+  // server block list arrives, a sender blocked on another device could
+  // otherwise flash through. Fails open on API failure.
+  const { serverHydrationComplete } = useBlockedUsersHydration(currentUser?.id);
 
   useEffect(() => {
     if (!currentUser?.id) return;
@@ -326,7 +329,11 @@ export default function MessagesScreen() {
     [messages, blockedIds],
   );
 
-  if (loading && visibleMessages.length === 0) {
+  // Render skeleton while messages are loading OR while we are still waiting
+  // on the initial server block-list hydration. The latter is critical: if we
+  // rendered cached messages before GET /users/blocks resolved, a user blocked
+  // on another device could briefly appear before being filtered out.
+  if ((loading && visibleMessages.length === 0) || !serverHydrationComplete) {
     return (
       <View style={styles.container}>
         <View style={styles.chatHeader}>
