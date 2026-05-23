@@ -11,14 +11,25 @@ import {
   Keyboard,
   Alert,
 } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { MoreStackParamList } from '../../navigation/ClientNavigator';
 import { messagesApi, profileApi } from '../../services/api';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { subscribeToMessages } from '../../services/realtime';
 import { cacheStorage } from '../../storage/mmkv';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
-import { errorMessage, errorStatus, errorCode } from '../../types/common';
+import { errorStatus, errorCode } from '../../types/common';
+import { useBlockedUsersStore, filterOutBlocked } from '../../store/blockedUsersStore';
+import { useBlockedUsersHydration } from '../../hooks/useBlockedUsersHydration';
+import { messagesModerationApi, ReportReason } from '../../api/messagesApi';
+import MessageBubble, { BubbleMessage } from '../../components/messaging/MessageBubble';
+import MessageActionSheet from '../../components/messaging/MessageActionSheet';
+import ReplyComposer, { ReplyTarget } from '../../components/messaging/ReplyComposer';
+import ReportMessageSheet from '../../components/messaging/ReportMessageSheet';
+import { track } from '../../lib/analytics';
 
 interface Message {
   id: string;
@@ -28,17 +39,14 @@ interface Message {
   created_at: string;
   read_at?: string | null;
   pending?: boolean;
+  parent_message_id?: string | null;
 }
 
 // Realtime now drives most refreshes. Keep a 60s safety poll as a backstop in
 // case the WebSocket is dropped (background → foreground transitions, mobile
 // data dead zones). Without realtime this used to be 15s.
 const FALLBACK_POLL_MS = 60000;
-// Per-user cache key. A previous version used a fixed global key, which let
-// User-A's last DM thread render in User-B's UI for ~200–800ms after a fast
-// account switch on the same device (Hunt #2 P0-1, R15 + R16). Reads/writes
-// now require a userId; when it's unavailable (sign-out transition) we bail
-// rather than risk a cross-user read.
+// Per-user cache key — see Hunt #2 P0-1 (cross-account thread leak).
 export const CACHE_KEY_PREFIX = 'messages_thread_client_';
 export function cacheKeyFor(userId: string): string {
   return `${CACHE_KEY_PREFIX}${userId}`;
@@ -47,31 +55,41 @@ export function cacheKeyFor(userId: string): string {
 export default function MessagesScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const textOnPrimaryDim = colors.textOnPrimary + 'B3';   // 70% opacity
-  const textOnPrimaryFaint = colors.textOnPrimary + '80'; // 50% opacity
-  const navigation = useNavigation<NavigationProp<ParamListBase>>();
+  const textOnPrimaryDim = colors.textOnPrimary + 'B3';
+  const textOnPrimaryFaint = colors.textOnPrimary + '80';
+  const navigation = useNavigation<NativeStackNavigationProp<MoreStackParamList>>();
   const currentUser = useCurrentUser();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
-  // null = unknown (haven't loaded yet); true = at least one page returned
-  // exactly the requested limit, meaning more messages may exist; false = the
-  // last fetch came back short, so we've reached the start of the thread.
   const [hasMoreOlder, setHasMoreOlder] = useState<boolean>(true);
   const [inputText, setInputText] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const [noCoach, setNoCoach] = useState(false);
   const [coachName, setCoachName] = useState('');
+  const [coachId, setCoachId] = useState('');
   const flatListRef = useRef<FlatList<Message>>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // iMessage-grade action state.
+  const [actionTarget, setActionTarget] = useState<Message | null>(null);
+  const [replyTarget, setReplyTarget] = useState<ReplyTarget | null>(null);
+  const [reportTarget, setReportTarget] = useState<Message | null>(null);
+
+  const blockStore = useBlockedUsersStore();
+  const blockedIds = useMemo(() => blockStore.blocked.map((b) => b.id), [blockStore.blocked]);
+
   const PAGE_LIMIT = 100;
 
-  // A. MMKV hydration — synchronous read so the screen never shows blank on
-  // cold load (MMKV is synchronous; shim returns undefined). Keyed by the
-  // current user's id so the previous account's thread can't surface here.
-  // Re-runs when the userId resolves because useCurrentUser is async on mount.
+  // Hydrate the block store: local MMKV first (instant paint) then layer
+  // GET /users/blocks on top so blocks made on another device or after a
+  // cache wipe still filter the DM list before the user opens Settings.
+  // `serverHydrationComplete` gates the message list render — until the
+  // server block list arrives, a sender blocked on another device could
+  // otherwise flash through. Fails open on API failure.
+  const { serverHydrationComplete } = useBlockedUsersHydration(currentUser?.id);
+
   useEffect(() => {
     if (!currentUser?.id) return;
     const cached = cacheStorage.getString(cacheKeyFor(currentUser.id));
@@ -83,19 +101,20 @@ export default function MessagesScreen() {
           setLoading(false);
         }
       } catch {
-        // Corrupt cache — ignore, real load will follow.
+        // Corrupt cache — ignore.
       }
     }
   }, [currentUser?.id]);
 
-  // B. Load real coach name from profile.
   useEffect(() => {
     profileApi.get().then((res) => {
       const profile = res?.data as Record<string, unknown> | undefined;
       const name = typeof profile?.coach_name === 'string' ? profile.coach_name : '';
+      const id = typeof profile?.coach_id === 'string' ? profile.coach_id : '';
       if (name) setCoachName(name);
+      if (id) setCoachId(id);
     }).catch(() => {
-      // Silent — fall back to 'Your Coach'
+      /* silent — fall back to 'Your Coach' */
     });
   }, []);
 
@@ -107,9 +126,6 @@ export default function MessagesScreen() {
       setHasMoreOlder(list.length >= PAGE_LIMIT);
       setError('');
       setNoCoach(false);
-      // Write to MMKV cache after successful load. Bail when the userId is
-      // unknown (sign-out transition) rather than risk persisting under any
-      // key that could be misattributed on the next sign-in.
       const uid = currentUser?.id;
       if (uid) {
         setMessages((current) => {
@@ -164,16 +180,12 @@ export default function MessagesScreen() {
       setLoading(true);
       load().then(() => markRead());
 
-      // Realtime: subscribe to message-arrived pings so the screen refreshes
-      // immediately when the coach replies. Falls back gracefully if the
-      // WebSocket fails to connect.
       const unsubscribe = currentUser?.id
         ? subscribeToMessages(currentUser.id, () => {
             load().then(() => markRead());
           })
         : () => {};
 
-      // Backstop poll — if Realtime drops we still catch up within a minute.
       pollRef.current = setInterval(() => {
         load();
       }, FALLBACK_POLL_MS);
@@ -191,10 +203,32 @@ export default function MessagesScreen() {
     if (!text || sending) return;
     setSending(true);
     Keyboard.dismiss();
+    const reply = replyTarget;
     try {
-      const res = await messagesApi.send(text);
-      const created = normalizeMessage(res.data);
+      let created: Message;
+      if (reply) {
+        // Reply path — pass parent_message_id so backend can record the thread
+        // once the field is wired through. Until then we keep the parent
+        // reference locally so the bubble renders the quoted preview.
+        const res = await messagesModerationApi.sendReply({
+          body: text,
+          parent_message_id: reply.id,
+        });
+        created = {
+          id: res.id,
+          sender_role: res.sender_role,
+          sender_id: res.sender_id,
+          body: res.body,
+          created_at: res.created_at,
+          read_at: null,
+          parent_message_id: res.parent_message_id ?? reply.id,
+        };
+      } else {
+        const res = await messagesApi.send(text);
+        created = normalizeMessage(res.data);
+      }
       setInputText('');
+      setReplyTarget(null);
       const uid = currentUser?.id;
       setMessages((prev) => {
         const next = mergeById(prev, [created]);
@@ -207,7 +241,6 @@ export default function MessagesScreen() {
       if (errorStatus(err) === 409 || code === 'NO_COACH_ASSIGNED') {
         setNoCoach(true);
       } else {
-        // F. Offline send queue: add as local-only pending message instead of alert.
         const pendingMsg: Message = {
           id: `pending_${Date.now()}`,
           sender_role: 'client',
@@ -215,6 +248,7 @@ export default function MessagesScreen() {
           created_at: new Date().toISOString(),
           read_at: null,
           pending: true,
+          parent_message_id: reply?.id ?? null,
         };
         const uid = currentUser?.id;
         setMessages((prev) => {
@@ -223,6 +257,7 @@ export default function MessagesScreen() {
           return next;
         });
         setInputText('');
+        setReplyTarget(null);
         setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
       }
     } finally {
@@ -230,14 +265,75 @@ export default function MessagesScreen() {
     }
   };
 
-  const formatTime = (iso: string): string => {
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) return '';
-    return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-  };
+  // ─── Long-press action handlers ────────────────────────────────────────────
+  const handleLongPress = useCallback((m: BubbleMessage) => {
+    const found = messages.find((x) => x.id === m.id);
+    setActionTarget(found ?? null);
+  }, [messages]);
 
-  // E. Loading skeleton — 3 fake message rows.
-  if (loading && messages.length === 0) {
+  const handleReply = useCallback(() => {
+    if (!actionTarget) return;
+    setReplyTarget({
+      id: actionTarget.id,
+      body: actionTarget.body,
+      authorLabel:
+        actionTarget.sender_role === 'coach'
+          ? coachName || 'Your Coach'
+          : 'You',
+    });
+    setActionTarget(null);
+  }, [actionTarget, coachName]);
+
+  const handleCopy = useCallback(async () => {
+    if (!actionTarget) return;
+    try {
+      await Clipboard.setStringAsync(actionTarget.body);
+    } catch {
+      /* non-fatal */
+    }
+    setActionTarget(null);
+  }, [actionTarget]);
+
+  const handleOpenReport = useCallback(() => {
+    if (!actionTarget) return;
+    setReportTarget(actionTarget);
+    setActionTarget(null);
+  }, [actionTarget]);
+
+  const handleSubmitReport = useCallback(
+    async (payload: { reason: ReportReason; details?: string }) => {
+      if (!reportTarget) return;
+      await messagesModerationApi.report(reportTarget.id, payload);
+      track('dm_message_reported', { reason: payload.reason });
+      setReportTarget(null);
+      Alert.alert(
+        'Reported',
+        'Our team will review within 24 hours. Thanks for keeping the community safe.',
+      );
+    },
+    [reportTarget],
+  );
+
+  const openContactView = useCallback(() => {
+    if (!coachId) return;
+    navigation.navigate('ContactView', {
+      contactId: coachId,
+      displayName: coachName || 'Your Coach',
+      role: 'coach',
+    });
+  }, [navigation, coachId, coachName]);
+
+  // Defence-in-depth filter — strip blocked senders before render.
+  const visibleMessages = useMemo(
+    () => filterOutBlocked(messages, blockedIds),
+    [messages, blockedIds],
+  );
+
+  // Render skeleton while messages are loading OR while we are still waiting
+  // on the initial server block-list hydration. The latter is critical: if we
+  // rendered cached messages before GET /users/blocks resolved, a user blocked
+  // on another device could briefly appear before being filtered out.
+  if ((loading && visibleMessages.length === 0) || !serverHydrationComplete) {
     return (
       <View style={styles.container}>
         <View style={styles.chatHeader}>
@@ -249,21 +345,16 @@ export default function MessagesScreen() {
           >
             <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
-          <Text style={styles.chatHeaderName}>
-            {coachName || 'Your Coach'}
-          </Text>
+          <Text style={styles.chatHeaderName}>{coachName || 'Your Coach'}</Text>
           <View style={{ width: 24 }} />
         </View>
         <View style={styles.skeletonContainer}>
-          {/* Row 1 — left, 70% */}
           <View style={[styles.skeletonRow, { alignItems: 'flex-start' }]}>
             <View style={[styles.skeletonBubble, { width: '70%' }]} />
           </View>
-          {/* Row 2 — right, 55% */}
           <View style={[styles.skeletonRow, { alignItems: 'flex-end' }]}>
             <View style={[styles.skeletonBubble, { width: '55%' }]} />
           </View>
-          {/* Row 3 — left, 70% */}
           <View style={[styles.skeletonRow, { alignItems: 'flex-start' }]}>
             <View style={[styles.skeletonBubble, { width: '70%' }]} />
           </View>
@@ -299,13 +390,15 @@ export default function MessagesScreen() {
     );
   }
 
-  // Find index of last client message for "Sent" receipt logic.
   const lastClientMsgIdx = (() => {
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].sender_role === 'client') return i;
+    for (let i = visibleMessages.length - 1; i >= 0; i--) {
+      if (visibleMessages[i].sender_role === 'client') return i;
     }
     return -1;
   })();
+
+  const parentLookup = new Map<string, Message>();
+  visibleMessages.forEach((m) => parentLookup.set(m.id, m));
 
   return (
     <KeyboardAvoidingView
@@ -322,14 +415,17 @@ export default function MessagesScreen() {
         >
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
-        <View style={styles.chatHeaderCenter}>
-          {coachName ? (
-            <View style={styles.onlineDot} />
-          ) : null}
-          <Text style={styles.chatHeaderName}>
-            {coachName || 'Your Coach'}
-          </Text>
-        </View>
+        <TouchableOpacity
+          onPress={openContactView}
+          accessibilityRole="button"
+          accessibilityLabel={`View ${coachName || 'coach'} contact details`}
+          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          style={styles.chatHeaderCenter}
+        >
+          {coachName ? <View style={styles.onlineDot} /> : null}
+          <Text style={styles.chatHeaderName}>{coachName || 'Your Coach'}</Text>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
         <View style={{ width: 24 }} />
       </View>
 
@@ -341,13 +437,13 @@ export default function MessagesScreen() {
 
       <FlatList
         ref={flatListRef}
-        data={messages}
+        data={visibleMessages}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.chatList}
         showsVerticalScrollIndicator={false}
         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
         ListHeaderComponent={
-          hasMoreOlder && messages.length > 0 ? (
+          hasMoreOlder && visibleMessages.length > 0 ? (
             <TouchableOpacity
               onPress={loadOlder}
               disabled={loadingOlder}
@@ -368,9 +464,7 @@ export default function MessagesScreen() {
         ListEmptyComponent={
           <View style={styles.chatEmpty}>
             <Ionicons name="chatbubbles-outline" size={40} color={colors.textMuted} />
-            <Text style={styles.chatEmptyText}>
-              Start a conversation with your coach
-            </Text>
+            <Text style={styles.chatEmptyText}>Start a conversation with your coach</Text>
           </View>
         }
         renderItem={({ item, index }) => {
@@ -378,13 +472,11 @@ export default function MessagesScreen() {
           const showDateSep =
             index === 0 ||
             new Date(item.created_at).toDateString() !==
-              new Date(messages[index - 1].created_at).toDateString();
+              new Date(visibleMessages[index - 1].created_at).toDateString();
 
-          // C. Read receipts — only for client messages.
           let receiptNode: React.ReactNode = null;
           if (isMe) {
             if (item.pending) {
-              // F. Pending indicator.
               receiptNode = (
                 <View style={styles.receiptRow}>
                   <Ionicons name="time-outline" size={10} color={textOnPrimaryFaint} />
@@ -408,8 +500,22 @@ export default function MessagesScreen() {
             }
           }
 
+          const parent =
+            item.parent_message_id ? parentLookup.get(item.parent_message_id) : null;
+
+          const bubbleMsg: BubbleMessage = {
+            id: item.id,
+            body: item.body,
+            created_at: item.created_at,
+            pending: item.pending,
+            read_at: item.read_at,
+            parent: parent
+              ? { id: parent.id, body: parent.body, sender_role: parent.sender_role }
+              : null,
+          };
+
           return (
-            <View style={item.pending ? { opacity: 0.5 } : undefined}>
+            <View>
               {showDateSep && (
                 <View style={styles.dateSep}>
                   <Text style={styles.dateSepText}>
@@ -421,36 +527,23 @@ export default function MessagesScreen() {
                   </Text>
                 </View>
               )}
-              <View
-                style={[
-                  styles.messageBubbleRow,
-                  isMe ? styles.messageBubbleRowRight : styles.messageBubbleRowLeft,
-                ]}
-              >
-                <View
-                  style={[
-                    styles.messageBubble,
-                    isMe ? styles.messageBubbleMe : styles.messageBubbleCoach,
-                  ]}
-                >
-                  <Text style={[styles.messageText, isMe && styles.messageTextMe]}>
-                    {item.body}
-                  </Text>
-                  <Text style={[styles.messageTime, isMe && styles.messageTimeMe]}>
-                    {formatTime(item.created_at)}
-                  </Text>
-                  {receiptNode}
-                </View>
-              </View>
+              <MessageBubble
+                message={bubbleMsg}
+                isMe={isMe}
+                receipt={receiptNode}
+                onLongPress={handleLongPress}
+              />
             </View>
           );
         }}
       />
 
+      <ReplyComposer target={replyTarget} onCancel={() => setReplyTarget(null)} />
+
       <View style={styles.inputBar}>
         <TextInput
           style={styles.chatInput}
-          placeholder="Type a message..."
+          placeholder={replyTarget ? 'Reply…' : 'Type a message...'}
           placeholderTextColor={colors.textMuted}
           value={inputText}
           onChangeText={setInputText}
@@ -472,6 +565,23 @@ export default function MessagesScreen() {
           />
         </TouchableOpacity>
       </View>
+
+      <MessageActionSheet
+        visible={!!actionTarget}
+        messagePreview={actionTarget?.body}
+        onReply={handleReply}
+        onCopy={handleCopy}
+        onReport={handleOpenReport}
+        onClose={() => setActionTarget(null)}
+        canReport={!!actionTarget && actionTarget.sender_role !== 'client'}
+      />
+
+      <ReportMessageSheet
+        visible={!!reportTarget}
+        messagePreview={reportTarget?.body ?? ''}
+        onSubmit={handleSubmitReport}
+        onClose={() => setReportTarget(null)}
+      />
     </KeyboardAvoidingView>
   );
 }
@@ -496,18 +606,10 @@ function normalizeMessage(raw: unknown): Message {
     body: String(r.body ?? ''),
     created_at: typeof r.created_at === 'string' ? r.created_at : new Date().toISOString(),
     read_at: (r.read_at as string | null | undefined) ?? null,
+    parent_message_id: typeof r.parent_message_id === 'string' ? r.parent_message_id : null,
   };
 }
 
-/**
- * Drop any pending (local-only) messages that the server roundtrip has
- * superseded — either because a server row with the same body has come back,
- * or because the pending row's timestamp is older than the oldest server
- * message in the page (so the thread has demonstrably moved past it). This
- * closes Hunt #2 P1-2 — orphan `pending_<ts>` bubbles that would otherwise
- * linger forever in the FlatList because their synthetic ids never appear in
- * server responses.
- */
 export function reconcilePending(prev: Message[], serverList: Message[]): Message[] {
   const oldestServerTs = serverList.length > 0
     ? new Date(serverList[0].created_at).getTime()
@@ -535,8 +637,8 @@ function mergeById(existing: Message[], incoming: Message[]): Message[] {
 }
 
 const makeStyles = (colors: ThemeColors) => {
-  const textOnPrimaryDim = colors.textOnPrimary + 'B3';   // 70% opacity
-  const textOnPrimaryFaint = colors.textOnPrimary + '80'; // 50% opacity
+  const textOnPrimaryDim = colors.textOnPrimary + 'B3';
+  const textOnPrimaryFaint = colors.textOnPrimary + '80';
   return StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   noCoachContainer: { flex: 1, backgroundColor: colors.background },
@@ -578,7 +680,6 @@ const makeStyles = (colors: ThemeColors) => {
     backgroundColor: colors.success,
   },
   chatHeaderName: { fontFamily: 'Inter_500Medium', fontSize: 15, fontWeight: '500', letterSpacing: 0.2, color: colors.textPrimary },
-  // E. Loading skeleton
   skeletonContainer: { flex: 1, padding: 16 },
   skeletonRow: { marginBottom: 12 },
   skeletonBubble: {
@@ -599,22 +700,6 @@ const makeStyles = (colors: ThemeColors) => {
   chatEmptyText: { fontSize: 14, color: colors.textMuted },
   dateSep: { alignItems: 'center', marginVertical: 16 },
   dateSepText: { fontSize: 12, color: colors.textMuted, backgroundColor: colors.background, paddingHorizontal: 12 },
-  messageBubbleRow: { marginBottom: 6 },
-  messageBubbleRowRight: { alignItems: 'flex-end' },
-  messageBubbleRowLeft: { alignItems: 'flex-start' },
-  messageBubble: { maxWidth: '78%', borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10 },
-  messageBubbleMe: { backgroundColor: colors.primary, borderBottomRightRadius: 4 },
-  messageBubbleCoach: {
-    backgroundColor: colors.surface,
-    borderBottomLeftRadius: 4,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  messageText: { fontSize: 15, color: colors.textPrimary, lineHeight: 21 },
-  messageTextMe: { color: colors.textOnPrimary },
-  messageTime: { fontSize: 11, color: colors.textMuted, marginTop: 4, alignSelf: 'flex-end' },
-  messageTimeMe: { color: textOnPrimaryDim },
-  // C. Read receipt styles
   receiptRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -644,7 +729,7 @@ const makeStyles = (colors: ThemeColors) => {
   chatInput: {
     flex: 1,
     backgroundColor: colors.background,
-    borderRadius: 2, // radius.md
+    borderRadius: 2,
     paddingHorizontal: 16,
     paddingVertical: 12,
     fontFamily: 'Inter_400Regular',
@@ -657,7 +742,7 @@ const makeStyles = (colors: ThemeColors) => {
   sendBtn: {
     width: 40,
     height: 40,
-    borderRadius: 4, // radius.lg
+    borderRadius: 4,
     backgroundColor: colors.primary,
     justifyContent: 'center',
     alignItems: 'center',

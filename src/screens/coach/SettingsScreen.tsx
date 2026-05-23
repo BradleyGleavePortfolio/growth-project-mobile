@@ -490,6 +490,28 @@ export default function SettingsScreen() {
         <BiometricUnlockSetting />
       </View>
 
+      {/* iMessage-grade DM — Apple App Review 1.2 compliance. The coach must
+          be able to view and undo their blocks from Settings. */}
+      <Text style={styles.sectionHeader}>Privacy</Text>
+      <View style={styles.section}>
+        <TouchableOpacity
+          style={styles.row}
+          onPress={() => navigation.navigate('BlockedUsers')}
+          accessibilityRole="button"
+          accessibilityLabel="Blocked Users"
+          accessibilityHint="View and manage the users you've blocked"
+        >
+          <Ionicons name="ban-outline" size={20} color={colors.textSecondary} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.rowLabel}>Blocked Users</Text>
+            <Text style={styles.rowSubLabel}>
+              Review and unblock people you've blocked from DMs
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        </TouchableOpacity>
+      </View>
+
       {/* Stage 3 — cross-pillar federated coach surface. Settings row
           enters the nested CrossPillarNavigator, which runs the
           practice-selection flow on first open and the live dashboard

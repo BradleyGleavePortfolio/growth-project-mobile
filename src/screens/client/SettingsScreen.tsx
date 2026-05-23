@@ -419,6 +419,22 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </HapticPressable>
+          {/* iMessage-grade DM — Apple 1.2 compliance. Users must be able to
+              view and undo their blocks from Settings. */}
+          <HapticPressable
+            intent="light"
+            style={styles.row}
+            onPress={() => navigation.navigate('BlockedUsers')}
+            accessibilityRole="button"
+            accessibilityLabel="Blocked Users"
+            accessibilityHint="View and manage the users you've blocked"
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+              <Ionicons name="ban-outline" size={18} color={colors.primary} />
+              <Text style={styles.rowLabel}>Blocked Users</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </HapticPressable>
           {/* Phase 10 — GDPR Article 20 data portability */}
           <HapticPressable
             intent="light"

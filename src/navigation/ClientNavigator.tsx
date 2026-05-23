@@ -101,6 +101,11 @@ import CheckoutReturnScreen from '../screens/client/CheckoutReturnScreen';
 import BrandedCheckoutWebViewScreen, {
   type BrandedCheckoutWebViewParams,
 } from '../screens/client/BrandedCheckoutWebViewScreen';
+// iMessage-grade DM rebuild — Apple App Review 1.2 compliance: ContactView for
+// the "tap the contact" surface, BlockedUsersScreen for Settings undo. Both
+// are reachable from the Messages thread and from the Settings hub.
+import ContactView from '../screens/messaging/ContactView';
+import BlockedUsersScreen from '../screens/settings/BlockedUsersScreen';
 import { colors } from '../theme/tokens';
 // Defense-in-depth client paywall (Option B): paid screens are wrapped so
 // the entitlement gate runs before the screen body. Server-side
@@ -225,6 +230,15 @@ export type MoreStackParamList = {
    * for the Apple Rule 3.1.3(b)/(e) B2B exemption rationale.
    */
   BrandedCheckoutWebView: BrandedCheckoutWebViewParams;
+  /** iMessage-grade DM — Apple 1.2 compliance contact details surface. */
+  ContactView: {
+    contactId: string;
+    displayName: string;
+    role?: 'coach' | 'client' | 'student' | 'other';
+    avatarUrl?: string | null;
+  };
+  /** iMessage-grade DM — manage blocked users from Settings. */
+  BlockedUsers: undefined;
 };
 
 // ─── Phase 9: unread count polling for the bell icon ─────────────────────────
@@ -432,6 +446,9 @@ function MoreStackNavigator() {
         component={BrandedCheckoutWebViewScreen}
         options={{ presentation: 'modal', headerShown: false, gestureEnabled: false }}
       />
+      {/* iMessage-grade DM — Apple App Review 1.2 compliance surfaces. */}
+      <MoreStackNav.Screen name="ContactView" component={ContactView} />
+      <MoreStackNav.Screen name="BlockedUsers" component={BlockedUsersScreen} />
     </MoreStackNav.Navigator>
   );
 }
