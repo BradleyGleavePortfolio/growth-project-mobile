@@ -73,6 +73,22 @@ function statusLabel(s: InviteStatus): string {
   }
 }
 
+const KNOWN_EMAIL_STATUSES: ReadonlyArray<EmailStatus> = [
+  'QUEUED',
+  'SENT',
+  'DELIVERED',
+  'BOUNCED',
+  'FAILED',
+];
+
+function toEmailStatus(value: string | null | undefined): EmailStatus | null {
+  if (!value) return null;
+  const upper = value.toUpperCase();
+  return (KNOWN_EMAIL_STATUSES as ReadonlyArray<string>).includes(upper)
+    ? (upper as EmailStatus)
+    : null;
+}
+
 function emailStatusLabel(s: EmailStatus): string {
   switch (s) {
     case 'QUEUED':
@@ -312,12 +328,12 @@ export default function CoachInvitesScreen({
                 </Text>
                 <View style={styles.rowMetaRow}>
                   <StatusBadge status={item.status} colors={colors} />
-                  {item.lastEmailStatus && (
-                    <EmailBadge
-                      status={item.lastEmailStatus}
-                      colors={colors}
-                    />
-                  )}
+                  {(() => {
+                    const emailStatus = toEmailStatus(item.lastEmailStatus);
+                    return emailStatus ? (
+                      <EmailBadge status={emailStatus} colors={colors} />
+                    ) : null;
+                  })()}
                   <Text style={styles.rowMetaText}>
                     {formatRelative(item.createdAt)}
                   </Text>

@@ -409,18 +409,24 @@ function deriveInviteStatus(row: RawInviteRow): InviteStatus {
 }
 
 function adaptInviteRow(row: RawInviteRow): Invite {
+  // Prefer the canonical `client_email` field from the email-pipeline
+  // backend; fall back to the legacy `intended_email` for any older
+  // rows still in flight, then to an empty string so the UI never
+  // renders `undefined`.
+  const clientEmail = row.client_email ?? row.intended_email ?? '';
   const invite: Invite = {
     id: row.id,
     code: row.code,
+    clientEmail,
     status: deriveInviteStatus(row),
     createdAt: row.created_at,
+    // Map `last_email_status` directly. Null is preserved (rather than
+    // collapsed to undefined) so callers can distinguish "backend
+    // explicitly said no status" from "field absent".
+    lastEmailStatus: row.last_email_status ?? null,
   };
-  if (row.intended_email) invite.clientEmail = row.intended_email;
   if (row.expires_at) invite.expiresAt = row.expires_at;
   if (row.accepted_at) invite.acceptedAt = row.accepted_at;
-  // `lastEmailStatus` is not currently persisted per-row by the backend,
-  // so it is left undefined here. Bulk send delivery state is surfaced
-  // separately via `BulkInviteResult.emailQueued`.
   return invite;
 }
 

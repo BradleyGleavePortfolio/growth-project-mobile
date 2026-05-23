@@ -235,6 +235,12 @@ export default function RootNavigator() {
   // the public accept call. Tokens are single-use; a second POST would
   // surface a misleading "already accepted" to the user.
   const consumedAcceptTokenRef = useRef<string | null>(null);
+  // Tracks an in-flight signed-in replay token (sign-out → AcceptInvite).
+  // Why: a duplicate URL event arriving while sign-out is in progress
+  // hits the unauthenticated branch and would otherwise mark the token
+  // consumed before the pending-replay effect has navigated — stranding
+  // the user on the auth stack.
+  const pendingAcceptTokenRef = useRef<string | null>(null);
 
   // Initialise the Crisp SDK once at app start. Safe to call before auth
   // resolves — configure() only registers the website ID and does not
@@ -324,7 +330,11 @@ export default function RootNavigator() {
         // vs foreground listener) is dropped.
         if (isAcceptInvite) {
           const token = extractAcceptInviteToken(url);
-          if (token) consumedAcceptTokenRef.current = token;
+          // Do NOT mark consumed if this token is the in-flight signed-in
+          // replay: the pending-replay effect still needs to navigate.
+          if (token && pendingAcceptTokenRef.current !== token) {
+            consumedAcceptTokenRef.current = token;
+          }
         }
         return;
       }
@@ -337,6 +347,8 @@ export default function RootNavigator() {
         // race where the prior authed navigator is still mounted when
         // the replay fires.
         if (isAcceptInvite) {
+          const token = extractAcceptInviteToken(url);
+          if (token) pendingAcceptTokenRef.current = token;
           setPendingAcceptUrl(url);
         } else {
           setPendingResetUrl(url);
@@ -403,9 +415,16 @@ export default function RootNavigator() {
         // Clear pending state regardless — we never want this URL to
         // sit around for a second replay pass.
         setPendingAcceptUrl(null);
-        if (!token) return;
-        if (consumedAcceptTokenRef.current === token) return;
+        if (!token) {
+          pendingAcceptTokenRef.current = null;
+          return;
+        }
+        if (consumedAcceptTokenRef.current === token) {
+          pendingAcceptTokenRef.current = null;
+          return;
+        }
         consumedAcceptTokenRef.current = token;
+        pendingAcceptTokenRef.current = null;
         try {
           const nav = navigationRef as unknown as {
             navigate: (name: string, params?: object) => void;

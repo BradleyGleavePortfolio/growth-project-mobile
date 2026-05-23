@@ -187,7 +187,7 @@ describe('RootNavigator — accept-invite replay guard', () => {
     });
   });
 
-  it('signed-in accept link: signs out once and navigates AcceptInvite once even when the URL fires twice', async () => {
+  it('signed-in accept link: signs out once and navigates AcceptInvite exactly once even when the URL fires twice', async () => {
     render(<RootNavigator />);
 
     // Resolve the cold-start lookup with no URL — the test will deliver
@@ -213,19 +213,64 @@ describe('RootNavigator — accept-invite replay guard', () => {
     });
 
     // signOut must NOT fire a second time for the same token, and the
-    // imperative navigate must fire AT MOST once.
+    // imperative navigate must fire EXACTLY once. Asserting "exactly 1"
+    // (not "≤ 1") guards against a regression where the duplicate
+    // unauthenticated event marks the in-flight token consumed and the
+    // pending-replay effect drops the navigate, stranding the user on
+    // the auth stack.
     expect(mockSignOut).toHaveBeenCalledTimes(1);
     // Linking.openURL must NOT be used as the replay channel (that was
     // the source of the loop).
     expect(mockLinkingOpenUrl).not.toHaveBeenCalled();
-    // navigate fires at most once for the accept token.
     const acceptNavs = mockNavigateSpy.mock.calls.filter(
       (call) => call[0] === 'AcceptInvite',
     );
-    expect(acceptNavs.length).toBeLessThanOrEqual(1);
-    if (acceptNavs.length === 1) {
-      expect(acceptNavs[0][1]).toEqual({ token: ACCEPT_TOKEN });
-    }
+    expect(acceptNavs.length).toBe(1);
+    expect(acceptNavs[0][1]).toEqual({ token: ACCEPT_TOKEN });
+  });
+
+  it('signed-in accept link: duplicate URL fired AFTER auth flip but BEFORE replay still navigates exactly once', async () => {
+    // This drives the exact race the round-3 audit called out: the
+    // first (signed-in) URL event stashes a pending replay, sign-out
+    // begins, and a second duplicate URL event arrives WHILE the
+    // pending replay is in flight (secureStorage already null because
+    // sign-out has cleared it) but BEFORE the replay effect has run.
+    // The fix uses a `pendingAcceptTokenRef` so the unauthenticated
+    // duplicate branch does NOT mark the in-flight token consumed.
+    render(<RootNavigator />);
+    await act(async () => {
+      mockGetInitialUrlResolver?.(null);
+    });
+    await waitFor(() => expect(mockUrlListener).not.toBeNull());
+
+    // Drive the race inside a single act() so both URL handlers run
+    // before React flushes the pending-replay effect. The first call
+    // sees secureStorage = signed-in, the second sees it null —
+    // matching real sign-out timing.
+    let callCount = 0;
+    mockSecureGet.mockImplementation(async (key: string) => {
+      if (key !== 'supabase_token') return null;
+      callCount += 1;
+      return callCount === 1 ? 'jwt-signed-in' : null;
+    });
+
+    await act(async () => {
+      // Fire both events in immediate succession. Each handleUrl is
+      // async; the second one races with the first one's pending
+      // state update.
+      mockUrlListener!({ url: ACCEPT_URL });
+      mockUrlListener!({ url: ACCEPT_URL });
+    });
+
+    // Exactly one sign-out for the signed-in branch, and exactly one
+    // imperative navigate (not zero — the regression we are testing).
+    expect(mockSignOut).toHaveBeenCalledTimes(1);
+    const acceptNavs = mockNavigateSpy.mock.calls.filter(
+      (call) => call[0] === 'AcceptInvite',
+    );
+    expect(acceptNavs.length).toBe(1);
+    expect(acceptNavs[0][1]).toEqual({ token: ACCEPT_TOKEN });
+    expect(mockLinkingOpenUrl).not.toHaveBeenCalled();
   });
 
   it('cold-start unauthenticated link: does NOT stash a pending URL (React Navigation handles it natively)', async () => {

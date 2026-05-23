@@ -232,7 +232,9 @@ describe('invitesApi.listInvites', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    // Backend returns a raw Prisma array, snake_case fields.
+    // Backend returns a raw Prisma array, snake_case fields. The
+    // email-pipeline backend uses `client_email` and `last_email_status`;
+    // legacy rows may still carry `intended_email`.
     mockedApi.get.mockResolvedValue({
       data: [
         {
@@ -244,7 +246,8 @@ describe('invitesApi.listInvites', () => {
           max_uses: 1,
           used_count: 0,
           revoked: false,
-          intended_email: 'one@ex.com',
+          client_email: 'one@ex.com',
+          last_email_status: 'SENT',
         },
         {
           id: '2',
@@ -255,7 +258,8 @@ describe('invitesApi.listInvites', () => {
           max_uses: 1,
           used_count: 1,
           revoked: false,
-          intended_email: 'two@ex.com',
+          client_email: 'two@ex.com',
+          last_email_status: 'DELIVERED',
           accepted_by_user_id: 'u2',
           accepted_at: '2026-01-02T00:00:00Z',
         },
@@ -268,7 +272,8 @@ describe('invitesApi.listInvites', () => {
           max_uses: 1,
           used_count: 0,
           revoked: false,
-          intended_email: 'three@ex.com',
+          client_email: 'three@ex.com',
+          last_email_status: null,
         },
         {
           id: '4',
@@ -279,7 +284,7 @@ describe('invitesApi.listInvites', () => {
           max_uses: 1,
           used_count: 0,
           revoked: true,
-          intended_email: 'four@ex.com',
+          client_email: 'four@ex.com',
         },
       ],
     });
@@ -296,6 +301,84 @@ describe('invitesApi.listInvites', () => {
       createdAt: '2026-01-01T00:00:00Z',
     });
     expect(out[0].expiresAt).toBe(future);
+  });
+
+  it('maps client_email → clientEmail (canonical backend field)', async () => {
+    const out = await invitesApi.listInvites();
+    expect(out.map((i) => i.clientEmail)).toEqual([
+      'one@ex.com',
+      'two@ex.com',
+      'three@ex.com',
+      'four@ex.com',
+    ]);
+  });
+
+  it('maps last_email_status → lastEmailStatus and preserves explicit null', async () => {
+    const out = await invitesApi.listInvites();
+    const byId = Object.fromEntries(
+      out.map((i) => [i.id, i.lastEmailStatus]),
+    );
+    expect(byId['1']).toBe('SENT');
+    expect(byId['2']).toBe('DELIVERED');
+    // Explicit null in the payload must round-trip as null — NOT undefined.
+    expect(byId['3']).toBeNull();
+    // Field absent on row 4 → defaults to null (matches backend "no status yet").
+    expect(byId['4']).toBeNull();
+  });
+
+  it('falls back to intended_email when client_email is missing (legacy rows)', async () => {
+    mockedApi.get.mockResolvedValueOnce({
+      data: [
+        {
+          id: 'legacy-1',
+          code: 'legacy',
+          coach_id: 'c',
+          created_at: '2026-01-01T00:00:00Z',
+          used_count: 0,
+          revoked: false,
+          intended_email: 'legacy@ex.com',
+        },
+      ],
+    });
+    const out = await invitesApi.listInvites();
+    expect(out).toHaveLength(1);
+    expect(out[0].clientEmail).toBe('legacy@ex.com');
+  });
+
+  it('prefers client_email over intended_email when both are present', async () => {
+    mockedApi.get.mockResolvedValueOnce({
+      data: [
+        {
+          id: 'both-1',
+          code: 'both',
+          coach_id: 'c',
+          created_at: '2026-01-01T00:00:00Z',
+          used_count: 0,
+          revoked: false,
+          client_email: 'canonical@ex.com',
+          intended_email: 'legacy@ex.com',
+        },
+      ],
+    });
+    const out = await invitesApi.listInvites();
+    expect(out[0].clientEmail).toBe('canonical@ex.com');
+  });
+
+  it('defaults clientEmail to empty string when both fields are absent', async () => {
+    mockedApi.get.mockResolvedValueOnce({
+      data: [
+        {
+          id: 'empty-1',
+          code: 'empty',
+          coach_id: 'c',
+          created_at: '2026-01-01T00:00:00Z',
+          used_count: 0,
+          revoked: false,
+        },
+      ],
+    });
+    const out = await invitesApi.listInvites();
+    expect(out[0].clientEmail).toBe('');
   });
 
   it('derives status from revoked / accepted / expires_at', async () => {
@@ -335,7 +418,8 @@ describe('invitesApi.listInvites', () => {
             created_at: '2026-01-01T00:00:00Z',
             used_count: 0,
             revoked: false,
-            intended_email: 'nine@ex.com',
+            client_email: 'nine@ex.com',
+            last_email_status: 'QUEUED',
           },
         ],
       },
@@ -343,6 +427,7 @@ describe('invitesApi.listInvites', () => {
     const out = await invitesApi.listInvites();
     expect(out).toHaveLength(1);
     expect(out[0].clientEmail).toBe('nine@ex.com');
+    expect(out[0].lastEmailStatus).toBe('QUEUED');
   });
 });
 
