@@ -28,6 +28,12 @@ const ASYNC_SIGN_OUT_KEYS = [
   'lean_onboarding_synced',
   'analytics_onboarding_completed_fired',
   'pending_invite_code',
+  // Pre-R15 global active workout session. Upgrading users may still have
+  // a payload at this key from before the per-user namespace landed; if it
+  // survives signOut, loadActiveWorkoutSession() on the next user will
+  // migrate it into their namespace and surface the previous user's
+  // working set. See audit #2 / R15.
+  '@activeWorkoutSession/v1',
 ];
 
 // Prefixes whose every matching AsyncStorage key should be wiped on signOut.
