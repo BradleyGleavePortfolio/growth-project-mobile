@@ -361,16 +361,30 @@ export default function RootNavigator() {
         const match = url.match(/\/join\/([^/?#]+)/i);
         const code = match?.[1];
         if (code) {
-          // B5/B6: stash the inbound code so the in-app banner (HomeScreen)
-          // can offer to claim it via authApi.attachInviteCode. The banner
-          // is the consent surface — we do NOT auto-attach because it would
-          // silently re-pair the client to a different coach.
+          // Stash the inbound code so RoleSelection (or a future settings
+          // surface) can offer to attach it. R15: every persisted key is
+          // user-scoped so a second user on the same device cannot read
+          // the prior user's pending code. We reach this branch only
+          // after `authed` was truthy above; resolve the user id from
+          // user_data and fall back to `:anonymous` if it cannot be
+          // parsed (which the sign-in flow then claims/migrates).
           try {
-            await AsyncStorage.setItem('pending_invite_code', code);
-            // Fire an authEvent so any mounted banner re-reads storage on
-            // foreground without waiting for a manual refresh.
-            authEvents.emit();
-          } catch (err) { logger.warn('RootNavigator', 'non-fatal', err); }
+            let scope = 'anonymous';
+            try {
+              const userRaw = await AsyncStorage.getItem('user_data');
+              if (userRaw) {
+                const parsed = JSON.parse(userRaw) as { id?: string };
+                if (parsed && typeof parsed.id === 'string' && parsed.id) {
+                  scope = parsed.id;
+                }
+              }
+            } catch {
+              // user_data unreadable — keep the `:anonymous` scope.
+            }
+            await AsyncStorage.setItem(`pending_invite_code:${scope}`, code);
+          } catch {
+            // best-effort
+          }
         }
       }
     };
