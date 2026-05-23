@@ -19,6 +19,8 @@ const STRIPE_ALLOWED_HOSTS = [
   'connect.stripe.com',
   'dashboard.stripe.com',
   'billing.stripe.com',
+  'invoice.stripe.com',
+  'pay.stripe.com',
 ];
 
 export function validateStripeUrl(url: string): boolean {

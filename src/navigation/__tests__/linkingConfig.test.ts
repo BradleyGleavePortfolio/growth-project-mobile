@@ -1,10 +1,12 @@
 // Cross-check the React Navigation linking config in RootNavigator against
-// app.json's intent filters / associatedDomains. The two sources of truth must
-// agree or deep links silently break: app.json declares "I will receive these
-// URLs", RootNavigator declares "and here is how to route them once received".
+// app.json's intent filters / associatedDomains. The two sources of truth
+// must agree or deep links silently break: app.json declares "I will receive
+// these URLs", RootNavigator declares "and here is how to route them once
+// received".
 //
-// Pure JS / fs — no NavigationContainer mounted. Keeps the test fast and
-// avoids dragging react-native-screens / reanimated into the test harness.
+// R26: All RootNavigator coverage in this file drives REAL URLs through
+// `linking.getStateFromPath()` and asserts the resulting navigation state.
+// No source-file regex matching.
 
 import * as fs from 'fs';
 import * as path from 'path';
@@ -13,14 +15,68 @@ import {
   INVITE_UNIVERSAL_HOST,
   INVITE_PATH,
 } from '../../utils/deepLink';
-import { isValidPackageShareToken } from '../../utils/packageShare';
 
 const ROOT = path.resolve(__dirname, '..', '..', '..');
 const APP_JSON = JSON.parse(fs.readFileSync(path.join(ROOT, 'app.json'), 'utf8'));
-const ROOT_NAV_SRC = fs.readFileSync(
-  path.join(ROOT, 'src', 'navigation', 'RootNavigator.tsx'),
-  'utf8',
-);
+
+// RootNavigator pulls in a tree of native/Expo dependencies it doesn't need
+// for the linking config alone. Mock the components it renders so importing
+// `linking` is cheap and side-effect-free.
+jest.mock('../AuthNavigator', () => () => null);
+jest.mock('../ClientNavigator', () => () => null);
+jest.mock('../CoachNavigator', () => () => null);
+jest.mock('../OnboardingNavigator', () => () => null);
+jest.mock('../LeanOnboardingNavigator', () => () => null);
+jest.mock('../../components/OfflineBanner', () => () => null);
+jest.mock('../../screens/client/Day1WinScreen', () => () => null);
+jest.mock('../../services/support/crisp.service', () => ({
+  initCrisp: jest.fn(),
+  syncCrispIdentity: jest.fn(),
+}));
+jest.mock('../../services/firstWinApi', () => ({
+  firstWinApi: { getStatus: jest.fn(), markComplete: jest.fn() },
+  WinType: {},
+}));
+jest.mock('../../services/authActions', () => ({ signOut: jest.fn() }));
+jest.mock('../../hooks/useLeanOnboardingReconcile', () => ({
+  useLeanOnboardingReconcile: () => {},
+}));
+jest.mock('../../services/foodLogQueue', () => ({ flush: jest.fn() }));
+jest.mock('../../screenshots', () => ({ isScreenshotMode: () => false }));
+
+import { linking } from '../RootNavigator';
+
+function resolve(url: string) {
+  // Strip the prefix the way React Navigation does before calling our
+  // getStateFromPath. RN's deep-link receiver removes the scheme/host prefix
+  // and feeds the path-and-beyond into the override.
+  const prefixes = linking.prefixes;
+  let stripped = url;
+  for (const p of prefixes) {
+    if (url.startsWith(p)) {
+      stripped = url.slice(p.length);
+      break;
+    }
+  }
+  if (!stripped.startsWith('/')) stripped = '/' + stripped;
+  return linking.getStateFromPath!(stripped, linking.config as never);
+}
+
+function findRoute(
+  state: ReturnType<typeof resolve> | null | undefined,
+  name: string,
+): { name: string; params?: Record<string, unknown> } | undefined {
+  if (!state) return undefined;
+  for (const route of state.routes ?? []) {
+    if (route.name === name) return route as never;
+    const child = (route as { state?: typeof state }).state;
+    if (child) {
+      const nested = findRoute(child, name);
+      if (nested) return nested;
+    }
+  }
+  return undefined;
+}
 
 describe('app.json declares the invite deep-link surface', () => {
   it('iOS associatedDomains lists applinks for the universal host', () => {
@@ -70,21 +126,6 @@ describe('app.json declares the invite deep-link surface', () => {
   });
 });
 
-describe('RootNavigator linking config agrees with app.json', () => {
-  it('declares both the custom-scheme prefix and the universal-link host', () => {
-    expect(ROOT_NAV_SRC).toMatch(/'tgp:\/\/'/);
-    expect(ROOT_NAV_SRC).toMatch(
-      new RegExp(`'https:\\/\\/${INVITE_UNIVERSAL_HOST.replace(/\./g, '\\.')}'`),
-    );
-  });
-
-  it('routes /join/:invite_code to CreateAccount', () => {
-    // The linking config uses the path 'join/:invite_code?'. Search for the
-    // literal so a typo (`/join/:code` etc.) shows up here instead of in QA.
-    expect(ROOT_NAV_SRC).toMatch(/path:\s*'join\/:invite_code\?'/);
-  });
-});
-
 describe('hosted association templates match app.json', () => {
   it('assetlinks.json package_name matches expo.android.package', () => {
     const al = JSON.parse(
@@ -107,13 +148,21 @@ describe('hosted association templates match app.json', () => {
     const paths = components.map((c: any) => c['/']);
     expect(paths).toEqual(expect.arrayContaining(['/join/*', '/join']));
   });
+
+  it('apple-app-site-association covers /p/*', () => {
+    const aasa = JSON.parse(
+      fs.readFileSync(
+        path.join(ROOT, 'docs', 'well-known', 'apple-app-site-association'),
+        'utf8',
+      ),
+    );
+    const components = aasa.applinks.details.flatMap((d: any) => d.components || []);
+    const paths = components.map((c: any) => c['/']);
+    expect(paths).toEqual(expect.arrayContaining(['/p/*']));
+  });
 });
 
-// Package share surface — every layer (app.json, RootNavigator, AASA) must
-// declare /p/<shareToken> for the universal-link to land in the PackageCheckout
-// screen. Regression coverage for the same drift class we already catch on
-// /join above.
-describe('app.json + RootNavigator + AASA declare the /p/<token> package surface', () => {
+describe('app.json declares the /p/<token> package surface', () => {
   it('Android intent filter routes https://<host>/p with autoVerify', () => {
     const filters = APP_JSON.expo.android.intentFilters;
     const hasHttpsP = filters.some((f: any) =>
@@ -136,92 +185,70 @@ describe('app.json + RootNavigator + AASA declare the /p/<token> package surface
     );
     expect(hasCustomP).toBe(true);
   });
-
-  it('RootNavigator linking config routes p/:shareToken', () => {
-    expect(ROOT_NAV_SRC).toMatch(/path:\s*'p\/:shareToken'/);
-  });
-
-  it('apple-app-site-association covers /p/*', () => {
-    const aasa = JSON.parse(
-      fs.readFileSync(
-        path.join(ROOT, 'docs', 'well-known', 'apple-app-site-association'),
-        'utf8',
-      ),
-    );
-    const components = aasa.applinks.details.flatMap((d: any) => d.components || []);
-    const paths = components.map((c: any) => c['/']);
-    expect(paths).toEqual(expect.arrayContaining(['/p/*']));
-  });
 });
 
-// Behavioral coverage for the share-token parser used by the linking
-// config. Asserts that a real https://app.trygrowthproject.com/p/<token>
-// link is parsed into a usable shareToken, and that malformed paths are
-// rejected before they ever reach PackageCheckoutScreen.
-describe('package share link parsing', () => {
-  function tokenFromUniversalLink(url: string): string | null {
-    // Mirrors what React Navigation's URL parser does for the
-    // `p/:shareToken` segment in RootNavigator. We strip the prefix the
-    // linking config recognises and treat the next path segment as the
-    // raw value, then run the same validator the linking config wraps
-    // `parse: { shareToken }` with.
-    const prefixes = [
-      'https://app.trygrowthproject.com/p/',
-      'tgp://p/',
-    ];
-    let raw: string | null = null;
-    for (const p of prefixes) {
-      if (url.startsWith(p)) {
-        raw = url.slice(p.length).split(/[?#/]/)[0];
-        break;
-      }
-    }
-    if (raw == null) return null;
-    try {
-      raw = decodeURIComponent(raw);
-    } catch {
-      return null;
-    }
-    return isValidPackageShareToken(raw) ? raw : null;
-  }
-
-  it('extracts a valid token from a universal link', () => {
-    expect(
-      tokenFromUniversalLink(
-        'https://app.trygrowthproject.com/p/abc-123_DEF',
-      ),
-    ).toBe('abc-123_DEF');
-  });
-
-  it('extracts a valid token from a custom-scheme link', () => {
-    expect(tokenFromUniversalLink('tgp://p/uuid-token-9999')).toBe(
-      'uuid-token-9999',
+describe('RootNavigator linking config — behavioral routing (R26)', () => {
+  it('declares both the custom-scheme prefix and the universal-link host', () => {
+    expect(linking.prefixes).toEqual(
+      expect.arrayContaining(['tgp://', `https://${INVITE_UNIVERSAL_HOST}`]),
     );
   });
 
-  it('rejects path-traversal and HTML-injection tokens', () => {
-    expect(
-      tokenFromUniversalLink(
-        'https://app.trygrowthproject.com/p/' +
-          encodeURIComponent('../etc/passwd'),
-      ),
-    ).toBeNull();
-    expect(
-      tokenFromUniversalLink(
-        'https://app.trygrowthproject.com/p/' +
-          encodeURIComponent('<script>alert(1)</script>'),
-      ),
-    ).toBeNull();
+  it('routes /join/<code> to CreateAccount with invite_code param', () => {
+    const state = resolve(`https://${INVITE_UNIVERSAL_HOST}/join/ABC123`);
+    const route = findRoute(state, 'CreateAccount');
+    expect(route).toBeDefined();
+    expect(route?.params).toMatchObject({ invite_code: 'ABC123' });
   });
 
-  it('rejects oversized tokens', () => {
+  it('routes tgp://join/<code> to CreateAccount with invite_code param', () => {
+    const state = resolve('tgp://join/XYZ789');
+    const route = findRoute(state, 'CreateAccount');
+    expect(route).toBeDefined();
+    expect(route?.params).toMatchObject({ invite_code: 'XYZ789' });
+  });
+
+  it('routes /p/<token> to PackageCheckout with shareToken param', () => {
+    const state = resolve(`https://${INVITE_UNIVERSAL_HOST}/p/abc-123_DEF`);
+    const route = findRoute(state, 'PackageCheckout');
+    expect(route).toBeDefined();
+    expect(route?.params).toMatchObject({ shareToken: 'abc-123_DEF' });
+  });
+
+  it('routes tgp://p/<token> to PackageCheckout with shareToken param', () => {
+    const state = resolve('tgp://p/uuid-token-9999');
+    const route = findRoute(state, 'PackageCheckout');
+    expect(route).toBeDefined();
+    expect(route?.params).toMatchObject({ shareToken: 'uuid-token-9999' });
+  });
+
+  it('rejects an invalid (path-traversal) /p/<token> as no-match (fail closed)', () => {
+    const state = resolve(
+      `https://${INVITE_UNIVERSAL_HOST}/p/${encodeURIComponent('../etc/passwd')}`,
+    );
+    expect(findRoute(state, 'PackageCheckout')).toBeUndefined();
+  });
+
+  it('rejects an HTML-injection /p/<token> as no-match (fail closed)', () => {
+    const state = resolve(
+      `https://${INVITE_UNIVERSAL_HOST}/p/${encodeURIComponent('<script>alert(1)</script>')}`,
+    );
+    expect(findRoute(state, 'PackageCheckout')).toBeUndefined();
+  });
+
+  it('rejects an oversized /p/<token> as no-match', () => {
     const big = 'a'.repeat(200);
-    expect(
-      tokenFromUniversalLink(`https://app.trygrowthproject.com/p/${big}`),
-    ).toBeNull();
+    const state = resolve(`https://${INVITE_UNIVERSAL_HOST}/p/${big}`);
+    expect(findRoute(state, 'PackageCheckout')).toBeUndefined();
   });
 
-  it('rejects links from an unrelated host', () => {
-    expect(tokenFromUniversalLink('https://evil.example.com/p/abc')).toBeNull();
+  it('rejects a malformed-URI /p/<token> without throwing (URIError fail-closed)', () => {
+    // `%E0%A4%A` is an incomplete UTF-8 sequence; decodeURIComponent throws.
+    // Linking resolver MUST return no-match instead of crashing.
+    expect(() =>
+      resolve(`https://${INVITE_UNIVERSAL_HOST}/p/%E0%A4%A`),
+    ).not.toThrow();
+    const state = resolve(`https://${INVITE_UNIVERSAL_HOST}/p/%E0%A4%A`);
+    expect(findRoute(state, 'PackageCheckout')).toBeUndefined();
   });
 });

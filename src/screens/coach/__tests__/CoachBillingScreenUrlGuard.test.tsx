@@ -1,11 +1,17 @@
 // Behavioral test: CoachBillingScreen MUST validate every backend-returned
 // payment browser URL through assertStripeUrl() before opening it.
-// Locks in the fix for audit P0-N1 (PR149 round 2).
+// Locks in the fix for audit P0-N1 (PR149 round 2) AND audit P1-A
+// (PR149 round 3): proves the REAL validator accepts invoice hosts and
+// that a rejected URL surfaces a user-visible alert.
+//
+// R26: This test does NOT mock the validator — it uses the production
+// allow-list. Mocking the guard would hide a production-side rejection
+// of a legitimate host (which is exactly the round-3 P1-A bug).
 
 import React from 'react';
+import { Alert } from 'react-native';
 import { render, fireEvent, act, waitFor } from '@testing-library/react-native';
 
-// jest.mock factories can only reference variables prefixed with `mock`.
 const mockOpenBrowserAsync = jest.fn().mockResolvedValue({ type: 'dismiss' });
 jest.mock('expo-web-browser', () => ({
   __esModule: true,
@@ -13,12 +19,7 @@ jest.mock('expo-web-browser', () => ({
   WebBrowserPresentationStyle: { PAGE_SHEET: 'pageSheet' },
 }));
 
-const mockAssertStripeUrl = jest.fn();
-jest.mock('../../../utils/stripeUrlValidator', () => ({
-  __esModule: true,
-  assertStripeUrl: (...args: unknown[]) => mockAssertStripeUrl(...args),
-  validateStripeUrl: jest.fn(() => true),
-}));
+// IMPORTANT: stripeUrlValidator is NOT mocked. The real allow-list runs.
 
 jest.mock('../../../theme/ThemeProvider', () => ({
   __esModule: true,
@@ -63,12 +64,18 @@ jest.mock('../../../utils/haptics', () => ({
 
 import CoachBillingScreen from '../CoachBillingScreen';
 
+let alertSpy: jest.SpyInstance;
+
 beforeEach(() => {
   mockOpenBrowserAsync.mockClear();
-  mockAssertStripeUrl.mockReset();
   mockGetStatus.mockReset();
   mockGetFull.mockReset();
   mockCreatePortalSession.mockReset();
+  alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+});
+
+afterEach(() => {
+  alertSpy.mockRestore();
 });
 
 function setupHappy(invoiceUrl: string, portalUrl: string) {
@@ -93,16 +100,14 @@ function setupHappy(invoiceUrl: string, portalUrl: string) {
   mockCreatePortalSession.mockResolvedValue({ data: { url: portalUrl } });
 }
 
-describe('CoachBillingScreen URL guard', () => {
-  it('validates portal URL with assertStripeUrl before opening browser', async () => {
+describe('CoachBillingScreen URL guard (real validator)', () => {
+  it('opens browser for a valid billing portal URL', async () => {
     setupHappy(
       'https://invoice.stripe.com/i/x',
       'https://billing.stripe.com/p/session_abc',
     );
-    mockAssertStripeUrl.mockImplementation(() => {});
-    // The screen always re-fires load() after the sheet closes regardless
-    // of result.type. Returning a 'locked' type sidesteps the reload branch
-    // entirely so the test boundary is deterministic.
+    // Returning a non-standard result type sidesteps the post-sheet reload
+    // branch so the test boundary is deterministic.
     mockOpenBrowserAsync.mockResolvedValueOnce({ type: 'locked' });
 
     const { findByLabelText } = render(
@@ -113,21 +118,15 @@ describe('CoachBillingScreen URL guard', () => {
     fireEvent.press(portalBtn);
 
     await waitFor(() => expect(mockOpenBrowserAsync).toHaveBeenCalled());
-    expect(mockAssertStripeUrl).toHaveBeenCalledWith(
-      'https://billing.stripe.com/p/session_abc',
-      expect.stringContaining('CoachBillingScreen'),
-    );
     expect(mockOpenBrowserAsync).toHaveBeenCalledWith(
       'https://billing.stripe.com/p/session_abc',
       expect.any(Object),
     );
+    expect(alertSpy).not.toHaveBeenCalled();
   });
 
-  it('rejects a non-Stripe portal URL and does NOT open the browser', async () => {
+  it('blocks a non-Stripe portal URL, shows user-visible alert, does NOT open browser', async () => {
     setupHappy('https://invoice.stripe.com/i/x', 'https://evil.example.com/phish');
-    mockAssertStripeUrl.mockImplementation((url: string) => {
-      if (url.includes('evil')) throw new Error('STRIPE_URL_REJECTED');
-    });
 
     const { findByLabelText } = render(
       <CoachBillingScreen navigation={{ goBack: jest.fn() } as never} />,
@@ -138,16 +137,18 @@ describe('CoachBillingScreen URL guard', () => {
     });
 
     await waitFor(() => expect(mockCreatePortalSession).toHaveBeenCalled());
-    expect(mockAssertStripeUrl).toHaveBeenCalled();
     expect(mockOpenBrowserAsync).not.toHaveBeenCalled();
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Billing portal unavailable',
+      expect.stringMatching(/invalid/i),
+    );
   });
 
-  it('validates invoice URL with assertStripeUrl before opening browser', async () => {
+  it('opens browser for a valid invoice.stripe.com URL (round-3 regression)', async () => {
     setupHappy(
       'https://invoice.stripe.com/i/abc',
       'https://billing.stripe.com/p/session_abc',
     );
-    mockAssertStripeUrl.mockImplementation(() => {});
 
     const { findByLabelText } = render(
       <CoachBillingScreen navigation={{ goBack: jest.fn() } as never} />,
@@ -158,21 +159,37 @@ describe('CoachBillingScreen URL guard', () => {
       fireEvent.press(invoiceRow);
     });
 
-    expect(mockAssertStripeUrl).toHaveBeenCalledWith(
-      'https://invoice.stripe.com/i/abc',
-      expect.stringContaining('CoachBillingScreen'),
-    );
     expect(mockOpenBrowserAsync).toHaveBeenCalledWith(
       'https://invoice.stripe.com/i/abc',
       expect.any(Object),
     );
+    expect(alertSpy).not.toHaveBeenCalled();
   });
 
-  it('rejects a non-Stripe invoice URL and does NOT open the browser', async () => {
-    setupHappy('https://evil.example.com/inv', 'https://billing.stripe.com/p/x');
-    mockAssertStripeUrl.mockImplementation((url: string) => {
-      if (url.includes('evil')) throw new Error('STRIPE_URL_REJECTED');
+  it('opens browser for a valid pay.stripe.com invoice URL', async () => {
+    setupHappy(
+      'https://pay.stripe.com/invoice/acct_abc/test_abc',
+      'https://billing.stripe.com/p/session_abc',
+    );
+
+    const { findByLabelText } = render(
+      <CoachBillingScreen navigation={{ goBack: jest.fn() } as never} />,
+    );
+
+    const invoiceRow = await findByLabelText(/^Invoice /);
+    await act(async () => {
+      fireEvent.press(invoiceRow);
     });
+
+    expect(mockOpenBrowserAsync).toHaveBeenCalledWith(
+      'https://pay.stripe.com/invoice/acct_abc/test_abc',
+      expect.any(Object),
+    );
+    expect(alertSpy).not.toHaveBeenCalled();
+  });
+
+  it('blocks a non-Stripe invoice URL, shows user-visible alert, does NOT open browser', async () => {
+    setupHappy('https://evil.example.com/inv', 'https://billing.stripe.com/p/x');
 
     const { findByLabelText } = render(
       <CoachBillingScreen navigation={{ goBack: jest.fn() } as never} />,
@@ -182,7 +199,10 @@ describe('CoachBillingScreen URL guard', () => {
       fireEvent.press(invoiceRow);
     });
 
-    expect(mockAssertStripeUrl).toHaveBeenCalled();
     expect(mockOpenBrowserAsync).not.toHaveBeenCalled();
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Could not open invoice',
+      expect.stringMatching(/invalid/i),
+    );
   });
 });

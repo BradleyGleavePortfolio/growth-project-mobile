@@ -97,7 +97,11 @@ function rewriteHttpsToScheme(url: string): string {
 //   tgp://join/<code>
 //   https://app.trygrowthproject.com/join/<code>
 //   tgp://reset-password#access_token=...&refresh_token=...&type=recovery
-const linking: LinkingOptions<Record<string, object | undefined>> = {
+// Exported for behavioral testing (R26): tests drive real URLs through
+// `linking.getStateFromPath` and assert the resulting nav state, instead
+// of grepping source. Not used by app code directly — RootNavigator
+// passes `linking` to NavigationContainer below.
+export const linking: LinkingOptions<Record<string, object | undefined>> = {
   prefixes: ['tgp://', 'https://app.trygrowthproject.com'],
   getStateFromPath(path, options) {
     // Defense-in-depth: a tampered package share link should not be able to
@@ -106,8 +110,19 @@ const linking: LinkingOptions<Record<string, object | undefined>> = {
     // user lands on the default screen instead of an empty checkout view.
     // The screen-level guard remains as a fallback for in-app navigation.
     const pkgMatch = path.match(/^\/?p\/([^/?#]+)/i);
-    if (pkgMatch && !isValidPackageShareToken(decodeURIComponent(pkgMatch[1]))) {
-      return undefined;
+    if (pkgMatch) {
+      // decodeURIComponent throws URIError on malformed sequences like
+      // `%E0%A4%A`. Fail closed: any malformed external link is rejected
+      // rather than allowed to crash the linking resolver.
+      let decoded: string;
+      try {
+        decoded = decodeURIComponent(pkgMatch[1]);
+      } catch {
+        return undefined;
+      }
+      if (!isValidPackageShareToken(decoded)) {
+        return undefined;
+      }
     }
     return getStateFromPath(fragmentToQuery(path), options);
   },
