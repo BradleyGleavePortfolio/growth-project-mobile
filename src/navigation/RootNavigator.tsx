@@ -66,6 +66,7 @@ type AuthState =
 import { fragmentToQuery } from './deepLinkUtils';
 import { readUserCache, clearUserCache } from '../lib/userCache';
 import { EntitlementProvider } from '../entitlements/EntitlementProvider';
+import { isValidPackageShareToken } from '../utils/packageShare';
 
 // A-2 helper. Convert `https://app.trygrowthproject.com/<path>` to its
 // `tgp://<path>` equivalent so the post-signOut replay never escapes to
@@ -96,9 +97,33 @@ function rewriteHttpsToScheme(url: string): string {
 //   tgp://join/<code>
 //   https://app.trygrowthproject.com/join/<code>
 //   tgp://reset-password#access_token=...&refresh_token=...&type=recovery
-const linking: LinkingOptions<Record<string, object | undefined>> = {
+// Exported for behavioral testing (R26): tests drive real URLs through
+// `linking.getStateFromPath` and assert the resulting nav state, instead
+// of grepping source. Not used by app code directly — RootNavigator
+// passes `linking` to NavigationContainer below.
+export const linking: LinkingOptions<Record<string, object | undefined>> = {
   prefixes: ['tgp://', 'https://app.trygrowthproject.com'],
   getStateFromPath(path, options) {
+    // Defense-in-depth: a tampered package share link should not be able to
+    // resolve to PackageCheckoutScreen at all. We reject the route at the
+    // navigator level so React Navigation treats it as "no match" — the
+    // user lands on the default screen instead of an empty checkout view.
+    // The screen-level guard remains as a fallback for in-app navigation.
+    const pkgMatch = path.match(/^\/?p\/([^/?#]+)/i);
+    if (pkgMatch) {
+      // decodeURIComponent throws URIError on malformed sequences like
+      // `%E0%A4%A`. Fail closed: any malformed external link is rejected
+      // rather than allowed to crash the linking resolver.
+      let decoded: string;
+      try {
+        decoded = decodeURIComponent(pkgMatch[1]);
+      } catch {
+        return undefined;
+      }
+      if (!isValidPackageShareToken(decoded)) {
+        return undefined;
+      }
+    }
     return getStateFromPath(fragmentToQuery(path), options);
   },
   config: {
@@ -166,16 +191,28 @@ const linking: LinkingOptions<Record<string, object | undefined>> = {
             Log: 'log',
           } as Record<string, unknown>)
         : {}),
-      // MoreTab linking — combines screenshot-mode deep links (only mounted
-      // in screenshot harness) with the Stripe Checkout return route, which
-      // is reachable in real builds via tgp://checkout/{success,cancel}.
-      // Stripe redirects to:
-      //   tgp://checkout/success?session_id=cs_xxx   (paid)
-      //   tgp://checkout/cancel                       (canceled)
-      // The return screen confirms the session against the backend before
-      // showing a celebratory state.
+      // MoreTab linking — combines:
+      //   • PackageCheckout (`tgp://p/:token`, `https://app.trygrowthproject.com/p/:token`)
+      //     — universal-link entry for a coach's package share link. The
+      //     `parse` rejects malformed/oversized/path-like tokens so garbage
+      //     from a tampered link never reaches the screen or any API path
+      //     interpolation. PackageCheckoutScreen still validates at mount
+      //     as defense-in-depth.
+      //   • Screenshot-mode deep links (only mounted in screenshot harness).
+      //   • Stripe Checkout return route, reachable in real builds via
+      //     tgp://checkout/{success,cancel}. Stripe redirects to:
+      //       tgp://checkout/success?session_id=cs_xxx   (paid)
+      //       tgp://checkout/cancel                       (canceled)
+      //     The return screen confirms the session against the backend
+      //     before showing a celebratory state.
       MoreTab: {
         screens: {
+          PackageCheckout: {
+            path: 'p/:shareToken',
+            parse: {
+              shareToken: (v: string) => (isValidPackageShareToken(v) ? v : ''),
+            },
+          },
           ...(isScreenshotMode()
             ? {
                 Plan: 'plan',

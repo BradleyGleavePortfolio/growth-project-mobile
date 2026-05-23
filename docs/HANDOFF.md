@@ -172,13 +172,18 @@ Required Supabase config: redirect URI `tgp://auth/callback` must be allowlisted
 
 ### 5.1 Supported shapes
 
-`src/utils/deepLink.ts` is the canonical parser:
+`src/utils/deepLink.ts` is the canonical parser for invite codes:
 
 - `tgp://join/<code>`
 - `tgp://join/<code>?ref=<source>`
 - `https://app.trygrowthproject.com/join/<code>`
 - `https://app.trygrowthproject.com/join` (no code, manual entry)
 - `https://app.trygrowthproject.com/join/` (trailing slash, no code)
+
+Coach package share links use a separate shape; `src/utils/packageShare.ts` builds them and `RootNavigator` routes them into the client `PackageCheckout` screen:
+
+- `tgp://p/<shareToken>`
+- `https://app.trygrowthproject.com/p/<shareToken>`
 
 Anything else returns `null`. The parser deliberately does not throw on malformed input; a `null` result means "let the navigator handle it".
 
@@ -202,6 +207,22 @@ These must stay in sync with `app.json` intent filters and the linking config in
 Templates: `docs/well-known/assetlinks.json` and `docs/well-known/apple-app-site-association`. The fingerprint placeholder in `assetlinks.json` is `REPLACE_WITH_PLAY_APP_SIGNING_SHA256_FINGERPRINT`. Replace it on the marketing site before promoting a build that depends on autoverified App Links.
 
 QA matrix: `docs/INVITE_DEEPLINK_QA.md`. Automated harness: `scripts/invite-qa.sh` (runs against the real prod backend + marketing site, no device required).
+
+## 5.4 Payments surface (coach + client)
+
+Coach-facing screens live under `src/screens/coach/payments/` and the client-facing checkout under `src/screens/client/PackageCheckoutScreen.tsx`. Typed API clients sit in `src/api/connectApi.ts` and `src/api/packagesApi.ts`.
+
+| Screen | Backend route | Notes |
+| --- | --- | --- |
+| `CoachConnectScreen` | `GET / POST /v1/connect/accounts/*` (real-or-flagged) | Renders a `CONNECT_NOT_CONFIGURED` empty state when Stripe Connect is not provisioned for the environment. Otherwise opens the Stripe Express onboarding link / dashboard in `expo-web-browser`. |
+| `CoachPackagesListScreen` | `GET /v1/coach/packages` | 404 → "Packages coming soon" empty state with `PACKAGES_NOT_CONFIGURED` surfaced verbatim. Otherwise lists packages with active/archived state. |
+| `CoachPackageEditScreen` | `POST /v1/coach/packages`, `PATCH /v1/coach/packages/:id`, `POST .../archive` | Single screen for create + edit + archive + share. Share uses `buildPackageShareUrl()` to build the universal-link form. |
+| `CoachPackageSubscribersScreen` | `GET /v1/coach/packages/:id/subscribers` | MRR + per-subscriber state (`active`, `past_due`, `canceled`, `trialing`). |
+| `CoachEarningsScreen` | `GET /v1/coach/earnings` | Net pending payout + month-to-date + lifetime + per-package breakdown. |
+| `CoachBillingScreen` (existing) | `GET /coach/billing/status` + `GET /v1/coach/me/billing` | Compact pill from the mobile route + invoice list from the BFF. Portal session via `POST /coach/billing/portal-session`. |
+| `PackageCheckoutScreen` (client) | `GET /v1/packages/:shareToken`, `POST /v1/packages/:shareToken/checkout` | Stripe Checkout in `expo-web-browser` — managed-workflow safe. Response shape leaves room for a future PaymentSheet path. |
+
+Real-or-flagged contract: every screen renders an actionable error state for `CONNECT_NOT_CONFIGURED`, `PACKAGES_NOT_CONFIGURED`, `STRIPE_NOT_CONFIGURED`, and `CONNECT_ONBOARDING_INCOMPLETE` rather than synthesising a fake success path. No screen claims a purchase has succeeded; that is the webhook's job.
 
 ## 6. AI context contract
 

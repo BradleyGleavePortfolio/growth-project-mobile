@@ -64,6 +64,15 @@
               "scheme": "https",
               "host": "app.trygrowthproject.com",
               "pathPrefix": "/reset-password"
+            },
+            {
+              "scheme": "tgp",
+              "host": "p"
+            },
+            {
+              "scheme": "https",
+              "host": "app.trygrowthproject.com",
+              "pathPrefix": "/p"
             }
           ],
           "category": [

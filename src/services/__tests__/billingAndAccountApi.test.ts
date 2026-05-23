@@ -47,19 +47,25 @@ describe('coachBillingApi', () => {
     expect(axiosMock.__instance.get).toHaveBeenCalledWith('/coach/billing/status');
   });
 
-  it('createPortalSession with no return path posts an empty body', async () => {
+  it('createPortalSession with no return path posts an empty body + idem header', async () => {
     await coachBillingApi.createPortalSession();
     expect(axiosMock.__instance.post).toHaveBeenCalledWith(
       '/coach/billing/portal-session',
       {},
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'Idempotency-Key': expect.any(String) }),
+      }),
     );
   });
 
-  it('createPortalSession forwards return_path when provided', async () => {
+  it('createPortalSession forwards return_path when provided + idem header', async () => {
     await coachBillingApi.createPortalSession('/coach/settings');
     expect(axiosMock.__instance.post).toHaveBeenCalledWith(
       '/coach/billing/portal-session',
       { return_path: '/coach/settings' },
+      expect.objectContaining({
+        headers: expect.objectContaining({ 'Idempotency-Key': expect.any(String) }),
+      }),
     );
   });
 });

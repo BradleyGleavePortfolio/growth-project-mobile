@@ -17,6 +17,18 @@ import ClientMessagesScreen from '../screens/coach/ClientMessagesScreen';
 import RiskBoardScreen from '../screens/coach/RiskBoardScreen';
 import ClientRiskDetailScreen from '../screens/coach/ClientRiskDetailScreen';
 import CoachBillingScreen from '../screens/coach/CoachBillingScreen';
+// Payments — coach Stripe Connect onboarding/dashboard, packages CRUD,
+// per-package subscribers, and net earnings. All wired to real backend
+// endpoints; surfaces a config-required state when backend modules aren't
+// deployed in the environment.
+import CoachConnectScreen from '../screens/coach/payments/CoachConnectScreen';
+import CoachPackagesListScreen from '../screens/coach/payments/CoachPackagesListScreen';
+import CoachPackageEditScreen from '../screens/coach/payments/CoachPackageEditScreen';
+import CoachPackageSubscribersScreen from '../screens/coach/payments/CoachPackageSubscribersScreen';
+// NOTE: payments/CoachEarningsScreen exists on disk (from feat branch) but
+// is intentionally not imported — the main `CoachEarningsScreen` (imported
+// below from `../screens/coach/CoachEarningsScreen`) is the production
+// surface for the `CoachEarnings` route.
 import BloodworkReviewQueueScreen from '../screens/coach/BloodworkReviewQueueScreen';
 import TrustCenterScreen from '../screens/TrustCenterScreen';
 // Wave 11 — runtime scaffolding. The screen registrations below only mount
@@ -168,6 +180,11 @@ export type SettingsStackParamList = {
   CoachTeamProfile: undefined;
   /** Payments — package CRUD (backend PR #215). */
   CoachPackages: undefined;
+  // Payments — Stripe Connect + coach package marketplace.
+  CoachConnect: undefined;
+  CoachPackagesList: undefined;
+  CoachPackageEdit: { packageId: string | null };
+  CoachPackageSubscribers: { packageId: string; title: string };
   /** Payments — earnings, payout readiness, reconciliation, refunds (backend PR #216). */
   CoachEarnings: undefined;
   /** iMessage-grade DM — manage blocked users from coach Settings. */
@@ -368,6 +385,14 @@ function SettingsStackNavigator() {
       <SettingsStack.Screen
         name="CoachPackages"
         component={CoachPackagesScreen}
+      />
+      {/* Payments — Connect, packages, subscribers, earnings (this branch). */}
+      <SettingsStack.Screen name="CoachConnect" component={CoachConnectScreen} />
+      <SettingsStack.Screen name="CoachPackagesList" component={CoachPackagesListScreen} />
+      <SettingsStack.Screen name="CoachPackageEdit" component={CoachPackageEditScreen} />
+      <SettingsStack.Screen
+        name="CoachPackageSubscribers"
+        component={CoachPackageSubscribersScreen}
       />
       {/* Payments — earnings, payout readiness, reconciliation, refunds (backend PR #216). */}
       <SettingsStack.Screen

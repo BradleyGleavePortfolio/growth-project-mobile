@@ -13,11 +13,12 @@ import { SkeletonList } from '../../ui/skeletons/Skeleton';
 import { Ionicons } from '@expo/vector-icons';
 import * as WebBrowser from 'expo-web-browser';
 
-import { coachBillingApi, CoachBillingStatus } from '../../services/api';
+import { coachBillingApi, CoachBillingStatus, CoachInvoice } from '../../services/api';
 import { mediumTap } from '../../utils/haptics';
 import { track } from '../../lib/analytics';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage, errorStatus } from '../../types/common';
+import { assertStripeUrl } from '../../utils/stripeUrlValidator';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 
 interface Props {
@@ -71,6 +72,7 @@ export default function CoachBillingScreen({ navigation }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const [status, setStatus] = useState<CoachBillingStatus | null>(null);
+  const [invoices, setInvoices] = useState<CoachInvoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [portalBusy, setPortalBusy] = useState(false);
@@ -79,18 +81,35 @@ export default function CoachBillingScreen({ navigation }: Props) {
   const load = useCallback(async () => {
     setError('');
     try {
-      const res = await coachBillingApi.getStatus();
-      setStatus(res.data ?? null);
-    } catch (err) {
-      const code = errorStatus(err);
-      if (code === 404) {
-        // Backend has not deployed billing yet — render an explicit, accurate
-        // empty state instead of a vague spinner.
-        setStatus({ state: 'none' });
+      // Compact pill from /coach/billing/status. Invoice list from the
+      // BFF /v1/coach/me/billing route. We fire both in parallel — the pill
+      // is what blocks the loading spinner; invoices are best-effort and
+      // their absence is non-fatal (some envs only deploy the compact
+      // status route).
+      const [statusRes, fullRes] = await Promise.allSettled([
+        coachBillingApi.getStatus(),
+        coachBillingApi.getFull(),
+      ]);
+      if (statusRes.status === 'fulfilled') {
+        setStatus(statusRes.value.data ?? null);
       } else {
-        setError(
-          errorMessage(err, 'Could not load billing status. Check your connection and try again.'),
-        );
+        const code = errorStatus(statusRes.reason);
+        if (code === 404) {
+          setStatus({ state: 'none' });
+        } else {
+          setError(
+            errorMessage(
+              statusRes.reason,
+              'Could not load billing status. Check your connection and try again.',
+            ),
+          );
+        }
+      }
+      if (fullRes.status === 'fulfilled') {
+        setInvoices(fullRes.value.data?.invoices ?? []);
+      } else {
+        // Silent: invoice list is a nice-to-have. Keep the pill visible.
+        setInvoices([]);
       }
     } finally {
       setLoading(false);
@@ -108,6 +127,31 @@ export default function CoachBillingScreen({ navigation }: Props) {
     setRefreshing(false);
   }, [load]);
 
+  const handleOpenInvoice = useCallback(async (inv: CoachInvoice) => {
+    const url = inv.hosted_invoice_url || inv.invoice_pdf;
+    if (!url) return;
+    mediumTap();
+    try {
+      assertStripeUrl(url, 'CoachBillingScreen.invoice');
+    } catch {
+      Alert.alert(
+        'Could not open invoice',
+        'Billing link is invalid. Please try again.',
+      );
+      return;
+    }
+    try {
+      await WebBrowser.openBrowserAsync(url, {
+        presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
+      });
+    } catch (err) {
+      Alert.alert(
+        'Could not open invoice',
+        errorMessage(err, 'Please try again in a moment.'),
+      );
+    }
+  }, []);
+
   const handleOpenPortal = useCallback(async () => {
     mediumTap();
     setPortalBusy(true);
@@ -115,6 +159,15 @@ export default function CoachBillingScreen({ navigation }: Props) {
       const res = await coachBillingApi.createPortalSession();
       const url = res.data?.url;
       if (!url) throw new Error('No portal URL returned');
+      try {
+        assertStripeUrl(url, 'CoachBillingScreen.portal');
+      } catch {
+        Alert.alert(
+          'Billing portal unavailable',
+          'Billing link is invalid. Please try again.',
+        );
+        return;
+      }
       track('coach_billing_portal_opened');
       // Use openAuthSessionAsync so the sheet closes the moment the
       // portal redirects back to the app's tgp:// return URL. The old
@@ -258,6 +311,37 @@ export default function CoachBillingScreen({ navigation }: Props) {
           Billing is handled by our payment provider in a secure browser session. Card
           details never touch the app.
         </Text>
+
+        {invoices.length > 0 ? (
+          <View style={styles.invoicesSection}>
+            <Text style={styles.invoicesTitle}>Invoices</Text>
+            {invoices.slice(0, 12).map((inv) => (
+              <TouchableOpacity
+                key={inv.id}
+                style={styles.invoiceRow}
+                onPress={() => handleOpenInvoice(inv)}
+                disabled={!inv.hosted_invoice_url && !inv.invoice_pdf}
+                accessibilityRole="button"
+                accessibilityLabel={`Invoice ${formatDate(inv.created_at) ?? ''}, ${inv.status}`}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.invoiceDate}>
+                    {formatDate(inv.created_at) ?? 'Unknown date'}
+                  </Text>
+                  <Text style={styles.invoiceMeta}>
+                    {(inv.currency || 'usd').toUpperCase()}{' '}
+                    {((inv.amount_paid_cents || inv.amount_due_cents || 0) / 100).toFixed(2)}
+                    {' · '}
+                    {inv.status}
+                  </Text>
+                </View>
+                {inv.hosted_invoice_url || inv.invoice_pdf ? (
+                  <Ionicons name="open-outline" size={16} color={colors.textSecondary} />
+                ) : null}
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : null}
       </>
     );
   };
@@ -381,5 +465,26 @@ const makeStyles = (colors: ThemeColors) =>
     textAlign: 'center',
     lineHeight: 18,
   },
-
+  invoicesSection: {
+    marginTop: 28,
+  },
+  invoicesTitle: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 10,
+  },
+  invoiceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: 4,
+    padding: 14,
+    marginBottom: 6,
+    gap: 8,
+  },
+  invoiceDate: { fontSize: 14, color: colors.textPrimary, fontWeight: '500' },
+  invoiceMeta: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
   });
