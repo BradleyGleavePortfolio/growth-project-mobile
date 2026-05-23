@@ -32,6 +32,12 @@ const ASYNC_SIGN_OUT_KEYS = [
   'lean_onboarding_synced',
   'analytics_onboarding_completed_fired',
   'pending_invite_code',
+  // Pre-R15 global active workout session. Upgrading users may still have
+  // a payload at this key from before the per-user namespace landed; if it
+  // survives signOut, loadActiveWorkoutSession() on the next user will
+  // migrate it into their namespace and surface the previous user's
+  // working set. See audit #2 / R15.
+  '@activeWorkoutSession/v1',
 ];
 
 // Prefixes whose every matching AsyncStorage key should be wiped on signOut.
@@ -41,6 +47,12 @@ const ASYNC_SIGN_OUT_KEYS = [
 const ASYNC_SIGN_OUT_PREFIXES = [
   'pending_food_logs_',
   'gp_coach_bio_',
+  // Per-user in-progress workout sessions (R15). The active workout
+  // persistence layer keys entries as `active_workout_session:<userId>`;
+  // sweeping the prefix on signOut prevents a second user on the same
+  // device from inheriting the previous user's session and seeing a
+  // "Resume?" prompt with someone else's working state.
+  'active_workout_session:',
 ];
 
 // Belt-and-braces wipe for the cacheStorage MMKV namespace. clearAllStorage()
