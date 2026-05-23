@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -280,16 +280,24 @@ export default function PlanScreen() {
     }
   }, [plans]);
 
+  // Hold the latest `loadPlans` in a ref so callbacks with stable `[]` deps
+  // always call the freshest closure. Without this, `useFocusEffect` below
+  // would capture the very first `loadPlans` (where `plans === null`) and
+  // on every later focus the `if (plans === null) setPlans([])` branch could
+  // blank prior data after a dual-source failure. R31/audit-P1 stale-closure.
+  const loadPlansRef = useRef(loadPlans);
   useEffect(() => {
-    loadPlans();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    loadPlansRef.current = loadPlans;
+  }, [loadPlans]);
+
+  useEffect(() => {
+    loadPlansRef.current();
   }, []);
 
   // Refetch on focus so coach-side changes show up without a full reload.
   useFocusEffect(
     useCallback(() => {
-      loadPlans();
-      // eslint-disable-next-line react-hooks/exhaustive-deps
+      loadPlansRef.current();
     }, []),
   );
 

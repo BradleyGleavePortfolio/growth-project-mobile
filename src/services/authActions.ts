@@ -24,6 +24,8 @@ const ASYNC_SIGN_OUT_KEYS = [
   'user_data',
   'needs_role_selection',
   'onboarding_complete',
+  // Legacy global macro cache (no user suffix). Per-user macro_targets:<id>
+  // keys are wiped via PER_USER_KEY_PREFIXES with the exact signing-out id.
   'macro_targets',
   'pending_email',
   'day_one_completed',
@@ -55,6 +57,15 @@ const ASYNC_SIGN_OUT_PREFIXES = [
   'active_workout_session:',
 ];
 
+// Per-user AsyncStorage key prefixes for nutrition/fasting state. R15 requires
+// signOut to wipe ONLY the signing-out user's keys; each prefix is concatenated
+// with the resolved userId at sweep time to form an EXACT key (no getAllKeys
+// scan), so bystander users on a shared device keep their data.
+const PER_USER_KEY_PREFIXES = [
+  'fasting:scheduled_notification_id:', // FastingScreen — scheduled push id
+  'macro_targets:', // useMacroTargets — per-user macro cache
+];
+
 // Belt-and-braces wipe for the cacheStorage MMKV namespace. clearAllStorage()
 // (called below) already drops the entire cache namespace at runtime, but in
 // the Expo Go / Jest AsyncStorage shim the cache lives behind `cache:` keys in
@@ -71,6 +82,7 @@ const CACHE_SIGN_OUT_SUBPREFIXES = [
 // Exported for any caller that wants the full list of session keys (does not
 // include the prefix-matched keys, which are enumerated at signOut time).
 export const SIGN_OUT_KEYS = [...SECURE_SIGN_OUT_KEYS, ...ASYNC_SIGN_OUT_KEYS];
+export const SIGN_OUT_PREFIXES = PER_USER_KEY_PREFIXES;
 
 async function collectPrefixedKeys(): Promise<string[]> {
   try {
@@ -93,14 +105,40 @@ async function collectPrefixedKeys(): Promise<string[]> {
   }
 }
 
-export async function signOut(): Promise<void> {
+/**
+ * Resolve the signing-out user's id. Falls back to the cached user object
+ * (MMKV `auth.user_data`, legacy `user_data` in AsyncStorage) when the caller
+ * doesn't pass an explicit id.
+ */
+async function resolveSigningOutUserId(explicit?: string | null): Promise<string | null> {
+  if (explicit) return explicit;
+  try {
+    const cached = readUserCacheSync();
+    if (cached?.id) return cached.id;
+  } catch {
+    // Fall through to AsyncStorage legacy read.
+  }
+  try {
+    const raw = await AsyncStorage.getItem('user_data');
+    if (raw) {
+      const parsed = JSON.parse(raw) as { id?: string };
+      if (parsed?.id) return parsed.id;
+    }
+  } catch {
+    // Non-fatal: per-user wipe will be skipped if we can't resolve the id.
+  }
+  return null;
+}
+
+export async function signOut(userId?: string | null): Promise<void> {
   // Clear all auth + session state and notify the root navigator.
   // We surface failures via console.error instead of Alert because a sign-out
   // button that appears to do nothing is worse than one that logs a warning.
 
-  // Capture the signing-out user BEFORE we wipe state so we can scope the
-  // offline workout-log delete to just their rows.
-  const signingOutUserId = readUserCacheSync()?.id;
+  // R15: only touch the signing-out user's per-user keys. If we can't resolve
+  // a userId, we skip the per-user wipe rather than fall back to a global
+  // sweep that would clobber bystander users on a shared device.
+  const signingOutUserId = await resolveSigningOutUserId(userId);
 
   // Best-effort: clear the push token on the backend before wiping local auth
   // state so the PATCH /users/me/push-token request can still attach a JWT.
@@ -130,12 +168,35 @@ export async function signOut(): Promise<void> {
     }
   }
 
+  // Best-effort: cancel the signing-out user's fasting notification (if any)
+  // so a "Fast Complete" push can't fire hours after they log out. Read the
+  // id from the exact per-user key (no getAllKeys scan) before the
+  // multiRemove below clears it.
+  if (signingOutUserId) {
+    try {
+      const fastingNotifKey = `fasting:scheduled_notification_id:${signingOutUserId}`;
+      const storedId = await AsyncStorage.getItem(fastingNotifKey);
+      if (storedId) {
+        try {
+          await Notifications.cancelScheduledNotificationAsync(storedId);
+        } catch {
+          // Orphan push is annoying, not broken. Don't block sign-out.
+        }
+      }
+    } catch (err) {
+      logger.error('AuthActions', 'signOut: cancel fasting notif failed', err);
+    }
+  }
+
   const prefixedKeys = await collectPrefixedKeys();
+  const perUserKeys = signingOutUserId
+    ? PER_USER_KEY_PREFIXES.map((p) => `${p}${signingOutUserId}`)
+    : [];
 
   try {
     await Promise.all([
       ...SECURE_SIGN_OUT_KEYS.map((k) => secureStorage.removeItem(k)),
-      AsyncStorage.multiRemove([...ASYNC_SIGN_OUT_KEYS, ...prefixedKeys]),
+      AsyncStorage.multiRemove([...ASYNC_SIGN_OUT_KEYS, ...prefixedKeys, ...perUserKeys]),
       clearAllStorage(),
     ]);
   } catch (err) {

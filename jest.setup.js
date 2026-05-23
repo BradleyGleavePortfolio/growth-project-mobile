@@ -47,6 +47,8 @@ jest.mock('expo-crypto', () => {
 // that need richer behaviour can call jest.requireMock to access the mocks.
 jest.mock('expo-notifications', () => ({
   unregisterForNotificationsAsync: jest.fn(async () => undefined),
+  cancelScheduledNotificationAsync: jest.fn(async () => undefined),
+  scheduleNotificationAsync: jest.fn(async () => 'mock-notif-id'),
   setNotificationHandler: jest.fn(),
   setNotificationChannelAsync: jest.fn(async () => undefined),
   getPermissionsAsync: jest.fn(async () => ({ status: 'undetermined' })),

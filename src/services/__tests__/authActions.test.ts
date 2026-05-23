@@ -33,12 +33,26 @@ const syncEngineMock = jest.requireMock(
 const mmkvMock = jest.requireMock('../../storage/mmkv') as {
   clearAllStorage: jest.Mock;
 };
+const userCacheMock = jest.requireMock('../../lib/userCache') as {
+  readUserCacheSync: jest.Mock;
+};
+
+const SIGNING_OUT_USER = 'user-123';
+const BYSTANDER_USER = 'user-456';
 
 describe('signOut', () => {
   beforeEach(async () => {
     await AsyncStorage.clear();
     syncEngineMock.deleteWorkoutLogsForUser.mockClear();
     mmkvMock.clearAllStorage.mockClear();
+    userCacheMock.readUserCacheSync.mockReset();
+    userCacheMock.readUserCacheSync.mockReturnValue({ id: 'user-A' });
+    const Notifications = jest.requireMock('expo-notifications') as {
+      unregisterForNotificationsAsync: jest.Mock;
+      cancelScheduledNotificationAsync: jest.Mock;
+    };
+    Notifications.unregisterForNotificationsAsync.mockClear();
+    Notifications.cancelScheduledNotificationAsync.mockClear();
   });
 
   it('clears all auth + session keys and fires logout event exactly once', async () => {
@@ -166,5 +180,144 @@ describe('signOut', () => {
     expect(Notifications.unregisterForNotificationsAsync).toHaveBeenCalledTimes(
       1,
     );
+  });
+
+  it('wipes ONLY the signing-out user fasting notification id and leaves bystander user keys intact', async () => {
+    // R15: signOut must only touch the signing-out user's per-user keys.
+    // A different user's `fasting:scheduled_notification_id:<otherUser>` must
+    // survive — otherwise a shared device leaks state between accounts.
+    await AsyncStorage.setItem(
+      `fasting:scheduled_notification_id:${SIGNING_OUT_USER}`,
+      'notif-abc',
+    );
+    await AsyncStorage.setItem(
+      `fasting:scheduled_notification_id:${BYSTANDER_USER}`,
+      'notif-def',
+    );
+    await AsyncStorage.setItem(
+      `fasting:something_else:${SIGNING_OUT_USER}`,
+      'should-stay',
+    );
+
+    await signOut(SIGNING_OUT_USER);
+
+    expect(
+      await AsyncStorage.getItem(`fasting:scheduled_notification_id:${SIGNING_OUT_USER}`),
+    ).toBeNull();
+    // The bystander user's notification id MUST survive — this is the R15
+    // cross-user isolation assertion.
+    expect(
+      await AsyncStorage.getItem(`fasting:scheduled_notification_id:${BYSTANDER_USER}`),
+    ).toBe('notif-def');
+    expect(
+      await AsyncStorage.getItem(`fasting:something_else:${SIGNING_OUT_USER}`),
+    ).toBe('should-stay');
+
+    const Notifications = jest.requireMock('expo-notifications') as {
+      cancelScheduledNotificationAsync: jest.Mock;
+    };
+    // Only the signing-out user's stored id is passed to the notifications API.
+    expect(Notifications.cancelScheduledNotificationAsync).toHaveBeenCalledWith('notif-abc');
+    expect(Notifications.cancelScheduledNotificationAsync).not.toHaveBeenCalledWith('notif-def');
+    expect(Notifications.cancelScheduledNotificationAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('wipes ONLY the signing-out user macro target cache and leaves bystander user keys intact', async () => {
+    // useMacroTargets writes macro_targets:${userId}. The signing-out user's
+    // cache must be wiped, but a bystander user's macros on the same device
+    // must remain so they aren't logged into a cleared profile next launch.
+    await AsyncStorage.setItem(
+      `macro_targets:${SIGNING_OUT_USER}`,
+      JSON.stringify({ kcal: 2200 }),
+    );
+    await AsyncStorage.setItem(
+      `macro_targets:${BYSTANDER_USER}`,
+      JSON.stringify({ kcal: 1800 }),
+    );
+    await AsyncStorage.setItem(
+      `macro_target_other:${SIGNING_OUT_USER}`,
+      'should-stay',
+    );
+
+    await signOut(SIGNING_OUT_USER);
+
+    expect(await AsyncStorage.getItem(`macro_targets:${SIGNING_OUT_USER}`)).toBeNull();
+    // The bystander user's macros MUST survive.
+    expect(await AsyncStorage.getItem(`macro_targets:${BYSTANDER_USER}`)).toBe(
+      JSON.stringify({ kcal: 1800 }),
+    );
+    expect(await AsyncStorage.getItem(`macro_target_other:${SIGNING_OUT_USER}`)).toBe(
+      'should-stay',
+    );
+  });
+
+  it('resolves the signing-out userId from cached user when no argument is passed', async () => {
+    // Callers like SettingsScreen invoke signOut() with no arguments. The
+    // helper must still scope correctly by falling back to the cached user.
+    userCacheMock.readUserCacheSync.mockReturnValue({ id: SIGNING_OUT_USER });
+    await AsyncStorage.setItem(
+      `fasting:scheduled_notification_id:${SIGNING_OUT_USER}`,
+      'notif-abc',
+    );
+    await AsyncStorage.setItem(
+      `fasting:scheduled_notification_id:${BYSTANDER_USER}`,
+      'notif-def',
+    );
+    await AsyncStorage.setItem(
+      `macro_targets:${SIGNING_OUT_USER}`,
+      JSON.stringify({ kcal: 2200 }),
+    );
+    await AsyncStorage.setItem(
+      `macro_targets:${BYSTANDER_USER}`,
+      JSON.stringify({ kcal: 1800 }),
+    );
+
+    await signOut();
+
+    expect(
+      await AsyncStorage.getItem(`fasting:scheduled_notification_id:${SIGNING_OUT_USER}`),
+    ).toBeNull();
+    expect(await AsyncStorage.getItem(`macro_targets:${SIGNING_OUT_USER}`)).toBeNull();
+    expect(
+      await AsyncStorage.getItem(`fasting:scheduled_notification_id:${BYSTANDER_USER}`),
+    ).toBe('notif-def');
+    expect(await AsyncStorage.getItem(`macro_targets:${BYSTANDER_USER}`)).toBe(
+      JSON.stringify({ kcal: 1800 }),
+    );
+
+    const Notifications = jest.requireMock('expo-notifications') as {
+      cancelScheduledNotificationAsync: jest.Mock;
+    };
+    expect(Notifications.cancelScheduledNotificationAsync).toHaveBeenCalledWith('notif-abc');
+    expect(Notifications.cancelScheduledNotificationAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips per-user wipe when no userId is resolvable (no cache, no argument)', async () => {
+    // If there's no signing-out user (no cache, no arg), the helper must not
+    // fall back to a global prefix sweep — bystander users' per-user keys
+    // (for these prefixes) must survive.
+    userCacheMock.readUserCacheSync.mockReturnValue(null);
+    await AsyncStorage.setItem(
+      `fasting:scheduled_notification_id:${BYSTANDER_USER}`,
+      'notif-def',
+    );
+    await AsyncStorage.setItem(
+      `macro_targets:${BYSTANDER_USER}`,
+      JSON.stringify({ kcal: 1800 }),
+    );
+
+    await signOut();
+
+    expect(
+      await AsyncStorage.getItem(`fasting:scheduled_notification_id:${BYSTANDER_USER}`),
+    ).toBe('notif-def');
+    expect(await AsyncStorage.getItem(`macro_targets:${BYSTANDER_USER}`)).toBe(
+      JSON.stringify({ kcal: 1800 }),
+    );
+
+    const Notifications = jest.requireMock('expo-notifications') as {
+      cancelScheduledNotificationAsync: jest.Mock;
+    };
+    expect(Notifications.cancelScheduledNotificationAsync).not.toHaveBeenCalled();
   });
 });
