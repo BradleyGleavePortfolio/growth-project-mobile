@@ -49,6 +49,7 @@ export default function ContactView(): React.ReactElement {
   const blockStore = useBlockedUsersStore();
   const currentUser = useCurrentUser();
   const isBlocked = blockStore.isBlocked(contactId);
+  const isSelf = !!currentUser?.id && currentUser.id === contactId;
   const [muted, setMuted] = useState(false);
   const [blocking, setBlocking] = useState(false);
 
@@ -192,14 +193,15 @@ export default function ContactView(): React.ReactElement {
           ) : (
             <Pressable
               onPress={handleBlock}
-              disabled={blocking}
+              disabled={blocking || isSelf}
               style={({ pressed }) => [
                 styles.dangerBtn,
-                pressed && styles.dangerBtnPressed,
-                blocking && styles.dangerBtnDisabled,
+                pressed && !isSelf && styles.dangerBtnPressed,
+                (blocking || isSelf) && styles.dangerBtnDisabled,
               ]}
               accessibilityRole="button"
               accessibilityLabel="Block user"
+              accessibilityState={{ disabled: blocking || isSelf }}
             >
               {blocking ? (
                 <ActivityIndicator size="small" color={colors.error} />
@@ -212,7 +214,9 @@ export default function ContactView(): React.ReactElement {
             </Pressable>
           )}
           <Text style={styles.dangerHelp}>
-            Blocking is reversible from Settings → Blocked Users.
+            {isSelf
+              ? 'You cannot block yourself.'
+              : 'Blocking is reversible from Settings → Blocked Users.'}
           </Text>
         </View>
       </ScrollView>

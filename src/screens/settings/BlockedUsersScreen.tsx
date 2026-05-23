@@ -3,7 +3,7 @@
  *
  * Apple 1.2 / Series D+ requirement: users must be able to view and undo their
  * block actions. Renders the local zustand store; each row offers an Unblock
- * button that calls /users/{id}/unblock + removes the row from the store.
+ * button that calls DELETE /users/:id/block + removes the row from the store.
  */
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import {
@@ -30,6 +30,8 @@ export default function BlockedUsersScreen(): React.ReactElement {
   const currentUser = useCurrentUser();
   const [working, setWorking] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string>('');
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -39,33 +41,32 @@ export default function BlockedUsersScreen(): React.ReactElement {
         if (!cancelled) setLoading(false);
         return;
       }
+      setFetchError('');
       const s = useBlockedUsersStore.getState();
       if (!s.hydrated || s.userId !== uid) {
         await s.hydrate(uid);
       }
       try {
         const res = await messagesModerationApi.listBlocked();
-        const localIds = new Set(
-          useBlockedUsersStore.getState().blocked.map((b) => b.id),
-        );
-        for (const row of res.blocked) {
-          if (!localIds.has(row.blockedId)) {
-            await useBlockedUsersStore.getState().block({
-              id: row.blockedId,
-              displayName: row.displayName || 'Blocked user',
-              role: 'other',
-            });
-          }
-        }
+        if (cancelled) return;
+        // Preserve the server-provided blockedAt instead of stamping new Date().
+        await useBlockedUsersStore.getState().addFromServer(res.blocked);
       } catch {
-        // Non-fatal — local list still renders.
+        if (!cancelled) {
+          setFetchError("Couldn't load the latest block list. Pull to retry.");
+        }
       }
       if (!cancelled) setLoading(false);
     })();
     return () => {
       cancelled = true;
     };
-  }, [currentUser?.id]);
+  }, [currentUser?.id, refreshKey]);
+
+  const handleRetry = useCallback(() => {
+    setLoading(true);
+    setRefreshKey((k) => k + 1);
+  }, []);
 
   const handleUnblock = useCallback(
     (user: BlockedUser) => {
@@ -111,6 +112,24 @@ export default function BlockedUsersScreen(): React.ReactElement {
       {loading ? (
         <View style={styles.loadingWrap}>
           <ActivityIndicator size="small" color={colors.primary} />
+        </View>
+      ) : fetchError && store.blocked.length === 0 ? (
+        <View style={styles.empty}>
+          <Ionicons name="cloud-offline-outline" size={36} color={colors.textMuted} />
+          <Text style={styles.emptyTitle}>Couldn't load your block list</Text>
+          <Text style={styles.emptyBody}>{fetchError}</Text>
+          <Pressable
+            onPress={handleRetry}
+            style={({ pressed }) => [
+              styles.unblockBtn,
+              pressed && styles.unblockBtnPressed,
+              { marginTop: 12 },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading block list"
+          >
+            <Text style={styles.unblockText}>Retry</Text>
+          </Pressable>
         </View>
       ) : (
         <FlatList

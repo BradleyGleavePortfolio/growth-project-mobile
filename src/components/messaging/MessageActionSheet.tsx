@@ -21,6 +21,10 @@ export interface MessageActionSheetProps {
   onCopy: () => void;
   onReport: () => void;
   onClose: () => void;
+  /** When false, the Report action is hidden — used to suppress self-report
+   *  on the user's own messages (Apple 1.2 says only foreign content is
+   *  reportable). Defaults to true. */
+  canReport?: boolean;
 }
 
 export function MessageActionSheet({
@@ -30,18 +34,23 @@ export function MessageActionSheet({
   onCopy,
   onReport,
   onClose,
+  canReport = true,
 }: MessageActionSheetProps): React.ReactElement | null {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   useEffect(() => {
     if (!visible || Platform.OS !== 'ios') return;
-    const options = ['Reply', 'Copy', 'Report Message', 'Cancel'];
+    const options = canReport
+      ? ['Reply', 'Copy', 'Report Message', 'Cancel']
+      : ['Reply', 'Copy', 'Cancel'];
+    const cancelButtonIndex = canReport ? 3 : 2;
+    const destructiveButtonIndex = canReport ? 2 : undefined;
     ActionSheetIOS.showActionSheetWithOptions(
       {
         options,
-        cancelButtonIndex: 3,
-        destructiveButtonIndex: 2,
+        cancelButtonIndex,
+        destructiveButtonIndex,
         title: messagePreview ? truncate(messagePreview, 80) : undefined,
         userInterfaceStyle: 'light',
       },
@@ -49,7 +58,7 @@ export function MessageActionSheet({
         onClose();
         if (idx === 0) onReply();
         else if (idx === 1) onCopy();
-        else if (idx === 2) onReport();
+        else if (canReport && idx === 2) onReport();
       },
     );
     // The parent re-toggles `visible` to re-trigger the native sheet;
@@ -89,7 +98,9 @@ export function MessageActionSheet({
           ) : null}
           <ActionRow icon="return-up-back-outline" label="Reply" onPress={handleReply} styles={styles} color={colors.textPrimary} />
           <ActionRow icon="copy-outline" label="Copy" onPress={handleCopy} styles={styles} color={colors.textPrimary} />
-          <ActionRow icon="flag-outline" label="Report Message" onPress={handleReport} styles={styles} color={colors.error} destructive />
+          {canReport ? (
+            <ActionRow icon="flag-outline" label="Report Message" onPress={handleReport} styles={styles} color={colors.error} destructive />
+          ) : null}
           <Pressable onPress={onClose} style={styles.cancelRow} accessibilityRole="button">
             <Text style={styles.cancelText}>Cancel</Text>
           </Pressable>

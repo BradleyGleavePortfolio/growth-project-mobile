@@ -35,6 +35,14 @@ export interface BlockedUser {
   blockedAt: string;
 }
 
+/** Row shape returned from the server. Keeps backend field names so callers
+ *  hydrating from GET /users/blocks don't have to translate manually. */
+export interface ServerBlockedRow {
+  blockedId: string;
+  displayName: string;
+  blockedAt: string;
+}
+
 interface BlockedUsersState {
   blocked: BlockedUser[];
   hydrated: boolean;
@@ -42,6 +50,9 @@ interface BlockedUsersState {
   userId: string | null;
   hydrate: (userId: string) => Promise<void>;
   block: (user: Omit<BlockedUser, 'blockedAt'>) => Promise<void>;
+  /** Merge rows fetched from GET /users/blocks. Preserves the server-provided
+   *  blockedAt timestamp instead of stamping new Date() locally. */
+  addFromServer: (rows: ReadonlyArray<ServerBlockedRow>) => Promise<void>;
   unblock: (id: string) => Promise<void>;
   isBlocked: (id: string) => boolean;
   /** Wipe all in-memory state and the persisted entry for the active user. */
@@ -116,6 +127,33 @@ export const useBlockedUsersStore = create<BlockedUsersState>((set, get) => ({
     set((s) => {
       const without = s.blocked.filter((b) => b.id !== user.id);
       const next = [...without, { ...user, blockedAt: now }];
+      void persistList(uid, next);
+      return { blocked: next };
+    });
+  },
+
+  addFromServer: async (rows) => {
+    if (!rows.length) return;
+    const uid = get().userId;
+    set((s) => {
+      const byId = new Map<string, BlockedUser>();
+      s.blocked.forEach((b) => byId.set(b.id, b));
+      for (const row of rows) {
+        if (!row.blockedId) continue;
+        const existing = byId.get(row.blockedId);
+        byId.set(row.blockedId, {
+          id: row.blockedId,
+          displayName: row.displayName || existing?.displayName || 'Blocked user',
+          role: existing?.role ?? 'other',
+          // Preserve the server-provided timestamp verbatim. Only fall back
+          // to a local stamp when the server payload is missing/malformed.
+          blockedAt:
+            typeof row.blockedAt === 'string' && row.blockedAt.length > 0
+              ? row.blockedAt
+              : (existing?.blockedAt ?? new Date().toISOString()),
+        });
+      }
+      const next = Array.from(byId.values());
       void persistList(uid, next);
       return { blocked: next };
     });

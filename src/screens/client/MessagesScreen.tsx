@@ -23,6 +23,7 @@ import { cacheStorage } from '../../storage/mmkv';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorStatus, errorCode } from '../../types/common';
 import { useBlockedUsersStore, filterOutBlocked } from '../../store/blockedUsersStore';
+import { useBlockedUsersHydration } from '../../hooks/useBlockedUsersHydration';
 import { messagesModerationApi, ReportReason } from '../../api/messagesApi';
 import MessageBubble, { BubbleMessage } from '../../components/messaging/MessageBubble';
 import MessageActionSheet from '../../components/messaging/MessageActionSheet';
@@ -81,14 +82,10 @@ export default function MessagesScreen() {
 
   const PAGE_LIMIT = 100;
 
-  useEffect(() => {
-    const uid = currentUser?.id;
-    if (!uid) return;
-    const s = useBlockedUsersStore.getState();
-    if (!s.hydrated || s.userId !== uid) {
-      void s.hydrate(uid);
-    }
-  }, [currentUser?.id]);
+  // Hydrate the block store: local MMKV first (instant paint) then layer
+  // GET /users/blocks on top so blocks made on another device or after a
+  // cache wipe still filter the DM list before the user opens Settings.
+  useBlockedUsersHydration(currentUser?.id);
 
   useEffect(() => {
     if (!currentUser?.id) return;
@@ -569,6 +566,7 @@ export default function MessagesScreen() {
         onCopy={handleCopy}
         onReport={handleOpenReport}
         onClose={() => setActionTarget(null)}
+        canReport={!!actionTarget && actionTarget.sender_role !== 'client'}
       />
 
       <ReportMessageSheet
