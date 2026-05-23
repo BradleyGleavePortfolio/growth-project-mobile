@@ -78,6 +78,16 @@ class AsyncStorageShim {
     const ours = allKeys.filter((k) => k.startsWith(`${this.namespace}:`));
     if (ours.length) await AsyncStorage.multiRemove(ours);
   }
+
+  // Returns logical (un-namespaced) keys for this instance. Used by sign-out to
+  // enumerate user-scoped keys and delete them by matching `:${userId}` suffix.
+  async getAllKeys(): Promise<string[]> {
+    const allKeys = await AsyncStorage.getAllKeys();
+    const prefix = `${this.namespace}:`;
+    return allKeys
+      .filter((k) => k.startsWith(prefix))
+      .map((k) => k.slice(prefix.length));
+  }
 }
 
 // ─── MMKV wrapper ────────────────────────────────────────────────────────────
@@ -127,6 +137,14 @@ class MmkvStorage {
       }
     }
   }
+
+  async getAllKeys(): Promise<string[]> {
+    const allKeys: string[] = this.store.getAllKeys();
+    const prefix = `${this.namespace}:`;
+    return allKeys
+      .filter((k) => k.startsWith(prefix))
+      .map((k) => k.slice(prefix.length));
+  }
 }
 
 // ─── Public typed interface ──────────────────────────────────────────────────
@@ -137,6 +155,7 @@ export interface StorageInstance {
   set(key: string, value: string | number | boolean): Promise<void>;
   delete(key: string): Promise<void>;
   clearNamespace(): Promise<void>;
+  getAllKeys(): Promise<string[]>;
 }
 
 function makeStorage(namespace: string, encrypted = false): StorageInstance {
