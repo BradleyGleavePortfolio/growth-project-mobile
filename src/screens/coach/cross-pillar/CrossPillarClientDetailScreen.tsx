@@ -35,6 +35,7 @@ import { useTheme, ThemeColors } from '../../../theme/ThemeProvider';
 import { Typography } from '../../../theme';
 import type { CrossPillarClientResponse } from '../../../types/crossPillar';
 import type { CrossPillarStackParamList } from './CrossPillarNavigator';
+import { bucketDateLocal } from '../../../utils/date';
 
 type Nav = NativeStackNavigationProp<CrossPillarStackParamList, 'CrossPillarClientDetail'>;
 type Route = RouteProp<CrossPillarStackParamList, 'CrossPillarClientDetail'>;
@@ -364,7 +365,7 @@ function Stat({
 
 function dateString(iso: string): string {
   try {
-    return new Date(iso).toISOString().slice(0, 10);
+    return bucketDateLocal(new Date(iso));
   } catch {
     return iso;
   }

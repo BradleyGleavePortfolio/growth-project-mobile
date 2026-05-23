@@ -12,6 +12,7 @@ import type { ThemeColors } from '../../../theme/ThemeProvider';
 import type { FoodLog } from '../../../types';
 import type { ClientDetailStyles } from './styles';
 import type { CoachMealEntry } from './types';
+import { getTodayString } from '../../../utils/date';
 
 // B15: Coach food-log review — group the client's recent meal entries by day
 // across a 7 / 14 / 30-day window so the coach can actually see what the
@@ -161,7 +162,7 @@ export function FoodLogReviewSection({
           {(showTodayFallback
             ? ([
                 [
-                  new Date().toISOString().slice(0, 10),
+                  getTodayString(),
                   todayLogs.map(
                     (l): CoachMealEntry => ({
                       id: l.id,
@@ -185,7 +186,7 @@ export function FoodLogReviewSection({
               <View key={day} style={styles.foodReviewDayCard}>
                 <View style={styles.foodReviewDayHeader}>
                   <Text style={styles.foodReviewDayDate}>
-                    {day === new Date().toISOString().slice(0, 10) ? 'Today' : day}
+                    {day === getTodayString() ? 'Today' : day}
                   </Text>
                   <Text style={styles.foodReviewDayTotal}>{dayCalories} kcal</Text>
                 </View>

@@ -15,6 +15,7 @@
  */
 
 import type { CurrentUser } from '../hooks/useCurrentUser';
+import { bucketDateLocal } from '../utils/date';
 
 const DEMO_USER_ID = 'demo-user-screenshot';
 const DEMO_COACH_ID = 'demo-coach-screenshot';
@@ -136,7 +137,7 @@ export const DEMO_WEIGHT_HISTORY = (() => {
       id: `weight-${i}`,
       user_id: DEMO_USER_ID,
       weight_lbs: Math.round((trend + noise) * 10) / 10,
-      date: d.toISOString().slice(0, 10),
+      date: bucketDateLocal(d),
     });
   }
   return out;
