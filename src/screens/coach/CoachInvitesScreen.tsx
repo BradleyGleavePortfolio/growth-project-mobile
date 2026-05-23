@@ -38,7 +38,8 @@ import type {
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
 import { mediumTap, successTap, warningTap } from '../../utils/haptics';
-import type { NavigationProp, ParamListBase } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { ClientsStackParamList } from '../../navigation/CoachNavigator';
 
 const FILTERS: InviteListFilter[] = ['all', 'pending', 'accepted', 'expired'];
 
@@ -104,10 +105,20 @@ function emailStatusLabel(s: EmailStatus): string {
   }
 }
 
+// R27 — typed navigation. `CoachInvites` is mounted under the
+// `ClientsStack` native-stack navigator (see `src/navigation/CoachNavigator.tsx`).
+// Typing the prop against `ClientsStackParamList` makes every
+// `navigation.navigate(...)` here compile-time checked against that
+// stack's routes.
+type CoachInvitesNavigationProp = NativeStackNavigationProp<
+  ClientsStackParamList,
+  'CoachInvites'
+>;
+
 export default function CoachInvitesScreen({
   navigation,
 }: {
-  navigation: NavigationProp<ParamListBase>;
+  navigation: CoachInvitesNavigationProp;
 }) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -257,7 +268,7 @@ export default function CoachInvitesScreen({
         </Pressable>
         <Text style={styles.title}>Invites</Text>
         <Pressable
-          onPress={() => navigation.navigate('BulkInvite' as never)}
+          onPress={() => navigation.navigate('BulkInvite')}
           style={styles.actionBtnTop}
           accessibilityRole="button"
           accessibilityLabel="Bulk invite"
