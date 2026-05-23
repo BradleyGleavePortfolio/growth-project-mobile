@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useState, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,12 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Shadow } from '../../constants/theme';
 import FadeInView from '../../components/FadeInView';
 import { mealPlansApi } from '../../services/api';
+import {
+  mealTemplatesApi,
+  type ClientTodayResponse,
+  type DailyMealPlanAssignmentWithPlan,
+  type SlotLabel,
+} from '../../api/mealTemplatesApi';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage, type JsonRecord } from '../../types/common';
 
@@ -169,6 +175,58 @@ function normalisePlans(payload: unknown): MealPlan[] {
   });
 }
 
+// Adapter: convert a Sprint-B `ClientTodayResponse` (slot-grouped server
+// payload) into the same `MealPlan[]` shape this screen already renders.
+// Doing the adaptation here — rather than diverging the render path —
+// means one screen, one render tree, and a coach who pushes a plan via
+// EITHER the Sprint-A `/meal-plans` endpoint or the Sprint-B
+// `/me/meal-plan/today` endpoint shows up identically to the client.
+function todayAssignmentsToPlans(today: ClientTodayResponse): MealPlan[] {
+  if (!today || !Array.isArray(today.assignments) || today.assignments.length === 0) {
+    return [];
+  }
+  // Sort by starts_on DESC defensively — the API does not document the
+  // ordering, so the client picks the most-recent first.
+  const sorted = [...today.assignments].sort((a, b) =>
+    a.starts_on < b.starts_on ? 1 : a.starts_on > b.starts_on ? -1 : 0,
+  );
+  return sorted.map((assignment) => assignmentToMealPlan(assignment, today.date));
+}
+
+function assignmentToMealPlan(
+  assignment: DailyMealPlanAssignmentWithPlan,
+  forDate: string,
+): MealPlan {
+  const slotToTimeOfDay = (slot: SlotLabel): string => {
+    switch (slot) {
+      case 'preworkout':
+        return 'pre-workout';
+      case 'postworkout':
+        return 'post-workout';
+      default:
+        return slot;
+    }
+  };
+  const slots = [...assignment.daily_meal_plan.slots].sort(
+    (a, b) => a.order - b.order,
+  );
+  const items: MealItem[] = slots.map((s) => ({
+    name: s.meal_template.name,
+    calories: s.meal_template.calories_kcal,
+    protein: s.meal_template.protein_g,
+    notes: s.meal_template.description,
+    time_of_day: slotToTimeOfDay(s.slot_label),
+  }));
+  return {
+    id: `today-${assignment.id}`,
+    title: `Today · ${assignment.daily_meal_plan.name}`,
+    notes: assignment.daily_meal_plan.notes,
+    items,
+    days: null,
+    created_at: forDate,
+  };
+}
+
 export default function PlanScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -179,30 +237,67 @@ export default function PlanScreen() {
 
   const loadPlans = useCallback(async () => {
     try {
-      const res = await mealPlansApi.list();
-      setPlans(normalisePlans(res.data));
-      setError(null);
-    } catch (err) {
-      // Read-only fetch. Surface a friendly message; leave any prior plans
-      // visible so a transient network blip doesn't empty the screen.
-      console.error('PlanScreen: mealPlansApi.list failed', err);
-      setError(errorMessage(err, 'Could not load your meal plans.'));
-      if (plans === null) setPlans([]);
+      // P0-1 unification: read from BOTH the legacy Sprint-A `/meal-plans`
+      // surface AND the canonical Sprint-B `/me/meal-plan/today` surface so
+      // a coach who assigned a plan via either path shows up here. Whichever
+      // request fails alone is tolerated — we merge what we have and warn.
+      const [legacyRes, todayRes] = await Promise.allSettled([
+        mealPlansApi.list(),
+        mealTemplatesApi.todayForClient(),
+      ]);
+
+      const legacyPlans =
+        legacyRes.status === 'fulfilled' ? normalisePlans(legacyRes.value.data) : [];
+      const todayPlans =
+        todayRes.status === 'fulfilled' ? todayAssignmentsToPlans(todayRes.value.data) : [];
+
+      // Sprint-B today assignment goes first — it's the most actionable view
+      // for the client right now.
+      const merged: MealPlan[] = [...todayPlans, ...legacyPlans];
+
+      // Surface an error banner only if BOTH sources failed; one missing is
+      // not user-visible because the other still rendered.
+      if (legacyRes.status === 'rejected' && todayRes.status === 'rejected') {
+        console.error(
+          'PlanScreen: both meal-plan sources failed',
+          legacyRes.reason,
+          todayRes.reason,
+        );
+        setError(errorMessage(legacyRes.reason, 'Could not load your meal plans.'));
+        if (plans === null) setPlans([]);
+      } else {
+        if (legacyRes.status === 'rejected') {
+          console.warn('PlanScreen: legacy mealPlansApi.list failed', legacyRes.reason);
+        }
+        if (todayRes.status === 'rejected') {
+          console.warn('PlanScreen: mealTemplatesApi.todayForClient failed', todayRes.reason);
+        }
+        setPlans(merged);
+        setError(null);
+      }
     } finally {
       setLoading(false);
     }
   }, [plans]);
 
+  // Hold the latest `loadPlans` in a ref so callbacks with stable `[]` deps
+  // always call the freshest closure. Without this, `useFocusEffect` below
+  // would capture the very first `loadPlans` (where `plans === null`) and
+  // on every later focus the `if (plans === null) setPlans([])` branch could
+  // blank prior data after a dual-source failure. R31/audit-P1 stale-closure.
+  const loadPlansRef = useRef(loadPlans);
   useEffect(() => {
-    loadPlans();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    loadPlansRef.current = loadPlans;
+  }, [loadPlans]);
+
+  useEffect(() => {
+    loadPlansRef.current();
   }, []);
 
   // Refetch on focus so coach-side changes show up without a full reload.
   useFocusEffect(
     useCallback(() => {
-      loadPlans();
-      // eslint-disable-next-line react-hooks/exhaustive-deps
+      loadPlansRef.current();
     }, []),
   );
 

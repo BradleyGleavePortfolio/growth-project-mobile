@@ -16,11 +16,20 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { fastingApi } from '../../services/api';
 import { logger } from '../../utils/logger';
 
+import * as Notifications from 'expo-notifications';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import EmptyState from '../../components/EmptyState';
 import FadeInView from '../../components/FadeInView';
 import { scheduleFastingAlert } from '../../utils/notifications';
+import { bucketDateLocal } from '../../utils/date';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
+
+// User-scoped per R15: a shared device must not let user A's scheduled
+// "Fast Complete" notification id be cancelled by user B's session, nor
+// leak across users on logout/login.
+const fastingNotifIdKey = (userId: string) =>
+  `fasting:scheduled_notification_id:${userId}`;
 
 type Protocol = { label: string; hours: number };
 
@@ -67,6 +76,9 @@ export default function FastingScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
+  // submitting locks Start/End buttons across the in-flight network round-trip
+  // so a double-tap can't create two server-side fasts (P0-3).
+  const [submitting, setSubmitting] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const setProtocol = (hours: number) => setSelectedProtocol(hours);
@@ -106,14 +118,21 @@ export default function FastingScreen() {
         setStats({ longestHours, averageHours, totalCompleted: completed.filter((s) => s.completed).length });
       }
 
-      // Compute streak from consecutive days with completed fasts
+      // Compute streak from consecutive days with completed fasts.
+      // Bucket by the user's LOCAL calendar day, not UTC: a fast started at
+      // 7pm in Hawaii (UTC-10) has a `startTime` whose ISO date is already
+      // tomorrow in UTC. Using toISOString() here was silently resetting the
+      // streak for AU/HI users every night (P0-4).
+      const completedDays = new Set(
+        completed.map((f) => bucketDateLocal(new Date(f.startTime))),
+      );
       let s = 0;
       const now = new Date();
       for (let i = 0; i < 60; i++) {
         const d = new Date(now);
         d.setDate(d.getDate() - i);
-        const dateStr = d.toISOString().split('T')[0];
-        if (completed.some((f) => f.startTime.startsWith(dateStr))) {
+        const dateStr = bucketDateLocal(d);
+        if (completedDays.has(dateStr)) {
           s++;
         } else if (i > 0) {
           break;
@@ -156,24 +175,66 @@ export default function FastingScreen() {
   }, [activeFast]);
 
   const handleStart = async () => {
-    if (!currentUser) return;
+    if (!currentUser || submitting) return;
+    // Lock the button BEFORE awaiting anything so a rapid double-tap (haptic
+    // queued + render not flushed) can't fire two POST /fasting/start calls
+    // (P0-3). There's no server-side idempotency key on this endpoint yet,
+    // so the client is the only thing standing between a slow network and a
+    // duplicate fast row.
+    setSubmitting(true);
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       await fastingApi.start({ protocol: `${selectedProtocol}:${24 - selectedProtocol}` });
       const endTime = new Date(Date.now() + selectedProtocol * 60 * 60 * 1000);
-      await scheduleFastingAlert(endTime);
+      const notifId = await scheduleFastingAlert(endTime);
+      // Persist the id so doEndFast can cancel the scheduled "Fast Complete"
+      // push even after the screen has been unmounted (cold start) before
+      // the user ends the fast.
+      if (notifId) {
+        try {
+          await AsyncStorage.setItem(fastingNotifIdKey(currentUser.id), notifId);
+        } catch (err) {
+          // Best-effort cache write. Failing here just means the worst case
+          // is a stale "Fast Complete" push once the target time arrives —
+          // not a destructive bug, so we don't surface it.
+          console.warn('FastingScreen: failed to persist notification id', err);
+        }
+      }
     } catch (err) {
       // Destructive write: surface so the user knows the fast didn't start.
       console.error('FastingScreen: handleStart failed', err);
       Alert.alert("Couldn't start fast", errorMessage(err, 'Please try again.'));
+      setSubmitting(false);
       return;
     }
-    void loadAll();
+    try {
+      await loadAll();
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const doEndFast = async () => {
+    if (submitting) return;
+    if (!currentUser) return;
+    setSubmitting(true);
     try {
       await fastingApi.end();
+      // Cancel the scheduled "Fast Complete" push so the user doesn't get a
+      // notification hours after they manually ended the fast (P0-3). If the
+      // id was never persisted (cold start lost it, or scheduling failed),
+      // there's nothing to cancel — quietly skip.
+      try {
+        const key = fastingNotifIdKey(currentUser.id);
+        const notifId = await AsyncStorage.getItem(key);
+        if (notifId) {
+          await Notifications.cancelScheduledNotificationAsync(notifId);
+          await AsyncStorage.removeItem(key);
+        }
+      } catch (err) {
+        // Cancellation is best-effort; an orphan push is annoying, not broken.
+        console.warn('FastingScreen: failed to cancel scheduled notification', err);
+      }
     } catch (err) {
       // Destructive write: surface so they know the fast wasn't ended. We
       // still call loadAll() so the UI reflects whatever the backend actually
@@ -181,7 +242,11 @@ export default function FastingScreen() {
       console.error('FastingScreen: doEndFast failed', err);
       Alert.alert("Couldn't end fast", errorMessage(err, 'Please try again.'));
     }
-    void loadAll();
+    try {
+      await loadAll();
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleEnd = async () => {
@@ -333,14 +398,32 @@ export default function FastingScreen() {
       {/* Start / End Button */}
       <View style={styles.actionRow}>
         {activeFast ? (
-          <TouchableOpacity style={styles.endBtn} onPress={handleEnd}>
+          <TouchableOpacity
+            style={[styles.endBtn, submitting && styles.btnDisabled]}
+            onPress={handleEnd}
+            disabled={submitting}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: submitting }}
+            accessibilityLabel="End fast"
+          >
             <Ionicons name="stop-circle" size={22} color={colors.textOnPrimary} />
-            <Text style={styles.actionBtnText}>End Fast</Text>
+            <Text style={styles.actionBtnText}>
+              {submitting ? 'Ending…' : 'End Fast'}
+            </Text>
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity style={styles.startBtn} onPress={handleStart}>
+          <TouchableOpacity
+            style={[styles.startBtn, submitting && styles.btnDisabled]}
+            onPress={handleStart}
+            disabled={submitting}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: submitting }}
+            accessibilityLabel="Start fast"
+          >
             <Ionicons name="play-circle" size={22} color={colors.textOnPrimary} />
-            <Text style={styles.actionBtnText}>Start Fast</Text>
+            <Text style={styles.actionBtnText}>
+              {submitting ? 'Starting…' : 'Start Fast'}
+            </Text>
           </TouchableOpacity>
         )}
       </View>
@@ -526,6 +609,9 @@ const makeStyles = (colors: ThemeColors) =>
     backgroundColor: colors.error,
     borderRadius: 4, // radius.lg
     paddingVertical: 16,
+  },
+  btnDisabled: {
+    opacity: 0.6,
   },
   actionBtnText: {
     fontSize: 16,

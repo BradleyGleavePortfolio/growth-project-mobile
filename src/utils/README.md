@@ -6,7 +6,7 @@ Helpers used across the app. The rule of thumb: if a piece of logic is reused by
 
 - Carry the auth shape that screens lean on without coupling them to Supabase: `googleAuth`, `supabaseAuth`, `authEvents`.
 - Own the platform integrations: `notifications`, `haptics`, `googleAuth`'s WebBrowser dance.
-- Hold pure helpers that are easy to test: `date`, `nutrition`, `weekUtils`, `mealPlanGenerator`, `log/*`.
+- Hold pure helpers that are easy to test: `date`, `nutrition`, `weekUtils`, `log/*`.
 - Keep the AI Guide's mobile-side glue isolated in `aiGuide.ts`. The mobile app never assembles a prompt — this helper just calls `aiApi.chat` and packages the response back as a `ChatMessage`.
 - Provide the auth-event bus that lets sign-in / sign-out re-bootstrap `RootNavigator` from anywhere in the tree.
 
@@ -46,10 +46,9 @@ Helpers used across the app. The rule of thumb: if a piece of logic is reused by
 
 | File | What it does |
 | --- | --- |
-| `date.ts` | `getTodayString`, `formatRelative`, `generateId`, week math. |
+| `date.ts` | `getTodayString`, `formatRelative`, `generateId`, week math, `bucketDateLocal` (timezone-aware day key). |
 | `nutrition.ts` | TDEE / macro target math. Pure functions, fully unit-tested. |
 | `weekUtils.ts` | Week-bucket helpers shared by Progress and Report. |
-| `mealPlanGenerator.ts` | Local fallback generator when no coach plan is assigned (Plan screen empty state). |
 | `log/*` | Small helpers used by the Log screen — `mapFoodItem`, `macros`, `types`. |
 
 ## Data flow
@@ -117,7 +116,7 @@ Both are required; missing values throw at module load via `config/env.ts`.
 npm test
 ```
 
-Unit tests live in `utils/__tests__/` for the pure helpers (`date`, `nutrition`, `weekUtils`, `mealPlanGenerator`). The platform helpers (`googleAuth`, `notifications`) are exercised by the smoke matrix.
+Unit tests live in `utils/__tests__/` for the pure helpers (`date`, `nutrition`, `weekUtils`). The platform helpers (`googleAuth`, `notifications`) are exercised by the smoke matrix.
 
 ## Release notes
 

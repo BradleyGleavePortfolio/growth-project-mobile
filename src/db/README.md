@@ -15,15 +15,17 @@
 | --- | --- |
 | `database.ts` | Opens `growthproject.db` once, sets WAL, runs `initDatabase` which executes every module's table-init function and seeds reference data. |
 | `chatDb.ts` | AsyncStorage-backed chat history keyed by user id. Trims to the last 50 messages on every write. |
-| `recipesDb.ts` | Foods + recipes seed and read helpers. Idempotent seed on first launch. |
 | `workoutDb.ts` | Routines, sessions, exercise library; seeds the exercise list. |
-| `mealPlanDb.ts` | Local cache of coach-assigned meal plans. The backend is authoritative — local copy is read-mostly. |
 | `habitsDb.ts` | Habit definitions + daily logs for offline-tolerant check-ins. |
 | `notificationsDb.ts` | Locally scheduled notification metadata so cancellation is possible after restart. |
 | `educationDb.ts` | Lessons content + completion state. Seeds the lessons library. |
 | `communityDb.ts` | Local cache of leaderboard / wins; refreshed on focus. |
-| `fastingDb.ts` | Fasting timer history. The active timer state lives in `store/fastingStore`, not SQLite. |
-| `shoppingListDb.ts` | Local mirror of grocery / shopping items. |
+
+> Removed in the nutrition P0 cleanup: `recipesDb.ts`, `mealPlanDb.ts`,
+> `fastingDb.ts`, `shoppingListDb.ts`. All four were orphan: foods/recipes
+> are now fetched live via `recipesApi`, meal plans via `mealTemplatesApi`
+> + `mealPlansApi`, fasting via `fastingApi`, and grocery/shopping lists
+> via `listsApi`.
 
 ## Data flow
 
