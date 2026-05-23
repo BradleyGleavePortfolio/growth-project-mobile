@@ -58,6 +58,9 @@ export default function EducationScreen() {
   const loadData = useCallback(async () => {
     if (!currentUser) return;
     let serverLessons: Lesson[] = [];
+    // Backend completions, derived from the same lessons payload we already
+    // fetched — no second round-trip to /lessons. See audit P0-7.
+    const backendCompletedIds = new Set<string>();
     try {
       const res = await lessonsApi.getAll();
       const data = res.data as { lessons?: JsonRecord[] } | JsonRecord[] | undefined;
@@ -66,16 +69,19 @@ export default function EducationScreen() {
         : Array.isArray(data?.lessons)
           ? data.lessons
           : [];
-      serverLessons = raw.map((l) => ({
-        id: String(l.id),
-        title: (l.title as string) || 'Untitled',
-        subtitle: (l.subtitle as string) || '',
-        category: (l.category as string) || 'Nutrition Basics',
-        content: (l.content as string) || (l.body as string) || '',
-        durationMin: (l.duration_min as number) ?? (l.durationMin as number) ?? 5,
-        sortOrder: (l.sort_order as number) ?? (l.sortOrder as number) ?? 0,
-        createdAt: (l.created_at as string) ?? (l.createdAt as string) ?? new Date().toISOString(),
-      }));
+      serverLessons = raw.map((l) => {
+        if (l.completed || l.is_completed) backendCompletedIds.add(String(l.id));
+        return {
+          id: String(l.id),
+          title: (l.title as string) || 'Untitled',
+          subtitle: (l.subtitle as string) || '',
+          category: (l.category as string) || 'Nutrition Basics',
+          content: (l.content as string) || (l.body as string) || '',
+          durationMin: (l.duration_min as number) ?? (l.durationMin as number) ?? 5,
+          sortOrder: (l.sort_order as number) ?? (l.sortOrder as number) ?? 0,
+          createdAt: (l.created_at as string) ?? (l.createdAt as string) ?? new Date().toISOString(),
+        };
+      });
       serverLessons.sort((a, b) => a.sortOrder - b.sortOrder);
     } catch (err) {
       // Read-only fetch. On failure leave whatever we had (first load = empty
@@ -90,24 +96,6 @@ export default function EducationScreen() {
     const localCompletedIds = new Set(
       userProgress.filter((p) => p.completed).map((p) => p.lessonId),
     );
-    // Try to pull backend completions (lessons already completed will have
-    // completed=true in the lesson list response if the backend tracks it,
-    // otherwise we fall back to local SQLite).
-    let backendCompletedIds = new Set<string>();
-    try {
-      const allRes = await lessonsApi.getAll();
-      const allData = allRes.data as { lessons?: JsonRecord[] } | JsonRecord[] | undefined;
-      const allRaw: JsonRecord[] = Array.isArray(allData)
-        ? allData
-        : Array.isArray(allData?.lessons)
-          ? allData.lessons
-          : [];
-      allRaw.forEach((l) => {
-        if (l.completed || l.is_completed) backendCompletedIds.add(String(l.id));
-      });
-    } catch {
-      // fallback to local only
-    }
     const completedIds = new Set([...localCompletedIds, ...backendCompletedIds]);
     setLessons(
       serverLessons.map((l) => ({ ...l, completed: completedIds.has(l.id) })),

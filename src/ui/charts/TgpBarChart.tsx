@@ -28,14 +28,6 @@ import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { Colors } from '../../constants/colors';
 
-const FALLBACK: Partial<ThemeColors> = {
-  primary:       Colors.primary,
-  surface:       Colors.surface,
-  textPrimary:   Colors.textPrimary,
-  textMuted:     Colors.textMuted,
-  border:        Colors.border,
-};
-
 export interface ChartDataPoint {
   x: number;
   y: number;
@@ -61,15 +53,10 @@ export default function TgpBarChart({
   themeOverride,
   accessibilityLabel = 'Bar chart',
 }: TgpBarChartProps) {
-  let themeColors: ThemeColors;
-  try {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    const theme = useTheme();
-    themeColors = theme.colors;
-  } catch {
-    themeColors = FALLBACK as ThemeColors;
-  }
-  const colors: ThemeColors = { ...themeColors, ...themeOverride };
+  // ThemeProvider's context default supplies safe values when no provider
+  // is mounted (e.g. tests), so useTheme() is unconditional.
+  const theme = useTheme();
+  const colors: ThemeColors = { ...theme.colors, ...themeOverride };
 
   const [tooltip, setTooltip] = useState<{ bx: number; by: number; bh: number; value: number } | null>(null);
   // Store the auto-dismiss timer ref so it can be cancelled on unmount,

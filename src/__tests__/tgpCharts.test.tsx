@@ -146,14 +146,19 @@ beforeEach(() => {
   gestureHandlers.tapStart = undefined;
 });
 
-// The tooltip Rect/SvgText in all three charts share the same dimensions
-// (width=56, height=22, rx=1; fontSize=10, textAnchor="middle"). These
-// selectors locate that specific Rect/SvgText among grid/axis siblings.
+// Selectors locate the tooltip <Rect>/<SvgText> among grid/axis siblings.
+// The Bar/Area charts share the original 56×22 single-line tooltip.
+// The Line chart's tooltip grew to 72×34 in audit P0-6 to fit a date label
+// above the value, so it has its own selector.
 type Rendered = { props: Record<string, unknown> };
 const isTooltipRect = (r: Rendered) =>
   r.props.width === 56 && r.props.height === 22 && r.props.rx === 1;
+const isLineTooltipRect = (r: Rendered) =>
+  r.props.width === 72 && r.props.height === 34 && r.props.rx === 1;
 const isTooltipText = (t: Rendered) =>
   t.props.fontSize === 10 && t.props.textAnchor === 'middle';
+const isLineTooltipValueText = (t: Rendered) =>
+  t.props.fontSize === 11 && t.props.textAnchor === 'middle';
 
 // ─── TgpLineChart ─────────────────────────────────────────────────────────────
 
@@ -178,12 +183,12 @@ describe('TgpLineChart — render output', () => {
       gestureHandlers.panUpdate!({ x: 100, y: 50 });
     });
     const rects = getAllByTestId('Rect').map((n) => n as unknown as Rendered);
-    const tooltipRect = rects.find(isTooltipRect);
+    const tooltipRect = rects.find(isLineTooltipRect);
     expect(tooltipRect).toBeDefined();
     expect(tooltipRect!.props.fill).toBe(BONE);
     expect(tooltipRect!.props.stroke).toBe(OXBLOOD);
     const texts = getAllByTestId('SvgText').map((n) => n as unknown as Rendered);
-    const tooltipText = texts.find(isTooltipText);
+    const tooltipText = texts.find(isLineTooltipValueText);
     expect(tooltipText).toBeDefined();
     expect(tooltipText!.props.fill).toBe(INK);
   });
@@ -197,6 +202,47 @@ describe('TgpLineChart — render output', () => {
   it('renders empty state when data has fewer than 2 points', () => {
     const { getByText } = render(<TgpLineChart data={[{ x: 0, y: 100 }]} />);
     expect(getByText('Not enough data points')).toBeTruthy();
+  });
+
+  // P0-5 — performance: skip per-point Circle markers once the series is
+  // big enough that the dots blur into a stripe and bog down low-end Android.
+  it('renders one Circle per point when data is small (<=30)', () => {
+    const small = Array.from({ length: 10 }, (_, i) => ({ x: i, y: 100 + i }));
+    const { getAllByTestId } = render(<TgpLineChart data={small} height={200} />);
+    expect(getAllByTestId('Circle').length).toBe(small.length);
+  });
+
+  it('skips per-point Circle markers when data is large (>30)', () => {
+    const big = Array.from({ length: 100 }, (_, i) => ({ x: i, y: 100 + i }));
+    const { queryAllByTestId } = render(<TgpLineChart data={big} height={200} />);
+    // No per-point circles; the line still renders.
+    expect(queryAllByTestId('Circle').length).toBe(0);
+  });
+
+  it('still skips circles at the 1000-point stress threshold', () => {
+    const stress = Array.from({ length: 1000 }, (_, i) => ({ x: i, y: 100 + Math.sin(i) }));
+    const { queryAllByTestId } = render(<TgpLineChart data={stress} height={200} />);
+    expect(queryAllByTestId('Circle').length).toBe(0);
+  });
+
+  // P0-6 — x-axis & tooltip should use a real date formatter, not raw indices.
+  it('uses xFormatter for axis tick labels when provided', () => {
+    // Build 5 points whose x values are epoch ms for sequential days.
+    const day0 = new Date('2026-05-01T00:00:00Z').getTime();
+    const data = Array.from({ length: 5 }, (_, i) => ({
+      x: day0 + i * 86_400_000,
+      y: 180 + i,
+    }));
+    const fmt = (ms: number) => new Date(ms).toISOString().slice(5, 10); // "MM-DD"
+    const { getAllByTestId } = render(
+      <TgpLineChart data={data} height={200} xFormatter={fmt} />,
+    );
+    const texts = getAllByTestId('SvgText').map((n) => (n as unknown as Rendered).props.children);
+    // At minimum the first and last axis labels should be in MM-DD shape.
+    const labelTexts = texts.filter(
+      (t) => typeof t === 'string' && /^\d{2}-\d{2}$/.test(t as string),
+    );
+    expect(labelTexts.length).toBeGreaterThan(0);
   });
 });
 

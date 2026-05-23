@@ -33,14 +33,6 @@ import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { Colors } from '../../constants/colors';
 
-const FALLBACK: Partial<ThemeColors> = {
-  primary:     Colors.primary,
-  primaryPale: Colors.primaryPale,
-  surface:     Colors.surface,
-  textMuted:   Colors.textMuted,
-  border:      Colors.border,
-};
-
 export interface ChartDataPoint {
   x: number;
   y: number;
@@ -65,15 +57,10 @@ export default function TgpAreaChart({
   themeOverride,
   accessibilityLabel = 'Area chart',
 }: TgpAreaChartProps) {
-  let themeColors: ThemeColors;
-  try {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    const theme = useTheme();
-    themeColors = theme.colors;
-  } catch {
-    themeColors = FALLBACK as ThemeColors;
-  }
-  const colors: ThemeColors = { ...themeColors, ...themeOverride };
+  // ThemeProvider's context default supplies safe values when no provider
+  // is mounted (e.g. tests), so useTheme() is unconditional.
+  const theme = useTheme();
+  const colors: ThemeColors = { ...theme.colors, ...themeOverride };
 
   const [tooltip, setTooltip] = useState<{ x: number; y: number; value: number } | null>(null);
 
