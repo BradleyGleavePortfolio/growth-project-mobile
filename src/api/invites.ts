@@ -4,22 +4,21 @@
  * Companion backend PR: feat/email-pipeline-v1-backend.
  *
  * Endpoints (see `src/types/invites.ts` for shapes):
- *   POST   /coach/invite-codes/bulk
+ *   POST   /coach/invite-codes/bulk          (rows: BulkInviteRowDto[])
  *   POST   /coach/invite-codes/single
- *   GET    /coach/invite-codes
- *   POST   /coach/invite-codes/:id/resend     (optional — graceful)
- *   DELETE /coach/invite-codes/:id            (revoke)
- *   POST   /invites/accept/:token             (PUBLIC, no auth)
+ *   GET    /coach/invite-codes               (returns raw Prisma rows, snake_case)
+ *   POST   /coach/invite-codes/:id/send      (resend; requires email body)
+ *   DELETE /coach/invite-codes/:id           (revoke)
+ *   POST   /invites/accept/:token            (PUBLIC, no auth)
  *
- * Why not extend `services/api.ts:coachApi`? Two reasons:
- *   1. Accept is unauthenticated; co-locating it with authed coach calls
- *      invites a mistake where someone adds the JWT interceptor to it.
- *   2. The v1 list contract (Invite shape with `status` + `lastEmailStatus`)
- *      diverges from the legacy `coachApi.listInviteCodes()` shape; keeping
- *      them in separate modules makes the migration boundary explicit.
+ * Contract adapters live at the bottom of this file. The backend returns
+ * `bulkInvite` as `{ total, created[], rejected[] }` and `listForCoach`
+ * as a raw `InviteCode[]` array with snake_case columns; we map both
+ * into the camelCase `Invite` / `BulkInviteResult` shapes the UI consumes
+ * so a backend response-shape change is contained to this file.
  *
  * The wrapper uses the existing axios instance for authed calls so the
- * 401 → refresh interceptor still fires. Accept goes through a raw fetch
+ * 401 -> refresh interceptor still fires. Accept goes through a raw fetch
  * against the same base URL so it never carries a stale auth header.
  *
  * Resend gracefully degrades: when the backend returns 404 we return
@@ -29,28 +28,51 @@
 
 import api from '../services/api';
 import { env } from '../config/env';
+import { isValidInviteToken } from '../utils/inviteToken';
 import type {
   AcceptInviteResponse,
   BulkInviteResponse,
+  BulkInviteResult,
   Invite,
   InviteListFilter,
-  ListInvitesResponse,
+  InviteStatus,
+  RawInviteRow,
   SingleInviteResponse,
 } from '../types/invites';
 
 const MAX_BULK_EMAILS = 100;
+const EMAIL_MAX_TOTAL = 254;
+const EMAIL_MAX_LOCAL = 64;
 
-/**
- * Conservative email regex matching the backend's `class-validator`
- * `@IsEmail()` accept-list in practice. Local pre-validation is required
- * because the bulk endpoint may reject the entire batch on a malformed
- * row depending on the backend's posture.
- */
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Stricter RFC-leaning email regex matching the conservative subset the
+// backend's class-validator `@IsEmail()` will accept. We also enforce a
+// display-safety pass that rejects HTML/script-flavored characters even
+// if they would be permitted in an RFC 5321 quoted local part — we never
+// want to surface such rows as "valid" in the bulk-invite preview.
+const EMAIL_RE =
+  /^[A-Za-z0-9](?:[A-Za-z0-9._+\-]*[A-Za-z0-9])?@[A-Za-z0-9](?:[A-Za-z0-9\-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9\-]*[A-Za-z0-9])?)+$/;
+
+function hasDisplayUnsafeChar(v: string): boolean {
+  for (let i = 0; i < v.length; i++) {
+    const c = v.charCodeAt(i);
+    if (c < 0x20 || c === 0x7f) return true;
+  }
+  return /[<>"'`&\\\s]/.test(v);
+}
 
 export function isValidEmail(value: string | undefined): boolean {
   if (!value) return false;
-  return EMAIL_RE.test(value.trim());
+  const v = value.trim();
+  if (v.length === 0 || v.length > EMAIL_MAX_TOTAL) return false;
+  if (hasDisplayUnsafeChar(v)) return false;
+  const at = v.indexOf('@');
+  if (at < 1) return false;
+  const local = v.slice(0, at);
+  const domain = v.slice(at + 1);
+  if (local.length === 0 || local.length > EMAIL_MAX_LOCAL) return false;
+  if (domain.length === 0 || !domain.includes('.')) return false;
+  if (v.includes('..')) return false;
+  return EMAIL_RE.test(v);
 }
 
 /** Normalise an email to lower-case, trimmed form. */
@@ -62,8 +84,7 @@ export function normaliseEmail(value: string): string {
  * Tokenise a paste blob into candidate emails.
  *
  * Accepts newline, comma, semicolon, tab, or whitespace separators.
- * Deduplicates while preserving first-seen order. Does NOT validate —
- * call `isValidEmail()` on each result if you need that.
+ * Deduplicates while preserving first-seen order. Does NOT validate.
  */
 export function tokeniseEmails(input: string): string[] {
   if (!input) return [];
@@ -86,9 +107,7 @@ export function tokeniseEmails(input: string): string[] {
  * Parse the first column of a CSV blob into candidate emails.
  *
  * Auto-detects an "email" header (case-insensitive). When no header
- * is present, takes column zero. Keep this hand-rolled — pulling in
- * papaparse just for a single column is overkill and we already have
- * a heavier server-side parser available for the more exotic shapes.
+ * is present, takes column zero.
  */
 export function parseCsvEmails(input: string): string[] {
   if (!input) return [];
@@ -101,8 +120,6 @@ export function parseCsvEmails(input: string): string[] {
 
   let emailColumn = 0;
   let startRow = 0;
-  // Detect a header row by looking for "email" (case-insensitive) in any
-  // of the first row's comma-separated fields.
   const firstCells = splitCsvLine(lines[0]);
   const headerIdx = firstCells.findIndex(
     (c) => c.trim().toLowerCase() === 'email',
@@ -126,12 +143,6 @@ export function parseCsvEmails(input: string): string[] {
   return out;
 }
 
-/**
- * Split a single CSV line respecting double-quoted fields. Doesn't
- * implement the entire RFC 4180 — newlines inside quotes are not
- * supported because the line tokeniser splits on `\n` first. That's
- * fine for the first-column-emails use case.
- */
 function splitCsvLine(line: string): string[] {
   const out: string[] = [];
   let cur = '';
@@ -164,11 +175,20 @@ function splitCsvLine(line: string): string[] {
 
 // ─── API surface ─────────────────────────────────────────────────────────────
 
+export interface BulkInviteRow {
+  email: string;
+  note?: string;
+  name?: string;
+}
+
 export const invitesApi = {
   /**
    * Bulk-create invite codes and queue their emails.
    * Up to 100 emails per request — over the cap throws synchronously
    * so the caller can show the validation error without a network round trip.
+   *
+   * Backend contract: `{ rows: BulkInviteRowDto[] }`. The optional `message`
+   * is forwarded as `note` on every row.
    */
   bulkInvite: async (
     emails: string[],
@@ -180,11 +200,15 @@ export const invitesApi = {
     if (emails.length > MAX_BULK_EMAILS) {
       throw new Error(`Too many emails — max ${MAX_BULK_EMAILS} per request`);
     }
-    const res = await api.post<BulkInviteResponse>(
-      '/coach/invite-codes/bulk',
-      { emails, message },
+    const note = message && message.trim().length > 0 ? message.trim() : undefined;
+    const rows: BulkInviteRow[] = emails.map((email) =>
+      note ? { email, note } : { email },
     );
-    return res.data;
+    const res = await api.post<BackendBulkInviteResponse>(
+      '/coach/invite-codes/bulk',
+      { rows },
+    );
+    return adaptBulkInviteResponse(res.data);
   },
 
   /** Single invite — used by the per-row resend path's fallback. */
@@ -201,16 +225,19 @@ export const invitesApi = {
 
   /**
    * List invite codes belonging to the current coach. Filter is applied
-   * client-side because the backend list is small (≤ a few hundred per coach)
-   * and we want fast filter-chip switching.
+   * client-side because the backend list is small (<= a few hundred per
+   * coach) and we want fast filter-chip switching.
    */
   listInvites: async (
     filter: InviteListFilter = 'all',
   ): Promise<Invite[]> => {
-    const res = await api.get<ListInvitesResponse>('/coach/invite-codes');
-    const invites = res.data?.invites ?? [];
+    const res = await api.get<RawInviteRow[] | { invites: RawInviteRow[] }>(
+      '/coach/invite-codes',
+    );
+    const raw = unwrapInviteList(res.data);
+    const invites = raw.map(adaptInviteRow);
     if (filter === 'all') return invites;
-    const target =
+    const target: InviteStatus =
       filter === 'pending'
         ? 'PENDING'
         : filter === 'accepted'
@@ -220,18 +247,24 @@ export const invitesApi = {
   },
 
   /**
-   * Re-queue the invite email for a PENDING invite. Calls
-   * POST /coach/invite-codes/:id/send with { email } matching the
-   * backend's sendOne endpoint signature. Returns
-   * `{ supported: false }` when the backend returns 404 so the UI
-   * can hide the affordance instead of erroring out.
+   * Re-deliver the invite email for an existing invite-code row. Hits
+   * `POST /coach/invite-codes/:id/send` with the recipient's email in the
+   * request body — that is the contract documented on the backend
+   * controller. Returns `{ supported: false }` on 404 so the UI can hide
+   * the affordance when the backend hasn't rolled the route yet.
    */
   resendInvite: async (
     id: string,
     email: string,
+    opts?: { name?: string; note?: string },
   ): Promise<{ supported: true } | { supported: false }> => {
+    if (!email) throw new Error('email is required to resend an invite');
     try {
-      await api.post(`/coach/invite-codes/${id}/send`, { email });
+      await api.post(`/coach/invite-codes/${id}/send`, {
+        email,
+        ...(opts?.name ? { name: opts.name } : {}),
+        ...(opts?.note ? { note: opts.note } : {}),
+      });
       return { supported: true };
     } catch (err) {
       if (isNotFound(err)) return { supported: false };
@@ -248,8 +281,15 @@ export const invitesApi = {
    * PUBLIC — accept an invite by token. Does NOT include the auth header
    * so an already-logged-in user can land here without their JWT being
    * consumed by the unauth handler.
+   *
+   * Tokens are validated against `isValidInviteToken()` before the
+   * network call. A malformed deep link short-circuits to a structured
+   * `invalid` failure instead of probing the public endpoint.
    */
   acceptInvite: async (token: string): Promise<AcceptInviteResponse> => {
+    if (!isValidInviteToken(token)) {
+      return { accepted: false, reason: 'invalid' };
+    }
     const base = env.API_URL.replace(/\/$/, '');
     const url = `${base}/invites/accept/${encodeURIComponent(token)}`;
     const res = await fetch(url, {
@@ -257,9 +297,6 @@ export const invitesApi = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
     });
-    // The backend is expected to return 200 on both "accepted" and a
-    // structured failure ({ accepted: false, reason }). Network or 5xx
-    // errors throw so the UI can render a retry CTA.
     if (!res.ok && res.status !== 410 && res.status !== 409) {
       throw new Error(`Accept failed (${res.status})`);
     }
@@ -280,4 +317,123 @@ function isNotFound(err: unknown): boolean {
   return e.response?.status === 404;
 }
 
+// ─── Backend response shapes (snake_case) ────────────────────────────────────
+//
+// These mirror what the backend invite-codes controller actually returns
+// today (`bulkInvite` → `{ total, created, rejected }`; `listForCoach`
+// → raw Prisma rows). We adapt them at the API boundary so the rest of
+// the mobile app keeps consuming the camelCase `Invite` / `BulkInviteResult`
+// shapes declared in `src/types/invites.ts`.
+
+type BackendBulkEmailStatus = 'sent' | 'failed' | 'skipped' | 'logged';
+
+interface BackendBulkCreatedRow {
+  email: string;
+  code: string;
+  invite_code_id: string;
+  email_status: BackendBulkEmailStatus;
+  email_error?: string;
+}
+
+interface BackendBulkRejectedRow {
+  email: string;
+  reason: string;
+}
+
+interface BackendBulkInviteResponse {
+  total: number;
+  created: BackendBulkCreatedRow[];
+  rejected: BackendBulkRejectedRow[];
+}
+
+function adaptBulkInviteResponse(
+  raw: BackendBulkInviteResponse,
+): BulkInviteResponse {
+  const created = Array.isArray(raw?.created) ? raw.created : [];
+  const rejected = Array.isArray(raw?.rejected) ? raw.rejected : [];
+  const results: BulkInviteResult[] = [
+    ...created.map<BulkInviteResult>((row) => {
+      const queued =
+        row.email_status === 'sent' || row.email_status === 'logged';
+      const status: BulkInviteResult['status'] =
+        row.email_status === 'failed' ? 'failed' : 'created';
+      const out: BulkInviteResult = {
+        email: row.email,
+        inviteId: row.invite_code_id,
+        status,
+        emailQueued: queued,
+      };
+      if (row.email_error) out.error = row.email_error;
+      return out;
+    }),
+    ...rejected.map<BulkInviteResult>((row) => ({
+      email: row.email,
+      status: 'failed',
+      emailQueued: false,
+      error: row.reason,
+    })),
+  ];
+  return {
+    results,
+    total: typeof raw?.total === 'number' ? raw.total : results.length,
+    createdCount: created.length,
+    rejectedCount: rejected.length,
+  };
+}
+
+function unwrapInviteList(
+  data: RawInviteRow[] | { invites: RawInviteRow[] } | null | undefined,
+): RawInviteRow[] {
+  if (Array.isArray(data)) return data;
+  if (data && Array.isArray((data as { invites?: RawInviteRow[] }).invites)) {
+    return (data as { invites: RawInviteRow[] }).invites;
+  }
+  return [];
+}
+
+function deriveInviteStatus(row: RawInviteRow): InviteStatus {
+  if (row.revoked) return 'REVOKED';
+  if (row.accepted_at || row.accepted_by_user_id) return 'ACCEPTED';
+  if (
+    typeof row.max_uses === 'number' &&
+    row.max_uses > 0 &&
+    row.used_count >= row.max_uses
+  ) {
+    return 'ACCEPTED';
+  }
+  if (row.expires_at) {
+    const exp = Date.parse(row.expires_at);
+    if (Number.isFinite(exp) && exp <= Date.now()) return 'EXPIRED';
+  }
+  return 'PENDING';
+}
+
+function adaptInviteRow(row: RawInviteRow): Invite {
+  // Prefer the canonical `client_email` field from the email-pipeline
+  // backend; fall back to the legacy `intended_email` for any older
+  // rows still in flight, then to an empty string so the UI never
+  // renders `undefined`.
+  const clientEmail = row.client_email ?? row.intended_email ?? '';
+  const invite: Invite = {
+    id: row.id,
+    code: row.code,
+    clientEmail,
+    status: deriveInviteStatus(row),
+    createdAt: row.created_at,
+    // Map `last_email_status` directly. Null is preserved (rather than
+    // collapsed to undefined) so callers can distinguish "backend
+    // explicitly said no status" from "field absent".
+    lastEmailStatus: row.last_email_status ?? null,
+  };
+  if (row.expires_at) invite.expiresAt = row.expires_at;
+  if (row.accepted_at) invite.acceptedAt = row.accepted_at;
+  return invite;
+}
+
 export { MAX_BULK_EMAILS };
+export const __invitesInternals = {
+  adaptBulkInviteResponse,
+  adaptInviteRow,
+  deriveInviteStatus,
+  unwrapInviteList,
+};

@@ -202,9 +202,45 @@ const linking: LinkingOptions<Record<string, object | undefined>> = {
 // hand-off; other navigation continues to flow through props/hooks.
 const navigationRef = createNavigationContainerRef<Record<string, object | undefined>>();
 
+// Extract the accept-invite token from a deep link URL. Returns null when
+// the URL is not an accept-invite link OR the token cannot be parsed.
+// Kept as a pure helper so RootNavigator's URL handler and the replay
+// effect can dedupe against the same token without re-parsing. Exported
+// for direct unit testing of the token-extraction contract.
+export function extractAcceptInviteToken(url: string): string | null {
+  const m = url.match(/\/invite\/accept\/([^/?#]+)/i);
+  if (!m || !m[1]) return null;
+  try {
+    return decodeURIComponent(m[1]);
+  } catch {
+    return null;
+  }
+}
+
 export default function RootNavigator() {
   const [authState, setAuthState] = useState<AuthState>('loading');
   const pendingDay1Target = useRef<WinType | null>(null);
+  // Deep-link replay state for the public accept-invite path. When a
+  // signed-in user clicks an accept-invite URL we sign them out and then
+  // navigate to AcceptInvite ONLY after authState flips to
+  // 'unauthenticated' AND the NavigationContainer is ready. Using a state
+  // value (not a timer) eliminates the race the audit flagged.
+  const [pendingAcceptUrl, setPendingAcceptUrl] = useState<string | null>(null);
+  // The reset-password flow follows the same pattern.
+  const [pendingResetUrl, setPendingResetUrl] = useState<string | null>(null);
+  // Once we have routed (or are about to route) an accept-invite token,
+  // record it here so a duplicate URL event — from a cold-start initial
+  // URL AND a foreground url listener, or from React Navigation's own
+  // linking pass following our imperative navigate — cannot double-fire
+  // the public accept call. Tokens are single-use; a second POST would
+  // surface a misleading "already accepted" to the user.
+  const consumedAcceptTokenRef = useRef<string | null>(null);
+  // Tracks an in-flight signed-in replay token (sign-out → AcceptInvite).
+  // Why: a duplicate URL event arriving while sign-out is in progress
+  // hits the unauthenticated branch and would otherwise mark the token
+  // consumed before the pending-replay effect has navigated — stranding
+  // the user on the auth stack.
+  const pendingAcceptTokenRef = useRef<string | null>(null);
 
   // Initialise the Crisp SDK once at app start. Safe to call before auth
   // resolves — configure() only registers the website ID and does not
@@ -268,28 +304,56 @@ export default function RootNavigator() {
 
       if (!isReset && !isInvite && !isAcceptInvite) return;
 
+      // For accept-invite URLs, dedupe against the consumed-token ref
+      // BEFORE doing any work. A cold-start URL event and a foreground
+      // url-listener event can both fire for the same link, and once we
+      // imperatively navigate to AcceptInvite the screen itself is the
+      // source of truth for the network call. Re-recording the same
+      // token would either redundantly re-mount AcceptInvite or, in the
+      // legacy Linking.openURL replay path, loop indefinitely.
+      if (isAcceptInvite) {
+        const token = extractAcceptInviteToken(url);
+        if (token && consumedAcceptTokenRef.current === token) {
+          return;
+        }
+      }
+
       const authed = await secureStorage.getItem('supabase_token');
-      if (!authed) return; // unauthenticated → linking config handles it natively.
+      if (!authed) {
+        // Unauthenticated → React Navigation's native `linking` config
+        // already routes the URL to AcceptInvite (or ResetPassword) when
+        // AuthNavigator mounts. We intentionally do NOT stash the URL
+        // here: a second imperative navigate would either mount the
+        // single-use accept screen twice or, under the legacy
+        // Linking.openURL replay, loop forever. Mark the accept token as
+        // consumed so any duplicate URL event arriving later (cold-start
+        // vs foreground listener) is dropped.
+        if (isAcceptInvite) {
+          const token = extractAcceptInviteToken(url);
+          // Do NOT mark consumed if this token is the in-flight signed-in
+          // replay: the pending-replay effect still needs to navigate.
+          if (token && pendingAcceptTokenRef.current !== token) {
+            consumedAcceptTokenRef.current = token;
+          }
+        }
+        return;
+      }
 
       if (isReset || isAcceptInvite) {
-        // Force full sign-out so the deep link can land on AuthNavigator's
-        // ResetPassword or AcceptInvite route with a clean session.
+        // Stash the URL FIRST, then force sign-out. The
+        // `pendingAcceptUrl`/`pendingResetUrl` watcher below replays the
+        // URL only once authState has flipped to 'unauthenticated' AND
+        // the NavigationContainer ref reports ready — preventing the
+        // race where the prior authed navigator is still mounted when
+        // the replay fires.
+        if (isAcceptInvite) {
+          const token = extractAcceptInviteToken(url);
+          if (token) pendingAcceptTokenRef.current = token;
+          setPendingAcceptUrl(url);
+        } else {
+          setPendingResetUrl(url);
+        }
         await signOut();
-        // A-2 fix: the previous implementation called
-        // `Linking.openURL(url)` where `url` was the original https://
-        // universal link. On iOS that re-issues the URL to the OS, which
-        // routes it to Safari instead of back to this app (the receiving
-        // process is already the same TGP app that owns the AASA entry,
-        // so the OS resolves "open URL" against the next available
-        // handler — the browser). The fix is to rewrite the URL to its
-        // custom-scheme (`tgp://…`) equivalent before re-delivery so the
-        // dispatch stays in-process. React Navigation's linking config
-        // picks up the tgp:// form against the unauthenticated stack
-        // once auth state flips.
-        const replayUrl = rewriteHttpsToScheme(url);
-        setTimeout(() => {
-          Linking.openURL(replayUrl).catch(() => {});
-        }, 50);
         return;
       }
 
@@ -297,16 +361,30 @@ export default function RootNavigator() {
         const match = url.match(/\/join\/([^/?#]+)/i);
         const code = match?.[1];
         if (code) {
-          // B5/B6: stash the inbound code so the in-app banner (HomeScreen)
-          // can offer to claim it via authApi.attachInviteCode. The banner
-          // is the consent surface — we do NOT auto-attach because it would
-          // silently re-pair the client to a different coach.
+          // Stash the inbound code so RoleSelection (or a future settings
+          // surface) can offer to attach it. R15: every persisted key is
+          // user-scoped so a second user on the same device cannot read
+          // the prior user's pending code. We reach this branch only
+          // after `authed` was truthy above; resolve the user id from
+          // user_data and fall back to `:anonymous` if it cannot be
+          // parsed (which the sign-in flow then claims/migrates).
           try {
-            await AsyncStorage.setItem('pending_invite_code', code);
-            // Fire an authEvent so any mounted banner re-reads storage on
-            // foreground without waiting for a manual refresh.
-            authEvents.emit();
-          } catch (err) { logger.warn('RootNavigator', 'non-fatal', err); }
+            let scope = 'anonymous';
+            try {
+              const userRaw = await AsyncStorage.getItem('user_data');
+              if (userRaw) {
+                const parsed = JSON.parse(userRaw) as { id?: string };
+                if (parsed && typeof parsed.id === 'string' && parsed.id) {
+                  scope = parsed.id;
+                }
+              }
+            } catch {
+              // user_data unreadable — keep the `:anonymous` scope.
+            }
+            await AsyncStorage.setItem(`pending_invite_code:${scope}`, code);
+          } catch {
+            // best-effort
+          }
         }
       }
     };
@@ -321,6 +399,70 @@ export default function RootNavigator() {
       sub.remove();
     };
   }, []);
+
+  // Pending accept/reset URL replay.
+  //
+  // Fires after `authState === 'unauthenticated'` so the AuthNavigator
+  // stack is guaranteed to be mounted. We waitFor `navigationRef.isReady()`
+  // before replaying — on slow devices the container can lag the auth
+  // flip by a frame or two.
+  //
+  // Accept-invite replay uses an imperative `navigationRef.navigate()`
+  // call — NOT `Linking.openURL(url)` — so it does not re-enter the
+  // foreground URL handler. The previous implementation's openURL replay
+  // could loop because the foreground handler would re-record the same
+  // pendingAcceptUrl on every replay; the consumed-token ref below adds
+  // a belt-and-braces guard against duplicate consumption.
+  useEffect(() => {
+    if (authState !== 'unauthenticated') return;
+    if (!pendingAcceptUrl && !pendingResetUrl) return;
+    let cancelled = false;
+    const tryReplay = () => {
+      if (cancelled) return;
+      if (!navigationRef.isReady()) {
+        requestAnimationFrame(tryReplay);
+        return;
+      }
+      if (pendingAcceptUrl) {
+        const url = pendingAcceptUrl;
+        const token = extractAcceptInviteToken(url);
+        // Clear pending state regardless — we never want this URL to
+        // sit around for a second replay pass.
+        setPendingAcceptUrl(null);
+        if (!token) {
+          pendingAcceptTokenRef.current = null;
+          return;
+        }
+        if (consumedAcceptTokenRef.current === token) {
+          pendingAcceptTokenRef.current = null;
+          return;
+        }
+        consumedAcceptTokenRef.current = token;
+        pendingAcceptTokenRef.current = null;
+        try {
+          const nav = navigationRef as unknown as {
+            navigate: (name: string, params?: object) => void;
+          };
+          nav.navigate('AcceptInvite', { token });
+        } catch {
+          // Navigation can fail in tests / screenshot mode; the
+          // consumed-token ref still prevents a re-entry.
+        }
+      } else if (pendingResetUrl) {
+        const url = pendingResetUrl;
+        setPendingResetUrl(null);
+        // Reset-password still relies on the URL fragment carrying the
+        // Supabase access_token + refresh_token pair, so we keep the
+        // openURL re-entry here. ResetPassword is not single-use and
+        // not at risk of the same double-consume bug accept-invite has.
+        Linking.openURL(url).catch(() => {});
+      }
+    };
+    tryReplay();
+    return () => {
+      cancelled = true;
+    };
+  }, [authState, pendingAcceptUrl, pendingResetUrl]);
 
   // Flush the offline food-log queue whenever the network comes back online.
   // Only fires on the offline → online transition; repeated online events are

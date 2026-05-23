@@ -35,11 +35,35 @@ import type { AcceptInviteResponse } from '../../types/invites';
 import { secureStorage } from '../../services/secureStorage';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
+import { isValidInviteToken } from '../../utils/inviteToken';
+
+type FailureReason = 'expired' | 'already_accepted' | 'invalid' | 'network';
 
 type LocalState =
   | { kind: 'loading' }
   | { kind: 'accepted'; payload: Extract<AcceptInviteResponse, { accepted: true }>; authed: boolean }
-  | { kind: 'failed'; reason: 'expired' | 'already_accepted' | 'invalid' | 'network'; message?: string };
+  | { kind: 'failed'; reason: FailureReason };
+
+/**
+ * Map a (possibly server-supplied) status string to a closed failure
+ * reason. Unknown strings collapse to `'invalid'` so we never render a
+ * raw backend code to the user.
+ */
+function mapBackendReason(input: unknown): FailureReason {
+  if (typeof input !== 'string') return 'invalid';
+  const norm = input.trim().toUpperCase();
+  if (norm === 'EXPIRED' || norm === 'INVITE_EXPIRED') return 'expired';
+  if (norm === 'ALREADY_ACCEPTED' || norm === 'INVITE_ALREADY_ACCEPTED')
+    return 'already_accepted';
+  if (
+    norm === 'INVALID' ||
+    norm === 'INVITE_INVALID' ||
+    norm === 'INVITE_NOT_FOUND' ||
+    norm === 'NOT_FOUND'
+  )
+    return 'invalid';
+  return 'invalid';
+}
 
 type AuthParamList = {
   AcceptInvite: { token: string };
@@ -62,7 +86,8 @@ export default function AcceptInviteScreen({
   const [state, setState] = useState<LocalState>({ kind: 'loading' });
 
   const accept = useCallback(async () => {
-    if (!token) {
+    // Fail closed on malformed/missing tokens — no network call.
+    if (!token || !isValidInviteToken(token)) {
       setState({ kind: 'failed', reason: 'invalid' });
       return;
     }
@@ -70,24 +95,17 @@ export default function AcceptInviteScreen({
     try {
       const res = await invitesApi.acceptInvite(token);
       if (!res.accepted) {
-        const reason: 'expired' | 'already_accepted' | 'invalid' =
-          res.reason === 'expired'
-            ? 'expired'
-            : res.reason === 'already_accepted'
-              ? 'already_accepted'
-              : 'invalid';
-        setState({ kind: 'failed', reason, message: res.message });
+        setState({ kind: 'failed', reason: mapBackendReason(res.reason) });
         return;
       }
       const sessionToken = await secureStorage.getItem('supabase_token');
       const authed = Boolean(sessionToken) || res.redirectTo === 'app_open';
       setState({ kind: 'accepted', payload: res, authed });
     } catch (err) {
-      setState({
-        kind: 'failed',
-        reason: 'network',
-        message: errorMessage(err, 'Could not reach the server'),
-      });
+      // Never render raw exception strings to the user — log details for
+      // operators and surface a fixed-copy network failure to the UI.
+      console.error('AcceptInviteScreen: accept failed', errorMessage(err));
+      setState({ kind: 'failed', reason: 'network' });
     }
   }, [token]);
 
@@ -143,9 +161,7 @@ export default function AcceptInviteScreen({
           color={colors.textMuted}
         />
         <Text style={styles.title}>{failureTitle(state.reason)}</Text>
-        <Text style={styles.body}>
-          {state.message ?? failureBody(state.reason)}
-        </Text>
+        <Text style={styles.body}>{failureBody(state.reason)}</Text>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={failureCta(state.reason)}
@@ -247,7 +263,7 @@ function failureBody(
     case 'already_accepted':
       return 'This invite has already been used. Sign in to continue.';
     case 'invalid':
-      return "We couldn't find that invite. Double-check the link from your coach.";
+      return 'This invite link is not valid. Please contact your coach.';
     case 'network':
       return 'Check your connection and try again.';
   }

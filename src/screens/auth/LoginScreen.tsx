@@ -22,7 +22,7 @@ import { AnalyticsEvents } from '../../analytics/events';
 import { toFriendlyAuthError } from '../../utils/authErrorMessage';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
-import type { NavigationProp, ParamListBase } from '@react-navigation/native';
+import type { NavigationProp, ParamListBase, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { AuthStackParamList } from '../../navigation/AuthNavigator';
 import AppleSignInButton from '../../components/AppleSignInButton';
@@ -32,12 +32,33 @@ import { Colors } from '../../constants/colors';
 
 interface Props {
   navigation: NativeStackNavigationProp<AuthStackParamList>;
+  route?: RouteProp<AuthStackParamList, 'Login'>;
 }
 
-export default function LoginScreen({ navigation }: Props) {
+/**
+ * Conservative sanitiser for an inbound prefilled email. Strips
+ * whitespace and any non-printable characters, then caps at the
+ * RFC 5321 limit so a crafted deep link can't paste a 10kB blob
+ * into the email field.
+ */
+function sanitisePrefillEmail(raw: unknown): string {
+  if (typeof raw !== 'string') return '';
+  let out = '';
+  for (let i = 0; i < raw.length && out.length < 254; i++) {
+    const c = raw.charCodeAt(i);
+    if (c < 0x20 || c === 0x7f) continue;
+    if (c === 0x20) continue;
+    out += raw[i];
+  }
+  return out.trim();
+}
+
+export default function LoginScreen({ navigation, route }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState<string>(() =>
+    sanitisePrefillEmail(route?.params?.email),
+  );
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);

@@ -41,7 +41,6 @@ const ASYNC_SIGN_OUT_KEYS = [
   // working set. See audit #2 / R15.
   '@activeWorkoutSession/v1',
 ];
-
 // Prefixes whose every matching AsyncStorage key should be wiped on signOut.
 // Per-user namespaced data lives behind these prefixes; without enumeration the
 // per-user suffixed keys persist across sign-outs and a second user on the
@@ -55,6 +54,12 @@ const ASYNC_SIGN_OUT_PREFIXES = [
   // device from inheriting the previous user's session and seeing a
   // "Resume?" prompt with someone else's working state.
   'active_workout_session:',
+  // Per-user deep-link landing for invite acceptance (R15). The deep-link
+  // handler writes `pending_invite_code:<userId>` (or `:anonymous`); the
+  // bare `pending_invite_code` legacy key is wiped via ASYNC_SIGN_OUT_KEYS.
+  // The trailing colon keeps unrelated keys like `pending_invite_codex_*`
+  // from being swept.
+  'pending_invite_code:',
 ];
 
 // Per-user AsyncStorage key prefixes for nutrition/fasting state. R15 requires
