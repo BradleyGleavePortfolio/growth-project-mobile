@@ -583,21 +583,28 @@ export default function ActiveWorkoutScreen() {
         //      fires on reconnect via NetInfo.
         onPress: async () => {
           // Suppress the debounced persistence write that would
-          // otherwise race the clear() below and re-create the entry.
-          // Also null the pending payload ref so the background-flush
-          // path can't write between this tap and the clear completing.
+          // otherwise race the post-durable-write clear() and re-create
+          // the entry. Also null the pending payload ref so the
+          // background-flush path can't write between this tap and the
+          // clear completing.
           finishingRef.current = true;
           if (persistDebounceRef.current) {
             clearTimeout(persistDebounceRef.current);
             persistDebounceRef.current = null;
           }
           pendingPersistPayloadRef.current = null;
-          if (userId) await clearActiveWorkoutSession(userId);
           if (timerRef.current) clearInterval(timerRef.current);
           const durationMinutes = Math.round(timer / 60);
           const completedExercises = sessionExercises.filter((e) =>
             e.sets.some((s) => s.completed),
           );
+
+          // R18: do NOT clear the recovery session before a durable
+          // replacement save has completed. We clear only after the
+          // local SQLite write loop finishes successfully (first
+          // durable checkpoint) — or, if local writes failed, after
+          // the server mutation succeeds.
+          let localWriteSucceeded = false;
 
           // Write each exercise as a separate row in the local
           // expo-sqlite store (one row per exercise group). A
@@ -625,9 +632,17 @@ export default function ActiveWorkoutScreen() {
                 durationMinutes,
               });
             }
+            localWriteSucceeded = true;
+            // R18: local SQLite write is the first durable checkpoint.
+            // Now that at least one durable replacement save has
+            // completed, it's safe to clear the recovery session.
+            if (userId) await clearActiveWorkoutSession(userId);
           } catch (localErr) {
             if (__DEV__) console.warn('[ActiveWorkout] local write failed', localErr);
-            // Non-fatal: still attempt the server call below.
+            // Non-fatal: still attempt the server call below. Recovery
+            // session is intentionally NOT cleared here — it will be
+            // cleared on server onSuccess as a fallback durable
+            // checkpoint, or preserved on onError for retry.
           }
 
           // Analytics — unchanged from before.
@@ -657,6 +672,15 @@ export default function ActiveWorkoutScreen() {
             {
               onSuccess: (data: unknown) => {
                 if (timerRef.current) clearInterval(timerRef.current);
+                // R18 fallback: if the local SQLite write failed above,
+                // the recovery session was not cleared yet. The server
+                // mutation just succeeded — it's now durable on the
+                // server, so clear the recovery session here.
+                if (!localWriteSucceeded && userId) {
+                  clearActiveWorkoutSession(userId).catch(() => {
+                    /* best-effort */
+                  });
+                }
                 // Phase 11 / Track 3: heavy haptic on workout completion
                 HapticService.heavyImpact();
                 // Psych Report #4: Analytics — workout_logged
