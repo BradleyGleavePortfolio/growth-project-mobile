@@ -243,8 +243,16 @@ export default function ActiveWorkoutScreen() {
           {
             text: 'Start Fresh',
             style: 'destructive',
-            onPress: () => {
-              clearActiveWorkoutSession(userId).catch(() => { /* best-effort */ });
+            onPress: async () => {
+              // Await the clear before enabling persistence: a slow native
+              // removeItem can otherwise race the very first debounced save
+              // for the fresh session and delete the new payload after it
+              // lands. See audit #6.
+              try {
+                await clearActiveWorkoutSession(userId);
+              } catch {
+                /* best-effort */
+              }
               setSessionExercises(defaultSessionExercises);
               setHydrated(true);
             },
