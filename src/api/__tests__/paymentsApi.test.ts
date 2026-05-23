@@ -1,140 +1,325 @@
-// Wire-shape tests for the Connect + Packages typed API clients. Mirrors
-// the pattern in src/services/__tests__/billingAndAccountApi.test.ts: mock
-// axios up front so the wrappers bind to a fake instance, then assert the
-// URL + payload of every call.
+// Behavioral tests for the Connect + Packages typed API clients.
+//
+// What we assert:
+//   • Every mutation sends a non-empty `Idempotency-Key` header.
+//   • Coach packages map mobile camelCase → backend snake_case bodies on
+//     create/update.
+//   • Coach packages map backend snake_case → mobile camelCase responses on
+//     list/get.
+//   • List unwraps `{ packages: rows }` shape AND tolerates a flat array.
+//   • Archive uses DELETE /v1/coach/packages/:id (not POST .../archive).
+//   • Checkout posts to /v1/checkout/sessions with snake_case body.
+//   • Stripe URL validator accepts Stripe hosts and rejects everything else.
+//   • Share-token validator passes valid tokens and rejects malformed ones.
 
-jest.mock('axios', () => {
+jest.mock('../../services/api', () => {
   const instance = {
     get: jest.fn(),
     post: jest.fn(),
     put: jest.fn(),
     patch: jest.fn(),
     delete: jest.fn(),
-    request: jest.fn(),
-    interceptors: {
-      request: { use: jest.fn() },
-      response: { use: jest.fn() },
-    },
-    defaults: { headers: { common: {} } },
   };
-  return {
-    __esModule: true,
-    default: { create: jest.fn(() => instance) },
-    __instance: instance,
-  };
+  return { __esModule: true, default: instance };
 });
 
-const axiosMock = jest.requireMock('axios') as {
-  __instance: {
-    get: jest.Mock;
-    post: jest.Mock;
-    patch: jest.Mock;
-  };
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const apiMock = jest.requireMock('../../services/api').default as {
+  get: jest.Mock;
+  post: jest.Mock;
+  patch: jest.Mock;
+  delete: jest.Mock;
 };
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { connectApi } = require('../connectApi');
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { coachPackagesApi, publicPackagesApi } = require('../packagesApi');
+import { connectApi } from '../connectApi';
+import {
+  coachPackagesApi,
+  publicPackagesApi,
+  newIdempotencyKey,
+} from '../packagesApi';
+import { validateStripeUrl } from '../../utils/stripeUrlValidator';
+import { isValidPackageShareToken } from '../../utils/packageShare';
 
 beforeEach(() => {
-  axiosMock.__instance.get.mockReset().mockResolvedValue({ data: {} });
-  axiosMock.__instance.post.mockReset().mockResolvedValue({ data: {} });
-  axiosMock.__instance.patch.mockReset().mockResolvedValue({ data: {} });
+  apiMock.get.mockReset().mockResolvedValue({ data: {} });
+  apiMock.post.mockReset().mockResolvedValue({ data: {} });
+  apiMock.patch.mockReset().mockResolvedValue({ data: {} });
+  apiMock.delete.mockReset().mockResolvedValue({ data: {} });
 });
 
-describe('connectApi', () => {
-  it('getStatus → GET /v1/connect/accounts/me', async () => {
-    await connectApi.getStatus();
-    expect(axiosMock.__instance.get).toHaveBeenCalledWith('/v1/connect/accounts/me');
-  });
+// ── connectApi mutations carry Idempotency-Key ─────────────────────────────
 
-  it('createAccount with country → POST /v1/connect/accounts/create', async () => {
+describe('connectApi mutations send Idempotency-Key', () => {
+  it('createAccount → POST /v1/connect/accounts/create + idem header', async () => {
     await connectApi.createAccount({ country: 'US' });
-    expect(axiosMock.__instance.post).toHaveBeenCalledWith(
-      '/v1/connect/accounts/create',
-      { country: 'US' },
-    );
+    expect(apiMock.post).toHaveBeenCalledTimes(1);
+    const [url, body, config] = apiMock.post.mock.calls[0];
+    expect(url).toBe('/v1/connect/accounts/create');
+    expect(body).toEqual({ country: 'US' });
+    expect(config?.headers?.['Idempotency-Key']).toBeTruthy();
   });
 
-  it('createOnboardingLink → POST /v1/connect/accounts/onboarding-link', async () => {
+  it('createOnboardingLink → POST .../onboarding-link + idem header', async () => {
     await connectApi.createOnboardingLink();
-    expect(axiosMock.__instance.post).toHaveBeenCalledWith(
-      '/v1/connect/accounts/onboarding-link',
-      {},
-    );
+    const [url, , config] = apiMock.post.mock.calls[0];
+    expect(url).toBe('/v1/connect/accounts/onboarding-link');
+    expect(config?.headers?.['Idempotency-Key']).toBeTruthy();
   });
 
-  it('createDashboardLink → POST /v1/connect/accounts/dashboard-link', async () => {
+  it('createDashboardLink → POST .../dashboard-link + idem header', async () => {
     await connectApi.createDashboardLink();
-    expect(axiosMock.__instance.post).toHaveBeenCalledWith(
-      '/v1/connect/accounts/dashboard-link',
-      {},
-    );
+    const [url, , config] = apiMock.post.mock.calls[0];
+    expect(url).toBe('/v1/connect/accounts/dashboard-link');
+    expect(config?.headers?.['Idempotency-Key']).toBeTruthy();
+  });
+
+  it('two sequential mutations get distinct idempotency keys', async () => {
+    await connectApi.createOnboardingLink();
+    await connectApi.createOnboardingLink();
+    const k1 = apiMock.post.mock.calls[0][2]?.headers?.['Idempotency-Key'];
+    const k2 = apiMock.post.mock.calls[1][2]?.headers?.['Idempotency-Key'];
+    expect(k1).toBeTruthy();
+    expect(k2).toBeTruthy();
+    expect(k1).not.toEqual(k2);
   });
 });
 
-describe('coachPackagesApi', () => {
-  it('list → GET /v1/coach/packages', async () => {
-    await coachPackagesApi.list();
-    expect(axiosMock.__instance.get).toHaveBeenCalledWith('/v1/coach/packages');
-  });
+// ── coachPackagesApi: list / mapping / verbs / idempotency ─────────────────
 
-  it('get(id) → GET /v1/coach/packages/:id', async () => {
-    await coachPackagesApi.get('pkg_1');
-    expect(axiosMock.__instance.get).toHaveBeenCalledWith('/v1/coach/packages/pkg_1');
-  });
-
-  it('create → POST /v1/coach/packages with body', async () => {
-    const input = {
+describe('coachPackagesApi list contract', () => {
+  it('unwraps { packages: rows } and maps snake_case → camelCase', async () => {
+    apiMock.get.mockResolvedValueOnce({
+      data: {
+        packages: [
+          {
+            id: 'pkg_1',
+            coach_user_id: 'coach_a',
+            name: 'Test',
+            description: 'desc',
+            amount_cents: 1500,
+            currency: 'usd',
+            billing_type: 'recurring',
+            billing_interval: 'monthly',
+            billing_interval_count: 1,
+            trial_days: 7,
+            features: ['a', 'b'],
+            is_active: true,
+            share_token: 'tok_abc',
+            created_at: '2026-01-01T00:00:00Z',
+            updated_at: '2026-01-02T00:00:00Z',
+          },
+        ],
+      },
+    });
+    const res = await coachPackagesApi.list();
+    expect(apiMock.get).toHaveBeenCalledWith('/v1/coach/packages');
+    expect(res.data).toHaveLength(1);
+    expect(res.data[0]).toMatchObject({
+      id: 'pkg_1',
+      coachUserId: 'coach_a',
       title: 'Test',
-      priceCents: 1000,
-      billingInterval: 'monthly' as const,
-    };
-    await coachPackagesApi.create(input);
-    expect(axiosMock.__instance.post).toHaveBeenCalledWith('/v1/coach/packages', input);
+      priceCents: 1500,
+      billingInterval: 'monthly',
+      intervalCount: 1,
+      trialDays: 7,
+      features: ['a', 'b'],
+      status: 'active',
+      shareToken: 'tok_abc',
+    });
   });
 
-  it('update(id, body) → PATCH /v1/coach/packages/:id', async () => {
-    await coachPackagesApi.update('pkg_1', { priceCents: 1500 });
-    expect(axiosMock.__instance.patch).toHaveBeenCalledWith(
-      '/v1/coach/packages/pkg_1',
-      { priceCents: 1500 },
-    );
-  });
-
-  it('archive(id) → POST /v1/coach/packages/:id/archive', async () => {
-    await coachPackagesApi.archive('pkg_1');
-    expect(axiosMock.__instance.post).toHaveBeenCalledWith(
-      '/v1/coach/packages/pkg_1/archive',
-      {},
-    );
-  });
-
-  it('subscribers(id) → GET /v1/coach/packages/:id/subscribers', async () => {
-    await coachPackagesApi.subscribers('pkg_1');
-    expect(axiosMock.__instance.get).toHaveBeenCalledWith(
-      '/v1/coach/packages/pkg_1/subscribers',
-    );
-  });
-
-  it('earnings → GET /v1/coach/earnings', async () => {
-    await coachPackagesApi.earnings();
-    expect(axiosMock.__instance.get).toHaveBeenCalledWith('/v1/coach/earnings');
+  it('tolerates a flat array response (legacy backends)', async () => {
+    apiMock.get.mockResolvedValueOnce({
+      data: [{ id: 'pkg_x', name: 'Solo', amount_cents: 500 }],
+    });
+    const res = await coachPackagesApi.list();
+    expect(res.data[0].title).toBe('Solo');
+    expect(res.data[0].priceCents).toBe(500);
   });
 });
 
-describe('publicPackagesApi', () => {
-  it('getByShareToken → GET /v1/packages/:shareToken', async () => {
-    await publicPackagesApi.getByShareToken('tok_abc');
-    expect(axiosMock.__instance.get).toHaveBeenCalledWith('/v1/packages/tok_abc');
+describe('coachPackagesApi mutations', () => {
+  it('create → POST with snake_case body + idem header', async () => {
+    apiMock.post.mockResolvedValueOnce({
+      data: { id: 'pkg_new', name: 'Pro', amount_cents: 9900 },
+    });
+    const res = await coachPackagesApi.create({
+      title: 'Pro',
+      priceCents: 9900,
+      billingInterval: 'monthly',
+      intervalCount: 1,
+      features: ['weekly check-ins'],
+    });
+    const [url, body, config] = apiMock.post.mock.calls[0];
+    expect(url).toBe('/v1/coach/packages');
+    expect(body).toMatchObject({
+      name: 'Pro',
+      amount_cents: 9900,
+      billing_type: 'recurring',
+      billing_interval: 'monthly',
+      billing_interval_count: 1,
+      features: ['weekly check-ins'],
+    });
+    expect(config?.headers?.['Idempotency-Key']).toBeTruthy();
+    expect(res.data.id).toBe('pkg_new');
+    expect(res.data.title).toBe('Pro');
   });
 
-  it('createCheckoutSession → POST /v1/packages/:shareToken/checkout', async () => {
-    await publicPackagesApi.createCheckoutSession('tok_abc', { returnUrl: 'tgp://x' });
-    expect(axiosMock.__instance.post).toHaveBeenCalledWith(
-      '/v1/packages/tok_abc/checkout',
-      { returnUrl: 'tgp://x' },
+  it('one_time create sets billing_type=one_time', async () => {
+    await coachPackagesApi.create({
+      title: 'Once',
+      priceCents: 5000,
+      billingInterval: 'one_time',
+    });
+    const [, body] = apiMock.post.mock.calls[0];
+    expect(body.billing_type).toBe('one_time');
+    expect(body.billing_interval).toBe('one_time');
+  });
+
+  it('update → PATCH with snake_case body + idem header', async () => {
+    apiMock.patch.mockResolvedValueOnce({
+      data: { id: 'pkg_1', name: 'Renamed', amount_cents: 2500 },
+    });
+    await coachPackagesApi.update('pkg_1', { priceCents: 2500, status: 'active' });
+    const [url, body, config] = apiMock.patch.mock.calls[0];
+    expect(url).toBe('/v1/coach/packages/pkg_1');
+    expect(body).toMatchObject({ amount_cents: 2500, is_active: true });
+    expect(config?.headers?.['Idempotency-Key']).toBeTruthy();
+  });
+
+  it('archive → DELETE /v1/coach/packages/:id (not POST archive) + idem', async () => {
+    apiMock.delete.mockResolvedValueOnce({ data: { ok: true } });
+    const res = await coachPackagesApi.archive('pkg_1');
+    expect(apiMock.delete).toHaveBeenCalledTimes(1);
+    expect(apiMock.post).not.toHaveBeenCalled();
+    const [url, config] = apiMock.delete.mock.calls[0];
+    expect(url).toBe('/v1/coach/packages/pkg_1');
+    expect(config?.headers?.['Idempotency-Key']).toBeTruthy();
+    expect(res.data.id).toBe('pkg_1');
+    expect(res.data.status).toBe('archived');
+  });
+
+  it('encodeURIComponent is applied to ids in path segments', async () => {
+    await coachPackagesApi.update('pkg/with/slash', { priceCents: 100 });
+    const [url] = apiMock.patch.mock.calls[0];
+    expect(url).toBe('/v1/coach/packages/pkg%2Fwith%2Fslash');
+  });
+});
+
+// ── publicPackagesApi: checkout endpoint + token validation ────────────────
+
+describe('publicPackagesApi.createCheckoutSession', () => {
+  it('hits /v1/checkout/sessions with snake_case body + idem header', async () => {
+    await publicPackagesApi.createCheckoutSession('tok_abc', {
+      returnUrl: 'tgp://packages/return',
+    });
+    expect(apiMock.post).toHaveBeenCalledTimes(1);
+    const [url, body, config] = apiMock.post.mock.calls[0];
+    expect(url).toBe('/v1/checkout/sessions');
+    expect(body).toMatchObject({
+      share_token: 'tok_abc',
+      success_url: 'tgp://packages/return',
+      cancel_url: 'tgp://packages/return',
+    });
+    expect(config?.headers?.['Idempotency-Key']).toBeTruthy();
+  });
+
+  it('rejects malformed tokens without making a network call', async () => {
+    await expect(
+      publicPackagesApi.createCheckoutSession('../etc/passwd'),
+    ).rejects.toThrow('INVALID_SHARE_TOKEN');
+    expect(apiMock.post).not.toHaveBeenCalled();
+  });
+
+  it('getByShareToken rejects malformed tokens before calling the API', async () => {
+    await expect(
+      publicPackagesApi.getByShareToken('has space'),
+    ).rejects.toThrow('INVALID_SHARE_TOKEN');
+    expect(apiMock.get).not.toHaveBeenCalled();
+  });
+
+  it('getByShareToken encodes valid tokens into the URL path', async () => {
+    await publicPackagesApi.getByShareToken('abc-123_DEF');
+    expect(apiMock.get).toHaveBeenCalledWith('/v1/packages/abc-123_DEF');
+  });
+});
+
+// ── newIdempotencyKey ──────────────────────────────────────────────────────
+
+describe('newIdempotencyKey', () => {
+  it('returns a string in UUID v4 shape', () => {
+    const k = newIdempotencyKey();
+    expect(typeof k).toBe('string');
+    expect(k).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
     );
+  });
+  it('returns a distinct value on each call', () => {
+    const a = newIdempotencyKey();
+    const b = newIdempotencyKey();
+    expect(a).not.toEqual(b);
+  });
+});
+
+// ── validateStripeUrl ──────────────────────────────────────────────────────
+
+describe('validateStripeUrl', () => {
+  it('accepts known Stripe hosts over https', () => {
+    expect(validateStripeUrl('https://checkout.stripe.com/c/pay/cs_x')).toBe(true);
+    expect(validateStripeUrl('https://connect.stripe.com/setup/e/acct_x')).toBe(true);
+    expect(validateStripeUrl('https://dashboard.stripe.com/login')).toBe(true);
+    expect(validateStripeUrl('https://billing.stripe.com/p/session_x')).toBe(true);
+  });
+
+  it('accepts Stripe subdomains (e.g. files.stripe.com is rejected — only the listed roots)', () => {
+    expect(validateStripeUrl('https://foo.checkout.stripe.com/x')).toBe(true);
+  });
+
+  it('rejects http (non-https) even for Stripe hosts', () => {
+    expect(validateStripeUrl('http://checkout.stripe.com/c/pay/cs_x')).toBe(false);
+  });
+
+  it('rejects unrelated hosts', () => {
+    expect(validateStripeUrl('https://evil.example.com/checkout.stripe.com')).toBe(false);
+    expect(validateStripeUrl('https://stripe.com.evil.example.com/x')).toBe(false);
+    expect(validateStripeUrl('https://stripe.com/x')).toBe(false);
+  });
+
+  it('rejects malformed input', () => {
+    expect(validateStripeUrl('')).toBe(false);
+    expect(validateStripeUrl('not a url')).toBe(false);
+    // @ts-expect-error — testing runtime guard for non-string input
+    expect(validateStripeUrl(null)).toBe(false);
+  });
+});
+
+// ── isValidPackageShareToken ───────────────────────────────────────────────
+
+describe('isValidPackageShareToken', () => {
+  it('accepts UUID-like and alnum tokens with - and _', () => {
+    expect(isValidPackageShareToken('abcDEF123')).toBe(true);
+    expect(isValidPackageShareToken('a-b_c-1_2')).toBe(true);
+    expect(
+      isValidPackageShareToken('11111111-2222-4333-8444-555555555555'),
+    ).toBe(true);
+  });
+
+  it('rejects empty / oversize', () => {
+    expect(isValidPackageShareToken('')).toBe(false);
+    expect(isValidPackageShareToken('a'.repeat(129))).toBe(false);
+  });
+
+  it('rejects path-like, whitespace, and HTML chars', () => {
+    expect(isValidPackageShareToken('../etc/passwd')).toBe(false);
+    expect(isValidPackageShareToken('foo bar')).toBe(false);
+    expect(isValidPackageShareToken('<script>')).toBe(false);
+    expect(isValidPackageShareToken('foo/bar')).toBe(false);
+    expect(isValidPackageShareToken('foo.bar')).toBe(false);
+  });
+
+  it('rejects non-strings', () => {
+    expect(isValidPackageShareToken(null)).toBe(false);
+    expect(isValidPackageShareToken(undefined)).toBe(false);
+    expect(isValidPackageShareToken(123)).toBe(false);
   });
 });

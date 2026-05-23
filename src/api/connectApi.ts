@@ -5,6 +5,7 @@
 // There is no fake-success path; callers render the error state honestly.
 
 import api from '../services/api';
+import { newIdempotencyKey } from './packagesApi';
 
 export interface ConnectAccountView {
   coach_user_id: string;
@@ -33,16 +34,35 @@ export interface DashboardLink {
   url: string;
 }
 
+function idemHeaders(key?: string): { headers: { 'Idempotency-Key': string } } {
+  return { headers: { 'Idempotency-Key': key ?? newIdempotencyKey() } };
+}
+
 export const connectApi = {
   getStatus: () =>
     api.get<ConnectStatusResponse>('/v1/connect/accounts/me'),
 
-  createAccount: (opts: { country?: string; email?: string } = {}) =>
-    api.post<ConnectAccountView>('/v1/connect/accounts/create', opts),
+  createAccount: (
+    opts: { country?: string; email?: string } = {},
+    idempotencyKey?: string,
+  ) =>
+    api.post<ConnectAccountView>(
+      '/v1/connect/accounts/create',
+      opts,
+      idemHeaders(idempotencyKey),
+    ),
 
-  createOnboardingLink: () =>
-    api.post<OnboardingLink>('/v1/connect/accounts/onboarding-link', {}),
+  createOnboardingLink: (idempotencyKey?: string) =>
+    api.post<OnboardingLink>(
+      '/v1/connect/accounts/onboarding-link',
+      {},
+      idemHeaders(idempotencyKey),
+    ),
 
-  createDashboardLink: () =>
-    api.post<DashboardLink>('/v1/connect/accounts/dashboard-link', {}),
+  createDashboardLink: (idempotencyKey?: string) =>
+    api.post<DashboardLink>(
+      '/v1/connect/accounts/dashboard-link',
+      {},
+      idemHeaders(idempotencyKey),
+    ),
 };

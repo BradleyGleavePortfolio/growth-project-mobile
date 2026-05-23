@@ -30,6 +30,7 @@ import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { connectApi, ConnectStatusResponse } from '../../../api/connectApi';
 import { errorCode, errorMessage, errorStatus } from '../../../types/common';
 import { mediumTap, successTap } from '../../../utils/haptics';
+import { assertStripeUrl } from '../../../utils/stripeUrlValidator';
 import { track } from '../../../lib/analytics';
 import { useTheme, ThemeColors } from '../../../theme/ThemeProvider';
 
@@ -38,8 +39,35 @@ interface Props {
 }
 
 interface ConfigError {
+  // `code` is kept for telemetry/logs only — it is never rendered.
   code: string;
-  message: string;
+  title: string;
+  body: string;
+}
+
+function configCopy(code: string): { title: string; body: string } {
+  switch (code) {
+    case 'CONNECT_NOT_CONFIGURED':
+      return {
+        title: 'Set up Stripe to get paid',
+        body: 'Set up Stripe to start getting paid.',
+      };
+    case 'CONNECT_NOT_DEPLOYED':
+      return {
+        title: 'Payouts coming soon',
+        body: 'Payments are being set up. Check back soon.',
+      };
+    case 'CONNECT_ONBOARDING_INCOMPLETE':
+      return {
+        title: 'Finish onboarding',
+        body: 'Finish setting up your Stripe account.',
+      };
+    default:
+      return {
+        title: 'Payouts unavailable',
+        body: 'Payouts are temporarily unavailable. Please try again later.',
+      };
+  }
 }
 
 export default function CoachConnectScreen({ navigation }: Props) {
@@ -60,24 +88,19 @@ export default function CoachConnectScreen({ navigation }: Props) {
       const code = errorCode(err);
       const httpCode = errorStatus(err);
       if (httpCode === 503 || code === 'CONNECT_NOT_CONFIGURED') {
-        setConfigError({
-          code: code ?? 'CONNECT_NOT_CONFIGURED',
-          message: errorMessage(
-            err,
-            'Stripe Connect is not configured on this environment.',
-          ),
-        });
+        const resolvedCode = code ?? 'CONNECT_NOT_CONFIGURED';
+        console.warn('[coach-connect] config blocker', resolvedCode);
+        setConfigError({ code: resolvedCode, ...configCopy(resolvedCode) });
         setStatus({ connected: false });
       } else if (httpCode === 404) {
-        // Endpoint not deployed yet — same actionable state, different copy.
+        console.warn('[coach-connect] config blocker CONNECT_NOT_DEPLOYED');
         setConfigError({
           code: 'CONNECT_NOT_DEPLOYED',
-          message:
-            'Payouts are coming soon. The Connect API is not yet deployed in this environment.',
+          ...configCopy('CONNECT_NOT_DEPLOYED'),
         });
         setStatus({ connected: false });
       } else {
-        Alert.alert('Could not load payouts', errorMessage(err));
+        Alert.alert('Could not load payouts', errorMessage(err, 'Please try again.'));
       }
     } finally {
       setLoading(false);
@@ -108,6 +131,12 @@ export default function CoachConnectScreen({ navigation }: Props) {
       }
       const link = await connectApi.createOnboardingLink();
       track('coach_connect_onboarding_started');
+      try {
+        assertStripeUrl(link.data.url, 'CoachConnectScreen.onboarding');
+      } catch {
+        Alert.alert('Unable to open Stripe', 'Please try again.');
+        return;
+      }
       const result = await WebBrowser.openBrowserAsync(link.data.url, {
         presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
       });
@@ -123,10 +152,8 @@ export default function CoachConnectScreen({ navigation }: Props) {
     } catch (err) {
       const code = errorCode(err);
       if (code === 'CONNECT_NOT_CONFIGURED') {
-        setConfigError({
-          code,
-          message: errorMessage(err, 'Stripe Connect is not configured.'),
-        });
+        console.warn('[coach-connect] config blocker CONNECT_NOT_CONFIGURED');
+        setConfigError({ code, ...configCopy(code) });
       } else {
         Alert.alert(
           'Could not open onboarding',
@@ -144,6 +171,12 @@ export default function CoachConnectScreen({ navigation }: Props) {
     try {
       const link = await connectApi.createDashboardLink();
       track('coach_connect_dashboard_opened');
+      try {
+        assertStripeUrl(link.data.url, 'CoachConnectScreen.dashboard');
+      } catch {
+        Alert.alert('Unable to open Stripe', 'Please try again.');
+        return;
+      }
       await WebBrowser.openBrowserAsync(link.data.url, {
         presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
       });
@@ -180,9 +213,8 @@ export default function CoachConnectScreen({ navigation }: Props) {
       return (
         <View style={styles.errorCard}>
           <Ionicons name="construct-outline" size={28} color={colors.warning} />
-          <Text style={styles.errorTitle}>Payouts not available yet</Text>
-          <Text style={styles.errorBody}>{configError.message}</Text>
-          <Text style={styles.errorCode}>{configError.code}</Text>
+          <Text style={styles.errorTitle}>{configError.title}</Text>
+          <Text style={styles.errorBody}>{configError.body}</Text>
           <TouchableOpacity style={styles.secondaryBtn} onPress={load}>
             <Text style={styles.secondaryBtnText}>Try again</Text>
           </TouchableOpacity>

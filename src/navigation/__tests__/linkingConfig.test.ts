@@ -13,6 +13,7 @@ import {
   INVITE_UNIVERSAL_HOST,
   INVITE_PATH,
 } from '../../utils/deepLink';
+import { isValidPackageShareToken } from '../../utils/packageShare';
 
 const ROOT = path.resolve(__dirname, '..', '..', '..');
 const APP_JSON = JSON.parse(fs.readFileSync(path.join(ROOT, 'app.json'), 'utf8'));
@@ -150,5 +151,77 @@ describe('app.json + RootNavigator + AASA declare the /p/<token> package surface
     const components = aasa.applinks.details.flatMap((d: any) => d.components || []);
     const paths = components.map((c: any) => c['/']);
     expect(paths).toEqual(expect.arrayContaining(['/p/*']));
+  });
+});
+
+// Behavioral coverage for the share-token parser used by the linking
+// config. Asserts that a real https://app.trygrowthproject.com/p/<token>
+// link is parsed into a usable shareToken, and that malformed paths are
+// rejected before they ever reach PackageCheckoutScreen.
+describe('package share link parsing', () => {
+  function tokenFromUniversalLink(url: string): string | null {
+    // Mirrors what React Navigation's URL parser does for the
+    // `p/:shareToken` segment in RootNavigator. We strip the prefix the
+    // linking config recognises and treat the next path segment as the
+    // raw value, then run the same validator the linking config wraps
+    // `parse: { shareToken }` with.
+    const prefixes = [
+      'https://app.trygrowthproject.com/p/',
+      'tgp://p/',
+    ];
+    let raw: string | null = null;
+    for (const p of prefixes) {
+      if (url.startsWith(p)) {
+        raw = url.slice(p.length).split(/[?#/]/)[0];
+        break;
+      }
+    }
+    if (raw == null) return null;
+    try {
+      raw = decodeURIComponent(raw);
+    } catch {
+      return null;
+    }
+    return isValidPackageShareToken(raw) ? raw : null;
+  }
+
+  it('extracts a valid token from a universal link', () => {
+    expect(
+      tokenFromUniversalLink(
+        'https://app.trygrowthproject.com/p/abc-123_DEF',
+      ),
+    ).toBe('abc-123_DEF');
+  });
+
+  it('extracts a valid token from a custom-scheme link', () => {
+    expect(tokenFromUniversalLink('tgp://p/uuid-token-9999')).toBe(
+      'uuid-token-9999',
+    );
+  });
+
+  it('rejects path-traversal and HTML-injection tokens', () => {
+    expect(
+      tokenFromUniversalLink(
+        'https://app.trygrowthproject.com/p/' +
+          encodeURIComponent('../etc/passwd'),
+      ),
+    ).toBeNull();
+    expect(
+      tokenFromUniversalLink(
+        'https://app.trygrowthproject.com/p/' +
+          encodeURIComponent('<script>alert(1)</script>'),
+      ),
+    ).toBeNull();
+  });
+
+  it('rejects oversized tokens', () => {
+    const big = 'a'.repeat(200);
+    expect(
+      tokenFromUniversalLink(`https://app.trygrowthproject.com/p/${big}`),
+    ).toBeNull();
+  });
+
+  it('rejects links from an unrelated host', () => {
+    expect(tokenFromUniversalLink('https://evil.example.com/p/abc')).toBeNull();
   });
 });

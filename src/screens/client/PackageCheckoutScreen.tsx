@@ -35,6 +35,8 @@ import type { NavigationProp, ParamListBase, RouteProp } from '@react-navigation
 
 import { publicPackagesApi, PublicPackageView, CheckoutSessionResponse } from '../../api/packagesApi';
 import { errorCode, errorMessage, errorStatus } from '../../types/common';
+import { assertStripeUrl } from '../../utils/stripeUrlValidator';
+import { isValidPackageShareToken } from '../../utils/packageShare';
 import { mediumTap, successTap, warningTap } from '../../utils/haptics';
 import { track } from '../../lib/analytics';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
@@ -72,6 +74,14 @@ export default function PackageCheckoutScreen({ navigation, route }: Props) {
 
   const load = useCallback(async () => {
     setError(null);
+    if (!isValidPackageShareToken(shareToken)) {
+      setError({
+        title: 'Link not valid',
+        body: 'This link is not valid. Ask your coach for an updated link.',
+      });
+      setLoading(false);
+      return;
+    }
     try {
       const res = await publicPackagesApi.getByShareToken(shareToken);
       setPkg(res.data);
@@ -127,6 +137,16 @@ export default function PackageCheckoutScreen({ navigation, route }: Props) {
         return;
       }
       track('package_checkout_session_created', { share_token: shareToken });
+      try {
+        assertStripeUrl(data.url, 'PackageCheckoutScreen');
+      } catch {
+        warningTap();
+        Alert.alert(
+          'Checkout unavailable',
+          'Payment link is invalid. Please contact your coach.',
+        );
+        return;
+      }
       const result = await WebBrowser.openBrowserAsync(data.url, {
         presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
       });

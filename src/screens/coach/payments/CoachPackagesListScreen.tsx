@@ -32,8 +32,25 @@ interface Props {
 }
 
 interface EmptyConfig {
+  // Code stays for telemetry/logs only — never rendered.
   code: string;
-  message: string;
+  title: string;
+  body: string;
+}
+
+function packagesConfigCopy(code: string): { title: string; body: string } {
+  switch (code) {
+    case 'PACKAGES_NOT_CONFIGURED':
+      return {
+        title: 'Create your first package',
+        body: 'Create your first package to get started.',
+      };
+    default:
+      return {
+        title: 'Packages coming soon',
+        body: 'Coach packages are not enabled in this environment yet.',
+      };
+  }
 }
 
 export default function CoachPackagesListScreen({ navigation }: Props) {
@@ -55,15 +72,9 @@ export default function CoachPackagesListScreen({ navigation }: Props) {
       const code = errorCode(err);
       const httpCode = errorStatus(err);
       if (httpCode === 404) {
-        // Backend module not deployed yet. Real-or-flagged: show the truth.
-        setConfigState({
-          code: code ?? 'PACKAGES_NOT_CONFIGURED',
-          message:
-            errorMessage(
-              err,
-              'Coach packages are not enabled in this environment yet.',
-            ),
-        });
+        const resolvedCode = code ?? 'PACKAGES_NOT_CONFIGURED';
+        console.warn('[coach-packages] config blocker', resolvedCode);
+        setConfigState({ code: resolvedCode, ...packagesConfigCopy(resolvedCode) });
         setItems([]);
       } else {
         setError(errorMessage(err, 'Could not load packages.'));
@@ -101,9 +112,8 @@ export default function CoachPackagesListScreen({ navigation }: Props) {
       return (
         <View style={styles.emptyWrap}>
           <Ionicons name="construct-outline" size={32} color={colors.textMuted} />
-          <Text style={styles.emptyTitle}>Packages coming soon</Text>
-          <Text style={styles.emptyBody}>{configState.message}</Text>
-          <Text style={styles.errorCode}>{configState.code}</Text>
+          <Text style={styles.emptyTitle}>{configState.title}</Text>
+          <Text style={styles.emptyBody}>{configState.body}</Text>
         </View>
       );
     }

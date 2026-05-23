@@ -66,6 +66,7 @@ type AuthState =
 import { fragmentToQuery } from './deepLinkUtils';
 import { readUserCache, clearUserCache } from '../lib/userCache';
 import { EntitlementProvider } from '../entitlements/EntitlementProvider';
+import { isValidPackageShareToken } from '../utils/packageShare';
 
 // A-2 helper. Convert `https://app.trygrowthproject.com/<path>` to its
 // `tgp://<path>` equivalent so the post-signOut replay never escapes to
@@ -168,9 +169,11 @@ const linking: LinkingOptions<Record<string, object | undefined>> = {
         : {}),
       // MoreTab linking — combines:
       //   • PackageCheckout (`tgp://p/:token`, `https://app.trygrowthproject.com/p/:token`)
-      //     — universal-link entry for a coach's package share link. Inert
-      //     when unauthenticated; the deep-link is queued until login lands
-      //     in ClientNavigator.
+      //     — universal-link entry for a coach's package share link. The
+      //     `parse` rejects malformed/oversized/path-like tokens so garbage
+      //     from a tampered link never reaches the screen or any API path
+      //     interpolation. PackageCheckoutScreen still validates at mount
+      //     as defense-in-depth.
       //   • Screenshot-mode deep links (only mounted in screenshot harness).
       //   • Stripe Checkout return route, reachable in real builds via
       //     tgp://checkout/{success,cancel}. Stripe redirects to:
@@ -182,7 +185,9 @@ const linking: LinkingOptions<Record<string, object | undefined>> = {
         screens: {
           PackageCheckout: {
             path: 'p/:shareToken',
-            parse: { shareToken: (v: string) => v },
+            parse: {
+              shareToken: (v: string) => (isValidPackageShareToken(v) ? v : ''),
+            },
           },
           ...(isScreenshotMode()
             ? {
