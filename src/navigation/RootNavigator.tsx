@@ -656,11 +656,15 @@ export default function RootNavigator() {
         // Re-surface PackageSelectionSheet if dismissed > 24h ago.
         // Only triggers on authenticated re-boots, not the first post-onboarding flow
         // (that is handled inside Day1WinScreen itself).
+        // R15: the dismissed-at key is scoped to user.id so the gate is
+        // per-user and can't be inherited by a different signed-in user.
         try {
           const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
-          const dismissedAt = await prefsStorage.getStringAsync(
-            'onboarding.package_prompt_dismissed_at',
-          );
+          const dismissedAt = user?.id
+            ? await prefsStorage.getStringAsync(
+                `onboarding.package_prompt_dismissed_at:${user.id}`,
+              )
+            : null;
           if (dismissedAt) {
             const elapsed = Date.now() - new Date(dismissedAt).getTime();
             if (elapsed > TWENTY_FOUR_HOURS) {

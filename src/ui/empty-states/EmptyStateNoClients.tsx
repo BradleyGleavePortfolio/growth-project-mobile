@@ -24,6 +24,7 @@ import * as Haptics from 'expo-haptics';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { prefsStorage } from '../../storage/mmkv';
 import { coachApi } from '../../services/api';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -47,7 +48,9 @@ interface Props {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const MMKV_CODE_KEY = 'coach.wizard.step_2_invite_code';
+// R15: scoped to the signed-in coach so a different coach signing in cannot
+// inherit the previous coach's invite code.
+const MMKV_CODE_KEY_BASE = 'coach.wizard.step_2_invite_code';
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -55,6 +58,11 @@ export function EmptyStateNoClients({ onGoToSettings, onInvite }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const handleInviteCta = onGoToSettings ?? onInvite;
+  const currentUser = useCurrentUser();
+  const cacheKey = useMemo(
+    () => (currentUser?.id ? `${MMKV_CODE_KEY_BASE}:${currentUser.id}` : null),
+    [currentUser?.id],
+  );
 
   const [code, setCode] = useState<string | null>(null);
   const [deepLink, setDeepLink] = useState<string | null>(null);
@@ -66,7 +74,7 @@ export function EmptyStateNoClients({ onGoToSettings, onInvite }: Props) {
   useEffect(() => {
     (async () => {
       try {
-        const cached = await prefsStorage.getStringAsync(MMKV_CODE_KEY);
+        const cached = cacheKey ? await prefsStorage.getStringAsync(cacheKey) : null;
         if (cached) {
           setCode(cached);
           setState('loaded');
@@ -88,7 +96,9 @@ export function EmptyStateNoClients({ onGoToSettings, onInvite }: Props) {
         setDeepLink(first.deep_link_url ?? null);
         setState('loaded');
         // Cache for next render
-        prefsStorage.set(MMKV_CODE_KEY, first.code).catch(() => {});
+        if (cacheKey) {
+          prefsStorage.set(cacheKey, first.code).catch(() => {});
+        }
       } catch (err) {
         const status = (err as { response?: { status?: number } })?.response?.status;
         if (status === 404) {
@@ -101,7 +111,7 @@ export function EmptyStateNoClients({ onGoToSettings, onInvite }: Props) {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [cacheKey]);
 
   const handleShare = useCallback(() => {
     if (!code) return;

@@ -30,10 +30,13 @@ import { LeanOnboardingParamList } from '../../navigation/LeanOnboardingNavigato
 import { saveOnboardingData } from '../../utils/onboardingStore';
 import { prefsStorage } from '../../storage/mmkv';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const DRAFT_KEY = 'onboarding.lean_q5_draft';
+// R15: scoped per-user so onboarding drafts from one user can't leak into the
+// next user's onboarding session on a shared device.
+const DRAFT_KEY_BASE = 'onboarding.lean_q5_draft';
 const ITEM_HEIGHT = 44;
 const VISIBLE_ITEMS = 5;
 const PICKER_HEIGHT = ITEM_HEIGHT * VISIBLE_ITEMS;
@@ -190,6 +193,11 @@ function WheelPicker({ years, selectedYear, onYearChange, styles, colors }: Whee
 export default function LeanQ5Screen({ navigation }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const currentUser = useCurrentUser();
+  const draftKey = useMemo(
+    () => (currentUser?.id ? `${DRAFT_KEY_BASE}:${currentUser.id}` : null),
+    [currentUser?.id],
+  );
 
   const years = useMemo(() => buildYearRange(), []);
   const defaultYear = new Date().getFullYear() - 30;
@@ -202,9 +210,13 @@ export default function LeanQ5Screen({ navigation }: Props) {
 
   // ── Hydrate from MMKV draft ───────────────────────────────────────────────
   useEffect(() => {
+    if (!draftKey) {
+      setHydrated(true);
+      return;
+    }
     async function hydrate() {
       try {
-        const raw = await prefsStorage.getStringAsync(DRAFT_KEY);
+        const raw = await prefsStorage.getStringAsync(draftKey!);
         if (raw) {
           const draft: DraftState = JSON.parse(raw);
           if (draft.dob) {
@@ -228,19 +240,20 @@ export default function LeanQ5Screen({ navigation }: Props) {
       }
     }
     hydrate();
-  }, []);
+  }, [draftKey]);
 
   // ── Persist draft on every change ────────────────────────────────────────
   useEffect(() => {
     if (!hydrated) return;
+    if (!draftKey) return;
     const draft: DraftState = { dob: `${selectedYear}-01-01` };
     const raw = parseFloat(targetWeight);
     if (Number.isFinite(raw) && raw > 0) {
       draft.target_weight_kg =
         units === 'imperial' ? lbsToKg(raw) : Math.round(raw * 10) / 10;
     }
-    prefsStorage.set(DRAFT_KEY, JSON.stringify(draft)).catch(() => {});
-  }, [selectedYear, targetWeight, units, hydrated]);
+    prefsStorage.set(draftKey, JSON.stringify(draft)).catch(() => {});
+  }, [selectedYear, targetWeight, units, hydrated, draftKey]);
 
   // ── Validation ────────────────────────────────────────────────────────────
   const isWeightValid = useMemo(() => {

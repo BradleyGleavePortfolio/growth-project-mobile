@@ -2,12 +2,17 @@
  * StripeSetupBanner — non-blocking banner prompting the coach to connect Stripe.
  *
  * Rules:
- * - MMKV key 'coach.stripe_banner_dismissed' — if 'true', render null
+ * - MMKV key 'coach.stripe_banner_dismissed:<userId>' — if 'true', render null
  * - On mount: GET /coach/connect/status via coachConnectApi.getStatus()
  * - If configured === false: show banner
  * - API error → suppress (fail-silent, never crash)
  * - Dismiss (×) → writes MMKV key, unmounts
  * - Tap body → navigate to Billing (SettingsStack > Billing)
+ *
+ * R15: the dismissed key is scoped to the signed-in coach's user id so a
+ * different coach signing in on the same device sees the banner again.
+ * R27: navigation uses the typed CoachTabParamList / SettingsStackParamList
+ * pair instead of an `as never` cast.
  */
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
@@ -17,26 +22,44 @@ import {
   StyleSheet,
   TouchableOpacity,
 } from 'react-native';
-import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
+import { useNavigation, CompositeNavigationProp } from '@react-navigation/native';
+import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { coachConnectApi } from '../../api/coachConnectApi';
 import { prefsStorage } from '../../storage/mmkv';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
+import type { CoachTabParamList, SettingsStackParamList } from '../../navigation/CoachNavigator';
 
-const DISMISSED_KEY = 'coach.stripe_banner_dismissed';
+const DISMISSED_KEY_BASE = 'coach.stripe_banner_dismissed';
+
+// R27: typed navigation. The banner is rendered inside CoachHomeScreen
+// (Dashboard → ClientsStack → coach tab), so we need a composite type that
+// can hop into the sibling SettingsStack tab and select its Billing screen.
+type StripeBannerNav = CompositeNavigationProp<
+  BottomTabNavigationProp<CoachTabParamList, 'SettingsStack'>,
+  NativeStackNavigationProp<SettingsStackParamList, 'Billing'>
+>;
 
 export default function StripeSetupBanner() {
   const { colors } = useTheme();
   const styles = React.useMemo(() => makeStyles(colors), [colors]);
-  const navigation = useNavigation<NavigationProp<ParamListBase>>();
+  const navigation = useNavigation<StripeBannerNav>();
+  const currentUser = useCurrentUser();
+  const dismissedKey = useMemo(
+    () => (currentUser?.id ? `${DISMISSED_KEY_BASE}:${currentUser.id}` : null),
+    [currentUser?.id],
+  );
 
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
+    if (!dismissedKey) return;
     let cancelled = false;
     (async () => {
       // Check MMKV dismissed flag first
       try {
-        const dismissed = await prefsStorage.getStringAsync(DISMISSED_KEY);
+        const dismissed = await prefsStorage.getStringAsync(dismissedKey);
         if (dismissed === 'true') return;
       } catch {
         // if MMKV read fails, continue — prefer to show than suppress
@@ -54,15 +77,17 @@ export default function StripeSetupBanner() {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [dismissedKey]);
 
   const handleDismiss = useCallback(() => {
-    prefsStorage.set(DISMISSED_KEY, 'true').catch(() => {});
+    if (dismissedKey) {
+      prefsStorage.set(dismissedKey, 'true').catch(() => {});
+    }
     setVisible(false);
-  }, []);
+  }, [dismissedKey]);
 
   const handlePress = useCallback(() => {
-    navigation.navigate('SettingsStack', { screen: 'Billing' } as never);
+    navigation.navigate('SettingsStack', { screen: 'Billing' });
   }, [navigation]);
 
   if (!visible) return null;

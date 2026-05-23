@@ -60,6 +60,32 @@ const ASYNC_SIGN_OUT_PREFIXES = [
   // The trailing colon keeps unrelated keys like `pending_invite_codex_*`
   // from being swept.
   'pending_invite_code:',
+  // R15 (PR #161): user-scoped key prefixes for in-app billing, coach
+  // onboarding wizard, banners, message cache, and onboarding drafts. Each
+  // key embeds the owning userId so a prefix sweep on signOut drops the
+  // signing-out user's row plus any bystander rows on a shared device —
+  // these are dismissed-flag / draft / cache surfaces where wiping more is
+  // strictly safer than wiping less.
+  //
+  // IMPORTANT: 'coach.first_client_payment_nudge_shown' is intentionally
+  // global and is NOT on this list — see CLAUDE.md "intentionally unscoped
+  // MMKV key".
+  'onboarding.package_prompt_dismissed_at:',
+  'coach.stripe_banner_dismissed:',
+  'coach.stripe_was_unconfigured:',
+  'home.coach_intro_banner_dismissed:',
+  'home.waiting_banner_dismissed:',
+  'coach.onboarding.is_complete:',
+  'coach.revenue_sharing_', // shape is coach.revenue_sharing_<subCoachId>:<ownerId>
+  'onboarding.lean_q5_draft:',
+  'onboarding.lean_q6_draft:',
+  'coach.wizard.step_2_invite_code:',
+  // R15: message thread cache holds PII; Hunt #2 audit flagged this surface
+  // as user-scoped. Both the bare MMKV key and the `cache:` MMKV-shim form.
+  // Underscore separator (`messages_thread_client_<userId>`) matches what
+  // MessagesScreen.tsx writes via cacheKeyFor() / CACHE_KEY_PREFIX.
+  'messages_thread_client_',
+  'cache:messages_thread_client_',
 ];
 
 // Per-user AsyncStorage key prefixes for nutrition/fasting state. R15 requires

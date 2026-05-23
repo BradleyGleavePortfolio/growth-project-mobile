@@ -25,6 +25,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { authEvents } from '../utils/authEvents';
 import { prefsStorage } from '../storage/mmkv';
 import api from '../services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme, ThemeColors } from '../theme/ThemeProvider';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -38,7 +39,21 @@ export type CoachWizardParamList = {
   CoachWizardStep6: undefined;
 };
 
-const MMKV_COMPLETE_KEY = 'coach.onboarding.is_complete';
+// R15: scope to user id. Stored opaquely for parity with the rest of the
+// wizard state — RootNavigator reads the canonical state from
+// GET /coach/onboarding, so this MMKV write is informational only.
+const MMKV_COMPLETE_KEY_BASE = 'coach.onboarding.is_complete';
+
+async function persistWizardCompleteFlag(): Promise<void> {
+  try {
+    const raw = await AsyncStorage.getItem('user_data');
+    const id = raw ? (JSON.parse(raw) as { id?: string })?.id : null;
+    if (!id) return;
+    await prefsStorage.set(`${MMKV_COMPLETE_KEY_BASE}:${id}`, 'true');
+  } catch {
+    // Best-effort — RootNavigator's API check is the source of truth.
+  }
+}
 
 // ─── Shared step layout ───────────────────────────────────────────────────────
 
@@ -235,7 +250,7 @@ function CoachWizardStep6({ navigation }: Step6Props) {
     try {
       await ensureWizardAtFinalStep(6);
       await api.post('/coach/onboarding/complete');
-      await prefsStorage.set(MMKV_COMPLETE_KEY, 'true');
+      await persistWizardCompleteFlag();
       authEvents.emit();
     } catch {
       setErrorMessage('Setup could not complete. Check your connection and try again.');

@@ -16,13 +16,21 @@ import { View, Text, StyleSheet, TouchableOpacity, AppState, AppStateStatus } fr
 import { coachConnectApi } from '../../api/coachConnectApi';
 import { prefsStorage } from '../../storage/mmkv';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 
-const WAS_UNCONFIGURED_KEY = 'coach.stripe_was_unconfigured';
+// R15: user-scoped so a second coach signing in on the same device cannot
+// inherit the previous coach's pre-Stripe-connect state.
+const WAS_UNCONFIGURED_KEY_BASE = 'coach.stripe_was_unconfigured';
 const AUTO_DISMISS_MS = 4000;
 
 export default function NewClientBanner() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const currentUser = useCurrentUser();
+  const wasUnconfiguredKey = useMemo(
+    () => (currentUser?.id ? `${WAS_UNCONFIGURED_KEY_BASE}:${currentUser.id}` : null),
+    [currentUser?.id],
+  );
 
   const [visible, setVisible] = useState(false);
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -38,14 +46,15 @@ export default function NewClientBanner() {
   }, [dismiss]);
 
   useEffect(() => {
+    if (!wasUnconfiguredKey) return;
     const handleAppStateChange = async (nextState: AppStateStatus) => {
       if (nextState !== 'active') return;
       try {
-        const wasUnconfigured = await prefsStorage.getStringAsync(WAS_UNCONFIGURED_KEY);
+        const wasUnconfigured = await prefsStorage.getStringAsync(wasUnconfiguredKey);
         if (wasUnconfigured !== 'true') return;
 
         // Mark checked immediately to avoid double-showing on rapid foregrounds
-        await prefsStorage.set(WAS_UNCONFIGURED_KEY, 'false');
+        await prefsStorage.set(wasUnconfiguredKey, 'false');
 
         const result = await coachConnectApi.getStatus();
         if (result.ok && result.data.configured) {
@@ -61,7 +70,7 @@ export default function NewClientBanner() {
       sub.remove();
       if (dismissTimer.current) clearTimeout(dismissTimer.current);
     };
-  }, [showBanner]);
+  }, [showBanner, wasUnconfiguredKey]);
 
   if (!visible) return null;
 
