@@ -833,11 +833,20 @@ export const coachBillingApi = {
   // opens it in a browser sheet; the portal handles checkout / card update /
   // cancel. The endpoint accepts an optional return path so the portal can
   // bounce the coach back to the right deep link when they finish.
-  createPortalSession: (returnPath?: string) =>
-    api.post<{ url: string }>(
+  createPortalSession: (returnPath?: string, idempotencyKey?: string) => {
+    // Inline require to avoid a circular dep with packagesApi (which imports
+    // this api module). Idempotency-Key prevents duplicate portal sessions
+    // on double-tap (R19).
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { newIdempotencyKey } = require('../api/packagesApi') as {
+      newIdempotencyKey: () => string;
+    };
+    return api.post<{ url: string }>(
       '/coach/billing/portal-session',
       returnPath ? { return_path: returnPath } : {},
-    ),
+      { headers: { 'Idempotency-Key': idempotencyKey ?? newIdempotencyKey() } },
+    );
+  },
 };
 
 // ── Public system / trust metadata (no auth required) ───────────────────────

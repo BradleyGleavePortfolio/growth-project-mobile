@@ -100,6 +100,15 @@ function rewriteHttpsToScheme(url: string): string {
 const linking: LinkingOptions<Record<string, object | undefined>> = {
   prefixes: ['tgp://', 'https://app.trygrowthproject.com'],
   getStateFromPath(path, options) {
+    // Defense-in-depth: a tampered package share link should not be able to
+    // resolve to PackageCheckoutScreen at all. We reject the route at the
+    // navigator level so React Navigation treats it as "no match" — the
+    // user lands on the default screen instead of an empty checkout view.
+    // The screen-level guard remains as a fallback for in-app navigation.
+    const pkgMatch = path.match(/^\/?p\/([^/?#]+)/i);
+    if (pkgMatch && !isValidPackageShareToken(decodeURIComponent(pkgMatch[1]))) {
+      return undefined;
+    }
     return getStateFromPath(fragmentToQuery(path), options);
   },
   config: {

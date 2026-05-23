@@ -43,7 +43,17 @@ import { useTheme, ThemeColors } from '../../../theme/ThemeProvider';
 import { parseDollarsToCents } from '../../../utils/currency';
 import { buildPackageShareUrl } from '../../../utils/packageShare';
 
-type ParamList = { CoachPackageEdit: { packageId: string | null } };
+type ParamList = {
+  CoachPackageEdit: {
+    packageId: string | null;
+    // Future: once `GET /v1/coach/packages/:id` is deployed on the
+    // backend this nav param can become optional and the screen can
+    // refresh from the server on mount. Until then we rely on the list
+    // row being passed through nav params so the form has the data it
+    // needs.
+    initialPackage?: CoachPackage | null;
+  };
+};
 interface Props {
   navigation: NavigationProp<ParamListBase>;
   route: RouteProp<ParamList, 'CoachPackageEdit'>;
@@ -59,11 +69,11 @@ const INTERVAL_OPTIONS: Array<{ label: string; value: PackageBillingInterval }> 
 export default function CoachPackageEditScreen({ navigation, route }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const { packageId } = route.params;
+  const { packageId, initialPackage } = route.params;
   const isEdit = Boolean(packageId);
 
-  const [loaded, setLoaded] = useState(!isEdit);
-  const [original, setOriginal] = useState<CoachPackage | null>(null);
+  const [loaded, setLoaded] = useState(!isEdit || Boolean(initialPackage));
+  const [original, setOriginal] = useState<CoachPackage | null>(initialPackage ?? null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [priceText, setPriceText] = useState('');
@@ -81,34 +91,28 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
       return;
     }
     track('coach_package_edit_opened', { package_id: packageId });
-    let cancelled = false;
-    coachPackagesApi
-      .get(packageId)
-      .then((res) => {
-        if (cancelled) return;
-        const p = res.data;
-        setOriginal(p);
-        setTitle(p.title ?? '');
-        setDescription(p.description ?? '');
-        setPriceText(((p.priceCents ?? 0) / 100).toFixed(2));
-        setBillingInterval(p.billingInterval);
-        setTrialText(p.trialDays ? String(p.trialDays) : '');
-        setFeaturesText((p.features ?? []).join('\n'));
-      })
-      .catch((err) => {
-        Alert.alert(
-          'Could not load package',
-          errorMessage(err, 'Please try again.'),
-          [{ text: 'OK', onPress: () => navigation.goBack() }],
-        );
-      })
-      .finally(() => {
-        if (!cancelled) setLoaded(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [packageId, navigation]);
+    // Future-route: switch to coachPackagesApi.get(packageId) once
+    // `GET /v1/coach/packages/:id` is deployed. Today the row is passed
+    // through nav params from CoachPackagesListScreen so the edit screen
+    // can render without hitting an undeployed route.
+    if (initialPackage) {
+      setOriginal(initialPackage);
+      setTitle(initialPackage.title ?? '');
+      setDescription(initialPackage.description ?? '');
+      setPriceText(((initialPackage.priceCents ?? 0) / 100).toFixed(2));
+      setBillingInterval(initialPackage.billingInterval);
+      setTrialText(initialPackage.trialDays ? String(initialPackage.trialDays) : '');
+      setFeaturesText((initialPackage.features ?? []).join('\n'));
+      setLoaded(true);
+      return;
+    }
+    Alert.alert(
+      'Could not load package',
+      'Open the package from the list to edit it.',
+      [{ text: 'OK', onPress: () => navigation.goBack() }],
+    );
+    setLoaded(true);
+  }, [packageId, initialPackage, navigation]);
 
   const validate = useCallback((): {
     payload: PackageCreateInput | null;
@@ -185,7 +189,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
         navigation.dispatch(
           CommonActions.navigate({
             name: 'CoachPackageEdit',
-            params: { packageId: res.data.id },
+            params: { packageId: res.data.id, initialPackage: res.data },
           }),
         );
         return;

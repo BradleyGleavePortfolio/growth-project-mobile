@@ -102,9 +102,11 @@ export default function CoachPackagesListScreen({ navigation }: Props) {
     navigation.navigate('CoachPackageEdit', { packageId: null });
   };
 
-  const handleOpenItem = (id: string) => {
+  const handleOpenItem = (pkg: CoachPackage) => {
     mediumTap();
-    navigation.navigate('CoachPackageEdit', { packageId: id });
+    // Pass the full row through nav params: the edit screen has no
+    // `GET /v1/coach/packages/:id` route to fetch from yet.
+    navigation.navigate('CoachPackageEdit', { packageId: pkg.id, initialPackage: pkg });
   };
 
   const renderEmpty = () => {
@@ -190,7 +192,7 @@ export default function CoachPackagesListScreen({ navigation }: Props) {
               pkg={item}
               colors={colors}
               styles={styles}
-              onPress={() => handleOpenItem(item.id)}
+              onPress={() => handleOpenItem(item)}
             />
           )}
         />

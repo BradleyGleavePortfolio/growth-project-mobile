@@ -122,9 +122,11 @@ export default function PackageCheckoutScreen({ navigation, route }: Props) {
     mediumTap();
     setPaying(true);
     try {
-      const res = await publicPackagesApi.createCheckoutSession(shareToken, {
-        returnUrl: 'tgp://packages/return',
-      });
+      // Backend `POST /v1/checkout/sessions` requires the resolved package
+      // UUID (not the share token). We use the id returned from the public
+      // share lookup. Default redirect URLs use the growthproject:// scheme
+      // which the backend allow-list accepts.
+      const res = await publicPackagesApi.createCheckoutSession(pkg.id);
       const data: CheckoutSessionResponse = res.data;
       if (!data.url) {
         // Real-or-flagged: backend can return a paymentIntent payload for a

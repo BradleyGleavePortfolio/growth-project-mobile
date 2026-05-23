@@ -18,6 +18,7 @@ import { mediumTap } from '../../utils/haptics';
 import { track } from '../../lib/analytics';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage, errorStatus } from '../../types/common';
+import { assertStripeUrl } from '../../utils/stripeUrlValidator';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 
 interface Props {
@@ -131,6 +132,15 @@ export default function CoachBillingScreen({ navigation }: Props) {
     if (!url) return;
     mediumTap();
     try {
+      assertStripeUrl(url, 'CoachBillingScreen.invoice');
+    } catch {
+      Alert.alert(
+        'Could not open invoice',
+        'Billing link is invalid. Please try again.',
+      );
+      return;
+    }
+    try {
       await WebBrowser.openBrowserAsync(url, {
         presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
       });
@@ -149,6 +159,15 @@ export default function CoachBillingScreen({ navigation }: Props) {
       const res = await coachBillingApi.createPortalSession();
       const url = res.data?.url;
       if (!url) throw new Error('No portal URL returned');
+      try {
+        assertStripeUrl(url, 'CoachBillingScreen.portal');
+      } catch {
+        Alert.alert(
+          'Billing portal unavailable',
+          'Billing link is invalid. Please try again.',
+        );
+        return;
+      }
       track('coach_billing_portal_opened');
       // Use openAuthSessionAsync so the sheet closes the moment the
       // portal redirects back to the app's tgp:// return URL. The old

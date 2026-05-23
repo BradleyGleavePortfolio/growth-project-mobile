@@ -1,33 +1,24 @@
 // Coach packages — coach-authored offerings clients can purchase.
 //
-// Contract alignment (audit PR149 R1):
+// Contract alignment (audit PR149 R2):
 //   • Backend list returns `{ packages: rows }`; we unwrap to a flat array.
 //   • Backend archive is `DELETE /v1/coach/packages/:id`; we use that verb.
 //   • Backend payload is snake_case; we map mobile camelCase ↔ backend
 //     snake_case so screens keep the typed CoachPackage shape.
+//   • Backend `CreatePackageDto` accepts: name, description, amount_cents,
+//     currency, billing_type ('one_time'|'recurring'), billing_interval
+//     ('week'|'month'|'year'), billing_interval_count, is_active. We map
+//     mobile UI values ('monthly','quarterly','yearly') to backend enums.
+//   • Backend `UpdatePackageDto` accepts only: name, description,
+//     amount_cents, currency, is_active. trial_days/features are TODO.
 //   • Backend checkout is `POST /v1/checkout/sessions` with `{ package_id,
-//     success_url, cancel_url }`. The earlier `POST /v1/packages/:token/
-//     checkout` route is planned but not deployed yet — see TODO below.
-//
-// Routes (live):
-//   GET    /v1/coach/packages                  → { packages: [...] }
-//   POST   /v1/coach/packages                  → create (snake_case body)
-//   PATCH  /v1/coach/packages/:id              → update (snake_case body)
-//   DELETE /v1/coach/packages/:id              → archive / soft-delete
-//   POST   /v1/checkout/sessions               → Stripe Checkout Session
-//                                               (server resolves token →
-//                                                package_id, or accepts a
-//                                                direct package_id)
-//
-// Routes (TODO — backend not deployed yet, surfaced as empty state):
-//   GET    /v1/coach/packages/:id              → coach-owned detail
-//   GET    /v1/coach/packages/:id/subscribers  → subscribers list
-//   GET    /v1/coach/earnings                  → earnings summary
-//   GET    /v1/packages/:shareToken            → public package view
+//     success_url, cancel_url }`. URLs must use growthproject://,
+//     com.growthproject.app://, or https:// prefixes.
 //
 // Every mutation sends a client-generated UUID `Idempotency-Key` header so
 // retries/double-taps don't create duplicate rows or duplicate Checkout
-// sessions (R19).
+// sessions (R19). The key is generated via crypto.randomUUID() / expo-crypto
+// so the value is cryptographically secure on a payments surface.
 
 import api from '../services/api';
 import { isValidPackageShareToken } from '../utils/packageShare';
@@ -35,6 +26,11 @@ import { isValidPackageShareToken } from '../utils/packageShare';
 export type PackageBillingInterval = 'one_time' | 'monthly' | 'quarterly' | 'yearly';
 
 export type PackageStatus = 'draft' | 'active' | 'archived';
+
+// Backend deep-link prefixes allowed for checkout redirects. Backend rejects
+// anything else (see growth-project-backend checkout.controller.ts).
+export const PACKAGE_CHECKOUT_SUCCESS_URL = 'growthproject://checkout/return';
+export const PACKAGE_CHECKOUT_CANCEL_URL = 'growthproject://checkout/cancel';
 
 export interface CoachPackage {
   id: string;
@@ -135,27 +131,50 @@ export interface CheckoutSessionResponse {
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
-// Generate a UUID v4 with no extra deps. Idempotency keys do not need to be
-// cryptographically secure — uniqueness per user-action is sufficient — but
-// we still seed from Math.random() with high entropy via the standard v4
-// pattern. expo-crypto is async; this stays sync so callers can stamp the
-// header inline.
+// Cryptographically secure UUID v4. On Hermes (RN/Expo SDK 55+) and on web,
+// `crypto.randomUUID()` is available and is backed by the platform CSPRNG.
+// We fall back to `crypto.getRandomValues` and then to expo-crypto. Math.random
+// is never used — this is a payments surface (R19).
 export function newIdempotencyKey(): string {
-  // RFC 4122 v4
-  const r = (n: number) =>
-    Math.floor(Math.random() * 0x100000000)
-      .toString(16)
-      .padStart(8, '0')
-      .slice(0, n);
-  const a = r(8);
-  const b = r(4);
-  const c = '4' + r(3);
-  const d = ((8 + Math.floor(Math.random() * 4)).toString(16) + r(3));
-  const e = r(8) + r(4);
-  return `${a}-${b}-${c}-${d}-${e}`;
+  const g: { crypto?: { randomUUID?: () => string; getRandomValues?: (a: Uint8Array) => Uint8Array } } =
+    globalThis as unknown as {
+      crypto?: { randomUUID?: () => string; getRandomValues?: (a: Uint8Array) => Uint8Array };
+    };
+  if (g.crypto && typeof g.crypto.randomUUID === 'function') {
+    return g.crypto.randomUUID();
+  }
+  const bytes = new Uint8Array(16);
+  if (g.crypto && typeof g.crypto.getRandomValues === 'function') {
+    g.crypto.getRandomValues(bytes);
+  } else {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const expoCrypto = require('expo-crypto') as {
+      getRandomBytes?: (n: number) => Uint8Array;
+    };
+    if (!expoCrypto || typeof expoCrypto.getRandomBytes !== 'function') {
+      throw new Error('No secure random source available for idempotency key');
+    }
+    const out = expoCrypto.getRandomBytes(16);
+    for (let i = 0; i < 16; i++) bytes[i] = out[i];
+  }
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex: string[] = [];
+  for (let i = 0; i < 16; i++) hex.push(bytes[i].toString(16).padStart(2, '0'));
+  return (
+    hex.slice(0, 4).join('') +
+    '-' +
+    hex.slice(4, 6).join('') +
+    '-' +
+    hex.slice(6, 8).join('') +
+    '-' +
+    hex.slice(8, 10).join('') +
+    '-' +
+    hex.slice(10, 16).join('')
+  );
 }
 
-function idemHeaders(key?: string): { headers: { 'Idempotency-Key': string } } {
+export function idemHeaders(key?: string): { headers: { 'Idempotency-Key': string } } {
   return { headers: { 'Idempotency-Key': key ?? newIdempotencyKey() } };
 }
 
@@ -165,6 +184,27 @@ const BILLING_TYPE_FOR_INTERVAL: Record<PackageBillingInterval, 'one_time' | 're
   quarterly: 'recurring',
   yearly: 'recurring',
 };
+
+// Mobile UI billing interval → backend enum ('week' | 'month' | 'year').
+// Backend rejects 'monthly' / 'quarterly' / 'yearly' (whitelist validator).
+function toBackendIntervalFields(
+  interval: PackageBillingInterval,
+  intervalCountInput?: number,
+): { billing_interval?: 'week' | 'month' | 'year'; billing_interval_count?: number } {
+  if (interval === 'one_time') {
+    return {};
+  }
+  if (interval === 'monthly') {
+    return { billing_interval: 'month', billing_interval_count: intervalCountInput ?? 1 };
+  }
+  if (interval === 'quarterly') {
+    return { billing_interval: 'month', billing_interval_count: (intervalCountInput ?? 1) * 3 };
+  }
+  if (interval === 'yearly') {
+    return { billing_interval: 'year', billing_interval_count: intervalCountInput ?? 1 };
+  }
+  return {};
+}
 
 interface BackendPackageRow {
   id?: string;
@@ -176,7 +216,7 @@ interface BackendPackageRow {
   price_cents?: number;
   currency?: string;
   billing_type?: 'one_time' | 'recurring';
-  billing_interval?: PackageBillingInterval | 'month' | 'quarter' | 'year';
+  billing_interval?: 'week' | 'month' | 'year' | PackageBillingInterval | 'quarter';
   billing_interval_count?: number;
   interval_count?: number;
   trial_days?: number | null;
@@ -191,10 +231,27 @@ interface BackendPackageRow {
   archived_at?: string | null;
 }
 
+function fromBackendInterval(
+  raw: BackendPackageRow['billing_interval'],
+  count: number,
+  billingType: BackendPackageRow['billing_type'],
+): PackageBillingInterval {
+  if (billingType === 'one_time') return 'one_time';
+  if (raw === 'week') return 'monthly';
+  if (raw === 'month') {
+    if (count >= 3 && count < 12) return 'quarterly';
+    return 'monthly';
+  }
+  if (raw === 'year') return 'yearly';
+  if (raw === 'monthly' || raw === 'quarterly' || raw === 'yearly' || raw === 'one_time') {
+    return raw;
+  }
+  return 'monthly';
+}
+
 function fromBackend(row: BackendPackageRow): CoachPackage {
-  const interval =
-    (row.billing_interval as PackageBillingInterval) ||
-    (row.billing_type === 'one_time' ? 'one_time' : 'monthly');
+  const count = row.billing_interval_count ?? row.interval_count ?? 1;
+  const interval = fromBackendInterval(row.billing_interval, count, row.billing_type);
   const status: PackageStatus =
     row.status ?? (row.is_active === false ? 'archived' : 'active');
   return {
@@ -205,7 +262,7 @@ function fromBackend(row: BackendPackageRow): CoachPackage {
     priceCents: row.amount_cents ?? row.price_cents ?? 0,
     currency: row.currency ?? 'usd',
     billingInterval: interval,
-    intervalCount: row.billing_interval_count ?? row.interval_count ?? 1,
+    intervalCount: count,
     trialDays: row.trial_days ?? null,
     features: Array.isArray(row.features) ? row.features : [],
     status,
@@ -224,40 +281,47 @@ interface BackendCreateBody {
   amount_cents: number;
   currency?: string;
   billing_type: 'one_time' | 'recurring';
-  billing_interval: PackageBillingInterval;
-  billing_interval_count: number;
-  trial_days?: number | null;
-  features?: string[];
+  billing_interval?: 'week' | 'month' | 'year';
+  billing_interval_count?: number;
   is_active?: boolean;
+  // TODO(backend): trial_days and features are not yet on the backend
+  // CreatePackageDto. Once added, expand the body. Mobile keeps the UI
+  // fields in `PackageCreateInput` so we don't lose them.
 }
 
 function toBackendCreate(input: PackageCreateInput): BackendCreateBody {
-  return {
+  const intervalFields = toBackendIntervalFields(input.billingInterval, input.intervalCount);
+  const body: BackendCreateBody = {
     name: input.title,
     description: input.description ?? null,
     amount_cents: input.priceCents,
-    currency: input.currency,
     billing_type: BILLING_TYPE_FOR_INTERVAL[input.billingInterval],
-    billing_interval: input.billingInterval,
-    billing_interval_count: input.intervalCount ?? 1,
-    trial_days: input.trialDays ?? null,
-    features: input.features ?? [],
   };
+  if (input.currency !== undefined) body.currency = input.currency;
+  if (intervalFields.billing_interval) body.billing_interval = intervalFields.billing_interval;
+  if (intervalFields.billing_interval_count != null) {
+    body.billing_interval_count = intervalFields.billing_interval_count;
+  }
+  // TODO(backend): trial_days, features rejected by whitelist DTO. Omit until added.
+  return body;
 }
 
-function toBackendUpdate(input: PackageUpdateInput): Partial<BackendCreateBody> {
-  const out: Partial<BackendCreateBody> = {};
+interface BackendUpdateBody {
+  name?: string;
+  description?: string | null;
+  amount_cents?: number;
+  currency?: string;
+  is_active?: boolean;
+  // TODO(backend): UpdatePackageDto does not accept billing_type,
+  // billing_interval, billing_interval_count, trial_days, or features.
+}
+
+function toBackendUpdate(input: PackageUpdateInput): BackendUpdateBody {
+  const out: BackendUpdateBody = {};
   if (input.title !== undefined) out.name = input.title;
   if (input.description !== undefined) out.description = input.description;
   if (input.priceCents !== undefined) out.amount_cents = input.priceCents;
   if (input.currency !== undefined) out.currency = input.currency;
-  if (input.billingInterval !== undefined) {
-    out.billing_type = BILLING_TYPE_FOR_INTERVAL[input.billingInterval];
-    out.billing_interval = input.billingInterval;
-  }
-  if (input.intervalCount !== undefined) out.billing_interval_count = input.intervalCount;
-  if (input.trialDays !== undefined) out.trial_days = input.trialDays;
-  if (input.features !== undefined) out.features = input.features;
   if (input.status !== undefined) out.is_active = input.status === 'active';
   return out;
 }
@@ -277,10 +341,8 @@ export const coachPackagesApi = {
     return { ...res, data: rows.map(fromBackend) };
   },
 
-  // TODO(backend): `GET /v1/coach/packages/:id` (coach-owned detail) is not
-  // yet exposed by the backend packages controller. Until it ships, the edit
-  // screen falls back to the row already loaded in the list. The wrapper is
-  // kept so the route can be wired in a future PR without churning callers.
+  // TODO(backend): `GET /v1/coach/packages/:id` not yet deployed.
+  // CoachPackageEditScreen passes the list row through nav params instead.
   get: async (id: string) => {
     const res = await api.get<BackendPackageRow>(
       `/v1/coach/packages/${encodeURIComponent(id)}`,
@@ -310,16 +372,12 @@ export const coachPackagesApi = {
     return { ...res, data: fromBackend(res.data) };
   },
 
-  // Backend exposes archive as a soft-delete via HTTP DELETE.
   archive: async (id: string, idempotencyKey?: string) => {
     const res = await api.delete<BackendPackageRow | { ok?: true }>(
       `/v1/coach/packages/${encodeURIComponent(id)}`,
       idemHeaders(idempotencyKey),
     );
     const body = res.data as BackendPackageRow | { ok?: true } | undefined;
-    // Some backends return only `{ ok: true }` on DELETE. Synthesize an
-    // archived record from the id so the caller can update local state
-    // without re-fetching.
     const row: BackendPackageRow =
       body && typeof body === 'object' && 'id' in (body as BackendPackageRow)
         ? (body as BackendPackageRow)
@@ -328,23 +386,19 @@ export const coachPackagesApi = {
   },
 
   // TODO(backend): `GET /v1/coach/packages/:id/subscribers` not yet deployed.
-  // Callers must treat 404 / NOT_CONFIGURED as an empty state.
   subscribers: (id: string) =>
     api.get<PackageSubscribersResponse>(
       `/v1/coach/packages/${encodeURIComponent(id)}/subscribers`,
     ),
 
-  // TODO(backend): `GET /v1/coach/earnings` not yet deployed. Callers must
-  // treat 404 / NOT_CONFIGURED as an empty state and never claim totals.
+  // TODO(backend): `GET /v1/coach/earnings` not yet deployed.
   earnings: () => api.get<CoachEarningsSummary>('/v1/coach/earnings'),
 };
 
 // ─── public / client-facing API ─────────────────────────────────────────────
 
 export const publicPackagesApi = {
-  // TODO(backend): `GET /v1/packages/:shareToken` (public marketing view) is
-  // planned but not deployed. PackageCheckoutScreen treats 404 as "link not
-  // found" and renders an actionable empty state instead of crashing.
+  // TODO(backend): `GET /v1/packages/:shareToken` planned but not deployed.
   getByShareToken: (shareToken: string) => {
     if (!isValidPackageShareToken(shareToken)) {
       return Promise.reject(new Error('INVALID_SHARE_TOKEN'));
@@ -354,31 +408,23 @@ export const publicPackagesApi = {
     );
   },
 
-  // Aligned to backend `POST /v1/checkout/sessions` with
-  // { package_id, success_url, cancel_url } — see growth-project-backend
-  // src/checkout/checkout.controller.ts. The mobile only has the share token
-  // at this point; we send it as `share_token` so the server can resolve to
-  // the package. Server-side, both `share_token` and `package_id` are
-  // accepted (whichever the deployed contract supports).
-  //
-  // TODO(backend): once the dedicated `POST /v1/packages/:shareToken/
-  // checkout` route lands, switch to that path so the share-token →
-  // package_id resolution lives entirely on the server.
+  // Backend `POST /v1/checkout/sessions` requires:
+  //   { package_id: <uuid>, success_url, cancel_url }
+  // URLs must start with growthproject:// | com.growthproject.app:// | https://
   createCheckoutSession: (
-    shareToken: string,
-    body: { returnUrl?: string; successUrl?: string; cancelUrl?: string } = {},
+    packageId: string,
+    body: { successUrl?: string; cancelUrl?: string } = {},
     idempotencyKey?: string,
   ) => {
-    if (!isValidPackageShareToken(shareToken)) {
-      return Promise.reject(new Error('INVALID_SHARE_TOKEN'));
+    if (typeof packageId !== 'string' || packageId.length === 0) {
+      return Promise.reject(new Error('INVALID_PACKAGE_ID'));
     }
-    const successUrl =
-      body.successUrl ?? body.returnUrl ?? 'tgp://packages/return';
-    const cancelUrl = body.cancelUrl ?? body.returnUrl ?? 'tgp://packages/return';
+    const successUrl = body.successUrl ?? PACKAGE_CHECKOUT_SUCCESS_URL;
+    const cancelUrl = body.cancelUrl ?? PACKAGE_CHECKOUT_CANCEL_URL;
     return api.post<CheckoutSessionResponse>(
       '/v1/checkout/sessions',
       {
-        share_token: shareToken,
+        package_id: packageId,
         success_url: successUrl,
         cancel_url: cancelUrl,
       },

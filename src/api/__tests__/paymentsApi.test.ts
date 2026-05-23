@@ -1,16 +1,10 @@
 // Behavioral tests for the Connect + Packages typed API clients.
 //
-// What we assert:
-//   • Every mutation sends a non-empty `Idempotency-Key` header.
-//   • Coach packages map mobile camelCase → backend snake_case bodies on
-//     create/update.
-//   • Coach packages map backend snake_case → mobile camelCase responses on
-//     list/get.
-//   • List unwraps `{ packages: rows }` shape AND tolerates a flat array.
-//   • Archive uses DELETE /v1/coach/packages/:id (not POST .../archive).
-//   • Checkout posts to /v1/checkout/sessions with snake_case body.
-//   • Stripe URL validator accepts Stripe hosts and rejects everything else.
-//   • Share-token validator passes valid tokens and rejects malformed ones.
+// Backend-compatible shapes only — see pr149_round2_backend_contract/* for
+// the source of truth. Tests assert package_id (not share_token), backend
+// enums ('one_time'|'recurring', 'week'|'month'|'year'), allowed redirect
+// URL prefixes (growthproject://), Idempotency-Key on every mutation, and
+// that newIdempotencyKey uses a cryptographically secure UUID source.
 
 jest.mock('../../services/api', () => {
   const instance = {
@@ -36,6 +30,8 @@ import {
   coachPackagesApi,
   publicPackagesApi,
   newIdempotencyKey,
+  PACKAGE_CHECKOUT_SUCCESS_URL,
+  PACKAGE_CHECKOUT_CANCEL_URL,
 } from '../packagesApi';
 import { validateStripeUrl } from '../../utils/stripeUrlValidator';
 import { isValidPackageShareToken } from '../../utils/packageShare';
@@ -99,10 +95,8 @@ describe('coachPackagesApi list contract', () => {
             amount_cents: 1500,
             currency: 'usd',
             billing_type: 'recurring',
-            billing_interval: 'monthly',
+            billing_interval: 'month',
             billing_interval_count: 1,
-            trial_days: 7,
-            features: ['a', 'b'],
             is_active: true,
             share_token: 'tok_abc',
             created_at: '2026-01-01T00:00:00Z',
@@ -119,10 +113,9 @@ describe('coachPackagesApi list contract', () => {
       coachUserId: 'coach_a',
       title: 'Test',
       priceCents: 1500,
+      // Backend interval='month' + count=1 → mobile UI 'monthly'.
       billingInterval: 'monthly',
       intervalCount: 1,
-      trialDays: 7,
-      features: ['a', 'b'],
       status: 'active',
       shareToken: 'tok_abc',
     });
@@ -139,7 +132,7 @@ describe('coachPackagesApi list contract', () => {
 });
 
 describe('coachPackagesApi mutations', () => {
-  it('create → POST with snake_case body + idem header', async () => {
+  it('create monthly → POST with backend-compatible body + idem header', async () => {
     apiMock.post.mockResolvedValueOnce({
       data: { id: 'pkg_new', name: 'Pro', amount_cents: 9900 },
     });
@@ -156,16 +149,43 @@ describe('coachPackagesApi mutations', () => {
       name: 'Pro',
       amount_cents: 9900,
       billing_type: 'recurring',
-      billing_interval: 'monthly',
+      // Backend DTO accepts only 'week' | 'month' | 'year'.
+      billing_interval: 'month',
       billing_interval_count: 1,
-      features: ['weekly check-ins'],
     });
+    // Backend `CreatePackageDto` whitelist rejects unknown fields.
+    expect(body.features).toBeUndefined();
+    expect(body.trial_days).toBeUndefined();
     expect(config?.headers?.['Idempotency-Key']).toBeTruthy();
     expect(res.data.id).toBe('pkg_new');
     expect(res.data.title).toBe('Pro');
   });
 
-  it('one_time create sets billing_type=one_time', async () => {
+  it('create yearly → backend billing_interval=year', async () => {
+    await coachPackagesApi.create({
+      title: 'Annual',
+      priceCents: 99000,
+      billingInterval: 'yearly',
+    });
+    const [, body] = apiMock.post.mock.calls[0];
+    expect(body.billing_type).toBe('recurring');
+    expect(body.billing_interval).toBe('year');
+    expect(body.billing_interval_count).toBe(1);
+  });
+
+  it('create quarterly → backend billing_interval=month, count=3', async () => {
+    await coachPackagesApi.create({
+      title: 'Quarter',
+      priceCents: 25000,
+      billingInterval: 'quarterly',
+    });
+    const [, body] = apiMock.post.mock.calls[0];
+    expect(body.billing_type).toBe('recurring');
+    expect(body.billing_interval).toBe('month');
+    expect(body.billing_interval_count).toBe(3);
+  });
+
+  it('one_time create → billing_type=one_time, no billing_interval', async () => {
     await coachPackagesApi.create({
       title: 'Once',
       priceCents: 5000,
@@ -173,10 +193,13 @@ describe('coachPackagesApi mutations', () => {
     });
     const [, body] = apiMock.post.mock.calls[0];
     expect(body.billing_type).toBe('one_time');
-    expect(body.billing_interval).toBe('one_time');
+    // Backend `billing_interval` is enum 'week'|'month'|'year' — valid only
+    // for recurring. One-time must omit the field entirely.
+    expect(body.billing_interval).toBeUndefined();
+    expect(body.billing_interval_count).toBeUndefined();
   });
 
-  it('update → PATCH with snake_case body + idem header', async () => {
+  it('update → PATCH with whitelisted snake_case body + idem header', async () => {
     apiMock.patch.mockResolvedValueOnce({
       data: { id: 'pkg_1', name: 'Renamed', amount_cents: 2500 },
     });
@@ -184,6 +207,12 @@ describe('coachPackagesApi mutations', () => {
     const [url, body, config] = apiMock.patch.mock.calls[0];
     expect(url).toBe('/v1/coach/packages/pkg_1');
     expect(body).toMatchObject({ amount_cents: 2500, is_active: true });
+    // Backend UpdatePackageDto whitelist: name, description, amount_cents,
+    // currency, is_active only.
+    expect(body.billing_type).toBeUndefined();
+    expect(body.billing_interval).toBeUndefined();
+    expect(body.trial_days).toBeUndefined();
+    expect(body.features).toBeUndefined();
     expect(config?.headers?.['Idempotency-Key']).toBeTruthy();
   });
 
@@ -209,25 +238,40 @@ describe('coachPackagesApi mutations', () => {
 // ── publicPackagesApi: checkout endpoint + token validation ────────────────
 
 describe('publicPackagesApi.createCheckoutSession', () => {
-  it('hits /v1/checkout/sessions with snake_case body + idem header', async () => {
-    await publicPackagesApi.createCheckoutSession('tok_abc', {
-      returnUrl: 'tgp://packages/return',
-    });
+  it('hits /v1/checkout/sessions with package_id + allowed redirect URLs + idem header', async () => {
+    await publicPackagesApi.createCheckoutSession(
+      '11111111-2222-4333-8444-555555555555',
+    );
     expect(apiMock.post).toHaveBeenCalledTimes(1);
     const [url, body, config] = apiMock.post.mock.calls[0];
     expect(url).toBe('/v1/checkout/sessions');
+    // Backend `CreateCheckoutDto` requires `package_id` as a UUID. We must
+    // NOT send `share_token` — the whitelist validator rejects it.
     expect(body).toMatchObject({
-      share_token: 'tok_abc',
-      success_url: 'tgp://packages/return',
-      cancel_url: 'tgp://packages/return',
+      package_id: '11111111-2222-4333-8444-555555555555',
+      success_url: PACKAGE_CHECKOUT_SUCCESS_URL,
+      cancel_url: PACKAGE_CHECKOUT_CANCEL_URL,
     });
+    expect(body.share_token).toBeUndefined();
+    expect(body.success_url).toMatch(/^(growthproject:\/\/|com\.growthproject\.app:\/\/|https:\/\/)/);
+    expect(body.cancel_url).toMatch(/^(growthproject:\/\/|com\.growthproject\.app:\/\/|https:\/\/)/);
     expect(config?.headers?.['Idempotency-Key']).toBeTruthy();
   });
 
-  it('rejects malformed tokens without making a network call', async () => {
+  it('caller can override success/cancel URLs', async () => {
+    await publicPackagesApi.createCheckoutSession('pkg_1', {
+      successUrl: 'growthproject://checkout/custom-return',
+      cancelUrl: 'https://app.trygrowthproject.com/cancel',
+    });
+    const [, body] = apiMock.post.mock.calls[0];
+    expect(body.success_url).toBe('growthproject://checkout/custom-return');
+    expect(body.cancel_url).toBe('https://app.trygrowthproject.com/cancel');
+  });
+
+  it('rejects empty package id without making a network call', async () => {
     await expect(
-      publicPackagesApi.createCheckoutSession('../etc/passwd'),
-    ).rejects.toThrow('INVALID_SHARE_TOKEN');
+      publicPackagesApi.createCheckoutSession(''),
+    ).rejects.toThrow('INVALID_PACKAGE_ID');
     expect(apiMock.post).not.toHaveBeenCalled();
   });
 
@@ -254,10 +298,44 @@ describe('newIdempotencyKey', () => {
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
     );
   });
+
   it('returns a distinct value on each call', () => {
     const a = newIdempotencyKey();
     const b = newIdempotencyKey();
     expect(a).not.toEqual(b);
+  });
+
+  it('uses crypto.randomUUID when available (secure source, not Math.random)', () => {
+    const original = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
+    const spy = jest.fn(() => '11111111-2222-4333-8444-555555555555');
+    (globalThis as { crypto?: { randomUUID?: () => string } }).crypto = {
+      randomUUID: spy,
+    };
+    try {
+      const k = newIdempotencyKey();
+      expect(spy).toHaveBeenCalledTimes(1);
+      expect(k).toBe('11111111-2222-4333-8444-555555555555');
+    } finally {
+      (globalThis as { crypto?: unknown }).crypto = original;
+    }
+  });
+
+  it('falls back to crypto.getRandomValues when randomUUID is missing', () => {
+    const original = (globalThis as { crypto?: unknown }).crypto;
+    const getRandomValues = jest.fn((buf: Uint8Array) => {
+      for (let i = 0; i < buf.length; i++) buf[i] = (i * 17) & 0xff;
+      return buf;
+    });
+    (globalThis as { crypto?: unknown }).crypto = { getRandomValues };
+    try {
+      const k = newIdempotencyKey();
+      expect(getRandomValues).toHaveBeenCalledTimes(1);
+      expect(k).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+      );
+    } finally {
+      (globalThis as { crypto?: unknown }).crypto = original;
+    }
   });
 });
 
@@ -271,7 +349,7 @@ describe('validateStripeUrl', () => {
     expect(validateStripeUrl('https://billing.stripe.com/p/session_x')).toBe(true);
   });
 
-  it('accepts Stripe subdomains (e.g. files.stripe.com is rejected — only the listed roots)', () => {
+  it('accepts Stripe subdomains', () => {
     expect(validateStripeUrl('https://foo.checkout.stripe.com/x')).toBe(true);
   });
 
