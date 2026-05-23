@@ -14,7 +14,8 @@ import {
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useRoute, useNavigation, RouteProp, NavigationProp, ParamListBase } from '@react-navigation/native';
+import { useFocusEffect, useRoute, useNavigation, RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { coachApi } from '../../services/api';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { subscribeToMessages } from '../../services/realtime';
@@ -47,7 +48,7 @@ export default function ClientMessagesScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const route = useRoute<RouteProp<ClientsStackParamList, 'ClientMessages'>>();
-  const navigation = useNavigation<NavigationProp<ParamListBase>>();
+  const navigation = useNavigation<NativeStackNavigationProp<ClientsStackParamList>>();
   const { clientId, clientName, initialDraft } = route.params;
   const currentUser = useCurrentUser();
 
@@ -70,8 +71,13 @@ export default function ClientMessagesScreen() {
   const blockedIds = useMemo(() => blockStore.blocked.map((b) => b.id), [blockStore.blocked]);
 
   useEffect(() => {
-    if (!blockStore.hydrated) void blockStore.hydrate();
-  }, [blockStore]);
+    const uid = currentUser?.id;
+    if (!uid) return;
+    const s = useBlockedUsersStore.getState();
+    if (!s.hydrated || s.userId !== uid) {
+      void s.hydrate(uid);
+    }
+  }, [currentUser?.id]);
 
   const PAGE_LIMIT = 100;
 
@@ -255,8 +261,7 @@ export default function ClientMessagesScreen() {
         </TouchableOpacity>
         <TouchableOpacity
           onPress={() => {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (navigation as any).navigate('ContactView', {
+            navigation.navigate('ContactView', {
               contactId: clientId,
               displayName: clientName,
               role: 'client',

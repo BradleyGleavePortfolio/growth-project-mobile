@@ -20,25 +20,41 @@ import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { useBlockedUsersStore, BlockedUser } from '../../store/blockedUsersStore';
 import { messagesModerationApi } from '../../api/messagesApi';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 export default function BlockedUsersScreen(): React.ReactElement {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const store = useBlockedUsersStore();
+  const currentUser = useCurrentUser();
   const [working, setWorking] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (!store.hydrated) await store.hydrate();
+      const uid = currentUser?.id;
+      if (!uid) {
+        if (!cancelled) setLoading(false);
+        return;
+      }
+      const s = useBlockedUsersStore.getState();
+      if (!s.hydrated || s.userId !== uid) {
+        await s.hydrate(uid);
+      }
       try {
         const res = await messagesModerationApi.listBlocked();
-        const localIds = new Set(store.blocked.map((b) => b.id));
-        for (const id of res.blocked_user_ids) {
-          if (!localIds.has(id)) {
-            await store.block({ id, displayName: 'Blocked user', role: 'other' });
+        const localIds = new Set(
+          useBlockedUsersStore.getState().blocked.map((b) => b.id),
+        );
+        for (const row of res.blocked) {
+          if (!localIds.has(row.blockedId)) {
+            await useBlockedUsersStore.getState().block({
+              id: row.blockedId,
+              displayName: row.displayName || 'Blocked user',
+              role: 'other',
+            });
           }
         }
       } catch {
@@ -49,8 +65,7 @@ export default function BlockedUsersScreen(): React.ReactElement {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [currentUser?.id]);
 
   const handleUnblock = useCallback(
     (user: BlockedUser) => {

@@ -13,7 +13,9 @@ import {
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { MoreStackParamList } from '../../navigation/ClientNavigator';
 import { messagesApi, profileApi } from '../../services/api';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { subscribeToMessages } from '../../services/realtime';
@@ -54,7 +56,7 @@ export default function MessagesScreen() {
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const textOnPrimaryDim = colors.textOnPrimary + 'B3';
   const textOnPrimaryFaint = colors.textOnPrimary + '80';
-  const navigation = useNavigation<NavigationProp<ParamListBase>>();
+  const navigation = useNavigation<NativeStackNavigationProp<MoreStackParamList>>();
   const currentUser = useCurrentUser();
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,8 +82,13 @@ export default function MessagesScreen() {
   const PAGE_LIMIT = 100;
 
   useEffect(() => {
-    if (!blockStore.hydrated) void blockStore.hydrate();
-  }, [blockStore]);
+    const uid = currentUser?.id;
+    if (!uid) return;
+    const s = useBlockedUsersStore.getState();
+    if (!s.hydrated || s.userId !== uid) {
+      void s.hydrate(uid);
+    }
+  }, [currentUser?.id]);
 
   useEffect(() => {
     if (!currentUser?.id) return;
@@ -309,8 +316,7 @@ export default function MessagesScreen() {
 
   const openContactView = useCallback(() => {
     if (!coachId) return;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (navigation as any).navigate('ContactView', {
+    navigation.navigate('ContactView', {
       contactId: coachId,
       displayName: coachName || 'Your Coach',
       role: 'coach',

@@ -3,25 +3,18 @@
  *
  * Legacy CRUD-style messaging endpoints (list / send / mark-read / unread-count)
  * continue to live on `services/api.ts -> messagesApi`. This module exists for
- * the *new* moderation surfaces that ship as part of the iMessage-grade rebuild:
+ * the moderation surfaces that ship as part of the iMessage-grade rebuild
+ * (backend PR #263, merged):
  *
- *   POST /messages/{id}/report   — report a single message
- *   POST /users/{id}/block       — block a user
- *   POST /users/{id}/unblock     — unblock a user
- *   GET  /users/blocks           — list of user IDs the caller has blocked
- *   POST /messages               — extended with optional parent_message_id
- *                                  for threaded replies
+ *   POST   /messages/report   — report a single message (body carries messageId)
+ *   POST   /users/{id}/block  — block a user
+ *   DELETE /users/{id}/block  — unblock a user
+ *   GET    /users/blocks      — list of users the caller has blocked
+ *   POST   /messages          — extended with optional parent_message_id for
+ *                               threaded replies
  *
- * Endpoint contract status (May 21 2026):
- *   - /messages/{id}/report   — TODO: backend endpoint not yet shipped. The
- *     call sends the report payload; backend will return 404 until the
- *     endpoint is added. Tracking issue on growth-project-backend titled
- *     "feat(messages): add report + block endpoints for Apple 1.2 compliance".
- *   - /users/{id}/block       — TODO: same backend issue.
- *   - parent_message_id       — sent as an additional field on the existing
- *     POST /messages body. The backend silently ignores unknown fields today
- *     for this DTO, so mobile reply state survives client-side and the field
- *     becomes live the moment the backend lands.
+ * No soft-success / 404-is-ok handling: a non-2xx response throws so the caller
+ * can render a real failure state and never falsely confirm to the user (R18).
  *
  * Defence in depth: even with backend enforcement, the mobile blocklist is
  * applied client-side via filterOutBlocked so a blocked user's messages never
@@ -34,21 +27,28 @@ import type { AxiosResponse } from 'axios';
 export type ReportReason =
   | 'spam'
   | 'harassment'
-  | 'sexual_content'
-  | 'self_harm'
+  | 'sexual'
+  | 'hate_speech'
+  | 'violence'
+  | 'misinformation'
   | 'other';
 
 export const REPORT_REASON_OPTIONS: ReadonlyArray<{ value: ReportReason; label: string }> = [
   { value: 'spam', label: 'Spam' },
   { value: 'harassment', label: 'Harassment or bullying' },
-  { value: 'sexual_content', label: 'Sexual content' },
-  { value: 'self_harm', label: 'Self-harm or suicide' },
+  { value: 'sexual', label: 'Sexual content' },
+  { value: 'hate_speech', label: 'Hate speech' },
+  { value: 'violence', label: 'Violence or threats' },
+  { value: 'misinformation', label: 'Misinformation' },
   { value: 'other', label: 'Something else' },
 ];
 
+/** Backend cap for the optional free-text context, per PR #263. */
+export const DETAILS_MAX = 1000;
+
 export interface ReportMessagePayload {
   reason: ReportReason;
-  /** Optional free-text context. Capped to 500 chars on the client. */
+  /** Optional free-text context. Capped to DETAILS_MAX chars on the client. */
   details?: string;
 }
 
@@ -61,8 +61,15 @@ export interface BlockUserResponse {
   ok: boolean;
 }
 
+/** Row shape returned by GET /users/blocks (backend PR #263). */
+export interface BlockedUserRow {
+  blockedId: string;
+  displayName: string;
+  blockedAt: string;
+}
+
 export interface BlockedListResponse {
-  blocked_user_ids: string[];
+  blocked: BlockedUserRow[];
 }
 
 export interface SendReplyPayload {
@@ -83,64 +90,47 @@ async function report(
   messageId: string,
   payload: ReportMessagePayload,
 ): Promise<ReportMessageResponse> {
-  if (!messageId) return { ok: false };
-  const trimmed: ReportMessagePayload = {
+  if (!messageId) throw new Error('messageId required');
+  const body = {
+    messageId,
     reason: payload.reason,
-    details: payload.details?.slice(0, 500),
+    details: payload.details?.slice(0, DETAILS_MAX),
   };
-  try {
-    const res: AxiosResponse<unknown> = await api.post(
-      `/messages/${encodeURIComponent(messageId)}/report`,
-      trimmed,
-    );
-    const data = (res.data ?? {}) as { id?: string; report_id?: string };
-    return { ok: true, report_id: data.report_id ?? data.id };
-  } catch (err) {
-    const status = (err as { response?: { status?: number } } | null)?.response?.status;
-    if (status === 404 || status === 501) {
-      // Endpoint not yet deployed — soft success, the local report log + the
-      // analytics event still capture the user-visible intent.
-      return { ok: true };
-    }
-    throw err;
-  }
+  const res: AxiosResponse<unknown> = await api.post('/messages/report', body);
+  const data = (res.data ?? {}) as { id?: string; report_id?: string };
+  return { ok: true, report_id: data.report_id ?? data.id };
 }
 
 async function block(userId: string): Promise<BlockUserResponse> {
-  if (!userId) return { ok: false };
-  try {
-    await api.post(`/users/${encodeURIComponent(userId)}/block`);
-    return { ok: true };
-  } catch (err) {
-    const status = (err as { response?: { status?: number } } | null)?.response?.status;
-    if (status === 404 || status === 501) return { ok: true };
-    throw err;
-  }
+  if (!userId) throw new Error('userId required');
+  await api.post(`/users/${encodeURIComponent(userId)}/block`);
+  return { ok: true };
 }
 
 async function unblock(userId: string): Promise<BlockUserResponse> {
-  if (!userId) return { ok: false };
-  try {
-    await api.post(`/users/${encodeURIComponent(userId)}/unblock`);
-    return { ok: true };
-  } catch (err) {
-    const status = (err as { response?: { status?: number } } | null)?.response?.status;
-    if (status === 404 || status === 501) return { ok: true };
-    throw err;
-  }
+  if (!userId) throw new Error('userId required');
+  await api.delete(`/users/${encodeURIComponent(userId)}/block`);
+  return { ok: true };
 }
 
 async function listBlocked(): Promise<BlockedListResponse> {
-  try {
-    const res: AxiosResponse<unknown> = await api.get('/users/blocks');
-    const data = (res.data ?? {}) as { blocked_user_ids?: unknown };
-    const ids = Array.isArray(data.blocked_user_ids)
-      ? data.blocked_user_ids.filter((v): v is string => typeof v === 'string')
+  const res: AxiosResponse<unknown> = await api.get('/users/blocks');
+  const raw = res.data;
+  const arr: unknown[] = Array.isArray(raw)
+    ? raw
+    : Array.isArray((raw as { blocked?: unknown[] } | null)?.blocked)
+      ? ((raw as { blocked: unknown[] }).blocked)
       : [];
-    return { blocked_user_ids: ids };
-  } catch {
-    return { blocked_user_ids: [] };
-  }
+  const rows: BlockedUserRow[] = arr
+    .filter((u): u is Record<string, unknown> => !!u && typeof u === 'object')
+    .map((u) => ({
+      blockedId: typeof u.blockedId === 'string' ? u.blockedId : '',
+      displayName: typeof u.displayName === 'string' ? u.displayName : '',
+      blockedAt:
+        typeof u.blockedAt === 'string' ? u.blockedAt : new Date().toISOString(),
+    }))
+    .filter((r) => r.blockedId.length > 0);
+  return { blocked: rows };
 }
 
 async function sendReply(payload: SendReplyPayload): Promise<SendReplyResponse> {

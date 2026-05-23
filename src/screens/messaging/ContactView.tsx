@@ -26,6 +26,7 @@ import { useRoute, useNavigation, RouteProp, NavigationProp, ParamListBase } fro
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { useBlockedUsersStore } from '../../store/blockedUsersStore';
 import { messagesModerationApi } from '../../api/messagesApi';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { HapticService } from '../../ui/haptics/haptics.service';
 import { track } from '../../lib/analytics';
 
@@ -46,15 +47,19 @@ export default function ContactView(): React.ReactElement {
   const styles = useMemo(() => makeStyles(colors), [colors]);
 
   const blockStore = useBlockedUsersStore();
+  const currentUser = useCurrentUser();
   const isBlocked = blockStore.isBlocked(contactId);
   const [muted, setMuted] = useState(false);
   const [blocking, setBlocking] = useState(false);
 
   useEffect(() => {
-    if (!blockStore.hydrated) {
-      void blockStore.hydrate();
+    const uid = currentUser?.id;
+    if (!uid) return;
+    const s = useBlockedUsersStore.getState();
+    if (!s.hydrated || s.userId !== uid) {
+      void s.hydrate(uid);
     }
-  }, [blockStore]);
+  }, [currentUser?.id]);
 
   const initials = useMemo(() => {
     return displayName

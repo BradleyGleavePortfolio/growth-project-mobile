@@ -11,7 +11,7 @@ import React, { useMemo, useState, useCallback } from 'react';
 import { Modal, View, Text, Pressable, TextInput, StyleSheet, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
-import { REPORT_REASON_OPTIONS, ReportReason } from '../../api/messagesApi';
+import { REPORT_REASON_OPTIONS, ReportReason, DETAILS_MAX } from '../../api/messagesApi';
 
 export interface ReportMessageSheetProps {
   visible: boolean;
@@ -19,8 +19,6 @@ export interface ReportMessageSheetProps {
   onSubmit: (payload: { reason: ReportReason; details?: string }) => Promise<void>;
   onClose: () => void;
 }
-
-const DETAILS_MAX = 500;
 
 export function ReportMessageSheet({
   visible,
