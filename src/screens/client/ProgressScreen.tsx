@@ -160,8 +160,12 @@ export default function ProgressScreen() {
         // the user's *local* calendar day so the streak compare below is
         // tz-correct on either side of the date line. See audit P0-3.
         const rawDate = w.date || w.created_at || '';
-        const normDate = /^\d{4}-\d{2}-\d{2}/.test(rawDate)
-          ? rawDate.slice(0, 10)
+        // A bare YYYY-MM-DD is exactly 10 chars with no 'T'. The unanchored
+        // regex used to match ISO timestamps too, which then sliced to the
+        // UTC day instead of the local day. Anchor to length so only true
+        // bare dates skip the bucketing step.
+        const normDate = /^\d{4}-\d{2}-\d{2}$/.test(rawDate)
+          ? rawDate
           : bucketDateLocal(new Date(rawDate));
         return {
           id: w.id,

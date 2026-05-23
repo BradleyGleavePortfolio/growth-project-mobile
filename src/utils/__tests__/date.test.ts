@@ -39,6 +39,13 @@ describe('bucketDateLocal', () => {
     ).toBe('2026-01-28');
   });
 
+  it('Pacific/Honolulu: 09:30 AM UTC on Jan 1 is 11:30 PM Dec 31 in Hawaii', () => {
+    // Hawaii is UTC-10 year-round (no DST). 09:30 UTC on Jan 1 == 23:30
+    // local on Dec 31, so the bucketed local day is the previous year.
+    const d = new Date('2026-01-01T09:30:00.000Z');
+    expect(bucketDateLocal(d, 'Pacific/Honolulu')).toBe('2025-12-31');
+  });
+
   it('America/Los_Angeles: Sunday 23:30 local on DST fall-back day stays on Sunday', () => {
     // 2026-11-01 is the US DST fall-back. At 23:30 local on the Sunday
     // (== 07:30 UTC Monday once back on PST/UTC-8), the calendar day is
