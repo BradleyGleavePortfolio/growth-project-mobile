@@ -25,7 +25,11 @@ import { bucketDateLocal } from '../../utils/date';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
 
-const FASTING_NOTIF_ID_KEY = 'fasting:scheduled_notification_id';
+// User-scoped per R15: a shared device must not let user A's scheduled
+// "Fast Complete" notification id be cancelled by user B's session, nor
+// leak across users on logout/login.
+const fastingNotifIdKey = (userId: string) =>
+  `fasting:scheduled_notification_id:${userId}`;
 
 type Protocol = { label: string; hours: number };
 
@@ -188,7 +192,7 @@ export default function FastingScreen() {
       // the user ends the fast.
       if (notifId) {
         try {
-          await AsyncStorage.setItem(FASTING_NOTIF_ID_KEY, notifId);
+          await AsyncStorage.setItem(fastingNotifIdKey(currentUser.id), notifId);
         } catch (err) {
           // Best-effort cache write. Failing here just means the worst case
           // is a stale "Fast Complete" push once the target time arrives —
@@ -212,6 +216,7 @@ export default function FastingScreen() {
 
   const doEndFast = async () => {
     if (submitting) return;
+    if (!currentUser) return;
     setSubmitting(true);
     try {
       await fastingApi.end();
@@ -220,10 +225,11 @@ export default function FastingScreen() {
       // id was never persisted (cold start lost it, or scheduling failed),
       // there's nothing to cancel — quietly skip.
       try {
-        const notifId = await AsyncStorage.getItem(FASTING_NOTIF_ID_KEY);
+        const key = fastingNotifIdKey(currentUser.id);
+        const notifId = await AsyncStorage.getItem(key);
         if (notifId) {
           await Notifications.cancelScheduledNotificationAsync(notifId);
-          await AsyncStorage.removeItem(FASTING_NOTIF_ID_KEY);
+          await AsyncStorage.removeItem(key);
         }
       } catch (err) {
         // Cancellation is best-effort; an orphan push is annoying, not broken.

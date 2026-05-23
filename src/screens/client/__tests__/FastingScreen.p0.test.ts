@@ -63,16 +63,20 @@ describe('FastingScreen — P0-3 double-start + notification cancel', () => {
     expect(handleStart).toMatch(/submitting\)\s*return/);
   });
 
-  it('persists the scheduled notification id after scheduling', () => {
-    expect(SRC).toMatch(/FASTING_NOTIF_ID_KEY/);
-    expect(SRC).toMatch(/AsyncStorage\.setItem\(FASTING_NOTIF_ID_KEY/);
+  it('persists the scheduled notification id under a user-scoped key', () => {
+    // R15: every persisted key is `${kind}:${userId}`. A shared device must
+    // not let user A's scheduled "Fast Complete" id leak to user B.
+    expect(SRC).toMatch(/fastingNotifIdKey/);
+    expect(SRC).toMatch(/fasting:scheduled_notification_id:\$\{userId\}/);
+    expect(SRC).toMatch(/AsyncStorage\.setItem\(fastingNotifIdKey\(currentUser\.id\)/);
   });
 
-  it('doEndFast cancels and removes the persisted notification id', () => {
+  it('doEndFast cancels and removes the persisted notification id (user-scoped)', () => {
     const doEndFast = extractFunctionBody(SRC, 'doEndFast');
-    expect(doEndFast).toMatch(/AsyncStorage\.getItem\(FASTING_NOTIF_ID_KEY\)/);
+    expect(doEndFast).toMatch(/fastingNotifIdKey\(currentUser\.id\)/);
+    expect(doEndFast).toMatch(/AsyncStorage\.getItem\(key\)/);
     expect(doEndFast).toMatch(/Notifications\.cancelScheduledNotificationAsync/);
-    expect(doEndFast).toMatch(/AsyncStorage\.removeItem\(FASTING_NOTIF_ID_KEY\)/);
+    expect(doEndFast).toMatch(/AsyncStorage\.removeItem\(key\)/);
     expect(doEndFast).toMatch(/setSubmitting\(true\)/);
   });
 });
