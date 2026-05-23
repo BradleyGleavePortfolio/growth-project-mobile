@@ -35,8 +35,16 @@ export interface BulkInviteResult {
   error?: string;
 }
 
+/**
+ * Mobile-facing bulk invite response. `invitesApi.bulkInvite()` adapts
+ * the backend response (`{ total, created[], rejected[] }`) into a flat
+ * `results[]` so the UI has one list to iterate.
+ */
 export interface BulkInviteResponse {
   results: BulkInviteResult[];
+  total: number;
+  createdCount: number;
+  rejectedCount: number;
 }
 
 export interface SingleInviteResponse {
@@ -56,8 +64,23 @@ export interface Invite {
   lastEmailStatus?: EmailStatus;
 }
 
-export interface ListInvitesResponse {
-  invites: Invite[];
+/**
+ * Raw row shape as returned by `GET /coach/invite-codes`. The backend
+ * sends snake_case Prisma rows directly; `invitesApi.listInvites()`
+ * adapts these to the camelCase `Invite` shape.
+ */
+export interface RawInviteRow {
+  id: string;
+  code: string;
+  coach_id: string;
+  created_at: string;
+  expires_at?: string | null;
+  max_uses?: number | null;
+  used_count: number;
+  revoked: boolean;
+  intended_email?: string | null;
+  accepted_by_user_id?: string | null;
+  accepted_at?: string | null;
 }
 
 /** Reason an accept attempt failed. The backend may add more values; treat

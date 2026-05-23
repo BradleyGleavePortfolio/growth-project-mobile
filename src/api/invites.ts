@@ -6,10 +6,16 @@
  * Endpoints (see `src/types/invites.ts` for shapes):
  *   POST   /coach/invite-codes/bulk          (rows: BulkInviteRowDto[])
  *   POST   /coach/invite-codes/single
- *   GET    /coach/invite-codes
+ *   GET    /coach/invite-codes               (returns raw Prisma rows, snake_case)
  *   POST   /coach/invite-codes/:id/send      (resend; requires email body)
  *   DELETE /coach/invite-codes/:id           (revoke)
  *   POST   /invites/accept/:token            (PUBLIC, no auth)
+ *
+ * Contract adapters live at the bottom of this file. The backend returns
+ * `bulkInvite` as `{ total, created[], rejected[] }` and `listForCoach`
+ * as a raw `InviteCode[]` array with snake_case columns; we map both
+ * into the camelCase `Invite` / `BulkInviteResult` shapes the UI consumes
+ * so a backend response-shape change is contained to this file.
  *
  * The wrapper uses the existing axios instance for authed calls so the
  * 401 -> refresh interceptor still fires. Accept goes through a raw fetch
@@ -26,9 +32,11 @@ import { isValidInviteToken } from '../utils/inviteToken';
 import type {
   AcceptInviteResponse,
   BulkInviteResponse,
+  BulkInviteResult,
   Invite,
   InviteListFilter,
-  ListInvitesResponse,
+  InviteStatus,
+  RawInviteRow,
   SingleInviteResponse,
 } from '../types/invites';
 
@@ -196,11 +204,11 @@ export const invitesApi = {
     const rows: BulkInviteRow[] = emails.map((email) =>
       note ? { email, note } : { email },
     );
-    const res = await api.post<BulkInviteResponse>(
+    const res = await api.post<BackendBulkInviteResponse>(
       '/coach/invite-codes/bulk',
       { rows },
     );
-    return res.data;
+    return adaptBulkInviteResponse(res.data);
   },
 
   /** Single invite — used by the per-row resend path's fallback. */
@@ -223,10 +231,13 @@ export const invitesApi = {
   listInvites: async (
     filter: InviteListFilter = 'all',
   ): Promise<Invite[]> => {
-    const res = await api.get<ListInvitesResponse>('/coach/invite-codes');
-    const invites = res.data?.invites ?? [];
+    const res = await api.get<RawInviteRow[] | { invites: RawInviteRow[] }>(
+      '/coach/invite-codes',
+    );
+    const raw = unwrapInviteList(res.data);
+    const invites = raw.map(adaptInviteRow);
     if (filter === 'all') return invites;
-    const target =
+    const target: InviteStatus =
       filter === 'pending'
         ? 'PENDING'
         : filter === 'accepted'
@@ -306,4 +317,117 @@ function isNotFound(err: unknown): boolean {
   return e.response?.status === 404;
 }
 
+// ─── Backend response shapes (snake_case) ────────────────────────────────────
+//
+// These mirror what the backend invite-codes controller actually returns
+// today (`bulkInvite` → `{ total, created, rejected }`; `listForCoach`
+// → raw Prisma rows). We adapt them at the API boundary so the rest of
+// the mobile app keeps consuming the camelCase `Invite` / `BulkInviteResult`
+// shapes declared in `src/types/invites.ts`.
+
+type BackendBulkEmailStatus = 'sent' | 'failed' | 'skipped' | 'logged';
+
+interface BackendBulkCreatedRow {
+  email: string;
+  code: string;
+  invite_code_id: string;
+  email_status: BackendBulkEmailStatus;
+  email_error?: string;
+}
+
+interface BackendBulkRejectedRow {
+  email: string;
+  reason: string;
+}
+
+interface BackendBulkInviteResponse {
+  total: number;
+  created: BackendBulkCreatedRow[];
+  rejected: BackendBulkRejectedRow[];
+}
+
+function adaptBulkInviteResponse(
+  raw: BackendBulkInviteResponse,
+): BulkInviteResponse {
+  const created = Array.isArray(raw?.created) ? raw.created : [];
+  const rejected = Array.isArray(raw?.rejected) ? raw.rejected : [];
+  const results: BulkInviteResult[] = [
+    ...created.map<BulkInviteResult>((row) => {
+      const queued =
+        row.email_status === 'sent' || row.email_status === 'logged';
+      const status: BulkInviteResult['status'] =
+        row.email_status === 'failed' ? 'failed' : 'created';
+      const out: BulkInviteResult = {
+        email: row.email,
+        inviteId: row.invite_code_id,
+        status,
+        emailQueued: queued,
+      };
+      if (row.email_error) out.error = row.email_error;
+      return out;
+    }),
+    ...rejected.map<BulkInviteResult>((row) => ({
+      email: row.email,
+      status: 'failed',
+      emailQueued: false,
+      error: row.reason,
+    })),
+  ];
+  return {
+    results,
+    total: typeof raw?.total === 'number' ? raw.total : results.length,
+    createdCount: created.length,
+    rejectedCount: rejected.length,
+  };
+}
+
+function unwrapInviteList(
+  data: RawInviteRow[] | { invites: RawInviteRow[] } | null | undefined,
+): RawInviteRow[] {
+  if (Array.isArray(data)) return data;
+  if (data && Array.isArray((data as { invites?: RawInviteRow[] }).invites)) {
+    return (data as { invites: RawInviteRow[] }).invites;
+  }
+  return [];
+}
+
+function deriveInviteStatus(row: RawInviteRow): InviteStatus {
+  if (row.revoked) return 'REVOKED';
+  if (row.accepted_at || row.accepted_by_user_id) return 'ACCEPTED';
+  if (
+    typeof row.max_uses === 'number' &&
+    row.max_uses > 0 &&
+    row.used_count >= row.max_uses
+  ) {
+    return 'ACCEPTED';
+  }
+  if (row.expires_at) {
+    const exp = Date.parse(row.expires_at);
+    if (Number.isFinite(exp) && exp <= Date.now()) return 'EXPIRED';
+  }
+  return 'PENDING';
+}
+
+function adaptInviteRow(row: RawInviteRow): Invite {
+  const invite: Invite = {
+    id: row.id,
+    code: row.code,
+    status: deriveInviteStatus(row),
+    createdAt: row.created_at,
+  };
+  if (row.intended_email) invite.clientEmail = row.intended_email;
+  if (row.expires_at) invite.expiresAt = row.expires_at;
+  if (row.accepted_at) invite.acceptedAt = row.accepted_at;
+  // `lastEmailStatus` is not currently persisted per-row by the backend,
+  // so it is left undefined here. Bulk send delivery state is surfaced
+  // separately via `BulkInviteResult.emailQueued`.
+  return invite;
+}
+
 export { MAX_BULK_EMAILS };
+export const __invitesInternals = {
+  adaptBulkInviteResponse,
+  adaptInviteRow,
+  deriveInviteStatus,
+  unwrapInviteList,
+};

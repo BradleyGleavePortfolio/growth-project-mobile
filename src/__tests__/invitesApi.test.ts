@@ -80,17 +80,26 @@ describe('invitesApi — email validator', () => {
 });
 
 describe('inviteToken — validator', () => {
-  it('accepts a reasonable URL-safe token', () => {
-    expect(isValidInviteToken('abcd_EFGH-1234.xy')).toBe(true);
+  it('accepts a backend-shaped token (letters/digits/hyphens, 3–32)', () => {
+    expect(isValidInviteToken('abcdEFGH-1234xy')).toBe(true);
+    expect(isValidInviteToken('abc')).toBe(true);
+    expect(isValidInviteToken('a'.repeat(32))).toBe(true);
   });
 
-  it('rejects path traversal / whitespace / oversize', () => {
+  it('rejects path traversal / whitespace / oversize / unsafe chars', () => {
     expect(isValidInviteToken('')).toBe(false);
-    expect(isValidInviteToken('a')).toBe(false);
+    expect(isValidInviteToken('ab')).toBe(false);
     expect(isValidInviteToken('foo/bar')).toBe(false);
     expect(isValidInviteToken('foo bar')).toBe(false);
+    expect(isValidInviteToken('a'.repeat(33))).toBe(false);
     expect(isValidInviteToken('a'.repeat(200))).toBe(false);
     expect(isValidInviteToken('<script>')).toBe(false);
+  });
+
+  it('rejects dots and underscores (out of backend character set)', () => {
+    expect(isValidInviteToken('abcd_efgh')).toBe(false);
+    expect(isValidInviteToken('abcd.efgh')).toBe(false);
+    expect(isValidInviteToken('abcd_EFGH-1234.xy')).toBe(false);
   });
 });
 
@@ -145,10 +154,12 @@ describe('invitesApi.bulkInvite', () => {
   it('sends a `rows` array matching the backend DTO shape', async () => {
     mockedApi.post.mockResolvedValueOnce({
       data: {
-        results: [
-          { email: 'a@ex.com', status: 'created', emailQueued: true },
-          { email: 'b@ex.com', status: 'reused', emailQueued: true },
+        total: 2,
+        created: [
+          { email: 'a@ex.com', code: 'aaa-111', invite_code_id: 'i1', email_status: 'sent' },
+          { email: 'b@ex.com', code: 'bbb-222', invite_code_id: 'i2', email_status: 'sent' },
         ],
+        rejected: [],
       },
     });
     await invitesApi.bulkInvite(['a@ex.com', 'b@ex.com'], 'hi friend');
@@ -164,7 +175,9 @@ describe('invitesApi.bulkInvite', () => {
   });
 
   it('omits `note` when no message is supplied', async () => {
-    mockedApi.post.mockResolvedValueOnce({ data: { results: [] } });
+    mockedApi.post.mockResolvedValueOnce({
+      data: { total: 1, created: [], rejected: [] },
+    });
     await invitesApi.bulkInvite(['a@ex.com']);
     expect(mockedApi.post).toHaveBeenCalledWith(
       '/coach/invite-codes/bulk',
@@ -172,38 +185,128 @@ describe('invitesApi.bulkInvite', () => {
     );
   });
 
-  it('surfaces per-email statuses from the response', async () => {
+  it('adapts the backend { total, created[], rejected[] } shape into results[]', async () => {
     mockedApi.post.mockResolvedValueOnce({
       data: {
-        results: [
-          { email: 'a@ex.com', status: 'created', emailQueued: true },
-          { email: 'c@ex.com', status: 'failed', emailQueued: false, error: 'x' },
+        total: 3,
+        created: [
+          { email: 'a@ex.com', code: 'aaa-111', invite_code_id: 'i1', email_status: 'sent' },
+          { email: 'c@ex.com', code: 'ccc-333', invite_code_id: 'i2', email_status: 'failed', email_error: 'bounce' },
+        ],
+        rejected: [
+          { email: 'dup@ex.com', reason: 'duplicate_in_batch' },
         ],
       },
     });
-    const res = await invitesApi.bulkInvite(['a@ex.com', 'c@ex.com']);
-    expect(res.results.map((r) => r.status)).toEqual(['created', 'failed']);
+    const res = await invitesApi.bulkInvite(['a@ex.com', 'c@ex.com', 'dup@ex.com']);
+    expect(res.total).toBe(3);
+    expect(res.createdCount).toBe(2);
+    expect(res.rejectedCount).toBe(1);
+    expect(res.results).toHaveLength(3);
+    expect(res.results[0]).toMatchObject({
+      email: 'a@ex.com',
+      inviteId: 'i1',
+      status: 'created',
+      emailQueued: true,
+    });
+    expect(res.results[1]).toMatchObject({
+      email: 'c@ex.com',
+      inviteId: 'i2',
+      status: 'failed',
+      emailQueued: false,
+      error: 'bounce',
+    });
+    expect(res.results[2]).toMatchObject({
+      email: 'dup@ex.com',
+      status: 'failed',
+      emailQueued: false,
+      error: 'duplicate_in_batch',
+    });
   });
 });
 
 describe('invitesApi.listInvites', () => {
+  const now = Date.now();
+  const future = new Date(now + 7 * 24 * 3600 * 1000).toISOString();
+  const past = new Date(now - 24 * 3600 * 1000).toISOString();
+
   beforeEach(() => {
     jest.clearAllMocks();
+    // Backend returns a raw Prisma array, snake_case fields.
     mockedApi.get.mockResolvedValue({
-      data: {
-        invites: [
-          { id: '1', code: 'a', status: 'PENDING', createdAt: 't' },
-          { id: '2', code: 'b', status: 'ACCEPTED', createdAt: 't' },
-          { id: '3', code: 'c', status: 'EXPIRED', createdAt: 't' },
-          { id: '4', code: 'd', status: 'REVOKED', createdAt: 't' },
-        ],
-      },
+      data: [
+        {
+          id: '1',
+          code: 'a',
+          coach_id: 'c',
+          created_at: '2026-01-01T00:00:00Z',
+          expires_at: future,
+          max_uses: 1,
+          used_count: 0,
+          revoked: false,
+          intended_email: 'one@ex.com',
+        },
+        {
+          id: '2',
+          code: 'b',
+          coach_id: 'c',
+          created_at: '2026-01-01T00:00:00Z',
+          expires_at: future,
+          max_uses: 1,
+          used_count: 1,
+          revoked: false,
+          intended_email: 'two@ex.com',
+          accepted_by_user_id: 'u2',
+          accepted_at: '2026-01-02T00:00:00Z',
+        },
+        {
+          id: '3',
+          code: 'c',
+          coach_id: 'c',
+          created_at: '2026-01-01T00:00:00Z',
+          expires_at: past,
+          max_uses: 1,
+          used_count: 0,
+          revoked: false,
+          intended_email: 'three@ex.com',
+        },
+        {
+          id: '4',
+          code: 'd',
+          coach_id: 'c',
+          created_at: '2026-01-01T00:00:00Z',
+          expires_at: future,
+          max_uses: 1,
+          used_count: 0,
+          revoked: true,
+          intended_email: 'four@ex.com',
+        },
+      ],
     });
   });
 
-  it('returns all by default', async () => {
+  it('returns all by default and maps snake_case → camelCase', async () => {
     const out = await invitesApi.listInvites();
     expect(out).toHaveLength(4);
+    expect(out[0]).toMatchObject({
+      id: '1',
+      code: 'a',
+      clientEmail: 'one@ex.com',
+      status: 'PENDING',
+      createdAt: '2026-01-01T00:00:00Z',
+    });
+    expect(out[0].expiresAt).toBe(future);
+  });
+
+  it('derives status from revoked / accepted / expires_at', async () => {
+    const out = await invitesApi.listInvites();
+    const byId = Object.fromEntries(out.map((i) => [i.id, i.status]));
+    expect(byId).toEqual({
+      '1': 'PENDING',
+      '2': 'ACCEPTED',
+      '3': 'EXPIRED',
+      '4': 'REVOKED',
+    });
   });
 
   it('filters PENDING', async () => {
@@ -219,6 +322,27 @@ describe('invitesApi.listInvites', () => {
   it('filters EXPIRED', async () => {
     const out = await invitesApi.listInvites('expired');
     expect(out.map((i) => i.id)).toEqual(['3']);
+  });
+
+  it('also tolerates a legacy `{ invites: [...] }` envelope', async () => {
+    mockedApi.get.mockResolvedValueOnce({
+      data: {
+        invites: [
+          {
+            id: '9',
+            code: 'z',
+            coach_id: 'c',
+            created_at: '2026-01-01T00:00:00Z',
+            used_count: 0,
+            revoked: false,
+            intended_email: 'nine@ex.com',
+          },
+        ],
+      },
+    });
+    const out = await invitesApi.listInvites();
+    expect(out).toHaveLength(1);
+    expect(out[0].clientEmail).toBe('nine@ex.com');
   });
 });
 
@@ -294,7 +418,7 @@ describe('invitesApi.acceptInvite', () => {
         redirectTo: 'app_open',
       }),
     });
-    const out = await invitesApi.acceptInvite('tok_123');
+    const out = await invitesApi.acceptInvite('tok-123');
     expect(out).toEqual({
       accepted: true,
       coachName: 'Coach K',
@@ -308,7 +432,7 @@ describe('invitesApi.acceptInvite', () => {
       status: 200,
       json: async () => ({ accepted: true }),
     });
-    await invitesApi.acceptInvite('tok_123');
+    await invitesApi.acceptInvite('tok-123');
     const init = (global.fetch as jest.Mock).mock.calls[0][1] as RequestInit;
     expect(init.method).toBe('POST');
     const headers = (init.headers ?? {}) as Record<string, string>;
@@ -323,7 +447,7 @@ describe('invitesApi.acceptInvite', () => {
       status: 410,
       json: async () => ({ accepted: false, reason: 'expired' }),
     });
-    const out = await invitesApi.acceptInvite('tok_old');
+    const out = await invitesApi.acceptInvite('tok-old');
     expect(out).toEqual({ accepted: false, reason: 'expired' });
   });
 
@@ -333,7 +457,7 @@ describe('invitesApi.acceptInvite', () => {
       status: 200,
       json: async () => null,
     });
-    const out = await invitesApi.acceptInvite('tok_x');
+    const out = await invitesApi.acceptInvite('tok-xyz');
     expect(out).toEqual({ accepted: false, reason: 'invalid' });
   });
 
@@ -343,6 +467,6 @@ describe('invitesApi.acceptInvite', () => {
       status: 500,
       json: async () => ({}),
     });
-    await expect(invitesApi.acceptInvite('tok_x')).rejects.toThrow();
+    await expect(invitesApi.acceptInvite('tok-xyz')).rejects.toThrow();
   });
 });

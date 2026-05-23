@@ -68,7 +68,7 @@ describe('AcceptInviteScreen — RTL', () => {
     });
     const { getByTestId } = render(
       <AcceptInviteScreen
-        route={makeRoute('tok_valid_abc')}
+        route={makeRoute('tok-valid-abc')}
         navigation={makeNav() as never}
       />,
     );
@@ -84,7 +84,7 @@ describe('AcceptInviteScreen — RTL', () => {
     });
     const { getByTestId } = render(
       <AcceptInviteScreen
-        route={makeRoute('tok_valid_abc')}
+        route={makeRoute('tok-valid-abc')}
         navigation={makeNav() as never}
       />,
     );
@@ -126,7 +126,7 @@ describe('AcceptInviteScreen — RTL', () => {
     });
     const { getByTestId, queryByText } = render(
       <AcceptInviteScreen
-        route={makeRoute('tok_old_abcd')}
+        route={makeRoute('tok-old-abcd')}
         navigation={makeNav() as never}
       />,
     );
@@ -144,7 +144,7 @@ describe('AcceptInviteScreen — RTL', () => {
     });
     const { getByTestId } = render(
       <AcceptInviteScreen
-        route={makeRoute('tok_used_abcd')}
+        route={makeRoute('tok-used-abcd')}
         navigation={makeNav() as never}
       />,
     );
@@ -160,7 +160,7 @@ describe('AcceptInviteScreen — RTL', () => {
     });
     const { getByTestId } = render(
       <AcceptInviteScreen
-        route={makeRoute('tok_xxxx')}
+        route={makeRoute('tok-xxxx')}
         navigation={makeNav() as never}
       />,
     );
@@ -175,7 +175,7 @@ describe('AcceptInviteScreen — RTL', () => {
     );
     const { getByTestId, queryByText } = render(
       <AcceptInviteScreen
-        route={makeRoute('tok_xxxx')}
+        route={makeRoute('tok-xxxx')}
         navigation={makeNav() as never}
       />,
     );
@@ -192,7 +192,7 @@ describe('AcceptInviteScreen — RTL', () => {
     mockAcceptInvite.mockReturnValueOnce(new Promise(() => {})); // never resolves
     const { getByTestId } = render(
       <AcceptInviteScreen
-        route={makeRoute('tok_valid_abc')}
+        route={makeRoute('tok-valid-abc')}
         navigation={makeNav() as never}
       />,
     );
