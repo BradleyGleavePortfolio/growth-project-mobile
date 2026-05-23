@@ -30,6 +30,7 @@ import {
   type PersistedActiveWorkoutSession,
 } from '../../storage/activeWorkoutSession';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { errorMessage } from '../../types/common';
 // Offline-first write path (audit fix H-5: comments were left
 // referencing the deleted WatermelonDB stack — current implementation
 // is built on expo-sqlite, see src/offline/database.ts and
@@ -713,9 +714,32 @@ export default function ActiveWorkoutScreen() {
               onError: (err) => {
                 // Phase 11 / Track 3: error haptic on failed API action
                 HapticService.error();
+                // The Finish path cleared the persisted session and disabled
+                // future writes by setting finishingRef. If the server save
+                // fails the user is told to retry, but without resetting
+                // these the next attempt has no recovery state — a force-
+                // kill during the retry alert would lose the workout. Flip
+                // persistence back on and re-save the current state so the
+                // session is recoverable. See audit #4 / R7 / R18.
+                finishingRef.current = false;
+                if (userId) {
+                  saveActiveWorkoutSession(userId, {
+                    startedAtMs: sessionStartMsRef.current,
+                    routineName,
+                    exercisesJson,
+                    assignmentId,
+                    idempotencyKey: idempotencyKeyRef.current,
+                    sessionExercises,
+                  }).catch(() => {
+                    /* best-effort re-save */
+                  });
+                }
                 // API failed (offline). Records are already in WDB as 'pending'.
                 // Navigate back — the sync badge will show on the history list.
-                Alert.alert("Couldn't save workout",  'Please try again.');
+                Alert.alert(
+                  'Save failed',
+                  errorMessage(err) || 'Please try again.',
+                );
               },
             },
           );
