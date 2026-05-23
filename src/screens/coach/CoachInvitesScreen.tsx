@@ -127,6 +127,7 @@ export default function CoachInvitesScreen({
   const [filter, setFilter] = useState<InviteListFilter>('all');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   /**
    * Tri-state per backend support: `null` = unknown, `true` = endpoint
    * works, `false` = endpoint returned 404. Once we know the backend
@@ -138,8 +139,14 @@ export default function CoachInvitesScreen({
     try {
       const next = await invitesApi.listInvites('all');
       setInvites(next);
+      setLoadError(null);
     } catch (err) {
-      console.error('CoachInvitesScreen: load failed', err);
+      setLoadError(
+        errorMessage(
+          err,
+          'We couldn\'t load your invites. Check your connection and try again.',
+        ),
+      );
     } finally {
       setLoading(false);
     }
@@ -232,14 +239,24 @@ export default function CoachInvitesScreen({
                 ),
               );
             } catch (err) {
-              console.error(
-                'CoachInvitesScreen: revoke failed',
-                errorMessage(err),
-              );
-              Alert.alert(
-                'Could not complete this action',
-                'Please try again.',
-              );
+              const status = (err as { response?: { status?: number } })
+                ?.response?.status;
+              if (status === 409) {
+                // P0-4: 409 means the invite was already accepted by someone
+                // else between our list-load and the revoke. Refresh the
+                // list so the UI shows the new ACCEPTED status, not a
+                // misleading "Unknown error".
+                Alert.alert(
+                  'Already accepted',
+                  'This invite has already accepted by someone else. Refreshing your list.',
+                );
+                void load();
+              } else {
+                Alert.alert(
+                  'Revoke failed',
+                  'Could not revoke this invite. Please try again.',
+                );
+              }
             }
           },
         },
@@ -320,13 +337,38 @@ export default function CoachInvitesScreen({
         }
         contentContainerStyle={styles.list}
         ListEmptyComponent={
-          <View style={styles.empty}>
-            <Ionicons name="mail-outline" size={42} color={colors.textMuted} />
-            <Text style={styles.emptyTitle}>No invites</Text>
-            <Text style={styles.emptyText}>
-              Send your first invite from the bulk-invite screen.
-            </Text>
-          </View>
+          loadError !== null ? (
+            <View
+              style={styles.empty}
+              accessibilityLiveRegion="polite"
+              testID="coach-invites-error-state"
+            >
+              <Ionicons
+                name="cloud-offline-outline"
+                size={42}
+                color={colors.error}
+              />
+              <Text style={styles.emptyTitle}>Couldn't load invites</Text>
+              <Text style={styles.emptyText}>{loadError}</Text>
+              <Pressable
+                onPress={() => void load()}
+                accessibilityRole="button"
+                accessibilityLabel="Retry loading invites"
+                testID="coach-invites-error-state-retry"
+                style={styles.errorRetryBtn}
+              >
+                <Text style={styles.errorRetryBtnText}>Retry</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View style={styles.empty} testID="coach-invites-empty">
+              <Ionicons name="mail-outline" size={42} color={colors.textMuted} />
+              <Text style={styles.emptyTitle}>No invites</Text>
+              <Text style={styles.emptyText}>
+                Send your first invite from the bulk-invite screen.
+              </Text>
+            </View>
+          )
         }
         renderItem={({ item }) => {
           const isPending = item.status === 'PENDING';
@@ -523,7 +565,19 @@ function makeStyles(colors: ThemeColors) {
       fontWeight: '500',
       color: colors.textPrimary,
     },
-    emptyText: { fontSize: 13, color: colors.textSecondary },
+    emptyText: { fontSize: 13, color: colors.textSecondary, textAlign: 'center' },
+    errorRetryBtn: {
+      marginTop: 12,
+      paddingHorizontal: 18,
+      paddingVertical: 10,
+      borderRadius: 8,
+      backgroundColor: colors.primary,
+    },
+    errorRetryBtnText: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.textOnPrimary,
+    },
     row: {
       flexDirection: 'row',
       alignItems: 'center',
