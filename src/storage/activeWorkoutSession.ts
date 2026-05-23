@@ -85,7 +85,18 @@ function isPersistedSession(value: unknown): value is PersistedActiveWorkoutSess
     typeof v.routineName === 'string' &&
     typeof v.exercisesJson === 'string' &&
     typeof v.idempotencyKey === 'string' &&
-    Array.isArray(v.sessionExercises)
+    Array.isArray(v.sessionExercises) &&
+    // Per-element shape: ExerciseCard renders `exercise.sets.map(...)` on
+    // resume, so a top-level-valid payload whose entries lack `sets` (or
+    // are otherwise corrupt) crashes the screen. Drop those payloads here
+    // and let the user start fresh. See audit #8.
+    (v.sessionExercises as unknown[]).every(
+      (ex) =>
+        ex !== null &&
+        typeof ex === 'object' &&
+        typeof (ex as Record<string, unknown>).exerciseName === 'string' &&
+        Array.isArray((ex as Record<string, unknown>).sets),
+    )
   );
 }
 
