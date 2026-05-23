@@ -41,26 +41,6 @@ const ASYNC_SIGN_OUT_KEYS = [
   // working set. See audit #2 / R15.
   '@activeWorkoutSession/v1',
 ];
-// AsyncStorage key prefixes that are user-scoped (R15) and may appear under
-// any `:${userId}` or `:anonymous` suffix. signOut sweeps every key starting
-// with one of these so a second user on the same device cannot read state
-// left by the previous session.
-const ASYNC_SIGN_OUT_PREFIXES = ['pending_invite_code'];
-// Exported for any caller that wants the full list of session keys.
-export const SIGN_OUT_KEYS = [...SECURE_SIGN_OUT_KEYS, ...ASYNC_SIGN_OUT_KEYS];
-export const SIGN_OUT_PREFIXES = ASYNC_SIGN_OUT_PREFIXES;
-
-async function getPrefixedKeys(): Promise<string[]> {
-  try {
-    const allKeys = await AsyncStorage.getAllKeys();
-    return allKeys.filter((k) =>
-      ASYNC_SIGN_OUT_PREFIXES.some((p) => k === p || k.startsWith(`${p}:`)),
-    );
-  } catch {
-    return [];
-  }
-}
-
 // Prefixes whose every matching AsyncStorage key should be wiped on signOut.
 // Per-user namespaced data lives behind these prefixes; without enumeration the
 // per-user suffixed keys persist across sign-outs and a second user on the
@@ -74,6 +54,12 @@ const ASYNC_SIGN_OUT_PREFIXES = [
   // device from inheriting the previous user's session and seeing a
   // "Resume?" prompt with someone else's working state.
   'active_workout_session:',
+  // Per-user deep-link landing for invite acceptance (R15). The deep-link
+  // handler writes `pending_invite_code:<userId>` (or `:anonymous`); the
+  // bare `pending_invite_code` legacy key is wiped via ASYNC_SIGN_OUT_KEYS.
+  // The trailing colon keeps unrelated keys like `pending_invite_codex_*`
+  // from being swept.
+  'pending_invite_code:',
 ];
 
 // Per-user AsyncStorage key prefixes for nutrition/fasting state. R15 requires
@@ -213,10 +199,10 @@ export async function signOut(userId?: string | null): Promise<void> {
     : [];
 
   try {
-    const prefixedKeys = await getPrefixedKeys();
     await Promise.all([
       ...SECURE_SIGN_OUT_KEYS.map((k) => secureStorage.removeItem(k)),
-      AsyncStorage.multiRemove([...ASYNC_SIGN_OUT_KEYS, ...prefixedKeys]),
+      AsyncStorage.multiRemove([...ASYNC_SIGN_OUT_KEYS, ...prefixedKeys, ...perUserKeys]),
+      clearAllStorage(),
     ]);
   } catch (err) {
     logger.error('AuthActions', 'signOut: clear failed', err);
