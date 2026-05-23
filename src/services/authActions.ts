@@ -11,7 +11,7 @@ import { setSentryUser } from './sentry';
 import { reset as analyticsReset } from '../lib/analytics';
 import { logger } from '../utils/logger';
 import { readUserCacheSync } from '../lib/userCache';
-import { clearAllStorage } from '../storage/mmkv';
+import { clearAllStorage, prefsStorage, cacheStorage } from '../storage/mmkv';
 import { deleteWorkoutLogsForUser } from '../offline/sync/sync-engine';
 import { useCoachStore } from '../store/coachStore';
 import { useClientStore } from '../store/clientStore';
@@ -88,6 +88,89 @@ const CACHE_SIGN_OUT_SUBPREFIXES = [
 // include the prefix-matched keys, which are enumerated at signOut time).
 export const SIGN_OUT_KEYS = [...SECURE_SIGN_OUT_KEYS, ...ASYNC_SIGN_OUT_KEYS];
 export const SIGN_OUT_PREFIXES = PER_USER_KEY_PREFIXES;
+
+// R15 (PR #161): user-scoped key prefixes added for in-app billing, coach
+// onboarding wizard, banners, message cache, and onboarding drafts. Each entry
+// maps a logical (un-namespaced) key prefix to the storage instance that owns
+// it, so we wipe through the right surface — native MMKV in release builds,
+// AsyncStorage-shim in Expo Go / Jest. Without that mapping, native MMKV keys
+// survive sign-out entirely, and the shim's `prefs:` / `cache:` namespace
+// wraps mean a raw prefix sweep over AsyncStorage never matches.
+//
+// IMPORTANT: 'coach.first_client_payment_nudge_shown' is intentionally global
+// and is NOT on this list — see CLAUDE.md "intentionally unscoped MMKV key".
+type ScopedPrefix = {
+  prefix: string;
+  storage: 'prefs' | 'cache';
+};
+
+const USER_SCOPED_PREFIXES: ScopedPrefix[] = [
+  { prefix: 'onboarding.package_prompt_dismissed_at:', storage: 'prefs' },
+  { prefix: 'coach.stripe_banner_dismissed:', storage: 'prefs' },
+  { prefix: 'coach.stripe_was_unconfigured:', storage: 'prefs' },
+  { prefix: 'home.coach_intro_banner_dismissed:', storage: 'prefs' },
+  { prefix: 'home.waiting_banner_dismissed:', storage: 'prefs' },
+  { prefix: 'coach.onboarding.is_complete:', storage: 'prefs' },
+  // Shape is coach.revenue_sharing_<subCoachId>:<ownerId> — the ":" is mid-key
+  // so we match by leading substring, not by a trailing colon.
+  { prefix: 'coach.revenue_sharing_', storage: 'prefs' },
+  { prefix: 'onboarding.lean_q5_draft:', storage: 'prefs' },
+  { prefix: 'onboarding.lean_q6_draft:', storage: 'prefs' },
+  { prefix: 'coach.wizard.step_2_invite_code:', storage: 'prefs' },
+  // PII-bearing message thread cache (Hunt #2). cacheStorage instance.
+  { prefix: 'messages_thread_client:', storage: 'cache' },
+];
+
+// Wipes every user-scoped key persisted by the new R15 surfaces. Routes through
+// the storage wrappers so native MMKV is actually cleared (raw AsyncStorage
+// sweeps miss native MMKV entirely) and the AsyncStorage-shim's `prefs:` /
+// `cache:` namespacing is honored.
+export async function clearUserScopedKeys(): Promise<void> {
+  // 1. Native MMKV / shim path: enumerate each storage instance's logical keys
+  //    and delete the ones matching any registered prefix.
+  const sweeps: Array<Promise<void>> = [];
+  for (const target of ['prefs', 'cache'] as const) {
+    const storage = target === 'prefs' ? prefsStorage : cacheStorage;
+    const ownedPrefixes = USER_SCOPED_PREFIXES.filter((p) => p.storage === target).map(
+      (p) => p.prefix,
+    );
+    if (!ownedPrefixes.length) continue;
+    sweeps.push(
+      (async () => {
+        try {
+          const logicalKeys = await storage.getAllKeys();
+          await Promise.all(
+            logicalKeys
+              .filter((k) => ownedPrefixes.some((prefix) => k.startsWith(prefix)))
+              .map((k) => storage.delete(k)),
+          );
+        } catch (err) {
+          logger.warn('AuthActions', 'clearUserScopedKeys: storage sweep failed', err);
+        }
+      })(),
+    );
+  }
+
+  // 2. Raw AsyncStorage path: belt-and-braces for legacy writers and for the
+  //    shim case where the namespaced key (e.g. `prefs:onboarding.lean_q5_draft:<uid>`)
+  //    must be removed directly. Also catches the bare-prefix legacy form in
+  //    case any caller historically wrote through AsyncStorage directly.
+  const namespacedPrefixes = USER_SCOPED_PREFIXES.flatMap((p) => [
+    p.prefix,
+    `${p.storage}:${p.prefix}`,
+  ]);
+  try {
+    const allKeys = await AsyncStorage.getAllKeys();
+    const matching = allKeys.filter((k) =>
+      namespacedPrefixes.some((prefix) => k.startsWith(prefix)),
+    );
+    if (matching.length) await AsyncStorage.multiRemove(matching);
+  } catch (err) {
+    logger.warn('AuthActions', 'clearUserScopedKeys: AsyncStorage sweep failed', err);
+  }
+
+  await Promise.all(sweeps);
+}
 
 async function collectPrefixedKeys(): Promise<string[]> {
   try {
@@ -202,6 +285,10 @@ export async function signOut(userId?: string | null): Promise<void> {
     await Promise.all([
       ...SECURE_SIGN_OUT_KEYS.map((k) => secureStorage.removeItem(k)),
       AsyncStorage.multiRemove([...ASYNC_SIGN_OUT_KEYS, ...prefixedKeys, ...perUserKeys]),
+      // R15 (PR #161): route new user-scoped MMKV keys through proper storage
+      // wrappers so native MMKV is actually cleared and the AsyncStorage-shim's
+      // `prefs:` / `cache:` namespaces are honored.
+      clearUserScopedKeys(),
       clearAllStorage(),
     ]);
   } catch (err) {

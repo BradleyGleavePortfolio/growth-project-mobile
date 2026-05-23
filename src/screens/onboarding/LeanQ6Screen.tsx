@@ -29,6 +29,7 @@ import { prefsStorage } from '../../storage/mmkv';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { track } from '../../lib/analytics';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -61,13 +62,20 @@ const CHIPS: ChipDef[] = [
   { label: 'Nut-free', value: 'nut_free' },
 ];
 
-const DRAFT_KEY = 'onboarding.lean_q6_draft';
+// R15: scoped per-user so onboarding drafts don't leak between users on a
+// shared device.
+const DRAFT_KEY_BASE = 'onboarding.lean_q6_draft';
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function LeanQ6Screen({ navigation }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const currentUser = useCurrentUser();
+  const draftKey = useMemo(
+    () => (currentUser?.id ? `${DRAFT_KEY_BASE}:${currentUser.id}` : null),
+    [currentUser?.id],
+  );
 
   const [selected, setSelected] = useState<Set<RestrictionValue | 'none'>>(new Set(['none']));
   const [submitting, setSubmitting] = useState(false);
@@ -75,9 +83,13 @@ export default function LeanQ6Screen({ navigation }: Props) {
 
   // ── Hydrate from MMKV draft ───────────────────────────────────────────────
   useEffect(() => {
+    if (!draftKey) {
+      setHydrated(true);
+      return;
+    }
     async function hydrate() {
       try {
-        const raw = await prefsStorage.getStringAsync(DRAFT_KEY);
+        const raw = await prefsStorage.getStringAsync(draftKey!);
         if (raw) {
           const arr: Array<RestrictionValue | 'none'> = JSON.parse(raw);
           if (Array.isArray(arr) && arr.length > 0) {
@@ -91,15 +103,16 @@ export default function LeanQ6Screen({ navigation }: Props) {
       }
     }
     hydrate();
-  }, []);
+  }, [draftKey]);
 
   // ── Persist draft on every change ────────────────────────────────────────
   useEffect(() => {
     if (!hydrated) return;
+    if (!draftKey) return;
     prefsStorage
-      .set(DRAFT_KEY, JSON.stringify(Array.from(selected)))
+      .set(draftKey, JSON.stringify(Array.from(selected)))
       .catch(() => {});
-  }, [selected, hydrated]);
+  }, [selected, hydrated, draftKey]);
 
   // ── Chip toggle ───────────────────────────────────────────────────────────
   const handleChipPress = (value: RestrictionValue | 'none') => {

@@ -580,14 +580,35 @@ export default function RootNavigator() {
           role: 'coach',
         });
         // Check coach onboarding wizard gate.
-        // On API failure (404/500) fall through to 'coach' — never hard-block.
+        // Backend contract: 404 means the wizard row has not been initialised
+        // yet, and the mobile client is expected to POST /coach/onboarding/start
+        // before entering the wizard. Any other failure (network, 5xx) falls
+        // through to the dashboard so a flaky API can never hard-block an
+        // already-onboarded coach from reaching their clients.
         try {
           const onboardingRes = await api.get<{ is_complete: boolean }>('/coach/onboarding');
           if (onboardingRes.data.is_complete === false) {
             setAuthState('coach_wizard');
             return;
           }
-        } catch (err) { logger.warn('RootNavigator', 'non-fatal', err); }
+        } catch (err) {
+          const status = (err as { response?: { status?: number } })?.response?.status;
+          if (status === 404) {
+            // Wizard row missing — start it and enter the wizard.
+            try {
+              await api.post('/coach/onboarding/start', {});
+              setAuthState('coach_wizard');
+              return;
+            } catch (startErr) {
+              // If start fails too, fail open to the dashboard rather than
+              // trap the coach behind an un-startable wizard.
+              logger.warn('RootNavigator', 'onboarding/start failed', startErr);
+            }
+          } else {
+            // Network / 5xx / unknown — fail open to coach dashboard.
+            logger.warn('RootNavigator', 'non-fatal', err);
+          }
+        }
         setAuthState('coach');
         return;
       }
@@ -656,11 +677,15 @@ export default function RootNavigator() {
         // Re-surface PackageSelectionSheet if dismissed > 24h ago.
         // Only triggers on authenticated re-boots, not the first post-onboarding flow
         // (that is handled inside Day1WinScreen itself).
+        // R15: the dismissed-at key is scoped to user.id so the gate is
+        // per-user and can't be inherited by a different signed-in user.
         try {
           const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
-          const dismissedAt = await prefsStorage.getStringAsync(
-            'onboarding.package_prompt_dismissed_at',
-          );
+          const dismissedAt = user?.id
+            ? await prefsStorage.getStringAsync(
+                `onboarding.package_prompt_dismissed_at:${user.id}`,
+              )
+            : null;
           if (dismissedAt) {
             const elapsed = Date.now() - new Date(dismissedAt).getTime();
             if (elapsed > TWENTY_FOUR_HOURS) {

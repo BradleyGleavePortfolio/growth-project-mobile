@@ -366,16 +366,17 @@ export const commandCenterApi = {
   /**
    * POST /coach/command-center/action-queue/:alertId/dismiss
    * Marks an alert as dismissed. Dismissed alerts are hidden from the queue.
+   *
+   * R18: do NOT swallow errors and fabricate { ok: true } — the caller
+   * relies on the catch path to roll its optimistic update back. Letting the
+   * error propagate is the only way the UI can stay consistent with the
+   * server's actual state.
    */
   dismissAlert: async (alertId: string): Promise<{ data: { ok: true } }> => {
     if (__USING_MOCK_DATA) return mockDelay({ ok: true as const });
-    try {
-      return await api.post<{ ok: true }>(
-        `${BASE}/action-queue/${encodeURIComponent(alertId)}/dismiss`,
-        {},
-      );
-    } catch {
-      return { data: { ok: true as const } };
-    }
+    return api.post<{ ok: true }>(
+      `${BASE}/action-queue/${encodeURIComponent(alertId)}/dismiss`,
+      {},
+    );
   },
 };

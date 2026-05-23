@@ -27,9 +27,11 @@ import { prefsStorage } from '../../storage/mmkv';
 import api from '../../services/api';
 
 // ─── MMKV Keys ────────────────────────────────────────────────────────────────
+// R15: per-user scope so a different client on the same device cannot inherit
+// the previous client's banner-dismissed state.
 
-const INTRO_DISMISSED_KEY = 'home.coach_intro_banner_dismissed';
-const WAITING_DISMISSED_KEY = 'home.waiting_banner_dismissed';
+const INTRO_DISMISSED_KEY_BASE = 'home.coach_intro_banner_dismissed';
+const WAITING_DISMISSED_KEY_BASE = 'home.waiting_banner_dismissed';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -44,19 +46,27 @@ interface CoachProfile {
 function WaitingForCoachBanner() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const currentUser = useCurrentUser();
+  const waitingKey = useMemo(
+    () => (currentUser?.id ? `${WAITING_DISMISSED_KEY_BASE}:${currentUser.id}` : null),
+    [currentUser?.id],
+  );
 
   const [dismissed, setDismissed] = useState<boolean | null>(null);
 
   useEffect(() => {
-    prefsStorage.getStringAsync(WAITING_DISMISSED_KEY).then((val) => {
+    if (!waitingKey) return;
+    prefsStorage.getStringAsync(waitingKey).then((val) => {
       setDismissed(val === 'true');
     }).catch(() => setDismissed(false));
-  }, []);
+  }, [waitingKey]);
 
   const handleDismiss = useCallback(() => {
-    prefsStorage.set(WAITING_DISMISSED_KEY, 'true').catch(() => {});
+    if (waitingKey) {
+      prefsStorage.set(waitingKey, 'true').catch(() => {});
+    }
     setDismissed(true);
-  }, []);
+  }, [waitingKey]);
 
   if (dismissed !== false) return null;
 
@@ -84,6 +94,10 @@ export default function CoachIntroductionBanner() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();
+  const introKey = useMemo(
+    () => (currentUser?.id ? `${INTRO_DISMISSED_KEY_BASE}:${currentUser.id}` : null),
+    [currentUser?.id],
+  );
 
   const [dismissed, setDismissed] = useState<boolean | null>(null);
   const [coach, setCoach] = useState<CoachProfile | null>(null);
@@ -91,10 +105,11 @@ export default function CoachIntroductionBanner() {
 
   // Check dismissed flag
   useEffect(() => {
-    prefsStorage.getStringAsync(INTRO_DISMISSED_KEY).then((val) => {
+    if (!introKey) return;
+    prefsStorage.getStringAsync(introKey).then((val) => {
       setDismissed(val === 'true');
     }).catch(() => setDismissed(false));
-  }, []);
+  }, [introKey]);
 
   // Fetch coach when we know user.coach_id and banner isn't dismissed
   useEffect(() => {
@@ -121,9 +136,11 @@ export default function CoachIntroductionBanner() {
   }, [dismissed, currentUser?.coach_id]);
 
   const handleDismiss = useCallback(() => {
-    prefsStorage.set(INTRO_DISMISSED_KEY, 'true').catch(() => {});
+    if (introKey) {
+      prefsStorage.set(introKey, 'true').catch(() => {});
+    }
     setDismissed(true);
-  }, []);
+  }, [introKey]);
 
   // ── Guards ────────────────────────────────────────────────────────────────
   if (dismissed === null) return null; // still reading MMKV

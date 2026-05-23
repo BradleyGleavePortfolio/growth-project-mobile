@@ -30,6 +30,7 @@ import { typography } from '../../theme/tokens';
 import PackageSelectionSheet from '../../components/PackageSelectionSheet';
 import { prefsStorage } from '../../storage/mmkv';
 import api from '../../services/api';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 // ── Win card definitions ──────────────────────────────────────────────────────
 
@@ -80,6 +81,7 @@ interface Day1WinScreenProps {
 export default function Day1WinScreen({ onComplete }: Day1WinScreenProps) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const currentUser = useCurrentUser();
 
   const [selectedWin, setSelectedWin] = useState<WinType | null>(null);
   const [loading, setLoading] = useState(false);
@@ -118,10 +120,13 @@ export default function Day1WinScreen({ onComplete }: Day1WinScreenProps) {
   // Check the 24h gate and package availability, then either show sheet or call onComplete.
   const maybeShowPackageSheet = useCallback(async (target?: WinType) => {
     const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+    const userId = currentUser?.id;
     try {
-      const dismissedAt = await prefsStorage.getStringAsync(
-        'onboarding.package_prompt_dismissed_at',
-      );
+      const dismissedAt = userId
+        ? await prefsStorage.getStringAsync(
+            `onboarding.package_prompt_dismissed_at:${userId}`,
+          )
+        : null;
       if (dismissedAt) {
         const elapsed = Date.now() - new Date(dismissedAt).getTime();
         if (elapsed < TWENTY_FOUR_HOURS) {
@@ -156,7 +161,7 @@ export default function Day1WinScreen({ onComplete }: Day1WinScreenProps) {
     // Packages exist and 24h gate passed — show sheet
     // Stash the target so the sheet callbacks can forward it
     setShowPackageSheet(true);
-  }, [onComplete]);
+  }, [onComplete, currentUser?.id]);
 
   // Continue without selecting a win — used by skip and by the persistent-
   // failure escape hatch. Routes straight into the main app (via package gate).

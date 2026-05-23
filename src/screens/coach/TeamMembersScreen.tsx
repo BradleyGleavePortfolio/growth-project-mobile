@@ -26,6 +26,8 @@ import { coachTeamApi, TeamMember } from '../../api/coachTeamApi';
 import { prefsStorage } from '../../storage/mmkv';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import api from '../../services/api';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { generateIdempotencyKey } from '../../utils/idempotency';
 
 // ─── Revenue sharing API helpers ─────────────────────────────────────────────
 
@@ -41,13 +43,20 @@ async function getRevenueSharing(subCoachId: string): Promise<boolean> {
 }
 
 async function patchRevenueSharing(subCoachId: string, enabled: boolean): Promise<void> {
-  await api.patch(`/coach/team/members/${subCoachId}/revenue-sharing`, { enabled });
+  // R19: every revenue-affecting mutation carries a client-generated
+  // idempotency key so a double-fire from a rapid toggle is server-deduped.
+  await api.patch(
+    `/coach/team/members/${subCoachId}/revenue-sharing`,
+    { enabled, idempotency_key: generateIdempotencyKey() },
+  );
 }
 
 // ─── MMKV helpers ─────────────────────────────────────────────────────────────
+// R15: caller passes the signed-in coach's user id so a second coach on the
+// same device cannot inherit the previous coach's per-sub-coach toggle state.
 
-function cacheKey(id: string) {
-  return `coach.revenue_sharing_${id}`;
+function cacheKey(subCoachId: string, ownerId: string) {
+  return `coach.revenue_sharing_${subCoachId}:${ownerId}`;
 }
 
 // ─── Skeleton row ─────────────────────────────────────────────────────────────
@@ -61,13 +70,14 @@ function SkeletonRow({ styles }: { styles: ReturnType<typeof makeStyles> }) {
 interface MemberRowProps {
   member: TeamMember;
   enabled: boolean;
+  pending: boolean;
   onToggle: (id: string, value: boolean) => void;
   error: string | null;
   styles: ReturnType<typeof makeStyles>;
   colors: ThemeColors;
 }
 
-function MemberRow({ member, enabled, onToggle, error, styles, colors }: MemberRowProps) {
+function MemberRow({ member, enabled, pending, onToggle, error, styles, colors }: MemberRowProps) {
   return (
     <View style={styles.row}>
       <View style={styles.rowLeft}>
@@ -90,12 +100,13 @@ function MemberRow({ member, enabled, onToggle, error, styles, colors }: MemberR
       </View>
       <Switch
         value={enabled}
+        disabled={pending}
         onValueChange={(val) => onToggle(member.id, val)}
         trackColor={{ false: colors.border, true: colors.primaryLight }}
         thumbColor={enabled ? colors.primary : colors.textMuted}
         accessibilityRole="switch"
         accessibilityLabel={`Revenue sharing for ${member.name}`}
-        accessibilityState={{ checked: enabled }}
+        accessibilityState={{ checked: enabled, disabled: pending }}
         testID={`revenue-sharing-toggle-${member.id}`}
       />
     </View>
@@ -107,6 +118,8 @@ function MemberRow({ member, enabled, onToggle, error, styles, colors }: MemberR
 export default function TeamMembersScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const currentUser = useCurrentUser();
+  const ownerId = currentUser?.id ?? null;
 
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(true);
@@ -117,6 +130,10 @@ export default function TeamMembersScreen() {
   const [toggleStates, setToggleStates] = useState<Record<string, boolean>>({});
   // Per-member toggle error messages
   const [toggleErrors, setToggleErrors] = useState<Record<string, string>>({});
+  // Per-member in-flight guard so rapid taps cannot fire a second PATCH while
+  // the first one is still resolving (otherwise an optimistic flip → rollback
+  // race can leave the UI showing the wrong state).
+  const [togglePending, setTogglePending] = useState<Record<string, boolean>>({});
 
   // ── Load members ───────────────────────────────────────────────────────────
   const loadMembers = useCallback(async () => {
@@ -134,17 +151,21 @@ export default function TeamMembersScreen() {
       const subCoaches = result.data.filter((m) => m.role === 'sub_coach');
       setMembers(subCoaches);
 
-      // Hydrate from MMKV cache first (optimistic)
-      const cachedStates: Record<string, boolean> = {};
-      await Promise.all(
-        subCoaches.map(async (m) => {
-          const cached = await prefsStorage.getStringAsync(cacheKey(m.id));
-          if (cached !== undefined) {
-            cachedStates[m.id] = cached === 'true';
-          }
-        }),
-      );
-      setToggleStates((prev) => ({ ...prev, ...cachedStates }));
+      // Hydrate from MMKV cache first (optimistic).
+      // R15: keyed by ${subCoachId}:${ownerId} so a different coach signing
+      // in cannot see the previous coach's per-sub-coach toggle state.
+      if (ownerId) {
+        const cachedStates: Record<string, boolean> = {};
+        await Promise.all(
+          subCoaches.map(async (m) => {
+            const cached = await prefsStorage.getStringAsync(cacheKey(m.id, ownerId));
+            if (cached !== undefined) {
+              cachedStates[m.id] = cached === 'true';
+            }
+          }),
+        );
+        setToggleStates((prev) => ({ ...prev, ...cachedStates }));
+      }
 
       // Fetch from API in parallel, overwrite cache
       const apiStates = await Promise.allSettled(
@@ -155,9 +176,11 @@ export default function TeamMembersScreen() {
         if (result.status === 'fulfilled') {
           freshStates[subCoaches[idx].id] = result.value;
           // Write to cache
-          prefsStorage
-            .set(cacheKey(subCoaches[idx].id), String(result.value))
-            .catch(() => {});
+          if (ownerId) {
+            prefsStorage
+              .set(cacheKey(subCoaches[idx].id, ownerId), String(result.value))
+              .catch(() => {});
+          }
         }
       });
       setToggleStates((prev) => ({ ...prev, ...freshStates }));
@@ -166,7 +189,7 @@ export default function TeamMembersScreen() {
     } finally {
       setLoadingMembers(false);
     }
-  }, []);
+  }, [ownerId]);
 
   useEffect(() => {
     loadMembers();
@@ -179,17 +202,26 @@ export default function TeamMembersScreen() {
     setRefreshing(false);
   }, [loadMembers]);
 
-  // ── Toggle handler (optimistic) ────────────────────────────────────────────
+  // ── Toggle handler (optimistic, single-flight per row) ──────────────────
   const handleToggle = useCallback(async (id: string, value: boolean) => {
+    // R19: disallow a second PATCH while the first is in-flight. Without
+    // this guard, two rapid taps each fire their own (idempotent) request
+    // and the second one's optimistic flip can land on top of the first's
+    // rollback, leaving the UI showing the opposite of the server state.
+    if (togglePending[id]) return;
+
     // Clear any prior error for this row
     setToggleErrors((prev) => ({ ...prev, [id]: '' }));
     // Optimistic update
     setToggleStates((prev) => ({ ...prev, [id]: value }));
+    setTogglePending((prev) => ({ ...prev, [id]: true }));
 
     try {
       await patchRevenueSharing(id, value);
       // Persist to cache on success
-      prefsStorage.set(cacheKey(id), String(value)).catch(() => {});
+      if (ownerId) {
+        prefsStorage.set(cacheKey(id, ownerId), String(value)).catch(() => {});
+      }
     } catch {
       // Revert on failure
       setToggleStates((prev) => ({ ...prev, [id]: !value }));
@@ -197,8 +229,10 @@ export default function TeamMembersScreen() {
         ...prev,
         [id]: 'Update failed. Please try again.',
       }));
+    } finally {
+      setTogglePending((prev) => ({ ...prev, [id]: false }));
     }
-  }, []);
+  }, [togglePending, ownerId]);
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -246,6 +280,7 @@ export default function TeamMembersScreen() {
               key={member.id}
               member={member}
               enabled={toggleStates[member.id] ?? false}
+              pending={togglePending[member.id] ?? false}
               onToggle={handleToggle}
               error={toggleErrors[member.id] ?? null}
               styles={styles}
