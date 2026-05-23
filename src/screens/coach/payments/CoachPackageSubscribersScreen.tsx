@@ -55,20 +55,23 @@ export default function CoachPackageSubscribersScreen({ navigation, route }: Pro
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const [unavailable, setUnavailable] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setError('');
+    setUnavailable(null);
     try {
       const res = await coachPackagesApi.subscribers(packageId);
       setData(res.data);
     } catch (err) {
+      // 404 here means the endpoint is not deployed in this environment
+      // (Wave 4 backend dependency). Surface it honestly — collapsing 404
+      // to an empty list would lie to the coach as "0 subscribers".
       if (errorStatus(err) === 404) {
-        setData({
-          packageId,
-          subscribers: [],
-          totalActive: 0,
-          monthlyRecurringRevenueCents: 0,
-        });
+        setUnavailable(
+          'Subscriber reporting is not available in this environment yet. It will appear once the marketplace backend ships.',
+        );
+        setData(null);
       } else {
         setError(errorMessage(err, 'Could not load subscribers.'));
       }
@@ -130,7 +133,17 @@ export default function CoachPackageSubscribersScreen({ navigation, route }: Pro
           keyExtractor={(s) => s.id}
           contentContainerStyle={styles.content}
           ListEmptyComponent={
-            error ? (
+            unavailable ? (
+              <View style={styles.emptyWrap}>
+                <Ionicons
+                  name="construct-outline"
+                  size={28}
+                  color={colors.textMuted}
+                />
+                <Text style={styles.emptyTitle}>Not available</Text>
+                <Text style={styles.emptyBody}>{unavailable}</Text>
+              </View>
+            ) : error ? (
               <View style={styles.emptyWrap}>
                 <Ionicons name="alert-circle-outline" size={28} color={colors.error} />
                 <Text style={styles.emptyBody}>{error}</Text>

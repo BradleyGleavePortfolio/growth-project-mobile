@@ -412,15 +412,28 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
 
         {isEdit && original ? (
           <>
-            <TouchableOpacity
-              style={styles.secondaryBtn}
-              onPress={handleShare}
-              accessibilityRole="button"
-              accessibilityLabel="Share package link"
-            >
-              <Ionicons name="share-outline" size={18} color={colors.primary} />
-              <Text style={styles.secondaryBtnText}>Share link</Text>
-            </TouchableOpacity>
+            {original.shareToken ? (
+              <TouchableOpacity
+                style={styles.secondaryBtn}
+                onPress={handleShare}
+                accessibilityRole="button"
+                accessibilityLabel="Share package link"
+              >
+                <Ionicons name="share-outline" size={18} color={colors.primary} />
+                <Text style={styles.secondaryBtnText}>Share link</Text>
+              </TouchableOpacity>
+            ) : (
+              <View
+                style={styles.secondaryBtnDisabled}
+                accessibilityRole="text"
+                accessibilityLabel="Share links are coming soon"
+              >
+                <Ionicons name="share-outline" size={18} color={colors.textMuted} />
+                <Text style={styles.secondaryBtnTextDisabled}>
+                  Share links are coming soon
+                </Text>
+              </View>
+            )}
 
             <TouchableOpacity
               style={[styles.tertiaryBtn, archiving && styles.primaryBtnDisabled]}
@@ -580,6 +593,23 @@ const makeStyles = (colors: ThemeColors) =>
       borderColor: colors.primary,
     },
     secondaryBtnText: { color: colors.primary, fontSize: 15, fontWeight: '500' },
+    secondaryBtnDisabled: {
+      marginTop: 12,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 8,
+      paddingVertical: 14,
+      borderRadius: 2,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+    },
+    secondaryBtnTextDisabled: {
+      color: colors.textMuted,
+      fontSize: 14,
+      fontWeight: '400',
+    },
     tertiaryBtn: {
       marginTop: 8,
       flexDirection: 'row',

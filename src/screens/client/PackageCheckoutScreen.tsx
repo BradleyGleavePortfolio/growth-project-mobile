@@ -74,6 +74,19 @@ export default function PackageCheckoutScreen({ navigation, route }: Props) {
 
   const load = useCallback(async () => {
     setError(null);
+    // Defense-in-depth: a missing/null shareToken should never reach the API.
+    // The backend share-token endpoint is a Wave 4 dependency (not yet
+    // shipped), so the only valid path here today is a fully-formed token
+    // that the validator accepts. Anything else gets a clear "not yet active"
+    // message instead of a silent 404.
+    if (shareToken == null || shareToken === '') {
+      setError({
+        title: 'This link is not yet active',
+        body: 'Coach package share links are coming soon. Ask your coach for an updated link.',
+      });
+      setLoading(false);
+      return;
+    }
     if (!isValidPackageShareToken(shareToken)) {
       setError({
         title: 'Link not valid',
