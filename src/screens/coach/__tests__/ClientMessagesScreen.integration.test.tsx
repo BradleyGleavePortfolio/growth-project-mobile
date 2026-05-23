@@ -1,23 +1,33 @@
 /**
- * Apple 1.2 / Audit #2 P1-7 integration coverage for the coach DM thread.
+ * Apple 1.2 / Audit #3 P1-A & P1-B integration coverage for the coach DM thread.
  *
- * Two end-to-end behaviours that the unit tests on messagesApi and the report
- * sheet cannot prove on their own:
+ * Three end-to-end behaviours that the unit tests on messagesApi and the
+ * report sheet cannot prove on their own:
  *
  *   1. Long-press a message → open the report sheet → submit → assert the
- *      real POST /messages/report fires with { messageId, reason, details }.
- *      This proves the long-press, sheet, and screen submit handler are wired
- *      end-to-end instead of being three independently green islands.
+ *      real `api.post('/messages/report', { messageId, reason, details })`
+ *      fires. We mock the underlying API client (NOT the moderation helper)
+ *      so this proves the full wire path: screen → messagesModerationApi →
+ *      api.post. Mocking the helper here would hide a regression where the
+ *      helper stops POSTing the right body, exactly the kind of thing the
+ *      audit flagged as "helper-boundary mocking".
  *
- *   2. GET /users/blocks returns user X as blocked → the screen must NOT
- *      render messages whose sender_id is X. This proves the new
- *      useBlockedUsersHydration hook actually feeds into filterOutBlocked.
+ *   2. GET /users/blocks returns user X as blocked → the screen must NEVER
+ *      render messages whose sender_id is X. Critical correctness property:
+ *      we assert the blocked body is absent at every observation point,
+ *      including before hydration kicks in. The DM screen gates its message
+ *      list render on `serverHydrationComplete`, so the only thing visible
+ *      until the server block-list resolves is the loading indicator.
+ *
+ *   3. The server-provided `blockedAt` flows through `addFromServer` without
+ *      being overwritten by `new Date().toISOString()`.
  */
 import React from 'react';
 import { Alert, Platform } from 'react-native';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import ClientMessagesScreen from '../ClientMessagesScreen';
 import { useBlockedUsersStore } from '../../../store/blockedUsersStore';
+import api from '../../../services/api';
 
 // Render the Android modal branch of MessageActionSheet so we can fire
 // Pressable events directly rather than hooking into ActionSheetIOS.
@@ -82,33 +92,33 @@ const sendClientMessageMock = jest.fn(async (_id: string, body: string) => ({
   data: { id: 'srv-new', sender_role: 'coach', body, created_at: new Date().toISOString() },
 }));
 
-jest.mock('../../../services/api', () => ({
-  coachApi: {
-    getClientMessages: (...args: unknown[]) => getClientMessagesMock(...(args as [string])),
-    markClientThreadRead: (...args: unknown[]) => markClientThreadReadMock(...args),
-    sendClientMessage: (...args: unknown[]) =>
-      sendClientMessageMock(...(args as [string, string])),
-  },
-}));
-
-const reportMock = jest.fn();
-const listBlockedMock = jest.fn();
-const blockMock = jest.fn();
-const unblockMock = jest.fn();
-const sendReplyMock = jest.fn();
-jest.mock('../../../api/messagesApi', () => {
-  const actual = jest.requireActual('../../../api/messagesApi');
+jest.mock('../../../services/api', () => {
+  const stub = {
+    get: jest.fn(),
+    post: jest.fn(),
+    delete: jest.fn(),
+    put: jest.fn(),
+    patch: jest.fn(),
+  };
   return {
-    ...actual,
-    messagesModerationApi: {
-      report: (...args: unknown[]) => reportMock(...args),
-      listBlocked: (...args: unknown[]) => listBlockedMock(...args),
-      block: (...args: unknown[]) => blockMock(...args),
-      unblock: (...args: unknown[]) => unblockMock(...args),
-      sendReply: (...args: unknown[]) => sendReplyMock(...args),
+    __esModule: true,
+    default: stub,
+    coachApi: {
+      getClientMessages: (...args: unknown[]) => getClientMessagesMock(...(args as [string])),
+      markClientThreadRead: (...args: unknown[]) => markClientThreadReadMock(...args),
+      sendClientMessage: (...args: unknown[]) =>
+        sendClientMessageMock(...(args as [string, string])),
     },
   };
 });
+
+// NOTE: we deliberately do NOT mock messagesModerationApi here. The whole
+// point of the P1-B audit fix is to prove the full call chain
+//   screen → messagesModerationApi.report() → api.post('/messages/report', …)
+// reaches the underlying HTTP layer. Mocking `report` itself would short-
+// circuit exactly the wire we are trying to verify. `api` (default export
+// from services/api) IS mocked above with jest.fn() methods, so the real
+// messagesModerationApi will call our stub.
 
 jest.mock('../../../services/realtime', () => ({
   subscribeToMessages: () => () => undefined,
@@ -144,25 +154,28 @@ jest.mock('@react-navigation/native', () => {
   };
 });
 
+const postMock = api.post as unknown as jest.Mock;
+const getMock = api.get as unknown as jest.Mock;
+const deleteMock = api.delete as unknown as jest.Mock;
+
 beforeEach(async () => {
   Object.keys(messagesByClient).forEach((k) => delete messagesByClient[k]);
   getClientMessagesMock.mockClear();
   markClientThreadReadMock.mockClear();
   sendClientMessageMock.mockClear();
-  reportMock.mockReset();
-  listBlockedMock.mockReset();
-  blockMock.mockReset();
-  unblockMock.mockReset();
-  sendReplyMock.mockReset();
+  postMock.mockReset();
+  getMock.mockReset();
+  deleteMock.mockReset();
   mockGoBack.mockReset();
   mockNavigate.mockReset();
-  // Default: no server-side blocks, so the hook merges nothing.
-  listBlockedMock.mockResolvedValue({ blocked: [] });
+  // Default for api.get: GET /users/blocks returns no blocks. Tests that need
+  // a populated list override this with mockResolvedValueOnce.
+  getMock.mockResolvedValue({ data: { blocked: [] } });
   await useBlockedUsersStore.getState().reset();
 });
 
-describe('ClientMessagesScreen — full-screen report integration (P1-7)', () => {
-  it('long-press → open report sheet → submit calls POST /messages/report with {messageId, reason, details}', async () => {
+describe('ClientMessagesScreen — full-screen report integration (P1-B)', () => {
+  it('long-press → open report sheet → submit calls POST /messages/report with the full body', async () => {
     messagesByClient['client-1'] = [
       {
         id: 'msg-123',
@@ -172,7 +185,8 @@ describe('ClientMessagesScreen — full-screen report integration (P1-7)', () =>
         created_at: '2026-05-22T10:00:00Z',
       },
     ];
-    reportMock.mockResolvedValueOnce({ ok: true, report_id: 'rep-1' });
+    // POST /messages/report resolves with a fake report id.
+    postMock.mockResolvedValue({ data: { ok: true, report_id: 'rep-1' } });
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
 
     const { findByLabelText, getByLabelText, getByText } = render(<ClientMessagesScreen />);
@@ -193,16 +207,26 @@ describe('ClientMessagesScreen — full-screen report integration (P1-7)', () =>
     // Submit.
     fireEvent.press(getByLabelText('Submit report'));
 
+    // The full chain reached the HTTP layer. This is the assertion the audit
+    // demanded: the underlying api.post must have been called with the exact
+    // path and body — proving screen → messagesModerationApi.report() →
+    // api.post('/messages/report', …) all wire together.
     await waitFor(() => {
-      expect(reportMock).toHaveBeenCalledTimes(1);
+      const reportCall = postMock.mock.calls.find(
+        ([url]) => url === '/messages/report',
+      );
+      expect(reportCall).toBeTruthy();
     });
-    expect(reportMock).toHaveBeenCalledWith('msg-123', {
+    const reportCall = postMock.mock.calls.find(
+      ([url]) => url === '/messages/report',
+    );
+    expect(reportCall?.[1]).toEqual({
+      messageId: 'msg-123',
       reason: 'spam',
       details: undefined,
     });
 
-    // The screen surfaces a confirmation Alert (only after the API resolves,
-    // never on failure).
+    // The screen surfaces a confirmation Alert only after the API resolves.
     await waitFor(() => {
       expect(alertSpy).toHaveBeenCalledWith(
         'Reported',
@@ -210,30 +234,35 @@ describe('ClientMessagesScreen — full-screen report integration (P1-7)', () =>
       );
     });
 
-    // The Reported alert text — assert it's not present until the network resolves.
-    // The mock resolved synchronously above, so the assertion already covers it;
-    // here we double-check we passed the right title.
-    const reportedAlertCall = alertSpy.mock.calls.find((c) => c[0] === 'Reported');
-    expect(reportedAlertCall).toBeTruthy();
-
     alertSpy.mockRestore();
     // sanity: getByText still works after the sheet closed.
     expect(getByText('Alice Smith')).toBeTruthy();
   });
 });
 
-describe('ClientMessagesScreen — server block hydration filters the DM list (P1-2 / P1-7)', () => {
-  it('does NOT render messages from a sender whose blockedId came back from GET /users/blocks', async () => {
+describe('ClientMessagesScreen — server block hydration filters the DM list (P1-A)', () => {
+  it('NEVER renders messages from a sender returned by GET /users/blocks (no flash before hydration)', async () => {
     // Server reports client-1 as blocked. The hook should merge that into
     // the store, and filterOutBlocked must drop the matching messages.
-    listBlockedMock.mockResolvedValueOnce({
-      blocked: [
-        {
-          blockedId: 'client-1',
-          displayName: 'Alice Smith',
-          blockedAt: '2026-05-01T00:00:00Z',
-        },
-      ],
+    //
+    // Critically, the screen gates the message list on
+    // `serverHydrationComplete`, so the blocked body must never appear at
+    // ANY observation point — not just "eventually absent".
+    getMock.mockImplementation(async (url: string) => {
+      if (url === '/users/blocks') {
+        return {
+          data: {
+            blocked: [
+              {
+                blockedId: 'client-1',
+                displayName: 'Alice Smith',
+                blockedAt: '2026-05-01T00:00:00Z',
+              },
+            ],
+          },
+        };
+      }
+      return { data: {} };
     });
     messagesByClient['client-1'] = [
       {
@@ -254,24 +283,41 @@ describe('ClientMessagesScreen — server block hydration filters the DM list (P
 
     const { queryByText, findByText } = render(<ClientMessagesScreen />);
 
-    // The coach's own message must render — guarantees the list rendered.
+    // Before server hydration completes, the screen renders the loading
+    // indicator and NOTHING from the message payload — assert the blocked
+    // body is absent right out of the gate. This is the audit's "never
+    // rendered, not just eventually absent" requirement.
+    expect(queryByText('should-be-filtered')).toBeNull();
+    expect(queryByText('should-stay-visible')).toBeNull();
+
+    // After hydration, the unblocked message renders.
     await findByText('should-stay-visible');
 
-    // Wait for the hydration hook to run and the filter to apply.
+    // And the blocked sender's message is still absent.
+    expect(queryByText('should-be-filtered')).toBeNull();
+
+    // Hydration store state reflects the block.
     await waitFor(() => {
       expect(useBlockedUsersStore.getState().isBlocked('client-1')).toBe(true);
     });
-    await waitFor(() => {
-      expect(queryByText('should-be-filtered')).toBeNull();
-    });
+
+    // Final assertion: the blocked body never became visible.
+    expect(queryByText('should-be-filtered')).toBeNull();
   });
 
   it('preserves the server-provided blockedAt (does not stamp new Date())', async () => {
     const serverIso = '2025-12-01T12:34:56.000Z';
-    listBlockedMock.mockResolvedValueOnce({
-      blocked: [
-        { blockedId: 'client-1', displayName: 'Alice Smith', blockedAt: serverIso },
-      ],
+    getMock.mockImplementation(async (url: string) => {
+      if (url === '/users/blocks') {
+        return {
+          data: {
+            blocked: [
+              { blockedId: 'client-1', displayName: 'Alice Smith', blockedAt: serverIso },
+            ],
+          },
+        };
+      }
+      return { data: {} };
     });
     messagesByClient['client-1'] = [];
 
