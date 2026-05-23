@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { coachApi } from '../../../services/api';
 import { errorMessage } from '../../../types/common';
-import { getTodayString } from '../../../utils/date';
+import { bucketDateLocal, getTodayString } from '../../../utils/date';
 import type { ThemeColors } from '../../../theme/ThemeProvider';
 import type { ClientProfile, FoodLog, WeightLog } from '../../../types';
 import {
@@ -89,7 +89,7 @@ export function useClientDetailData(clientId: string, colors: ThemeColors) {
       const weights = ((data.weight_logs as WeightRow[] | undefined) || []).map((w) => ({
         id: w.id,
         weight: w.weight_lbs,
-        date: typeof w.date === 'string' ? w.date.slice(0, 10) : new Date(w.date).toISOString().split('T')[0],
+        date: typeof w.date === 'string' ? w.date.slice(0, 10) : bucketDateLocal(new Date(w.date)),
         notes: w.notes || '',
       }));
       setWeightLogs(weights as unknown as WeightLog[]);
@@ -240,13 +240,13 @@ export function useClientDetailData(clientId: string, colors: ThemeColors) {
         const day = d.getDay();
         const diff = day === 0 ? -6 : 1 - day;
         d.setDate(d.getDate() + diff);
-        return d.toISOString().split('T')[0];
+        return bucketDateLocal(d);
       };
 
       const getSundayOf = (mondayStr: string): string => {
         const d = new Date(mondayStr + 'T00:00:00');
         d.setDate(d.getDate() + 6);
-        return d.toISOString().split('T')[0];
+        return bucketDateLocal(d);
       };
 
       const formatWeekLabel = (startStr: string, endStr: string): string => {

@@ -47,6 +47,12 @@ describe('bucketDateLocal', () => {
       bucketDateLocal(new Date('2026-11-02T07:30:00Z'), 'America/Los_Angeles'),
     ).toBe('2026-11-01');
   });
+
+  it('Pacific/Honolulu: 09:30 AM UTC on Jan 1 is 11:30 PM Dec 31 in Hawaii', () => {
+    // Hawaii is UTC-10, no DST. 09:30 UTC on Jan 1 is 23:30 local on Dec 31.
+    const d = new Date('2026-01-01T09:30:00.000Z');
+    expect(bucketDateLocal(d, 'Pacific/Honolulu')).toBe('2025-12-31');
+  });
 });
 
 describe('getLocalWeekStart (Monday-anchored)', () => {

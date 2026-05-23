@@ -40,6 +40,7 @@ import {
   BloodworkReviewState,
 } from '../../types/bloodwork';
 import { canTransition } from '../../lib/bloodworkSignoff';
+import { bucketDateLocal } from '../../utils/date';
 
 // Server-shaped list. Empty in v1 — backend hookup tracked separately.
 const QUEUE_PLACEHOLDER: BloodworkReviewQueueItem[] = [];
@@ -196,7 +197,7 @@ function formatSubmittedAt(iso: string): string {
   try {
     const d = new Date(iso);
     if (Number.isNaN(d.getTime())) return '';
-    return d.toISOString().slice(0, 10);
+    return bucketDateLocal(d);
   } catch {
     return '';
   }
