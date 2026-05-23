@@ -126,6 +126,62 @@ describe('blockedUsersStore', () => {
   });
 });
 
+describe('blockedUsersStore.addFromServer', () => {
+  it('inserts new rows with the server-provided blockedAt verbatim', async () => {
+    await useBlockedUsersStore.getState().hydrate('user-A');
+    const serverIso = '2025-11-30T12:34:56.000Z';
+    await useBlockedUsersStore.getState().addFromServer([
+      { blockedId: 'srv1', displayName: 'Server Name', blockedAt: serverIso },
+    ]);
+    const row = useBlockedUsersStore.getState().blocked.find((b) => b.id === 'srv1');
+    expect(row).toBeDefined();
+    expect(row?.blockedAt).toBe(serverIso);
+    expect(row?.displayName).toBe('Server Name');
+  });
+
+  it('does not overwrite an existing local blockedAt when the row already exists', async () => {
+    await useBlockedUsersStore.getState().hydrate('user-A');
+    await useBlockedUsersStore.getState().block({
+      id: 'u1',
+      displayName: 'Alice',
+      role: 'coach',
+    });
+    const localStamp = useBlockedUsersStore.getState().blocked.find((b) => b.id === 'u1')!.blockedAt;
+    // Server returns a different blockedAt — addFromServer should take the
+    // server value because that is the canonical source of truth.
+    const serverIso = '2020-01-01T00:00:00.000Z';
+    await useBlockedUsersStore.getState().addFromServer([
+      { blockedId: 'u1', displayName: 'Alice', blockedAt: serverIso },
+    ]);
+    const after = useBlockedUsersStore.getState().blocked.find((b) => b.id === 'u1')!;
+    // The blocked entry should now reflect the server's blockedAt (server is
+    // authoritative) and must not be the locally-stamped value.
+    expect(after.blockedAt).toBe(serverIso);
+    expect(after.blockedAt).not.toBe(localStamp);
+  });
+
+  it('falls back to a local timestamp if the server omits blockedAt', async () => {
+    await useBlockedUsersStore.getState().hydrate('user-A');
+    await useBlockedUsersStore.getState().addFromServer([
+      { blockedId: 'srv2', displayName: 'No date', blockedAt: '' },
+    ]);
+    const row = useBlockedUsersStore.getState().blocked.find((b) => b.id === 'srv2')!;
+    expect(row.blockedAt.length).toBeGreaterThan(0);
+  });
+
+  it('persists merged rows under the user-scoped key', async () => {
+    await useBlockedUsersStore.getState().hydrate('user-A');
+    await useBlockedUsersStore.getState().addFromServer([
+      { blockedId: 'u9', displayName: 'Server', blockedAt: '2026-01-01T00:00:00Z' },
+    ]);
+    const key = persistKeyFor('user-A')!;
+    const raw = __memory.get(key);
+    expect(raw).toBeTruthy();
+    expect(raw).toContain('"id":"u9"');
+    expect(raw).toContain('2026-01-01T00:00:00Z');
+  });
+});
+
 describe('filterOutBlocked', () => {
   const msgs = [
     { id: '1', sender_id: 'u1', body: 'a' },
