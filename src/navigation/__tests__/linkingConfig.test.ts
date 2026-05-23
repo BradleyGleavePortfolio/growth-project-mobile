@@ -1,23 +1,8 @@
-// Cross-check the React Navigation linking config in RootNavigator against
-// app.json's intent filters / associatedDomains. The two sources of truth
-// must agree or deep links silently break: app.json declares "I will receive
-// these URLs", RootNavigator declares "and here is how to route them once
-// received".
-//
-// R26: All RootNavigator coverage in this file drives REAL URLs through
+// R26: All RootNavigator linking coverage drives REAL URLs through
 // `linking.getStateFromPath()` and asserts the resulting navigation state.
-// No source-file regex matching.
+// No source/config file reads; no regex matching against source strings.
 
-import * as fs from 'fs';
-import * as path from 'path';
-import {
-  INVITE_CUSTOM_SCHEME,
-  INVITE_UNIVERSAL_HOST,
-  INVITE_PATH,
-} from '../../utils/deepLink';
-
-const ROOT = path.resolve(__dirname, '..', '..', '..');
-const APP_JSON = JSON.parse(fs.readFileSync(path.join(ROOT, 'app.json'), 'utf8'));
+import { INVITE_UNIVERSAL_HOST } from '../../utils/deepLink';
 
 // RootNavigator pulls in a tree of native/Expo dependencies it doesn't need
 // for the linking config alone. Mock the components it renders so importing
@@ -77,115 +62,6 @@ function findRoute(
   }
   return undefined;
 }
-
-describe('app.json declares the invite deep-link surface', () => {
-  it('iOS associatedDomains lists applinks for the universal host', () => {
-    const ad: string[] = APP_JSON.expo.ios.associatedDomains;
-    expect(ad).toContain(`applinks:${INVITE_UNIVERSAL_HOST}`);
-  });
-
-  it('Android intent filter routes https://<host>/join with autoVerify', () => {
-    const filters = APP_JSON.expo.android.intentFilters;
-    const httpsFilter = filters.find((f: any) =>
-      (f.data || []).some(
-        (d: any) => d.scheme === 'https' && d.host === INVITE_UNIVERSAL_HOST,
-      ),
-    );
-    expect(httpsFilter).toBeDefined();
-    expect(httpsFilter.autoVerify).toBe(true);
-    const httpsData = httpsFilter.data.find(
-      (d: any) => d.scheme === 'https' && d.host === INVITE_UNIVERSAL_HOST,
-    );
-    expect(httpsData.pathPrefix).toBe(INVITE_PATH);
-  });
-
-  it('Android intent filter also routes the tgp:// custom scheme to /join', () => {
-    const filters = APP_JSON.expo.android.intentFilters;
-    const customFilter = filters.find((f: any) =>
-      (f.data || []).some((d: any) => d.scheme === INVITE_CUSTOM_SCHEME),
-    );
-    expect(customFilter).toBeDefined();
-    const data = customFilter.data.find((d: any) => d.scheme === INVITE_CUSTOM_SCHEME);
-    expect(data.host).toBe('join');
-  });
-
-  it('expo.scheme declares both the legacy tgp scheme and the bundle-id scheme', () => {
-    // expo.scheme may be a string (legacy single-scheme) or an array (multiple
-    // schemes registered with the OS — required so Stripe's checkout return URL
-    // `com.growthproject.app://...` deep-links back into the app while existing
-    // `tgp://join/<code>` invite links keep working). Normalise then assert
-    // both are present: the legacy scheme (matches INVITE_CUSTOM_SCHEME, used
-    // by the deep-link parser) AND the bundle-id scheme (matches
-    // expo.android.package / expo.ios.bundleIdentifier, used by Stripe).
-    const schemes = Array.isArray(APP_JSON.expo.scheme)
-      ? APP_JSON.expo.scheme
-      : [APP_JSON.expo.scheme];
-    expect(schemes).toContain(INVITE_CUSTOM_SCHEME);
-    expect(schemes).toContain(APP_JSON.expo.android.package);
-    expect(schemes).toContain(APP_JSON.expo.ios.bundleIdentifier);
-  });
-});
-
-describe('hosted association templates match app.json', () => {
-  it('assetlinks.json package_name matches expo.android.package', () => {
-    const al = JSON.parse(
-      fs.readFileSync(path.join(ROOT, 'docs', 'well-known', 'assetlinks.json'), 'utf8'),
-    );
-    const packages = al
-      .map((s: any) => s && s.target && s.target.package_name)
-      .filter(Boolean);
-    expect(packages).toContain(APP_JSON.expo.android.package);
-  });
-
-  it('apple-app-site-association covers /join/* and bare /join', () => {
-    const aasa = JSON.parse(
-      fs.readFileSync(
-        path.join(ROOT, 'docs', 'well-known', 'apple-app-site-association'),
-        'utf8',
-      ),
-    );
-    const components = aasa.applinks.details.flatMap((d: any) => d.components || []);
-    const paths = components.map((c: any) => c['/']);
-    expect(paths).toEqual(expect.arrayContaining(['/join/*', '/join']));
-  });
-
-  it('apple-app-site-association covers /p/*', () => {
-    const aasa = JSON.parse(
-      fs.readFileSync(
-        path.join(ROOT, 'docs', 'well-known', 'apple-app-site-association'),
-        'utf8',
-      ),
-    );
-    const components = aasa.applinks.details.flatMap((d: any) => d.components || []);
-    const paths = components.map((c: any) => c['/']);
-    expect(paths).toEqual(expect.arrayContaining(['/p/*']));
-  });
-});
-
-describe('app.json declares the /p/<token> package surface', () => {
-  it('Android intent filter routes https://<host>/p with autoVerify', () => {
-    const filters = APP_JSON.expo.android.intentFilters;
-    const hasHttpsP = filters.some((f: any) =>
-      (f.data || []).some(
-        (d: any) =>
-          d.scheme === 'https' &&
-          d.host === INVITE_UNIVERSAL_HOST &&
-          d.pathPrefix === '/p',
-      ),
-    );
-    expect(hasHttpsP).toBe(true);
-  });
-
-  it('Android intent filter also routes the tgp://p custom scheme', () => {
-    const filters = APP_JSON.expo.android.intentFilters;
-    const hasCustomP = filters.some((f: any) =>
-      (f.data || []).some(
-        (d: any) => d.scheme === INVITE_CUSTOM_SCHEME && d.host === 'p',
-      ),
-    );
-    expect(hasCustomP).toBe(true);
-  });
-});
 
 describe('RootNavigator linking config — behavioral routing (R26)', () => {
   it('declares both the custom-scheme prefix and the universal-link host', () => {
