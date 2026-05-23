@@ -1,57 +1,17 @@
 /**
  * Apple App Review 1.2 wiring assertions for the iMessage-grade DM rebuild.
  *
- * Regression guards split into two layers:
+ * Behavioural tests: for screens that own the user-visible affordance (the
+ * Blocked Users row in Settings), render the screen and assert that pressing
+ * the row calls navigation.navigate('BlockedUsers') (R26: tests must prove
+ * behaviour, not strings).
  *
- *   1. TYPE-LEVEL — TypeScript itself proves the route names + params resolve
- *      against the navigator param lists. If a future PR renames `ContactView`
- *      to anything else on either navigator, `tsc --noEmit` fails before
- *      anyone reaches this test.
- *
- *   2. BEHAVIOUR — for screens that own the user-visible affordance (the
- *      Blocked Users row in Settings), render the screen and assert that
- *      pressing the row calls navigation.navigate('BlockedUsers'). This
- *      replaces the previous source-regex assertions (R26: tests must prove
- *      behaviour, not strings).
+ * Type-level route safety is provided by `tsc --noEmit`; runtime Jest tests
+ * are not needed for that.
  */
 
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
-import type { MoreStackParamList } from '../ClientNavigator';
-import type { ClientsStackParamList, SettingsStackParamList } from '../CoachNavigator';
-
-describe('Type-level navigator wiring — Apple 1.2 DM routes', () => {
-  it('ContactView is registered on the coach Clients stack with the expected params', () => {
-    const sample: ClientsStackParamList['ContactView'] = {
-      contactId: 'c-1',
-      displayName: 'A',
-      role: 'client',
-    };
-    expect(sample.contactId).toBe('c-1');
-  });
-
-  it('ContactView is registered on the client More stack with the expected params', () => {
-    const sample: MoreStackParamList['ContactView'] = {
-      contactId: 'c-1',
-      displayName: 'A',
-      role: 'coach',
-    };
-    expect(sample.contactId).toBe('c-1');
-  });
-
-  it('BlockedUsers is registered on both navigators', () => {
-    const coach: SettingsStackParamList['BlockedUsers'] = undefined;
-    const client: MoreStackParamList['BlockedUsers'] = undefined;
-    expect(coach).toBeUndefined();
-    expect(client).toBeUndefined();
-  });
-});
-
-// ─── Behavioural tests for the Settings row → BlockedUsers navigation ───────
-//
-// These replace the previous regex-based source assertions. Rendering the
-// full SettingsScreen drags in a lot of unrelated dependencies (notifications
-// API, profile API, password modals, etc.) so each test mocks them out.
 
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
