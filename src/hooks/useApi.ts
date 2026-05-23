@@ -39,6 +39,7 @@ import {
   mealPlansApi,
   messagesApi,
 } from '../services/api';
+import { bucketDateLocal } from '../utils/date';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Habits
@@ -309,7 +310,7 @@ export function useWeeklyVolumeBreakdown(weekStart: string, weekEnd: string, lim
       let total = 0;
       for (const s of inRange) {
         const stamp = s.date || s.created_at || '';
-        const day = new Date(stamp).toISOString().split('T')[0];
+        const day = bucketDateLocal(new Date(stamp));
         let sessionVol = 0;
         for (const ex of (s.exercises || [])) {
           const sets = Number(ex.sets || 0);

@@ -1,5 +1,5 @@
 import { getDatabase } from './database';
-import { generateId, getTodayString } from '../utils/date';
+import { bucketDateLocal, generateId, getTodayString } from '../utils/date';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -180,7 +180,7 @@ export async function getHabitStreak(habitId: string, userId: string): Promise<n
   let checkDate = new Date(today + 'T00:00:00');
 
   for (let i = 0; i < 365; i++) {
-    const dateStr = checkDate.toISOString().split('T')[0];
+    const dateStr = bucketDateLocal(checkDate);
     const log = await db.getFirstAsync<{ completed: number }>(
       'SELECT completed FROM habit_logs WHERE habitId = ? AND userId = ? AND date = ? AND completed = 1',
       [habitId, userId, dateStr]
@@ -207,7 +207,7 @@ export async function getWeekCompletions(userId: string, habitId: string): Promi
   for (let i = 0; i < 7; i++) {
     const d = new Date(monday);
     d.setDate(monday.getDate() + i);
-    const dateStr = d.toISOString().split('T')[0];
+    const dateStr = bucketDateLocal(d);
     const log = await db.getFirstAsync<{ completed: number }>(
       'SELECT completed FROM habit_logs WHERE habitId = ? AND userId = ? AND date = ? AND completed = 1',
       [habitId, userId, dateStr]

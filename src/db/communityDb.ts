@@ -1,5 +1,5 @@
 import { getDatabase } from './database';
-import { generateId, getTodayString } from '../utils/date';
+import { bucketDateLocal, generateId, getTodayString } from '../utils/date';
 
 export interface Challenge {
   id: string;
@@ -253,15 +253,15 @@ export async function seedCommunityIfNeeded(): Promise<void> {
 
   const endDate7 = new Date();
   endDate7.setDate(endDate7.getDate() + 7);
-  const end7 = endDate7.toISOString().split('T')[0];
+  const end7 = bucketDateLocal(endDate7);
 
   const endDate14 = new Date();
   endDate14.setDate(endDate14.getDate() + 14);
-  const end14 = endDate14.toISOString().split('T')[0];
+  const end14 = bucketDateLocal(endDate14);
 
   const endDate30 = new Date();
   endDate30.setDate(endDate30.getDate() + 30);
-  const end30 = endDate30.toISOString().split('T')[0];
+  const end30 = bucketDateLocal(endDate30);
 
   const challenges = [
     { title: '7-Day Protein Challenge', description: 'Hit your protein target every day for a week', category: 'nutrition', targetValue: 7, unit: 'days', durationDays: 7, endDate: end7 },

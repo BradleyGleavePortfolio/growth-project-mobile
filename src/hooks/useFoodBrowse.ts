@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { logApi } from '../services/api';
 import { SearchResult } from '../utils/log/types';
 import { mapLogEntryToFood, RawLogEntry } from '../utils/log/mapFoodItem';
+import { bucketDateLocal } from '../utils/date';
 
 export function useFoodBrowse(currentUserId: string | undefined, selectedDate: string) {
   const [recentFoods, setRecentFoods] = useState<SearchResult[]>([]);
@@ -41,7 +42,7 @@ export function useFoodBrowse(currentUserId: string | undefined, selectedDate: s
       for (let i = 0; i < 7; i++) {
         const d = new Date(today);
         d.setDate(d.getDate() - i);
-        dateStrings.push(d.toISOString().split('T')[0]);
+        dateStrings.push(bucketDateLocal(d));
       }
       const settled = await Promise.allSettled(dateStrings.map((ds) => logApi.getDaily(ds)));
       const foodCount: Record<string, { count: number; food: SearchResult }> = {};
