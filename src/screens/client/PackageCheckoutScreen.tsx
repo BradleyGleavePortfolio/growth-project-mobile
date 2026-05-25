@@ -180,7 +180,7 @@ export default function PackageCheckoutScreen({ navigation, route }: Props) {
         }
       ).navigate('BrandedCheckoutWebView', {
         checkoutUrl: data.url,
-        packageName: pkg?.name ?? 'Coaching package',
+        packageName: pkg?.title ?? 'Coaching package',
         returnScheme: 'tgp',
       });
     } catch (err) {
