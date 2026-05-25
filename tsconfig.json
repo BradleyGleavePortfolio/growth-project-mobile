@@ -4,6 +4,7 @@
     "strict": true,
     "noFallthroughCasesInSwitch": true,
     "experimentalDecorators": true,
-    "emitDecoratorMetadata": false
+    "emitDecoratorMetadata": false,
+    "types": ["jest", "node", "react"]
   }
 }
