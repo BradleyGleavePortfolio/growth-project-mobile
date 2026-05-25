@@ -17,6 +17,8 @@
  * as `YYYY-MM-DD`, sidestepping locale-specific separators and any DST
  * gotchas that `setDate()` arithmetic introduces.
  */
+import { generateIdempotencyKey } from './idempotency';
+
 const defaultBucketFormatter = new Intl.DateTimeFormat('en-CA', {
   year: 'numeric',
   month: '2-digit',
@@ -68,8 +70,17 @@ export function getGreeting(): string {
   return 'Good evening';
 }
 
+// Local row identifier (SQLite primary keys for offline-only rows).
+// R19: even where collision is the only risk, prefer a cryptographically
+// secure source over Math.random so the grep gate stays clean and any
+// future security-relevant caller does not accidentally inherit a weak
+// generator. Delegates to the shared UUID helper (uses crypto.randomUUID /
+// expo-crypto under the hood).
 export function generateId(): string {
-  return Date.now().toString(36) + Math.random().toString(36).substring(2, 10);
+  const uuid = generateIdempotencyKey();
+  // Preserve the historical "<timestamp><short-rand>" shape that DB
+  // primary keys are prefixed with elsewhere in the codebase.
+  return Date.now().toString(36) + uuid.replace(/-/g, '').slice(0, 8);
 }
 
 export function addDays(dateStr: string, days: number): string {
