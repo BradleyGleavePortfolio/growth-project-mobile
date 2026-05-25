@@ -80,6 +80,7 @@
   },
   "devDependencies": {
     "@expo/metro-runtime": "~56.0.12",
+    "@react-native/jest-preset": "^0.85.3",
     "@testing-library/react-native": "^13.3.3",
     "@types/jest": "^29.5.14",
     "@types/react": "~19.2.2",
@@ -93,7 +94,7 @@
     "jest-expo": "~56.0.4",
     "react-dom": "19.2.3",
     "react-native-web": "^0.21.0",
-    "react-test-renderer": "^19.2.0",
+    "react-test-renderer": "19.2.3",
     "typescript": "~6.0.3"
   },
   "private": true
