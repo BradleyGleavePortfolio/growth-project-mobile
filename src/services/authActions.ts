@@ -8,6 +8,7 @@ import { authEvents } from '../utils/authEvents';
 import { profileApi, usersApi } from './api';
 import { secureStorage } from './secureStorage';
 import { setSentryUser } from './sentry';
+import { purgePersistedQueryCacheForAllUsers } from './queryClient';
 import { reset as analyticsReset } from '../lib/analytics';
 import { logger } from '../utils/logger';
 import { readUserCacheSync } from '../lib/userCache';
@@ -290,6 +291,11 @@ export async function signOut(userId?: string | null): Promise<void> {
       // `prefs:` / `cache:` namespaces are honored.
       clearUserScopedKeys(),
       clearAllStorage(),
+      // R15 (PR #192): wipe every persisted React Query cache key from
+      // AsyncStorage so user A's cache cannot hydrate into user B's session
+      // on a shared device. Covers both the new TGP_RQ_CACHE_V1:<userId>
+      // namespaced form and the legacy unsuffixed form.
+      purgePersistedQueryCacheForAllUsers(),
     ]);
   } catch (err) {
     logger.error('AuthActions', 'signOut: clear failed', err);

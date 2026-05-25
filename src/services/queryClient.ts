@@ -27,6 +27,7 @@
 import { QueryClient } from '@tanstack/react-query';
 import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { readUserCacheSync } from '../lib/userCache';
 
 function getHttpStatus(err: unknown): number | undefined {
   return (err as { response?: { status?: number } })?.response?.status;
@@ -81,13 +82,51 @@ export const queryClient = new QueryClient({
  *   24h max age. Anything older is treated as cold and refetched on first
  *   subscribe. This bounds the staleness window for users who open the app
  *   once a week without ever connecting.
+ *
+ * R15: the persister key is namespaced by authenticated user id so a shared
+ * device cannot hydrate user A's cache into user B's session. The id is read
+ * synchronously from MMKV on module load; an anonymous (logged-out) cold
+ * start uses ':anonymous', which is wiped on the next sign-in.
  */
+export const QUERY_CACHE_KEY_PREFIX = 'TGP_RQ_CACHE_V1';
+
+export function persisterKeyForUser(userId: string | null | undefined): string {
+  const suffix = userId && userId.trim() ? userId : 'anonymous';
+  return `${QUERY_CACHE_KEY_PREFIX}:${suffix}`;
+}
+
+function resolveBootUserId(): string | null {
+  try {
+    return readUserCacheSync()?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export const asyncStoragePersister = createAsyncStoragePersister({
   storage: AsyncStorage,
-  key: 'TGP_RQ_CACHE_V1',
+  key: persisterKeyForUser(resolveBootUserId()),
   // Throttle disk writes so heavy cache churn doesn't hammer AsyncStorage.
   throttleTime: 1000,
 });
+
+/**
+ * Remove every persisted React Query cache key from AsyncStorage. Used on
+ * sign-out to honor R15: a shared device must not retain user A's cache into
+ * user B's session, even at a stale legacy key. Also wipes the legacy
+ * unsuffixed key from pre-R15 builds.
+ */
+export async function purgePersistedQueryCacheForAllUsers(): Promise<void> {
+  try {
+    const allKeys = await AsyncStorage.getAllKeys();
+    const matching = allKeys.filter(
+      (k) => k === QUERY_CACHE_KEY_PREFIX || k.startsWith(`${QUERY_CACHE_KEY_PREFIX}:`),
+    );
+    if (matching.length) await AsyncStorage.multiRemove(matching);
+  } catch {
+    // Non-fatal: the persister will hydrate empty on next sign-in.
+  }
+}
 
 export const QUERY_CACHE_MAX_AGE = 24 * 60 * 60 * 1000; // 24 hours
 

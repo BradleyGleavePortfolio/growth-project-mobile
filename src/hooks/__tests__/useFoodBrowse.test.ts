@@ -68,8 +68,8 @@ jest.mock('../../utils/date', () => {
       // non-writable; ignore.
     }
   });
-  // @ts-expect-error Intl.DateTimeFormat is read-only in lib types; we patch it for tests.
-  Intl.DateTimeFormat = Patched;
+  // Intl.DateTimeFormat is widened to any so we can swap the constructor in tests.
+  (Intl as { DateTimeFormat: unknown }).DateTimeFormat = Patched;
   const actual = jest.requireActual('../../utils/date');
 
   // Pure string-math addDays: independent of host timezone, independent
