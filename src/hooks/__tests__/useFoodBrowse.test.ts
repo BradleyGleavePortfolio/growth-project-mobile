@@ -68,7 +68,7 @@ jest.mock('../../utils/date', () => {
       // non-writable; ignore.
     }
   });
-  // @ts-ignore
+  // @ts-expect-error Intl.DateTimeFormat is read-only in lib types; we patch it for tests.
   Intl.DateTimeFormat = Patched;
   const actual = jest.requireActual('../../utils/date');
 
