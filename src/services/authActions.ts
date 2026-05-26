@@ -8,7 +8,7 @@ import { authEvents } from '../utils/authEvents';
 import { profileApi, usersApi } from './api';
 import { secureStorage } from './secureStorage';
 import { setSentryUser } from './sentry';
-import { purgePersistedQueryCacheForAllUsers } from './queryClient';
+import { purgePersistedQueryCacheForAllUsers, queryClient } from './queryClient';
 import { reset as analyticsReset } from '../lib/analytics';
 import { logger } from '../utils/logger';
 import { readUserCacheSync } from '../lib/userCache';
@@ -313,6 +313,13 @@ export async function signOut(userId?: string | null): Promise<void> {
   // user's clients/foodLogs/active fast/notification banner flash through
   // before the post-login fetches complete.
   resetUserScopedStores();
+
+  // P0-1 (PR #192): clear the in-memory React Query cache BEFORE emitting
+  // logout so user A's query data cannot hydrate into user B's session.
+  // The persisted AsyncStorage copy is wiped above via
+  // purgePersistedQueryCacheForAllUsers(); this call covers the live
+  // singleton that every running screen reads from.
+  queryClient.clear();
 
   authEvents.emit('logout');
 }
