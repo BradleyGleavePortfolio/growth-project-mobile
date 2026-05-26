@@ -103,6 +103,15 @@ function resolveBootUserId(): string | null {
   }
 }
 
+// NOTE (P1-1): the persister key is resolved ONCE at module load time
+// (via resolveBootUserId()) and cannot be swapped after construction.
+// This means that after an in-session account switch the persister
+// continues writing under the boot-time user's key, not the newly
+// signed-in user's key. To compensate, every sign-in path calls
+// purgePersistedQueryCacheForAllUsers() immediately after setUserCache()
+// so any orphan blob at a stale key is removed before the first
+// persistence pass for the new user. See src/screens/auth/LoginScreen.tsx,
+// CreateAccountScreen.tsx, and RoleSelectionScreen.tsx.
 export const asyncStoragePersister = createAsyncStoragePersister({
   storage: AsyncStorage,
   key: persisterKeyForUser(resolveBootUserId()),

@@ -18,6 +18,7 @@ import { authApi, InvitePreview } from '../../services/api';
 import { authEvents } from '../../utils/authEvents';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { readUserCache, setUserCache } from '../../lib/userCache';
+import { purgePersistedQueryCacheForAllUsers } from '../../services/queryClient';
 
 type Props = {
   navigation: NativeStackNavigationProp<AuthStackParamList, 'RoleSelection'>;
@@ -138,6 +139,9 @@ export default function RoleSelectionScreen(_: Props) {
         user.role = res.data.role;
         if (res.data.coach_id) user.coach_id = res.data.coach_id;
         setUserCache(user);
+        // P1-1 (PR #192): purge any orphan persisted cache blobs written under a
+        // stale boot-time key before the first persistence pass for this user.
+        await purgePersistedQueryCacheForAllUsers();
       }
       await AsyncStorage.removeItem('needs_role_selection');
       authEvents.emit();
