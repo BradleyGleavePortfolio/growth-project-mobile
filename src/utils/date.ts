@@ -74,8 +74,9 @@ export function getGreeting(): string {
 // R19: even where collision is the only risk, prefer a cryptographically
 // secure source over Math.random so the grep gate stays clean and any
 // future security-relevant caller does not accidentally inherit a weak
-// generator. Delegates to the shared UUID helper (uses crypto.randomUUID /
-// expo-crypto under the hood).
+// generator. Delegates to generateIdempotencyKey() which uses
+// crypto.getRandomValues via the react-native-get-random-values polyfill
+// (imported at index.ts boot) — no Math.random fallback at any layer.
 export function generateId(): string {
   const uuid = generateIdempotencyKey();
   // Preserve the historical "<timestamp><short-rand>" shape that DB

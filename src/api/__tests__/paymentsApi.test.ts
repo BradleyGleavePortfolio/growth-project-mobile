@@ -4,7 +4,7 @@
 // the source of truth. Tests assert package_id (not share_token), backend
 // enums ('one_time'|'recurring', 'week'|'month'|'year'), allowed redirect
 // URL prefixes (growthproject://), Idempotency-Key on every mutation, and
-// that newIdempotencyKey uses a cryptographically secure UUID source.
+// that generateIdempotencyKey uses a cryptographically secure UUID source.
 
 jest.mock('../../services/api', () => {
   const instance = {
@@ -29,10 +29,10 @@ import { connectApi } from '../connectApi';
 import {
   coachPackagesApi,
   publicPackagesApi,
-  newIdempotencyKey,
   PACKAGE_CHECKOUT_SUCCESS_URL,
   PACKAGE_CHECKOUT_CANCEL_URL,
 } from '../packagesApi';
+import { generateIdempotencyKey } from '../../utils/idempotency';
 import { validateStripeUrl } from '../../utils/stripeUrlValidator';
 import { isValidPackageShareToken } from '../../utils/packageShare';
 
@@ -288,11 +288,13 @@ describe('publicPackagesApi.createCheckoutSession', () => {
   });
 });
 
-// ── newIdempotencyKey ──────────────────────────────────────────────────────
+// ── generateIdempotencyKey ─────────────────────────────────────────────────
+// (canonical helper from utils/idempotency — packagesApi and connectApi both
+// delegate here instead of maintaining a local copy)
 
-describe('newIdempotencyKey', () => {
+describe('generateIdempotencyKey', () => {
   it('returns a string in UUID v4 shape', () => {
-    const k = newIdempotencyKey();
+    const k = generateIdempotencyKey();
     expect(typeof k).toBe('string');
     expect(k).toMatch(
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
@@ -300,27 +302,12 @@ describe('newIdempotencyKey', () => {
   });
 
   it('returns a distinct value on each call', () => {
-    const a = newIdempotencyKey();
-    const b = newIdempotencyKey();
+    const a = generateIdempotencyKey();
+    const b = generateIdempotencyKey();
     expect(a).not.toEqual(b);
   });
 
-  it('uses crypto.randomUUID when available (secure source, not Math.random)', () => {
-    const original = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
-    const spy = jest.fn(() => '11111111-2222-4333-8444-555555555555');
-    (globalThis as { crypto?: { randomUUID?: () => string } }).crypto = {
-      randomUUID: spy,
-    };
-    try {
-      const k = newIdempotencyKey();
-      expect(spy).toHaveBeenCalledTimes(1);
-      expect(k).toBe('11111111-2222-4333-8444-555555555555');
-    } finally {
-      (globalThis as { crypto?: unknown }).crypto = original;
-    }
-  });
-
-  it('falls back to crypto.getRandomValues when randomUUID is missing', () => {
+  it('uses crypto.getRandomValues (secure source, not Math.random)', () => {
     const original = (globalThis as { crypto?: unknown }).crypto;
     const getRandomValues = jest.fn((buf: Uint8Array) => {
       for (let i = 0; i < buf.length; i++) buf[i] = (i * 17) & 0xff;
@@ -328,7 +315,7 @@ describe('newIdempotencyKey', () => {
     });
     (globalThis as { crypto?: unknown }).crypto = { getRandomValues };
     try {
-      const k = newIdempotencyKey();
+      const k = generateIdempotencyKey();
       expect(getRandomValues).toHaveBeenCalledTimes(1);
       expect(k).toMatch(
         /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
