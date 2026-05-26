@@ -134,6 +134,10 @@ export default function LoginScreen({ navigation, route }: Props) {
         await AsyncStorage.setItem('needs_role_selection', 'true');
         navigation.replace('RoleSelection');
       } else {
+        // P1-1 (PR #192 INF-1): purge any orphan persisted cache blobs before
+        // this user's first persistence pass, matching the email sign-in path.
+        if (result.user) setUserCache(result.user);
+        await purgePersistedQueryCacheForAllUsers();
         // Psych Report #4: Analytics
         if (result.user?.id) identify(result.user.id, { role: result.user.role });
         track(AnalyticsEvents.LOGIN_COMPLETED, { method: 'google' });
@@ -167,6 +171,10 @@ export default function LoginScreen({ navigation, route }: Props) {
         await AsyncStorage.setItem('needs_role_selection', 'true');
         navigation.replace('RoleSelection');
       } else {
+        // P1-1 (PR #192 INF-1): purge any orphan persisted cache blobs before
+        // this user's first persistence pass, matching the email sign-in path.
+        if (result.user) setUserCache(result.user);
+        await purgePersistedQueryCacheForAllUsers();
         if (result.user?.id) identify(result.user.id, { role: result.user.role });
         track(AnalyticsEvents.LOGIN_COMPLETED, { method: 'apple' });
         authEvents.emit();
