@@ -130,3 +130,8 @@ jest.mock('./src/ui/skeletons/Skeleton', () => {
     SkeletonScreen: stub,
   };
 });
+
+// P1-2 (PR #192): react-native-get-random-values polyfills crypto.getRandomValues
+// for Hermes / React Native. Under Jest (Node.js), globalThis.crypto.getRandomValues
+// is already available natively, so this module is a no-op stub.
+jest.mock('react-native-get-random-values', () => {});
