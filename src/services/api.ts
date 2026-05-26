@@ -73,6 +73,7 @@ import { secureStorage } from './secureStorage';
 import { env } from '../config/env';
 import { entitlementEvents } from '../entitlements/entitlementEvents';
 import { logger } from '../utils/logger';
+import { generateIdempotencyKey } from '../utils/idempotency';
 
 function isEntitlementEndpoint(url?: string): boolean {
   if (!url) return false;
@@ -834,17 +835,11 @@ export const coachBillingApi = {
   // cancel. The endpoint accepts an optional return path so the portal can
   // bounce the coach back to the right deep link when they finish.
   createPortalSession: (returnPath?: string, idempotencyKey?: string) => {
-    // Inline require to avoid a circular dep with packagesApi (which imports
-    // this api module). Idempotency-Key prevents duplicate portal sessions
-    // on double-tap (R19).
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { newIdempotencyKey } = require('../api/packagesApi') as {
-      newIdempotencyKey: () => string;
-    };
+    // Idempotency-Key prevents duplicate portal sessions on double-tap (R19).
     return api.post<{ url: string }>(
       '/coach/billing/portal-session',
       returnPath ? { return_path: returnPath } : {},
-      { headers: { 'Idempotency-Key': idempotencyKey ?? newIdempotencyKey() } },
+      { headers: { 'Idempotency-Key': idempotencyKey ?? generateIdempotencyKey() } },
     );
   },
 };

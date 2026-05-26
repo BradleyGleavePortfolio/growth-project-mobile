@@ -5,7 +5,7 @@
 // There is no fake-success path; callers render the error state honestly.
 
 import api from '../services/api';
-import { newIdempotencyKey } from './packagesApi';
+import { generateIdempotencyKey } from '../utils/idempotency';
 
 export interface ConnectAccountView {
   coach_user_id: string;
@@ -35,7 +35,7 @@ export interface DashboardLink {
 }
 
 function idemHeaders(key?: string): { headers: { 'Idempotency-Key': string } } {
-  return { headers: { 'Idempotency-Key': key ?? newIdempotencyKey() } };
+  return { headers: { 'Idempotency-Key': key ?? generateIdempotencyKey() } };
 }
 
 export const connectApi = {

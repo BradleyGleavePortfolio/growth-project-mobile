@@ -17,11 +17,14 @@
 //
 // Every mutation sends a client-generated UUID `Idempotency-Key` header so
 // retries/double-taps don't create duplicate rows or duplicate Checkout
-// sessions (R19). The key is generated via crypto.randomUUID() / expo-crypto
-// so the value is cryptographically secure on a payments surface.
+// sessions (R19). The key is generated via the canonical generateIdempotencyKey()
+// helper (src/utils/idempotency.ts) which uses crypto.getRandomValues backed
+// by the react-native-get-random-values polyfill — cryptographically secure
+// on a payments surface, with no Math.random fallback.
 
 import api from '../services/api';
 import { isValidPackageShareToken } from '../utils/packageShare';
+import { generateIdempotencyKey } from '../utils/idempotency';
 
 export type PackageBillingInterval = 'one_time' | 'monthly' | 'quarterly' | 'yearly';
 
@@ -197,51 +200,8 @@ export interface CheckoutSessionResponse {
 
 // ─── helpers ────────────────────────────────────────────────────────────────
 
-// Cryptographically secure UUID v4. On Hermes (RN/Expo SDK 55+) and on web,
-// `crypto.randomUUID()` is available and is backed by the platform CSPRNG.
-// We fall back to `crypto.getRandomValues` and then to expo-crypto. Math.random
-// is never used — this is a payments surface (R19).
-export function newIdempotencyKey(): string {
-  const g: { crypto?: { randomUUID?: () => string; getRandomValues?: (a: Uint8Array) => Uint8Array } } =
-    globalThis as unknown as {
-      crypto?: { randomUUID?: () => string; getRandomValues?: (a: Uint8Array) => Uint8Array };
-    };
-  if (g.crypto && typeof g.crypto.randomUUID === 'function') {
-    return g.crypto.randomUUID();
-  }
-  const bytes = new Uint8Array(16);
-  if (g.crypto && typeof g.crypto.getRandomValues === 'function') {
-    g.crypto.getRandomValues(bytes);
-  } else {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const expoCrypto = require('expo-crypto') as {
-      getRandomBytes?: (n: number) => Uint8Array;
-    };
-    if (!expoCrypto || typeof expoCrypto.getRandomBytes !== 'function') {
-      throw new Error('No secure random source available for idempotency key');
-    }
-    const out = expoCrypto.getRandomBytes(16);
-    for (let i = 0; i < 16; i++) bytes[i] = out[i];
-  }
-  bytes[6] = (bytes[6] & 0x0f) | 0x40;
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
-  const hex: string[] = [];
-  for (let i = 0; i < 16; i++) hex.push(bytes[i].toString(16).padStart(2, '0'));
-  return (
-    hex.slice(0, 4).join('') +
-    '-' +
-    hex.slice(4, 6).join('') +
-    '-' +
-    hex.slice(6, 8).join('') +
-    '-' +
-    hex.slice(8, 10).join('') +
-    '-' +
-    hex.slice(10, 16).join('')
-  );
-}
-
 export function idemHeaders(key?: string): { headers: { 'Idempotency-Key': string } } {
-  return { headers: { 'Idempotency-Key': key ?? newIdempotencyKey() } };
+  return { headers: { 'Idempotency-Key': key ?? generateIdempotencyKey() } };
 }
 
 const BILLING_TYPE_FOR_INTERVAL: Record<PackageBillingInterval, 'one_time' | 'recurring'> = {
