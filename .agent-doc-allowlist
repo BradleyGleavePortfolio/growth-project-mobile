@@ -1,0 +1,129 @@
+# .agent-doc-allowlist — R15 temporary exception list.
+#
+# Each line is a doc filename (or repo-relative path) that the
+# verify-doc-refs CI check will tolerate as "not yet in this repo."
+#
+# These are KNOWN-STRANDED legacy canonical docs that lived in a prior
+# operator's sandbox and were never pushed to GitHub. They are being
+# rescued into the dedicated `tgp-agent-context` repo. As each one is
+# restored, DELETE its line from this file.
+#
+# Goal state: this file is empty (or contains only the header).
+#
+# Format: one filename or path per line. Blank lines and `#`-comments are
+# ignored. Bare filenames match any reference to a file with that name.
+
+# --- Canonical R-rule docs (lives in tgp-agent-context, referenced widely) ---
+RULES.md
+CANONICAL_RULES.md
+RULES_R1_R55.md
+RULES_R1_R61.md
+R36_TO_R45_OPERATOR_RULES.md
+HOUSE_RULES.md
+AUDIT_MANDATE.md
+50_FAILURES.md
+SECURITY_SKILL.md
+CURRENT_TEST_FAILURES.md
+
+# --- CPO / operator handoffs (tgp-agent-context) ---
+CPO_MASTER_HANDOFF.md
+CPO_MASTER_HANDOFF_PART_2.md
+CPO_BRIEFING.md
+BRADLEY_BRIEFING.md
+NEXT_OPERATOR_MEGA_PROMPT.md
+OPERATOR_HANDOFF_2026-05-26.md
+BACKLOG_DEDUP_2026-05-26.md
+SECURITY_SPRINT_A_2.md
+REFERENCE_DOCS.md
+
+# --- Strategy / roadmap (tgp-agent-context) ---
+FEATURE_ROADMAP_CANONICAL.md
+SUPABASE_RLS_CRISIS.md
+CYCLE_B_RLS_PLAN.md
+COMPETITIVE_INTEL.md
+TGP_PRODUCT_VISION.md
+product-dominance-playbook.md
+
+# --- Design bibles (tgp-agent-context) ---
+simplicity-ideology.md
+simplicity-ideology-2.md
+LANDING_PAGE_DESIGN_DOCTRINE.md
+Mobile-App-Design-Intelligence-Exhaustive-Agent-Training-2.md
+Website-Landing-Page-Design-Intelligence.md
+The-50-Failures-of-AI-Generated-Code-at-Enterprise-Scale.md
+
+# --- Audits (tgp-agent-context) ---
+PR_272_AUDIT.md
+WORKOUT_BUILDER_AUDIT.md
+LP_V2_AUDIT.md
+CNAME_AUDIT.md
+NUDGE_AUDIT.md
+DUNNING_AUDIT.md
+UI_QUALITY_AUDIT_2026_05_26.md
+UI_FIX_PRIORITY_2026_05_26.md
+
+# --- Local-only operator scripts (need decision: commit to tgp-agent-context or delete refs) ---
+autopush.sh
+
+# --- Pre-existing dangling references found at R15 introduction (2026-05-26).
+# --- These are real references in main that don't currently resolve. Each is
+# --- a cleanup task: fix the reference, commit the file, or remove the
+# --- reference. Goal: empty this section.
+AUDIT.md
+BACKLOG.md
+DEPLOY.md
+FITNESS_RADIUS_HITS.md
+Mobile-App-Design-Intelligence.md
+QA_ISSUES.md
+RELEASE_BLOCKER.md
+STATE.md
+SplashScreen.tsx
+aiGuide.ts
+audits/00_MASTER_REPORT.md
+audits/coach_ai_capability_audit.md
+compatibility.json
+data-export.json
+gpb/test/coach-practice-type.service.spec.ts
+gpb/test/cross-pillar-practice.guard.spec.ts
+gpb/test/cross-pillar.service.spec.ts
+growth-project-backend/src/coach/coach.controller.ts
+index.tsx
+jest/resolver.js
+mealPlanDb.ts
+node_modules/react-native-reanimated/compatibility.json
+node_modules/react-native-reanimated/src/platform-specific/workletsVersion.ts
+rbac.ts
+recipesDb.ts
+schema.ts
+shoppingListDb.ts
+src/__tests__/bloodworkDisclaimerGate.test.ts
+src/__tests__/sessionsAdapter.test.ts
+src/__tests__/sessionsCopy.test.ts
+src/__tests__/sessionsFlags.test.ts
+src/__tests__/sessionsStatusDisplay.test.ts
+src/__tests__/yourSync.test.ts
+src/config/sessionsFlags.ts
+src/constants/sessionsCopy.ts
+src/lib/sessionsStatusDisplay.ts
+src/notifications/notification-category.enum.ts
+src/offline/models/YourModel.ts
+src/offline/schema.ts
+src/screens/applicant/__tests__/ApplicationStatusScreen.test.tsx
+src/screens/client/MyScreen.tsx
+src/screens/client/SessionPrepareScreen.tsx
+src/screens/client/SessionRequestScreen.tsx
+src/screens/client/SessionsUpcomingScreen.tsx
+src/screens/coach/CoachAvailabilityScreen.tsx
+src/screens/coach/CoachSessionBriefScreen.tsx
+src/screens/coach/CoachSessionRequestsScreen.tsx
+src/screens/coach/CoachUpcomingCallsScreen.tsx
+src/screens/settings/ClientSettingsScreen.tsx
+src/screens/settings/CoachSettingsScreen.tsx
+src/services/sessions/sessionsClient.ts
+src/types/sessions.ts
+src/utils/aiGuide.ts
+src/utils/rbac.ts
+tgp-finance-app/backend/test/coach-practice-type.service.spec.ts
+tokens.radius.md
+useFirstWinCelebration.ts
+workletsVersion.ts
