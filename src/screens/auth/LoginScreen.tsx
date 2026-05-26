@@ -28,6 +28,7 @@ import type { AuthStackParamList } from '../../navigation/AuthNavigator';
 import AppleSignInButton from '../../components/AppleSignInButton';
 import { signInWithApple } from '../../utils/appleAuth';
 import { setUserCache } from '../../lib/userCache';
+import { purgePersistedQueryCacheForAllUsers } from '../../services/queryClient';
 import { Colors } from '../../constants/colors';
 
 interface Props {
@@ -84,6 +85,11 @@ export default function LoginScreen({ navigation, route }: Props) {
       await secureStorage.setItem('supabase_token', access_token);
       if (refresh_token) await secureStorage.setItem('supabase_refresh_token', refresh_token);
       setUserCache(user);
+      // P1-1 (PR #192): the asyncStoragePersister key is resolved once at
+      // module load (boot-time user id). Purge ALL persisted cache blobs here
+      // so any orphan blob written under a stale key by a prior session is
+      // removed before the first persistence pass writes new data for this user.
+      await purgePersistedQueryCacheForAllUsers();
 
       // Restore onboarding status from backend profile — prevents re-onboarding on re-login
       if (user.profile?.onboarding_completed) {

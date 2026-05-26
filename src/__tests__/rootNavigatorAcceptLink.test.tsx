@@ -169,7 +169,6 @@ import { render, act, waitFor } from '@testing-library/react-native';
 
 // IMPORTANT: import RootNavigator AFTER the jest.mock calls above so the
 // mocks are applied to the modules it imports.
-// eslint-disable-next-line import/first
 import RootNavigator from '../navigation/RootNavigator';
 
 const ACCEPT_URL = 'tgp://invite/accept/abcd-1234';

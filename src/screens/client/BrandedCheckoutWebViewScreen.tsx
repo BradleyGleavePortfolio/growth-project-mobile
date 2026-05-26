@@ -681,7 +681,7 @@ function makeStyles(colors: ThemeColors) {
       backgroundColor: colors.background,
     },
     skeleton: {
-      ...StyleSheet.absoluteFillObject,
+      ...StyleSheet.absoluteFill,
       alignItems: 'center',
       justifyContent: 'flex-start',
       paddingTop: 48,

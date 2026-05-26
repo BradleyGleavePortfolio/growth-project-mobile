@@ -1,5 +1,15 @@
 import React, { useEffect, useState } from 'react';
+import { Platform, StatusBar as RNStatusBar } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+
+// SDK 56: expo-status-bar dropped the typed backgroundColor prop. On Android
+// we still want the bone background to extend behind the system status bar,
+// so we apply it via the React Native StatusBar imperative API at module load.
+// This is a no-op on iOS where the status bar background is derived from the
+// underlying view hierarchy.
+if (Platform.OS === 'android') {
+  RNStatusBar.setBackgroundColor('#F5EFE4', false);
+}
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { PostHogProvider } from 'posthog-react-native';
 import {
@@ -202,7 +212,7 @@ function App() {
     return (
       <>
         <AppSplash onFinish={() => setShowSplash(false)} />
-        <StatusBar style="dark" backgroundColor="#F5EFE4" />
+        <StatusBar style="dark" />
       </>
     );
   }
@@ -245,8 +255,10 @@ function App() {
             },
           }}
         >
-          {/* Wave 2: dark status bar on bone background */}
-          <StatusBar style="dark" backgroundColor="#F5EFE4" />
+          {/* Wave 2: dark status bar on bone background. SDK 56: Android
+              background color is set via the imperative RN StatusBar API at
+              module load (see top of file). */}
+          <StatusBar style="dark" />
           {/* ThemeProvider: Premium Visual System — UX Psych Report #5.
               Must be inside PersistQueryClientProvider so useFoundingNumber()
               (which calls useQuery) works correctly. */}

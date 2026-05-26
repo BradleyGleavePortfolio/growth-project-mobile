@@ -5,17 +5,15 @@
  * PATCH /coach/team/.../revenue-sharing, etc.) must send a client-generated
  * UUID so the backend can deduplicate retries from the same logical action.
  *
- * Preference order:
- *   1. crypto.randomUUID() — available on Hermes + iOS 14+ / Android 14+ via
- *      the JS engine's crypto polyfill. Native UUID, no dependency.
- *   2. expo-crypto getRandomBytes — already a project dep. We build a v4-ish
- *      UUID by hand so the wire format matches the native path.
- *   3. Math.random fallback — extremely unlikely path; logged so we can spot
- *      it in Sentry if it ever happens.
+ * Crypto source: `crypto.getRandomValues` (Web Crypto API), polyfilled for
+ * React Native / Hermes by `react-native-get-random-values` which is
+ * imported as the very first module in `index.ts`. This ensures a single
+ * crypto-grade code path in ALL builds — dev, Expo Go, and production —
+ * with no `Math.random` fallback anywhere in the chain.
  *
- * The output is a 36-character RFC 4122 v4 string when either path 1 or 2
- * succeeds. The fallback shape is "mob-<ts>-<rand>" — the backend accepts
- * any opaque string up to 128 chars as an idempotency key.
+ * The polyfill MUST be imported before this module. If it is missing, the
+ * function will throw (via the error below) rather than silently fall back
+ * to a weak source, honoring R19's "no Math.random sources, ever" requirement.
  */
 
 function uuidFromBytes(bytes: Uint8Array): string {
@@ -36,32 +34,22 @@ function uuidFromBytes(bytes: Uint8Array): string {
 }
 
 export function generateIdempotencyKey(): string {
-  // Path 1 — native crypto.randomUUID, when present.
-  try {
-    const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
-    if (c?.randomUUID) {
-      const v = c.randomUUID();
-      if (typeof v === 'string' && v.length >= 32) return v;
-    }
-  } catch {
-    // fall through
+  // Single crypto-grade path: Web Crypto API polyfilled by
+  // react-native-get-random-values (imported at the top of index.ts).
+  // Works identically in dev builds, Expo Go, and production — no
+  // Math.random fallback at any layer.
+  const c = (globalThis as { crypto?: { getRandomValues?: <T extends ArrayBufferView>(array: T) => T } }).crypto;
+  if (c?.getRandomValues) {
+    const bytes = new Uint8Array(16);
+    c.getRandomValues(bytes);
+    return uuidFromBytes(bytes);
   }
 
-  // Path 2 — expo-crypto getRandomBytes.
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires, global-require
-    const expoCrypto = require('expo-crypto');
-    if (typeof expoCrypto?.getRandomBytes === 'function') {
-      const bytes: Uint8Array = expoCrypto.getRandomBytes(16);
-      return uuidFromBytes(bytes);
-    }
-  } catch {
-    // fall through
-  }
-
-  // Path 3 — last-resort fallback. Math.random is not cryptographically
-  // strong but an idempotency key only needs to be unique within the
-  // backend's dedupe window, not unguessable.
-  const rand = Math.random().toString(36).slice(2, 10);
-  return `mob-${Date.now().toString(36)}-${rand}`;
+  // R19 — no Math.random fallback. If crypto.getRandomValues is unavailable
+  // (polyfill not imported before this module), throw rather than silently
+  // emit a weak key.
+  throw new Error(
+    'generateIdempotencyKey: crypto.getRandomValues is unavailable. ' +
+      'Ensure react-native-get-random-values is imported first in index.ts.',
+  );
 }

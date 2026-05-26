@@ -7,11 +7,6 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#F5EFE4"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.growthproject.app",
@@ -90,6 +85,14 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#F5EFE4"
+        }
+      ],
       "expo-sqlite",
       "expo-apple-authentication",
       "expo-web-browser",

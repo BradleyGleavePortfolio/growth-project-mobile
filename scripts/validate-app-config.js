@@ -710,6 +710,17 @@ function main() {
     console.error(`\nvalidate-app-config: ${errors.length} error(s), ${warnings.length} warning(s)`);
     process.exit(1);
   }
+  // PR #192 fix round 1 (P2-3): in --release mode, release blockers MUST
+  // turn the gate red. Previously the script exited 0 even when
+  // RELEASE_BLOCKER.md listed Play Store fingerprint / Play Store URL gaps,
+  // so CI could mark validate:release green while the app was not
+  // submission-ready.
+  if (RELEASE_MODE && releaseBlockers.length) {
+    console.error(
+      `\nvalidate-app-config: FAIL (--release) — ${releaseBlockers.length} release blocker(s) written to RELEASE_BLOCKER.md`,
+    );
+    process.exit(1);
+  }
   console.log(
     `validate-app-config: OK${RELEASE_MODE ? ' (--release)' : ''}${warnings.length ? ` (${warnings.length} warning(s))` : ''}${releaseBlockers.length ? ` — ${releaseBlockers.length} release blocker(s) written to RELEASE_BLOCKER.md` : ''}`,
   );

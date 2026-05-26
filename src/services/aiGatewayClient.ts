@@ -40,14 +40,12 @@ import type {
   AIGatewayStatusResponse,
 } from '../types/aiGateway';
 import { AIUnavailableError } from './aiGatewayErrors';
+import { generateIdempotencyKey } from '../utils/idempotency';
 
 // ─── Idempotency key ───────────────────────────────────────────────────────
-// Cheap, collision-resistant enough for short-window dedupe. Backend persists
-// the key for ~10 minutes; longer windows would require a UUID lib import.
-function generateIdempotencyKey(): string {
-  const rand = Math.random().toString(36).slice(2, 10);
-  return `mob-${Date.now().toString(36)}-${rand}`;
-}
+// Delegated to the shared cryptographic helper (R19). The previous inline
+// Math.random-based generator violated the security rule that idempotency
+// keys must come from a cryptographically secure source.
 
 // ─── Synthesised fail-closed responses ─────────────────────────────────────
 // When the mobile flag is off we never touch the network. Callers still get a
@@ -243,5 +241,7 @@ export const aiGatewayClient = {
 
 // Exported for tests and any caller that needs to short-circuit on flags
 // without invoking the client.
+// Re-exported for legacy callers and tests; the canonical implementation
+// lives in '../utils/idempotency'.
 export { generateIdempotencyKey };
 export { AIUnavailableError, isAIUnavailableError } from './aiGatewayErrors';

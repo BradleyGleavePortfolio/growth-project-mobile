@@ -109,7 +109,8 @@ export default function ExerciseDetailScreen({ route }: Props) {
         <VideoView
           style={styles.player}
           player={player}
-          allowsFullscreen
+          // SDK 56: 'allowsFullscreen' was replaced with 'fullscreenOptions.enable'.
+          fullscreenOptions={{ enable: true }}
           allowsPictureInPicture
           testID="exercise-detail-player"
         />

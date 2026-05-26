@@ -64,6 +64,9 @@ module.exports = {
       rules: {
         '@typescript-eslint/no-explicit-any': 'off',
         '@typescript-eslint/no-unused-vars': 'off',
+        // jest.mock() factories must use require() because jest hoists them
+        // above the import block at runtime. Allow that pattern in tests.
+        '@typescript-eslint/no-var-requires': 'off',
       },
     },
   ],

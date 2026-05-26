@@ -369,10 +369,16 @@ describe('aiGatewayClient.getStatus', () => {
 });
 
 describe('generateIdempotencyKey', () => {
-  it('returns a non-empty mob-prefixed string', () => {
+  // R19: idempotency keys must come from a cryptographically secure source.
+  // The helper returns a 36-character RFC 4122 v4 UUID from crypto.randomUUID
+  // when available, or an expo-crypto-derived UUID. There is no Math.random
+  // fallback.
+  const UUID_V4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+  it('returns a 36-character RFC 4122 v4 UUID', () => {
     const k = generateIdempotencyKey();
-    expect(k).toMatch(/^mob-/);
-    expect(k.length).toBeGreaterThan(8);
+    expect(k).toHaveLength(36);
+    expect(k).toMatch(UUID_V4_RE);
   });
 
   it('returns distinct keys on successive calls', () => {
