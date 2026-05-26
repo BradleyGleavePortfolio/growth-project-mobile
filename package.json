@@ -58,7 +58,7 @@
     "expo-local-authentication": "~56.0.4",
     "expo-localization": "~56.0.6",
     "expo-notifications": "~56.0.13",
-    "expo-secure-store": "^56.0.4",
+    "expo-secure-store": "~56.0.4",
     "expo-sharing": "~56.0.13",
     "expo-splash-screen": "~56.0.10",
     "expo-sqlite": "~56.0.4",
