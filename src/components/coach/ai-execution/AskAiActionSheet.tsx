@@ -11,9 +11,9 @@
  * directly to the inbox.
  *
  * Doctrine compliance: no springs (RN Modal default slide), no
- * confetti, no celebration overlays. Single forest accent on the
- * submit CTA. Display copy uses typography tokens (≤500 weight per
- * doctrine §1).
+ * particle bursts, no celebration overlays. Single forest accent on
+ * the submit CTA. Display copy uses typography tokens (≤500 weight
+ * per doctrine §1).
  *
  * Wire contract: see `src/api/coachAiExecutionApi.ts`. Backend
  * Stream 2 PR is not merged at build time; the API client falls back
