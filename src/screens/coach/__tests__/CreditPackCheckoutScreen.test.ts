@@ -8,7 +8,10 @@
  * the custom-pack validation surface.
  */
 
-import { parseDollarsToCents } from '../CreditPackCheckoutScreen';
+// Import the pure helper from its own module so the test does not
+// transitively load `react-native-webview`, whose TurboModule cannot
+// resolve under jest-expo.
+import { parseDollarsToCents } from '../creditPackCheckoutHelpers';
 
 describe('parseDollarsToCents', () => {
   it('accepts whole-dollar amounts', () => {

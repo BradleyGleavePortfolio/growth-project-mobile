@@ -60,9 +60,13 @@ import {
   isOriginAllowed,
   parseReturnDeepLink,
 } from '../client/BrandedCheckoutWebViewScreen';
+import { parseDollarsToCents } from './creditPackCheckoutHelpers';
 
 // Re-export so consumers (tests, navigator) can verify allow-list parity.
 export { CHECKOUT_ALLOWED_HOSTS };
+// Re-export so older imports of `parseDollarsToCents` from this screen
+// continue to work; the canonical home is `creditPackCheckoutHelpers.ts`.
+export { parseDollarsToCents } from './creditPackCheckoutHelpers';
 
 const DEFAULT_RETURN_SCHEME = 'com.growthproject.app';
 
@@ -296,22 +300,6 @@ export default function CreditPackCheckoutScreen(): React.ReactElement {
       )}
     </SafeAreaView>
   );
-}
-
-/**
- * Parse a user-entered dollar amount into cents. Accepts "10", "10.5", "10.50".
- * Returns null on any malformed input (NaN, negative, > 2 decimals).
- *
- * Banker's rounding is NOT applied here — we round half-up to cents because
- * the backend rejects non-integer cents and the user typed an exact amount.
- */
-export function parseDollarsToCents(input: string): number | null {
-  if (!input) return null;
-  const trimmed = input.trim().replace(/[$,]/g, '');
-  if (!/^\d+(\.\d{1,2})?$/.test(trimmed)) return null;
-  const dollars = Number(trimmed);
-  if (!Number.isFinite(dollars) || dollars < 0) return null;
-  return Math.round(dollars * 100);
 }
 
 // ─── Confetti success view ───────────────────────────────────────────────────
