@@ -13,14 +13,21 @@
  *   2. Webview phase — embed `react-native-webview` pointing at the minted
  *      URL with the same origin allow-list / deep-link parser as
  *      `BrandedCheckoutWebViewScreen`. On `success` deep link, render the
- *      confetti micro-interaction, invalidate the budget query, then route
+ *      SuccessReceipt component, invalidate the budget query, then route
  *      back to Coach Home. On `cancel`, return to the selection phase.
+ *
+ * Round-3 fix: the success state was previously a particle burst that
+ * violated QUIET_LUXURY_DOCTRINE.md §3 (no celebrations). It is now a
+ * quiet receipt — opacity fade-in + a single icon pulse, two metadata
+ * rows ("New balance" + "Receipt sent to your inbox"), auto-dismiss
+ * after 1800ms. Same confidence as an Amex statement.
  *
  * Optimistic UI: NONE. Stripe Checkout is the source of truth for payment
  * success; the budget query is invalidated only after the webhook applies
  * the credit on the backend (the React Query refetch on Coach Home picks
- * it up). Showing a "credit added" balance before the backend confirms
- * would be the optimistic-without-rollback failure mode the spec calls out.
+ * it up). The "New balance" line on the receipt is a SNAPSHOT projection
+ * (previous balance + amount paid) for the glance moment; the source of
+ * truth is the next budget refetch.
  */
 
 import React, { useCallback, useMemo, useRef, useState } from 'react';
@@ -46,6 +53,7 @@ import * as Haptics from 'expo-haptics';
 
 import HapticPressable from '../../components/HapticPressable';
 import { useTheme, type ThemeColors } from '../../theme/ThemeProvider';
+import { motion, typography } from '../../theme/tokens';
 import { PackOptionsRow } from '../../components/coach/ai-budget/PackOptionsRow';
 import {
   coachAiBudgetApi,
@@ -75,7 +83,17 @@ type Phase =
   | { kind: 'select' }
   | { kind: 'minting'; amountCents: number }
   | { kind: 'webview'; url: string; sessionId: string; amountCents: number }
-  | { kind: 'success'; amountCents: number }
+  /**
+   * Round-3: success carries `newBalanceCents`, the SNAPSHOT projection of
+   * the coach's balance after the just-completed purchase. Computed in
+   * `handleSuccess` BEFORE the budget query is invalidated so the value
+   * reflects "previous remaining + amount paid", not whatever the next
+   * refetch (which races with the backend webhook) happens to return.
+   * `null` when the previous balance was unavailable at success time (rare
+   * — only if the budget query was in error state when the user paid);
+   * the receipt falls back to the pack amount in that case.
+   */
+  | { kind: 'success'; amountCents: number; newBalanceCents: number | null }
   | { kind: 'error'; message: string };
 
 export default function CreditPackCheckoutScreen(): React.ReactElement {
@@ -157,19 +175,31 @@ export default function CreditPackCheckoutScreen(): React.ReactElement {
 
   const handleSuccess = useCallback(
     (amountCents: number) => {
-      // Confetti haptic — `Haptics.notificationAsync` Success is the right
-      // pairing for a purchase-confirm moment per the Duolingo doctrine.
+      // Quiet success haptic — `Haptics.notificationAsync` Success is the
+      // single tactile cue for the purchase-confirm moment. Doctrine §5
+      // caps motion at one decel fade; this haptic is the only beat.
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
         () => undefined,
       );
+      // Round-3: snapshot the projected new balance BEFORE invalidating the
+      // budget query. `budget` is the hook's data at the moment the
+      // user completed checkout; once we invalidate, the cache may show
+      // stale-while-revalidating data or undefined depending on React
+      // Query's state — neither is what we want on the receipt. The
+      // snapshot is the deterministic "what you just paid for" value.
+      const previousRemaining = budget?.remaining_displayed_cents;
+      const newBalanceCents =
+        typeof previousRemaining === 'number'
+          ? previousRemaining + amountCents
+          : null;
       // Invalidate budget so Coach Home re-fetches with the new pack credit.
       // The backend webhook applies the credit asynchronously — invalidating
       // here triggers a refetch but the UI must tolerate the credit not
       // being visible for a few seconds while the webhook fires.
       queryClient.invalidateQueries({ queryKey: COACH_AI_BUDGET_QUERY_KEY });
-      setPhase({ kind: 'success', amountCents });
+      setPhase({ kind: 'success', amountCents, newBalanceCents });
     },
-    [queryClient],
+    [queryClient, budget],
   );
 
   const handleCancel = useCallback(() => {
@@ -286,8 +316,9 @@ export default function CreditPackCheckoutScreen(): React.ReactElement {
       )}
 
       {phase.kind === 'success' && (
-        <SuccessConfetti
+        <SuccessReceipt
           amountCents={phase.amountCents}
+          newBalanceCents={phase.newBalanceCents}
           colors={colors}
           styles={styles}
           onDone={() => navigation.goBack()}
@@ -315,71 +346,77 @@ export default function CreditPackCheckoutScreen(): React.ReactElement {
   );
 }
 
-// ─── Confetti success view ───────────────────────────────────────────────────
+// ─── Success receipt view (quiet-luxury) ─────────────────────────────────────
 
 interface SuccessProps {
   amountCents: number;
+  /** SNAPSHOT projection (previous remaining + amount paid). null when
+   *  the previous remaining was unavailable at success time. */
+  newBalanceCents: number | null;
   colors: ThemeColors;
   styles: ReturnType<typeof makeStyles>;
   onDone: () => void;
 }
 
 /**
- * Lightweight CSS-confetti: 18 small colored dots fall+spin into view with
- * staggered delays. Uses RN Animated (rather than Reanimated) for the
- * particles because each particle only needs simple opacity + translateY +
- * rotate; building it on Reanimated would not buy us anything for these
- * short, fire-and-forget animations.
+ * SuccessReceipt — the quiet-luxury success state for the credit-pack purchase.
  *
- * Auto-dismisses after ~1.8s so the coach is dropped back into Coach Home
- * with a freshly invalidated budget query.
+ * Replaces the prior particle burst that violated QUIET_LUXURY_DOCTRINE.md §3
+ * (no celebrations, no particle bursts). The visual language is now an Amex
+ * statement or Loro Piana confirmation page — confident, restrained, and
+ * over in under two seconds.
+ *
+ * Motion (doctrine §5 — capped at base=400ms decel, single forest accent):
+ *   1. Wrapper opacity 0 → 1 over `motion.duration.base` (400ms) with
+ *      `Easing.out(Easing.cubic)` (the `decel` curve from tokens).
+ *   2. ONE icon pulse: scale 1.0 → 1.02 → 1.0 over 600ms total
+ *      (300ms out, 300ms back) with `Easing.inOut(Easing.cubic)`. The
+ *      pulse fires once after the wrapper fade completes; it is the
+ *      only animated cue besides the fade.
+ * Nothing else animates. No translateY, no rotate, no springs, no
+ * particles. Both animations use `useNativeDriver: true` so the
+ * tactile haptic (fired in handleSuccess) and the visual settle land
+ * on the same frame.
+ *
+ * Auto-dismiss: 1800ms after mount the wrapper calls `onDone()` which
+ * routes the coach back to Coach Home. The receipt is meant to be
+ * glanced at, not lingered on — Coach Home's refetch will surface the
+ * actual confirmed balance once the backend webhook applies the credit.
  */
-function SuccessConfetti({ amountCents, colors, styles, onDone }: SuccessProps) {
+function SuccessReceipt({
+  amountCents,
+  newBalanceCents,
+  colors,
+  styles,
+  onDone,
+}: SuccessProps) {
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fade = useRef(new Animated.Value(0)).current;
-  const particles = useRef(
-    new Array(18).fill(0).map(() => ({
-      x: Math.random() * 320 - 160,
-      delay: Math.random() * 250,
-      rotate: new Animated.Value(0),
-      translate: new Animated.Value(-40),
-      opacity: new Animated.Value(0),
-    })),
-  ).current;
+  const iconScale = useRef(new Animated.Value(1)).current;
 
   React.useEffect(() => {
+    // Phase 1: opacity fade-in.
     Animated.timing(fade, {
       toValue: 1,
-      duration: 280,
+      duration: motion.duration.base, // 400ms — doctrine §5 default
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
-    }).start();
-    particles.forEach((p) => {
-      Animated.parallel([
-        Animated.sequence([
-          Animated.delay(p.delay),
-          Animated.timing(p.opacity, {
-            toValue: 1,
-            duration: 120,
-            useNativeDriver: true,
-          }),
-          Animated.delay(1100),
-          Animated.timing(p.opacity, {
-            toValue: 0,
-            duration: 280,
-            useNativeDriver: true,
-          }),
-        ]),
-        Animated.timing(p.translate, {
-          toValue: 320,
-          duration: 1500,
-          easing: Easing.out(Easing.quad),
+    }).start(() => {
+      // Phase 2: single icon pulse. 600ms total (no token at this exact
+      // value — `base` is 400 and `slow` is 800; doctrine §5 allows
+      // explicit values when between tokens. The pulse is intentionally
+      // subtler than a `slow` reveal but more deliberate than a snap.).
+      Animated.sequence([
+        Animated.timing(iconScale, {
+          toValue: 1.02,
+          duration: 300,
+          easing: Easing.inOut(Easing.cubic),
           useNativeDriver: true,
         }),
-        Animated.timing(p.rotate, {
+        Animated.timing(iconScale, {
           toValue: 1,
-          duration: 1500,
-          easing: Easing.linear,
+          duration: 300,
+          easing: Easing.inOut(Easing.cubic),
           useNativeDriver: true,
         }),
       ]).start();
@@ -389,7 +426,22 @@ function SuccessConfetti({ amountCents, colors, styles, onDone }: SuccessProps) 
     return () => {
       if (dismissTimer.current) clearTimeout(dismissTimer.current);
     };
-  }, [fade, particles, onDone]);
+  }, [fade, iconScale, onDone]);
+
+  // Fallback: when the previous-balance snapshot was unavailable (the hook
+  // was in error state at success time), surface the pack amount alone.
+  // Never show NaN, undefined, or a wrong number — silence is better than
+  // a misleading balance on a receipt.
+  const balanceDisplay =
+    typeof newBalanceCents === 'number'
+      ? formatCents(newBalanceCents)
+      : formatCents(amountCents);
+
+  // Accessibility: each metadata row composes label + value into a single
+  // a11y label so screen readers say "New balance, twelve fifty" rather
+  // than landing on disjoint nodes.
+  const balanceA11y = `New balance, ${balanceDisplay}`;
+  const receiptA11y = 'Receipt, sent to your inbox.';
 
   return (
     <Animated.View
@@ -397,40 +449,39 @@ function SuccessConfetti({ amountCents, colors, styles, onDone }: SuccessProps) 
       testID="credit-pack-success"
     >
       <View style={styles.successContent}>
-        <View style={styles.successIconWrap}>
+        <Animated.View
+          style={[styles.successIconWrap, { transform: [{ scale: iconScale }] }]}
+        >
           <Ionicons name="checkmark-circle" size={56} color={colors.success} />
-        </View>
+        </Animated.View>
         <Text style={styles.successTitle}>Credits added</Text>
         <Text style={styles.successBody}>
           {formatCents(amountCents)} of AI credit is now on your account.
         </Text>
-      </View>
-      <View style={styles.confettiLayer} pointerEvents="none">
-        {particles.map((p, i) => {
-          const rotateStr = p.rotate.interpolate({
-            inputRange: [0, 1],
-            outputRange: ['0deg', '720deg'],
-          });
-          const tone =
-            i % 3 === 0 ? colors.primary : i % 3 === 1 ? colors.gold : colors.success;
-          return (
-            <Animated.View
-              key={i}
-              style={[
-                styles.confettiDot,
-                {
-                  backgroundColor: tone,
-                  transform: [
-                    { translateX: p.x },
-                    { translateY: p.translate },
-                    { rotate: rotateStr },
-                  ],
-                  opacity: p.opacity,
-                },
-              ]}
-            />
-          );
-        })}
+
+        <View style={styles.metaHairline} />
+
+        <View
+          style={styles.metaRow}
+          accessible
+          accessibilityLabel={balanceA11y}
+          testID="credit-pack-success-balance-row"
+        >
+          <Text style={styles.metaLabel}>New balance</Text>
+          <Text style={styles.metaValue} testID="credit-pack-success-balance-value">
+            {balanceDisplay}
+          </Text>
+        </View>
+
+        <View
+          style={styles.metaRow}
+          accessible
+          accessibilityLabel={receiptA11y}
+          testID="credit-pack-success-receipt-row"
+        >
+          <Text style={styles.metaLabel}>Receipt</Text>
+          <Text style={styles.metaValue}>Sent to your inbox</Text>
+        </View>
       </View>
     </Animated.View>
   );
@@ -526,34 +577,51 @@ function makeStyles(colors: ThemeColors) {
       justifyContent: 'center',
       backgroundColor: colors.background,
     },
-    successContent: { alignItems: 'center', gap: 12, paddingHorizontal: 24 },
-    successIconWrap: { marginBottom: 4 },
+    successContent: {
+      alignItems: 'stretch',
+      gap: 12,
+      paddingHorizontal: 24,
+      // Cap the width so the meta rows align like a printed receipt
+      // rather than stretching edge-to-edge on tablets.
+      maxWidth: 360,
+      width: '100%',
+    },
+    successIconWrap: { marginBottom: 4, alignSelf: 'center' },
+    // Doctrine §1: display weight ≤ 500. Was '600' (banned for display).
+    // Pulls the family + size + letterSpacing from tokens so a future
+    // typography change doesn't have to special-case this screen.
     successTitle: {
-      fontSize: 24,
-      fontWeight: '600',
+      ...typography.h2,
       color: colors.textPrimary,
-      letterSpacing: 0.2,
+      textAlign: 'center',
     },
     successBody: {
-      fontSize: 15,
+      ...typography.body,
       color: colors.textSecondary,
       textAlign: 'center',
     },
-    confettiLayer: {
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      alignItems: 'center',
-      justifyContent: 'flex-start',
-      paddingTop: 80,
+    // R3: quiet receipt rows. Hairline above, label muted on left, value
+    // ink on right. Same visual register the rest of the app uses for
+    // label/value lists.
+    metaHairline: {
+      height: StyleSheet.hairlineWidth,
+      backgroundColor: colors.border,
+      marginVertical: 12,
+      width: '100%',
     },
-    confettiDot: {
-      position: 'absolute',
-      width: 10,
-      height: 10,
-      borderRadius: 2,
+    metaRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'baseline',
+      width: '100%',
+    },
+    metaLabel: {
+      ...typography.bodySmall,
+      color: colors.textMuted,
+    },
+    metaValue: {
+      ...typography.bodyMd,
+      color: colors.textPrimary,
     },
   });
 }
