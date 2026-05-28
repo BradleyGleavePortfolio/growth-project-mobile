@@ -23,7 +23,12 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View } from 'react-native';
-import { useNavigation, type NavigationProp, type ParamListBase } from '@react-navigation/native';
+import {
+  useIsFocused,
+  useNavigation,
+  type NavigationProp,
+  type ParamListBase,
+} from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ErrorBoundary from '../../ErrorBoundary';
 import { useAIBudget } from '../../../hooks/useAIBudget';
@@ -52,7 +57,16 @@ export function AIBudgetMount({
   enabled = true,
   checkoutScreen = 'CreditPackCheckout',
 }: AIBudgetMountProps): React.ReactElement | null {
-  const { data: budget } = useAIBudget({ enabled });
+  // P1-2 fix: gate the 60s polling interval on screen focus. The brief's
+  // deliverable #1 says "Refetch every 60s WHILE Coach Home mounted". RN's
+  // default native-stack keeps unfocused screens mounted underneath the
+  // current one, so without `useIsFocused` the budget kept polling in the
+  // background as the coach navigated deeper into the app — battery + data
+  // drain for no benefit. `enabled && isFocused` collapses to no-op the
+  // moment Coach Home loses focus and resumes the moment it regains it
+  // (TanStack Query keeps the cached data warm).
+  const isFocused = useIsFocused();
+  const { data: budget } = useAIBudget({ enabled: enabled && isFocused });
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
 
   const surface = useMemo(() => surfaceFor(budget), [budget]);

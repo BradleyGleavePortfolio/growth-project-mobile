@@ -51,6 +51,7 @@ import {
   coachAiBudgetApi,
   CUSTOM_PACK_MAX_CENTS,
   CUSTOM_PACK_MIN_CENTS,
+  buildCheckoutInput,
   type CreateCheckoutResponse,
 } from '../../api/coachAiBudgetApi';
 import { useAIBudget, COACH_AI_BUDGET_QUERY_KEY } from '../../hooks/useAIBudget';
@@ -97,21 +98,27 @@ export default function CreditPackCheckoutScreen(): React.ReactElement {
     async (amountCents: number) => {
       setPhase({ kind: 'minting', amountCents });
       try {
-        const res = await coachAiBudgetApi.createCheckout({ amount_cents: amountCents });
+        // Cents → tier mapping happens at the API boundary (`buildCheckoutInput`)
+        // so the rest of this screen keeps speaking in cents while the wire
+        // contract carries the discriminated `tier` the backend's
+        // class-validator @IsIn(...) requires.
+        const res = await coachAiBudgetApi.createCheckout(
+          buildCheckoutInput(amountCents),
+        );
         const data: CreateCheckoutResponse = res.data;
-        if (!data?.url) {
+        if (!data?.checkout_url) {
           throw new Error('Checkout session URL missing');
         }
         // Reject any URL not in the same origin allow-list as the existing
         // client checkout webview. The backend should only emit Stripe URLs,
         // but defence-in-depth — never trust a remote URL.
-        if (!isOriginAllowed(data.url)) {
+        if (!isOriginAllowed(data.checkout_url)) {
           throw new Error('Checkout URL origin not allowed');
         }
         setPhase({
           kind: 'webview',
-          url: data.url,
-          sessionId: data.session_id,
+          url: data.checkout_url,
+          sessionId: data.checkout_session_id,
           amountCents,
         });
       } catch (err) {
@@ -256,7 +263,13 @@ export default function CreditPackCheckoutScreen(): React.ReactElement {
       {phase.kind === 'webview' && (
         <WebView
           source={{ uri: phase.url }}
-          originWhitelist={['https://*']}
+          // P1-1 fix: tighten the outer WebView origin gate from the
+          // wildcard `https://*` to the same Stripe host allow-list that
+          // `onShouldStartLoadWithRequest` (line below) and the mint-time
+          // `isOriginAllowed` check enforce. The wildcard would have been
+          // the only line of defence if the JS-side checks were ever
+          // accidentally removed in a refactor; this closes that gap.
+          originWhitelist={CHECKOUT_ALLOWED_HOSTS.map((h) => `https://${h}`)}
           onNavigationStateChange={handleWebViewNavigation}
           onShouldStartLoadWithRequest={handleShouldStartLoad}
           javaScriptEnabled
