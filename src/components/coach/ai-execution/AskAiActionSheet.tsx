@@ -1,23 +1,35 @@
 /**
- * AskAiActionSheet — single sheet that handles all four Stream 2
- * invocation entry points.
+ * AskAiActionSheet — entry point for the Stream 2 AI execution capabilities.
  *
- * The coach taps "Ask AI" on the client-detail Summary tab. The sheet
- * opens with a four-item picker (message / workout / meal plan /
- * nudge), the coach selects one, types a short prompt, and submits.
- * On submit the sheet calls the corresponding `coachAiExecutionApi.*`
- * method, invalidates the pending-drafts query so the inbox refreshes,
- * and either closes (with an optional "Open inbox" hint) or routes
- * directly to the inbox.
+ * R1 audit fix (P0-2): the previous sheet posted `{clientId, prompt}` to
+ * `/coach/ai/drafts/*` for every capability. The backend Zod schemas demand
+ * the full structured payload (workoutPlanId UUID + scheduledFor ISO,
+ * dailyMealPlanId UUID + startsOn YYYY-MM-DD, or kind + body for the
+ * notification flow). The audit forbade defaulting UUIDs silently.
  *
- * Doctrine compliance: no springs (RN Modal default slide), no
- * particle bursts, no celebration overlays. Single forest accent on
- * the submit CTA. Display copy uses typography tokens (≤500 weight
- * per doctrine §1).
+ * Resolution for this PR:
  *
- * Wire contract: see `src/api/coachAiExecutionApi.ts`. Backend
- * Stream 2 PR is not merged at build time; the API client falls back
- * to an in-memory mock so the flow is testable end-to-end.
+ *   - `draft.send_notification`: WIRED. Requires only `clientId`, `kind`,
+ *     `body` (≤160), and `prompt`. The coach types `body` into the sheet;
+ *     `kind` defaults to 'coach_nudge'. No picker needed — this works today.
+ *
+ *   - `draft.assign_workout` / `draft.assign_meal_plan`: REMOVED from this
+ *     sheet pending the picker integration. These capabilities require the
+ *     coach to choose an existing WorkoutPlan / DailyMealPlan UUID from
+ *     their library; the right surface for that pick is the Workouts /
+ *     Meal Plans tab, not a context-free sheet. Tracked as a P3 follow-up
+ *     — see the README for the planned UX.
+ *
+ *   - `draft.client_message`: REMOVED. The backend merged this capability
+ *     into the existing PR #293 `draft.coach_message` surface, which mobile
+ *     reaches via `coachAi.ts`. The "Draft a message" entry is the existing
+ *     coach-AI surface, not a new Stream 2 path.
+ *
+ * Defence-in-depth role guard (R1 audit fix P2-2): the sheet refuses to
+ * render if the authenticated user role is not 'coach' or 'owner'.
+ *
+ * Doctrine compliance: no springs (RN Modal default slide), no particle
+ * bursts, no celebration overlays. Single forest accent on the submit CTA.
  */
 
 import React, { useCallback, useMemo, useState } from 'react';
@@ -36,69 +48,31 @@ import { useTheme, type ThemeColors } from '../../../theme/ThemeProvider';
 import { typography, radius, spacing } from '../../../theme/tokens';
 import { coachAiExecutionApi } from '../../../api/coachAiExecutionApi';
 import { COACH_AI_PENDING_DRAFTS_QUERY_KEY } from '../../../hooks/usePendingAiDrafts';
-import {
-  capabilityLabel,
-  type CoachAiDraftCapability,
-} from '../../../api/types/coachAiExecution';
+import { useCurrentUser } from '../../../hooks/useCurrentUser';
 
-/** The four capabilities surfaced by this sheet, in the spec's display order. */
-const CAPABILITIES: ReadonlyArray<{
-  cap: CoachAiDraftCapability;
-  icon: keyof typeof Ionicons.glyphMap;
-  /** Coach-facing button label. Doctrine-clean (no exclamation, no hype). */
-  label: string;
-  /** Placeholder hint for the prompt textarea — capability-appropriate. */
-  hint: string;
-}> = [
-  {
-    cap: 'draft.client_message',
-    icon: 'chatbubble-outline',
-    label: 'Draft a message',
-    hint: 'What should the message focus on?',
-  },
-  {
-    cap: 'draft.assign_workout',
-    icon: 'barbell-outline',
-    label: 'Suggest a workout',
-    hint: 'Goals or constraints for this block?',
-  },
-  {
-    cap: 'draft.assign_meal_plan',
-    icon: 'nutrition-outline',
-    label: 'Suggest a meal plan',
-    hint: 'Diet preferences or macros to target?',
-  },
-  {
-    cap: 'draft.send_notification',
-    icon: 'notifications-outline',
-    label: 'Draft a check-in nudge',
-    hint: 'What prompted the check-in?',
-  },
-];
+const ALLOWED_ROLES = new Set(['coach', 'owner']);
+
+const NOTIFICATION_DEFAULT_KIND = 'coach_nudge';
+const NOTIFICATION_BODY_MAX = 160;
+const PROMPT_MAX = 500;
 
 export interface AskAiActionSheetProps {
   visible: boolean;
   clientId: string;
   clientName: string;
-  /** Close handler. The sheet calls this when the coach taps the
-   *  scrim, the close icon, or after a successful submit (unless
-   *  `onAfterSubmit` navigates away). */
+  /** Close handler. The sheet calls this on scrim tap, close icon, or
+   *  after a successful submit (unless `onAfterSubmit` navigates away). */
   onClose: () => void;
-  /** Called after a successful submit. The Summary tab uses this to
-   *  route the coach to the pending-drafts inbox so they can see
-   *  their new draft land. Optional — if omitted, the sheet just
-   *  closes and the consumer is expected to surface a separate
-   *  "View pending drafts" affordance. */
-  onAfterSubmit?: (capability: CoachAiDraftCapability, draftId: string) => void;
+  /** Called after a successful submit. The Summary tab uses this to route
+   *  the coach to the pending-drafts inbox. */
+  onAfterSubmit?: (draftId: string) => void;
 }
 
 type Phase =
   | { kind: 'pick' }
-  | { kind: 'prompt'; capability: CoachAiDraftCapability }
-  | { kind: 'submitting'; capability: CoachAiDraftCapability }
-  | { kind: 'error'; capability: CoachAiDraftCapability; message: string };
-
-const PROMPT_MAX = 500;
+  | { kind: 'notification-form' }
+  | { kind: 'submitting' }
+  | { kind: 'error'; message: string };
 
 export function AskAiActionSheet({
   visible,
@@ -106,73 +80,78 @@ export function AskAiActionSheet({
   clientName,
   onClose,
   onAfterSubmit,
-}: AskAiActionSheetProps): React.ReactElement {
+}: AskAiActionSheetProps): React.ReactElement | null {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const queryClient = useQueryClient();
+  const user = useCurrentUser();
   const [phase, setPhase] = useState<Phase>({ kind: 'pick' });
+  const [body, setBody] = useState('');
   const [prompt, setPrompt] = useState('');
 
-  // Reset phase + prompt every time the sheet re-opens so a previous
-  // submit state never leaks into the next session.
-  const handleClose = useCallback(() => {
-    setPhase({ kind: 'pick' });
-    setPrompt('');
-    onClose();
-  }, [onClose]);
+  // Defence-in-depth role guard. If the authenticated user isn't a
+  // coach/owner, the sheet renders nothing — the caller controls visibility
+  // anyway, so `null` is the least surprising response.
+  const allowed = user?.role !== undefined && ALLOWED_ROLES.has(user.role);
 
-  const handlePick = useCallback((cap: CoachAiDraftCapability) => {
-    setPhase({ kind: 'prompt', capability: cap });
+  const reset = useCallback(() => {
+    setPhase({ kind: 'pick' });
+    setBody('');
     setPrompt('');
   }, []);
 
+  const handleClose = useCallback(() => {
+    reset();
+    onClose();
+  }, [reset, onClose]);
+
   const handleSubmit = useCallback(async () => {
-    if (phase.kind !== 'prompt') return;
-    const trimmed = prompt.trim();
-    if (trimmed.length === 0) {
+    const trimmedBody = body.trim();
+    const trimmedPrompt = prompt.trim();
+    if (trimmedBody.length === 0) {
+      setPhase({ kind: 'error', message: 'Type the notification body to send.' });
+      return;
+    }
+    if (trimmedBody.length > NOTIFICATION_BODY_MAX) {
       setPhase({
         kind: 'error',
-        capability: phase.capability,
-        message: 'Enter a short prompt so the model has context.',
+        message: `Body too long. Keep it under ${NOTIFICATION_BODY_MAX} characters.`,
       });
       return;
     }
-    setPhase({ kind: 'submitting', capability: phase.capability });
+    if (trimmedPrompt.length === 0) {
+      setPhase({
+        kind: 'error',
+        message: 'Add a short prompt so the model has context.',
+      });
+      return;
+    }
+    setPhase({ kind: 'submitting' });
     try {
-      const req = { clientId, prompt: trimmed };
-      let result;
-      switch (phase.capability) {
-        case 'draft.client_message':
-          result = await coachAiExecutionApi.invokeClientMessage(req, clientName);
-          break;
-        case 'draft.assign_workout':
-          result = await coachAiExecutionApi.invokeAssignWorkout(req, clientName);
-          break;
-        case 'draft.assign_meal_plan':
-          result = await coachAiExecutionApi.invokeAssignMealPlan(req, clientName);
-          break;
-        case 'draft.send_notification':
-          result = await coachAiExecutionApi.invokeSendNotification(req, clientName);
-          break;
-      }
-      // Refresh the pending-drafts inbox so the new draft appears on
-      // the next render of the inbox screen. Fire-and-forget — the
-      // invalidation cost is one in-memory cache invalidation.
-      queryClient.invalidateQueries({ queryKey: COACH_AI_PENDING_DRAFTS_QUERY_KEY });
-      // Reset UI state then notify the parent. The parent decides
-      // whether to navigate; the sheet's job ends here.
-      setPhase({ kind: 'pick' });
-      setPrompt('');
+      const result = await coachAiExecutionApi.invokeSendNotification({
+        clientId,
+        kind: NOTIFICATION_DEFAULT_KIND,
+        body: trimmedBody,
+        prompt: trimmedPrompt,
+      });
+      queryClient.invalidateQueries({
+        queryKey: COACH_AI_PENDING_DRAFTS_QUERY_KEY,
+      });
+      reset();
       onClose();
-      onAfterSubmit?.(phase.capability, result.draftId);
+      if (result.approval.draft_id) {
+        onAfterSubmit?.(result.approval.draft_id);
+      }
     } catch (err) {
       const msg =
         err instanceof Error && err.message
           ? err.message
           : 'Could not submit. Try again in a moment.';
-      setPhase({ kind: 'error', capability: phase.capability, message: msg });
+      setPhase({ kind: 'error', message: msg });
     }
-  }, [phase, prompt, clientId, clientName, queryClient, onClose, onAfterSubmit]);
+  }, [body, prompt, clientId, queryClient, reset, onClose, onAfterSubmit]);
+
+  if (!allowed) return null;
 
   return (
     <Modal
@@ -204,40 +183,89 @@ export function AskAiActionSheet({
               showsVerticalScrollIndicator={false}
               testID="ask-ai-pick-list"
             >
-              <Text style={styles.subhead}>What should I help you draft?</Text>
-              {CAPABILITIES.map((c) => (
-                <Pressable
-                  key={c.cap}
-                  style={styles.optionRow}
-                  onPress={() => handlePick(c.cap)}
-                  accessibilityRole="button"
-                  accessibilityLabel={c.label}
-                  testID={`ask-ai-option-${c.cap}`}
-                >
-                  <View style={styles.optionIconWrap}>
-                    <Ionicons name={c.icon} size={20} color={colors.primary} />
-                  </View>
-                  <View style={styles.optionTextWrap}>
-                    <Text style={styles.optionLabel}>{c.label}</Text>
-                    <Text style={styles.optionSubtext}>{capabilityLabel(c.cap)}</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-                </Pressable>
-              ))}
+              <Text style={styles.subhead}>
+                What should I help you draft for {clientName}?
+              </Text>
+              <Pressable
+                style={styles.optionRow}
+                onPress={() => setPhase({ kind: 'notification-form' })}
+                accessibilityRole="button"
+                accessibilityLabel="Draft a check-in nudge"
+                testID="ask-ai-option-draft.send_notification"
+              >
+                <View style={styles.optionIconWrap}>
+                  <Ionicons
+                    name="notifications-outline"
+                    size={20}
+                    color={colors.primary}
+                  />
+                </View>
+                <View style={styles.optionTextWrap}>
+                  <Text style={styles.optionLabel}>Draft a check-in nudge</Text>
+                  <Text style={styles.optionSubtext}>
+                    A short push that lands once you approve it.
+                  </Text>
+                </View>
+                <Ionicons
+                  name="chevron-forward"
+                  size={18}
+                  color={colors.textMuted}
+                />
+              </Pressable>
+
+              {/* Workout / meal-plan suggestion entries are deferred to a
+                  follow-up: the backend Zod schemas require workoutPlanId /
+                  dailyMealPlanId UUIDs the coach must select from their
+                  library. The right surface for that pick is the Workouts
+                  / Meal Plans tab, where the picker already exists; we
+                  will add an "Ask AI to schedule this" affordance there. */}
+              <View style={styles.followUpNote}>
+                <Text style={styles.followUpText}>
+                  Workout + meal plan AI suggestions land in a follow-up — coach
+                  picks the plan in its tab first, then asks AI to schedule.
+                </Text>
+              </View>
             </ScrollView>
           )}
 
-          {(phase.kind === 'prompt' ||
+          {(phase.kind === 'notification-form' ||
             phase.kind === 'submitting' ||
             phase.kind === 'error') && (
             <View style={styles.promptBody}>
-              <PromptHeader
-                capability={phase.capability}
-                styles={styles}
-                onBack={() => setPhase({ kind: 'pick' })}
+              <View style={styles.promptHeaderRow}>
+                <Pressable
+                  onPress={() => setPhase({ kind: 'pick' })}
+                  hitSlop={12}
+                  accessibilityRole="button"
+                  accessibilityLabel="Back to options"
+                  testID="ask-ai-back"
+                >
+                  <Text style={styles.backLink}>Back</Text>
+                </Pressable>
+                <Text style={styles.promptHeadingLabel}>Check-in nudge</Text>
+                <View style={styles.spacer16} />
+              </View>
+
+              <Text style={styles.promptLabel}>Notification body</Text>
+              <TextInput
+                value={body}
+                onChangeText={setBody}
+                multiline
+                editable={phase.kind !== 'submitting'}
+                maxLength={NOTIFICATION_BODY_MAX}
+                placeholder={`What ${clientName} will see in the push`}
+                placeholderTextColor={colors.textMuted}
+                style={styles.promptInput}
+                textAlignVertical="top"
+                testID="ask-ai-body-input"
+                accessibilityLabel="Notification body"
               />
-              <Text style={styles.promptLabel}>
-                {hintFor(phase.capability)}
+              <Text style={styles.promptCounter}>
+                {body.length} / {NOTIFICATION_BODY_MAX}
+              </Text>
+
+              <Text style={[styles.promptLabel, styles.promptLabelGap]}>
+                Prompt to the AI
               </Text>
               <TextInput
                 value={prompt}
@@ -245,7 +273,7 @@ export function AskAiActionSheet({
                 multiline
                 editable={phase.kind !== 'submitting'}
                 maxLength={PROMPT_MAX}
-                placeholder={hintFor(phase.capability)}
+                placeholder="What prompted the check-in?"
                 placeholderTextColor={colors.textMuted}
                 style={styles.promptInput}
                 textAlignVertical="top"
@@ -257,7 +285,10 @@ export function AskAiActionSheet({
               </Text>
 
               {phase.kind === 'error' && (
-                <Text style={styles.errorText} accessibilityLiveRegion="polite">
+                <Text
+                  style={styles.errorText}
+                  accessibilityLiveRegion="polite"
+                >
                   {phase.message}
                 </Text>
               )}
@@ -282,35 +313,6 @@ export function AskAiActionSheet({
         </View>
       </View>
     </Modal>
-  );
-}
-
-function hintFor(cap: CoachAiDraftCapability): string {
-  const found = CAPABILITIES.find((c) => c.cap === cap);
-  return found?.hint ?? 'What should this focus on?';
-}
-
-interface PromptHeaderProps {
-  capability: CoachAiDraftCapability;
-  styles: ReturnType<typeof makeStyles>;
-  onBack: () => void;
-}
-
-function PromptHeader({ capability, styles, onBack }: PromptHeaderProps) {
-  return (
-    <View style={styles.promptHeaderRow}>
-      <Pressable
-        onPress={onBack}
-        hitSlop={12}
-        accessibilityRole="button"
-        accessibilityLabel="Back to options"
-        testID="ask-ai-back"
-      >
-        <Text style={styles.backLink}>Back</Text>
-      </Pressable>
-      <Text style={styles.promptHeadingLabel}>{capabilityLabel(capability)}</Text>
-      <View style={styles.spacer16} />
-    </View>
   );
 }
 
@@ -367,6 +369,17 @@ function makeStyles(colors: ThemeColors) {
       color: colors.textMuted,
       marginTop: 2,
     },
+    followUpNote: {
+      marginTop: 16,
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+      backgroundColor: colors.surface,
+      borderRadius: radius.lg,
+    },
+    followUpText: {
+      ...typography.bodySmall,
+      color: colors.textMuted,
+    },
 
     promptBody: { paddingTop: 4 },
     promptHeaderRow: {
@@ -383,6 +396,7 @@ function makeStyles(colors: ThemeColors) {
       color: colors.textMuted,
       marginBottom: 6,
     },
+    promptLabelGap: { marginTop: 12 },
     promptInput: {
       ...typography.body,
       color: colors.textPrimary,
@@ -391,7 +405,7 @@ function makeStyles(colors: ThemeColors) {
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: colors.border,
       padding: 12,
-      minHeight: 120,
+      minHeight: 100,
     },
     promptCounter: {
       ...typography.bodySmall,

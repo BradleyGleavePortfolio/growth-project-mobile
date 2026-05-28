@@ -1,80 +1,85 @@
 /**
- * coachAiExecutionApi — Stream 2 client for the four AI execution
- * capabilities.
+ * coachAiExecutionApi — Stream 2 client for the three AI execution
+ * capabilities exposed by the backend coach-AI-execution controller.
  *
- * Endpoints (matches the Stream 2 backend PR):
- *   POST /coach/ai/drafts/message              → draft.client_message
- *   POST /coach/ai/drafts/assign-workout       → draft.assign_workout
- *   POST /coach/ai/drafts/assign-meal-plan     → draft.assign_meal_plan
- *   POST /coach/ai/drafts/send-notification    → draft.send_notification
+ * Wire contract (R1 audit fix — was wrong on every URL, every payload, and
+ * every response shape; now matches `/v1/coach/ai/draft/*` exactly):
  *
- *   GET  /coach/ai/drafts/pending              → list pending drafts
- *   POST /coach/ai/drafts/:id/approve          → approve
- *   POST /coach/ai/drafts/:id/reject           → reject
+ *   POST  /v1/coach/ai/draft/assign-workout      → draft.assign_workout
+ *   POST  /v1/coach/ai/draft/assign-meal-plan    → draft.assign_meal_plan
+ *   POST  /v1/coach/ai/draft/send-notification   → draft.send_notification
  *
- * The backend Stream 2 PR has NOT merged at build time. To unblock mobile
- * builders + audit + e2e checks, this module ships with an in-memory
- * mock that satisfies the typed contract above. The mock is activated
- * automatically when `EXPO_PUBLIC_AI_EXECUTION_MOCK` is `'on'` (default
- * in non-production) AND when the network call returns 404 (so a real
- * staging backend can co-exist with the mock without a config change).
+ *   GET   /ai/gateway/drafts?status=pending&clientId=&limit=
+ *   PATCH /ai/gateway/drafts/:id   body: { decision: 'approved'|'rejected', note? }
  *
- * Once the backend lands, set `EXPO_PUBLIC_AI_EXECUTION_MOCK=off` in
- * the staging env and confirm the network shapes match. The mock is
- * intentionally limited — it persists drafts only for the current
- * process lifetime (an in-memory Map) and never crosses the network.
+ * `draft.client_message` is no longer surfaced here — it was merged into
+ * the existing PR #293 `draft.coach_message` flow, which mobile reaches via
+ * `coachAi.ts`. The Ask AI sheet routes message-drafting to that flow.
+ *
+ * Mock mode (R1 audit fix — P0-1): the previous module defaulted to MOCK ON
+ * unless `EXPO_PUBLIC_AI_EXECUTION_MOCK=off` was explicitly set, meaning
+ * production builds silently swallowed every coach action. The default is
+ * now MOCK OFF; opt-in requires (a) a dev build (`__DEV__ === true`)
+ * AND (b) the env flag explicitly set to 'on' or 'true'. Production
+ * release builds never run the mock.
  */
 
 import api from '../services/api';
 import type {
-  ApproveDraftResponse,
-  AssignMealPlanPayload,
-  AssignWorkoutPayload,
-  ClientMessagePayload,
-  CoachAiDraft,
-  CoachAiDraftCapability,
-  InvokeDraftRequest,
+  AiActionDraftRow,
+  AssignMealPlanInvokeRequest,
+  AssignMealPlanProposedAction,
+  AssignWorkoutInvokeRequest,
+  AssignWorkoutProposedAction,
+  DecideRequest,
+  DecideResponse,
   InvokeDraftResponse,
   ListPendingResponse,
-  RejectDraftRequest,
-  RejectDraftResponse,
-  SendNotificationPayload,
+  SendNotificationInvokeRequest,
+  SendNotificationProposedAction,
 } from './types/coachAiExecution';
 
 // ─── Mock mode resolution ───────────────────────────────────────────────────
 
-/**
- * Whether the mock backend should serve responses by default. Read at
- * module load so a test can flip the env var before importing.
- *
- * `off` disables the mock entirely (use the real network); any other
- * value (including unset) leaves the mock on. The opt-out posture
- * deliberately defaults safe: if mobile ships before backend lands the
- * UI still works, and a deliberate `off` flips it the moment backend
- * is in staging.
- */
-const MOCK_MODE = (() => {
-  const raw = process.env.EXPO_PUBLIC_AI_EXECUTION_MOCK;
-  if (raw === 'off' || raw === 'false') return 'off' as const;
-  return 'on' as const;
-})();
+declare const __DEV__: boolean | undefined;
 
-/** Exposed for tests so a spec can flip the mode without re-importing
- *  the whole module. Production code SHOULD NOT call this — the env
- *  var is the documented switch. */
-export function _setMockModeForTesting(mode: 'on' | 'off'): void {
-  // We mutate the let-binding (declared below) so the next request
-  // reads the new value. Tests should restore the original mode in
-  // their afterEach.
-  _mockMode = mode;
-}
+/**
+ * Posture: opt-in, dev-only. Production release builds never run the mock.
+ * A misconfigured `EXPO_PUBLIC_AI_EXECUTION_MOCK=on` in a release build logs
+ * a warning and falls through to the real API.
+ */
+const MOCK_MODE: 'on' | 'off' = (() => {
+  const raw = process.env.EXPO_PUBLIC_AI_EXECUTION_MOCK;
+  const isDev = typeof __DEV__ !== 'undefined' && __DEV__ === true;
+  if (!isDev) {
+    if (raw === 'on' || raw === 'true') {
+      // eslint-disable-next-line no-console
+      console.warn(
+        '[coachAiExecutionApi] ignoring EXPO_PUBLIC_AI_EXECUTION_MOCK=' +
+          raw +
+          ' in non-dev build; falling through to real API.',
+      );
+    }
+    return 'off';
+  }
+  if (raw === 'on' || raw === 'true') return 'on';
+  return 'off';
+})();
 
 let _mockMode: 'on' | 'off' = MOCK_MODE;
 
-// ─── In-memory mock store (only used when MOCK_MODE === 'on') ───────────────
+/** Test-only: flip mock mode without re-importing the module. No-op in
+ *  non-test builds so a production binary cannot be coerced into mock mode
+ *  via this export. */
+export function _setMockModeForTesting(mode: 'on' | 'off'): void {
+  if (process.env.NODE_ENV !== 'test') return;
+  _mockMode = mode;
+}
+
+// ─── In-memory mock store (only used when _mockMode === 'on') ──────────────
 
 interface MockStore {
-  drafts: Map<string, CoachAiDraft>;
+  drafts: Map<string, AiActionDraftRow>;
   nextSeq: number;
 }
 
@@ -84,228 +89,233 @@ const mockStore: MockStore = {
 };
 
 function mockId(): string {
-  // RFC 4122-ish synthetic id so the UI's UUID typing doesn't trip on
-  // dev. Format: `mock-<seq>-<random-hex>`. Real backend returns a
-  // proper uuid4; the consuming UI never reads the structure beyond
-  // string identity.
   const seq = mockStore.nextSeq++;
   const rand = Math.random().toString(16).slice(2, 10);
   return `mock-${seq}-${rand}`;
 }
 
-function makeMockDraft(
-  capability: CoachAiDraftCapability,
-  req: InvokeDraftRequest,
-  clientName: string,
-): CoachAiDraft {
-  const base = {
+function makeMockRow(
+  capability:
+    | 'draft.assign_workout'
+    | 'draft.assign_meal_plan'
+    | 'draft.send_notification',
+  payload: Record<string, unknown>,
+  clientId: string,
+): AiActionDraftRow {
+  const now = new Date().toISOString();
+  return {
     id: mockId(),
-    status: 'pending' as const,
-    tenantCoachId: 'mock-coach',
-    subjectClientId: req.clientId,
-    subjectClientName: clientName,
-    createdAt: new Date().toISOString(),
-    rationale: `(mock) Prompt: ${truncate(req.prompt, 80)}`,
+    capability,
+    status: 'pending',
+    tenant_coach_id: 'mock-coach',
+    subject_user_id: clientId,
+    requester_id: 'mock-coach',
+    created_at: now,
+    payload,
   };
-  switch (capability) {
-    case 'draft.client_message': {
-      const payload: ClientMessagePayload = {
-        clientId: req.clientId,
-        body: `(mock) Quick check-in based on your prompt: "${truncate(req.prompt, 80)}".`,
-      };
-      return { ...base, capability, payload };
-    }
-    case 'draft.assign_workout': {
-      const payload: AssignWorkoutPayload = {
-        clientId: req.clientId,
-        workoutName: '(mock) 4-week strength block',
-        weekCount: 4,
-        day1ExerciseCount: 6,
-        rationale: req.prompt,
-      };
-      return { ...base, capability, payload };
-    }
-    case 'draft.assign_meal_plan': {
-      const payload: AssignMealPlanPayload = {
-        clientId: req.clientId,
-        planName: '(mock) High-protein week',
-        dayCount: 7,
-        macroSummary: '180p / 220c / 70f',
-        rationale: req.prompt,
-      };
-      return { ...base, capability, payload };
-    }
-    case 'draft.send_notification': {
-      const payload: SendNotificationPayload = {
-        clientId: req.clientId,
-        title: '(mock) Check in with your coach',
-        body: 'How is your week going? Reply with a quick note when you have a moment.',
-        scheduledFor: null,
-      };
-      return { ...base, capability, payload };
-    }
-  }
 }
 
-function truncate(s: string, max: number): string {
-  return s.length <= max ? s : `${s.slice(0, max - 1)}…`;
+function mockInvokeResponse(draftId: string): InvokeDraftResponse {
+  return {
+    request_id: mockId(),
+    audit_id: mockId(),
+    approval: {
+      required: true,
+      status: 'pending',
+      draft_id: draftId,
+    },
+  };
 }
 
 // ─── Public API surface ─────────────────────────────────────────────────────
 
-/**
- * Endpoint→capability mapping. Centralised so the inbox refresh + the
- * sheet share the same wire constants and a future endpoint move is
- * one file.
- */
+/** Centralised endpoint constants so a future route move is one file. */
 export const COACH_AI_EXECUTION_PATHS = {
-  invokeClientMessage: '/coach/ai/drafts/message',
-  invokeAssignWorkout: '/coach/ai/drafts/assign-workout',
-  invokeAssignMealPlan: '/coach/ai/drafts/assign-meal-plan',
-  invokeSendNotification: '/coach/ai/drafts/send-notification',
-  listPending: '/coach/ai/drafts/pending',
+  invokeAssignWorkout: '/v1/coach/ai/draft/assign-workout',
+  invokeAssignMealPlan: '/v1/coach/ai/draft/assign-meal-plan',
+  invokeSendNotification: '/v1/coach/ai/draft/send-notification',
+  listPending: '/ai/gateway/drafts',
+  decide: (draftId: string) =>
+    `/ai/gateway/drafts/${encodeURIComponent(draftId)}`,
 } as const;
-
-function pathForCapability(c: CoachAiDraftCapability): string {
-  switch (c) {
-    case 'draft.client_message':
-      return COACH_AI_EXECUTION_PATHS.invokeClientMessage;
-    case 'draft.assign_workout':
-      return COACH_AI_EXECUTION_PATHS.invokeAssignWorkout;
-    case 'draft.assign_meal_plan':
-      return COACH_AI_EXECUTION_PATHS.invokeAssignMealPlan;
-    case 'draft.send_notification':
-      return COACH_AI_EXECUTION_PATHS.invokeSendNotification;
-  }
-}
-
-/**
- * Invoke any of the four capabilities. The `capability` argument keys
- * both the wire path and the discriminated-union payload type the
- * inbox renders.
- *
- * `clientName` is a SECOND argument because the mock needs it to
- * synthesise a draft preview; the real backend ignores it (it
- * resolves the name server-side from the subject user lookup). Mobile
- * callers always have it on the client-detail screen where the
- * invocation sheet lives, so this isn't an awkward ask.
- */
-async function invokeDraft(
-  capability: CoachAiDraftCapability,
-  req: InvokeDraftRequest,
-  clientName: string,
-): Promise<InvokeDraftResponse> {
-  if (_mockMode === 'on') {
-    const draft = makeMockDraft(capability, req, clientName);
-    mockStore.drafts.set(draft.id, draft);
-    return {
-      draftId: draft.id,
-      status: 'pending',
-      capability,
-    };
-  }
-  const res = await api.post<InvokeDraftResponse>(pathForCapability(capability), req);
-  return res.data;
-}
 
 export const coachAiExecutionApi = {
   /**
-   * `draft.client_message` — coach asks AI to draft an outbound message
-   * to a specific client. On approval, the materialiser inserts the
-   * `CoachMessage` row + dispatches the push notification.
+   * `draft.assign_workout` — AI proposes assigning an existing WorkoutPlan
+   * to a client at a scheduled time. On approval, the materialiser inserts
+   * a `ClientWorkoutAssignment` row and fires a workout-assigned push.
    */
-  invokeClientMessage: (req: InvokeDraftRequest, clientName: string) =>
-    invokeDraft('draft.client_message', req, clientName),
-
-  /** `draft.assign_workout` — AI proposes a workout assignment for the
-   *  client. On approval, materialiser inserts `ClientWorkoutAssignment`. */
-  invokeAssignWorkout: (req: InvokeDraftRequest, clientName: string) =>
-    invokeDraft('draft.assign_workout', req, clientName),
-
-  /** `draft.assign_meal_plan` — AI proposes a meal plan assignment.
-   *  On approval, materialiser inserts `DailyMealPlanAssignment`. */
-  invokeAssignMealPlan: (req: InvokeDraftRequest, clientName: string) =>
-    invokeDraft('draft.assign_meal_plan', req, clientName),
-
-  /** `draft.send_notification` — AI drafts a check-in push notification.
-   *  On approval, materialiser inserts `Notification` + dispatches push. */
-  invokeSendNotification: (req: InvokeDraftRequest, clientName: string) =>
-    invokeDraft('draft.send_notification', req, clientName),
-
-  /** Fetch the coach's pending AI drafts. Used by the inbox + by the
-   *  optimistic refresh in the invocation sheet. */
-  async listPending(): Promise<ListPendingResponse> {
+  async invokeAssignWorkout(
+    req: AssignWorkoutInvokeRequest,
+  ): Promise<InvokeDraftResponse> {
     if (_mockMode === 'on') {
-      const drafts = Array.from(mockStore.drafts.values())
-        .filter((d) => d.status === 'pending')
-        // Newest first — the inbox renders top-down.
-        .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
-      return { drafts };
-    }
-    const res = await api.get<ListPendingResponse>(COACH_AI_EXECUTION_PATHS.listPending);
-    return res.data;
-  },
-
-  /** Approve a draft. Backend's `AiApprovalService.decide('approved')`
-   *  resolves the materialiser and emits the side-effect. Returns the
-   *  materialised row's id on success. */
-  async approveDraft(draftId: string): Promise<ApproveDraftResponse> {
-    if (_mockMode === 'on') {
-      const draft = mockStore.drafts.get(draftId);
-      if (!draft) throw new Error(`Mock: draft ${draftId} not found`);
-      // Flip in-place. The mock does not materialise anything beyond
-      // marking the draft approved — real backend creates the
-      // CoachMessage / AssignedWorkout / etc. row.
-      const next = { ...draft, status: 'approved' as const };
-      mockStore.drafts.set(draftId, next);
-      return {
-        draftId,
-        status: 'approved',
-        materialisedRef: `mock-materialised-${draftId}`,
+      const payload: AssignWorkoutProposedAction = {
+        workoutPlanId: req.workoutPlanId,
+        clientId: req.clientId,
+        scheduledFor: req.scheduledFor,
+        notificationBody: req.notificationBody,
       };
+      const row = makeMockRow(
+        'draft.assign_workout',
+        payload as unknown as Record<string, unknown>,
+        req.clientId,
+      );
+      mockStore.drafts.set(row.id, row);
+      return mockInvokeResponse(row.id);
     }
-    const res = await api.post<ApproveDraftResponse>(
-      `/coach/ai/drafts/${encodeURIComponent(draftId)}/approve`,
+    const res = await api.post<InvokeDraftResponse>(
+      COACH_AI_EXECUTION_PATHS.invokeAssignWorkout,
+      req,
     );
     return res.data;
   },
 
-  /** Reject a draft. Optional reason is included in the audit log
-   *  alongside the rejection. */
-  async rejectDraft(draftId: string, body: RejectDraftRequest = {}): Promise<RejectDraftResponse> {
+  /** `draft.assign_meal_plan` — AI proposes a meal plan assignment window. */
+  async invokeAssignMealPlan(
+    req: AssignMealPlanInvokeRequest,
+  ): Promise<InvokeDraftResponse> {
+    if (_mockMode === 'on') {
+      const payload: AssignMealPlanProposedAction = {
+        dailyMealPlanId: req.dailyMealPlanId,
+        clientId: req.clientId,
+        startsOn: req.startsOn,
+        endsOn: req.endsOn,
+        notificationBody: req.notificationBody,
+      };
+      const row = makeMockRow(
+        'draft.assign_meal_plan',
+        payload as unknown as Record<string, unknown>,
+        req.clientId,
+      );
+      mockStore.drafts.set(row.id, row);
+      return mockInvokeResponse(row.id);
+    }
+    const res = await api.post<InvokeDraftResponse>(
+      COACH_AI_EXECUTION_PATHS.invokeAssignMealPlan,
+      req,
+    );
+    return res.data;
+  },
+
+  /** `draft.send_notification` — AI drafts a check-in push for the coach
+   *  to approve. The notification IS the artifact — coach approval IS
+   *  delivery (subject to OS-level mute + backend per-kind rate-limit). */
+  async invokeSendNotification(
+    req: SendNotificationInvokeRequest,
+  ): Promise<InvokeDraftResponse> {
+    if (_mockMode === 'on') {
+      const payload: SendNotificationProposedAction = {
+        clientId: req.clientId,
+        kind: req.kind,
+        body: req.body,
+        deepLink: req.deepLink,
+        channel: req.channel,
+      };
+      const row = makeMockRow(
+        'draft.send_notification',
+        payload as unknown as Record<string, unknown>,
+        req.clientId,
+      );
+      mockStore.drafts.set(row.id, row);
+      return mockInvokeResponse(row.id);
+    }
+    const res = await api.post<InvokeDraftResponse>(
+      COACH_AI_EXECUTION_PATHS.invokeSendNotification,
+      req,
+    );
+    return res.data;
+  },
+
+  /** Fetch the coach's pending AI drafts via the generic gateway endpoint.
+   *  The gateway returns rows across ALL capabilities for the tenant coach;
+   *  the inbox filters with `isStream2Capability` for renderable rows. */
+  async listPending(
+    options: { clientId?: string; limit?: number } = {},
+  ): Promise<ListPendingResponse> {
+    if (_mockMode === 'on') {
+      const drafts = Array.from(mockStore.drafts.values())
+        .filter((d) => d.status === 'pending')
+        .filter((d) => !options.clientId || d.subject_user_id === options.clientId)
+        .sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+      return { drafts };
+    }
+    const params: Record<string, string> = { status: 'pending' };
+    if (options.clientId) params.clientId = options.clientId;
+    if (options.limit) params.limit = String(options.limit);
+    const res = await api.get<ListPendingResponse | AiActionDraftRow[]>(
+      COACH_AI_EXECUTION_PATHS.listPending,
+      { params },
+    );
+    // Normalise both possible shapes (Prisma findMany returns a bare array;
+    // a future pagination wrapper would return an envelope).
+    if (Array.isArray(res.data)) return { drafts: res.data };
+    return res.data;
+  },
+
+  /** Approve a draft. PATCH the gateway decide endpoint. Returns the
+   *  updated row. On materialisation failure backend returns a 500 with
+   *  AI_MATERIALISATION_FAILED; the draft stays `pending` so the coach
+   *  can retry. */
+  async approveDraft(draftId: string, note?: string): Promise<DecideResponse> {
+    const body: DecideRequest = { decision: 'approved', note };
     if (_mockMode === 'on') {
       const draft = mockStore.drafts.get(draftId);
       if (!draft) throw new Error(`Mock: draft ${draftId} not found`);
-      const next = { ...draft, status: 'rejected' as const };
+      const next: AiActionDraftRow = {
+        ...draft,
+        status: 'approved',
+        decided_at: new Date().toISOString(),
+        decision_note: note ?? null,
+        materialised_ref: `mock-materialised-${draftId}`,
+      };
       mockStore.drafts.set(draftId, next);
-      return { draftId, status: 'rejected' };
+      return next;
     }
-    const res = await api.post<RejectDraftResponse>(
-      `/coach/ai/drafts/${encodeURIComponent(draftId)}/reject`,
+    const res = await api.patch<DecideResponse>(
+      COACH_AI_EXECUTION_PATHS.decide(draftId),
       body,
     );
     return res.data;
   },
 
-  // ─── Test-only helpers ───────────────────────────────────────────────────
-  /** Wipe the in-memory mock store. Used by tests between runs. */
+  /** Reject a draft. Optional reason surfaces in the audit log. */
+  async rejectDraft(draftId: string, note?: string): Promise<DecideResponse> {
+    const body: DecideRequest = { decision: 'rejected', note };
+    if (_mockMode === 'on') {
+      const draft = mockStore.drafts.get(draftId);
+      if (!draft) throw new Error(`Mock: draft ${draftId} not found`);
+      const next: AiActionDraftRow = {
+        ...draft,
+        status: 'rejected',
+        decided_at: new Date().toISOString(),
+        decision_note: note ?? null,
+      };
+      mockStore.drafts.set(draftId, next);
+      return next;
+    }
+    const res = await api.patch<DecideResponse>(
+      COACH_AI_EXECUTION_PATHS.decide(draftId),
+      body,
+    );
+    return res.data;
+  },
+
+  // ─── Test-only helpers (no-op outside NODE_ENV=test) ─────────────────────
+  /** Wipe the in-memory mock store. */
   _resetMockStore(): void {
+    if (process.env.NODE_ENV !== 'test') return;
     mockStore.drafts.clear();
     mockStore.nextSeq = 1;
   },
-  /** Seed the mock store with a pre-built draft. Useful for inbox
-   *  render tests that don't want to go through the invoke flow. */
-  _seedMockDraft(draft: CoachAiDraft): void {
-    mockStore.drafts.set(draft.id, draft);
+  /** Seed the mock store with a pre-built draft row. */
+  _seedMockDraft(row: AiActionDraftRow): void {
+    if (process.env.NODE_ENV !== 'test') return;
+    mockStore.drafts.set(row.id, row);
   },
 };
 
-/** Whether the API is currently running against the mock store rather
- *  than the network. Surfaced so the UI can render a one-line "Using
- *  mock backend" banner during the staging-before-backend-lands window
- *  (we choose NOT to surface the banner — silence is better than a
- *  banner the operator will see in screenshots and ask about — but
- *  the bit is here in case ops want it). */
+/** Whether the API is currently running against the mock store. Production
+ *  builds always return false. */
 export function isMockMode(): boolean {
   return _mockMode === 'on';
 }

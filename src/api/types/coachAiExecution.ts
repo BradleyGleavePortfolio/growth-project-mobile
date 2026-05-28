@@ -1,196 +1,200 @@
 /**
  * coachAiExecution — DTO types for the Stream 2 AI execution capabilities.
  *
- * Stream 2 extends the AI gateway with four "draft.*" capabilities that
- * let a coach ask the AI to propose a side-effecting action (message,
- * workout assignment, meal plan assignment, push notification). Every
- * draft requires the coach's explicit approval before the materialiser
- * emits the side-effect.
+ * R1 audit fix (P0-2): the previous DTO shapes diverged from the backend
+ * Zod schemas, response envelope, and URL paths. This rewrite mirrors the
+ * backend exactly — see:
+ *   - `src/ai/gateway/materialisers/assign-workout.materialiser.ts`
+ *   - `src/ai/gateway/materialisers/assign-meal-plan.materialiser.ts`
+ *   - `src/ai/gateway/materialisers/send-notification.materialiser.ts`
+ *   - `src/ai/coach/coach-ai-execution.controller.ts` (DTOs lines 42-123)
+ *   - `src/ai/gateway/ai-gateway.controller.ts` (list/decide endpoints)
  *
- * Wire contract (matches the backend Stream 2 PR — see
- * `canonical_docs/STREAM_2_AI_EXECUTION_SPEC.md` §2 + §4.1):
+ * Wire contract:
  *
- *   Capability                  Endpoint
- *   draft.client_message        POST /coach/ai/drafts/message
- *   draft.assign_workout        POST /coach/ai/drafts/assign-workout
- *   draft.assign_meal_plan      POST /coach/ai/drafts/assign-meal-plan
- *   draft.send_notification     POST /coach/ai/drafts/send-notification
+ *   POST /v1/coach/ai/draft/assign-workout       → draft.assign_workout
+ *   POST /v1/coach/ai/draft/assign-meal-plan     → draft.assign_meal_plan
+ *   POST /v1/coach/ai/draft/send-notification    → draft.send_notification
  *
- *   List pending                GET  /coach/ai/drafts/pending
- *   Approve                     POST /coach/ai/drafts/:id/approve
- *   Reject                      POST /coach/ai/drafts/:id/reject
+ *   GET  /ai/gateway/drafts?status=pending&clientId=&limit=
+ *   PATCH /ai/gateway/drafts/:id   body: { decision: 'approved' | 'rejected', note? }
  *
- * Status: backend PR not yet merged at build time. The mobile mocks the
- * API at the axios layer (see `src/api/coachAiExecutionApi.ts`'s
- * `_isMocked` export) and will swap to the real network once the
- * backend lands. The DTO shapes here are the source of truth the
- * backend was specced against; if the backend response diverges the
- * fix is to update these types + the axios adapter, NOT the consuming
- * UI.
+ * R1 audit fix (capability merge): `draft.client_message` was removed from
+ * the backend and merged into the existing PR #293 `draft.coach_message`
+ * surface, which is reached through `coachAi.ts` (the pre-Stream-2 module).
+ * Stream 2 mobile no longer exposes `draft.client_message`; the Ask AI
+ * sheet routes message-drafting to the existing coach-message flow.
+ *
+ * Approval surface returns the raw AiActionDraft row (snake_case Prisma
+ * fields). Mobile mirrors that shape; helpers below normalise the
+ * capability discriminant.
  */
 
-/**
- * The four Stream 2 capabilities. Names match the backend's
- * `AiActionDraft.capability` column so a single string round-trips from
- * the controller's request body, through the gateway, to the
- * materialiser registry, and back out on the pending-drafts list.
- *
- * `draft.coach_message` (existing from PR #293) is intentionally NOT
- * included — it's reachable from the messages surface, not from the
- * Stream 2 sheet on the client-detail screen.
- */
+// `draft.coach_message` is intentionally NOT included here — it predates
+// Stream 2 and is handled by `coachAi.ts`. If the unified inbox needs to
+// render a coach_message row, extend `CoachAiDraftCapability` + `previewFor`.
 export type CoachAiDraftCapability =
-  | 'draft.client_message'
   | 'draft.assign_workout'
   | 'draft.assign_meal_plan'
   | 'draft.send_notification';
 
-/** Status values surfaced on the pending-drafts list. The full
- *  backend enum includes more states (e.g. `expired`); the inbox only
- *  ever lists `pending` rows, so the runtime value will always be
- *  'pending' on a successful list response. Other states surface only
- *  as the result of approve/reject. */
+/**
+ * Statuses returned by the backend on the AiActionDraft row. The inbox only
+ * ever renders 'pending' rows; approve/reject responses surface other states.
+ */
 export type CoachAiDraftStatus =
   | 'pending'
   | 'approved'
   | 'rejected'
-  | 'expired'
-  | 'racing';
+  | 'expired';
 
-// ─── Per-capability payload shapes ──────────────────────────────────────────
-// These mirror the backend Zod schemas (see
-// `src/ai/gateway/materialisers/*.materialiser.ts` in the Stream 2 PR).
-// Keep the shapes minimal — the materialiser is the source of truth and
-// re-validates the payload at materialise time.
+// ─── Per-capability proposed_action payload shapes ──────────────────────────
+//
+// Structured fields the backend Zod schemas demand at draft creation AND
+// re-validate at materialisation. Field names + types MUST match exactly.
 
-/** Outbound coach → client direct message proposed by the AI. */
-export interface ClientMessagePayload {
+/** Payload for `draft.assign_workout`. */
+export interface AssignWorkoutProposedAction {
+  /** Existing WorkoutPlan UUID owned by the tenant coach. */
+  workoutPlanId: string;
+  /** Subject client UUID. */
   clientId: string;
-  /** 1..4000 chars after trim. Never whitespace-only. */
+  /** ISO 8601 date-time when the workout is due. */
+  scheduledFor: string;
+  /** Optional override copy for the push notification (≤160 chars). */
+  notificationBody?: string;
+}
+
+/** Payload for `draft.assign_meal_plan`. */
+export interface AssignMealPlanProposedAction {
+  /** Existing DailyMealPlan UUID owned by the tenant coach. */
+  dailyMealPlanId: string;
+  /** Subject client UUID. */
+  clientId: string;
+  /** Plan window start (YYYY-MM-DD). */
+  startsOn: string;
+  /** Optional plan window end (YYYY-MM-DD, inclusive). Must be ≥ startsOn. */
+  endsOn?: string;
+  /** Optional override copy for the push notification (≤160 chars). */
+  notificationBody?: string;
+}
+
+/** Payload for `draft.send_notification`. */
+export interface SendNotificationProposedAction {
+  /** Subject client UUID. */
+  clientId: string;
+  /** Notification kind tag (1-64 chars, e.g. 'coach_nudge'). */
+  kind: string;
+  /** Notification body text shown to the client (1-160 chars). */
   body: string;
+  /** Optional tgp:// deep link (≤512 chars). */
+  deepLink?: string;
+  /** Delivery channel. Backend defaults to 'push' when omitted. */
+  channel?: 'push' | 'inapp';
 }
 
-/** A workout assignment the AI is proposing for a client. The backend
- *  materialiser inserts the actual `ClientWorkoutAssignment` row. We
- *  carry only the surface fields the coach reviews in the inbox card. */
-export interface AssignWorkoutPayload {
+// ─── Invoke request envelopes ───────────────────────────────────────────────
+//
+// Camel-case keys mirror the controller DTOs (`coach-ai-execution.controller.ts:42-123`).
+// NestJS class-validator unmarshals JSON keys as-is, so camelCase round-trips.
+
+export interface AssignWorkoutInvokeRequest {
+  workoutPlanId: string;
   clientId: string;
-  /** Short human-readable name. Drives the inbox card title. */
-  workoutName: string;
-  /** Number of weeks the assignment covers. Used in the card subtitle. */
-  weekCount: number;
-  /** Exercise count on day 1 — gives the coach a single glanceable
-   *  cue for how dense the first session is. */
-  day1ExerciseCount: number;
-  /** Optional rationale the model emitted. Kept short; the inbox card
-   *  truncates and the full string is available in a detail screen. */
-  rationale?: string;
-}
-
-/** A meal plan assignment proposed by the AI. */
-export interface AssignMealPlanPayload {
-  clientId: string;
-  planName: string;
-  /** Day count of the plan (typically 7). */
-  dayCount: number;
-  /** Macro summary line for the inbox card — e.g. "180p / 220c / 70f". */
-  macroSummary: string;
-  rationale?: string;
-}
-
-/** A push notification proposed by the AI. */
-export interface SendNotificationPayload {
-  clientId: string;
-  /** 1..120 chars. */
-  title: string;
-  /** 1..240 chars. */
-  body: string;
-  /** Optional ISO8601 scheduled-for time. Null/undefined means send-now. */
-  scheduledFor?: string | null;
-}
-
-/** Discriminated-union shape returned by `listPending` so the inbox can
- *  switch on `capability` to pick the right card renderer. */
-export type CoachAiDraft =
-  | (CoachAiDraftBase & { capability: 'draft.client_message'; payload: ClientMessagePayload })
-  | (CoachAiDraftBase & { capability: 'draft.assign_workout'; payload: AssignWorkoutPayload })
-  | (CoachAiDraftBase & { capability: 'draft.assign_meal_plan'; payload: AssignMealPlanPayload })
-  | (CoachAiDraftBase & { capability: 'draft.send_notification'; payload: SendNotificationPayload });
-
-export interface CoachAiDraftBase {
-  /** Server-assigned UUID. The approve/reject endpoints key off this. */
-  id: string;
-  status: CoachAiDraftStatus;
-  /** Mirrors `tenant_coach_id` from the backend — present on every
-   *  Stream 2 draft because the four new capabilities are coach-scoped. */
-  tenantCoachId: string;
-  /** Subject client — never null for Stream 2 (every capability targets
-   *  exactly one client). */
-  subjectClientId: string;
-  /** Display name for the client. Server resolves this at list-time so
-   *  the inbox doesn't have to fan out a per-row user lookup. */
-  subjectClientName: string;
-  /** ISO8601. Used for the per-card timestamp. */
-  createdAt: string;
-  /** Optional 1-line model-emitted rationale. Surfaced as the card
-   *  subtitle when the per-capability payload doesn't carry its own. */
-  rationale?: string | null;
-}
-
-// ─── Per-endpoint request / response shapes ─────────────────────────────────
-
-/** Common shape for the four invocation requests. The coach's prompt is
- *  the only user-supplied free text; everything else (clientId, tenant
- *  coach id) is bound server-side from the JWT + path params. */
-export interface InvokeDraftRequest {
-  clientId: string;
-  /** Coach's natural-language prompt. 1..500 chars. */
+  scheduledFor: string;
   prompt: string;
+  notificationBody?: string;
 }
+
+export interface AssignMealPlanInvokeRequest {
+  dailyMealPlanId: string;
+  clientId: string;
+  startsOn: string;
+  endsOn?: string;
+  prompt: string;
+  notificationBody?: string;
+}
+
+export interface SendNotificationInvokeRequest {
+  clientId: string;
+  kind: string;
+  body: string;
+  prompt: string;
+  deepLink?: string;
+  channel?: 'push' | 'inapp';
+}
+
+// ─── Invoke response envelope (matches gateway draftResponse) ───────────────
+//
+// `coach-ai-execution.controller.ts:279-295` returns:
+//   { request_id, audit_id, approval: { required, status, draft_id } }
+
+export type ApprovalStatus =
+  | 'not_required'
+  | 'pending'
+  | 'approved'
+  | 'rejected'
+  | 'expired';
 
 export interface InvokeDraftResponse {
-  /** The draft id the materialiser will use as its idempotency key. */
-  draftId: string;
-  /** Initial status — typically 'pending'. */
+  request_id: string;
+  audit_id: string;
+  approval: {
+    required: boolean;
+    status: ApprovalStatus;
+    draft_id: string | null;
+  };
+}
+
+// ─── List pending / decide response shapes ─────────────────────────────────
+//
+// `ai-gateway.controller.ts` returns the raw Prisma row. AiActionDraft
+// fields are snake_case; `payload` is the structured JSON.
+
+export interface AiActionDraftRow {
+  id: string;
+  /** Includes Stream 2 capabilities AND pre-Stream-2 (e.g. draft.coach_message). */
+  capability: string;
   status: CoachAiDraftStatus;
-  /** Mirror of the chosen capability so the inbox can refresh
-   *  immediately without re-fetching. */
-  capability: CoachAiDraftCapability;
+  tenant_coach_id: string | null;
+  subject_user_id: string | null;
+  requester_id: string | null;
+  created_at: string;
+  decided_at?: string | null;
+  decided_by_id?: string | null;
+  decision_note?: string | null;
+  materialised_ref?: string | null;
+  payload: Record<string, unknown>;
 }
 
 export interface ListPendingResponse {
-  drafts: CoachAiDraft[];
+  drafts: AiActionDraftRow[];
 }
 
-export interface ApproveDraftResponse {
-  draftId: string;
-  status: CoachAiDraftStatus;
-  /** The materialised row's id (e.g. CoachMessage.id, AssignedWorkout.id).
-   *  Null only on `racing` outcomes where the materialiser refused to
-   *  commit the side-effect — the UI should re-fetch the inbox. */
-  materialisedRef?: string | null;
+export interface DecideRequest {
+  decision: 'approved' | 'rejected';
+  note?: string;
 }
 
-export interface RejectDraftRequest {
-  /** Optional 1..240 char reason — surfaces in the audit log. */
-  reason?: string;
+/** Decide returns the updated row. */
+export type DecideResponse = AiActionDraftRow;
+
+// ─── Display helpers ────────────────────────────────────────────────────────
+
+/** Whether the row's capability belongs to Stream 2 and the inbox knows how
+ *  to render it. The inbox tolerates unknown capabilities so an older
+ *  draft.coach_message row co-existing in the queue doesn't blow up. */
+export function isStream2Capability(c: string): c is CoachAiDraftCapability {
+  return (
+    c === 'draft.assign_workout' ||
+    c === 'draft.assign_meal_plan' ||
+    c === 'draft.send_notification'
+  );
 }
 
-export interface RejectDraftResponse {
-  draftId: string;
-  status: CoachAiDraftStatus;
-}
-
-// ─── Display helpers (pure functions — no React deps) ───────────────────────
-// Kept in the types module so tests + the inbox + the sheet can share
-// the same label resolution without re-implementing it.
-
-/** Human-readable card title per capability. Centralised so a future
- *  copy tweak only changes one file. */
+/** Human-readable card title per capability. */
 export function capabilityLabel(c: CoachAiDraftCapability): string {
   switch (c) {
-    case 'draft.client_message':
-      return 'Message draft';
     case 'draft.assign_workout':
       return 'Workout suggestion';
     case 'draft.assign_meal_plan':
@@ -200,29 +204,54 @@ export function capabilityLabel(c: CoachAiDraftCapability): string {
   }
 }
 
-/** One-line preview string for a draft, used by the inbox card subtitle
- *  and by the sheet's optimistic "submitted" state. The function is
- *  intentionally narrow — long previews live on the detail screen
- *  (when/if we add one); the inbox stays a single line per card. */
-export function previewFor(draft: CoachAiDraft): string {
-  switch (draft.capability) {
-    case 'draft.client_message':
-      return truncate(draft.payload.body, 120);
-    case 'draft.assign_workout':
-      return `${draft.payload.workoutName} — ${draft.payload.weekCount}w, day 1 has ${draft.payload.day1ExerciseCount} exercises`;
-    case 'draft.assign_meal_plan':
-      return `${draft.payload.planName} — ${draft.payload.dayCount}d, ${draft.payload.macroSummary}`;
-    case 'draft.send_notification':
-      return `${draft.payload.title} — ${truncate(draft.payload.body, 80)}`;
+/**
+ * One-line preview string for a Stream 2 draft. Reads from `row.payload`
+ * via the per-capability structured-payload type. Callers should pre-filter
+ * with `isStream2Capability`.
+ */
+export function previewFor(row: AiActionDraftRow): string {
+  switch (row.capability) {
+    case 'draft.assign_workout': {
+      const p = row.payload as Partial<AssignWorkoutProposedAction>;
+      const when = p.scheduledFor ? formatScheduledFor(p.scheduledFor) : 'unscheduled';
+      const note = p.notificationBody ? ` — ${truncate(p.notificationBody, 80)}` : '';
+      return `Workout · ${when}${note}`;
+    }
+    case 'draft.assign_meal_plan': {
+      const p = row.payload as Partial<AssignMealPlanProposedAction>;
+      const window =
+        p.startsOn && p.endsOn
+          ? `${p.startsOn} → ${p.endsOn}`
+          : p.startsOn
+            ? `from ${p.startsOn}`
+            : 'no window';
+      const note = p.notificationBody ? ` — ${truncate(p.notificationBody, 80)}` : '';
+      return `Meal plan · ${window}${note}`;
+    }
+    case 'draft.send_notification': {
+      const p = row.payload as Partial<SendNotificationProposedAction>;
+      return p.body ? truncate(p.body, 120) : '(no body)';
+    }
+    default:
+      return '';
   }
 }
 
-/** Truncate a string at the nearest word boundary at or below `max`
- *  chars and append a Unicode ellipsis. Used by `previewFor`. */
 function truncate(s: string, max: number): string {
   if (s.length <= max) return s;
   const slice = s.slice(0, max).trimEnd();
   const lastSpace = slice.lastIndexOf(' ');
   const cut = lastSpace > max - 20 ? slice.slice(0, lastSpace) : slice;
   return `${cut}…`;
+}
+
+function formatScheduledFor(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 }
