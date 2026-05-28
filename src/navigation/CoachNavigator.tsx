@@ -71,6 +71,9 @@ import ClientInsightScreen from '../screens/coach/ClientInsightScreen';
 import DeleteAccountScreen from '../screens/settings/DeleteAccountScreen';
 // Stream 1 — AI credit-pack checkout (Stripe webview B2B carve-out).
 import CreditPackCheckoutScreen from '../screens/coach/CreditPackCheckoutScreen';
+// Stream 2 — Coach AI execution drafts inbox (draft.client_message,
+// draft.assign_workout, draft.assign_meal_plan, draft.send_notification).
+import PendingAiDraftsScreen from '../screens/coach/PendingAiDraftsScreen';
 // TestFlight coach SaaS — new business & team surfaces + invite redeemer drilldown.
 import CoachBusinessMetricsScreen from '../screens/coach/CoachBusinessMetricsScreen';
 // Payments — backend PRs #215 (package CRUD) and #216 (earnings/payouts).
@@ -146,6 +149,9 @@ export type ClientsStackParamList = {
   AIMealPlanDraft: { draftId: string; clientId: string; clientName: string };
   /** Coach AI v1 — render an AI-generated weekly insight for a client. */
   ClientInsight:   { draftId: string; clientId: string; clientName: string };
+  /** Stream 2 — inbox of pending AI execution drafts (messages,
+   *  workouts, meal plans, notifications). */
+  PendingAiDrafts: undefined;
   /** Phase 9 — Global notification center. */
   NotificationCenter: undefined;
   /** Phase 9 — Notification preferences. */
@@ -328,6 +334,11 @@ function ClientsStackNavigator() {
       <ClientsStack.Screen
         name="ClientInsight"
         component={ClientInsightScreen}
+      />
+      {/* Stream 2 — pending AI execution drafts inbox. */}
+      <ClientsStack.Screen
+        name="PendingAiDrafts"
+        component={PendingAiDraftsScreen}
       />
       {/* Phase 9 — Notification center screens */}
       <ClientsStack.Screen
