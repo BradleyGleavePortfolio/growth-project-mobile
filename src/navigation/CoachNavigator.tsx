@@ -69,6 +69,8 @@ import AIMealPlanDraftScreen from '../screens/coach/AIMealPlanDraftScreen';
 import ClientInsightScreen from '../screens/coach/ClientInsightScreen';
 // Phase 10 — GDPR right to erasure.
 import DeleteAccountScreen from '../screens/settings/DeleteAccountScreen';
+// Stream 1 — AI credit-pack checkout (Stripe webview B2B carve-out).
+import CreditPackCheckoutScreen from '../screens/coach/CreditPackCheckoutScreen';
 // TestFlight coach SaaS — new business & team surfaces + invite redeemer drilldown.
 import CoachBusinessMetricsScreen from '../screens/coach/CoachBusinessMetricsScreen';
 // Payments — backend PRs #215 (package CRUD) and #216 (earnings/payouts).
@@ -194,6 +196,9 @@ export type SettingsStackParamList = {
   CoachEarnings: undefined;
   /** iMessage-grade DM — manage blocked users from coach Settings. */
   BlockedUsers: undefined;
+  /** Stream 1 — AI credit-pack checkout. `preselect` lets callers route
+   *  the coach into a pre-selected tier or the custom-amount flow. */
+  CreditPackCheckout: { preselect?: number | 'custom' } | undefined;
 };
 
 /** Phase 11 / Track 7 — team management stack param list. */
@@ -406,6 +411,11 @@ function SettingsStackNavigator() {
       />
       {/* iMessage-grade DM — Apple 1.2 compliance blocked-users management. */}
       <SettingsStack.Screen name="BlockedUsers" component={BlockedUsersScreen} />
+      {/* Stream 1 — AI credit pack checkout (Stripe webview, B2B carve-out). */}
+      <SettingsStack.Screen
+        name="CreditPackCheckout"
+        component={CreditPackCheckoutScreen}
+      />
     </SettingsStack.Navigator>
   );
 }
