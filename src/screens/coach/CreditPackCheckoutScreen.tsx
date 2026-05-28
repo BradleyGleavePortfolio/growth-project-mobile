@@ -393,8 +393,16 @@ function SuccessReceipt({
   const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fade = useRef(new Animated.Value(0)).current;
   const iconScale = useRef(new Animated.Value(1)).current;
+  // mounted ref: the icon pulse runs as the fade-in's onComplete callback,
+  // which can fire AFTER the component unmounts in tests (or in
+  // production if the coach navigates away mid-fade). Without this guard
+  // the Animated.sequence would attempt to attach to a detached fiber
+  // and emit a noisy `Unable to find node on an unmounted component`
+  // warning that Jest treats as a test failure.
+  const mounted = useRef(true);
 
   React.useEffect(() => {
+    mounted.current = true;
     // Phase 1: opacity fade-in.
     Animated.timing(fade, {
       toValue: 1,
@@ -405,7 +413,10 @@ function SuccessReceipt({
       // Phase 2: single icon pulse. 600ms total (no token at this exact
       // value — `base` is 400 and `slow` is 800; doctrine §5 allows
       // explicit values when between tokens. The pulse is intentionally
-      // subtler than a `slow` reveal but more deliberate than a snap.).
+      // subtler than a `slow` reveal but more deliberate than a snap).
+      // Guarded by `mounted` so an unmount during the fade does not
+      // attach a follow-on animation to a detached fiber.
+      if (!mounted.current) return;
       Animated.sequence([
         Animated.timing(iconScale, {
           toValue: 1.02,
@@ -424,6 +435,7 @@ function SuccessReceipt({
 
     dismissTimer.current = setTimeout(onDone, 1800);
     return () => {
+      mounted.current = false;
       if (dismissTimer.current) clearTimeout(dismissTimer.current);
     };
   }, [fade, iconScale, onDone]);
