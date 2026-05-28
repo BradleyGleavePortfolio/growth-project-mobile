@@ -35,6 +35,8 @@ import { ProgressTab } from './client-detail/ProgressTab';
 import { PlanFormModal } from './client-detail/PlanFormModal';
 import { NudgeModal } from './client-detail/NudgeModal';
 import { useClientDetailData } from './client-detail/useClientDetailData';
+// Stream 2 — AskAi sheet for the four execution capabilities.
+import { AskAiActionSheet } from '../../components/coach/ai-execution/AskAiActionSheet';
 
 export default function ClientDetailScreen({ navigation, route }: Props) {
   const { colors } = useTheme();
@@ -77,6 +79,11 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
   const [nudgeError, setNudgeError] = useState('');
   const [nudgeSuccess, setNudgeSuccess] = useState(false);
   const [archiveBusy, setArchiveBusy] = useState(false);
+  // Stream 2 — Ask-AI sheet visibility. Opens via the SummaryTab "Ask
+  // AI" pill, closes either via the X icon, scrim tap, or after a
+  // successful submit (the sheet calls onClose then onAfterSubmit so
+  // the screen can route to the pending-drafts inbox).
+  const [askAiVisible, setAskAiVisible] = useState(false);
 
   // Server-side meal plans (Tier 2). The legacy local-SQLite `mealPlanDb`
   // shim was removed in the nutrition P0 cleanup — Grocery / Shopping /
@@ -440,6 +447,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
               })
             }
             onOpenWorkoutBuilder={() => navigation.navigate('CoachWorkoutBuilder', undefined)}
+            onOpenAskAi={() => setAskAiVisible(true)}
             colors={colors}
             styles={styles}
           />
@@ -557,6 +565,18 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
         onSend={sendNudge}
         colors={colors}
         styles={styles}
+      />
+
+      {/* Stream 2 — Ask-AI sheet for the four execution capabilities.
+          Mounted always; `visible` controls render. On a successful
+          submit the sheet closes and we navigate to the pending-drafts
+          inbox so the coach sees their new draft land. */}
+      <AskAiActionSheet
+        visible={askAiVisible}
+        clientId={clientId}
+        clientName={route.params.clientName}
+        onClose={() => setAskAiVisible(false)}
+        onAfterSubmit={() => navigation.navigate('PendingAiDrafts')}
       />
     </View>
   );
