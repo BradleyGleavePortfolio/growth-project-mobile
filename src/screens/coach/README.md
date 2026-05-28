@@ -23,6 +23,24 @@ Everything a signed-in `coach` user sees. Mounted under `CoachNavigator` (5 tabs
 | `ProgramTemplatesScreen.tsx` | Authoring surface for reusable program / meal-plan templates. |
 | `CoachBillingScreen.tsx` | Subscription state surface. Renders a status pill (`active` / `trialing` / `past_due` / `paused` / `canceled` / `none`), the plan, seat usage, and renewal / trial dates when present. The CTA opens the backend portal session URL in `expo-web-browser`'s in-app sheet and refreshes status when the sheet closes. Shows an explicit empty state on `404` (backend not yet shipped) instead of a vague spinner. Reachable as `Settings → Subscription → Billing & access`. |
 | `SettingsScreen.tsx` | Coach-side settings: business profile (name, bio), notification preferences (server-backed via `notificationsApi.getPreferences` / `updatePreferences`), local haptics toggle, password change (Supabase), **Subscription → Billing & access** entry, **Privacy & Data** section linking to Trust Center, account deletion, and sign out. Polls `usersApi.getAccountStatus` on mount and renders either *Delete account* or *Deletion scheduled — tap to cancel* with the permanent-on date when present. The static *Theme: Dark* row is gone — the app ships a single bone/forest light theme, and a row that didn't reflect that was untrue chrome. |
+| `CreditPackCheckoutScreen.tsx` | Stripe-webview entry point for AI credit packs (Stream 1). Two-phase flow: selection (pack tiers + custom amount, bounded by `pack_options_cents` / `custom_pack_bounds_cents` from the budget query) then webview (`react-native-webview` pointing at the minted Stripe Checkout URL with the same origin allow-list + deep-link parser as `BrandedCheckoutWebViewScreen`). B2B exemption applies — Apple App Review Rule 3.1.3(b)/(e); NEVER use IAP for these packs. Success state is `SuccessReceipt` (quiet-luxury — see "Success state" below). |
+
+### Success state — `SuccessReceipt`
+
+The credit-pack purchase confirmation uses the `SuccessReceipt` component (defined inline at the bottom of `CreditPackCheckoutScreen.tsx`). It is the pattern any future purchase-confirm surface on the coach side should follow.
+
+Why this pattern exists: `docs/QUIET_LUXURY_DOCTRINE.md` §3 bans confetti, particle bursts, and full-screen celebration overlays. An earlier draft of the screen rendered a particle burst that violated the doctrine and tripped `src/__tests__/quietLuxuryDoctrine.test.ts`. The Round-3 audit + operator decision pulled it.
+
+What it does instead:
+
+- **Motion**: opacity fade-in 0→1 over `motion.duration.base` (400ms) with `Easing.out(Easing.cubic)`. After the fade settles, ONE icon pulse: scale 1.0 → 1.02 → 1.0 over 600ms total (300ms out, 300ms back) with `Easing.inOut(Easing.cubic)`. Both animations use the native driver. Nothing else animates — no translateY, no rotate, no springs, no particles.
+- **Color**: single forest accent (`colors.success` on the check icon). No gold, no primary. Background stays bone (`colors.background`). The single-accent rule comes from doctrine §5.
+- **Typography**: pulled from `theme/tokens`. `typography.h2` (Cormorant Garamond 400) for the title; `typography.body` for the body line; `typography.bodySmall` muted for receipt-row labels; `typography.bodyMd` ink for receipt-row values. Display weight never exceeds 500 per doctrine §1.
+- **Receipt rows**: hairline divider, then two metadata rows in the visual register of an Amex statement or a Loro Piana confirmation page. "New balance" shows the *snapshot* projection (previous remaining cents + amount paid) captured BEFORE the budget query is invalidated, so the value is deterministic and never races with the backend webhook. Falls back to the pack amount alone when the previous balance was unavailable. "Receipt" reads "Sent to your inbox" (Stripe handles email delivery; we do not fetch it client-side).
+- **Auto-dismiss**: 1800ms after mount the wrapper calls `onDone()` which routes the coach back to Coach Home. Glanceable, not lingerable. Coach Home's invalidated budget query will surface the confirmed balance once the backend webhook applies the credit.
+- **Accessibility**: each metadata row carries a single `accessibilityLabel` composing label + value ("New balance, $25.00") so screen readers read the row as one coherent line rather than two disjoint nodes.
+
+If you add another purchase-confirm surface (e.g. a future subscription upgrade flow), copy this pattern. Do not reintroduce confetti, springs, or any motion outside the fade + single pulse.
 
 ## Data flow
 
