@@ -21,23 +21,13 @@ jobs:
       - name: Install deps
         run: npm install
 
-      - name: Validate release readiness (placeholders, store URLs, version)
-        # Early-fail gate — runs first so placeholder regressions are caught
-        # before slower typecheck/lint/test steps. In --release mode the
-        # validator exits zero even when known-pending items (SHA256
-        # fingerprint, null store URLs) are present; those are written to
-        # RELEASE_BLOCKER.md instead. Genuinely broken config (wrong package
-        # name, malformed URL, missing plugin) always exits non-zero.
-        run: npm run validate:release
-
-      - name: Validate release readiness (placeholders, store URLs, version)
-        # Early-fail gate — runs first so placeholder regressions are caught
-        # before slower typecheck/lint/test steps. In --release mode the
-        # validator exits zero even when known-pending items (SHA256
-        # fingerprint, null store URLs) are present; those are written to
-        # RELEASE_BLOCKER.md instead. Genuinely broken config (wrong package
-        # name, malformed URL, missing plugin) always exits non-zero.
-        run: npm run validate:release
+      - name: Validate app config (default mode — catches genuine breakage)
+        # Always runs. Catches the things that always have to be true:
+        # missing custom scheme, mismatched bundle ids, stale Google client
+        # IDs in .env.example, missing expo-notifications plugin, etc.
+        # Placeholders / null store URLs are allowed in this mode — those
+        # are pending-but-expected and only block on release branches.
+        run: npm run validate:config
 
       - name: Lint
         run: npm run lint --if-present
@@ -45,8 +35,23 @@ jobs:
       - name: Typecheck
         run: npx tsc --noEmit
 
-      - name: Validate app config
-        run: npm run validate:config --if-present
-
       - name: Test
         run: npm test --if-present -- --ci --passWithNoTests
+
+      - name: Validate release readiness (release branches only)
+        # Hard-fail gate — runs ONLY on release/* branches, where we are
+        # about to submit to the App Store / Play Store. Treats every
+        # REPLACE_WITH_* placeholder and null store URL as a hard error
+        # and writes RELEASE_BLOCKER.md.
+        #
+        # Why this is branch-scoped: PR #192 round-1 P2-3 hardened
+        # --release to exit non-zero on pending items, which is correct
+        # for a release branch but red-pen-marked main and every feature
+        # PR for weeks while we still didn't have the real Play App
+        # Signing SHA256 / Play Store URL. Honest CI signal on every PR
+        # > vestigial submission-readiness signal on every push.
+        #
+        # When you cut release/v1.0.0 the gate will fire and surface the
+        # remaining release blockers in RELEASE_BLOCKER.md.
+        if: startsWith(github.ref, 'refs/heads/release/') || startsWith(github.base_ref, 'release/')
+        run: npm run validate:release
