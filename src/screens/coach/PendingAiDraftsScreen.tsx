@@ -2,22 +2,25 @@
  * PendingAiDraftsScreen — Stream 2 inbox of pending AI drafts.
  *
  * Lists every `AiActionDraft` row in `status='pending'` for the current
- * coach across all four Stream 2 capabilities (and the existing
- * `draft.coach_message` from PR #293 — the inbox is capability-aware
- * and ignores anything it doesn't have a card for). Each card renders
- * a capability-specific preview, an Approve, and a Reject button.
+ * coach. The gateway returns rows across ALL capabilities; we filter
+ * with `isStream2Capability` so pre-Stream-2 rows (draft.coach_message)
+ * still surface in their own surface and don't show up unhandled here.
  *
- * Doctrine compliance (post-Stream-1 round 3/4):
- *   - Single forest accent on the Approve button. Reject is a quiet
- *     destructive (ink text, hairline border — NOT a red flood).
- *   - No emoji, no exclamation marks, no celebration overlays. The
- *     "Sent by AI" badge after approval is a small caption ("AI draft"),
- *     not a celebratory pill (doctrine §3 / §5).
- *   - Typography pulled from `theme/tokens` — display weights ≤500.
+ * Each card renders a capability-specific preview, Approve, and Reject.
  *
- * Polling: focus-gated 30s refetch (`usePendingAiDrafts` + `useIsFocused`).
- * When the screen blurs, the React Query interval suspends; on focus, the
- * cached list renders immediately and a fresh fetch lands within ~1s.
+ * Doctrine compliance:
+ *   - Single forest accent on Approve. Reject is a quiet destructive (ink
+ *     text, hairline border — not a red flood).
+ *   - No emoji, no exclamation marks, no celebration overlays. "AI draft"
+ *     caption badge after approval, not a celebratory pill.
+ *
+ * Defence-in-depth role guard (R1 audit fix P2-2): renders an inert
+ * "Restricted" state if the authenticated user role is not coach/owner.
+ * Structural gate (CoachNavigator only mounts for coaches) remains the
+ * primary defence; this is the second layer.
+ *
+ * Polling: focus-gated 30s refetch via `usePendingAiDrafts` +
+ * `useIsFocused`.
  */
 
 import React, { useCallback, useMemo } from 'react';
@@ -35,39 +38,44 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTheme, type ThemeColors } from '../../theme/ThemeProvider';
 import { typography, radius, spacing } from '../../theme/tokens';
 import ErrorBoundary from '../../components/ErrorBoundary';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import {
   usePendingAiDrafts,
   COACH_AI_PENDING_DRAFTS_QUERY_KEY,
 } from '../../hooks/usePendingAiDrafts';
 import {
   capabilityLabel,
+  isStream2Capability,
   previewFor,
-  type CoachAiDraft,
+  type AiActionDraftRow,
+  type CoachAiDraftCapability,
 } from '../../api/types/coachAiExecution';
 import { coachAiExecutionApi } from '../../api/coachAiExecutionApi';
 
-/** Inbox screen registered in CoachNavigator under ClientsStack as
- *  `PendingAiDrafts`. Reached from the ClientDetail Summary tab via
- *  the `<AskAiCta>` row, OR from the Coach Home dashboard via a
- *  future "AI drafts (N)" pill (out of scope for this PR). */
+/** Roles allowed to see + decide AI drafts. Mirrors backend
+ *  `@Roles('coach', 'owner')` on the gateway list/decide endpoints. */
+const ALLOWED_ROLES = new Set(['coach', 'owner']);
+
 export default function PendingAiDraftsScreen(): React.ReactElement {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const isFocused = useIsFocused();
   const queryClient = useQueryClient();
+  const user = useCurrentUser();
 
-  // P0-equivalent from Stream 1 round 1 (the unread-polling bug):
-  // focus-gated polling means the inbox does not poll when the coach
-  // is on a different screen. The hook reads `enabled` each render so
-  // the focus toggle flows through without a stale-closure trap.
-  const query = usePendingAiDrafts({ enabled: isFocused });
+  // Defence-in-depth role guard. CoachNavigator is the primary gate; this
+  // layer keeps an inert surface even if the screen is reached through a
+  // deep link refactor that bypasses the navigator-level role split.
+  const allowed = user?.role !== undefined && ALLOWED_ROLES.has(user.role);
+
+  // Polling is also gated on `allowed` so a non-coach session never even
+  // hits the gateway list endpoint (which would 403 anyway, but no point
+  // burning a roundtrip).
+  const query = usePendingAiDrafts({ enabled: allowed && isFocused });
 
   const approveMutation = useMutation({
     mutationFn: (draftId: string) => coachAiExecutionApi.approveDraft(draftId),
     onSettled: () => {
-      // Both branches (success + error) re-fetch — on success the row
-      // disappears from the pending list; on error the row stays
-      // pending and the coach can retry.
       queryClient.invalidateQueries({ queryKey: COACH_AI_PENDING_DRAFTS_QUERY_KEY });
     },
   });
@@ -88,9 +96,32 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
     [rejectMutation],
   );
 
-  const drafts = query.data?.drafts ?? [];
-  const isMutating =
-    approveMutation.isPending || rejectMutation.isPending;
+  if (!allowed) {
+    return (
+      <ErrorBoundary>
+        <View style={styles.root} testID="pending-ai-drafts-screen-restricted">
+          <View style={styles.emptyState}>
+            <Ionicons
+              name="lock-closed-outline"
+              size={48}
+              color={colors.textMuted}
+              style={styles.emptyIcon}
+            />
+            <Text style={styles.emptyTitle}>Restricted</Text>
+            <Text style={styles.emptyBody}>
+              This view is only available to coach accounts.
+            </Text>
+          </View>
+        </View>
+      </ErrorBoundary>
+    );
+  }
+
+  const allRows = query.data?.drafts ?? [];
+  // Render only Stream 2 capabilities. Older draft.coach_message rows live
+  // in their own surface.
+  const renderable = allRows.filter((r) => isStream2Capability(r.capability));
+  const isMutating = approveMutation.isPending || rejectMutation.isPending;
 
   return (
     <ErrorBoundary>
@@ -103,11 +134,12 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
         </View>
 
         <FlatList
-          data={drafts}
+          data={renderable}
           keyExtractor={(d) => d.id}
           renderItem={({ item }) => (
             <DraftCard
               draft={item}
+              capability={item.capability as CoachAiDraftCapability}
               styles={styles}
               colors={colors}
               onApprove={onApprove}
@@ -115,7 +147,9 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
               disabled={isMutating}
             />
           )}
-          contentContainerStyle={drafts.length === 0 ? styles.emptyContainer : styles.listContainer}
+          contentContainerStyle={
+            renderable.length === 0 ? styles.emptyContainer : styles.listContainer
+          }
           refreshControl={
             <RefreshControl
               refreshing={query.isFetching}
@@ -157,7 +191,8 @@ export default function PendingAiDraftsScreen(): React.ReactElement {
 // ─── Card ─────────────────────────────────────────────────────────────────
 
 interface DraftCardProps {
-  draft: CoachAiDraft;
+  draft: AiActionDraftRow;
+  capability: CoachAiDraftCapability;
   styles: ReturnType<typeof makeStyles>;
   colors: ThemeColors;
   onApprove: (draftId: string) => void;
@@ -165,52 +200,47 @@ interface DraftCardProps {
   disabled: boolean;
 }
 
-/**
- * Per-capability card. The switch on `draft.capability` picks the
- * preview body; the surrounding chrome (badge, header, action row)
- * is shared so the inbox stays visually coherent even as new
- * capabilities are added.
- */
 function DraftCard({
   draft,
+  capability,
   styles,
   colors,
   onApprove,
   onReject,
   disabled,
 }: DraftCardProps): React.ReactElement {
-  const a11yBase = `${capabilityLabel(draft.capability)} for ${draft.subjectClientName}`;
+  const subjectLabel = draft.subject_user_id
+    ? `client ${draft.subject_user_id.slice(0, 8)}`
+    : 'client';
+  const a11yBase = `${capabilityLabel(capability)} for ${subjectLabel}`;
   return (
     <View
       style={styles.card}
       accessible
       accessibilityLabel={a11yBase}
-      testID={`ai-draft-card-${draft.capability}`}
+      testID={`ai-draft-card-${capability}`}
     >
       <View style={styles.cardHeaderRow}>
         <View style={styles.cardHeaderIconWrap}>
           <Ionicons
-            name={iconForCapability(draft.capability)}
+            name={iconForCapability(capability)}
             size={18}
             color={colors.primary}
           />
         </View>
         <View style={styles.cardHeaderTextWrap}>
-          <Text style={styles.cardTitle}>{capabilityLabel(draft.capability)}</Text>
-          <Text style={styles.cardSubtitle}>
-            For {draft.subjectClientName}
-          </Text>
+          <Text style={styles.cardTitle}>{capabilityLabel(capability)}</Text>
+          <Text style={styles.cardSubtitle}>For {subjectLabel}</Text>
         </View>
         <View style={styles.aiBadge}>
           <Text style={styles.aiBadgeText}>AI draft</Text>
         </View>
       </View>
 
-      {/* Capability-specific preview body. Each variant pulls from the
-          discriminated CoachAiDraft union so TS narrows the payload
-          shape correctly. */}
       <View style={styles.cardPreviewWrap}>
-        <CardPreview draft={draft} styles={styles} />
+        <Text style={styles.previewBody} numberOfLines={4}>
+          {previewFor(draft)}
+        </Text>
       </View>
 
       <View style={styles.cardActionRow}>
@@ -239,71 +269,8 @@ function DraftCard({
   );
 }
 
-interface CardPreviewProps {
-  draft: CoachAiDraft;
-  styles: ReturnType<typeof makeStyles>;
-}
-
-function CardPreview({ draft, styles }: CardPreviewProps): React.ReactElement {
-  switch (draft.capability) {
-    case 'draft.client_message':
-      return (
-        <View>
-          <Text style={styles.previewBody} numberOfLines={4}>
-            {draft.payload.body}
-          </Text>
-        </View>
-      );
-    case 'draft.assign_workout':
-      return (
-        <View>
-          <Text style={styles.previewHeadline}>{draft.payload.workoutName}</Text>
-          <Text style={styles.previewMeta}>
-            {draft.payload.weekCount} weeks · day 1 has{' '}
-            {draft.payload.day1ExerciseCount} exercises
-          </Text>
-          {draft.payload.rationale && (
-            <Text style={styles.previewRationale} numberOfLines={2}>
-              {draft.payload.rationale}
-            </Text>
-          )}
-        </View>
-      );
-    case 'draft.assign_meal_plan':
-      return (
-        <View>
-          <Text style={styles.previewHeadline}>{draft.payload.planName}</Text>
-          <Text style={styles.previewMeta}>
-            {draft.payload.dayCount} days · {draft.payload.macroSummary}
-          </Text>
-          {draft.payload.rationale && (
-            <Text style={styles.previewRationale} numberOfLines={2}>
-              {draft.payload.rationale}
-            </Text>
-          )}
-        </View>
-      );
-    case 'draft.send_notification':
-      return (
-        <View>
-          <Text style={styles.previewHeadline}>{draft.payload.title}</Text>
-          <Text style={styles.previewBody} numberOfLines={3}>
-            {draft.payload.body}
-          </Text>
-          {draft.payload.scheduledFor && (
-            <Text style={styles.previewMeta}>
-              Scheduled for {formatScheduledFor(draft.payload.scheduledFor)}
-            </Text>
-          )}
-        </View>
-      );
-  }
-}
-
-function iconForCapability(c: CoachAiDraft['capability']): keyof typeof Ionicons.glyphMap {
+function iconForCapability(c: CoachAiDraftCapability): keyof typeof Ionicons.glyphMap {
   switch (c) {
-    case 'draft.client_message':
-      return 'chatbubble-outline';
     case 'draft.assign_workout':
       return 'barbell-outline';
     case 'draft.assign_meal_plan':
@@ -311,19 +278,6 @@ function iconForCapability(c: CoachAiDraft['capability']): keyof typeof Ionicons
     case 'draft.send_notification':
       return 'notifications-outline';
   }
-}
-
-function formatScheduledFor(iso: string): string {
-  // Intl is available in jest-expo + RN. We use the device locale so the
-  // coach sees their own time format.
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
 }
 
 // ─── Empty state ──────────────────────────────────────────────────────────
@@ -350,10 +304,9 @@ function EmptyState({ styles, colors, title, body }: EmptyStateProps): React.Rea
   );
 }
 
-// Export the helpers for tests so the renderer-internal logic stays
-// covered without re-rendering the whole screen.
+// Re-export helpers so tests can target them without re-rendering the screen.
 export { previewFor };
-export type { CoachAiDraft };
+export type { AiActionDraftRow };
 
 // ─── styles ───────────────────────────────────────────────────────────────
 
@@ -404,11 +357,6 @@ function makeStyles(colors: ThemeColors) {
       color: colors.textMuted,
       marginTop: 2,
     },
-    /**
-     * Quiet "AI draft" badge. Doctrine §3 §5: no celebratory pill, no
-     * gradient, no glow. A hairline border + caption typography reads
-     * as a sober label, not a marketing tag.
-     */
     aiBadge: {
       paddingHorizontal: 10,
       paddingVertical: 4,
@@ -430,21 +378,6 @@ function makeStyles(colors: ThemeColors) {
     previewBody: {
       ...typography.body,
       color: colors.textPrimary,
-    },
-    previewHeadline: {
-      ...typography.bodyMd,
-      color: colors.textPrimary,
-    },
-    previewMeta: {
-      ...typography.bodySmall,
-      color: colors.textMuted,
-      marginTop: 4,
-    },
-    previewRationale: {
-      ...typography.bodySmall,
-      color: colors.textSecondary,
-      marginTop: 6,
-      fontStyle: 'italic',
     },
 
     cardActionRow: {
