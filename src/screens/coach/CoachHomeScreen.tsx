@@ -22,6 +22,8 @@ import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { SkeletonStatTile } from '../../ui/skeletons';
 import StripeSetupBanner from '../../components/coach/StripeSetupBanner';
 import NewClientBanner from '../../components/coach/NewClientBanner';
+// Stream 1 — AI budget meter + forced 80% tutorial + 95% banner + 100% hard pause.
+import AIBudgetMount from '../../components/coach/ai-budget/AIBudgetMount';
 
 
 interface RedFlagClient {
@@ -231,6 +233,11 @@ export default function CoachHomeScreen() {
       <StripeSetupBanner />
       {/* Post-Stripe-return detection banner — auto-dismisses after 4s */}
       <NewClientBanner />
+      {/* Stream 1 — AI budget surfaces (meter chip at 60-79%, blocking
+          tutorial at 80-94%, banner at 95-99%, hard-pause modal at 100%+).
+          Wrapped in its own ErrorBoundary internally — a crash in the meter
+          must not bring down Coach Home. */}
+      <AIBudgetMount />
 
       <View style={styles.header}>
         <View>
