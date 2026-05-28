@@ -336,7 +336,10 @@ describe('CreditPackCheckoutScreen — SuccessReceipt (R3 doctrine fix)', () => 
   // createCheckout promise still resolves and the success phase still
   // renders.
   it('auto-dismisses via navigation.goBack() 1800ms after entering success phase', async () => {
-    // Fake timers are active suite-wide (see beforeEach).
+    // Opt-in to fake timers for this test only. `doNotFake: ['queueMicrotask']`
+    // keeps the microtask flushes driveToSuccessPhase relies on (the
+    // createCheckout promise must still resolve under fake timers).
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
     mockUseAIBudget.mockReturnValue({
       data: {
         period_start: '2026-05-01T00:00:00Z',
@@ -379,7 +382,10 @@ describe('CreditPackCheckoutScreen — SuccessReceipt (R3 doctrine fix)', () => 
   // exercised the timer path, so here we just need to assert the render
   // shape without waiting for real time.
   it('falls back to the pack amount when previous remaining is undefined', async () => {
-    // Fake timers are active suite-wide (see beforeEach).
+    // Use fake timers so the SuccessReceipt's 1800ms setTimeout does not
+    // race with the test runner. `doNotFake: ['queueMicrotask']` keeps
+    // promise-resolution flushes working.
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
     mockUseAIBudget.mockReturnValue({ data: undefined });
 
     render(<CreditPackCheckoutScreen />);
