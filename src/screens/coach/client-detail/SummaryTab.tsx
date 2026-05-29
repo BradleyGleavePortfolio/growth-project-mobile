@@ -23,6 +23,7 @@ export function SummaryTab({
   onOpenNudge,
   onOpenMacrosReview,
   onOpenWorkoutBuilder,
+  onOpenAskAi,
   colors,
   styles,
 }: {
@@ -35,6 +36,13 @@ export function SummaryTab({
   onOpenNudge: () => void;
   onOpenMacrosReview: () => void;
   onOpenWorkoutBuilder: () => void;
+  /**
+   * Stream 2 — opens the AskAiActionSheet for this client. Optional so
+   * existing usages of SummaryTab in other contexts (e.g. unit tests
+   * that don't mount the sheet wiring) don't have to supply it. When
+   * omitted, the "Ask AI" pill renders disabled.
+   */
+  onOpenAskAi?: () => void;
   colors: ThemeColors;
   styles: ClientDetailStyles;
 }) {
@@ -139,6 +147,18 @@ export function SummaryTab({
         >
           <Ionicons name="barbell-outline" size={18} color={colors.primary} />
           <Text style={styles.actionPillText}>Workouts</Text>
+        </TouchableOpacity>
+        {/* Stream 2 — opens the four-capability Ask-AI sheet. */}
+        <TouchableOpacity
+          style={[styles.actionPill, !onOpenAskAi && { opacity: 0.5 }]}
+          onPress={onOpenAskAi}
+          disabled={!onOpenAskAi}
+          accessibilityRole="button"
+          accessibilityLabel="Ask AI to draft a message, workout, meal plan, or nudge"
+          testID="summary-tab-ask-ai-pill"
+        >
+          <Ionicons name="sparkles-outline" size={18} color={colors.primary} />
+          <Text style={styles.actionPillText}>Ask AI</Text>
         </TouchableOpacity>
       </View>
       {nudgeSuccess && (
