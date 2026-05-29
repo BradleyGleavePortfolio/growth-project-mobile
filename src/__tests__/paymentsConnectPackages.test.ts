@@ -105,17 +105,78 @@ describe('clientPaymentsApi', () => {
     }
   });
 
-  it('returns not_configured on 501 from payment-status', async () => {
-    mockedApi.get.mockRejectedValueOnce({ response: { status: 501 } });
+  // PR-1 round 2 (audit fix): there is no backend `/status` route. The
+  // first-pass rewire pointed `getPaymentStatus` at `/v1/checkout/status`
+  // which also does not exist. `getPaymentStatus` is now DERIVED from
+  // `/v1/checkout/entitlement` + `/v1/clients/me/coach/packages` — the
+  // only two routes that actually exist and carry the signal we need.
+  // All status tests assert on that derivation contract.
+
+  it('derives state=active + package_name when entitlement is active and a current package exists', async () => {
+    mockedApi.get
+      // call 1: getEntitlement
+      .mockResolvedValueOnce({ data: { active: true } })
+      // call 2: getPackages
+      .mockResolvedValueOnce({
+        data: [
+          { id: 'pkg_1', name: '1:1 Coaching', is_current: true, type: 'recurring', price: 199, currency: 'USD' },
+          { id: 'pkg_2', name: 'Group', is_current: false, type: 'recurring', price: 49, currency: 'USD' },
+        ],
+      });
+    const res = await clientPaymentsApi.getPaymentStatus();
+    expect(mockedApi.get).toHaveBeenCalledWith('/v1/checkout/entitlement');
+    expect(mockedApi.get).toHaveBeenCalledWith('/v1/clients/me/coach/packages');
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.data.state).toBe('active');
+      expect(res.data.package_name).toBe('1:1 Coaching');
+      // No backend route exposes these yet — must be null, never invented.
+      expect(res.data.current_period_end).toBeNull();
+      expect(res.data.trial_ends_at).toBeNull();
+      expect(res.data.dunning).toBeNull();
+    }
+  });
+
+  it('derives state=none when entitlement is inactive', async () => {
+    mockedApi.get
+      .mockResolvedValueOnce({ data: { active: false } })
+      .mockResolvedValueOnce({ data: [] });
+    const res = await clientPaymentsApi.getPaymentStatus();
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.data.state).toBe('none');
+      expect(res.data.package_name).toBeNull();
+    }
+  });
+
+  it('returns not_configured when /v1/checkout/entitlement is 501', async () => {
+    mockedApi.get
+      .mockRejectedValueOnce({ response: { status: 501 } })
+      // packages call still fires in parallel — give it a benign response
+      .mockResolvedValueOnce({ data: [] });
     const res = await clientPaymentsApi.getPaymentStatus();
     expect(res).toEqual({ ok: false, reason: 'not_configured' });
   });
 
-  it('surfaces a 404 from payment-status as a retryable error, NOT not_configured', async () => {
-    mockedApi.get.mockRejectedValueOnce({
-      response: { status: 404 },
-      message: 'Request failed with status code 404',
-    });
+  it('returns not_configured when packages list is 501', async () => {
+    mockedApi.get
+      .mockResolvedValueOnce({ data: { active: false } })
+      .mockRejectedValueOnce({ response: { status: 501 } });
+    const res = await clientPaymentsApi.getPaymentStatus();
+    expect(res).toEqual({ ok: false, reason: 'not_configured' });
+  });
+
+  it('surfaces a 404 from entitlement as a retryable error, NOT not_configured', async () => {
+    // PR-1 round 2: the auditor verified there is no /status route on
+    // CheckoutController. A 404 on either upstream must propagate as a
+    // real, retryable error so the UI offers a retry instead of telling
+    // the buyer their coach hasn't enabled payments.
+    mockedApi.get
+      .mockRejectedValueOnce({
+        response: { status: 404 },
+        message: 'Request failed with status code 404',
+      })
+      .mockResolvedValueOnce({ data: [] });
     const res = await clientPaymentsApi.getPaymentStatus();
     expect(res.ok).toBe(false);
     if (!res.ok) {
@@ -123,79 +184,39 @@ describe('clientPaymentsApi', () => {
     }
   });
 
-  it('surfaces dunning summary + update_card_url verbatim', async () => {
-    mockedApi.get.mockResolvedValueOnce({
-      data: {
-        state: 'past_due',
-        package_name: '1:1 Coaching',
-        current_period_end: '2026-05-31T00:00:00Z',
-        trial_ends_at: null,
-        dunning: {
-          summary: 'Your card was declined on May 12. Update it to keep access.',
-          update_card_url: 'https://billing.stripe.com/p/session/test_xxx',
-          grace_until: '2026-05-19T00:00:00Z',
-        },
-      },
-    });
+  it('surfaces a 404 from packages list as a retryable error, NOT not_configured', async () => {
+    mockedApi.get
+      .mockResolvedValueOnce({ data: { active: true } })
+      .mockRejectedValueOnce({
+        response: { status: 404 },
+        message: 'Request failed with status code 404',
+      });
     const res = await clientPaymentsApi.getPaymentStatus();
-    expect(res.ok).toBe(true);
-    if (res.ok) {
-      expect(res.data.state).toBe('past_due');
-      expect(res.data.dunning?.summary).toMatch(/declined/);
-      expect(res.data.dunning?.update_card_url).toMatch(/^https:\/\//);
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.reason).toBe('error');
     }
   });
 
-  it('mints a billing-portal URL when past_due lacks update_card_url (audit M10)', async () => {
-    mockedApi.get.mockResolvedValueOnce({
-      data: {
-        state: 'past_due',
-        package_name: '1:1 Coaching',
-        current_period_end: '2026-05-31T00:00:00Z',
-        trial_ends_at: null,
-        dunning: null,
-      },
-    });
+  it('createBillingPortalSession POSTs /v1/checkout/billing-portal', async () => {
     mockedApi.post.mockResolvedValueOnce({
       data: { url: 'https://billing.stripe.com/p/session/portal_fresh' },
     });
-    const res = await clientPaymentsApi.getPaymentStatus();
+    const res = await clientPaymentsApi.createBillingPortalSession();
+    expect(mockedApi.post).toHaveBeenCalledWith('/v1/checkout/billing-portal', {});
     expect(res.ok).toBe(true);
     if (res.ok) {
-      expect(res.data.state).toBe('past_due');
-      expect(res.data.dunning?.update_card_url).toBe(
-        'https://billing.stripe.com/p/session/portal_fresh',
-      );
+      expect(res.data.url).toMatch(/^https:\/\/billing\.stripe\.com\//);
     }
-    expect(mockedApi.post).toHaveBeenCalledWith(
-      '/v1/checkout/billing-portal',
-      expect.any(Object),
-    );
   });
 
-  it('marks dunning.portal_unavailable when past_due AND billing-portal mint fails (round-3 residual fix)', async () => {
-    mockedApi.get.mockResolvedValueOnce({
-      data: {
-        state: 'past_due',
-        package_name: '1:1 Coaching',
-        current_period_end: '2026-05-31T00:00:00Z',
-        trial_ends_at: null,
-        dunning: null,
-      },
-    });
-    mockedApi.post.mockRejectedValueOnce({
-      response: { status: 500, data: {} },
-      message: 'Server error',
-    });
-    const res = await clientPaymentsApi.getPaymentStatus();
+  it('getEntitlement GETs /v1/checkout/entitlement (audit fix — was /v1/clients/me/coach/entitlement)', async () => {
+    mockedApi.get.mockResolvedValueOnce({ data: { active: true } });
+    const res = await clientPaymentsApi.getEntitlement();
+    expect(mockedApi.get).toHaveBeenCalledWith('/v1/checkout/entitlement');
     expect(res.ok).toBe(true);
     if (res.ok) {
-      expect(res.data.state).toBe('past_due');
-      expect(res.data.dunning).not.toBeNull();
-      expect(res.data.dunning?.update_card_url).toBeNull();
-      expect(res.data.dunning?.portal_unavailable).toBe(true);
-      // Summary must still be present so the banner has something to render.
-      expect(typeof res.data.dunning?.summary).toBe('string');
+      expect(res.data.active).toBe(true);
     }
   });
 

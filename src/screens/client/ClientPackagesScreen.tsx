@@ -4,19 +4,28 @@
  * Wired via `clientPaymentsApi`:
  *   - GET  /v1/clients/me/coach/packages    (packages list)
  *   - POST /v1/checkout/sessions            (CheckoutController — buy)
- *   - GET  /v1/checkout/status              (CheckoutController — subscription state)
+ *   - GET  /v1/checkout/entitlement         (CheckoutController — paid-access flag)
+ *   - POST /v1/checkout/billing-portal      (CheckoutController — Stripe Billing Portal URL)
+ *
+ * `getPaymentStatus()` is a DERIVED call: there is no backend `/status`
+ * route, so subscription state is composed from the entitlement flag and
+ * the package list's `is_current` marker. Fields the backend does not
+ * expose (period_end, trial_ends_at, dunning) arrive as null and the UI
+ * omits the corresponding rows rather than fabricating values.
  *
  * Behaviour contract:
- *  - 501 from the packages endpoint => "Your coach has not enabled
+ *  - 501 from packages OR entitlement => "Your coach has not enabled
  *    self-serve checkout yet" empty state with a "Message your coach"
  *    CTA. A real 404 / transport error is surfaced as a retryable error
  *    banner — it is no longer silently shown as "not configured" (PR-1
  *    in-app checkout fix). The true "not configured" state is derived
  *    from the explicit `not_configured` envelope plus an empty package
- *    list / `state: 'none'` signal, never from a 404 alone.
- *  - 'past_due' from payment-status => dunning banner at top with the
- *    backend-supplied summary verbatim and an "Update card" button that
- *    opens the Stripe billing portal in the branded in-app webview.
+ *    list / inactive entitlement, never from a 404 alone.
+ *  - The dunning banner is reachable only when the backend ships a real
+ *    past-due signal; until then `status.dunning` is always null and the
+ *    banner does not render. The standalone
+ *    `clientPaymentsApi.createBillingPortalSession()` is still available
+ *    for any future surface that needs to mint a portal URL on demand.
  *  - Tapping a package opens Stripe Checkout in the branded in-app
  *    webview (Apple Rule 3.1.3(b)/(e) B2B exemption). The success /
  *    cancel deep links are intercepted by the webview screen and routed

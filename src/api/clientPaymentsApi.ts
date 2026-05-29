@@ -2,28 +2,40 @@
  * clientPaymentsApi — typed mobile client for the client-facing payments
  * surface.
  *
- * Endpoints consumed:
- *   GET  /v1/clients/me/coach/packages           — packages the coach offers this client
- *   GET  /v1/checkout/status                     — subscription + dunning state (CheckoutController)
- *   POST /v1/checkout/sessions                   — create Stripe Checkout session (CheckoutController)
- *   GET  /v1/checkout/sessions/:id/confirm       — confirm a returned session (CheckoutController)
- *   POST /v1/checkout/billing-portal             — Stripe Billing Portal URL (CheckoutController)
- *   GET  /v1/clients/me/coach/entitlement        — current entitlement_active flag
+ * Real backend routes (CheckoutController, mounted at `/v1/checkout/*`):
+ *   POST /v1/checkout/sessions                   — create Stripe Checkout session
+ *   POST /v1/checkout/billing-portal             — Stripe Billing Portal URL
+ *   GET  /v1/checkout/sessions/:id/confirm       — confirm a returned session
+ *   GET  /v1/checkout/entitlement                — current entitlement_active flag
  *
- * History: the four checkout-shaped calls (sessions, confirm, status,
- * billing-portal) previously pointed at `/v1/clients/me/coach/*` paths that
- * do NOT exist on the backend. Every call 404'd, and the 404 was swallowed
- * into a misleading "not configured" empty state. They now hit the real
- * `CheckoutController` mounted at `/v1/checkout/*`, the same controller
- * `PackageCheckoutScreen` already uses for session creation.
+ * Plus the client packages list (separate controller, not CheckoutController):
+ *   GET  /v1/clients/me/coach/packages           — packages the coach offers this client
+ *
+ * History — round 1: the four checkout-shaped calls (sessions, confirm,
+ * payment-status, billing-portal) previously pointed at five
+ * `/v1/clients/me/coach/*` paths that do NOT exist on the backend. Every
+ * call 404'd; the 404 was swallowed into a misleading "not configured"
+ * empty state so the regression sat undetected for weeks.
+ *
+ * History — round 2 (this revision, per audit): the first-pass fix
+ * invented a `GET /v1/checkout/status` route that ALSO does not exist
+ * on the backend, and missed rewiring `getEntitlement`
+ * (`/v1/clients/me/coach/entitlement` → `/v1/checkout/entitlement`).
+ * The audit found the backend `checkout.controller.ts` exposes ONLY the
+ * four routes listed above — there is no `/status` route. `getPaymentStatus`
+ * is therefore derived from `getEntitlement` + `getPackages` (the only
+ * authoritative signals available to the client today): backend dunning /
+ * period-end / trial-end data is not exposed and is reported as null
+ * rather than fabricated. When the backend ships a real status route this
+ * derivation is the single place to replace.
  *
  * Envelope: only a 501 collapses into
  * `{ ok: false, reason: 'not_configured' }`. A 404 is treated as a real
  * transport/path failure and surfaced as `{ ok: false, reason: 'error' }`
  * so the UI can offer a retry instead of silently telling the buyer their
  * coach hasn't enabled payments. The true "no plans / not connected"
- * state is derived from an empty package list or an explicit `state: 'none'`
- * on the payment-status response, not from a 404.
+ * state is derived from an empty package list or `entitlement.active === false`
+ * — never from a 404 on a broken route.
  *
  * Checkout return / cancel deep-links are handled by the navigator
  * (`com.growthproject.app://checkout/success` and
@@ -230,48 +242,75 @@ export const clientPaymentsApi = {
     ),
 
   /**
-   * Returns the client's current subscription + dunning status. Backend
-   * renders the dunning summary copy verbatim; the app does not assemble
-   * any client-side billing copy.
+   * Returns the client's current subscription state for the packages
+   * screen.
    *
-   * Past-due fallback (audit M10): when the backend reports past_due but
-   * omits a Stripe-hosted update_card_url, mint a Billing Portal URL on
-   * demand so the dunning banner always has a working "Update card" link.
-   * Without this, paying customers with a failed invoice see the dunning
-   * banner with no actionable CTA.
+   * IMPORTANT — derived, not fetched. The backend `CheckoutController`
+   * does NOT expose a `/status` route (audit verified the controller
+   * exposes only sessions, sessions/:id/confirm, billing-portal, and
+   * entitlement). To avoid a third generation of dead-route bugs, status
+   * is composed from the two authoritative signals the controller DOES
+   * expose:
+   *
+   *   • `GET /v1/checkout/entitlement` — single source of truth for
+   *     whether the client currently has paid access (R20).
+   *   • `GET /v1/clients/me/coach/packages` — the client's package list
+   *     also carries an `is_current` flag, naming the package the user
+   *     is on right now.
+   *
+   * Fields the backend doesn't yet surface (period_end, trial_ends_at,
+   * past-due dunning summary / update_card_url) are reported as null so
+   * the UI degrades honestly rather than rendering invented values
+   * (rule 18). When the backend ships a real status route, this whole
+   * method is the single point to replace.
+   *
+   * Transport contract: if either upstream call returns an explicit
+   * `not_configured` (501), the whole call returns `not_configured`. If
+   * either fails with a real transport error (404, 5xx, network), the
+   * whole call returns `reason: 'error'` and the UI surfaces it as
+   * retryable (rule 9) rather than masking it as "not enabled yet" — the
+   * exact regression PR-1 round 1 was supposed to fix.
    */
   getPaymentStatus: async (): Promise<PaymentsResult<ClientPaymentStatus>> => {
-    const statusResult = await wrap(
-      api.get<ClientPaymentStatus>('/v1/checkout/status'),
-    );
-    if (!statusResult.ok) return statusResult;
-    const status = statusResult.data;
-    if (status.state === 'past_due' && !status.dunning?.update_card_url) {
-      const portal = await wrap(
-        api.post<{ url: string }>('/v1/checkout/billing-portal', {}),
-      );
-      const updateCardUrl = portal.ok ? portal.data.url : null;
-      // Round-3 residual fix: when the portal mint itself fails, the
-      // dunning banner previously rendered with no Update CTA — a true
-      // dead-end. Mark `portal_unavailable` so the screen can render a
-      // "Update card unavailable — contact support" notice instead.
-      const portalUnavailable = !portal.ok;
-      return {
-        ok: true,
-        data: {
-          ...status,
-          dunning: {
-            summary:
-              status.dunning?.summary ??
-              'Your last payment failed. Update your card to keep access.',
-            update_card_url: updateCardUrl,
-            grace_until: status.dunning?.grace_until ?? null,
-            portal_unavailable: portalUnavailable,
-          },
-        },
-      };
+    const [entitlementResult, packagesResult] = await Promise.all([
+      clientPaymentsApi.getEntitlement(),
+      clientPaymentsApi.getPackages(),
+    ]);
+
+    // Explicit "backend has declined to serve this on this deployment"
+    // signal wins — same envelope semantics as before so screens that
+    // already gate on `reason: 'not_configured'` continue to work.
+    if (!entitlementResult.ok && entitlementResult.reason === 'not_configured') {
+      return entitlementResult;
     }
-    return statusResult;
+    if (!packagesResult.ok && packagesResult.reason === 'not_configured') {
+      return packagesResult;
+    }
+    // Any other failure (404, 5xx, network) bubbles up as a real,
+    // retryable error. Entitlement is the load-bearing signal; if it
+    // failed, we cannot honestly report state — fail loud, not silent.
+    if (!entitlementResult.ok) return entitlementResult;
+    if (!packagesResult.ok) return packagesResult;
+
+    const active = entitlementResult.data.active === true;
+    const currentPackage = packagesResult.data.find((p) => p.is_current) ?? null;
+    const state: ClientPaymentStatus['state'] = active ? 'active' : 'none';
+
+    return {
+      ok: true,
+      data: {
+        state,
+        package_name: currentPackage?.name ?? null,
+        // Backend does not yet expose these on any route. Null tells the
+        // UI to omit the rows instead of fabricating values (rule 18).
+        current_period_end: null,
+        trial_ends_at: null,
+        // No status route → no past-due signal. Past-due dunning is
+        // currently unreachable from page-load; once the backend ships a
+        // real status route this is where the dunning object reappears.
+        dunning: null,
+      },
+    };
   },
 
   /**
@@ -280,9 +319,16 @@ export const clientPaymentsApi = {
    * PaymentsResult envelope so callers can distinguish a configured-but-
    * inactive state from a transport failure (the latter must fail closed —
    * see ProtectedScreen).
+   *
+   * Route: `GET /v1/checkout/entitlement` (CheckoutController). The
+   * previous `/v1/clients/me/coach/entitlement` path does not exist on
+   * the backend — every entitlement check was 404'ing and (per
+   * `EntitlementProvider.refreshEntitlement`) fail-closing the whole app
+   * for paying clients. This was the fifth dead route the first pass
+   * missed (audit round 2).
    */
   getEntitlement: (): Promise<PaymentsResult<{ active: boolean; reason?: string }>> =>
-    wrap(api.get<{ active: boolean; reason?: string }>('/v1/clients/me/coach/entitlement')),
+    wrap(api.get<{ active: boolean; reason?: string }>('/v1/checkout/entitlement')),
 
   /**
    * Called on the checkout success deep-link to confirm the session
