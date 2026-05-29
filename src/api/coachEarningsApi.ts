@@ -1,21 +1,16 @@
 /**
- * coachPaymentsApi — typed mobile client for the coach-facing payment ops
- * from backend PRs #215 (package CRUD, dunning ops) and #216 (payout
- * readiness, reconciliation, refunds/disputes, earnings, rollups).
+ * coachEarningsApi — typed mobile client for coach-facing earnings, payout
+ * readiness, recent payouts, reconciliation, refunds/disputes, and the
+ * Stripe Express dashboard one-time link.
  *
- * Endpoints consumed:
- *   GET    /v1/coach/packages                          — list packages this coach offers
- *   POST   /v1/coach/packages                          — create
- *   PATCH  /v1/coach/packages/:id                      — update
- *   DELETE /v1/coach/packages/:id                      — archive (Stripe keeps history)
- *   GET    /v1/coach/payouts/readiness                 — Connect KYC + payout readiness
- *   GET    /v1/coach/payouts                           — recent payouts (with reconciliation)
- *   GET    /v1/coach/earnings                          — coach earnings: gross/net/fees,
- *                                                        current period, lifetime,
- *                                                        sub-coach attribution
- *   GET    /v1/coach/reconciliation                    — Stripe ↔ platform ledger health
- *   GET    /v1/coach/refunds                           — pending + recent refunds/disputes
- *   POST   /v1/coach/dashboard-link                    — Stripe Express dashboard URL
+ * Endpoints consumed (backend PR #216):
+ *   GET    /v1/coach/payouts/readiness — Connect KYC + payout readiness
+ *   GET    /v1/coach/payouts           — recent payouts (with reconciliation)
+ *   GET    /v1/coach/earnings          — coach earnings: gross/net/fees,
+ *                                        current period, lifetime, sub-coach attribution
+ *   GET    /v1/coach/reconciliation    — Stripe ↔ platform ledger health
+ *   GET    /v1/coach/refunds           — pending + recent refunds/disputes
+ *   POST   /v1/coach/dashboard-link    — Stripe Express dashboard URL
  *
  * Same envelope as `coachConnectApi`: 404 / 501 means the route is not
  * deployed yet; the screen renders an honest setup CTA, never a fake number.
@@ -24,32 +19,15 @@
  *   - The Growth Project platform fee: 2% of gross paid revenue (TGP)
  *   - Head coach / gym override: 5% of sub-coach gross (when applicable)
  *   - Stripe processing fees: passed through, not collected by TGP
+ *
+ * Note: package CRUD lives in `packagesApi.ts` (`coachPackagesApi`). This
+ * file holds the earnings/payout/Connect-dashboard methods that previously
+ * shared `coachPaymentsApi.ts` with package CRUD.
  */
 
 import api from '../services/api';
 import type { AxiosResponse } from 'axios';
 import type { ConnectResult } from './coachConnectApi';
-
-export interface CoachPackageInput {
-  name: string;
-  description?: string | null;
-  type: 'one_time' | 'recurring';
-  /** Major-unit price (199.00 not 19900). */
-  price: number;
-  currency: string;
-  interval?: 'month' | 'year' | null;
-  trial_days?: number | null;
-  features?: string[];
-  active?: boolean;
-}
-
-export interface CoachPackageRecord extends CoachPackageInput {
-  id: string;
-  active: boolean;
-  active_subscribers: number;
-  created_at: string;
-  updated_at: string;
-}
 
 export interface PayoutReadiness {
   /** Has the coach finished Stripe Connect onboarding? */
@@ -143,26 +121,6 @@ export interface DashboardLink {
   expires_at: string;
 }
 
-function normalizePackageRecord(raw: Record<string, unknown>): CoachPackageRecord {
-  const amountCents = typeof raw.amount_cents === 'number' ? raw.amount_cents : null;
-  const price = typeof raw.price === 'number' ? raw.price : (amountCents != null ? amountCents / 100 : 0);
-  return {
-    id: String(raw.id ?? ''),
-    name: String(raw.name ?? ''),
-    description: (raw.description as string | null) ?? null,
-    type: (raw.type as 'one_time' | 'recurring') ?? (raw.billing_type as 'one_time' | 'recurring') ?? 'one_time',
-    price,
-    currency: String(raw.currency ?? 'usd'),
-    interval: (raw.interval as 'month' | 'year' | null) ?? null,
-    trial_days: null,
-    features: [],
-    active: typeof raw.active === 'boolean' ? raw.active : Boolean(raw.is_active ?? true),
-    active_subscribers: typeof raw.active_subscribers === 'number' ? raw.active_subscribers : 0,
-    created_at: String(raw.created_at ?? ''),
-    updated_at: String(raw.updated_at ?? ''),
-  };
-}
-
 function isNotConfigured(err: unknown): boolean {
   const e = err as { response?: { status?: number } } | undefined;
   const status = e?.response?.status;
@@ -180,47 +138,15 @@ function wrap<T>(p: Promise<AxiosResponse<T>>): Promise<ConnectResult<T>> {
     });
 }
 
-export const coachPaymentsApi = {
-  // ── Package CRUD (PR #215) ────────────────────────────────────────────
-  listPackages: (): Promise<ConnectResult<CoachPackageRecord[]>> =>
-    wrap(
-      api
-        .get<{ packages: unknown[] } | unknown[]>(
-          '/v1/coach/packages',
-        )
-        .then((r) => {
-          const raw: unknown[] = Array.isArray(r.data)
-            ? r.data
-            : (r.data as { packages: unknown[] }).packages ?? [];
-          return {
-            ...r,
-            data: raw.map((item) =>
-              normalizePackageRecord(item as Record<string, unknown>),
-            ),
-          };
-        }),
-    ),
-
-  createPackage: (input: CoachPackageInput): Promise<ConnectResult<CoachPackageRecord>> =>
-    wrap(api.post<CoachPackageRecord>('/v1/coach/packages', input)),
-
-  updatePackage: (
-    id: string,
-    patch: Partial<CoachPackageInput>,
-  ): Promise<ConnectResult<CoachPackageRecord>> =>
-    wrap(api.patch<CoachPackageRecord>(`/v1/coach/packages/${id}`, patch)),
-
-  archivePackage: (id: string): Promise<ConnectResult<{ id: string; active: false }>> =>
-    wrap(api.delete<{ id: string; active: false }>(`/v1/coach/packages/${id}`)),
-
-  // ── Payout readiness + recent payouts (PR #216) ───────────────────────
+export const coachEarningsApi = {
+  // ── Payout readiness + recent payouts ─────────────────────────────────
   getPayoutReadiness: (): Promise<ConnectResult<PayoutReadiness>> =>
     wrap(api.get<PayoutReadiness>('/v1/coach/payouts/readiness')),
 
   getRecentPayouts: (limit = 10): Promise<ConnectResult<RecentPayout[]>> =>
     wrap(api.get<RecentPayout[]>(`/v1/coach/payouts?limit=${limit}`)),
 
-  // ── Earnings, reconciliation, refunds (PR #216) ───────────────────────
+  // ── Earnings, reconciliation, refunds ─────────────────────────────────
   getEarnings: (): Promise<ConnectResult<CoachEarnings>> =>
     wrap(api.get<CoachEarnings>('/v1/coach/earnings')),
 

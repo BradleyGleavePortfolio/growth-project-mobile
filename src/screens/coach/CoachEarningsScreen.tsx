@@ -36,13 +36,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 
 import {
-  coachPaymentsApi,
+  coachEarningsApi,
   type CoachEarnings,
   type PayoutReadiness,
   type RecentPayout,
   type ReconciliationHealth,
   type RefundRow,
-} from '../../api/coachPaymentsApi';
+} from '../../api/coachEarningsApi';
 import { coachConnectApi, type ConnectResult } from '../../api/coachConnectApi';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 
@@ -117,11 +117,11 @@ export default function CoachEarningsScreen() {
 
   const load = useCallback(async () => {
     const [e, r, p, rc, rf] = await Promise.all([
-      coachPaymentsApi.getEarnings(),
-      coachPaymentsApi.getPayoutReadiness(),
-      coachPaymentsApi.getRecentPayouts(10),
-      coachPaymentsApi.getReconciliation(),
-      coachPaymentsApi.getRefunds(),
+      coachEarningsApi.getEarnings(),
+      coachEarningsApi.getPayoutReadiness(),
+      coachEarningsApi.getRecentPayouts(10),
+      coachEarningsApi.getReconciliation(),
+      coachEarningsApi.getRefunds(),
     ]);
     setEarnings(e);
     setReadiness(r);
@@ -154,7 +154,7 @@ export default function CoachEarningsScreen() {
   const openDashboard = useCallback(async () => {
     setDashboardBusy(true);
     try {
-      const res = await coachPaymentsApi.createDashboardLink();
+      const res = await coachEarningsApi.createDashboardLink();
       if (res.ok) {
         await Linking.openURL(res.data.url);
       }
