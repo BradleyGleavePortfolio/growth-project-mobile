@@ -61,21 +61,31 @@ export const featureFlags = {
     isDev,
   ),
 
-  // ─── PR-13 — Buyer-facing Deliverables timeline (drip engine) ────────────
+  // ─── PR-13 / PR-15B — Buyer-facing Deliverables timeline + Purchase unpack ─
   /**
-   * Buyer-facing Deliverables CTA on `ClientPackagesScreen` + the
-   * `DeliverablesScreen` it routes into.
+   * Buyer-facing Deliverables CTA on `ClientPackagesScreen`, the
+   * `DeliverablesScreen` it routes into, and the post-checkout
+   * `PurchaseUnpackScreen` (PR-15B).
    *
-   * Default OFF in production until the backend ships
-   * `GET /v1/checkout/purchases/:purchaseId/drops` (the route is
-   * documented as a prereq in `specs/PR13_BUILD_REPORT.md` and
-   * `clientPaymentsApi.getPurchaseDrops`'s header). Today the endpoint
-   * does not exist, so the CTA would land on a 404; gating it off
-   * prevents every paying user from seeing a dead-feature error state.
+   * Default posture:
+   *   • __DEV__              → ON (`isDev` fallback) so the screens are
+   *                            reachable for local development against
+   *                            the live PR-15A endpoint or a stub.
+   *   • Production / staging → OFF until ops flips
+   *                            `EXPO_PUBLIC_FF_DELIVERABLES=true` once
+   *                            PR-15A
+   *                            (`GET /v1/checkout/purchases/:purchaseId/drops`)
+   *                            is deployed. The mobile client is wired
+   *                            to gracefully degrade if the endpoint is
+   *                            absent (404/501 → calm "deliverables
+   *                            coming" state, never an error banner),
+   *                            but keeping the flag OFF until rollout
+   *                            avoids surfacing the unpack screen at all
+   *                            before the contract is live.
    *
-   * Flip on by setting `EXPO_PUBLIC_FF_DELIVERABLES=true` in the build
-   * env once the backend route lands. ON in __DEV__ so the screen is
-   * still reachable for local development against a stub.
+   * PR-15B does NOT change the prod default — the rollout toggle stays
+   * with ops. Only the docstring is updated; the `isDev` fallback was
+   * already the intended dev posture.
    *
    * env: EXPO_PUBLIC_FF_DELIVERABLES
    */

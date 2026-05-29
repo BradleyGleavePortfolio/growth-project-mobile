@@ -637,38 +637,18 @@ export const clientPaymentsApi = {
    */
   /**
    * Lists the buyer's ScheduledDrops for a purchase — the data the
-   * Deliverables timeline renders. Snapshotted at fan-out time onto the
-   * `ScheduledDrop` table (master plan §3) so the UI does not depend on
-   * the (mutable) authoring `CoachPackageContent` rows.
+   * Deliverables timeline + PurchaseUnpackScreen render. Snapshotted at
+   * fan-out time onto the `ScheduledDrop` table (master plan §3) so the
+   * UI does not depend on the (mutable) authoring `CoachPackageContent`
+   * rows.
    *
-   * Backend gap (PR-13 build): NO buyer-facing route exists today. The
-   * routes that exist are:
-   *   • `GET /v1/checkout/purchases` (CheckoutController) — purchase rows
-   *     only; no `drops` include.
-   *   • `GET /v1/coach/packages/:id/contents` (CoachPackageContentsController)
-   *     — coach-only authoring rows; not buyer-visible and not snapshotted.
-   *
-   * The `ScheduledDrop` Prisma rows exist (master plan §3 + PR-9 fan-out)
-   * but are read only by the dispatcher + internal services today. No
-   * `GET /v1/checkout/purchases/:id/drops` or `GET /v1/clients/me/deliverables`
-   * controller is registered (grep `@Get.*drop\|@Get.*deliverable` across
-   * `growth-project-backend/src@main` returns zero hits).
-   *
-   * PR-13 is mobile-only per scope, so this PR does NOT add the backend
-   * route. The client is wired to a clean, typed contract so wiring the
-   * UI to a real endpoint is a one-line change the moment the backend
-   * ships it. Until then a real 404 is surfaced as a retryable error
-   * (the UI shows the "We couldn't load deliverables" retry banner), and
-   * a 501 collapses into the calm `not_configured` envelope (UI shows
-   * the empty "No deliverables yet" state).
-   *
-   * Backend follow-up prereq (recommended shape — wire this and the UI
-   * lights up with zero mobile changes):
+   * Backend route (PR-15A — shipping in parallel with PR-15B):
    *
    *   GET /v1/checkout/purchases/:purchaseId/drops
    *
    *   Auth: JwtAuthGuard; the buyer (req.user.id) must own
-   *         ClientPurchase.client_id === req.user.id (IDOR guard).
+   *         ClientPurchase.client_id === req.user.id (IDOR guard —
+   *         cross-user → 404, never 403, mirroring `requireOwned`).
    *   Response:
    *     {
    *       drops: Array<{
@@ -683,28 +663,45 @@ export const clientPaymentsApi = {
    *     status IN ('pending','due','fired')  -- master plan §1 #10:
    *     failed/canceled/skipped go to the COACH_ALERT path; never the buyer.
    *
-   * Transport envelope: same as the rest of clientPaymentsApi — `501`
-   * collapses to `not_configured`, `404` and other transport failures
-   * surface as retryable `reason: 'error'`.
+   * The typed contract here was frozen by PR-13 and is what PR-15A is
+   * obligated to return. Both the envelope (`{ drops: [...] }`) and a
+   * bare array are unwrapped below for forward-compat — if the backend
+   * ships either, this client copes.
+   *
+   * Transport envelope (`getPurchaseDrops`-specific): only 501 →
+   * `not_configured` (deployment explicitly declined the route).
+   * 404 → retryable `reason: 'error'` — restored to PR-1's codified
+   * rule now that PR-15A is shipping the route. A 404 from a route
+   * that is supposed to exist is a real bug (controller path
+   * regression, misrouted proxy, path-parameter encoding fault, or
+   * cross-user IDOR collapse from PR-15A's `requireOwned`) and the
+   * buyer should see a recoverable error banner with Retry, not the
+   * silent "deliverables coming" calm state. 5xx / network also →
+   * retryable `reason: 'error'`.
+   *
+   * History note: PR-13 mapped 404 → `not_configured` as a scoped
+   * audit fix (P2-1) while the backend route was a documented gap.
+   * That justification expired the moment PR-15A landed; PR-15B audit
+   * (P2-1) restores the distinction.
    */
   getPurchaseDrops: async (
     purchaseId: string,
   ): Promise<PaymentsResult<ScheduledDropView[]>> => {
-    // PR-13 audit fix (P2-1): the backend route is a documented prereq
-    // and does not exist today. Under defense-in-depth, a 404 on THIS
-    // specific endpoint must NOT surface as a scary "Request failed
-    // with status code 404" message to the buyer — the screen is
-    // already feature-flagged off in production, but if the flag is
-    // flipped before the backend lands, we want a calm empty state, not
-    // an error banner. So `getPurchaseDrops` (and ONLY this method)
-    // maps an HTTP 404 to the `not_configured` envelope so the
-    // Deliverables screen renders the "No deliverables yet" empty state
-    // rather than the retry error banner. This is a deliberate, scoped
-    // exception to PR-1's "404 is never not_configured" rule, justified
-    // because this endpoint is documented to not exist yet (the PR-1
-    // sin was a route TYPO masquerading as not_configured; here the
-    // route is a public, tracked prereq). All other failure modes
-    // (5xx, network, 501) still flow through the standard `wrap`.
+    // PR-15B audit P2-1 — restore PR-1's "404 ≠ not_configured" rule.
+    // PR-13 mapped 404 → not_configured while the buyer-facing drops
+    // route was a documented gap; that justification expired when
+    // PR-15A shipped the real route. With the endpoint live, a 404
+    // is a real route/transport bug (controller regression, misrouted
+    // proxy, path-parameter encode fault, IDOR-collapsed cross-user
+    // miss, etc.) and the buyer should see a recoverable error banner
+    // with Retry — never the silent "deliverables coming" calm state.
+    //   501 → `not_configured` (deployment explicitly declined the
+    //          route — calm "Purchase complete, deliverables coming"
+    //          state, no Retry).
+    //   404 / 5xx / network → `reason: 'error'` (retry banner). The
+    //          screen NEVER renders the raw axios message to the buyer
+    //          (Rule 9 / Rule 17) — it's preserved here only for
+    //          logger/observability.
     try {
       const r = await api.get<{ drops?: ScheduledDropView[] } | ScheduledDropView[]>(
         `/v1/checkout/purchases/${encodeURIComponent(purchaseId)}/drops`,
@@ -717,15 +714,9 @@ export const clientPaymentsApi = {
       return { ok: true, data };
     } catch (err) {
       const status = (err as { response?: { status?: number } })?.response?.status;
-      // 404 → calm empty state (endpoint not deployed yet — PR-13 prereq).
-      // 501 → calm empty state (deployment explicitly declined the route).
-      if (status === 404 || status === 501) {
+      if (status === 501) {
         return { ok: false, reason: 'not_configured' };
       }
-      // Genuine transient failures (network/5xx) keep the retryable
-      // error envelope. The screen NEVER renders the raw message to the
-      // buyer — see DeliverablesScreen.tsx error branch — but it is
-      // preserved here for logger/observability wiring.
       const message =
         (err as { message?: string })?.message ?? 'Failed to load — try again.';
       return { ok: false, reason: 'error', message };

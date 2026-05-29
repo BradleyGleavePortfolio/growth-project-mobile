@@ -181,18 +181,32 @@ describe('upcoming caption fallbacks', () => {
 
 describe('DeliverablesScreen — source guards', () => {
   const SRC = readSrc('screens/client/DeliverablesScreen.tsx');
+  // PR-15B refactor: the per-asset_type routing table + DropRow live in
+  // a shared module so the unpack screen and the deliverables screen
+  // cannot drift. The route-string guards now read from the shared
+  // module location.
+  const SHARED = readSrc('screens/client/deliverables/dropRow.tsx');
 
   it('routes workout_program / workout_plan to WorkoutAssignmentDetail', () => {
-    expect(SRC).toMatch(/WorkoutAssignmentDetail/);
-    expect(SRC).toMatch(/assignmentId/);
+    expect(SHARED).toMatch(/WorkoutAssignmentDetail/);
+    expect(SHARED).toMatch(/assignmentId/);
   });
 
   it('routes meal_plan to ClientDailyMealPlan', () => {
-    expect(SRC).toMatch(/ClientDailyMealPlan/);
+    expect(SHARED).toMatch(/ClientDailyMealPlan/);
   });
 
   it('routes auto_message to Messages (via parent Home stack)', () => {
-    expect(SRC).toMatch(/Messages/);
+    expect(SHARED).toMatch(/Messages/);
+  });
+
+  it('DeliverablesScreen imports the shared DropRow + routeForDrop (PR-15B)', () => {
+    // The screen itself should be a thin shell: it imports the shared
+    // routing helpers rather than re-implementing them, so PR-13 and
+    // PR-15B can never diverge on per-asset_type destinations.
+    expect(SRC).toMatch(/from\s+['"]\.\/deliverables\/dropRow['"]/);
+    expect(SRC).toMatch(/\brouteForDrop\b/);
+    expect(SRC).toMatch(/\bDropRow\b/);
   });
 
   it('uses useTheme().colors (no hardcoded hex)', () => {
@@ -434,8 +448,29 @@ describe('DeliverablesScreen — RTL mount', () => {
 
   it('renders the empty (not error) state when the endpoint is not configured (501)', async () => {
     mockGetPurchaseDrops.mockResolvedValue({ ok: false, reason: 'not_configured' });
-    const { getByTestId } = render(<DeliverablesScreen />);
+    const { getByTestId, queryByTestId } = render(<DeliverablesScreen />);
     await waitFor(() => expect(getByTestId('deliverables-empty')).toBeTruthy());
+    // PR-15B audit P2-1: 501 is the ONLY path to the calm empty state
+    // for this envelope — the companion 404 test below asserts the
+    // error banner. The two must remain distinguishable downstream of
+    // `getPurchaseDrops`.
+    expect(queryByTestId('deliverables-error')).toBeNull();
+  });
+
+  it('renders the error (not empty) state for a real transport failure that maps to error (PR-15B audit P2-1)', async () => {
+    // A 404 from the now-real PR-15A endpoint maps to reason: 'error'
+    // (see deliverablesApi.test.ts), and that envelope must reach the
+    // user as the retry banner — not the silent "No deliverables yet"
+    // empty state. Pairs with the 501 → empty test above.
+    mockGetPurchaseDrops.mockResolvedValue({
+      ok: false,
+      reason: 'error',
+      message: 'Request failed with status code 404',
+    });
+    const { getByTestId, queryByTestId } = render(<DeliverablesScreen />);
+    await waitFor(() => expect(getByTestId('deliverables-error')).toBeTruthy());
+    expect(getByTestId('deliverables-retry')).toBeTruthy();
+    expect(queryByTestId('deliverables-empty')).toBeNull();
   });
 
   it('tapping a delivered workout drop navigates to WorkoutAssignmentDetail with the assignmentId', async () => {
