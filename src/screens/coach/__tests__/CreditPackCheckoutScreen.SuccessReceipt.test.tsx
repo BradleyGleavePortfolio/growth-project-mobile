@@ -331,20 +331,23 @@ describe('CreditPackCheckoutScreen — SuccessReceipt (R3 doctrine fix)', () => 
 
   // (c) Auto-dismiss after 1800ms.
   //
-  // Implementation note: the SUT's success-phase useEffect schedules a
-  // `setTimeout(onDone, 1800)` on whichever timer implementation is
-  // active at MOUNT. We use fake timers throughout this test so the
-  // 1800ms dismiss can be advanced deterministically. The driveToSuccess
-  // helper still flushes microtasks via `await Promise.resolve()` —
-  // `useFakeTimers({ doNotFake: ['queueMicrotask'] })` keeps the
-  // promise-resolution flushes working alongside the timer mock so the
-  // createCheckout promise still resolves and the success phase still
-  // renders.
+  // The earlier implementation used `jest.useFakeTimers({ doNotFake:
+  // ['queueMicrotask'] })` + `jest.advanceTimersByTime(1800)`. In React 19's
+  // Scheduler (which react-test-renderer uses under the hood), faking
+  // `setImmediate` / `MessageChannel` deadlocks the work-loop: scheduled
+  // work is queued but the host-callback heartbeat never fires, so
+  // `flushActQueue` spins synchronously inside `renderRootSync` and the
+  // worker pegs a CPU at 100% indefinitely. The hang has nothing to do
+  // with Animated — it reproduces in select phase too, the moment fake
+  // timers are active across a render.
+  //
+  // Real-timer fix: spy on `global.setTimeout` so the SUT's
+  // `setTimeout(onDone, 1800)` call is captured rather than scheduled.
+  // We then invoke the captured callback directly to assert auto-dismiss
+  // semantics without waiting for wall-clock time. The Animated.timing
+  // callbacks remain on real timers (~400ms + 600ms pulse) but unmount
+  // in `afterEach` clears them before the next test renders.
   it('auto-dismisses via navigation.goBack() 1800ms after entering success phase', async () => {
-    // Opt-in to fake timers for this test only. `doNotFake: ['queueMicrotask']`
-    // keeps the microtask flushes driveToSuccessPhase relies on (the
-    // createCheckout promise must still resolve under fake timers).
-    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
     mockUseAIBudget.mockReturnValue({
       data: {
         period_start: '2026-05-01T00:00:00Z',
@@ -363,44 +366,92 @@ describe('CreditPackCheckoutScreen — SuccessReceipt (R3 doctrine fix)', () => 
       },
     });
 
-    render(<CreditPackCheckoutScreen />);
-    await driveToSuccessPhase();
+    // Capture every `setTimeout(cb, delay)` the SUT schedules so we can
+    // assert against the 1800ms dismiss timer without waiting for it
+    // and without enabling fake timers (see comment above for why fake
+    // timers deadlock React 19's Scheduler).
+    type ScheduledTimer = { cb: () => void; delay: number };
+    const scheduled: ScheduledTimer[] = [];
+    const realSetTimeout = global.setTimeout;
+    const timeoutSpy = jest
+      .spyOn(global, 'setTimeout')
+      .mockImplementation((handler: TimerHandler, timeout?: number) => {
+        // Animated's internal driver schedules tiny (~16ms) setIntervals
+        // / setTimeouts during the wrapper fade-in. We let those through
+        // by passing them to the real implementation so the animation
+        // still ticks and the auto-dismiss effect's `setTimeout(onDone,
+        // 1800)` is the only one we trap. The handler is always a
+        // function in practice (the SUT does not pass a string).
+        if (typeof handler === 'function' && timeout === 1800) {
+          scheduled.push({ cb: handler as () => void, delay: timeout });
+          // Return a sentinel id — the SUT only uses the id to
+          // clearTimeout on unmount; our cleanup is no-op-safe because
+          // the trapped callback was never actually scheduled.
+          return 999999 as unknown as ReturnType<typeof setTimeout>;
+        }
+        return (realSetTimeout as typeof setTimeout)(
+          handler as () => void,
+          timeout,
+        );
+      });
 
-    expect(screen.getByTestId('credit-pack-success')).toBeTruthy();
-    expect(mockGoBack).not.toHaveBeenCalled();
+    try {
+      render(<CreditPackCheckoutScreen />);
+      await driveToSuccessPhase();
 
-    act(() => {
-      jest.advanceTimersByTime(1799);
-    });
-    expect(mockGoBack).not.toHaveBeenCalled();
+      expect(screen.getByTestId('credit-pack-success')).toBeTruthy();
+      expect(mockGoBack).not.toHaveBeenCalled();
 
-    act(() => {
-      jest.advanceTimersByTime(2);
-    });
-    expect(mockGoBack).toHaveBeenCalledTimes(1);
+      // The SUT scheduled the dismiss timer at success-phase mount.
+      const dismiss = scheduled.find((t) => t.delay === 1800);
+      expect(dismiss).toBeDefined();
+
+      // Invoke the trapped callback directly — same semantics as the
+      // real timer firing, no wall-clock wait.
+      act(() => {
+        dismiss!.cb();
+      });
+      expect(mockGoBack).toHaveBeenCalledTimes(1);
+    } finally {
+      timeoutSpy.mockRestore();
+    }
   });
 
   // (d) Fallback when previous balance is undefined.
   //
-  // Uses fake timers so the SuccessReceipt's 1800ms setTimeout does not
-  // race with the test runner — the auto-dismiss test (c) above already
-  // exercised the timer path, so here we just need to assert the render
-  // shape without waiting for real time.
+  // Same setTimeout-spy pattern as test (c) — the spy traps the SUT's
+  // 1800ms dismiss timer so the worker does not stay alive between tests
+  // and we never enable fake timers (see (c) for the React 19 Scheduler
+  // deadlock reason).
   it('falls back to the pack amount when previous remaining is undefined', async () => {
-    // Use fake timers so the SuccessReceipt's 1800ms setTimeout does not
-    // race with the test runner. `doNotFake: ['queueMicrotask']` keeps
-    // promise-resolution flushes working.
-    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
     mockUseAIBudget.mockReturnValue({ data: undefined });
 
-    render(<CreditPackCheckoutScreen />);
-    await driveToSuccessPhase();
+    const realSetTimeout = global.setTimeout;
+    const timeoutSpy = jest
+      .spyOn(global, 'setTimeout')
+      .mockImplementation((handler: TimerHandler, timeout?: number) => {
+        if (typeof handler === 'function' && timeout === 1800) {
+          // Trap and discard — the dismiss timer is not exercised here.
+          return 999999 as unknown as ReturnType<typeof setTimeout>;
+        }
+        return (realSetTimeout as typeof setTimeout)(
+          handler as () => void,
+          timeout,
+        );
+      });
 
-    expect(screen.getByText('New balance')).toBeTruthy();
-    const value = screen.getByTestId('credit-pack-success-balance-value');
-    // 1000c is a whole dollar -> USD_WHOLE format -> '$10' (no trailing zeros).
-    expect(value).toHaveTextContent('$10');
-    expect(value).not.toHaveTextContent('NaN');
-    expect(value).not.toHaveTextContent('undefined');
+    try {
+      render(<CreditPackCheckoutScreen />);
+      await driveToSuccessPhase();
+
+      expect(screen.getByText('New balance')).toBeTruthy();
+      const value = screen.getByTestId('credit-pack-success-balance-value');
+      // 1000c is a whole dollar -> USD_WHOLE format -> '$10' (no trailing zeros).
+      expect(value).toHaveTextContent('$10');
+      expect(value).not.toHaveTextContent('NaN');
+      expect(value).not.toHaveTextContent('undefined');
+    } finally {
+      timeoutSpy.mockRestore();
+    }
   });
 });
