@@ -137,6 +137,102 @@ export interface ClientPurchase {
   created_at: string;
 }
 
+/**
+ * Asset type discriminator for a ScheduledDrop. Matches the backend
+ * `CoachPackageContent.asset_type` enum
+ * (`growth-project-backend/src/packages/package-contents.dto.ts` &
+ * `prisma/schema.prisma:81-98` per master plan §3):
+ *   workout_program | workout_plan | meal_plan | pdf | video | auto_message
+ *
+ * The mobile Deliverables UI uses this discriminator to pick the right
+ * existing viewer for a delivered drop — `materialised_ref` carries the
+ * destination id (e.g. assignment id, document id, mux playback id,
+ * thread/message id) snapshotted onto the row when the drop fired.
+ */
+export type ScheduledDropAssetType =
+  | 'workout_program'
+  | 'workout_plan'
+  | 'meal_plan'
+  | 'pdf'
+  | 'video'
+  | 'auto_message';
+
+/**
+ * Cadence kind on a ScheduledDrop — matches `CoachPackageContent.cadence_kind`
+ * in master plan §3 (`prisma/schema.prisma:89`). The UI does not interpret
+ * cadence_payload itself; it only branches on the kind to choose the
+ * "Unlocks…" copy when fire_at is null (on_completion / on_milestone).
+ */
+export type ScheduledDropCadenceKind =
+  | 'immediate'
+  | 'relative_to_purchase'
+  | 'fixed_calendar'
+  | 'on_completion'
+  | 'on_milestone';
+
+/**
+ * Status on a ScheduledDrop — `prisma/schema.prisma:120` per master plan §3:
+ *   pending | due | fired | skipped | failed | canceled
+ *
+ * Buyer UI mapping:
+ *   fired                          → "Delivered" (tappable to viewer)
+ *   pending | due                  → "Upcoming" (locked styling, with
+ *                                    "Unlocks {when}" copy)
+ *   failed | canceled | skipped    → hidden from the buyer (coach gets the
+ *                                    COACH_ALERT per master plan §1 #10).
+ *                                    See PR-13 BUILD REPORT (f) for the
+ *                                    rationale.
+ */
+export type ScheduledDropStatus =
+  | 'pending'
+  | 'due'
+  | 'fired'
+  | 'skipped'
+  | 'failed'
+  | 'canceled';
+
+/**
+ * A single buyer-visible ScheduledDrop row. Field provenance is the master
+ * plan §3 schema (`ScheduledDrop` Prisma model) — every field here is
+ * snapshotted onto the row at fan-out time, so the buyer UI never has to
+ * re-resolve from the (mutable) `CoachPackageContent` source.
+ *
+ * `materialised_ref` is the id the viewer needs:
+ *   workout_program / workout_plan → WorkoutAssignment id
+ *                                    (route: WorkoutAssignmentDetail
+ *                                    { assignmentId })
+ *   meal_plan                      → date string YYYY-MM-DD (start date)
+ *                                    (route: ClientDailyMealPlan { date })
+ *   pdf                            → CoachMediaAsset id
+ *                                    (no viewer registered yet — degrade
+ *                                    gracefully: shown but not tappable)
+ *   video                          → Mux playback id / CoachMediaAsset id
+ *                                    (no viewer registered yet — degrade)
+ *   auto_message                   → Conversation id (or null)
+ *                                    (route: Messages — opens thread)
+ *
+ * The PDF / video viewers do not exist yet in mobile — listed in master
+ * plan PR-12 (media upload) which is out of scope. Until they ship, those
+ * delivered drops render as non-tappable rows with a "Saved to your
+ * library" caption so the buyer is not left tapping a dead row.
+ */
+export interface ScheduledDropView {
+  id: string;
+  asset_type: ScheduledDropAssetType;
+  asset_id: string;
+  asset_revision_id: string | null;
+  cadence_kind: ScheduledDropCadenceKind;
+  display_title: string | null;
+  display_caption: string | null;
+  /** ISO timestamp the drop is scheduled to fire (null for on_completion / on_milestone until trigger). */
+  fire_at: string | null;
+  /** ISO timestamp the drop actually fired (null until delivered). */
+  fired_at: string | null;
+  status: ScheduledDropStatus;
+  /** Destination id for delivered drops; viewer-specific (see field docstring). */
+  materialised_ref: string | null;
+}
+
 export interface CheckoutSession {
   /**
    * Stripe-hosted Checkout URL — must be opened in the branded in-app
@@ -188,6 +284,14 @@ export interface ClientPaymentStatus {
    * - 'none'      — no subscription yet (coach manages access externally)
    */
   state: 'active' | 'trialing' | 'past_due' | 'canceled' | 'none';
+  /**
+   * `ClientPurchase.id` of the row this status was derived from. Surfaced
+   * so the buyer can deep-link from "Current plan" into the per-purchase
+   * Deliverables timeline (PR-13). Null when state === 'none' or when the
+   * status comes from a confirm-shape (which does not carry a row id —
+   * see `confirmCheckoutSession`).
+   */
+  purchase_id: string | null;
   /** ClientPurchase.package_id — null when state === 'none'. */
   package_id: string | null;
   package_name: string | null;
@@ -473,6 +577,7 @@ export const clientPaymentsApi = {
       ok: true,
       data: {
         state,
+        purchase_id: chosen?.id ?? null,
         package_id: packageId,
         package_name: packageName,
         current_period_end: chosen?.current_period_end ?? null,
@@ -530,6 +635,103 @@ export const clientPaymentsApi = {
    * idempotent (the session id is the dedup key on the server side),
    * so no client-supplied Idempotency-Key is needed.
    */
+  /**
+   * Lists the buyer's ScheduledDrops for a purchase — the data the
+   * Deliverables timeline renders. Snapshotted at fan-out time onto the
+   * `ScheduledDrop` table (master plan §3) so the UI does not depend on
+   * the (mutable) authoring `CoachPackageContent` rows.
+   *
+   * Backend gap (PR-13 build): NO buyer-facing route exists today. The
+   * routes that exist are:
+   *   • `GET /v1/checkout/purchases` (CheckoutController) — purchase rows
+   *     only; no `drops` include.
+   *   • `GET /v1/coach/packages/:id/contents` (CoachPackageContentsController)
+   *     — coach-only authoring rows; not buyer-visible and not snapshotted.
+   *
+   * The `ScheduledDrop` Prisma rows exist (master plan §3 + PR-9 fan-out)
+   * but are read only by the dispatcher + internal services today. No
+   * `GET /v1/checkout/purchases/:id/drops` or `GET /v1/clients/me/deliverables`
+   * controller is registered (grep `@Get.*drop\|@Get.*deliverable` across
+   * `growth-project-backend/src@main` returns zero hits).
+   *
+   * PR-13 is mobile-only per scope, so this PR does NOT add the backend
+   * route. The client is wired to a clean, typed contract so wiring the
+   * UI to a real endpoint is a one-line change the moment the backend
+   * ships it. Until then a real 404 is surfaced as a retryable error
+   * (the UI shows the "We couldn't load deliverables" retry banner), and
+   * a 501 collapses into the calm `not_configured` envelope (UI shows
+   * the empty "No deliverables yet" state).
+   *
+   * Backend follow-up prereq (recommended shape — wire this and the UI
+   * lights up with zero mobile changes):
+   *
+   *   GET /v1/checkout/purchases/:purchaseId/drops
+   *
+   *   Auth: JwtAuthGuard; the buyer (req.user.id) must own
+   *         ClientPurchase.client_id === req.user.id (IDOR guard).
+   *   Response:
+   *     {
+   *       drops: Array<{
+   *         id, asset_type, asset_id, asset_revision_id,
+   *         cadence_kind, display_title, display_caption,
+   *         fire_at, fired_at, status, materialised_ref
+   *       }>
+   *     }
+   *   Source rows: `ScheduledDrop` where client_purchase_id === :purchaseId,
+   *                ordered by COALESCE(fired_at, fire_at, created_at) ASC.
+   *   Buyer-visibility filter (server-side):
+   *     status IN ('pending','due','fired')  -- master plan §1 #10:
+   *     failed/canceled/skipped go to the COACH_ALERT path; never the buyer.
+   *
+   * Transport envelope: same as the rest of clientPaymentsApi — `501`
+   * collapses to `not_configured`, `404` and other transport failures
+   * surface as retryable `reason: 'error'`.
+   */
+  getPurchaseDrops: async (
+    purchaseId: string,
+  ): Promise<PaymentsResult<ScheduledDropView[]>> => {
+    // PR-13 audit fix (P2-1): the backend route is a documented prereq
+    // and does not exist today. Under defense-in-depth, a 404 on THIS
+    // specific endpoint must NOT surface as a scary "Request failed
+    // with status code 404" message to the buyer — the screen is
+    // already feature-flagged off in production, but if the flag is
+    // flipped before the backend lands, we want a calm empty state, not
+    // an error banner. So `getPurchaseDrops` (and ONLY this method)
+    // maps an HTTP 404 to the `not_configured` envelope so the
+    // Deliverables screen renders the "No deliverables yet" empty state
+    // rather than the retry error banner. This is a deliberate, scoped
+    // exception to PR-1's "404 is never not_configured" rule, justified
+    // because this endpoint is documented to not exist yet (the PR-1
+    // sin was a route TYPO masquerading as not_configured; here the
+    // route is a public, tracked prereq). All other failure modes
+    // (5xx, network, 501) still flow through the standard `wrap`.
+    try {
+      const r = await api.get<{ drops?: ScheduledDropView[] } | ScheduledDropView[]>(
+        `/v1/checkout/purchases/${encodeURIComponent(purchaseId)}/drops`,
+      );
+      const data: ScheduledDropView[] = Array.isArray(r.data)
+        ? r.data
+        : Array.isArray((r.data as { drops?: ScheduledDropView[] })?.drops)
+          ? ((r.data as { drops: ScheduledDropView[] }).drops)
+          : [];
+      return { ok: true, data };
+    } catch (err) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      // 404 → calm empty state (endpoint not deployed yet — PR-13 prereq).
+      // 501 → calm empty state (deployment explicitly declined the route).
+      if (status === 404 || status === 501) {
+        return { ok: false, reason: 'not_configured' };
+      }
+      // Genuine transient failures (network/5xx) keep the retryable
+      // error envelope. The screen NEVER renders the raw message to the
+      // buyer — see DeliverablesScreen.tsx error branch — but it is
+      // preserved here for logger/observability wiring.
+      const message =
+        (err as { message?: string })?.message ?? 'Failed to load — try again.';
+      return { ok: false, reason: 'error', message };
+    }
+  },
+
   confirmCheckoutSession: async (
     sessionId: string,
   ): Promise<PaymentsResult<ClientPaymentStatus>> => {
@@ -544,6 +746,7 @@ export const clientPaymentsApi = {
       ok: true,
       data: {
         state: paid ? 'active' : 'none',
+        purchase_id: null, // confirm endpoint does not return the ClientPurchase row id
         package_id: null, // confirm endpoint does not return package_id
         package_name: package_name ?? null,
         current_period_end: null,

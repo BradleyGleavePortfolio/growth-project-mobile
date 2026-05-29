@@ -60,6 +60,26 @@ export const featureFlags = {
     'EXPO_PUBLIC_FF_VERIFIED_PROGRESS_SIGNOFF',
     isDev,
   ),
+
+  // ─── PR-13 — Buyer-facing Deliverables timeline (drip engine) ────────────
+  /**
+   * Buyer-facing Deliverables CTA on `ClientPackagesScreen` + the
+   * `DeliverablesScreen` it routes into.
+   *
+   * Default OFF in production until the backend ships
+   * `GET /v1/checkout/purchases/:purchaseId/drops` (the route is
+   * documented as a prereq in `specs/PR13_BUILD_REPORT.md` and
+   * `clientPaymentsApi.getPurchaseDrops`'s header). Today the endpoint
+   * does not exist, so the CTA would land on a 404; gating it off
+   * prevents every paying user from seeing a dead-feature error state.
+   *
+   * Flip on by setting `EXPO_PUBLIC_FF_DELIVERABLES=true` in the build
+   * env once the backend route lands. ON in __DEV__ so the screen is
+   * still reachable for local development against a stub.
+   *
+   * env: EXPO_PUBLIC_FF_DELIVERABLES
+   */
+  deliverables: readFlag('EXPO_PUBLIC_FF_DELIVERABLES', isDev),
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;
