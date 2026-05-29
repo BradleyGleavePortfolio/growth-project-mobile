@@ -4,14 +4,21 @@
  * Wired via `clientPaymentsApi`:
  *   - GET  /v1/clients/me/coach/packages    (packages list)
  *   - POST /v1/checkout/sessions            (CheckoutController — buy)
+ *   - GET  /v1/checkout/purchases           (CheckoutController — purchase history)
  *   - GET  /v1/checkout/entitlement         (CheckoutController — paid-access flag)
  *   - POST /v1/checkout/billing-portal      (CheckoutController — Stripe Billing Portal URL)
  *
  * `getPaymentStatus()` is a DERIVED call: there is no backend `/status`
- * route, so subscription state is composed from the entitlement flag and
- * the package list's `is_current` marker. Fields the backend does not
- * expose (period_end, trial_ends_at, dunning) arrive as null and the UI
- * omits the corresponding rows rather than fabricating values.
+ * route, so subscription state is composed from the REAL purchases list
+ * (the `ClientPurchase` Prisma row carries `entitlement_active`, `status`,
+ * `current_period_end`, `package_id`) joined against the packages list
+ * by `package_id` for the human-readable name. Fields the backend does
+ * not expose (trial_ends_at, dunning) arrive as null and the UI omits
+ * the corresponding rows rather than fabricating values. The "Current"
+ * pill on each card now reads `status.data.package_id === pkg.id`
+ * instead of a fabricated `pkg.is_current` field (round-3 audit fix —
+ * the backend `CoachPackage` schema has no `is_current` column, so the
+ * pill never rendered before).
  *
  * Behaviour contract:
  *  - 501 from packages OR entitlement => "Your coach has not enabled
@@ -355,7 +362,12 @@ export default function ClientPackagesScreen() {
         ) : (
           packages.data.map((pkg) => {
             const busy = checkoutBusyId === pkg.id;
-            const current = pkg.is_current;
+            // PR-1 round 3: "current package" comes from the real backend
+            // ClientPurchase row surfaced via getPaymentStatus().package_id,
+            // not from a fabricated `is_current` field on the package row
+            // (the backend CoachPackage schema has no such column —
+            // backend prisma/schema.prisma:2942-3000).
+            const current = status.ok && status.data.package_id === pkg.id;
             return (
               <View key={pkg.id} style={styles.pkgCard}>
                 <View style={styles.pkgHeader}>

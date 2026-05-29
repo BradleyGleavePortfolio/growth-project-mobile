@@ -63,7 +63,6 @@ describe('PaywallSheet', () => {
           interval: 'month',
           trial_days: null,
           features: [],
-          is_current: false,
         },
       ],
     });
@@ -129,7 +128,6 @@ describe('PaywallSheet', () => {
           interval: null,
           trial_days: null,
           features: [],
-          is_current: false,
         },
       ],
     });
