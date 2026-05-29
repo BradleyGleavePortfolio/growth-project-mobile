@@ -1,18 +1,38 @@
 /**
  * ClientPackagesScreen — packages the client's coach offers + checkout.
  *
- * Wired to backend PR #215 via `clientPaymentsApi`:
- *   - GET  /v1/clients/me/coach/packages
- *   - POST /v1/clients/me/coach/checkout
- *   - GET  /v1/clients/me/payment-status
+ * Wired via `clientPaymentsApi`:
+ *   - GET  /v1/clients/me/coach/packages    (packages list)
+ *   - POST /v1/checkout/sessions            (CheckoutController — buy)
+ *   - GET  /v1/checkout/purchases           (CheckoutController — purchase history)
+ *   - GET  /v1/checkout/entitlement         (CheckoutController — paid-access flag)
+ *   - POST /v1/checkout/billing-portal      (CheckoutController — Stripe Billing Portal URL)
+ *
+ * `getPaymentStatus()` is a DERIVED call: there is no backend `/status`
+ * route, so subscription state is composed from the REAL purchases list
+ * (the `ClientPurchase` Prisma row carries `entitlement_active`, `status`,
+ * `current_period_end`, `package_id`) joined against the packages list
+ * by `package_id` for the human-readable name. Fields the backend does
+ * not expose (trial_ends_at, dunning) arrive as null and the UI omits
+ * the corresponding rows rather than fabricating values. The "Current"
+ * pill on each card now reads `status.data.package_id === pkg.id`
+ * instead of a fabricated `pkg.is_current` field (round-3 audit fix —
+ * the backend `CoachPackage` schema has no `is_current` column, so the
+ * pill never rendered before).
  *
  * Behaviour contract:
- *  - 404 / 501 from the packages endpoint => "Your coach has not enabled
- *    self-serve checkout yet" empty state with a "Message your coach" CTA.
- *    No fake packages, no placeholder prices.
- *  - 'past_due' from payment-status => dunning banner at top with the
- *    backend-supplied summary verbatim and an "Update card" button that
- *    opens the Stripe billing portal in the branded in-app webview.
+ *  - 501 from packages OR entitlement => "Your coach has not enabled
+ *    self-serve checkout yet" empty state with a "Message your coach"
+ *    CTA. A real 404 / transport error is surfaced as a retryable error
+ *    banner — it is no longer silently shown as "not configured" (PR-1
+ *    in-app checkout fix). The true "not configured" state is derived
+ *    from the explicit `not_configured` envelope plus an empty package
+ *    list / inactive entitlement, never from a 404 alone.
+ *  - The dunning banner is reachable only when the backend ships a real
+ *    past-due signal; until then `status.dunning` is always null and the
+ *    banner does not render. The standalone
+ *    `clientPaymentsApi.createBillingPortalSession()` is still available
+ *    for any future surface that needs to mint a portal URL on demand.
  *  - Tapping a package opens Stripe Checkout in the branded in-app
  *    webview (Apple Rule 3.1.3(b)/(e) B2B exemption). The success /
  *    cancel deep links are intercepted by the webview screen and routed
@@ -231,10 +251,19 @@ export default function ClientPackagesScreen() {
     return <SkeletonScreen count={5} />;
   }
 
+  // PR-1: derive "your coach has not enabled self-serve checkout" from
+  // real backend signal, not from a 404. The explicit 501 → not_configured
+  // envelope on EITHER packages or payment-status is one signal; an empty
+  // published package list + `state: 'none'` from a healthy payment-status
+  // call is the other. A 404 / transport error on either now arrives as
+  // `reason: 'error'` and lands in the retryable error branches below
+  // instead of being silently mapped to the calm "not enabled yet" gate.
   const packagesNotConfigured = !packages.ok && packages.reason === 'not_configured';
+  const packagesEmptyOk = packages.ok && packages.data.length === 0;
   const statusUnavailable = !status.ok && status.reason === 'not_configured';
   const statusNone = status.ok && status.data.state === 'none';
-  const notConfigured = packagesNotConfigured && (statusUnavailable || statusNone);
+  const notConfigured =
+    (packagesNotConfigured || packagesEmptyOk) && (statusUnavailable || statusNone);
 
   return (
     <ScrollView
@@ -333,7 +362,12 @@ export default function ClientPackagesScreen() {
         ) : (
           packages.data.map((pkg) => {
             const busy = checkoutBusyId === pkg.id;
-            const current = pkg.is_current;
+            // PR-1 round 3: "current package" comes from the real backend
+            // ClientPurchase row surfaced via getPaymentStatus().package_id,
+            // not from a fabricated `is_current` field on the package row
+            // (the backend CoachPackage schema has no such column —
+            // backend prisma/schema.prisma:2942-3000).
+            const current = status.ok && status.data.package_id === pkg.id;
             return (
               <View key={pkg.id} style={styles.pkgCard}>
                 <View style={styles.pkgHeader}>

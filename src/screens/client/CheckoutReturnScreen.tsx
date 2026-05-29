@@ -5,11 +5,18 @@
  *   tgp://checkout/success?session_id=<sid>  → outcome === 'success'
  *   tgp://checkout/cancel                    → outcome === 'cancel'
  *
- * On success we call /v1/clients/me/coach/checkout/confirm to verify the
- * session actually completed before showing a celebratory state — Stripe
- * webhooks may not have landed by the time the user is back in the app,
- * so we re-fetch payment status from the backend. On cancel we route back
- * to the packages screen without a celebration.
+ * On success we call `GET /v1/checkout/sessions/:id/confirm` (the real
+ * CheckoutController confirm route) to verify the session actually
+ * completed before showing a celebratory state — Stripe webhooks may not
+ * have landed by the time the user is back in the app, so we re-fetch
+ * payment status from the backend. On cancel we route back to the
+ * packages screen without a celebration.
+ *
+ * History: this previously did `POST /clients/me/coach/checkout/confirm`,
+ * which is both the wrong verb AND a non-existent path on the backend.
+ * The 404 used to be swallowed as `reason: 'not_configured'`, which
+ * silently kept the buyer in "confirmation pending" forever even though
+ * the charge had succeeded. Both bugs are fixed here.
  */
 
 import React, { useEffect, useMemo, useState } from 'react';

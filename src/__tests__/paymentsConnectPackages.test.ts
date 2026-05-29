@@ -65,19 +65,26 @@ beforeEach(() => {
 // ── 1) clientPaymentsApi envelope ──────────────────────────────────────────
 describe('clientPaymentsApi', () => {
   it('returns { ok: true, data } when the package list is live', async () => {
+    // PR-1 round 3 (audit fix): the backend `CoachPackage` Prisma model
+    // (prisma/schema.prisma:2942-3000) has NO `is_current` column. The
+    // mock must reflect ONLY columns that actually exist on the wire.
+    // Mocking a fabricated field is exactly how the previous bug was
+    // masked. The mobile `ClientCoachPackage` type no longer carries
+    // `is_current` either — the screen reads "current plan" from
+    // `getPaymentStatus().data.package_id` instead.
     mockedApi.get.mockResolvedValueOnce({
       data: [
         {
           id: 'pkg_1',
           name: '1:1 Coaching',
           description: 'Weekly check-ins',
+          // Backend column is `billing_type`. Normalizer accepts either,
+          // and prefers `type` when present so tests can pass either.
           type: 'recurring',
           price: 199,
           currency: 'USD',
           interval: 'month',
-          trial_days: null,
           features: ['Weekly check-ins', 'Custom macros'],
-          is_current: false,
         },
       ],
     });
@@ -86,94 +93,264 @@ describe('clientPaymentsApi', () => {
     expect(res.ok).toBe(true);
     if (res.ok) {
       expect(res.data[0].name).toBe('1:1 Coaching');
+      // Guard against regressions: `is_current` is intentionally NOT on
+      // the mobile type. If it ever comes back, this assertion forces
+      // the author to revisit the round-3 audit.
+      expect((res.data[0] as unknown as Record<string, unknown>).is_current).toBeUndefined();
     }
   });
 
-  it('returns not_configured on 404 from packages', async () => {
-    mockedApi.get.mockRejectedValueOnce({ response: { status: 404 } });
-    const res = await clientPaymentsApi.getPackages();
-    expect(res).toEqual({ ok: false, reason: 'not_configured' });
-  });
-
-  it('returns not_configured on 501 from payment-status', async () => {
-    mockedApi.get.mockRejectedValueOnce({ response: { status: 501 } });
-    const res = await clientPaymentsApi.getPaymentStatus();
-    expect(res).toEqual({ ok: false, reason: 'not_configured' });
-  });
-
-  it('surfaces dunning summary + update_card_url verbatim', async () => {
-    mockedApi.get.mockResolvedValueOnce({
-      data: {
-        state: 'past_due',
-        package_name: '1:1 Coaching',
-        current_period_end: '2026-05-31T00:00:00Z',
-        trial_ends_at: null,
-        dunning: {
-          summary: 'Your card was declined on May 12. Update it to keep access.',
-          update_card_url: 'https://billing.stripe.com/p/session/test_xxx',
-          grace_until: '2026-05-19T00:00:00Z',
-        },
-      },
+  it('surfaces a 404 from packages as a retryable error, NOT not_configured', async () => {
+    // PR-1 (in-app checkout fix): a 404 used to be silently mapped to
+    // `not_configured`, which masked four dead routes for weeks. Real
+    // 404s must surface as `reason: 'error'` so the UI offers a retry
+    // instead of telling the buyer their coach hasn't enabled payments.
+    mockedApi.get.mockRejectedValueOnce({
+      response: { status: 404 },
+      message: 'Request failed with status code 404',
     });
+    const res = await clientPaymentsApi.getPackages();
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.reason).toBe('error');
+    }
+  });
+
+  // PR-1 round 3 (audit fix): there is no backend `/status` route and
+  // the round-2 derivation referenced a fabricated `is_current` field
+  // that does not exist on the backend `CoachPackage` Prisma model.
+  // `getPaymentStatus` is now derived from the REAL routes:
+  //   GET /v1/checkout/purchases     (returns raw ClientPurchase rows;
+  //                                   verified backend
+  //                                   src/checkout/checkout.controller.ts:147
+  //                                   + src/checkout/checkout.service.ts:623)
+  //   GET /v1/clients/me/coach/packages
+  // Every field asserted here maps to a real Prisma column on
+  // `ClientPurchase` (schema.prisma:3189-3256) or `CoachPackage`
+  // (schema.prisma:2942-3000). Mocks must NOT invent fields.
+
+  it('derives state=active + package_id/name from the entitlement_active purchase row', async () => {
+    mockedApi.get
+      // call 1: getPurchases
+      .mockResolvedValueOnce({
+        data: {
+          purchases: [
+            {
+              id: 'pur_1',
+              package_id: 'pkg_1',
+              status: 'paid', // ClientPurchase.status (schema.prisma:3214)
+              entitlement_active: true, // ClientPurchase.entitlement_active (schema.prisma:3215)
+              access_expires_at: null,
+              current_period_end: '2026-07-01T00:00:00Z',
+              cancel_at_period_end: false,
+              canceled_at: null,
+              created_at: '2026-05-01T00:00:00Z',
+            },
+          ],
+          next_cursor: null,
+        },
+      })
+      // call 2: getPackages (CoachPackage Prisma rows — schema.prisma:2942)
+      .mockResolvedValueOnce({
+        data: [
+          { id: 'pkg_1', name: '1:1 Coaching', amount_cents: 19900, currency: 'USD', billing_type: 'recurring', interval: 'month' },
+          { id: 'pkg_2', name: 'Group', amount_cents: 4900, currency: 'USD', billing_type: 'recurring', interval: 'month' },
+        ],
+      });
+    const res = await clientPaymentsApi.getPaymentStatus();
+    expect(mockedApi.get).toHaveBeenCalledWith('/v1/checkout/purchases');
+    expect(mockedApi.get).toHaveBeenCalledWith('/v1/clients/me/coach/packages');
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.data.state).toBe('active');
+      expect(res.data.package_id).toBe('pkg_1');
+      expect(res.data.package_name).toBe('1:1 Coaching');
+      // Real ClientPurchase column — pass through unchanged.
+      expect(res.data.current_period_end).toBe('2026-07-01T00:00:00Z');
+      // No backend column today — must be null, never invented.
+      expect(res.data.trial_ends_at).toBeNull();
+      // No client-facing dunning route today — must be null. The screen's
+      // past-due banner will light up once the backend ships one.
+      expect(res.data.dunning).toBeNull();
+    }
+  });
+
+  it('drops a purchase whose access_expires_at is in the past (mirrors backend hasActiveEntitlement)', async () => {
+    // Backend rule (checkout.service.ts:744-757): entitlement_active
+    // alone is not enough — the row also needs access_expires_at null
+    // or in the future. Mobile must mirror to avoid a stale row
+    // outliving its server-side entitlement.
+    mockedApi.get
+      .mockResolvedValueOnce({
+        data: {
+          purchases: [
+            {
+              id: 'pur_old',
+              package_id: 'pkg_1',
+              status: 'paid',
+              entitlement_active: true,
+              access_expires_at: '2020-01-01T00:00:00Z', // long expired
+              current_period_end: null,
+              cancel_at_period_end: false,
+              canceled_at: null,
+              created_at: '2020-01-01T00:00:00Z',
+            },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({ data: [] });
+    const res = await clientPaymentsApi.getPaymentStatus();
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.data.state).toBe('none');
+      expect(res.data.package_id).toBeNull();
+      expect(res.data.package_name).toBeNull();
+    }
+  });
+
+  it('surfaces state=past_due even when entitlement has been turned off', async () => {
+    // ClientPurchase.status === 'past_due' is real backend signal —
+    // schema.prisma:3214. The screen renders a (currently null) dunning
+    // banner against this state; entitlement may already be inactive.
+    mockedApi.get
+      .mockResolvedValueOnce({
+        data: {
+          purchases: [
+            {
+              id: 'pur_pd',
+              package_id: 'pkg_1',
+              status: 'past_due',
+              entitlement_active: false,
+              access_expires_at: null,
+              current_period_end: '2026-04-30T00:00:00Z',
+              cancel_at_period_end: false,
+              canceled_at: null,
+              created_at: '2026-04-01T00:00:00Z',
+            },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({
+        data: [{ id: 'pkg_1', name: '1:1 Coaching', amount_cents: 19900, currency: 'USD', billing_type: 'recurring' }],
+      });
     const res = await clientPaymentsApi.getPaymentStatus();
     expect(res.ok).toBe(true);
     if (res.ok) {
       expect(res.data.state).toBe('past_due');
-      expect(res.data.dunning?.summary).toMatch(/declined/);
-      expect(res.data.dunning?.update_card_url).toMatch(/^https:\/\//);
+      expect(res.data.package_id).toBe('pkg_1');
+      expect(res.data.package_name).toBe('1:1 Coaching');
     }
   });
 
-  it('mints a billing-portal URL when past_due lacks update_card_url (audit M10)', async () => {
+  it('derives state=none when the user has no purchases at all', async () => {
+    mockedApi.get
+      .mockResolvedValueOnce({ data: { purchases: [] } })
+      .mockResolvedValueOnce({ data: [] });
+    const res = await clientPaymentsApi.getPaymentStatus();
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.data.state).toBe('none');
+      expect(res.data.package_id).toBeNull();
+      expect(res.data.package_name).toBeNull();
+    }
+  });
+
+  it('returns not_configured when /v1/checkout/purchases is 501', async () => {
+    mockedApi.get
+      .mockRejectedValueOnce({ response: { status: 501 } })
+      // packages call still fires in parallel — benign response is fine
+      .mockResolvedValueOnce({ data: [] });
+    const res = await clientPaymentsApi.getPaymentStatus();
+    expect(res).toEqual({ ok: false, reason: 'not_configured' });
+  });
+
+  it('returns not_configured when packages list is 501', async () => {
+    mockedApi.get
+      .mockResolvedValueOnce({ data: { purchases: [] } })
+      .mockRejectedValueOnce({ response: { status: 501 } });
+    const res = await clientPaymentsApi.getPaymentStatus();
+    expect(res).toEqual({ ok: false, reason: 'not_configured' });
+  });
+
+  it('surfaces a 404 from purchases as a retryable error, NOT not_configured', async () => {
+    // Round-1 regression guard: 404 must not be silently mapped to
+    // not_configured. We've now had this bug land twice — once on the
+    // dead checkout routes, and once on the invented /status route. The
+    // assertion is identical for either upstream.
+    mockedApi.get
+      .mockRejectedValueOnce({
+        response: { status: 404 },
+        message: 'Request failed with status code 404',
+      })
+      .mockResolvedValueOnce({ data: [] });
+    const res = await clientPaymentsApi.getPaymentStatus();
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.reason).toBe('error');
+    }
+  });
+
+  it('surfaces a 404 from packages list as a retryable error, NOT not_configured', async () => {
+    mockedApi.get
+      .mockResolvedValueOnce({ data: { purchases: [] } })
+      .mockRejectedValueOnce({
+        response: { status: 404 },
+        message: 'Request failed with status code 404',
+      });
+    const res = await clientPaymentsApi.getPaymentStatus();
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.reason).toBe('error');
+    }
+  });
+
+  it('getPurchases GETs /v1/checkout/purchases and unwraps the envelope', async () => {
     mockedApi.get.mockResolvedValueOnce({
       data: {
-        state: 'past_due',
-        package_name: '1:1 Coaching',
-        current_period_end: '2026-05-31T00:00:00Z',
-        trial_ends_at: null,
-        dunning: null,
+        purchases: [
+          {
+            id: 'pur_1',
+            package_id: 'pkg_1',
+            status: 'paid',
+            entitlement_active: true,
+            access_expires_at: null,
+            current_period_end: null,
+            cancel_at_period_end: false,
+            canceled_at: null,
+            created_at: '2026-05-01T00:00:00Z',
+          },
+        ],
+        next_cursor: null,
       },
     });
+    const res = await clientPaymentsApi.getPurchases();
+    expect(mockedApi.get).toHaveBeenCalledWith('/v1/checkout/purchases');
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.data).toHaveLength(1);
+      expect(res.data[0].entitlement_active).toBe(true);
+    }
+  });
+
+  it('createBillingPortalSession POSTs /v1/checkout/billing-portal', async () => {
     mockedApi.post.mockResolvedValueOnce({
       data: { url: 'https://billing.stripe.com/p/session/portal_fresh' },
     });
-    const res = await clientPaymentsApi.getPaymentStatus();
+    const res = await clientPaymentsApi.createBillingPortalSession();
+    expect(mockedApi.post).toHaveBeenCalledWith('/v1/checkout/billing-portal', {});
     expect(res.ok).toBe(true);
     if (res.ok) {
-      expect(res.data.state).toBe('past_due');
-      expect(res.data.dunning?.update_card_url).toBe(
-        'https://billing.stripe.com/p/session/portal_fresh',
-      );
+      expect(res.data.url).toMatch(/^https:\/\/billing\.stripe\.com\//);
     }
-    expect(mockedApi.post).toHaveBeenCalledWith(
-      '/v1/clients/me/coach/billing-portal',
-      expect.any(Object),
-    );
   });
 
-  it('marks dunning.portal_unavailable when past_due AND billing-portal mint fails (round-3 residual fix)', async () => {
-    mockedApi.get.mockResolvedValueOnce({
-      data: {
-        state: 'past_due',
-        package_name: '1:1 Coaching',
-        current_period_end: '2026-05-31T00:00:00Z',
-        trial_ends_at: null,
-        dunning: null,
-      },
-    });
-    mockedApi.post.mockRejectedValueOnce({
-      response: { status: 500, data: {} },
-      message: 'Server error',
-    });
-    const res = await clientPaymentsApi.getPaymentStatus();
+  it('getEntitlement GETs /v1/checkout/entitlement (audit fix — was /v1/clients/me/coach/entitlement)', async () => {
+    mockedApi.get.mockResolvedValueOnce({ data: { active: true } });
+    const res = await clientPaymentsApi.getEntitlement();
+    expect(mockedApi.get).toHaveBeenCalledWith('/v1/checkout/entitlement');
     expect(res.ok).toBe(true);
     if (res.ok) {
-      expect(res.data.state).toBe('past_due');
-      expect(res.data.dunning).not.toBeNull();
-      expect(res.data.dunning?.update_card_url).toBeNull();
-      expect(res.data.dunning?.portal_unavailable).toBe(true);
-      // Summary must still be present so the banner has something to render.
-      expect(typeof res.data.dunning?.summary).toBe('string');
+      expect(res.data.active).toBe(true);
     }
   });
 
@@ -187,35 +364,76 @@ describe('clientPaymentsApi', () => {
     });
     await clientPaymentsApi.createCheckoutSession('pkg_1');
     expect(mockedApi.post).toHaveBeenCalledWith(
-      '/v1/clients/me/coach/checkout',
+      '/v1/checkout/sessions',
       expect.objectContaining({
         package_id: 'pkg_1',
         success_url: expect.stringMatching(/^com\.growthproject\.app:\/\/checkout\/success/),
         cancel_url: 'com.growthproject.app://checkout/cancel',
+      }),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'Idempotency-Key': expect.any(String),
+        }),
       }),
     );
     // The success URL must include the Stripe session-id template token
     // so the backend hands it back to the app on return.
     const call = mockedApi.post.mock.calls[0][1] as { success_url: string };
     expect(call.success_url).toContain('{CHECKOUT_SESSION_ID}');
+    // R19: every checkout-session POST carries an Idempotency-Key so a
+    // double-tap on Buy does not mint duplicate Stripe sessions.
+    const config = mockedApi.post.mock.calls[0][2] as {
+      headers: { 'Idempotency-Key'?: string };
+    };
+    expect(config.headers['Idempotency-Key']).toBeTruthy();
   });
 
-  it('confirmCheckoutSession POSTs the session id to /confirm', async () => {
-    mockedApi.post.mockResolvedValueOnce({
-      data: {
-        state: 'active',
-        package_name: '1:1 Coaching',
-        current_period_end: null,
-        trial_ends_at: null,
-        dunning: null,
-      },
+  it('confirmCheckoutSession adapts the real {paid, status, package_name} backend shape to ClientPaymentStatus', async () => {
+    // Round-3 audit: the real backend confirm endpoint returns
+    // `{ paid: boolean; status: string; package_name: string | null }`
+    // — verified `growth-project-backend/src/checkout/checkout.service.ts:677-735`.
+    // The previous test mocked a fabricated `{ state, package_name, ... }`
+    // shape and would have passed even though the wire shape is different.
+    mockedApi.get.mockResolvedValueOnce({
+      data: { paid: true, status: 'paid', package_name: '1:1 Coaching' },
     });
     const res = await clientPaymentsApi.confirmCheckoutSession('cs_test_abc');
-    expect(mockedApi.post).toHaveBeenCalledWith(
-      '/v1/clients/me/coach/checkout/confirm',
-      { session_id: 'cs_test_abc' },
+    expect(mockedApi.get).toHaveBeenCalledWith(
+      '/v1/checkout/sessions/cs_test_abc/confirm',
     );
     expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.data.state).toBe('active');
+      expect(res.data.package_name).toBe('1:1 Coaching');
+      // Confirm payload does not return period_end / package_id / dunning.
+      expect(res.data.package_id).toBeNull();
+      expect(res.data.current_period_end).toBeNull();
+      expect(res.data.dunning).toBeNull();
+    }
+  });
+
+  it('confirmCheckoutSession surfaces state=none when backend reports paid=false', async () => {
+    mockedApi.get.mockResolvedValueOnce({
+      data: { paid: false, status: 'unpaid', package_name: null },
+    });
+    const res = await clientPaymentsApi.confirmCheckoutSession('cs_test_pending');
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.data.state).toBe('none');
+      expect(res.data.package_name).toBeNull();
+    }
+  });
+
+  it('confirmCheckoutSession URL-encodes the session id in the path', async () => {
+    mockedApi.get.mockResolvedValueOnce({
+      data: { paid: false, status: 'unpaid', package_name: null },
+    });
+    // Stripe session ids are alphanumeric+underscore in practice, but defend
+    // against any caller passing an id with reserved characters.
+    await clientPaymentsApi.confirmCheckoutSession('cs/with/slash');
+    expect(mockedApi.get).toHaveBeenCalledWith(
+      '/v1/checkout/sessions/cs%2Fwith%2Fslash/confirm',
+    );
   });
 });
 
