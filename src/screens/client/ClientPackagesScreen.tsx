@@ -60,6 +60,7 @@ import {
   type PaymentsResult,
 } from '../../api/clientPaymentsApi';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { featureFlags } from '../../config/featureFlags';
 
 function formatMoney(amount: number, currency: string): string {
   try {
@@ -303,11 +304,16 @@ export default function ClientPackagesScreen() {
               ? `Renews ${formatDate(status.data.current_period_end)}`
               : ''}
           </Text>
-          {/* PR-13 — buyer-facing Deliverables entry. Only shown when we
-              have a real purchase_id (state !== 'none'); when state ===
-              'none' there is no purchase to list drops for, so the row
-              is hidden rather than showing a dead-end. */}
-          {status.data.purchase_id ? (
+          {/* PR-13 — buyer-facing Deliverables entry. Two gates:
+              (1) feature flag `deliverables` — OFF in production until
+                  the backend ships `GET /v1/checkout/purchases/:id/drops`
+                  (the screen exists but the data source does not). This
+                  prevents every paying user from landing on a 404 error
+                  state today. Flip via EXPO_PUBLIC_FF_DELIVERABLES=true.
+              (2) real `purchase_id` — when state === 'none' there is no
+                  purchase to list drops for, so the row is hidden
+                  rather than showing a dead-end. */}
+          {featureFlags.deliverables && status.data.purchase_id ? (
             <TouchableOpacity
               accessibilityRole="button"
               accessibilityLabel="View what's included in your plan"

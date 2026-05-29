@@ -1,16 +1,25 @@
 /**
- * ClientDailyMealPlanScreen — today's assigned meal plan as a slot-
- * grouped list.
+ * ClientDailyMealPlanScreen — assigned meal plan as a slot-grouped list.
  *
- * Reads /me/meal-plan/today via useMealPlanToday(). The endpoint
- * returns one or more active assignments for the requested date; we
- * pick the most-recent (first in the API's starts_on DESC order) and
- * render its slots grouped by slot_label.
+ * Reads `/me/meal-plan/today` via `useMealPlanToday(dateIso?)`. The
+ * endpoint returns one or more active assignments for the requested
+ * date; we pick the most-recent (first in the API's starts_on DESC
+ * order) and render its slots grouped by slot_label.
  *
- * When no assignment is active for today we render an honest empty
- * state — no fabricated suggestions, no "ask your coach" CTA that
- * cannot do anything from here. The client-side surface is read-only;
- * the coach assigns plans from CoachDailyMealPlanScreen.
+ * Route param `date` (optional, ISO `YYYY-MM-DD`): when present, the
+ * screen loads the plan that covers that day instead of today. Added
+ * for PR-13 audit fix (P2-2): the Deliverables timeline routes a
+ * delivered `meal_plan` drop into this screen with the drop's
+ * `materialised_ref` (start-date string) as `date`, so tapping a
+ * delivered plan opens THAT plan rather than silently showing today.
+ * The route entry in `MoreStackParamList` already typed this param as
+ * `{ date?: string } | undefined` — the screen was the one that needed
+ * to honor it. Defaults to today when omitted (the legacy call site).
+ *
+ * When no assignment is active for the chosen day we render an honest
+ * empty state — no fabricated suggestions, no "ask your coach" CTA
+ * that cannot do anything from here. The client-side surface is
+ * read-only; the coach assigns plans from `CoachDailyMealPlanScreen`.
  */
 
 import React, { useCallback, useMemo } from 'react';
@@ -21,6 +30,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useRoute, type RouteProp } from '@react-navigation/native';
 import {
   SLOT_LABELS,
   type DailyMealPlanAssignmentWithPlan,
@@ -32,12 +42,31 @@ import { spacing, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import type { SemanticTokens } from '../../theme/tokens';
 
+// Route params: optional ISO date string (YYYY-MM-DD). Falls back to
+// today (useMealPlanToday's default) when omitted, matching the legacy
+// call site behaviour.
+type MealPlanRouteParams = { date?: string } | undefined;
+
+// Accept either YYYY-MM-DD or a full ISO timestamp; the hook + backend
+// query parameter expect YYYY-MM-DD so we trim accordingly.
+function normaliseDateParam(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  // Reject anything that isn't a plausible date string so a malformed
+  // route param can't propagate into the query string. Defense in depth
+  // — the typed param is `string` but routes can be deep-linked.
+  const match = /^(\d{4}-\d{2}-\d{2})/.exec(raw);
+  return match ? match[1] : undefined;
+}
+
 export default function ClientDailyMealPlanScreen() {
   const { semanticColors: sc } = useTheme();
   const styles = makeStyles(sc);
 
+  const route = useRoute<RouteProp<Record<string, MealPlanRouteParams>, string>>();
+  const dateParam = normaliseDateParam(route.params?.date);
+
   const { data, isLoading, isError, refetch, isRefetching } =
-    useMealPlanToday();
+    useMealPlanToday(dateParam);
 
   const onRefresh = useCallback(() => {
     void refetch();
@@ -76,7 +105,7 @@ export default function ClientDailyMealPlanScreen() {
       }
     >
       <Text style={[typography.h2, { color: sc.textPrimary }]}>
-        Today's meals
+        {dateParam ? 'Meal plan' : "Today's meals"}
       </Text>
 
       {isLoading ? (
@@ -88,7 +117,7 @@ export default function ClientDailyMealPlanScreen() {
           Could not load today's plan. Pull to retry.
         </Text>
       ) : !active ? (
-        <EmptyState styles={styles} sc={sc} />
+        <EmptyState styles={styles} sc={sc} dateOverride={dateParam} />
       ) : (
         <>
           <Text style={[typography.bodySmall, { color: sc.accent }]}>
@@ -139,15 +168,24 @@ function SlotGroup({
   );
 }
 
-function EmptyState({ styles, sc }: { styles: Styles; sc: SemanticTokens }) {
+function EmptyState({
+  styles,
+  sc,
+  dateOverride,
+}: {
+  styles: Styles;
+  sc: SemanticTokens;
+  dateOverride?: string;
+}) {
   return (
     <View style={styles.card}>
       <Text style={[typography.h3, { color: sc.textPrimary }]}>
-        No plan for today
+        {dateOverride ? 'No plan for this day' : 'No plan for today'}
       </Text>
       <Text style={[typography.body, { color: sc.textMuted }]}>
-        Your coach has not assigned a meal plan that covers today. Once
-        they do, the slot list will appear here.
+        {dateOverride
+          ? 'Your coach has not assigned a meal plan that covers this day. Once they do, the slot list will appear here.'
+          : 'Your coach has not assigned a meal plan that covers today. Once they do, the slot list will appear here.'}
       </Text>
     </View>
   );

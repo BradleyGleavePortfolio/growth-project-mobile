@@ -102,15 +102,37 @@ describe('clientPaymentsApi.getPurchaseDrops — typed contract', () => {
     if (!res.ok) expect(res.reason).toBe('not_configured');
   });
 
-  it('surfaces a 404 as a retryable error — NEVER not_configured', async () => {
-    // Same regression posture PR-1 codified: 404 is the wrong path (the
-    // documented backend gap until the buyer-facing drops endpoint
-    // lands), not a declined-on-this-deployment signal. Buyer sees a
-    // retry banner, not a calm "your coach hasn't enabled deliverables"
-    // empty state.
+  it('maps a 404 on the documented-prereq drops route to not_configured (PR-13 audit P2-1)', async () => {
+    // Scoped exception to PR-1's "404 is never not_configured" rule:
+    // the buyer-facing drops endpoint is a documented backend prereq
+    // (PR13_BUILD_REPORT.md) that does not exist yet. As defense-in-
+    // depth — on top of the production feature flag that hides the
+    // CTA entirely — a 404 here renders the calm "No deliverables yet"
+    // empty state, NOT a "Request failed with status code 404" banner
+    // (Rule 9 / Rule 17). The PR-1 sin was different in kind: a route
+    // TYPO that 404'd silently. This route is publicly tracked.
     mockedApi.get.mockRejectedValueOnce({
       response: { status: 404 },
       message: 'Request failed with status code 404',
+    });
+    const res = await clientPaymentsApi.getPurchaseDrops('p');
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.reason).toBe('not_configured');
+  });
+
+  it('a 5xx remains a retryable error (only 404 + 501 collapse to not_configured)', async () => {
+    mockedApi.get.mockRejectedValueOnce({
+      response: { status: 503 },
+      message: 'Service unavailable',
+    });
+    const res = await clientPaymentsApi.getPurchaseDrops('p');
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.reason).toBe('error');
+  });
+
+  it('a network failure (no response) remains a retryable error', async () => {
+    mockedApi.get.mockRejectedValueOnce({
+      message: 'Network Error',
     });
     const res = await clientPaymentsApi.getPurchaseDrops('p');
     expect(res.ok).toBe(false);

@@ -211,6 +211,19 @@ describe('DeliverablesScreen — source guards', () => {
   it('renders a SkeletonScreen while loading', () => {
     expect(SRC).toMatch(/SkeletonScreen/);
   });
+
+  it('does NOT render raw axios error.message verbatim (Rule 9 / Rule 17)', () => {
+    // PR-13 audit fix (P2-1): the error state must never show
+    // `result.message` directly — that would surface "Request failed
+    // with status code 404" or similar server internals to the buyer.
+    expect(SRC).not.toMatch(/<Text[^>]*>\s*\{result\.message\}/);
+    expect(SRC).not.toMatch(/style=\{styles\.emptyBody\}\s*>\s*\{result\.message\}/);
+  });
+
+  it('uses a valid React Native accessibilityRole (no "summary")', () => {
+    // RN does not document a "summary" role; audit P3.
+    expect(SRC).not.toMatch(/accessibilityRole=['"]summary['"]/);
+  });
 });
 
 // ─── Navigation wiring guards ────────────────────────────────────────────────
@@ -235,6 +248,22 @@ describe('navigation wiring — Deliverables', () => {
     expect(packagesScreen).toMatch(/'Deliverables'/);
     expect(packagesScreen).toMatch(/view-deliverables-cta/);
     expect(packagesScreen).toMatch(/purchase_id/);
+  });
+
+  it('Deliverables CTA is feature-flag gated (audit P2-1)', () => {
+    // The CTA must be hidden in production until the backend route lands.
+    // We expect a `featureFlags.deliverables` gate in the conditional.
+    expect(packagesScreen).toMatch(/featureFlags\.deliverables/);
+  });
+
+  it('featureFlags exposes a `deliverables` flag that defaults OFF in prod', () => {
+    const flags = readSrc('config/featureFlags.ts');
+    // The flag must read EXPO_PUBLIC_FF_DELIVERABLES so ops can flip it.
+    expect(flags).toMatch(/deliverables:\s*readFlag\(['"]EXPO_PUBLIC_FF_DELIVERABLES['"]/);
+    // Default value should be isDev (or false) — not a literal `true`.
+    expect(flags).not.toMatch(
+      /deliverables:\s*readFlag\(['"]EXPO_PUBLIC_FF_DELIVERABLES['"],\s*true\b/,
+    );
   });
 });
 
@@ -383,15 +412,23 @@ describe('DeliverablesScreen — RTL mount', () => {
     expect(getByText('No deliverables yet')).toBeTruthy();
   });
 
-  it('renders the error state with a Retry button when the request fails', async () => {
+  it('renders the error state with a Retry button when the request fails (no raw axios message)', async () => {
+    // Audit P2-1: even when the API returns a raw axios message like
+    // "Request failed with status code 404" (or "Network Error"), the
+    // screen must NEVER render it verbatim. The buyer sees a friendly,
+    // action-oriented copy; the technical message stays in the result
+    // object for the logger only.
     mockGetPurchaseDrops.mockResolvedValue({
       ok: false,
       reason: 'error',
-      message: 'Network down',
+      message: 'Request failed with status code 502',
     });
-    const { getByTestId, getByText } = render(<DeliverablesScreen />);
+    const { getByTestId, getByText, queryByText } = render(<DeliverablesScreen />);
     await waitFor(() => expect(getByTestId('deliverables-error')).toBeTruthy());
-    expect(getByText('Network down')).toBeTruthy();
+    // The raw axios message must NOT appear anywhere on screen.
+    expect(queryByText('Request failed with status code 502')).toBeNull();
+    // A friendly, scrubbed copy is rendered instead.
+    expect(getByText(/Check your connection and try again/i)).toBeTruthy();
     expect(getByTestId('deliverables-retry')).toBeTruthy();
   });
 
@@ -428,7 +465,12 @@ describe('DeliverablesScreen — RTL mount', () => {
     });
   });
 
-  it('tapping a delivered meal_plan drop navigates to ClientDailyMealPlan with the date', async () => {
+  it('tapping a delivered meal_plan drop navigates to ClientDailyMealPlan with the date AND the destination honors it', async () => {
+    // Audit P2-2: the destination screen (ClientDailyMealPlanScreen)
+    // must actually USE the `date` param — asserting only the
+    // navigate() call would be self-fulfilling. We assert both: (a)
+    // navigate is called with `date`, and (b) source-grep proves the
+    // destination wires the param into `useMealPlanToday(dateParam)`.
     mockGetPurchaseDrops.mockResolvedValue({
       ok: true,
       data: [
@@ -453,6 +495,12 @@ describe('DeliverablesScreen — RTL mount', () => {
     expect(mockNavigate).toHaveBeenCalledWith('ClientDailyMealPlan', {
       date: '2026-05-01',
     });
+    // Destination-honors-the-param guard (defense against self-fulfilling
+    // mock — see audit P2-2 finding):
+    const mealPlanScreenSrc = readSrc('screens/client/ClientDailyMealPlanScreen.tsx');
+    expect(mealPlanScreenSrc).toMatch(/useRoute/);
+    expect(mealPlanScreenSrc).toMatch(/route\.params\?\.date/);
+    expect(mealPlanScreenSrc).toMatch(/useMealPlanToday\(\s*dateParam\s*\)/);
   });
 
   it('tapping a delivered auto_message drop opens Messages via parent navigator', async () => {

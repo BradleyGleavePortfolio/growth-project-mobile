@@ -687,23 +687,50 @@ export const clientPaymentsApi = {
    * collapses to `not_configured`, `404` and other transport failures
    * surface as retryable `reason: 'error'`.
    */
-  getPurchaseDrops: (
+  getPurchaseDrops: async (
     purchaseId: string,
-  ): Promise<PaymentsResult<ScheduledDropView[]>> =>
-    wrap(
-      api
-        .get<{ drops?: ScheduledDropView[] } | ScheduledDropView[]>(
-          `/v1/checkout/purchases/${encodeURIComponent(purchaseId)}/drops`,
-        )
-        .then((r) => ({
-          ...r,
-          data: Array.isArray(r.data)
-            ? r.data
-            : Array.isArray(r.data?.drops)
-              ? r.data!.drops
-              : [],
-        })),
-    ),
+  ): Promise<PaymentsResult<ScheduledDropView[]>> => {
+    // PR-13 audit fix (P2-1): the backend route is a documented prereq
+    // and does not exist today. Under defense-in-depth, a 404 on THIS
+    // specific endpoint must NOT surface as a scary "Request failed
+    // with status code 404" message to the buyer — the screen is
+    // already feature-flagged off in production, but if the flag is
+    // flipped before the backend lands, we want a calm empty state, not
+    // an error banner. So `getPurchaseDrops` (and ONLY this method)
+    // maps an HTTP 404 to the `not_configured` envelope so the
+    // Deliverables screen renders the "No deliverables yet" empty state
+    // rather than the retry error banner. This is a deliberate, scoped
+    // exception to PR-1's "404 is never not_configured" rule, justified
+    // because this endpoint is documented to not exist yet (the PR-1
+    // sin was a route TYPO masquerading as not_configured; here the
+    // route is a public, tracked prereq). All other failure modes
+    // (5xx, network, 501) still flow through the standard `wrap`.
+    try {
+      const r = await api.get<{ drops?: ScheduledDropView[] } | ScheduledDropView[]>(
+        `/v1/checkout/purchases/${encodeURIComponent(purchaseId)}/drops`,
+      );
+      const data: ScheduledDropView[] = Array.isArray(r.data)
+        ? r.data
+        : Array.isArray((r.data as { drops?: ScheduledDropView[] })?.drops)
+          ? ((r.data as { drops: ScheduledDropView[] }).drops)
+          : [];
+      return { ok: true, data };
+    } catch (err) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      // 404 → calm empty state (endpoint not deployed yet — PR-13 prereq).
+      // 501 → calm empty state (deployment explicitly declined the route).
+      if (status === 404 || status === 501) {
+        return { ok: false, reason: 'not_configured' };
+      }
+      // Genuine transient failures (network/5xx) keep the retryable
+      // error envelope. The screen NEVER renders the raw message to the
+      // buyer — see DeliverablesScreen.tsx error branch — but it is
+      // preserved here for logger/observability wiring.
+      const message =
+        (err as { message?: string })?.message ?? 'Failed to load — try again.';
+      return { ok: false, reason: 'error', message };
+    }
+  },
 
   confirmCheckoutSession: async (
     sessionId: string,

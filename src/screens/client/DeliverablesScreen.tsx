@@ -24,9 +24,12 @@
  *                                    library" caption — degrades cleanly).
  *
  * Empty / loading / error / pull-to-refresh all handled here; no headless
- * states. Date formatting uses `Intl.RelativeTimeFormat` so the locale +
- * timezone match the rest of the app's date util (`src/utils/date.ts`)
- * — never `Date.now()` on time-sensitive business logic (Rule 16).
+ * states. Date formatting uses the platform's `Intl.RelativeTimeFormat`
+ * (locale-aware, timezone-safe) for the "Unlocks in 3 days" copy and
+ * the device locale's `toLocaleDateString` for absolute dates. Display
+ * only — no time-sensitive business logic is derived from
+ * `Date.now()` here (Rule 16); the timestamps come from the server and
+ * are formatted for the buyer.
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -103,9 +106,10 @@ function buyerStatusOf(drop: ScheduledDropView): BuyerStatus | null {
  * Built on `Intl.RelativeTimeFormat` so the wording matches the device
  * locale; absolute fallback uses the user's local calendar.
  *
- * Same wall-clock day → "Unlocks today". The day arithmetic uses the
- * local-timezone bucket from `src/utils/date.ts` so DST and east-of-UTC
- * users don't get an off-by-one "Yesterday" for a fire_at later today.
+ * Same wall-clock day → `Intl.RelativeTimeFormat` with `numeric: 'auto'`
+ * produces "today" / "tomorrow" / "in N days" using the device's locale
+ * and timezone, so DST and east-of-UTC users don't get an off-by-one
+ * label for a `fire_at` later today.
  */
 function formatUnlockAt(iso: string | null): string {
   if (!iso) return '';
@@ -288,6 +292,12 @@ function DeliverablesContent({
       );
     }
     // 'error' — real, retryable failure.
+    //
+    // We NEVER surface the raw axios `message` (e.g. "Request failed
+    // with status code 404") to the buyer — Rule 9 (no raw error codes
+    // to users) + Rule 17 (scrub server internals). The technical
+    // detail is still in `result.message` for any logger/observability
+    // wiring; the UI renders only a friendly, action-oriented copy.
     return (
       <ScrollView
         testID="deliverables-error"
@@ -301,7 +311,10 @@ function DeliverablesContent({
         <View style={styles.empty}>
           <Ionicons name="alert-circle-outline" size={36} color={colors.error} />
           <Text style={styles.emptyTitle}>We couldn&apos;t load deliverables</Text>
-          <Text style={styles.emptyBody}>{result.message}</Text>
+          <Text style={styles.emptyBody}>
+            Check your connection and try again. If this keeps happening,
+            message your coach.
+          </Text>
           <TouchableOpacity
             style={styles.retryBtn}
             onPress={onRetry}
@@ -468,7 +481,7 @@ function DropRow({ drop, variant, onPress, styles, colors }: DropRowProps) {
   }
   return (
     <View
-      accessibilityRole={variant === 'upcoming' ? 'text' : 'summary'}
+      accessibilityRole="text"
       accessibilityLabel={a11yLabel}
       testID={`drop-row-${drop.id}`}
       style={styles.rowTouchable}
