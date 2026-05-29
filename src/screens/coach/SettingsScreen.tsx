@@ -517,10 +517,6 @@ export default function SettingsScreen() {
           mediumTap();
           navigation.navigate('CoachBusinessMetrics');
         }}
-        onOpenPackages={() => {
-          mediumTap();
-          navigation.navigate('CoachPackages');
-        }}
         onOpenEarnings={() => {
           mediumTap();
           navigation.navigate('CoachEarnings');

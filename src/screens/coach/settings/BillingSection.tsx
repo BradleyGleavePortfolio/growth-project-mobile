@@ -7,7 +7,6 @@ import type { SettingsStyles } from './styles';
 export function BillingSection({
   onOpenTeamProfile,
   onOpenBusinessMetrics,
-  onOpenPackages,
   onOpenEarnings,
   onOpenBilling,
   colors,
@@ -15,7 +14,6 @@ export function BillingSection({
 }: {
   onOpenTeamProfile: () => void;
   onOpenBusinessMetrics: () => void;
-  onOpenPackages: () => void;
   onOpenEarnings: () => void;
   onOpenBilling: () => void;
   colors: ThemeColors;
@@ -50,19 +48,9 @@ export function BillingSection({
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
         <View style={styles.divider} />
-        {/* Packages CRUD — backend PR #215. */}
-        <TouchableOpacity
-          style={styles.row}
-          onPress={onOpenPackages}
-          accessibilityRole="button"
-          accessibilityLabel="Open packages"
-        >
-          <Ionicons name="pricetags-outline" size={20} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>Packages</Text>
-          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-        </TouchableOpacity>
-        <View style={styles.divider} />
-        {/* Earnings + payout readiness — backend PR #216. */}
+        {/* Earnings + payout readiness — backend PR #216.
+            Packages CRUD lives in the top Payments section
+            (CoachPackagesList) — single entry per surface. */}
         <TouchableOpacity
           style={styles.row}
           onPress={onOpenEarnings}

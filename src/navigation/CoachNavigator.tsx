@@ -76,8 +76,9 @@ import CreditPackCheckoutScreen from '../screens/coach/CreditPackCheckoutScreen'
 import PendingAiDraftsScreen from '../screens/coach/PendingAiDraftsScreen';
 // TestFlight coach SaaS — new business & team surfaces + invite redeemer drilldown.
 import CoachBusinessMetricsScreen from '../screens/coach/CoachBusinessMetricsScreen';
-// Payments — backend PRs #215 (package CRUD) and #216 (earnings/payouts).
-import CoachPackagesScreen from '../screens/coach/CoachPackagesScreen';
+// Payments — earnings/payouts (backend PR #216). Package CRUD is the
+// `CoachPackagesList`/`CoachPackageEdit`/`CoachPackageSubscribers` family
+// from `screens/coach/payments/*`, imported above.
 import CoachEarningsScreen from '../screens/coach/CoachEarningsScreen';
 import CoachTeamProfileScreen from '../screens/coach/CoachTeamProfileScreen';
 import InviteCodeRedeemersScreen from '../screens/coach/InviteCodeRedeemersScreen';
@@ -191,8 +192,6 @@ export type SettingsStackParamList = {
   CoachBusinessMetrics: undefined;
   /** TestFlight coach SaaS — team/gym profile and team code. */
   CoachTeamProfile: undefined;
-  /** Payments — package CRUD (backend PR #215). */
-  CoachPackages: undefined;
   // Payments — Stripe Connect + coach package marketplace.
   CoachConnect: undefined;
   CoachPackagesList: undefined;
@@ -402,12 +401,9 @@ function SettingsStackNavigator() {
         name="CoachTeamProfile"
         component={CoachTeamProfileScreen}
       />
-      {/* Payments — package CRUD (backend PR #215). */}
-      <SettingsStack.Screen
-        name="CoachPackages"
-        component={CoachPackagesScreen}
-      />
-      {/* Payments — Connect, packages, subscribers, earnings (this branch). */}
+      {/* Payments — Connect, packages, subscribers, earnings.
+          Package CRUD lives in the CoachPackagesList → CoachPackageEdit →
+          CoachPackageSubscribers family below. */}
       <SettingsStack.Screen name="CoachConnect" component={CoachConnectScreen} />
       <SettingsStack.Screen name="CoachPackagesList" component={CoachPackagesListScreen} />
       <SettingsStack.Screen name="CoachPackageEdit" component={CoachPackageEditScreen} />

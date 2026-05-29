@@ -14,10 +14,14 @@
  *      the deep-link gate in BrandedCheckoutWebView — if the schemes drift,
  *      the in-app webview does not settle on return and the checkout
  *      appears stuck (audit C11).
- *   3. coachPaymentsApi CRUD calls hit the right paths + verbs.
+ *   3. coachPackagesApi (package CRUD — Surface B / packagesApi.ts) +
+ *      coachEarningsApi (earnings/payout/Connect-dashboard) hit the right
+ *      paths + verbs. PR-5 removed `coachPaymentsApi` and unified package
+ *      CRUD on `coachPackagesApi` while rehoming earnings/payout methods
+ *      onto `coachEarningsApi` so neither feature is lost.
  *   4. The coach earnings response exposes the documented fee split
  *      shape (2% TGP platform fee + 5% head coach override + Stripe).
- *   5. Navigation: ClientPackages, CheckoutReturn, CoachPackages, and
+ *   5. Navigation: ClientPackages, CheckoutReturn, CoachPackagesList, and
  *      CoachEarnings are registered, and the Membership screen + Settings
  *      Business section expose entry points.
  *   6. RootNavigator deep-link config accepts tgp://checkout/success
@@ -27,7 +31,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { clientPaymentsApi } from '../api/clientPaymentsApi';
-import { coachPaymentsApi } from '../api/coachPaymentsApi';
+import { coachEarningsApi } from '../api/coachEarningsApi';
+import { coachPackagesApi } from '../api/packagesApi';
 import api from '../services/api';
 
 function readSrc(rel: string): string {
@@ -437,54 +442,72 @@ describe('clientPaymentsApi', () => {
   });
 });
 
-// ── 2) coachPaymentsApi CRUD + earnings shape ──────────────────────────────
-describe('coachPaymentsApi', () => {
-  it('listPackages GETs /v1/coach/packages', async () => {
-    mockedApi.get.mockResolvedValueOnce({ data: [] });
-    await coachPaymentsApi.listPackages();
+// ── 2) coach package CRUD (via coachPackagesApi — packagesApi.ts) ──────────
+// PR-5 supersede: package CRUD now lives in `coachPackagesApi`. The
+// legacy `coachPaymentsApi` package methods were removed when Surface A
+// was killed; the surviving editor (Surface B) drives this client.
+describe('coachPackagesApi (package CRUD)', () => {
+  it('list GETs /v1/coach/packages', async () => {
+    mockedApi.get.mockResolvedValueOnce({ data: { packages: [] } });
+    await coachPackagesApi.list();
     expect(mockedApi.get).toHaveBeenCalledWith('/v1/coach/packages');
   });
 
-  it('createPackage POSTs the full input shape', async () => {
+  it('create POSTs the backend (snake_case) shape with Idempotency-Key', async () => {
     mockedApi.post.mockResolvedValueOnce({ data: { id: 'pkg_new' } });
-    await coachPaymentsApi.createPackage({
-      name: '1:1 Coaching',
-      type: 'recurring',
-      price: 199,
-      currency: 'USD',
-      interval: 'month',
-      trial_days: 7,
+    await coachPackagesApi.create({
+      title: '1:1 Coaching',
+      description: 'Weekly check-ins',
+      priceCents: 19900,
+      currency: 'usd',
+      billingInterval: 'monthly',
+      trialDays: 7,
       features: ['Weekly check-ins'],
-      active: true,
     });
     expect(mockedApi.post).toHaveBeenCalledWith(
       '/v1/coach/packages',
       expect.objectContaining({
         name: '1:1 Coaching',
-        type: 'recurring',
-        price: 199,
-        currency: 'USD',
-        interval: 'month',
-        trial_days: 7,
+        amount_cents: 19900,
+        billing_type: 'recurring',
+        billing_interval: 'month',
+        billing_interval_count: 1,
+      }),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'Idempotency-Key': expect.any(String),
+        }),
       }),
     );
   });
 
-  it('updatePackage PATCHes /v1/coach/packages/:id', async () => {
-    mockedApi.patch.mockResolvedValueOnce({ data: {} });
-    await coachPaymentsApi.updatePackage('pkg_1', { active: false });
+  it('update PATCHes /v1/coach/packages/:id with the backend shape', async () => {
+    mockedApi.patch.mockResolvedValueOnce({ data: { id: 'pkg_1' } });
+    await coachPackagesApi.update('pkg_1', { status: 'archived' });
     expect(mockedApi.patch).toHaveBeenCalledWith(
       '/v1/coach/packages/pkg_1',
-      { active: false },
+      expect.objectContaining({ is_active: false }),
+      expect.any(Object),
     );
   });
 
-  it('archivePackage DELETEs /v1/coach/packages/:id', async () => {
-    mockedApi.delete.mockResolvedValueOnce({ data: { id: 'pkg_1', active: false } });
-    await coachPaymentsApi.archivePackage('pkg_1');
-    expect(mockedApi.delete).toHaveBeenCalledWith('/v1/coach/packages/pkg_1');
+  it('archive DELETEs /v1/coach/packages/:id', async () => {
+    mockedApi.delete.mockResolvedValueOnce({
+      data: { id: 'pkg_1', is_active: false, status: 'archived' },
+    });
+    await coachPackagesApi.archive('pkg_1');
+    expect(mockedApi.delete).toHaveBeenCalledWith(
+      '/v1/coach/packages/pkg_1',
+      expect.any(Object),
+    );
   });
+});
 
+// ── 2b) coachEarningsApi — earnings/payout/Stripe-dashboard rehomed ────────
+// PR-5 supersede: these methods previously lived on `coachPaymentsApi`
+// alongside package CRUD; they are now on their own client. Losing any of
+// them would be a P0 (the CoachEarningsScreen depends on every one).
+describe('coachEarningsApi', () => {
   it('getPayoutReadiness GETs /v1/coach/payouts/readiness', async () => {
     mockedApi.get.mockResolvedValueOnce({
       data: {
@@ -496,12 +519,24 @@ describe('coachPaymentsApi', () => {
         dashboard_available: true,
       },
     });
-    const res = await coachPaymentsApi.getPayoutReadiness();
+    const res = await coachEarningsApi.getPayoutReadiness();
     expect(mockedApi.get).toHaveBeenCalledWith('/v1/coach/payouts/readiness');
     expect(res.ok).toBe(true);
     if (res.ok) {
       expect(res.data.requirements_due).toContain('external_account');
     }
+  });
+
+  it('getRecentPayouts GETs /v1/coach/payouts with a limit', async () => {
+    mockedApi.get.mockResolvedValueOnce({ data: [] });
+    await coachEarningsApi.getRecentPayouts(10);
+    expect(mockedApi.get).toHaveBeenCalledWith('/v1/coach/payouts?limit=10');
+  });
+
+  it('getRefunds GETs /v1/coach/refunds', async () => {
+    mockedApi.get.mockResolvedValueOnce({ data: [] });
+    await coachEarningsApi.getRefunds();
+    expect(mockedApi.get).toHaveBeenCalledWith('/v1/coach/refunds');
   });
 
   it('earnings response carries 2% platform + 5% head-coach fee fields', async () => {
@@ -519,7 +554,7 @@ describe('coachPaymentsApi', () => {
         generated_at: '2026-05-15T00:00:00Z',
       },
     });
-    const res = await coachPaymentsApi.getEarnings();
+    const res = await coachEarningsApi.getEarnings();
     expect(res.ok).toBe(true);
     if (res.ok) {
       // 2% of gross.
@@ -540,7 +575,7 @@ describe('coachPaymentsApi', () => {
         summary: 'Ledger drift detected — contact support.',
       },
     });
-    const res = await coachPaymentsApi.getReconciliation();
+    const res = await coachEarningsApi.getReconciliation();
     expect(res.ok).toBe(true);
     if (res.ok) {
       expect(res.data.state).toBe('drift');
@@ -552,7 +587,7 @@ describe('coachPaymentsApi', () => {
     mockedApi.post.mockResolvedValueOnce({
       data: { url: 'https://connect.stripe.com/express/abc', expires_at: '...' },
     });
-    await coachPaymentsApi.createDashboardLink();
+    await coachEarningsApi.createDashboardLink();
     expect(mockedApi.post).toHaveBeenCalledWith('/v1/coach/dashboard-link', {});
   });
 });
@@ -568,11 +603,21 @@ describe('navigation wiring', () => {
     expect(clientNav).toMatch(/name="CheckoutReturn"\s+component=\{CheckoutReturnScreen\}/);
   });
 
-  it('CoachNavigator registers CoachPackages + CoachEarnings', () => {
-    expect(coachNav).toMatch(/name="CoachPackages"/);
+  it('CoachNavigator registers CoachPackagesList + CoachEarnings', () => {
+    // PR-5 supersede: the live coach package surface is the sectioned editor
+    // (CoachPackagesListScreen → CoachPackageEditScreen → CoachPackageSubscribersScreen).
+    // The legacy single-screen `CoachPackages` route was removed.
+    expect(coachNav).toMatch(/name="CoachPackagesList"/);
     expect(coachNav).toMatch(/name="CoachEarnings"/);
-    expect(coachNav).toMatch(/component=\{CoachPackagesScreen\}/);
+    expect(coachNav).toMatch(/component=\{CoachPackagesListScreen\}/);
     expect(coachNav).toMatch(/component=\{CoachEarningsScreen\}/);
+  });
+
+  it('CoachNavigator no longer registers the deleted CoachPackages route', () => {
+    // PR-5 guard: prevent regression — Surface A's single-screen route
+    // must not reappear. There must be exactly one coach package entry.
+    expect(coachNav).not.toMatch(/name="CoachPackages"\s/);
+    expect(coachNav).not.toMatch(/component=\{CoachPackagesScreen\}/);
   });
 
   it('RootNavigator deep-link config accepts tgp://checkout/{outcome}', () => {
@@ -585,17 +630,33 @@ describe('navigation wiring', () => {
     expect(membership).toMatch(/VIEW COACHING PLANS/i);
   });
 
-  it('Coach Settings Business section exposes Packages + Earnings rows', () => {
+  it('Coach Settings exposes Packages (Surface B) + Earnings entry points', () => {
     const settings = readSrc('screens/coach/SettingsScreen.tsx');
-    expect(settings).toMatch(/navigation\.navigate\('CoachPackages'\)/);
+    // PR-5: the single coach packages entry now lands on Surface B's list screen.
+    expect(settings).toMatch(/navigation\.navigate\('CoachPackagesList'\)/);
     expect(settings).toMatch(/navigation\.navigate\('CoachEarnings'\)/);
+  });
+
+  it('Coach Settings has exactly one entry to a coach packages surface', () => {
+    // PR-5 guard: no duplicate package entries. BillingSection's old
+    // "Packages" row was removed; the top Payments section is the sole entry.
+    const settings = readSrc('screens/coach/SettingsScreen.tsx');
+    const billingSection = readSrc('screens/coach/settings/BillingSection.tsx');
+    const matches = settings.match(/navigation\.navigate\('CoachPackagesList'\)/g) ?? [];
+    expect(matches.length).toBe(1);
+    expect(billingSection).not.toMatch(/onOpenPackages/);
+    // BillingSection must not navigate to any coach packages route.
+    expect(billingSection).not.toMatch(/navigation\.navigate\('CoachPackages/);
   });
 });
 
 // ── 4) Fee transparency copy ───────────────────────────────────────────────
+// PR-5 supersede: the legacy CoachPackagesScreen carried an inline 2% fee
+// hint. The surviving Surface B editor delegates fee transparency to the
+// dedicated Earnings + Business Metrics screens (single source of truth),
+// so the per-screen fee-copy assertions live there now.
 describe('fee split copy', () => {
   const earnings = readSrc('screens/coach/CoachEarningsScreen.tsx');
-  const packages = readSrc('screens/coach/CoachPackagesScreen.tsx');
   const metrics = readSrc('screens/coach/CoachBusinessMetricsScreen.tsx');
 
   it('Earnings screen shows the documented 2% platform fee row', () => {
@@ -604,10 +665,6 @@ describe('fee split copy', () => {
 
   it('Earnings screen shows the 5% head coach / gym override row', () => {
     expect(earnings).toMatch(/Head coach[^\n]*5%|5%[^\n]*head coach/i);
-  });
-
-  it('Packages editor explains the 2% TGP fee inline', () => {
-    expect(packages).toMatch(/TGP fee 2%|platform fee is .{0,40}2%|2% of gross/i);
   });
 
   it('Business metrics screen clarifies fees are deducted on the Earnings screen', () => {
