@@ -114,6 +114,31 @@ describe('buildReceipt — receipt header reconciliation', () => {
   });
 });
 
+describe('formatChargeDate — deterministic year comparison (PR-15B audit P3-3)', () => {
+  it('omits the year when the charge falls in the same calendar year as `now`', () => {
+    // Inject a fixed `now` so the year-comparison branch is testable.
+    const out = UnpackTest.formatChargeDate(
+      '2026-06-29T00:00:00Z',
+      Date.parse('2026-01-01T00:00:00Z'),
+    );
+    expect(out).not.toBeNull();
+    expect(out).not.toMatch(/2026/);
+  });
+
+  it('includes the year when the charge crosses into a different calendar year', () => {
+    const out = UnpackTest.formatChargeDate(
+      '2027-01-15T00:00:00Z',
+      Date.parse('2026-12-01T00:00:00Z'),
+    );
+    expect(out).toMatch(/2027/);
+  });
+
+  it('returns null for null / malformed input', () => {
+    expect(UnpackTest.formatChargeDate(null)).toBeNull();
+    expect(UnpackTest.formatChargeDate('not-a-date')).toBeNull();
+  });
+});
+
 // ─── Source guards ──────────────────────────────────────────────────────────
 
 describe('PurchaseUnpackScreen — source guards', () => {
@@ -146,6 +171,17 @@ describe('PurchaseUnpackScreen — source guards', () => {
 
   it('renders a SkeletonScreen while loading', () => {
     expect(SRC).toMatch(/SkeletonScreen/);
+  });
+
+  it('load is cancel-safe on unmount — guards setState behind an isAlive ref (PR-15B audit P3-2)', () => {
+    // A fast back-out during the three parallel fetches must not call
+    // setState on an unmounted component. We assert the pattern by
+    // source-grep: an `isAliveRef` is declared, the useEffect cleanup
+    // flips it to false, and `load` checks `isAlive()` before every
+    // setState.
+    expect(SRC).toMatch(/isAliveRef/);
+    expect(SRC).toMatch(/isAliveRef\.current\s*=\s*false/);
+    expect(SRC).toMatch(/if\s*\(\s*!\s*isAlive\(\)\s*\)\s*return/);
   });
 
   it('shared dropRow module exports the routing helper as a single source of truth', () => {
@@ -189,6 +225,15 @@ describe('navigation wiring — PurchaseUnpack', () => {
     // exact call so a refactor cannot silently delete the handoff.
     expect(checkoutReturn).toMatch(/'PurchaseUnpack'/);
     expect(checkoutReturn).toMatch(/purchaseId:\s*status\.purchase_id/);
+  });
+
+  it('CheckoutReturnScreen prefers replace() over navigate() so back-swipe skips the confirm screen (PR-15B audit P3-1)', () => {
+    // The handoff should swap PurchaseUnpack IN PLACE of the
+    // confirmation screen on stacks that support it (native-stack),
+    // with a navigate() fallback for navigators that don't expose
+    // replace (e.g. tab parents). Source-grep both.
+    expect(checkoutReturn).toMatch(/navAny\.replace\(\s*'PurchaseUnpack'/);
+    expect(checkoutReturn).toMatch(/navAny\.navigate\(\s*'PurchaseUnpack'/);
   });
 
   it('CheckoutReturnScreen gates the PurchaseUnpack nav on featureFlags.deliverables', () => {
@@ -492,19 +537,42 @@ describe('PurchaseUnpackScreen — RTL mount', () => {
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 
-  it('renders the not_configured graceful state — never an error banner (PR-15A not deployed)', async () => {
+  it('501 → not_configured → calm "Purchase complete" state, no Retry button (PR-15B audit P2-1)', async () => {
+    // Paired test: only an EXPLICIT 501 from the backend collapses to
+    // the calm complete state. The companion 404 test (below) asserts
+    // a 404 produces the retryable error banner — PR-1's rule, restored
+    // after PR-15A shipped the real route.
     mockGetPurchaseDrops.mockResolvedValue({ ok: false, reason: 'not_configured' });
     const { getByTestId, queryByTestId, getByText } = render(<PurchaseUnpackScreen />);
     await waitFor(() =>
       expect(getByTestId('purchase-unpack-not-configured')).toBeTruthy(),
     );
-    // Never the error banner.
     expect(queryByTestId('purchase-unpack-error')).toBeNull();
-    // Calm "purchase complete" copy.
+    expect(queryByTestId('purchase-unpack-retry')).toBeNull();
     expect(getByText('Purchase complete')).toBeTruthy();
   });
 
-  it('renders the error banner with Retry on a real transport failure (not 404/501)', async () => {
+  it('404 → retryable error envelope → error banner with Retry (PR-15B audit P2-1)', async () => {
+    // The real client maps 404 → reason: 'error' (see
+    // deliverablesApi.test.ts). The unpack screen's `error` branch
+    // renders the retry banner — proven here by stubbing the envelope
+    // a 404 produces and asserting the resulting render is the error
+    // state, not the calm complete state.
+    mockGetPurchaseDrops.mockResolvedValue({
+      ok: false,
+      reason: 'error',
+      message: 'Request failed with status code 404',
+    });
+    const { getByTestId, queryByTestId, queryByText } = render(<PurchaseUnpackScreen />);
+    await waitFor(() => expect(getByTestId('purchase-unpack-error')).toBeTruthy());
+    expect(getByTestId('purchase-unpack-retry')).toBeTruthy();
+    // Never the calm complete state.
+    expect(queryByTestId('purchase-unpack-not-configured')).toBeNull();
+    // Raw axios message must never reach the buyer (Rule 9 / Rule 17).
+    expect(queryByText('Request failed with status code 404')).toBeNull();
+  });
+
+  it('renders the error banner with Retry on a real transport failure (5xx)', async () => {
     mockGetPurchaseDrops.mockResolvedValue({
       ok: false,
       reason: 'error',
@@ -513,7 +581,6 @@ describe('PurchaseUnpackScreen — RTL mount', () => {
     const { getByTestId, queryByText } = render(<PurchaseUnpackScreen />);
     await waitFor(() => expect(getByTestId('purchase-unpack-error')).toBeTruthy());
     expect(getByTestId('purchase-unpack-retry')).toBeTruthy();
-    // Raw axios message must never reach the buyer.
     expect(queryByText('Request failed with status code 502')).toBeNull();
   });
 

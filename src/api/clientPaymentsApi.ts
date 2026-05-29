@@ -668,32 +668,40 @@ export const clientPaymentsApi = {
    * bare array are unwrapped below for forward-compat — if the backend
    * ships either, this client copes.
    *
-   * Transport envelope (`getPurchaseDrops`-specific, see body comment
-   * below for the audit history): 501 → `not_configured` (deployment
-   * declined the route). 404 also → `not_configured` so a partial
-   * rollout where the mobile build hits a backend that hasn't deployed
-   * PR-15A renders the calm "deliverables coming" state rather than
-   * stranding the buyer with an error banner. 5xx / network → retryable
-   * `reason: 'error'`.
+   * Transport envelope (`getPurchaseDrops`-specific): only 501 →
+   * `not_configured` (deployment explicitly declined the route).
+   * 404 → retryable `reason: 'error'` — restored to PR-1's codified
+   * rule now that PR-15A is shipping the route. A 404 from a route
+   * that is supposed to exist is a real bug (controller path
+   * regression, misrouted proxy, path-parameter encoding fault, or
+   * cross-user IDOR collapse from PR-15A's `requireOwned`) and the
+   * buyer should see a recoverable error banner with Retry, not the
+   * silent "deliverables coming" calm state. 5xx / network also →
+   * retryable `reason: 'error'`.
+   *
+   * History note: PR-13 mapped 404 → `not_configured` as a scoped
+   * audit fix (P2-1) while the backend route was a documented gap.
+   * That justification expired the moment PR-15A landed; PR-15B audit
+   * (P2-1) restores the distinction.
    */
   getPurchaseDrops: async (
     purchaseId: string,
   ): Promise<PaymentsResult<ScheduledDropView[]>> => {
-    // PR-13 audit fix (P2-1): the backend route is a documented prereq
-    // and does not exist today. Under defense-in-depth, a 404 on THIS
-    // specific endpoint must NOT surface as a scary "Request failed
-    // with status code 404" message to the buyer — the screen is
-    // already feature-flagged off in production, but if the flag is
-    // flipped before the backend lands, we want a calm empty state, not
-    // an error banner. So `getPurchaseDrops` (and ONLY this method)
-    // maps an HTTP 404 to the `not_configured` envelope so the
-    // Deliverables screen renders the "No deliverables yet" empty state
-    // rather than the retry error banner. This is a deliberate, scoped
-    // exception to PR-1's "404 is never not_configured" rule, justified
-    // because this endpoint is documented to not exist yet (the PR-1
-    // sin was a route TYPO masquerading as not_configured; here the
-    // route is a public, tracked prereq). All other failure modes
-    // (5xx, network, 501) still flow through the standard `wrap`.
+    // PR-15B audit P2-1 — restore PR-1's "404 ≠ not_configured" rule.
+    // PR-13 mapped 404 → not_configured while the buyer-facing drops
+    // route was a documented gap; that justification expired when
+    // PR-15A shipped the real route. With the endpoint live, a 404
+    // is a real route/transport bug (controller regression, misrouted
+    // proxy, path-parameter encode fault, IDOR-collapsed cross-user
+    // miss, etc.) and the buyer should see a recoverable error banner
+    // with Retry — never the silent "deliverables coming" calm state.
+    //   501 → `not_configured` (deployment explicitly declined the
+    //          route — calm "Purchase complete, deliverables coming"
+    //          state, no Retry).
+    //   404 / 5xx / network → `reason: 'error'` (retry banner). The
+    //          screen NEVER renders the raw axios message to the buyer
+    //          (Rule 9 / Rule 17) — it's preserved here only for
+    //          logger/observability.
     try {
       const r = await api.get<{ drops?: ScheduledDropView[] } | ScheduledDropView[]>(
         `/v1/checkout/purchases/${encodeURIComponent(purchaseId)}/drops`,
@@ -706,15 +714,9 @@ export const clientPaymentsApi = {
       return { ok: true, data };
     } catch (err) {
       const status = (err as { response?: { status?: number } })?.response?.status;
-      // 404 → calm empty state (endpoint not deployed yet — PR-13 prereq).
-      // 501 → calm empty state (deployment explicitly declined the route).
-      if (status === 404 || status === 501) {
+      if (status === 501) {
         return { ok: false, reason: 'not_configured' };
       }
-      // Genuine transient failures (network/5xx) keep the retryable
-      // error envelope. The screen NEVER renders the raw message to the
-      // buyer — see DeliverablesScreen.tsx error branch — but it is
-      // preserved here for logger/observability wiring.
       const message =
         (err as { message?: string })?.message ?? 'Failed to load — try again.';
       return { ok: false, reason: 'error', message };

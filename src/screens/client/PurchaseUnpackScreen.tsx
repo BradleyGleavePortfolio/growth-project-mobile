@@ -115,16 +115,25 @@ function buildReceipt(
   return { packageName, amountDisplay, recurring, nextChargeAt };
 }
 
-function formatChargeDate(iso: string | null): string | null {
+/**
+ * Format the recurring-next-charge ISO timestamp into a short locale
+ * date ("Jun 29" same year, "Jun 29, 2027" cross-year).
+ *
+ * PR-15B audit P3-3 — accepts an optional `nowMs` so the year
+ * comparison is deterministic in tests. Defaults to `Date.now()` in
+ * production. The same-year-omit-year behaviour mirrors PR-13's
+ * `formatDeliveredAt` so the two screens read consistently.
+ */
+function formatChargeDate(iso: string | null, nowMs: number = Date.now()): string | null {
   if (!iso) return null;
   const ts = Date.parse(iso);
   if (Number.isNaN(ts)) return null;
   const d = new Date(ts);
+  const sameYear = d.getFullYear() === new Date(nowMs).getFullYear();
   return d.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
-    year:
-      d.getFullYear() === new Date().getFullYear() ? undefined : 'numeric',
+    year: sameYear ? undefined : 'numeric',
   });
 }
 
@@ -420,39 +429,54 @@ export default function PurchaseUnpackScreen() {
   });
   const [refreshing, setRefreshing] = useState(false);
 
-  const load = useCallback(async () => {
-    if (!purchaseId) {
-      setDropsResult({ ok: true, data: [] });
-      return;
-    }
-    // Drops + receipt fetched in parallel — the receipt header should
-    // render even if the drops request lags, but they're typically both
-    // fast. Receipt failures degrade silently (the header just hides
-    // the optional rows); drops failures show the error banner.
-    const [drops, purchases, packages] = await Promise.all([
-      clientPaymentsApi.getPurchaseDrops(purchaseId),
-      clientPaymentsApi.getPurchases(),
-      clientPaymentsApi.getPackages(),
-    ]);
-    setDropsResult(drops);
-    setReceipt(
-      buildReceipt(
-        purchaseId,
-        purchases.ok ? purchases.data : [],
-        packages.ok ? packages.data : [],
-        packageNameParam ?? null,
-      ),
-    );
-  }, [purchaseId, packageNameParam]);
+  // PR-15B audit P3-2 — cancel-safe load. A fast back-out (the buyer
+  // taps "Done" or swipes back before the three parallel fetches
+  // settle) must not setState on an unmounted component. We thread a
+  // shared `isAliveRef` from the mounting useEffect so both the
+  // initial load and the pull-to-refresh path bail out cleanly.
+  const isAliveRef = React.useRef(true);
+  const load = useCallback(
+    async (isAlive: () => boolean) => {
+      if (!purchaseId) {
+        if (isAlive()) setDropsResult({ ok: true, data: [] });
+        return;
+      }
+      // Drops + receipt fetched in parallel — the receipt header
+      // should render even if the drops request lags, but they're
+      // typically both fast. Receipt failures degrade silently (the
+      // header just hides the optional rows); drops failures show the
+      // error banner.
+      const [drops, purchases, packages] = await Promise.all([
+        clientPaymentsApi.getPurchaseDrops(purchaseId),
+        clientPaymentsApi.getPurchases(),
+        clientPaymentsApi.getPackages(),
+      ]);
+      if (!isAlive()) return;
+      setDropsResult(drops);
+      setReceipt(
+        buildReceipt(
+          purchaseId,
+          purchases.ok ? purchases.data : [],
+          packages.ok ? packages.data : [],
+          packageNameParam ?? null,
+        ),
+      );
+    },
+    [purchaseId, packageNameParam],
+  );
 
   useEffect(() => {
-    void load();
+    isAliveRef.current = true;
+    void load(() => isAliveRef.current);
+    return () => {
+      isAliveRef.current = false;
+    };
   }, [load]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await load();
-    setRefreshing(false);
+    await load(() => isAliveRef.current);
+    if (isAliveRef.current) setRefreshing(false);
   }, [load]);
 
   const onOpenDrop = useCallback(
@@ -494,7 +518,7 @@ export default function PurchaseUnpackScreen() {
       receipt={receipt}
       refreshing={refreshing}
       onRefresh={onRefresh}
-      onRetry={() => void load()}
+      onRetry={() => void load(() => isAliveRef.current)}
       onOpenDrop={onOpenDrop}
       onDone={onDone}
       onGoToDeliverables={onGoToDeliverables}

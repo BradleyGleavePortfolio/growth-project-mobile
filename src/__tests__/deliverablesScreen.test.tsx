@@ -448,8 +448,29 @@ describe('DeliverablesScreen — RTL mount', () => {
 
   it('renders the empty (not error) state when the endpoint is not configured (501)', async () => {
     mockGetPurchaseDrops.mockResolvedValue({ ok: false, reason: 'not_configured' });
-    const { getByTestId } = render(<DeliverablesScreen />);
+    const { getByTestId, queryByTestId } = render(<DeliverablesScreen />);
     await waitFor(() => expect(getByTestId('deliverables-empty')).toBeTruthy());
+    // PR-15B audit P2-1: 501 is the ONLY path to the calm empty state
+    // for this envelope — the companion 404 test below asserts the
+    // error banner. The two must remain distinguishable downstream of
+    // `getPurchaseDrops`.
+    expect(queryByTestId('deliverables-error')).toBeNull();
+  });
+
+  it('renders the error (not empty) state for a real transport failure that maps to error (PR-15B audit P2-1)', async () => {
+    // A 404 from the now-real PR-15A endpoint maps to reason: 'error'
+    // (see deliverablesApi.test.ts), and that envelope must reach the
+    // user as the retry banner — not the silent "No deliverables yet"
+    // empty state. Pairs with the 501 → empty test above.
+    mockGetPurchaseDrops.mockResolvedValue({
+      ok: false,
+      reason: 'error',
+      message: 'Request failed with status code 404',
+    });
+    const { getByTestId, queryByTestId } = render(<DeliverablesScreen />);
+    await waitFor(() => expect(getByTestId('deliverables-error')).toBeTruthy());
+    expect(getByTestId('deliverables-retry')).toBeTruthy();
+    expect(queryByTestId('deliverables-empty')).toBeNull();
   });
 
   it('tapping a delivered workout drop navigates to WorkoutAssignmentDetail with the assignmentId', async () => {

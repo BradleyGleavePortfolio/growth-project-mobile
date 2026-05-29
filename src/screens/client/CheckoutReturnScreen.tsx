@@ -116,9 +116,15 @@ export default function CheckoutReturnScreen() {
   }, [outcome, sessionId]);
 
   // PR-15B nav handoff: once we have a confirmed `paid` status + a real
-  // ClientPurchase id and the deliverables flag is enabled, push the
-  // unpack screen. We `replace` to avoid leaving the bare confirmation
-  // screen on the back stack.
+  // ClientPurchase id and the deliverables flag is enabled, swap the
+  // unpack screen IN PLACE of the confirmation screen. We use
+  // `navigation.replace` (when available on the native stack) instead
+  // of `navigate` so a back-swipe from PurchaseUnpack lands on the
+  // caller (More tab / packages screen / deep-link origin), not on
+  // the bare "You are subscribed" confirm screen — the buyer just
+  // completed the purchase, so re-presenting the confirm state on
+  // back-swipe would be a weird dead-end. Falls back to `navigate` on
+  // navigator types that don't expose `replace` (bottom-tab parents).
   useEffect(() => {
     if (didUnpackNav) return;
     if (!featureFlags.deliverables) return;
@@ -128,14 +134,19 @@ export default function CheckoutReturnScreen() {
     if (!isPaying) return;
     if (!status.purchase_id) return;
     setDidUnpackNav(true);
-    (
-      navigation as unknown as {
-        navigate: (n: string, p: { purchaseId: string; packageName?: string }) => void;
-      }
-    ).navigate('PurchaseUnpack', {
+    const params = {
       purchaseId: status.purchase_id,
       packageName: status.package_name ?? undefined,
-    });
+    };
+    const navAny = navigation as unknown as {
+      replace?: (n: string, p: typeof params) => void;
+      navigate: (n: string, p: typeof params) => void;
+    };
+    if (typeof navAny.replace === 'function') {
+      navAny.replace('PurchaseUnpack', params);
+    } else {
+      navAny.navigate('PurchaseUnpack', params);
+    }
   }, [didUnpackNav, outcome, status, navigation]);
 
   const goPackages = () => {

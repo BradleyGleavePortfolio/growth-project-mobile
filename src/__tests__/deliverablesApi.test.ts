@@ -102,25 +102,25 @@ describe('clientPaymentsApi.getPurchaseDrops — typed contract', () => {
     if (!res.ok) expect(res.reason).toBe('not_configured');
   });
 
-  it('maps a 404 on the documented-prereq drops route to not_configured (PR-13 audit P2-1)', async () => {
-    // Scoped exception to PR-1's "404 is never not_configured" rule:
-    // the buyer-facing drops endpoint is a documented backend prereq
-    // (PR13_BUILD_REPORT.md) that does not exist yet. As defense-in-
-    // depth — on top of the production feature flag that hides the
-    // CTA entirely — a 404 here renders the calm "No deliverables yet"
-    // empty state, NOT a "Request failed with status code 404" banner
-    // (Rule 9 / Rule 17). The PR-1 sin was different in kind: a route
-    // TYPO that 404'd silently. This route is publicly tracked.
+  it('a 404 surfaces as a retryable error (PR-15B audit P2-1 — restored PR-1 rule)', async () => {
+    // PR-13 mapped 404 → not_configured as a scoped audit fix while
+    // the buyer-facing drops route was a documented gap. PR-15A
+    // shipped the real route, so a 404 is now a real route/transport
+    // bug (controller regression, misrouted proxy, path-encode fault,
+    // cross-user IDOR collapse) and must surface as a retryable error
+    // banner with Retry — never the silent "deliverables coming" calm
+    // state. The PR-1 sin (404 silently treated as not_configured)
+    // would otherwise re-emerge the moment the route exists.
     mockedApi.get.mockRejectedValueOnce({
       response: { status: 404 },
       message: 'Request failed with status code 404',
     });
     const res = await clientPaymentsApi.getPurchaseDrops('p');
     expect(res.ok).toBe(false);
-    if (!res.ok) expect(res.reason).toBe('not_configured');
+    if (!res.ok) expect(res.reason).toBe('error');
   });
 
-  it('a 5xx remains a retryable error (only 404 + 501 collapse to not_configured)', async () => {
+  it('a 5xx remains a retryable error (only 501 collapses to not_configured)', async () => {
     mockedApi.get.mockRejectedValueOnce({
       response: { status: 503 },
       message: 'Service unavailable',
