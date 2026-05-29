@@ -103,6 +103,10 @@ import CheckoutReturnScreen from '../screens/client/CheckoutReturnScreen';
 // PR-13 — buyer-facing Deliverables timeline (drip engine consumer surface,
 // master plan §3 ScheduledDrop rows).
 import DeliverablesScreen from '../screens/client/DeliverablesScreen';
+// PR-15B — post-purchase "here's what you just got" unpack moment.
+// Reachable only from CheckoutReturnScreen on a successful confirm; the
+// Deliverables screen above remains the persistent surface.
+import PurchaseUnpackScreen from '../screens/client/PurchaseUnpackScreen';
 import BrandedCheckoutWebViewScreen, {
   type BrandedCheckoutWebViewParams,
 } from '../screens/client/BrandedCheckoutWebViewScreen';
@@ -234,6 +238,13 @@ export type MoreStackParamList = {
    * it already has.
    */
   Deliverables: { purchaseId: string; packageName?: string };
+  /**
+   * PR-15B — post-checkout "what you just got + what's coming" unpack
+   * screen. Navigated from `CheckoutReturnScreen` on a successful
+   * confirm when the deliverables flag is enabled and a purchase id is
+   * available.
+   */
+  PurchaseUnpack: { purchaseId: string; packageName?: string };
   /**
    * Payments — Stripe Checkout return.
    *   outcome: 'success' | 'cancel'
@@ -459,6 +470,9 @@ function MoreStackNavigator() {
       <MoreStackNav.Screen name="CheckoutReturn"  component={CheckoutReturnScreen} />
       {/* PR-13 — buyer-facing Deliverables timeline (drip engine surface). */}
       <MoreStackNav.Screen name="Deliverables"    component={DeliverablesScreen} />
+      {/* PR-15B — post-checkout unpack moment. Reachable from
+          CheckoutReturnScreen on a successful confirm. */}
+      <MoreStackNav.Screen name="PurchaseUnpack"  component={PurchaseUnpackScreen} />
       {/* Branded in-app webview checkout (Apple B2B exemption — see screen docstring). */}
       <MoreStackNav.Screen
         name="BrandedCheckoutWebView"

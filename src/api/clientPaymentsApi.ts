@@ -637,38 +637,18 @@ export const clientPaymentsApi = {
    */
   /**
    * Lists the buyer's ScheduledDrops for a purchase — the data the
-   * Deliverables timeline renders. Snapshotted at fan-out time onto the
-   * `ScheduledDrop` table (master plan §3) so the UI does not depend on
-   * the (mutable) authoring `CoachPackageContent` rows.
+   * Deliverables timeline + PurchaseUnpackScreen render. Snapshotted at
+   * fan-out time onto the `ScheduledDrop` table (master plan §3) so the
+   * UI does not depend on the (mutable) authoring `CoachPackageContent`
+   * rows.
    *
-   * Backend gap (PR-13 build): NO buyer-facing route exists today. The
-   * routes that exist are:
-   *   • `GET /v1/checkout/purchases` (CheckoutController) — purchase rows
-   *     only; no `drops` include.
-   *   • `GET /v1/coach/packages/:id/contents` (CoachPackageContentsController)
-   *     — coach-only authoring rows; not buyer-visible and not snapshotted.
-   *
-   * The `ScheduledDrop` Prisma rows exist (master plan §3 + PR-9 fan-out)
-   * but are read only by the dispatcher + internal services today. No
-   * `GET /v1/checkout/purchases/:id/drops` or `GET /v1/clients/me/deliverables`
-   * controller is registered (grep `@Get.*drop\|@Get.*deliverable` across
-   * `growth-project-backend/src@main` returns zero hits).
-   *
-   * PR-13 is mobile-only per scope, so this PR does NOT add the backend
-   * route. The client is wired to a clean, typed contract so wiring the
-   * UI to a real endpoint is a one-line change the moment the backend
-   * ships it. Until then a real 404 is surfaced as a retryable error
-   * (the UI shows the "We couldn't load deliverables" retry banner), and
-   * a 501 collapses into the calm `not_configured` envelope (UI shows
-   * the empty "No deliverables yet" state).
-   *
-   * Backend follow-up prereq (recommended shape — wire this and the UI
-   * lights up with zero mobile changes):
+   * Backend route (PR-15A — shipping in parallel with PR-15B):
    *
    *   GET /v1/checkout/purchases/:purchaseId/drops
    *
    *   Auth: JwtAuthGuard; the buyer (req.user.id) must own
-   *         ClientPurchase.client_id === req.user.id (IDOR guard).
+   *         ClientPurchase.client_id === req.user.id (IDOR guard —
+   *         cross-user → 404, never 403, mirroring `requireOwned`).
    *   Response:
    *     {
    *       drops: Array<{
@@ -683,9 +663,18 @@ export const clientPaymentsApi = {
    *     status IN ('pending','due','fired')  -- master plan §1 #10:
    *     failed/canceled/skipped go to the COACH_ALERT path; never the buyer.
    *
-   * Transport envelope: same as the rest of clientPaymentsApi — `501`
-   * collapses to `not_configured`, `404` and other transport failures
-   * surface as retryable `reason: 'error'`.
+   * The typed contract here was frozen by PR-13 and is what PR-15A is
+   * obligated to return. Both the envelope (`{ drops: [...] }`) and a
+   * bare array are unwrapped below for forward-compat — if the backend
+   * ships either, this client copes.
+   *
+   * Transport envelope (`getPurchaseDrops`-specific, see body comment
+   * below for the audit history): 501 → `not_configured` (deployment
+   * declined the route). 404 also → `not_configured` so a partial
+   * rollout where the mobile build hits a backend that hasn't deployed
+   * PR-15A renders the calm "deliverables coming" state rather than
+   * stranding the buyer with an error banner. 5xx / network → retryable
+   * `reason: 'error'`.
    */
   getPurchaseDrops: async (
     purchaseId: string,

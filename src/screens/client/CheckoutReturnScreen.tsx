@@ -35,6 +35,7 @@ import {
   type ClientPaymentStatus,
 } from '../../api/clientPaymentsApi';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { featureFlags } from '../../config/featureFlags';
 
 type CheckoutReturnRoute = RouteProp<
   Record<string, { outcome?: 'success' | 'cancel'; session_id?: string } | undefined>,
@@ -52,30 +53,90 @@ export default function CheckoutReturnScreen() {
   const [status, setStatus] = useState<ClientPaymentStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(outcome === 'success');
+  // PR-15B — once the confirm lands and we have a real ClientPurchase id,
+  // we forward the buyer to the PurchaseUnpack screen for the
+  // "here's what you just got" moment. The unpack screen is gated behind
+  // `featureFlags.deliverables` (same flag the persistent Deliverables
+  // surface uses) so this is a no-op in production until ops flips it.
+  const [didUnpackNav, setDidUnpackNav] = useState(false);
 
   useEffect(() => {
     if (outcome !== 'success') return;
     let cancelled = false;
     (async () => {
-      const res = sessionId
+      // The confirm endpoint reports `paid` but does NOT carry the
+      // ClientPurchase row id (see clientPaymentsApi.confirmCheckoutSession
+      // — `purchase_id: null` by design). For the PR-15B unpack
+      // navigation we need a real purchase id, so on a successful confirm
+      // we ALSO call getPaymentStatus() which reads from
+      // GET /v1/checkout/purchases and returns the active purchase id.
+      // This is one extra call only on the success path; on cancel /
+      // missing session id we already did getPaymentStatus directly.
+      const confirmRes = sessionId
         ? await clientPaymentsApi.confirmCheckoutSession(sessionId)
         : await clientPaymentsApi.getPaymentStatus();
       if (cancelled) return;
-      if (res.ok) {
-        setStatus(res.data);
-      } else if (res.reason === 'not_configured') {
-        setError(
-          'Backend not configured — your coach will need to confirm payment manually.',
-        );
-      } else {
-        setError(res.message);
+      if (!confirmRes.ok) {
+        if (confirmRes.reason === 'not_configured') {
+          setError(
+            'Backend not configured — your coach will need to confirm payment manually.',
+          );
+        } else {
+          setError(confirmRes.message);
+        }
+        setLoading(false);
+        return;
       }
+      let confirmedStatus = confirmRes.data;
+      // If we don't already have a purchase_id (confirm response doesn't
+      // include it), reconcile with getPaymentStatus() to find the active
+      // ClientPurchase row id.
+      if (!confirmedStatus.purchase_id) {
+        const statusRes = await clientPaymentsApi.getPaymentStatus();
+        if (cancelled) return;
+        if (statusRes.ok && statusRes.data.purchase_id) {
+          confirmedStatus = {
+            ...confirmedStatus,
+            purchase_id: statusRes.data.purchase_id,
+            package_id: confirmedStatus.package_id ?? statusRes.data.package_id,
+            package_name:
+              confirmedStatus.package_name ?? statusRes.data.package_name,
+            current_period_end:
+              confirmedStatus.current_period_end ??
+              statusRes.data.current_period_end,
+          };
+        }
+      }
+      setStatus(confirmedStatus);
       setLoading(false);
     })();
     return () => {
       cancelled = true;
     };
   }, [outcome, sessionId]);
+
+  // PR-15B nav handoff: once we have a confirmed `paid` status + a real
+  // ClientPurchase id and the deliverables flag is enabled, push the
+  // unpack screen. We `replace` to avoid leaving the bare confirmation
+  // screen on the back stack.
+  useEffect(() => {
+    if (didUnpackNav) return;
+    if (!featureFlags.deliverables) return;
+    if (outcome !== 'success') return;
+    if (!status) return;
+    const isPaying = status.state === 'active' || status.state === 'trialing';
+    if (!isPaying) return;
+    if (!status.purchase_id) return;
+    setDidUnpackNav(true);
+    (
+      navigation as unknown as {
+        navigate: (n: string, p: { purchaseId: string; packageName?: string }) => void;
+      }
+    ).navigate('PurchaseUnpack', {
+      purchaseId: status.purchase_id,
+      packageName: status.package_name ?? undefined,
+    });
+  }, [didUnpackNav, outcome, status, navigation]);
 
   const goPackages = () => {
     // The packages screen lives on the MoreStack; navigate via parent to hop tabs.

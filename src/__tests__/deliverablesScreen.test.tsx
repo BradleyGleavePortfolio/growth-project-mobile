@@ -181,18 +181,32 @@ describe('upcoming caption fallbacks', () => {
 
 describe('DeliverablesScreen — source guards', () => {
   const SRC = readSrc('screens/client/DeliverablesScreen.tsx');
+  // PR-15B refactor: the per-asset_type routing table + DropRow live in
+  // a shared module so the unpack screen and the deliverables screen
+  // cannot drift. The route-string guards now read from the shared
+  // module location.
+  const SHARED = readSrc('screens/client/deliverables/dropRow.tsx');
 
   it('routes workout_program / workout_plan to WorkoutAssignmentDetail', () => {
-    expect(SRC).toMatch(/WorkoutAssignmentDetail/);
-    expect(SRC).toMatch(/assignmentId/);
+    expect(SHARED).toMatch(/WorkoutAssignmentDetail/);
+    expect(SHARED).toMatch(/assignmentId/);
   });
 
   it('routes meal_plan to ClientDailyMealPlan', () => {
-    expect(SRC).toMatch(/ClientDailyMealPlan/);
+    expect(SHARED).toMatch(/ClientDailyMealPlan/);
   });
 
   it('routes auto_message to Messages (via parent Home stack)', () => {
-    expect(SRC).toMatch(/Messages/);
+    expect(SHARED).toMatch(/Messages/);
+  });
+
+  it('DeliverablesScreen imports the shared DropRow + routeForDrop (PR-15B)', () => {
+    // The screen itself should be a thin shell: it imports the shared
+    // routing helpers rather than re-implementing them, so PR-13 and
+    // PR-15B can never diverge on per-asset_type destinations.
+    expect(SRC).toMatch(/from\s+['"]\.\/deliverables\/dropRow['"]/);
+    expect(SRC).toMatch(/\brouteForDrop\b/);
+    expect(SRC).toMatch(/\bDropRow\b/);
   });
 
   it('uses useTheme().colors (no hardcoded hex)', () => {
