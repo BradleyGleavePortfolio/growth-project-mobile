@@ -1,18 +1,29 @@
 /**
  * clientPaymentsApi — typed mobile client for the client-facing payments
- * surface from backend PR #215 (packages + checkout + dunning).
+ * surface.
  *
  * Endpoints consumed:
  *   GET  /v1/clients/me/coach/packages           — packages the coach offers this client
- *   GET  /v1/clients/me/coach/payment-status     — subscription + dunning state
- *   POST /v1/clients/me/coach/checkout           — create Stripe Checkout session
- *   POST /v1/clients/me/coach/checkout/confirm   — confirm a returned session
- *   POST /v1/clients/me/coach/billing-portal     — Stripe Billing Portal URL
+ *   GET  /v1/checkout/status                     — subscription + dunning state (CheckoutController)
+ *   POST /v1/checkout/sessions                   — create Stripe Checkout session (CheckoutController)
+ *   GET  /v1/checkout/sessions/:id/confirm       — confirm a returned session (CheckoutController)
+ *   POST /v1/checkout/billing-portal             — Stripe Billing Portal URL (CheckoutController)
  *   GET  /v1/clients/me/coach/entitlement        — current entitlement_active flag
  *
- * Same envelope convention as `coachConnectApi`: 404 / 501 collapses into
- * `{ ok: false, reason: 'not_configured' }` so the screen renders a calm
- * "your coach has not enabled checkout yet" empty state instead of a crash.
+ * History: the four checkout-shaped calls (sessions, confirm, status,
+ * billing-portal) previously pointed at `/v1/clients/me/coach/*` paths that
+ * do NOT exist on the backend. Every call 404'd, and the 404 was swallowed
+ * into a misleading "not configured" empty state. They now hit the real
+ * `CheckoutController` mounted at `/v1/checkout/*`, the same controller
+ * `PackageCheckoutScreen` already uses for session creation.
+ *
+ * Envelope: only a 501 collapses into
+ * `{ ok: false, reason: 'not_configured' }`. A 404 is treated as a real
+ * transport/path failure and surfaced as `{ ok: false, reason: 'error' }`
+ * so the UI can offer a retry instead of silently telling the buyer their
+ * coach hasn't enabled payments. The true "no plans / not connected"
+ * state is derived from an empty package list or an explicit `state: 'none'`
+ * on the payment-status response, not from a 404.
  *
  * Checkout return / cancel deep-links are handled by the navigator
  * (`com.growthproject.app://checkout/success` and
@@ -21,6 +32,7 @@
 
 import api from '../services/api';
 import type { AxiosResponse } from 'axios';
+import { generateIdempotencyKey } from '../utils/idempotency';
 
 /**
  * A package as the client sees it. Subset of the coach-side CoachPackage
@@ -121,10 +133,23 @@ function normalizeClientPackage(raw: Record<string, unknown>): ClientCoachPackag
   };
 }
 
+/**
+ * "Not configured" is a server-side signal that the endpoint exists but the
+ * backend has explicitly declined to serve it on this deployment (e.g. the
+ * payments module is gated off). 501 Not Implemented is the only status we
+ * accept as that signal.
+ *
+ * A 404 is NOT not_configured — it almost always means the client is
+ * pointing at the wrong route, which is exactly the regression this PR
+ * fixes. Treating 404 as "not_configured" silently masked four broken
+ * checkout routes for weeks; the buyer saw "your coach hasn't enabled
+ * payments yet" when the real cause was a typo in the mobile path.
+ * 404 (and every other transport/HTTP failure) is surfaced as a real,
+ * retryable error so the UI can recover or the user can see what's wrong.
+ */
 function isNotConfigured(err: unknown): boolean {
   const e = err as { response?: { status?: number } } | undefined;
-  const status = e?.response?.status;
-  return status === 404 || status === 501;
+  return e?.response?.status === 501;
 }
 
 function wrap<T>(p: Promise<AxiosResponse<T>>): Promise<PaymentsResult<T>> {
@@ -142,9 +167,13 @@ export const clientPaymentsApi = {
   /**
    * Creates a Stripe Billing Portal session for the signed-in client.
    * Returns a Stripe-hosted URL the app should open in an in-app browser.
+   *
+   * Route: `POST /v1/checkout/billing-portal` (CheckoutController). The
+   * previous `/v1/clients/me/coach/billing-portal` path did not exist on
+   * the backend and 404'd on every call.
    */
   createBillingPortalSession: (): Promise<PaymentsResult<{ url: string }>> =>
-    wrap(api.post<{ url: string }>('/v1/clients/me/coach/billing-portal', {})),
+    wrap(api.post<{ url: string }>('/v1/checkout/billing-portal', {})),
 
   getPackages: (): Promise<PaymentsResult<ClientCoachPackage[]>> =>
     wrap(
@@ -175,17 +204,29 @@ export const clientPaymentsApi = {
    * `BrandedCheckoutWebViewScreen.parseReturnDeepLink` so the webview
    * dismisses on return; if these drift, payment looks "stuck" after a
    * successful charge.
+   *
+   * Route: `POST /v1/checkout/sessions` (CheckoutController). Same
+   * endpoint `publicPackagesApi.createCheckoutSession` (used by the
+   * working `PackageCheckoutScreen`) hits. The previous
+   * `/v1/clients/me/coach/checkout` path did not exist on the backend
+   * and 404'd on every buy. Every mutation carries a client-generated
+   * `Idempotency-Key` (rule R19) so retries / double-taps don't mint
+   * duplicate Checkout sessions.
    */
   createCheckoutSession: (
     packageId: string,
   ): Promise<PaymentsResult<CheckoutSession>> =>
     wrap(
-      api.post<CheckoutSession>('/v1/clients/me/coach/checkout', {
-        package_id: packageId,
-        success_url:
-          'com.growthproject.app://checkout/success?session_id={CHECKOUT_SESSION_ID}',
-        cancel_url: 'com.growthproject.app://checkout/cancel',
-      }),
+      api.post<CheckoutSession>(
+        '/v1/checkout/sessions',
+        {
+          package_id: packageId,
+          success_url:
+            'com.growthproject.app://checkout/success?session_id={CHECKOUT_SESSION_ID}',
+          cancel_url: 'com.growthproject.app://checkout/cancel',
+        },
+        { headers: { 'Idempotency-Key': generateIdempotencyKey() } },
+      ),
     ),
 
   /**
@@ -201,13 +242,13 @@ export const clientPaymentsApi = {
    */
   getPaymentStatus: async (): Promise<PaymentsResult<ClientPaymentStatus>> => {
     const statusResult = await wrap(
-      api.get<ClientPaymentStatus>('/v1/clients/me/coach/payment-status'),
+      api.get<ClientPaymentStatus>('/v1/checkout/status'),
     );
     if (!statusResult.ok) return statusResult;
     const status = statusResult.data;
     if (status.state === 'past_due' && !status.dunning?.update_card_url) {
       const portal = await wrap(
-        api.post<{ url: string }>('/v1/clients/me/coach/billing-portal', {}),
+        api.post<{ url: string }>('/v1/checkout/billing-portal', {}),
       );
       const updateCardUrl = portal.ok ? portal.data.url : null;
       // Round-3 residual fix: when the portal mint itself fails, the
@@ -247,14 +288,20 @@ export const clientPaymentsApi = {
    * Called on the checkout success deep-link to confirm the session
    * actually granted entitlement before the UI flips to "access granted".
    * Returns the full ClientPaymentStatus directly from the backend.
+   *
+   * Route: `GET /v1/checkout/sessions/:id/confirm` (CheckoutController).
+   * The previous `POST /v1/clients/me/coach/checkout/confirm` had both a
+   * wrong verb AND a wrong path — every successful charge stuck in
+   * "confirmation pending" forever. The real endpoint is idempotent (the
+   * session id is the dedup key on the server side), so it does not
+   * require a client-supplied Idempotency-Key header.
    */
   confirmCheckoutSession: (
     sessionId: string,
   ): Promise<PaymentsResult<ClientPaymentStatus>> =>
     wrap(
-      api.post<ClientPaymentStatus>(
-        '/v1/clients/me/coach/checkout/confirm',
-        { session_id: sessionId },
+      api.get<ClientPaymentStatus>(
+        `/v1/checkout/sessions/${encodeURIComponent(sessionId)}/confirm`,
       ),
     ),
 };

@@ -1,15 +1,19 @@
 /**
  * ClientPackagesScreen — packages the client's coach offers + checkout.
  *
- * Wired to backend PR #215 via `clientPaymentsApi`:
- *   - GET  /v1/clients/me/coach/packages
- *   - POST /v1/clients/me/coach/checkout
- *   - GET  /v1/clients/me/payment-status
+ * Wired via `clientPaymentsApi`:
+ *   - GET  /v1/clients/me/coach/packages    (packages list)
+ *   - POST /v1/checkout/sessions            (CheckoutController — buy)
+ *   - GET  /v1/checkout/status              (CheckoutController — subscription state)
  *
  * Behaviour contract:
- *  - 404 / 501 from the packages endpoint => "Your coach has not enabled
- *    self-serve checkout yet" empty state with a "Message your coach" CTA.
- *    No fake packages, no placeholder prices.
+ *  - 501 from the packages endpoint => "Your coach has not enabled
+ *    self-serve checkout yet" empty state with a "Message your coach"
+ *    CTA. A real 404 / transport error is surfaced as a retryable error
+ *    banner — it is no longer silently shown as "not configured" (PR-1
+ *    in-app checkout fix). The true "not configured" state is derived
+ *    from the explicit `not_configured` envelope plus an empty package
+ *    list / `state: 'none'` signal, never from a 404 alone.
  *  - 'past_due' from payment-status => dunning banner at top with the
  *    backend-supplied summary verbatim and an "Update card" button that
  *    opens the Stripe billing portal in the branded in-app webview.
@@ -231,10 +235,19 @@ export default function ClientPackagesScreen() {
     return <SkeletonScreen count={5} />;
   }
 
+  // PR-1: derive "your coach has not enabled self-serve checkout" from
+  // real backend signal, not from a 404. The explicit 501 → not_configured
+  // envelope on EITHER packages or payment-status is one signal; an empty
+  // published package list + `state: 'none'` from a healthy payment-status
+  // call is the other. A 404 / transport error on either now arrives as
+  // `reason: 'error'` and lands in the retryable error branches below
+  // instead of being silently mapped to the calm "not enabled yet" gate.
   const packagesNotConfigured = !packages.ok && packages.reason === 'not_configured';
+  const packagesEmptyOk = packages.ok && packages.data.length === 0;
   const statusUnavailable = !status.ok && status.reason === 'not_configured';
   const statusNone = status.ok && status.data.state === 'none';
-  const notConfigured = packagesNotConfigured && (statusUnavailable || statusNone);
+  const notConfigured =
+    (packagesNotConfigured || packagesEmptyOk) && (statusUnavailable || statusNone);
 
   return (
     <ScrollView

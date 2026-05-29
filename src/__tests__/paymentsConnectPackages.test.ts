@@ -89,16 +89,38 @@ describe('clientPaymentsApi', () => {
     }
   });
 
-  it('returns not_configured on 404 from packages', async () => {
-    mockedApi.get.mockRejectedValueOnce({ response: { status: 404 } });
+  it('surfaces a 404 from packages as a retryable error, NOT not_configured', async () => {
+    // PR-1 (in-app checkout fix): a 404 used to be silently mapped to
+    // `not_configured`, which masked four dead routes for weeks. Real
+    // 404s must surface as `reason: 'error'` so the UI offers a retry
+    // instead of telling the buyer their coach hasn't enabled payments.
+    mockedApi.get.mockRejectedValueOnce({
+      response: { status: 404 },
+      message: 'Request failed with status code 404',
+    });
     const res = await clientPaymentsApi.getPackages();
-    expect(res).toEqual({ ok: false, reason: 'not_configured' });
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.reason).toBe('error');
+    }
   });
 
   it('returns not_configured on 501 from payment-status', async () => {
     mockedApi.get.mockRejectedValueOnce({ response: { status: 501 } });
     const res = await clientPaymentsApi.getPaymentStatus();
     expect(res).toEqual({ ok: false, reason: 'not_configured' });
+  });
+
+  it('surfaces a 404 from payment-status as a retryable error, NOT not_configured', async () => {
+    mockedApi.get.mockRejectedValueOnce({
+      response: { status: 404 },
+      message: 'Request failed with status code 404',
+    });
+    const res = await clientPaymentsApi.getPaymentStatus();
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.reason).toBe('error');
+    }
   });
 
   it('surfaces dunning summary + update_card_url verbatim', async () => {
@@ -146,7 +168,7 @@ describe('clientPaymentsApi', () => {
       );
     }
     expect(mockedApi.post).toHaveBeenCalledWith(
-      '/v1/clients/me/coach/billing-portal',
+      '/v1/checkout/billing-portal',
       expect.any(Object),
     );
   });
@@ -187,21 +209,38 @@ describe('clientPaymentsApi', () => {
     });
     await clientPaymentsApi.createCheckoutSession('pkg_1');
     expect(mockedApi.post).toHaveBeenCalledWith(
-      '/v1/clients/me/coach/checkout',
+      '/v1/checkout/sessions',
       expect.objectContaining({
         package_id: 'pkg_1',
         success_url: expect.stringMatching(/^com\.growthproject\.app:\/\/checkout\/success/),
         cancel_url: 'com.growthproject.app://checkout/cancel',
+      }),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          'Idempotency-Key': expect.any(String),
+        }),
       }),
     );
     // The success URL must include the Stripe session-id template token
     // so the backend hands it back to the app on return.
     const call = mockedApi.post.mock.calls[0][1] as { success_url: string };
     expect(call.success_url).toContain('{CHECKOUT_SESSION_ID}');
+    // R19: every checkout-session POST carries an Idempotency-Key so a
+    // double-tap on Buy does not mint duplicate Stripe sessions.
+    const config = mockedApi.post.mock.calls[0][2] as {
+      headers: { 'Idempotency-Key'?: string };
+    };
+    expect(config.headers['Idempotency-Key']).toBeTruthy();
   });
 
-  it('confirmCheckoutSession POSTs the session id to /confirm', async () => {
-    mockedApi.post.mockResolvedValueOnce({
+  it('confirmCheckoutSession GETs /v1/checkout/sessions/:id/confirm', async () => {
+    // PR-1 (in-app checkout fix): the old call was POST to a non-existent
+    // /v1/clients/me/coach/checkout/confirm path — every successful
+    // charge was stuck in "confirmation pending" forever. Real route is
+    // GET /v1/checkout/sessions/:id/confirm with the session id in the
+    // path (the session id itself is the dedup key — no body, no
+    // client-supplied Idempotency-Key required).
+    mockedApi.get.mockResolvedValueOnce({
       data: {
         state: 'active',
         package_name: '1:1 Coaching',
@@ -211,11 +250,28 @@ describe('clientPaymentsApi', () => {
       },
     });
     const res = await clientPaymentsApi.confirmCheckoutSession('cs_test_abc');
-    expect(mockedApi.post).toHaveBeenCalledWith(
-      '/v1/clients/me/coach/checkout/confirm',
-      { session_id: 'cs_test_abc' },
+    expect(mockedApi.get).toHaveBeenCalledWith(
+      '/v1/checkout/sessions/cs_test_abc/confirm',
     );
     expect(res.ok).toBe(true);
+  });
+
+  it('confirmCheckoutSession URL-encodes the session id in the path', async () => {
+    mockedApi.get.mockResolvedValueOnce({
+      data: {
+        state: 'active',
+        package_name: null,
+        current_period_end: null,
+        trial_ends_at: null,
+        dunning: null,
+      },
+    });
+    // Stripe session ids are alphanumeric+underscore in practice, but defend
+    // against any caller passing an id with reserved characters.
+    await clientPaymentsApi.confirmCheckoutSession('cs/with/slash');
+    expect(mockedApi.get).toHaveBeenCalledWith(
+      '/v1/checkout/sessions/cs%2Fwith%2Fslash/confirm',
+    );
   });
 });
 
