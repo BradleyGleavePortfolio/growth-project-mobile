@@ -303,6 +303,36 @@ export default function ClientPackagesScreen() {
               ? `Renews ${formatDate(status.data.current_period_end)}`
               : ''}
           </Text>
+          {/* PR-13 — buyer-facing Deliverables entry. Only shown when we
+              have a real purchase_id (state !== 'none'); when state ===
+              'none' there is no purchase to list drops for, so the row
+              is hidden rather than showing a dead-end. */}
+          {status.data.purchase_id ? (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="View what's included in your plan"
+              testID="view-deliverables-cta"
+              onPress={() =>
+                (
+                  navigation as unknown as {
+                    navigate: (
+                      n: string,
+                      p: { purchaseId: string; packageName?: string },
+                    ) => void;
+                  }
+                ).navigate('Deliverables', {
+                  purchaseId: status.data.purchase_id as string,
+                  packageName: status.data.package_name ?? undefined,
+                })
+              }
+              style={styles.currentPlanCta}
+            >
+              <Text style={styles.currentPlanCtaText}>
+                View what&apos;s included
+              </Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+            </TouchableOpacity>
+          ) : null}
         </View>
       ) : null}
 
@@ -498,6 +528,20 @@ const makeStyles = (colors: ThemeColors) =>
     },
     currentPlanName: { fontSize: 18, fontWeight: '600', color: colors.textPrimary },
     currentPlanSub: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+    currentPlanCta: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginTop: 12,
+      paddingTop: 12,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    currentPlanCtaText: {
+      fontSize: 14,
+      color: colors.primary,
+      fontWeight: '600',
+    },
     errorBanner: {
       flexDirection: 'row',
       alignItems: 'center',

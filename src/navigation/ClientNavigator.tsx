@@ -100,6 +100,9 @@ import DataExportScreen from '../screens/settings/DataExportScreen';
 // Payments — client-facing packages + checkout return (backend PR #215).
 import ClientPackagesScreen from '../screens/client/ClientPackagesScreen';
 import CheckoutReturnScreen from '../screens/client/CheckoutReturnScreen';
+// PR-13 — buyer-facing Deliverables timeline (drip engine consumer surface,
+// master plan §3 ScheduledDrop rows).
+import DeliverablesScreen from '../screens/client/DeliverablesScreen';
 import BrandedCheckoutWebViewScreen, {
   type BrandedCheckoutWebViewParams,
 } from '../screens/client/BrandedCheckoutWebViewScreen';
@@ -221,6 +224,16 @@ export type MoreStackParamList = {
   DataExport: undefined;
   /** Payments — client-facing packages list (backend PR #215). */
   ClientPackages: undefined;
+  /**
+   * PR-13 — buyer-facing Deliverables timeline for one ClientPurchase.
+   * Renders the buyer's ScheduledDrops (delivered + upcoming) and routes
+   * delivered taps to the existing per-asset_type viewer.
+   *
+   * `purchaseId` is required; `packageName` is optional and used purely
+   * for the screen header so the caller does not have to refetch a label
+   * it already has.
+   */
+  Deliverables: { purchaseId: string; packageName?: string };
   /**
    * Payments — Stripe Checkout return.
    *   outcome: 'success' | 'cancel'
@@ -444,6 +457,8 @@ function MoreStackNavigator() {
           tgp://checkout/{success,cancel}; see RootNavigator.linking. */}
       <MoreStackNav.Screen name="ClientPackages"  component={ClientPackagesScreen} />
       <MoreStackNav.Screen name="CheckoutReturn"  component={CheckoutReturnScreen} />
+      {/* PR-13 — buyer-facing Deliverables timeline (drip engine surface). */}
+      <MoreStackNav.Screen name="Deliverables"    component={DeliverablesScreen} />
       {/* Branded in-app webview checkout (Apple B2B exemption — see screen docstring). */}
       <MoreStackNav.Screen
         name="BrandedCheckoutWebView"
