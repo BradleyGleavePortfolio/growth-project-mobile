@@ -50,16 +50,30 @@ import {
   coachPackageContentsApi,
   PackageContent,
   PatchContentBody,
+  PushAudience,
 } from '../../../api/packageContentsApi';
 import { generateIdempotencyKey } from '../../../utils/idempotency';
 import { errorMessage } from '../../../types/common';
-import { lightTap, mediumTap, warningTap } from '../../../utils/haptics';
+import {
+  lightTap,
+  mediumTap,
+  successTap,
+  warningTap,
+} from '../../../utils/haptics';
 import { useTheme, ThemeColors } from '../../../theme/ThemeProvider';
 import HapticPressable from '../../../components/HapticPressable';
 import ContentAttachForm, {
   assetTypeLabel,
   cadenceLabel,
 } from './contents/ContentAttachForm';
+import PushPromptSheet from './contents/PushPromptSheet';
+import PushConfirmModal from './contents/PushConfirmModal';
+
+// Resolved audience for THIS push (decision #1, per-push). M5 defaults to
+// 'active' (active buyers); the confirm modal shows the resolved count/label.
+// Module-scope constants so handlers don't need them in their dependency lists.
+const PUSH_AUDIENCE: PushAudience = 'active';
+const PUSH_AUDIENCE_LABEL = 'active buyers';
 
 type ParamList = {
   CoachPackageContents: { packageId: string; title?: string };
@@ -80,6 +94,23 @@ export default function CoachPackageContentsScreen({ navigation, route }: Props)
   const [formVisible, setFormVisible] = useState(false);
   const [editing, setEditing] = useState<PackageContent | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // ── Per-card push flow state (PR-17 M5, decision #12) ──────────────────────
+  // The push flow is a small state machine confined to this screen:
+  //   pushTarget set  → PushPromptSheet visible (the M3 push-vs-future choice)
+  //   confirmVisible  → PushConfirmModal visible (the M4 preview + date + notify)
+  // `pushTarget` is the content row the coach tapped; it stays set across the
+  // prompt → confirm hops so the confirm step knows which content to push.
+  const [pushTarget, setPushTarget] = useState<PackageContent | null>(null);
+  const [promptVisible, setPromptVisible] = useState(false);
+  const [confirmVisible, setConfirmVisible] = useState(false);
+  const [audienceCount, setAudienceCount] = useState(0);
+  const [buyerNotify, setBuyerNotify] = useState(true); // default ON (decision #9)
+  const [fireAt, setFireAt] = useState<Date | null>(null); // coach picks (decision #2)
+  const [pushSubmitting, setPushSubmitting] = useState(false);
+  // ONE idempotency key per confirmed push attempt (decision #8 / R19): created
+  // when the coach taps Confirm and reused across retries of the SAME intent.
+  const [pushIdemKey, setPushIdemKey] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -201,26 +232,145 @@ export default function CoachPackageContentsScreen({ navigation, route }: Props)
     [packageId, load],
   );
 
-  /**
-   * PLACEHOLDER SEAM for M5 (decision #12, per-card entry point).
-   *
-   * M2 owns the affordance but NOT the behavior: the push-vs-future prompt
-   * (M3) and confirm-preview modal (M4) are separate new files, wired here by
-   * M5. Until then this is a no-op hint so the surface is discoverable without
-   * pretending the flow exists. Do NOT build the push modal in this file.
-   */
-  const onPushPress = useCallback((_content: PackageContent) => {
-    // TODO(M5): open PushPromptSheet → PushConfirmModal for `_content`.
-    lightTap();
-    Alert.alert(
-      'Push to existing buyers',
-      'Pushing an update to existing buyers is coming soon.',
-    );
+  // The resolved title for a row — mirrors renderRow's `rowTitle` so the prompt
+  // and confirm copy name the exact content the coach tapped.
+  const contentTitleOf = useCallback(
+    (content: PackageContent) =>
+      content.display_title?.trim() || assetTypeLabel(content.asset_type),
+    [],
+  );
+
+  // ── Per-card push flow (PR-17 M5, decision #12) ──────────────────────────
+
+  // Reset all transient push state — used when the flow closes (dismiss / cancel
+  // / future-only / success) so a later tap starts clean.
+  const resetPushState = useCallback(() => {
+    setPushTarget(null);
+    setAudienceCount(0);
+    setBuyerNotify(true);
+    setFireAt(null);
+    setPushSubmitting(false);
+    setPushIdemKey(null);
   }, []);
+
+  // Step 1 — tap the row's push icon: open the M3 prompt for that content.
+  // mode='new_content' is the per-card "push this existing content" entry
+  // (cadence_edit/full_edit belong to the edit-save flow, out of M5 scope).
+  const onPushPress = useCallback((content: PackageContent) => {
+    lightTap();
+    setPushTarget(content);
+    setConfirmVisible(false);
+    setAudienceCount(0);
+    setBuyerNotify(true);
+    setFireAt(null);
+    setPushSubmitting(false);
+    setPushIdemKey(null);
+    setPromptVisible(true);
+  }, []);
+
+  // Step 2 — future-only / dismiss: close the sheet, NO push (decision #5).
+  const closePrompt = useCallback(() => {
+    setPromptVisible(false);
+    resetPushState();
+  }, [resetPushState]);
+
+  // Step 3 — "push to existing": close the prompt, preview the audience, then
+  // open the M4 confirm modal with the resolved count. A preview FAILURE shows
+  // a warm Alert and does NOT open the confirm modal (error-prevention: never
+  // surface a real error as a benign empty state).
+  const onPushExisting = useCallback(async () => {
+    const target = pushTarget;
+    if (!target) return;
+    setPromptVisible(false);
+    try {
+      const res = await coachPackageContentsApi.pushPreview(packageId, target.id, {
+        audience: PUSH_AUDIENCE,
+        mode: 'push_existing',
+      });
+      setAudienceCount(res.data.count);
+      setBuyerNotify(true);
+      setFireAt(null);
+      setPushSubmitting(false);
+      setPushIdemKey(null);
+      setConfirmVisible(true);
+    } catch (err) {
+      warningTap();
+      Alert.alert(
+        'Could not check buyers',
+        errorMessage(err, 'Please try again.'),
+      );
+      resetPushState();
+    }
+  }, [pushTarget, packageId, resetPushState]);
+
+  // Step 4 — confirm modal field changes.
+  const onChangeBuyerNotify = useCallback((next: boolean) => {
+    setBuyerNotify(next);
+  }, []);
+  const onChangeFireAt = useCallback((next: Date) => {
+    setFireAt(next);
+  }, []);
+
+  // Step 6 — cancel: close the confirm modal, reset transient push state.
+  const onPushCancel = useCallback(() => {
+    setConfirmVisible(false);
+    resetPushState();
+  }, [resetPushState]);
+
+  // Step 5 — confirm: call the push API with one idempotency key per attempt.
+  // Double-submit is guarded by `pushSubmitting` (the modal also disables
+  // Confirm while `submitting`). On success: warm Alert + success haptic +
+  // refresh. On error: warningTap + warm Alert, keep the modal OPEN so the
+  // coach can retry, submitting back to false.
+  const onPushConfirm = useCallback(async () => {
+    const target = pushTarget;
+    // Guard double-submit and a missing date/target (the modal also enforces).
+    if (!target || fireAt == null || pushSubmitting) return;
+    setPushSubmitting(true);
+    // One key per confirmed attempt, stable across retries of the same intent.
+    const key = pushIdemKey ?? generateIdempotencyKey();
+    if (!pushIdemKey) setPushIdemKey(key);
+    try {
+      const res = await coachPackageContentsApi.push(
+        packageId,
+        target.id,
+        {
+          audience: PUSH_AUDIENCE,
+          fire_at: fireAt.toISOString(),
+          mode: 'push_existing',
+          notify: buyerNotify,
+        },
+        key,
+      );
+      successTap();
+      setConfirmVisible(false);
+      resetPushState();
+      // Warm success copy in the decision #10 preview language.
+      Alert.alert(
+        'Scheduled',
+        `This delivers to ${res.data.scheduled} ${PUSH_AUDIENCE_LABEL}.`,
+      );
+      await load();
+    } catch (err) {
+      warningTap();
+      // Keep the modal OPEN so the coach can retry; reuse the same key.
+      setPushSubmitting(false);
+      Alert.alert('Could not push', errorMessage(err, 'Please try again.'));
+    }
+  }, [
+    pushTarget,
+    fireAt,
+    pushSubmitting,
+    pushIdemKey,
+    packageId,
+    buyerNotify,
+    resetPushState,
+    load,
+  ]);
 
   const renderRow = useCallback(
     ({ item }: { item: PackageContent }) => {
-      const rowTitle = item.display_title?.trim() || assetTypeLabel(item.asset_type);
+      const rowTitle = contentTitleOf(item);
       return (
         <View style={styles.row} testID={`content-row-${item.id}`}>
           <View style={styles.rowMain}>
@@ -268,7 +418,7 @@ export default function CoachPackageContentsScreen({ navigation, route }: Props)
         </View>
       );
     },
-    [styles, colors, onPushPress, openEdit, handleRemove],
+    [styles, colors, contentTitleOf, onPushPress, openEdit, handleRemove],
   );
 
   const renderBody = () => {
@@ -362,6 +512,30 @@ export default function CoachPackageContentsScreen({ navigation, route }: Props)
         onCancel={closeForm}
         onSubmitAttach={handleAttach}
         onSubmitPatch={handlePatch}
+      />
+
+      {/* PR-17 M5 — per-card push: prompt (M3) → confirm (M4) → push API. */}
+      <PushPromptSheet
+        visible={promptVisible}
+        contentTitle={pushTarget ? contentTitleOf(pushTarget) : ''}
+        mode="new_content"
+        onPushExisting={onPushExisting}
+        onFutureOnly={closePrompt}
+        onDismiss={closePrompt}
+      />
+
+      <PushConfirmModal
+        visible={confirmVisible}
+        contentTitle={pushTarget ? contentTitleOf(pushTarget) : ''}
+        audienceCount={audienceCount}
+        audienceLabel={PUSH_AUDIENCE_LABEL}
+        buyerNotify={buyerNotify}
+        onChangeBuyerNotify={onChangeBuyerNotify}
+        fireAt={fireAt}
+        onChangeFireAt={onChangeFireAt}
+        onConfirm={onPushConfirm}
+        onCancel={onPushCancel}
+        submitting={pushSubmitting}
       />
     </View>
   );

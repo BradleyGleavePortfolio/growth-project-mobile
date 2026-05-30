@@ -57,18 +57,20 @@ describe('CoachPackageContents — nav + wiring source guards', () => {
     expect(EDIT_SRC).toMatch(/navigation\.navigate\('CoachPackageContents'/);
   });
 
-  it('the push affordance is a placeholder seam, not the push modal (M3/M4 are out of scope)', () => {
-    // M2 owns the per-row affordance + an onPushPress hook only.
+  it('the push affordance is wired through PushPromptSheet → PushConfirmModal (M5)', () => {
+    // M5 owns the per-row affordance hook AND the real prompt → confirm wiring.
     expect(SCREEN_SRC).toMatch(/onPushPress/);
-    expect(SCREEN_SRC).toMatch(/TODO\(M5\)/);
-    // Forbidden: M2 must NOT build the push prompt / confirm modal. Check the
-    // CODE (comments stripped) so the doctrine note referencing the M3/M4 file
-    // names doesn't trip the guard.
-    expect(SCREEN_CODE).not.toMatch(/PushPromptSheet/);
-    expect(SCREEN_CODE).not.toMatch(/PushConfirmModal/);
-    // No imports of the M3/M4 files anywhere.
-    expect(SCREEN_SRC).not.toMatch(/from '.*PushPromptSheet'/);
-    expect(SCREEN_SRC).not.toMatch(/from '.*PushConfirmModal'/);
+    // The M2 placeholder "coming soon" Alert / TODO(M5) seam is GONE.
+    expect(SCREEN_CODE).not.toMatch(/TODO\(M5\)/);
+    expect(SCREEN_CODE).not.toMatch(/coming soon/);
+    // The M3/M4 components are now imported and rendered (comment-stripped).
+    expect(SCREEN_CODE).toMatch(/PushPromptSheet/);
+    expect(SCREEN_CODE).toMatch(/PushConfirmModal/);
+    expect(SCREEN_SRC).toMatch(/from '.*PushPromptSheet'/);
+    expect(SCREEN_SRC).toMatch(/from '.*PushConfirmModal'/);
+    // The real push API verbs are wired (preview + push).
+    expect(SCREEN_CODE).toMatch(/coachPackageContentsApi\.pushPreview/);
+    expect(SCREEN_CODE).toMatch(/coachPackageContentsApi\.push\(/);
   });
 
   it('uses warm empty-state copy, never "No data"', () => {
@@ -125,19 +127,92 @@ jest.mock('../utils/haptics', () => ({
   successTap: jest.fn(),
 }));
 
-// Partial mock of the M1 API client (jest.fn on list/attach/patch/remove).
+// Partial mock of the M1 API client (jest.fn on every verb the screen uses).
 const mockList = jest.fn();
 const mockAttach = jest.fn();
 const mockPatch = jest.fn();
 const mockRemove = jest.fn();
+const mockPushPreview = jest.fn();
+const mockPush = jest.fn();
 jest.mock('../api/packageContentsApi', () => ({
   coachPackageContentsApi: {
     list: (...a: unknown[]) => mockList(...a),
     attach: (...a: unknown[]) => mockAttach(...a),
     patch: (...a: unknown[]) => mockPatch(...a),
     remove: (...a: unknown[]) => mockRemove(...a),
+    pushPreview: (...a: unknown[]) => mockPushPreview(...a),
+    push: (...a: unknown[]) => mockPush(...a),
   },
 }));
+
+// Lightweight stand-ins for the FROZEN M3/M4 components so the SCREEN's state
+// machine is exercised in isolation (no DateTimePicker, no sheet animation).
+// Each exposes testID-tagged buttons that fire the exact prop callbacks the
+// real components fire, so the wiring contract is what we assert.
+jest.mock('../screens/coach/payments/contents/PushPromptSheet', () => {
+  const RN = require('react-native');
+  const React = require('react');
+  return {
+    __esModule: true,
+    default: (props: Record<string, unknown>) =>
+      props.visible
+        ? React.createElement(
+            RN.View,
+            { testID: 'mock-prompt-sheet' },
+            React.createElement(RN.Text, { testID: 'mock-prompt-title' }, props.contentTitle as string),
+            React.createElement(RN.Text, { testID: 'mock-prompt-mode' }, props.mode as string),
+            React.createElement(RN.TouchableOpacity, {
+              testID: 'mock-prompt-existing',
+              onPress: props.onPushExisting as () => void,
+            }),
+            React.createElement(RN.TouchableOpacity, {
+              testID: 'mock-prompt-future',
+              onPress: props.onFutureOnly as () => void,
+            }),
+            React.createElement(RN.TouchableOpacity, {
+              testID: 'mock-prompt-dismiss',
+              onPress: props.onDismiss as () => void,
+            }),
+          )
+        : null,
+  };
+});
+
+jest.mock('../screens/coach/payments/contents/PushConfirmModal', () => {
+  const RN = require('react-native');
+  const React = require('react');
+  const fixedFireAt = new Date('2099-01-15T00:00:00.000Z');
+  return {
+    __esModule: true,
+    default: (props: Record<string, unknown>) =>
+      props.visible
+        ? React.createElement(
+            RN.View,
+            { testID: 'mock-confirm-modal' },
+            React.createElement(RN.Text, { testID: 'mock-confirm-count' }, String(props.audienceCount)),
+            React.createElement(RN.Text, { testID: 'mock-confirm-label' }, props.audienceLabel as string),
+            React.createElement(RN.Text, { testID: 'mock-confirm-submitting' }, String(!!props.submitting)),
+            // Pick a fixed future date through the real onChangeFireAt prop.
+            React.createElement(RN.TouchableOpacity, {
+              testID: 'mock-confirm-pick-date',
+              onPress: () => (props.onChangeFireAt as CallableFunction)(fixedFireAt),
+            }),
+            React.createElement(RN.TouchableOpacity, {
+              testID: 'mock-confirm-submit',
+              onPress: props.onConfirm as () => void,
+            }),
+            React.createElement(RN.TouchableOpacity, {
+              testID: 'mock-confirm-cancel',
+              onPress: props.onCancel as () => void,
+            }),
+          )
+        : null,
+  };
+});
+
+// A stable future fire-at the confirm mock feeds back via onChangeFireAt; the
+// outer copy mirrors the in-factory value for the push-body assertions.
+const mockFixedFireAt = new Date('2099-01-15T00:00:00.000Z');
 
 import CoachPackageContentsScreen from '../screens/coach/payments/CoachPackageContentsScreen';
 
@@ -229,5 +304,194 @@ describe('CoachPackageContentsScreen — RTL mount', () => {
       cadence_kind: 'immediate',
     });
     expect(callArgs[2]).toBe('test-idem-key-0001');
+  });
+});
+
+// ── Per-card push flow (PR-17 M5) ────────────────────────────────────
+describe('CoachPackageContentsScreen — per-card push flow (M5)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  async function mountWithRow() {
+    mockList.mockResolvedValue({ data: { contents: [makeContent()] } });
+    const utils = render(
+      <CoachPackageContentsScreen navigation={navigation} route={route} />,
+    );
+    await waitFor(() => expect(utils.getByTestId('content-row-c1')).toBeTruthy());
+    return utils;
+  }
+
+  it('tapping the row push icon opens the prompt sheet with the right contentTitle', async () => {
+    const { getByTestId } = await mountWithRow();
+    fireEvent.press(getByTestId('content-row-push-c1'));
+    await waitFor(() => expect(getByTestId('mock-prompt-sheet')).toBeTruthy());
+    expect(getByTestId('mock-prompt-title').props.children).toBe('Week 1 Program');
+    // The per-card affordance is the fresh-push entry (mode='new_content').
+    expect(getByTestId('mock-prompt-mode').props.children).toBe('new_content');
+  });
+
+  it('"Future only" closes the sheet with NO preview/push call', async () => {
+    const { getByTestId, queryByTestId } = await mountWithRow();
+    fireEvent.press(getByTestId('content-row-push-c1'));
+    await waitFor(() => expect(getByTestId('mock-prompt-sheet')).toBeTruthy());
+    fireEvent.press(getByTestId('mock-prompt-future'));
+    await waitFor(() => expect(queryByTestId('mock-prompt-sheet')).toBeNull());
+    expect(mockPushPreview).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(queryByTestId('mock-confirm-modal')).toBeNull();
+  });
+
+  it('dismiss closes the sheet with NO preview/push call', async () => {
+    const { getByTestId, queryByTestId } = await mountWithRow();
+    fireEvent.press(getByTestId('content-row-push-c1'));
+    await waitFor(() => expect(getByTestId('mock-prompt-sheet')).toBeTruthy());
+    fireEvent.press(getByTestId('mock-prompt-dismiss'));
+    await waitFor(() => expect(queryByTestId('mock-prompt-sheet')).toBeNull());
+    expect(mockPushPreview).not.toHaveBeenCalled();
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('"Push existing" calls pushPreview then opens the confirm modal with the returned count', async () => {
+    mockPushPreview.mockResolvedValueOnce({
+      data: { count: 7, audience: 'active', already_delivered: 0 },
+    });
+    const { getByTestId, queryByTestId } = await mountWithRow();
+    fireEvent.press(getByTestId('content-row-push-c1'));
+    await waitFor(() => expect(getByTestId('mock-prompt-sheet')).toBeTruthy());
+    fireEvent.press(getByTestId('mock-prompt-existing'));
+
+    await waitFor(() => expect(mockPushPreview).toHaveBeenCalledTimes(1));
+    // pushPreview(packageId, contentId, { audience:'active', mode:'push_existing' })
+    expect(mockPushPreview.mock.calls[0][0]).toBe('pkg1');
+    expect(mockPushPreview.mock.calls[0][1]).toBe('c1');
+    expect(mockPushPreview.mock.calls[0][2]).toEqual({
+      audience: 'active',
+      mode: 'push_existing',
+    });
+
+    await waitFor(() => expect(getByTestId('mock-confirm-modal')).toBeTruthy());
+    expect(getByTestId('mock-confirm-count').props.children).toBe('7');
+    expect(getByTestId('mock-confirm-label').props.children).toBe('active buyers');
+    // The prompt sheet is closed once the confirm modal opens.
+    expect(queryByTestId('mock-prompt-sheet')).toBeNull();
+  });
+
+  it('preview FAILURE shows an error and does NOT open the confirm modal', async () => {
+    const alertSpy = jest
+      .spyOn(require('react-native').Alert, 'alert')
+      .mockImplementation(() => {});
+    mockPushPreview.mockRejectedValueOnce(new Error('network down'));
+    const { getByTestId, queryByTestId } = await mountWithRow();
+    fireEvent.press(getByTestId('content-row-push-c1'));
+    await waitFor(() => expect(getByTestId('mock-prompt-sheet')).toBeTruthy());
+    fireEvent.press(getByTestId('mock-prompt-existing'));
+
+    await waitFor(() => expect(mockPushPreview).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(alertSpy).toHaveBeenCalled());
+    expect(alertSpy.mock.calls[0][0]).toMatch(/Could not check buyers/);
+    expect(queryByTestId('mock-confirm-modal')).toBeNull();
+    expect(mockPush).not.toHaveBeenCalled();
+    alertSpy.mockRestore();
+  });
+
+  it('confirm calls push with the correct body + Idempotency-Key, shows success', async () => {
+    const alertSpy = jest
+      .spyOn(require('react-native').Alert, 'alert')
+      .mockImplementation(() => {});
+    mockPushPreview.mockResolvedValueOnce({
+      data: { count: 4, audience: 'active', already_delivered: 0 },
+    });
+    mockPush.mockResolvedValueOnce({
+      data: {
+        scheduled: 4,
+        skipped: 0,
+        fire_at: mockFixedFireAt.toISOString(),
+        audience: 'active',
+        notify: true,
+      },
+    });
+    const { getByTestId, queryByTestId } = await mountWithRow();
+    fireEvent.press(getByTestId('content-row-push-c1'));
+    await waitFor(() => expect(getByTestId('mock-prompt-sheet')).toBeTruthy());
+    fireEvent.press(getByTestId('mock-prompt-existing'));
+    await waitFor(() => expect(getByTestId('mock-confirm-modal')).toBeTruthy());
+
+    // Pick a future date, then confirm.
+    fireEvent.press(getByTestId('mock-confirm-pick-date'));
+    fireEvent.press(getByTestId('mock-confirm-submit'));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledTimes(1));
+    const args = mockPush.mock.calls[0];
+    expect(args[0]).toBe('pkg1');
+    expect(args[1]).toBe('c1');
+    expect(args[2]).toEqual({
+      audience: 'active',
+      fire_at: mockFixedFireAt.toISOString(),
+      mode: 'push_existing',
+      notify: true,
+    });
+    // Idempotency key (decision #8) threaded as the 4th arg.
+    expect(args[3]).toBe('test-idem-key-0001');
+
+    // Success: warm Alert + modal closes + list refreshes.
+    await waitFor(() => expect(queryByTestId('mock-confirm-modal')).toBeNull());
+    expect(alertSpy).toHaveBeenCalled();
+    expect(alertSpy.mock.calls.some((c) => /delivers to 4 active buyers/.test(String(c[1])))).toBe(true);
+    // load() ran once on mount + once after success.
+    expect(mockList).toHaveBeenCalledTimes(2);
+    alertSpy.mockRestore();
+  });
+
+  it('double-submit cannot fire push twice while submitting', async () => {
+    mockPushPreview.mockResolvedValueOnce({
+      data: { count: 2, audience: 'active', already_delivered: 0 },
+    });
+    // Never resolve, so submitting stays true across the second tap.
+    mockPush.mockReturnValueOnce(new Promise(() => {}));
+    const { getByTestId } = await mountWithRow();
+    fireEvent.press(getByTestId('content-row-push-c1'));
+    await waitFor(() => expect(getByTestId('mock-prompt-sheet')).toBeTruthy());
+    fireEvent.press(getByTestId('mock-prompt-existing'));
+    await waitFor(() => expect(getByTestId('mock-confirm-modal')).toBeTruthy());
+
+    fireEvent.press(getByTestId('mock-confirm-pick-date'));
+    fireEvent.press(getByTestId('mock-confirm-submit'));
+    await waitFor(() =>
+      expect(getByTestId('mock-confirm-submitting').props.children).toBe('true'),
+    );
+    // Second tap while in flight must be ignored.
+    fireEvent.press(getByTestId('mock-confirm-submit'));
+    fireEvent.press(getByTestId('mock-confirm-submit'));
+
+    expect(mockPush).toHaveBeenCalledTimes(1);
+  });
+
+  it('push FAILURE keeps the modal open and surfaces a warm error', async () => {
+    const alertSpy = jest
+      .spyOn(require('react-native').Alert, 'alert')
+      .mockImplementation(() => {});
+    mockPushPreview.mockResolvedValueOnce({
+      data: { count: 3, audience: 'active', already_delivered: 0 },
+    });
+    mockPush.mockRejectedValueOnce(new Error('server 500'));
+    const { getByTestId } = await mountWithRow();
+    fireEvent.press(getByTestId('content-row-push-c1'));
+    await waitFor(() => expect(getByTestId('mock-prompt-sheet')).toBeTruthy());
+    fireEvent.press(getByTestId('mock-prompt-existing'));
+    await waitFor(() => expect(getByTestId('mock-confirm-modal')).toBeTruthy());
+
+    fireEvent.press(getByTestId('mock-confirm-pick-date'));
+    fireEvent.press(getByTestId('mock-confirm-submit'));
+
+    await waitFor(() => expect(mockPush).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(alertSpy).toHaveBeenCalled());
+    expect(alertSpy.mock.calls.some((c) => /Could not push/.test(String(c[0])))).toBe(true);
+    // Modal stays OPEN for retry, and submitting is reset to false.
+    expect(getByTestId('mock-confirm-modal')).toBeTruthy();
+    await waitFor(() =>
+      expect(getByTestId('mock-confirm-submitting').props.children).toBe('false'),
+    );
+    alertSpy.mockRestore();
   });
 });
