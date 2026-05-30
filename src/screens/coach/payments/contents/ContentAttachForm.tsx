@@ -24,7 +24,7 @@
  * calls + idempotency keys; this component only collects + validates input.
  */
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -141,15 +141,69 @@ export default function ContentAttachForm({
     const d = content?.cadence_payload?.offset_days;
     return typeof d === 'number' ? String(d) : '';
   });
+  // fixed_calendar → release_at (ISO 8601). M2 collects this as a simple text
+  // entry; the rich date picker lands with M4 (do NOT add that dep here).
+  const [releaseAt, setReleaseAt] = useState<string>(() => {
+    const r = content?.cadence_payload?.release_at;
+    return typeof r === 'string' ? r : '';
+  });
+  // on_milestone → milestone_key (non-empty string per backend DTO).
+  const [milestoneKey, setMilestoneKey] = useState<string>(() => {
+    const m = content?.cadence_payload?.milestone_key;
+    return typeof m === 'string' ? m : '';
+  });
   const [error, setError] = useState('');
+
+  // P1 #1 fix — re-sync ALL form state when the editing target or visibility
+  // changes. The parent keeps a SINGLE ContentAttachForm instance mounted
+  // (CoachPackageContentsScreen.tsx) and merely flips `content`/`visible`, so
+  // without this the useState initializers above only run once and editing an
+  // existing row would submit stale/default values (wiping title/caption and
+  // resetting cadence to immediate). Keyed on content?.id + visible (and
+  // content?.updated_at so an edited-then-reopened row re-seeds): null content
+  // → add-mode defaults; an existing row → its seeded values.
+  useEffect(() => {
+    if (content) {
+      setAssetType(content.asset_type);
+      setAssetId(content.asset_id ?? '');
+      setCadenceKind(content.cadence_kind);
+      setTitle(content.display_title ?? '');
+      setCaption(content.display_caption ?? '');
+      setAdvancedOpen(content.cadence_kind !== 'immediate');
+      const d = content.cadence_payload?.offset_days;
+      setRelativeDays(typeof d === 'number' ? String(d) : '');
+      const r = content.cadence_payload?.release_at;
+      setReleaseAt(typeof r === 'string' ? r : '');
+      const m = content.cadence_payload?.milestone_key;
+      setMilestoneKey(typeof m === 'string' ? m : '');
+    } else {
+      // Add mode — reset to the safe defaults.
+      setAssetType('workout_program');
+      setAssetId('');
+      setCadenceKind('immediate');
+      setTitle('');
+      setCaption('');
+      setAdvancedOpen(false);
+      setRelativeDays('');
+      setReleaseAt('');
+      setMilestoneKey('');
+    }
+    setError('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [content?.id, content?.updated_at, visible]);
 
   const buildCadencePayload = useCallback((): {
     payload: Record<string, unknown> | null;
     message: string | null;
   } => {
-    // Only `relative_to_purchase` collects a value in this minimal M2 form;
-    // the other kinds carry an empty payload (the backend zod schema fills
-    // defaults / validates per-kind). This keeps the form to ≤5 elements.
+    // Build the per-kind cadence_payload and validate the required field is
+    // present BEFORE submit (error-prevention, UI Bible). Every kind exposed in
+    // CADENCE_OPTIONS builds a payload the backend zod schema accepts:
+    //   immediate            → {} (ImmediatePayload is strict-empty)
+    //   relative_to_purchase → { offset_days } (int 0..365)
+    //   fixed_calendar       → { release_at } (ISO 8601 string)
+    //   on_completion        → {} (depends_on_content_id is optional)
+    //   on_milestone         → { milestone_key } (non-empty string)
     if (cadenceKind === 'relative_to_purchase') {
       const n = Number(relativeDays.trim());
       if (!relativeDays.trim() || !Number.isInteger(n) || n < 0 || n > 365) {
@@ -160,8 +214,30 @@ export default function ContentAttachForm({
       }
       return { payload: { offset_days: n }, message: null };
     }
+    if (cadenceKind === 'fixed_calendar') {
+      const v = releaseAt.trim();
+      if (!v || Number.isNaN(Date.parse(v))) {
+        return {
+          payload: null,
+          message:
+            'Enter a release date as an ISO date — for example 2026-09-01T09:00:00Z.',
+        };
+      }
+      return { payload: { release_at: v }, message: null };
+    }
+    if (cadenceKind === 'on_milestone') {
+      const v = milestoneKey.trim();
+      if (!v) {
+        return {
+          payload: null,
+          message: 'Add the milestone key that releases this content.',
+        };
+      }
+      return { payload: { milestone_key: v }, message: null };
+    }
+    // `immediate` and `on_completion` carry no required payload field.
     return { payload: {}, message: null };
-  }, [cadenceKind, relativeDays]);
+  }, [cadenceKind, relativeDays, releaseAt, milestoneKey]);
 
   const handleSubmit = useCallback(() => {
     const trimmedAssetId = assetId.trim();
@@ -392,6 +468,42 @@ export default function ContentAttachForm({
                     keyboardType="number-pad"
                     maxLength={3}
                     testID="content-attach-relative-days"
+                  />
+                </>
+              ) : null}
+
+              {/* fixed_calendar needs release_at. M2 collects a simple ISO
+                  date string; TODO(M4): swap this for the rich date picker
+                  dependency that M4 introduces. */}
+              {cadenceKind === 'fixed_calendar' ? (
+                <>
+                  <Label colors={colors}>Release date (ISO)</Label>
+                  <TextInput
+                    value={releaseAt}
+                    onChangeText={setReleaseAt}
+                    placeholder="2026-09-01T09:00:00Z"
+                    style={styles.input}
+                    placeholderTextColor={colors.textMuted}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    testID="content-attach-release-at"
+                  />
+                </>
+              ) : null}
+
+              {/* on_milestone needs a milestone_key (non-empty string). */}
+              {cadenceKind === 'on_milestone' ? (
+                <>
+                  <Label colors={colors}>Milestone key</Label>
+                  <TextInput
+                    value={milestoneKey}
+                    onChangeText={setMilestoneKey}
+                    placeholder="first_workout_complete"
+                    style={styles.input}
+                    placeholderTextColor={colors.textMuted}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    testID="content-attach-milestone-key"
                   />
                 </>
               ) : null}
