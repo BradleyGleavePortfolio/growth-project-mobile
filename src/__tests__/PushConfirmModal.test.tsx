@@ -148,6 +148,53 @@ describe('PushConfirmModal — confirm gating (error-prevention)', () => {
       true,
     );
   });
+
+  // R2 P1 defence-in-depth: a PAST `fireAt` arriving via props (not via the
+  // picker) must NOT enable Confirm, using the same start-of-today basis as the
+  // picker's minimumDate (`fireAt >= minimumDate` is required).
+  it('confirm is DISABLED when a PAST fireAt is supplied via props', () => {
+    const past = new Date();
+    past.setDate(past.getDate() - 1); // yesterday
+    const { getByTestId } = render(
+      <PushConfirmModal {...baseProps({ fireAt: past })} />,
+    );
+    expect(getByTestId('push-confirm-submit').props.accessibilityState.disabled).toBe(
+      true,
+    );
+  });
+
+  it('pressing confirm with a PAST fireAt prop does NOT call onConfirm', () => {
+    const onConfirm = jest.fn();
+    const past = new Date();
+    past.setDate(past.getDate() - 1); // yesterday
+    const { getByTestId } = render(
+      <PushConfirmModal {...baseProps({ onConfirm, fireAt: past })} />,
+    );
+    fireEvent.press(getByTestId('push-confirm-submit'));
+    expect(onConfirm).not.toHaveBeenCalled();
+  });
+
+  it('confirm stays ENABLED for a future fireAt prop (no over-correction)', () => {
+    const future = new Date();
+    future.setDate(future.getDate() + 7); // a week out
+    const { getByTestId } = render(
+      <PushConfirmModal {...baseProps({ fireAt: future })} />,
+    );
+    expect(getByTestId('push-confirm-submit').props.accessibilityState.disabled).toBe(
+      false,
+    );
+  });
+
+  it('confirm is ENABLED when fireAt equals start-of-today (today or later basis)', () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const { getByTestId } = render(
+      <PushConfirmModal {...baseProps({ fireAt: today })} />,
+    );
+    expect(getByTestId('push-confirm-submit').props.accessibilityState.disabled).toBe(
+      false,
+    );
+  });
 });
 
 describe('PushConfirmModal — date picker minimumDate (decision #6)', () => {

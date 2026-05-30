@@ -103,7 +103,17 @@ export default function PushConfirmModal({
   const minimumDate = useMemo(() => startOfToday(), []);
 
   const hasAudience = audienceCount > 0;
-  const hasFireAt = fireAt != null;
+  // Defence-in-depth (R2 P1): `fireAt` is valid ONLY when it is a non-null Date
+  // that is NOT in the past, using the SAME now/today basis as the picker's
+  // `minimumDate` (= start-of-today). Chosen basis: "today or later"
+  // (`fireAt.getTime() >= minimumDate.getTime()`), NOT "future instant", so the
+  // gate and the picker agree exactly — any whole day from today onward is
+  // selectable AND confirmable. The picker's `minimumDate` blocks past dates
+  // chosen IN the picker; this guard additionally blocks a past `fireAt` that
+  // arrives via PROPS (e.g. M5 passing a stale/restored date, or a value that
+  // crossed midnight). Decision #6: past dates are BLOCKED at the gate, not
+  // only at the picker.
+  const hasFireAt = fireAt != null && fireAt.getTime() >= minimumDate.getTime();
   // Confirm is enabled ONLY when there is an audience, a chosen future date, and
   // no in-flight submit (error-prevention + CALM single-decision gating).
   const canConfirm = hasAudience && hasFireAt && !submitting;
