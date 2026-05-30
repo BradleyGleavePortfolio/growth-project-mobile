@@ -195,6 +195,48 @@ describe('PushConfirmModal — confirm gating (error-prevention)', () => {
       false,
     );
   });
+
+  // R4 STALE-MIDNIGHT FIX (R2 P1): the past-date gate must re-derive
+  // start-of-today on each render / at confirm time, NOT memoize it once at
+  // mount. Here a same-day `fireAt` is valid when the modal mounts, then the
+  // wall clock advances past midnight (the chosen date is now "yesterday").
+  // After a re-render the gate must DISABLE Confirm, and a press must NOT call
+  // onConfirm. A mount-time-memoized minimumDate would (wrongly) keep both
+  // alive — this proves the staleness is fixed.
+  it('confirm DISABLES + onConfirm is guarded when now advances past a same-day fireAt across midnight', () => {
+    jest.useFakeTimers();
+    try {
+      // Mount "now" = mid-day on a fixed day; fireAt is later the SAME day.
+      const mountNow = new Date('2025-06-15T12:00:00');
+      jest.setSystemTime(mountNow);
+      const fireAt = new Date('2025-06-15T18:00:00'); // valid at mount (today)
+      const onConfirm = jest.fn();
+
+      const { getByTestId, rerender } = render(
+        <PushConfirmModal {...baseProps({ fireAt, onConfirm })} />,
+      );
+      // Valid at mount: start-of-today is 2025-06-15 00:00 <= fireAt.
+      expect(
+        getByTestId('push-confirm-submit').props.accessibilityState.disabled,
+      ).toBe(false);
+
+      // Advance the wall clock past midnight — it is now 2025-06-16, so the
+      // previously-valid 2025-06-15 fireAt is now in the PAST.
+      jest.setSystemTime(new Date('2025-06-16T00:30:00'));
+      rerender(<PushConfirmModal {...baseProps({ fireAt, onConfirm })} />);
+
+      // (a) Confirm must now be DISABLED against the FRESH start-of-today.
+      expect(
+        getByTestId('push-confirm-submit').props.accessibilityState.disabled,
+      ).toBe(true);
+
+      // (b) Pressing Confirm must NOT fire onConfirm (call-time re-derivation).
+      fireEvent.press(getByTestId('push-confirm-submit'));
+      expect(onConfirm).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });
 
 describe('PushConfirmModal — date picker minimumDate (decision #6)', () => {

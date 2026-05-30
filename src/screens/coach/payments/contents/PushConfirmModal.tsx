@@ -100,7 +100,16 @@ export default function PushConfirmModal({
   // gate the Android dialog behind this flag (opened from the date row).
   const [pickerOpen, setPickerOpen] = useState(false);
 
-  const minimumDate = useMemo(() => startOfToday(), []);
+  // R4 STALE-MIDNIGHT FIX (R2 P1): `minimumDate` is re-derived on EVERY render
+  // via a fresh `startOfToday()` — NOT memoized once at mount with empty deps.
+  // A value memoized at mount becomes stale after midnight: a same-day `fireAt`
+  // that was valid when the modal opened silently becomes "past" once the wall
+  // clock crosses into the next day, yet a mount-time `minimumDate` would keep
+  // treating it as valid (Confirm enabled, onConfirm fireable). Recomputing here
+  // means each render re-evaluates the gate against the current start-of-today,
+  // and the picker receives the current minimum too. (`handleConfirm` ALSO
+  // re-derives start-of-today at call time as a final guard — see below.)
+  const minimumDate = startOfToday();
 
   const hasAudience = audienceCount > 0;
   // Defence-in-depth (R2 P1): `fireAt` is valid ONLY when it is a non-null Date
@@ -138,13 +147,22 @@ export default function PushConfirmModal({
   );
 
   const handleConfirm = useCallback(() => {
-    if (!canConfirm) {
+    // R4 STALE-MIDNIGHT FIX (R2 P1): re-derive start-of-today at CALL TIME and
+    // re-validate `fireAt` here, independent of any render-time `canConfirm`.
+    // This is the authoritative guard: even if the modal stayed open across
+    // midnight (so the render that produced the press handler captured an older
+    // start-of-today), onConfirm CANNOT fire with a null or now-past `fireAt`.
+    // Decision #6: past dates are BLOCKED at confirm time.
+    const todayAtCall = startOfToday();
+    const fireAtValidNow =
+      fireAt != null && fireAt.getTime() >= todayAtCall.getTime();
+    if (!hasAudience || !fireAtValidNow || submitting) {
       warningTap();
       return;
     }
     mediumTap();
     onConfirm();
-  }, [canConfirm, onConfirm]);
+  }, [hasAudience, fireAt, submitting, onConfirm]);
 
   const previewLine = hasFireAt
     ? `This delivers “${contentTitle}” to ${audienceCount} ${audienceLabel} on ${formatFireAt(
