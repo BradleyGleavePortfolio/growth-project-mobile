@@ -197,13 +197,22 @@ describe('PushConfirmModal — confirm gating (error-prevention)', () => {
   });
 
   // R4 STALE-MIDNIGHT FIX (R2 P1): the past-date gate must re-derive
-  // start-of-today on each render / at confirm time, NOT memoize it once at
+  // start-of-today on each render AND at confirm time, NOT memoize it once at
   // mount. Here a same-day `fireAt` is valid when the modal mounts, then the
   // wall clock advances past midnight (the chosen date is now "yesterday").
-  // After a re-render the gate must DISABLE Confirm, and a press must NOT call
-  // onConfirm. A mount-time-memoized minimumDate would (wrongly) keep both
-  // alive — this proves the staleness is fixed.
-  it('confirm DISABLES + onConfirm is guarded when now advances past a same-day fireAt across midnight', () => {
+  //
+  // This test proves the CALL-TIME hard guard in `handleConfirm` specifically.
+  // The subtlety: if we rerendered FIRST, the render-time gate would already
+  // have disabled the button, so `fireEvent.press` on a disabled
+  // TouchableOpacity would no-op — and a mutant with the call-time guard
+  // REMOVED would still "pass" (onConfirm never fires because the button is
+  // disabled, not because of the guard). To actually exercise (and kill) that
+  // mutant we must press Confirm while the button is STILL ENABLED from the
+  // stale mount-time render — i.e. press AFTER advancing the clock but BEFORE
+  // rerendering. Only the call-time re-derivation of start-of-today inside
+  // `handleConfirm` can then stop onConfirm; removing it makes onConfirm fire
+  // and this assertion fail.
+  it('onConfirm is BLOCKED at call time when now crosses midnight before any rerender (kills no-call-time-guard mutant)', () => {
     jest.useFakeTimers();
     try {
       // Mount "now" = mid-day on a fixed day; fireAt is later the SAME day.
@@ -212,25 +221,63 @@ describe('PushConfirmModal — confirm gating (error-prevention)', () => {
       const fireAt = new Date('2025-06-15T18:00:00'); // valid at mount (today)
       const onConfirm = jest.fn();
 
-      const { getByTestId, rerender } = render(
+      const { getByTestId } = render(
         <PushConfirmModal {...baseProps({ fireAt, onConfirm })} />,
       );
-      // Valid at mount: start-of-today is 2025-06-15 00:00 <= fireAt.
+      // Valid at mount: start-of-today is 2025-06-15 00:00 <= fireAt, so the
+      // button is enabled and its captured press handler is "live".
       expect(
         getByTestId('push-confirm-submit').props.accessibilityState.disabled,
       ).toBe(false);
 
       // Advance the wall clock past midnight — it is now 2025-06-16, so the
-      // previously-valid 2025-06-15 fireAt is now in the PAST.
+      // previously-valid 2025-06-15 fireAt is now in the PAST. Crucially we do
+      // NOT rerender, so the button is STILL rendered as enabled (the stale
+      // mount-time render); fireEvent.press WILL invoke handleConfirm.
+      jest.setSystemTime(new Date('2025-06-16T00:30:00'));
+      expect(
+        getByTestId('push-confirm-submit').props.accessibilityState.disabled,
+      ).toBe(false);
+
+      // CALL-TIME GUARD: pressing the still-enabled Confirm must NOT fire
+      // onConfirm, because handleConfirm re-derives start-of-today at call time
+      // and sees fireAt is now past. (Removing that guard => onConfirm fires =>
+      // this fails: the mutant is killed.)
+      fireEvent.press(getByTestId('push-confirm-submit'));
+      expect(onConfirm).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  // Companion to the above: the RENDER-TIME gate must also disable Confirm once
+  // the component rerenders after the clock crosses midnight. A mount-time-
+  // memoized minimumDate would (wrongly) keep the button enabled — this proves
+  // the gate re-derives start-of-today on each render.
+  it('confirm DISABLES on rerender after now advances past a same-day fireAt across midnight (render gate)', () => {
+    jest.useFakeTimers();
+    try {
+      jest.setSystemTime(new Date('2025-06-15T12:00:00'));
+      const fireAt = new Date('2025-06-15T18:00:00'); // valid at mount (today)
+      const onConfirm = jest.fn();
+
+      const { getByTestId, rerender } = render(
+        <PushConfirmModal {...baseProps({ fireAt, onConfirm })} />,
+      );
+      expect(
+        getByTestId('push-confirm-submit').props.accessibilityState.disabled,
+      ).toBe(false);
+
+      // Past midnight: the 2025-06-15 fireAt is now "yesterday".
       jest.setSystemTime(new Date('2025-06-16T00:30:00'));
       rerender(<PushConfirmModal {...baseProps({ fireAt, onConfirm })} />);
 
-      // (a) Confirm must now be DISABLED against the FRESH start-of-today.
+      // Render-time gate must DISABLE Confirm against the FRESH start-of-today.
       expect(
         getByTestId('push-confirm-submit').props.accessibilityState.disabled,
       ).toBe(true);
 
-      // (b) Pressing Confirm must NOT fire onConfirm (call-time re-derivation).
+      // And pressing the now-disabled button is a no-op (belt-and-braces).
       fireEvent.press(getByTestId('push-confirm-submit'));
       expect(onConfirm).not.toHaveBeenCalled();
     } finally {
