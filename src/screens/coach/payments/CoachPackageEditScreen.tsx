@@ -463,6 +463,23 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
               )}
             </TouchableOpacity>
 
+            {/* PR-17 M2 — entry point to the content-authoring screen.
+                Mirrors the subscribers-button nav pattern below. */}
+            <TouchableOpacity
+              style={styles.linkBtn}
+              onPress={() =>
+                navigation.navigate('CoachPackageContents', {
+                  packageId: original.id,
+                  title: original.title,
+                })
+              }
+              accessibilityRole="button"
+              accessibilityLabel="Manage content"
+            >
+              <Text style={styles.linkBtnText}>Manage content</Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+            </TouchableOpacity>
+
             <TouchableOpacity
               style={styles.linkBtn}
               onPress={() =>

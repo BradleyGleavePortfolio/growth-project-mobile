@@ -26,6 +26,7 @@ import CoachConnectScreen from '../screens/coach/payments/CoachConnectScreen';
 import CoachPackagesListScreen from '../screens/coach/payments/CoachPackagesListScreen';
 import CoachPackageEditScreen from '../screens/coach/payments/CoachPackageEditScreen';
 import CoachPackageSubscribersScreen from '../screens/coach/payments/CoachPackageSubscribersScreen';
+import CoachPackageContentsScreen from '../screens/coach/payments/CoachPackageContentsScreen';
 // NOTE: payments/CoachEarningsScreen exists on disk (from feat branch) but
 // is intentionally not imported — the main `CoachEarningsScreen` (imported
 // below from `../screens/coach/CoachEarningsScreen`) is the production
@@ -197,6 +198,8 @@ export type SettingsStackParamList = {
   CoachPackagesList: undefined;
   CoachPackageEdit: { packageId: string | null };
   CoachPackageSubscribers: { packageId: string; title: string };
+  /** PR-17 M2 — coach package content-authoring screen. */
+  CoachPackageContents: { packageId: string; title?: string };
   /** Payments — earnings, payout readiness, reconciliation, refunds (backend PR #216). */
   CoachEarnings: undefined;
   /** iMessage-grade DM — manage blocked users from coach Settings. */
@@ -410,6 +413,11 @@ function SettingsStackNavigator() {
       <SettingsStack.Screen
         name="CoachPackageSubscribers"
         component={CoachPackageSubscribersScreen}
+      />
+      {/* PR-17 M2 — content-authoring screen, reached from CoachPackageEdit. */}
+      <SettingsStack.Screen
+        name="CoachPackageContents"
+        component={CoachPackageContentsScreen}
       />
       {/* Payments — earnings, payout readiness, reconciliation, refunds (backend PR #216). */}
       <SettingsStack.Screen
