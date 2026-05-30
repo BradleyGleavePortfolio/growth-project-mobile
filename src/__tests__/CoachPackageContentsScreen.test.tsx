@@ -467,6 +467,120 @@ describe('CoachPackageContentsScreen — per-card push flow (M5)', () => {
     expect(mockPush).toHaveBeenCalledTimes(1);
   });
 
+  it('P0: two SYNCHRONOUS Confirm presses fire push EXACTLY ONCE (ref guard)', async () => {
+    mockPushPreview.mockResolvedValueOnce({
+      data: { count: 5, audience: 'active', already_delivered: 0 },
+    });
+    // Never resolves: the push promise is in flight across both taps, and we do
+    // NOT await any re-render between the two presses. The `pushSubmitting`
+    // STATE has not propagated yet, so only a SYNCHRONOUS ref guard can block
+    // the second tap. If the code relied on state alone, push would fire twice.
+    mockPush.mockReturnValueOnce(new Promise(() => {}));
+    const { getByTestId } = await mountWithRow();
+    fireEvent.press(getByTestId('content-row-push-c1'));
+    await waitFor(() => expect(getByTestId('mock-prompt-sheet')).toBeTruthy());
+    fireEvent.press(getByTestId('mock-prompt-existing'));
+    await waitFor(() => expect(getByTestId('mock-confirm-modal')).toBeTruthy());
+    fireEvent.press(getByTestId('mock-confirm-pick-date'));
+
+    // Two back-to-back taps in the SAME tick — no waitFor in between, so no
+    // re-render lands between them. The synchronous submitInFlightRef must
+    // swallow the second tap.
+    fireEvent.press(getByTestId('mock-confirm-submit'));
+    fireEvent.press(getByTestId('mock-confirm-submit'));
+
+    // push called EXACTLY ONCE despite two synchronous taps.
+    expect(mockPush).toHaveBeenCalledTimes(1);
+  });
+
+  it('P0: the single push uses ONE idempotency key captured once at intent start', async () => {
+    mockPushPreview.mockResolvedValueOnce({
+      data: { count: 5, audience: 'active', already_delivered: 0 },
+    });
+    mockPush.mockReturnValueOnce(new Promise(() => {}));
+    const { getByTestId } = await mountWithRow();
+    fireEvent.press(getByTestId('content-row-push-c1'));
+    await waitFor(() => expect(getByTestId('mock-prompt-sheet')).toBeTruthy());
+    fireEvent.press(getByTestId('mock-prompt-existing'));
+    await waitFor(() => expect(getByTestId('mock-confirm-modal')).toBeTruthy());
+    fireEvent.press(getByTestId('mock-confirm-pick-date'));
+
+    fireEvent.press(getByTestId('mock-confirm-submit'));
+    fireEvent.press(getByTestId('mock-confirm-submit'));
+
+    expect(mockPush).toHaveBeenCalledTimes(1);
+    // The single push uses the ONE stable key (minted once, the mocked value).
+    expect(mockPush.mock.calls[0][3]).toBe('test-idem-key-0001');
+  });
+
+  it('a retry after a FAILED push reuses the SAME idempotency key', async () => {
+    const alertSpy = jest
+      .spyOn(require('react-native').Alert, 'alert')
+      .mockImplementation(() => {});
+    mockPushPreview.mockResolvedValueOnce({
+      data: { count: 6, audience: 'active', already_delivered: 0 },
+    });
+    // First push FAILS, retry SUCCEEDS — same intent, same key both times.
+    mockPush
+      .mockRejectedValueOnce(new Error('server 500'))
+      .mockResolvedValueOnce({
+        data: {
+          scheduled: 6,
+          skipped: 0,
+          fire_at: mockFixedFireAt.toISOString(),
+          audience: 'active',
+          notify: true,
+        },
+      });
+    const { getByTestId } = await mountWithRow();
+    fireEvent.press(getByTestId('content-row-push-c1'));
+    await waitFor(() => expect(getByTestId('mock-prompt-sheet')).toBeTruthy());
+    fireEvent.press(getByTestId('mock-prompt-existing'));
+    await waitFor(() => expect(getByTestId('mock-confirm-modal')).toBeTruthy());
+    fireEvent.press(getByTestId('mock-confirm-pick-date'));
+
+    // First attempt fails — modal stays open, submitting resets to false.
+    fireEvent.press(getByTestId('mock-confirm-submit'));
+    await waitFor(() => expect(mockPush).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(getByTestId('mock-confirm-submitting').props.children).toBe('false'),
+    );
+
+    // Deliberate RETRY of the SAME intent.
+    fireEvent.press(getByTestId('mock-confirm-submit'));
+    await waitFor(() => expect(mockPush).toHaveBeenCalledTimes(2));
+
+    // Both calls used the SAME idempotency key (one key per intent).
+    expect(mockPush.mock.calls[0][3]).toBe('test-idem-key-0001');
+    expect(mockPush.mock.calls[1][3]).toBe('test-idem-key-0001');
+    expect(mockPush.mock.calls[1][3]).toBe(mockPush.mock.calls[0][3]);
+    alertSpy.mockRestore();
+  });
+
+  it('P2: shows a calm loading state while pushPreview is in flight', async () => {
+    // Preview stays pending so we can observe the loading affordance; the
+    // confirm modal must NOT be visible yet (no dead moment, no premature jump).
+    let resolvePreview!: (v: unknown) => void;
+    mockPushPreview.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolvePreview = resolve;
+      }),
+    );
+    const { getByTestId, queryByTestId } = await mountWithRow();
+    fireEvent.press(getByTestId('content-row-push-c1'));
+    await waitFor(() => expect(getByTestId('mock-prompt-sheet')).toBeTruthy());
+    fireEvent.press(getByTestId('mock-prompt-existing'));
+
+    // While preview is in flight: calm loading visible, confirm modal NOT yet.
+    await waitFor(() => expect(getByTestId('push-preview-loading')).toBeTruthy());
+    expect(queryByTestId('mock-confirm-modal')).toBeNull();
+
+    // Once preview resolves, the loading clears and the confirm modal opens.
+    resolvePreview({ data: { count: 3, audience: 'active', already_delivered: 0 } });
+    await waitFor(() => expect(getByTestId('mock-confirm-modal')).toBeTruthy());
+    expect(queryByTestId('push-preview-loading')).toBeNull();
+  });
+
   it('push FAILURE keeps the modal open and surfaces a warm error', async () => {
     const alertSpy = jest
       .spyOn(require('react-native').Alert, 'alert')

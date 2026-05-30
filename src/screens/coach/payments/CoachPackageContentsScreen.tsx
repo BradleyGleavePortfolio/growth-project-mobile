@@ -28,7 +28,7 @@
  * later unit can add drag-reorder without reshaping the list.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -108,9 +108,27 @@ export default function CoachPackageContentsScreen({ navigation, route }: Props)
   const [buyerNotify, setBuyerNotify] = useState(true); // default ON (decision #9)
   const [fireAt, setFireAt] = useState<Date | null>(null); // coach picks (decision #2)
   const [pushSubmitting, setPushSubmitting] = useState(false);
-  // ONE idempotency key per confirmed push attempt (decision #8 / R19): created
-  // when the coach taps Confirm and reused across retries of the SAME intent.
-  const [pushIdemKey, setPushIdemKey] = useState<string | null>(null);
+  // Calm loading affordance during the pushPreview round-trip (P2): the prompt
+  // sheet has closed, but the confirm modal cannot open until preview resolves.
+  // Without this the screen shows a "dead" moment. We render a calm overlay
+  // (warm, no "Loading…" text, no spinner-flash jank if preview is instant).
+  const [previewLoading, setPreviewLoading] = useState(false);
+
+  // ── Synchronous push guards (PR-17 M5 P0 fix, decision #8 / #19 / R19) ─────
+  // React state (`pushSubmitting`) updates are async/batched, so a fast
+  // DOUBLE-TAP on Confirm in the SAME tick both see `pushSubmitting === false`
+  // and fire push twice — and worse, each tap minted a NEW idempotency key, so
+  // the backend saw two DIFFERENT keys and could NOT dedupe → double delivery.
+  //
+  // The fix is two refs (refs are written synchronously; state is not):
+  //   • submitInFlightRef — set true at the TOP of the confirm handler BEFORE
+  //     any await; a synchronous second tap bails immediately. Reset in finally.
+  //   • pushIdemKeyRef — ONE stable idempotency key per push INTENT, minted
+  //     once when the intent begins (preview resolves / confirm modal opens)
+  //     and reused for the push call AND any retry of the SAME intent. A
+  //     brand-new intent (new modal open) gets a fresh key.
+  const submitInFlightRef = useRef(false);
+  const pushIdemKeyRef = useRef<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -250,7 +268,11 @@ export default function CoachPackageContentsScreen({ navigation, route }: Props)
     setBuyerNotify(true);
     setFireAt(null);
     setPushSubmitting(false);
-    setPushIdemKey(null);
+    setPreviewLoading(false);
+    // Clear the synchronous push guards: this push intent is over, so a later
+    // tap starts a brand-new intent (and will mint a fresh idempotency key).
+    submitInFlightRef.current = false;
+    pushIdemKeyRef.current = null;
   }, []);
 
   // Step 1 — tap the row's push icon: open the M3 prompt for that content.
@@ -264,7 +286,11 @@ export default function CoachPackageContentsScreen({ navigation, route }: Props)
     setBuyerNotify(true);
     setFireAt(null);
     setPushSubmitting(false);
-    setPushIdemKey(null);
+    setPreviewLoading(false);
+    // Fresh push intent: clear the synchronous guards so the next confirmed
+    // push mints exactly one new stable idempotency key.
+    submitInFlightRef.current = false;
+    pushIdemKeyRef.current = null;
     setPromptVisible(true);
   }, []);
 
@@ -282,6 +308,10 @@ export default function CoachPackageContentsScreen({ navigation, route }: Props)
     const target = pushTarget;
     if (!target) return;
     setPromptVisible(false);
+    // P2: show a calm loading affordance for the duration of the preview
+    // round-trip so there is no dead moment between the sheet closing and the
+    // confirm modal opening.
+    setPreviewLoading(true);
     try {
       const res = await coachPackageContentsApi.pushPreview(packageId, target.id, {
         audience: PUSH_AUDIENCE,
@@ -291,7 +321,13 @@ export default function CoachPackageContentsScreen({ navigation, route }: Props)
       setBuyerNotify(true);
       setFireAt(null);
       setPushSubmitting(false);
-      setPushIdemKey(null);
+      // The push INTENT begins here: mint ONE stable idempotency key now and
+      // reuse it for the push call and any retry of this same intent. Both the
+      // ref (synchronous source of truth) and state (debug/inspection) carry it.
+      const intentKey = generateIdempotencyKey();
+      pushIdemKeyRef.current = intentKey;
+      submitInFlightRef.current = false;
+      setPreviewLoading(false);
       setConfirmVisible(true);
     } catch (err) {
       warningTap();
@@ -317,19 +353,31 @@ export default function CoachPackageContentsScreen({ navigation, route }: Props)
     resetPushState();
   }, [resetPushState]);
 
-  // Step 5 — confirm: call the push API with one idempotency key per attempt.
-  // Double-submit is guarded by `pushSubmitting` (the modal also disables
-  // Confirm while `submitting`). On success: warm Alert + success haptic +
-  // refresh. On error: warningTap + warm Alert, keep the modal OPEN so the
-  // coach can retry, submitting back to false.
+  // Step 5 — confirm: call the push API with ONE stable idempotency key per
+  // push intent. Double-submit (P0) is blocked SYNCHRONOUSLY by
+  // `submitInFlightRef`: a fast second tap in the same tick — before the
+  // `pushSubmitting` state re-render lands — sees the ref already true and
+  // bails, so push fires EXACTLY ONCE. The `pushSubmitting` STATE still drives
+  // the spinner/disabled UI. The idempotency key was minted ONCE when the
+  // intent began (`onPushExisting`), so a retry after a FAILED push reuses the
+  // SAME key (same intent → backend can dedupe). On success: warm Alert +
+  // success haptic + refresh. On error: warningTap + warm Alert, keep the
+  // modal OPEN so the coach can retry, submitting + the ref back to false.
   const onPushConfirm = useCallback(async () => {
+    // SYNCHRONOUS re-entrancy guard FIRST — before any await. Refs are written
+    // synchronously, so a same-tick double-tap is blocked here even though the
+    // `pushSubmitting` state has not re-rendered yet.
+    if (submitInFlightRef.current) return;
     const target = pushTarget;
-    // Guard double-submit and a missing date/target (the modal also enforces).
-    if (!target || fireAt == null || pushSubmitting) return;
+    // Guard a missing date/target (the modal also enforces these).
+    if (!target || fireAt == null) return;
+    // Reuse the ONE key minted when this push intent began. A retry of a failed
+    // push keeps the same key; a fresh modal open mints a new one in preview.
+    const key = pushIdemKeyRef.current ?? generateIdempotencyKey();
+    pushIdemKeyRef.current = key;
+    // Claim the lock synchronously, then reflect it in state for the UI.
+    submitInFlightRef.current = true;
     setPushSubmitting(true);
-    // One key per confirmed attempt, stable across retries of the same intent.
-    const key = pushIdemKey ?? generateIdempotencyKey();
-    if (!pushIdemKey) setPushIdemKey(key);
     try {
       const res = await coachPackageContentsApi.push(
         packageId,
@@ -353,15 +401,15 @@ export default function CoachPackageContentsScreen({ navigation, route }: Props)
       await load();
     } catch (err) {
       warningTap();
-      // Keep the modal OPEN so the coach can retry; reuse the same key.
+      // Keep the modal OPEN so the coach can retry; reuse the SAME key. Release
+      // the synchronous lock so a deliberate retry tap can proceed.
+      submitInFlightRef.current = false;
       setPushSubmitting(false);
       Alert.alert('Could not push', errorMessage(err, 'Please try again.'));
     }
   }, [
     pushTarget,
     fireAt,
-    pushSubmitting,
-    pushIdemKey,
     packageId,
     buyerNotify,
     resetPushState,
@@ -537,6 +585,24 @@ export default function CoachPackageContentsScreen({ navigation, route }: Props)
         onCancel={onPushCancel}
         submitting={pushSubmitting}
       />
+
+      {/* P2 — calm preview affordance: after the prompt sheet closes and before
+          the confirm modal opens, the pushPreview round-trip would otherwise be
+          a dead moment. Show a calm, warm overlay (no "Loading…" text). If
+          preview is instant this unmounts immediately — no spinner-flash jank. */}
+      {previewLoading ? (
+        <View
+          style={styles.previewOverlay}
+          testID="push-preview-loading"
+          accessibilityRole="progressbar"
+          accessibilityLabel="Checking your buyers"
+        >
+          <View style={styles.previewCard}>
+            <ActivityIndicator color={colors.primary} />
+            <Text style={styles.previewText}>Checking your buyers…</Text>
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -639,5 +705,27 @@ const makeStyles = (colors: ThemeColors) =>
       color: colors.textOnPrimary,
       fontSize: 15,
       fontWeight: '500',
+    },
+    previewOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: colors.background,
+      opacity: 0.96,
+    },
+    previewCard: {
+      alignItems: 'center',
+      gap: 12,
+      paddingVertical: 24,
+      paddingHorizontal: 32,
+    },
+    previewText: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      textAlign: 'center',
     },
   });
