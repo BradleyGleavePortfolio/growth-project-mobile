@@ -28,7 +28,7 @@
  * later unit can add drag-reorder without reshaping the list.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -50,16 +50,30 @@ import {
   coachPackageContentsApi,
   PackageContent,
   PatchContentBody,
+  PushAudience,
 } from '../../../api/packageContentsApi';
 import { generateIdempotencyKey } from '../../../utils/idempotency';
 import { errorMessage } from '../../../types/common';
-import { lightTap, mediumTap, warningTap } from '../../../utils/haptics';
+import {
+  lightTap,
+  mediumTap,
+  successTap,
+  warningTap,
+} from '../../../utils/haptics';
 import { useTheme, ThemeColors } from '../../../theme/ThemeProvider';
 import HapticPressable from '../../../components/HapticPressable';
 import ContentAttachForm, {
   assetTypeLabel,
   cadenceLabel,
 } from './contents/ContentAttachForm';
+import PushPromptSheet from './contents/PushPromptSheet';
+import PushConfirmModal from './contents/PushConfirmModal';
+
+// Resolved audience for THIS push (decision #1, per-push). M5 defaults to
+// 'active' (active buyers); the confirm modal shows the resolved count/label.
+// Module-scope constants so handlers don't need them in their dependency lists.
+const PUSH_AUDIENCE: PushAudience = 'active';
+const PUSH_AUDIENCE_LABEL = 'active buyers';
 
 type ParamList = {
   CoachPackageContents: { packageId: string; title?: string };
@@ -80,6 +94,60 @@ export default function CoachPackageContentsScreen({ navigation, route }: Props)
   const [formVisible, setFormVisible] = useState(false);
   const [editing, setEditing] = useState<PackageContent | null>(null);
   const [saving, setSaving] = useState(false);
+
+  // ── Per-card push flow state (PR-17 M5, decision #12) ──────────────────────
+  // The push flow is a small state machine confined to this screen:
+  //   pushTarget set  → PushPromptSheet visible (the M3 push-vs-future choice)
+  //   confirmVisible  → PushConfirmModal visible (the M4 preview + date + notify)
+  // `pushTarget` is the content row the coach tapped; it stays set across the
+  // prompt → confirm hops so the confirm step knows which content to push.
+  const [pushTarget, setPushTarget] = useState<PackageContent | null>(null);
+  const [promptVisible, setPromptVisible] = useState(false);
+  const [confirmVisible, setConfirmVisible] = useState(false);
+  const [audienceCount, setAudienceCount] = useState(0);
+  const [buyerNotify, setBuyerNotify] = useState(true); // default ON (decision #9)
+  const [fireAt, setFireAt] = useState<Date | null>(null); // coach picks (decision #2)
+  const [pushSubmitting, setPushSubmitting] = useState(false);
+  // Calm loading affordance during the pushPreview round-trip (P2): the prompt
+  // sheet has closed, but the confirm modal cannot open until preview resolves.
+  // Without this the screen shows a "dead" moment. We render a calm overlay
+  // (warm, no "Loading…" text, no spinner-flash jank if preview is instant).
+  const [previewLoading, setPreviewLoading] = useState(false);
+
+  // ── Synchronous push guards (PR-17 M5 P0 fix, decision #8 / #19 / R19) ─────
+  // React state (`pushSubmitting`) updates are async/batched, so a fast
+  // DOUBLE-TAP on Confirm in the SAME tick both see `pushSubmitting === false`
+  // and fire push twice — and worse, each tap minted a NEW idempotency key, so
+  // the backend saw two DIFFERENT keys and could NOT dedupe → double delivery.
+  //
+  // The fix is two refs (refs are written synchronously; state is not):
+  //   • submitInFlightRef — set true at the TOP of the confirm handler BEFORE
+  //     any await; a synchronous second tap bails immediately. Reset in finally.
+  //   • pushIdemKeyRef — ONE stable idempotency key per push INTENT, minted
+  //     once when the intent begins (preview resolves / confirm modal opens)
+  //     and reused for the push call AND any retry of the SAME intent. A
+  //     brand-new intent (new modal open) gets a fresh key.
+  const submitInFlightRef = useRef(false);
+  const pushIdemKeyRef = useRef<string | null>(null);
+
+  // ── Synchronous preview/intent guards (PR-17 M5 R2 P0 fix) ────────────────
+  // A fast DOUBLE-TAP on the prompt's "Send to existing buyers" can start TWO
+  // pushPreview round-trips. Because `onPushExisting` awaits before opening the
+  // confirm modal, a LATE/second preview resolution would otherwise re-mint the
+  // idempotency key and reset `submitInFlightRef` to false — WHILE a first push
+  // (from preview A) is already in flight — letting a second confirm fire push
+  // again with a DIFFERENT key → duplicate delivery. Two synchronous refs fix
+  // this (refs are written synchronously; state is batched/async):
+  //   • previewInFlightRef — claimed at the TOP of onPushExisting BEFORE any
+  //     await; a synchronous second tap bails immediately, so only ONE preview
+  //     ever drives the confirm. Cleared on resolve/failure/reset.
+  //   • intentTokenRef — a monotonically increasing token stamped per preview
+  //     call. When a preview resolves, it only acts if its token is STILL the
+  //     current one; a stale/late preview is ignored entirely (no key mint, no
+  //     submit-lock reset, no confirm open). This makes resolutions stale-safe
+  //     even if a second preview slipped through.
+  const previewInFlightRef = useRef(false);
+  const intentTokenRef = useRef(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -201,26 +269,207 @@ export default function CoachPackageContentsScreen({ navigation, route }: Props)
     [packageId, load],
   );
 
-  /**
-   * PLACEHOLDER SEAM for M5 (decision #12, per-card entry point).
-   *
-   * M2 owns the affordance but NOT the behavior: the push-vs-future prompt
-   * (M3) and confirm-preview modal (M4) are separate new files, wired here by
-   * M5. Until then this is a no-op hint so the surface is discoverable without
-   * pretending the flow exists. Do NOT build the push modal in this file.
-   */
-  const onPushPress = useCallback((_content: PackageContent) => {
-    // TODO(M5): open PushPromptSheet → PushConfirmModal for `_content`.
-    lightTap();
-    Alert.alert(
-      'Push to existing buyers',
-      'Pushing an update to existing buyers is coming soon.',
-    );
+  // The resolved title for a row — mirrors renderRow's `rowTitle` so the prompt
+  // and confirm copy name the exact content the coach tapped.
+  const contentTitleOf = useCallback(
+    (content: PackageContent) =>
+      content.display_title?.trim() || assetTypeLabel(content.asset_type),
+    [],
+  );
+
+  // ── Per-card push flow (PR-17 M5, decision #12) ──────────────────────────
+
+  // Reset all transient push state — used when the flow closes (dismiss / cancel
+  // / future-only / success) so a later tap starts clean.
+  const resetPushState = useCallback(() => {
+    setPushTarget(null);
+    setAudienceCount(0);
+    setBuyerNotify(true);
+    setFireAt(null);
+    setPushSubmitting(false);
+    setPreviewLoading(false);
+    // Clear the synchronous push guards: this push intent is over, so a later
+    // tap starts a brand-new intent (and will mint a fresh idempotency key).
+    submitInFlightRef.current = false;
+    pushIdemKeyRef.current = null;
+    // Release the preview guard and BUMP the intent token so any preview still
+    // in flight resolves STALE (ignored) and a legitimate NEXT push can start.
+    previewInFlightRef.current = false;
+    intentTokenRef.current += 1;
   }, []);
+
+  // Step 1 — tap the row's push icon: open the M3 prompt for that content.
+  // mode='new_content' is the per-card "push this existing content" entry
+  // (cadence_edit/full_edit belong to the edit-save flow, out of M5 scope).
+  const onPushPress = useCallback((content: PackageContent) => {
+    lightTap();
+    setPushTarget(content);
+    setConfirmVisible(false);
+    setAudienceCount(0);
+    setBuyerNotify(true);
+    setFireAt(null);
+    setPushSubmitting(false);
+    setPreviewLoading(false);
+    // Fresh push intent: clear the synchronous guards so the next confirmed
+    // push mints exactly one new stable idempotency key.
+    submitInFlightRef.current = false;
+    pushIdemKeyRef.current = null;
+    // Release any prior preview claim and bump the token so a stray late
+    // preview from a previous intent can never act on this fresh one.
+    previewInFlightRef.current = false;
+    intentTokenRef.current += 1;
+    setPromptVisible(true);
+  }, []);
+
+  // Step 2 — future-only / dismiss: close the sheet, NO push (decision #5).
+  const closePrompt = useCallback(() => {
+    setPromptVisible(false);
+    resetPushState();
+  }, [resetPushState]);
+
+  // Step 3 — "push to existing": close the prompt, preview the audience, then
+  // open the M4 confirm modal with the resolved count. A preview FAILURE shows
+  // a warm Alert and does NOT open the confirm modal (error-prevention: never
+  // surface a real error as a benign empty state).
+  const onPushExisting = useCallback(async () => {
+    const target = pushTarget;
+    if (!target) return;
+    // SYNCHRONOUS preview/intent guard FIRST — before any await. A fast second
+    // tap on "Send to existing buyers" in the SAME tick sees the ref already
+    // claimed and bails, so only ONE preview ever starts for this intent. Refs
+    // are written synchronously; the `previewLoading` state has not re-rendered
+    // yet, so state alone cannot block the same-tick double-tap.
+    if (previewInFlightRef.current) return;
+    previewInFlightRef.current = true;
+    // Stamp THIS preview with a fresh monotonic token. Only the resolution that
+    // still matches `intentTokenRef.current` is allowed to act; any other (a
+    // stale/late one that slipped through) is ignored entirely.
+    const myToken = (intentTokenRef.current += 1);
+    setPromptVisible(false);
+    // P2: show a calm loading affordance for the duration of the preview
+    // round-trip so there is no dead moment between the sheet closing and the
+    // confirm modal opening.
+    setPreviewLoading(true);
+    try {
+      const res = await coachPackageContentsApi.pushPreview(packageId, target.id, {
+        audience: PUSH_AUDIENCE,
+        mode: 'push_existing',
+      });
+      // STALE-SAFE resolution: if this is no longer the current intent (a newer
+      // tap bumped the token, or the flow was reset/closed), IGNORE this result
+      // completely — do NOT mint a key, do NOT touch submitInFlightRef, do NOT
+      // open confirm. This guarantees a late preview can never reset the submit
+      // lock or replace the idempotency key while a push is already in flight.
+      if (myToken !== intentTokenRef.current) return;
+      // This preview won the intent: release the preview claim so a legitimate
+      // NEXT push intent can proceed once this one finishes.
+      previewInFlightRef.current = false;
+      setAudienceCount(res.data.count);
+      setBuyerNotify(true);
+      setFireAt(null);
+      setPushSubmitting(false);
+      // The push INTENT begins here: mint ONE stable idempotency key now and
+      // reuse it for the push call and any retry of this same intent. Both the
+      // ref (synchronous source of truth) and state (debug/inspection) carry it.
+      const intentKey = generateIdempotencyKey();
+      pushIdemKeyRef.current = intentKey;
+      submitInFlightRef.current = false;
+      setPreviewLoading(false);
+      setConfirmVisible(true);
+    } catch (err) {
+      // Only the CURRENT intent surfaces an error / resets state. A stale
+      // failed preview is ignored so it cannot disturb an in-flight push.
+      if (myToken !== intentTokenRef.current) return;
+      previewInFlightRef.current = false;
+      warningTap();
+      Alert.alert(
+        'Could not check buyers',
+        errorMessage(err, 'Please try again.'),
+      );
+      resetPushState();
+    }
+  }, [pushTarget, packageId, resetPushState]);
+
+  // Step 4 — confirm modal field changes.
+  const onChangeBuyerNotify = useCallback((next: boolean) => {
+    setBuyerNotify(next);
+  }, []);
+  const onChangeFireAt = useCallback((next: Date) => {
+    setFireAt(next);
+  }, []);
+
+  // Step 6 — cancel: close the confirm modal, reset transient push state.
+  const onPushCancel = useCallback(() => {
+    setConfirmVisible(false);
+    resetPushState();
+  }, [resetPushState]);
+
+  // Step 5 — confirm: call the push API with ONE stable idempotency key per
+  // push intent. Double-submit (P0) is blocked SYNCHRONOUSLY by
+  // `submitInFlightRef`: a fast second tap in the same tick — before the
+  // `pushSubmitting` state re-render lands — sees the ref already true and
+  // bails, so push fires EXACTLY ONCE. The `pushSubmitting` STATE still drives
+  // the spinner/disabled UI. The idempotency key was minted ONCE when the
+  // intent began (`onPushExisting`), so a retry after a FAILED push reuses the
+  // SAME key (same intent → backend can dedupe). On success: warm Alert +
+  // success haptic + refresh. On error: warningTap + warm Alert, keep the
+  // modal OPEN so the coach can retry, submitting + the ref back to false.
+  const onPushConfirm = useCallback(async () => {
+    // SYNCHRONOUS re-entrancy guard FIRST — before any await. Refs are written
+    // synchronously, so a same-tick double-tap is blocked here even though the
+    // `pushSubmitting` state has not re-rendered yet.
+    if (submitInFlightRef.current) return;
+    const target = pushTarget;
+    // Guard a missing date/target (the modal also enforces these).
+    if (!target || fireAt == null) return;
+    // Reuse the ONE key minted when this push intent began. A retry of a failed
+    // push keeps the same key; a fresh modal open mints a new one in preview.
+    const key = pushIdemKeyRef.current ?? generateIdempotencyKey();
+    pushIdemKeyRef.current = key;
+    // Claim the lock synchronously, then reflect it in state for the UI.
+    submitInFlightRef.current = true;
+    setPushSubmitting(true);
+    try {
+      const res = await coachPackageContentsApi.push(
+        packageId,
+        target.id,
+        {
+          audience: PUSH_AUDIENCE,
+          fire_at: fireAt.toISOString(),
+          mode: 'push_existing',
+          notify: buyerNotify,
+        },
+        key,
+      );
+      successTap();
+      setConfirmVisible(false);
+      resetPushState();
+      // Warm success copy in the decision #10 preview language.
+      Alert.alert(
+        'Scheduled',
+        `This delivers to ${res.data.scheduled} ${PUSH_AUDIENCE_LABEL}.`,
+      );
+      await load();
+    } catch (err) {
+      warningTap();
+      // Keep the modal OPEN so the coach can retry; reuse the SAME key. Release
+      // the synchronous lock so a deliberate retry tap can proceed.
+      submitInFlightRef.current = false;
+      setPushSubmitting(false);
+      Alert.alert('Could not push', errorMessage(err, 'Please try again.'));
+    }
+  }, [
+    pushTarget,
+    fireAt,
+    packageId,
+    buyerNotify,
+    resetPushState,
+    load,
+  ]);
 
   const renderRow = useCallback(
     ({ item }: { item: PackageContent }) => {
-      const rowTitle = item.display_title?.trim() || assetTypeLabel(item.asset_type);
+      const rowTitle = contentTitleOf(item);
       return (
         <View style={styles.row} testID={`content-row-${item.id}`}>
           <View style={styles.rowMain}>
@@ -268,7 +517,7 @@ export default function CoachPackageContentsScreen({ navigation, route }: Props)
         </View>
       );
     },
-    [styles, colors, onPushPress, openEdit, handleRemove],
+    [styles, colors, contentTitleOf, onPushPress, openEdit, handleRemove],
   );
 
   const renderBody = () => {
@@ -363,6 +612,48 @@ export default function CoachPackageContentsScreen({ navigation, route }: Props)
         onSubmitAttach={handleAttach}
         onSubmitPatch={handlePatch}
       />
+
+      {/* PR-17 M5 — per-card push: prompt (M3) → confirm (M4) → push API. */}
+      <PushPromptSheet
+        visible={promptVisible}
+        contentTitle={pushTarget ? contentTitleOf(pushTarget) : ''}
+        mode="new_content"
+        onPushExisting={onPushExisting}
+        onFutureOnly={closePrompt}
+        onDismiss={closePrompt}
+      />
+
+      <PushConfirmModal
+        visible={confirmVisible}
+        contentTitle={pushTarget ? contentTitleOf(pushTarget) : ''}
+        audienceCount={audienceCount}
+        audienceLabel={PUSH_AUDIENCE_LABEL}
+        buyerNotify={buyerNotify}
+        onChangeBuyerNotify={onChangeBuyerNotify}
+        fireAt={fireAt}
+        onChangeFireAt={onChangeFireAt}
+        onConfirm={onPushConfirm}
+        onCancel={onPushCancel}
+        submitting={pushSubmitting}
+      />
+
+      {/* P2 — calm preview affordance: after the prompt sheet closes and before
+          the confirm modal opens, the pushPreview round-trip would otherwise be
+          a dead moment. Show a calm, warm overlay (no "Loading…" text). If
+          preview is instant this unmounts immediately — no spinner-flash jank. */}
+      {previewLoading ? (
+        <View
+          style={styles.previewOverlay}
+          testID="push-preview-loading"
+          accessibilityRole="progressbar"
+          accessibilityLabel="Checking your buyers"
+        >
+          <View style={styles.previewCard}>
+            <ActivityIndicator color={colors.primary} />
+            <Text style={styles.previewText}>Checking your buyers…</Text>
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -465,5 +756,27 @@ const makeStyles = (colors: ThemeColors) =>
       color: colors.textOnPrimary,
       fontSize: 15,
       fontWeight: '500',
+    },
+    previewOverlay: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: colors.background,
+      opacity: 0.96,
+    },
+    previewCard: {
+      alignItems: 'center',
+      gap: 12,
+      paddingVertical: 24,
+      paddingHorizontal: 32,
+    },
+    previewText: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      textAlign: 'center',
     },
   });
