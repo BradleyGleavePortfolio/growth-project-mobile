@@ -9,6 +9,7 @@
       "developmentClient": true,
       "distribution": "internal",
       "environment": "development",
+      "prebuildCommand": "prebuild --no-install",
       "android": {
         "buildType": "apk"
       }
@@ -16,6 +17,7 @@
     "preview": {
       "distribution": "internal",
       "environment": "preview",
+      "prebuildCommand": "prebuild --no-install",
       "android": {
         "buildType": "apk"
       },
@@ -27,6 +29,7 @@
     "production": {
       "distribution": "store",
       "environment": "production",
+      "prebuildCommand": "prebuild --no-install",
       "env": {
         "EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER": "false",
         "EXPO_PUBLIC_NOTIFICATIONS_MOCK": "false"
