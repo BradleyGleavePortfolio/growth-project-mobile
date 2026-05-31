@@ -11,7 +11,7 @@ import { renderHook, waitFor, act } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const store: Record<string, string> = {};
-jest.mock('../../services/secureStorage', () => ({
+jest.mock('../services/secureStorage', () => ({
   secureStorage: {
     getItem: jest.fn((k: string) => Promise.resolve(store[k] ?? null)),
     setItem: jest.fn((k: string, v: string) => {
@@ -25,12 +25,12 @@ jest.mock('../../services/secureStorage', () => ({
   },
 }));
 
-jest.mock('../../utils/logger', () => ({
+jest.mock('../utils/logger', () => ({
   logger: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 
-import { useHealthConnectSync } from '../useHealthConnectSync';
-import { HealthConnectUnsupportedError } from '../../services/health/healthConnect';
+import { useHealthConnectSync } from './useHealthConnectSync';
+import { HealthConnectUnsupportedError } from '../services/health/healthConnect';
 
 function setPlatform(os: string): void {
   Object.defineProperty(Platform, 'OS', { get: () => os, configurable: true });
@@ -91,6 +91,8 @@ describe('useHealthConnectSync', () => {
     let res: { normalizedCount: number; inserted: number } | undefined;
     await act(async () => {
       res = await result.current.sync({ userId: 'u1', connectionId: 'c1' });
+      // Allow the post-resolution mutation state update to flush inside act().
+      await Promise.resolve();
     });
 
     expect(res?.normalizedCount).toBe(1);
@@ -103,8 +105,11 @@ describe('useHealthConnectSync', () => {
     setPlatform('ios');
     const d = deps();
     const { result } = renderHook(() => useHealthConnectSync({ deps: d }), { wrapper });
-    await expect(
-      result.current.sync({ userId: 'u1', connectionId: 'c1' }),
-    ).rejects.toBeInstanceOf(HealthConnectUnsupportedError);
+    await act(async () => {
+      await expect(
+        result.current.sync({ userId: 'u1', connectionId: 'c1' }),
+      ).rejects.toBeInstanceOf(HealthConnectUnsupportedError);
+      await Promise.resolve();
+    });
   });
 });

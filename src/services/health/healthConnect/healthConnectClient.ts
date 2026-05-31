@@ -122,9 +122,14 @@ export async function getGrantedPermissions(): Promise<HealthConnectPermission[]
  */
 export async function requestPermission(): Promise<HealthConnectPermission[]> {
   assertSupported();
-  const granted = (await hcRequestPermission(
-    buildReadPermissions(),
-  )) as HealthConnectPermission[];
+  // The library types `requestPermission` against its own narrower
+  // `Permission` union (record-type string-literal + accessType: 'read').
+  // Our descriptors are structurally identical for the read set; cast through
+  // the library's parameter type so the wider local union does not leak.
+  const request = hcRequestPermission as unknown as (
+    perms: HealthConnectPermission[],
+  ) => Promise<HealthConnectPermission[]>;
+  const granted = await request(buildReadPermissions());
   return Array.isArray(granted) ? granted : [];
 }
 
