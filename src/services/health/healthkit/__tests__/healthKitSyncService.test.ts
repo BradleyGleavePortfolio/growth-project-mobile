@@ -11,7 +11,7 @@
  */
 
 import { Platform } from 'react-native';
-import type { HealthKitReadResult } from '../healthKitClient';
+import type { HealthKitQueryWindow, HealthKitReadResult } from '../healthKitClient';
 
 // ── api mock (default export is the axios instance) ──
 const mockPost = jest.fn();
@@ -59,8 +59,10 @@ const NOW = new Date('2026-05-31T12:00:00.000Z');
 /** A fake client whose auth/read are jest-controllable. */
 function makeClient(read: HealthKitReadResult) {
   return {
-    requestAuth: jest.fn(async () => undefined),
-    readSamples: jest.fn(async () => read),
+    requestAuth: jest.fn(async (_types?: unknown): Promise<void> => undefined),
+    readSamples: jest.fn(
+      async (_window: HealthKitQueryWindow): Promise<HealthKitReadResult> => read,
+    ),
   };
 }
 
