@@ -130,6 +130,25 @@ export default function CoachPackageContentsScreen({ navigation, route }: Props)
   const submitInFlightRef = useRef(false);
   const pushIdemKeyRef = useRef<string | null>(null);
 
+  // ── Synchronous preview/intent guards (PR-17 M5 R2 P0 fix) ────────────────
+  // A fast DOUBLE-TAP on the prompt's "Send to existing buyers" can start TWO
+  // pushPreview round-trips. Because `onPushExisting` awaits before opening the
+  // confirm modal, a LATE/second preview resolution would otherwise re-mint the
+  // idempotency key and reset `submitInFlightRef` to false — WHILE a first push
+  // (from preview A) is already in flight — letting a second confirm fire push
+  // again with a DIFFERENT key → duplicate delivery. Two synchronous refs fix
+  // this (refs are written synchronously; state is batched/async):
+  //   • previewInFlightRef — claimed at the TOP of onPushExisting BEFORE any
+  //     await; a synchronous second tap bails immediately, so only ONE preview
+  //     ever drives the confirm. Cleared on resolve/failure/reset.
+  //   • intentTokenRef — a monotonically increasing token stamped per preview
+  //     call. When a preview resolves, it only acts if its token is STILL the
+  //     current one; a stale/late preview is ignored entirely (no key mint, no
+  //     submit-lock reset, no confirm open). This makes resolutions stale-safe
+  //     even if a second preview slipped through.
+  const previewInFlightRef = useRef(false);
+  const intentTokenRef = useRef(0);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -273,6 +292,10 @@ export default function CoachPackageContentsScreen({ navigation, route }: Props)
     // tap starts a brand-new intent (and will mint a fresh idempotency key).
     submitInFlightRef.current = false;
     pushIdemKeyRef.current = null;
+    // Release the preview guard and BUMP the intent token so any preview still
+    // in flight resolves STALE (ignored) and a legitimate NEXT push can start.
+    previewInFlightRef.current = false;
+    intentTokenRef.current += 1;
   }, []);
 
   // Step 1 — tap the row's push icon: open the M3 prompt for that content.
@@ -291,6 +314,10 @@ export default function CoachPackageContentsScreen({ navigation, route }: Props)
     // push mints exactly one new stable idempotency key.
     submitInFlightRef.current = false;
     pushIdemKeyRef.current = null;
+    // Release any prior preview claim and bump the token so a stray late
+    // preview from a previous intent can never act on this fresh one.
+    previewInFlightRef.current = false;
+    intentTokenRef.current += 1;
     setPromptVisible(true);
   }, []);
 
@@ -307,6 +334,17 @@ export default function CoachPackageContentsScreen({ navigation, route }: Props)
   const onPushExisting = useCallback(async () => {
     const target = pushTarget;
     if (!target) return;
+    // SYNCHRONOUS preview/intent guard FIRST — before any await. A fast second
+    // tap on "Send to existing buyers" in the SAME tick sees the ref already
+    // claimed and bails, so only ONE preview ever starts for this intent. Refs
+    // are written synchronously; the `previewLoading` state has not re-rendered
+    // yet, so state alone cannot block the same-tick double-tap.
+    if (previewInFlightRef.current) return;
+    previewInFlightRef.current = true;
+    // Stamp THIS preview with a fresh monotonic token. Only the resolution that
+    // still matches `intentTokenRef.current` is allowed to act; any other (a
+    // stale/late one that slipped through) is ignored entirely.
+    const myToken = (intentTokenRef.current += 1);
     setPromptVisible(false);
     // P2: show a calm loading affordance for the duration of the preview
     // round-trip so there is no dead moment between the sheet closing and the
@@ -317,6 +355,15 @@ export default function CoachPackageContentsScreen({ navigation, route }: Props)
         audience: PUSH_AUDIENCE,
         mode: 'push_existing',
       });
+      // STALE-SAFE resolution: if this is no longer the current intent (a newer
+      // tap bumped the token, or the flow was reset/closed), IGNORE this result
+      // completely — do NOT mint a key, do NOT touch submitInFlightRef, do NOT
+      // open confirm. This guarantees a late preview can never reset the submit
+      // lock or replace the idempotency key while a push is already in flight.
+      if (myToken !== intentTokenRef.current) return;
+      // This preview won the intent: release the preview claim so a legitimate
+      // NEXT push intent can proceed once this one finishes.
+      previewInFlightRef.current = false;
       setAudienceCount(res.data.count);
       setBuyerNotify(true);
       setFireAt(null);
@@ -330,6 +377,10 @@ export default function CoachPackageContentsScreen({ navigation, route }: Props)
       setPreviewLoading(false);
       setConfirmVisible(true);
     } catch (err) {
+      // Only the CURRENT intent surfaces an error / resets state. A stale
+      // failed preview is ignored so it cannot disturb an in-flight push.
+      if (myToken !== intentTokenRef.current) return;
+      previewInFlightRef.current = false;
       warningTap();
       Alert.alert(
         'Could not check buyers',

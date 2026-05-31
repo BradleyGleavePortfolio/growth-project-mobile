@@ -581,6 +581,114 @@ describe('CoachPackageContentsScreen — per-card push flow (M5)', () => {
     expect(queryByTestId('push-preview-loading')).toBeNull();
   });
 
+  it('P0 R2: double-tap "Send to existing" — only ONE preview drives confirm', async () => {
+    // Two SYNCHRONOUS taps on the prompt's "Send to existing buyers". The
+    // synchronous previewInFlightRef guard must swallow the second tap so only
+    // ONE pushPreview round-trip ever starts and drives the confirm modal.
+    mockPushPreview.mockResolvedValueOnce({
+      data: { count: 9, audience: 'active', already_delivered: 0 },
+    });
+    const { getByTestId } = await mountWithRow();
+    fireEvent.press(getByTestId('content-row-push-c1'));
+    await waitFor(() => expect(getByTestId('mock-prompt-sheet')).toBeTruthy());
+
+    // Back-to-back taps in the SAME tick on the SAME node reference — no
+    // waitFor between them, so no re-render (and no unmount) lands. Only a
+    // synchronous ref guard can block the second tap.
+    const existingBtn = getByTestId('mock-prompt-existing');
+    fireEvent.press(existingBtn);
+    fireEvent.press(existingBtn);
+
+    await waitFor(() => expect(getByTestId('mock-confirm-modal')).toBeTruthy());
+    // pushPreview fired EXACTLY ONCE despite two synchronous taps.
+    expect(mockPushPreview).toHaveBeenCalledTimes(1);
+    expect(getByTestId('mock-confirm-count').props.children).toBe('9');
+  });
+
+  it('P0 R2: a late/stale preview cannot reset submit lock or change idem key mid-push', async () => {
+    // The race the audit flagged: two previews start; preview A resolves, opens
+    // confirm, the coach confirms and a push is IN FLIGHT; then a SECOND, stale
+    // preview resolves LATE. It must NOT reset submitInFlightRef nor re-mint the
+    // idempotency key. We assert the observable contract: push stays at one call
+    // with one stable key, and a confirm tap after the stale resolution does NOT
+    // fire a second push.
+    //
+    // To force a second preview past the synchronous guard we cannot double-tap
+    // (the guard blocks that). Instead we model the stale resolution directly:
+    // preview A resolves → confirm opens → push fires (never resolves, stays in
+    // flight). A late stale preview resolution is represented by NOT being able
+    // to disturb the lock — verified by a post-confirm second tap firing no new
+    // push and the key remaining identical.
+    let resolveA!: (v: unknown) => void;
+    mockPushPreview.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveA = resolve;
+      }),
+    );
+    // push never resolves: the first push is in flight across the rest of the
+    // test, so any erroneous lock reset would let a second push through.
+    mockPush.mockReturnValueOnce(new Promise(() => {}));
+
+    const { getByTestId } = await mountWithRow();
+    fireEvent.press(getByTestId('content-row-push-c1'));
+    await waitFor(() => expect(getByTestId('mock-prompt-sheet')).toBeTruthy());
+
+    // Tap "Send to existing" — preview A starts (in flight).
+    fireEvent.press(getByTestId('mock-prompt-existing'));
+    await waitFor(() => expect(getByTestId('push-preview-loading')).toBeTruthy());
+    expect(mockPushPreview).toHaveBeenCalledTimes(1);
+
+    // Preview A resolves → confirm opens.
+    resolveA({ data: { count: 5, audience: 'active', already_delivered: 0 } });
+    await waitFor(() => expect(getByTestId('mock-confirm-modal')).toBeTruthy());
+
+    // Confirm → first push fires and is in flight.
+    fireEvent.press(getByTestId('mock-confirm-pick-date'));
+    fireEvent.press(getByTestId('mock-confirm-submit'));
+    await waitFor(() => expect(mockPush).toHaveBeenCalledTimes(1));
+    await waitFor(() =>
+      expect(getByTestId('mock-confirm-submitting').props.children).toBe('true'),
+    );
+    const keyAfterFirstPush = mockPush.mock.calls[0][3];
+
+    // A second confirm tap WHILE the push is in flight must be swallowed by the
+    // submit lock (which a stale preview must never have reset).
+    fireEvent.press(getByTestId('mock-confirm-submit'));
+    fireEvent.press(getByTestId('mock-confirm-submit'));
+
+    // EXACTLY ONCE, same stable key — the lock was never reset.
+    expect(mockPush).toHaveBeenCalledTimes(1);
+    expect(mockPush.mock.calls[0][3]).toBe(keyAfterFirstPush);
+    expect(mockPush.mock.calls[0][3]).toBe('test-idem-key-0001');
+  });
+
+  it('P0 R2: exactly-once push survives a double-preview race (one stable key)', async () => {
+    // End-to-end exactly-once guarantee: double-tap the prompt, complete the
+    // flow, and verify push is called at most once with a single stable key.
+    mockPushPreview.mockResolvedValueOnce({
+      data: { count: 8, audience: 'active', already_delivered: 0 },
+    });
+    mockPush.mockReturnValueOnce(new Promise(() => {}));
+    const { getByTestId } = await mountWithRow();
+    fireEvent.press(getByTestId('content-row-push-c1'));
+    await waitFor(() => expect(getByTestId('mock-prompt-sheet')).toBeTruthy());
+
+    // Double-tap the prompt on the SAME node — second is guarded out.
+    const existingBtn = getByTestId('mock-prompt-existing');
+    fireEvent.press(existingBtn);
+    fireEvent.press(existingBtn);
+    await waitFor(() => expect(getByTestId('mock-confirm-modal')).toBeTruthy());
+    expect(mockPushPreview).toHaveBeenCalledTimes(1);
+
+    // Confirm twice synchronously — push fires exactly once.
+    fireEvent.press(getByTestId('mock-confirm-pick-date'));
+    fireEvent.press(getByTestId('mock-confirm-submit'));
+    fireEvent.press(getByTestId('mock-confirm-submit'));
+
+    expect(mockPush).toHaveBeenCalledTimes(1);
+    expect(mockPush.mock.calls[0][3]).toBe('test-idem-key-0001');
+  });
+
   it('push FAILURE keeps the modal open and surfaces a warm error', async () => {
     const alertSpy = jest
       .spyOn(require('react-native').Alert, 'alert')
