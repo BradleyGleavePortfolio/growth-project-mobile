@@ -282,9 +282,73 @@ describe('publicPackagesApi.createCheckoutSession', () => {
     expect(apiMock.get).not.toHaveBeenCalled();
   });
 
-  it('getByShareToken encodes valid tokens into the URL path', async () => {
+  it('getByShareToken hits the public join route and encodes the token', async () => {
+    apiMock.get.mockResolvedValueOnce({ data: {} });
     await publicPackagesApi.getByShareToken('abc-123_DEF');
-    expect(apiMock.get).toHaveBeenCalledWith('/v1/packages/abc-123_DEF');
+    expect(apiMock.get).toHaveBeenCalledWith('/v1/packages/public/join/abc-123_DEF');
+  });
+
+  it('getByShareToken adapts the snake_case backend payload to PublicPackageView', async () => {
+    apiMock.get.mockResolvedValueOnce({
+      data: {
+        package_id: 'pkg-uuid-1',
+        package_name: 'Elite Coaching',
+        description: 'Twelve weeks of 1:1 coaching',
+        price_cents: 24900,
+        currency: 'USD',
+        billing_cycle: 'annual',
+        trial_days: null,
+        features: [],
+        coach: {
+          display_name: '  Coach Dana  ',
+          bio: 'Olympic strength coach',
+          avatar_url: 'https://cdn.example.com/a.jpg',
+          verified: true,
+        },
+        stripe_publishable_key: 'pk_test_123',
+        share_link_enabled: true,
+      },
+    });
+    const res = await publicPackagesApi.getByShareToken('abc-123_DEF');
+    expect(res.data).toEqual({
+      id: 'pkg-uuid-1',
+      title: 'Elite Coaching',
+      description: 'Twelve weeks of 1:1 coaching',
+      priceCents: 24900,
+      currency: 'usd',
+      billingInterval: 'yearly',
+      intervalCount: 1,
+      trialDays: null,
+      features: [],
+      coach: {
+        id: null,
+        displayName: 'Coach Dana',
+        avatarUrl: 'https://cdn.example.com/a.jpg',
+        bio: 'Olympic strength coach',
+        verified: true,
+      },
+      stripePublishableKey: 'pk_test_123',
+    });
+  });
+
+  it('getByShareToken maps quarterly billing_cycle to intervalCount 3 and defaults missing fields', async () => {
+    apiMock.get.mockResolvedValueOnce({
+      data: {
+        package_id: 'pkg-2',
+        package_name: 'Quarterly Plan',
+        price_cents: 9900,
+        currency: 'usd',
+        billing_cycle: 'quarterly',
+        coach: {},
+      },
+    });
+    const res = await publicPackagesApi.getByShareToken('tok_2');
+    expect(res.data.billingInterval).toBe('quarterly');
+    expect(res.data.intervalCount).toBe(3);
+    expect(res.data.features).toEqual([]);
+    expect(res.data.coach.displayName).toBe('Your Coach');
+    expect(res.data.coach.verified).toBe(false);
+    expect(res.data.coach.id).toBeNull();
   });
 });
 
