@@ -41,7 +41,11 @@ jest.mock('../navigation/CoachNavigator', () => () => null);
 jest.mock('../navigation/OnboardingNavigator', () => () => null);
 jest.mock('../navigation/LeanOnboardingNavigator', () => () => null);
 
-// eslint-disable-next-line import/first
+// Note: this import deliberately follows the jest.mock() calls above. Jest
+// hoists the mocks above all imports at runtime, so the import order here is
+// intentional and safe. We do not add an `import/first` disable directive
+// because `eslint-plugin-import` is not configured in this repo (.eslintrc.js),
+// and an unknown-rule disable comment makes `eslint --quiet` exit non-zero.
 import { linking } from '../navigation/RootNavigator';
 
 function findCheckoutReturn(state: unknown): Record<string, unknown> | null {

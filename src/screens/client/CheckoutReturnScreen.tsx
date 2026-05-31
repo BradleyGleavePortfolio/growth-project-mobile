@@ -416,7 +416,7 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
     },
     successEyebrow: {
       fontSize: 12,
-      fontWeight: '700',
+      fontWeight: '600',
       letterSpacing: 1.2,
       textTransform: 'uppercase',
       color: tokens.colors.forest,
