@@ -44,7 +44,8 @@ import {
 } from '@react-navigation/native';
 
 import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
-import { useTheme, type ThemeColors } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
+import type { SemanticTokens, Tokens } from '../../theme/tokens';
 import {
   clientPaymentsApi,
   type PaymentsResult,
@@ -78,7 +79,8 @@ interface DeliverablesScreenContentProps {
   onOpenDrop: (drop: ScheduledDropView) => void;
   headerTitle: string;
   styles: ReturnType<typeof makeStyles>;
-  colors: ThemeColors;
+  semanticColors: SemanticTokens;
+  tokens: Tokens;
 }
 
 function DeliverablesContent({
@@ -89,7 +91,8 @@ function DeliverablesContent({
   onOpenDrop,
   headerTitle,
   styles,
-  colors,
+  semanticColors,
+  tokens,
 }: DeliverablesScreenContentProps) {
   const visible = useMemo(() => {
     if (!result.ok) return { delivered: [] as ScheduledDropView[], upcoming: [] as ScheduledDropView[] };
@@ -122,12 +125,12 @@ function DeliverablesContent({
           style={styles.container}
           contentContainerStyle={styles.content}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={semanticColors.accent} />
           }
         >
           <Text style={styles.header}>{headerTitle}</Text>
           <View style={styles.empty}>
-            <Ionicons name="cube-outline" size={36} color={colors.textMuted} />
+            <Ionicons name="cube-outline" size={36} color={semanticColors.textMuted} />
             <Text style={styles.emptyTitle}>No deliverables yet</Text>
             <Text style={styles.emptyBody}>
               Your coach hasn&apos;t added anything to this package yet. Check
@@ -143,12 +146,12 @@ function DeliverablesContent({
         style={styles.container}
         contentContainerStyle={styles.content}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={semanticColors.accent} />
         }
       >
         <Text style={styles.header}>{headerTitle}</Text>
         <View style={styles.empty}>
-          <Ionicons name="alert-circle-outline" size={36} color={colors.error} />
+          <Ionicons name="alert-circle-outline" size={36} color={tokens.colors.error} />
           <Text style={styles.emptyTitle}>We couldn&apos;t load deliverables</Text>
           <Text style={styles.emptyBody}>
             Check your connection and try again. If this keeps happening,
@@ -175,12 +178,12 @@ function DeliverablesContent({
         style={styles.container}
         contentContainerStyle={styles.content}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={semanticColors.accent} />
         }
       >
         <Text style={styles.header}>{headerTitle}</Text>
         <View style={styles.empty}>
-          <Ionicons name="cube-outline" size={36} color={colors.textMuted} />
+          <Ionicons name="cube-outline" size={36} color={semanticColors.textMuted} />
           <Text style={styles.emptyTitle}>No deliverables yet</Text>
           <Text style={styles.emptyBody}>
             Your coach hasn&apos;t added anything to this package yet. Check
@@ -197,7 +200,7 @@ function DeliverablesContent({
       style={styles.container}
       contentContainerStyle={styles.content}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={semanticColors.accent} />
       }
     >
       <Text style={styles.header}>{headerTitle}</Text>
@@ -238,8 +241,8 @@ function DeliverablesContent({
 }
 
 export default function DeliverablesScreen() {
-  const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { semanticColors, tokens } = useTheme();
+  const styles = useMemo(() => makeStyles(semanticColors, tokens), [semanticColors, tokens]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const route = useRoute<RouteProp<Record<string, DeliverablesRouteParams>, string>>();
   const { purchaseId, packageName } = route.params ?? { purchaseId: '' };
@@ -293,7 +296,7 @@ export default function DeliverablesScreen() {
       onOpenDrop={onOpenDrop}
       headerTitle={headerTitle}
       styles={styles}
-      colors={colors}
+      semanticColors={semanticColors} tokens={tokens}
     />
   );
 }
@@ -311,25 +314,25 @@ export const __test = {
 };
 export type { ScheduledDropCadenceKind, ScheduledDropAssetType };
 
-const makeStyles = (colors: ThemeColors) =>
+const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
   StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
+    container: { flex: 1, backgroundColor: semanticColors.bgPrimary },
     content: { paddingHorizontal: 20, paddingTop: 56, paddingBottom: 40 },
     header: {
       fontSize: 28,
       fontWeight: '600',
-      color: colors.textPrimary,
+      color: semanticColors.textPrimary,
       marginBottom: 4,
     },
     subheader: {
       fontSize: 13,
-      color: colors.textSecondary,
+      color: semanticColors.textMuted,
       lineHeight: 18,
       marginBottom: 16,
     },
     sectionTitle: {
       fontSize: 12,
-      color: colors.textMuted,
+      color: semanticColors.textMuted,
       textTransform: 'uppercase',
       letterSpacing: 0.6,
       marginTop: 18,
@@ -339,22 +342,22 @@ const makeStyles = (colors: ThemeColors) =>
     emptyTitle: {
       fontSize: 18,
       fontWeight: '600',
-      color: colors.textPrimary,
+      color: semanticColors.textPrimary,
       marginTop: 12,
     },
     emptyBody: {
       fontSize: 14,
-      color: colors.textSecondary,
+      color: semanticColors.textMuted,
       textAlign: 'center',
       marginTop: 8,
       lineHeight: 20,
     },
     retryBtn: {
       marginTop: 18,
-      backgroundColor: colors.primary,
+      backgroundColor: semanticColors.accent,
       paddingHorizontal: 20,
       paddingVertical: 10,
       borderRadius: 10,
     },
-    retryBtnText: { color: colors.textOnPrimary, fontWeight: '600', fontSize: 14 },
+    retryBtnText: { color: semanticColors.textOnAccent, fontWeight: '600', fontSize: 14 },
   });

@@ -30,10 +30,25 @@ export type PackageBillingInterval = 'one_time' | 'monthly' | 'quarterly' | 'yea
 
 export type PackageStatus = 'draft' | 'active' | 'archived';
 
-// Backend deep-link prefixes allowed for checkout redirects. Backend rejects
-// anything else (see growth-project-backend checkout.controller.ts).
-export const PACKAGE_CHECKOUT_SUCCESS_URL = 'growthproject://checkout/return';
-export const PACKAGE_CHECKOUT_CANCEL_URL = 'growthproject://checkout/cancel';
+// Backend deep-link prefixes allowed for checkout redirects: the backend
+// allow-list (growth-project-backend checkout.controller.ts:30-38) accepts
+// only `growthproject://`, `com.growthproject.app://`, and `https://` — it
+// REJECTS `tgp://`. The redirect PATH must also match the in-app return
+// handler: BrandedCheckoutWebViewScreen.parseReturnDeepLink() and the
+// RootNavigator deep-link config both intercept `<scheme>://checkout/success`
+// (with the `session_id` query param) and `<scheme>://checkout/cancel`.
+//
+// The previous value used the `/return` path, which NEVER matched the
+// `/success` path the webview/deep-link parser expects, so a completed
+// Stripe payment was never routed to CheckoutReturn (P0). We now mint the
+// backend-accepted `com.growthproject.app://checkout/success` (with Stripe's
+// `{CHECKOUT_SESSION_ID}` placeholder so the confirm step can re-verify the
+// session) and `.../checkout/cancel`. Callers MUST pass the matching
+// `returnScheme` ('com.growthproject.app') to BrandedCheckoutWebView.
+export const PACKAGE_CHECKOUT_RETURN_SCHEME = 'com.growthproject.app';
+export const PACKAGE_CHECKOUT_SUCCESS_URL =
+  'com.growthproject.app://checkout/success?session_id={CHECKOUT_SESSION_ID}';
+export const PACKAGE_CHECKOUT_CANCEL_URL = 'com.growthproject.app://checkout/cancel';
 
 export interface CoachPackage {
   id: string;
@@ -181,10 +196,82 @@ export interface PublicPackageView {
   trialDays: number | null;
   features: string[];
   coach: {
-    id: string;
+    // Backend public payload (storefront.types.ts PublicPackageData) does NOT
+    // expose the coach user id — the storefront is anonymous and checkout is
+    // keyed off the resolved package id + share token. Mobile must NOT invent
+    // an id (IDOR is backend-owned), so this is null when absent.
+    id: string | null;
     displayName: string;
     avatarUrl: string | null;
     bio: string | null;
+    /** Coach is fully Stripe-Connect onboarded (KYC + payouts proven). */
+    verified: boolean;
+  };
+  /** Stripe publishable key for the coach's connected account (web checkout). */
+  stripePublishableKey: string | null;
+}
+
+// Backend `GET /v1/packages/public/join/:token` payload
+// (growth-project-backend storefront.types.ts `PublicPackageData`). snake_case;
+// `billing_cycle` uses 'annual' (not 'yearly') and there is NO interval_count
+// or coach.id field. We adapt this to the camelCase `PublicPackageView` model
+// here so screens never see the raw backend shape.
+interface BackendPublicPackage {
+  package_id?: string;
+  package_name?: string;
+  description?: string | null;
+  price_cents?: number;
+  currency?: string;
+  billing_cycle?: 'monthly' | 'quarterly' | 'annual' | 'one_time';
+  trial_days?: number | null;
+  features?: string[];
+  coach?: {
+    display_name?: string;
+    bio?: string | null;
+    avatar_url?: string | null;
+    verified?: boolean;
+  };
+  stripe_publishable_key?: string | null;
+  share_link_enabled?: boolean;
+}
+
+function billingCycleToInterval(
+  cycle: BackendPublicPackage['billing_cycle'],
+): PackageBillingInterval {
+  // Backend BillingCycle ('annual') → mobile PackageBillingInterval ('yearly').
+  if (cycle === 'one_time') return 'one_time';
+  if (cycle === 'quarterly') return 'quarterly';
+  if (cycle === 'annual') return 'yearly';
+  return 'monthly';
+}
+
+/**
+ * Adapt the backend public-storefront payload (snake_case `PublicPackageData`)
+ * into the camelCase `PublicPackageView` the client screens consume.
+ *
+ * Quarterly maps to intervalCount 3 (months); everything else is count 1 so
+ * `intervalCopy()` renders "per month/year" rather than "every N months".
+ */
+export function adaptPublicPackage(raw: BackendPublicPackage): PublicPackageView {
+  const interval = billingCycleToInterval(raw.billing_cycle);
+  return {
+    id: raw.package_id ?? '',
+    title: raw.package_name ?? '',
+    description: raw.description ?? null,
+    priceCents: raw.price_cents ?? 0,
+    currency: (raw.currency ?? 'usd').toLowerCase(),
+    billingInterval: interval,
+    intervalCount: interval === 'quarterly' ? 3 : 1,
+    trialDays: raw.trial_days ?? null,
+    features: Array.isArray(raw.features) ? raw.features : [],
+    coach: {
+      id: null,
+      displayName: raw.coach?.display_name?.trim() || 'Your Coach',
+      avatarUrl: raw.coach?.avatar_url ?? null,
+      bio: raw.coach?.bio ?? null,
+      verified: raw.coach?.verified === true,
+    },
+    stripePublishableKey: raw.stripe_publishable_key ?? null,
   };
 }
 
@@ -434,14 +521,20 @@ export const coachPackagesApi = {
 // ─── public / client-facing API ─────────────────────────────────────────────
 
 export const publicPackagesApi = {
-  // TODO(backend): `GET /v1/packages/:shareToken` planned but not deployed.
-  getByShareToken: (shareToken: string) => {
+  // Backend route is `GET /v1/packages/public/join/:token`
+  // (storefront-public.controller.ts: @Controller('v1/packages/public')
+  // + @Get('join/:token')). It returns the snake_case `PublicPackageData`
+  // payload, which we adapt into the camelCase `PublicPackageView` before any
+  // consumer sees it. The earlier `/v1/packages/:shareToken` route was a TODO
+  // that was never deployed.
+  getByShareToken: async (shareToken: string) => {
     if (!isValidPackageShareToken(shareToken)) {
       return Promise.reject(new Error('INVALID_SHARE_TOKEN'));
     }
-    return api.get<PublicPackageView>(
-      `/v1/packages/${encodeURIComponent(shareToken)}`,
+    const res = await api.get<BackendPublicPackage>(
+      `/v1/packages/public/join/${encodeURIComponent(shareToken)}`,
     );
+    return { ...res, data: adaptPublicPackage(res.data) };
   },
 
   // Backend `POST /v1/checkout/sessions` requires:

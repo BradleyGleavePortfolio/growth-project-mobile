@@ -1,9 +1,9 @@
 /**
  * CheckoutReturnScreen — handles the deep-link return from Stripe Checkout.
  *
- * Routes:
- *   tgp://checkout/success?session_id=<sid>  → outcome === 'success'
- *   tgp://checkout/cancel                    → outcome === 'cancel'
+ * Routes (the Stripe return scheme minted by packagesApi):
+ *   com.growthproject.app://checkout/success?session_id=<sid> → 'success'
+ *   com.growthproject.app://checkout/cancel                   → 'cancel'
  *
  * On success we call `GET /v1/checkout/sessions/:id/confirm` (the real
  * CheckoutController confirm route) to verify the session actually
@@ -19,22 +19,26 @@
  * the charge had succeeded. Both bugs are fixed here.
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   ActivityIndicator,
+  Animated,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useNavigation, NavigationProp, ParamListBase, RouteProp, useRoute } from '@react-navigation/native';
 
 import {
   clientPaymentsApi,
   type ClientPaymentStatus,
 } from '../../api/clientPaymentsApi';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
+import type { SemanticTokens, Tokens } from '../../theme/tokens';
 import { featureFlags } from '../../config/featureFlags';
 
 type CheckoutReturnRoute = RouteProp<
@@ -43,8 +47,8 @@ type CheckoutReturnRoute = RouteProp<
 >;
 
 export default function CheckoutReturnScreen() {
-  const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { semanticColors, tokens } = useTheme();
+  const styles = useMemo(() => makeStyles(semanticColors, tokens), [semanticColors, tokens]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const route = useRoute<CheckoutReturnRoute>();
   const outcome = route.params?.outcome ?? 'success';
@@ -53,6 +57,20 @@ export default function CheckoutReturnScreen() {
   const [status, setStatus] = useState<ClientPaymentStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(outcome === 'success');
+
+  // ─── Success peak-moment (PR-18 M1 R2 P0) ────────────────────────────────
+  // The paid confirmation is the peak of the buyer journey. Rather than a
+  // static icon + line + button (an "Empty Confirmation" anti-pattern), we
+  // fire a single calibrated success haptic and animate a brief, premium
+  // closure moment: the check badge springs in, then the copy + CTA reveal.
+  // Everything degrades to its final state on the first frame when the user
+  // has Reduce Motion enabled (or in the test harness), so the screen is
+  // never gated on animation completing.
+  const badgeScale = useRef(new Animated.Value(0.6)).current;
+  const badgeOpacity = useRef(new Animated.Value(0)).current;
+  const contentOpacity = useRef(new Animated.Value(0)).current;
+  const contentTranslate = useRef(new Animated.Value(12)).current;
+  const didCelebrate = useRef(false);
   // PR-15B — once the confirm lands and we have a real ClientPurchase id,
   // we forward the buyer to the PurchaseUnpack screen for the
   // "here's what you just got" moment. The unpack screen is gated behind
@@ -149,6 +167,105 @@ export default function CheckoutReturnScreen() {
     }
   }, [didUnpackNav, outcome, status, navigation]);
 
+  const isPaying = status?.state === 'active' || status?.state === 'trialing';
+
+  // Fire the success haptic + reveal animation exactly once, the moment a
+  // confirmed paying state lands. Guarded by `didCelebrate` so a re-render
+  // (or a status reconcile) cannot double-fire the haptic.
+  useEffect(() => {
+    if (outcome !== 'success') return;
+    if (loading || error) return;
+    if (!isPaying) return;
+    if (didCelebrate.current) return;
+    didCelebrate.current = true;
+
+    // Success haptic — fire-and-forget; never block the UI on it and never
+    // let a missing haptic engine (simulator) throw.
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
+      () => {},
+    );
+
+    let cancelled = false;
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((reduceMotion) => {
+        if (cancelled) return;
+        if (reduceMotion) {
+          badgeScale.setValue(1);
+          badgeOpacity.setValue(1);
+          contentOpacity.setValue(1);
+          contentTranslate.setValue(0);
+          return;
+        }
+        Animated.sequence([
+          Animated.parallel([
+            Animated.spring(badgeScale, {
+              toValue: 1,
+              friction: 5,
+              tension: 120,
+              useNativeDriver: true,
+            }),
+            Animated.timing(badgeOpacity, {
+              toValue: 1,
+              duration: 220,
+              useNativeDriver: true,
+            }),
+          ]),
+          Animated.parallel([
+            Animated.timing(contentOpacity, {
+              toValue: 1,
+              duration: 280,
+              useNativeDriver: true,
+            }),
+            Animated.timing(contentTranslate, {
+              toValue: 0,
+              duration: 280,
+              useNativeDriver: true,
+            }),
+          ]),
+        ]).start();
+      })
+      .catch(() => {
+        // If the reduce-motion probe fails, fall back to the final state so
+        // the confirmation is never stuck invisible.
+        badgeScale.setValue(1);
+        badgeOpacity.setValue(1);
+        contentOpacity.setValue(1);
+        contentTranslate.setValue(0);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    outcome,
+    loading,
+    error,
+    isPaying,
+    badgeScale,
+    badgeOpacity,
+    contentOpacity,
+    contentTranslate,
+  ]);
+
+  const goUnpack = () => {
+    // Primary next-step: take the buyer straight into "here's what you got"
+    // when we have a real purchase to unpack and the deliverables surface is
+    // live. Otherwise fall back to home. Only ONE primary decision is shown.
+    if (featureFlags.deliverables && status?.purchase_id) {
+      const params = {
+        purchaseId: status.purchase_id,
+        packageName: status.package_name ?? undefined,
+      };
+      const navAny = navigation as unknown as {
+        replace?: (n: string, p: typeof params) => void;
+        navigate: (n: string, p: typeof params) => void;
+      };
+      if (typeof navAny.replace === 'function') navAny.replace('PurchaseUnpack', params);
+      else navAny.navigate('PurchaseUnpack', params);
+      return;
+    }
+    goHome();
+  };
+
   const goPackages = () => {
     // The packages screen lives on the MoreStack; navigate via parent to hop tabs.
     const parent = navigation.getParent?.();
@@ -170,7 +287,7 @@ export default function CheckoutReturnScreen() {
   if (outcome === 'cancel') {
     return (
       <View style={styles.container}>
-        <Ionicons name="close-circle-outline" size={64} color={colors.textMuted} />
+        <Ionicons name="close-circle-outline" size={64} color={semanticColors.textMuted} />
         <Text style={styles.title}>Checkout canceled</Text>
         <Text style={styles.body}>
           No charge was made. You can try again whenever you're ready.
@@ -185,7 +302,7 @@ export default function CheckoutReturnScreen() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <ActivityIndicator color={colors.primary} size="large" />
+        <ActivityIndicator color={semanticColors.accent} size="large" />
         <Text style={styles.title}>Confirming payment…</Text>
         <Text style={styles.body}>
           We're verifying your subscription with Stripe. This usually takes a
@@ -198,7 +315,7 @@ export default function CheckoutReturnScreen() {
   if (error) {
     return (
       <View style={styles.container}>
-        <Ionicons name="alert-circle-outline" size={64} color={colors.warning} />
+        <Ionicons name="alert-circle-outline" size={64} color={tokens.semantic.warning.icon} />
         <Text style={styles.title}>Payment received — confirmation pending</Text>
         <Text style={styles.body}>
           Stripe accepted the charge, but the app couldn't confirm with the
@@ -215,21 +332,67 @@ export default function CheckoutReturnScreen() {
     );
   }
 
-  const isPaying = status?.state === 'active' || status?.state === 'trialing';
+  // Confirmed-paid peak moment. The check badge springs in, then the
+  // package-specific copy + single primary next-step reveal. One primary
+  // decision only ("See what's included" when there's something to unpack,
+  // else "Go to home"); a quiet secondary link is non-competing.
+  if (isPaying) {
+    const packageName = status?.package_name?.trim();
+    const hasUnpack = featureFlags.deliverables && !!status?.purchase_id;
+    const primaryLabel = hasUnpack ? "See what's included" : 'Go to home';
+    return (
+      <View style={styles.container}>
+        <Animated.View
+          style={[
+            styles.successBadge,
+            { opacity: badgeOpacity, transform: [{ scale: badgeScale }] },
+          ]}
+        >
+          <Ionicons name="checkmark-circle" size={88} color={tokens.colors.forest} />
+        </Animated.View>
+        <Animated.View
+          style={{ opacity: contentOpacity, transform: [{ translateY: contentTranslate }], alignItems: 'center' }}
+        >
+          <Text style={styles.successEyebrow}>You're in</Text>
+          <Text style={styles.title}>
+            {packageName ? `Welcome to ${packageName}` : "You're subscribed"}
+          </Text>
+          <Text style={styles.body}>
+            {packageName
+              ? `Your spot in ${packageName} is confirmed and your coach has been notified. Here's what happens next.`
+              : 'Your subscription is confirmed and your coach has been notified. Here\'s what happens next.'}
+          </Text>
+          <TouchableOpacity
+            style={styles.cta}
+            onPress={hasUnpack ? goUnpack : goHome}
+            accessibilityRole="button"
+            accessibilityLabel={primaryLabel}
+          >
+            <Text style={styles.ctaText}>{primaryLabel}</Text>
+          </TouchableOpacity>
+          {hasUnpack ? (
+            <TouchableOpacity
+              style={styles.secondaryLink}
+              onPress={goHome}
+              accessibilityRole="button"
+              accessibilityLabel="Go to home"
+            >
+              <Text style={styles.secondaryLinkText}>Go to home</Text>
+            </TouchableOpacity>
+          ) : null}
+        </Animated.View>
+      </View>
+    );
+  }
 
+  // Paid but not yet entitled (webhook lag) — calm "almost there" state.
   return (
     <View style={styles.container}>
-      <Ionicons
-        name={isPaying ? 'checkmark-circle' : 'time-outline'}
-        size={64}
-        color={isPaying ? colors.success : colors.warning}
-      />
-      <Text style={styles.title}>
-        {isPaying ? 'You are subscribed' : 'Payment received'}
-      </Text>
+      <Ionicons name="time-outline" size={64} color={tokens.semantic.warning.icon} />
+      <Text style={styles.title}>Payment received</Text>
       <Text style={styles.body}>
-        {isPaying && status?.package_name
-          ? `Welcome to ${status.package_name}. Your coach has been notified.`
+        {status?.package_name
+          ? `We're activating ${status.package_name} now — your coach has been notified and access opens within a few minutes.`
           : 'Your coach has been notified — access activates within a few minutes.'}
       </Text>
       <TouchableOpacity style={styles.cta} onPress={goHome} accessibilityRole="button">
@@ -239,35 +402,53 @@ export default function CheckoutReturnScreen() {
   );
 }
 
-const makeStyles = (colors: ThemeColors) =>
+const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
   StyleSheet.create({
     container: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
       padding: 32,
-      backgroundColor: colors.background,
+      backgroundColor: semanticColors.bgPrimary,
+    },
+    successBadge: {
+      marginBottom: 4,
+    },
+    successEyebrow: {
+      fontSize: 12,
+      fontWeight: '600',
+      letterSpacing: 1.2,
+      textTransform: 'uppercase',
+      color: tokens.colors.forest,
+      marginTop: 16,
+      textAlign: 'center',
     },
     title: {
       fontSize: 22,
       fontWeight: '600',
-      color: colors.textPrimary,
-      marginTop: 16,
+      color: semanticColors.textPrimary,
+      marginTop: 8,
       textAlign: 'center',
     },
     body: {
       fontSize: 14,
-      color: colors.textSecondary,
+      color: semanticColors.textMuted,
       lineHeight: 20,
       textAlign: 'center',
       marginTop: 12,
     },
     cta: {
       marginTop: 28,
-      backgroundColor: colors.primary,
+      backgroundColor: semanticColors.accent,
       paddingHorizontal: 28,
       paddingVertical: 12,
       borderRadius: 10,
     },
-    ctaText: { color: colors.textOnPrimary, fontWeight: '600', fontSize: 15 },
+    ctaText: { color: semanticColors.textOnAccent, fontWeight: '600', fontSize: 15 },
+    secondaryLink: { marginTop: 14, paddingVertical: 6 },
+    secondaryLinkText: {
+      color: semanticColors.textMuted,
+      fontWeight: '500',
+      fontSize: 14,
+    },
   });

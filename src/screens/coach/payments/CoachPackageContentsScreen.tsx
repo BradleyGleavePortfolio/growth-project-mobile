@@ -18,7 +18,8 @@
  *     compact action group).
  *   • Warm copy — the empty state reads "No content yet — add the first piece",
  *     never "No data".
- *   • Consistency — reuses useTheme() colors (forest #2C4A36 / cream #F5EFE4),
+ *   • Consistency — reuses useTheme() semantic tokens (forest accent / cream
+ *     background, never literal hex),
  *     the primary-button TouchableOpacity style from CoachPackageEditScreen
  *     :397-411, and HapticPressable + haptics (lightTap/mediumTap). No emoji,
  *     no hardcoded hex, no new design dependency.
@@ -60,7 +61,8 @@ import {
   successTap,
   warningTap,
 } from '../../../utils/haptics';
-import { useTheme, ThemeColors } from '../../../theme/ThemeProvider';
+import { useTheme } from '../../../theme/ThemeProvider';
+import type { SemanticTokens, Tokens } from '../../../theme/tokens';
 import HapticPressable from '../../../components/HapticPressable';
 import ContentAttachForm, {
   assetTypeLabel,
@@ -84,8 +86,8 @@ interface Props {
 }
 
 export default function CoachPackageContentsScreen({ navigation, route }: Props) {
-  const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { semanticColors, tokens } = useTheme();
+  const styles = useMemo(() => makeStyles(semanticColors, tokens), [semanticColors, tokens]);
   const { packageId, title } = route.params;
 
   const [contents, setContents] = useState<PackageContent[]>([]);
@@ -491,7 +493,7 @@ export default function CoachPackageContentsScreen({ navigation, route }: Props)
               accessibilityLabel={`Push ${rowTitle} to existing buyers`}
               testID={`content-row-push-${item.id}`}
             >
-              <Ionicons name="paper-plane-outline" size={18} color={colors.primary} />
+              <Ionicons name="paper-plane-outline" size={18} color={semanticColors.accent} />
             </HapticPressable>
             <HapticPressable
               intent="light"
@@ -501,7 +503,7 @@ export default function CoachPackageContentsScreen({ navigation, route }: Props)
               accessibilityLabel={`Edit ${rowTitle}`}
               testID={`content-row-edit-${item.id}`}
             >
-              <Ionicons name="create-outline" size={18} color={colors.textSecondary} />
+              <Ionicons name="create-outline" size={18} color={semanticColors.textMuted} />
             </HapticPressable>
             <HapticPressable
               intent="warning"
@@ -511,20 +513,20 @@ export default function CoachPackageContentsScreen({ navigation, route }: Props)
               accessibilityLabel={`Remove ${rowTitle}`}
               testID={`content-row-remove-${item.id}`}
             >
-              <Ionicons name="trash-outline" size={18} color={colors.warning} />
+              <Ionicons name="trash-outline" size={18} color={tokens.semantic.warning.icon} />
             </HapticPressable>
           </View>
         </View>
       );
     },
-    [styles, colors, contentTitleOf, onPushPress, openEdit, handleRemove],
+    [styles, semanticColors, contentTitleOf, onPushPress, openEdit, handleRemove],
   );
 
   const renderBody = () => {
     if (loading) {
       return (
         <View style={styles.center} testID="content-loading">
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator color={semanticColors.accent} />
         </View>
       );
     }
@@ -549,7 +551,7 @@ export default function CoachPackageContentsScreen({ navigation, route }: Props)
           <Ionicons
             name="document-text-outline"
             size={32}
-            color={colors.textMuted}
+            color={semanticColors.textMuted}
           />
           <Text style={styles.emptyTitle}>No content yet — add the first piece</Text>
           <Text style={styles.emptyHint}>
@@ -580,7 +582,7 @@ export default function CoachPackageContentsScreen({ navigation, route }: Props)
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={semanticColors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.topTitle} numberOfLines={1}>
           {title?.trim() || 'Package content'}
@@ -599,7 +601,7 @@ export default function CoachPackageContentsScreen({ navigation, route }: Props)
           accessibilityLabel="Add content"
           testID="content-add-button"
         >
-          <Ionicons name="add" size={20} color={colors.textOnPrimary} />
+          <Ionicons name="add" size={20} color={semanticColors.textOnAccent} />
           <Text style={styles.primaryBtnText}>Add content</Text>
         </TouchableOpacity>
       </View>
@@ -649,7 +651,7 @@ export default function CoachPackageContentsScreen({ navigation, route }: Props)
           accessibilityLabel="Checking your buyers"
         >
           <View style={styles.previewCard}>
-            <ActivityIndicator color={colors.primary} />
+            <ActivityIndicator color={semanticColors.accent} />
             <Text style={styles.previewText}>Checking your buyers…</Text>
           </View>
         </View>
@@ -658,9 +660,9 @@ export default function CoachPackageContentsScreen({ navigation, route }: Props)
   );
 }
 
-const makeStyles = (colors: ThemeColors) =>
+const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
   StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
+    container: { flex: 1, backgroundColor: semanticColors.bgPrimary },
     topBar: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -680,7 +682,7 @@ const makeStyles = (colors: ThemeColors) =>
       textAlign: 'center',
       fontSize: 18,
       fontWeight: '500',
-      color: colors.textPrimary,
+      color: semanticColors.textPrimary,
     },
     body: { flex: 1 },
     center: {
@@ -691,7 +693,7 @@ const makeStyles = (colors: ThemeColors) =>
       gap: 10,
     },
     listContent: { paddingHorizontal: 24, paddingVertical: 12 },
-    separator: { height: 1, backgroundColor: colors.divider },
+    separator: { height: 1, backgroundColor: semanticColors.border },
     row: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -699,15 +701,15 @@ const makeStyles = (colors: ThemeColors) =>
       gap: 12,
     },
     rowMain: { flex: 1 },
-    rowTitle: { fontSize: 15, fontWeight: '500', color: colors.textPrimary },
+    rowTitle: { fontSize: 15, fontWeight: '500', color: semanticColors.textPrimary },
     rowMetaLine: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 6,
       marginTop: 4,
     },
-    rowMeta: { fontSize: 12, color: colors.textSecondary },
-    rowMetaDot: { fontSize: 12, color: colors.textMuted },
+    rowMeta: { fontSize: 12, color: semanticColors.textMuted },
+    rowMetaDot: { fontSize: 12, color: semanticColors.textMuted },
     rowActions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     rowActionBtn: {
       width: 36,
@@ -718,42 +720,42 @@ const makeStyles = (colors: ThemeColors) =>
     emptyTitle: {
       fontSize: 16,
       fontWeight: '500',
-      color: colors.textPrimary,
+      color: semanticColors.textPrimary,
       textAlign: 'center',
     },
     emptyHint: {
       fontSize: 13,
-      color: colors.textSecondary,
+      color: semanticColors.textMuted,
       textAlign: 'center',
     },
-    errorText: { fontSize: 14, color: colors.error, textAlign: 'center' },
+    errorText: { fontSize: 14, color: tokens.colors.error, textAlign: 'center' },
     retryBtn: {
       marginTop: 4,
       paddingVertical: 10,
       paddingHorizontal: 20,
       borderRadius: 2,
       borderWidth: 1,
-      borderColor: colors.primary,
+      borderColor: semanticColors.accent,
     },
-    retryBtnText: { color: colors.primary, fontSize: 14, fontWeight: '500' },
+    retryBtnText: { color: semanticColors.accent, fontSize: 14, fontWeight: '500' },
     footer: {
       paddingHorizontal: 24,
       paddingTop: 12,
       paddingBottom: 28,
       borderTopWidth: 1,
-      borderTopColor: colors.divider,
+      borderTopColor: semanticColors.border,
     },
     primaryBtn: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
       gap: 8,
-      backgroundColor: colors.primary,
+      backgroundColor: semanticColors.accent,
       paddingVertical: 14,
       borderRadius: 2,
     },
     primaryBtnText: {
-      color: colors.textOnPrimary,
+      color: semanticColors.textOnAccent,
       fontSize: 15,
       fontWeight: '500',
     },
@@ -765,7 +767,7 @@ const makeStyles = (colors: ThemeColors) =>
       bottom: 0,
       justifyContent: 'center',
       alignItems: 'center',
-      backgroundColor: colors.background,
+      backgroundColor: semanticColors.bgPrimary,
       opacity: 0.96,
     },
     previewCard: {
@@ -776,7 +778,7 @@ const makeStyles = (colors: ThemeColors) =>
     },
     previewText: {
       fontSize: 14,
-      color: colors.textSecondary,
+      color: semanticColors.textMuted,
       textAlign: 'center',
     },
   });

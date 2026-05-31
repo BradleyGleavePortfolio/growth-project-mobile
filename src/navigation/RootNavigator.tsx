@@ -97,12 +97,22 @@ function rewriteHttpsToScheme(url: string): string {
 //   tgp://join/<code>
 //   https://app.trygrowthproject.com/join/<code>
 //   tgp://reset-password#access_token=...&refresh_token=...&type=recovery
+//   com.growthproject.app://checkout/success?session_id=<sid>  (Stripe return)
+//   com.growthproject.app://checkout/cancel                    (Stripe cancel)
 // Exported for behavioral testing (R26): tests drive real URLs through
 // `linking.getStateFromPath` and assert the resulting nav state, instead
 // of grepping source. Not used by app code directly — RootNavigator
 // passes `linking` to NavigationContainer below.
 export const linking: LinkingOptions<Record<string, object | undefined>> = {
-  prefixes: ['tgp://', 'https://app.trygrowthproject.com'],
+  // `com.growthproject.app://` is the Stripe Checkout return scheme minted by
+  // packagesApi (com.growthproject.app://checkout/{success,cancel}) and the
+  // app.json-registered scheme alongside `tgp`. The primary success path is
+  // the in-app webview short-circuit, but a platform/browser/WebView fallback
+  // can deliver the return through React Navigation's app-link path instead;
+  // without this prefix that path would not route to CheckoutReturn and a paid
+  // buyer could be stranded off the confirmation. See app.json `scheme` and
+  // the CheckoutReturn screen config below.
+  prefixes: ['tgp://', 'com.growthproject.app://', 'https://app.trygrowthproject.com'],
   getStateFromPath(path, options) {
     // Defense-in-depth: a tampered package share link should not be able to
     // resolve to PackageCheckoutScreen at all. We reject the route at the
@@ -199,12 +209,13 @@ export const linking: LinkingOptions<Record<string, object | undefined>> = {
       //     interpolation. PackageCheckoutScreen still validates at mount
       //     as defense-in-depth.
       //   • Screenshot-mode deep links (only mounted in screenshot harness).
-      //   • Stripe Checkout return route, reachable in real builds via
-      //     tgp://checkout/{success,cancel}. Stripe redirects to:
-      //       tgp://checkout/success?session_id=cs_xxx   (paid)
-      //       tgp://checkout/cancel                       (canceled)
-      //     The return screen confirms the session against the backend
-      //     before showing a celebratory state.
+      //   • Stripe Checkout return route. Stripe redirects to the
+      //     com.growthproject.app scheme minted by packagesApi:
+      //       com.growthproject.app://checkout/success?session_id=cs_xxx (paid)
+      //       com.growthproject.app://checkout/cancel                    (canceled)
+      //     The primary path is the in-app webview short-circuit; this
+      //     navigator config is the app-link fallback. The return screen
+      //     confirms the session against the backend before celebrating.
       MoreTab: {
         screens: {
           PackageCheckout: {

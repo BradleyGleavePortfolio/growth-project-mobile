@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   Share,
@@ -39,9 +40,14 @@ import {
 import { errorCode, errorMessage } from '../../../types/common';
 import { mediumTap, successTap, warningTap } from '../../../utils/haptics';
 import { track } from '../../../lib/analytics';
-import { useTheme, ThemeColors } from '../../../theme/ThemeProvider';
+import { useTheme } from '../../../theme/ThemeProvider';
+import type { SemanticTokens, Tokens } from '../../../theme/tokens';
 import { parseDollarsToCents } from '../../../utils/currency';
 import { buildPackageShareUrl } from '../../../utils/packageShare';
+import { useCurrentUser } from '../../../hooks/useCurrentUser';
+import PackageDetailSurface, {
+  type PackageDetailViewModel,
+} from '../../client/packageDetail/PackageDetailSurface';
 
 type ParamList = {
   CoachPackageEdit: {
@@ -67,8 +73,9 @@ const INTERVAL_OPTIONS: Array<{ label: string; value: PackageBillingInterval }> 
 ];
 
 export default function CoachPackageEditScreen({ navigation, route }: Props) {
-  const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { semanticColors, tokens } = useTheme();
+  const styles = useMemo(() => makeStyles(semanticColors, tokens), [semanticColors, tokens]);
+  const currentUser = useCurrentUser();
   const { packageId, initialPackage } = route.params;
   const isEdit = Boolean(packageId);
 
@@ -84,6 +91,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
   const [saving, setSaving] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [error, setError] = useState('');
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   useEffect(() => {
     if (!packageId) {
@@ -204,6 +212,12 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
             'The packages backend module is not deployed in this environment.',
           ),
         );
+      } else if (code === 'PACKAGE_PRICING_LOCKED') {
+        warningTap();
+        Alert.alert(
+          'Pricing is locked',
+          'Pricing is locked because this package already has active subscribers. Create a new package for new pricing; you can still edit name, description, deliverables, and availability.',
+        );
       } else {
         Alert.alert(
           'Could not save',
@@ -268,15 +282,65 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
     }
   }, [original]);
 
+  // The coach's own display name for the preview header. Falls back to a
+  // neutral label rather than inventing data — the buyer-facing public route
+  // resolves the real coach profile server-side at purchase time.
+  const coachDisplayName = useMemo(() => {
+    const n =
+      currentUser?.name?.trim() ||
+      [currentUser?.firstName, currentUser?.lastName].filter(Boolean).join(' ').trim();
+    return n || 'You';
+  }, [currentUser]);
+
+  // Build the preview view model from the LIVE draft fields so the coach sees
+  // their unsaved edits, falling back to saved values where a field is empty.
+  // No network round-trip: everything here comes from local state + `original`.
+  const previewViewModel = useMemo<PackageDetailViewModel>(() => {
+    const cents = parseDollarsToCents(priceText) ?? original?.priceCents ?? 0;
+    const features = featuresText
+      .split('\n')
+      .map((f) => f.trim())
+      .filter(Boolean);
+    const trimmedTrial = trialText.trim();
+    const trialDays =
+      billingInterval !== 'one_time' && trimmedTrial && Number.isInteger(Number(trimmedTrial))
+        ? Number(trimmedTrial)
+        : null;
+    return {
+      id: original?.id ?? 'preview',
+      title: title.trim() || 'Untitled package',
+      description: description.trim() || null,
+      priceCents: cents,
+      currency: original?.currency ?? 'usd',
+      billingInterval,
+      intervalCount: original?.intervalCount ?? 1,
+      trialDays,
+      features,
+      coach: { displayName: coachDisplayName, bio: null },
+    };
+  }, [
+    priceText,
+    featuresText,
+    trialText,
+    billingInterval,
+    title,
+    description,
+    original,
+    coachDisplayName,
+  ]);
+
   if (!loaded) {
     return (
       <View style={[styles.container, styles.center]}>
-        <ActivityIndicator color={colors.primary} />
+        <ActivityIndicator color={semanticColors.accent} />
       </View>
     );
   }
 
   const archived = original?.status === 'archived';
+  // Pricing is immutable once a package has active subscribers — surface that
+  // up-front (helper copy) and again if the backend rejects a price change.
+  const pricingLocked = isEdit && (original?.subscriberCount ?? 0) > 0;
 
   return (
     <KeyboardAvoidingView
@@ -290,7 +354,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={semanticColors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.topTitle}>{isEdit ? 'Edit package' : 'New package'}</Text>
         <View style={styles.backBtn} />
@@ -301,7 +365,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
       >
         {archived ? (
           <View style={styles.archivedBanner}>
-            <Ionicons name="archive-outline" size={16} color={colors.warning} />
+            <Ionicons name="archive-outline" size={16} color={tokens.semantic.warning.icon} />
             <Text style={styles.archivedText}>
               This package is archived. Restore it by setting status back to
               Active in the form below — current subscribers are unaffected.
@@ -309,39 +373,39 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
           </View>
         ) : null}
 
-        <Label colors={colors}>Name</Label>
+        <Label semanticColors={semanticColors} tokens={tokens}>Name</Label>
         <TextInput
           value={title}
           onChangeText={setTitle}
           placeholder="e.g. 12-week transformation"
           style={styles.input}
-          placeholderTextColor={colors.textMuted}
+          placeholderTextColor={semanticColors.textMuted}
           maxLength={120}
         />
 
-        <Label colors={colors}>Description</Label>
+        <Label semanticColors={semanticColors} tokens={tokens}>Description</Label>
         <TextInput
           value={description}
           onChangeText={setDescription}
           placeholder="What's included? Who is this for?"
           style={[styles.input, styles.inputMultiline]}
-          placeholderTextColor={colors.textMuted}
+          placeholderTextColor={semanticColors.textMuted}
           multiline
           maxLength={1000}
         />
 
-        <Label colors={colors}>Price (USD)</Label>
+        <Label semanticColors={semanticColors} tokens={tokens}>Price (USD)</Label>
         <TextInput
           value={priceText}
           onChangeText={setPriceText}
           placeholder="199.00"
           style={styles.input}
-          placeholderTextColor={colors.textMuted}
+          placeholderTextColor={semanticColors.textMuted}
           keyboardType="decimal-pad"
           maxLength={12}
         />
 
-        <Label colors={colors}>Billing</Label>
+        <Label semanticColors={semanticColors} tokens={tokens}>Billing</Label>
         <View style={styles.segment}>
           {INTERVAL_OPTIONS.map((opt) => {
             const active = billingInterval === opt.value;
@@ -367,28 +431,38 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
           })}
         </View>
 
+        {pricingLocked ? (
+          <View style={styles.lockNotice} accessibilityRole="text">
+            <Ionicons name="lock-closed" size={14} color={tokens.semantic.warning.icon} />
+            <Text style={styles.lockNoticeText}>
+              Pricing is locked after subscribers join. Create a new package for
+              new pricing.
+            </Text>
+          </View>
+        ) : null}
+
         {billingInterval !== 'one_time' ? (
           <>
-            <Label colors={colors}>Trial days (optional)</Label>
+            <Label semanticColors={semanticColors} tokens={tokens}>Trial days (optional)</Label>
             <TextInput
               value={trialText}
               onChangeText={setTrialText}
               placeholder="0"
               style={styles.input}
-              placeholderTextColor={colors.textMuted}
+              placeholderTextColor={semanticColors.textMuted}
               keyboardType="number-pad"
               maxLength={3}
             />
           </>
         ) : null}
 
-        <Label colors={colors}>Features (one per line)</Label>
+        <Label semanticColors={semanticColors} tokens={tokens}>Features (one per line)</Label>
         <TextInput
           value={featuresText}
           onChangeText={setFeaturesText}
           placeholder={'Weekly check-ins\nCustom workout plan\nMeal plan'}
           style={[styles.input, styles.inputMultiline, { minHeight: 120 }]}
-          placeholderTextColor={colors.textMuted}
+          placeholderTextColor={semanticColors.textMuted}
           multiline
         />
 
@@ -402,7 +476,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
           accessibilityLabel={isEdit ? 'Save changes' : 'Create package'}
         >
           {saving ? (
-            <ActivityIndicator color={colors.textOnPrimary} />
+            <ActivityIndicator color={semanticColors.textOnAccent} />
           ) : (
             <Text style={styles.primaryBtnText}>
               {isEdit ? 'Save changes' : 'Create package'}
@@ -412,6 +486,19 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
 
         {isEdit && original ? (
           <>
+            <TouchableOpacity
+              style={styles.secondaryBtn}
+              onPress={() => {
+                mediumTap();
+                setPreviewOpen(true);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Preview as buyer"
+            >
+              <Ionicons name="eye-outline" size={18} color={semanticColors.accent} />
+              <Text style={styles.secondaryBtnText}>Preview as buyer</Text>
+            </TouchableOpacity>
+
             {original.shareToken ? (
               <TouchableOpacity
                 style={styles.secondaryBtn}
@@ -419,7 +506,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
                 accessibilityRole="button"
                 accessibilityLabel="Share package link"
               >
-                <Ionicons name="share-outline" size={18} color={colors.primary} />
+                <Ionicons name="share-outline" size={18} color={semanticColors.accent} />
                 <Text style={styles.secondaryBtnText}>Share link</Text>
               </TouchableOpacity>
             ) : (
@@ -428,7 +515,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
                 accessibilityRole="text"
                 accessibilityLabel="Share links are coming soon"
               >
-                <Ionicons name="share-outline" size={18} color={colors.textMuted} />
+                <Ionicons name="share-outline" size={18} color={semanticColors.textMuted} />
                 <Text style={styles.secondaryBtnTextDisabled}>
                   Share links are coming soon
                 </Text>
@@ -443,18 +530,18 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
               accessibilityLabel="Archive package"
             >
               {archiving ? (
-                <ActivityIndicator color={colors.warning} />
+                <ActivityIndicator color={tokens.semantic.warning.icon} />
               ) : (
                 <>
                   <Ionicons
                     name="archive-outline"
                     size={18}
-                    color={archived ? colors.textMuted : colors.warning}
+                    color={archived ? semanticColors.textMuted : tokens.semantic.warning.icon}
                   />
                   <Text
                     style={[
                       styles.tertiaryBtnText,
-                      archived && { color: colors.textMuted },
+                      archived && { color: semanticColors.textMuted },
                     ]}
                   >
                     {archived ? 'Archived' : 'Archive package'}
@@ -477,7 +564,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
               accessibilityLabel="Manage content"
             >
               <Text style={styles.linkBtnText}>Manage content</Text>
-              <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+              <Ionicons name="chevron-forward" size={16} color={semanticColors.accent} />
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -492,21 +579,49 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
               accessibilityLabel="View subscribers"
             >
               <Text style={styles.linkBtnText}>View subscribers ({original.subscriberCount})</Text>
-              <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+              <Ionicons name="chevron-forward" size={16} color={semanticColors.accent} />
             </TouchableOpacity>
           </>
         ) : null}
       </ScrollView>
+
+      <Modal
+        visible={previewOpen}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setPreviewOpen(false)}
+      >
+        <View style={styles.container}>
+          <View style={styles.topBar}>
+            <TouchableOpacity
+              onPress={() => setPreviewOpen(false)}
+              style={styles.backBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Close preview"
+            >
+              <Ionicons name="close" size={24} color={semanticColors.textPrimary} />
+            </TouchableOpacity>
+            <Text style={styles.topTitle}>Buyer preview</Text>
+            <View style={styles.backBtn} />
+          </View>
+          {/* coachPreview mode: checkout CTA is disabled and never calls a
+              checkout session. No network fetch — the view model is built from
+              the live draft + saved `original`. */}
+          <PackageDetailSurface package={previewViewModel} mode="coachPreview" />
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
 
 function Label({
   children,
-  colors,
+  semanticColors,
+  tokens,
 }: {
   children: React.ReactNode;
-  colors: ThemeColors;
+  semanticColors: SemanticTokens;
+  tokens: Tokens;
 }) {
   return (
     <Text
@@ -514,7 +629,7 @@ function Label({
         marginTop: 16,
         marginBottom: 6,
         fontSize: 12,
-        color: colors.textSecondary,
+        color: semanticColors.textMuted,
         textTransform: 'uppercase',
         letterSpacing: 0.5,
         fontWeight: '500',
@@ -525,9 +640,9 @@ function Label({
   );
 }
 
-const makeStyles = (colors: ThemeColors) =>
+const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
   StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
+    container: { flex: 1, backgroundColor: semanticColors.bgPrimary },
     center: { justifyContent: 'center', alignItems: 'center' },
     topBar: {
       flexDirection: 'row',
@@ -543,24 +658,42 @@ const makeStyles = (colors: ThemeColors) =>
       justifyContent: 'center',
       alignItems: 'center',
     },
-    topTitle: { fontSize: 18, fontWeight: '500', color: colors.textPrimary },
+    topTitle: { fontSize: 18, fontWeight: '500', color: semanticColors.textPrimary },
     content: { paddingHorizontal: 24, paddingBottom: 60 },
     archivedBanner: {
       flexDirection: 'row',
       gap: 8,
       padding: 10,
       borderRadius: 4,
-      backgroundColor: colors.noticeWarningIconBg,
+      backgroundColor: tokens.semantic.warning.bg,
       marginBottom: 12,
     },
-    archivedText: { flex: 1, fontSize: 12, color: colors.textPrimary },
+    archivedText: { flex: 1, fontSize: 12, color: semanticColors.textPrimary },
+    lockNotice: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 8,
+      marginTop: 10,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      borderRadius: tokens.radius.lg,
+      borderWidth: 1,
+      borderColor: tokens.semantic.warning.border,
+      backgroundColor: tokens.semantic.warning.bg,
+    },
+    lockNoticeText: {
+      flex: 1,
+      fontSize: 12,
+      lineHeight: 17,
+      color: semanticColors.textPrimary,
+    },
     input: {
-      backgroundColor: colors.surface,
+      backgroundColor: semanticColors.bgSurface,
       paddingHorizontal: 14,
       paddingVertical: 12,
       borderRadius: 4,
       fontSize: 15,
-      color: colors.textPrimary,
+      color: semanticColors.textPrimary,
     },
     inputMultiline: {
       minHeight: 80,
@@ -568,7 +701,7 @@ const makeStyles = (colors: ThemeColors) =>
     },
     segment: {
       flexDirection: 'row',
-      backgroundColor: colors.surface,
+      backgroundColor: semanticColors.bgSurface,
       borderRadius: 4,
       padding: 4,
       gap: 4,
@@ -579,22 +712,22 @@ const makeStyles = (colors: ThemeColors) =>
       borderRadius: 2,
       alignItems: 'center',
     },
-    segmentItemActive: { backgroundColor: colors.primary },
-    segmentText: { fontSize: 12, color: colors.textSecondary, fontWeight: '500' },
-    segmentTextActive: { color: colors.textOnPrimary },
+    segmentItemActive: { backgroundColor: semanticColors.accent },
+    segmentText: { fontSize: 12, color: semanticColors.textMuted, fontWeight: '500' },
+    segmentTextActive: { color: semanticColors.textOnAccent },
     primaryBtn: {
       marginTop: 28,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
       gap: 8,
-      backgroundColor: colors.primary,
+      backgroundColor: semanticColors.accent,
       paddingVertical: 14,
       borderRadius: 2,
     },
     primaryBtnDisabled: { opacity: 0.6 },
     primaryBtnText: {
-      color: colors.textOnPrimary,
+      color: semanticColors.textOnAccent,
       fontSize: 15,
       fontWeight: '500',
     },
@@ -607,9 +740,9 @@ const makeStyles = (colors: ThemeColors) =>
       paddingVertical: 14,
       borderRadius: 2,
       borderWidth: 1,
-      borderColor: colors.primary,
+      borderColor: semanticColors.accent,
     },
-    secondaryBtnText: { color: colors.primary, fontSize: 15, fontWeight: '500' },
+    secondaryBtnText: { color: semanticColors.accent, fontSize: 15, fontWeight: '500' },
     secondaryBtnDisabled: {
       marginTop: 12,
       flexDirection: 'row',
@@ -619,11 +752,11 @@ const makeStyles = (colors: ThemeColors) =>
       paddingVertical: 14,
       borderRadius: 2,
       borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.surface,
+      borderColor: semanticColors.border,
+      backgroundColor: semanticColors.bgSurface,
     },
     secondaryBtnTextDisabled: {
-      color: colors.textMuted,
+      color: semanticColors.textMuted,
       fontSize: 14,
       fontWeight: '400',
     },
@@ -636,7 +769,7 @@ const makeStyles = (colors: ThemeColors) =>
       paddingVertical: 14,
       borderRadius: 2,
     },
-    tertiaryBtnText: { color: colors.warning, fontSize: 14, fontWeight: '500' },
+    tertiaryBtnText: { color: tokens.semantic.warning.icon, fontSize: 14, fontWeight: '500' },
     linkBtn: {
       marginTop: 16,
       flexDirection: 'row',
@@ -644,10 +777,10 @@ const makeStyles = (colors: ThemeColors) =>
       justifyContent: 'space-between',
       paddingVertical: 12,
     },
-    linkBtnText: { fontSize: 14, color: colors.primary, fontWeight: '500' },
+    linkBtnText: { fontSize: 14, color: semanticColors.accent, fontWeight: '500' },
     errorText: {
       marginTop: 12,
-      color: colors.error,
+      color: tokens.colors.error,
       fontSize: 13,
     },
   });

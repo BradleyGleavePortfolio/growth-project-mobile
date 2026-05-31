@@ -32,7 +32,8 @@ import type {
   ParamListBase,
 } from '@react-navigation/native';
 
-import { useTheme, type ThemeColors } from '../../../theme/ThemeProvider';
+import { useTheme } from '../../../theme/ThemeProvider';
+import type { SemanticTokens, Tokens } from '../../../theme/tokens';
 import type {
   ScheduledDropAssetType,
   ScheduledDropView,
@@ -263,8 +264,8 @@ export interface DropRowProps {
 }
 
 export function DropRow({ drop, variant, onPress }: DropRowProps) {
-  const { colors } = useTheme();
-  const styles = React.useMemo(() => makeStyles(colors), [colors]);
+  const { semanticColors, tokens } = useTheme();
+  const styles = React.useMemo(() => makeStyles(semanticColors, tokens), [semanticColors, tokens]);
   const tappable = variant === 'delivered' && isTappableDelivered(drop);
   const icon = ASSET_ICON[drop.asset_type] ?? 'cube-outline';
   const typeLabel = ASSET_LABEL[drop.asset_type] ?? 'Item';
@@ -292,7 +293,7 @@ export function DropRow({ drop, variant, onPress }: DropRowProps) {
         <Ionicons
           name={variant === 'upcoming' ? 'lock-closed-outline' : icon}
           size={20}
-          color={variant === 'upcoming' ? colors.textMuted : colors.primary}
+          color={variant === 'upcoming' ? semanticColors.textMuted : semanticColors.accent}
         />
       </View>
       <View style={styles.rowBody}>
@@ -314,7 +315,7 @@ export function DropRow({ drop, variant, onPress }: DropRowProps) {
         <Text style={styles.rowMeta}>{caption}</Text>
       </View>
       {variant === 'delivered' && tappable ? (
-        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        <Ionicons name="chevron-forward" size={18} color={semanticColors.textMuted} />
       ) : null}
     </View>
   );
@@ -345,7 +346,7 @@ export function DropRow({ drop, variant, onPress }: DropRowProps) {
   );
 }
 
-const makeStyles = (colors: ThemeColors) =>
+const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
   StyleSheet.create({
     rowTouchable: {
       borderRadius: 12,
@@ -355,44 +356,44 @@ const makeStyles = (colors: ThemeColors) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: 12,
-      backgroundColor: colors.surface,
+      backgroundColor: semanticColors.bgSurface,
       borderRadius: 12,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: semanticColors.border,
       padding: 12,
     },
     rowLocked: {
-      backgroundColor: colors.background,
+      backgroundColor: semanticColors.bgPrimary,
       borderStyle: 'dashed',
     },
     iconWrap: {
       width: 36,
       height: 36,
       borderRadius: 18,
-      backgroundColor: colors.primaryPale,
+      backgroundColor: tokens.brand[50],
       alignItems: 'center',
       justifyContent: 'center',
     },
     iconWrapLocked: {
-      backgroundColor: colors.surface,
+      backgroundColor: semanticColors.bgSurface,
     },
     rowBody: { flex: 1 },
     rowTypeLabel: {
       fontSize: 10,
-      color: colors.textMuted,
+      color: semanticColors.textMuted,
       textTransform: 'uppercase',
       letterSpacing: 0.5,
       marginBottom: 2,
     },
-    rowTitle: { fontSize: 15, fontWeight: '600', color: colors.textPrimary },
-    rowTitleLocked: { color: colors.textSecondary },
+    rowTitle: { fontSize: 15, fontWeight: '600', color: semanticColors.textPrimary },
+    rowTitleLocked: { color: semanticColors.textMuted },
     rowDesc: {
       fontSize: 12,
-      color: colors.textSecondary,
+      color: semanticColors.textMuted,
       marginTop: 2,
       lineHeight: 16,
     },
-    rowMeta: { fontSize: 12, color: colors.textMuted, marginTop: 4 },
+    rowMeta: { fontSize: 12, color: semanticColors.textMuted, marginTop: 4 },
   });
 
 // Test surface — pure helpers exposed for unit tests.

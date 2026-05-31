@@ -61,7 +61,8 @@ import {
   type RouteProp,
 } from '@react-navigation/native';
 
-import { useTheme, type ThemeColors } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
+import type { SemanticTokens, Tokens } from '../../theme/tokens';
 
 // ─── Route params ─────────────────────────────────────────────────────────────
 
@@ -192,8 +193,8 @@ interface CheckoutErrorState {
 }
 
 export default function BrandedCheckoutWebViewScreen() {
-  const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { semanticColors, tokens } = useTheme();
+  const styles = useMemo(() => makeStyles(semanticColors, tokens), [semanticColors, tokens]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const route = useRoute<BrandedCheckoutRoute>();
   const params = route.params;
@@ -350,7 +351,7 @@ export default function BrandedCheckoutWebViewScreen() {
 
   return (
     <SafeAreaView style={styles.root} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.primaryDark} />
+      <StatusBar barStyle="light-content" backgroundColor={tokens.brand[800]} />
       <View style={styles.header} testID="branded-checkout-header">
         <View style={styles.headerLogoSlot}>
           <View
@@ -380,7 +381,7 @@ export default function BrandedCheckoutWebViewScreen() {
           style={styles.closeBtn}
           testID="branded-checkout-close"
         >
-          <Ionicons name="close" size={24} color={colors.textOnPrimary} />
+          <Ionicons name="close" size={24} color={semanticColors.textOnAccent} />
         </TouchableOpacity>
       </View>
 
@@ -394,7 +395,7 @@ export default function BrandedCheckoutWebViewScreen() {
             <Ionicons
               name="alert-circle"
               size={36}
-              color={colors.error}
+              color={tokens.colors.error}
               style={styles.errorIcon}
             />
             <Text style={styles.errorTitle}>{error.title}</Text>
@@ -460,7 +461,7 @@ export default function BrandedCheckoutWebViewScreen() {
                 : {})}
               style={styles.webview}
             />
-            {loading ? <CheckoutLoadingSkeleton colors={colors} styles={styles} /> : null}
+            {loading ? <CheckoutLoadingSkeleton semanticColors={semanticColors} tokens={tokens} styles={styles} /> : null}
           </>
         )}
       </View>
@@ -496,10 +497,12 @@ function safeHostFor(url: string): string {
 type SkeletonStyles = ReturnType<typeof makeStyles>;
 
 function CheckoutLoadingSkeleton({
-  colors,
+  semanticColors,
+  tokens,
   styles,
 }: {
-  colors: ThemeColors;
+  semanticColors: SemanticTokens;
+  tokens: Tokens;
   styles: SkeletonStyles;
 }) {
   const [reduceMotion, setReduceMotion] = useState<boolean>(false);
@@ -604,7 +607,7 @@ function CheckoutLoadingSkeleton({
         <Animated.View
           style={[
             styles.skeletonButton,
-            { backgroundColor: colors.primary, opacity: reduceMotion ? 0.85 : barOpacity },
+            { backgroundColor: semanticColors.accent, opacity: reduceMotion ? 0.85 : barOpacity },
           ]}
         />
       </View>
@@ -616,18 +619,18 @@ function CheckoutLoadingSkeleton({
 
 // ─── styles ───────────────────────────────────────────────────────────────────
 
-function makeStyles(colors: ThemeColors) {
+function makeStyles(semanticColors: SemanticTokens, tokens: Tokens) {
   return StyleSheet.create({
     root: {
       flex: 1,
-      backgroundColor: colors.primaryDark,
+      backgroundColor: tokens.brand[800],
     },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
       paddingHorizontal: 12,
       paddingVertical: 10,
-      backgroundColor: colors.primaryDark,
+      backgroundColor: tokens.brand[800],
       borderBottomWidth: StyleSheet.hairlineWidth,
       borderBottomColor: 'rgba(255,255,255,0.08)',
     },
@@ -639,12 +642,12 @@ function makeStyles(colors: ThemeColors) {
       width: 32,
       height: 32,
       borderRadius: 8,
-      backgroundColor: colors.gold,
+      backgroundColor: tokens.gold[400],
       alignItems: 'center',
       justifyContent: 'center',
     },
     logoBadgeText: {
-      color: colors.primaryDark,
+      color: tokens.brand[800],
       fontWeight: '600',
       fontSize: 12,
       letterSpacing: 0.5,
@@ -655,12 +658,12 @@ function makeStyles(colors: ThemeColors) {
       paddingHorizontal: 8,
     },
     headerTitle: {
-      color: colors.textOnPrimary,
+      color: semanticColors.textOnAccent,
       fontSize: 17,
       fontWeight: '600',
     },
     headerSubtitle: {
-      color: colors.textOnPrimary,
+      color: semanticColors.textOnAccent,
       opacity: 0.75,
       fontSize: 12,
       marginTop: 2,
@@ -674,11 +677,11 @@ function makeStyles(colors: ThemeColors) {
     },
     body: {
       flex: 1,
-      backgroundColor: colors.background,
+      backgroundColor: semanticColors.bgPrimary,
     },
     webview: {
       flex: 1,
-      backgroundColor: colors.background,
+      backgroundColor: semanticColors.bgPrimary,
     },
     skeleton: {
       ...StyleSheet.absoluteFill,
@@ -686,19 +689,19 @@ function makeStyles(colors: ThemeColors) {
       justifyContent: 'flex-start',
       paddingTop: 48,
       paddingHorizontal: 24,
-      backgroundColor: colors.background,
+      backgroundColor: semanticColors.bgPrimary,
       gap: 24,
     },
     skeletonLogo: {
       width: 56,
       height: 56,
       borderRadius: 14,
-      backgroundColor: colors.gold,
+      backgroundColor: tokens.gold[400],
       alignItems: 'center',
       justifyContent: 'center',
     },
     skeletonLogoText: {
-      color: colors.primaryDark,
+      color: tokens.brand[800],
       fontWeight: '600',
       fontSize: 18,
       letterSpacing: 0.5,
@@ -706,10 +709,10 @@ function makeStyles(colors: ThemeColors) {
     skeletonCard: {
       width: '100%',
       maxWidth: 420,
-      backgroundColor: colors.surface,
+      backgroundColor: semanticColors.bgSurface,
       borderRadius: 16,
       borderWidth: StyleSheet.hairlineWidth,
-      borderColor: colors.border,
+      borderColor: semanticColors.border,
       padding: 20,
       gap: 14,
     },
@@ -717,13 +720,13 @@ function makeStyles(colors: ThemeColors) {
       height: 14,
       width: '55%',
       borderRadius: 6,
-      backgroundColor: colors.primaryPale,
+      backgroundColor: tokens.brand[50],
     },
     skeletonAmountBar: {
       height: 28,
       width: '40%',
       borderRadius: 8,
-      backgroundColor: colors.primaryPale,
+      backgroundColor: tokens.brand[50],
       marginBottom: 4,
     },
     skeletonFieldRow: {
@@ -733,7 +736,7 @@ function makeStyles(colors: ThemeColors) {
       height: 44,
       width: '100%',
       borderRadius: 10,
-      backgroundColor: colors.primaryPale,
+      backgroundColor: tokens.brand[50],
     },
     skeletonButton: {
       height: 48,
@@ -742,7 +745,7 @@ function makeStyles(colors: ThemeColors) {
       marginTop: 4,
     },
     skeletonText: {
-      color: colors.textSecondary,
+      color: semanticColors.textMuted,
       fontSize: 13,
       letterSpacing: 0.2,
     },
@@ -752,25 +755,25 @@ function makeStyles(colors: ThemeColors) {
       justifyContent: 'center',
       paddingHorizontal: 32,
       gap: 8,
-      backgroundColor: colors.background,
+      backgroundColor: semanticColors.bgPrimary,
     },
     errorIcon: {
       marginBottom: 4,
     },
     errorTitle: {
-      color: colors.textPrimary,
+      color: semanticColors.textPrimary,
       fontSize: 18,
       fontWeight: '600',
       textAlign: 'center',
     },
     errorBody: {
-      color: colors.textSecondary,
+      color: semanticColors.textMuted,
       fontSize: 14,
       textAlign: 'center',
       lineHeight: 20,
     },
     errorCode: {
-      color: colors.textMuted,
+      color: semanticColors.textMuted,
       fontSize: 11,
       marginTop: 4,
       fontVariant: ['tabular-nums'],
@@ -780,14 +783,14 @@ function makeStyles(colors: ThemeColors) {
       paddingHorizontal: 20,
       paddingVertical: 12,
       borderRadius: 10,
-      backgroundColor: colors.primary,
+      backgroundColor: semanticColors.accent,
       minHeight: 44,
       minWidth: 160,
       alignItems: 'center',
       justifyContent: 'center',
     },
     errorBtnText: {
-      color: colors.textOnPrimary,
+      color: semanticColors.textOnAccent,
       fontWeight: '600',
       fontSize: 15,
     },
@@ -797,7 +800,7 @@ function makeStyles(colors: ThemeColors) {
       paddingVertical: 12,
       borderRadius: 10,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: semanticColors.border,
       backgroundColor: 'transparent',
       minHeight: 44,
       minWidth: 160,
@@ -805,7 +808,7 @@ function makeStyles(colors: ThemeColors) {
       justifyContent: 'center',
     },
     errorBtnSecondaryText: {
-      color: colors.textPrimary,
+      color: semanticColors.textPrimary,
       fontWeight: '600',
       fontSize: 15,
     },

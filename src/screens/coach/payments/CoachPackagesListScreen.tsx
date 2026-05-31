@@ -24,7 +24,8 @@ import { coachPackagesApi, CoachPackage } from '../../../api/packagesApi';
 import { errorCode, errorMessage, errorStatus } from '../../../types/common';
 import { mediumTap } from '../../../utils/haptics';
 import { track } from '../../../lib/analytics';
-import { useTheme, ThemeColors } from '../../../theme/ThemeProvider';
+import { useTheme } from '../../../theme/ThemeProvider';
+import type { SemanticTokens, Tokens } from '../../../theme/tokens';
 import { formatCurrencyCents } from '../../../utils/currency';
 
 interface Props {
@@ -54,8 +55,8 @@ function packagesConfigCopy(code: string): { title: string; body: string } {
 }
 
 export default function CoachPackagesListScreen({ navigation }: Props) {
-  const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { semanticColors, tokens } = useTheme();
+  const styles = useMemo(() => makeStyles(semanticColors, tokens), [semanticColors, tokens]);
   const [items, setItems] = useState<CoachPackage[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -113,7 +114,7 @@ export default function CoachPackagesListScreen({ navigation }: Props) {
     if (configState) {
       return (
         <View style={styles.emptyWrap}>
-          <Ionicons name="construct-outline" size={32} color={colors.textMuted} />
+          <Ionicons name="construct-outline" size={32} color={semanticColors.textMuted} />
           <Text style={styles.emptyTitle}>{configState.title}</Text>
           <Text style={styles.emptyBody}>{configState.body}</Text>
         </View>
@@ -121,14 +122,14 @@ export default function CoachPackagesListScreen({ navigation }: Props) {
     }
     return (
       <View style={styles.emptyWrap}>
-        <Ionicons name="pricetags-outline" size={32} color={colors.textMuted} />
+        <Ionicons name="pricetags-outline" size={32} color={semanticColors.textMuted} />
         <Text style={styles.emptyTitle}>No packages yet</Text>
         <Text style={styles.emptyBody}>
           Create an offering — a 1:1 plan, a 12-week program, a meal plan
           subscription — and share the link with prospective clients.
         </Text>
         <TouchableOpacity style={styles.primaryBtn} onPress={handleCreate}>
-          <Ionicons name="add" size={18} color={colors.textOnPrimary} />
+          <Ionicons name="add" size={18} color={semanticColors.textOnAccent} />
           <Text style={styles.primaryBtnText}>Create your first package</Text>
         </TouchableOpacity>
       </View>
@@ -144,7 +145,7 @@ export default function CoachPackagesListScreen({ navigation }: Props) {
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={semanticColors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.topTitle}>Packages</Text>
         {!configState ? (
@@ -154,7 +155,7 @@ export default function CoachPackagesListScreen({ navigation }: Props) {
             accessibilityRole="button"
             accessibilityLabel="Create package"
           >
-            <Ionicons name="add" size={24} color={colors.textPrimary} />
+            <Ionicons name="add" size={24} color={semanticColors.textPrimary} />
           </TouchableOpacity>
         ) : (
           <View style={styles.backBtn} />
@@ -163,7 +164,7 @@ export default function CoachPackagesListScreen({ navigation }: Props) {
 
       {loading ? (
         <View style={styles.loadingWrap}>
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator color={semanticColors.accent} />
         </View>
       ) : (
         <FlatList
@@ -184,13 +185,13 @@ export default function CoachPackagesListScreen({ navigation }: Props) {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor={colors.primary}
+              tintColor={semanticColors.accent}
             />
           }
           renderItem={({ item }) => (
             <PackageRow
               pkg={item}
-              colors={colors}
+              semanticColors={semanticColors} tokens={tokens}
               styles={styles}
               onPress={() => handleOpenItem(item)}
             />
@@ -203,12 +204,14 @@ export default function CoachPackagesListScreen({ navigation }: Props) {
 
 function PackageRow({
   pkg,
-  colors,
+  semanticColors,
+  tokens,
   styles,
   onPress,
 }: {
   pkg: CoachPackage;
-  colors: ThemeColors;
+  semanticColors: SemanticTokens;
+  tokens: Tokens;
   styles: ReturnType<typeof makeStyles>;
   onPress: () => void;
 }) {
@@ -234,8 +237,8 @@ function PackageRow({
             style={[
               styles.pillText,
               archived
-                ? { color: colors.textMuted }
-                : { color: colors.primary },
+                ? { color: semanticColors.textMuted }
+                : { color: semanticColors.accent },
             ]}
           >
             {archived ? 'Archived' : pkg.status === 'draft' ? 'Draft' : 'Active'}
@@ -267,9 +270,9 @@ function PackageRow({
   );
 }
 
-const makeStyles = (colors: ThemeColors) =>
+const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
   StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
+    container: { flex: 1, backgroundColor: semanticColors.bgPrimary },
     topBar: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -284,7 +287,7 @@ const makeStyles = (colors: ThemeColors) =>
       justifyContent: 'center',
       alignItems: 'center',
     },
-    topTitle: { fontSize: 18, fontWeight: '500', color: colors.textPrimary },
+    topTitle: { fontSize: 18, fontWeight: '500', color: semanticColors.textPrimary },
     loadingWrap: { paddingVertical: 60, alignItems: 'center' },
     content: { paddingHorizontal: 24, paddingBottom: 40, gap: 12 },
     contentEmpty: { flexGrow: 1, paddingHorizontal: 24, paddingBottom: 40 },
@@ -292,34 +295,34 @@ const makeStyles = (colors: ThemeColors) =>
     emptyTitle: {
       fontSize: 18,
       fontWeight: '500',
-      color: colors.textPrimary,
+      color: semanticColors.textPrimary,
       marginTop: 8,
     },
     emptyBody: {
       fontSize: 14,
-      color: colors.textSecondary,
+      color: semanticColors.textMuted,
       textAlign: 'center',
       paddingHorizontal: 8,
       lineHeight: 20,
     },
-    errorCode: { fontSize: 11, color: colors.textMuted, marginTop: 4 },
+    errorCode: { fontSize: 11, color: semanticColors.textMuted, marginTop: 4 },
     primaryBtn: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 8,
-      backgroundColor: colors.primary,
+      backgroundColor: semanticColors.accent,
       paddingHorizontal: 18,
       paddingVertical: 12,
       borderRadius: 2,
       marginTop: 12,
     },
     primaryBtnText: {
-      color: colors.textOnPrimary,
+      color: semanticColors.textOnAccent,
       fontSize: 14,
       fontWeight: '500',
     },
     card: {
-      backgroundColor: colors.surface,
+      backgroundColor: semanticColors.bgSurface,
       borderRadius: 4,
       padding: 16,
     },
@@ -335,30 +338,30 @@ const makeStyles = (colors: ThemeColors) =>
       flex: 1,
       fontSize: 16,
       fontWeight: '500',
-      color: colors.textPrimary,
+      color: semanticColors.textPrimary,
     },
     pill: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
-    pillActive: { backgroundColor: colors.primaryPale },
-    pillArchived: { backgroundColor: colors.surfaceElevated },
+    pillActive: { backgroundColor: tokens.brand[50] },
+    pillArchived: { backgroundColor: semanticColors.bgSurface },
     pillText: { fontSize: 11, fontWeight: '500', textTransform: 'uppercase' },
     cardPrice: {
       fontSize: 18,
       fontWeight: '500',
-      color: colors.textPrimary,
+      color: semanticColors.textPrimary,
       marginBottom: 6,
     },
-    cardPriceMeta: { fontSize: 13, fontWeight: '400', color: colors.textSecondary },
+    cardPriceMeta: { fontSize: 13, fontWeight: '400', color: semanticColors.textMuted },
     cardMetaRow: {
       flexDirection: 'row',
       justifyContent: 'space-between',
       marginTop: 4,
     },
-    cardMeta: { fontSize: 12, color: colors.textSecondary },
+    cardMeta: { fontSize: 12, color: semanticColors.textMuted },
     errorBanner: {
-      backgroundColor: colors.noticeWarningIconBg,
+      backgroundColor: tokens.semantic.warning.bg,
       padding: 10,
       borderRadius: 4,
       marginBottom: 12,
     },
-    errorBannerText: { fontSize: 13, color: colors.textPrimary },
+    errorBannerText: { fontSize: 13, color: semanticColors.textPrimary },
   });

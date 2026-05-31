@@ -85,27 +85,38 @@ jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: jest.fn(), replace: jest.fn() }),
 }));
 
-jest.mock('../theme/ThemeProvider', () => ({
-  useTheme: () => ({
-    colors: {
-      background: '#F5EFE4',
-      surface: '#F1E8D5',
-      primary: '#2C4A36',
-      primaryTint: 'rgba(44,74,54,0.06)',
-      textPrimary: '#1A1A18',
-      textSecondary: '#3D3D3A',
-      textMuted: '#B1A89F',
-      textOnPrimary: '#F5EFE4',
-      border: 'rgba(176,141,87,0.2)',
-      divider: 'rgba(176,141,87,0.15)',
-      success: '#2C4A36',
-      warning: '#C5A253',
-      error: '#4A0404',
-      info: '#1A73E8',
-      streak: '#C5A253',
-    },
-  }),
-}));
+// Day1Win mounts the package-selection path, and PackageSelectionSheet was
+// migrated to semantic tokens (PR-18 M1), so it now destructures
+// `semanticColors` and `tokens` from useTheme. Mock against the real token
+// module so the full theme surface is present and stays in sync with the
+// source of truth instead of a hand-maintained partial.
+jest.mock('../theme/ThemeProvider', () => {
+  const realTokens = jest.requireActual('../theme/tokens').default;
+  return {
+    useTheme: () => ({
+      colors: {
+        background: '#F5EFE4',
+        surface: '#F1E8D5',
+        primary: '#2C4A36',
+        primaryTint: 'rgba(44,74,54,0.06)',
+        textPrimary: '#1A1A18',
+        textSecondary: '#3D3D3A',
+        textMuted: '#B1A89F',
+        textOnPrimary: '#F5EFE4',
+        border: 'rgba(176,141,87,0.2)',
+        divider: 'rgba(176,141,87,0.15)',
+        success: '#2C4A36',
+        warning: '#C5A253',
+        error: '#4A0404',
+        info: '#1A73E8',
+        streak: '#C5A253',
+      },
+      tokens: realTokens,
+      semanticColors: realTokens.lightTokens,
+      colorScheme: 'light',
+    }),
+  };
+});
 
 jest.mock('../lib/analytics', () => ({
   track: jest.fn(),

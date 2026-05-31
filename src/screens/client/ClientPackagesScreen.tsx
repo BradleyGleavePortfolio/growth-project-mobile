@@ -59,7 +59,8 @@ import {
   type ClientPaymentStatus,
   type PaymentsResult,
 } from '../../api/clientPaymentsApi';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
+import tokens, { type SemanticTokens, type Tokens } from '../../theme/tokens';
 import { featureFlags } from '../../config/featureFlags';
 
 function formatMoney(amount: number, currency: string): string {
@@ -92,7 +93,7 @@ function DunningBanner({
 }) {
   return (
     <View style={styles.dunningBanner}>
-      <Ionicons name="warning" size={18} color="#fff" />
+      <Ionicons name="warning" size={18} color={tokens.neutral[0]} />
       <View style={{ flex: 1 }}>
         <Text style={styles.dunningText}>{dunning.summary}</Text>
         {dunning.grace_until ? (
@@ -127,8 +128,11 @@ function DunningBanner({
 }
 
 export default function ClientPackagesScreen() {
-  const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { semanticColors } = useTheme();
+  // `tokens` is the static design-token module (mode-agnostic) imported at the
+  // top of this file, so it does not need to come from the theme context and
+  // is referenceable from module-scope sub-components (e.g. DunningBanner).
+  const styles = useMemo(() => makeStyles(semanticColors, tokens), [semanticColors]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
 
   const [packages, setPackages] = useState<PaymentsResult<ClientCoachPackage[]> | null>(null);
@@ -271,7 +275,7 @@ export default function ClientPackagesScreen() {
       style={styles.container}
       contentContainerStyle={styles.content}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={semanticColors.accent} />
       }
     >
       <Text style={styles.header}>Coaching plans</Text>
@@ -336,7 +340,7 @@ export default function ClientPackagesScreen() {
               <Text style={styles.currentPlanCtaText}>
                 View what&apos;s included
               </Text>
-              <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+              <Ionicons name="chevron-forward" size={16} color={semanticColors.accent} />
             </TouchableOpacity>
           ) : null}
         </View>
@@ -345,7 +349,7 @@ export default function ClientPackagesScreen() {
       {checkoutError ? (
         <>
           <View style={styles.errorBanner}>
-            <Ionicons name="alert-circle-outline" size={18} color="#fff" />
+            <Ionicons name="alert-circle-outline" size={18} color={tokens.neutral[0]} />
             <Text style={styles.errorBannerText}>{checkoutError}</Text>
           </View>
           <TouchableOpacity
@@ -362,7 +366,7 @@ export default function ClientPackagesScreen() {
       {/* Packages list */}
       {notConfigured ? (
         <View style={styles.gate}>
-          <Ionicons name="cube-outline" size={36} color={colors.textMuted} />
+          <Ionicons name="cube-outline" size={36} color={semanticColors.textMuted} />
           <Text style={styles.gateTitle}>No self-serve plans yet</Text>
           <Text style={styles.gateBody}>
             Your coach handles access directly. Message them to start or
@@ -430,7 +434,7 @@ export default function ClientPackagesScreen() {
                   <View style={styles.pkgFeatures}>
                     {(pkg.features ?? []).map((feat, i) => (
                       <View key={i} style={styles.pkgFeatureRow}>
-                        <Ionicons name="checkmark" size={14} color={colors.primary} />
+                        <Ionicons name="checkmark" size={14} color={semanticColors.accent} />
                         <Text style={styles.pkgFeatureText}>{feat}</Text>
                       </View>
                     ))}
@@ -449,9 +453,20 @@ export default function ClientPackagesScreen() {
                   }
                 >
                   {busy ? (
-                    <ActivityIndicator color={colors.textOnPrimary} />
+                    <ActivityIndicator
+                      color={
+                        current || busy
+                          ? semanticColors.textOnDisabled
+                          : semanticColors.textOnAccent
+                      }
+                    />
                   ) : (
-                    <Text style={styles.buyBtnText}>
+                    <Text
+                      style={[
+                        styles.buyBtnText,
+                        (current || busy) && styles.buyBtnTextDisabled,
+                      ]}
+                    >
                       {current
                         ? 'Current plan'
                         : pkg.type === 'recurring'
@@ -468,7 +483,7 @@ export default function ClientPackagesScreen() {
         )
       ) : packages.reason === 'error' ? (
         <TouchableOpacity onPress={load} style={styles.errorBanner}>
-          <Ionicons name="alert-circle-outline" size={18} color="#fff" />
+          <Ionicons name="alert-circle-outline" size={18} color={tokens.neutral[0]} />
           <Text style={styles.errorBannerText}>{packages.message} Tap to retry.</Text>
         </TouchableOpacity>
       ) : null}
@@ -482,20 +497,20 @@ export default function ClientPackagesScreen() {
   );
 }
 
-const makeStyles = (colors: ThemeColors) =>
+const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
   StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
+    container: { flex: 1, backgroundColor: semanticColors.bgPrimary },
     content: { paddingHorizontal: 20, paddingTop: 56, paddingBottom: 40 },
     center: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: colors.background,
+      backgroundColor: semanticColors.bgPrimary,
     },
-    header: { fontSize: 28, fontWeight: '600', color: colors.textPrimary, marginBottom: 4 },
+    header: { fontSize: 28, fontWeight: '600', color: semanticColors.textPrimary, marginBottom: 4 },
     subheader: {
       fontSize: 13,
-      color: colors.textSecondary,
+      color: semanticColors.textMuted,
       lineHeight: 18,
       marginBottom: 16,
     },
@@ -503,37 +518,37 @@ const makeStyles = (colors: ThemeColors) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: 10,
-      backgroundColor: colors.error,
+      backgroundColor: tokens.colors.error,
       padding: 12,
       borderRadius: 8,
       marginBottom: 16,
     },
-    dunningText: { color: '#fff', fontSize: 13, fontWeight: '500' },
-    dunningSub: { color: '#fff', fontSize: 11, opacity: 0.85, marginTop: 2 },
+    dunningText: { color: tokens.neutral[0], fontSize: 13, fontWeight: '500' },
+    dunningSub: { color: tokens.neutral[0], fontSize: 11, opacity: 0.85, marginTop: 2 },
     dunningBtn: {
-      backgroundColor: '#fff',
+      backgroundColor: tokens.neutral[0],
       paddingHorizontal: 12,
       paddingVertical: 6,
       borderRadius: 6,
     },
-    dunningBtnText: { color: colors.error, fontWeight: '600', fontSize: 12 },
+    dunningBtnText: { color: tokens.colors.error, fontWeight: '600', fontSize: 12 },
     currentPlanCard: {
-      backgroundColor: colors.surface,
+      backgroundColor: semanticColors.bgSurface,
       borderRadius: 12,
       padding: 14,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: semanticColors.border,
       marginBottom: 16,
     },
     currentPlanLabel: {
       fontSize: 11,
-      color: colors.textMuted,
+      color: semanticColors.textMuted,
       textTransform: 'uppercase',
       letterSpacing: 0.4,
       marginBottom: 4,
     },
-    currentPlanName: { fontSize: 18, fontWeight: '600', color: colors.textPrimary },
-    currentPlanSub: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+    currentPlanName: { fontSize: 18, fontWeight: '600', color: semanticColors.textPrimary },
+    currentPlanSub: { fontSize: 12, color: semanticColors.textMuted, marginTop: 2 },
     currentPlanCta: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -541,77 +556,81 @@ const makeStyles = (colors: ThemeColors) =>
       marginTop: 12,
       paddingTop: 12,
       borderTopWidth: 1,
-      borderTopColor: colors.border,
+      borderTopColor: semanticColors.border,
     },
     currentPlanCtaText: {
       fontSize: 14,
-      color: colors.primary,
+      color: semanticColors.accent,
       fontWeight: '600',
     },
     errorBanner: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 8,
-      backgroundColor: colors.error,
+      backgroundColor: tokens.colors.error,
       paddingVertical: 10,
       paddingHorizontal: 12,
       borderRadius: 8,
       marginBottom: 12,
     },
-    errorBannerText: { color: '#fff', fontSize: 13, flex: 1 },
+    errorBannerText: { color: tokens.neutral[0], fontSize: 13, flex: 1 },
     gate: { alignItems: 'center', paddingVertical: 36, paddingHorizontal: 16 },
-    gateTitle: { fontSize: 18, fontWeight: '600', color: colors.textPrimary, marginTop: 12 },
+    gateTitle: { fontSize: 18, fontWeight: '600', color: semanticColors.textPrimary, marginTop: 12 },
     gateBody: {
       fontSize: 14,
-      color: colors.textSecondary,
+      color: semanticColors.textMuted,
       textAlign: 'center',
       marginTop: 8,
       lineHeight: 20,
     },
     cta: {
       marginTop: 20,
-      backgroundColor: colors.primary,
+      backgroundColor: semanticColors.accent,
       borderRadius: 10,
       paddingHorizontal: 20,
       paddingVertical: 12,
     },
-    ctaText: { color: colors.textOnPrimary, fontWeight: '600', fontSize: 14 },
+    ctaText: { color: semanticColors.textOnAccent, fontWeight: '600', fontSize: 14 },
     pkgCard: {
-      backgroundColor: colors.surface,
+      backgroundColor: semanticColors.bgSurface,
       borderRadius: 12,
       padding: 16,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: semanticColors.border,
       marginBottom: 12,
     },
     pkgHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-    pkgName: { fontSize: 17, fontWeight: '600', color: colors.textPrimary, flex: 1 },
+    pkgName: { fontSize: 17, fontWeight: '600', color: semanticColors.textPrimary, flex: 1 },
     currentPill: {
-      backgroundColor: colors.primaryPale,
+      backgroundColor: tokens.brand[50],
       paddingHorizontal: 10,
       paddingVertical: 3,
       borderRadius: 999,
     },
-    currentPillText: { color: colors.primary, fontSize: 10, fontWeight: '600', textTransform: 'uppercase' },
-    pkgPrice: { fontSize: 22, fontWeight: '600', color: colors.textPrimary, marginTop: 6 },
-    pkgInterval: { fontSize: 13, fontWeight: '400', color: colors.textSecondary },
-    pkgTrial: { fontSize: 12, color: colors.success, marginTop: 2 },
-    pkgDesc: { fontSize: 13, color: colors.textSecondary, marginTop: 8, lineHeight: 18 },
+    currentPillText: { color: semanticColors.accent, fontSize: 10, fontWeight: '600', textTransform: 'uppercase' },
+    pkgPrice: { fontSize: 22, fontWeight: '600', color: semanticColors.textPrimary, marginTop: 6 },
+    pkgInterval: { fontSize: 13, fontWeight: '400', color: semanticColors.textMuted },
+    pkgTrial: { fontSize: 12, color: tokens.colors.forest, marginTop: 2 },
+    pkgDesc: { fontSize: 13, color: semanticColors.textMuted, marginTop: 8, lineHeight: 18 },
     pkgFeatures: { marginTop: 10, gap: 6 },
     pkgFeatureRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    pkgFeatureText: { fontSize: 13, color: colors.textPrimary, flex: 1 },
+    pkgFeatureText: { fontSize: 13, color: semanticColors.textPrimary, flex: 1 },
     buyBtn: {
       marginTop: 14,
-      backgroundColor: colors.primary,
+      backgroundColor: semanticColors.accent,
       paddingVertical: 12,
       borderRadius: 8,
       alignItems: 'center',
     },
-    buyBtnDisabled: { backgroundColor: colors.textMuted, opacity: 0.55 },
-    buyBtnText: { color: colors.textOnPrimary, fontWeight: '600', fontSize: 14 },
+    // Explicit disabled fill + label tokens (no parent opacity). The previous
+    // opacity-on-textMuted treatment composited to ~2.05–2.24:1 for the 14px
+    // semibold label; disabledBg + textOnDisabled clear AA in both modes.
+    buyBtnDisabled: { backgroundColor: semanticColors.disabledBg },
+    buyBtnText: { color: semanticColors.textOnAccent, fontWeight: '600', fontSize: 14 },
+    buyBtnTextDisabled: { color: semanticColors.textOnDisabled },
     fineprint: {
       fontSize: 11,
-      color: colors.textMuted,
+      color: semanticColors.textMuted,
       textAlign: 'center',
       marginTop: 20,
       lineHeight: 16,
@@ -623,7 +642,7 @@ const makeStyles = (colors: ThemeColors) =>
     },
     refreshLinkText: {
       fontSize: 13,
-      color: colors.primary,
+      color: semanticColors.accent,
       textAlign: 'center',
     },
   });

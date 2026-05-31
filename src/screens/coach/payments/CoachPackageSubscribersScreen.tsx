@@ -21,7 +21,8 @@ import type { NavigationProp, ParamListBase, RouteProp } from '@react-navigation
 
 import { coachPackagesApi, PackageSubscribersResponse, PackageSubscriber } from '../../../api/packagesApi';
 import { errorMessage, errorStatus } from '../../../types/common';
-import { useTheme, ThemeColors } from '../../../theme/ThemeProvider';
+import { useTheme } from '../../../theme/ThemeProvider';
+import type { SemanticTokens, Tokens } from '../../../theme/tokens';
 import { formatCurrencyCents } from '../../../utils/currency';
 
 type ParamList = {
@@ -48,8 +49,8 @@ function formatDate(iso: string | null | undefined): string | null {
 }
 
 export default function CoachPackageSubscribersScreen({ navigation, route }: Props) {
-  const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { semanticColors, tokens } = useTheme();
+  const styles = useMemo(() => makeStyles(semanticColors, tokens), [semanticColors, tokens]);
   const { packageId, title } = route.params;
   const [data, setData] = useState<PackageSubscribersResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -99,7 +100,7 @@ export default function CoachPackageSubscribersScreen({ navigation, route }: Pro
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          <Ionicons name="arrow-back" size={24} color={semanticColors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.topTitle} numberOfLines={1}>
           {title}
@@ -109,7 +110,7 @@ export default function CoachPackageSubscribersScreen({ navigation, route }: Pro
 
       {loading ? (
         <View style={styles.loadingWrap}>
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator color={semanticColors.accent} />
         </View>
       ) : (
         <FlatList
@@ -138,19 +139,19 @@ export default function CoachPackageSubscribersScreen({ navigation, route }: Pro
                 <Ionicons
                   name="construct-outline"
                   size={28}
-                  color={colors.textMuted}
+                  color={semanticColors.textMuted}
                 />
                 <Text style={styles.emptyTitle}>Not available</Text>
                 <Text style={styles.emptyBody}>{unavailable}</Text>
               </View>
             ) : error ? (
               <View style={styles.emptyWrap}>
-                <Ionicons name="alert-circle-outline" size={28} color={colors.error} />
+                <Ionicons name="alert-circle-outline" size={28} color={tokens.colors.error} />
                 <Text style={styles.emptyBody}>{error}</Text>
               </View>
             ) : (
               <View style={styles.emptyWrap}>
-                <Ionicons name="people-outline" size={28} color={colors.textMuted} />
+                <Ionicons name="people-outline" size={28} color={semanticColors.textMuted} />
                 <Text style={styles.emptyTitle}>No subscribers yet</Text>
                 <Text style={styles.emptyBody}>
                   Share this package's link to start enrolling clients.
@@ -162,7 +163,7 @@ export default function CoachPackageSubscribersScreen({ navigation, route }: Pro
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor={colors.primary}
+              tintColor={semanticColors.accent}
             />
           }
           renderItem={({ item }) => {
@@ -190,9 +191,9 @@ export default function CoachPackageSubscribersScreen({ navigation, route }: Pro
                     <Text
                       style={[
                         styles.pillText,
-                        copy.tone === 'ok' && { color: colors.primary },
-                        copy.tone === 'attention' && { color: colors.warning },
-                        copy.tone === 'muted' && { color: colors.textMuted },
+                        copy.tone === 'ok' && { color: semanticColors.accent },
+                        copy.tone === 'attention' && { color: tokens.semantic.warning.icon },
+                        copy.tone === 'muted' && { color: semanticColors.textMuted },
                       ]}
                     >
                       {copy.label}
@@ -211,9 +212,9 @@ export default function CoachPackageSubscribersScreen({ navigation, route }: Pro
   );
 }
 
-const makeStyles = (colors: ThemeColors) =>
+const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
   StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
+    container: { flex: 1, backgroundColor: semanticColors.bgPrimary },
     topBar: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -228,7 +229,7 @@ const makeStyles = (colors: ThemeColors) =>
       textAlign: 'center',
       fontSize: 16,
       fontWeight: '500',
-      color: colors.textPrimary,
+      color: semanticColors.textPrimary,
     },
     loadingWrap: { paddingVertical: 60, alignItems: 'center' },
     content: { paddingHorizontal: 16, paddingBottom: 40, gap: 8 },
@@ -240,7 +241,7 @@ const makeStyles = (colors: ThemeColors) =>
     },
     summaryItem: {
       flex: 1,
-      backgroundColor: colors.surface,
+      backgroundColor: semanticColors.bgSurface,
       borderRadius: 4,
       padding: 14,
       alignItems: 'center',
@@ -248,42 +249,42 @@ const makeStyles = (colors: ThemeColors) =>
     summaryValue: {
       fontSize: 20,
       fontWeight: '500',
-      color: colors.textPrimary,
+      color: semanticColors.textPrimary,
     },
     summaryLabel: {
       fontSize: 11,
-      color: colors.textSecondary,
+      color: semanticColors.textMuted,
       textTransform: 'uppercase',
       letterSpacing: 0.5,
       marginTop: 2,
     },
     row: {
       flexDirection: 'row',
-      backgroundColor: colors.surface,
+      backgroundColor: semanticColors.bgSurface,
       borderRadius: 4,
       padding: 14,
       alignItems: 'center',
       gap: 12,
     },
     rowMain: { flex: 1 },
-    rowName: { fontSize: 14, color: colors.textPrimary, fontWeight: '500' },
-    rowMeta: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+    rowName: { fontSize: 14, color: semanticColors.textPrimary, fontWeight: '500' },
+    rowMeta: { fontSize: 12, color: semanticColors.textMuted, marginTop: 2 },
     rowRight: { alignItems: 'flex-end', gap: 4 },
     pill: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
-    pillOk: { backgroundColor: colors.primaryPale },
-    pillAttention: { backgroundColor: colors.noticeWarningIconBg },
-    pillMuted: { backgroundColor: colors.surfaceElevated },
+    pillOk: { backgroundColor: tokens.brand[50] },
+    pillAttention: { backgroundColor: tokens.semantic.warning.bg },
+    pillMuted: { backgroundColor: semanticColors.bgSurface },
     pillText: { fontSize: 10, fontWeight: '500', textTransform: 'uppercase' },
-    rowAmount: { fontSize: 12, color: colors.textPrimary, fontWeight: '500' },
+    rowAmount: { fontSize: 12, color: semanticColors.textPrimary, fontWeight: '500' },
     emptyWrap: {
       paddingVertical: 60,
       alignItems: 'center',
       gap: 10,
     },
-    emptyTitle: { fontSize: 16, fontWeight: '500', color: colors.textPrimary },
+    emptyTitle: { fontSize: 16, fontWeight: '500', color: semanticColors.textPrimary },
     emptyBody: {
       fontSize: 13,
-      color: colors.textSecondary,
+      color: semanticColors.textMuted,
       textAlign: 'center',
       paddingHorizontal: 24,
       lineHeight: 18,

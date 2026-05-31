@@ -93,25 +93,38 @@ describe('CoachPackageContents — nav + wiring source guards', () => {
 
 // ── RTL mount ─────────────────────────────────────────────────────────────────
 
-const THEME_COLORS = {
-  background: '#F5EFE4',
-  surface: '#F1E8D5',
-  primary: '#2C4A36',
-  textPrimary: '#1A1A18',
-  textSecondary: '#3D3D3A',
-  textMuted: '#B1A89F',
-  textOnPrimary: '#F5EFE4',
-  border: 'rgba(176,141,87,0.2)',
-  divider: 'rgba(176,141,87,0.15)',
-  success: '#2C4A36',
-  warning: '#C5A253',
-  error: '#4A0404',
-  info: '#1A73E8',
-};
-
-jest.mock('../theme/ThemeProvider', () => ({
-  useTheme: () => ({ colors: THEME_COLORS }),
-}));
+// Theme mock — vends the real design-token module + light semantic tokens so
+// the screen's `useTheme().semanticColors` / `tokens` access resolves against
+// the production shapes (Phase-11 semantic migration, PR-18 M1).
+jest.mock('../theme/ThemeProvider', () => {
+  const tokensModule = jest.requireActual('../theme/tokens');
+  const realTokens = tokensModule.default;
+  const CanonicalColors = jest.requireActual('../constants/colors').default;
+  // Legacy flat `colors` map (still consumed by non-scoped child components
+  // that have not yet migrated) PLUS the Phase-11 semantic tokens the scoped
+  // PR-18 M1 screens now use.
+  const colors = {
+    ...CanonicalColors,
+    dark: CanonicalColors.textPrimary,
+    white: CanonicalColors.textOnPrimary,
+    gold: CanonicalColors.warning,
+    orange: CanonicalColors.error,
+  };
+  return {
+    useTheme: () => ({
+      colors,
+      tokens: realTokens,
+      semanticColors: realTokens.lightTokens,
+      tierColors: {
+        accentBorder: realTokens.colors.forest,
+        accentBg: 'rgba(44,74,54,0.06)',
+        accentFg: realTokens.colors.forest,
+        badgeShadow: realTokens.shadows.sm,
+      },
+      colorScheme: 'light',
+    }),
+  };
+});
 
 jest.mock('expo-font', () => ({ isLoaded: () => true }));
 
@@ -248,9 +261,14 @@ describe('CoachPackageContentsScreen — RTL mount', () => {
     const { getByTestId, getByText } = render(
       <CoachPackageContentsScreen navigation={navigation} route={route} />,
     );
-    await waitFor(() => {
-      expect(getByTestId('content-row-c1')).toBeTruthy();
-    });
+    // Explicit waitFor budget so the initial async list load is never raced
+    // by Jest's 5s default test timeout under a slow CI harness (R2 P3).
+    await waitFor(
+      () => {
+        expect(getByTestId('content-row-c1')).toBeTruthy();
+      },
+      { timeout: 10000 },
+    );
     expect(getByText('Week 1 Program')).toBeTruthy();
   });
 
@@ -284,17 +302,26 @@ describe('CoachPackageContentsScreen — RTL mount', () => {
     const { getByTestId } = render(
       <CoachPackageContentsScreen navigation={navigation} route={route} />,
     );
-    await waitFor(() => expect(getByTestId('content-empty')).toBeTruthy());
+    await waitFor(
+      () => expect(getByTestId('content-empty')).toBeTruthy(),
+      { timeout: 10000 },
+    );
 
     fireEvent.press(getByTestId('content-add-button'));
-    await waitFor(() => expect(getByTestId('content-attach-form')).toBeTruthy());
+    await waitFor(
+      () => expect(getByTestId('content-attach-form')).toBeTruthy(),
+      { timeout: 10000 },
+    );
 
     fireEvent.changeText(getByTestId('content-attach-asset-id'), 'asset-xyz');
     fireEvent.press(getByTestId('content-attach-submit'));
 
-    await waitFor(() => {
-      expect(mockAttach).toHaveBeenCalledTimes(1);
-    });
+    await waitFor(
+      () => {
+        expect(mockAttach).toHaveBeenCalledTimes(1);
+      },
+      { timeout: 10000 },
+    );
     const callArgs = mockAttach.mock.calls[0];
     // attach(packageId, body, key)
     expect(callArgs[0]).toBe('pkg1');

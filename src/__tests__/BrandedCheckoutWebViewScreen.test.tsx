@@ -67,25 +67,38 @@ jest.mock('@react-navigation/native', () => ({
   }),
 }));
 
-jest.mock('../theme/ThemeProvider', () => ({
-  useTheme: () => ({
-    colors: {
-      primary: '#2C4A36',
-      primaryDark: '#1B2E22',
-      primaryPale: '#E8E0CF',
-      background: '#F5EFE4',
-      surface: '#FFFFFF',
-      border: '#E0D8C8',
-      textPrimary: '#1A1A18',
-      textSecondary: '#3D3D3A',
-      textMuted: '#B1A89F',
-      textOnPrimary: '#F5EFE4',
-      gold: '#C5A253',
-      error: '#4A0404',
-      success: '#1F6B3A',
-    },
-  }),
-}));
+// Theme mock — vends the real design-token module + light semantic tokens so
+// the screen's `useTheme().semanticColors` / `tokens` access resolves against
+// the production shapes (Phase-11 semantic migration, PR-18 M1).
+jest.mock('../theme/ThemeProvider', () => {
+  const tokensModule = jest.requireActual('../theme/tokens');
+  const realTokens = tokensModule.default;
+  const CanonicalColors = jest.requireActual('../constants/colors').default;
+  // Legacy flat `colors` map (still consumed by non-scoped child components
+  // that have not yet migrated) PLUS the Phase-11 semantic tokens the scoped
+  // PR-18 M1 screens now use.
+  const colors = {
+    ...CanonicalColors,
+    dark: CanonicalColors.textPrimary,
+    white: CanonicalColors.textOnPrimary,
+    gold: CanonicalColors.warning,
+    orange: CanonicalColors.error,
+  };
+  return {
+    useTheme: () => ({
+      colors,
+      tokens: realTokens,
+      semanticColors: realTokens.lightTokens,
+      tierColors: {
+        accentBorder: realTokens.colors.forest,
+        accentBg: 'rgba(44,74,54,0.06)',
+        accentFg: realTokens.colors.forest,
+        badgeShadow: realTokens.shadows.sm,
+      },
+      colorScheme: 'light',
+    }),
+  };
+});
 
 jest.mock('react-native-safe-area-context', () => {
   const React = require('react');
@@ -136,6 +149,11 @@ import BrandedCheckoutWebViewScreen, {
   isOriginAllowed,
   parseReturnDeepLink,
 } from '../screens/client/BrandedCheckoutWebViewScreen';
+import {
+  PACKAGE_CHECKOUT_SUCCESS_URL,
+  PACKAGE_CHECKOUT_CANCEL_URL,
+  PACKAGE_CHECKOUT_RETURN_SCHEME,
+} from '../api/packagesApi';
 
 beforeEach(() => {
   mockNavigate.mockClear();
@@ -589,6 +607,24 @@ describe('parseReturnDeepLink — exact, not prefix', () => {
         'com.growthproject.app',
       ),
     ).toBeNull();
+  });
+
+  // P0 fix: the public-package checkout redirect URLs minted by packagesApi
+  // MUST round-trip through this parser under the returnScheme the
+  // PackageCheckoutScreen passes. The audited bug minted
+  // `growthproject://checkout/return` (scheme + path mismatch) so a completed
+  // payment was never intercepted and the buyer never reached CheckoutReturn.
+  it('parses the packagesApi-minted public checkout redirect URLs (P0)', () => {
+    const mintedSuccess = PACKAGE_CHECKOUT_SUCCESS_URL.replace(
+      '{CHECKOUT_SESSION_ID}',
+      'cs_test_abc123',
+    );
+    expect(parseReturnDeepLink(mintedSuccess, PACKAGE_CHECKOUT_RETURN_SCHEME)).toEqual(
+      { outcome: 'success', sessionId: 'cs_test_abc123' },
+    );
+    expect(
+      parseReturnDeepLink(PACKAGE_CHECKOUT_CANCEL_URL, PACKAGE_CHECKOUT_RETURN_SCHEME),
+    ).toEqual({ outcome: 'cancel' });
   });
 });
 
