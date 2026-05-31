@@ -12,6 +12,7 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   Share,
@@ -43,6 +44,10 @@ import { useTheme } from '../../../theme/ThemeProvider';
 import type { SemanticTokens, Tokens } from '../../../theme/tokens';
 import { parseDollarsToCents } from '../../../utils/currency';
 import { buildPackageShareUrl } from '../../../utils/packageShare';
+import { useCurrentUser } from '../../../hooks/useCurrentUser';
+import PackageDetailSurface, {
+  type PackageDetailViewModel,
+} from '../../client/packageDetail/PackageDetailSurface';
 
 type ParamList = {
   CoachPackageEdit: {
@@ -70,6 +75,7 @@ const INTERVAL_OPTIONS: Array<{ label: string; value: PackageBillingInterval }> 
 export default function CoachPackageEditScreen({ navigation, route }: Props) {
   const { semanticColors, tokens } = useTheme();
   const styles = useMemo(() => makeStyles(semanticColors, tokens), [semanticColors, tokens]);
+  const currentUser = useCurrentUser();
   const { packageId, initialPackage } = route.params;
   const isEdit = Boolean(packageId);
 
@@ -85,6 +91,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
   const [saving, setSaving] = useState(false);
   const [archiving, setArchiving] = useState(false);
   const [error, setError] = useState('');
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   useEffect(() => {
     if (!packageId) {
@@ -205,6 +212,12 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
             'The packages backend module is not deployed in this environment.',
           ),
         );
+      } else if (code === 'PACKAGE_PRICING_LOCKED') {
+        warningTap();
+        Alert.alert(
+          'Pricing is locked',
+          'Pricing is locked because this package already has active subscribers. Create a new package for new pricing; you can still edit name, description, deliverables, and availability.',
+        );
       } else {
         Alert.alert(
           'Could not save',
@@ -269,6 +282,53 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
     }
   }, [original]);
 
+  // The coach's own display name for the preview header. Falls back to a
+  // neutral label rather than inventing data — the buyer-facing public route
+  // resolves the real coach profile server-side at purchase time.
+  const coachDisplayName = useMemo(() => {
+    const n =
+      currentUser?.name?.trim() ||
+      [currentUser?.firstName, currentUser?.lastName].filter(Boolean).join(' ').trim();
+    return n || 'You';
+  }, [currentUser]);
+
+  // Build the preview view model from the LIVE draft fields so the coach sees
+  // their unsaved edits, falling back to saved values where a field is empty.
+  // No network round-trip: everything here comes from local state + `original`.
+  const previewViewModel = useMemo<PackageDetailViewModel>(() => {
+    const cents = parseDollarsToCents(priceText) ?? original?.priceCents ?? 0;
+    const features = featuresText
+      .split('\n')
+      .map((f) => f.trim())
+      .filter(Boolean);
+    const trimmedTrial = trialText.trim();
+    const trialDays =
+      billingInterval !== 'one_time' && trimmedTrial && Number.isInteger(Number(trimmedTrial))
+        ? Number(trimmedTrial)
+        : null;
+    return {
+      id: original?.id ?? 'preview',
+      title: title.trim() || 'Untitled package',
+      description: description.trim() || null,
+      priceCents: cents,
+      currency: original?.currency ?? 'usd',
+      billingInterval,
+      intervalCount: original?.intervalCount ?? 1,
+      trialDays,
+      features,
+      coach: { displayName: coachDisplayName, bio: null },
+    };
+  }, [
+    priceText,
+    featuresText,
+    trialText,
+    billingInterval,
+    title,
+    description,
+    original,
+    coachDisplayName,
+  ]);
+
   if (!loaded) {
     return (
       <View style={[styles.container, styles.center]}>
@@ -278,6 +338,9 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
   }
 
   const archived = original?.status === 'archived';
+  // Pricing is immutable once a package has active subscribers — surface that
+  // up-front (helper copy) and again if the backend rejects a price change.
+  const pricingLocked = isEdit && (original?.subscriberCount ?? 0) > 0;
 
   return (
     <KeyboardAvoidingView
@@ -368,6 +431,16 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
           })}
         </View>
 
+        {pricingLocked ? (
+          <View style={styles.lockNotice} accessibilityRole="text">
+            <Ionicons name="lock-closed" size={14} color={tokens.semantic.warning.icon} />
+            <Text style={styles.lockNoticeText}>
+              Pricing is locked after subscribers join. Create a new package for
+              new pricing.
+            </Text>
+          </View>
+        ) : null}
+
         {billingInterval !== 'one_time' ? (
           <>
             <Label semanticColors={semanticColors} tokens={tokens}>Trial days (optional)</Label>
@@ -413,6 +486,19 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
 
         {isEdit && original ? (
           <>
+            <TouchableOpacity
+              style={styles.secondaryBtn}
+              onPress={() => {
+                mediumTap();
+                setPreviewOpen(true);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Preview as buyer"
+            >
+              <Ionicons name="eye-outline" size={18} color={semanticColors.accent} />
+              <Text style={styles.secondaryBtnText}>Preview as buyer</Text>
+            </TouchableOpacity>
+
             {original.shareToken ? (
               <TouchableOpacity
                 style={styles.secondaryBtn}
@@ -498,6 +584,32 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
           </>
         ) : null}
       </ScrollView>
+
+      <Modal
+        visible={previewOpen}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setPreviewOpen(false)}
+      >
+        <View style={styles.container}>
+          <View style={styles.topBar}>
+            <TouchableOpacity
+              onPress={() => setPreviewOpen(false)}
+              style={styles.backBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Close preview"
+            >
+              <Ionicons name="close" size={24} color={semanticColors.textPrimary} />
+            </TouchableOpacity>
+            <Text style={styles.topTitle}>Buyer preview</Text>
+            <View style={styles.backBtn} />
+          </View>
+          {/* coachPreview mode: checkout CTA is disabled and never calls a
+              checkout session. No network fetch — the view model is built from
+              the live draft + saved `original`. */}
+          <PackageDetailSurface package={previewViewModel} mode="coachPreview" />
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -557,6 +669,24 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       marginBottom: 12,
     },
     archivedText: { flex: 1, fontSize: 12, color: semanticColors.textPrimary },
+    lockNotice: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 8,
+      marginTop: 10,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      borderRadius: tokens.radius.lg,
+      borderWidth: 1,
+      borderColor: tokens.semantic.warning.border,
+      backgroundColor: tokens.semantic.warning.bg,
+    },
+    lockNoticeText: {
+      flex: 1,
+      fontSize: 12,
+      lineHeight: 17,
+      color: semanticColors.textPrimary,
+    },
     input: {
       backgroundColor: semanticColors.bgSurface,
       paddingHorizontal: 14,
