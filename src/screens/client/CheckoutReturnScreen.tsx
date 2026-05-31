@@ -34,7 +34,8 @@ import {
   clientPaymentsApi,
   type ClientPaymentStatus,
 } from '../../api/clientPaymentsApi';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
+import type { SemanticTokens, Tokens } from '../../theme/tokens';
 import { featureFlags } from '../../config/featureFlags';
 
 type CheckoutReturnRoute = RouteProp<
@@ -43,8 +44,8 @@ type CheckoutReturnRoute = RouteProp<
 >;
 
 export default function CheckoutReturnScreen() {
-  const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { semanticColors, tokens } = useTheme();
+  const styles = useMemo(() => makeStyles(semanticColors, tokens), [semanticColors, tokens]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const route = useRoute<CheckoutReturnRoute>();
   const outcome = route.params?.outcome ?? 'success';
@@ -170,7 +171,7 @@ export default function CheckoutReturnScreen() {
   if (outcome === 'cancel') {
     return (
       <View style={styles.container}>
-        <Ionicons name="close-circle-outline" size={64} color={colors.textMuted} />
+        <Ionicons name="close-circle-outline" size={64} color={semanticColors.textMuted} />
         <Text style={styles.title}>Checkout canceled</Text>
         <Text style={styles.body}>
           No charge was made. You can try again whenever you're ready.
@@ -185,7 +186,7 @@ export default function CheckoutReturnScreen() {
   if (loading) {
     return (
       <View style={styles.container}>
-        <ActivityIndicator color={colors.primary} size="large" />
+        <ActivityIndicator color={semanticColors.accent} size="large" />
         <Text style={styles.title}>Confirming payment…</Text>
         <Text style={styles.body}>
           We're verifying your subscription with Stripe. This usually takes a
@@ -198,7 +199,7 @@ export default function CheckoutReturnScreen() {
   if (error) {
     return (
       <View style={styles.container}>
-        <Ionicons name="alert-circle-outline" size={64} color={colors.warning} />
+        <Ionicons name="alert-circle-outline" size={64} color={tokens.semantic.warning.icon} />
         <Text style={styles.title}>Payment received — confirmation pending</Text>
         <Text style={styles.body}>
           Stripe accepted the charge, but the app couldn't confirm with the
@@ -222,7 +223,7 @@ export default function CheckoutReturnScreen() {
       <Ionicons
         name={isPaying ? 'checkmark-circle' : 'time-outline'}
         size={64}
-        color={isPaying ? colors.success : colors.warning}
+        color={isPaying ? tokens.colors.forest : tokens.semantic.warning.icon}
       />
       <Text style={styles.title}>
         {isPaying ? 'You are subscribed' : 'Payment received'}
@@ -239,35 +240,35 @@ export default function CheckoutReturnScreen() {
   );
 }
 
-const makeStyles = (colors: ThemeColors) =>
+const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
   StyleSheet.create({
     container: {
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
       padding: 32,
-      backgroundColor: colors.background,
+      backgroundColor: semanticColors.bgPrimary,
     },
     title: {
       fontSize: 22,
       fontWeight: '600',
-      color: colors.textPrimary,
+      color: semanticColors.textPrimary,
       marginTop: 16,
       textAlign: 'center',
     },
     body: {
       fontSize: 14,
-      color: colors.textSecondary,
+      color: semanticColors.textMuted,
       lineHeight: 20,
       textAlign: 'center',
       marginTop: 12,
     },
     cta: {
       marginTop: 28,
-      backgroundColor: colors.primary,
+      backgroundColor: semanticColors.accent,
       paddingHorizontal: 28,
       paddingVertical: 12,
       borderRadius: 10,
     },
-    ctaText: { color: colors.textOnPrimary, fontWeight: '600', fontSize: 15 },
+    ctaText: { color: semanticColors.textOnAccent, fontWeight: '600', fontSize: 15 },
   });

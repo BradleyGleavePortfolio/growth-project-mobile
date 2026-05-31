@@ -93,25 +93,38 @@ describe('CoachPackageContents — nav + wiring source guards', () => {
 
 // ── RTL mount ─────────────────────────────────────────────────────────────────
 
-const THEME_COLORS = {
-  background: '#F5EFE4',
-  surface: '#F1E8D5',
-  primary: '#2C4A36',
-  textPrimary: '#1A1A18',
-  textSecondary: '#3D3D3A',
-  textMuted: '#B1A89F',
-  textOnPrimary: '#F5EFE4',
-  border: 'rgba(176,141,87,0.2)',
-  divider: 'rgba(176,141,87,0.15)',
-  success: '#2C4A36',
-  warning: '#C5A253',
-  error: '#4A0404',
-  info: '#1A73E8',
-};
-
-jest.mock('../theme/ThemeProvider', () => ({
-  useTheme: () => ({ colors: THEME_COLORS }),
-}));
+// Theme mock — vends the real design-token module + light semantic tokens so
+// the screen's `useTheme().semanticColors` / `tokens` access resolves against
+// the production shapes (Phase-11 semantic migration, PR-18 M1).
+jest.mock('../theme/ThemeProvider', () => {
+  const tokensModule = jest.requireActual('../theme/tokens');
+  const realTokens = tokensModule.default;
+  const CanonicalColors = jest.requireActual('../constants/colors').default;
+  // Legacy flat `colors` map (still consumed by non-scoped child components
+  // that have not yet migrated) PLUS the Phase-11 semantic tokens the scoped
+  // PR-18 M1 screens now use.
+  const colors = {
+    ...CanonicalColors,
+    dark: CanonicalColors.textPrimary,
+    white: CanonicalColors.textOnPrimary,
+    gold: CanonicalColors.warning,
+    orange: CanonicalColors.error,
+  };
+  return {
+    useTheme: () => ({
+      colors,
+      tokens: realTokens,
+      semanticColors: realTokens.lightTokens,
+      tierColors: {
+        accentBorder: realTokens.colors.forest,
+        accentBg: 'rgba(44,74,54,0.06)',
+        accentFg: realTokens.colors.forest,
+        badgeShadow: realTokens.shadows.sm,
+      },
+      colorScheme: 'light',
+    }),
+  };
+});
 
 jest.mock('expo-font', () => ({ isLoaded: () => true }));
 

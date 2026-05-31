@@ -61,7 +61,8 @@ import {
 } from '@react-navigation/native';
 
 import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
-import { useTheme, type ThemeColors } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
+import type { SemanticTokens, Tokens } from '../../theme/tokens';
 import {
   clientPaymentsApi,
   type ClientCoachPackage,
@@ -147,7 +148,8 @@ interface PurchaseUnpackContentProps {
   onDone: () => void;
   onGoToDeliverables: () => void;
   styles: ReturnType<typeof makeStyles>;
-  colors: ThemeColors;
+  semanticColors: SemanticTokens;
+  tokens: Tokens;
 }
 
 function PurchaseUnpackContent({
@@ -160,7 +162,8 @@ function PurchaseUnpackContent({
   onDone,
   onGoToDeliverables,
   styles,
-  colors,
+  semanticColors,
+  tokens,
 }: PurchaseUnpackContentProps) {
   const visible = useMemo(() => {
     if (!dropsResult.ok)
@@ -189,7 +192,7 @@ function PurchaseUnpackContent({
   const ReceiptHeader = (
     <View style={styles.receiptCard} testID="purchase-unpack-receipt">
       <View style={styles.celebrateRow}>
-        <Ionicons name="checkmark-circle" size={28} color={colors.success} />
+        <Ionicons name="checkmark-circle" size={28} color={tokens.colors.forest} />
         <Text style={styles.celebrateText}>You&apos;re in</Text>
       </View>
       {receipt.packageName ? (
@@ -224,13 +227,13 @@ function PurchaseUnpackContent({
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={colors.primary}
+            tintColor={semanticColors.accent}
           />
         }
       >
         {ReceiptHeader}
         <View style={styles.empty}>
-          <Ionicons name="cube-outline" size={36} color={colors.textMuted} />
+          <Ionicons name="cube-outline" size={36} color={semanticColors.textMuted} />
           <Text style={styles.emptyTitle}>Purchase complete</Text>
           <Text style={styles.emptyBody}>
             Your coach is finalising what&apos;s included. You&apos;ll see
@@ -261,13 +264,13 @@ function PurchaseUnpackContent({
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={colors.primary}
+            tintColor={semanticColors.accent}
           />
         }
       >
         {ReceiptHeader}
         <View style={styles.empty}>
-          <Ionicons name="alert-circle-outline" size={36} color={colors.error} />
+          <Ionicons name="alert-circle-outline" size={36} color={tokens.colors.error} />
           <Text style={styles.emptyTitle}>We couldn&apos;t load what&apos;s included</Text>
           <Text style={styles.emptyBody}>
             Your purchase went through. Check your connection and try again,
@@ -308,13 +311,13 @@ function PurchaseUnpackContent({
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={colors.primary}
+            tintColor={semanticColors.accent}
           />
         }
       >
         {ReceiptHeader}
         <View style={styles.empty}>
-          <Ionicons name="hourglass-outline" size={36} color={colors.textMuted} />
+          <Ionicons name="hourglass-outline" size={36} color={semanticColors.textMuted} />
           <Text style={styles.emptyTitle}>Your coach is setting things up</Text>
           <Text style={styles.emptyBody}>
             Items in this package will appear here as your coach releases
@@ -345,7 +348,7 @@ function PurchaseUnpackContent({
         <RefreshControl
           refreshing={refreshing}
           onRefresh={onRefresh}
-          tintColor={colors.primary}
+          tintColor={semanticColors.accent}
         />
       }
     >
@@ -408,8 +411,8 @@ function PurchaseUnpackContent({
 }
 
 export default function PurchaseUnpackScreen() {
-  const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { semanticColors, tokens } = useTheme();
+  const styles = useMemo(() => makeStyles(semanticColors, tokens), [semanticColors, tokens]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const route = useRoute<
     RouteProp<Record<string, PurchaseUnpackRouteParams>, string>
@@ -523,7 +526,7 @@ export default function PurchaseUnpackScreen() {
       onDone={onDone}
       onGoToDeliverables={onGoToDeliverables}
       styles={styles}
-      colors={colors}
+      semanticColors={semanticColors} tokens={tokens}
     />
   );
 }
@@ -534,15 +537,15 @@ export const __test = {
   formatChargeDate,
 };
 
-const makeStyles = (colors: ThemeColors) =>
+const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
   StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
+    container: { flex: 1, backgroundColor: semanticColors.bgPrimary },
     content: { paddingHorizontal: 20, paddingTop: 56, paddingBottom: 40 },
     receiptCard: {
-      backgroundColor: colors.surface,
+      backgroundColor: semanticColors.bgSurface,
       borderRadius: 14,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: semanticColors.border,
       padding: 16,
       marginBottom: 20,
     },
@@ -555,27 +558,27 @@ const makeStyles = (colors: ThemeColors) =>
     celebrateText: {
       fontSize: 22,
       fontWeight: '600',
-      color: colors.textPrimary,
+      color: semanticColors.textPrimary,
     },
     packageName: {
       fontSize: 16,
       fontWeight: '600',
-      color: colors.textPrimary,
+      color: semanticColors.textPrimary,
       marginTop: 2,
     },
     amount: {
       fontSize: 14,
-      color: colors.textSecondary,
+      color: semanticColors.textMuted,
       marginTop: 4,
     },
     nextCharge: {
       fontSize: 13,
-      color: colors.textMuted,
+      color: semanticColors.textMuted,
       marginTop: 4,
     },
     sectionTitle: {
       fontSize: 12,
-      color: colors.textMuted,
+      color: semanticColors.textMuted,
       textTransform: 'uppercase',
       letterSpacing: 0.6,
       marginTop: 18,
@@ -583,32 +586,32 @@ const makeStyles = (colors: ThemeColors) =>
     },
     sectionSub: {
       fontSize: 12,
-      color: colors.textSecondary,
+      color: semanticColors.textMuted,
       marginBottom: 8,
     },
     empty: { alignItems: 'center', paddingVertical: 36, paddingHorizontal: 12 },
     emptyTitle: {
       fontSize: 18,
       fontWeight: '600',
-      color: colors.textPrimary,
+      color: semanticColors.textPrimary,
       marginTop: 12,
       textAlign: 'center',
     },
     emptyBody: {
       fontSize: 14,
-      color: colors.textSecondary,
+      color: semanticColors.textMuted,
       textAlign: 'center',
       marginTop: 8,
       lineHeight: 20,
     },
     retryBtn: {
       marginTop: 18,
-      backgroundColor: colors.primary,
+      backgroundColor: semanticColors.accent,
       paddingHorizontal: 20,
       paddingVertical: 10,
       borderRadius: 10,
     },
-    retryBtnText: { color: colors.textOnPrimary, fontWeight: '600', fontSize: 14 },
+    retryBtnText: { color: semanticColors.textOnAccent, fontWeight: '600', fontSize: 14 },
     footerCtas: {
       flexDirection: 'row',
       gap: 10,
@@ -616,27 +619,27 @@ const makeStyles = (colors: ThemeColors) =>
     },
     ctaPrimary: {
       flex: 1,
-      backgroundColor: colors.primary,
+      backgroundColor: semanticColors.accent,
       paddingVertical: 14,
       borderRadius: 12,
       alignItems: 'center',
     },
     ctaPrimaryText: {
-      color: colors.textOnPrimary,
+      color: semanticColors.textOnAccent,
       fontWeight: '600',
       fontSize: 15,
     },
     ctaSecondary: {
       flex: 1,
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: semanticColors.border,
       paddingVertical: 14,
       borderRadius: 12,
       alignItems: 'center',
-      backgroundColor: colors.surface,
+      backgroundColor: semanticColors.bgSurface,
     },
     ctaSecondaryText: {
-      color: colors.textPrimary,
+      color: semanticColors.textPrimary,
       fontWeight: '600',
       fontSize: 15,
     },

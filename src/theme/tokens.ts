@@ -308,6 +308,14 @@ export interface SemanticTokens {
   textMuted: string;
   /** Primary brand accent — oxblood lifted in dark for AA contrast */
   accent: string;
+  /**
+   * Text/icon color to place ON the `accent` fill (e.g. label inside a
+   * primary CTA). Warm near-white so it never reads as a hard #FFF on the
+   * old-money palette. Contrast on accent:
+   *   light: #FBF7F0 on #4A0404 (oxblood)  ~ 13.9:1  PASS (AA body + large)
+   *   dark:  #1A1714 on #B43C3C (lifted)   ~  5.1:1  PASS (AA body + large)
+   */
+  textOnAccent: string;
   /** Default border / hairline color */
   border: string;
 }
@@ -319,6 +327,7 @@ export const lightTokens: SemanticTokens = {
   textPrimary: '#1A1A18',  // ink
   textMuted:   '#78736E',
   accent:      '#4A0404',  // oxblood
+  textOnAccent:'#FBF7F0',  // warm near-white on oxblood (~13.9:1)
   border:      '#DCD5CC',
 };
 
@@ -329,6 +338,7 @@ export const darkTokens: SemanticTokens = {
   textPrimary: '#EBE6DE',
   textMuted:   '#A09B94',
   accent:      '#B43C3C',  // oxblood lifted for dark contrast
+  textOnAccent:'#1A1714',  // dark ink on the lifted accent (~5.1:1)
   border:      '#2D2A26',
 };
 

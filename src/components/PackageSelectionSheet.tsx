@@ -35,7 +35,8 @@ import {
   ScrollView,
   TouchableOpacity,
 } from 'react-native';
-import { useTheme, ThemeColors } from '../theme/ThemeProvider';
+import { useTheme } from '../theme/ThemeProvider';
+import type { SemanticTokens, Tokens } from '../theme/tokens';
 import { prefsStorage } from '../storage/mmkv';
 import api from '../services/api';
 import { useCurrentUser } from '../hooks/useCurrentUser';
@@ -165,8 +166,8 @@ export default function PackageSelectionSheet({
   onDismiss,
   onPaymentSuccess,
 }: PackageSelectionSheetProps) {
-  const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { semanticColors, tokens } = useTheme();
+  const styles = useMemo(() => makeStyles(semanticColors, tokens), [semanticColors, tokens]);
   const currentUser = useCurrentUser();
   const dismissedKey = useMemo(
     () => (currentUser?.id ? `${DISMISSED_KEY_BASE}:${currentUser.id}` : null),
@@ -429,13 +430,13 @@ export default function PackageSelectionSheet({
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const makeStyles = (colors: ThemeColors) =>
+const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
   StyleSheet.create({
     sheet: {
       flex: 1,
-      backgroundColor: colors.background,
+      backgroundColor: semanticColors.bgPrimary,
       borderTopWidth: 1,
-      borderTopColor: colors.border,
+      borderTopColor: semanticColors.border,
     },
     scrollContent: {
       paddingHorizontal: 24,
@@ -447,78 +448,78 @@ const makeStyles = (colors: ThemeColors) =>
       width: 36,
       height: 4,
       borderRadius: 2,
-      backgroundColor: colors.border,
+      backgroundColor: semanticColors.border,
       marginBottom: 24,
     },
     heading: {
       fontFamily: 'CormorantGaramond_400Regular',
       fontSize: 28,
       lineHeight: 32,
-      color: colors.textPrimary,
+      color: semanticColors.textPrimary,
       marginBottom: 8,
     },
     subtext: {
       fontFamily: 'Inter_400Regular',
       fontSize: 15,
-      color: colors.textMuted,
+      color: semanticColors.textMuted,
       lineHeight: 22,
       marginBottom: 24,
     },
     // Package cards
     packageCard: {
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: semanticColors.border,
       borderRadius: 2,
       padding: 16,
       marginBottom: 12,
-      backgroundColor: colors.surface,
+      backgroundColor: semanticColors.bgSurface,
     },
     packageCardSelected: {
-      borderColor: colors.primary,
-      backgroundColor: colors.primaryPale,
+      borderColor: semanticColors.accent,
+      backgroundColor: tokens.brand[50],
     },
     packageName: {
       fontFamily: 'Inter_500Medium',
       fontSize: 15,
-      color: colors.textPrimary,
+      color: semanticColors.textPrimary,
       marginBottom: 4,
     },
     packagePrice: {
       fontFamily: 'Inter_400Regular',
       fontSize: 13,
-      color: colors.textSecondary,
+      color: semanticColors.textMuted,
       marginBottom: 6,
     },
     packageDesc: {
       fontFamily: 'Inter_400Regular',
       fontSize: 13,
-      color: colors.textMuted,
+      color: semanticColors.textMuted,
       lineHeight: 19,
     },
     // Skeleton
     skeletonCard: {
       borderWidth: 1,
-      borderColor: colors.border,
+      borderColor: semanticColors.border,
       borderRadius: 2,
       padding: 16,
       marginBottom: 12,
-      backgroundColor: colors.surface,
+      backgroundColor: semanticColors.bgSurface,
     },
     skeletonLine: {
       borderRadius: 2,
-      backgroundColor: colors.border,
+      backgroundColor: semanticColors.border,
     },
     // Error
     errorText: {
       fontFamily: 'Inter_400Regular',
       fontSize: 13,
-      color: colors.error,
+      color: tokens.colors.error,
       marginBottom: 12,
       lineHeight: 19,
     },
     // CTA
     ctaBtn: {
-      backgroundColor: colors.primary,
+      backgroundColor: semanticColors.accent,
       paddingVertical: 16,
       alignItems: 'center',
       marginTop: 8,
@@ -527,7 +528,7 @@ const makeStyles = (colors: ThemeColors) =>
     ctaBtnText: {
       fontFamily: 'Inter_600SemiBold',
       fontSize: 14,
-      color: colors.textOnPrimary,
+      color: semanticColors.textOnAccent,
       letterSpacing: 1.2,
     },
     // Skip
@@ -538,6 +539,6 @@ const makeStyles = (colors: ThemeColors) =>
     skipText: {
       fontFamily: 'Inter_400Regular',
       fontSize: 13,
-      color: colors.textMuted,
+      color: semanticColors.textMuted,
     },
   });

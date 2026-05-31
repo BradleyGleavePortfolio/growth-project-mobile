@@ -42,7 +42,8 @@ import { assertStripeUrl } from '../../utils/stripeUrlValidator';
 import { isValidPackageShareToken } from '../../utils/packageShare';
 import { mediumTap, successTap, warningTap } from '../../utils/haptics';
 import { track } from '../../lib/analytics';
-import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
+import type { SemanticTokens, Tokens } from '../../theme/tokens';
 import { formatCurrencyCents } from '../../utils/currency';
 
 type ParamList = {
@@ -67,8 +68,8 @@ function intervalCopy(p: PublicPackageView): string {
 }
 
 export default function PackageCheckoutScreen({ navigation, route }: Props) {
-  const { colors } = useTheme();
-  const styles = useMemo(() => makeStyles(colors), [colors]);
+  const { semanticColors, tokens } = useTheme();
+  const styles = useMemo(() => makeStyles(semanticColors, tokens), [semanticColors, tokens]);
   const { shareToken } = route.params;
   const [pkg, setPkg] = useState<PublicPackageView | null>(null);
   const [loading, setLoading] = useState(true);
@@ -215,7 +216,7 @@ export default function PackageCheckoutScreen({ navigation, route }: Props) {
           accessibilityRole="button"
           accessibilityLabel="Go back"
         >
-          <Ionicons name="close" size={24} color={colors.textPrimary} />
+          <Ionicons name="close" size={24} color={semanticColors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.topTitle}>Coaching package</Text>
         <View style={styles.backBtn} />
@@ -223,11 +224,11 @@ export default function PackageCheckoutScreen({ navigation, route }: Props) {
 
       {loading ? (
         <View style={styles.loadingWrap}>
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator color={semanticColors.accent} />
         </View>
       ) : error ? (
         <View style={styles.errorWrap}>
-          <Ionicons name="alert-circle-outline" size={32} color={colors.textMuted} />
+          <Ionicons name="alert-circle-outline" size={32} color={semanticColors.textMuted} />
           <Text style={styles.errorTitle}>{error.title}</Text>
           <Text style={styles.errorBody}>{error.body}</Text>
           <TouchableOpacity style={styles.retryBtn} onPress={load}>
@@ -238,7 +239,7 @@ export default function PackageCheckoutScreen({ navigation, route }: Props) {
         <ScrollView contentContainerStyle={styles.content}>
           <View style={styles.coachCard}>
             <View style={styles.avatarPlaceholder}>
-              <Ionicons name="person" size={22} color={colors.textOnPrimary} />
+              <Ionicons name="person" size={22} color={semanticColors.textOnAccent} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.coachLabel}>Coached by</Text>
@@ -276,7 +277,7 @@ export default function PackageCheckoutScreen({ navigation, route }: Props) {
                   <Ionicons
                     name="checkmark"
                     size={18}
-                    color={colors.primary}
+                    color={semanticColors.accent}
                     style={{ marginTop: 2 }}
                   />
                   <Text style={styles.featureText}>{f}</Text>
@@ -293,10 +294,10 @@ export default function PackageCheckoutScreen({ navigation, route }: Props) {
             accessibilityLabel="Continue to payment"
           >
             {paying ? (
-              <ActivityIndicator color={colors.textOnPrimary} />
+              <ActivityIndicator color={semanticColors.textOnAccent} />
             ) : (
               <>
-                <Ionicons name="lock-closed" size={16} color={colors.textOnPrimary} />
+                <Ionicons name="lock-closed" size={16} color={semanticColors.textOnAccent} />
                 <Text style={styles.payBtnText}>
                   {pkg.trialDays
                     ? 'Start free trial'
@@ -316,9 +317,9 @@ export default function PackageCheckoutScreen({ navigation, route }: Props) {
   );
 }
 
-const makeStyles = (colors: ThemeColors) =>
+const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
   StyleSheet.create({
-    container: { flex: 1, backgroundColor: colors.background },
+    container: { flex: 1, backgroundColor: semanticColors.bgPrimary },
     topBar: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -328,7 +329,7 @@ const makeStyles = (colors: ThemeColors) =>
       paddingBottom: 12,
     },
     backBtn: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-    topTitle: { fontSize: 16, fontWeight: '500', color: colors.textPrimary },
+    topTitle: { fontSize: 16, fontWeight: '500', color: semanticColors.textPrimary },
     loadingWrap: { paddingVertical: 60, alignItems: 'center' },
     errorWrap: {
       flex: 1,
@@ -340,12 +341,12 @@ const makeStyles = (colors: ThemeColors) =>
     errorTitle: {
       fontSize: 18,
       fontWeight: '500',
-      color: colors.textPrimary,
+      color: semanticColors.textPrimary,
       textAlign: 'center',
     },
     errorBody: {
       fontSize: 13,
-      color: colors.textSecondary,
+      color: semanticColors.textMuted,
       textAlign: 'center',
       lineHeight: 18,
     },
@@ -355,14 +356,14 @@ const makeStyles = (colors: ThemeColors) =>
       paddingVertical: 10,
       borderRadius: 4,
       borderWidth: 1,
-      borderColor: colors.primary,
+      borderColor: semanticColors.accent,
     },
-    retryText: { color: colors.primary, fontSize: 14, fontWeight: '600' },
+    retryText: { color: semanticColors.accent, fontSize: 14, fontWeight: '600' },
     content: { paddingHorizontal: 24, paddingBottom: 40 },
     coachCard: {
       flexDirection: 'row',
       gap: 12,
-      backgroundColor: colors.surface,
+      backgroundColor: semanticColors.bgSurface,
       borderRadius: 4,
       padding: 14,
       marginBottom: 18,
@@ -372,47 +373,47 @@ const makeStyles = (colors: ThemeColors) =>
       width: 40,
       height: 40,
       borderRadius: 20,
-      backgroundColor: colors.primary,
+      backgroundColor: semanticColors.accent,
       justifyContent: 'center',
       alignItems: 'center',
     },
     coachLabel: {
       fontSize: 11,
-      color: colors.textSecondary,
+      color: semanticColors.textMuted,
       textTransform: 'uppercase',
       letterSpacing: 0.5,
       marginBottom: 2,
     },
-    coachName: { fontSize: 16, fontWeight: '500', color: colors.textPrimary },
-    coachBio: { fontSize: 13, color: colors.textSecondary, marginTop: 4, lineHeight: 18 },
+    coachName: { fontSize: 16, fontWeight: '500', color: semanticColors.textPrimary },
+    coachBio: { fontSize: 13, color: semanticColors.textMuted, marginTop: 4, lineHeight: 18 },
     title: {
       fontFamily: 'CormorantGaramond_400Regular',
       fontSize: 28,
-      color: colors.textPrimary,
+      color: semanticColors.textPrimary,
       marginBottom: 8,
     },
     description: {
       fontSize: 15,
-      color: colors.textSecondary,
+      color: semanticColors.textMuted,
       lineHeight: 22,
       marginBottom: 18,
     },
     priceCard: {
-      backgroundColor: colors.surface,
+      backgroundColor: semanticColors.bgSurface,
       borderRadius: 4,
       padding: 18,
       marginBottom: 18,
     },
-    priceValue: { fontSize: 32, fontWeight: '500', color: colors.textPrimary },
-    priceMeta: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
-    trialMeta: { fontSize: 13, color: colors.primary, marginTop: 6 },
+    priceValue: { fontSize: 32, fontWeight: '500', color: semanticColors.textPrimary },
+    priceMeta: { fontSize: 13, color: semanticColors.textMuted, marginTop: 2 },
+    trialMeta: { fontSize: 13, color: semanticColors.accent, marginTop: 6 },
     featuresList: {
       marginBottom: 24,
     },
     featuresTitle: {
       fontSize: 12,
       fontWeight: '500',
-      color: colors.textSecondary,
+      color: semanticColors.textMuted,
       textTransform: 'uppercase',
       letterSpacing: 0.5,
       marginBottom: 10,
@@ -423,22 +424,22 @@ const makeStyles = (colors: ThemeColors) =>
       marginBottom: 8,
       alignItems: 'flex-start',
     },
-    featureText: { flex: 1, fontSize: 14, color: colors.textPrimary, lineHeight: 20 },
+    featureText: { flex: 1, fontSize: 14, color: semanticColors.textPrimary, lineHeight: 20 },
     payBtn: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
       gap: 8,
-      backgroundColor: colors.primary,
+      backgroundColor: semanticColors.accent,
       paddingVertical: 16,
       borderRadius: 2,
     },
     payBtnDisabled: { opacity: 0.6 },
-    payBtnText: { color: colors.textOnPrimary, fontSize: 16, fontWeight: '500' },
+    payBtnText: { color: semanticColors.textOnAccent, fontSize: 16, fontWeight: '500' },
     fineprint: {
       marginTop: 12,
       fontSize: 12,
-      color: colors.textMuted,
+      color: semanticColors.textMuted,
       textAlign: 'center',
       lineHeight: 18,
     },
