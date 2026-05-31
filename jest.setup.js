@@ -2,6 +2,13 @@
 // jest-expo handles most RN/Expo shims; we only add mocks for modules that
 // tests touch explicitly.
 
+// PR-18 M1 R2 P3: the jest-expo preset is heavy and a cold RTL mount can take
+// several seconds on a slow CI box. A handful of async `waitFor`-based screen
+// tests (e.g. CoachPackageContentsScreen) intermittently raced Jest's 5s
+// default per-test timeout. Raise the global budget here so the suite is
+// robust WITHOUT requiring a `--testTimeout` override on the command line.
+jest.setTimeout(20000);
+
 // react-native-worklets throws at module-load when `global.__workletsModuleProxy`
 // is undefined (NativeWorklets initializes during top-level import via
 // reanimated → Skeleton → screen tests). The native TurboModule isn't present

@@ -320,6 +320,19 @@ export interface SemanticTokens {
    * near-white too — both modes use light text on the oxblood CTA.
    */
   textOnAccent: string;
+  /**
+   * Fill for a DISABLED / inactive primary control (e.g. a CTA that is the
+   * current plan or mid-request). Use this explicit token instead of
+   * compositing the enabled `accent` fill under a parent `opacity`, which
+   * drags the whole button — including its label — below AA. Paired with
+   * `textOnDisabled` so the disabled label stays legible. Contrast on this
+   * fill (WCAG 2.1, verified in scopedTokenGate test):
+   *   light: #524E47 on #E0D9CE ~ 5.90:1  PASS
+   *   dark:  #9A958C on #2A2723 ~ 4.99:1  PASS
+   */
+  disabledBg: string;
+  /** Text/icon color to place ON the `disabledBg` fill. */
+  textOnDisabled: string;
   /** Default border / hairline color */
   border: string;
 }
@@ -335,6 +348,10 @@ export const lightTokens: SemanticTokens = {
   textMuted:   '#6B675F',
   accent:      '#4A0404',  // oxblood
   textOnAccent:'#FBF7F0',  // warm near-white on oxblood (~15.01:1)
+  // Disabled CTA: warm taupe fill + dark warm ink. ~5.90:1 (AA PASS) so a
+  // disabled/current-plan button label stays legible without parent opacity.
+  disabledBg:     '#E0D9CE',
+  textOnDisabled: '#524E47',
   border:      '#DCD5CC',
 };
 
@@ -345,9 +362,14 @@ export const darkTokens: SemanticTokens = {
   textPrimary: '#EBE6DE',
   textMuted:   '#A09B94',
   accent:      '#B43C3C',  // oxblood lifted for dark contrast
+  // (disabled tokens declared after textOnAccent below)
   // Warm near-white on the lifted accent (~5.38:1, AA PASS). The previous
   // dark ink #1A1714 was only ~3.10:1 on #B43C3C (AA FAIL for body text).
   textOnAccent:'#FBF7F0',
+  // Disabled CTA in dark mode: muted ink on a slightly raised neutral fill.
+  // ~4.99:1 (AA PASS) for the disabled label without parent opacity.
+  disabledBg:     '#2A2723',
+  textOnDisabled: '#9A958C',
   border:      '#2D2A26',
 };
 

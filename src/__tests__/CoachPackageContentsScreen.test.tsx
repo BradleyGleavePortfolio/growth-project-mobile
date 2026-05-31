@@ -261,9 +261,14 @@ describe('CoachPackageContentsScreen — RTL mount', () => {
     const { getByTestId, getByText } = render(
       <CoachPackageContentsScreen navigation={navigation} route={route} />,
     );
-    await waitFor(() => {
-      expect(getByTestId('content-row-c1')).toBeTruthy();
-    });
+    // Explicit waitFor budget so the initial async list load is never raced
+    // by Jest's 5s default test timeout under a slow CI harness (R2 P3).
+    await waitFor(
+      () => {
+        expect(getByTestId('content-row-c1')).toBeTruthy();
+      },
+      { timeout: 10000 },
+    );
     expect(getByText('Week 1 Program')).toBeTruthy();
   });
 
@@ -297,17 +302,26 @@ describe('CoachPackageContentsScreen — RTL mount', () => {
     const { getByTestId } = render(
       <CoachPackageContentsScreen navigation={navigation} route={route} />,
     );
-    await waitFor(() => expect(getByTestId('content-empty')).toBeTruthy());
+    await waitFor(
+      () => expect(getByTestId('content-empty')).toBeTruthy(),
+      { timeout: 10000 },
+    );
 
     fireEvent.press(getByTestId('content-add-button'));
-    await waitFor(() => expect(getByTestId('content-attach-form')).toBeTruthy());
+    await waitFor(
+      () => expect(getByTestId('content-attach-form')).toBeTruthy(),
+      { timeout: 10000 },
+    );
 
     fireEvent.changeText(getByTestId('content-attach-asset-id'), 'asset-xyz');
     fireEvent.press(getByTestId('content-attach-submit'));
 
-    await waitFor(() => {
-      expect(mockAttach).toHaveBeenCalledTimes(1);
-    });
+    await waitFor(
+      () => {
+        expect(mockAttach).toHaveBeenCalledTimes(1);
+      },
+      { timeout: 10000 },
+    );
     const callArgs = mockAttach.mock.calls[0];
     // attach(packageId, body, key)
     expect(callArgs[0]).toBe('pkg1');

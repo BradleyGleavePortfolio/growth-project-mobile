@@ -84,6 +84,13 @@ export default function PackageDetailSurface({ package: pkg, mode, onPay, paying
   const styles = useMemo(() => makeStyles(semanticColors, tokens), [semanticColors, tokens]);
 
   const isPreview = mode === 'coachPreview';
+  // Disabled = coach preview (no checkout) or a buyer mid-request. We swap to
+  // explicit disabled semantic tokens (disabledBg + textOnDisabled) instead of
+  // dimming the enabled accent button with parent opacity, which dragged the
+  // 16px label below AA (audited ~3.60:1 in dark mode). The token pair clears
+  // AA on both modes (see tokens.ts / scopedTokenGate).
+  const isDisabled = paying || isPreview;
+  const onAccentColor = isDisabled ? semanticColors.textOnDisabled : semanticColors.textOnAccent;
   const payLabel = pkg.trialDays
     ? 'Start free trial'
     : `Pay ${formatCurrencyCents(pkg.priceCents, pkg.currency)}`;
@@ -143,20 +150,20 @@ export default function PackageDetailSurface({ package: pkg, mode, onPay, paying
       ) : null}
 
       <TouchableOpacity
-        style={[styles.payBtn, (paying || isPreview) && styles.payBtnDisabled]}
+        style={[styles.payBtn, isDisabled && styles.payBtnDisabled]}
         // Coach preview MUST NOT trigger checkout: no onPress wired at all.
         onPress={isPreview ? undefined : onPay}
-        disabled={isPreview || paying}
+        disabled={isDisabled}
         accessibilityRole="button"
-        accessibilityState={{ disabled: isPreview || paying }}
+        accessibilityState={{ disabled: isDisabled }}
         accessibilityLabel={isPreview ? 'Checkout disabled in preview' : 'Continue to payment'}
       >
         {paying ? (
-          <ActivityIndicator color={semanticColors.textOnAccent} />
+          <ActivityIndicator color={onAccentColor} />
         ) : (
           <>
-            <Ionicons name="lock-closed" size={16} color={semanticColors.textOnAccent} />
-            <Text style={styles.payBtnText}>{payLabel}</Text>
+            <Ionicons name="lock-closed" size={16} color={onAccentColor} />
+            <Text style={[styles.payBtnText, isDisabled && styles.payBtnTextDisabled]}>{payLabel}</Text>
           </>
         )}
       </TouchableOpacity>
@@ -276,13 +283,15 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       paddingVertical: 16,
       borderRadius: tokens.radius.md,
     },
-    payBtnDisabled: { opacity: 0.6 },
+    // Explicit disabled fill (no parent opacity) so the label keeps AA contrast.
+    payBtnDisabled: { backgroundColor: semanticColors.disabledBg },
     payBtnText: {
       fontFamily: tokens.typography.bodyMd.fontFamily,
       color: semanticColors.textOnAccent,
       fontSize: 16,
       fontWeight: '500',
     },
+    payBtnTextDisabled: { color: semanticColors.textOnDisabled },
     fineprint: {
       marginTop: 12,
       fontSize: 12,

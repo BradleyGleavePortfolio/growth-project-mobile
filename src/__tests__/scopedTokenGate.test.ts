@@ -120,6 +120,18 @@ describe('PR-18 M1 — semantic-token AA contrast gate (P2)', () => {
     ).toBeGreaterThanOrEqual(AA_NORMAL);
   });
 
+  it('light textOnDisabled clears AA on the disabled fill', () => {
+    expect(
+      contrastRatio(lightTokens.textOnDisabled, lightTokens.disabledBg),
+    ).toBeGreaterThanOrEqual(AA_NORMAL);
+  });
+
+  it('dark textOnDisabled clears AA on the disabled fill', () => {
+    expect(
+      contrastRatio(darkTokens.textOnDisabled, darkTokens.disabledBg),
+    ).toBeGreaterThanOrEqual(AA_NORMAL);
+  });
+
   it('textPrimary clears AA on its mode background', () => {
     expect(
       contrastRatio(lightTokens.textPrimary, lightTokens.bgPrimary),

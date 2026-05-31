@@ -453,9 +453,20 @@ export default function ClientPackagesScreen() {
                   }
                 >
                   {busy ? (
-                    <ActivityIndicator color={semanticColors.textOnAccent} />
+                    <ActivityIndicator
+                      color={
+                        current || busy
+                          ? semanticColors.textOnDisabled
+                          : semanticColors.textOnAccent
+                      }
+                    />
                   ) : (
-                    <Text style={styles.buyBtnText}>
+                    <Text
+                      style={[
+                        styles.buyBtnText,
+                        (current || busy) && styles.buyBtnTextDisabled,
+                      ]}
+                    >
                       {current
                         ? 'Current plan'
                         : pkg.type === 'recurring'
@@ -611,8 +622,12 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       borderRadius: 8,
       alignItems: 'center',
     },
-    buyBtnDisabled: { backgroundColor: semanticColors.textMuted, opacity: 0.55 },
+    // Explicit disabled fill + label tokens (no parent opacity). The previous
+    // opacity-on-textMuted treatment composited to ~2.05–2.24:1 for the 14px
+    // semibold label; disabledBg + textOnDisabled clear AA in both modes.
+    buyBtnDisabled: { backgroundColor: semanticColors.disabledBg },
     buyBtnText: { color: semanticColors.textOnAccent, fontWeight: '600', fontSize: 14 },
+    buyBtnTextDisabled: { color: semanticColors.textOnDisabled },
     fineprint: {
       fontSize: 11,
       color: semanticColors.textMuted,
