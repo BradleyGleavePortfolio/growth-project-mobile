@@ -35,7 +35,12 @@ import { Ionicons } from '@expo/vector-icons';
 // CheckoutReturn refresh that keeps webhook-derived state authoritative.
 import type { NavigationProp, ParamListBase, RouteProp } from '@react-navigation/native';
 
-import { publicPackagesApi, PublicPackageView, CheckoutSessionResponse } from '../../api/packagesApi';
+import {
+  publicPackagesApi,
+  PublicPackageView,
+  CheckoutSessionResponse,
+  PACKAGE_CHECKOUT_RETURN_SCHEME,
+} from '../../api/packagesApi';
 import { errorCode, errorMessage, errorStatus } from '../../types/common';
 import { assertStripeUrl } from '../../utils/stripeUrlValidator';
 import { isValidPackageShareToken } from '../../utils/packageShare';
@@ -146,8 +151,12 @@ export default function PackageCheckoutScreen({ navigation, route }: Props) {
     try {
       // Backend `POST /v1/checkout/sessions` requires the resolved package
       // UUID (not the share token). We use the id returned from the public
-      // share lookup. Default redirect URLs use the growthproject:// scheme
-      // which the backend allow-list accepts.
+      // share lookup. The default redirect URLs minted in packagesApi use the
+      // backend-accepted `com.growthproject.app://checkout/success` /
+      // `.../checkout/cancel` deep links — the SAME scheme + path that the
+      // BrandedCheckoutWebView parser (`returnScheme` below) and RootNavigator
+      // intercept, so a completed Stripe payment is reliably routed to
+      // CheckoutReturn for confirmation.
       const res = await publicPackagesApi.createCheckoutSession(pkg.id);
       const data: CheckoutSessionResponse = res.data;
       if (!data.url) {
@@ -187,7 +196,11 @@ export default function PackageCheckoutScreen({ navigation, route }: Props) {
       ).navigate('BrandedCheckoutWebView', {
         checkoutUrl: data.url,
         packageName: pkg?.title ?? 'Coaching package',
-        returnScheme: 'tgp',
+        // MUST match the scheme of the success_url/cancel_url minted by
+        // createCheckoutSession (PACKAGE_CHECKOUT_SUCCESS_URL/_CANCEL_URL).
+        // Mismatched schemes mean the webview never intercepts the Stripe
+        // return redirect and the buyer is stranded after paying (P0).
+        returnScheme: PACKAGE_CHECKOUT_RETURN_SCHEME,
       });
     } catch (err) {
       const code = errorCode(err);

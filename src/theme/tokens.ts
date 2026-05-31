@@ -311,9 +311,13 @@ export interface SemanticTokens {
   /**
    * Text/icon color to place ON the `accent` fill (e.g. label inside a
    * primary CTA). Warm near-white so it never reads as a hard #FFF on the
-   * old-money palette. Contrast on accent:
-   *   light: #FBF7F0 on #4A0404 (oxblood)  ~ 13.9:1  PASS (AA body + large)
-   *   dark:  #1A1714 on #B43C3C (lifted)   ~  5.1:1  PASS (AA body + large)
+   * old-money palette. Contrast on accent (computed, WCAG 2.1 relative
+   * luminance — verified in contrast_check.py / scopedTokenGate test):
+   *   light: #FBF7F0 on #4A0404 (oxblood)        ~ 15.01:1  PASS (AA body + large)
+   *   dark:  #FBF7F0 on #B43C3C (oxblood lifted) ~  5.38:1  PASS (AA body + large)
+   * NOTE: a dark ink on the lifted dark accent only reaches ~3.10:1 (even
+   * pure black tops out at ~3.65:1), so the dark on-accent MUST be the warm
+   * near-white too — both modes use light text on the oxblood CTA.
    */
   textOnAccent: string;
   /** Default border / hairline color */
@@ -322,12 +326,15 @@ export interface SemanticTokens {
 
 /** Light-mode semantic tokens (default — matches existing bone/ink palette). */
 export const lightTokens: SemanticTokens = {
-  bgPrimary:   '#F5EFE4',  // bone
+  bgPrimary:   '#F5EFE4',  // bone / cream
   bgSurface:   '#FFFDF8',
-  textPrimary: '#1A1A18',  // ink
-  textMuted:   '#78736E',
+  textPrimary: '#1A1A18',  // ink (~15.23:1 on cream)
+  // Warm taupe muted. Darkened from #78736E (only 4.10:1 on cream, AA FAIL
+  // for body-sized 12-13px meta text) to #6B675F so it clears AA on BOTH
+  // light backgrounds: ~4.92:1 on cream #F5EFE4, ~5.54:1 on surface #FFFDF8.
+  textMuted:   '#6B675F',
   accent:      '#4A0404',  // oxblood
-  textOnAccent:'#FBF7F0',  // warm near-white on oxblood (~13.9:1)
+  textOnAccent:'#FBF7F0',  // warm near-white on oxblood (~15.01:1)
   border:      '#DCD5CC',
 };
 
@@ -338,7 +345,9 @@ export const darkTokens: SemanticTokens = {
   textPrimary: '#EBE6DE',
   textMuted:   '#A09B94',
   accent:      '#B43C3C',  // oxblood lifted for dark contrast
-  textOnAccent:'#1A1714',  // dark ink on the lifted accent (~5.1:1)
+  // Warm near-white on the lifted accent (~5.38:1, AA PASS). The previous
+  // dark ink #1A1714 was only ~3.10:1 on #B43C3C (AA FAIL for body text).
+  textOnAccent:'#FBF7F0',
   border:      '#2D2A26',
 };
 

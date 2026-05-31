@@ -31,6 +31,7 @@ import {
   publicPackagesApi,
   PACKAGE_CHECKOUT_SUCCESS_URL,
   PACKAGE_CHECKOUT_CANCEL_URL,
+  PACKAGE_CHECKOUT_RETURN_SCHEME,
 } from '../packagesApi';
 import { generateIdempotencyKey } from '../../utils/idempotency';
 import { validateStripeUrl } from '../../utils/stripeUrlValidator';
@@ -256,6 +257,31 @@ describe('publicPackagesApi.createCheckoutSession', () => {
     expect(body.success_url).toMatch(/^(growthproject:\/\/|com\.growthproject\.app:\/\/|https:\/\/)/);
     expect(body.cancel_url).toMatch(/^(growthproject:\/\/|com\.growthproject\.app:\/\/|https:\/\/)/);
     expect(config?.headers?.['Idempotency-Key']).toBeTruthy();
+  });
+
+  // P0 regression: the public-package checkout redirect URLs the app mints
+  // MUST use the SAME scheme the screen passes to BrandedCheckoutWebView as
+  // `returnScheme`, and the SAME `/checkout/success` + `/checkout/cancel`
+  // paths that BrandedCheckoutWebViewScreen.parseReturnDeepLink intercepts.
+  // The original bug minted `growthproject://checkout/return` while the
+  // webview parsed `tgp://checkout/success`, so a completed Stripe payment
+  // was never routed to CheckoutReturn. (The round-trip through the actual
+  // parser is asserted in BrandedCheckoutWebViewScreen.test.tsx, which mocks
+  // the native webview module.)
+  it('minted redirect URLs share the webview returnScheme + correct paths (P0)', () => {
+    const scheme = PACKAGE_CHECKOUT_RETURN_SCHEME; // 'com.growthproject.app'
+    expect(PACKAGE_CHECKOUT_SUCCESS_URL).toBe(
+      `${scheme}://checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+    );
+    expect(PACKAGE_CHECKOUT_CANCEL_URL).toBe(`${scheme}://checkout/cancel`);
+    // Backend allow-list (checkout.controller.ts) accepts only these prefixes
+    // and REJECTS `tgp://`.
+    expect(PACKAGE_CHECKOUT_SUCCESS_URL).toMatch(
+      /^(growthproject:\/\/|com\.growthproject\.app:\/\/|https:\/\/)/,
+    );
+    expect(PACKAGE_CHECKOUT_CANCEL_URL).toMatch(
+      /^(growthproject:\/\/|com\.growthproject\.app:\/\/|https:\/\/)/,
+    );
   });
 
   it('caller can override success/cancel URLs', async () => {

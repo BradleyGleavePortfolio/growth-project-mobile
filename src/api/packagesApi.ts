@@ -30,10 +30,25 @@ export type PackageBillingInterval = 'one_time' | 'monthly' | 'quarterly' | 'yea
 
 export type PackageStatus = 'draft' | 'active' | 'archived';
 
-// Backend deep-link prefixes allowed for checkout redirects. Backend rejects
-// anything else (see growth-project-backend checkout.controller.ts).
-export const PACKAGE_CHECKOUT_SUCCESS_URL = 'growthproject://checkout/return';
-export const PACKAGE_CHECKOUT_CANCEL_URL = 'growthproject://checkout/cancel';
+// Backend deep-link prefixes allowed for checkout redirects: the backend
+// allow-list (growth-project-backend checkout.controller.ts:30-38) accepts
+// only `growthproject://`, `com.growthproject.app://`, and `https://` — it
+// REJECTS `tgp://`. The redirect PATH must also match the in-app return
+// handler: BrandedCheckoutWebViewScreen.parseReturnDeepLink() and the
+// RootNavigator deep-link config both intercept `<scheme>://checkout/success`
+// (with the `session_id` query param) and `<scheme>://checkout/cancel`.
+//
+// The previous value used the `/return` path, which NEVER matched the
+// `/success` path the webview/deep-link parser expects, so a completed
+// Stripe payment was never routed to CheckoutReturn (P0). We now mint the
+// backend-accepted `com.growthproject.app://checkout/success` (with Stripe's
+// `{CHECKOUT_SESSION_ID}` placeholder so the confirm step can re-verify the
+// session) and `.../checkout/cancel`. Callers MUST pass the matching
+// `returnScheme` ('com.growthproject.app') to BrandedCheckoutWebView.
+export const PACKAGE_CHECKOUT_RETURN_SCHEME = 'com.growthproject.app';
+export const PACKAGE_CHECKOUT_SUCCESS_URL =
+  'com.growthproject.app://checkout/success?session_id={CHECKOUT_SESSION_ID}';
+export const PACKAGE_CHECKOUT_CANCEL_URL = 'com.growthproject.app://checkout/cancel';
 
 export interface CoachPackage {
   id: string;

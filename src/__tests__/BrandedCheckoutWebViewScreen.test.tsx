@@ -149,6 +149,11 @@ import BrandedCheckoutWebViewScreen, {
   isOriginAllowed,
   parseReturnDeepLink,
 } from '../screens/client/BrandedCheckoutWebViewScreen';
+import {
+  PACKAGE_CHECKOUT_SUCCESS_URL,
+  PACKAGE_CHECKOUT_CANCEL_URL,
+  PACKAGE_CHECKOUT_RETURN_SCHEME,
+} from '../api/packagesApi';
 
 beforeEach(() => {
   mockNavigate.mockClear();
@@ -602,6 +607,24 @@ describe('parseReturnDeepLink — exact, not prefix', () => {
         'com.growthproject.app',
       ),
     ).toBeNull();
+  });
+
+  // P0 fix: the public-package checkout redirect URLs minted by packagesApi
+  // MUST round-trip through this parser under the returnScheme the
+  // PackageCheckoutScreen passes. The audited bug minted
+  // `growthproject://checkout/return` (scheme + path mismatch) so a completed
+  // payment was never intercepted and the buyer never reached CheckoutReturn.
+  it('parses the packagesApi-minted public checkout redirect URLs (P0)', () => {
+    const mintedSuccess = PACKAGE_CHECKOUT_SUCCESS_URL.replace(
+      '{CHECKOUT_SESSION_ID}',
+      'cs_test_abc123',
+    );
+    expect(parseReturnDeepLink(mintedSuccess, PACKAGE_CHECKOUT_RETURN_SCHEME)).toEqual(
+      { outcome: 'success', sessionId: 'cs_test_abc123' },
+    );
+    expect(
+      parseReturnDeepLink(PACKAGE_CHECKOUT_CANCEL_URL, PACKAGE_CHECKOUT_RETURN_SCHEME),
+    ).toEqual({ outcome: 'cancel' });
   });
 });
 
