@@ -472,9 +472,9 @@ export default function ContentAttachForm({
                 </>
               ) : null}
 
-              {/* fixed_calendar needs release_at. M2 collects a simple ISO
-                  date string; TODO(M4): swap this for the rich date picker
-                  dependency that M4 introduces. */}
+              {/* fixed_calendar needs release_at. This collects a simple ISO
+                  date string; a richer date picker can replace this input in a
+                  later milestone without changing the surrounding contract. */}
               {cadenceKind === 'fixed_calendar' ? (
                 <>
                   <Label colors={colors}>Release date (ISO)</Label>

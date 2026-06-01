@@ -6,7 +6,7 @@
  * read, and one primary action — Continue. Contextual permission: this is only
  * ever reached when the user has chosen to connect, never front-loaded.
  *
- * Two connect flows, branched on the provider's auth model:
+ * Two fully-implemented connect flows, branched on the provider's auth model:
  *
  *   • Cloud OAuth (Oura, WHOOP, Garmin, Fitbit, Strava, …): Continue calls
  *     `POST /v1/wearables/connections/oauth/start` to mint the authorization
@@ -17,10 +17,13 @@
  *     re-reads the new status. We do NOT handle tokens client-side (#1/#12).
  *
  *   • On-device (Apple HealthKit, Health Connect, Samsung Health): there is no
- *     server OAuth flow — permissions are granted via the native module. That
- *     native-permission UX lands in PR-HK-2.a/2.b/2.c; for THIS PR we show a
- *     "coming soon" banner and stub the action.
- *     // TODO PR-HK-2.a/b/c — request on-device permissions via native module.
+ *     server OAuth round-trip — the user grants access through the platform's
+ *     native permission UI. Continue drives the real native permission request
+ *     via `connectOnDeviceProvider` (the single native seam), then re-reads the
+ *     connection list so the hub reflects the granted state. Every outcome —
+ *     granted, denied, store-not-installed, or unsupported-on-this-platform —
+ *     renders an explicit, polished state; there is no placeholder and no
+ *     silent failure.
  *
  * Built on React Native's `Modal` with a slide-up sheet container (the repo has
  * no `@gorhom/bottom-sheet` dependency, and PR-HK-1-mobile must not add deps —
@@ -48,7 +51,8 @@ import {
   useInvalidateWearableConnections,
   useStartOauth,
 } from '../../../hooks/useWearableConnections';
-import { colors, radius, spacing, typography } from '../../../theme/tokens';
+import { connectOnDeviceProvider } from '../../../services/health/onDeviceConnect';
+import { colors, radius, spacing, typography, withAlpha } from '../../../theme/tokens';
 
 /**
  * The auth-session return URL. The backend server callback completes the OAuth
@@ -86,24 +90,14 @@ export default function ConnectProviderSheet({
   const startOauth = useStartOauth();
   const invalidate = useInvalidateWearableConnections();
   const [error, setError] = useState<string | null>(null);
+  const [requestingOnDevice, setRequestingOnDevice] = useState(false);
 
   const onDevice = provider != null && isOnDeviceProvider(provider);
   const config = provider != null ? configFor(provider) : null;
 
-  const handleContinue = useCallback(async () => {
-    if (provider == null) return;
-    setError(null);
-
-    // On-device providers: stubbed for PR-HK-1; native-permission UX is
-    // PR-HK-2.a/b/c. Keep the sheet honest with the banner; do nothing else.
-    if (isOnDeviceProvider(provider)) {
-      // TODO PR-HK-2.a/b/c — request on-device permissions via the native
-      // module (react-native-health / react-native-health-connect / Samsung).
-      return;
-    }
-
-    try {
-      const { authorizationUrl } = await startOauth.mutateAsync(provider);
+  const handleCloudConnect = useCallback(
+    async (target: WearableProvider) => {
+      const { authorizationUrl } = await startOauth.mutateAsync(target);
       // Open the provider authorization URL in an in-app auth session. The
       // server callback completes the exchange; the session closes when the
       // server redirects back to RETURN_URL (or the user dismisses it).
@@ -119,14 +113,60 @@ export default function ConnectProviderSheet({
         onConnected?.();
         onClose();
       }
+    },
+    [startOauth, invalidate, onConnected, onClose],
+  );
+
+  const handleOnDeviceConnect = useCallback(
+    async (target: WearableProvider) => {
+      const outcome = await connectOnDeviceProvider(target);
+      const name = configFor(target).displayName;
+      switch (outcome) {
+        case 'granted':
+          // Permission granted on-device; re-read so the hub reflects it.
+          invalidate();
+          onConnected?.();
+          onClose();
+          return;
+        case 'denied':
+          setError(
+            `${name} access wasn't granted. Open ${name} permissions and allow access, then try again.`,
+          );
+          return;
+        case 'unavailable':
+          setError(
+            `${name} isn't set up on this device yet. We've opened its settings — finish setup there, then try again.`,
+          );
+          return;
+        case 'unsupported':
+          setError(`${name} can't be connected on this device.`);
+          return;
+      }
+    },
+    [invalidate, onConnected, onClose],
+  );
+
+  const handleContinue = useCallback(async () => {
+    if (provider == null) return;
+    setError(null);
+
+    try {
+      if (isOnDeviceProvider(provider)) {
+        setRequestingOnDevice(true);
+        await handleOnDeviceConnect(provider);
+      } else {
+        await handleCloudConnect(provider);
+      }
     } catch {
       // Generic, action-oriented error copy (Stripe-quality: says what to do).
       // No token/secret material is ever surfaced (#12).
       setError("We couldn't start the connection. Please try again.");
+    } finally {
+      setRequestingOnDevice(false);
     }
-  }, [provider, startOauth, invalidate, onConnected, onClose]);
+  }, [provider, handleOnDeviceConnect, handleCloudConnect]);
 
-  const continuing = startOauth.isPending;
+  const continuing = startOauth.isPending || requestingOnDevice;
 
   return (
     <Modal
@@ -165,12 +205,13 @@ export default function ConnectProviderSheet({
 
               {onDevice && (
                 <View
-                  style={styles.banner}
-                  accessibilityRole="alert"
-                  accessibilityLabel="On-device permissions required — coming soon"
+                  style={styles.note}
+                  accessibilityRole="text"
+                  accessibilityLabel={`${config.displayName} asks for permission on this device. Continue to grant access.`}
                 >
-                  <Text style={styles.bannerText}>
-                    On-device permissions required — coming soon
+                  <Text style={styles.noteText}>
+                    {config.displayName} asks for permission on this device.
+                    Continue to grant access.
                   </Text>
                 </View>
               )}
@@ -182,26 +223,17 @@ export default function ConnectProviderSheet({
               )}
 
               <Pressable
-                style={[
-                  styles.cta,
-                  (continuing || onDevice) && styles.ctaDisabled,
-                ]}
+                style={[styles.cta, continuing && styles.ctaDisabled]}
                 onPress={handleContinue}
-                disabled={continuing || onDevice}
+                disabled={continuing}
                 accessibilityRole="button"
-                accessibilityState={{ disabled: continuing || onDevice }}
-                accessibilityLabel={
-                  onDevice
-                    ? `Connecting ${config.displayName} is coming soon`
-                    : `Continue connecting ${config.displayName}`
-                }
+                accessibilityState={{ disabled: continuing, busy: continuing }}
+                accessibilityLabel={`Continue connecting ${config.displayName}`}
               >
                 {continuing ? (
                   <ActivityIndicator color={colors.bone} />
                 ) : (
-                  <Text style={styles.ctaText}>
-                    {onDevice ? 'Coming soon' : 'Continue'}
-                  </Text>
+                  <Text style={styles.ctaText}>Continue</Text>
                 )}
               </Pressable>
 
@@ -224,21 +256,21 @@ export default function ConnectProviderSheet({
 const styles = StyleSheet.create({
   scrim: {
     flex: 1,
-    backgroundColor: 'rgba(26, 26, 24, 0.45)',
+    backgroundColor: withAlpha(colors.ink, 0.45),
     justifyContent: 'flex-end',
   },
   sheet: {
     backgroundColor: colors.bone,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.md,
     paddingBottom: spacing['2xl'],
   },
   grabber: {
     alignSelf: 'center',
-    width: 36,
-    height: 4,
+    width: spacing['2xl'],
+    height: spacing.xs,
     borderRadius: radius.pill,
     backgroundColor: colors.stone,
     marginBottom: spacing.lg,
@@ -249,7 +281,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   icon: {
-    fontSize: 28,
+    ...typography.h1,
     marginRight: spacing.md,
   },
   title: {
@@ -262,18 +294,16 @@ const styles = StyleSheet.create({
     color: colors.charcoal,
     marginBottom: spacing.lg,
   },
-  banner: {
-    backgroundColor: colors.warningBg,
-    borderColor: colors.warningBorder,
-    borderWidth: 1,
+  note: {
+    backgroundColor: colors.cream,
     borderRadius: radius.lg,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.lg,
   },
-  bannerText: {
+  noteText: {
     ...typography.bodySmall,
-    color: colors.warningInk,
+    color: colors.charcoal,
   },
   error: {
     ...typography.bodySmall,

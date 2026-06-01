@@ -45,7 +45,7 @@ import {
   useDisconnectProvider,
   useWearableConnections,
 } from '../../../hooks/useWearableConnections';
-import { colors, radius, spacing, typography } from '../../../theme/tokens';
+import { colors, radius, semantic, spacing, typography } from '../../../theme/tokens';
 import ConnectProviderSheet from './ConnectProviderSheet';
 
 // ─── Status presentation ──────────────────────────────────────────────────────
@@ -68,9 +68,9 @@ function badgeTone(status: string): BadgeTone {
 }
 
 const BADGE_COLORS: Record<BadgeTone, { bg: string; fg: string; label: string }> = {
-  connected: { bg: '#E4EBE6', fg: colors.forest, label: 'Connected' },
-  expired: { bg: colors.warningBg, fg: colors.warningInk, label: 'Expired' },
-  error: { bg: '#F7E4E4', fg: colors.error, label: 'Error' },
+  connected: { bg: semantic.success.bg, fg: semantic.success.fg, label: 'Connected' },
+  expired: { bg: semantic.warning.bg, fg: semantic.warning.fg, label: 'Expired' },
+  error: { bg: semantic.danger.bg, fg: semantic.danger.fg, label: 'Error' },
   disconnected: { bg: colors.cream, fg: colors.charcoal, label: 'Not connected' },
 };
 

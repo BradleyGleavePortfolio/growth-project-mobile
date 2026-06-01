@@ -128,7 +128,7 @@ export function providerAuthModel(provider: WearableProvider): WearableAuthModel
 export interface ProviderConfig {
   readonly provider: WearableProvider;
   readonly displayName: string;
-  /** Placeholder brand glyph (emoji/initial). Swap for an asset later. */
+  /** Brand-asset placeholder. Swap for a vector brand asset later. */
   readonly icon: string;
   /** Plain-language statement of what we'll read (connect-sheet body). */
   readonly dataDescription: string;
