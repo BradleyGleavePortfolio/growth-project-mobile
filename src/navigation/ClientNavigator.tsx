@@ -115,6 +115,9 @@ import BrandedCheckoutWebViewScreen, {
 // are reachable from the Messages thread and from the Settings hub.
 import ContactView from '../screens/messaging/ContactView';
 import BlockedUsersScreen from '../screens/settings/BlockedUsersScreen';
+// PR-HK-1-mobile — Wearable Connections Hub (manage health data sources).
+// Additive registration only; mounts under MoreStack at AppTabs/Settings/Connections.
+import ConnectionsScreen from '../screens/client/wearables/ConnectionsScreen';
 import { colors } from '../theme/tokens';
 // Defense-in-depth client paywall (Option B): paid screens are wrapped so
 // the entitlement gate runs before the screen body. Server-side
@@ -267,6 +270,8 @@ export type MoreStackParamList = {
   BlockedUsers: undefined;
   /** Client-facing checkout for a coach's package share link. */
   PackageCheckout: { shareToken: string };
+  /** PR-HK-1-mobile — Wearable Connections Hub (manage health data sources). */
+  Connections: undefined;
 };
 
 // ─── Phase 9: unread count polling for the bell icon ─────────────────────────
@@ -482,6 +487,9 @@ function MoreStackNavigator() {
       {/* iMessage-grade DM — Apple App Review 1.2 compliance surfaces. */}
       <MoreStackNav.Screen name="ContactView" component={ContactView} />
       <MoreStackNav.Screen name="BlockedUsers" component={BlockedUsersScreen} />
+      {/* PR-HK-1-mobile — Wearable Connections Hub. Reachable from Settings;
+          the bucket UI + segmented switcher land in PR-HK-3a/3b. */}
+      <MoreStackNav.Screen name="Connections" component={ConnectionsScreen} />
       {/* Client-facing checkout for a coach's package share link. Reachable
           via deep-link (tgp://p/:token, https://app.trygrowthproject.com/p/:token)
           and from the MembershipScreen. */}

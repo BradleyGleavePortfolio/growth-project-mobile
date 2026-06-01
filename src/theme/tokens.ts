@@ -373,6 +373,31 @@ export const darkTokens: SemanticTokens = {
   border:      '#2D2A26',
 };
 
+// ─── Color utilities ────────────────────────────────────────────────────────
+/**
+ * Derive an `rgba()` string from a palette hex token at a given opacity.
+ * Use this for scrims/overlays so they stay anchored to a theme token instead
+ * of hard-coding a raw `rgba(...)` literal (e.g. `withAlpha(colors.ink, 0.45)`
+ * for the modal scrim). Accepts `#RGB` and `#RRGGBB`; alpha is clamped to
+ * [0, 1]. Non-hex input is returned unchanged so callers degrade gracefully.
+ */
+export function withAlpha(hex: string, alpha: number): string {
+  const a = Math.max(0, Math.min(1, alpha));
+  const m = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.exec(hex);
+  if (m == null) return hex;
+  let h = m[1];
+  if (h.length === 3) {
+    h = h
+      .split('')
+      .map((c) => c + c)
+      .join('');
+  }
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${a})`;
+}
+
 // ─── Composite token export ────────────────────────────────────────────────────
 const tokens = {
   colors,

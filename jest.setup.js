@@ -142,3 +142,42 @@ jest.mock('./src/ui/skeletons/Skeleton', () => {
 // for Hermes / React Native. Under Jest (Node.js), globalThis.crypto.getRandomValues
 // is already available natively, so this module is a no-op stub.
 jest.mock('react-native-get-random-values', () => {});
+
+// PR-HK-1: on-device wearable connectors (Apple HealthKit / Health Connect /
+// Samsung Health) import these native modules through the single
+// `services/health/onDeviceConnect` seam. The native TurboModules aren't
+// present under Jest, so provide minimal default mocks (the granted path) here
+// so any screen that transitively imports the seam mounts cleanly. Tests that
+// exercise specific outcomes override these per-case with jest.mock(...).
+jest.mock('react-native-health', () => ({
+  __esModule: true,
+  default: {
+    Constants: {
+      Permissions: {
+        Steps: 'Steps',
+        StepCount: 'StepCount',
+        HeartRate: 'HeartRate',
+        RestingHeartRate: 'RestingHeartRate',
+        HeartRateVariability: 'HeartRateVariability',
+        ActiveEnergyBurned: 'ActiveEnergyBurned',
+        SleepAnalysis: 'SleepAnalysis',
+        Workout: 'Workout',
+      },
+    },
+    initHealthKit: jest.fn((_perms, cb) => cb(null)),
+    isAvailable: jest.fn((cb) => cb(null, true)),
+  },
+}));
+
+jest.mock('react-native-health-connect', () => ({
+  __esModule: true,
+  SdkAvailabilityStatus: {
+    SDK_UNAVAILABLE: 1,
+    SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED: 2,
+    SDK_AVAILABLE: 3,
+  },
+  getSdkStatus: jest.fn(async () => 3),
+  initialize: jest.fn(async () => true),
+  openHealthConnectSettings: jest.fn(),
+  requestPermission: jest.fn(async (perms) => perms),
+}));
