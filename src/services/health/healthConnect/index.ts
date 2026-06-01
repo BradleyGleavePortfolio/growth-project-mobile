@@ -13,7 +13,9 @@ export {
   type HealthConnectPermission,
   type TimeRange,
   type HealthConnectClient,
+  type HealthConnectStatus,
   isHealthConnectSupported,
+  getHealthConnectStatus,
   buildReadPermissions,
   healthConnectClient,
 } from './healthConnectClient';

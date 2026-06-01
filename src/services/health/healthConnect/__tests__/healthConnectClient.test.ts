@@ -22,6 +22,7 @@ import {
   HEALTH_CONNECT_RECORD_TYPES,
   buildReadPermissions,
   getGrantedPermissions,
+  getHealthConnectStatus,
   initialize,
   isHealthConnectSupported,
   readAllSupportedRecords,
@@ -60,6 +61,25 @@ describe('platform guard', () => {
     expect(isHealthConnectSupported()).toBe(false);
     setPlatform('web');
     expect(isHealthConnectSupported()).toBe(false);
+  });
+
+  it('getHealthConnectStatus reports a supported status on android', () => {
+    setPlatform('android');
+    const status = getHealthConnectStatus();
+    expect(status.supported).toBe(true);
+    expect(status.platform).toBe('android');
+    expect(status.reason).toBe('supported');
+    expect(status.message.length).toBeGreaterThan(0);
+  });
+
+  it('getHealthConnectStatus reports a structured platform-unsupported status on ios', () => {
+    setPlatform('ios');
+    const status = getHealthConnectStatus();
+    expect(status.supported).toBe(false);
+    expect(status.platform).toBe('ios');
+    expect(status.reason).toBe('platform-unsupported');
+    // Real, renderable copy — not an empty/silent fallback.
+    expect(status.message).toMatch(/Android only/i);
   });
 
   it('initialize throws HealthConnectUnsupportedError on ios', async () => {

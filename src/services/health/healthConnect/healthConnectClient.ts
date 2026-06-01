@@ -17,15 +17,62 @@
 
 import { Platform } from 'react-native';
 import {
-  initialize as hcInitialize,
-  getGrantedPermissions as hcGetGrantedPermissions,
-  requestPermission as hcRequestPermission,
-  readRecords as hcReadRecords,
-} from 'react-native-health-connect';
-import {
   HealthConnectUnavailableError,
   HealthConnectUnsupportedError,
 } from './errors';
+
+// IMPORTANT — iOS graceful no-op under the new architecture.
+//
+// We must NOT statically `import` from 'react-native-health-connect' at module
+// scope. Under the new architecture (`newArchEnabled=true`, which this project
+// ships) the library resolves its native module eagerly at module-evaluation
+// time:
+//
+//   const HealthConnectModule = Platform.select({
+//     android: isTurboModuleEnabled
+//       ? require('./NativeHealthConnect').default   // ← evaluated on ALL platforms
+//       : NativeModules.HealthConnect,
+//     ios: moduleProxy(PLATFORM_NOT_SUPPORTED_ERROR),
+//     default: moduleProxy(PLATFORM_NOT_SUPPORTED_ERROR),
+//   });
+//
+// JavaScript evaluates every value of the object literal before `Platform.select`
+// chooses one, so `require('./NativeHealthConnect').default` —
+// `TurboModuleRegistry.getEnforcing('HealthConnect')` — runs on iOS too and
+// THROWS (the native module is absent). A static import would therefore make the
+// iOS JS bundle throw at module-evaluation time the moment any iOS-reachable
+// module imports this connector — breaking the required Android-only graceful
+// no-op. We instead `require` the library lazily, behind the platform guard, so
+// the iOS bundle never evaluates `getEnforcing`.
+
+/** The subset of the native library surface this connector uses. */
+interface HealthConnectLib {
+  initialize: () => Promise<boolean>;
+  getGrantedPermissions: () => Promise<unknown>;
+  requestPermission: (perms: HealthConnectPermission[]) => Promise<unknown>;
+  readRecords: (
+    recordType: string,
+    options: {
+      timeRangeFilter: { operator: 'between'; startTime: string; endTime: string };
+    },
+  ) => Promise<{ records?: unknown[] }>;
+}
+
+/**
+ * Lazily load the native Health Connect library. Only ever called AFTER
+ * `assertSupported()` confirms `Platform.OS === 'android'`, so the iOS/web JS
+ * bundle never evaluates the library module (and therefore never triggers the
+ * eager `TurboModuleRegistry.getEnforcing('HealthConnect')` that throws on iOS
+ * under the new architecture). The `require` is deliberately inline so the
+ * bundler does not hoist it to module scope.
+ */
+function loadHealthConnectLib(): HealthConnectLib {
+  // Deliberate lazy require (not a top-level import) so the iOS/web bundle never
+  // evaluates the library module — see the block comment above. Reached only
+  // after assertSupported() confirms Platform.OS === 'android'.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  return require('react-native-health-connect') as HealthConnectLib;
+}
 
 /**
  * The Health Connect record types this connector reads. These map 1:1 onto
@@ -84,6 +131,57 @@ export function isHealthConnectSupported(): boolean {
 }
 
 /**
+ * A structured, renderable description of whether this device can use Health
+ * Connect. The calling UI MUST render the unsupported case as a real,
+ * user-visible state (e.g. “Health Connect is available on Android only on this
+ * device”) rather than treating an iOS device as a user who simply has no data.
+ * The `message` is doctrine-compliant copy: no mascot, no medicalization, no
+ * “coming soon” placeholder — it states a fact about platform availability.
+ */
+export interface HealthConnectStatus {
+  /** True only on Android — mirrors {@link isHealthConnectSupported}. */
+  supported: boolean;
+  /** The current platform (`'android' | 'ios' | 'web' | …`). */
+  platform: typeof Platform.OS;
+  /**
+   * Machine-readable reason the status is what it is. `'supported'` on Android;
+   * `'platform-unsupported'` everywhere else. UI branches on this, never on the
+   * human-readable `message`.
+   */
+  reason: 'supported' | 'platform-unsupported';
+  /** Human-readable, render-ready copy describing the status. */
+  message: string;
+}
+
+/**
+ * Report whether Health Connect is usable on this device, as a structured
+ * result the UI can render directly. This NEVER touches the native library, so
+ * it is safe to call on every platform (including iOS, where evaluating the
+ * library would throw under the new architecture). On unsupported platforms it
+ * returns an explicit `'platform-unsupported'` status — a real state to render,
+ * not a silent empty-data fallback.
+ */
+export function getHealthConnectStatus(): HealthConnectStatus {
+  if (isHealthConnectSupported()) {
+    return {
+      supported: true,
+      platform: Platform.OS,
+      reason: 'supported',
+      message: 'Health Connect is available on this device.',
+    };
+  }
+  return {
+    supported: false,
+    platform: Platform.OS,
+    reason: 'platform-unsupported',
+    message:
+      Platform.OS === 'ios'
+        ? 'Health Connect is available on Android only. On this device, connect Apple Health instead.'
+        : 'Health Connect is available on Android only and is not supported on this device.',
+  };
+}
+
+/**
  * Throw if the current platform cannot run Health Connect. Called at the top
  * of every public method so a mis-wired call site fails loud (#50) rather than
  * silently reading nothing.
@@ -102,7 +200,7 @@ function assertSupported(): void {
  */
 export async function initialize(): Promise<boolean> {
   assertSupported();
-  const ok = await hcInitialize();
+  const ok = await loadHealthConnectLib().initialize();
   if (!ok) {
     throw new HealthConnectUnavailableError();
   }
@@ -112,7 +210,7 @@ export async function initialize(): Promise<boolean> {
 /** Return the read permissions the user has already granted this app. */
 export async function getGrantedPermissions(): Promise<HealthConnectPermission[]> {
   assertSupported();
-  const granted = (await hcGetGrantedPermissions()) as HealthConnectPermission[];
+  const granted = (await loadHealthConnectLib().getGrantedPermissions()) as HealthConnectPermission[];
   return Array.isArray(granted) ? granted : [];
 }
 
@@ -126,7 +224,7 @@ export async function requestPermission(): Promise<HealthConnectPermission[]> {
   // `Permission` union (record-type string-literal + accessType: 'read').
   // Our descriptors are structurally identical for the read set; cast through
   // the library's parameter type so the wider local union does not leak.
-  const request = hcRequestPermission as unknown as (
+  const request = loadHealthConnectLib().requestPermission as unknown as (
     perms: HealthConnectPermission[],
   ) => Promise<HealthConnectPermission[]>;
   const granted = await request(buildReadPermissions());
@@ -152,7 +250,7 @@ export async function readRecords(
   // `{ records: T[] }`. We cast through `unknown` because our record-type
   // union is wider than the library's per-call generic and we treat records
   // opaquely until normalization.
-  const result = (await (hcReadRecords as unknown as (
+  const result = (await (loadHealthConnectLib().readRecords as unknown as (
     rt: string,
     opts: { timeRangeFilter: { operator: 'between'; startTime: string; endTime: string } },
   ) => Promise<{ records?: unknown[] }>)(recordType, {
@@ -192,6 +290,7 @@ export async function readAllSupportedRecords(
 /** Grouped client surface — handy for the sync service + mocking in tests. */
 export const healthConnectClient = {
   isHealthConnectSupported,
+  getHealthConnectStatus,
   buildReadPermissions,
   initialize,
   getGrantedPermissions,
