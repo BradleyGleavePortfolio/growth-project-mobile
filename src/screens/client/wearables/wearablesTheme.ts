@@ -38,7 +38,8 @@ export interface ToneTokens {
   /**
    * AA-safe foreground (≥4.5:1 vs bone, and on cream) — used as the fill for
    * primary CTAs that carry bone text AND as on-light text/link colour. Warm
-   * resolves to gold[700] (#8A6A2A ≈ 5.10:1 bone); cool to forest (8.57:1).
+   * resolves to gold[800] (#6B4F1A — 6.65:1 bone / 6.25:1 cream); cool to
+   * forest (8.57:1).
    */
   readonly accentInk: string;
   /** Soft tinted surface behind hero / selected states. */
@@ -51,7 +52,9 @@ export interface ToneTokens {
 
 const WARM: ToneTokens = {
   accent: colors.camel, // clay/amber warm accent (#B08D57) — borders/icons/lines only
-  accentInk: gold[700], // #8A6A2A — bone-on-fill ≈ 5.10:1 (AA PASS)
+  // AA-safe (6.65:1 on bone / 6.25:1 on cream) — used as on-light text/link colour
+  // AND as filled-CTA background behind bone text.
+  accentInk: gold[800], // #6B4F1A
   tint: withAlpha(colors.camel, 0.1),
   glow: withAlpha(colors.mutedGold, 0.6),
   track: withAlpha(colors.camel, 0.16),
