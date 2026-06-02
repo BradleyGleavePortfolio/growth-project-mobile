@@ -82,6 +82,14 @@ export interface BoundPreference {
     opts?: { onError?: (err: Error) => void },
   ) => void;
   readonly isPending: boolean;
+  /**
+   * True when the most recent set OR clear write failed. Surfaced (R65 #36) so
+   * the screen can render an observable error state — passing `opts.onError`
+   * is additive and never suppresses this flag.
+   */
+  readonly isError: boolean;
+  /** The error from the failed set/clear write, or null when none. */
+  readonly error: Error | null;
 }
 
 /**
@@ -222,6 +230,13 @@ export function useWearablePreference(args?: {
     data: optimistic.data ?? null,
     // Either write is in flight → the chip row shows pending.
     isPending: mutation.isPending || clearMutation.isPending,
+    // Either write failed → the bound return reflects an observable error
+    // state. A caller-supplied `opts.onError` runs ADDITIVELY (see below) and
+    // never consumes/suppresses these flags (R65 #36 — no silent failure). We
+    // prefer the clear error when both somehow carry one, but in practice only
+    // one write path is exercised per bound metric at a time.
+    isError: mutation.isError || clearMutation.isError,
+    error: clearMutation.error ?? mutation.error ?? null,
     mutate: (
       preferredProvider: WearableProvider | null,
       opts?: { onError?: (err: Error) => void },

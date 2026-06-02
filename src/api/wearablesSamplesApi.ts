@@ -53,6 +53,13 @@ export type WearableMetricBucket = (typeof WEARABLE_METRIC_BUCKETS)[number];
  * (growth-project-backend prisma schema + samples/metric-bucket.map.ts). The
  * ordering is irrelevant to the wire; what matters is the exact value set so a
  * drift trips the Zod parse instead of silently dropping a series.
+ *
+ * `SLEEP_DURATION_MIN` / `SLEEP_ONSET_ISO` / `SLEEP_WAKE_ISO` are the
+ * sleep-bucket metrics consumed by HK-3b (PR #223) `recoveryData` (sleep
+ * deficit + consistency). The backend enum add for these ships in the same
+ * PR-HK-3a coordination line; the mobile mirror is added here so the shared
+ * client typechecks for HK-3b. Onset/wake carry a numeric value = local
+ * minutes-of-day (see HK-3b `sleepConsistency`).
  */
 export const WEARABLE_METRIC_TYPES = [
   // Health & Fitness
@@ -69,12 +76,15 @@ export const WEARABLE_METRIC_TYPES = [
   'BLOOD_PRESSURE_SYS',
   'BLOOD_PRESSURE_DIA',
   // Sleep & Recovery
+  'SLEEP_DURATION_MIN',
   'SLEEP_TOTAL_MIN',
   'SLEEP_REM_MIN',
   'SLEEP_DEEP_MIN',
   'SLEEP_LIGHT_MIN',
   'SLEEP_AWAKE_MIN',
   'SLEEP_EFFICIENCY_PCT',
+  'SLEEP_ONSET_ISO',
+  'SLEEP_WAKE_ISO',
   'HRV_MS',
   'RECOVERY_SCORE',
   'READINESS_SCORE',

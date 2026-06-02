@@ -254,7 +254,7 @@ describe('useWearablePreference({ metric }) — HK-3b contract overload (R1 P0 #
     await waitFor(() => expect(result.current.isPending).toBe(false));
   });
 
-  it('clear surfaces errors via opts.onError instead of failing silently', async () => {
+  it('clear surfaces errors via opts.onError so the caller is notified', async () => {
     const mockedClear = wearablesSamplesApi.clearPreference as jest.MockedFunction<
       typeof wearablesSamplesApi.clearPreference
     >;
@@ -275,7 +275,36 @@ describe('useWearablePreference({ metric }) — HK-3b contract overload (R1 P0 #
 
     // The failure is observable — the caller's onError fires (actionable toast).
     await waitFor(() => expect(onError).toHaveBeenCalledWith(boom));
-    // The optimistic active preference is NOT silently wiped on a failed clear.
+    // The optimistic active preference is preserved on a failed clear.
     expect(qc.getQueryData(wearablePreferenceQueryKey('STEPS'))).toBe('OURA');
+  });
+
+  it('clear with a caller onError still reflects isError and error on the bound return', async () => {
+    const mockedClear = wearablesSamplesApi.clearPreference as jest.MockedFunction<
+      typeof wearablesSamplesApi.clearPreference
+    >;
+    const boom = new Error('clear rejected');
+    mockedClear.mockRejectedValueOnce(boom);
+    const { qc, Wrapper } = makeWrapper();
+    qc.setQueryData(wearablePreferenceQueryKey('STEPS'), 'OURA');
+    const onError = jest.fn();
+
+    const { result } = renderHook(
+      () => useWearablePreference({ metric: 'STEPS' }),
+      { wrapper: Wrapper },
+    );
+
+    act(() => {
+      result.current.mutate(null, { onError });
+    });
+
+    // The caller's onError runs ADDITIVELY — exactly once, with the error …
+    await waitFor(() => expect(onError).toHaveBeenCalledTimes(1));
+    expect(onError).toHaveBeenCalledWith(boom);
+    // … AND passing opts.onError does NOT consume the observable error state:
+    // the bound return reflects the failed clear (R65 #36).
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(result.current.error).toBe(boom);
+    expect(result.current.error?.message).toBe('clear rejected');
   });
 });
