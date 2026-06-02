@@ -82,10 +82,10 @@ export default function BucketSwitcher({ active, onChange }: Props) {
   );
 }
 
-// `colors` has no dedicated "switch surface" token; use a tinted neutral that
-// reads as a raised pill on the bone/cream track (matches the app's chip
-// treatment) without inventing an off-palette hex.
-const SWITCH_SURFACE = withAlpha(colors.bone, 1);
+// `colors` has no dedicated "switch surface" token; the raised pill reads as a
+// solid neutral on the bone/cream track (matches the app's chip treatment)
+// without inventing an off-palette hex. (R1 P3: drop the withAlpha(_, 1) no-op.)
+const SWITCH_SURFACE = colors.bone;
 
 const styles = StyleSheet.create({
   container: {

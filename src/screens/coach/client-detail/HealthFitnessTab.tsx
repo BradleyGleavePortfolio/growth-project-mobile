@@ -10,23 +10,49 @@
  * The band is derived from the client's own H&F series; it is advisory copy,
  * not a medical claim, and never renders raw values when there is no data
  * (value-first, never "Coming soon").
+ *
+ * Data-integrity (R1 visual P1 #2 — clinician-facing): the band MUST branch on
+ * the query's loading / error states. A failed fetch is NEVER allowed to render
+ * the green "no notable shifts" reassurance — that would lie to a coach reading
+ * a real client's data.
+ *
+ * The band shares ONE hour-rounded window with the embedded HealthFitnessScreen
+ * so they hit a single React Query cache key instead of double-fetching
+ * (R1 code P1 #2 / P2 #1).
+ *
+ * Surface chrome reuses the wearables `WearableCard` (R1 visual P1 #4) so the
+ * band sits on the same bone/cream material as the screen it caps — no coach↔
+ * wearables palette seam — and carries no inline hex / off-grid spacing.
  */
 
 import React, { useMemo } from 'react';
-import { Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ThemeColors } from '../../../theme/ThemeProvider';
 import type { ClientDetailStyles } from './styles';
 import { useWearableSamples } from '../../../hooks/useWearableSamples';
-import { metricMeta } from '../../client/wearables/wearablesTheme';
+import { metricMeta, toneTokens } from '../../client/wearables/wearablesTheme';
 import { seriesPoints, deltaPct } from '../../client/wearables/seriesSummary';
 import type {
   SamplesResponse,
   WearableMetricType,
 } from '../../../api/wearablesSamplesApi';
+import { colors, semantic, spacing, typography } from '../../../theme/tokens';
+import WearableCard from '../../client/wearables/components/WearableCard';
 import HealthFitnessScreen from '../../client/wearables/HealthFitnessScreen';
 
 const WINDOW_DAYS = 30;
+
+/**
+ * Round a timestamp DOWN to the start of its hour so the rolling-window cache
+ * key is stable across re-mounts within the same hour and matches the window
+ * the embedded HealthFitnessScreen reuses (R1 code P1 #2 / P2 #1).
+ */
+function roundToHour(d: Date): Date {
+  const r = new Date(d);
+  r.setMinutes(0, 0, 0);
+  return r;
+}
 
 /** Metrics the coach anomaly band scans, with the direction that reads as a flag. */
 const WATCHED: ReadonlyArray<{
@@ -71,15 +97,19 @@ function computeAnomalies(data: SamplesResponse | undefined): Anomaly[] {
 
 export function HealthFitnessTab({
   clientId,
-  colors,
   styles,
 }: {
   clientId: string;
-  colors: ThemeColors;
+  /** Coach theme palette (kept for prop-compat with the tab host). */
+  colors?: ThemeColors;
   styles: ClientDetailStyles;
 }) {
+  const toneTk = toneTokens('warm');
+
+  // Single hour-rounded window shared with the embedded HealthFitnessScreen so
+  // both reads collapse to one React Query cache key (R1 code P1 #2 / P2 #1).
   const window = useMemo(() => {
-    const to = new Date();
+    const to = roundToHour(new Date());
     const from = new Date(to.getTime() - WINDOW_DAYS * 24 * 60 * 60 * 1000);
     return { from: from.toISOString(), to: to.toISOString() };
   }, []);
@@ -97,53 +127,127 @@ export function HealthFitnessTab({
   return (
     <>
       <Text style={styles.sectionTitle}>Coach insights</Text>
-      <View
-        style={{
-          backgroundColor: colors.surface,
-          borderRadius: 4,
-          borderWidth: 1,
-          borderColor: colors.border,
-          padding: 16,
-          marginBottom: 16,
-        }}
+      <WearableCard
+        title="Signal scan"
+        icon="pulse-outline"
+        accent={toneTk.accent}
+        style={bandStyles.card}
       >
-        {anomalies.length === 0 ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Ionicons name="checkmark-circle-outline" size={18} color={colors.success} />
-            <Text style={{ color: colors.textSecondary, flex: 1 }}>
-              No notable shifts in this client&apos;s fitness signals over the last{' '}
-              {WINDOW_DAYS} days.
-            </Text>
-          </View>
-        ) : (
-          anomalies.map((a) => {
-            const rising = a.deltaPct >= 0;
-            return (
-              <View
-                key={a.metric}
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 8,
-                  paddingVertical: 6,
-                }}
-              >
-                <Ionicons
-                  name={rising ? 'trending-up-outline' : 'trending-down-outline'}
-                  size={18}
-                  color={colors.warning}
-                />
-                <Text style={{ color: colors.textPrimary, flex: 1 }}>
-                  {a.label} {rising ? 'up' : 'down'} {Math.abs(a.deltaPct).toFixed(0)}%
-                  {' '}over {WINDOW_DAYS} days
-                </Text>
-              </View>
-            );
-          })
-        )}
-      </View>
+        {renderBand({
+          isLoading: query.isLoading,
+          isError: query.isError,
+          anomalies,
+        })}
+      </WearableCard>
 
-      <HealthFitnessScreen clientId={clientId} />
+      <HealthFitnessScreen clientId={clientId} window={window} />
     </>
   );
 }
+
+/**
+ * Render the band body with explicit loading / error / empty / populated
+ * branches. The error branch is intentionally neutral (no green, no "all
+ * clear") — a failed fetch must never read as reassurance (R1 visual P1 #2).
+ */
+function renderBand({
+  isLoading,
+  isError,
+  anomalies,
+}: {
+  isLoading: boolean;
+  isError: boolean;
+  anomalies: readonly Anomaly[];
+}) {
+  if (isLoading) {
+    return (
+      <View style={bandStyles.skeleton} accessibilityLabel="Loading coach insights" />
+    );
+  }
+
+  if (isError) {
+    return (
+      <View style={bandStyles.row}>
+        <Ionicons name="cloud-offline-outline" size={18} color={colors.stone} />
+        <Text style={bandStyles.neutralText} accessibilityRole="alert">
+          Couldn&apos;t load insights — pull to refresh.
+        </Text>
+      </View>
+    );
+  }
+
+  if (anomalies.length === 0) {
+    return (
+      <View style={bandStyles.row}>
+        <Ionicons
+          name="checkmark-circle-outline"
+          size={18}
+          color={semantic.success.fg}
+        />
+        <Text style={bandStyles.bodyText}>
+          No notable shifts in this client&apos;s fitness signals over the last{' '}
+          {WINDOW_DAYS} days.
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <>
+      {anomalies.map((a) => {
+        const rising = a.deltaPct >= 0;
+        return (
+          <View key={a.metric} style={bandStyles.anomalyRow}>
+            <Ionicons
+              name={rising ? 'trending-up-outline' : 'trending-down-outline'}
+              size={18}
+              color={semantic.warning.fg}
+            />
+            <Text style={bandStyles.primaryText}>
+              {a.label} {rising ? 'up' : 'down'}{' '}
+              {Math.abs(a.deltaPct).toFixed(0)}% over {WINDOW_DAYS} days
+            </Text>
+          </View>
+        );
+      })}
+    </>
+  );
+}
+
+const bandStyles = StyleSheet.create({
+  card: {
+    marginBottom: spacing.lg,
+  },
+  skeleton: {
+    height: 20,
+    borderRadius: 4,
+    backgroundColor: colors.cream,
+    opacity: 0.55,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  anomalyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  bodyText: {
+    ...typography.body,
+    color: colors.charcoal,
+    flex: 1,
+  },
+  neutralText: {
+    ...typography.body,
+    color: colors.charcoal,
+    flex: 1,
+  },
+  primaryText: {
+    ...typography.body,
+    color: colors.ink,
+    flex: 1,
+  },
+});

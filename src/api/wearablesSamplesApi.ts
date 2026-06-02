@@ -27,7 +27,9 @@
  */
 
 import { z } from 'zod';
+import axios from 'axios';
 import api from '../services/api';
+import { logger } from '../utils/logger';
 import {
   WEARABLE_PROVIDERS,
   type WearableProvider,
@@ -181,6 +183,43 @@ export const samplesResponseSchema = z
 
 export type SamplesResponse = z.infer<typeof samplesResponseSchema>;
 
+// ─── HK-3b contract aliases (shared client surface) ──────────────────────────
+//
+// HK-3b (PR #223) imports the response + series types under a `Wearable`-
+// prefixed spelling for readability at its call sites. These are EXACT aliases
+// of the canonical types above — one shape on the wire, two spellings of the
+// same TypeScript type. Adding aliases (not a second definition) keeps the
+// §3b LOCK NOTE intact: there is still a single response shape, mirrored once.
+
+/** Alias of {@link SamplesResponse} for HK-3b imports. */
+export type WearableSamplesResponse = SamplesResponse;
+/** Alias of {@link SampleSeries} for HK-3b imports. */
+export type WearableSampleSeries = SampleSeries;
+
+/**
+ * A typed failure from the samples/preferences client. HK-3b branches on
+ * `err instanceof WearableSamplesError && err.status === 403` to distinguish an
+ * IDOR-gated coach read from a transient transport failure, so this is a REAL
+ * class (never an `as any`): the `status` is the HTTP status the backend
+ * returned (or a synthetic one for a Zod drift), `kind` is a stable string
+ * discriminant, and `cause` preserves the original error for structured
+ * logging WITHOUT swallowing it (#36).
+ */
+export class WearableSamplesError extends Error {
+  constructor(
+    public readonly kind: string,
+    public readonly status: number,
+    message: string,
+    public readonly cause?: unknown,
+  ) {
+    super(message);
+    this.name = 'WearableSamplesError';
+    // Restore the prototype chain so `instanceof` holds across the TS→ES5
+    // class-extends-builtin transpile (HK-3b relies on the instanceof check).
+    Object.setPrototypeOf(this, WearableSamplesError.prototype);
+  }
+}
+
 /** Result of a preferred-source upsert (mirror of backend POST response). */
 export const preferenceResultSchema = z.object({
   metric: metricSchema,
@@ -212,6 +251,18 @@ export interface GetSamplesParams {
    * window are returned (Metric Detail "compare sources" view).
    */
   readonly preferredOnly?: boolean;
+  /**
+   * Optional explicit provider filter (HK-3b contract). When set, only these
+   * providers' samples are requested. Sent as a comma-joined `providers` query
+   * param. (Backend acceptance is being added in PR #356 — see deliverable
+   * BACKEND_COORDINATION_REQUIRED.)
+   */
+  readonly providers?: readonly WearableProvider[];
+  /**
+   * Optional IANA timezone for server-side day-boundary bucketing (HK-3b
+   * contract). Sent as a `timezone` query param.
+   */
+  readonly timezone?: string;
 }
 
 // ─── Client ──────────────────────────────────────────────────────────────────
@@ -238,6 +289,14 @@ function buildSamplesQuery(params: GetSamplesParams): Record<string, string> {
   if (params.preferredOnly !== undefined) {
     query.preferredOnly = params.preferredOnly ? 'true' : 'false';
   }
+  // Provider filter + timezone (HK-3b contract). Omitted (not sent as the
+  // string "undefined") so the backend's tolerant-of-absent-optionals schema
+  // never sees a stray key. An empty providers array is treated as "no filter"
+  // and omitted too.
+  if (params.providers !== undefined && params.providers.length > 0) {
+    query.providers = [...params.providers].join(',');
+  }
+  if (params.timezone !== undefined) query.timezone = params.timezone;
   return query;
 }
 
@@ -245,15 +304,55 @@ export const wearablesSamplesApi = {
   /**
    * Read wearable time-series for a bucket (and optional single metric) over a
    * window. The window is hard-capped at 90 days server-side.
+   *
+   * Transport failures (400/403/503) are RE-THROWN as a typed
+   * {@link WearableSamplesError} carrying the HTTP `status`, so callers (and
+   * HK-3b's `isForbidden` guard) can branch on `err.status === 403` without
+   * depending on axios internals. A Zod drift propagates UNCHANGED as a
+   * `ZodError` (it is a contract-shape bug, not an HTTP status). We never
+   * swallow either (#36): a `WearableSamplesError` always preserves the
+   * original error in `cause` for structured logging.
    * @throws ZodError if the wire shape drifts from the backend DTO.
-   * @throws AxiosError (with response.status) on 400/403/503 — callers map
-   *         these to typed user-facing error states (NEVER swallow — #36).
+   * @throws WearableSamplesError (with `.status`) on a transport failure.
    */
   async getSamples(params: GetSamplesParams): Promise<SamplesResponse> {
-    const res = await api.get<unknown>(SAMPLES_BASE, {
-      params: buildSamplesQuery(params),
-    });
-    return samplesResponseSchema.parse(res.data);
+    try {
+      const res = await api.get<unknown>(SAMPLES_BASE, {
+        params: buildSamplesQuery(params),
+      });
+      return samplesResponseSchema.parse(res.data);
+    } catch (err) {
+      // A Zod drift is a shape contract bug, not an HTTP status — surface it
+      // verbatim so the existing parse-throws contract is unchanged.
+      if (err instanceof z.ZodError) throw err;
+      if (axios.isAxiosError(err)) {
+        const status = err.response?.status ?? 0;
+        const kind =
+          status === 403
+            ? 'forbidden'
+            : status === 400
+              ? 'bad_request'
+              : status >= 500
+                ? 'degraded'
+                : 'transport';
+        // Log with structured context (NO sample values / PII — #34) then
+        // re-throw as a typed error. This is the "best-effort secondary call"
+        // pattern inverted: the PRIMARY call's failure is never hidden.
+        logger.log('wearablesSamplesApi', 'getSamples failed', {
+          status,
+          kind,
+          bucket: params.bucket,
+        });
+        throw new WearableSamplesError(
+          kind,
+          status,
+          err.message || `WEARABLE_SAMPLES_${kind.toUpperCase()}`,
+          err,
+        );
+      }
+      // Unknown non-axios, non-Zod error — never swallow; re-throw as-is.
+      throw err;
+    }
   },
 
   /**

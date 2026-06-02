@@ -3,10 +3,12 @@
  *
  * Mirrors the repo's data-hook conventions (see `useWearableConnections` for
  * the query pattern). The cache key encodes EVERY param that changes the
- * server result so two different windows / granularities / clients never
- * collide on one cache entry:
+ * server result so two different windows / granularities / clients / provider
+ * filters never collide on one cache entry:
  *
- *   ['wearables','samples', { bucket, metric, from, to, clientId, granularity, preferredOnly }]
+ *   ['wearables','samples',
+ *     { bucket, metric, from, to, clientId, granularity, preferredOnly,
+ *       providers, timezone }]
  *
  * Per the CPO React Query note (§3b), the persister buster is bumped to
  * `v2-samples` in App.tsx so a stale pre-samples cache is discarded on first
@@ -15,6 +17,15 @@
  * staleTime 60s / gcTime 5min: wearable series move on a minutes-to-hours
  * cadence, so re-opening the H&F screen within a minute serves cache instantly
  * (no refetch) while a cold open after a few minutes pulls fresh data.
+ *
+ * Two caller shapes are accepted (R1 P0 #4 — HK-3b contract compat):
+ *   - LEGACY: { bucket, from, to, metric?, clientId?, granularity?,
+ *              preferredOnly?, providers?, timezone? }
+ *   - CONTRACT: { bucket, metric, range: { from, to }, granularity, providers,
+ *              timezone, clientId?, preferredOnly? }
+ * Both normalise to {@link GetSamplesParams}; the CONTRACT `range` is just an
+ * explicit window object. A single overloaded signature keeps every existing
+ * call site working while satisfying HK-3b's documented contract surface.
  */
 
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
@@ -30,10 +41,65 @@ export const WEARABLE_SAMPLES_STALE_MS = 60_000;
 export const WEARABLE_SAMPLES_GC_MS = 5 * 60_000;
 
 /**
+ * The CONTRACT-shape args HK-3b's contract documents: a single `range` window
+ * object instead of flat `from`/`to`. Everything else mirrors
+ * {@link GetSamplesParams}. `range` is required in this shape so TypeScript can
+ * discriminate it from the legacy (flat `from`/`to`) shape at the overload.
+ */
+export interface ContractSamplesArgs {
+  readonly bucket: GetSamplesParams['bucket'];
+  readonly range: { readonly from: string; readonly to: string };
+  readonly metric?: GetSamplesParams['metric'];
+  readonly clientId?: GetSamplesParams['clientId'];
+  readonly granularity?: GetSamplesParams['granularity'];
+  readonly preferredOnly?: GetSamplesParams['preferredOnly'];
+  readonly providers?: GetSamplesParams['providers'];
+  readonly timezone?: GetSamplesParams['timezone'];
+}
+
+/** Type guard: the contract shape carries a `range` window object. */
+function isContractArgs(
+  args: GetSamplesParams | ContractSamplesArgs,
+): args is ContractSamplesArgs {
+  return (
+    typeof (args as ContractSamplesArgs).range === 'object' &&
+    (args as ContractSamplesArgs).range !== null
+  );
+}
+
+/**
+ * Normalise either caller shape to the flat {@link GetSamplesParams} the API
+ * client expects. Pure + exported so the overload behaviour is unit-testable.
+ */
+export function normalizeSampleArgs(
+  args: GetSamplesParams | ContractSamplesArgs,
+): GetSamplesParams {
+  if (isContractArgs(args)) {
+    return {
+      bucket: args.bucket,
+      from: args.range.from,
+      to: args.range.to,
+      metric: args.metric,
+      clientId: args.clientId,
+      granularity: args.granularity,
+      preferredOnly: args.preferredOnly,
+      providers: args.providers,
+      timezone: args.timezone,
+    };
+  }
+  return args;
+}
+
+/**
  * The canonical, fully-normalised cache key for a samples query. Exported so
  * the preference write-hook can surgically invalidate only the affected
  * queries and tests can assert key shape. Keys are objects (React Query does a
  * stable structural compare) — order of param fields is irrelevant.
+ *
+ * `providers` is normalised to a sorted joined string (so `[A,B]` and `[B,A]`
+ * hit the SAME cache entry) and `timezone` is included — without these two,
+ * two different provider-filtered / timezone variants would COLLIDE on one
+ * cache entry and serve the wrong data (R1 P0 #4).
  */
 export function wearableSamplesQueryKey(params: GetSamplesParams) {
   return [
@@ -47,6 +113,11 @@ export function wearableSamplesQueryKey(params: GetSamplesParams) {
       clientId: params.clientId ?? null,
       granularity: params.granularity ?? 'raw',
       preferredOnly: params.preferredOnly ?? true,
+      providers:
+        params.providers && params.providers.length > 0
+          ? [...params.providers].sort().join(',')
+          : null,
+      timezone: params.timezone ?? null,
     },
   ] as const;
 }
@@ -69,7 +140,16 @@ export const WEARABLE_SAMPLES_ROOT_KEY = ['wearables', 'samples'] as const;
 export function useWearableSamples(
   params: GetSamplesParams,
   options?: { enabled?: boolean },
+): UseQueryResult<SamplesResponse, Error>;
+export function useWearableSamples(
+  args: ContractSamplesArgs,
+  options?: { enabled?: boolean },
+): UseQueryResult<SamplesResponse, Error>;
+export function useWearableSamples(
+  args: GetSamplesParams | ContractSamplesArgs,
+  options?: { enabled?: boolean },
 ): UseQueryResult<SamplesResponse, Error> {
+  const params = normalizeSampleArgs(args);
   return useQuery<SamplesResponse, Error>({
     queryKey: wearableSamplesQueryKey(params),
     queryFn: () => wearablesSamplesApi.getSamples(params),

@@ -77,7 +77,7 @@ export default function WorkoutsCard({ workoutSeries, tone, onPress, now }: Prop
                 style={[styles.chip, { borderColor: withAlpha(toneTk.accent, 0.3) }]}
               >
                 <Text style={styles.chipText}>
-                  {Math.round(s.value)}m · {relativeTime(s.start_at, now) ?? 'recent'}
+                  {Math.round(s.value)} min · {relativeTime(s.start_at, now) ?? 'recent'}
                 </Text>
               </View>
             ))}

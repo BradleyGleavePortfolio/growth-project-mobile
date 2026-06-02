@@ -143,3 +143,66 @@ describe('useWearablePreference', () => {
     expect(qc.getQueryData(wearablePreferenceQueryKey('STEPS'))).toBeUndefined();
   });
 });
+
+describe('useWearablePreference({ metric }) — HK-3b contract overload (R1 P0 #5)', () => {
+  it('returns { data, mutate, isPending } and mutate(provider) writes the metric', async () => {
+    mockedSet.mockResolvedValueOnce({
+      metric: 'STEPS',
+      preferred_provider: 'WHOOP',
+      updated_at: '2026-05-08T06:00:00.000Z',
+    });
+    const { qc, Wrapper } = makeWrapper();
+
+    const { result } = renderHook(
+      () => useWearablePreference({ metric: 'STEPS' }),
+      { wrapper: Wrapper },
+    );
+
+    // Bound surface: data + isPending + a single-arg mutate.
+    expect(result.current).toHaveProperty('data');
+    expect(result.current).toHaveProperty('isPending');
+    expect(typeof result.current.mutate).toBe('function');
+
+    act(() => {
+      // The metric is bound, so the simpler surface is mutate(preferredProvider).
+      result.current.mutate('WHOOP');
+    });
+
+    // Optimistic write lands in the per-metric preference cache.
+    await waitFor(() =>
+      expect(qc.getQueryData(wearablePreferenceQueryKey('STEPS'))).toBe('WHOOP'),
+    );
+    expect(mockedSet).toHaveBeenCalledWith('STEPS', 'WHOOP');
+  });
+
+  it('reads the optimistic provider back through `data`', async () => {
+    const { qc, Wrapper } = makeWrapper();
+    qc.setQueryData(wearablePreferenceQueryKey('STEPS'), 'OURA');
+
+    const { result } = renderHook(
+      () => useWearablePreference({ metric: 'STEPS' }),
+      { wrapper: Wrapper },
+    );
+
+    await waitFor(() => expect(result.current.data).toBe('OURA'));
+  });
+
+  it('mutate(null) clears the preference via the clear endpoint', async () => {
+    const mockedClear = wearablesSamplesApi.clearPreference as jest.MockedFunction<
+      typeof wearablesSamplesApi.clearPreference
+    >;
+    mockedClear.mockResolvedValueOnce();
+    const { Wrapper } = makeWrapper();
+
+    const { result } = renderHook(
+      () => useWearablePreference({ metric: 'STEPS' }),
+      { wrapper: Wrapper },
+    );
+
+    act(() => {
+      result.current.mutate(null);
+    });
+
+    await waitFor(() => expect(mockedClear).toHaveBeenCalledWith('STEPS'));
+  });
+});

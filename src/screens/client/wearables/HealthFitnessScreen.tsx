@@ -28,6 +28,7 @@
 
 import React, { useCallback, useMemo } from 'react';
 import {
+  Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -75,6 +76,17 @@ const RING_GOALS = {
 
 const WINDOW_DAYS = 30;
 
+/**
+ * Round a timestamp DOWN to the start of its hour so the rolling-window cache
+ * key is stable across re-mounts within the same hour (R1 code P2 #1). Coarser
+ * than an hour would let H&F data look up to 1h stale.
+ */
+function roundToHour(d: Date): Date {
+  const r = new Date(d);
+  r.setMinutes(0, 0, 0);
+  return r;
+}
+
 interface Props {
   /** Coach embed reads a client's data; omitted on the client's own surface. */
   readonly clientId?: string;
@@ -83,6 +95,14 @@ interface Props {
    * now (brief §4.1) so adding it is additive and never reshapes the layout.
    */
   readonly aiPanelSlot?: React.ReactNode;
+  /**
+   * Optional pre-computed sample window (ISO `from`/`to`). When the coach tab
+   * embeds this screen it passes the SAME hour-rounded window it already reads
+   * for the anomaly band, so both share one React Query cache key instead of
+   * firing two near-identical requests (R1 code P1 #2 / P2 #1). Omitted on the
+   * client's own surface, where the screen computes its own window.
+   */
+  readonly window?: { readonly from: string; readonly to: string };
 }
 
 function findSeries(
@@ -92,18 +112,25 @@ function findSeries(
   return data?.series.find((s) => s.metric === metric);
 }
 
-export default function HealthFitnessScreen({ clientId, aiPanelSlot }: Props) {
+export default function HealthFitnessScreen({
+  clientId,
+  aiPanelSlot,
+  window: windowProp,
+}: Props) {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const reduceMotion = useReduceMotion();
   const tone = toneForBucket('HEALTH_FITNESS');
   const toneTk = toneTokens(tone);
 
-  // Window: last WINDOW_DAYS, day granularity (server aggregates).
-  const window = useMemo(() => {
-    const to = new Date();
+  // Window: last WINDOW_DAYS, day granularity (server aggregates). When a parent
+  // (the coach tab) supplies a shared, hour-rounded window we reuse it verbatim
+  // so the query key matches and we don't double-fetch (R1 code P1 #2 / P2 #1).
+  const ownWindow = useMemo(() => {
+    const to = roundToHour(new Date());
     const from = new Date(to.getTime() - WINDOW_DAYS * 24 * 60 * 60 * 1000);
     return { from: from.toISOString(), to: to.toISOString() };
   }, []);
+  const window = windowProp ?? ownWindow;
 
   const query = useWearableSamples({
     bucket: 'HEALTH_FITNESS',
@@ -207,13 +234,15 @@ export default function HealthFitnessScreen({ clientId, aiPanelSlot }: Props) {
         <Text style={styles.errorBody}>
           We&apos;ll keep your data safe — try again.
         </Text>
-        <Text
-          style={[styles.retry, { color: toneTk.accent }]}
-          accessibilityRole="button"
+        <Pressable
           onPress={() => void refetch()}
+          accessibilityRole="button"
+          accessibilityLabel="Try again"
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          style={({ pressed }) => [styles.recoveryCta, pressed && styles.recoveryCtaPressed]}
         >
-          Try again
-        </Text>
+          <Text style={[styles.recoveryCtaLabel, { color: toneTk.accent }]}>Try again</Text>
+        </Pressable>
       </View>
     );
   }
@@ -342,8 +371,20 @@ const styles = StyleSheet.create({
     color: colors.charcoal,
     textAlign: 'center',
   },
-  retry: {
-    ...typography.bodyMd,
+  // R1 visual P0 #2: recovery CTAs are real ≥44pt tap targets (Apple HIG),
+  // mirroring the praised HealthFitnessEmptyState CTA pattern — the closure
+  // moment of a failure flow (peak-end rule) must be reliable to tap.
+  recoveryCta: {
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
     marginTop: spacing.md,
+  },
+  recoveryCtaPressed: {
+    opacity: 0.7,
+  },
+  recoveryCtaLabel: {
+    ...typography.bodyMd,
   },
 });

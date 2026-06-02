@@ -22,6 +22,7 @@
 
 import React, { useCallback, useMemo, useState } from 'react';
 import {
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -194,13 +195,15 @@ export default function MetricDetailScreen() {
           <Text style={styles.errorBody}>
             We&apos;ll keep your data safe — try again.
           </Text>
-          <Text
-            style={[styles.retry, { color: toneTk.accent }]}
-            accessibilityRole="button"
+          <Pressable
             onPress={() => void refetch()}
+            accessibilityRole="button"
+            accessibilityLabel="Try again"
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            style={({ pressed }) => [styles.recoveryCta, pressed && styles.recoveryCtaPressed]}
           >
-            Try again
-          </Text>
+            <Text style={[styles.recoveryCtaLabel, { color: toneTk.accent }]}>Try again</Text>
+          </Pressable>
         </View>
       </SafeAreaView>
     );
@@ -230,13 +233,17 @@ export default function MetricDetailScreen() {
               Connect a source that records {meta.label.toLowerCase()} to see your
               trend here.
             </Text>
-            <Text
-              style={[styles.retry, { color: toneTk.accent }]}
-              accessibilityRole="button"
+            <Pressable
               onPress={onConnect}
+              accessibilityRole="button"
+              accessibilityLabel="Connect a source"
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              style={({ pressed }) => [styles.recoveryCta, pressed && styles.recoveryCtaPressed]}
             >
-              Connect a source
-            </Text>
+              <Text style={[styles.recoveryCtaLabel, { color: toneTk.accent }]}>
+                Connect a source
+              </Text>
+            </Pressable>
           </View>
         )}
 
@@ -254,13 +261,15 @@ export default function MetricDetailScreen() {
         <View style={styles.toast} accessibilityRole="alert" accessibilityLiveRegion="polite">
           <Ionicons name="alert-circle" size={16} color={semantic.warning.fg} />
           <Text style={styles.toastText}>{toast}</Text>
-          <Text
-            style={[styles.toastDismiss, { color: toneTk.accent }]}
-            accessibilityRole="button"
+          <Pressable
             onPress={() => setToast(null)}
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss"
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            style={({ pressed }) => [styles.toastDismissCta, pressed && styles.recoveryCtaPressed]}
           >
-            Dismiss
-          </Text>
+            <Text style={[styles.toastDismiss, { color: toneTk.accent }]}>Dismiss</Text>
+          </Pressable>
         </View>
       )}
     </SafeAreaView>
@@ -374,9 +383,20 @@ const styles = StyleSheet.create({
     color: colors.charcoal,
     textAlign: 'center',
   },
-  retry: {
-    ...typography.bodyMd,
+  // R1 visual P0 #2: recovery CTAs are real ≥44pt tap targets (Apple HIG),
+  // mirroring the praised HealthFitnessEmptyState CTA pattern.
+  recoveryCta: {
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
     marginTop: spacing.md,
+  },
+  recoveryCtaPressed: {
+    opacity: 0.7,
+  },
+  recoveryCtaLabel: {
+    ...typography.bodyMd,
   },
   toast: {
     position: 'absolute',
@@ -399,5 +419,12 @@ const styles = StyleSheet.create({
   toastDismiss: {
     ...typography.bodySmall,
     fontFamily: 'Inter_600SemiBold',
+  },
+  // The toast "Dismiss" sits inline in a compact row, so it uses a tighter
+  // ≥44pt target (height + vertical centring) rather than a top margin.
+  toastDismissCta: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xs,
   },
 });

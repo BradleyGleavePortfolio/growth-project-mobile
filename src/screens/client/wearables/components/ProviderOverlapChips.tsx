@@ -16,6 +16,7 @@
 
 import React, { useCallback } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import {
   colors,
   radius,
@@ -28,7 +29,10 @@ import {
   type WearableProvider,
 } from '../../../../api/wearablesConnectionsApi';
 import type { WearableMetricType } from '../../../../api/wearablesSamplesApi';
-import { useWearablePreference } from '../../../../hooks/useWearablePreference';
+import {
+  useOptimisticPreferredProvider,
+  useWearablePreference,
+} from '../../../../hooks/useWearablePreference';
 import { toneTokens, type BucketTone } from '../wearablesTheme';
 
 interface Props {
@@ -60,9 +64,16 @@ export default function ProviderOverlapChips({
   const toneTk = toneTokens(tone);
   const preference = useWearablePreference();
 
+  // R1 P1 #1: subscribe to the optimistic preference cache so the active chip
+  // flips the instant the user taps (before the network confirms), and falls
+  // back to the server-resolved `activeProvider` prop when no optimistic value
+  // has been written yet.
+  const optimisticProvider = useOptimisticPreferredProvider(metric);
+  const displayedActiveProvider = optimisticProvider ?? activeProvider;
+
   const handlePick = useCallback(
     (provider: WearableProvider) => {
-      if (provider === activeProvider && !isAuto) return;
+      if (provider === displayedActiveProvider && !isAuto) return;
       preference.mutate(
         { metric, preferredProvider: provider },
         {
@@ -70,7 +81,7 @@ export default function ProviderOverlapChips({
         },
       );
     },
-    [activeProvider, isAuto, metric, preference, onError],
+    [displayedActiveProvider, isAuto, metric, preference, onError],
   );
 
   // Only meaningful with ≥2 overlapping providers (§4.4).
@@ -85,7 +96,7 @@ export default function ProviderOverlapChips({
       <Text style={styles.heading}>Source</Text>
       <View style={styles.chips}>
         {providers.map((provider) => {
-          const active = provider === activeProvider;
+          const active = provider === displayedActiveProvider;
           const cfg = configFor(provider);
           return (
             <Pressable
@@ -95,6 +106,8 @@ export default function ProviderOverlapChips({
               accessibilityRole="radio"
               accessibilityState={{ selected: active, disabled: preference.isPending }}
               accessibilityLabel={cfg.displayName}
+              // Sub-44pt chip: hitSlop keeps the tap reliable (Apple HIG).
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               style={[
                 styles.chip,
                 {
@@ -103,6 +116,12 @@ export default function ProviderOverlapChips({
                 },
               ]}
             >
+              {/* R1 P2 #3: a leading checkmark gives the active state a
+                  non-colour disambiguator (accessibility ramp — colour is
+                  decorative, not informational). */}
+              {active && (
+                <Ionicons name="checkmark-circle" size={12} color={toneTk.accent} />
+              )}
               <Text
                 style={[
                   styles.chipText,
@@ -135,6 +154,9 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.lg,
     borderRadius: radius.pill,

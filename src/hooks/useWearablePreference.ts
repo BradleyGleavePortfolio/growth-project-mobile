@@ -14,10 +14,19 @@
  * per-metric scalar, and overwriting it there keeps the chip's "active"
  * highlight in sync across every window/granularity view of that metric
  * without us guessing which samples cache entries exist.
+ *
+ * Two caller shapes (R1 P0 #5 — HK-3b contract compat):
+ *   - LEGACY (zero-arg): returns the raw mutation; `mutate({ metric,
+ *     preferredProvider }, opts?)`. Used by `ProviderOverlapChips`.
+ *   - CONTRACT ({ metric }): returns `{ data, mutate, isPending }` where the
+ *     metric is bound, so `mutate(preferredProvider | null)` is the simpler
+ *     surface HK-3b documents. `data` is the optimistically-tracked preferred
+ *     provider (or null), read live from the preference cache.
  */
 
 import {
   useMutation,
+  useQuery,
   useQueryClient,
   type UseMutationResult,
 } from '@tanstack/react-query';
@@ -48,22 +57,30 @@ interface OptimisticContext {
   readonly previous: WearableProvider | undefined;
 }
 
-/**
- * Mutation hook to set the preferred provider for a metric.
- *
- * onMutate: cancel in-flight reads of the preference key, snapshot the prior
- *   value, optimistically write the new one.
- * onError: roll back to the snapshot (NEVER leave the chip in a lying state)
- *   — the screen surfaces the actionable toast off `mutation.isError`.
- * onSuccess: write the server-confirmed provider.
- * onSettled: invalidate all samples queries so preferred reads re-resolve.
- */
-export function useWearablePreference(): UseMutationResult<
+type PreferenceMutation = UseMutationResult<
   PreferenceResult,
   Error,
   SetPreferenceVars,
   OptimisticContext
-> {
+>;
+
+/** The metric-bound contract return (R1 P0 #5). */
+export interface BoundPreference {
+  /** Optimistically-tracked preferred provider for this metric (or null). */
+  readonly data: WearableProvider | null;
+  /** Set/clear the preferred provider for the bound metric. */
+  readonly mutate: (
+    preferredProvider: WearableProvider | null,
+    opts?: { onError?: (err: Error) => void },
+  ) => void;
+  readonly isPending: boolean;
+}
+
+/**
+ * Internal factory: the raw mutation. Shared by both overloads so the
+ * optimistic write / rollback / invalidate logic lives in ONE place.
+ */
+function usePreferenceMutation(): PreferenceMutation {
   const qc = useQueryClient();
 
   return useMutation<PreferenceResult, Error, SetPreferenceVars, OptimisticContext>({
@@ -105,4 +122,83 @@ export function useWearablePreference(): UseMutationResult<
       void qc.invalidateQueries({ queryKey: WEARABLE_SAMPLES_ROOT_KEY });
     },
   });
+}
+
+/**
+ * Read the optimistically-tracked preferred provider for a metric from the
+ * dedicated preference cache. Exported so chips can subscribe to the optimistic
+ * value BEFORE the network confirms (R1 P1 #1). The query has no `queryFn`
+ * (the value is written only by the mutation's optimistic path / onSuccess), so
+ * it never fetches — it is a pure cache subscription.
+ */
+export function useOptimisticPreferredProvider(
+  metric: WearableMetricType,
+): WearableProvider | null {
+  const { data } = useQuery<WearableProvider | null>({
+    queryKey: wearablePreferenceQueryKey(metric),
+    enabled: false,
+    // No queryFn: this entry is populated only by the mutation. Default to null
+    // so a never-written metric reads as "no explicit preference".
+    initialData: null,
+  });
+  return data ?? null;
+}
+
+// ── Overloads (R1 P0 #5) ──────────────────────────────────────────────────────
+
+/** Legacy zero-arg form: returns the raw mutation. */
+export function useWearablePreference(): PreferenceMutation;
+/** Contract form: metric-bound `{ data, mutate, isPending }`. */
+export function useWearablePreference(args: {
+  metric: WearableMetricType;
+}): BoundPreference;
+export function useWearablePreference(args?: {
+  metric: WearableMetricType;
+}): PreferenceMutation | BoundPreference {
+  const mutation = usePreferenceMutation();
+  // The hook order is stable: we ALWAYS read the (cheap, fetch-disabled)
+  // preference query so the rules-of-hooks hold regardless of the overload.
+  const boundMetric = args?.metric;
+  const optimistic = useQuery<WearableProvider | null>({
+    queryKey: wearablePreferenceQueryKey(
+      // A stable placeholder key when unbound keeps the hook count constant;
+      // its value is never read in the legacy branch.
+      boundMetric ?? ('__unbound__' as unknown as WearableMetricType),
+    ),
+    enabled: false,
+    initialData: null,
+  });
+
+  if (boundMetric === undefined) {
+    return mutation;
+  }
+
+  return {
+    data: optimistic.data ?? null,
+    isPending: mutation.isPending,
+    mutate: (
+      preferredProvider: WearableProvider | null,
+      opts?: { onError?: (err: Error) => void },
+    ) => {
+      if (preferredProvider === null) {
+        // Clearing: write through the dedicated clear endpoint via the API,
+        // then let onSettled re-resolve. We surface errors, never swallow.
+        wearablesSamplesApi
+          .clearPreference(boundMetric)
+          .then(() => {
+            // Optimistic-consistent: re-run the samples invalidation path.
+            mutation.reset();
+          })
+          .catch((err: unknown) => {
+            const e = err instanceof Error ? err : new Error(String(err));
+            opts?.onError?.(e);
+          });
+        return;
+      }
+      mutation.mutate(
+        { metric: boundMetric, preferredProvider },
+        { onError: (err) => opts?.onError?.(err) },
+      );
+    },
+  };
 }

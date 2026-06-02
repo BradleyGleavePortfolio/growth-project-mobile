@@ -30,7 +30,14 @@
 
 import React, { useCallback, useMemo } from 'react';
 import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
-import Svg, { Polyline, Circle, Line as SvgLine } from 'react-native-svg';
+import Svg, {
+  Circle,
+  Defs,
+  LinearGradient,
+  Path,
+  Stop,
+  Line as SvgLine,
+} from 'react-native-svg';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
@@ -42,6 +49,7 @@ import Animated, {
 import * as Haptics from 'expo-haptics';
 import { colors, withAlpha } from '../../../../theme/tokens';
 import { toneTokens, type BucketTone } from '../wearablesTheme';
+import { smoothAreaPath, smoothLinePath, type PathPoint } from './smoothPath';
 
 export interface GlowChartPoint {
   /** X position is implicit (even spacing by index); Y is the metric value. */
@@ -78,7 +86,7 @@ function selectionHaptic(): void {
   });
 }
 
-export default function RevolutGlowChart({
+export function RevolutGlowChart({
   data,
   tone,
   height = 120,
@@ -208,22 +216,28 @@ export default function RevolutGlowChart({
     ],
   }));
 
-  // SVG polyline points string in a 0..100 normalized coordinate space (the
-  // Svg uses viewBox="0 0 100 100" + preserveAspectRatio="none", so the line
-  // stretches to the measured container width without us reading width.value
-  // on the JS thread). `vectorEffect="non-scaling-stroke"` keeps the stroke
-  // crisp despite the non-uniform scale.
-  const polyline = useMemo(() => {
-    if (count === 0) return '';
-    return data
-      .map((d, i) => {
-        const xRatio = count <= 1 ? 0 : i / (count - 1);
-        const x = xRatio * 100;
-        const y =
-          ((PAD_Y + plotH - ((d.value - minY) / rangeY) * plotH) / height) * 100;
-        return `${x},${y}`;
-      })
-      .join(' ');
+  // Line + area paths in a 0..100 normalized coordinate space (the Svg uses
+  // viewBox="0 0 100 100" + preserveAspectRatio="none", so the path stretches
+  // to the measured container width without us reading width.value on the JS
+  // thread). `vectorEffect="non-scaling-stroke"` keeps the stroke crisp despite
+  // the non-uniform scale. We render a MONOTONE-CUBIC bezier (smoothPath) over
+  // a soft gradient area fill — the Revolut peak-moment treatment (Mobile
+  // Design Intel doc), replacing the prior tutorial-grade <Polyline>.
+  const { linePath, areaPath } = useMemo(() => {
+    if (count < 2) return { linePath: '', areaPath: '' };
+    const pts: PathPoint[] = data.map((d, i) => {
+      const xRatio = count <= 1 ? 0 : i / (count - 1);
+      const x = xRatio * 100;
+      const y =
+        ((PAD_Y + plotH - ((d.value - minY) / rangeY) * plotH) / height) * 100;
+      return { x, y };
+    });
+    // Baseline at the chart bottom (matches the hairline at y=99) so the fill
+    // reads as area-under-the-curve rather than a floating ribbon.
+    return {
+      linePath: smoothLinePath(pts),
+      areaPath: smoothAreaPath(pts, 99),
+    };
   }, [data, count, minY, rangeY, plotH, height]);
 
   return (
@@ -242,16 +256,29 @@ export default function RevolutGlowChart({
             preserveAspectRatio="none"
             pointerEvents="none"
           >
+            <Defs>
+              {/* Soft top-down gradient: accent at 18% fading to fully
+                  transparent at the baseline (Revolut area treatment). */}
+              <LinearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
+                <Stop offset="0" stopColor={toneTk.accent} stopOpacity={0.18} />
+                <Stop offset="1" stopColor={toneTk.accent} stopOpacity={0} />
+              </LinearGradient>
+            </Defs>
             {count > 1 && (
-              <Polyline
-                points={polyline}
-                fill="none"
-                stroke={toneTk.accent}
-                strokeWidth={1.4}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                vectorEffect="non-scaling-stroke"
-              />
+              <>
+                {/* Gradient area UNDERNEATH the line. */}
+                <Path d={areaPath} fill="url(#chartFill)" stroke="none" />
+                {/* Smooth monotone-cubic line ON TOP. */}
+                <Path
+                  d={linePath}
+                  fill="none"
+                  stroke={toneTk.accent}
+                  strokeWidth={2}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  vectorEffect="non-scaling-stroke"
+                />
+              </>
             )}
             {count === 1 && (
               <Circle cx="50" cy="50" r={1.6} fill={toneTk.accent} />
@@ -303,6 +330,8 @@ export default function RevolutGlowChart({
     </View>
   );
 }
+
+export default RevolutGlowChart;
 
 const THUMB = 12;
 const GLOW = 34;

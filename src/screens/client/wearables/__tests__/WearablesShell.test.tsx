@@ -73,7 +73,9 @@ beforeEach(() => {
         channel_expires_at: null,
         status: 'connected',
         last_error: null,
-        last_synced_at: '2026-06-01T00:00:00.000Z',
+        // Synced just now so the chip reads `current` (post R1 P1 #3, a sync
+        // older than 6h would read as the new `stale` tier).
+        last_synced_at: new Date().toISOString(),
         backfilled_until: null,
         disconnected_at: null,
         created_at: '2026-01-01T00:00:00.000Z',
