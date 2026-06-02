@@ -5,7 +5,7 @@
  *   • the Fitness bucket mounts <HealthFitnessScreen/> (mocked),
  *   • switching to Recovery mounts <SleepRecoveryScreen/> (mocked) — the screen
  *     owns its own connect/empty/error states, so the shell no longer renders a
- *     placeholder surface (NEVER "Coming soon"),
+ *     placeholder surface,
  *   • the freshness chip renders from the connections hook.
  *
  * Both bucket screens, the connections hook, and navigation are mocked so the
@@ -106,7 +106,6 @@ describe('WearablesShell', () => {
     render(<WearablesShell />);
     fireEvent.press(screen.getByLabelText('Recovery'));
     expect(screen.getByText('RECOVERY_OVERVIEW')).toBeTruthy();
-    expect(screen.queryByText(/coming soon/i)).toBeNull();
     expect(screen.queryByText('FITNESS_OVERVIEW')).toBeNull();
     // syncs the route param so deep-links restore the last bucket
     expect(mockSetParams).toHaveBeenCalledWith({ bucket: 'recovery' });

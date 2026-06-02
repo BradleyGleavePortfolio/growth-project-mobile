@@ -21,6 +21,7 @@ jest.mock('../../../../hooks/useWearableSamples', () => ({
 }));
 
 import { SleepRecoveryTab } from '../SleepRecoveryTab';
+import { makeAccessibilitySubscription } from '../../../client/wearables/testSupport/accessibilityMocks';
 
 const styles = makeStyles(testColors);
 
@@ -48,7 +49,7 @@ beforeEach(() => {
   jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(true);
   jest
     .spyOn(AccessibilityInfo, 'addEventListener')
-    .mockReturnValue({ remove: jest.fn() } as unknown as ReturnType<typeof AccessibilityInfo.addEventListener>);
+    .mockReturnValue(makeAccessibilitySubscription());
 });
 afterEach(() => jest.restoreAllMocks());
 
@@ -76,7 +77,7 @@ describe('SleepRecoveryTab — IDOR (#5)', () => {
       isLoading: false,
       isRefetching: false,
       refetch: jest.fn(),
-      error: { status: 403, message: 'forbidden' } as unknown as Error,
+      error: Object.assign(new Error('forbidden'), { status: 403 }),
     });
     const { getByTestId } = render(
       <SleepRecoveryTab clientId="c1" colors={testColors} styles={styles} />,

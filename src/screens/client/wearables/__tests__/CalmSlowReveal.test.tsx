@@ -8,6 +8,7 @@ import React from 'react';
 import { AccessibilityInfo, Text } from 'react-native';
 import { render, waitFor } from '@testing-library/react-native';
 import { CalmSlowReveal } from '../components/CalmSlowReveal';
+import { makeAccessibilitySubscription } from '../testSupport/accessibilityMocks';
 
 describe('CalmSlowReveal', () => {
   afterEach(() => jest.restoreAllMocks());
@@ -18,7 +19,7 @@ describe('CalmSlowReveal', () => {
       .mockResolvedValue(false);
     const addSpy = jest
       .spyOn(AccessibilityInfo, 'addEventListener')
-      .mockReturnValue({ remove: jest.fn() } as unknown as ReturnType<typeof AccessibilityInfo.addEventListener>);
+      .mockReturnValue(makeAccessibilitySubscription());
 
     render(
       <CalmSlowReveal testID="reveal">
@@ -34,7 +35,7 @@ describe('CalmSlowReveal', () => {
     jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(true);
     jest
       .spyOn(AccessibilityInfo, 'addEventListener')
-      .mockReturnValue({ remove: jest.fn() } as unknown as ReturnType<typeof AccessibilityInfo.addEventListener>);
+      .mockReturnValue(makeAccessibilitySubscription());
 
     const { getByText } = render(
       <CalmSlowReveal>
@@ -50,7 +51,7 @@ describe('CalmSlowReveal', () => {
       .mockRejectedValue(new Error('unavailable'));
     jest
       .spyOn(AccessibilityInfo, 'addEventListener')
-      .mockReturnValue({ remove: jest.fn() } as unknown as ReturnType<typeof AccessibilityInfo.addEventListener>);
+      .mockReturnValue(makeAccessibilitySubscription());
 
     const { getByText } = render(
       <CalmSlowReveal>

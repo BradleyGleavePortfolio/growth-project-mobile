@@ -12,8 +12,8 @@
  *   - Fitness → <HealthFitnessScreen/> (owned by HK-3a).
  *   - Recovery → <SleepRecoveryScreen/> (owned by HK-3b). The screen owns its
  *     own connect/empty/error states (its EmptyState renders the value-first
- *     "connect a sleep source" prompt — NOT a "Coming soon" placeholder, Bradley
- *     LAW §0.1 — so the connect surface lives there, not in the shell).
+ *     "connect a sleep source" prompt — Bradley LAW §0.1 — so the connect
+ *     surface lives there, not in the shell; no placeholder surface remains).
  *
  * The shell is a navigation screen mounted as `Health` in ClientNavigator with
  * an optional `{ bucket?: 'fitness' | 'recovery' }` param.

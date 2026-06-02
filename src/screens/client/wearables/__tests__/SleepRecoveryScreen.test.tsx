@@ -36,6 +36,7 @@ jest.mock('../../../../theme/ThemeProvider', () => {
 });
 
 import SleepRecoveryScreen from '../SleepRecoveryScreen';
+import { makeAccessibilitySubscription } from '../testSupport/accessibilityMocks';
 
 function resp(series: WearableSamplesResponse['series']): WearableSamplesResponse {
   return {
@@ -61,7 +62,7 @@ beforeEach(() => {
   jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(true);
   jest
     .spyOn(AccessibilityInfo, 'addEventListener')
-    .mockReturnValue({ remove: jest.fn() } as unknown as ReturnType<typeof AccessibilityInfo.addEventListener>);
+    .mockReturnValue(makeAccessibilitySubscription());
 });
 afterEach(() => jest.restoreAllMocks());
 
@@ -155,7 +156,7 @@ describe('SleepRecoveryScreen', () => {
       refetch: jest.fn(),
       error: null,
     });
-    const { getByTestId } = render(<SleepRecoveryScreen bucketParam={'__evil__' as unknown as string} />);
+    const { getByTestId } = render(<SleepRecoveryScreen bucketParam="__evil__" />);
     expect(getByTestId('recovery-ring-hero')).toBeTruthy();
     // The hook is always asked for the SLEEP_RECOVERY bucket regardless of param.
     expect(mockUseWearableSamples).toHaveBeenCalledWith(

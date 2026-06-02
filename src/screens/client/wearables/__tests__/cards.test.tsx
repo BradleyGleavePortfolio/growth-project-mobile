@@ -17,6 +17,7 @@ import { RespirationCard } from '../cards/RespirationCard';
 import { SleepConsistencyCard } from '../cards/SleepConsistencyCard';
 import { testColors } from '../recoveryTestColors';
 import type { SleepStagesView } from '../recoveryData';
+import { makeAccessibilitySubscription } from '../testSupport/accessibilityMocks';
 
 // Built from fragments so the banned clinical tokens never appear literally in
 // source (the auditor greps this directory for them). Matching is unchanged.
@@ -28,7 +29,7 @@ beforeEach(() => {
   jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(true);
   jest
     .spyOn(AccessibilityInfo, 'addEventListener')
-    .mockReturnValue({ remove: jest.fn() } as unknown as ReturnType<typeof AccessibilityInfo.addEventListener>);
+    .mockReturnValue(makeAccessibilitySubscription());
 });
 afterEach(() => jest.restoreAllMocks());
 
