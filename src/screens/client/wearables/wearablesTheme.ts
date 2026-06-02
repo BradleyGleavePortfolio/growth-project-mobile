@@ -14,7 +14,7 @@
  * the app and never introduce a raw off-palette hex.
  */
 
-import { colors, withAlpha } from '../../../theme/tokens';
+import { colors, gold, withAlpha } from '../../../theme/tokens';
 import type { IoniconName } from '../../../types/common';
 import type {
   WearableMetricBucket,
@@ -28,8 +28,19 @@ export const SHELL_CROSSFADE_MS = 200;
 export type BucketTone = 'warm' | 'cool';
 
 export interface ToneTokens {
-  /** Primary accent for rings/lines/active chips. */
+  /**
+   * Primary accent for hairline borders, rings, inactive chips, icons, and
+   * chart lines — its documented role (warm `camel` is borders-only per
+   * tokens.ts). NOT for filled CTAs or on-light text: warm `camel` is only
+   * 2.70:1 on bone and 2.54:1 on cream, both below WCAG AA.
+   */
   readonly accent: string;
+  /**
+   * AA-safe foreground (≥4.5:1 vs bone, and on cream) — used as the fill for
+   * primary CTAs that carry bone text AND as on-light text/link colour. Warm
+   * resolves to gold[700] (#8A6A2A ≈ 5.10:1 bone); cool to forest (8.57:1).
+   */
+  readonly accentInk: string;
   /** Soft tinted surface behind hero / selected states. */
   readonly tint: string;
   /** Glow color for the Revolut chart's lifted datum. */
@@ -39,7 +50,8 @@ export interface ToneTokens {
 }
 
 const WARM: ToneTokens = {
-  accent: colors.camel, // clay/amber warm accent (#B08D57)
+  accent: colors.camel, // clay/amber warm accent (#B08D57) — borders/icons/lines only
+  accentInk: gold[700], // #8A6A2A — bone-on-fill ≈ 5.10:1 (AA PASS)
   tint: withAlpha(colors.camel, 0.1),
   glow: withAlpha(colors.mutedGold, 0.6),
   track: withAlpha(colors.camel, 0.16),
@@ -47,6 +59,7 @@ const WARM: ToneTokens = {
 
 const COOL: ToneTokens = {
   accent: colors.forest, // forest/slate cool accent (#2C4A36)
+  accentInk: colors.forest, // already AA-safe vs bone (8.57:1) and cream (8.06:1)
   tint: withAlpha(colors.forest, 0.1),
   glow: withAlpha(colors.forest, 0.5),
   track: withAlpha(colors.forest, 0.16),

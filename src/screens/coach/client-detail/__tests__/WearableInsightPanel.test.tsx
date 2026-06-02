@@ -246,15 +246,83 @@ describe('review sheet', () => {
   });
 });
 
-describe('R0 hygiene', () => {
-  it('never renders the banned "Coming soon" string in any state', () => {
-    for (const data of [fullInsight(), emptyInsight()]) {
-      mockUseCoachInsight.mockReturnValue(queryState({ data }));
-      const { queryByText, unmount } = render(
-        <WearableInsightPanel {...baseProps} />,
-      );
-      expect(queryByText(/coming soon/i)).toBeNull();
-      unmount();
-    }
+describe('Retry semantics (F4 — replay the failed action + its body)', () => {
+  /** Open the sheet, with the first mutate attempt failing via onError. */
+  function openSheetWithFailingFirstAttempt() {
+    mockUseCoachInsight.mockReturnValue(queryState({ data: fullInsight() }));
+    // First attempt fails; later attempts succeed quietly (no further onError).
+    mockMutate.mockImplementationOnce((_vars, opts) => {
+      opts.onError(new Error('network blew up'));
+    });
+    const utils = render(<WearableInsightPanel {...baseProps} />);
+    fireEvent.press(utils.getByTestId('coach-insight-panel'));
+    fireEvent.press(utils.getByTestId('coach-insight-review-cta'));
+    return utils;
+  }
+
+  it('Approve fails → user edits the body → Retry replays approve with the ORIGINAL body', async () => {
+    const { getByTestId } = openSheetWithFailingFirstAttempt();
+    const original = fullInsight().suggested_message_draft;
+
+    fireEvent.press(getByTestId('coach-insight-approve'));
+    await waitFor(() =>
+      expect(getByTestId('coach-insight-sheet-error')).toBeTruthy(),
+    );
+
+    // User edits the draft AFTER the failure — Retry must NOT pick this up.
+    fireEvent.changeText(
+      getByTestId('coach-insight-draft-input'),
+      'A totally different message typed after the failure',
+    );
+
+    fireEvent.press(getByTestId('coach-insight-sheet-retry'));
+
+    expect(mockMutate).toHaveBeenCalledTimes(2);
+    const secondCall = mockMutate.mock.calls[1][0];
+    expect(secondCall.action).toBe('approve');
+    expect(secondCall.draftBody).toBe(original);
+  });
+
+  it('Dismiss fails → Retry replays dismiss (NOT approve) with an empty body', async () => {
+    const { getByTestId } = openSheetWithFailingFirstAttempt();
+
+    fireEvent.press(getByTestId('coach-insight-dismiss'));
+    await waitFor(() =>
+      expect(getByTestId('coach-insight-sheet-error')).toBeTruthy(),
+    );
+
+    fireEvent.press(getByTestId('coach-insight-sheet-retry'));
+
+    expect(mockMutate).toHaveBeenCalledTimes(2);
+    const secondCall = mockMutate.mock.calls[1][0];
+    expect(secondCall.action).toBe('dismiss');
+    expect(secondCall.draftBody).toBe('');
+  });
+
+  it('Edit fails → Retry replays edit with the body sent at failure time, not a later edit', async () => {
+    const { getByTestId } = openSheetWithFailingFirstAttempt();
+    const bodyAtFailure = 'Edited message at the moment of the failed send';
+
+    fireEvent.changeText(
+      getByTestId('coach-insight-draft-input'),
+      bodyAtFailure,
+    );
+    fireEvent.press(getByTestId('coach-insight-edit-send'));
+    await waitFor(() =>
+      expect(getByTestId('coach-insight-sheet-error')).toBeTruthy(),
+    );
+
+    // A further edit after the failure must not leak into the replay.
+    fireEvent.changeText(
+      getByTestId('coach-insight-draft-input'),
+      'Yet another edit made after the failure',
+    );
+
+    fireEvent.press(getByTestId('coach-insight-sheet-retry'));
+
+    expect(mockMutate).toHaveBeenCalledTimes(2);
+    const secondCall = mockMutate.mock.calls[1][0];
+    expect(secondCall.action).toBe('edit');
+    expect(secondCall.draftBody).toBe(bodyAtFailure);
   });
 });

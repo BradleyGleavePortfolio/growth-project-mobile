@@ -44,10 +44,23 @@ function coachInsight(): CoachInsight {
   };
 }
 
+// Track every QueryClient created in a test so afterEach can tear each one
+// down. Without this, the client's internal cache/timers keep the Node event
+// loop alive and Jest prints "did not exit one second after the test run"
+// (F5) — the CI gate runs without --forceExit, so a hang fails the gate.
+const createdClients: QueryClient[] = [];
+
 function makeWrapper() {
   const qc = new QueryClient({
-    defaultOptions: { queries: { retry: false, gcTime: 0, staleTime: 0 } },
+    defaultOptions: {
+      queries: { retry: false, gcTime: 0, staleTime: 0 },
+      // RQ v5 defaults a mutation's gcTime to 5min; without overriding it the
+      // settled mutation schedules a 5-minute setTimeout that outlives the
+      // test and keeps Node's event loop alive (the F5 "did not exit" hang).
+      mutations: { gcTime: 0 },
+    },
   });
+  createdClients.push(qc);
   const Wrapper = ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={qc}>{children}</QueryClientProvider>
   );
@@ -57,6 +70,17 @@ function makeWrapper() {
 beforeEach(() => {
   mockedFetch.mockReset();
   mockedApprove.mockReset();
+});
+
+afterEach(() => {
+  // Defense-in-depth alongside the zero gcTimes above: drop every cached
+  // query/mutation and release the client's focus/online subscriptions so no
+  // timer survives the test (F5).
+  for (const qc of createdClients) {
+    qc.clear();
+    qc.unmount();
+  }
+  createdClients.length = 0;
 });
 
 describe('useCoachInsight', () => {

@@ -102,6 +102,9 @@ export function WearableInsightPanel({
   clientFirstName,
 }: WearableInsightPanelProps) {
   const tone = toneTokens(toneForBucket(bucket));
+  // AA-safe foreground/fill (≥4.5:1 on bone & cream). Raw `tone.accent`
+  // (warm camel) is only ~2.70:1 on bone, so it stays on borders/icons only.
+  const toneInk = tone.accentInk;
   const reduceMotion = useReduceMotion();
 
   const [expanded, setExpanded] = useState(false);
@@ -222,7 +225,7 @@ export function WearableInsightPanel({
           accessibilityLabel="Retry loading the insight"
           testID="coach-insight-retry"
         >
-          <Text style={[styles.retryText, { color: tone.accent }]}>Retry</Text>
+          <Text style={[styles.retryText, { color: toneInk }]}>Retry</Text>
         </Pressable>
       </View>
     );
@@ -280,13 +283,13 @@ export function WearableInsightPanel({
               accessibilityLabel={draftPreviewExpanded ? 'Show less of the draft' : 'Read more of the draft'}
               testID="coach-insight-readmore"
             >
-              <Text style={[styles.readMore, { color: tone.accent }]}>
+              <Text style={[styles.readMore, { color: toneInk }]}>
                 {draftPreviewExpanded ? 'Show less' : 'Read more'}
               </Text>
             </Pressable>
 
             <Pressable
-              style={[styles.reviewCta, { backgroundColor: tone.accent }]}
+              style={[styles.reviewCta, { backgroundColor: toneInk }]}
               onPress={onOpenSheet}
               accessibilityRole="button"
               accessibilityLabel="Review message before sending"
@@ -306,7 +309,7 @@ export function WearableInsightPanel({
           clientId={clientId}
           bucket={bucket}
           clientFirstName={clientFirstName}
-          accent={tone.accent}
+          accentInk={toneInk}
           onClose={onCloseSheet}
           onSent={onSent}
         />
@@ -376,7 +379,7 @@ function MessageDraftReviewSheet({
   clientId,
   bucket,
   clientFirstName,
-  accent,
+  accentInk,
   onClose,
   onSent,
 }: {
@@ -385,7 +388,8 @@ function MessageDraftReviewSheet({
   clientId: string;
   bucket: WearableMetricBucket;
   clientFirstName?: string;
-  accent: string;
+  /** AA-safe foreground/fill threaded from the host (see {@link ToneTokens}). */
+  accentInk: string;
   onClose: () => void;
   onSent: (firstName?: string) => void;
 }) {
@@ -395,12 +399,20 @@ function MessageDraftReviewSheet({
   const [pending, setPending] = useState<string | null>(null);
   // Set when the mutation throws a real error.
   const [errorCopy, setErrorCopy] = useState<string | null>(null);
+  // Remember the exact action + body of the last attempt so Retry replays it
+  // faithfully (F4) — a failed `dismiss` must NOT become an `approve`, and a
+  // failed `approve` must replay its ORIGINAL body, not a body edited since.
+  const lastAttemptRef = useRef<{
+    action: 'approve' | 'edit' | 'dismiss';
+    draftBody: string;
+  } | null>(null);
 
   const approve = useApproveDraft();
   const edited = body.trim() !== original.trim();
 
   const run = useCallback(
     (action: 'approve' | 'edit' | 'dismiss', draftBody: string) => {
+      lastAttemptRef.current = { action, draftBody };
       setPending(null);
       setErrorCopy(null);
       approve.mutate(
@@ -425,6 +437,19 @@ function MessageDraftReviewSheet({
 
   const busy = approve.isPending;
   const primaryDisabled = busy || pending != null;
+
+  const onRetrySend = useCallback(() => {
+    // Guard against replaying an already-in-flight request (#28 race).
+    if (busy) return;
+    const last = lastAttemptRef.current;
+    if (last) {
+      run(last.action, last.draftBody);
+      return;
+    }
+    // Defensive fallback (Retry is only shown after a failed `run`, so the ref
+    // should always be populated): replay the current intent.
+    run(edited ? 'edit' : 'approve', body);
+  }, [busy, run, edited, body]);
 
   return (
     <Modal
@@ -475,12 +500,12 @@ function MessageDraftReviewSheet({
                 {errorCopy}
               </Text>
               <Pressable
-                onPress={() => run(edited ? 'edit' : 'approve', body)}
+                onPress={onRetrySend}
                 accessibilityRole="button"
                 accessibilityLabel="Retry sending"
                 testID="coach-insight-sheet-retry"
               >
-                <Text style={[styles.readMore, { color: accent }]}>Retry</Text>
+                <Text style={[styles.readMore, { color: accentInk }]}>Retry</Text>
               </Pressable>
             </View>
           )}
@@ -488,7 +513,7 @@ function MessageDraftReviewSheet({
           <Pressable
             style={[
               styles.primaryBtn,
-              { backgroundColor: primaryDisabled ? colors.stone : accent },
+              { backgroundColor: primaryDisabled ? colors.stone : accentInk },
             ]}
             onPress={() => run('approve', original)}
             disabled={primaryDisabled}
@@ -507,7 +532,7 @@ function MessageDraftReviewSheet({
           <Pressable
             style={[
               styles.secondaryBtn,
-              { borderColor: edited && !primaryDisabled ? accent : colors.stone },
+              { borderColor: edited && !primaryDisabled ? accentInk : colors.stone },
             ]}
             onPress={() => run('edit', body)}
             disabled={!edited || primaryDisabled}
@@ -519,7 +544,7 @@ function MessageDraftReviewSheet({
             <Text
               style={[
                 styles.secondaryBtnText,
-                { color: edited && !primaryDisabled ? accent : colors.stone },
+                { color: edited && !primaryDisabled ? accentInk : colors.stone },
               ]}
             >
               Edit then send
@@ -687,7 +712,9 @@ const styles = StyleSheet.create({
   },
   charCount: {
     ...typography.micro,
-    color: colors.stone,
+    // charcoal on bone = 8.0:1 (AA PASS); stone (#B1A89F) was ~2.05:1 and is
+    // reserved for borders/dividers/disabled affordances (F6).
+    color: colors.charcoal,
     alignSelf: 'flex-end',
     marginTop: spacing.xs,
   },

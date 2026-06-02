@@ -227,12 +227,19 @@ export async function approveDraft(
   }
 }
 
+/**
+ * Versioned segment in every insight query key. Bump this when the cached
+ * insight shape changes so stale entries from a prior shape are abandoned
+ * rather than deserialized into the new contract.
+ */
+export const INSIGHT_KEY_VERSION = 'v1' as const;
+
 /** Stable React Query key roots so HK-5a + HK-5b never collide. */
 export const insightQueryKeys = {
   coach: (clientId: string, bucket: WearableMetricBucket) =>
-    ['wearable-insight', 'coach', clientId, bucket] as const,
+    ['wearable-insight', INSIGHT_KEY_VERSION, 'coach', clientId, bucket] as const,
   client: (bucket: WearableMetricBucket) =>
-    ['wearable-insight', 'client', bucket] as const,
+    ['wearable-insight', INSIGHT_KEY_VERSION, 'client', bucket] as const,
 };
 
 export type { WearableMetricType, WearableMetricBucket };
