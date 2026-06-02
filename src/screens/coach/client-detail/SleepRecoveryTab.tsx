@@ -30,6 +30,7 @@ import { SleepStagesCard } from '../../client/wearables/cards/SleepStagesCard';
 import { HrvTrendCard } from '../../client/wearables/cards/HrvTrendCard';
 import { SleepConsistencyCard } from '../../client/wearables/cards/SleepConsistencyCard';
 import { RECOVERY_PALETTE } from '../../client/wearables/recoveryTheme';
+import { WearableInsightPanel } from './WearableInsightPanel';
 import {
   recoveryScore,
   sleepStages,
@@ -127,6 +128,8 @@ export function SleepRecoveryTab({ clientId, colors, styles }: SleepRecoveryTabP
         <RecoveryRingHero score={score} colors={colors} size={200} />
         <AnomalyBand trend={hrvTrend} colors={colors} />
       </View>
+
+      <WearableInsightPanel side="coach" bucket="SLEEP_RECOVERY" clientId={clientId} />
 
       <View style={{ marginTop: 14 }}>
         <SleepStagesCard stages={stages} colors={colors} />

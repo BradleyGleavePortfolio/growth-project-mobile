@@ -20,6 +20,15 @@ jest.mock('../../../../hooks/useWearableSamples', () => ({
   useWearableSamples: (opts: unknown) => mockUseWearableSamples(opts),
 }));
 
+// PR-HK-5a: the tab now mounts <WearableInsightPanel>, which calls the AI
+// insight hooks (React Query). These tests target the IDOR fallback / retry
+// band, not the panel, so we hold the panel in its loading state — a harmless
+// skeleton with no `coach-insight-*` text colliding with these assertions.
+jest.mock('../../../../hooks/useWearableInsight', () => ({
+  useCoachInsight: () => ({ data: undefined, isLoading: true, isError: false }),
+  useApproveDraft: () => ({ mutate: jest.fn(), isPending: false, reset: jest.fn() }),
+}));
+
 import { SleepRecoveryTab } from '../SleepRecoveryTab';
 import { makeAccessibilitySubscription } from '../../../client/wearables/testSupport/accessibilityMocks';
 
