@@ -40,6 +40,7 @@ import type {
 import { colors, radius, semantic, spacing, typography } from '../../../theme/tokens';
 import WearableCard from '../../client/wearables/components/WearableCard';
 import HealthFitnessScreen from '../../client/wearables/HealthFitnessScreen';
+import { WearableInsightPanel } from './WearableInsightPanel';
 
 const WINDOW_DAYS = 30;
 
@@ -139,6 +140,8 @@ export function HealthFitnessTab({
           anomalies,
         })}
       </WearableCard>
+
+      <WearableInsightPanel side="coach" bucket="HEALTH_FITNESS" clientId={clientId} />
 
       <HealthFitnessScreen clientId={clientId} window={window} />
     </>

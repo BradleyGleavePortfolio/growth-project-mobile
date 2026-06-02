@@ -17,6 +17,15 @@ jest.mock('../../../../hooks/useWearableSamples', () => ({
   useWearableSamples: (...args: unknown[]) => mockUseWearableSamples(...args),
 }));
 
+// PR-HK-5a: the tab now mounts <WearableInsightPanel>, which calls the AI
+// insight hooks (React Query). These band tests are not about the panel, so we
+// hold the panel in its loading state — it renders a harmless skeleton with no
+// `coach-insight-*` text that could collide with the anomaly-band assertions.
+jest.mock('../../../../hooks/useWearableInsight', () => ({
+  useCoachInsight: () => ({ data: undefined, isLoading: true, isError: false }),
+  useApproveDraft: () => ({ mutate: jest.fn(), isPending: false, reset: jest.fn() }),
+}));
+
 // Isolate the band: stub the embedded client screen (it pulls navigation +
 // its own data) and render WearableCard's children inline.
 jest.mock('../../../client/wearables/HealthFitnessScreen', () => ({
