@@ -26,6 +26,14 @@
  * is accepted so existing call sites + tests can inject a fixture without a
  * QueryClientProvider.
  *
+ * Component split (R2 P1 #3): the rendering is a PURE component
+ * ({@link FreshnessChipPure}) that takes a resolved `connections` list and
+ * calls NO hook. The exported {@link FreshnessChip} is a thin wrapper that
+ * SHORT-CIRCUITS the hook entirely when a `connections` prop is supplied —
+ * only reaching for `useWearableConnections()` when the caller has none. This
+ * removes the hidden state-coupling that forced every render site (and test)
+ * of the chip to provide a QueryClientProvider.
+ *
  * Tapping the chip routes to the existing ConnectionsScreen so the user can
  * reconnect / add a tracker.
  */
@@ -70,7 +78,7 @@ function needsAttention(status: string): boolean {
  * A connected, non-errored provider is "stale" when its last sync is older
  * than {@link FRESHNESS_STALE_HOURS}. A missing `last_synced_at` is treated as
  * stale (we have a linked source but no confirmed sync yet) rather than
- * silently "current".
+ * defaulting to "current".
  */
 function isStale(conn: WearableConnection, now: number): boolean {
   if (conn.status !== 'connected') return false;
@@ -211,19 +219,23 @@ const TIER_STYLE: Record<
   empty: { bg: colors.cream, fg: colors.charcoal, icon: 'add-circle-outline' },
 };
 
-export function FreshnessChip({ bucket, tone, onPress, connections }: Props) {
-  // Internal fallback: when the caller does not inject a connections list, read
-  // it from the hook so HK-3b can mount us with just `{ bucket, tone, onPress }`.
-  const hookQuery = useWearableConnections();
-  const hookData = hookQuery.data;
-  const resolvedConnections = useMemo(
-    () => connections ?? hookData ?? [],
-    [connections, hookData],
-  );
+/** Props for the pure chip — `connections` is always resolved by the caller. */
+interface PureProps {
+  readonly bucket: WearableMetricBucket;
+  readonly tone?: BucketTone;
+  readonly onPress?: () => void;
+  readonly connections: readonly WearableConnection[];
+}
 
+/**
+ * Pure presentational chip. Takes a resolved connections list and calls NO
+ * hook, so it renders in any tree (no QueryClientProvider required). Exported
+ * for the wrapper, render tests, and any call site that already holds the list.
+ */
+export function FreshnessChipPure({ bucket, tone, onPress, connections }: PureProps) {
   const summary = useMemo(
-    () => summariseFreshness(resolvedConnections, bucket),
-    [resolvedConnections, bucket],
+    () => summariseFreshness(connections, bucket),
+    [connections, bucket],
   );
   const tier = TIER_STYLE[summary.tone];
 
@@ -253,6 +265,41 @@ export function FreshnessChip({ bucket, tone, onPress, connections }: Props) {
       <Ionicons name="chevron-forward" size={16} color={accentFg} />
     </Pressable>
   );
+}
+
+/**
+ * Hook-backed variant: reads the user's connections from
+ * `useWearableConnections()` then delegates to the pure chip. Rendered ONLY by
+ * the {@link FreshnessChip} wrapper when the caller supplied no `connections`
+ * prop, so the hook (and its QueryClient requirement) never runs for call
+ * sites that already hold the list.
+ */
+function FreshnessChipConnected({
+  bucket,
+  tone,
+  onPress,
+}: Omit<Props, 'connections'>) {
+  const hookQuery = useWearableConnections();
+  const resolved = useMemo(() => hookQuery.data ?? [], [hookQuery.data]);
+  return (
+    <FreshnessChipPure
+      bucket={bucket}
+      tone={tone}
+      onPress={onPress}
+      connections={resolved}
+    />
+  );
+}
+
+/**
+ * The exported chip. When a `connections` prop is provided the hook is skipped
+ * entirely (pure path); otherwise the hook-backed variant resolves the list.
+ */
+export function FreshnessChip({ connections, ...rest }: Props) {
+  if (connections !== undefined) {
+    return <FreshnessChipPure {...rest} connections={connections} />;
+  }
+  return <FreshnessChipConnected {...rest} />;
 }
 
 export default FreshnessChip;

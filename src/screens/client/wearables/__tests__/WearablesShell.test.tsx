@@ -3,11 +3,12 @@
  *
  * Verifies:
  *   • the Fitness bucket mounts <HealthFitnessScreen/> (mocked),
- *   • switching to Recovery shows the value-first connect surface (NEVER
- *     "Coming soon"), and its CTA routes to Connections,
+ *   • switching to Recovery mounts <SleepRecoveryScreen/> (mocked) — the screen
+ *     owns its own connect/empty/error states, so the shell no longer renders a
+ *     placeholder surface,
  *   • the freshness chip renders from the connections hook.
  *
- * HealthFitnessScreen, the connections hook, and navigation are mocked so the
+ * Both bucket screens, the connections hook, and navigation are mocked so the
  * test isolates the shell's own switching + routing logic.
  */
 
@@ -31,6 +32,15 @@ jest.mock('../HealthFitnessScreen', () => {
   return {
     __esModule: true,
     default: () => ReactLocal.createElement(Text, null, 'FITNESS_OVERVIEW'),
+  };
+});
+
+jest.mock('../SleepRecoveryScreen', () => {
+  const ReactLocal = require('react');
+  const { Text } = require('react-native');
+  return {
+    __esModule: true,
+    default: () => ReactLocal.createElement(Text, null, 'RECOVERY_OVERVIEW'),
   };
 });
 
@@ -92,19 +102,18 @@ describe('WearablesShell', () => {
     expect(screen.getByText('All sources current')).toBeTruthy();
   });
 
-  it('switches to Recovery → value-first connect surface, never a placeholder gate', () => {
+  it('switches to Recovery → mounts the Sleep & Recovery screen, never a placeholder gate', () => {
     render(<WearablesShell />);
     fireEvent.press(screen.getByLabelText('Recovery'));
-    expect(screen.getByText('See your recovery')).toBeTruthy();
-    expect(screen.queryByText(/coming soon/i)).toBeNull();
+    expect(screen.getByText('RECOVERY_OVERVIEW')).toBeTruthy();
+    expect(screen.queryByText('FITNESS_OVERVIEW')).toBeNull();
     // syncs the route param so deep-links restore the last bucket
     expect(mockSetParams).toHaveBeenCalledWith({ bucket: 'recovery' });
   });
 
-  it('recovery CTA routes to the Connections hub', () => {
+  it('mounts the Sleep & Recovery screen directly when deep-linked to recovery', () => {
     mockRouteParams = { bucket: 'recovery' };
     render(<WearablesShell />);
-    fireEvent.press(screen.getByText('Connect a source'));
-    expect(mockNavigate).toHaveBeenCalledWith('Connections');
+    expect(screen.getByText('RECOVERY_OVERVIEW')).toBeTruthy();
   });
 });
