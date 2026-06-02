@@ -29,7 +29,7 @@
  * defence-in-depth (#5/#8) even though the backend schema already enforces it.
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Linking,
@@ -37,18 +37,21 @@ import {
   StyleSheet,
   Text,
   View,
+  type NativeSyntheticEvent,
+  type TextLayoutEventData,
 } from 'react-native';
 import axios from 'axios';
 import { Ionicons } from '@expo/vector-icons';
 import { ZodError } from 'zod';
 
 import {
-  colors,
   radius,
   spacing,
   typography,
   withAlpha,
+  type SemanticTokens,
 } from '../../../theme/tokens';
+import { useTheme } from '../../../theme/useTheme';
 import { logger } from '../../../utils/logger';
 import { useReduceMotion } from './components/useReduceMotion';
 import { toneForBucket, toneTokens, type ToneTokens } from './wearablesTheme';
@@ -123,11 +126,14 @@ export function ClientWearableInsightPanel({
   onCtaPress,
 }: ClientWearableInsightPanelProps) {
   const tone = toneTokens(toneForBucket(bucket));
+  const { semanticColors } = useTheme();
+  const styles = useMemo(() => makeStyles(semanticColors), [semanticColors]);
   const reduceMotion = useReduceMotion();
   const query = useClientInsight({ bucket });
 
-  // Guard against a double-tap firing two navigations (#28): once a deep-link
-  // open is in flight, the CTA latches disabled for the lifetime of this card.
+  // Guard against a double-tap firing two navigations (#28): the CTA is
+  // disabled only while a deep-link open is in flight, then re-enabled in
+  // `.finally` so a successful open does not permanently latch it disabled.
   const [ctaOpening, setCtaOpening] = useState(false);
 
   const onRetry = useCallback(() => {
@@ -155,8 +161,9 @@ export function ClientWearableInsightPanel({
         return;
       }
       // openURL rejects if the OS cannot resolve the scheme — surface a
-      // breadcrumb and re-enable the CTA rather than letting the rejection
-      // bubble as an unhandled promise (#36).
+      // breadcrumb. The in-flight latch is released in `.finally` (NOT only on
+      // failure) so a successful open does not permanently disable the CTA: the
+      // `ctaOpening` guard above still blocks the synchronous double-tap window.
       Linking.openURL(deepLink)
         .catch((err: unknown) => {
           logger.warn(
@@ -164,6 +171,8 @@ export function ClientWearableInsightPanel({
             'deep link failed to open',
             { bucket, err },
           );
+        })
+        .finally(() => {
           setCtaOpening(false);
         });
     },
@@ -180,13 +189,13 @@ export function ClientWearableInsightPanel({
         testID="client-insight-loading"
       >
         <View style={styles.headerRow}>
-          <SkeletonBar width="48%" height={14} reduceMotion={reduceMotion} />
-          <SkeletonBar width={92} height={20} reduceMotion={reduceMotion} />
+          <SkeletonBar width="48%" height={14} reduceMotion={reduceMotion} styles={styles} />
+          <SkeletonBar width={92} height={20} reduceMotion={reduceMotion} styles={styles} />
         </View>
-        <SkeletonBar width="92%" height={12} reduceMotion={reduceMotion} style={styles.skeletonGap} />
-        <SkeletonBar width="80%" height={12} reduceMotion={reduceMotion} style={styles.skeletonGap} />
-        <SkeletonBar width="86%" height={12} reduceMotion={reduceMotion} style={styles.skeletonGap} />
-        <SkeletonBar width="100%" height={44} reduceMotion={reduceMotion} style={styles.skeletonCta} />
+        <SkeletonBar width="92%" height={12} reduceMotion={reduceMotion} styles={styles} style={styles.skeletonGap} />
+        <SkeletonBar width="80%" height={12} reduceMotion={reduceMotion} styles={styles} style={styles.skeletonGap} />
+        <SkeletonBar width="86%" height={12} reduceMotion={reduceMotion} styles={styles} style={styles.skeletonGap} />
+        <SkeletonBar width="100%" height={44} reduceMotion={reduceMotion} styles={styles} style={styles.skeletonCta} />
       </View>
     );
   }
@@ -201,7 +210,7 @@ export function ClientWearableInsightPanel({
         testID="client-insight-error"
       >
         <View style={styles.row}>
-          <Ionicons name="cloud-offline-outline" size={18} color={colors.stone} />
+          <Ionicons name="cloud-offline-outline" size={18} color={semanticColors.textMuted} />
           <Text style={styles.primary} accessibilityRole="alert">
             {sanitizeWearableError(query.error)}
           </Text>
@@ -222,8 +231,15 @@ export function ClientWearableInsightPanel({
   const insight = query.data;
 
   // ── Empty / settled-with-no-data: calm guidance, NO chip, NO CTA (§2.2). ──
-  if (insight == null || isEmptyInsight(insight)) {
-    return <EmptyPanel bucket={bucket} tone={tone} />;
+  // P3-a: a whitespace-only observation/norm/intervention would pass the
+  // backend `z.string().min(1)` but render a near-blank Section, so we treat a
+  // fully blank-after-trim insight as empty here too (defence-in-depth).
+  if (
+    insight == null ||
+    isEmptyInsight(insight) ||
+    !hasAnyRenderableField(insight)
+  ) {
+    return <EmptyPanel bucket={bucket} tone={tone} styles={styles} />;
   }
 
   return (
@@ -233,7 +249,18 @@ export function ClientWearableInsightPanel({
       insight={insight}
       ctaOpening={ctaOpening}
       onCta={onCta}
+      styles={styles}
+      semanticColors={semanticColors}
     />
+  );
+}
+
+/** True when at least one of the three content fields is non-blank after trim. */
+function hasAnyRenderableField(insight: ClientInsight): boolean {
+  return (
+    insight.observation.trim().length > 0 ||
+    insight.norm_comparison.trim().length > 0 ||
+    insight.intervention.trim().length > 0
   );
 }
 
@@ -245,9 +272,11 @@ export function ClientWearableInsightPanel({
 function EmptyPanel({
   bucket,
   tone,
+  styles,
 }: {
   bucket: WearableMetricBucket;
   tone: ToneTokens;
+  styles: PanelStyles;
 }) {
   return (
     <View
@@ -269,22 +298,64 @@ function EmptyPanel({
   );
 }
 
-/** The fully-populated insight card: header chip + three labelled sections + CTA. */
+/** Collapsed line cap for the non-emphasized body sections (§4.5). */
+const CLAMP_LINES = 3;
+
+/**
+ * The fully-populated insight card: header chip + labelled sections +
+ * provenance + CTA.
+ *
+ * Progressive disclosure (§4.5, consonant with the HK-5a coach `Read more`):
+ * `observation` and `norm_comparison` clamp to {@link CLAMP_LINES} lines while
+ * collapsed; the emphasized `intervention` is the action and is ALWAYS rendered
+ * in full. A single `Read more` / `Show less` toggle expands BOTH clamped
+ * sections together and only appears once `onTextLayout` reports that one of
+ * them actually overflowed the cap — so short content never shows an orphaned
+ * toggle.
+ */
 function LoadedPanel({
   bucket,
   tone,
   insight,
   ctaOpening,
   onCta,
+  styles,
+  semanticColors,
 }: {
   bucket: WearableMetricBucket;
   tone: ToneTokens;
   insight: ClientInsight;
   ctaOpening: boolean;
   onCta: (deepLink: string) => void;
+  styles: PanelStyles;
+  semanticColors: SemanticTokens;
 }) {
   const level = insight.confidence_level;
   const cta = insight.optional_cta;
+
+  const [expanded, setExpanded] = useState(false);
+  // Tracks whether each clamped section overflowed CLAMP_LINES at its natural
+  // height. Measured once (while collapsed) via onTextLayout. Either overflowing
+  // surfaces the toggle.
+  const [observationOverflows, setObservationOverflows] = useState(false);
+  const [normOverflows, setNormOverflows] = useState(false);
+  const showToggle = observationOverflows || normOverflows;
+
+  const onClampLayout = useCallback(
+    (
+      setter: (v: boolean) => void,
+    ): ((e: NativeSyntheticEvent<TextLayoutEventData>) => void) =>
+      (e) => {
+        // `lines` reflects the un-clamped layout RN computed for this text; if
+        // it exceeds the cap the content needs a Read more affordance.
+        if (e.nativeEvent.lines.length > CLAMP_LINES) setter(true);
+      },
+    [],
+  );
+
+  const showObservation = insight.observation.trim().length > 0;
+  const showNorm = insight.norm_comparison.trim().length > 0;
+  const showIntervention = insight.intervention.trim().length > 0;
 
   return (
     <View
@@ -300,23 +371,66 @@ function LoadedPanel({
             AI insight
           </Text>
         </View>
-        <ConfidenceChip level={level} accent={tone.accent} />
+        <ConfidenceChip level={level} accent={tone.accent} styles={styles} />
       </View>
 
-      <Section label="Observation" value={insight.observation} />
-      <Section label="Norm comparison" value={insight.norm_comparison} />
-      <Section
-        label="Intervention"
-        value={insight.intervention}
-        emphasize
-      />
+      {showObservation && (
+        <Section
+          label="Observation"
+          value={insight.observation}
+          styles={styles}
+          numberOfLines={expanded ? undefined : CLAMP_LINES}
+          onTextLayout={onClampLayout(setObservationOverflows)}
+          testID="client-insight-observation"
+        />
+      )}
+      {showNorm && (
+        <Section
+          label="Norm comparison"
+          value={insight.norm_comparison}
+          styles={styles}
+          numberOfLines={expanded ? undefined : CLAMP_LINES}
+          onTextLayout={onClampLayout(setNormOverflows)}
+          testID="client-insight-norm"
+        />
+      )}
+
+      {showToggle && (
+        <Pressable
+          style={({ pressed }) => [
+            styles.readMoreBtn,
+            pressed && styles.readMorePressed,
+          ]}
+          onPress={() => setExpanded((v) => !v)}
+          accessibilityRole="button"
+          accessibilityLabel={expanded ? 'Show less' : 'Read more'}
+          testID="client-insight-readmore"
+        >
+          <Text style={[styles.readMoreText, { color: tone.accentInk }]}>
+            {expanded ? 'Show less' : 'Read more'}
+          </Text>
+        </Pressable>
+      )}
+
+      {showIntervention && (
+        <Section
+          label="Intervention"
+          value={insight.intervention}
+          styles={styles}
+          emphasize
+          testID="client-insight-intervention"
+        />
+      )}
+
+      <ProvenanceRow sourceMetrics={insight.source_metrics} styles={styles} />
 
       {cta != null && (
         <Pressable
-          style={[
+          style={({ pressed }) => [
             styles.cta,
             { backgroundColor: tone.accentInk },
             ctaOpening && styles.ctaDisabled,
+            pressed && !ctaOpening && styles.ctaPressed,
           ]}
           onPress={() => onCta(cta.deep_link)}
           disabled={ctaOpening}
@@ -326,9 +440,48 @@ function LoadedPanel({
           testID="client-insight-cta"
         >
           <Text style={styles.ctaText}>{cta.label}</Text>
-          <Ionicons name="arrow-forward-outline" size={16} color={colors.bone} />
+          <Ionicons
+            name="arrow-forward-outline"
+            size={16}
+            color={semanticColors.textOnAccent}
+          />
         </Pressable>
       )}
+    </View>
+  );
+}
+
+/**
+ * Provenance row (audit-brief required, contract `source_metrics: min(1)`).
+ * Supporting (not primary) content: lighter muted typography. Joins the first
+ * three metrics with `, ` and appends ` +N more` when there are extras. Omits
+ * itself entirely when there are no metrics so we never render an empty row.
+ */
+function ProvenanceRow({
+  sourceMetrics,
+  styles,
+}: {
+  sourceMetrics: readonly string[];
+  styles: PanelStyles;
+}) {
+  const metrics = sourceMetrics.filter((m) => m.trim().length > 0);
+  if (metrics.length === 0) return null;
+
+  const shown = metrics.slice(0, 3).join(', ');
+  const rest = metrics.length - 3;
+  const value = rest > 0 ? `${shown} +${rest} more` : shown;
+
+  return (
+    <View style={styles.section} testID="client-insight-source-metrics">
+      <Text style={styles.sectionLabel} accessibilityRole="text">
+        Source metrics
+      </Text>
+      <Text
+        style={styles.provenanceValue}
+        accessibilityLabel={`Source metrics: ${value}`}
+      >
+        {value}
+      </Text>
     </View>
   );
 }
@@ -341,11 +494,19 @@ function LoadedPanel({
 function Section({
   label,
   value,
+  styles,
   emphasize = false,
+  numberOfLines,
+  onTextLayout,
+  testID,
 }: {
   label: string;
   value: string;
+  styles: PanelStyles;
   emphasize?: boolean;
+  numberOfLines?: number;
+  onTextLayout?: (e: NativeSyntheticEvent<TextLayoutEventData>) => void;
+  testID?: string;
 }) {
   return (
     <View style={styles.section}>
@@ -355,6 +516,10 @@ function Section({
       <Text
         style={emphasize ? styles.sectionValueStrong : styles.sectionValue}
         accessibilityRole="text"
+        numberOfLines={numberOfLines}
+        ellipsizeMode="tail"
+        onTextLayout={onTextLayout}
+        testID={testID}
       >
         {value}
       </Text>
@@ -366,9 +531,11 @@ function Section({
 function ConfidenceChip({
   level,
   accent,
+  styles,
 }: {
   level: ConfidenceLevel;
   accent: string;
+  styles: PanelStyles;
 }) {
   return (
     <View
@@ -377,7 +544,7 @@ function ConfidenceChip({
         { borderColor: withAlpha(accent, 0.4), backgroundColor: withAlpha(accent, 0.1) },
       ]}
       accessibilityRole="text"
-      accessibilityLabel={`${CONFIDENCE_LABEL[level]} confidence`}
+      accessibilityLabel={`Confidence: ${CONFIDENCE_LABEL[level]}, ${CONFIDENCE_PCT[level]} percent`}
       testID="client-insight-confidence"
     >
       <Text style={styles.chipText}>
@@ -397,11 +564,13 @@ function SkeletonBar({
   width,
   height,
   reduceMotion,
+  styles,
   style,
 }: {
   width: number | `${number}%`;
   height: number;
   reduceMotion: boolean;
+  styles: PanelStyles;
   style?: object;
 }) {
   const opacity = useRef(new Animated.Value(0.4)).current;
@@ -434,111 +603,145 @@ function SkeletonBar({
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.bone,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    padding: spacing.lg,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
-  titleWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    flex: 1,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-  eyebrow: {
-    ...typography.eyebrow,
-    color: colors.charcoal,
-  },
-  primary: {
-    ...typography.body,
-    color: colors.ink,
-    flex: 1,
-  },
-  secondary: {
-    ...typography.bodySmall,
-    color: colors.charcoal,
-    marginTop: spacing.xs,
-  },
-  section: {
-    marginTop: spacing.md,
-  },
-  sectionLabel: {
-    ...typography.eyebrow,
-    color: colors.charcoal,
-  },
-  sectionValue: {
-    ...typography.body,
-    color: colors.ink,
-    marginTop: spacing.xs,
-  },
-  // Intervention is the actionable line — heavier weight + larger size.
-  sectionValueStrong: {
-    ...typography.bodyMd,
-    color: colors.ink,
-    marginTop: spacing.xs,
-  },
-  chip: {
-    borderWidth: 1,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs / 2 + 1,
-  },
-  chipText: {
-    ...typography.micro,
-    color: colors.charcoal,
-  },
-  cta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    borderRadius: radius.sm,
-    paddingVertical: spacing.md,
-    marginTop: spacing.lg,
-    minHeight: 44,
-  },
-  ctaDisabled: {
-    opacity: 0.6,
-  },
-  ctaText: {
-    ...typography.bodyMd,
-    color: colors.bone,
-  },
-  retryBtn: {
-    alignSelf: 'flex-start',
-    borderWidth: 1,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    marginTop: spacing.md,
-    minHeight: 44,
-    justifyContent: 'center',
-  },
-  retryText: {
-    ...typography.bodyMd,
-  },
-  skeletonBar: {
-    backgroundColor: withAlpha(colors.stone, 0.4),
-  },
-  skeletonGap: {
-    marginTop: spacing.md,
-  },
-  skeletonCta: {
-    marginTop: spacing.lg,
-  },
-});
+/**
+ * Theme-aware stylesheet factory (P2-5 dark-mode parity). The panel consumes
+ * `useTheme().semanticColors` so its surface/text/skeleton tokens follow the
+ * resolved colour scheme; the bucket `tone.accent` / `tone.accentInk` fills
+ * stay as-is (already AA-verified) and the on-accent label/icon uses
+ * `theme.textOnAccent` (warm near-white, AA on both the light and dark accent).
+ */
+function makeStyles(t: SemanticTokens) {
+  return StyleSheet.create({
+    card: {
+      backgroundColor: t.bgSurface,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      padding: spacing.lg,
+    },
+    headerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.sm,
+    },
+    titleWrap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.xs,
+      flex: 1,
+    },
+    row: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    eyebrow: {
+      ...typography.eyebrow,
+      color: t.textMuted,
+    },
+    primary: {
+      ...typography.body,
+      color: t.textPrimary,
+      flex: 1,
+    },
+    secondary: {
+      ...typography.bodySmall,
+      color: t.textMuted,
+      marginTop: spacing.xs,
+    },
+    section: {
+      marginTop: spacing.md,
+    },
+    sectionLabel: {
+      ...typography.eyebrow,
+      color: t.textMuted,
+    },
+    sectionValue: {
+      ...typography.body,
+      color: t.textPrimary,
+      marginTop: spacing.xs,
+    },
+    // Intervention is the actionable line — heavier weight + larger size.
+    sectionValueStrong: {
+      ...typography.bodyMd,
+      color: t.textPrimary,
+      marginTop: spacing.xs,
+    },
+    // Provenance is supporting (not primary) content — lighter muted text.
+    provenanceValue: {
+      ...typography.bodySmall,
+      color: t.textMuted,
+      marginTop: spacing.xs,
+    },
+    readMoreBtn: {
+      alignSelf: 'flex-start',
+      marginTop: spacing.sm,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.xs,
+      minHeight: 44,
+      justifyContent: 'center',
+    },
+    readMorePressed: {
+      opacity: 0.6,
+    },
+    readMoreText: {
+      ...typography.bodyMd,
+    },
+    chip: {
+      borderWidth: 1,
+      borderRadius: radius.pill,
+      paddingHorizontal: spacing.sm,
+      paddingVertical: spacing.xs / 2 + 1,
+    },
+    chipText: {
+      ...typography.micro,
+      color: t.textMuted,
+    },
+    cta: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: spacing.sm,
+      borderRadius: radius.sm,
+      paddingVertical: spacing.md,
+      marginTop: spacing.lg,
+      minHeight: 44,
+    },
+    ctaDisabled: {
+      opacity: 0.6,
+    },
+    ctaPressed: {
+      opacity: 0.8,
+    },
+    ctaText: {
+      ...typography.bodyMd,
+      color: t.textOnAccent,
+    },
+    retryBtn: {
+      alignSelf: 'flex-start',
+      borderWidth: 1,
+      borderRadius: radius.sm,
+      paddingHorizontal: spacing.lg,
+      paddingVertical: spacing.sm,
+      marginTop: spacing.md,
+      minHeight: 44,
+      justifyContent: 'center',
+    },
+    retryText: {
+      ...typography.bodyMd,
+    },
+    skeletonBar: {
+      backgroundColor: withAlpha(t.border, 0.6),
+    },
+    skeletonGap: {
+      marginTop: spacing.md,
+    },
+    skeletonCta: {
+      marginTop: spacing.lg,
+    },
+  });
+}
+
+type PanelStyles = ReturnType<typeof makeStyles>;
 
 export default ClientWearableInsightPanel;
