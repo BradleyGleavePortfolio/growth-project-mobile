@@ -42,7 +42,17 @@ export type Props = {
   route: RouteProp<ClientsStackParamList, 'ClientDetail'>;
 };
 
-export type TabKey = 'summary' | 'logs' | 'mealplan' | 'progress' | 'healthFitness' | 'workouts' | 'timeline' | 'weekly';
+export type TabKey =
+  | 'summary'
+  | 'logs'
+  | 'mealplan'
+  | 'progress'
+  | 'healthFitness'
+  | 'workouts'
+  | 'timeline'
+  | 'weekly'
+  // PR-HK-3b — coach Sleep & Recovery tab (added after 'healthFitness' from HK-3a).
+  | 'sleepRecovery';
 
 // ── Coach-side meal plans (server) ──
 export interface CoachMealPlanItem {

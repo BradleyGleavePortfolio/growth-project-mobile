@@ -36,6 +36,8 @@ import { HealthFitnessTab } from './client-detail/HealthFitnessTab';
 import { PlanFormModal } from './client-detail/PlanFormModal';
 import { NudgeModal } from './client-detail/NudgeModal';
 import { useClientDetailData } from './client-detail/useClientDetailData';
+// PR-HK-3b — coach Sleep & Recovery tab content.
+import { SleepRecoveryTab } from './client-detail/SleepRecoveryTab';
 // Stream 2 — AskAi sheet for the four execution capabilities.
 import { AskAiActionSheet } from '../../components/coach/ai-execution/AskAiActionSheet';
 
@@ -274,6 +276,8 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
     { key: 'healthFitness', label: 'Fitness', icon: 'fitness-outline' },
     { key: 'timeline', label: 'Timeline', icon: 'time-outline' },
     { key: 'weekly', label: 'Weekly', icon: 'stats-chart-outline' },
+    // PR-HK-3b — Sleep & Recovery tab (sits after HK-3a's 'healthFitness').
+    { key: 'sleepRecovery', label: 'Recovery', icon: 'moon-outline' },
   ];
 
   const handleToggleArchive = async () => {
@@ -535,6 +539,13 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
               }}
             />
           </>
+        )}
+
+        {/* PR-HK-3b — coach Sleep & Recovery tab. Anomaly band + cohort
+            comparison render here (coach-only); the tab gracefully handles a
+            403 from the IDOR-gated samples endpoint. */}
+        {activeTab === 'sleepRecovery' && (
+          <SleepRecoveryTab clientId={clientId} colors={colors} styles={styles} />
         )}
       </ScrollView>
 
