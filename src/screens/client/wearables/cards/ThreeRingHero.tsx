@@ -26,7 +26,7 @@ import Animated, {
   withTiming,
   Easing,
 } from 'react-native-reanimated';
-import { colors, typography, withAlpha } from '../../../../theme/tokens';
+import { colors, spacing, typography, withAlpha } from '../../../../theme/tokens';
 import { toneTokens, type BucketTone } from '../wearablesTheme';
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -185,7 +185,7 @@ const styles = StyleSheet.create({
     ...typography.bodySmall,
     color: colors.charcoal,
     textAlign: 'center',
-    marginBottom: 12,
+    marginBottom: spacing.md,
     maxWidth: 280,
   },
   ringWrap: {
@@ -215,8 +215,8 @@ const styles = StyleSheet.create({
   },
   legend: {
     flexDirection: 'row',
-    gap: 16,
-    marginTop: 12,
+    gap: spacing.lg,
+    marginTop: spacing.md,
   },
   legendItem: {
     flexDirection: 'row',

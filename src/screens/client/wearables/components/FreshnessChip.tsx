@@ -239,9 +239,11 @@ export function FreshnessChip({ bucket, tone, onPress, connections }: Props) {
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={`${summary.label}. Tap to manage your connected sources.`}
-      // P1 visual #1: restore tap reliability on the sub-44pt chip without a
-      // layout change (the chip itself stays compact in the hero corner).
-      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      // P0: the chip is ~26pt visual; an 8pt hitSlop left the total tap
+      // surface (~42pt) under the HIG 44pt floor. Raise to 12pt each side
+      // (≈ 50pt total) — no layout change, the chip stays compact in the
+      // hero corner while edge taps register reliably.
+      hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
       style={[styles.chip, { backgroundColor: tier.bg }]}
     >
       <Ionicons name={tier.icon} size={16} color={tier.fg} />

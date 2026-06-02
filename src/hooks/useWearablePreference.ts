@@ -37,6 +37,7 @@ import {
 } from '../api/wearablesSamplesApi';
 import { type WearableProvider } from '../api/wearablesConnectionsApi';
 import { WEARABLE_SAMPLES_ROOT_KEY } from './useWearableSamples';
+import { logger } from '../utils/logger';
 
 /**
  * Cache key for the locally-tracked preferred provider of a single metric.
@@ -62,6 +63,13 @@ type PreferenceMutation = UseMutationResult<
   Error,
   SetPreferenceVars,
   OptimisticContext
+>;
+
+type ClearPreferenceMutation = UseMutationResult<
+  void,
+  Error,
+  WearableMetricType,
+  unknown
 >;
 
 /** The metric-bound contract return (R1 P0 #5). */
@@ -125,6 +133,40 @@ function usePreferenceMutation(): PreferenceMutation {
 }
 
 /**
+ * Internal factory: the CLEAR mutation. Routed through React Query (mirrors
+ * `usePreferenceMutation`) so clearing a preference is a first-class mutation —
+ * it tracks `isPending`, invalidates the samples subtree, drops the per-metric
+ * preference cache entry, and surfaces errors instead of failing silently
+ * (R65 #36). Previously the clear path called the API directly, bypassing the
+ * query client entirely: no pending state, no cache invalidation, and a failed
+ * DELETE was never observable by the UI.
+ */
+function useClearPreferenceMutation(): ClearPreferenceMutation {
+  const qc = useQueryClient();
+
+  return useMutation<void, Error, WearableMetricType, unknown>({
+    mutationFn: (metric) => wearablesSamplesApi.clearPreference(metric),
+
+    onSuccess: (_void, metric) => {
+      // Clear the per-metric preference cache so the chip drops its "active"
+      // highlight, then invalidate the samples subtree so the next read falls
+      // back to recency (`resolveBest`).
+      qc.setQueryData<WearableProvider | null>(
+        wearablePreferenceQueryKey(metric),
+        null,
+      );
+      void qc.invalidateQueries({ queryKey: WEARABLE_SAMPLES_ROOT_KEY });
+    },
+
+    onError: (error, metric) => {
+      // Never swallow — log for diagnostics; the caller's `opts.onError` (wired
+      // below) still fires so the screen's actionable toast can surface it.
+      logger.error('useWearablePreference.clear', { metric, error });
+    },
+  });
+}
+
+/**
  * Read the optimistically-tracked preferred provider for a metric from the
  * dedicated preference cache. Exported so chips can subscribe to the optimistic
  * value BEFORE the network confirms (R1 P1 #1). The query has no `queryFn`
@@ -156,6 +198,9 @@ export function useWearablePreference(args?: {
   metric: WearableMetricType;
 }): PreferenceMutation | BoundPreference {
   const mutation = usePreferenceMutation();
+  // Clear mutation is ALWAYS instantiated (rules-of-hooks: stable hook order
+  // across overloads). It is only invoked from the bound overload's mutate(null).
+  const clearMutation = useClearPreferenceMutation();
   // The hook order is stable: we ALWAYS read the (cheap, fetch-disabled)
   // preference query so the rules-of-hooks hold regardless of the overload.
   const boundMetric = args?.metric;
@@ -175,24 +220,20 @@ export function useWearablePreference(args?: {
 
   return {
     data: optimistic.data ?? null,
-    isPending: mutation.isPending,
+    // Either write is in flight → the chip row shows pending.
+    isPending: mutation.isPending || clearMutation.isPending,
     mutate: (
       preferredProvider: WearableProvider | null,
       opts?: { onError?: (err: Error) => void },
     ) => {
       if (preferredProvider === null) {
-        // Clearing: write through the dedicated clear endpoint via the API,
-        // then let onSettled re-resolve. We surface errors, never swallow.
-        wearablesSamplesApi
-          .clearPreference(boundMetric)
-          .then(() => {
-            // Optimistic-consistent: re-run the samples invalidation path.
-            mutation.reset();
-          })
-          .catch((err: unknown) => {
-            const e = err instanceof Error ? err : new Error(String(err));
-            opts?.onError?.(e);
-          });
+        // Clearing: route through the dedicated clear mutation so the request
+        // is tracked (isPending), the samples subtree is invalidated on
+        // success, and a failed DELETE surfaces via isError + opts.onError
+        // (no silent failure — R65 #36).
+        clearMutation.mutate(boundMetric, {
+          onError: (err) => opts?.onError?.(err),
+        });
         return;
       }
       mutation.mutate(

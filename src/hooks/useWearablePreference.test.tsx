@@ -34,6 +34,9 @@ import { WEARABLE_SAMPLES_ROOT_KEY } from './useWearableSamples';
 const mockedSet = wearablesSamplesApi.setPreference as jest.MockedFunction<
   typeof wearablesSamplesApi.setPreference
 >;
+const mockedClearFn = wearablesSamplesApi.clearPreference as jest.MockedFunction<
+  typeof wearablesSamplesApi.clearPreference
+>;
 
 function makeWrapper() {
   const qc = new QueryClient({
@@ -54,6 +57,7 @@ function makeWrapper() {
 
 beforeEach(() => {
   mockedSet.mockReset();
+  mockedClearFn.mockReset();
 });
 
 describe('useWearablePreference', () => {
@@ -204,5 +208,74 @@ describe('useWearablePreference({ metric }) — HK-3b contract overload (R1 P0 #
     });
 
     await waitFor(() => expect(mockedClear).toHaveBeenCalledWith('STEPS'));
+  });
+
+  it('clear routes through React Query: drops the preference, invalidates samples, exposes isPending', async () => {
+    const mockedClear = wearablesSamplesApi.clearPreference as jest.MockedFunction<
+      typeof wearablesSamplesApi.clearPreference
+    >;
+    // Hold the DELETE open so we can assert isPending is true mid-flight.
+    let resolveClear!: () => void;
+    mockedClear.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        resolveClear = resolve;
+      }),
+    );
+    const { qc, Wrapper } = makeWrapper();
+    // Seed an active preference so we can prove the clear drops it.
+    qc.setQueryData(wearablePreferenceQueryKey('STEPS'), 'OURA');
+    const invalidateSpy = jest.spyOn(qc, 'invalidateQueries');
+
+    const { result } = renderHook(
+      () => useWearablePreference({ metric: 'STEPS' }),
+      { wrapper: Wrapper },
+    );
+
+    act(() => {
+      result.current.mutate(null);
+    });
+
+    // The clear is a tracked mutation — isPending flips true while in flight.
+    await waitFor(() => expect(result.current.isPending).toBe(true));
+
+    act(() => {
+      resolveClear();
+    });
+
+    // On success: per-metric preference cache is dropped to null …
+    await waitFor(() =>
+      expect(qc.getQueryData(wearablePreferenceQueryKey('STEPS'))).toBeNull(),
+    );
+    // … the samples subtree is invalidated so reads fall back to recency …
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: WEARABLE_SAMPLES_ROOT_KEY,
+    });
+    // … and isPending settles back to false.
+    await waitFor(() => expect(result.current.isPending).toBe(false));
+  });
+
+  it('clear surfaces errors via opts.onError instead of failing silently', async () => {
+    const mockedClear = wearablesSamplesApi.clearPreference as jest.MockedFunction<
+      typeof wearablesSamplesApi.clearPreference
+    >;
+    const boom = new Error('clear failed');
+    mockedClear.mockRejectedValueOnce(boom);
+    const { qc, Wrapper } = makeWrapper();
+    qc.setQueryData(wearablePreferenceQueryKey('STEPS'), 'OURA');
+    const onError = jest.fn();
+
+    const { result } = renderHook(
+      () => useWearablePreference({ metric: 'STEPS' }),
+      { wrapper: Wrapper },
+    );
+
+    act(() => {
+      result.current.mutate(null, { onError });
+    });
+
+    // The failure is observable — the caller's onError fires (actionable toast).
+    await waitFor(() => expect(onError).toHaveBeenCalledWith(boom));
+    // The optimistic active preference is NOT silently wiped on a failed clear.
+    expect(qc.getQueryData(wearablePreferenceQueryKey('STEPS'))).toBe('OURA');
   });
 });

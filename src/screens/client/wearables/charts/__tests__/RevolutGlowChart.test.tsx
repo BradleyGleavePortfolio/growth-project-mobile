@@ -24,23 +24,43 @@ const DATA: readonly GlowChartPoint[] = [
   { value: 60, label: '2026-05-05' },
 ];
 
+/**
+ * Minimal structural shape of a react-test-renderer JSON node we inspect.
+ * `props` is intentionally an index map of unknown values so each read site
+ * narrows the specific prop it cares about (no blanket `any`).
+ */
+interface TestNode {
+  readonly props?: Record<string, unknown>;
+  readonly children?: readonly unknown[];
+}
+
+/** Type guard: is this rendered JSON value an inspectable node? */
+function isTestNode(value: unknown): value is TestNode {
+  return typeof value === 'object' && value !== null;
+}
+
+/** Read a string prop off a node, or undefined if absent/non-string. */
+function stringProp(node: TestNode, key: string): string | undefined {
+  const v = node.props?.[key];
+  return typeof v === 'string' ? v : undefined;
+}
+
 /** Depth-first collect every node in the rendered JSON tree. */
-function flatten(node: unknown, out: any[] = []): any[] {
-  if (!node || typeof node !== 'object') return out;
-  const n = node as any;
-  out.push(n);
-  const kids = Array.isArray(n.children) ? n.children : [];
+function flatten(node: unknown, out: TestNode[] = []): TestNode[] {
+  if (!isTestNode(node)) return out;
+  out.push(node);
+  const kids = Array.isArray(node.children) ? node.children : [];
   for (const k of kids) flatten(k, out);
   return out;
 }
 
-function renderTree(reduceMotion: boolean) {
+function renderTree(reduceMotion: boolean): TestNode[] {
   const r = render(
     <RevolutGlowChart data={DATA} tone="warm" reduceMotion={reduceMotion} />,
   );
   const json = r.toJSON();
   const roots = Array.isArray(json) ? json : [json];
-  const nodes: any[] = [];
+  const nodes: TestNode[] = [];
   for (const root of roots) flatten(root, nodes);
   return nodes;
 }
@@ -53,18 +73,19 @@ describe('RevolutGlowChart', () => {
     // gradient exists AND is wired to a filled area path.
     const gradient = nodes.find(
       (n) =>
-        n.props &&
-        (n.props.id === 'chartFill' || n.props.name === 'chartFill'),
+        n.props?.id === 'chartFill' || n.props?.name === 'chartFill',
     );
     expect(gradient).toBeTruthy();
     // RN-SVG resolves the `fill="url(#chartFill)"` reference to a brush object
     // `{ type, brushRef: 'chartFill' }` on the area path; web/string form is
     // also accepted so the assertion is renderer-agnostic.
     const filledArea = nodes.find((n) => {
-      const fill = n.props && n.props.fill;
+      const fill = n.props?.fill;
       return (
         fill === 'url(#chartFill)' ||
-        (fill && typeof fill === 'object' && fill.brushRef === 'chartFill')
+        (typeof fill === 'object' &&
+          fill !== null &&
+          (fill as { brushRef?: unknown }).brushRef === 'chartFill')
       );
     });
     expect(filledArea).toBeTruthy();
@@ -73,29 +94,24 @@ describe('RevolutGlowChart', () => {
   it('renders a smooth bezier line path (d starts with M, contains a C)', () => {
     const nodes = renderTree(true);
     // Among Path-like nodes, find the line: a `d` with a cubic command.
-    const beziers = nodes.filter(
-      (n) =>
-        n.props &&
-        typeof n.props.d === 'string' &&
-        n.props.d.startsWith('M') &&
-        n.props.d.includes('C'),
-    );
+    const beziers = nodes.filter((n) => {
+      const d = stringProp(n, 'd');
+      return d !== undefined && d.startsWith('M') && d.includes('C');
+    });
     expect(beziers.length).toBeGreaterThan(0);
     // No legacy <Polyline> points-based line remains.
-    const polylines = nodes.filter((n) => n.props && 'points' in n.props);
+    const polylines = nodes.filter((n) => n.props != null && 'points' in n.props);
     expect(polylines.length).toBe(0);
   });
 
   it('renders the chart fully under reduce-motion (data never hidden)', () => {
     const nodes = renderTree(false);
     const reduced = renderTree(true);
-    const hasLine = (ns: any[]) =>
-      ns.some(
-        (n) =>
-          n.props &&
-          typeof n.props.d === 'string' &&
-          n.props.d.includes('C'),
-      );
+    const hasLine = (ns: TestNode[]) =>
+      ns.some((n) => {
+        const d = stringProp(n, 'd');
+        return d !== undefined && d.includes('C');
+      });
     // The smooth line is present whether or not motion is reduced.
     expect(hasLine(nodes)).toBe(true);
     expect(hasLine(reduced)).toBe(true);

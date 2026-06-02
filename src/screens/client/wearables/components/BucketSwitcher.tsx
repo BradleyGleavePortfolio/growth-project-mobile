@@ -60,6 +60,10 @@ export default function BucketSwitcher({ active, onChange }: Props) {
             accessibilityRole="tab"
             accessibilityState={{ selected }}
             accessibilityLabel={segment.label}
+            // P0: this is the most-tapped control on the screen. Guarantee a
+            // ≥44pt tap surface (HIG floor) with minHeight + symmetric hitSlop
+            // so edge taps near the pill track still register.
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             style={[styles.segment, selected && styles.segmentSelected]}
           >
             <Ionicons
@@ -70,11 +74,20 @@ export default function BucketSwitcher({ active, onChange }: Props) {
             <Text
               style={[
                 styles.label,
-                { color: selected ? colors.ink : colors.charcoal },
+                {
+                  color: selected ? colors.ink : colors.charcoal,
+                  // P2: non-color disambiguator — weight bump complements the
+                  // underline below so the active segment never relies on
+                  // color alone (a11y: contrast-independent state).
+                  fontFamily: selected ? 'Inter_600SemiBold' : 'Inter_500Medium',
+                },
               ]}
             >
               {segment.label}
             </Text>
+            {/* P2: position-anchored underline — a non-color active indicator
+                that harmonises with the segmented pill chrome. */}
+            {selected && <View style={styles.activeUnderline} />}
           </Pressable>
         );
       })}
@@ -92,15 +105,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: withAlpha(colors.ink, 0.05),
     borderRadius: radius.pill,
-    padding: spacing.xs / 2,
+    // P2: snap to the 4pt grid (was spacing.xs / 2 = 2pt, off-grid).
+    padding: spacing.xs,
     alignSelf: 'center',
   },
   segment: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: spacing.xs,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.lg,
+    // P0: HIG 44pt minimum tap height for the primary header control.
+    minHeight: 44,
     borderRadius: radius.pill,
   },
   segmentSelected: {
@@ -108,6 +125,18 @@ const styles = StyleSheet.create({
   },
   label: {
     ...typography.bodySmall,
-    fontFamily: 'Inter_500Medium',
+    // fontFamily is set per-segment (selected → SemiBold) as a non-color
+    // active disambiguator; the base weight is Medium.
+  },
+  // P2: non-color active indicator — a thin bar anchored to the segment
+  // baseline, in the primary ink so it reads regardless of hue.
+  activeUnderline: {
+    position: 'absolute',
+    bottom: spacing.xs,
+    left: spacing.lg,
+    right: spacing.lg,
+    height: 1.5,
+    borderRadius: radius.pill,
+    backgroundColor: colors.ink,
   },
 });

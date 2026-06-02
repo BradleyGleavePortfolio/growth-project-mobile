@@ -37,7 +37,7 @@ import type {
   SamplesResponse,
   WearableMetricType,
 } from '../../../api/wearablesSamplesApi';
-import { colors, semantic, spacing, typography } from '../../../theme/tokens';
+import { colors, radius, semantic, spacing, typography } from '../../../theme/tokens';
 import WearableCard from '../../client/wearables/components/WearableCard';
 import HealthFitnessScreen from '../../client/wearables/HealthFitnessScreen';
 
@@ -220,7 +220,7 @@ const bandStyles = StyleSheet.create({
   },
   skeleton: {
     height: 20,
-    borderRadius: 4,
+    borderRadius: radius.lg,
     backgroundColor: colors.cream,
     opacity: 0.55,
   },

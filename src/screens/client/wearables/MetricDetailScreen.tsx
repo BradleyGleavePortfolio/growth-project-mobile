@@ -68,6 +68,17 @@ type MetricDetailParams = {
 const WINDOW_DAYS = 30;
 
 /**
+ * Round a Date down to the top of its hour. Mirrors `HealthFitnessScreen` so
+ * the samples queryKey changes at most once per hour instead of on every
+ * millisecond of mount time — stable cache reuse across re-renders (P2).
+ */
+function roundToHour(d: Date): Date {
+  const r = new Date(d);
+  r.setMinutes(0, 0, 0);
+  return r;
+}
+
+/**
  * The set of providers that contributed samples in the window, ordered by most
  * recent sample first. The first entry is the recency-based resolveBest
  * fallback (what the server would auto-pick with no explicit preference).
@@ -104,7 +115,9 @@ export default function MetricDetailScreen() {
   const [toast, setToast] = useState<string | null>(null);
 
   const window = useMemo(() => {
-    const to = new Date();
+    // Hour-rounded boundary (matches HealthFitnessScreen): keeps the derived
+    // samples queryKey stable within the hour so we don't thrash the cache.
+    const to = roundToHour(new Date());
     const from = new Date(to.getTime() - WINDOW_DAYS * 24 * 60 * 60 * 1000);
     return { from: from.toISOString(), to: to.toISOString() };
   }, []);
