@@ -118,6 +118,9 @@ import BlockedUsersScreen from '../screens/settings/BlockedUsersScreen';
 // PR-HK-1-mobile — Wearable Connections Hub (manage health data sources).
 // Additive registration only; mounts under MoreStack at AppTabs/Settings/Connections.
 import ConnectionsScreen from '../screens/client/wearables/ConnectionsScreen';
+import WearablesShell from '../screens/client/wearables/WearablesShell';
+import MetricDetailScreen from '../screens/client/wearables/MetricDetailScreen';
+import type { WearableMetricBucket, WearableMetricType } from '../api/wearablesSamplesApi';
 import { colors } from '../theme/tokens';
 // Defense-in-depth client paywall (Option B): paid screens are wrapped so
 // the entitlement gate runs before the screen body. Server-side
@@ -272,6 +275,14 @@ export type MoreStackParamList = {
   PackageCheckout: { shareToken: string };
   /** PR-HK-1-mobile — Wearable Connections Hub (manage health data sources). */
   Connections: undefined;
+  /** PR-HK-3a — Wearables bucket shell (Fitness | Recovery segmented switcher). */
+  Health: { bucket?: 'fitness' | 'recovery' } | undefined;
+  /** PR-HK-3a — shared metric drill-down (compare sources + glow-drag chart). */
+  WearableMetricDetail: {
+    metric: WearableMetricType;
+    bucket: WearableMetricBucket;
+    clientId?: string;
+  };
 };
 
 // ─── Phase 9: unread count polling for the bell icon ─────────────────────────
@@ -490,6 +501,14 @@ function MoreStackNavigator() {
       {/* PR-HK-1-mobile — Wearable Connections Hub. Reachable from Settings;
           the bucket UI + segmented switcher land in PR-HK-3a/3b. */}
       <MoreStackNav.Screen name="Connections" component={ConnectionsScreen} />
+      {/* PR-HK-3a — wearables bucket shell + shared metric detail. The shell
+          mounts the Health & Fitness overview (and, post-HK-3b, Sleep &
+          Recovery). This is the single nav edit point per UNIFIED_BUILD_PLAN §6. */}
+      <MoreStackNav.Screen name="Health" component={WearablesShell} />
+      <MoreStackNav.Screen
+        name="WearableMetricDetail"
+        component={MetricDetailScreen}
+      />
       {/* Client-facing checkout for a coach's package share link. Reachable
           via deep-link (tgp://p/:token, https://app.trygrowthproject.com/p/:token)
           and from the MembershipScreen. */}

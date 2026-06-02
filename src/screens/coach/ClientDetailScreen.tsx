@@ -32,6 +32,7 @@ import { SummaryTab } from './client-detail/SummaryTab';
 import { WorkoutsTab } from './client-detail/WorkoutsTab';
 import { MealPlanTab } from './client-detail/MealPlanTab';
 import { ProgressTab } from './client-detail/ProgressTab';
+import { HealthFitnessTab } from './client-detail/HealthFitnessTab';
 import { PlanFormModal } from './client-detail/PlanFormModal';
 import { NudgeModal } from './client-detail/NudgeModal';
 import { useClientDetailData } from './client-detail/useClientDetailData';
@@ -270,6 +271,7 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
     { key: 'workouts', label: 'Workouts', icon: 'barbell-outline' },
     { key: 'mealplan', label: 'Plan', icon: 'calendar-outline' },
     { key: 'progress', label: 'Progress', icon: 'trending-up-outline' },
+    { key: 'healthFitness', label: 'Fitness', icon: 'fitness-outline' },
     { key: 'timeline', label: 'Timeline', icon: 'time-outline' },
     { key: 'weekly', label: 'Weekly', icon: 'stats-chart-outline' },
   ];
@@ -482,6 +484,10 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
 
         {activeTab === 'progress' && (
           <ProgressTab weightLogs={weightLogs} colors={colors} styles={styles} />
+        )}
+
+        {activeTab === 'healthFitness' && (
+          <HealthFitnessTab clientId={clientId} colors={colors} styles={styles} />
         )}
 
         {activeTab === 'timeline' && (
