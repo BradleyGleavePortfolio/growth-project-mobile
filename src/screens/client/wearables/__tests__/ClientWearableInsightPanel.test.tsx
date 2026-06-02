@@ -16,9 +16,41 @@
  */
 
 import React from 'react';
-import { AccessibilityInfo, Linking } from 'react-native';
+import { AccessibilityInfo, Linking, StyleSheet } from 'react-native';
 import { render, fireEvent, act } from '@testing-library/react-native';
 import type { ReactTestInstance } from 'react-test-renderer';
+
+// ── Inline WCAG 2.1 contrast helper (P2 dark-mode AA regression) ──────────────
+// Colocated here on purpose: the dark-mode AA assertions must not depend on the
+// workspace `_contrast_hk5b_r2.py` script. ~10 lines of the standard relative
+// luminance + contrast-ratio formulas, exercised against the resolved style.
+function channelLuminance(channel: number): number {
+  const c = channel / 255;
+  return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+}
+
+function relativeLuminance(hex: string): number {
+  const h = hex.replace('#', '');
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return (
+    0.2126 * channelLuminance(r) +
+    0.7152 * channelLuminance(g) +
+    0.0722 * channelLuminance(b)
+  );
+}
+
+function contrastRatio(fg: string, bg: string): number {
+  const l1 = relativeLuminance(fg);
+  const l2 = relativeLuminance(bg);
+  const hi = Math.max(l1, l2);
+  const lo = Math.min(l1, l2);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+/** The dark card surface (`darkTokens.bgSurface`) every on-surface ink sits on. */
+const DARK_SURFACE = '#1C1A18';
 
 const mockUseClientInsight = jest.fn();
 
@@ -36,8 +68,26 @@ jest.mock('../components/useReduceMotion', () => ({
   useReduceMotion: () => true,
 }));
 
+// Drive the panel's resolved colour scheme deterministically. The component
+// reads `useTheme().colorScheme` to pick the scheme-reactive tone; mocking the
+// hook lets us mount it under dark mode without standing up the full
+// ThemeProvider (which pulls AsyncStorage + the founding-number query). The
+// real `darkTokens` are returned so `bgSurface` is the genuine #1C1A18 surface.
+const mockColorScheme = { current: 'light' as 'light' | 'dark' };
+jest.mock('../../../../theme/useTheme', () => {
+  const { lightTokens, darkTokens } = jest.requireActual('../../../../theme/tokens');
+  return {
+    useTheme: () => ({
+      colorScheme: mockColorScheme.current,
+      semanticColors:
+        mockColorScheme.current === 'dark' ? darkTokens : lightTokens,
+    }),
+  };
+});
+
 import { makeAccessibilitySubscription } from '../testSupport/accessibilityMocks';
 import { ClientWearableInsightPanel } from '../ClientWearableInsightPanel';
+import { logger } from '../../../../utils/logger';
 import type {
   ClientInsight,
   ClientInsightResponse,
@@ -112,6 +162,8 @@ function queryState(over: Record<string, unknown>) {
 
 beforeEach(() => {
   mockUseClientInsight.mockReset();
+  mockColorScheme.current = 'light'; // default; dark-mode suite opts in per-test
+  jest.restoreAllMocks();
   jest
     .spyOn(AccessibilityInfo, 'isReduceMotionEnabled')
     .mockResolvedValue(true); // reduce-motion ON → static skeleton, deterministic
@@ -484,5 +536,195 @@ describe('long-content clamp + Read more toggle (state #5)', () => {
     overflowLayout(getByTestId('client-insight-observation'), 2);
     overflowLayout(getByTestId('client-insight-norm'), 2);
     expect(queryByTestId('client-insight-readmore')).toBeNull();
+  });
+});
+
+/**
+ * Resolve the effective `color` / `borderColor` of a rendered node by flattening
+ * its style (RN merges arrays + functional styles; the panel applies the ink
+ * inline as the last array entry, so the flattened value is the one painted).
+ */
+function flatColor(node: ReactTestInstance, key: 'color' | 'borderColor'): string {
+  const flat = StyleSheet.flatten(node.props.style) as Record<string, unknown>;
+  const value = flat[key];
+  expect(typeof value).toBe('string');
+  return value as string;
+}
+
+describe('dark-mode on-surface AA (P1 regression guard)', () => {
+  // Parametrised over BOTH buckets — warm and cool resolve to DIFFERENT inks
+  // (gold[300] #D4B96B vs brand[300] #6E9479) so each must be guarded.
+  const buckets = [
+    { bucket: 'HEALTH_FITNESS' as const, name: 'warm / Health & Fitness' },
+    { bucket: 'SLEEP_RECOVERY' as const, name: 'cool / Sleep & Recovery' },
+  ];
+
+  it.each(buckets)(
+    'Read more toggle ink clears 4.5:1 on the dark surface ($name)',
+    ({ bucket }) => {
+      mockColorScheme.current = 'dark';
+      mockUseClientInsight.mockReturnValue(
+        queryState({
+          data: fullInsight({
+            observation: LONG_280,
+            norm_comparison: LONG_280,
+          }),
+        }),
+      );
+      const { getByTestId } = render(
+        <ClientWearableInsightPanel bucket={bucket} />,
+      );
+      // Surface the toggle so its resolved ink can be measured.
+      overflowLayout(getByTestId('client-insight-observation'));
+      const toggle = getByTestId('client-insight-readmore');
+      // The inner Text carries the inline color; read it off the rendered child.
+      const textNode = toggle.children.find(
+        (c): c is ReactTestInstance => typeof c !== 'string',
+      ) as ReactTestInstance;
+      const color = flatColor(textNode, 'color');
+      expect(contrastRatio(color, DARK_SURFACE)).toBeGreaterThanOrEqual(4.5);
+    },
+  );
+
+  it.each(buckets)(
+    'Retry text + border ink clears AA on the dark surface ($name)',
+    ({ bucket }) => {
+      mockColorScheme.current = 'dark';
+      mockUseClientInsight.mockReturnValue(
+        queryState({ isError: true, error: new Error('x'), refetch: jest.fn() }),
+      );
+      const { getByTestId } = render(
+        <ClientWearableInsightPanel bucket={bucket} />,
+      );
+      const retry = getByTestId('client-insight-retry');
+      // Border lives on the Pressable; text colour on the inner Text. Both must
+      // clear their respective AA thresholds (text 4.5:1, UI border 3:1).
+      const borderColor = flatColor(retry, 'borderColor');
+      const textNode = retry.children.find(
+        (c): c is ReactTestInstance => typeof c !== 'string',
+      ) as ReactTestInstance;
+      const textColor = flatColor(textNode, 'color');
+      expect(contrastRatio(borderColor, DARK_SURFACE)).toBeGreaterThanOrEqual(3);
+      expect(contrastRatio(textColor, DARK_SURFACE)).toBeGreaterThanOrEqual(4.5);
+    },
+  );
+});
+
+describe('Read more stale-state on refetch (#28)', () => {
+  it('drops the toggle when long content is replaced by short content', () => {
+    mockUseClientInsight.mockReturnValue(
+      queryState({
+        data: fullInsight({
+          observation: LONG_280,
+          norm_comparison: LONG_280,
+        }),
+      }),
+    );
+    const { getByTestId, queryByTestId, rerender } = render(
+      <ClientWearableInsightPanel {...baseProps} />,
+    );
+    // Long content overflows → toggle appears.
+    overflowLayout(getByTestId('client-insight-observation'));
+    overflowLayout(getByTestId('client-insight-norm'));
+    expect(getByTestId('client-insight-readmore')).toBeTruthy();
+
+    // Refetch swaps in short content; the keyed effect collapses + clears flags.
+    mockUseClientInsight.mockReturnValue(
+      queryState({
+        data: fullInsight({
+          observation: 'Short now',
+          norm_comparison: 'Also short',
+        }),
+      }),
+    );
+    rerender(<ClientWearableInsightPanel {...baseProps} />);
+    // The fresh layout pass reports a within-cap measurement; the always-assign
+    // handler flips the flag back to false so the toggle is gone (not stuck on).
+    overflowLayout(getByTestId('client-insight-observation'), 2);
+    overflowLayout(getByTestId('client-insight-norm'), 2);
+    expect(queryByTestId('client-insight-readmore')).toBeNull();
+  });
+});
+
+describe('edge-case section omission', () => {
+  it('omits the provenance row when source_metrics is empty', () => {
+    mockUseClientInsight.mockReturnValue(
+      queryState({ data: fullInsight({ source_metrics: [] }) }),
+    );
+    const { queryByTestId } = render(
+      <ClientWearableInsightPanel {...baseProps} />,
+    );
+    expect(queryByTestId('client-insight-source-metrics')).toBeNull();
+  });
+
+  it('omits blank-after-trim sections but renders the real intervention (no EmptyPanel)', () => {
+    mockUseClientInsight.mockReturnValue(
+      queryState({
+        data: fullInsight({
+          observation: '   ',
+          norm_comparison: '',
+          intervention: 'real content',
+        }),
+      }),
+    );
+    const { getByText, queryByTestId } = render(
+      <ClientWearableInsightPanel {...baseProps} />,
+    );
+    // The two blank sections do NOT render…
+    expect(queryByTestId('client-insight-observation')).toBeNull();
+    expect(queryByTestId('client-insight-norm')).toBeNull();
+    // …the real intervention DOES…
+    expect(queryByTestId('client-insight-intervention')).toBeTruthy();
+    expect(getByText('real content')).toBeTruthy();
+    // …and because at least one field is real, this is NOT the empty state.
+    expect(queryByTestId('client-insight-empty')).toBeNull();
+  });
+
+  it('falls back to the EmptyPanel when all three text fields are blank', () => {
+    mockUseClientInsight.mockReturnValue(
+      queryState({
+        data: fullInsight({
+          observation: '   ',
+          norm_comparison: '',
+          intervention: '\t\n',
+          optional_cta: {
+            label: 'Open plan',
+            deep_link: 'tgp://wearables/plan',
+          },
+        }),
+      }),
+    );
+    const { getByTestId, queryByTestId } = render(
+      <ClientWearableInsightPanel {...baseProps} />,
+    );
+    expect(getByTestId('client-insight-empty')).toBeTruthy();
+    // No CTA / chip / Read more leak through the all-blank fallback.
+    expect(queryByTestId('client-insight-cta')).toBeNull();
+    expect(queryByTestId('client-insight-confidence')).toBeNull();
+    expect(queryByTestId('client-insight-readmore')).toBeNull();
+  });
+});
+
+describe('unsafe deep-link refusal is logged (P2)', () => {
+  it('warns via logger when refusing a non-tgp deep link', () => {
+    const warn = jest.spyOn(logger, 'warn').mockImplementation(() => {});
+    const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+    const seeded: ClientInsightResponse = fullInsight({
+      optional_cta: { label: 'Open something', deep_link: 'tgp://placeholder' },
+    });
+    if (seeded.optional_cta) {
+      Object.assign(seeded.optional_cta, { deep_link: 'javascript:alert(1)' });
+    }
+    mockUseClientInsight.mockReturnValue(queryState({ data: seeded }));
+    const { getByTestId } = render(
+      <ClientWearableInsightPanel {...baseProps} />,
+    );
+    fireEvent.press(getByTestId('client-insight-cta'));
+    expect(openURL).not.toHaveBeenCalled();
+    // The refusal must leave a breadcrumb naming the unsafe-link refusal.
+    expect(warn).toHaveBeenCalledTimes(1);
+    const [context, message] = warn.mock.calls[0];
+    expect(context).toBe('ClientWearableInsightPanel');
+    expect(String(message)).toMatch(/refused to open a non-tgp deep link/);
   });
 });
