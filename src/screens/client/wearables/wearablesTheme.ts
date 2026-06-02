@@ -14,7 +14,7 @@
  * the app and never introduce a raw off-palette hex.
  */
 
-import { colors, gold, withAlpha } from '../../../theme/tokens';
+import { brand, colors, gold, withAlpha } from '../../../theme/tokens';
 import type { IoniconName } from '../../../types/common';
 import type {
   WearableMetricBucket,
@@ -27,21 +27,40 @@ export const SHELL_CROSSFADE_MS = 200;
 /** A bucket's visual tone. `warm` = Health & Fitness, `cool` = Sleep & Recovery. */
 export type BucketTone = 'warm' | 'cool';
 
+/** Resolved colour scheme the tone tokens are tuned for. */
+export type ToneScheme = 'light' | 'dark';
+
 export interface ToneTokens {
   /**
    * Primary accent for hairline borders, rings, inactive chips, icons, and
    * chart lines — its documented role (warm `camel` is borders-only per
    * tokens.ts). NOT for filled CTAs or on-light text: warm `camel` is only
    * 2.70:1 on bone and 2.54:1 on cream, both below WCAG AA.
+   *
+   * Scheme-reactive: on the dark card surface (`bgSurface #1C1A18`) the cool
+   * `forest #2C4A36` icon is only 1.77:1 (below the 3:1 UI-component
+   * threshold), so dark COOL lifts to `brand[300] #6E9479` (5.10:1). Warm
+   * `camel #B08D57` already clears 3:1 on dark (5.61:1) and is preserved.
    */
   readonly accent: string;
   /**
-   * AA-safe foreground (≥4.5:1 vs bone, and on cream) — used as the fill for
-   * primary CTAs that carry bone text AND as on-light text/link colour. Warm
-   * resolves to gold[800] (#6B4F1A — 6.65:1 bone / 6.25:1 cream); cool to
-   * forest (8.57:1).
+   * CTA-fill colour: the background behind the primary CTA's `textOnAccent`
+   * label. This pairing passes AA in BOTH schemes (warm 7.13:1 / cool 9.19:1
+   * with the near-white label) so it is held static across schemes. NOT for
+   * on-surface text/border — use {@link onSurfaceInk} for those.
    */
   readonly accentInk: string;
+  /**
+   * On-surface ink: the foreground used for text/border affordances drawn
+   * directly on the card surface (Retry text+border, Read more/Show less).
+   * Scheme-reactive against `bgSurface` so it clears AA in both modes:
+   *  - light: warm `gold[800] #6B4F1A` (7.49:1 on bone) / cool `forest`
+   *    (9.65:1) — preserves the prior light appearance.
+   *  - dark: warm `gold[300] #D4B96B` (9.05:1 on #1C1A18) / cool
+   *    `brand[300] #6E9479` (5.10:1) — the prior static inks failed dark
+   *    (warm 2.28:1 / cool 1.77:1).
+   */
+  readonly onSurfaceInk: string;
   /** Soft tinted surface behind hero / selected states. */
   readonly tint: string;
   /** Glow color for the Revolut chart's lifted datum. */
@@ -50,27 +69,63 @@ export interface ToneTokens {
   readonly track: string;
 }
 
-const WARM: ToneTokens = {
+/** Light-mode base for the warm (Health & Fitness) tone. */
+const WARM_LIGHT: ToneTokens = {
   accent: colors.camel, // clay/amber warm accent (#B08D57) — borders/icons/lines only
-  // AA-safe (6.65:1 on bone / 6.25:1 on cream) — used as on-light text/link colour
-  // AND as filled-CTA background behind bone text.
+  // CTA fill behind bone text (7.13:1 with textOnAccent).
   accentInk: gold[800], // #6B4F1A
+  // On-surface ink: 7.49:1 on bone — preserves prior light text appearance.
+  onSurfaceInk: gold[800], // #6B4F1A
   tint: withAlpha(colors.camel, 0.1),
   glow: withAlpha(colors.mutedGold, 0.6),
   track: withAlpha(colors.camel, 0.16),
 };
 
-const COOL: ToneTokens = {
+/** Light-mode base for the cool (Sleep & Recovery) tone. */
+const COOL_LIGHT: ToneTokens = {
   accent: colors.forest, // forest/slate cool accent (#2C4A36)
-  accentInk: colors.forest, // already AA-safe vs bone (8.57:1) and cream (8.06:1)
+  accentInk: colors.forest, // CTA fill behind bone text (9.19:1 with textOnAccent)
+  onSurfaceInk: colors.forest, // 9.65:1 on bone — preserves prior light text appearance
   tint: withAlpha(colors.forest, 0.1),
   glow: withAlpha(colors.forest, 0.5),
   track: withAlpha(colors.forest, 0.16),
 };
 
-/** Resolve the tone tokens for a tone id. */
-export function toneTokens(tone: BucketTone): ToneTokens {
-  return tone === 'warm' ? WARM : COOL;
+/**
+ * Dark-scheme overrides, merged over the light base. Only the slots whose AA
+ * verdict changes on the dark card surface (`bgSurface #1C1A18`) are listed;
+ * `accentInk` (CTA fill) and the alpha-derived tint/glow/track stay put.
+ *
+ *  - `onSurfaceInk`: the prior static inks fail dark (warm 2.28:1, cool
+ *    1.77:1); lifted to `gold[300]` (9.05:1) / `brand[300]` (5.10:1).
+ *  - `accent`: cool `forest` icon is 1.77:1 on dark (below 3:1), lifted to
+ *    `brand[300]` (5.10:1). Warm `camel` is 5.61:1 on dark and is kept. The
+ *    chip-tint composite (accent @ 0.1 over the dark surface) still passes
+ *    because a lighter accent over a dark bg only raises its contrast.
+ */
+const WARM_DARK: Partial<ToneTokens> = {
+  onSurfaceInk: gold[300], // #D4B96B — 9.05:1 on #1C1A18
+};
+
+const COOL_DARK: Partial<ToneTokens> = {
+  accent: brand[300], // #6E9479 — 5.10:1 on #1C1A18 (forest was 1.77:1)
+  onSurfaceInk: brand[300], // #6E9479 — 5.10:1 on #1C1A18
+};
+
+/**
+ * Resolve the tone tokens for a tone id and the resolved colour scheme. Callers
+ * get a single object with the right values for the current scheme: the dark
+ * overrides above are merged over the light base so on-surface affordances
+ * clear WCAG AA against the dark card surface.
+ */
+export function toneTokens(
+  tone: BucketTone,
+  colorScheme: ToneScheme = 'light',
+): ToneTokens {
+  if (tone === 'warm') {
+    return colorScheme === 'dark' ? { ...WARM_LIGHT, ...WARM_DARK } : WARM_LIGHT;
+  }
+  return colorScheme === 'dark' ? { ...COOL_LIGHT, ...COOL_DARK } : COOL_LIGHT;
 }
 
 /** The tone a bucket renders in. */
