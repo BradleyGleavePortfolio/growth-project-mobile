@@ -125,8 +125,11 @@ export function ClientWearableInsightPanel({
   bucket,
   onCtaPress,
 }: ClientWearableInsightPanelProps) {
-  const tone = toneTokens(toneForBucket(bucket));
-  const { semanticColors } = useTheme();
+  const { semanticColors, colorScheme } = useTheme();
+  // Resolve the tone for the CURRENT colour scheme so on-surface affordances
+  // (Retry text/border, Read more) use a scheme-reactive ink that clears AA
+  // against the dark card surface (#1C1A18). The CTA fill keeps `accentInk`.
+  const tone = toneTokens(toneForBucket(bucket), colorScheme);
   const styles = useMemo(() => makeStyles(semanticColors), [semanticColors]);
   const reduceMotion = useReduceMotion();
   const query = useClientInsight({ bucket });
@@ -216,13 +219,13 @@ export function ClientWearableInsightPanel({
           </Text>
         </View>
         <Pressable
-          style={[styles.retryBtn, { borderColor: tone.accentInk }]}
+          style={[styles.retryBtn, { borderColor: tone.onSurfaceInk }]}
           onPress={onRetry}
           accessibilityRole="button"
           accessibilityLabel="Retry"
           testID="client-insight-retry"
         >
-          <Text style={[styles.retryText, { color: tone.accentInk }]}>Retry</Text>
+          <Text style={[styles.retryText, { color: tone.onSurfaceInk }]}>Retry</Text>
         </Pressable>
       </View>
     );
@@ -335,20 +338,35 @@ function LoadedPanel({
 
   const [expanded, setExpanded] = useState(false);
   // Tracks whether each clamped section overflowed CLAMP_LINES at its natural
-  // height. Measured once (while collapsed) via onTextLayout. Either overflowing
-  // surfaces the toggle.
+  // height, re-measured via onTextLayout on every layout pass. Either
+  // overflowing surfaces the toggle.
   const [observationOverflows, setObservationOverflows] = useState(false);
   const [normOverflows, setNormOverflows] = useState(false);
   const showToggle = observationOverflows || normOverflows;
+
+  // Stale-state guard (#28): after a React Query refetch swaps long content for
+  // short content the panel must not keep a stuck "Show less" / orphaned
+  // "Read more". Collapse back to the clamped view when the measured text
+  // changes and clear the overflow flags so the next onTextLayout pass
+  // re-measures from scratch (belt-and-suspenders alongside the always-assign
+  // handler below). Keyed on the two clamped fields only — the intervention is
+  // never clamped.
+  useEffect(() => {
+    setExpanded(false);
+    setObservationOverflows(false);
+    setNormOverflows(false);
+  }, [insight.observation, insight.norm_comparison]);
 
   const onClampLayout = useCallback(
     (
       setter: (v: boolean) => void,
     ): ((e: NativeSyntheticEvent<TextLayoutEventData>) => void) =>
       (e) => {
-        // `lines` reflects the un-clamped layout RN computed for this text; if
-        // it exceeds the cap the content needs a Read more affordance.
-        if (e.nativeEvent.lines.length > CLAMP_LINES) setter(true);
+        // `lines` reflects the un-clamped layout RN computed for this text.
+        // ALWAYS assign the current measurement (not a one-way latch to true)
+        // so that when refetched content now fits, the flag falls back to false
+        // and the toggle disappears instead of remaining stuck on (#28).
+        setter(e.nativeEvent.lines.length > CLAMP_LINES);
       },
     [],
   );
@@ -406,7 +424,7 @@ function LoadedPanel({
           accessibilityLabel={expanded ? 'Show less' : 'Read more'}
           testID="client-insight-readmore"
         >
-          <Text style={[styles.readMoreText, { color: tone.accentInk }]}>
+          <Text style={[styles.readMoreText, { color: tone.onSurfaceInk }]}>
             {expanded ? 'Show less' : 'Read more'}
           </Text>
         </Pressable>
@@ -606,9 +624,10 @@ function SkeletonBar({
 /**
  * Theme-aware stylesheet factory (P2-5 dark-mode parity). The panel consumes
  * `useTheme().semanticColors` so its surface/text/skeleton tokens follow the
- * resolved colour scheme; the bucket `tone.accent` / `tone.accentInk` fills
- * stay as-is (already AA-verified) and the on-accent label/icon uses
- * `theme.textOnAccent` (warm near-white, AA on both the light and dark accent).
+ * resolved colour scheme; the bucket `tone.accentInk` CTA fill stays as-is
+ * (AA-verified in both schemes with `theme.textOnAccent`), while on-surface
+ * text/border affordances use the scheme-reactive `tone.onSurfaceInk` applied
+ * inline at the call sites so they clear AA against the dark card surface.
  */
 function makeStyles(t: SemanticTokens) {
   return StyleSheet.create({
