@@ -246,7 +246,7 @@ function App() {
             // changes incompatibly. Cache entries with a different buster are
             // discarded on hydration instead of being deserialized into
             // mismatched TypeScript types.
-            buster: 'tgp-rq-v1',
+            buster: 'tgp-rq-v2-samples',
             dehydrateOptions: {
               // Don't persist transient or per-session-only queries. Anything
               // tagged with the meta { persist: false } (none today, but future
