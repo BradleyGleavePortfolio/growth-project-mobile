@@ -40,6 +40,7 @@ import {
 } from './wearablesTheme';
 import BucketSwitcher from './components/BucketSwitcher';
 import FreshnessChip from './components/FreshnessChip';
+import ClientWearableInsightPanel from './ClientWearableInsightPanel';
 import HealthFitnessScreen from './HealthFitnessScreen';
 import SleepRecoveryScreen from './SleepRecoveryScreen';
 
@@ -97,11 +98,18 @@ export default function WearablesShell() {
     setBucket((prev: WearableMetricBucket) => (prev === fromParam ? prev : fromParam));
   }, [route.params?.bucket]);
 
+  // Each bucket screen renders the client AI insight panel in its `aiPanelSlot`
+  // (the read-only HK-5b surface — no approve/dismiss; that is coach-only, HK-6).
   const content =
     bucket === 'HEALTH_FITNESS' ? (
-      <HealthFitnessScreen />
+      <HealthFitnessScreen
+        aiPanelSlot={<ClientWearableInsightPanel bucket="HEALTH_FITNESS" />}
+      />
     ) : (
-      <SleepRecoveryScreen />
+      <SleepRecoveryScreen
+        bucketParam={paramForBucket(bucket)}
+        aiPanelSlot={<ClientWearableInsightPanel bucket="SLEEP_RECOVERY" />}
+      />
     );
 
   return (

@@ -26,21 +26,48 @@ jest.mock('react-native-safe-area-context', () => {
   };
 });
 
+// The bucket screens render their `aiPanelSlot` so the test can assert the
+// HK-5b AI panel is mounted into each bucket (the shell pipes a
+// <ClientWearableInsightPanel/> into that slot).
 jest.mock('../HealthFitnessScreen', () => {
   const ReactLocal = require('react');
-  const { Text } = require('react-native');
+  const { Text, View } = require('react-native');
   return {
     __esModule: true,
-    default: () => ReactLocal.createElement(Text, null, 'FITNESS_OVERVIEW'),
+    default: ({ aiPanelSlot }: { aiPanelSlot?: React.ReactNode }) =>
+      ReactLocal.createElement(
+        View,
+        null,
+        ReactLocal.createElement(Text, null, 'FITNESS_OVERVIEW'),
+        aiPanelSlot,
+      ),
   };
 });
 
 jest.mock('../SleepRecoveryScreen', () => {
   const ReactLocal = require('react');
+  const { Text, View } = require('react-native');
+  return {
+    __esModule: true,
+    default: ({ aiPanelSlot }: { aiPanelSlot?: React.ReactNode }) =>
+      ReactLocal.createElement(
+        View,
+        null,
+        ReactLocal.createElement(Text, null, 'RECOVERY_OVERVIEW'),
+        aiPanelSlot,
+      ),
+  };
+});
+
+// Stub the AI panel to a bucket-tagged marker so we can assert which bucket it
+// was mounted for without exercising the real React Query hook here.
+jest.mock('../ClientWearableInsightPanel', () => {
+  const ReactLocal = require('react');
   const { Text } = require('react-native');
   return {
     __esModule: true,
-    default: () => ReactLocal.createElement(Text, null, 'RECOVERY_OVERVIEW'),
+    default: ({ bucket }: { bucket: string }) =>
+      ReactLocal.createElement(Text, null, `AI_PANEL_${bucket}`),
   };
 });
 
@@ -115,5 +142,16 @@ describe('WearablesShell', () => {
     mockRouteParams = { bucket: 'recovery' };
     render(<WearablesShell />);
     expect(screen.getByText('RECOVERY_OVERVIEW')).toBeTruthy();
+  });
+
+  it('mounts the client AI insight panel into each bucket', () => {
+    render(<WearablesShell />);
+    // Fitness bucket → the H&F-scoped panel is mounted.
+    expect(screen.getByText('AI_PANEL_HEALTH_FITNESS')).toBeTruthy();
+
+    // Switch to Recovery → the S&R-scoped panel is mounted.
+    fireEvent.press(screen.getByLabelText('Recovery'));
+    expect(screen.getByText('AI_PANEL_SLEEP_RECOVERY')).toBeTruthy();
+    expect(screen.queryByText('AI_PANEL_HEALTH_FITNESS')).toBeNull();
   });
 });
