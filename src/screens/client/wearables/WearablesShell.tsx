@@ -9,22 +9,18 @@
  *   - the `?bucket=` route param (defaults to `fitness`).
  *
  * Mounting:
- *   - Fitness → <HealthFitnessScreen/> (owned by THIS PR).
- *   - Recovery → the Sleep & Recovery surface. HK-3b owns SleepRecoveryScreen
- *     and, on merge, swaps the single `renderRecovery()` branch below to mount
- *     it (a tight, additive one-line change — this file is otherwise frozen for
- *     HK-3b per the brief). Until then the Recovery bucket renders a real,
- *     value-first connect surface (NOT a "Coming soon" placeholder — Bradley
- *     LAW §0.1): a genuine prompt to connect a sleep/recovery source, which is
- *     the accurate state for a user with no recovery data yet.
+ *   - Fitness → <HealthFitnessScreen/> (owned by HK-3a).
+ *   - Recovery → <SleepRecoveryScreen/> (owned by HK-3b). The screen owns its
+ *     own connect/empty/error states (its EmptyState renders the value-first
+ *     "connect a sleep source" prompt — NOT a "Coming soon" placeholder, Bradley
+ *     LAW §0.1 — so the connect surface lives there, not in the shell).
  *
  * The shell is a navigation screen mounted as `Health` in ClientNavigator with
  * an optional `{ bucket?: 'fitness' | 'recovery' }` param.
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Animated, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   useNavigation,
@@ -33,12 +29,7 @@ import {
   type ParamListBase,
   type RouteProp,
 } from '@react-navigation/native';
-import {
-  colors,
-  radius,
-  spacing,
-  typography,
-} from '../../../theme/tokens';
+import { colors, spacing } from '../../../theme/tokens';
 import type { WearableMetricBucket } from '../../../api/wearablesSamplesApi';
 import { useWearableConnections } from '../../../hooks/useWearableConnections';
 import { useReduceMotion } from './components/useReduceMotion';
@@ -50,39 +41,9 @@ import {
 import BucketSwitcher from './components/BucketSwitcher';
 import FreshnessChip from './components/FreshnessChip';
 import HealthFitnessScreen from './HealthFitnessScreen';
+import SleepRecoveryScreen from './SleepRecoveryScreen';
 
 type HealthRouteParams = { bucket?: 'fitness' | 'recovery' };
-
-/**
- * The Recovery bucket placeholder rendered until HK-3b mounts the dedicated
- * SleepRecoveryScreen here. This is a real, value-first connect surface — it
- * accurately reflects "no recovery source connected yet" and routes to the
- * Connections hub. It is NOT a "Coming soon" gate.
- */
-function RecoveryConnectSurface({ onConnect }: { onConnect: () => void }) {
-  return (
-    <View style={styles.recoveryWrap}>
-      <View style={styles.recoveryIcon}>
-        <Ionicons name="moon-outline" size={28} color={colors.forest} />
-      </View>
-      <Text style={styles.recoveryTitle}>See your recovery</Text>
-      <Text style={styles.recoveryBody}>
-        Connect a sleep or recovery source — like Oura, Whoop, or Apple Health —
-        to track sleep, HRV, and readiness here.
-      </Text>
-      <Pressable
-        onPress={onConnect}
-        accessibilityRole="button"
-        style={({ pressed }) => [
-          styles.recoveryCta,
-          pressed && styles.recoveryCtaPressed,
-        ]}
-      >
-        <Text style={styles.recoveryCtaText}>Connect a source</Text>
-      </Pressable>
-    </View>
-  );
-}
 
 export default function WearablesShell() {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
@@ -140,7 +101,7 @@ export default function WearablesShell() {
     bucket === 'HEALTH_FITNESS' ? (
       <HealthFitnessScreen />
     ) : (
-      <RecoveryConnectSurface onConnect={goToConnections} />
+      <SleepRecoveryScreen />
     );
 
   return (
@@ -184,46 +145,5 @@ const styles = StyleSheet.create({
   },
   body: {
     flex: 1,
-  },
-  recoveryWrap: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.xl,
-    gap: spacing.md,
-  },
-  recoveryIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.cream,
-  },
-  recoveryTitle: {
-    ...typography.h3,
-    color: colors.ink,
-    textAlign: 'center',
-  },
-  recoveryBody: {
-    ...typography.body,
-    color: colors.charcoal,
-    textAlign: 'center',
-    maxWidth: 320,
-  },
-  recoveryCta: {
-    marginTop: spacing.sm,
-    backgroundColor: colors.forest,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xl,
-    borderRadius: radius.lg,
-  },
-  recoveryCtaPressed: {
-    opacity: 0.85,
-  },
-  recoveryCtaText: {
-    ...typography.bodyMd,
-    color: colors.bone,
-    fontFamily: 'Inter_600SemiBold',
   },
 });

@@ -44,7 +44,7 @@ describe('CalmSlowReveal', () => {
     await waitFor(() => expect(getByText('visible-child')).toBeTruthy());
   });
 
-  it('falls back to the reduced (instant) path if the query rejects (graceful, not silent)', async () => {
+  it('falls back to the instant reveal path when the reduced-motion query rejects with content visible', async () => {
     jest
       .spyOn(AccessibilityInfo, 'isReduceMotionEnabled')
       .mockRejectedValue(new Error('unavailable'));

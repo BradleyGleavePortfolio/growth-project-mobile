@@ -4,7 +4,10 @@
  * plain-language stage labels.
  */
 
-import type { WearableSamplesResponse } from '../../../../api/wearablesSamplesApi';
+import type {
+  WearableSamplesResponse,
+  SampleDatum,
+} from '../../../../api/wearablesSamplesApi';
 import {
   recoveryScore,
   sleepStages,
@@ -29,9 +32,13 @@ function resp(series: WearableSamplesResponse['series']): WearableSamplesRespons
   };
 }
 
-function sample(value: number, day = 1) {
+function sample(
+  value: number,
+  day = 1,
+  provider: SampleDatum['provider'] = 'OURA',
+): SampleDatum {
   const d = String(day).padStart(2, '0');
-  return { start_at: `2026-05-${d}T22:00:00Z`, end_at: `2026-05-${d}T22:00:01Z`, value, provider: 'OURA' };
+  return { start_at: `2026-05-${d}T22:00:00Z`, end_at: `2026-05-${d}T22:00:01Z`, value, provider };
 }
 
 describe('recoveryScore', () => {
@@ -185,6 +192,51 @@ describe('sleepConsistency', () => {
     const view = sleepConsistency(resp([]));
     expect(view.bedtimeSpreadMin).toBeNull();
     expect(view.nights).toBe(0);
+  });
+
+  it('measures the spread across midnight as the short arc, not the long one', () => {
+    // 23:50 and 00:10 are 20 minutes apart on the clock; a linear max-min would
+    // wrongly report ~1420. The circular spread reports 20.
+    const data = resp([
+      {
+        metric: 'SLEEP_ONSET_ISO',
+        unit: 'min',
+        provider_used: 'OURA',
+        sample_count: 2,
+        samples: [sample(23 * 60 + 50, 1), sample(0 * 60 + 10, 2)],
+      },
+    ]);
+    expect(sleepConsistency(data).bedtimeSpreadMin).toBe(20);
+  });
+
+  it('spans the smallest arc when three bedtimes straddle midnight', () => {
+    // 22:00 → 00:00 → 01:00 occupies a 180-minute arc (10pm to 1am).
+    const data = resp([
+      {
+        metric: 'SLEEP_ONSET_ISO',
+        unit: 'min',
+        provider_used: 'OURA',
+        sample_count: 3,
+        samples: [sample(22 * 60, 1), sample(0 * 60, 2), sample(1 * 60, 3)],
+      },
+    ]);
+    expect(sleepConsistency(data).bedtimeSpreadMin).toBe(180);
+  });
+
+  it('reports a zero spread for a single night and null for no nights', () => {
+    const one = resp([
+      {
+        metric: 'SLEEP_ONSET_ISO',
+        unit: 'min',
+        provider_used: 'OURA',
+        sample_count: 1,
+        samples: [sample(23 * 60, 1)],
+      },
+    ]);
+    expect(sleepConsistency(one).bedtimeSpreadMin).toBe(0);
+    expect(sleepConsistency(one).nights).toBe(1);
+    // No onset series at all → null spread, zero nights.
+    expect(sleepConsistency(resp([])).bedtimeSpreadMin).toBeNull();
   });
 });
 

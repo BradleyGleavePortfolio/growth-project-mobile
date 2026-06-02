@@ -105,9 +105,13 @@ export default function SleepRecoveryScreen({ bucketParam, aiPanelSlot }: SleepR
 
   const onRetry = useCallback(() => {
     // #36 — never swallow: log the recovery attempt (NO sample values, #34) and
-    // re-run the query so the user sees a real outcome.
+    // re-run the query so the user sees a real outcome. The refetch promise is
+    // intentionally floated, but a rejection is logged (never dropped) so a
+    // failing retry surfaces in diagnostics.
     logger.log('SleepRecoveryScreen', 'retry samples fetch', { bucket });
-    void query.refetch();
+    void query.refetch().catch((error: unknown) => {
+      logger.warn('SleepRecoveryScreen', 'refetch rejected', { error });
+    });
   }, [query, bucket]);
 
   // ── Error state (no cached data) — typed, actionable, never a spinner. ──

@@ -270,14 +270,14 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
   const tabs: { key: TabKey; label: string; icon: IoniconName }[] = [
     { key: 'summary', label: 'Summary', icon: 'pie-chart-outline' },
     { key: 'logs', label: 'Logs', icon: 'restaurant-outline' },
-    { key: 'workouts', label: 'Workouts', icon: 'barbell-outline' },
     { key: 'mealplan', label: 'Plan', icon: 'calendar-outline' },
     { key: 'progress', label: 'Progress', icon: 'trending-up-outline' },
     { key: 'healthFitness', label: 'Fitness', icon: 'fitness-outline' },
+    // PR-HK-3b — Sleep & Recovery sits directly after HK-3a's 'healthFitness'.
+    { key: 'sleepRecovery', label: 'Recovery', icon: 'moon-outline' },
+    { key: 'workouts', label: 'Workouts', icon: 'barbell-outline' },
     { key: 'timeline', label: 'Timeline', icon: 'time-outline' },
     { key: 'weekly', label: 'Weekly', icon: 'stats-chart-outline' },
-    // PR-HK-3b — Sleep & Recovery tab (sits after HK-3a's 'healthFitness').
-    { key: 'sleepRecovery', label: 'Recovery', icon: 'moon-outline' },
   ];
 
   const handleToggleArchive = async () => {

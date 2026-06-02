@@ -7,7 +7,10 @@
 import React from 'react';
 import { AccessibilityInfo } from 'react-native';
 import { render, fireEvent } from '@testing-library/react-native';
-import type { WearableSamplesResponse } from '../../../../api/wearablesSamplesApi';
+import type {
+  WearableSamplesResponse,
+  SampleDatum,
+} from '../../../../api/wearablesSamplesApi';
 import { WearableSamplesError } from '../../../../api/wearablesSamplesApi';
 import { makeStyles } from '../styles';
 import { testColors } from '../../../client/wearables/recoveryTestColors';
@@ -31,9 +34,13 @@ function resp(series: WearableSamplesResponse['series']): WearableSamplesRespons
     freshness: { providers: [] },
   };
 }
-function s(value: number, day = 1) {
+function s(
+  value: number,
+  day = 1,
+  provider: SampleDatum['provider'] = 'OURA',
+): SampleDatum {
   const d = String(day).padStart(2, '0');
-  return { start_at: `2026-05-${d}T22:00:00Z`, end_at: `2026-05-${d}T22:00:01Z`, value, provider: 'OURA' };
+  return { start_at: `2026-05-${d}T22:00:00Z`, end_at: `2026-05-${d}T22:00:01Z`, value, provider };
 }
 
 beforeEach(() => {
@@ -80,7 +87,9 @@ describe('SleepRecoveryTab — IDOR (#5)', () => {
 
 describe('SleepRecoveryTab — other errors (#36)', () => {
   it('surfaces a retry on a non-403 failure', () => {
-    const refetch = jest.fn();
+    // refetch returns a Promise (React Query contract) so the tab's
+    // floated-with-logged-rejection retry path can chain `.catch`.
+    const refetch = jest.fn().mockResolvedValue(undefined);
     mockUseWearableSamples.mockReturnValue({
       data: undefined,
       isError: true,

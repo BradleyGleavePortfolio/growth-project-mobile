@@ -1,6 +1,6 @@
 /**
  * SleepRecoveryErrorState — shown when the samples query fails. Per Bradley LAW
- * (#36 silent failures, #50 graceful degradation): a clear, actionable retry +
+ * (#36 surfaced failures, #50 graceful degradation): a clear, actionable retry +
  * a "last synced" line when cached data exists. NEVER a swallowed error, NEVER
  * a placeholder/not-yet-built message, NEVER a bare spinner.
  *

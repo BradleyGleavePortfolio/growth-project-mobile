@@ -11,7 +11,8 @@ import React, { useMemo } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import type { ThemeColors } from '../../../../theme/ThemeProvider';
 import { SrCard } from './SrCard';
-import { RevolutGlowChart } from '../charts/RevolutGlowChart';
+import RevolutGlowChart, { type GlowChartPoint } from '../charts/RevolutGlowChart';
+import { useReduceMotion } from '../components/useReduceMotion';
 import { RECOVERY_PALETTE } from '../recoveryTheme';
 import type { TrendPoint } from '../recoveryData';
 
@@ -45,8 +46,15 @@ function hrvCopy(trend: TrendPoint[], latestMs: number | null): string {
 
 export function HrvTrendCard({ trend, latestMs, colors, revealDelay = 0 }: HrvTrendCardProps) {
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  const reduceMotion = useReduceMotion();
   const copy = hrvCopy(trend, latestMs);
-  const chartData = trend.map((p) => ({ at: p.at, value: p.value }));
+  // GlowChartPoint carries the metric value plus an ISO label for the
+  // selected-day readout (the chart formats it). HRV's x-axis is the day
+  // timestamp, mirroring FitnessTrendCard's `label: start_at` convention.
+  const chartData = useMemo<GlowChartPoint[]>(
+    () => trend.map((p) => ({ value: p.value, label: p.at })),
+    [trend],
+  );
 
   return (
     <SrCard
@@ -70,10 +78,9 @@ export function HrvTrendCard({ trend, latestMs, colors, revealDelay = 0 }: HrvTr
         <RevolutGlowChart
           data={chartData}
           tone="cool"
-          color={RECOVERY_PALETTE.accent}
           height={120}
-          formatValue={(v) => `${Math.round(v)} ms`}
-          testID="hrv-chart"
+          reduceMotion={reduceMotion}
+          accessibilityLabel="Heart-rate variability trend. Drag to scrub by day."
         />
       ) : (
         <View style={[styles.emptyChart, { backgroundColor: RECOVERY_PALETTE.track }]} testID="hrv-empty-chart" />

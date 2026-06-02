@@ -7,7 +7,10 @@
 import React from 'react';
 import { AccessibilityInfo } from 'react-native';
 import { render, fireEvent } from '@testing-library/react-native';
-import type { WearableSamplesResponse } from '../../../../api/wearablesSamplesApi';
+import type {
+  WearableSamplesResponse,
+  SampleDatum,
+} from '../../../../api/wearablesSamplesApi';
 
 const mockNavigate = jest.fn();
 jest.mock('@react-navigation/native', () => ({
@@ -17,6 +20,14 @@ jest.mock('@react-navigation/native', () => ({
 const mockUseWearableSamples = jest.fn();
 jest.mock('../../../../hooks/useWearableSamples', () => ({
   useWearableSamples: (opts: unknown) => mockUseWearableSamples(opts),
+}));
+
+// The screen reads the user's connections to drive the FreshnessChip. Mock the
+// hook so the overview path renders without a QueryClientProvider (the chip's
+// pure variant takes the injected list directly).
+const mockUseWearableConnections = jest.fn();
+jest.mock('../../../../hooks/useWearableConnections', () => ({
+  useWearableConnections: () => mockUseWearableConnections(),
 }));
 
 jest.mock('../../../../theme/ThemeProvider', () => {
@@ -37,12 +48,16 @@ function resp(series: WearableSamplesResponse['series']): WearableSamplesRespons
   };
 }
 
-function s(value: number) {
-  return { start_at: '2026-05-01T22:00:00Z', end_at: '2026-05-01T22:00:01Z', value, provider: 'OURA' };
+function s(
+  value: number,
+  provider: SampleDatum['provider'] = 'OURA',
+): SampleDatum {
+  return { start_at: '2026-05-01T22:00:00Z', end_at: '2026-05-01T22:00:01Z', value, provider };
 }
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockUseWearableConnections.mockReturnValue({ data: [] });
   jest.spyOn(AccessibilityInfo, 'isReduceMotionEnabled').mockResolvedValue(true);
   jest
     .spyOn(AccessibilityInfo, 'addEventListener')
@@ -79,7 +94,9 @@ describe('SleepRecoveryScreen', () => {
   });
 
   it('renders a typed error state with retry when the query fails and no cache', () => {
-    const refetch = jest.fn();
+    // refetch returns a Promise (React Query contract) so the screen's
+    // floated-with-logged-rejection retry path can chain `.catch`.
+    const refetch = jest.fn().mockResolvedValue(undefined);
     mockUseWearableSamples.mockReturnValue({
       data: undefined,
       isLoading: false,

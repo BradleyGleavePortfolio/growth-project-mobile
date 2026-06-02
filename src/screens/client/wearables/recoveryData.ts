@@ -195,25 +195,45 @@ export interface ConsistencyView {
  * Compute bedtime/wake-time consistency from ISO onset/wake series. Each sample
  * value is encoded as minutes-from-midnight by the backend (SLEEP_ONSET_ISO /
  * SLEEP_WAKE_ISO carry a numeric value = local minutes-of-day). We measure the
- * spread (max-min) — a tighter spread means a more settled schedule.
+ * spread — a tighter spread means a more settled schedule.
+ *
+ * Bedtimes wrap around midnight (23:50 and 00:10 are 20 minutes apart, not
+ * ~1420), so a naive linear `max - min` over minutes-of-day is wrong for any
+ * schedule that straddles midnight. We measure the spread on a CIRCULAR clock
+ * (period = 1440 min): the times occupy the smallest arc of the day, and the
+ * spread is that arc — i.e. `period - largestGap` between adjacent times.
  */
 export function sleepConsistency(data: WearableSamplesResponse | undefined): ConsistencyView {
   const onset = seriesFor(data, 'SLEEP_ONSET_ISO');
   const wake = seriesFor(data, 'SLEEP_WAKE_ISO');
   return {
-    bedtimeSpreadMin: spread(onset?.samples.map((s) => s.value)),
-    wakeSpreadMin: spread(wake?.samples.map((s) => s.value)),
+    bedtimeSpreadMin: circularSpread(onset?.samples.map((s) => s.value)),
+    wakeSpreadMin: circularSpread(wake?.samples.map((s) => s.value)),
     nights: onset?.samples.length ?? 0,
   };
 }
 
-function spread(values: number[] | undefined): number | null {
-  if (!values || values.length === 0) return null;
-  let min = values[0]!;
-  let max = values[0]!;
-  for (const v of values) {
-    if (v < min) min = v;
-    if (v > max) max = v;
+/**
+ * Circular spread of minutes-of-day values over a 24h (1440-minute) clock.
+ * Returns the width of the smallest arc that contains every time — so times
+ * clustered around midnight read as a tight spread, not a near-full-day one.
+ *
+ *   - `[23*60+50, 0*60+10]` (23:50, 00:10) → 20, not 1420.
+ *   - `[22*60, 0*60, 1*60]`  (22:00, 00:00, 01:00) → 180 (10pm → 1am).
+ *   - single value → 0 (a single night has zero spread).
+ *   - empty / undefined → null (no data).
+ */
+function circularSpread(values: number[] | undefined, period = 1440): number | null {
+  if (!values || values.length < 2) {
+    return values && values.length === 1 ? 0 : null;
   }
-  return Math.round(max - min);
+  const sorted = [...values].sort((a, b) => a - b);
+  // The largest gap between adjacent times (including the wrap from the last
+  // back to the first) is the empty arc; the spread is the rest of the clock.
+  let largestGap = sorted[0]! + (period - sorted[sorted.length - 1]!);
+  for (let i = 1; i < sorted.length; i++) {
+    const gap = sorted[i]! - sorted[i - 1]!;
+    if (gap > largestGap) largestGap = gap;
+  }
+  return Math.round(period - largestGap);
 }

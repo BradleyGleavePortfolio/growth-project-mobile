@@ -51,10 +51,10 @@ export function CalmSlowReveal({
         if (!cancelled) setReduceMotion(enabled);
       },
       () => {
-        // Fail-safe (NOT silent): if the query rejects we default to the
-        // reduced (instant) path so content is never stuck hidden. This is a
-        // graceful degradation, not a swallowed error — the no-motion path is
-        // the accessible default.
+        // Fail-safe: if the reduced-motion query rejects we default to the
+        // instant reveal path so content is never stuck hidden. This is a
+        // graceful, observable degradation — not a swallowed error — and the
+        // no-motion path is the accessible default.
         if (!cancelled) setReduceMotion(true);
       },
     );

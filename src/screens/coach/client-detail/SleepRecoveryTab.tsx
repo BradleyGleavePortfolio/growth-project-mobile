@@ -76,7 +76,11 @@ export function SleepRecoveryTab({ clientId, colors, styles }: SleepRecoveryTabP
 
   const onRetry = useCallback(() => {
     logger.log('SleepRecoveryTab', 'retry samples fetch', { hasClient: true });
-    void query.refetch();
+    // Floated refetch — a rejection is logged (never dropped) so a failing
+    // coach-side retry surfaces in diagnostics (#36).
+    void query.refetch().catch((error: unknown) => {
+      logger.warn('SleepRecoveryTab', 'refetch rejected', { error });
+    });
   }, [query]);
 
   // ── IDOR-safe 403 fallback (#5) — graceful, never an uncaught throw. ──
