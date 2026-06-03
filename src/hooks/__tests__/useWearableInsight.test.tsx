@@ -3,8 +3,10 @@
  *
  * Mocks the api module (tighter than mocking axios) and verifies:
  *   - useCoachInsight: loading → success, calls fetchCoachInsight once.
- *   - useApproveDraft: an `ok` result invalidates the coach insight key; a
- *     `not_implemented` result does NOT invalidate (nothing new to read).
+ *   - useApproveDraft: the sole `ok` success shape (HK-6a is live) invalidates
+ *     the coach insight key; a thrown error (e.g. a 404 from a deploy/route
+ *     regression) PROPAGATES to the mutation's error state and does NOT
+ *     invalidate — it is never coerced into a fake success.
  */
 
 import React from 'react';
@@ -141,25 +143,31 @@ describe('useApproveDraft', () => {
     });
   });
 
-  it('does NOT invalidate on a not_implemented result', async () => {
-    const pending: ApproveResponse = {
-      status: 'not_implemented',
-      message: 'Approval is rolling out — try again later.',
-    };
-    mockedApprove.mockResolvedValueOnce(pending);
+  it('propagates a thrown error (e.g. 404) to onError and does NOT invalidate', async () => {
+    // HK-6a is live: a 404 is now a real failure, not a coerced success. The
+    // mutation must reject (caller's onError fires) and never invalidate.
+    const boom = new Error('Request failed with status code 404');
+    mockedApprove.mockRejectedValueOnce(boom);
     const { qc, Wrapper } = makeWrapper();
     const invalidateSpy = jest.spyOn(qc, 'invalidateQueries');
+    const onError = jest.fn();
 
     const { result } = renderHook(() => useApproveDraft(), { wrapper: Wrapper });
 
-    await result.current.mutateAsync({
-      clientId: 'client-7',
-      bucket: 'SLEEP_RECOVERY',
-      draftBody: 'Hi',
-      action: 'approve',
-    });
+    await expect(
+      result.current.mutateAsync(
+        {
+          clientId: 'client-7',
+          bucket: 'SLEEP_RECOVERY',
+          draftBody: 'Hi',
+          action: 'approve',
+        },
+        { onError },
+      ),
+    ).rejects.toThrow('404');
 
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(onError).toHaveBeenCalledTimes(1);
     expect(invalidateSpy).not.toHaveBeenCalled();
   });
 });

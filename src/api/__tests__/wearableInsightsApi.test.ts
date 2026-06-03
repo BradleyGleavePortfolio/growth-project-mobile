@@ -7,7 +7,8 @@
  *   • a Zod parse-SUCCESS path (valid backend shape → typed object),
  *   • a Zod parse-FAILURE path (missing field / extra field → throws under
  *     `.strict()`), so a future contract drift trips the suite (#17),
- *   • the approve 404 → typed not_implemented coercion (graceful degrade),
+ *   • the approve 404 → propagated to the caller (never coerced to a fake
+ *     degraded success that would hide a deploy/route regression, #36),
  *   • the approve 500 → re-throw (never silently masked, #36).
  *
  * Backend contract source of truth:
@@ -23,7 +24,6 @@ import {
   CoachInsightSchema,
   EmptyInsightSchema,
   EMPTY_OBSERVATION,
-  APPROVAL_PENDING_MESSAGE,
   type CoachInsight,
   type EmptyInsight,
 } from '../wearableInsightsApi';
@@ -168,20 +168,17 @@ describe('approveDraft', () => {
     expect(res).toEqual(ok);
   });
 
-  it('coerces a 404 into a typed not_implemented response (graceful degrade)', async () => {
+  it('propagates a 404 to the caller — the HK-6a route is live, so a 404 is a real regression, never coerced to a fake success (#36)', async () => {
     api.post.mockRejectedValueOnce(axiosErrorWithStatus(404));
 
-    const res = await approveDraft({
-      clientId: 'client-9',
-      bucket: 'SLEEP_RECOVERY',
-      draftBody: 'Hi',
-      action: 'approve',
-    });
-
-    expect(res).toEqual({
-      status: 'not_implemented',
-      message: APPROVAL_PENDING_MESSAGE,
-    });
+    await expect(
+      approveDraft({
+        clientId: 'client-9',
+        bucket: 'SLEEP_RECOVERY',
+        draftBody: 'Hi',
+        action: 'approve',
+      }),
+    ).rejects.toBeInstanceOf(AxiosError);
   });
 
   it('re-throws a 500 — the failure is never masked', async () => {
