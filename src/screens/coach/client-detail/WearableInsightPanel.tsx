@@ -17,10 +17,11 @@
  *   - Reduce-motion honoured (a11y): the expand fade respects
  *     `useReduceMotion()`, mirroring HK-3b `HrvTrendCard`.
  *
- * Honesty / graceful degradation (#36/#50): the approve endpoint is HK-6's;
- * pre-HK-6 the api coerces 404 → typed `not_implemented`, and this panel shows
- * a calm, recoverable "rolling out — try again later" message with the primary
- * CTA disabled, never a silent failure.
+ * Honesty / graceful degradation (#36/#50): the approve endpoint is LIVE as of
+ * HK-6a. A successful approve closes the sheet and shows the forward hook; any
+ * failure (4xx/5xx, network, or a shape drift) surfaces sanitized, recoverable
+ * error copy in the sheet with a Retry CTA — never a silent failure and never a
+ * fabricated success that would hide a real outage.
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -94,6 +95,22 @@ function sanitizeError(error: unknown): string {
     if (status === 0) return 'Check your connection and try again.';
   }
   return "We couldn't load this insight.";
+}
+
+/**
+ * Map an approve-send failure to sanitized, recoverable copy (#12 — never leak
+ * internals). Deliberately generic + action-oriented: the coach just needs to
+ * know it didn't send and that retrying is safe. A 404 here is NOT a degraded
+ * fallback (HK-6a shipped the endpoint) — it is a real failure, surfaced as a
+ * recoverable error, not masked as success (#36).
+ */
+function sanitizeSendError(error: unknown): string {
+  if (axios.isAxiosError(error)) {
+    const status = error.response?.status ?? 0;
+    if (status === 403) return "You don't have access to message this client.";
+    if (status === 0) return 'Check your connection and try again.';
+  }
+  return "Couldn't send right now. Try again.";
 }
 
 export function WearableInsightPanel({
@@ -369,9 +386,9 @@ function Field({ label, value }: { label: string; value: string }) {
 /**
  * MessageDraftReviewSheet — the review / edit / approve modal (UX §4.5).
  * Editable multiline draft, three actions (Approve & send / Edit then send /
- * Dismiss). Never auto-sends. Pre-HK-6 the approve hits a 404 that the api
- * coerces to `not_implemented`; we show calm copy + keep the sheet open and
- * disable the primary CTA (graceful degradation, #36/#50).
+ * Dismiss). Never auto-sends. The HK-6a approve endpoint is live: a successful
+ * approve closes the sheet via `onSent`; a failed approve keeps the sheet open
+ * and shows sanitized, recoverable error copy + a Retry CTA (#36/#50).
  */
 function MessageDraftReviewSheet({
   visible,
@@ -395,9 +412,8 @@ function MessageDraftReviewSheet({
 }) {
   const original = insight.suggested_message_draft;
   const [body, setBody] = useState(original);
-  // Set when the backend returns the pre-HK-6 not_implemented response.
-  const [pending, setPending] = useState<string | null>(null);
-  // Set when the mutation throws a real error.
+  // Set when the mutation throws a real error (the only failure path now the
+  // HK-6a endpoint is live). Drives the sanitized, recoverable error row.
   const [errorCopy, setErrorCopy] = useState<string | null>(null);
   // Remember the exact action + body of the last attempt so Retry replays it
   // faithfully (F4) — a failed `dismiss` must NOT become an `approve`, and a
@@ -413,21 +429,17 @@ function MessageDraftReviewSheet({
   const run = useCallback(
     (action: 'approve' | 'edit' | 'dismiss', draftBody: string) => {
       lastAttemptRef.current = { action, draftBody };
-      setPending(null);
       setErrorCopy(null);
       approve.mutate(
         { clientId, bucket, draftBody, action },
         {
-          onSuccess: (res) => {
-            if (res.status === 'ok') {
-              onSent(clientFirstName);
-            } else {
-              // not_implemented — keep the sheet open, calm copy, CTA off.
-              setPending(res.message);
-            }
+          // `onSuccess` only fires for the sole success shape (`status: 'ok'`)
+          // now HK-6a is live — close the sheet and run the forward hook.
+          onSuccess: () => {
+            onSent(clientFirstName);
           },
           onError: (err) => {
-            setErrorCopy(sanitizeError(err));
+            setErrorCopy(sanitizeSendError(err));
           },
         },
       );
@@ -436,7 +448,7 @@ function MessageDraftReviewSheet({
   );
 
   const busy = approve.isPending;
-  const primaryDisabled = busy || pending != null;
+  const primaryDisabled = busy;
 
   const onRetrySend = useCallback(() => {
     // Guard against replaying an already-in-flight request (#28 race).
@@ -489,11 +501,6 @@ function MessageDraftReviewSheet({
             {body.length}/{DRAFT_MAX}
           </Text>
 
-          {pending != null && (
-            <Text style={styles.pendingCopy} accessibilityRole="alert" testID="coach-insight-pending">
-              {pending}
-            </Text>
-          )}
           {errorCopy != null && (
             <View style={styles.sheetErrorRow}>
               <Text style={styles.errorCopy} accessibilityRole="alert" testID="coach-insight-sheet-error">
@@ -717,11 +724,6 @@ const styles = StyleSheet.create({
     color: colors.charcoal,
     alignSelf: 'flex-end',
     marginTop: spacing.xs,
-  },
-  pendingCopy: {
-    ...typography.bodySmall,
-    color: colors.charcoal,
-    marginTop: spacing.sm,
   },
   sheetErrorRow: {
     flexDirection: 'row',

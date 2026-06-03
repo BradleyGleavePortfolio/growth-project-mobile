@@ -4,10 +4,11 @@
  * (HK-5b); the query keys live in `wearableInsightsApi` so the two never
  * collide and an approve-mutation can invalidate the exact coach read.
  *
- * The mutation surfaces real errors (#36): a thrown error propagates to the
- * caller's `onError`/error state; the pre-HK-6 404 is already coerced to a
- * typed `not_implemented` ApproveResponse inside `approveDraft`, so the panel
- * can render a calm, recoverable CTA without the hook swallowing anything.
+ * The mutation surfaces real errors (#36): the HK-6a approve endpoint is live,
+ * so `approveDraft` resolves to exactly one success shape (`status: 'ok'`) or
+ * THROWS. The hook never swallows — every failure (including a 404 from a
+ * deploy/route regression) propagates to the caller's `onError`/error state so
+ * the panel can render a generic, recoverable error.
  */
 
 import {
@@ -63,15 +64,14 @@ export function useApproveDraft() {
   const qc = useQueryClient();
   return useMutation<ApproveResponse, Error, ApproveDraftPayload>({
     mutationFn: approveDraft,
-    onSuccess: (res, vars) => {
-      // Only a materialised approve (post-HK-6) changes server state worth
-      // refetching. A typed `not_implemented` MUST NOT invalidate — there is
-      // nothing new to read and a refetch would only churn LLM budget.
-      if (res.status === 'ok') {
-        void qc.invalidateQueries({
-          queryKey: insightQueryKeys.coach(vars.clientId, vars.bucket),
-        });
-      }
+    onSuccess: (_res, vars) => {
+      // A successful approve materialises server state, so refetch the exact
+      // coach read it affected. `onSuccess` only fires for `status: 'ok'`
+      // (the sole success shape now HK-6a is live), so there is nothing to
+      // branch on — invalidate unconditionally.
+      void qc.invalidateQueries({
+        queryKey: insightQueryKeys.coach(vars.clientId, vars.bucket),
+      });
     },
     // No onError that swallows — errors propagate to the caller's error state.
   });

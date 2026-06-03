@@ -8,7 +8,8 @@
  *   - expanded state renders all four fields + confidence chip label/%,
  *   - review sheet: open / edit-detection / dismiss,
  *   - approve 'ok' → panel replaced by the forward hook,
- *   - approve 'not_implemented' → sheet stays open with calm copy,
+ *   - approve failure (e.g. 404 from a deploy/route regression) → sheet stays
+ *     open and surfaces sanitized, recoverable error copy + a Retry CTA,
  *   - no banned strings.
  */
 
@@ -210,26 +211,32 @@ describe('review sheet', () => {
     unmount();
   });
 
-  it('on not_implemented result, keeps the sheet open with calm copy', async () => {
+  it('on a 404 (HK-6a live: a real failure, not a fallback), surfaces recoverable error + retry, sheet stays open', async () => {
     mockUseCoachInsight.mockReturnValue(queryState({ data: fullInsight() }));
-    mockMutate.mockImplementation((_vars, opts) => {
-      opts.onSuccess({
-        status: 'not_implemented',
-        message: 'Approval is rolling out — try again later.',
-      });
+    // Simulate the api propagating a 404 axios error (deploy/route regression)
+    // — it must reach onError, NOT be coerced into a success that closes the
+    // sheet.
+    const notFound = Object.assign(new Error('Request failed with status code 404'), {
+      isAxiosError: true,
+      response: { status: 404 },
     });
-    const { getByTestId, getByText } = openSheet();
+    mockMutate.mockImplementation((_vars, opts) => {
+      opts.onError(notFound);
+    });
+    const { getByTestId, getByText, queryByTestId } = openSheet();
     fireEvent.press(getByTestId('coach-insight-approve'));
     await waitFor(() =>
-      expect(getByTestId('coach-insight-pending')).toBeTruthy(),
+      expect(getByTestId('coach-insight-sheet-error')).toBeTruthy(),
     );
-    expect(
-      getByText('Approval is rolling out — try again later.'),
-    ).toBeTruthy();
-    // Primary CTA disabled while pending.
+    // Generic, recoverable copy — never raw internals, never a fake success.
+    expect(getByText("Couldn't send right now. Try again.")).toBeTruthy();
+    expect(getByTestId('coach-insight-sheet-retry')).toBeTruthy();
+    // The sheet stays open (forward-hook "sent" surface NOT shown).
+    expect(queryByTestId('coach-insight-sent')).toBeNull();
+    // Primary CTA is re-enabled (not stuck disabled) so the coach can retry.
     expect(
       getByTestId('coach-insight-approve').props.accessibilityState.disabled,
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it('on a thrown error, surfaces sanitized copy + retry beneath the input', async () => {

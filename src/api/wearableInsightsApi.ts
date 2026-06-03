@@ -25,17 +25,17 @@
  *      `z.nativeEnum` cannot consume it. We mirror the established pattern in
  *      `wearablesSamplesApi.ts:126` and use `z.enum(WEARABLE_METRIC_TYPES)`,
  *      which yields the identical value-set validation.
- *   3. The approve endpoint (POST /v1/wearables/insights/approve) does NOT
- *      exist yet — HK-6 lands it. Per the brief, a 404 is coerced into a typed
- *      `not_implemented` response so the panel degrades gracefully (honest,
- *      recoverable copy + retry), never a silent failure (#36) and never a
- *      spinner-only dead end.
+ *   3. The approve endpoint (POST /v1/wearables/insights/approve) is LIVE as of
+ *      HK-6a (backend `main`). `approveDraft` therefore returns a single
+ *      success shape `{ status: 'ok', draft_id, materialised_at }`; every
+ *      failure (including a 404 from a deploy/route-registration regression)
+ *      PROPAGATES to the caller's `onError` and is surfaced as a generic,
+ *      recoverable error in the panel — never coerced into a fake degraded
+ *      success, which would hide a real outage (#36 silent failure).
  */
 
 import { z } from 'zod';
-import axios from 'axios';
 import api from '../services/api';
-import { logger } from '../utils/logger';
 // WearableMetricType / WearableMetricBucket + their runtime arrays come from
 // wearablesSamplesApi — IMPORT them; do NOT redeclare (single source of truth).
 import {
@@ -148,26 +148,17 @@ export function isEmptyInsight(
   return (value as Partial<EmptyInsight>).is_empty === true;
 }
 
-// ── Approve payload — speculative; HK-6 lands the real controller. ──
-// Success → { status: 'ok', draft_id, materialised_at }. Pre-HK-6 a 404 is
-// coerced to { status: 'not_implemented', message } by `approveDraft` so the
-// panel degrades to a calm, recoverable CTA (never a silent failure, #36/#50).
-export const ApproveResponseSchema = z.discriminatedUnion('status', [
-  z.object({
-    status: z.literal('ok'),
-    draft_id: z.string().uuid(),
-    materialised_at: z.string(),
-  }),
-  z.object({
-    status: z.literal('not_implemented'),
-    message: z.string(),
-  }),
-]);
+// ── Approve payload — HK-6a controller is LIVE (backend `main`). ──
+// The endpoint returns exactly ONE success shape; there is no longer a
+// degraded fallback branch. Any HTTP failure propagates from
+// `approveDraft` to the caller so the panel can surface a real, recoverable
+// error rather than masking an outage as expected behavior (#36).
+export const ApproveResponseSchema = z.object({
+  status: z.literal('ok'),
+  draft_id: z.string().uuid(),
+  materialised_at: z.string(),
+});
 export type ApproveResponse = z.infer<typeof ApproveResponseSchema>;
-
-/** The honest, user-facing copy shown when the approval endpoint is pre-HK-6. */
-export const APPROVAL_PENDING_MESSAGE =
-  'Approval is rolling out — try again later.';
 
 export interface ApproveDraftPayload {
   clientId: string;
@@ -199,32 +190,17 @@ export async function fetchClientInsight(params: {
 export async function approveDraft(
   payload: ApproveDraftPayload,
 ): Promise<ApproveResponse> {
-  try {
-    const res = await api.post<unknown>('/v1/wearables/insights/approve', {
-      client_id: payload.clientId,
-      bucket: payload.bucket,
-      draft_body: payload.draftBody,
-      action: payload.action,
-    });
-    return ApproveResponseSchema.parse(res.data);
-  } catch (err) {
-    // A Zod drift is a shape-contract bug, not an HTTP status — surface it
-    // verbatim (the panel renders it as a generic error, never raw internals).
-    if (err instanceof z.ZodError) throw err;
-    // Coerce ONLY the expected pre-HK-6 404 into a typed not_implemented
-    // response. The calling hook surfaces this to the coach as a calm,
-    // recoverable CTA — NOT a silent failure (#36), NOT a spinner.
-    if (axios.isAxiosError(err) && err.response?.status === 404) {
-      // No client identifiers logged (#12/#34) — only the structural fact.
-      logger.log('wearableInsightsApi', 'approve endpoint not yet live (404)', {
-        bucket: payload.bucket,
-        action: payload.action,
-      });
-      return { status: 'not_implemented', message: APPROVAL_PENDING_MESSAGE };
-    }
-    // Every other failure propagates — never swallowed.
-    throw err;
-  }
+  // No try/catch: the HK-6a endpoint is live, so there is no status to coerce.
+  // A Zod drift (shape-contract bug) and every HTTP failure (4xx/5xx, network)
+  // propagate to the caller's `onError` — the panel renders a generic,
+  // recoverable error, never a silent failure (#36) and never raw internals.
+  const res = await api.post<unknown>('/v1/wearables/insights/approve', {
+    client_id: payload.clientId,
+    bucket: payload.bucket,
+    draft_body: payload.draftBody,
+    action: payload.action,
+  });
+  return ApproveResponseSchema.parse(res.data);
 }
 
 /**
