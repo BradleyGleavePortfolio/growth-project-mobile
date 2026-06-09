@@ -19,6 +19,7 @@ import {
   Platform,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useForegroundBanner } from '../store/foregroundBannerStore';
 import { useTheme } from '../theme/ThemeProvider';
@@ -28,6 +29,7 @@ const AUTO_DISMISS_MS = 4000;
 
 export default function ForegroundNotificationBanner() {
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
   const banner = useForegroundBanner((s) => s.banner);
   const dismiss = useForegroundBanner((s) => s.dismissBanner);
   const navigation = useNavigation();
@@ -110,6 +112,10 @@ export default function ForegroundNotificationBanner() {
       style={[
         styles.container,
         {
+          // SDK 56 edge-to-edge: pad below the status-bar / notch using the
+          // real safe-area top inset, with a 12px floor so the banner never
+          // hugs the very top edge on devices that report a 0 inset.
+          paddingTop: Math.max(insets.top, 12),
           backgroundColor: colors.textPrimary,
           transform: [{ translateY }],
           ...Platform.select({
@@ -179,7 +185,6 @@ const styles = StyleSheet.create({
     zIndex: 999,
     borderBottomLeftRadius: 4,
     borderBottomRightRadius: 4,
-    paddingTop: Platform.OS === 'ios' ? 44 : 12,
     paddingBottom: 0,
   },
   inner: {
