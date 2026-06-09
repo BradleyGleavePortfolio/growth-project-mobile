@@ -122,6 +122,14 @@ import WearablesShell from '../screens/client/wearables/WearablesShell';
 import MetricDetailScreen from '../screens/client/wearables/MetricDetailScreen';
 import type { WearableMetricBucket, WearableMetricType } from '../api/wearablesSamplesApi';
 import { colors } from '../theme/tokens';
+// v1-5 Community client tab. The whole stack + tab are gated behind
+// featureFlags.communityTab (default OFF). When the flag is OFF the tab is not
+// rendered and the deep-link route is not registered (see CommunityTabBarIcon
+// and the flag-gated <Tab.Screen> below).
+import CommunityNavigator from './CommunityNavigator';
+import { useCommunityBadge } from '../hooks/useCommunity';
+import { useCurrentUser } from '../hooks/useCurrentUser';
+import UnreadBadge from '../components/community/UnreadBadge';
 // Defense-in-depth client paywall (Option B): paid screens are wrapped so
 // the entitlement gate runs before the screen body. Server-side
 // ClientEntitlementGuard remains canonical (Rule 20).
@@ -162,6 +170,8 @@ export type ClientTabParamList = {
   WorkoutTab: undefined;  // Train
   Log:        undefined;  // Coach (Log+Plan hub — keeps Log screen for food logging)
   MoreTab:    undefined;  // Profile / More
+  // v1-5 Community tab — only mounted when featureFlags.communityTab is true.
+  CommunityTab: undefined;
 };
 
 export type WorkoutStackParamList = {
@@ -523,6 +533,24 @@ function MoreStackNavigator() {
 
 // ─── Main tab navigator ───────────────────────────────────────────────────────
 
+/**
+ * CommunityTabBarIcon — the Community tab icon with a LIVE unread badge. The
+ * badge count comes from useCommunityBadge, which is driven by the Supabase
+ * Realtime subscription (a broadcast ping invalidates community/me and the
+ * authoritative unread counts refetch over REST) — NOT polling. Rendered only
+ * when featureFlags.communityTab is true, since the tab itself is flag-gated.
+ */
+function CommunityTabBarIcon({ color }: { color: string }) {
+  const client = useCurrentUser();
+  const badge = useCommunityBadge(client?.id);
+  return (
+    <View style={styles.communityIconWrap}>
+      <Ionicons name="chatbubbles-outline" size={24} color={color} />
+      <UnreadBadge count={badge.total} corner testID="community-tab-badge" />
+    </View>
+  );
+}
+
 export default function ClientNavigator() {
   return (
     <Tab.Navigator
@@ -586,6 +614,20 @@ export default function ClientNavigator() {
           ),
         }}
       />
+      {/* v1-5 Community tab — gated by featureFlags.communityTab (default OFF).
+          When the flag is OFF this <Tab.Screen> is not rendered, so the tab does
+          not appear and the CommunityTab route (and its deep link) never
+          registers. */}
+      {featureFlags.communityTab && (
+        <Tab.Screen
+          name="CommunityTab"
+          component={CommunityNavigator}
+          options={{
+            tabBarAccessibilityLabel: 'Community',
+            tabBarIcon: ({ color }) => <CommunityTabBarIcon color={color} />,
+          }}
+        />
+      )}
     </Tab.Navigator>
   );
 }
@@ -598,6 +640,13 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   bellWrap: {
+    position: 'relative',
+    width: 28,
+    height: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  communityIconWrap: {
     position: 'relative',
     width: 28,
     height: 28,
