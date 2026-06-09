@@ -7,7 +7,7 @@
  * React Navigation (which pulls in reanimated / gesture-handler). This mirrors
  * the existing clientNavigator.test.ts pattern.
  *
- * Also asserts the four Expo flags default to OFF and that no `sonnet` string
+ * Also asserts the four Expo flags default to OFF and that no `dormant` string
  * leaked into the community source tree (build-role hygiene).
  */
 import * as fs from 'fs';
@@ -95,7 +95,7 @@ describe('Expo feature flags — default OFF', () => {
 });
 
 describe('build-role hygiene', () => {
-  it('contains no "sonnet" reference anywhere in the community source tree', () => {
+  it('contains no "dormant" reference anywhere in the community source tree', () => {
     const dirs = [
       path.join(ROOT, 'screens', 'community'),
       path.join(ROOT, 'components', 'community'),
@@ -113,7 +113,7 @@ describe('build-role hygiene', () => {
     }
     for (const f of files) {
       const src = fs.readFileSync(f, 'utf8');
-      expect(src.toLowerCase()).not.toContain('sonnet');
+      expect(src.toLowerCase()).not.toContain('dormant');
     }
   });
 });
