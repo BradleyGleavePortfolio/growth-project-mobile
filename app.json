@@ -2,7 +2,10 @@
   "expo": {
     "name": "The Growth Project",
     "slug": "tgp-health-and-wellness",
-    "scheme": ["tgp", "com.growthproject.app"],
+    "scheme": [
+      "tgp",
+      "com.growthproject.app"
+    ],
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -102,7 +105,8 @@
         "android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND",
         "android.permission.ACTIVITY_RECOGNITION",
         "com.samsung.android.hardware.sensormanager.permission.READ_ADDITIONAL_HEALTH_DATA"
-      ]
+      ],
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "favicon": "./assets/favicon.png"
