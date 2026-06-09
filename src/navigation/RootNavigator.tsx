@@ -29,6 +29,10 @@ import { Colors } from '../constants/colors';
 import { useNetworkStatus, isEffectivelyOnline } from '../hooks/useNetworkStatus';
 import { flush as flushFoodLogQueue } from '../services/foodLogQueue';
 import { isScreenshotMode } from '../screenshots';
+// v1-5 Community tab deep-link gate. The CommunityTab link is registered ONLY
+// when featureFlags.communityTab is true; when the flag is OFF the spread below
+// contributes nothing, so no `tgp://community*` route exists in the parser.
+import { featureFlags } from '../config/featureFlags';
 import { firstWinApi, WinType } from '../services/firstWinApi';
 import Day1WinScreen from '../screens/client/Day1WinScreen';
 import PackageSelectionSheet from '../components/PackageSelectionSheet';
@@ -216,6 +220,21 @@ export const linking: LinkingOptions<Record<string, object | undefined>> = {
       //     The primary path is the in-app webview short-circuit; this
       //     navigator config is the app-link fallback. The return screen
       //     confirms the session against the backend before celebrating.
+      // v1-5 Community deep link — gated by featureFlags.communityTab (default
+      // OFF). When the flag is OFF this spread adds nothing, so the
+      // `tgp://community` / universal `community` path is NOT registered.
+      ...(featureFlags.communityTab
+        ? ({
+            CommunityTab: {
+              path: 'community',
+              screens: {
+                CommunityTab: 'home',
+                CommunityThread: 'thread/:postId',
+                CommunityDmThread: 'dm/:recipientId',
+              },
+            },
+          } as Record<string, unknown>)
+        : {}),
       MoreTab: {
         screens: {
           PackageCheckout: {

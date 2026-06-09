@@ -90,6 +90,24 @@ export const featureFlags = {
    * env: EXPO_PUBLIC_FF_DELIVERABLES
    */
   deliverables: readFlag('EXPO_PUBLIC_FF_DELIVERABLES', isDev),
+
+  // ─── Community v1-5 — mobile client tab ──────────────────────────────────
+  // The v1-4 backend (realtime / push / telemetry) is merged; v1-5 is the
+  // client mobile surface that consumes it. ALL FOUR flags default OFF
+  // UNCONDITIONALLY (not `isDev`) — when the master tab flag is false the
+  // Community tab MUST NOT appear in ClientNavigator and its deep-link route
+  // MUST NOT register. v1-5 is otherwise dead code at build time. The backend
+  // gates are also OFF in prod (FEATURE_COMMUNITY_*), so a dev build that
+  // flips these on still degrades gracefully to a calm empty state.
+
+  /** Master Community tab on/off. OFF → no tab, no deep-link route. */
+  communityTab: readFlag('EXPO_PUBLIC_FF_COMMUNITY_TAB', false),
+  /** Hall space type (coach-wide announcements + cohort posts). */
+  communityHall: readFlag('EXPO_PUBLIC_FF_COMMUNITY_HALL', false),
+  /** Cohort spaces (coach-defined groups / training blocks). */
+  communityCohorts: readFlag('EXPO_PUBLIC_FF_COMMUNITY_COHORTS', false),
+  /** Direct messages (client↔coach and client↔client per §2.10 gates). */
+  communityDm: readFlag('EXPO_PUBLIC_FF_COMMUNITY_DM', false),
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;
