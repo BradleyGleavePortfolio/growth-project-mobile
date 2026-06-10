@@ -1,15 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Platform, StatusBar as RNStatusBar } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-
-// SDK 56: expo-status-bar dropped the typed backgroundColor prop. On Android
-// we still want the bone background to extend behind the system status bar,
-// so we apply it via the React Native StatusBar imperative API at module load.
-// This is a no-op on iOS where the status bar background is derived from the
-// underlying view hierarchy.
-if (Platform.OS === 'android') {
-  RNStatusBar.setBackgroundColor('#F5EFE4', false);
-}
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { PostHogProvider } from 'posthog-react-native';
 import {
@@ -26,6 +17,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import RootNavigator from './src/navigation/RootNavigator';
 import AppSplash from './src/components/AppSplash';
 import ErrorBoundary from './src/components/ErrorBoundary';
+import { StatusBarBand } from './src/components/StatusBarBand';
 // Phase 11: push-channel taxonomy — register Android channels + iOS categories
 import { registerPushChannels } from './src/notifications/push-channels';
 import {
@@ -218,7 +210,8 @@ function App() {
   }
 
   return (
-    <ErrorBoundary>
+    <SafeAreaProvider>
+      <ErrorBoundary>
       {/*
         PostHogProvider wraps the whole app so the SDK can auto-capture
         screen views and session recording (when enabled). autocapture is
@@ -255,9 +248,9 @@ function App() {
             },
           }}
         >
-          {/* Wave 2: dark status bar on bone background. SDK 56: Android
-              background color is set via the imperative RN StatusBar API at
-              module load (see top of file). */}
+          {/* Wave 2: dark status-bar icons on the bone background. SDK 56
+              edge-to-edge: the bone band itself is painted by <StatusBarBand>
+              above; expo-status-bar only controls icon contrast now. */}
           <StatusBar style="dark" />
           {/* ThemeProvider: Premium Visual System — UX Psych Report #5.
               Must be inside PersistQueryClientProvider so useFoundingNumber()
@@ -272,7 +265,13 @@ function App() {
           </ThemeProvider>
         </PersistQueryClientProvider>
       </AnalyticsProvider>
-    </ErrorBoundary>
+      </ErrorBoundary>
+      {/* SDK 56 edge-to-edge: paint the bone band behind the Android status
+          bar via an absolutely-positioned overlay. Rendered AFTER the app tree
+          so it stacks on top via position:absolute + zIndex, without consuming
+          layout space (no double safe-area inset). */}
+      <StatusBarBand />
+    </SafeAreaProvider>
   );
 }
 

@@ -1,0 +1,24 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`StatusBarBand (EW3-001 edge-to-edge bone band) paints the bone band at the safe-area top inset height 1`] = `
+<View
+  pointerEvents="none"
+  style={
+    [
+      {
+        "elevation": 1000,
+        "left": 0,
+        "position": "absolute",
+        "right": 0,
+        "top": 0,
+        "zIndex": 1000,
+      },
+      {
+        "backgroundColor": "#F5EFE4",
+        "height": 47,
+      },
+    ]
+  }
+  testID="status-bar-band"
+/>
+`;
