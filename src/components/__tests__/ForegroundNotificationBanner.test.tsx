@@ -25,10 +25,11 @@ jest.mock('@react-navigation/native', () => ({
 }));
 
 jest.mock('react-native-safe-area-context', () => ({
-  useSafeAreaInsets: () => ({ top: 47, bottom: 0, left: 0, right: 0 }),
+  useSafeAreaInsets: jest.fn(() => ({ top: 47, bottom: 0, left: 0, right: 0 })),
 }));
 
 import ForegroundNotificationBanner from '../ForegroundNotificationBanner';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { foregroundBannerStore } from '../../store/foregroundBannerStore';
 
 const flatten = (style: unknown): Record<string, unknown> => {
@@ -46,6 +47,7 @@ describe('ForegroundNotificationBanner safe-area inset', () => {
     act(() => {
       foregroundBannerStore.getState().reset();
     });
+    jest.mocked(useSafeAreaInsets).mockReturnValue({ top: 47, bottom: 0, left: 0, right: 0 });
   });
 
   it('uses the safe-area top inset for paddingTop', () => {
@@ -68,5 +70,27 @@ describe('ForegroundNotificationBanner safe-area inset', () => {
 
     const flat = flatten(match.props.style);
     expect(flat.paddingTop).toBe(47);
+  });
+
+  it('uses the 12px floor when the safe-area top inset is 0', () => {
+    jest.mocked(useSafeAreaInsets).mockReturnValue({ top: 0, bottom: 0, left: 0, right: 0 });
+
+    act(() => {
+      foregroundBannerStore.getState().showBanner({
+        title: 'New message',
+        body: 'You have a new message from your coach',
+        notificationId: 'n-1',
+      });
+    });
+
+    const { UNSAFE_root } = render(<ForegroundNotificationBanner />);
+
+    const match = UNSAFE_root.findAll((node) => {
+      const flat = flatten(node.props?.style);
+      return flat.position === 'absolute' && flat.zIndex === 999;
+    })[0];
+
+    const flat = flatten(match.props.style);
+    expect(flat.paddingTop).toBe(12);
   });
 });

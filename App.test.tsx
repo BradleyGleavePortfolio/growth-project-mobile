@@ -10,10 +10,11 @@ import React from 'react';
 import { render } from '@testing-library/react-native';
 
 jest.mock('react-native-safe-area-context', () => ({
-  useSafeAreaInsets: () => ({ top: 47, bottom: 0, left: 0, right: 0 }),
+  useSafeAreaInsets: jest.fn(() => ({ top: 47, bottom: 0, left: 0, right: 0 })),
 }));
 
 import { StatusBarBand } from './src/components/StatusBarBand';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const flatten = (style: unknown): Record<string, unknown> => {
   const out: Record<string, unknown> = {};
@@ -26,6 +27,10 @@ const flatten = (style: unknown): Record<string, unknown> => {
 };
 
 describe('StatusBarBand (EW3-001 edge-to-edge bone band)', () => {
+  afterEach(() => {
+    jest.mocked(useSafeAreaInsets).mockReturnValue({ top: 47, bottom: 0, left: 0, right: 0 });
+  });
+
   it('paints the bone band at the safe-area top inset height', () => {
     const { getByTestId, toJSON } = render(<StatusBarBand />);
     const band = getByTestId('status-bar-band');
@@ -33,6 +38,16 @@ describe('StatusBarBand (EW3-001 edge-to-edge bone band)', () => {
 
     expect(flat.height).toBe(47);
     expect(flat.backgroundColor).toBe('#F5EFE4');
+    // Absolute overlay so it never consumes layout space (no double inset).
+    expect(flat.position).toBe('absolute');
     expect(toJSON()).toMatchSnapshot();
+  });
+
+  it('renders nothing when the safe-area top inset is 0', () => {
+    jest.mocked(useSafeAreaInsets).mockReturnValue({ top: 0, bottom: 0, left: 0, right: 0 });
+    const { toJSON, queryByTestId } = render(<StatusBarBand />);
+
+    expect(queryByTestId('status-bar-band')).toBeNull();
+    expect(toJSON()).toBeNull();
   });
 });
