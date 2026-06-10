@@ -211,10 +211,6 @@ function App() {
 
   return (
     <SafeAreaProvider>
-      {/* SDK 56 edge-to-edge: paint the bone band behind the Android status
-          bar via a top-inset View. Rendered before the app tree so it sits at
-          the very top of the layout. */}
-      <StatusBarBand />
       <ErrorBoundary>
       {/*
         PostHogProvider wraps the whole app so the SDK can auto-capture
@@ -270,6 +266,11 @@ function App() {
         </PersistQueryClientProvider>
       </AnalyticsProvider>
       </ErrorBoundary>
+      {/* SDK 56 edge-to-edge: paint the bone band behind the Android status
+          bar via an absolutely-positioned overlay. Rendered AFTER the app tree
+          so it stacks on top via position:absolute + zIndex, without consuming
+          layout space (no double safe-area inset). */}
+      <StatusBarBand />
     </SafeAreaProvider>
   );
 }
