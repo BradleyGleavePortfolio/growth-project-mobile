@@ -18,6 +18,7 @@ import CoachCommunityCohortsScreen from '../screens/community/CoachCommunityCoho
 import CoachCommunityCohortDetailScreen from '../screens/community/CoachCommunityCohortDetailScreen';
 import CoachCommunityPostDetailScreen from '../screens/community/CoachCommunityPostDetailScreen';
 import CoachCommunityModerationScreen from '../screens/community/CoachCommunityModerationScreen';
+import CoachCommunityEventsScreen from '../screens/community/CoachCommunityEventsScreen';
 import type { CoachCommunityStackParamList } from '../screens/community/coachCommunityNavTypes';
 
 const CoachCommunityStack =
@@ -62,6 +63,11 @@ export default function CoachCommunityNavigator(): React.ReactElement {
         name="CoachCommunityModeration"
         component={CoachCommunityModerationScreen}
         options={{ title: 'Moderation' }}
+      />
+      <CoachCommunityStack.Screen
+        name="CoachCommunityEvents"
+        component={CoachCommunityEventsScreen}
+        options={{ title: 'Events' }}
       />
     </CoachCommunityStack.Navigator>
   );

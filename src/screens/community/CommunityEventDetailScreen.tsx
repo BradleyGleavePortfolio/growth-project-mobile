@@ -73,7 +73,7 @@ export default function CommunityEventDetailScreen(): React.ReactElement {
   const me = useCommunityMe();
 
   const eventQuery = useCommunityEvent(eventId.length > 0 ? eventId : undefined);
-  const rsvp = useRsvpEvent(eventId, me.data?.workspace_id);
+  const rsvp = useRsvpEvent(eventId, me.data?.workspace_id ?? undefined);
   const event = eventQuery.data;
 
   const onOpenLink = useCallback(() => {
