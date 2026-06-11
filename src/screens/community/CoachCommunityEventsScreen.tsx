@@ -17,11 +17,19 @@
  *
  * THREE distinct branches (UX P0.2): a loading spinner; an honest
  * CoachErrorState on failure (never a calm/empty masquerade); and — on a
- * genuinely empty list — an honest, coach-voiced empty state with a create
- * action. NOTE: the backend coach empty-states payload has no events surface
- * key, so this screen renders its OWN honest empty state rather than the
- * operator-locked CoachEmptyState (which would throw a contract error for a
- * surface the backend does not vend).
+ * genuinely empty list — an honest, NEUTRAL (non-Roman) empty state with a
+ * create action.
+ *
+ * FACE + VOICE CONTRACT (operator rule 2026-06-10): an empty state that speaks
+ * in Roman's VOICE must (a) render Roman's FACE and (b) source its copy from
+ * the backend Roman voice-policy payload — never hardcoded. The backend
+ * coach empty-states payload has NO events surface key, so there is no Roman
+ * copy to vend for this surface. Rather than invent client-side "Roman" copy
+ * (a face+voice violation) or call the operator-locked CoachEmptyState (which
+ * would throw a contract error for an unvended surface), this screen renders a
+ * plain functional empty state: a neutral Ionicons line glyph (NOT RomanAvatar)
+ * above functional UI copy. It does not speak in Roman's voice, so the
+ * face+voice contract does not apply.
  *
  * NO NATIVE LIVE ROOM (Step 0): the "live" / "replay" links are EXTERNAL,
  * host-allowlisted URLs. Nothing here creates or implies an in-app room.
@@ -40,7 +48,7 @@ import {
 import { useTheme } from '../../theme/useTheme';
 import { spacing, radius, withAlpha } from '../../theme/tokens';
 import HapticPressable from '../../components/HapticPressable';
-import RomanAvatar from '../../components/community/RomanAvatar';
+import { Ionicons } from '@expo/vector-icons';
 import { CoachErrorState } from '../../components/community/coach';
 import CompletionToast, {
   useCompletionToast,
@@ -192,7 +200,11 @@ export default function CoachCommunityEventsScreen(): React.ReactElement {
         />
       ) : isEmpty ? (
         <View style={styles.emptyWrap} testID="coach-community-events-empty">
-          <RomanAvatar crop="neutral" size={64} />
+          <Ionicons
+            name="calendar-outline"
+            size={64}
+            color={semanticColors.textMuted}
+          />
           <Text style={[styles.emptyTitle, { color: semanticColors.textPrimary }]}>
             No events yet
           </Text>
