@@ -135,17 +135,36 @@ describe('CoachAckBadge — reduced motion', () => {
   });
   afterEach(() => jest.restoreAllMocks());
 
-  it('reduced motion ON: consults the OS setting and renders identical content', async () => {
+  it('reduced motion ON: never plays the entrance timing, renders identical content', async () => {
     isReduceMotionEnabled.mockResolvedValue(true);
+    timingSpy.mockClear();
     const { getByTestId, getByText } = render(
       <CoachAckBadge ack={envelope('acked', 'warning')} testID={TEST_ID} />,
     );
     // The badge consults the OS reduce-motion setting and subscribes to live
     // changes (the seam that decides whether to animate).
     await waitFor(() => expect(isReduceMotionEnabled).toHaveBeenCalled());
+    // v2-2 (R1 fixer, M-P2): with the preference resolved to TRUE the badge must
+    // NOT fire Animated.timing at all — it rests at full opacity. (The prior
+    // ref-based impl could animate for a frame before the async preference
+    // resolved; the tri-state useState fix holds resting until known.)
+    await waitFor(() => expect(isReduceMotionEnabled).toHaveBeenCalled());
+    expect(timingSpy).not.toHaveBeenCalled();
     // Content is identical regardless of motion: the state pill + label render.
     expect(getByTestId(`${TEST_ID}-state-acked`)).toBeTruthy();
     expect(getByText('Acked')).toBeTruthy();
+  });
+
+  it('reduced motion UNKNOWN (unresolved): holds resting, never animates before the preference resolves', async () => {
+    // Never resolve the promise — preference stays `null` (unknown). The badge
+    // must hold at resting opacity and NOT animate while the setting is unknown.
+    isReduceMotionEnabled.mockReturnValue(new Promise(() => {}));
+    timingSpy.mockClear();
+    const { getByTestId } = render(
+      <CoachAckBadge ack={envelope('seen', 'within')} testID={TEST_ID} />,
+    );
+    expect(getByTestId(`${TEST_ID}-state-seen`)).toBeTruthy();
+    expect(timingSpy).not.toHaveBeenCalled();
   });
 
   it('reduced motion OFF: plays a single opacity fade-in toward 1', async () => {
@@ -164,4 +183,49 @@ describe('CoachAckBadge — reduced motion', () => {
     // Content still renders.
     expect(getByTestId(`${TEST_ID}-state-seen`)).toBeTruthy();
   });
+});
+
+// ── v2-2 (R1 fixer, M-P1c): ack-pill contrast matrix ─────────────────────────
+// Pins that EVERY ack-state pill clears WCAG AA (4.5:1 normal text) in BOTH
+// light and dark mode. This is the regression guard for the dark-mode `acked`
+// pill, which previously rendered accent-tinted text on the surface (~3.02:1,
+// AA FAIL); the fix fills it with the accent + on-accent ink (same as
+// `replied`). The pairs below mirror `ackPillColors` in CoachAckBadge; the
+// `none` pill is transparent so it is checked against the row background
+// (bgPrimary), the realistic backdrop.
+describe('CoachAckBadge — ack-pill contrast matrix (AA, light + dark)', () => {
+  const { lightTokens, darkTokens } = jest.requireActual('../../../theme/tokens');
+  const { contrastRatio, AA_NORMAL } = jest.requireActual('../../../theme/contrast');
+
+  // fg/bg for each state, mirroring ackPillColors(). `none` uses transparent
+  // bg → evaluated against the page background (bgPrimary).
+  const pairFor = (
+    state: CoachAckState,
+    c: typeof lightTokens,
+  ): { fg: string; bg: string } => {
+    switch (state) {
+      case 'replied':
+        return { fg: c.textOnAccent, bg: c.accent };
+      case 'acked':
+        return { fg: c.textOnAccent, bg: c.accent };
+      case 'seen':
+        return { fg: c.textPrimary, bg: c.bgSurface };
+      case 'none':
+      default:
+        return { fg: c.textMuted, bg: c.bgPrimary };
+    }
+  };
+
+  for (const [mode, tokens] of [
+    ['light', lightTokens],
+    ['dark', darkTokens],
+  ] as const) {
+    for (const state of ACK_STATES) {
+      it(`${mode} ${state} pill clears AA`, () => {
+        const { fg, bg } = pairFor(state, tokens);
+        const ratio = contrastRatio(fg, bg);
+        expect(ratio).toBeGreaterThanOrEqual(AA_NORMAL);
+      });
+    }
+  }
 });
