@@ -37,6 +37,18 @@ import { coachCommunityKeys } from './useCoachCommunity';
 export type CoachAckTarget = Exclude<CoachAckState, 'none'>;
 
 /**
+ * Stable React Query mutation key for an ack transition on a message. Exposed
+ * so other surfaces (e.g. the inbox pull-to-refresh cache reconciliation) can
+ * ask `useIsMutating({ mutationKey: ackMutationKey(id) })` whether an
+ * optimistic ack is in flight for a given message — and therefore MUST NOT be
+ * clobbered by a server refetch. Keyed by message id only (not target) so a
+ * pending `seen`/`acked`/`replied` on the same message all match.
+ */
+export function ackMutationKey(messageId: string): readonly unknown[] {
+  return [...coachCommunityKeys.ackState(messageId), 'mutation'] as const;
+}
+
+/**
  * Compose an optimistic ack envelope for a target transition. We only RAISE the
  * state (never lower it): a `seen` tap on an already-`replied` message leaves
  * the cached state at `replied`, mirroring the backend's monotonic rule. The
@@ -113,6 +125,7 @@ function useAckMutation(
         : coachCommunityApi.markCoachAckReplied;
 
   return useMutation<AckStateDto, unknown, void, { prev?: AckStateDto }>({
+    mutationKey: ackMutationKey(messageId),
     mutationFn: async () => {
       const res = await fn(messageId);
       return res.ack;
