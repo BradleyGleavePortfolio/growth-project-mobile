@@ -90,7 +90,6 @@ jest.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 
-// eslint-disable-next-line import/first
 import CoachCommunityInboxScreen from '../CoachCommunityInboxScreen';
 
 const MID = '11111111-1111-1111-1111-111111111111';
