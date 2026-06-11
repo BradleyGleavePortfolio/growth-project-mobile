@@ -33,6 +33,7 @@ import {
   type CoachEmptyStateSurfaceKey,
   type RomanCopyPayload,
   type CoachPostDetail,
+  type CoachMessage,
 } from '../api/coachCommunityApi';
 // NOTE (fixer R2, BLOCKER 1): `getCoachEmptyStateFallback` is intentionally NOT
 // imported here. The success-empty render path must consume the BACKEND payload
@@ -52,6 +53,8 @@ export const coachCommunityKeys = {
   flagged: () => [...coachCommunityKeys.all, 'flagged'] as const,
   emptyStates: () => [...coachCommunityKeys.all, 'emptyStates'] as const,
   post: (id: string) => [...coachCommunityKeys.all, 'post', id] as const,
+  /** v2-2 single cohort-message view (coach message-detail surface). */
+  message: (id: string) => [...coachCommunityKeys.all, 'message', id] as const,
   /**
    * v2-2 per-message ack envelope (state + SLA snapshot). Seeded from the inbox
    * payload and updated optimistically by `useCoachAckActions`; the
@@ -237,6 +240,22 @@ export function useCoachPostDetail(
     queryKey: coachCommunityKeys.post(postId),
     queryFn: () => coachCommunityApi.getCoachPostDetail(postId),
     enabled: postId.length > 0,
+    staleTime: 15_000,
+  });
+}
+
+/**
+ * v2-2: fetch a single cohort message for the coach message-detail surface.
+ * The response carries the FLAT ack envelope (when the flag is on); the screen
+ * lifts it into the badge shape. Disabled until a non-empty id is provided.
+ */
+export function useCoachMessageDetail(
+  messageId: string,
+): UseQueryResult<CoachMessage> {
+  return useQuery({
+    queryKey: coachCommunityKeys.message(messageId),
+    queryFn: () => coachCommunityApi.getCoachMessageDetail(messageId),
+    enabled: messageId.length > 0,
     staleTime: 15_000,
   });
 }
