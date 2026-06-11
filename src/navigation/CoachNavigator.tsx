@@ -39,6 +39,10 @@ import TrustCenterScreen from '../screens/TrustCenterScreen';
 import CoachBriefScreen from '../screens/coach/CoachBriefScreen';
 import AdminControlRoomScreen from '../screens/coach/AdminControlRoomScreen';
 import { featureFlags } from '../config/featureFlags';
+// Community v1-6 — coach community sub-stack (six screens). Mounted as a
+// bottom-tab ONLY when `featureFlags.coachCommunity` is true; when the flag is
+// OFF the tab does not render and none of the six routes register.
+import CoachCommunityNavigator from './CoachCommunityNavigator';
 // Stage 3 — cross-pillar federated coach surface. Mounted as a nested
 // navigator so the practice-selection picker, dashboard, roster, detail
 // view, messages, and assignments all live under one settings entry.
@@ -117,6 +121,9 @@ export type CoachTabParamList = {
   // into a settings sub-screen, which silently broke when names changed.
   SettingsStack: NavigatorScreenParams<SettingsStackParamList> | undefined;
   TeamStack: undefined;
+  // Community v1-6 — only present in the param list / tab bar when
+  // `featureFlags.coachCommunity` is true (registered conditionally below).
+  CommunityStack: undefined;
 };
 
 export type ClientsStackParamList = {
@@ -576,6 +583,22 @@ export default function CoachNavigator() {
             tabBarLabel: 'Team',
             tabBarIcon: ({ color, size }) => (
               <Ionicons name="people-circle" size={size} color={color} />
+            ),
+          }}
+        />
+      )}
+      {/* Community v1-6 — coach community tab. Registered ONLY when the
+          feature flag is true; when OFF the tab is absent and none of the six
+          CoachCommunity routes register (the flag-OFF deep-link test asserts
+          this). The coach lands on the existing home as today. */}
+      {featureFlags.coachCommunity && (
+        <Tab.Screen
+          name="CommunityStack"
+          component={CoachCommunityNavigator}
+          options={{
+            tabBarLabel: 'Community',
+            tabBarIcon: ({ color, size }) => (
+              <Ionicons name="people-circle-outline" size={size} color={color} />
             ),
           }}
         />
