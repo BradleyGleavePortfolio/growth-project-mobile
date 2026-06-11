@@ -108,6 +108,22 @@ export const featureFlags = {
   communityCohorts: readFlag('EXPO_PUBLIC_FF_COMMUNITY_COHORTS', false),
   /** Direct messages (client↔coach and client↔client per §2.10 gates). */
   communityDm: readFlag('EXPO_PUBLIC_FF_COMMUNITY_DM', false),
+
+  // ─── Community v1-6 — mobile coach surface ───────────────────────────────
+  // The v1-6 backend (community-cohort-write, community-cohort-members,
+  // community-coach-inbox controllers) is merged; v1-6 is the coach-only
+  // mobile surface that consumes it: a coach home, aggregated inbox, private
+  // drafting lab, cohort management, cohort detail, and a moderation queue.
+  //
+  // Defaults OFF UNCONDITIONALLY (not `isDev`). When this flag is false the
+  // coach navigator MUST NOT register the six CoachCommunity routes and the
+  // coach lands on the existing home as today. When true the six routes
+  // register and a Community tab appears in the coach bottom nav. The backend
+  // gates are also OFF in prod, so a dev build that flips this on still
+  // degrades gracefully to a calm Roman-voiced empty state.
+  //
+  // env: EXPO_PUBLIC_FF_COACH_COMMUNITY
+  coachCommunity: readFlag('EXPO_PUBLIC_FF_COACH_COMMUNITY', false),
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;
