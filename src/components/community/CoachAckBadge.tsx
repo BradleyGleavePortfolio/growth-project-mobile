@@ -331,6 +331,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   priorityLabel: {
-    fontWeight: '700',
+    // Doctrine caps weight at 600; breached emphasis is carried by the danger
+    // rail, SLA-first ordering, and the alert icon — not a heavier glyph.
+    fontWeight: '600',
   },
 });
