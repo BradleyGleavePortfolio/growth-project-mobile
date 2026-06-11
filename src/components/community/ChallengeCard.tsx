@@ -5,9 +5,10 @@
  *   - Participation-focused: the card foregrounds the caller's OWN progress
  *     (a compact bar + "X of Y") — a competence signal (§3.7), never a ranking
  *     and never a "behind" framing (§3.4, no public failure).
- *   - One clear action: "Join" when not joined, "Continue" when joined and in
- *     progress, and a calm "Goal reached" closure chip when complete. Hick's Law:
- *     a single primary affordance per card.
+ *   - ONE clear affordance per card (Hick's Law, UX finding 13): a single chip
+ *     that both states where you are AND what tapping does — "Join" when not
+ *     joined, "Continue" when in progress, and a calm "Goal reached" closure when
+ *     complete. There is no separate status label competing with the action.
  *   - Completed state is a positive closure, shown with a line check icon — not
  *     a trophy/badge (avoids badge theater) and never a comparison.
  *
@@ -52,12 +53,8 @@ export default function ChallengeCard({
   const unit = challenge.unit ?? '';
   const fraction = fractionFor(value, target);
 
-  const statusLabel = completed
-    ? 'Goal reached'
-    : joined
-      ? 'In progress'
-      : 'Open to join';
-  const actionLabel = completed ? 'View' : joined ? 'Continue' : 'Join';
+  // A SINGLE affordance that encodes both status and the tap outcome (F13).
+  const actionLabel = completed ? 'Goal reached' : joined ? 'Continue' : 'Join';
 
   const progressLabel =
     !joined
@@ -71,7 +68,7 @@ export default function ChallengeCard({
       intent="light"
       onPress={() => onPress(challenge)}
       accessibilityRole="button"
-      accessibilityLabel={`Open challenge ${challenge.title}. ${statusLabel}.`}
+      accessibilityLabel={`Open challenge ${challenge.title}. ${actionLabel}.`}
       testID={testID}
       style={[
         styles.card,
@@ -118,11 +115,19 @@ export default function ChallengeCard({
         </View>
       ) : null}
 
+      {/* F13: a single chip is the only footer affordance. */}
       <View style={styles.footerRow}>
-        <Text style={[styles.status, { color: semanticColors.textMuted }]}>
-          {statusLabel}
-        </Text>
-        <View style={[styles.actionChip, { borderColor: semanticColors.accent }]}>
+        <View
+          style={[styles.actionChip, { borderColor: semanticColors.accent }]}
+          testID={`${testID ?? 'challenge-card'}-action`}
+        >
+          {completed ? (
+            <Ionicons
+              name="checkmark-circle-outline"
+              size={15}
+              color={semanticColors.accent}
+            />
+          ) : null}
           <Text style={[styles.actionLabel, { color: semanticColors.accent }]}>
             {actionLabel}
           </Text>
@@ -158,15 +163,18 @@ const styles = StyleSheet.create({
   footerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     marginTop: spacing.xs,
   },
-  status: { fontSize: 13, fontWeight: '500' },
   actionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radius.pill,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
+    minHeight: 32,
   },
   actionLabel: { fontSize: 13, fontWeight: '600' },
 });

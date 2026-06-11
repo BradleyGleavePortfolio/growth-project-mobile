@@ -32,6 +32,8 @@ export type CommunityStackParamList = {
     | undefined;
   /** Single challenge detail (v3-1). Registered only behind communityChallenges. */
   CommunityChallengeDetail: { challengeId: string };
+  /** Challenge discovery list (v3-1). Registered only behind communityChallenges. */
+  CommunityChallenges: undefined;
 };
 
 /** Loosely-typed nav prop used by the screens (matches the codebase pattern). */

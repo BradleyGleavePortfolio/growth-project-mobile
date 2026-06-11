@@ -3,7 +3,8 @@
  *
  * Pins the card's design contract (DESIGN_INTELLIGENCE Part III):
  *   - Foregrounds the caller's OWN progress ("X of Y"), never a ranking.
- *   - One clear action that adapts to state: Join → Continue → View.
+ *   - ONE affordance that adapts to state: Join → Continue → Goal reached
+ *     (UX finding 13 — a single chip, no separate status label).
  *   - Completed renders a calm closure ("Goal reached") with a LINE check icon,
  *     not a trophy/badge (no badge theater §3.7) and no comparison.
  */
@@ -66,7 +67,7 @@ function participation(overrides: Record<string, unknown> = {}) {
 }
 
 describe('ChallengeCard', () => {
-  it('shows a Join action and description when not joined', () => {
+  it('shows a single Join affordance and description when not joined', () => {
     render(
       <ChallengeCard
         challenge={challenge()}
@@ -75,12 +76,15 @@ describe('ChallengeCard', () => {
         testID="card"
       />,
     );
+    // F13: exactly one footer affordance, labelled by state.
+    expect(screen.getByTestId('card-action')).toBeTruthy();
     expect(screen.getByText('Join')).toBeTruthy();
-    expect(screen.getByText('Open to join')).toBeTruthy();
     expect(screen.getByText('Hit your protein target daily.')).toBeTruthy();
+    // No separate status label competing with the action chip.
+    expect(screen.queryByText('Open to join')).toBeNull();
   });
 
-  it('shows own progress and a Continue action when joined', () => {
+  it('shows own progress and a single Continue affordance when joined', () => {
     render(
       <ChallengeCard
         challenge={challenge()}
@@ -92,9 +96,11 @@ describe('ChallengeCard', () => {
     expect(screen.getByText('12 of 30 days')).toBeTruthy();
     expect(screen.getByText('Continue')).toBeTruthy();
     expect(screen.getByTestId('card-fill')).toBeTruthy();
+    // F13: no separate "In progress" status text.
+    expect(screen.queryByText('In progress')).toBeNull();
   });
 
-  it('renders a calm completed closure with a line check icon', () => {
+  it('renders a calm completed closure as the single affordance with a line check icon', () => {
     render(
       <ChallengeCard
         challenge={challenge()}
@@ -103,8 +109,10 @@ describe('ChallengeCard', () => {
         testID="card"
       />,
     );
+    // The chip itself IS the closure label (F13) — no separate "View" action.
+    expect(screen.getByTestId('card-action')).toBeTruthy();
     expect(screen.getByText('Goal reached')).toBeTruthy();
-    expect(screen.getByText('View')).toBeTruthy();
+    expect(screen.queryByText('View')).toBeNull();
     expect(screen.getByTestId('card-complete-icon')).toBeTruthy();
   });
 

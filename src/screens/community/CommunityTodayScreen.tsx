@@ -62,6 +62,17 @@ export default function CommunityTodayScreen({
       goToHall();
     }
   };
+  // F6 (discovery): the Today challenge card opens the challenge detail when the
+  // challenges feature is on. With the flag OFF the detail route is not even
+  // registered, so we fall back to the Hall rather than navigate to a missing
+  // route (the card is never a dead end).
+  const goToChallenge = (challengeId: string) => {
+    if (featureFlags.communityChallenges) {
+      navigation.navigate('CommunityChallengeDetail', { challengeId });
+    } else {
+      goToHall();
+    }
+  };
 
   // Empty state: friendly Roman copy + a primary action (never a bare spinner).
   if (isEmpty || today.isError) {
@@ -154,7 +165,7 @@ export default function CommunityTodayScreen({
         <Card
           color={semanticColors.bgSurface}
           border={semanticColors.border}
-          onPress={goToHall}
+          onPress={() => goToChallenge(data.challenge!.id)}
           testID="community-today-challenge"
         >
           <CardLabel color={semanticColors.textMuted}>Challenge</CardLabel>
