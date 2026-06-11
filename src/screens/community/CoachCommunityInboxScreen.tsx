@@ -20,7 +20,7 @@
  * copy + crop come from the backend voice policy (face + voice contract).
  * Touch targets are >= 44pt.
  */
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -38,18 +38,34 @@ import {
   MonogramBadge,
   relativeAge,
 } from '../../components/community/coach';
+import CoachAckBadge from '../../components/community/CoachAckBadge';
 import {
   useCoachInbox,
   useAckInboxItem,
+  useCoachAckState,
   useCoachEmptyStatePayload,
+  coachCommunityKeys,
 } from '../../hooks/useCoachCommunity';
-import type { CoachInboxItem } from '../../api/coachCommunityApi';
+import { useCoachAckActions } from '../../hooks/useCoachAckActions';
+import { featureFlags } from '../../config/featureFlags';
+import { useQueryClient } from '@tanstack/react-query';
+import { AckStateSchema } from '../../api/coachCommunityApi';
+import type {
+  CoachInboxItem,
+  AckStateDto,
+} from '../../api/coachCommunityApi';
+
+// v2-2 kill switch: when OFF the inbox renders exactly as the v1-6 surface
+// (no ack badge, no "Mark acked" quick-action). Read once at module scope —
+// the flag is build-time and never flips mid-session.
+const ACKS_ENABLED = featureFlags.communityAcks;
 
 export default function CoachCommunityInboxScreen(): React.ReactElement {
   const { semanticColors } = useTheme();
   const inbox = useCoachInbox();
   const ack = useAckInboxItem();
   const emptyState = useCoachEmptyStatePayload('coach_community_inbox_empty');
+  const qc = useQueryClient();
 
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -58,6 +74,28 @@ export default function CoachCommunityInboxScreen(): React.ReactElement {
   // the `?? []` fallback allocates a fresh array each render and churns the
   // useCallback deps below (and the FlatList data prop).
   const items = useMemo(() => inbox.data?.items ?? [], [inbox.data?.items]);
+
+  // v2-2: seed the per-message ack cache from any ack envelope the backend
+  // attached to an inbox row (additive `ack` field, present only when
+  // FEATURE_COMMUNITY_ACKS is on server-side). The inbox payload is the source
+  // of truth; this only PRIMES the cache so the badge has a value before any
+  // optimistic action. Validated at the boundary so a drifted shape is dropped
+  // rather than fed into the badge. No-op when the flag is off or no ack is
+  // present. We never overwrite a value already in the cache (an in-flight
+  // optimistic state must win until it reconciles).
+  useEffect(() => {
+    if (!ACKS_ENABLED) return;
+    for (const item of items) {
+      const raw = (item as { ack?: unknown }).ack;
+      if (raw == null) continue;
+      const key = coachCommunityKeys.ackState(item.id);
+      if (qc.getQueryData<AckStateDto>(key) != null) continue;
+      const parsed = AckStateSchema.safeParse(raw);
+      if (parsed.success) {
+        qc.setQueryData<AckStateDto>(key, parsed.data);
+      }
+    }
+  }, [items, qc]);
   const isEmpty = !inbox.isLoading && !inbox.isError && items.length === 0;
 
   const onAck = useCallback(
@@ -344,6 +382,9 @@ function InboxRow({
         >
           {item.snippet}
         </Text>
+        {ACKS_ENABLED && !selecting ? (
+          <CoachAckRow item={item} />
+        ) : null}
       </View>
       {selecting ? null : (
         <HapticPressable
@@ -358,6 +399,62 @@ function InboxRow({
         </HapticPressable>
       )}
     </HapticPressable>
+  );
+}
+
+/**
+ * v2-2 ack signals for a single inbox row: the CoachAckBadge (current state +
+ * SLA chip, read from the per-message ack cache) and a "Mark acked"
+ * quick-action that fires the optimistic `markAcked` mutation. Rendered only
+ * when EXPO_PUBLIC_FF_COMMUNITY_ACKS is on (the parent gates this with
+ * ACKS_ENABLED), so the v1-6 inbox is untouched when the flag is off.
+ *
+ * Extracted into its own component because it owns hooks (`useCoachAckState`,
+ * `useCoachAckActions`) that must not be conditionally called inside the parent
+ * row's render — here they live behind the flag gate at the row level, which is
+ * stable for the lifetime of the build.
+ */
+function CoachAckRow({
+  item,
+}: {
+  item: CoachInboxItem;
+}): React.ReactElement {
+  const { semanticColors } = useTheme();
+  const ackState = useCoachAckState(item.id);
+  const actions = useCoachAckActions(item.id);
+  const pending = actions.markAcked.isPending;
+  const alreadyAcked =
+    ackState?.state === 'acked' || ackState?.state === 'replied';
+
+  return (
+    <View style={styles.ackRow}>
+      <CoachAckBadge
+        ack={ackState}
+        testID={`coach-community-inbox-ack-badge-${item.id}`}
+      />
+      <HapticPressable
+        intent="light"
+        onPress={() => actions.markAcked.mutate()}
+        disabled={pending || alreadyAcked}
+        accessibilityRole="button"
+        accessibilityLabel={`Mark message from ${item.client_name} as acked`}
+        accessibilityState={{ disabled: pending || alreadyAcked }}
+        testID={`coach-community-inbox-mark-acked-${item.id}`}
+        style={[
+          styles.markAckedButton,
+          {
+            borderColor: semanticColors.accent,
+            opacity: pending || alreadyAcked ? 0.5 : 1,
+          },
+        ]}
+      >
+        <Text
+          style={[styles.markAckedLabel, { color: semanticColors.accent }]}
+        >
+          Mark acked
+        </Text>
+      </HapticPressable>
+    </View>
   );
 }
 
@@ -447,6 +544,26 @@ const styles = StyleSheet.create({
   },
   ackLabel: {
     fontSize: 14,
+    fontWeight: '600',
+  },
+  ackRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  markAckedButton: {
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+  },
+  markAckedLabel: {
+    fontSize: 13,
     fontWeight: '600',
   },
   footer: {

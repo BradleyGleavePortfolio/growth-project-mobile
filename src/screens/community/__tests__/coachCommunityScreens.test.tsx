@@ -153,23 +153,69 @@ const mockEmptyResultOverride: {
   current: Partial<Record<CoachEmptyStateSurfaceKey, RomanResult>>;
 } = { current: {} };
 
-jest.mock('../../../hooks/useCoachCommunity', () => ({
-  useCoachDashboard: () => mockState.dashboard,
-  useCoachInbox: () => mockState.inbox,
-  useCoachCohorts: () => mockState.cohorts,
-  useCoachCohortDetail: () => mockState.cohortDetail,
-  useCoachFlagged: () => mockState.flagged,
-  useCoachPostDetail: () => mockState.postDetail,
-  useCoachEmptyStatePayload: (surfaceKey: CoachEmptyStateSurfaceKey) =>
-    mockEmptyResultOverride.current[surfaceKey] ?? {
-      status: 'ready',
-      payload: SYNTHETIC_EMPTY[surfaceKey],
-    },
-  useAckInboxItem: () => ({ mutate: mockAckMutate, isPending: false }),
-  useCreateCohort: () => ({ mutate: mockCreateMutate, isPending: false }),
-  useInviteMember: () => ({ mutate: mockInviteMutate, isPending: false }),
-  useRemoveMember: () => ({ mutate: mockRemoveMutate, isPending: false }),
-  useHideFlagged: () => ({ mutate: mockHideMutate, isPending: false }),
+// v2-2: a per-message ack envelope the badge reads, keyed by message id. Tests
+// seed this to drive the badge state; default empty (weakest `none`).
+const mockAckStateByMessage: { current: Record<string, unknown> } = {
+  current: {},
+};
+const mockMarkAckedMutate = jest.fn();
+
+jest.mock('../../../hooks/useCoachCommunity', () => {
+  const actual = jest.requireActual('../../../hooks/useCoachCommunity');
+  return {
+    // Keep the real `coachCommunityKeys` (the screen seeds the ack cache with
+    // it) while stubbing every data/mutation hook.
+    coachCommunityKeys: actual.coachCommunityKeys,
+    useCoachDashboard: () => mockState.dashboard,
+    useCoachInbox: () => mockState.inbox,
+    useCoachCohorts: () => mockState.cohorts,
+    useCoachCohortDetail: () => mockState.cohortDetail,
+    useCoachFlagged: () => mockState.flagged,
+    useCoachPostDetail: () => mockState.postDetail,
+    useCoachAckState: (messageId: string) =>
+      mockAckStateByMessage.current[messageId],
+    useCoachEmptyStatePayload: (surfaceKey: CoachEmptyStateSurfaceKey) =>
+      mockEmptyResultOverride.current[surfaceKey] ?? {
+        status: 'ready',
+        payload: SYNTHETIC_EMPTY[surfaceKey],
+      },
+    useAckInboxItem: () => ({ mutate: mockAckMutate, isPending: false }),
+    useCreateCohort: () => ({ mutate: mockCreateMutate, isPending: false }),
+    useInviteMember: () => ({ mutate: mockInviteMutate, isPending: false }),
+    useRemoveMember: () => ({ mutate: mockRemoveMutate, isPending: false }),
+    useHideFlagged: () => ({ mutate: mockHideMutate, isPending: false }),
+  };
+});
+
+// v2-2: ack-action hook. markAcked.mutate is the spy the Mark-acked
+// quick-action fires; the other two are inert for these screen tests.
+jest.mock('../../../hooks/useCoachAckActions', () => ({
+  useCoachAckActions: () => ({
+    markSeen: { mutate: jest.fn(), isPending: false },
+    markAcked: { mutate: mockMarkAckedMutate, isPending: false },
+    markReplied: { mutate: jest.fn(), isPending: false },
+  }),
+}));
+
+// v2-2: force the kill-switch flag ON so the inbox renders the ack badge +
+// Mark-acked quick-action. The screen reads `featureFlags.communityAcks` at
+// module scope, so this mock must be in place before the screen is imported.
+jest.mock('../../../config/featureFlags', () => {
+  const actual = jest.requireActual('../../../config/featureFlags');
+  return {
+    ...actual,
+    featureFlags: { ...actual.featureFlags, communityAcks: true },
+  };
+});
+
+// react-query: the screen calls useQueryClient() to seed the ack cache. Provide
+// an inert client so the seeding effect is a no-op in these render tests (the
+// badge state is driven directly via the useCoachAckState mock above).
+jest.mock('@tanstack/react-query', () => ({
+  useQueryClient: () => ({
+    getQueryData: () => undefined,
+    setQueryData: () => undefined,
+  }),
 }));
 
 import CoachCommunityHomeScreen from '../CoachCommunityHomeScreen';
@@ -256,6 +302,8 @@ beforeEach(() => {
   mockInviteMutate.mockReset();
   mockRemoveMutate.mockReset();
   mockHideMutate.mockReset();
+  mockMarkAckedMutate.mockReset();
+  mockAckStateByMessage.current = {};
   // Reset to default quiet/empty state per suite.
   mockState.dashboard = { data: undefined, isLoading: false, isError: false };
   mockState.inbox = { data: { items: [], next_before: null }, isLoading: false, isError: false, isRefetching: false, refetch: jest.fn() };
@@ -870,5 +918,81 @@ describe('List states + interactions — loading, refresh, navigation, batch sel
     fireEvent.press(getByTestId('coach-community-cohorts-modal-cancel'));
     expect(mockCreateMutate).not.toHaveBeenCalled();
     expect(queryByTestId('coach-community-cohorts-name-input')).toBeNull();
+  });
+});
+
+// ─── v2-2 — Coach ack badges + Mark-acked quick-action (flag ON) ─────────────
+//
+// The featureFlags mock above pins `communityAcks: true`, so the inbox renders
+// the CoachAckBadge per row and a per-row "Mark acked" quick-action. The badge
+// state is driven by the `useCoachAckState` mock (keyed by message id) and the
+// quick-action fires the mocked `markAcked.mutate`. These three cases cover the
+// brief's inbox-integration requirements: badge renders for each state from the
+// API, tap "Mark acked" fires the hook, and the SLA chip matches the state.
+describe('v2-2 inbox ack integration — badge + Mark-acked quick-action', () => {
+  const MID = '11111111-1111-1111-1111-111111111111';
+
+  const ackEnvelope = (
+    state: 'none' | 'seen' | 'acked' | 'replied',
+    sla: 'within' | 'warning' | 'breached',
+  ) => ({
+    state,
+    seen_at: state === 'none' ? null : '2026-06-09T12:00:00.000Z',
+    acked_at:
+      state === 'acked' || state === 'replied'
+        ? '2026-06-09T12:05:00.000Z'
+        : null,
+    replied_at: state === 'replied' ? '2026-06-09T12:10:00.000Z' : null,
+    sla: {
+      sla_state: sla,
+      elapsed_ms: 1_000,
+      soft_target_ms: 24 * 60 * 60 * 1000,
+      hard_target_ms: 48 * 60 * 60 * 1000,
+    },
+  });
+
+  const seedInbox = () => {
+    mockState.inbox = {
+      data: { items: [inboxItem()], next_before: null },
+      isLoading: false,
+      isError: false,
+      isRefetching: false,
+      refetch: jest.fn(),
+    };
+  };
+
+  it('renders the ack badge per row reflecting the state from the API', () => {
+    seedInbox();
+    mockAckStateByMessage.current[MID] = ackEnvelope('acked', 'within');
+    const { getByTestId } = render(<CoachCommunityInboxScreen />);
+    expect(getByTestId(`coach-community-inbox-ack-badge-${MID}`)).toBeTruthy();
+    // The derived state pill is keyed by the API state.
+    expect(
+      getByTestId(`coach-community-inbox-ack-badge-${MID}-state-acked`),
+    ).toBeTruthy();
+  });
+
+  it('tapping Mark acked fires the ack-action hook for that message', () => {
+    seedInbox();
+    mockAckStateByMessage.current[MID] = ackEnvelope('seen', 'within');
+    const { getByTestId } = render(<CoachCommunityInboxScreen />);
+    fireEvent.press(getByTestId(`coach-community-inbox-mark-acked-${MID}`));
+    expect(mockMarkAckedMutate).toHaveBeenCalledTimes(1);
+  });
+
+  it('the SLA chip matches the state from the API (breached)', () => {
+    seedInbox();
+    mockAckStateByMessage.current[MID] = ackEnvelope('seen', 'breached');
+    const { getByTestId, queryByTestId } = render(<CoachCommunityInboxScreen />);
+    // The breached SLA chip renders; the within/warning chips do not.
+    expect(
+      getByTestId(`coach-community-inbox-ack-badge-${MID}-sla-breached`),
+    ).toBeTruthy();
+    expect(
+      queryByTestId(`coach-community-inbox-ack-badge-${MID}-sla-within`),
+    ).toBeNull();
+    expect(
+      queryByTestId(`coach-community-inbox-ack-badge-${MID}-sla-warning`),
+    ).toBeNull();
   });
 });

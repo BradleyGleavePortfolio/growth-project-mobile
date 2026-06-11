@@ -21,6 +21,7 @@ import {
   coachCommunityApi,
   CoachCommunityApiError,
   COACH_EMPTY_STATE_SURFACE_KEYS,
+  type AckStateDto,
   type CoachDashboard,
   type CoachInboxItem,
   type CoachInboxPage,
@@ -51,6 +52,13 @@ export const coachCommunityKeys = {
   flagged: () => [...coachCommunityKeys.all, 'flagged'] as const,
   emptyStates: () => [...coachCommunityKeys.all, 'emptyStates'] as const,
   post: (id: string) => [...coachCommunityKeys.all, 'post', id] as const,
+  /**
+   * v2-2 per-message ack envelope (state + SLA snapshot). Seeded from the inbox
+   * payload and updated optimistically by `useCoachAckActions`; the
+   * `CoachAckBadge` reads it so an in-flight transition reflects instantly.
+   */
+  ackState: (messageId: string) =>
+    [...coachCommunityKeys.all, 'ackState', messageId] as const,
 };
 
 // ─── Read hooks ──────────────────────────────────────────────────────────────
@@ -196,6 +204,29 @@ export function useCoachEmptyStatePayload(
     return { status: 'loading' };
   }
   return { status: 'error', kind: 'contract', retry };
+}
+
+/**
+ * Read the cached v2-2 ack envelope for a single message reactively.
+ *
+ * The envelope is not fetched on its own (the inbox payload is the source of
+ * truth); this hook subscribes to the per-message `ackState` cache slot so the
+ * `CoachAckBadge` re-renders when `useCoachAckActions` writes an optimistic or
+ * reconciled value. `enabled: false` + a no-op `queryFn` keep it a pure cache
+ * reader that never triggers a network call. Returns `undefined` until an ack
+ * value exists, which the badge renders as the weakest `none` state.
+ */
+export function useCoachAckState(
+  messageId: string,
+): AckStateDto | undefined {
+  const { data } = useQuery<AckStateDto | undefined>({
+    queryKey: coachCommunityKeys.ackState(messageId),
+    queryFn: () => undefined,
+    enabled: false,
+    staleTime: Infinity,
+    gcTime: Infinity,
+  });
+  return data;
 }
 
 /** Fetch a single post + its reply thread for the post-detail surface. */

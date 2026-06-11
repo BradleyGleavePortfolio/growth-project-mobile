@@ -44,6 +44,33 @@ export const COACH_COHORT_MEMBER_ROLES = ['client', 'coach', 'owner'] as const;
 export type CoachCohortMemberRole =
   (typeof COACH_COHORT_MEMBER_ROLES)[number];
 
+// ─── v2-2 coach ack signals (mirror backend src/community/ack/ack.dto.ts) ─────
+
+/**
+ * The four ordered ack states. Badge precedence is
+ * `replied > acked > seen > none`; the backend derives the highest reached
+ * state from the existing `coach_*_at` columns. These are COACH-SIDE-ONLY
+ * signals shown TO the client — the client can never mutate them.
+ */
+export const COACH_ACK_STATES = ['none', 'seen', 'acked', 'replied'] as const;
+export type CoachAckState = (typeof COACH_ACK_STATES)[number];
+
+/**
+ * Monotonic rank for badge precedence and to forbid backward transitions
+ * (cannot un-ack a replied message). Higher wins. Mirrors the backend
+ * `ACK_STATE_RANK`.
+ */
+export const ACK_STATE_RANK: Record<CoachAckState, number> = {
+  none: 0,
+  seen: 1,
+  acked: 2,
+  replied: 3,
+};
+
+/** The three SLA states, derived from elapsed time vs configured thresholds. */
+export const COACH_SLA_STATES = ['within', 'warning', 'breached'] as const;
+export type CoachSlaState = (typeof COACH_SLA_STATES)[number];
+
 // ─── Response schemas (mirror backend Zod DTOs) ──────────────────────────────
 
 /**
@@ -255,6 +282,55 @@ export interface CoachPostDetail {
   comments: CoachPostComment[];
 }
 
+// ─── v2-2 ack envelope schemas (mirror backend Zod DTOs exactly) ────────────
+
+/**
+ * The read-time SLA snapshot for a message: the derived state plus the inputs
+ * that produced it, so the badge can render a countdown without re-deriving
+ * the thresholds. `elapsed_ms` is time since message receipt; the soft/hard
+ * thresholds are the configured targets (env-configurable on the backend,
+ * default 24h soft / 48h hard).
+ */
+export const CoachSlaSnapshotSchema = z
+  .object({
+    sla_state: z.enum(COACH_SLA_STATES),
+    elapsed_ms: z.number().int().nonnegative(),
+    soft_target_ms: z.number().int().positive(),
+    hard_target_ms: z.number().int().positive(),
+  })
+  .passthrough();
+export type CoachSlaSnapshot = z.infer<typeof CoachSlaSnapshotSchema>;
+
+/**
+ * The ack envelope returned by every transition endpoint and (additively)
+ * attached to a message view when the flag is ON. `seen_at`/`acked_at`/
+ * `replied_at` mirror the existing `coach_*_at` columns (ISO strings or null);
+ * `state` is the derived highest reached state; `sla` is the read-time SLA
+ * snapshot.
+ */
+export const AckStateSchema = z
+  .object({
+    state: z.enum(COACH_ACK_STATES),
+    seen_at: z.string().nullable(),
+    acked_at: z.string().nullable(),
+    replied_at: z.string().nullable(),
+    sla: CoachSlaSnapshotSchema,
+  })
+  .passthrough();
+export type AckStateDto = z.infer<typeof AckStateSchema>;
+
+/**
+ * POST /community/ack/:messageId/(seen|acked|replied) response envelope.
+ * Mirrors the backend `AckTransitionResponseSchema`.
+ */
+export const AckTransitionResponseSchema = z
+  .object({
+    message_id: z.string().uuid(),
+    ack: AckStateSchema,
+  })
+  .passthrough();
+export type AckTransitionResponse = z.infer<typeof AckTransitionResponseSchema>;
+
 // ─── Typed error ─────────────────────────────────────────────────────────────
 
 /**
@@ -384,6 +460,52 @@ export const coachCommunityApi = {
         idempotentHeaders(),
       ),
     ).then(() => undefined);
+  },
+
+  /**
+   * POST /community/ack/:messageId/seen — v2-2 coach ack transition. Stamps the
+   * `seen` signal on a client message and returns the full ack envelope (state
+   * + SLA snapshot). Idempotent (R19): re-stamping is a server-side no-op that
+   * returns the existing timestamp. The acting coach is derived from the JWT;
+   * no coachId is sent. Disjoint from the v1-6 `ackInboxItem` endpoint above.
+   */
+  markCoachAckSeen(messageId: string): Promise<AckTransitionResponse> {
+    return call(AckTransitionResponseSchema, () =>
+      api.post<unknown>(
+        `/community/ack/${messageId}/seen`,
+        {},
+        idempotentHeaders(),
+      ),
+    );
+  },
+
+  /**
+   * POST /community/ack/:messageId/acked — v2-2 coach ack transition. Stamps
+   * the `acked` signal. Idempotent (R19); monotonic on the backend (cannot
+   * regress a message that has already reached `replied`).
+   */
+  markCoachAckAcked(messageId: string): Promise<AckTransitionResponse> {
+    return call(AckTransitionResponseSchema, () =>
+      api.post<unknown>(
+        `/community/ack/${messageId}/acked`,
+        {},
+        idempotentHeaders(),
+      ),
+    );
+  },
+
+  /**
+   * POST /community/ack/:messageId/replied — v2-2 coach ack transition. Stamps
+   * the strongest `replied` signal. Idempotent (R19).
+   */
+  markCoachAckReplied(messageId: string): Promise<AckTransitionResponse> {
+    return call(AckTransitionResponseSchema, () =>
+      api.post<unknown>(
+        `/community/ack/${messageId}/replied`,
+        {},
+        idempotentHeaders(),
+      ),
+    );
   },
 
   /** GET /community/coach/cohorts — the coach's cohorts (tenant-scoped). */
