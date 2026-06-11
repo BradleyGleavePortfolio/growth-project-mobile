@@ -14,6 +14,7 @@ import CommunityTabScreen from '../screens/community/CommunityTabScreen';
 import CommunityTodayScreen from '../screens/community/CommunityTodayScreen';
 import CommunitySpaceScreen from '../screens/community/CommunitySpaceScreen';
 import CommunityThreadScreen from '../screens/community/CommunityThreadScreen';
+import CommunityEventDetailScreen from '../screens/community/CommunityEventDetailScreen';
 import CommunityDmListScreen from '../screens/community/CommunityDmListScreen';
 import CommunityDmThreadScreen from '../screens/community/CommunityDmThreadScreen';
 import CommunityComposerScreen from '../screens/community/CommunityComposerScreen';
@@ -33,6 +34,7 @@ export default function CommunityNavigator(): React.ReactElement {
       <CommunityStack.Screen name="CommunityToday" component={CommunityTodayScreen} />
       <CommunityStack.Screen name="CommunitySpace" component={CommunitySpaceScreen} />
       <CommunityStack.Screen name="CommunityThread" component={CommunityThreadScreen} />
+      <CommunityStack.Screen name="CommunityEventDetail" component={CommunityEventDetailScreen} />
       <CommunityStack.Screen name="CommunityDmList" component={CommunityDmListScreen} />
       <CommunityStack.Screen name="CommunityDmThread" component={CommunityDmThreadScreen} />
       <CommunityStack.Screen name="CommunityComposer" component={CommunityComposerScreen} />
