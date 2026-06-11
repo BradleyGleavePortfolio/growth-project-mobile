@@ -1,7 +1,7 @@
 /**
  * CoachCommunityNavigator — the v1-6 Coach Community sub-stack. Registers the
- * six CoachCommunity screens (Home, Inbox, Cohorts, CohortDetail, PostDetail,
- * Moderation) against the typed CoachCommunityStackParamList.
+ * CoachCommunity screens (Home, Inbox, Cohorts, CohortDetail, PostDetail,
+ * MessageDetail, Moderation) against the typed CoachCommunityStackParamList.
  *
  * IMPORTANT (flag posture): this navigator is only ever MOUNTED by
  * CoachNavigator when `featureFlags.coachCommunity` is true. When the flag is
@@ -17,6 +17,7 @@ import CoachCommunityInboxScreen from '../screens/community/CoachCommunityInboxS
 import CoachCommunityCohortsScreen from '../screens/community/CoachCommunityCohortsScreen';
 import CoachCommunityCohortDetailScreen from '../screens/community/CoachCommunityCohortDetailScreen';
 import CoachCommunityPostDetailScreen from '../screens/community/CoachCommunityPostDetailScreen';
+import CoachCommunityMessageDetailScreen from '../screens/community/CoachCommunityMessageDetailScreen';
 import CoachCommunityModerationScreen from '../screens/community/CoachCommunityModerationScreen';
 import type { CoachCommunityStackParamList } from '../screens/community/coachCommunityNavTypes';
 
@@ -57,6 +58,11 @@ export default function CoachCommunityNavigator(): React.ReactElement {
         name="CoachCommunityPostDetail"
         component={CoachCommunityPostDetailScreen}
         options={{ title: 'Post' }}
+      />
+      <CoachCommunityStack.Screen
+        name="CoachCommunityMessageDetail"
+        component={CoachCommunityMessageDetailScreen}
+        options={{ title: 'Message' }}
       />
       <CoachCommunityStack.Screen
         name="CoachCommunityModeration"
