@@ -185,6 +185,23 @@ export const featureFlags = {
   //
   // env: EXPO_PUBLIC_FF_COMMUNITY_CHALLENGES
   communityChallenges: readFlag('EXPO_PUBLIC_FF_COMMUNITY_CHALLENGES', false),
+  // ─── MWB-4 — workout-builder autosave (Google-Docs-style save) ───────────
+  // The MWB-3 backend (PATCH /workout-plans/:planId/autosave + POST .../undo,
+  // FEATURE_MWB_AUTOSAVE_UNDO) is merged; MWB-4 is the mobile half: a reusable
+  // useAutosave hook, an AsyncStorage offline mirror that lets an edit survive
+  // an app kill and replay on reconnect, a strict-Zod autosave API layer, and a
+  // calm save-state header pill on the coach workout builder.
+  //
+  // Defaults OFF UNCONDITIONALLY (not `isDev`). When this flag is false the
+  // CoachWorkoutBuilderScreen MUST behave byte-identically to its legacy
+  // explicit-Save (PUT replace-all) form: zero autosave network calls, zero
+  // offline-mirror writes, and no save-state pill rendered. The backend gate
+  // (FEATURE_MWB_AUTOSAVE_UNDO) is ALSO off in prod and returns 404 for the
+  // autosave route while dark, so even a dev build that flips this flag on
+  // degrades to a calm offline/`gone` state rather than an error banner.
+  //
+  // env: EXPO_PUBLIC_FF_MWB_AUTOSAVE
+  mwbAutosave: readFlag('EXPO_PUBLIC_FF_MWB_AUTOSAVE', false),
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;

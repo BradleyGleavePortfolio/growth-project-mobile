@@ -19,9 +19,19 @@
  * resolves to forest (#2C4A36). Oxblood (#4A0404) is reserved for the
  * Finance pillar per src/theme/tokens.ts line 48. PR #130's coach
  * screens follow the same convention; we mirror it here.
+ *
+ * MWB-4 (autosave, flag `EXPO_PUBLIC_FF_MWB_AUTOSAVE`, default OFF): when the
+ * flag is ON the screen ALSO mounts a Google-Docs-style autosave — a debounced
+ * op-diff (workoutBuilderAutosaveDiff) is streamed to the MWB-3 backend through
+ * useAutosave, an offline mirror lets an in-flight edit survive an app kill, a
+ * 409 rebases by refetching the plan, and a calm save-state pill rides in the
+ * header. When the flag is OFF the autosave hook is mounted with `enabled:
+ * false` (fully inert — no timers, no network, no mirror) and the screen behaves
+ * byte-identically to its legacy explicit-Save (PUT replace-all) form. The
+ * explicit Save button stays in BOTH modes as the big-save fallback.
  */
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import {
   Alert,
@@ -49,17 +59,49 @@ import { useExerciseSearch } from '../../hooks/useExerciseLibrary';
 import { spacing, typography } from '../../theme/tokens';
 import type { SemanticTokens } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
+import { featureFlags } from '../../config/featureFlags';
+import { useAutosave } from '../../hooks/useAutosave';
+import AutosaveStatusPill from '../../components/workout/AutosaveStatusPill';
+import {
+  diffWorkingCopy,
+  type WorkoutBuilderWorkingCopy,
+} from './workoutBuilderAutosaveDiff';
 
 type RouteParam = { planId?: string };
+
+/**
+ * Placeholder lock token + base index used for the FIRST autosave attempt.
+ *
+ * The backend lock_token is an HMAC of (planId, version, head_revision_id)
+ * computed with a server-only secret, and `GET /workout-plans/:id` does NOT
+ * expose version / head_revision_index / lock_token (the mobile WorkoutPlan
+ * shape has none of those fields). The client therefore CANNOT derive the real
+ * token up front. By design the first autosave 409s with `autosave_lock_stale`
+ * carrying the correct fresh lock_token + head_revision_index; the hook
+ * fast-forwards and the next batch lands. Starting from a 16-zero token + index
+ * 0 makes that bootstrap deterministic. (Documented as a deviation in
+ * MWB-4_BUILDER_REPORT.md.)
+ */
+const AUTOSAVE_BOOTSTRAP_LOCK_TOKEN = '0000000000000000';
+const AUTOSAVE_BOOTSTRAP_BASE_INDEX = 0;
 
 const WORKOUT_TYPES: WorkoutType[] = ['strength', 'cardio', 'mobility'];
 
 interface DraftExerciseRow {
+  /**
+   * Server-assigned row uuid for a row the backend already persisted; undefined
+   * for a row added on-device this session. Used by the autosave diff to emit
+   * remove_exercise / reorder ops (which require a uuid) and to upsert with the
+   * right id. The legacy explicit-Save (PUT replace-all) path ignores it.
+   */
+  row_id?: string;
   exercise_external_id: string;
   display_name: string;
   sets: number;
   reps_or_duration_seconds: number;
   rest_seconds: number | null;
+  weight_lbs: number | null;
+  superset_group_id: string | null;
   notes: string | null;
 }
 
@@ -72,7 +114,7 @@ export default function CoachWorkoutBuilderScreen() {
   const { semanticColors: sc } = useTheme();
   const styles = useMemo(() => makeStyles(sc), [sc]);
 
-  const { data: existingPlan } = useWorkoutPlan(planId);
+  const { data: existingPlan, refetch: refetchPlan } = useWorkoutPlan(planId);
   const createMut = useCreateWorkoutPlan();
   const updateMut = useUpdateWorkoutPlan();
   const setExercisesMut = useSetWorkoutExercises();
@@ -88,11 +130,14 @@ export default function CoachWorkoutBuilderScreen() {
   );
   const [rows, setRows] = useState<DraftExerciseRow[]>(
     (existingPlan?.exercises ?? []).map((e) => ({
+      row_id: e.id,
       exercise_external_id: e.exercise_external_id,
       display_name: e.exercise_external_id,
       sets: e.sets,
       reps_or_duration_seconds: e.reps_or_duration_seconds,
       rest_seconds: e.rest_seconds,
+      weight_lbs: e.weight_lbs,
+      superset_group_id: e.superset_group_id,
       notes: e.notes,
     })),
   );
@@ -109,11 +154,16 @@ export default function CoachWorkoutBuilderScreen() {
     setRows((cur) => [
       ...cur,
       {
+        // No row_id: a brand-new on-device row. The autosave diff emits an
+        // upsert_exercise WITHOUT a row_id (the server assigns one on insert,
+        // which the next refetch folds back in).
         exercise_external_id: ex.id,
         display_name: ex.name,
         sets: 3,
         reps_or_duration_seconds: 10,
         rest_seconds: 60,
+        weight_lbs: null,
+        superset_group_id: null,
         notes: null,
       },
     ]);
@@ -144,6 +194,90 @@ export default function CoachWorkoutBuilderScreen() {
     },
     [],
   );
+
+  // ─── MWB-4 autosave wiring (flag-gated) ────────────────────────────────────
+  // The hook is ALWAYS mounted (hooks cannot be conditional), but `enabled` is
+  // driven by the flag AND the plan-exists precondition. With `enabled: false`
+  // the hook is fully inert — no timers, no network, no mirror writes — so a
+  // flag-off build does ZERO autosave work and the screen is byte-identical to
+  // its legacy form. Autosave only runs when EDITING an existing plan: a brand
+  // new (not-yet-created) plan has no planId to PATCH, so it stays on the
+  // explicit-Create path until first save.
+  const autosaveEnabled = featureFlags.mwbAutosave && isEditing && Boolean(planId);
+
+  // The working copy the diff runs over. Memoised on the editable fields so an
+  // unrelated re-render does not churn a new reference (which would re-arm the
+  // debounce). plan-meta duration is NOT in the autosave meta (the backend
+  // plan_meta op set covers name/type/duration_weeks/week/day, not the legacy
+  // duration_estimate_minutes), so duration edits stay on the explicit-Save
+  // path; name + type + the row set are what autosave streams.
+  const workingCopy = useMemo<WorkoutBuilderWorkingCopy>(
+    () => ({
+      meta: { name, type },
+      rows: rows.map((r) => ({
+        rowId: r.row_id,
+        exerciseExternalId: r.exercise_external_id,
+        sets: r.sets,
+        repsOrDurationSeconds: r.reps_or_duration_seconds,
+        restSeconds: r.rest_seconds,
+        weightLbs: r.weight_lbs,
+        supersetGroupId: r.superset_group_id,
+        notes: r.notes,
+      })),
+    }),
+    [name, type, rows],
+  );
+
+  // On a 409 the plan moved ahead (a replay of an already-applied batch, or an
+  // edit from another device). The hook has already fast-forwarded its lock
+  // token + index from the conflict body; we additionally refetch the plan so
+  // the local rows re-baseline against the server head. Single-editor model:
+  // the conflict body carries NO serverOps, so a refetch is the rebase.
+  const onAutosaveConflict = useCallback(() => {
+    if (!autosaveEnabled) return;
+    void refetchPlan();
+  }, [autosaveEnabled, refetchPlan]);
+
+  const autosave = useAutosave<WorkoutBuilderWorkingCopy>({
+    planId: planId ?? '',
+    value: workingCopy,
+    diff: diffWorkingCopy,
+    baseRevisionIndex: AUTOSAVE_BOOTSTRAP_BASE_INDEX,
+    lockToken: AUTOSAVE_BOOTSTRAP_LOCK_TOKEN,
+    enabled: autosaveEnabled,
+    onConflict: onAutosaveConflict,
+  });
+
+  // Re-baseline the local rows when a refetch (post-409, or initial load)
+  // brings in fresh server rows WITH their ids — but only while autosave is on
+  // and only when the user has no in-flight pending edit, so we never clobber a
+  // coach mid-type. This adopts server-assigned row_ids for rows that were
+  // inserted on-device (which arrived id-less) so subsequent reorder/remove ops
+  // can name them.
+  useEffect(() => {
+    if (!autosaveEnabled) return;
+    if (autosave.hasPending) return;
+    if (!existingPlan) return;
+    setRows(
+      existingPlan.exercises.map((e) => ({
+        row_id: e.id,
+        exercise_external_id: e.exercise_external_id,
+        display_name: e.exercise_external_id,
+        sets: e.sets,
+        reps_or_duration_seconds: e.reps_or_duration_seconds,
+        rest_seconds: e.rest_seconds,
+        weight_lbs: e.weight_lbs,
+        superset_group_id: e.superset_group_id,
+        notes: e.notes,
+      })),
+    );
+    // Re-baseline only when the server's exercise set identity changes, not on
+    // every render — keyed on the joined row-id list + count.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    autosaveEnabled,
+    existingPlan?.exercises.map((e) => e.id).join(','),
+  ]);
 
   const canSave =
     name.trim().length > 0 &&
@@ -223,9 +357,24 @@ export default function CoachWorkoutBuilderScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={[typography.h2, { color: sc.textPrimary }]}>
-          {isEditing ? 'Edit workout plan' : 'New workout plan'}
-        </Text>
+        <View style={styles.headerRow}>
+          <Text style={[typography.h2, { color: sc.textPrimary }]}>
+            {isEditing ? 'Edit workout plan' : 'New workout plan'}
+          </Text>
+          {/* Save-state pill: only when autosave is active. Flag-off (or a
+              brand-new plan) renders NOTHING here — zero UI residue. Tapping a
+              recoverable (offline/conflict) pill retries the flush now. */}
+          {autosaveEnabled ? (
+            <AutosaveStatusPill
+              testID="mwb-autosave-pill"
+              status={autosave.status}
+              lastSavedAt={autosave.lastSavedAt}
+              onPress={() => {
+                void autosave.flush();
+              }}
+            />
+          ) : null}
+        </View>
 
         <Text style={[typography.caption, styles.label, { color: sc.textMuted }]}>
           Plan name
@@ -450,6 +599,13 @@ function makeStyles(sc: SemanticTokens) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: sc.bgPrimary },
     content: { padding: spacing.lg, paddingBottom: spacing["2xl"] },
+    headerRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      gap: spacing.sm,
+      marginBottom: spacing.xs,
+    },
     label: { marginTop: spacing.md, marginBottom: spacing.xs },
     input: {
       borderWidth: 1,
