@@ -29,9 +29,11 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/useTheme';
 import { spacing, radius } from '../../theme/tokens';
 import HapticPressable from '../../components/HapticPressable';
+import { trackAckDetailOpened } from '../../components/community/coach/ackTelemetry';
 import {
   CoachRomanEmptyState,
   CoachErrorState,
@@ -46,14 +48,18 @@ import {
   useCoachEmptyStatePayload,
   coachCommunityKeys,
 } from '../../hooks/useCoachCommunity';
-import { useCoachAckActions } from '../../hooks/useCoachAckActions';
+import {
+  useCoachAckActions,
+  ackMutationKey,
+} from '../../hooks/useCoachAckActions';
 import { featureFlags } from '../../config/featureFlags';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useIsMutating } from '@tanstack/react-query';
 import { AckStateSchema } from '../../api/coachCommunityApi';
 import type {
   CoachInboxItem,
   AckStateDto,
 } from '../../api/coachCommunityApi';
+import type { CoachCommunityNav } from './coachCommunityNavTypes';
 
 // v2-2 kill switch: when OFF the inbox renders exactly as the v1-6 surface
 // (no ack badge, no "Mark acked" quick-action). Read once at module scope —
@@ -62,6 +68,7 @@ const ACKS_ENABLED = featureFlags.communityAcks;
 
 export default function CoachCommunityInboxScreen(): React.ReactElement {
   const { semanticColors } = useTheme();
+  const navigation = useNavigation<CoachCommunityNav>();
   const inbox = useCoachInbox();
   const ack = useAckInboxItem();
   const emptyState = useCoachEmptyStatePayload('coach_community_inbox_empty');
@@ -75,27 +82,50 @@ export default function CoachCommunityInboxScreen(): React.ReactElement {
   // useCallback deps below (and the FlatList data prop).
   const items = useMemo(() => inbox.data?.items ?? [], [inbox.data?.items]);
 
-  // v2-2: seed the per-message ack cache from any ack envelope the backend
-  // attached to an inbox row (additive `ack` field, present only when
-  // FEATURE_COMMUNITY_ACKS is on server-side). The inbox payload is the source
-  // of truth; this only PRIMES the cache so the badge has a value before any
-  // optimistic action. Validated at the boundary so a drifted shape is dropped
-  // rather than fed into the badge. No-op when the flag is off or no ack is
-  // present. We never overwrite a value already in the cache (an in-flight
-  // optimistic state must win until it reconciles).
+  // v2-2 (R1 fixer, M-P1d): how many ack mutations are in flight RIGHT NOW
+  // (across all rows). A nonzero count tells the reconcile effect below to
+  // narrow, per-message, which cache entries it must NOT clobber (those with a
+  // pending optimistic transition). This `useIsMutating` SUBSCRIPTION also
+  // ensures the effect re-runs whenever the in-flight set changes (e.g. a
+  // mutation settles) so a just-reconciled row picks up fresh backend state.
+  // The ack mutation key is `['coachCommunity','ackState',<id>,'mutation']`
+  // (see `ackMutationKey`), so index 1 === 'ackState' identifies our family.
+  const pendingAckMutations = useIsMutating({
+    predicate: (m) =>
+      Array.isArray(m.options.mutationKey) &&
+      (m.options.mutationKey as unknown[])[1] === 'ackState',
+  });
+
+  // v2-2 (R1 fixer, M-P1d): reconcile the per-message ack cache from the inbox
+  // payload's `ack` envelope (additive, present only when FEATURE_COMMUNITY_ACKS
+  // is on server-side). The inbox payload is the SOURCE OF TRUTH, so on every
+  // refetch (pull-to-refresh, refocus) we OVERWRITE the cached badge state with
+  // the freshest backend value — EXCEPT for a message that currently has an
+  // optimistic ack mutation in flight, whose optimistic state must win until it
+  // reconciles on its own onSuccess/onError. (The prior implementation skipped
+  // any entry already in cache, so a pull-to-refresh silently ignored newer
+  // backend state — stale badges that never caught up.) Validated at the
+  // boundary so a drifted shape is dropped rather than fed into the badge.
   useEffect(() => {
     if (!ACKS_ENABLED) return;
     for (const item of items) {
       const raw = (item as { ack?: unknown }).ack;
       if (raw == null) continue;
+      // Hold off if an optimistic transition is in flight for THIS message:
+      // its cache entry is owned by the mutation lifecycle until it settles.
+      if (
+        pendingAckMutations > 0 &&
+        qc.isMutating({ mutationKey: ackMutationKey(item.id) }) > 0
+      ) {
+        continue;
+      }
       const key = coachCommunityKeys.ackState(item.id);
-      if (qc.getQueryData<AckStateDto>(key) != null) continue;
       const parsed = AckStateSchema.safeParse(raw);
       if (parsed.success) {
         qc.setQueryData<AckStateDto>(key, parsed.data);
       }
     }
-  }, [items, qc]);
+  }, [items, qc, pendingAckMutations]);
   const isEmpty = !inbox.isLoading && !inbox.isError && items.length === 0;
 
   const onAck = useCallback(
@@ -103,6 +133,27 @@ export default function CoachCommunityInboxScreen(): React.ReactElement {
       ack.mutate(id);
     },
     [ack],
+  );
+
+  // v2-2 (R1 fixer, M-NEW): open the full message-detail view for a row. A
+  // normal tap (not in multi-select mode) navigates to the message thread so
+  // the coach can read the body and reply; opening the detail is itself a
+  // telemetry-worthy ack-funnel event. The long-press shortcut (mark-thread-
+  // read) is preserved separately.
+  const onOpenDetail = useCallback(
+    (id: string) => {
+      // Report the row's current ack state at open-time (derived from the inbox
+      // envelope when present, else `none`) so the detail-opened funnel event
+      // can be segmented by where the message sat in its lifecycle.
+      const row = items.find((i) => i.id === id);
+      const rawAck = (row as { ack?: unknown } | undefined)?.ack;
+      const parsed = rawAck == null ? null : AckStateSchema.safeParse(rawAck);
+      const state: AckStateDto['state'] =
+        parsed && parsed.success ? parsed.data.state : 'none';
+      trackAckDetailOpened({ messageId: id, state });
+      navigation.navigate('CoachCommunityMessageDetail', { messageId: id });
+    },
+    [navigation, items],
   );
 
   // Long-press: mark all visible items in the same cohort thread as read.
@@ -150,6 +201,7 @@ export default function CoachCommunityInboxScreen(): React.ReactElement {
         accent={semanticColors.accent}
         onAccent={semanticColors.textOnAccent}
         onAck={onAck}
+        onOpenDetail={onOpenDetail}
         onMarkThreadRead={onMarkThreadRead}
         onToggleSelected={toggleRowSelected}
       />
@@ -159,6 +211,7 @@ export default function CoachCommunityInboxScreen(): React.ReactElement {
       selecting,
       selected,
       onAck,
+      onOpenDetail,
       onMarkThreadRead,
       toggleRowSelected,
     ],
@@ -304,6 +357,7 @@ function InboxRow({
   accent,
   onAccent,
   onAck,
+  onOpenDetail,
   onMarkThreadRead,
   onToggleSelected,
 }: {
@@ -317,20 +371,23 @@ function InboxRow({
   accent: string;
   onAccent: string;
   onAck: (id: string) => void;
+  onOpenDetail: (id: string) => void;
   onMarkThreadRead: (item: CoachInboxItem) => void;
   onToggleSelected: (id: string) => void;
 }): React.ReactElement {
   return (
     <HapticPressable
       intent="light"
-      onPress={selecting ? () => onToggleSelected(item.id) : undefined}
+      onPress={
+        selecting ? () => onToggleSelected(item.id) : () => onOpenDetail(item.id)
+      }
       onLongPress={selecting ? undefined : () => onMarkThreadRead(item)}
       accessibilityRole={selecting ? 'checkbox' : 'button'}
       accessibilityLabel={`${item.client_name} in ${item.cohort_name}: ${item.snippet}`}
       accessibilityHint={
         selecting
           ? 'Tap to select this item'
-          : 'Long press to mark this cohort thread as read'
+          : 'Tap to open this message; long press to mark this cohort thread as read'
       }
       accessibilityState={selecting ? { checked } : undefined}
       testID={`coach-community-inbox-row-${item.id}`}
@@ -386,7 +443,16 @@ function InboxRow({
           <CoachAckRow item={item} />
         ) : null}
       </View>
-      {selecting ? null : (
+      {/*
+       * v2-2 (R1 fixer, M-P2 copy collision): the legacy v1-6 trailing "Ack"
+       * CTA is suppressed when EXPO_PUBLIC_FF_COMMUNITY_ACKS is on. With the
+       * flag on, the in-row CoachAckRow renders a state-aware "Mark acked"
+       * quick-action (which also disables once acked/replied) plus the ack
+       * badge — two competing "acknowledge" affordances on one row was the
+       * collision the UX audit flagged. When the flag is OFF the v1-6 surface
+       * is preserved byte-for-byte, so the legacy CTA remains.
+       */}
+      {selecting || ACKS_ENABLED ? null : (
         <HapticPressable
           intent="success"
           onPress={() => onAck(item.id)}
