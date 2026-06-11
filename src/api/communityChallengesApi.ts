@@ -36,39 +36,39 @@ export type CommunityChallengeStatus =
 
 export const ChallengeSchema = z
   .object({
-    id: z.string(),
-    workspace_id: z.string(),
-    cohort_id: z.string().nullable(),
-    created_by_user_id: z.string(),
+    id: z.string().uuid(),
+    workspace_id: z.string().uuid(),
+    cohort_id: z.string().uuid().nullable(),
+    created_by_user_id: z.string().uuid(),
     title: z.string(),
     description: z.string().nullable(),
     status: z.enum(COMMUNITY_CHALLENGE_STATUSES),
-    starts_at: z.string().nullable(),
-    ends_at: z.string().nullable(),
+    starts_at: z.string().datetime().nullable(),
+    ends_at: z.string().datetime().nullable(),
     metric_key: z.string().nullable(),
     target_value: z.number().nullable(),
     unit: z.string().nullable(),
     leaderboard_enabled: z.boolean(),
-    created_at: z.string(),
-    updated_at: z.string(),
+    created_at: z.string().datetime(),
+    updated_at: z.string().datetime(),
     archived: z.boolean(),
   })
-  .passthrough();
+  .strict();
 export type CommunityChallenge = z.infer<typeof ChallengeSchema>;
 
 export const ParticipationSchema = z
   .object({
-    challenge_id: z.string(),
-    user_id: z.string(),
+    challenge_id: z.string().uuid(),
+    user_id: z.string().uuid(),
     progress_value: z.number(),
     target_value: z.number().nullable(),
     progress_fraction: z.number().nullable(),
     completed: z.boolean(),
-    completed_at: z.string().nullable(),
-    last_logged_at: z.string().nullable(),
+    completed_at: z.string().datetime().nullable(),
+    last_logged_at: z.string().datetime().nullable(),
     leaderboard_opted_in: z.boolean(),
   })
-  .passthrough();
+  .strict();
 export type CommunityChallengeParticipation = z.infer<
   typeof ParticipationSchema
 >;
@@ -78,25 +78,25 @@ const ChallengeResponseSchema = z
     challenge: ChallengeSchema,
     participation: ParticipationSchema.nullable(),
   })
-  .passthrough();
+  .strict();
 export type CommunityChallengeDetail = z.infer<typeof ChallengeResponseSchema>;
 
 const ChallengeListResponseSchema = z
   .object({ challenges: z.array(ChallengeSchema) })
-  .passthrough();
+  .strict();
 
 const ParticipationResponseSchema = z
   .object({ participation: ParticipationSchema })
-  .passthrough();
+  .strict();
 
 export const LeaderboardRowSchema = z
   .object({
-    user_id: z.string(),
-    rank: z.number(),
+    user_id: z.string().uuid(),
+    rank: z.number().int().positive(),
     progress_value: z.number(),
     is_self: z.boolean(),
   })
-  .passthrough();
+  .strict();
 export type CommunityChallengeLeaderboardRow = z.infer<
   typeof LeaderboardRowSchema
 >;
@@ -107,35 +107,78 @@ const LeaderboardResponseSchema = z
     opted_in: z.boolean(),
     rows: z.array(LeaderboardRowSchema),
   })
-  .passthrough();
+  .strict();
 export type CommunityChallengeLeaderboard = z.infer<
   typeof LeaderboardResponseSchema
 >;
 
 export const ChallengeCommentSchema = z
   .object({
-    id: z.string(),
-    challenge_id: z.string(),
-    author_user_id: z.string(),
+    id: z.string().uuid(),
+    challenge_id: z.string().uuid(),
+    author_user_id: z.string().uuid(),
     body: z.string(),
-    created_at: z.string(),
+    created_at: z.string().datetime(),
   })
-  .passthrough();
+  .strict();
 export type CommunityChallengeComment = z.infer<typeof ChallengeCommentSchema>;
 
 const ChallengeCommentListResponseSchema = z
   .object({ comments: z.array(ChallengeCommentSchema) })
-  .passthrough();
+  .strict();
 
 const ChallengeCommentResponseSchema = z
   .object({ comment: ChallengeCommentSchema })
-  .passthrough();
+  .strict();
+
+// ─── Roman empty-state payload (operator-locked face+voice contract) ──────────
+//
+// The challenge comments empty surface renders OPERATOR-LOCKED Roman copy that
+// is composed on the BACKEND (the VoicePolicy maps) and delivered as a payload —
+// it is NOT sourced from a local `romanVoice.ts` constant on the client (gate 9
+// / FACE+VOICE: local empty-state copy is a P0). The four contract fields mirror
+// the backend RomanCopyPayload exactly (see
+// growth-project-backend coach-empty-states.dto.ts: `text`, `avatar_crop`,
+// `surface_key`, `voice_variant`). The `surface_key` for this surface is
+// `challenge_comments_empty`. The payload is validated strictly at the boundary;
+// a missing/drifted payload throws a `contract` error so the screen can fall to
+// an HONEST loading/error state rather than a local copy fallback.
+
+export const ChallengeAvatarCropSchema = z.enum(['monogram', 'smile', 'neutral']);
+export type ChallengeAvatarCrop = z.infer<typeof ChallengeAvatarCropSchema>;
+
+export const ChallengeVoiceVariantSchema = z.enum(['legacy', 'roman_v2']);
+export type ChallengeVoiceVariant = z.infer<typeof ChallengeVoiceVariantSchema>;
+
+export const ChallengeEmptyStateSurfaceKeySchema = z.enum([
+  'challenge_comments_empty',
+]);
+export type ChallengeEmptyStateSurfaceKey = z.infer<
+  typeof ChallengeEmptyStateSurfaceKeySchema
+>;
+
+export const ChallengeEmptyStatePayloadSchema = z
+  .object({
+    text: z.string().min(1),
+    avatar_crop: ChallengeAvatarCropSchema,
+    surface_key: ChallengeEmptyStateSurfaceKeySchema,
+    voice_variant: ChallengeVoiceVariantSchema,
+  })
+  .strict();
+export type ChallengeEmptyStatePayload = z.infer<
+  typeof ChallengeEmptyStatePayloadSchema
+>;
+
+const ChallengeCommentsEmptyStateResponseSchema = z
+  .object({ empty_state: ChallengeEmptyStatePayloadSchema })
+  .strict();
 
 // ─── Transport helper (mirrors communityApi.call) ─────────────────────────────
 
 function classify(status: number): CommunityApiError['kind'] {
   if (status === 401) return 'unauthorized';
   if (status === 403) return 'forbidden';
+  if (status === 409) return 'conflict';
   if (status === 410) return 'gone';
   if (status >= 500) return 'server';
   if (status === 0) return 'network';
@@ -261,6 +304,22 @@ export const communityChallengesApi = {
     return call(ChallengeCommentListResponseSchema, () =>
       api.get<unknown>(`/community/challenges/${challengeId}/comments`),
     ).then((r) => r.comments);
+  },
+
+  /**
+   * GET /community/challenges/:challengeId/comments/empty-state — the
+   * operator-locked Roman copy payload for the challenge comments empty surface.
+   * Strictly validated; a drifted/absent payload throws `contract` so the screen
+   * renders an honest error state and NEVER falls back to local copy.
+   */
+  getCommentsEmptyState(
+    challengeId: string,
+  ): Promise<ChallengeEmptyStatePayload> {
+    return call(ChallengeCommentsEmptyStateResponseSchema, () =>
+      api.get<unknown>(
+        `/community/challenges/${challengeId}/comments/empty-state`,
+      ),
+    ).then((r) => r.empty_state);
   },
 
   /** POST /community/challenges/:challengeId/comments — encouragement. */
