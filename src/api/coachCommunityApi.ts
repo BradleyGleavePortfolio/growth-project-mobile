@@ -331,6 +331,93 @@ export const AckTransitionResponseSchema = z
   .passthrough();
 export type AckTransitionResponse = z.infer<typeof AckTransitionResponseSchema>;
 
+// ─── v2-2 message-detail view (mirror backend community-message.dto.ts) ──────
+
+/**
+ * The FLAT coach ack envelope attached to a message VIEW (GET
+ * /community/messages/:id and the cohort list) when FEATURE_COMMUNITY_ACKS is
+ * on. This is DELIBERATELY a different, narrower shape than the transition /
+ * inbox `AckStateDto` (which carries a derived `state` + a full `sla`
+ * snapshot): the message view emits the raw `coach_*_at` timestamps plus the
+ * derived `sla_state` only. `deriveAckStateFromEnvelope` below lifts this flat
+ * shape into the full `AckStateDto` the CoachAckBadge consumes.
+ */
+export const MessageAckEnvelopeSchema = z
+  .object({
+    seen_at: z.string().nullable(),
+    acked_at: z.string().nullable(),
+    replied_at: z.string().nullable(),
+    sla_state: z.enum(COACH_SLA_STATES),
+  })
+  .passthrough();
+export type MessageAckEnvelope = z.infer<typeof MessageAckEnvelopeSchema>;
+
+/**
+ * A single cohort message as returned by GET /community/messages/:id. Mirrors
+ * the backend `CommunityMessageSchema`. The `ack` envelope is OPTIONAL (absent
+ * when the flag is off); `plan_context` is left as a passthrough unknown here
+ * because the message-detail surface does not render it (kept additive-safe).
+ */
+export const CoachMessageSchema = z
+  .object({
+    id: z.string().uuid(),
+    cohort_id: z.string().uuid().nullable(),
+    sender_user_id: z.string().uuid(),
+    body: z.string().nullable(),
+    kind: z.enum(['text', 'voice', 'system']),
+    created_at: z.string(),
+    updated_at: z.string(),
+    edited: z.boolean(),
+    deleted: z.boolean(),
+    ack: MessageAckEnvelopeSchema.optional(),
+  })
+  .passthrough();
+export type CoachMessage = z.infer<typeof CoachMessageSchema>;
+
+/** GET /community/messages/:id — `{ message }` envelope. */
+export const CoachMessageResponseSchema = z
+  .object({ message: CoachMessageSchema })
+  .passthrough();
+export type CoachMessageResponse = z.infer<typeof CoachMessageResponseSchema>;
+
+/**
+ * Lift the FLAT message-view ack envelope into the full `AckStateDto` the
+ * CoachAckBadge consumes. The message view never sends a derived `state` (only
+ * the raw timestamps), so we derive the highest-reached state with the SAME
+ * precedence the backend uses (`replied > acked > seen > none`) and synthesise
+ * a minimal SLA snapshot from `sla_state` (the message view omits the elapsed /
+ * threshold inputs, which the badge does not render). Returns `null` when there
+ * is no envelope (flag off / un-stamped) so the badge falls back to `none`.
+ */
+export function deriveAckStateFromEnvelope(
+  env: MessageAckEnvelope | null | undefined,
+): AckStateDto | null {
+  if (env == null) return null;
+  const state: CoachAckState = env.replied_at
+    ? 'replied'
+    : env.acked_at
+      ? 'acked'
+      : env.seen_at
+        ? 'seen'
+        : 'none';
+  return {
+    state,
+    seen_at: env.seen_at,
+    acked_at: env.acked_at,
+    replied_at: env.replied_at,
+    // The flat view does not carry elapsed/threshold inputs; the badge only
+    // reads `sla.sla_state`, so a minimal snapshot is contract-sufficient. The
+    // thresholds mirror the backend defaults (24h soft / 48h hard) purely so
+    // the synthesised snapshot is internally coherent if ever inspected.
+    sla: {
+      sla_state: env.sla_state,
+      elapsed_ms: 0,
+      soft_target_ms: 24 * 60 * 60 * 1000,
+      hard_target_ms: 48 * 60 * 60 * 1000,
+    },
+  };
+}
+
 // ─── Typed error ─────────────────────────────────────────────────────────────
 
 /**
@@ -601,6 +688,19 @@ export const coachCommunityApi = {
       () => api.get<unknown>(`/community/posts/${postId}/comments`),
     ).then((r) => r.comments);
     return { post, comments };
+  },
+
+  /**
+   * GET /community/messages/:id — the single cohort-message view for the coach
+   * message-detail surface. Returns the message plus (when FEATURE_COMMUNITY_ACKS
+   * is on) the FLAT coach ack envelope. Zod-validated at the wire boundary; the
+   * detail screen lifts the flat envelope into the full badge shape via
+   * `deriveAckStateFromEnvelope`.
+   */
+  getCoachMessageDetail(messageId: string): Promise<CoachMessage> {
+    return call(CoachMessageResponseSchema, () =>
+      api.get<unknown>(`/community/messages/${messageId}`),
+    ).then((r) => r.message);
   },
 
   /**
