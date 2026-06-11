@@ -24,6 +24,8 @@ import CommunityEventDetailScreen from '../screens/community/CommunityEventDetai
 import CommunityDmListScreen from '../screens/community/CommunityDmListScreen';
 import CommunityDmThreadScreen from '../screens/community/CommunityDmThreadScreen';
 import CommunityComposerScreen from '../screens/community/CommunityComposerScreen';
+import CommunityChallengeDetailScreen from '../screens/community/CommunityChallengeDetailScreen';
+import { featureFlags } from '../config/featureFlags';
 import type { CommunityStackParamList } from '../screens/community/communityNavTypes';
 
 const CommunityStack = createNativeStackNavigator<CommunityStackParamList>();
@@ -46,6 +48,12 @@ export default function CommunityNavigator(): React.ReactElement {
       <CommunityStack.Screen name="CommunityDmList" component={CommunityDmListScreen} />
       <CommunityStack.Screen name="CommunityDmThread" component={CommunityDmThreadScreen} />
       <CommunityStack.Screen name="CommunityComposer" component={CommunityComposerScreen} />
+      {featureFlags.communityChallenges ? (
+        <CommunityStack.Screen
+          name="CommunityChallengeDetail"
+          component={CommunityChallengeDetailScreen}
+        />
+      ) : null}
     </CommunityStack.Navigator>
   );
 }

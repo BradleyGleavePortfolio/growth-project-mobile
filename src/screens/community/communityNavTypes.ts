@@ -30,6 +30,8 @@ export type CommunityStackParamList = {
     | { mode: 'post' }
     | { mode: 'dm'; recipientId: string }
     | undefined;
+  /** Single challenge detail (v3-1). Registered only behind communityChallenges. */
+  CommunityChallengeDetail: { challengeId: string };
 };
 
 /** Loosely-typed nav prop used by the screens (matches the codebase pattern). */
