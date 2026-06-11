@@ -21,6 +21,12 @@ export type CoachCommunityStackParamList = {
   CoachCommunityCohortDetail: { cohortId: string; cohortName?: string };
   /** A single post: title, body, author, timestamp, reply thread. */
   CoachCommunityPostDetail: { postId: string; flagged?: boolean };
+  /**
+   * v2-2: a single cohort message: sender, body, the coach ack lifecycle
+   * (badge + timestamp strip + SLA explainer), and a reply composer. Reached by
+   * tapping an inbox row when FEATURE_COMMUNITY_ACKS is on.
+   */
+  CoachCommunityMessageDetail: { messageId: string };
   /** Flagged-content moderation queue (hide, confirmed). */
   CoachCommunityModeration: undefined;
 };
