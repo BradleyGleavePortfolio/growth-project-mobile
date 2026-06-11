@@ -215,7 +215,12 @@ jest.mock('@tanstack/react-query', () => ({
   useQueryClient: () => ({
     getQueryData: () => undefined,
     setQueryData: () => undefined,
+    isMutating: () => 0,
   }),
+  // v2-2 (R1 fixer, M-P1d): the inbox subscribes to in-flight ack mutations so
+  // its reconcile effect can avoid clobbering an optimistic transition. With no
+  // mutations in these mocked render tests it is always zero.
+  useIsMutating: () => 0,
 }));
 
 import CoachCommunityHomeScreen from '../CoachCommunityHomeScreen';
@@ -700,7 +705,12 @@ describe('Coach mutations — create / invite / remove / ack / hide', () => {
     expect(mockRemoveMutate).not.toHaveBeenCalled();
   });
 
-  it('acknowledges an inbox item', () => {
+  it('acknowledges an inbox item via the Mark-acked quick-action (flag ON; legacy Ack CTA suppressed)', () => {
+    // v2-2 (R1 fixer, M-P2 copy collision): with EXPO_PUBLIC_FF_COMMUNITY_ACKS
+    // on, the legacy trailing "Ack" CTA is removed in favour of the in-row
+    // "Mark acked" quick-action (which is state-aware and disables once
+    // acked/replied). The two competing acknowledge affordances were the
+    // collision the UX audit flagged.
     mockState.inbox = {
       data: { items: [inboxItem()], next_before: null },
       isLoading: false,
@@ -708,11 +718,28 @@ describe('Coach mutations — create / invite / remove / ack / hide', () => {
       isRefetching: false,
       refetch: jest.fn(),
     };
-    const { getByTestId } = render(<CoachCommunityInboxScreen />);
+    mockAckStateByMessage.current['11111111-1111-1111-1111-111111111111'] = {
+      state: 'seen',
+      seen_at: '2026-06-09T12:00:00.000Z',
+      acked_at: null,
+      replied_at: null,
+      sla: {
+        sla_state: 'within',
+        elapsed_ms: 1_000,
+        soft_target_ms: 24 * 60 * 60 * 1000,
+        hard_target_ms: 48 * 60 * 60 * 1000,
+      },
+    };
+    const { getByTestId, queryByTestId } = render(<CoachCommunityInboxScreen />);
+    // The legacy v1-6 "Ack" CTA is gone under the flag.
+    expect(
+      queryByTestId('coach-community-inbox-ack-11111111-1111-1111-1111-111111111111'),
+    ).toBeNull();
+    // The v2-2 "Mark acked" quick-action fires the ack-action hook instead.
     fireEvent.press(
-      getByTestId('coach-community-inbox-ack-11111111-1111-1111-1111-111111111111'),
+      getByTestId('coach-community-inbox-mark-acked-11111111-1111-1111-1111-111111111111'),
     );
-    expect(mockAckMutate).toHaveBeenCalledWith('11111111-1111-1111-1111-111111111111');
+    expect(mockMarkAckedMutate).toHaveBeenCalledTimes(1);
   });
 
   it('hides a flagged post only after confirmation', () => {
@@ -994,5 +1021,17 @@ describe('v2-2 inbox ack integration — badge + Mark-acked quick-action', () =>
     expect(
       queryByTestId(`coach-community-inbox-ack-badge-${MID}-sla-warning`),
     ).toBeNull();
+  });
+
+  it('a normal row tap navigates to the message-detail surface (M-NEW closed loop)', () => {
+    // The R1 UX audit dead-ended here: the inbox showed ack badges but tapping a
+    // row went NOWHERE. A normal (non-select) tap now opens the message detail.
+    seedInbox();
+    mockAckStateByMessage.current[MID] = ackEnvelope('seen', 'within');
+    const { getByTestId } = render(<CoachCommunityInboxScreen />);
+    fireEvent.press(getByTestId(`coach-community-inbox-row-${MID}`));
+    expect(mockNavigate).toHaveBeenCalledWith('CoachCommunityMessageDetail', {
+      messageId: MID,
+    });
   });
 });
