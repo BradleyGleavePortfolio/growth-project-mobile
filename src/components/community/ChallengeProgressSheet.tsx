@@ -28,6 +28,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../HapticPressable';
 import { useTheme } from '../../theme/useTheme';
@@ -42,8 +43,13 @@ export interface ChallengeProgressSheetProps {
   challenge: CommunityChallenge;
   /** The caller's participation, or null when they have not joined yet. */
   participation: CommunityChallengeParticipation | null;
-  /** Persist a new cumulative progress value. Resolves when the server confirms. */
-  onSubmit: (progressValue: number) => Promise<void>;
+  /**
+   * Persist a new cumulative progress value. Resolves with the server-confirmed
+   * outcome (whether the goal is now complete) so the sheet can stage the
+   * completion peak; REJECTS when the write fails so the sheet surfaces a calm
+   * error and keeps the user's draft (no silent swallow, FIFTY_FAILURES #36).
+   */
+  onSubmit: (progressValue: number) => Promise<{ completed: boolean }>;
   onClose: () => void;
   /** Submission in flight — disables the primary action and shows progress copy. */
   submitting?: boolean;
@@ -71,12 +77,22 @@ export default function ChallengeProgressSheet({
   const unit = challenge.unit ?? '';
   const [draft, setDraft] = useState<string>(String(current));
   const [reduceMotion, setReduceMotion] = useState(false);
+  // Calm, surfaced error for a rejected submit (no silent swallow).
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  // Completion PEAK: after a server-confirmed goal completion the sheet stays
+  // open in this state (fill at 100%, success haptic, closure copy + Done).
+  const [celebrating, setCelebrating] = useState(false);
   const fill = useRef(new Animated.Value(fractionFor(current, target) ?? 0)).current;
 
   // Re-seed the draft to the current value whenever the sheet (re)opens — the
   // smart default is "your number so far", so logging more is a small edit.
+  // Also clear any prior error / celebration when the sheet (re)opens.
   useEffect(() => {
-    if (visible) setDraft(String(current));
+    if (visible) {
+      setDraft(String(current));
+      setSubmitError(null);
+      setCelebrating(false);
+    }
   }, [visible, current]);
 
   useEffect(() => {
@@ -98,13 +114,20 @@ export default function ChallengeProgressSheet({
   const draftValid = draft.trim() !== '' && Number.isFinite(draftValue) && draftValue >= 0;
   // Monotonic: a log can only hold or raise the visible number.
   const nextValue = draftValid ? Math.max(draftValue, current) : current;
+  // When the typed number is BELOW the saved total we silently keep the higher
+  // saved value (monotonic). We explain that inline as reassurance, NOT as an
+  // error (no red, no shame) — UX finding 11 / §3.4.
+  const isClampedDown = draftValid && current > 0 && draftValue < current;
   const nextFraction = fractionFor(nextValue, target);
   const willComplete =
     target !== null && target > 0 && nextValue >= target && current < target;
 
   // Animate the bar toward the DRAFT fraction so the user previews their gain
-  // before committing — anticipation, then the submit confirms it.
+  // before committing — anticipation, then the submit confirms it. During the
+  // completion PEAK the bar is driven to a full 100% instead (see below), so we
+  // skip the draft-preview animation while celebrating.
   useEffect(() => {
+    if (celebrating) return;
     const toValue = nextFraction ?? 0;
     if (reduceMotion) {
       fill.setValue(toValue);
@@ -117,12 +140,50 @@ export default function ChallengeProgressSheet({
     });
     anim.start();
     return () => anim.stop();
-  }, [nextFraction, reduceMotion, fill]);
+  }, [nextFraction, reduceMotion, fill, celebrating]);
 
-  const handleSubmit = useCallback(() => {
+  // Completion PEAK (UX finding 4 / §5.1 Step 6): once the server confirms the
+  // goal is reached we keep the sheet open and drive the fill to a full 100%.
+  // Reduced motion collapses the animation to an instant set; either way a
+  // single success haptic fires — calm, deliberate closure, no confetti.
+  useEffect(() => {
+    if (!celebrating) return;
+    if (reduceMotion) {
+      fill.setValue(1);
+    } else {
+      const anim = Animated.timing(fill, {
+        toValue: 1,
+        duration: motion.duration.base,
+        useNativeDriver: false,
+      });
+      anim.start();
+    }
+    void Haptics.notificationAsync(
+      Haptics.NotificationFeedbackType.Success,
+    ).catch(() => {
+      // Web / unsupported hardware — the visual closure still stands.
+    });
+  }, [celebrating, reduceMotion, fill]);
+
+  const handleSubmit = useCallback(async () => {
     if (!draftValid || submitting) return;
-    void onSubmit(nextValue);
-  }, [draftValid, submitting, onSubmit, nextValue]);
+    setSubmitError(null);
+    try {
+      const result = await onSubmit(nextValue);
+      if (result.completed) {
+        // Stay open for the closure peak; the user dismisses with Done.
+        setCelebrating(true);
+      } else {
+        onClose();
+      }
+    } catch {
+      // Surface a calm, non-shaming error and KEEP the draft so the user can
+      // retry (no silent swallow, no optimistic state left dangling — #30/#36).
+      setSubmitError(
+        'We could not save your progress just now. Please try again.',
+      );
+    }
+  }, [draftValid, submitting, onSubmit, nextValue, onClose]);
 
   const widthInterpolation = fill.interpolate({
     inputRange: [0, 1],
@@ -145,7 +206,7 @@ export default function ChallengeProgressSheet({
       onRequestClose={onClose}
       testID={testID}
     >
-      <View style={styles.backdrop}>
+      <View style={[styles.backdrop, { backgroundColor: semanticColors.overlay }]}>
         <View
           style={[
             styles.sheet,
@@ -204,7 +265,7 @@ export default function ChallengeProgressSheet({
             {percentLabel ? `  ·  ${percentLabel}` : ''}
           </Text>
 
-          {willComplete ? (
+          {willComplete && !celebrating ? (
             <View style={styles.completeRow} testID={`${testID ?? 'challenge-progress'}-complete`}>
               <Ionicons
                 name="checkmark-circle-outline"
@@ -217,6 +278,42 @@ export default function ChallengeProgressSheet({
             </View>
           ) : null}
 
+          {celebrating ? (
+            <View
+              style={styles.celebrateBlock}
+              testID={`${testID ?? 'challenge-progress'}-celebrate`}
+            >
+              <View style={styles.completeRow}>
+                <Ionicons
+                  name="checkmark-circle"
+                  size={22}
+                  color={semanticColors.accent}
+                />
+                <Text
+                  style={[styles.celebrateTitle, { color: semanticColors.textPrimary }]}
+                  accessibilityLiveRegion="polite"
+                >
+                  Goal reached — progress saved.
+                </Text>
+              </View>
+              <Text style={[styles.celebrateBody, { color: semanticColors.textMuted }]}>
+                Nicely done. Your total is locked in.
+              </Text>
+              <HapticPressable
+                intent="light"
+                onPress={onClose}
+                accessibilityRole="button"
+                accessibilityLabel="Done"
+                testID={`${testID ?? 'challenge-progress'}-done`}
+                style={[styles.cta, { backgroundColor: semanticColors.accent }]}
+              >
+                <Text style={[styles.ctaLabel, { color: semanticColors.textOnAccent }]}>
+                  Done
+                </Text>
+              </HapticPressable>
+            </View>
+          ) : (
+          <>
           <Text style={[styles.inputLabel, { color: semanticColors.textMuted }]}>
             {unit ? `Update your total (${unit})` : 'Update your total'}
           </Text>
@@ -239,6 +336,34 @@ export default function ChallengeProgressSheet({
               },
             ]}
           />
+
+          {/* Monotonic explanation (always present, calm) + inline note when the
+              typed value is below the saved total — UX finding 11. */}
+          <Text
+            style={[styles.helperText, { color: semanticColors.textMuted }]}
+            testID={`${testID ?? 'challenge-progress'}-monotonic-help`}
+          >
+            Enter your total so far. Totals only move up.
+          </Text>
+          {isClampedDown ? (
+            <Text
+              style={[styles.helperText, { color: semanticColors.textMuted }]}
+              accessibilityLiveRegion="polite"
+              testID={`${testID ?? 'challenge-progress'}-monotonic-clamp`}
+            >
+              {`Keeping your saved total at ${current}${unit ? ` ${unit}` : ''}.`}
+            </Text>
+          ) : null}
+
+          {submitError ? (
+            <Text
+              style={[styles.errorText, { color: semanticColors.textMuted }]}
+              accessibilityLiveRegion="polite"
+              testID={`${testID ?? 'challenge-progress'}-error`}
+            >
+              {submitError}
+            </Text>
+          ) : null}
 
           <HapticPressable
             intent="success"
@@ -266,9 +391,15 @@ export default function ChallengeProgressSheet({
                 },
               ]}
             >
-              {submitting ? 'Saving your progress…' : 'Log progress'}
+              {submitting
+                ? 'Saving your progress…'
+                : submitError
+                  ? 'Try again'
+                  : 'Log progress'}
             </Text>
           </HapticPressable>
+          </>
+          )}
         </View>
       </View>
     </Modal>
@@ -277,8 +408,9 @@ export default function ChallengeProgressSheet({
 
 const styles = StyleSheet.create({
   backdrop: {
+    // Color comes from the semantic `overlay` token (theme-anchored scrim,
+    // dark-mode aware) applied inline — not a raw rgba literal.
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.35)',
     justifyContent: 'flex-end',
   },
   sheet: {
@@ -321,6 +453,11 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   completeText: { fontSize: 14, fontWeight: '600' },
+  celebrateBlock: { gap: spacing.sm, marginTop: spacing.md },
+  celebrateTitle: { flex: 1, fontSize: 17, fontWeight: '700' },
+  celebrateBody: { fontSize: 14 },
+  helperText: { fontSize: 13, marginTop: spacing.xs },
+  errorText: { fontSize: 14, fontWeight: '600', marginTop: spacing.xs },
   inputLabel: { fontSize: 13, marginTop: spacing.md },
   input: {
     minHeight: 48,

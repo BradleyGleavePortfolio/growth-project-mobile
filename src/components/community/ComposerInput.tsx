@@ -6,7 +6,12 @@
  *
  * Standardized on semanticColors / tokens.ts.
  */
-import React, { useState } from 'react';
+import React, {
+  forwardRef,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from 'react';
 import { View, TextInput, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../HapticPressable';
@@ -23,14 +28,24 @@ export interface ComposerInputProps {
   testID?: string;
 }
 
-export default function ComposerInput({
-  placeholder,
-  maxLength,
-  sending = false,
-  onSubmit,
-  testID,
-}: ComposerInputProps): React.ReactElement {
+/**
+ * Imperative handle so a caller (e.g. the comments empty-state CTA) can focus
+ * the composer as a REAL action rather than a dead no-op (UX finding 3).
+ */
+export interface ComposerInputHandle {
+  focus: () => void;
+}
+
+const ComposerInput = forwardRef<ComposerInputHandle, ComposerInputProps>(
+  function ComposerInput(
+    { placeholder, maxLength, sending = false, onSubmit, testID },
+    ref,
+  ): React.ReactElement {
   const { semanticColors } = useTheme();
+  const inputRef = useRef<TextInput>(null);
+  useImperativeHandle(ref, () => ({
+    focus: () => inputRef.current?.focus(),
+  }));
   const [value, setValue] = useState('');
   const trimmed = value.trim();
   const canSend = trimmed.length > 0 && !sending;
@@ -53,6 +68,7 @@ export default function ComposerInput({
       testID={testID}
     >
       <TextInput
+        ref={inputRef}
         value={value}
         onChangeText={setValue}
         placeholder={placeholder}
@@ -94,7 +110,10 @@ export default function ComposerInput({
       </HapticPressable>
     </View>
   );
-}
+  },
+);
+
+export default ComposerInput;
 
 const styles = StyleSheet.create({
   bar: {

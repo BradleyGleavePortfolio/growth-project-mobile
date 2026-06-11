@@ -24,7 +24,7 @@
  * only (no raw hex); line Ionicons only (no emoji); reduced-motion aware via the
  * progress sheet; real loading / empty / error states (no spinner-only screens).
  */
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -44,13 +44,11 @@ import { useTheme } from '../../theme/useTheme';
 import { spacing, radius } from '../../theme/tokens';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { featureFlags } from '../../config/featureFlags';
-import {
-  CommunityEmptyState,
-  ThreadHeader,
-  ComposerInput,
-} from '../../components/community';
+import { ThreadHeader, ComposerInput } from '../../components/community';
+import type { ComposerInputHandle } from '../../components/community/ComposerInput';
 import HapticPressable from '../../components/HapticPressable';
 import ChallengeProgressSheet from '../../components/community/ChallengeProgressSheet';
+import ChallengeCommentsEmptyState from '../../components/community/ChallengeCommentsEmptyState';
 import {
   communityChallengesApi,
   type CommunityChallengeComment,
@@ -69,6 +67,8 @@ function describeError(err: unknown): string {
         return 'This challenge belongs to a cohort you are not part of.';
       case 'gone':
         return 'This challenge is no longer available.';
+      case 'conflict':
+        return 'Your progress was updated elsewhere. We have refreshed it for you.';
       case 'network':
         return 'We could not reach the server. Check your connection and try again.';
       case 'contract':
@@ -88,6 +88,12 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
   const queryClient = useQueryClient();
 
   const [sheetOpen, setSheetOpen] = useState(false);
+  // A calm, surfaced banner for a failed write action (join / opt-in / report /
+  // comment). No silent swallow (FIFTY_FAILURES #36): every mutation has an
+  // onError that sets this, and the banner is dismissible.
+  const [actionError, setActionError] = useState<string | null>(null);
+  // Imperative handle to the composer so the empty-state CTA can focus it.
+  const composerRef = useRef<ComposerInputHandle>(null);
 
   const detail = useQuery({
     queryKey: ['community', 'challenge', challengeId],
@@ -118,47 +124,92 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
       optedIn,
   });
 
+  // The TRUE-EMPTY copy for the comments surface is sourced from the BACKEND
+  // (operator-locked Roman payload), NOT a local constant -- a local fallback on
+  // this surface is the P0 (gate 9). It is fetched only when the comments query
+  // has actually resolved to zero rows, so a load error never masquerades as
+  // "empty". If THIS payload is missing/drifted we degrade to a calm load-error
+  // state for the empty surface rather than inventing copy.
+  const commentsResolvedEmpty =
+    comments.isSuccess && (comments.data?.length ?? 0) === 0;
+  const emptyState = useQuery({
+    queryKey: ['community', 'challenge', challengeId, 'comments', 'empty-state'],
+    queryFn: () => communityChallengesApi.getCommentsEmptyState(challengeId),
+    enabled:
+      !!challengeId && featureFlags.communityChallenges && commentsResolvedEmpty,
+  });
+
   const invalidateDetail = useCallback(() => {
     void queryClient.invalidateQueries({
       queryKey: ['community', 'challenge', challengeId],
     });
   }, [queryClient, challengeId]);
 
+  const invalidateLeaderboard = useCallback(() => {
+    void queryClient.invalidateQueries({
+      queryKey: ['community', 'challenge', challengeId, 'leaderboard'],
+    });
+  }, [queryClient, challengeId]);
+
   const joinMutation = useMutation({
     mutationFn: () => communityChallengesApi.join(challengeId),
+    onMutate: () => setActionError(null),
     onSuccess: invalidateDetail,
+    onError: (err: unknown) => {
+      if (err instanceof CommunityApiError && err.kind === 'conflict') {
+        invalidateDetail();
+      }
+      setActionError(describeError(err));
+    },
   });
 
   const progressMutation = useMutation({
     mutationFn: (value: number) =>
       communityChallengesApi.updateProgress(challengeId, value),
+    onMutate: () => setActionError(null),
     onSuccess: () => {
       invalidateDetail();
-      void queryClient.invalidateQueries({
-        queryKey: ['community', 'challenge', challengeId, 'leaderboard'],
-      });
+      invalidateLeaderboard();
+    },
+    onError: (err: unknown) => {
+      // On a 409 the server's monotonic total moved under us -- re-fetch detail
+      // + leaderboard so the next attempt starts from the true value
+      // (FIFTY_FAILURES #30: never leave optimistic state dangling). The sheet
+      // owns the inline error surface, so we do NOT raise the banner here; we
+      // let mutateAsync reject into the sheet's calm catch.
+      if (err instanceof CommunityApiError && err.kind === 'conflict') {
+        invalidateDetail();
+        invalidateLeaderboard();
+      }
     },
   });
 
   const optInMutation = useMutation({
     mutationFn: (next: boolean) =>
       communityChallengesApi.setLeaderboardOptIn(challengeId, next),
+    onMutate: () => setActionError(null),
     onSuccess: () => {
       invalidateDetail();
-      void queryClient.invalidateQueries({
-        queryKey: ['community', 'challenge', challengeId, 'leaderboard'],
-      });
+      invalidateLeaderboard();
+    },
+    onError: (err: unknown) => {
+      if (err instanceof CommunityApiError && err.kind === 'conflict') {
+        invalidateDetail();
+      }
+      setActionError(describeError(err));
     },
   });
 
   const commentMutation = useMutation({
     mutationFn: (body: string) =>
       communityChallengesApi.addComment(challengeId, body),
+    onMutate: () => setActionError(null),
     onSuccess: () => {
       void queryClient.invalidateQueries({
         queryKey: ['community', 'challenge', challengeId, 'comments'],
       });
     },
+    onError: (err: unknown) => setActionError(describeError(err)),
   });
 
   const reportMutation = useMutation({
@@ -168,15 +219,27 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
         commentId,
         'inappropriate',
       ),
+    onMutate: () => setActionError(null),
+    onSuccess: () =>
+      setActionError('Thanks -- our team will take a look at this.'),
+    onError: (err: unknown) => setActionError(describeError(err)),
   });
 
   const handleSubmitProgress = useCallback(
-    async (value: number) => {
-      await progressMutation.mutateAsync(value);
-      setSheetOpen(false);
+    async (value: number): Promise<{ completed: boolean }> => {
+      // Rejects on failure so the sheet keeps the draft + shows its calm inline
+      // error; resolves with the server-confirmed completion so the sheet can
+      // stage the completion peak (UX finding 4). The sheet, not the screen,
+      // owns dismissal now.
+      const result = await progressMutation.mutateAsync(value);
+      return { completed: result.completed };
     },
     [progressMutation],
   );
+
+  const focusComposer = useCallback(() => {
+    composerRef.current?.focus();
+  }, []);
 
   const handlePrimaryAction = useCallback(() => {
     if (!joined) {
@@ -185,8 +248,6 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
     }
     setSheetOpen(true);
   }, [joined, joinMutation]);
-
-  const firstName = client?.firstName ?? client?.name ?? null;
 
   const primaryLabel = useMemo(() => {
     if (joinMutation.isPending) return 'Joining…';
@@ -284,8 +345,15 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
       : `${value} of ${target}${unit ? ` ${unit}` : ''}`;
 
   const commentData = comments.data ?? [];
-  const commentsEmpty =
-    !comments.isLoading && (comments.isError || commentData.length === 0);
+  // F8: a LOAD ERROR and a TRUE EMPTY are different states and must never be
+  // conflated. A load error gets a calm retry (the composer stays available);
+  // a true empty (server confirmed zero rows) gets the backend-sourced Roman
+  // empty-state with a real CTA. The empty-state payload fetch can itself fail
+  // -- then we show the calm load-error treatment for the empty surface rather
+  // than inventing local copy (gate 9).
+  const commentsLoadError = comments.isError;
+  const commentsTrueEmpty = commentsResolvedEmpty;
+  const hasComments = commentData.length > 0;
 
   const renderComment = ({ item }: { item: CommunityChallengeComment }) => {
     const mine = item.author_user_id === client?.id;
@@ -403,26 +471,50 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
               Join the challenge to take part in the leaderboard.
             </Text>
           ) : !optedIn ? (
+            // F7: a NEUTRAL, equal-weight choice -- not a single nudge toward
+            // sharing. Privacy is the stated default and is offered FIRST; both
+            // options are the same visual weight (no primary/secondary framing)
+            // so opting out is as easy as opting in (§3.4, no pressure).
             <View style={styles.optInBlock}>
               <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
-                The leaderboard is private until you choose to share your
-                progress with your cohort. You can turn this off any time.
+                Private is the default. Sharing puts your progress on your
+                cohort's leaderboard; logging works either way, and you can
+                change this any time.
               </Text>
-              <HapticPressable
-                intent="medium"
-                onPress={() => optInMutation.mutate(true)}
-                disabled={optInMutation.isPending}
-                accessibilityRole="button"
-                accessibilityLabel="Share my progress on the leaderboard"
-                testID="community-challenge-optin"
-                style={[styles.optInButton, { borderColor: semanticColors.accent }]}
-              >
-                <Text style={[styles.optInLabel, { color: semanticColors.accent }]}>
-                  {optInMutation.isPending
-                    ? 'Updating…'
-                    : 'Share my progress'}
-                </Text>
-              </HapticPressable>
+              <View style={styles.optInChoiceRow}>
+                <HapticPressable
+                  intent="light"
+                  onPress={() => optInMutation.mutate(false)}
+                  disabled={optInMutation.isPending}
+                  accessibilityRole="button"
+                  accessibilityLabel="Keep my progress private"
+                  testID="community-challenge-keep-private"
+                  style={[
+                    styles.optInChoice,
+                    { borderColor: semanticColors.border },
+                  ]}
+                >
+                  <Text style={[styles.optInLabel, { color: semanticColors.textPrimary }]}>
+                    Keep private
+                  </Text>
+                </HapticPressable>
+                <HapticPressable
+                  intent="medium"
+                  onPress={() => optInMutation.mutate(true)}
+                  disabled={optInMutation.isPending}
+                  accessibilityRole="button"
+                  accessibilityLabel="Share my progress with my cohort"
+                  testID="community-challenge-optin"
+                  style={[
+                    styles.optInChoice,
+                    { borderColor: semanticColors.accent },
+                  ]}
+                >
+                  <Text style={[styles.optInLabel, { color: semanticColors.accent }]}>
+                    {optInMutation.isPending ? 'Updating…' : 'Share progress'}
+                  </Text>
+                </HapticPressable>
+              </View>
             </View>
           ) : leaderboard.isLoading ? (
             <View style={styles.lbLoading} testID="community-challenge-lb-loading">
@@ -465,6 +557,71 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
     </View>
   );
 
+  // F1/F8: the footer below the comments list. Three honest, distinct states:
+  //   1. comments LOAD ERROR  -> calm retry; the composer below stays usable.
+  //   2. comments TRUE EMPTY  -> backend Roman empty-state (real focus CTA),
+  //      OR its own load-error/loading treatment if the payload isn't ready.
+  //   3. has comments         -> no footer.
+  const commentsFooter = commentsLoadError ? (
+    <View style={styles.emptyComments} testID="community-challenge-comments-load-error">
+      <Ionicons
+        name="cloud-offline-outline"
+        size={24}
+        color={semanticColors.textMuted}
+      />
+      <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
+        We could not load the encouragement notes. Your message will still send.
+      </Text>
+      <HapticPressable
+        intent="light"
+        onPress={() => void comments.refetch()}
+        accessibilityRole="button"
+        accessibilityLabel="Try loading the notes again"
+        testID="community-challenge-comments-retry"
+        style={[styles.retry, { borderColor: semanticColors.accent }]}
+      >
+        <Text style={[styles.retryLabel, { color: semanticColors.accent }]}>
+          Try again
+        </Text>
+      </HapticPressable>
+    </View>
+  ) : commentsTrueEmpty ? (
+    emptyState.isLoading ? (
+      <View style={styles.emptyComments} testID="community-challenge-comments-empty-loading">
+        <ActivityIndicator color={semanticColors.accent} />
+      </View>
+    ) : emptyState.isError || !emptyState.data ? (
+      // The empty-state payload is missing/drifted: degrade to a calm load
+      // error rather than invent local Roman copy (gate 9 / F1 P0).
+      <View style={styles.emptyComments} testID="community-challenge-comments-empty-error">
+        <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
+          Be the first to leave a note of encouragement.
+        </Text>
+        <HapticPressable
+          intent="medium"
+          onPress={focusComposer}
+          accessibilityRole="button"
+          accessibilityLabel="Leave the first note"
+          testID="community-challenge-comments-empty-fallback-action"
+          style={[styles.retry, { borderColor: semanticColors.accent }]}
+        >
+          <Text style={[styles.retryLabel, { color: semanticColors.accent }]}>
+            Leave the first note
+          </Text>
+        </HapticPressable>
+      </View>
+    ) : (
+      <View style={styles.emptyComments}>
+        <ChallengeCommentsEmptyState
+          payload={emptyState.data}
+          actionLabel="Leave the first note"
+          onAction={focusComposer}
+          testID="community-challenge-comments-empty"
+        />
+      </View>
+    )
+  ) : null;
+
   return (
     <SafeAreaView
       style={[styles.safe, { backgroundColor: semanticColors.bgPrimary }]}
@@ -473,41 +630,34 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
     >
       <ThreadHeader title={challenge.title} testID="community-challenge-header" />
 
-      {commentsEmpty ? (
-        <FlatList
-          data={[]}
-          renderItem={null}
-          ListHeaderComponent={Header}
-          ListFooterComponent={
-            <View style={styles.emptyComments}>
-              <CommunityEmptyState
-                stem="threadEmpty"
-                firstName={firstName}
-                title="No encouragement yet"
-                actionLabel="Leave the first note"
-                onAction={() => {
-                  /* Composer is always present below; this nudges focus. */
-                }}
-                quipSeed={challengeId}
-                testID="community-challenge-comments-empty"
-              />
-            </View>
-          }
-          contentContainerStyle={styles.listContent}
-          keyExtractor={() => 'empty'}
-        />
-      ) : (
-        <FlatList
-          data={commentData}
-          renderItem={renderComment}
-          ListHeaderComponent={Header}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
-          testID="community-challenge-comments"
-        />
-      )}
+      {actionError ? (
+        <HapticPressable
+          intent="light"
+          onPress={() => setActionError(null)}
+          accessibilityRole="button"
+          accessibilityLabel="Dismiss this message"
+          testID="community-challenge-action-error"
+          style={[styles.banner, { backgroundColor: semanticColors.bgSurface, borderColor: semanticColors.border }]}
+        >
+          <Text style={[styles.bannerText, { color: semanticColors.textPrimary }]}>
+            {actionError}
+          </Text>
+          <Ionicons name="close" size={16} color={semanticColors.textMuted} />
+        </HapticPressable>
+      ) : null}
+
+      <FlatList
+        data={hasComments ? commentData : []}
+        renderItem={renderComment}
+        ListHeaderComponent={Header}
+        ListFooterComponent={commentsFooter}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.listContent}
+        testID="community-challenge-comments"
+      />
 
       <ComposerInput
+        ref={composerRef}
         onSubmit={(body) => commentMutation.mutate(body)}
         maxLength={COMMENT_MAX}
         sending={commentMutation.isPending}
@@ -571,6 +721,31 @@ const styles = StyleSheet.create({
   ctaLabel: { fontSize: 15, fontWeight: '600' },
   lbBlock: { gap: spacing.sm, marginTop: spacing.sm },
   optInBlock: { gap: spacing.sm },
+  optInChoiceRow: { flexDirection: 'row', gap: spacing.sm },
+  optInChoice: {
+    flex: 1,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  banner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.md,
+    minHeight: 48,
+  },
+  bannerText: { flex: 1, fontSize: 13, lineHeight: 18 },
   optInButton: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: radius.pill,
@@ -607,10 +782,16 @@ const styles = StyleSheet.create({
   },
   commentBody: { flex: 1, fontSize: 14, lineHeight: 20 },
   reportButton: {
-    minWidth: 32,
-    minHeight: 32,
+    // >=48dp touch target (F5 / WCAG 2.5.5, design checklist §6.2). The icon is
+    // visually small but the hit area is a full 48dp square.
+    minWidth: 48,
+    minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  emptyComments: { paddingVertical: spacing.lg },
+  emptyComments: {
+    paddingVertical: spacing.lg,
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
 });

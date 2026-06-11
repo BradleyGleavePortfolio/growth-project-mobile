@@ -345,6 +345,12 @@ export interface SemanticTokens {
   textOnDisabled: string;
   /** Default border / hairline color */
   border: string;
+  /**
+   * Scrim/overlay behind modals and bottom sheets. A theme-anchored token so
+   * the dim is consistent across light/dark instead of a hard-coded raw rgba.
+   * Calm, not opaque — the sheet sits on a dimmed-but-visible context.
+   */
+  overlay: string;
 }
 
 /** Light-mode semantic tokens (default — matches existing bone/ink palette). */
@@ -363,6 +369,8 @@ export const lightTokens: SemanticTokens = {
   disabledBg:     '#E0D9CE',
   textOnDisabled: '#524E47',
   border:      '#DCD5CC',
+  // Ink (#1A1A18) at 0.40 — a calm dim that keeps the underlying screen legible.
+  overlay:     'rgba(26, 26, 24, 0.40)',
 };
 
 /** Dark-mode semantic tokens. */
@@ -381,6 +389,9 @@ export const darkTokens: SemanticTokens = {
   disabledBg:     '#2A2723',
   textOnDisabled: '#9A958C',
   border:      '#2D2A26',
+  // Deeper near-black scrim for dark mode so the dim still reads against the
+  // already-dark surfaces without washing out (#000 at 0.55).
+  overlay:     'rgba(0, 0, 0, 0.55)',
 };
 
 // ─── Color utilities ────────────────────────────────────────────────────────
