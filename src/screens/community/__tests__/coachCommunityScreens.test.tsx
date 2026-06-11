@@ -8,10 +8,14 @@
  *   - FACE + VOICE contract (operator-locked 2026-06-10): every empty state
  *     renders <RomanAvatar /> (by `${root}-avatar` testID) AND the BACKEND
  *     PAYLOAD text — NOT a hardcoded local constant. The hook
- *     `useCoachEmptyStatePayload` is mocked to return a deterministic synthetic
+ *     `useCoachEmptyStatePayload` is mocked to return the discriminated
+ *     `{ status: 'ready', payload }` result with a deterministic synthetic
  *     payload (`text: "TEST_EMPTY_<SURFACE>_COPY"`, `voice_variant: 'roman_v2'`)
  *     so the assertions prove the screen renders whatever the backend says,
- *     never the production string baked into the file.
+ *     never the production string baked into the file. The hook's `loading`
+ *     and `error` branches are exercised by overriding that mock per-test
+ *     (see the dedicated describe block) so a missing/late surface renders an
+ *     honest spinner/CoachErrorState — never Roman copy from a local constant.
  *   - THREE distinct branches per screen (UX P0.2): loading spinner; an honest
  *     CoachErrorState on a load error (NEVER the calm/empty masquerade); and the
  *     payload-driven empty state on a genuinely empty success.
@@ -134,6 +138,21 @@ const SYNTHETIC_EMPTY: Record<CoachEmptyStateSurfaceKey, RomanCopyPayload> = {
   },
 };
 
+/**
+ * Per-surface override for the empty-state RESULT. `null` (the default) means
+ * "return the ready result built from SYNTHETIC_EMPTY for that surface". A test
+ * can set an override to exercise the `loading`/`error` branches that the
+ * stateful hook now produces — proving the screen renders a spinner or
+ * CoachErrorState rather than Roman copy when the payload is not yet ready.
+ */
+type RomanResult =
+  | { status: 'loading' }
+  | { status: 'error'; kind: 'network' | 'contract'; retry: () => void }
+  | { status: 'ready'; payload: RomanCopyPayload };
+const mockEmptyResultOverride: {
+  current: Partial<Record<CoachEmptyStateSurfaceKey, RomanResult>>;
+} = { current: {} };
+
 jest.mock('../../../hooks/useCoachCommunity', () => ({
   useCoachDashboard: () => mockState.dashboard,
   useCoachInbox: () => mockState.inbox,
@@ -142,7 +161,10 @@ jest.mock('../../../hooks/useCoachCommunity', () => ({
   useCoachFlagged: () => mockState.flagged,
   useCoachPostDetail: () => mockState.postDetail,
   useCoachEmptyStatePayload: (surfaceKey: CoachEmptyStateSurfaceKey) =>
-    SYNTHETIC_EMPTY[surfaceKey],
+    mockEmptyResultOverride.current[surfaceKey] ?? {
+      status: 'ready',
+      payload: SYNTHETIC_EMPTY[surfaceKey],
+    },
   useAckInboxItem: () => ({ mutate: mockAckMutate, isPending: false }),
   useCreateCohort: () => ({ mutate: mockCreateMutate, isPending: false }),
   useInviteMember: () => ({ mutate: mockInviteMutate, isPending: false }),
@@ -241,6 +263,7 @@ beforeEach(() => {
   mockState.cohortDetail = { data: undefined, isLoading: false, isError: false, isRefetching: false, refetch: jest.fn() };
   mockState.flagged = { data: [], isLoading: false, isError: false, isRefetching: false, refetch: jest.fn() };
   mockState.postDetail = { data: undefined, isLoading: false, isError: false, isRefetching: false, refetch: jest.fn() };
+  mockEmptyResultOverride.current = {};
 });
 
 describe('Coach Community screens — render with flag ON, mocked API', () => {
@@ -415,6 +438,55 @@ describe('FACE + VOICE contract — RomanAvatar + BACKEND-PAYLOAD copy on every 
     // The smile crop (from the payload) announces the celebratory variant.
     expect(avatar.props.accessibilityLabel).toBe('Roman, pleased');
     expect(getByText('TEST_EMPTY_MODERATION_COPY')).toBeTruthy();
+  });
+});
+
+describe('Empty-state PAYLOAD is stateful — loading + error branches (BLOCKER 1/2)', () => {
+  it('Home: payload still loading on a quiet dashboard renders a spinner, NOT Roman copy', () => {
+    // Primary data is a genuinely-empty success, but the voice-policy payload
+    // is still in flight. The screen must show the non-Roman loading branch,
+    // never the calm empty copy.
+    mockState.dashboard = {
+      data: { unread_inbox_count: 0, active_cohort_count: 0, flagged_today_count: 0 },
+      isLoading: false,
+      isError: false,
+    };
+    mockEmptyResultOverride.current = {
+      coach_community_home_empty: { status: 'loading' },
+    };
+    const { getByTestId, queryByText, queryByTestId } = render(
+      <CoachCommunityHomeScreen />,
+    );
+    expect(getByTestId('coach-community-home-empty-loading')).toBeTruthy();
+    // No Roman face and no Roman copy while the policy loads.
+    expect(queryByTestId('coach-community-home-empty-avatar')).toBeNull();
+    expect(queryByText('TEST_EMPTY_HOME_COPY')).toBeNull();
+  });
+
+  it('Cohorts: a CONTRACT failure (200 missing surface) renders CoachErrorState, NOT Roman copy', () => {
+    const retry = jest.fn();
+    mockState.cohorts = { data: [], isLoading: false, isError: false, isRefetching: false, refetch: jest.fn() };
+    mockEmptyResultOverride.current = {
+      coach_community_cohorts_empty: { status: 'error', kind: 'contract', retry },
+    };
+    const { getByTestId, queryByText } = render(<CoachCommunityCohortsScreen />);
+    // The payload-error branch renders an honest error, never the empty copy.
+    expect(getByTestId('coach-community-cohorts-empty-payload-error')).toBeTruthy();
+    expect(queryByText('TEST_EMPTY_COHORTS_COPY')).toBeNull();
+    // Retrying re-runs the policy fetch.
+    fireEvent.press(getByTestId('coach-community-cohorts-empty-payload-error-retry'));
+    expect(retry).toHaveBeenCalledTimes(1);
+  });
+
+  it('Moderation: a NETWORK payload failure renders CoachErrorState, NOT the celebratory empty copy', () => {
+    const retry = jest.fn();
+    mockState.flagged = { data: [], isLoading: false, isError: false, isRefetching: false, refetch: jest.fn() };
+    mockEmptyResultOverride.current = {
+      coach_community_moderation_empty: { status: 'error', kind: 'network', retry },
+    };
+    const { getByTestId, queryByText } = render(<CoachCommunityModerationScreen />);
+    expect(getByTestId('coach-community-moderation-empty-payload-error')).toBeTruthy();
+    expect(queryByText('TEST_EMPTY_MODERATION_COPY')).toBeNull();
   });
 });
 

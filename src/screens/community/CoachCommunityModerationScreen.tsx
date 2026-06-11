@@ -40,7 +40,7 @@ import { useTheme } from '../../theme/useTheme';
 import { spacing, radius, semantic } from '../../theme/tokens';
 import HapticPressable from '../../components/HapticPressable';
 import {
-  CoachEmptyState,
+  CoachRomanEmptyState,
   CoachErrorState,
   ConfirmModal,
   relativeAge,
@@ -61,7 +61,7 @@ export default function CoachCommunityModerationScreen(): React.ReactElement {
   const navigation = useNavigation<CoachCommunityNav>();
   const flagged = useCoachFlagged();
   const hide = useHideFlagged();
-  const emptyPayload = useCoachEmptyStatePayload(
+  const emptyState = useCoachEmptyStatePayload(
     'coach_community_moderation_empty',
   );
   const completion = useCompletionToast();
@@ -197,8 +197,8 @@ export default function CoachCommunityModerationScreen(): React.ReactElement {
           testID="coach-community-moderation-error"
         />
       ) : isEmpty ? (
-        <CoachEmptyState
-          payload={emptyPayload}
+        <CoachRomanEmptyState
+          result={emptyState}
           testID="coach-community-moderation-empty"
         />
       ) : (
@@ -227,6 +227,7 @@ export default function CoachCommunityModerationScreen(): React.ReactElement {
             : undefined
         }
         confirmLabel="Hide"
+        variant="destructive"
         busy={hide.isPending}
         onConfirm={onConfirmHide}
         onCancel={() => setPendingHide(null)}

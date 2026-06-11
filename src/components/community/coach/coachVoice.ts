@@ -7,11 +7,17 @@
  * useCoachEmptyStates). These constants are NO LONGER the success-path source
  * of truth — the backend VoicePolicyService is.
  *
- * This module exists ONLY to provide a typed, offline fallback for when the
- * empty-states network call ERRORS (network/5xx). On the success path the
- * screens render the backend payload verbatim and never read these constants.
- * Fallback payloads are stamped `voice_variant: 'legacy'` so analytics can tell
- * a fallback render apart from a live `roman_v2` render.
+ * This module exists ONLY as a typed, OPT-IN offline-cache payload source. It
+ * is NOT wired into the live render path: `useCoachEmptyStatePayload` (fixer R2,
+ * BLOCKER 1) returns a stateful `{ status: 'loading' | 'error' | 'ready' }`
+ * result and NEVER falls back to these constants — on loading it renders a
+ * non-Roman skeleton, on error it renders `CoachErrorState`, and Roman copy is
+ * rendered ONLY from the live backend payload. `getCoachEmptyStateFallback` is
+ * retained for a future explicit offline-cache hydration mode (which must also
+ * surface a visible "Offline mode" indicator and stamp `voice_variant:
+ * 'legacy'` so a fallback render is observable); until that mode ships it has
+ * no success-empty-state call-site. The grep gate
+ * (`getCoachEmptyStateFallback\(`) therefore matches only this definition.
  *
  * Copy rules (ROMAN_VOICE_POLICY §4): no exclamation points, no emoji, no
  * "Oops/Whoops/Uh oh", one next step per message, optional `— Roman` sign-off
@@ -54,9 +60,12 @@ export const COACH_EMPTY_FALLBACK: Readonly<
 };
 
 /**
- * Build a fully-typed RomanCopyPayload fallback for a surface. ONLY used when
- * `useCoachEmptyStates()` returns an error — never on a successful 200.
- * Stamped `voice_variant: 'legacy'` so a fallback render is observable.
+ * Build a fully-typed RomanCopyPayload fallback for a surface. NOT wired into
+ * the live render path: the success-empty path renders the backend payload and
+ * the error path renders `CoachErrorState` (see `useCoachEmptyStatePayload`).
+ * This helper is retained ONLY for a future explicit, opt-in offline-cache
+ * hydration mode (which must surface a visible "Offline mode" indicator). It is
+ * stamped `voice_variant: 'legacy'` so any such fallback render is observable.
  */
 export function getCoachEmptyStateFallback(
   surfaceKey: CoachEmptyStateSurfaceKey,

@@ -31,7 +31,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/useTheme';
 import { spacing, radius, withAlpha } from '../../theme/tokens';
 import HapticPressable from '../../components/HapticPressable';
-import { CoachEmptyState, CoachErrorState } from '../../components/community/coach';
+import { CoachRomanEmptyState, CoachErrorState } from '../../components/community/coach';
 import CompletionToast, {
   useCompletionToast,
 } from '../../components/community/CompletionToast';
@@ -48,7 +48,7 @@ export default function CoachCommunityCohortsScreen(): React.ReactElement {
   const navigation = useNavigation<CoachCommunityNav>();
   const cohorts = useCoachCohorts();
   const createCohort = useCreateCohort();
-  const emptyPayload = useCoachEmptyStatePayload('coach_community_cohorts_empty');
+  const emptyState = useCoachEmptyStatePayload('coach_community_cohorts_empty');
   const completion = useCompletionToast();
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -138,8 +138,8 @@ export default function CoachCommunityCohortsScreen(): React.ReactElement {
           testID="coach-community-cohorts-error"
         />
       ) : isEmpty ? (
-        <CoachEmptyState
-          payload={emptyPayload}
+        <CoachRomanEmptyState
+          result={emptyState}
           testID="coach-community-cohorts-empty"
         />
       ) : (

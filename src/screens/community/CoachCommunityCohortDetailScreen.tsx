@@ -36,10 +36,10 @@ import {
 } from 'react-native';
 import { useRoute } from '@react-navigation/native';
 import { useTheme } from '../../theme/useTheme';
-import { spacing, radius, withAlpha } from '../../theme/tokens';
+import { spacing, radius, withAlpha, semantic } from '../../theme/tokens';
 import HapticPressable from '../../components/HapticPressable';
 import {
-  CoachEmptyState,
+  CoachRomanEmptyState,
   CoachErrorState,
   MonogramBadge,
   ConfirmModal,
@@ -70,7 +70,7 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
   const detail = useCoachCohortDetail(cohortId);
   const invite = useInviteMember(cohortId);
   const remove = useRemoveMember(cohortId);
-  const emptyPayload = useCoachEmptyStatePayload(
+  const emptyState = useCoachEmptyStatePayload(
     'coach_community_cohort_members_empty',
   );
   const completion = useCompletionToast();
@@ -201,8 +201,8 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
           testID="coach-community-cohort-detail-error"
         />
       ) : isEmptyMembers ? (
-        <CoachEmptyState
-          payload={emptyPayload}
+        <CoachRomanEmptyState
+          result={emptyState}
           testID="coach-community-cohort-detail-empty"
         />
       ) : (
@@ -364,7 +364,7 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
               testID="coach-community-member-menu-remove"
               style={styles.sheetItem}
             >
-              <Text style={[styles.sheetItemLabel, { color: semanticColors.accent }]}>
+              <Text style={[styles.sheetItemLabel, { color: semantic.danger.fg }]}>
                 Remove from cohort
               </Text>
             </HapticPressable>
@@ -382,6 +382,7 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
             : undefined
         }
         confirmLabel="Remove"
+        variant="destructive"
         busy={remove.isPending}
         onConfirm={onConfirmRemove}
         onCancel={() => setPendingRemove(null)}

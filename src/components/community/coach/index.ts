@@ -8,6 +8,8 @@ export { default as CoachEmptyState } from './CoachEmptyState';
 export type { CoachEmptyStateProps } from './CoachEmptyState';
 export { default as CoachErrorState } from './CoachErrorState';
 export type { CoachErrorStateProps } from './CoachErrorState';
+export { default as CoachRomanEmptyState } from './CoachRomanEmptyState';
+export type { CoachRomanEmptyStateProps } from './CoachRomanEmptyState';
 export { default as MonogramBadge } from './MonogramBadge';
 export type { MonogramBadgeProps } from './MonogramBadge';
 export { default as ConfirmModal } from './ConfirmModal';

@@ -11,14 +11,22 @@
  *   - The confirm button is `disabled` while a mutation is in flight
  *     (`busy`) so a double-tap cannot fire two deletes.
  *   - Both buttons clear a >= 44pt touch target.
- *   - Colours come from semanticColors; the confirm uses the `accent`
- *     (oxblood) fill which is the palette's destructive/primary tone.
+ *
+ * Confirm-button colour follows `variant` (UX-03 fix):
+ *   - `destructive` (DEFAULT) — the confirm reads as a real delete. It uses the
+ *     dedicated `semantic.danger` tokens (deep-oxblood text on a soft danger
+ *     fill with a danger border), matching the Moderation row "Hide" treatment.
+ *     The previous `semanticColors.accent` fill was the brand/constructive tone
+ *     and read as a safe primary action on a destructive confirm — the exact
+ *     mismatch this fix removes.
+ *   - `constructive` — a non-destructive confirm (e.g. an affirmative "Save"
+ *     style). Keeps the brand `accent` fill with on-accent text.
  */
 import React from 'react';
 import { Modal, View, Text, StyleSheet } from 'react-native';
 import HapticPressable from '../../HapticPressable';
 import { useTheme } from '../../../theme/useTheme';
-import { spacing, radius, withAlpha } from '../../../theme/tokens';
+import { spacing, radius, withAlpha, semantic } from '../../../theme/tokens';
 
 export interface ConfirmModalProps {
   visible: boolean;
@@ -28,6 +36,12 @@ export interface ConfirmModalProps {
   confirmLabel: string;
   /** Label for the cancel button. Defaults to "Cancel". */
   cancelLabel?: string;
+  /**
+   * Confirm-button treatment. `destructive` (default) renders the danger
+   * tokens so a delete never wears the brand/constructive accent;
+   * `constructive` keeps the brand accent for an affirmative confirm.
+   */
+  variant?: 'destructive' | 'constructive';
   /** True while the confirmed mutation is in flight; disables confirm. */
   busy?: boolean;
   onConfirm: () => void;
@@ -41,12 +55,25 @@ export default function ConfirmModal({
   body,
   confirmLabel,
   cancelLabel = 'Cancel',
+  variant = 'destructive',
   busy = false,
   onConfirm,
   onCancel,
   testID,
 }: ConfirmModalProps): React.ReactElement {
   const { semanticColors } = useTheme();
+  const isDestructive = variant === 'destructive';
+  // Resting (non-busy) confirm colours by variant. Destructive uses the
+  // dedicated danger tokens; constructive keeps the brand accent.
+  const confirmBg = isDestructive
+    ? semantic.danger.bg
+    : semanticColors.accent;
+  const confirmFg = isDestructive
+    ? semantic.danger.fg
+    : semanticColors.textOnAccent;
+  const confirmBorderColor = isDestructive
+    ? semantic.danger.border
+    : 'transparent';
   return (
     <Modal
       visible={visible}
@@ -98,7 +125,7 @@ export default function ConfirmModal({
               </Text>
             </HapticPressable>
             <HapticPressable
-              intent="warning"
+              intent={isDestructive ? 'warning' : 'medium'}
               onPress={onConfirm}
               disabled={busy}
               accessibilityRole="button"
@@ -108,9 +135,9 @@ export default function ConfirmModal({
               style={[
                 styles.button,
                 {
-                  backgroundColor: busy
-                    ? semanticColors.disabledBg
-                    : semanticColors.accent,
+                  backgroundColor: busy ? semanticColors.disabledBg : confirmBg,
+                  borderColor: busy ? 'transparent' : confirmBorderColor,
+                  borderWidth: busy || !isDestructive ? 0 : StyleSheet.hairlineWidth,
                 },
               ]}
             >
@@ -118,9 +145,7 @@ export default function ConfirmModal({
                 style={[
                   styles.confirmLabel,
                   {
-                    color: busy
-                      ? semanticColors.textOnDisabled
-                      : semanticColors.textOnAccent,
+                    color: busy ? semanticColors.textOnDisabled : confirmFg,
                   },
                 ]}
               >

@@ -33,7 +33,12 @@ import {
   type RomanCopyPayload,
   type CoachPostDetail,
 } from '../api/coachCommunityApi';
-import { getCoachEmptyStateFallback } from '../components/community/coach/coachVoice';
+// NOTE (fixer R2, BLOCKER 1): `getCoachEmptyStateFallback` is intentionally NOT
+// imported here. The success-empty render path must consume the BACKEND payload
+// or render an honest loading/error branch — never local Roman copy. The legacy
+// fallback helper remains in `coachVoice.ts` for an explicit, opt-in
+// offline-cache mode only (see that module's header); it is never reachable
+// from this hook.
 
 // ─── Query keys (stable, namespaced) ─────────────────────────────────────────
 
@@ -125,21 +130,72 @@ export function useCoachEmptyStates(): UseQueryResult<CoachEmptyStatesResponse> 
 }
 
 /**
- * Resolve the Roman copy payload for ONE surface, ready to hand straight to
- * <CoachEmptyState payload={...} />. On the success path it returns the live
- * backend payload (`voice_variant: 'roman_v2'`). ONLY when the empty-states
- * call itself errored (network / 5xx / contract drift) does it return the
- * typed offline fallback, stamped `voice_variant: 'legacy'` so a fallback
- * render is observable in analytics. There is NO silent fallback on a
- * successful 200 — a missing surface throws inside `useCoachEmptyStates`.
+ * Stateful result of resolving the Roman empty-state copy for ONE surface.
+ *
+ * The screen branches on `status`:
+ *   - `loading` — the empty-states policy is still being fetched. Render a
+ *     non-Roman skeleton/spinner, NEVER Roman copy.
+ *   - `error`   — the fetch failed (`network`) or returned a 200 missing the
+ *     required surface (`contract`). Render `CoachErrorState` with `retry`,
+ *     NEVER the calm/celebratory empty state.
+ *   - `ready`   — the live backend payload for this surface is present. Only
+ *     now may the screen render `CoachEmptyState` with `payload`.
+ *
+ * There is NO local-constant fallback on any branch: Roman-voiced copy is
+ * rendered ONLY from the backend payload, satisfying the operator-locked
+ * face+voice backend-source rule.
+ */
+export type RomanEmptyStateResult =
+  | { status: 'loading' }
+  | { status: 'error'; kind: 'network' | 'contract'; retry: () => void }
+  | { status: 'ready'; payload: RomanCopyPayload };
+
+/**
+ * Resolve the Roman copy payload for ONE surface as a discriminated state.
+ *
+ * Derives `status` from the underlying `useCoachEmptyStates()` query:
+ *   - `isLoading` (initial fetch in flight)              → `loading`
+ *   - `isError`                                          → `error`, with
+ *       `kind: 'contract'` when the failure is a `CoachCommunityApiError`
+ *       whose `kind` is `'contract'` (a 200 missing a required surface),
+ *       otherwise `kind: 'network'`
+ *   - `data[surfaceKey]` present                         → `ready` with payload
+ *   - `data` present but this surface MISSING            → `error` /
+ *       `'contract'` (defensive: `useCoachEmptyStates` already throws on a
+ *       missing surface, so a settled `data` normally has every key)
+ *
+ * The screen NEVER renders `CoachEmptyState` (calm/celebratory copy + Roman's
+ * face) unless this returns `ready`.
  */
 export function useCoachEmptyStatePayload(
   surfaceKey: CoachEmptyStateSurfaceKey,
-): RomanCopyPayload {
+): RomanEmptyStateResult {
   const emptyStates = useCoachEmptyStates();
+  const retry = (): void => {
+    void emptyStates.refetch();
+  };
+
+  if (emptyStates.isError) {
+    const err = emptyStates.error;
+    const kind: 'network' | 'contract' =
+      err instanceof CoachCommunityApiError && err.kind === 'contract'
+        ? 'contract'
+        : 'network';
+    return { status: 'error', kind, retry };
+  }
+
   const live = emptyStates.data?.[surfaceKey];
-  if (live != null) return live;
-  return getCoachEmptyStateFallback(surfaceKey);
+  if (live != null) {
+    return { status: 'ready', payload: live };
+  }
+
+  // No error and no payload yet: either the initial fetch is in flight, or
+  // (defensively) the settled response is missing this surface. A settled
+  // success that is missing the key is a contract failure, not a loading state.
+  if (emptyStates.isLoading || emptyStates.isFetching || !emptyStates.isSuccess) {
+    return { status: 'loading' };
+  }
+  return { status: 'error', kind: 'contract', retry };
 }
 
 /** Fetch a single post + its reply thread for the post-detail surface. */

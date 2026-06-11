@@ -33,7 +33,7 @@ import { useTheme } from '../../theme/useTheme';
 import { spacing, radius } from '../../theme/tokens';
 import HapticPressable from '../../components/HapticPressable';
 import {
-  CoachEmptyState,
+  CoachRomanEmptyState,
   CoachErrorState,
   MonogramBadge,
   relativeAge,
@@ -49,7 +49,7 @@ export default function CoachCommunityInboxScreen(): React.ReactElement {
   const { semanticColors } = useTheme();
   const inbox = useCoachInbox();
   const ack = useAckInboxItem();
-  const emptyPayload = useCoachEmptyStatePayload('coach_community_inbox_empty');
+  const emptyState = useCoachEmptyStatePayload('coach_community_inbox_empty');
 
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -162,8 +162,8 @@ export default function CoachCommunityInboxScreen(): React.ReactElement {
         style={[styles.flex, { backgroundColor: semanticColors.bgPrimary }]}
         testID="coach-community-inbox-screen"
       >
-        <CoachEmptyState
-          payload={emptyPayload}
+        <CoachRomanEmptyState
+          result={emptyState}
           testID="coach-community-inbox-empty"
         />
       </View>

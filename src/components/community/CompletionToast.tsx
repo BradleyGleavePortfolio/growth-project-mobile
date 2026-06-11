@@ -13,6 +13,13 @@
  * exclamation point and no emoji (e.g. "Cohort created.", "Invite sent.",
  * "Hidden."). The caller supplies the message; this component owns only the
  * timing + motion + success styling.
+ *
+ * Reduced motion (UX-04 fix): when the OS "Reduce Motion" setting is on, the
+ * vertical slide is suppressed — the toast appears at its resting position and
+ * only cross-fades (and still cross-fades out). The screen-reader announcement
+ * is unchanged either way. We read `AccessibilityInfo.isReduceMotionEnabled()`
+ * on mount and subscribe to the `reduceMotionChanged` event so a mid-session
+ * settings change is honoured for the next toast.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, Text, StyleSheet, AccessibilityInfo } from 'react-native';
@@ -64,29 +71,77 @@ export default function CompletionToast({
   const translateY = useRef(new Animated.Value(16)).current;
   const [rendered, setRendered] = useState<CompletionToastState | null>(null);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Live mirror of the OS "Reduce Motion" setting. Kept in a ref so the enter
+  // effect reads the latest value without itself depending on it (a toggle
+  // mid-toast should not re-fire the entrance animation).
+  const reduceMotion = useRef(false);
+  const [, setReduceMotionTick] = useState(0);
+
+  useEffect(() => {
+    let mounted = true;
+    // Only re-render when the resolved/changed value actually differs from what
+    // we already hold. The animation logic reads `reduceMotion.current` lazily
+    // at fire time, so an unchanged value needs no render — and skipping the
+    // no-op state update avoids a spurious post-unmount/after-assert update.
+    const apply = (enabled: boolean) => {
+      if (reduceMotion.current === enabled) return;
+      reduceMotion.current = enabled;
+      setReduceMotionTick((t) => t + 1);
+    };
+    void AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
+      if (!mounted) return;
+      apply(enabled);
+    });
+    const sub = AccessibilityInfo.addEventListener(
+      'reduceMotionChanged',
+      (enabled: boolean) => {
+        if (!mounted) return;
+        apply(enabled);
+      },
+    );
+    return () => {
+      mounted = false;
+      // RN >= 0.65 returns a subscription with `.remove()`.
+      sub?.remove?.();
+    };
+  }, []);
 
   useEffect(() => {
     if (state == null) return;
     setRendered(state);
-    // Announce to screen readers — a toast is otherwise easy to miss.
+    // Announce to screen readers — a toast is otherwise easy to miss. This is
+    // unchanged by reduce-motion.
     AccessibilityInfo.announceForAccessibility(state.message);
+
+    const motionReduced = reduceMotion.current;
     opacity.setValue(0);
-    translateY.setValue(16);
-    Animated.parallel([
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: FADE_MS,
-        useNativeDriver: true,
-      }),
-      Animated.timing(translateY, {
-        toValue: 0,
-        duration: FADE_MS,
-        useNativeDriver: true,
-      }),
-    ]).start();
+    // With reduce-motion the toast sits at its resting position (no slide); the
+    // only transition is the cross-fade. Otherwise it rises from +16.
+    translateY.setValue(motionReduced ? 0 : 16);
+
+    const enter = motionReduced
+      ? Animated.timing(opacity, {
+          toValue: 1,
+          duration: FADE_MS,
+          useNativeDriver: true,
+        })
+      : Animated.parallel([
+          Animated.timing(opacity, {
+            toValue: 1,
+            duration: FADE_MS,
+            useNativeDriver: true,
+          }),
+          Animated.timing(translateY, {
+            toValue: 0,
+            duration: FADE_MS,
+            useNativeDriver: true,
+          }),
+        ]);
+    enter.start();
 
     if (hideTimer.current) clearTimeout(hideTimer.current);
     hideTimer.current = setTimeout(() => {
+      // Exit is a plain cross-fade in both modes (no slide to suppress).
       Animated.timing(opacity, {
         toValue: 0,
         duration: FADE_MS,
