@@ -27,11 +27,28 @@ import {
 } from '@tanstack/react-query';
 import {
   coachCommunityApi,
+  CoachCommunityApiError,
   ACK_STATE_RANK,
+  ACK_ILLEGAL_TRANSITION_CODE,
   type AckStateDto,
   type CoachAckState,
 } from '../api/coachCommunityApi';
 import { coachCommunityKeys } from './useCoachCommunity';
+
+/**
+ * True when an error is a server-rejected ack transition (HTTP 409 with the
+ * backend `community.ack.illegal_transition` code) — i.e. the message state
+ * changed underneath the coach. The row UI reads this to surface an accessible
+ * "message state changed — refreshed" notice and the hook refetches the
+ * authoritative ack state rather than silently rolling back.
+ */
+export function isIllegalAckTransition(err: unknown): boolean {
+  return (
+    err instanceof CoachCommunityApiError &&
+    err.kind === 'conflict' &&
+    err.code === ACK_ILLEGAL_TRANSITION_CODE
+  );
+}
 
 /** A single ack transition target reachable from the coach UI. */
 export type CoachAckTarget = Exclude<CoachAckState, 'none'>;
@@ -123,7 +140,7 @@ function useAckMutation(
       qc.setQueryData<AckStateDto>(key, projectOptimistic(prev, target));
       return { prev };
     },
-    onError: (_err, _vars, ctx) => {
+    onError: (err, _vars, ctx) => {
       // Restore the exact prior snapshot. When there was NO prior value we
       // remove the cache entry rather than calling setQueryData(undefined)
       // (React Query treats an `undefined` updater value as a no-op, which
@@ -134,6 +151,17 @@ function useAckMutation(
         qc.removeQueries({ queryKey: key, exact: true });
       } else {
         qc.setQueryData<AckStateDto>(key, ctx.prev);
+      }
+
+      // 409 illegal_transition is NOT a transient failure to silently roll back:
+      // the server rejected the transition because the message state changed
+      // underneath the coach (e.g. another device advanced it). Reconcile by
+      // invalidating the per-message ack state AND the inbox page so the next
+      // read pulls the authoritative state; the row surfaces an accessible
+      // "message state changed — refreshed" notice via `markAcked.error`.
+      if (isIllegalAckTransition(err)) {
+        qc.invalidateQueries({ queryKey: key, exact: true });
+        qc.invalidateQueries({ queryKey: coachCommunityKeys.inbox() });
       }
     },
     onSuccess: (ack) => {

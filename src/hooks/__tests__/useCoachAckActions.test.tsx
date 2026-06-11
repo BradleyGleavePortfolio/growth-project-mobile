@@ -32,6 +32,8 @@ jest.mock('../../api/coachCommunityApi', () => {
 
 import {
   coachCommunityApi,
+  CoachCommunityApiError,
+  ACK_ILLEGAL_TRANSITION_CODE,
   type AckStateDto,
   type AckTransitionResponse,
 } from '../../api/coachCommunityApi';
@@ -40,11 +42,10 @@ import { coachCommunityKeys } from '../useCoachCommunity';
 
 const MSG = '11111111-1111-1111-1111-111111111111';
 
-const mockApi = coachCommunityApi as unknown as {
-  markCoachAckSeen: jest.Mock;
-  markCoachAckAcked: jest.Mock;
-  markCoachAckReplied: jest.Mock;
-};
+// Typed access to the jest-mocked client — `jest.mocked` infers the mock-fn
+// types from the real module surface, so we never need an `as unknown as`
+// double-cast (the mock factory above only stubs the three ack transitions).
+const mockApi = jest.mocked(coachCommunityApi);
 
 function sla() {
   return {
@@ -174,6 +175,66 @@ describe('useCoachAckActions — error rollback', () => {
 
     await waitFor(() => expect(result.current.markSeen.isError).toBe(true));
     expect(qc.getQueryData<AckStateDto>(key)).toBeUndefined();
+  });
+});
+
+describe('useCoachAckActions — 409 illegal_transition reconcile', () => {
+  it('a server-rejected transition refetches the ack state + inbox and surfaces isError', async () => {
+    const { qc, Wrapper } = makeWrapper();
+    const key = coachCommunityKeys.ackState(MSG);
+
+    // Seed a prior `acked` envelope; another device advanced the message, so
+    // the backend rejects this transition with 409 illegal_transition.
+    const prior = envelope({
+      state: 'acked',
+      seen_at: '2026-06-09T12:00:00.000Z',
+      acked_at: '2026-06-09T12:05:00.000Z',
+    });
+    qc.setQueryData<AckStateDto>(key, prior);
+
+    const invalidateSpy = jest.spyOn(qc, 'invalidateQueries');
+
+    mockApi.markCoachAckAcked.mockRejectedValue(
+      new CoachCommunityApiError(
+        'conflict',
+        409,
+        'coach community request failed (409)',
+        undefined,
+        ACK_ILLEGAL_TRANSITION_CODE,
+      ),
+    );
+
+    const { result } = renderHook(() => useCoachAckActions(MSG), {
+      wrapper: Wrapper,
+    });
+
+    await act(async () => {
+      result.current.markAcked.mutate();
+    });
+
+    await waitFor(() => expect(result.current.markAcked.isError).toBe(true));
+
+    // The error is the recognised illegal-transition conflict (the row reads
+    // this to show its accessible "message state changed — refreshed" notice).
+    const err = result.current.markAcked.error;
+    expect(err).toBeInstanceOf(CoachCommunityApiError);
+    expect((err as CoachCommunityApiError).kind).toBe('conflict');
+    expect((err as CoachCommunityApiError).code).toBe(
+      ACK_ILLEGAL_TRANSITION_CODE,
+    );
+
+    // Reconcile: BOTH the per-message ack state and the inbox page are
+    // invalidated so the next read pulls the authoritative state.
+    await waitFor(() => {
+      expect(invalidateSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ queryKey: key }),
+      );
+    });
+    expect(invalidateSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: coachCommunityKeys.inbox() }),
+    );
+
+    invalidateSpy.mockRestore();
   });
 });
 

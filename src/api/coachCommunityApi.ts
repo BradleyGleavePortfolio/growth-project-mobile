@@ -298,7 +298,7 @@ export const CoachSlaSnapshotSchema = z
     soft_target_ms: z.number().int().positive(),
     hard_target_ms: z.number().int().positive(),
   })
-  .passthrough();
+  .strict();
 export type CoachSlaSnapshot = z.infer<typeof CoachSlaSnapshotSchema>;
 
 /**
@@ -311,12 +311,12 @@ export type CoachSlaSnapshot = z.infer<typeof CoachSlaSnapshotSchema>;
 export const AckStateSchema = z
   .object({
     state: z.enum(COACH_ACK_STATES),
-    seen_at: z.string().nullable(),
-    acked_at: z.string().nullable(),
-    replied_at: z.string().nullable(),
+    seen_at: z.string().datetime().nullable(),
+    acked_at: z.string().datetime().nullable(),
+    replied_at: z.string().datetime().nullable(),
     sla: CoachSlaSnapshotSchema,
   })
-  .passthrough();
+  .strict();
 export type AckStateDto = z.infer<typeof AckStateSchema>;
 
 /**
@@ -328,17 +328,30 @@ export const AckTransitionResponseSchema = z
     message_id: z.string().uuid(),
     ack: AckStateSchema,
   })
-  .passthrough();
+  .strict();
 export type AckTransitionResponse = z.infer<typeof AckTransitionResponseSchema>;
 
 // ─── Typed error ─────────────────────────────────────────────────────────────
 
 /**
+ * The bounded set of backend ack error codes the mobile client reconciles
+ * against. The v2-2 backend returns `community.ack.illegal_transition` (HTTP
+ * 409) when a coach attempts a transition the server rejects because the
+ * message state changed underneath them (e.g. another device already advanced
+ * it). We parse ONLY this known code from the error body; any other shape is
+ * left as `undefined` so the UI falls back to its generic conflict handling.
+ */
+export const ACK_ILLEGAL_TRANSITION_CODE = 'community.ack.illegal_transition';
+export type CoachAckErrorCode = typeof ACK_ILLEGAL_TRANSITION_CODE;
+
+/**
  * Transport / contract error surfaced to the screen hooks. `.status` lets the
  * UI branch on 401 (auth), 403 (forbidden — e.g. a non-coach role or a foreign
- * tenant), 404/410 (gone), and 5xx (server) without re-parsing the axios
- * error. `kind` is a coarse, bounded label (never a raw server message) for
- * telemetry / logging.
+ * tenant), 404/410 (gone), 409 (conflict — a server-rejected state transition),
+ * and 5xx (server) without re-parsing the axios error. `kind` is a coarse,
+ * bounded label (never a raw server message) for telemetry / logging. `code`
+ * carries the bounded backend error code when the body matched a known one
+ * (currently only `community.ack.illegal_transition`).
  */
 export class CoachCommunityApiError extends Error {
   constructor(
@@ -346,6 +359,7 @@ export class CoachCommunityApiError extends Error {
       | 'unauthorized'
       | 'forbidden'
       | 'gone'
+      | 'conflict'
       | 'server'
       | 'network'
       | 'contract'
@@ -353,6 +367,7 @@ export class CoachCommunityApiError extends Error {
     public readonly status: number,
     message: string,
     public readonly cause?: unknown,
+    public readonly code?: CoachAckErrorCode,
   ) {
     super(message);
     this.name = 'CoachCommunityApiError';
@@ -364,9 +379,24 @@ function classify(status: number): CoachCommunityApiError['kind'] {
   if (status === 401) return 'unauthorized';
   if (status === 403) return 'forbidden';
   if (status === 404 || status === 410) return 'gone';
+  if (status === 409) return 'conflict';
   if (status >= 500) return 'server';
   if (status === 0) return 'network';
   return 'unknown';
+}
+
+/**
+ * Extract the bounded backend ack error code from an axios error body, if it
+ * matches a known code. The backend convention is a JSON body of the shape
+ * `{ code: 'community.ack.illegal_transition', ... }` (NestJS exception
+ * filter). We never surface a raw server message — only the recognised code.
+ */
+function parseAckErrorCode(data: unknown): CoachAckErrorCode | undefined {
+  if (data == null || typeof data !== 'object') return undefined;
+  const code = (data as { code?: unknown }).code;
+  return code === ACK_ILLEGAL_TRANSITION_CODE
+    ? ACK_ILLEGAL_TRANSITION_CODE
+    : undefined;
 }
 
 /**
@@ -389,6 +419,7 @@ async function call<T>(
         status,
         `coach community request failed (${status || 'network'})`,
         err,
+        status === 409 ? parseAckErrorCode(err.response?.data) : undefined,
       );
     }
     throw new CoachCommunityApiError(

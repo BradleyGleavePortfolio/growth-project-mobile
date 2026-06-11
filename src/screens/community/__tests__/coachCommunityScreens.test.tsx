@@ -32,7 +32,7 @@
  * resolve without standing up the full ThemeProvider.
  */
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
+import { render, fireEvent, configure } from '@testing-library/react-native';
 import type {
   CoachEmptyStateSurfaceKey,
   RomanCopyPayload,
@@ -191,10 +191,13 @@ jest.mock('../../../hooks/useCoachCommunity', () => {
 // quick-action fires; the other two are inert for these screen tests.
 jest.mock('../../../hooks/useCoachAckActions', () => ({
   useCoachAckActions: () => ({
-    markSeen: { mutate: jest.fn(), isPending: false },
-    markAcked: { mutate: mockMarkAckedMutate, isPending: false },
-    markReplied: { mutate: jest.fn(), isPending: false },
+    markSeen: { mutate: jest.fn(), isPending: false, error: null },
+    markAcked: { mutate: mockMarkAckedMutate, isPending: false, error: null },
+    markReplied: { mutate: jest.fn(), isPending: false, error: null },
   }),
+  // The screen also imports the conflict predicate to decide whether to surface
+  // the inline "message state changed" notice; default to false (no conflict).
+  isIllegalAckTransition: () => false,
 }));
 
 // v2-2: force the kill-switch flag ON so the inbox renders the ack badge +
@@ -224,6 +227,14 @@ import CoachCommunityCohortsScreen from '../CoachCommunityCohortsScreen';
 import CoachCommunityCohortDetailScreen from '../CoachCommunityCohortDetailScreen';
 import CoachCommunityModerationScreen from '../CoachCommunityModerationScreen';
 import CoachCommunityPostDetailScreen from '../CoachCommunityPostDetailScreen';
+
+// v2-2: the per-row CoachAckBadge renders with `labelledByRow`, so it hides
+// itself from the accessibility tree (the row owns the a11y summary). RTL
+// excludes accessibility-hidden subtrees from queries by default; enable hidden
+// elements file-wide so the badge testIDs stay queryable for these structural
+// assertions. Negative `queryBy*` checks here assert genuine ABSENCE (elements
+// not rendered at all), which this flag does not affect.
+configure({ defaultIncludeHiddenElements: true });
 
 const inboxItem = (over: Partial<Record<string, unknown>> = {}) => ({
   id: '11111111-1111-1111-1111-111111111111',
@@ -700,7 +711,12 @@ describe('Coach mutations — create / invite / remove / ack / hide', () => {
     expect(mockRemoveMutate).not.toHaveBeenCalled();
   });
 
-  it('acknowledges an inbox item', () => {
+  it('dismisses an inbox item via long-press when the v2-2 flag is ON (no legacy Ack button)', () => {
+    // UX F1: with the v2-2 flag ON there is exactly ONE visible ack action per
+    // row — the v2-2 "Acknowledge" quick-action (which STAMPS the signal,
+    // `mockMarkAckedMutate`). The legacy visible "Ack" button (which DISMISSES
+    // the row via `useAckInboxItem`) is removed; dismissal is demoted to the
+    // existing long-press, which marks the cohort thread read.
     mockState.inbox = {
       data: { items: [inboxItem()], next_before: null },
       isLoading: false,
@@ -708,9 +724,15 @@ describe('Coach mutations — create / invite / remove / ack / hide', () => {
       isRefetching: false,
       refetch: jest.fn(),
     };
-    const { getByTestId } = render(<CoachCommunityInboxScreen />);
-    fireEvent.press(
-      getByTestId('coach-community-inbox-ack-11111111-1111-1111-1111-111111111111'),
+    const { queryByTestId, getByTestId } = render(<CoachCommunityInboxScreen />);
+    // The legacy visible dismissal button is gone under the flag.
+    expect(
+      queryByTestId('coach-community-inbox-ack-11111111-1111-1111-1111-111111111111'),
+    ).toBeNull();
+    // Long-press still dismisses (marks the cohort thread read).
+    fireEvent(
+      getByTestId('coach-community-inbox-row-11111111-1111-1111-1111-111111111111'),
+      'longPress',
     );
     expect(mockAckMutate).toHaveBeenCalledWith('11111111-1111-1111-1111-111111111111');
   });
@@ -994,5 +1016,87 @@ describe('v2-2 inbox ack integration — badge + Mark-acked quick-action', () =>
     expect(
       queryByTestId(`coach-community-inbox-ack-badge-${MID}-sla-warning`),
     ).toBeNull();
+  });
+
+  it('renders NO badge for the default none + within row (kill the badge wall)', () => {
+    // R1 UX F2: a default/untouched row (state=none + sla=within) carries no
+    // redundant chrome — the badge renders null, so its testID is absent.
+    seedInbox();
+    mockAckStateByMessage.current[MID] = ackEnvelope('none', 'within');
+    const { queryByTestId } = render(<CoachCommunityInboxScreen />);
+    expect(
+      queryByTestId(`coach-community-inbox-ack-badge-${MID}`),
+    ).toBeNull();
+    expect(
+      queryByTestId(`coach-community-inbox-ack-badge-${MID}-state-none`),
+    ).toBeNull();
+  });
+
+  it('shows ONLY the Overdue chip for an untouched but breached row', () => {
+    // R1 UX F2/F3: none + breached surfaces the priority Overdue chip without a
+    // redundant "Awaiting coach" state pill.
+    seedInbox();
+    mockAckStateByMessage.current[MID] = ackEnvelope('none', 'breached');
+    const { getByTestId, getByText, queryByTestId } = render(
+      <CoachCommunityInboxScreen />,
+    );
+    expect(
+      getByTestId(`coach-community-inbox-ack-badge-${MID}-sla-breached`),
+    ).toBeTruthy();
+    expect(getByText('Overdue')).toBeTruthy();
+    expect(
+      queryByTestId(`coach-community-inbox-ack-badge-${MID}-state-none`),
+    ).toBeNull();
+  });
+
+  it('uses the unified Acknowledge / Acknowledged vocabulary (UX F5)', () => {
+    seedInbox();
+    // Not-yet-acked: the action button reads "Acknowledge".
+    mockAckStateByMessage.current[MID] = ackEnvelope('seen', 'warning');
+    const { getByTestId, queryByText, rerender } = render(
+      <CoachCommunityInboxScreen />,
+    );
+    const button = getByTestId(`coach-community-inbox-mark-acked-${MID}`);
+    expect(button).toHaveTextContent('Acknowledge');
+    // The abbreviated "Mark acked"/"Acked" vocabulary is gone everywhere.
+    expect(queryByText('Mark acked')).toBeNull();
+    expect(queryByText('Acked')).toBeNull();
+
+    // Already acked: the action button reads the settled "Acknowledged".
+    mockAckStateByMessage.current[MID] = ackEnvelope('acked', 'within');
+    rerender(<CoachCommunityInboxScreen />);
+    expect(
+      getByTestId(`coach-community-inbox-mark-acked-${MID}`),
+    ).toHaveTextContent('Acknowledged');
+  });
+
+  it('the row owns the ack accessibility summary, Overdue-first (badge hidden from a11y)', () => {
+    seedInbox();
+    mockAckStateByMessage.current[MID] = ackEnvelope('acked', 'breached');
+    const { getByTestId } = render(<CoachCommunityInboxScreen />);
+    // The row's accessibility label leads with the Overdue cue, then the state.
+    const row = getByTestId(`coach-community-inbox-row-${MID}`);
+    expect(row.props.accessibilityLabel).toContain('Overdue');
+    expect(row.props.accessibilityLabel).toContain('Acknowledged');
+    // The badge itself is hidden from the a11y tree (no duplicate announcement).
+    const badge = getByTestId(`coach-community-inbox-ack-badge-${MID}`);
+    expect(badge.props.accessibilityElementsHidden).toBe(true);
+  });
+
+  it('shows a subtle closure confirmation toast on a successful acknowledge (UX F6)', () => {
+    seedInbox();
+    mockAckStateByMessage.current[MID] = ackEnvelope('seen', 'within');
+    // Drive the mutate spy to invoke the per-call onSuccess (the screen passes
+    // `onAcknowledged` there) so we can assert the closure moment renders.
+    mockMarkAckedMutate.mockImplementation(
+      (_vars?: unknown, opts?: { onSuccess?: () => void }) => {
+        opts?.onSuccess?.();
+      },
+    );
+    const { getByTestId } = render(<CoachCommunityInboxScreen />);
+    fireEvent.press(getByTestId(`coach-community-inbox-mark-acked-${MID}`));
+    expect(
+      getByTestId('coach-community-inbox-completion-toast'),
+    ).toBeTruthy();
   });
 });
