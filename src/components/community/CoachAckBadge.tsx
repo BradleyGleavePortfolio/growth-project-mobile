@@ -76,26 +76,30 @@ export default function CoachAckBadge({
     state === 'replied' ? null : ack?.sla?.sla_state ?? null;
 
   // ── Reduced-motion-aware fade-in ──────────────────────────────────────────
+  // v2-2 (R1 fixer, M-P2): the reduce-motion preference is TRI-STATE
+  // (`null` = unknown/unresolved, `true`/`false` = resolved) held in real
+  // component state — NOT a ref. The prior ref+tick pattern meant the very
+  // first paint always read `false` (default) and could fire the fade-in for a
+  // frame before the async preference resolved, briefly animating for a user
+  // who asked for no motion. By starting `null` and HOLDING at resting opacity
+  // (no animation) until the preference resolves, we never animate while the
+  // setting is unknown OR when it is true — the fade only plays once we KNOW
+  // motion is allowed. Because it is state, a `reduceMotionChanged` event now
+  // re-renders and re-runs the animation effect deterministically.
   const opacity = useRef(new Animated.Value(0)).current;
-  const reduceMotion = useRef(false);
-  const [, setReduceMotionTick] = useState(0);
+  const [reduceMotion, setReduceMotion] = useState<boolean | null>(null);
 
   useEffect(() => {
     let mounted = true;
-    const apply = (enabled: boolean): void => {
-      if (reduceMotion.current === enabled) return;
-      reduceMotion.current = enabled;
-      setReduceMotionTick((t) => t + 1);
-    };
     void AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
       if (!mounted) return;
-      apply(enabled);
+      setReduceMotion(enabled);
     });
     const sub = AccessibilityInfo.addEventListener(
       'reduceMotionChanged',
       (enabled: boolean) => {
         if (!mounted) return;
-        apply(enabled);
+        setReduceMotion(enabled);
       },
     );
     return () => {
@@ -105,8 +109,10 @@ export default function CoachAckBadge({
   }, []);
 
   useEffect(() => {
-    if (reduceMotion.current) {
-      // Resting opacity, no animation.
+    // Hold at resting opacity (fully visible, no animation) whenever motion is
+    // unknown (`null`) OR explicitly reduced (`true`). Only animate once we
+    // KNOW motion is allowed (`false`).
+    if (reduceMotion !== false) {
       opacity.setValue(1);
       return;
     }
@@ -118,7 +124,7 @@ export default function CoachAckBadge({
     });
     anim.start();
     return () => anim.stop();
-  }, [opacity, state, slaState]);
+  }, [opacity, state, slaState, reduceMotion]);
 
   const { icon, label } = ACK_COPY[state];
 
@@ -206,7 +212,15 @@ function ackPillColors(
     case 'replied':
       return { bg: c.accent, border: c.accent, fg: c.textOnAccent };
     case 'acked':
-      return { bg: c.bgSurface, border: c.accent, fg: c.accent };
+      // v2-2 (R1 fixer, M-P1c): FILL with the accent + on-accent ink instead of
+      // accent-tinted text on the surface. The prior {bg: bgSurface, fg: accent}
+      // only reached ~3.02:1 in dark mode (#B43C3C on #1C1A18) — an AA FAIL for
+      // 12px label text. The accent fill matches `replied`'s treatment and the
+      // textOnAccent pairing is contrast-verified in BOTH modes (light
+      // #FBF7F0/#4A0404 ~15.01:1, dark #FBF7F0/#B43C3C ~5.38:1 — see
+      // theme/contrast.ts + the CoachAckBadge contrast-matrix test). `acked`
+      // stays distinct from `replied` via its icon + label, not its fill.
+      return { bg: c.accent, border: c.accent, fg: c.textOnAccent };
     case 'seen':
       return { bg: c.bgSurface, border: c.border, fg: c.textPrimary };
     case 'none':
