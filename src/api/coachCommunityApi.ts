@@ -157,6 +157,104 @@ export const CoachFlaggedListSchema = z
   .passthrough();
 export type CoachFlaggedList = z.infer<typeof CoachFlaggedListSchema>;
 
+// ─── Roman empty-state payload (operator-locked face+voice contract) ─────────
+
+/**
+ * Avatar crop for a Roman-voiced surface. Mirrors the backend
+ * voice-policy.constants AVATAR_CROPS. `monogram` is the universal fallback;
+ * `neutral`/`smile` are the empty-state crops.
+ */
+export const CoachAvatarCropSchema = z.enum(['monogram', 'smile', 'neutral']);
+export type CoachAvatarCrop = z.infer<typeof CoachAvatarCropSchema>;
+
+/** Which backend copy map a payload was composed from (analytics signal). */
+export const CoachVoiceVariantSchema = z.enum(['legacy', 'roman_v2']);
+export type CoachVoiceVariant = z.infer<typeof CoachVoiceVariantSchema>;
+
+/**
+ * The five v1-6 coach-community empty-state surfaces. Mirrors the backend
+ * SURFACE_KEYS exactly (the coach lab surface was removed from v1-6 — it had
+ * no backend write — so there is no `coach_community_lab_empty`).
+ */
+export const CoachEmptyStateSurfaceKeySchema = z.enum([
+  'coach_community_home_empty',
+  'coach_community_inbox_empty',
+  'coach_community_cohorts_empty',
+  'coach_community_cohort_members_empty',
+  'coach_community_moderation_empty',
+]);
+export type CoachEmptyStateSurfaceKey = z.infer<
+  typeof CoachEmptyStateSurfaceKeySchema
+>;
+
+export const COACH_EMPTY_STATE_SURFACE_KEYS =
+  CoachEmptyStateSurfaceKeySchema.options;
+
+/**
+ * The composed Roman copy payload for a single surface. `passthrough()` so a
+ * future additive backend field (e.g. an `avatar_url`) does not fail the
+ * boundary parse; the four contract fields are required and typed.
+ */
+export const RomanCopyPayloadSchema = z
+  .object({
+    text: z.string().min(1),
+    avatar_crop: CoachAvatarCropSchema,
+    surface_key: CoachEmptyStateSurfaceKeySchema,
+    voice_variant: CoachVoiceVariantSchema,
+  })
+  .passthrough();
+export type RomanCopyPayload = z.infer<typeof RomanCopyPayloadSchema>;
+
+/** GET /community/coach/empty-states — every surface keyed by surface_key. */
+export const CoachEmptyStatesResponseSchema = z.record(
+  CoachEmptyStateSurfaceKeySchema,
+  RomanCopyPayloadSchema,
+);
+export type CoachEmptyStatesResponse = z.infer<
+  typeof CoachEmptyStatesResponseSchema
+>;
+
+// ─── Post detail (coach post-detail surface) ─────────────────────────────────
+
+/** A single community post as returned by GET /community/posts/:id. */
+export const CoachPostSchema = z
+  .object({
+    id: z.string().uuid(),
+    workspace_id: z.string().uuid(),
+    cohort_id: z.string().uuid().nullable(),
+    author_user_id: z.string().uuid(),
+    title: z.string().nullable(),
+    body: z.string().nullable(),
+    scope: z.enum(['hall', 'cohort']),
+    type: z.enum(['text', 'lesson', 'replay', 'poll', 'win']),
+    pinned: z.boolean(),
+    created_at: z.string(),
+    updated_at: z.string(),
+    deleted: z.boolean(),
+  })
+  .passthrough();
+export type CoachPost = z.infer<typeof CoachPostSchema>;
+
+/** A single reply/comment on a post (GET /community/posts/:id/comments). */
+export const CoachPostCommentSchema = z
+  .object({
+    id: z.string().uuid(),
+    // The backend comment view derives post_id from a nullable column and may
+    // emit an empty string, so this is a plain string (not a uuid) by design.
+    post_id: z.string(),
+    author_user_id: z.string().uuid(),
+    body: z.string(),
+    created_at: z.string(),
+  })
+  .passthrough();
+export type CoachPostComment = z.infer<typeof CoachPostCommentSchema>;
+
+/** Composed post-detail view consumed by CoachCommunityPostDetailScreen. */
+export interface CoachPostDetail {
+  post: CoachPost;
+  comments: CoachPostComment[];
+}
+
 // ─── Typed error ─────────────────────────────────────────────────────────────
 
 /**
@@ -350,6 +448,37 @@ export const coachCommunityApi = {
     return call(CoachFlaggedListSchema, () =>
       api.get<unknown>('/community/moderation/flagged'),
     ).then((r) => r.items);
+  },
+
+  /**
+   * GET /community/coach/empty-states — the operator-locked Roman copy payload
+   * for every v1-6 coach-community empty-state surface, keyed by surface_key.
+   * Validated at the wire boundary; a missing surface key throws a `contract`
+   * error (caught here as a Zod drift) so the client never silently falls back
+   * to constants on a successful 200.
+   */
+  getCoachEmptyStates(): Promise<CoachEmptyStatesResponse> {
+    return call(CoachEmptyStatesResponseSchema, () =>
+      api.get<unknown>('/community/coach/empty-states'),
+    );
+  },
+
+  /**
+   * GET /community/posts/:id (+ /comments) — the post-detail view for the
+   * coach post-detail surface. The coach role can read any post in their
+   * tenant via the existing posts controller (Roles: coach). Two reads are
+   * composed into one CoachPostDetail; both are Zod-validated.
+   */
+  async getCoachPostDetail(postId: string): Promise<CoachPostDetail> {
+    const post = await call(
+      z.object({ post: CoachPostSchema }).passthrough(),
+      () => api.get<unknown>(`/community/posts/${postId}`),
+    ).then((r) => r.post);
+    const comments = await call(
+      z.object({ comments: z.array(CoachPostCommentSchema) }).passthrough(),
+      () => api.get<unknown>(`/community/posts/${postId}/comments`),
+    ).then((r) => r.comments);
+    return { post, comments };
   },
 
   /**

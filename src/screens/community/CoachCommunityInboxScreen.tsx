@@ -4,14 +4,23 @@
  * `POST /community/coach/inbox/:id/ack`.
  *
  * Each row shows the client avatar (with a monogram badge fallback), a snippet,
- * a relative age, and an acknowledge button. A long-press on a row marks every
- * item in that client's cohort thread as read (a batch ack of the visible
- * sibling items). Acks are optimistic with rollback (see useAckInboxItem).
+ * a relative age, and an acknowledge button. Acks are optimistic with rollback
+ * (see useAckInboxItem).
  *
- * Empty + error states render the operator-locked Roman-voiced empty state
- * (neutral crop) — never a bare spinner. Touch targets are >= 44pt.
+ * Batch acknowledge (UX P1.3 — dual affordance):
+ *   - A visible "Select" toggle in the header enters multi-select mode; rows
+ *     show a checkbox and a footer "Mark N as read" button appears. This is the
+ *     discoverable, sighted-user path.
+ *   - A long-press on a row still marks every visible item in that client's
+ *     cohort thread as read — retained as a power-user shortcut.
+ *
+ * THREE distinct branches (UX P0.2): a loading spinner; an honest
+ * CoachErrorState on failure (never a calm/empty masquerade); and — on a
+ * genuinely empty inbox — the operator-locked Roman-voiced empty state whose
+ * copy + crop come from the backend voice policy (face + voice contract).
+ * Touch targets are >= 44pt.
  */
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -25,13 +34,14 @@ import { spacing, radius } from '../../theme/tokens';
 import HapticPressable from '../../components/HapticPressable';
 import {
   CoachEmptyState,
-  COACH_EMPTY_COPY,
+  CoachErrorState,
   MonogramBadge,
   relativeAge,
 } from '../../components/community/coach';
 import {
   useCoachInbox,
   useAckInboxItem,
+  useCoachEmptyStatePayload,
 } from '../../hooks/useCoachCommunity';
 import type { CoachInboxItem } from '../../api/coachCommunityApi';
 
@@ -39,6 +49,10 @@ export default function CoachCommunityInboxScreen(): React.ReactElement {
   const { semanticColors } = useTheme();
   const inbox = useCoachInbox();
   const ack = useAckInboxItem();
+  const emptyPayload = useCoachEmptyStatePayload('coach_community_inbox_empty');
+
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   // Memoise the row list so its identity is stable across renders — otherwise
   // the `?? []` fallback allocates a fresh array each render and churns the
@@ -63,10 +77,34 @@ export default function CoachCommunityInboxScreen(): React.ReactElement {
     [items, ack],
   );
 
+  const toggleSelectMode = useCallback(() => {
+    setSelecting((prev) => {
+      if (prev) setSelected(new Set());
+      return !prev;
+    });
+  }, []);
+
+  const toggleRowSelected = useCallback((id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const onMarkSelectedRead = useCallback(() => {
+    selected.forEach((id) => ack.mutate(id));
+    setSelected(new Set());
+    setSelecting(false);
+  }, [selected, ack]);
+
   const renderItem = useCallback(
     ({ item }: { item: CoachInboxItem }) => (
       <InboxRow
         item={item}
+        selecting={selecting}
+        checked={selected.has(item.id)}
         surface={semanticColors.bgSurface}
         border={semanticColors.border}
         titleColor={semanticColors.textPrimary}
@@ -75,9 +113,17 @@ export default function CoachCommunityInboxScreen(): React.ReactElement {
         onAccent={semanticColors.textOnAccent}
         onAck={onAck}
         onMarkThreadRead={onMarkThreadRead}
+        onToggleSelected={toggleRowSelected}
       />
     ),
-    [semanticColors, onAck, onMarkThreadRead],
+    [
+      semanticColors,
+      selecting,
+      selected,
+      onAck,
+      onMarkThreadRead,
+      toggleRowSelected,
+    ],
   );
 
   if (inbox.isLoading) {
@@ -94,15 +140,30 @@ export default function CoachCommunityInboxScreen(): React.ReactElement {
     );
   }
 
-  if (isEmpty || inbox.isError) {
+  if (inbox.isError) {
+    return (
+      <View
+        style={[styles.flex, { backgroundColor: semanticColors.bgPrimary }]}
+        testID="coach-community-inbox-screen"
+      >
+        <CoachErrorState
+          message="Could not load your inbox. Pull to retry."
+          onRetry={() => inbox.refetch()}
+          retrying={inbox.isRefetching}
+          testID="coach-community-inbox-error"
+        />
+      </View>
+    );
+  }
+
+  if (isEmpty) {
     return (
       <View
         style={[styles.flex, { backgroundColor: semanticColors.bgPrimary }]}
         testID="coach-community-inbox-screen"
       >
         <CoachEmptyState
-          crop={COACH_EMPTY_COPY.inbox.crop}
-          copy={COACH_EMPTY_COPY.inbox.copy}
+          payload={emptyPayload}
           testID="coach-community-inbox-empty"
         />
       </View>
@@ -114,6 +175,24 @@ export default function CoachCommunityInboxScreen(): React.ReactElement {
       style={[styles.flex, { backgroundColor: semanticColors.bgPrimary }]}
       testID="coach-community-inbox-screen"
     >
+      <View style={[styles.toolbar, { borderBottomColor: semanticColors.border }]}>
+        <HapticPressable
+          intent="light"
+          onPress={toggleSelectMode}
+          accessibilityRole="button"
+          accessibilityLabel={
+            selecting ? 'Cancel selection' : 'Select items to mark as read'
+          }
+          accessibilityState={{ selected: selecting }}
+          testID="coach-community-inbox-select-toggle"
+          style={styles.toolbarButton}
+        >
+          <Text style={[styles.toolbarLabel, { color: semanticColors.accent }]}>
+            {selecting ? 'Cancel' : 'Select'}
+          </Text>
+        </HapticPressable>
+      </View>
+
       <FlatList
         data={items}
         keyExtractor={(i) => i.id}
@@ -127,12 +206,59 @@ export default function CoachCommunityInboxScreen(): React.ReactElement {
           />
         }
       />
+
+      {selecting ? (
+        <View
+          style={[
+            styles.footer,
+            {
+              backgroundColor: semanticColors.bgSurface,
+              borderTopColor: semanticColors.border,
+            },
+          ]}
+        >
+          <HapticPressable
+            intent="success"
+            onPress={onMarkSelectedRead}
+            disabled={selected.size === 0}
+            accessibilityRole="button"
+            accessibilityLabel={`Mark ${selected.size} as read`}
+            accessibilityState={{ disabled: selected.size === 0 }}
+            testID="coach-community-inbox-mark-selected"
+            style={[
+              styles.footerButton,
+              {
+                backgroundColor:
+                  selected.size === 0
+                    ? semanticColors.disabledBg
+                    : semanticColors.accent,
+              },
+            ]}
+          >
+            <Text
+              style={[
+                styles.footerLabel,
+                {
+                  color:
+                    selected.size === 0
+                      ? semanticColors.textOnDisabled
+                      : semanticColors.textOnAccent,
+                },
+              ]}
+            >
+              {`Mark ${selected.size} as read`}
+            </Text>
+          </HapticPressable>
+        </View>
+      ) : null}
     </View>
   );
 }
 
 function InboxRow({
   item,
+  selecting,
+  checked,
   surface,
   border,
   titleColor,
@@ -141,8 +267,11 @@ function InboxRow({
   onAccent,
   onAck,
   onMarkThreadRead,
+  onToggleSelected,
 }: {
   item: CoachInboxItem;
+  selecting: boolean;
+  checked: boolean;
   surface: string;
   border: string;
   titleColor: string;
@@ -151,17 +280,40 @@ function InboxRow({
   onAccent: string;
   onAck: (id: string) => void;
   onMarkThreadRead: (item: CoachInboxItem) => void;
+  onToggleSelected: (id: string) => void;
 }): React.ReactElement {
   return (
     <HapticPressable
       intent="light"
-      onLongPress={() => onMarkThreadRead(item)}
-      accessibilityRole="button"
+      onPress={selecting ? () => onToggleSelected(item.id) : undefined}
+      onLongPress={selecting ? undefined : () => onMarkThreadRead(item)}
+      accessibilityRole={selecting ? 'checkbox' : 'button'}
       accessibilityLabel={`${item.client_name} in ${item.cohort_name}: ${item.snippet}`}
-      accessibilityHint="Long press to mark this cohort thread as read"
+      accessibilityHint={
+        selecting
+          ? 'Tap to select this item'
+          : 'Long press to mark this cohort thread as read'
+      }
+      accessibilityState={selecting ? { checked } : undefined}
       testID={`coach-community-inbox-row-${item.id}`}
       style={[styles.row, { backgroundColor: surface, borderColor: border }]}
     >
+      {selecting ? (
+        <View
+          testID={`coach-community-inbox-check-${item.id}`}
+          style={[
+            styles.checkbox,
+            {
+              borderColor: accent,
+              backgroundColor: checked ? accent : 'transparent',
+            },
+          ]}
+        >
+          {checked ? (
+            <Text style={[styles.checkmark, { color: onAccent }]}>✓</Text>
+          ) : null}
+        </View>
+      ) : null}
       <MonogramBadge
         name={item.client_name}
         avatarUrl={item.avatar_url}
@@ -193,16 +345,18 @@ function InboxRow({
           {item.snippet}
         </Text>
       </View>
-      <HapticPressable
-        intent="success"
-        onPress={() => onAck(item.id)}
-        accessibilityRole="button"
-        accessibilityLabel={`Acknowledge message from ${item.client_name}`}
-        testID={`coach-community-inbox-ack-${item.id}`}
-        style={[styles.ackButton, { backgroundColor: accent }]}
-      >
-        <Text style={[styles.ackLabel, { color: onAccent }]}>Ack</Text>
-      </HapticPressable>
+      {selecting ? null : (
+        <HapticPressable
+          intent="success"
+          onPress={() => onAck(item.id)}
+          accessibilityRole="button"
+          accessibilityLabel={`Acknowledge message from ${item.client_name}`}
+          testID={`coach-community-inbox-ack-${item.id}`}
+          style={[styles.ackButton, { backgroundColor: accent }]}
+        >
+          <Text style={[styles.ackLabel, { color: onAccent }]}>Ack</Text>
+        </HapticPressable>
+      )}
     </HapticPressable>
   );
 }
@@ -213,6 +367,25 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  toolbar: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xs,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  toolbarButton: {
+    minHeight: 44,
+    minWidth: 64,
+    justifyContent: 'center',
+    alignItems: 'flex-end',
+    paddingHorizontal: spacing.sm,
+  },
+  toolbarLabel: {
+    fontSize: 15,
+    fontWeight: '600',
   },
   listContent: {
     padding: spacing.lg,
@@ -226,6 +399,18 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     minHeight: 64,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkmark: {
+    fontSize: 14,
+    fontWeight: '600',
   },
   rowBody: {
     flex: 1,
@@ -262,6 +447,20 @@ const styles = StyleSheet.create({
   },
   ackLabel: {
     fontSize: 14,
+    fontWeight: '600',
+  },
+  footer: {
+    padding: spacing.lg,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  footerButton: {
+    minHeight: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: radius.md,
+  },
+  footerLabel: {
+    fontSize: 15,
     fontWeight: '600',
   },
 });

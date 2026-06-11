@@ -6,10 +6,14 @@
  */
 export { default as CoachEmptyState } from './CoachEmptyState';
 export type { CoachEmptyStateProps } from './CoachEmptyState';
+export { default as CoachErrorState } from './CoachErrorState';
+export type { CoachErrorStateProps } from './CoachErrorState';
 export { default as MonogramBadge } from './MonogramBadge';
 export type { MonogramBadgeProps } from './MonogramBadge';
 export { default as ConfirmModal } from './ConfirmModal';
 export type { ConfirmModalProps } from './ConfirmModal';
 export { relativeAge } from './relativeAge';
-export { COACH_EMPTY_COPY } from './coachVoice';
-export type { CoachVoiceEntry, CoachEmptyKey } from './coachVoice';
+export {
+  COACH_EMPTY_FALLBACK,
+  getCoachEmptyStateFallback,
+} from './coachVoice';

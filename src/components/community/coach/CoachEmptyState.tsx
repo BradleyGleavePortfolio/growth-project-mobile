@@ -8,41 +8,50 @@
  * is the single enforcement point: it always renders `<RomanAvatar />` above a
  * centered copy line, with >= 12pt spacing between them.
  *
- * Crop selection per surface (per ROMAN_VOICE_POLICY.md §4 avatar matrix):
+ * Payload source of truth (fixer R1, face+voice contract): the `text` and
+ * `avatar_crop` come from the backend Roman voice-policy payload
+ * (`GET /community/coach/empty-states`, surfaced via `useCoachEmptyStates`).
+ * The screen passes the resolved `RomanCopyPayload` straight through here, so
+ * the copy and crop are NEVER hardcoded at the call site — they are whatever
+ * the backend policy says they are. On a network/5xx error the screen renders
+ * `CoachErrorState` instead (honest error copy), never this celebratory/calm
+ * empty state, so an error can never masquerade as "all clear".
+ *
+ * Crop selection per surface is decided by the backend policy
+ * (SURFACE_AVATAR_CROP):
  *   - `neutral` — generic empty states (home blank, inbox empty, cohorts empty,
- *     lab empty, cohort-detail empty members). DEFAULT here.
+ *     empty cohort members).
  *   - `smile`   — celebratory empty states only (moderation queue cleared).
- *   - `monogram` — compact accents in dense rows, NOT empty states (use
- *     MonogramBadge for those).
  *
  * Size: 64pt on full-screen empty states. The RomanAvatar carries its own
  * `accessibilityLabel` defaults, so screen readers announce "Roman".
- *
- * Copy rules (enforced by review, surfaced here for callers): no exclamation
- * points, no emoji, no "Oops/Whoops/Uh oh", one next step per message. The
- * locked copy strings live in coachVoice.ts and are passed in by each screen.
  */
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import RomanAvatar, { type RomanCrop } from '../RomanAvatar';
+import RomanAvatar from '../RomanAvatar';
 import { useTheme } from '../../../theme/useTheme';
 import { spacing } from '../../../theme/tokens';
+import type { RomanCopyPayload } from '../../../api/coachCommunityApi';
 
 export interface CoachEmptyStateProps {
-  /** Which approved crop to show. `neutral` for generic, `smile` for cleared. */
-  crop?: Extract<RomanCrop, 'neutral' | 'smile'>;
-  /** The locked Roman copy string for this surface. */
-  copy: string;
+  /**
+   * The backend Roman copy payload for this surface. The component renders
+   * `payload.text` beneath `<RomanAvatar crop={payload.avatar_crop} />` so the
+   * face + voice contract is satisfied with backend-driven content only.
+   */
+  payload: RomanCopyPayload;
   /** Root testID — the avatar nested inside uses `${testID}-avatar`. */
   testID?: string;
 }
 
 export default function CoachEmptyState({
-  crop = 'neutral',
-  copy,
+  payload,
   testID,
 }: CoachEmptyStateProps): React.ReactElement {
   const { semanticColors } = useTheme();
+  // The backend payload only ever carries `neutral` or `smile` for an empty
+  // state; `monogram` is a dense-row crop and never reaches an empty surface.
+  const crop = payload.avatar_crop === 'smile' ? 'smile' : 'neutral';
   return (
     <View style={styles.container} testID={testID}>
       <RomanAvatar
@@ -51,7 +60,7 @@ export default function CoachEmptyState({
         testID={testID ? `${testID}-avatar` : 'empty-roman-avatar'}
       />
       <Text style={[styles.copy, { color: semanticColors.textMuted }]}>
-        {copy}
+        {payload.text}
       </Text>
     </View>
   );

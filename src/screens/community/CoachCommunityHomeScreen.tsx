@@ -5,10 +5,13 @@
  * at-a-glance cards: unread inbox count, active cohort count, and today's
  * flagged moderation items. Each card routes into the matching surface.
  *
- * When the dashboard is entirely quiet (no unread, no cohorts, nothing flagged)
- * OR the request errors, the screen renders the operator-locked Roman-voiced
- * empty state with the neutral crop (face + voice contract). No spinner-only
- * empty states. Colours come from semanticColors; touch targets are >= 44pt.
+ * The screen has THREE distinct branches (UX P0.2): a loading spinner; an
+ * honest CoachErrorState on a load failure (never a calm/empty masquerade); and
+ * — when the dashboard is genuinely quiet (no unread, no cohorts, nothing
+ * flagged) — the operator-locked Roman-voiced empty state. The empty-state copy
+ * and avatar crop come from the backend voice policy (face + voice contract),
+ * resolved via useCoachEmptyStatePayload. Colours come from semanticColors;
+ * touch targets are >= 44pt.
  */
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
@@ -16,14 +19,18 @@ import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/useTheme';
 import { spacing, radius } from '../../theme/tokens';
 import HapticPressable from '../../components/HapticPressable';
-import { CoachEmptyState, COACH_EMPTY_COPY } from '../../components/community/coach';
-import { useCoachDashboard } from '../../hooks/useCoachCommunity';
+import { CoachEmptyState, CoachErrorState } from '../../components/community/coach';
+import {
+  useCoachDashboard,
+  useCoachEmptyStatePayload,
+} from '../../hooks/useCoachCommunity';
 import type { CoachCommunityNav } from './coachCommunityNavTypes';
 
 export default function CoachCommunityHomeScreen(): React.ReactElement {
   const { semanticColors } = useTheme();
   const navigation = useNavigation<CoachCommunityNav>();
   const dashboard = useCoachDashboard();
+  const emptyPayload = useCoachEmptyStatePayload('coach_community_home_empty');
   const data = dashboard.data;
 
   const isQuiet =
@@ -48,7 +55,23 @@ export default function CoachCommunityHomeScreen(): React.ReactElement {
     );
   }
 
-  if (isQuiet || dashboard.isError) {
+  if (dashboard.isError) {
+    return (
+      <View
+        style={[styles.flex, { backgroundColor: semanticColors.bgPrimary }]}
+        testID="coach-community-home-screen"
+      >
+        <CoachErrorState
+          message="Could not load your community summary. Pull to retry."
+          onRetry={() => dashboard.refetch()}
+          retrying={dashboard.isRefetching}
+          testID="coach-community-home-error"
+        />
+      </View>
+    );
+  }
+
+  if (isQuiet) {
     return (
       <ScrollView
         contentContainerStyle={styles.center}
@@ -56,8 +79,7 @@ export default function CoachCommunityHomeScreen(): React.ReactElement {
         testID="coach-community-home-screen"
       >
         <CoachEmptyState
-          crop={COACH_EMPTY_COPY.home.crop}
-          copy={COACH_EMPTY_COPY.home.copy}
+          payload={emptyPayload}
           testID="coach-community-home-empty"
         />
       </ScrollView>
@@ -104,22 +126,6 @@ export default function CoachCommunityHomeScreen(): React.ReactElement {
         onPress={() => navigation.navigate('CoachCommunityModeration')}
         testID="coach-community-home-moderation-card"
       />
-
-      <HapticPressable
-        intent="light"
-        onPress={() => navigation.navigate('CoachCommunityLab')}
-        accessibilityRole="button"
-        accessibilityLabel="Open the drafting lab"
-        testID="coach-community-home-lab-link"
-        style={[
-          styles.labLink,
-          { borderColor: semanticColors.border },
-        ]}
-      >
-        <Text style={[styles.labLinkText, { color: semanticColors.textPrimary }]}>
-          Open the drafting lab
-        </Text>
-      </HapticPressable>
     </ScrollView>
   );
 }
@@ -159,6 +165,7 @@ function StatCard({
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
   content: {
     padding: spacing.lg,
     gap: spacing.md,
@@ -187,18 +194,5 @@ const styles = StyleSheet.create({
   },
   cardLabel: {
     fontSize: 14,
-  },
-  labLink: {
-    minHeight: 48,
-    paddingHorizontal: spacing.lg,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    marginTop: spacing.sm,
-  },
-  labLinkText: {
-    fontSize: 15,
-    fontWeight: '600',
   },
 });

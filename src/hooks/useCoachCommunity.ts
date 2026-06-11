@@ -19,6 +19,8 @@ import {
 } from '@tanstack/react-query';
 import {
   coachCommunityApi,
+  CoachCommunityApiError,
+  COACH_EMPTY_STATE_SURFACE_KEYS,
   type CoachDashboard,
   type CoachInboxItem,
   type CoachInboxPage,
@@ -26,7 +28,12 @@ import {
   type CoachCohortDetail,
   type CoachCohortMember,
   type CoachFlaggedItem,
+  type CoachEmptyStatesResponse,
+  type CoachEmptyStateSurfaceKey,
+  type RomanCopyPayload,
+  type CoachPostDetail,
 } from '../api/coachCommunityApi';
+import { getCoachEmptyStateFallback } from '../components/community/coach/coachVoice';
 
 // ─── Query keys (stable, namespaced) ─────────────────────────────────────────
 
@@ -37,6 +44,8 @@ export const coachCommunityKeys = {
   cohorts: () => [...coachCommunityKeys.all, 'cohorts'] as const,
   cohort: (id: string) => [...coachCommunityKeys.all, 'cohort', id] as const,
   flagged: () => [...coachCommunityKeys.all, 'flagged'] as const,
+  emptyStates: () => [...coachCommunityKeys.all, 'emptyStates'] as const,
+  post: (id: string) => [...coachCommunityKeys.all, 'post', id] as const,
 };
 
 // ─── Read hooks ──────────────────────────────────────────────────────────────
@@ -79,6 +88,68 @@ export function useCoachFlagged(): UseQueryResult<CoachFlaggedItem[]> {
   return useQuery({
     queryKey: coachCommunityKeys.flagged(),
     queryFn: () => coachCommunityApi.getFlagged(),
+    staleTime: 15_000,
+  });
+}
+
+/**
+ * Fetch the operator-locked Roman empty-state payloads for every coach surface
+ * (the face+voice contract). One call, cached for the session (the policy
+ * almost never changes mid-session; it re-fetches on app restart / version
+ * bump). The runtime invariant below is the contract enforcement point: a
+ * successful 200 that is MISSING any known surface_key throws a typed
+ * `contract` error rather than silently letting a screen fall back to local
+ * constants — that silent fallback is exactly the violation this fix removes.
+ */
+export function useCoachEmptyStates(): UseQueryResult<CoachEmptyStatesResponse> {
+  return useQuery({
+    queryKey: coachCommunityKeys.emptyStates(),
+    queryFn: async () => {
+      const data = await coachCommunityApi.getCoachEmptyStates();
+      for (const key of COACH_EMPTY_STATE_SURFACE_KEYS) {
+        if (data[key] == null) {
+          throw new CoachCommunityApiError(
+            'contract',
+            200,
+            `coach empty-states response missing required surface: ${key}`,
+          );
+        }
+      }
+      return data;
+    },
+    // The policy is effectively static within a session.
+    staleTime: Infinity,
+    gcTime: Infinity,
+    retry: false,
+  });
+}
+
+/**
+ * Resolve the Roman copy payload for ONE surface, ready to hand straight to
+ * <CoachEmptyState payload={...} />. On the success path it returns the live
+ * backend payload (`voice_variant: 'roman_v2'`). ONLY when the empty-states
+ * call itself errored (network / 5xx / contract drift) does it return the
+ * typed offline fallback, stamped `voice_variant: 'legacy'` so a fallback
+ * render is observable in analytics. There is NO silent fallback on a
+ * successful 200 — a missing surface throws inside `useCoachEmptyStates`.
+ */
+export function useCoachEmptyStatePayload(
+  surfaceKey: CoachEmptyStateSurfaceKey,
+): RomanCopyPayload {
+  const emptyStates = useCoachEmptyStates();
+  const live = emptyStates.data?.[surfaceKey];
+  if (live != null) return live;
+  return getCoachEmptyStateFallback(surfaceKey);
+}
+
+/** Fetch a single post + its reply thread for the post-detail surface. */
+export function useCoachPostDetail(
+  postId: string,
+): UseQueryResult<CoachPostDetail> {
+  return useQuery({
+    queryKey: coachCommunityKeys.post(postId),
+    queryFn: () => coachCommunityApi.getCoachPostDetail(postId),
+    enabled: postId.length > 0,
     staleTime: 15_000,
   });
 }
@@ -294,45 +365,11 @@ export function useHideFlagged(): UseMutationResult<
   });
 }
 
-/** Discriminated decision used by the moderation screen's approve action. */
-export function useApproveFlagged(): UseMutationResult<
-  void,
-  unknown,
-  CoachFlaggedItem
-> {
-  const qc = useQueryClient();
-  // "Approve" clears the item from the queue without hiding the content. The
-  // v1-6 backend exposes no approve endpoint yet (the flagged queue is the only
-  // moderation read), so approving is a client-side dismissal that simply
-  // refetches the authoritative queue. When the backend ships an approve/clear
-  // endpoint (tracked for v2-x) this mutationFn swaps in without touching the
-  // screen. Until then it optimistically removes the row and re-syncs.
-  return useMutation({
-    mutationFn: async (_item: CoachFlaggedItem) => {
-      // No network mutation yet — re-sync against the authoritative queue.
-      return undefined;
-    },
-    onMutate: async (item) => {
-      await qc.cancelQueries({ queryKey: coachCommunityKeys.flagged() });
-      const prev = qc.getQueryData<CoachFlaggedItem[]>(
-        coachCommunityKeys.flagged(),
-      );
-      if (prev) {
-        qc.setQueryData<CoachFlaggedItem[]>(
-          coachCommunityKeys.flagged(),
-          prev.filter((f) => f.id !== item.id),
-        );
-      }
-      return { prev };
-    },
-    onError: (_err, _item, ctx) => {
-      const c = ctx as { prev?: CoachFlaggedItem[] } | undefined;
-      if (c?.prev) qc.setQueryData(coachCommunityKeys.flagged(), c.prev);
-    },
-    onSettled: () => {
-      qc.invalidateQueries({ queryKey: coachCommunityKeys.flagged() });
-    },
-  });
-}
+// NOTE (R0 / fixer G10.2 Option A): the no-network `useApproveFlagged` stub was
+// REMOVED. The v1-6 backend exposes no durable approve/clear endpoint, so an
+// "Approve" action could only ever be a client-side dismissal that masquerades
+// as a backend decision — a silent no-op. Per the decacorn rule, the moderation
+// screen now ships only the real, backend-backed Hide action. A real approve
+// endpoint can reintroduce the action in a later PR.
 
 export type { CoachInboxItem };

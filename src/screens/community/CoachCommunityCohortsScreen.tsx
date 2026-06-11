@@ -9,8 +9,12 @@
  *     the list) that reconciles with the server row on success.
  *   - Tapping a row routes into CoachCommunityCohortDetail.
  *
- * Empty + error states render the operator-locked Roman-voiced empty state
- * (neutral crop) — never a bare spinner. Touch targets are >= 44pt.
+ * THREE distinct branches (UX P0.2): a loading spinner; an honest
+ * CoachErrorState on failure (never a calm/empty masquerade); and — on a
+ * genuinely empty cohort list — the operator-locked Roman-voiced empty state
+ * whose copy + crop come from the backend voice policy (face + voice
+ * contract). A CompletionToast confirms a successful create (G11). Touch
+ * targets are >= 44pt.
  */
 import React, { useCallback, useState } from 'react';
 import {
@@ -27,10 +31,14 @@ import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/useTheme';
 import { spacing, radius, withAlpha } from '../../theme/tokens';
 import HapticPressable from '../../components/HapticPressable';
-import { CoachEmptyState, COACH_EMPTY_COPY } from '../../components/community/coach';
+import { CoachEmptyState, CoachErrorState } from '../../components/community/coach';
+import CompletionToast, {
+  useCompletionToast,
+} from '../../components/community/CompletionToast';
 import {
   useCoachCohorts,
   useCreateCohort,
+  useCoachEmptyStatePayload,
 } from '../../hooks/useCoachCommunity';
 import type { CoachCohort } from '../../api/coachCommunityApi';
 import type { CoachCommunityNav } from './coachCommunityNavTypes';
@@ -40,6 +48,8 @@ export default function CoachCommunityCohortsScreen(): React.ReactElement {
   const navigation = useNavigation<CoachCommunityNav>();
   const cohorts = useCoachCohorts();
   const createCohort = useCreateCohort();
+  const emptyPayload = useCoachEmptyStatePayload('coach_community_cohorts_empty');
+  const completion = useCompletionToast();
 
   const [modalOpen, setModalOpen] = useState(false);
   const [name, setName] = useState('');
@@ -57,10 +67,11 @@ export default function CoachCommunityCohortsScreen(): React.ReactElement {
         onSuccess: () => {
           setName('');
           setModalOpen(false);
+          completion.show('Cohort created.');
         },
       },
     );
-  }, [trimmed, createCohort]);
+  }, [trimmed, createCohort, completion]);
 
   const renderItem = useCallback(
     ({ item }: { item: CoachCohort }) => (
@@ -119,10 +130,16 @@ export default function CoachCommunityCohortsScreen(): React.ReactElement {
       style={[styles.flex, { backgroundColor: semanticColors.bgPrimary }]}
       testID="coach-community-cohorts-screen"
     >
-      {isEmpty || cohorts.isError ? (
+      {cohorts.isError ? (
+        <CoachErrorState
+          message="Could not load your cohorts. Pull to retry."
+          onRetry={() => cohorts.refetch()}
+          retrying={cohorts.isRefetching}
+          testID="coach-community-cohorts-error"
+        />
+      ) : isEmpty ? (
         <CoachEmptyState
-          crop={COACH_EMPTY_COPY.cohorts.crop}
-          copy={COACH_EMPTY_COPY.cohorts.copy}
+          payload={emptyPayload}
           testID="coach-community-cohorts-empty"
         />
       ) : (
@@ -247,6 +264,8 @@ export default function CoachCommunityCohortsScreen(): React.ReactElement {
           </View>
         </View>
       </Modal>
+
+      <CompletionToast state={completion.toast} />
     </View>
   );
 }

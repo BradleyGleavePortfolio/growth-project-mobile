@@ -2,18 +2,29 @@
  * CoachCommunityModerationScreen — the flagged-content review queue (v1-6).
  * Consumes the existing moderation endpoints: `GET /community/moderation/flagged`
  * (read), `POST /community/posts/:id/hide`, and
- * `POST /community/messages/:id/hide` (decisions).
+ * `POST /community/messages/:id/hide` (decision).
  *
  * Each row shows the offending content verbatim, the author, the cohort, a
- * coarse reason label, and two decisions: "hide" (destructive) and "approve"
- * (clears the item from the queue without hiding). Both destructive paths route
- * through a confirmation modal (hard gate §2.3 — no one-tap hide). Hides are
- * optimistic with rollback (see useHideFlagged).
+ * coarse reason label, and the single real decision: HIDE. The destructive Hide
+ * path routes through a confirmation modal (hard gate §2.3 — no one-tap hide)
+ * and is optimistic with rollback (see useHideFlagged).
  *
- * The empty state is CELEBRATORY: when the queue is clear (or after the coach
- * clears it) the screen renders the operator-locked Roman-voiced empty state
- * with the SMILE crop ("Nothing flagged. The room is running itself."). No bare
- * spinner. Touch targets are >= 44pt.
+ * APPROVE REMOVED (fixer R1 / G10.2 Option A): the v1-6 backend exposes no
+ * durable approve/clear endpoint, so an "Approve" action could only ever be a
+ * client-side dismissal masquerading as a backend decision (a silent no-op).
+ * Per the decacorn rule the action was removed; it can return when a real
+ * approve endpoint ships.
+ *
+ * When a flagged item targets a POST, the content area opens the post-detail
+ * surface (with the flagged badge) so the coach can read the full thread before
+ * deciding.
+ *
+ * THREE distinct branches (UX P0.2): a loading spinner; an honest
+ * CoachErrorState on failure (never a celebratory "all clear" masquerade); and
+ * — when the queue is genuinely clear — the operator-locked Roman-voiced empty
+ * state with the SMILE crop, copy + crop sourced from the backend voice policy
+ * (face + voice contract). A CompletionToast confirms a successful Hide (G11).
+ * Touch targets are >= 44pt.
  */
 import React, { useCallback, useState } from 'react';
 import {
@@ -24,106 +35,139 @@ import {
   ActivityIndicator,
   RefreshControl,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/useTheme';
-import { spacing, radius } from '../../theme/tokens';
+import { spacing, radius, semantic } from '../../theme/tokens';
 import HapticPressable from '../../components/HapticPressable';
 import {
   CoachEmptyState,
-  COACH_EMPTY_COPY,
+  CoachErrorState,
   ConfirmModal,
   relativeAge,
 } from '../../components/community/coach';
+import CompletionToast, {
+  useCompletionToast,
+} from '../../components/community/CompletionToast';
 import {
   useCoachFlagged,
   useHideFlagged,
-  useApproveFlagged,
+  useCoachEmptyStatePayload,
 } from '../../hooks/useCoachCommunity';
 import type { CoachFlaggedItem } from '../../api/coachCommunityApi';
+import type { CoachCommunityNav } from './coachCommunityNavTypes';
 
 export default function CoachCommunityModerationScreen(): React.ReactElement {
   const { semanticColors } = useTheme();
+  const navigation = useNavigation<CoachCommunityNav>();
   const flagged = useCoachFlagged();
   const hide = useHideFlagged();
-  const approve = useApproveFlagged();
+  const emptyPayload = useCoachEmptyStatePayload(
+    'coach_community_moderation_empty',
+  );
+  const completion = useCompletionToast();
 
   const [pendingHide, setPendingHide] = useState<CoachFlaggedItem | null>(null);
-  const [pendingApprove, setPendingApprove] =
-    useState<CoachFlaggedItem | null>(null);
 
   const items = flagged.data ?? [];
   const isEmpty = !flagged.isLoading && !flagged.isError && items.length === 0;
 
   const onConfirmHide = useCallback(() => {
     if (!pendingHide) return;
-    hide.mutate(pendingHide, { onSettled: () => setPendingHide(null) });
-  }, [pendingHide, hide]);
-
-  const onConfirmApprove = useCallback(() => {
-    if (!pendingApprove) return;
-    approve.mutate(pendingApprove, {
-      onSettled: () => setPendingApprove(null),
+    hide.mutate(pendingHide, {
+      onSuccess: () => completion.show('Hidden.'),
+      onSettled: () => setPendingHide(null),
     });
-  }, [pendingApprove, approve]);
+  }, [pendingHide, hide, completion]);
+
+  const onOpenPost = useCallback(
+    (item: CoachFlaggedItem) => {
+      if (item.target_type !== 'post') return;
+      navigation.navigate('CoachCommunityPostDetail', {
+        postId: item.target_id,
+        flagged: true,
+      });
+    },
+    [navigation],
+  );
 
   const renderItem = useCallback(
-    ({ item }: { item: CoachFlaggedItem }) => (
-      <View
-        style={[
-          styles.card,
-          {
-            backgroundColor: semanticColors.bgSurface,
-            borderColor: semanticColors.border,
-          },
-        ]}
-        testID={`coach-community-flagged-row-${item.id}`}
-      >
-        <View style={styles.cardHeader}>
+    ({ item }: { item: CoachFlaggedItem }) => {
+      const isPost = item.target_type === 'post';
+      return (
+        <View
+          style={[
+            styles.card,
+            {
+              backgroundColor: semanticColors.bgSurface,
+              borderColor: semanticColors.border,
+            },
+          ]}
+          testID={`coach-community-flagged-row-${item.id}`}
+        >
+          <View style={styles.cardHeader}>
+            <Text
+              style={[styles.author, { color: semanticColors.textPrimary }]}
+              numberOfLines={1}
+            >
+              {item.author_name}
+            </Text>
+            <Text style={[styles.age, { color: semanticColors.textMuted }]}>
+              {relativeAge(item.created_at)}
+            </Text>
+          </View>
           <Text
-            style={[styles.author, { color: semanticColors.textPrimary }]}
+            style={[styles.meta, { color: semanticColors.textMuted }]}
             numberOfLines={1}
           >
-            {item.author_name}
+            {(item.cohort_name ? `${item.cohort_name} · ` : '') +
+              `${item.target_type} · ${item.reason}`}
           </Text>
-          <Text style={[styles.age, { color: semanticColors.textMuted }]}>
-            {relativeAge(item.created_at)}
-          </Text>
-        </View>
-        <Text style={[styles.meta, { color: semanticColors.textMuted }]} numberOfLines={1}>
-          {(item.cohort_name ? `${item.cohort_name} · ` : '') +
-            `${item.target_type} · ${item.reason}`}
-        </Text>
-        <Text style={[styles.content, { color: semanticColors.textPrimary }]}>
-          {item.content}
-        </Text>
-        <View style={styles.actions}>
           <HapticPressable
             intent="light"
-            onPress={() => setPendingApprove(item)}
-            accessibilityRole="button"
-            accessibilityLabel={`Approve content from ${item.author_name}`}
-            testID={`coach-community-flagged-approve-${item.id}`}
-            style={[styles.action, { borderColor: semanticColors.border }]}
+            onPress={isPost ? () => onOpenPost(item) : undefined}
+            disabled={!isPost}
+            accessibilityRole={isPost ? 'button' : 'text'}
+            accessibilityLabel={
+              isPost
+                ? `Open post from ${item.author_name}`
+                : `Flagged ${item.target_type} from ${item.author_name}`
+            }
+            accessibilityHint={isPost ? 'Opens the full post and thread' : undefined}
+            testID={`coach-community-flagged-content-${item.id}`}
           >
-            <Text style={[styles.approveLabel, { color: semanticColors.textPrimary }]}>
-              Approve
+            <Text style={[styles.content, { color: semanticColors.textPrimary }]}>
+              {item.content}
             </Text>
+            {isPost ? (
+              <Text style={[styles.openHint, { color: semanticColors.accent }]}>
+                View post
+              </Text>
+            ) : null}
           </HapticPressable>
-          <HapticPressable
-            intent="warning"
-            onPress={() => setPendingHide(item)}
-            accessibilityRole="button"
-            accessibilityLabel={`Hide content from ${item.author_name}`}
-            testID={`coach-community-flagged-hide-${item.id}`}
-            style={[styles.action, { backgroundColor: semanticColors.accent }]}
-          >
-            <Text style={[styles.hideLabel, { color: semanticColors.textOnAccent }]}>
-              Hide
-            </Text>
-          </HapticPressable>
+          <View style={styles.actions}>
+            <HapticPressable
+              intent="warning"
+              onPress={() => setPendingHide(item)}
+              accessibilityRole="button"
+              accessibilityLabel={`Hide content from ${item.author_name}`}
+              testID={`coach-community-flagged-hide-${item.id}`}
+              style={[
+                styles.hideAction,
+                {
+                  backgroundColor: semantic.danger.bg,
+                  borderColor: semantic.danger.border,
+                },
+              ]}
+            >
+              <Text style={[styles.hideLabel, { color: semantic.danger.fg }]}>
+                Hide
+              </Text>
+            </HapticPressable>
+          </View>
         </View>
-      </View>
-    ),
-    [semanticColors],
+      );
+    },
+    [semanticColors, onOpenPost],
   );
 
   if (flagged.isLoading) {
@@ -145,10 +189,16 @@ export default function CoachCommunityModerationScreen(): React.ReactElement {
       style={[styles.flex, { backgroundColor: semanticColors.bgPrimary }]}
       testID="coach-community-moderation-screen"
     >
-      {isEmpty || flagged.isError ? (
+      {flagged.isError ? (
+        <CoachErrorState
+          message="Could not load the review queue. Pull to retry."
+          onRetry={() => flagged.refetch()}
+          retrying={flagged.isRefetching}
+          testID="coach-community-moderation-error"
+        />
+      ) : isEmpty ? (
         <CoachEmptyState
-          crop={COACH_EMPTY_COPY.moderation.crop}
-          copy={COACH_EMPTY_COPY.moderation.copy}
+          payload={emptyPayload}
           testID="coach-community-moderation-empty"
         />
       ) : (
@@ -183,21 +233,7 @@ export default function CoachCommunityModerationScreen(): React.ReactElement {
         testID="coach-community-moderation-hide-confirm"
       />
 
-      {/* Approve confirmation — clears the item from the queue. */}
-      <ConfirmModal
-        visible={pendingApprove != null}
-        title="Approve this content"
-        body={
-          pendingApprove
-            ? `Keep this ${pendingApprove.target_type} from ${pendingApprove.author_name} and clear it from the queue.`
-            : undefined
-        }
-        confirmLabel="Approve"
-        busy={approve.isPending}
-        onConfirm={onConfirmApprove}
-        onCancel={() => setPendingApprove(null)}
-        testID="coach-community-moderation-approve-confirm"
-      />
+      <CompletionToast state={completion.toast} />
     </View>
   );
 }
@@ -241,13 +277,18 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     marginTop: spacing.xs,
   },
+  openHint: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: spacing.xs,
+  },
   actions: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
     gap: spacing.sm,
     marginTop: spacing.sm,
   },
-  action: {
+  hideAction: {
     minHeight: 44,
     minWidth: 96,
     paddingHorizontal: spacing.lg,
@@ -255,10 +296,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
-  },
-  approveLabel: {
-    fontSize: 14,
-    fontWeight: '600',
   },
   hideLabel: {
     fontSize: 14,

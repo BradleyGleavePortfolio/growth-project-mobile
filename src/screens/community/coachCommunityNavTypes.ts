@@ -15,13 +15,13 @@ export type CoachCommunityStackParamList = {
   CoachCommunityHome: undefined;
   /** Aggregated unanswered items across the coach's cohorts. */
   CoachCommunityInbox: undefined;
-  /** Private scratch space for drafting posts/DMs (AsyncStorage only). */
-  CoachCommunityLab: undefined;
   /** List of the coach's cohorts with a create-cohort FAB. */
   CoachCommunityCohorts: undefined;
   /** Cohort header + member list + invite / remove flows. */
   CoachCommunityCohortDetail: { cohortId: string; cohortName?: string };
-  /** Flagged-content moderation queue (hide / approve, confirmed). */
+  /** A single post: title, body, author, timestamp, reply thread. */
+  CoachCommunityPostDetail: { postId: string; flagged?: boolean };
+  /** Flagged-content moderation queue (hide, confirmed). */
   CoachCommunityModeration: undefined;
 };
 

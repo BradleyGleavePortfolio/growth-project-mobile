@@ -13,8 +13,16 @@
  *     §2.3 — no one-tap destructive actions); confirming fires an optimistic
  *     remove with rollback.
  *
- * Empty members + error states render the operator-locked Roman-voiced empty
- * state (neutral crop) — never a bare spinner. Touch targets are >= 44pt.
+ * THREE distinct branches (UX P0.2): a loading spinner; an honest
+ * CoachErrorState on failure (never a calm/empty masquerade); and — on a
+ * cohort with no members — the operator-locked Roman-voiced empty state whose
+ * copy + crop come from the backend voice policy (face + voice contract).
+ *
+ * Destructive Remove is demoted (UX P1.1): it is NOT a button on every row.
+ * Each client row carries an overflow (kebab) affordance that opens a small
+ * action sheet whose only entry is "Remove from cohort"; choosing it routes
+ * through the existing confirmation modal before any mutation fires. A
+ * CompletionToast confirms a successful invite (G11). Touch targets are >= 44pt.
  */
 import React, { useCallback, useState } from 'react';
 import {
@@ -32,14 +40,18 @@ import { spacing, radius, withAlpha } from '../../theme/tokens';
 import HapticPressable from '../../components/HapticPressable';
 import {
   CoachEmptyState,
-  COACH_EMPTY_COPY,
+  CoachErrorState,
   MonogramBadge,
   ConfirmModal,
 } from '../../components/community/coach';
+import CompletionToast, {
+  useCompletionToast,
+} from '../../components/community/CompletionToast';
 import {
   useCoachCohortDetail,
   useInviteMember,
   useRemoveMember,
+  useCoachEmptyStatePayload,
 } from '../../hooks/useCoachCommunity';
 import type { CoachCohortMember } from '../../api/coachCommunityApi';
 import type { CoachCommunityRoute } from './coachCommunityNavTypes';
@@ -58,9 +70,15 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
   const detail = useCoachCohortDetail(cohortId);
   const invite = useInviteMember(cohortId);
   const remove = useRemoveMember(cohortId);
+  const emptyPayload = useCoachEmptyStatePayload(
+    'coach_community_cohort_members_empty',
+  );
+  const completion = useCompletionToast();
 
   const [inviteOpen, setInviteOpen] = useState(false);
   const [email, setEmail] = useState('');
+  // The member whose overflow sheet is open (pre-confirmation).
+  const [menuMember, setMenuMember] = useState<CoachCohortMember | null>(null);
   const [pendingRemove, setPendingRemove] = useState<CoachCohortMember | null>(
     null,
   );
@@ -82,10 +100,11 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
         onSuccess: () => {
           setEmail('');
           setInviteOpen(false);
+          completion.show('Invite sent.');
         },
       },
     );
-  }, [email, invite]);
+  }, [email, invite, completion]);
 
   const onConfirmRemove = useCallback(() => {
     if (!pendingRemove) return;
@@ -129,21 +148,21 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
         </View>
         {item.role === 'client' ? (
           <HapticPressable
-            intent="warning"
-            onPress={() => setPendingRemove(item)}
+            intent="light"
+            onPress={() => setMenuMember(item)}
             accessibilityRole="button"
-            accessibilityLabel={`Remove ${item.name}`}
-            testID={`coach-community-member-remove-${item.user_id}`}
-            style={[styles.removeButton, { borderColor: semanticColors.border }]}
+            accessibilityLabel={`More actions for ${item.name}`}
+            testID={`coach-community-member-menu-${item.user_id}`}
+            style={styles.kebab}
           >
-            <Text style={[styles.removeLabel, { color: semanticColors.accent }]}>
-              Remove
+            <Text style={[styles.kebabGlyph, { color: semanticColors.textMuted }]}>
+              ⋯
             </Text>
           </HapticPressable>
         ) : null}
       </View>
     ),
-    [semanticColors],
+    [semanticColors, setMenuMember],
   );
 
   if (detail.isLoading) {
@@ -174,10 +193,16 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
         </Text>
       </View>
 
-      {isEmptyMembers || detail.isError ? (
+      {detail.isError ? (
+        <CoachErrorState
+          message="Could not load this cohort. Pull back and open it again."
+          onRetry={() => detail.refetch()}
+          retrying={detail.isRefetching}
+          testID="coach-community-cohort-detail-error"
+        />
+      ) : isEmptyMembers ? (
         <CoachEmptyState
-          crop={COACH_EMPTY_COPY.cohortMembers.crop}
-          copy={COACH_EMPTY_COPY.cohortMembers.copy}
+          payload={emptyPayload}
           testID="coach-community-cohort-detail-empty"
         />
       ) : (
@@ -299,6 +324,54 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
         </View>
       </Modal>
 
+      {/* Overflow action sheet (UX P1.1 — Remove lives here, not on the row). */}
+      <Modal
+        visible={menuMember != null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMenuMember(null)}
+        testID="coach-community-member-menu-sheet"
+      >
+        <HapticPressable
+          intent="light"
+          onPress={() => setMenuMember(null)}
+          accessibilityRole="button"
+          accessibilityLabel="Dismiss"
+          style={[
+            styles.sheetScrim,
+            { backgroundColor: withAlpha(semanticColors.textPrimary, 0.45) },
+          ]}
+        >
+          <View
+            style={[
+              styles.sheet,
+              {
+                backgroundColor: semanticColors.bgSurface,
+                borderColor: semanticColors.border,
+              },
+            ]}
+          >
+            <HapticPressable
+              intent="warning"
+              onPress={() => {
+                setPendingRemove(menuMember);
+                setMenuMember(null);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={
+                menuMember ? `Remove ${menuMember.name} from cohort` : 'Remove'
+              }
+              testID="coach-community-member-menu-remove"
+              style={styles.sheetItem}
+            >
+              <Text style={[styles.sheetItemLabel, { color: semanticColors.accent }]}>
+                Remove from cohort
+              </Text>
+            </HapticPressable>
+          </View>
+        </HapticPressable>
+      </Modal>
+
       {/* Remove-member confirmation (hard gate: no one-tap destructive). */}
       <ConfirmModal
         visible={pendingRemove != null}
@@ -314,6 +387,8 @@ export default function CoachCommunityCohortDetailScreen(): React.ReactElement {
         onCancel={() => setPendingRemove(null)}
         testID="coach-community-cohort-detail-remove-confirm"
       />
+
+      <CompletionToast state={completion.toast} />
     </View>
   );
 }
@@ -363,16 +438,35 @@ const styles = StyleSheet.create({
   memberMeta: {
     fontSize: 13,
   },
-  removeButton: {
+  kebab: {
     minHeight: 44,
-    paddingHorizontal: spacing.md,
+    minWidth: 44,
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: radius.md,
-    borderWidth: StyleSheet.hairlineWidth,
   },
-  removeLabel: {
-    fontSize: 14,
+  kebabGlyph: {
+    fontSize: 22,
+    fontWeight: '600',
+    lineHeight: 24,
+  },
+  sheetScrim: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    padding: spacing.lg,
+  },
+  sheet: {
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
+  },
+  sheetItem: {
+    minHeight: 52,
+    paddingHorizontal: spacing.lg,
+    justifyContent: 'center',
+  },
+  sheetItemLabel: {
+    fontSize: 16,
     fontWeight: '600',
   },
   fab: {

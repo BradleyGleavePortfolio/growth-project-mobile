@@ -95,9 +95,9 @@ describe('build-role hygiene', () => {
       path.join(ROOT, 'navigation', 'CoachNavigator.tsx'),
       path.join(ROOT, 'screens', 'community', 'CoachCommunityHomeScreen.tsx'),
       path.join(ROOT, 'screens', 'community', 'CoachCommunityInboxScreen.tsx'),
-      path.join(ROOT, 'screens', 'community', 'CoachCommunityLabScreen.tsx'),
       path.join(ROOT, 'screens', 'community', 'CoachCommunityCohortsScreen.tsx'),
       path.join(ROOT, 'screens', 'community', 'CoachCommunityCohortDetailScreen.tsx'),
+      path.join(ROOT, 'screens', 'community', 'CoachCommunityPostDetailScreen.tsx'),
       path.join(ROOT, 'screens', 'community', 'CoachCommunityModerationScreen.tsx'),
       path.join(ROOT, 'screens', 'community', 'coachCommunityNavTypes.ts'),
     ];
