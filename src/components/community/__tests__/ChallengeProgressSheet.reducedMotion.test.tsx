@@ -96,6 +96,13 @@ describe('ChallengeProgressSheet — reduced motion', () => {
     );
 
     await waitFor(() => expect(isReduceMotionSpy).toHaveBeenCalled());
+    // Flush the reduce-motion resolution, then drive a NEW fill target by
+    // raising the draft — the bar should animate via Animated.timing.
+    await act(async () => {
+      await Promise.resolve();
+    });
+    timingSpy.mockClear();
+    fireEvent.changeText(screen.getByTestId('sheet-input'), '20');
     await waitFor(() => expect(timingSpy).toHaveBeenCalled());
   });
 
@@ -116,7 +123,13 @@ describe('ChallengeProgressSheet — reduced motion', () => {
     );
 
     await waitFor(() => expect(isReduceMotionSpy).toHaveBeenCalled());
-    // Allow the reduce-motion state to flush and the effect to re-run.
+    // Allow the reduce-motion state to flush, THEN clear any mount-time call and
+    // drive a new fill target — with reduce motion on, no timing must run.
+    await act(async () => {
+      await Promise.resolve();
+    });
+    timingSpy.mockClear();
+    fireEvent.changeText(screen.getByTestId('sheet-input'), '20');
     await act(async () => {
       await Promise.resolve();
     });

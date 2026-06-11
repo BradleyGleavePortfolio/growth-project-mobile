@@ -15,6 +15,17 @@ jest.mock('../../../theme/useTheme', () => {
   return { useTheme: () => ({ colorScheme: 'light', semanticColors: lightTokens }) };
 });
 
+// Ionicons → a Text node that forwards name/testID so the completed-state line
+// icon is observable without loading font assets (repo pattern).
+jest.mock('@expo/vector-icons', () => {
+  const React = require('react');
+  const { Text } = require('react-native');
+  return {
+    Ionicons: ({ name, testID }: { name: string; testID?: string }) =>
+      React.createElement(Text, { testID: testID ?? `icon-${name}` }, `icon:${name}`),
+  };
+});
+
 import ChallengeCard from '../ChallengeCard';
 
 function challenge(overrides: Record<string, unknown> = {}) {

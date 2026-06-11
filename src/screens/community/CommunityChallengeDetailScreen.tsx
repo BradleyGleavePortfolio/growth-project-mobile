@@ -33,7 +33,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useRoute } from '@react-navigation/native';
 import {
   useMutation,
   useQuery,
@@ -57,7 +57,7 @@ import {
   type CommunityChallengeLeaderboardRow,
 } from '../../api/communityChallengesApi';
 import { CommunityApiError } from '../../api/communityApi';
-import type { CommunityNav, CommunityRoute } from './communityNavTypes';
+import type { CommunityRoute } from './communityNavTypes';
 
 const COMMENT_MAX = 2000; // mirror backend CreateChallengeCommentDto
 
@@ -82,7 +82,6 @@ function describeError(err: unknown): string {
 
 export default function CommunityChallengeDetailScreen(): React.ReactElement {
   const { semanticColors } = useTheme();
-  const navigation = useNavigation<CommunityNav>();
   const route = useRoute<CommunityRoute<'CommunityChallengeDetail'>>();
   const challengeId = route.params?.challengeId ?? '';
   const client = useCurrentUser();
