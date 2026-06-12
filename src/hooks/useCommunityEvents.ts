@@ -77,10 +77,16 @@ function tempEventId(): string {
 /**
  * List events for a workspace. Disabled until a workspace id is known so the
  * query never fires with an empty path segment.
+ *
+ * `opts` is narrowed to `Omit<ListEventsOptions, 'before'>`: the single-query
+ * hook intentionally cannot pass the keyset `before` cursor, because the list
+ * key omits `before` and two different cursor requests would otherwise collide
+ * on one cache entry. Keyset pagination belongs to `useCommunityEventsInfiniteList`,
+ * which threads the cursor through `pageParam` under a single key.
  */
 export function useCommunityEventsList(
   workspaceId: string | undefined,
-  opts: ListEventsOptions = {},
+  opts: Omit<ListEventsOptions, 'before'> = {},
 ): UseQueryResult<CommunityEventListResponse> {
   return useQuery({
     queryKey: communityEventsKeys.list(workspaceId ?? '∅', opts),
