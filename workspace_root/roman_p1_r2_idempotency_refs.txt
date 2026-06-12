@@ -1,0 +1,107 @@
+all idempotency refs in src
+src/__tests__/CoachPackageContentsScreen.test.tsx:12://      form calls coachPackageContentsApi.attach WITH an Idempotency-Key.
+src/__tests__/CoachPackageContentsScreen.test.tsx:299:  it('submitting the attach form calls attach with an Idempotency-Key', async () => {
+src/__tests__/CoachPackageContentsScreen.test.tsx:425:  it('confirm calls push with the correct body + Idempotency-Key, shows success', async () => {
+src/__tests__/paymentsConnectPackages.test.ts:380:          'Idempotency-Key': expect.any(String),
+src/__tests__/paymentsConnectPackages.test.ts:388:    // R19: every checkout-session POST carries an Idempotency-Key so a
+src/__tests__/paymentsConnectPackages.test.ts:391:      headers: { 'Idempotency-Key'?: string };
+src/__tests__/paymentsConnectPackages.test.ts:393:    expect(config.headers['Idempotency-Key']).toBeTruthy();
+src/__tests__/paymentsConnectPackages.test.ts:456:  it('create POSTs the backend (snake_case) shape with Idempotency-Key', async () => {
+src/__tests__/paymentsConnectPackages.test.ts:478:          'Idempotency-Key': expect.any(String),
+src/api/__tests__/communityApi.test.ts:15: *   - mutations send an Idempotency-Key header (R19)
+src/api/__tests__/communityApi.test.ts:259:  it('POSTs the post body with an Idempotency-Key header (R19)', async () => {
+src/api/__tests__/communityApi.test.ts:268:      { headers: { 'Idempotency-Key': 'test-idem-key' } },
+src/api/__tests__/communityApi.test.ts:288:  it('POSTs a comment with the Idempotency-Key header', async () => {
+src/api/__tests__/communityApi.test.ts:304:      { headers: { 'Idempotency-Key': 'test-idem-key' } },
+src/api/__tests__/communityApi.test.ts:355:  it('sendDm POSTs the body with the Idempotency-Key header', async () => {
+src/api/__tests__/communityApi.test.ts:361:      { headers: { 'Idempotency-Key': 'test-idem-key' } },
+src/api/__tests__/communityApi.test.ts:374:  it('openDmThread POSTs recipient_user_id with the Idempotency-Key header', async () => {
+src/api/__tests__/communityApi.test.ts:380:      { headers: { 'Idempotency-Key': 'test-idem-key' } },
+src/api/__tests__/packageContentsApi.test.ts:5:// the mutations (attach/patch/push) carry an Idempotency-Key header
+src/api/__tests__/packageContentsApi.test.ts:68:    expect(config?.headers?.['Idempotency-Key']).toBeTruthy();
+src/api/__tests__/packageContentsApi.test.ts:80:    expect(config?.headers?.['Idempotency-Key']).toBe('fixed-key-1');
+src/api/__tests__/packageContentsApi.test.ts:94:    expect(config?.headers?.['Idempotency-Key']).toBeTruthy();
+src/api/__tests__/packageContentsApi.test.ts:110:    expect(config?.headers?.['Idempotency-Key']).toBeTruthy();
+src/api/__tests__/packageContentsApi.test.ts:137:    expect(config?.headers?.['Idempotency-Key']).toBeTruthy();
+src/api/__tests__/packageContentsApi.test.ts:149:    expect(config?.headers?.['Idempotency-Key']).toBe('fixed-push-key');
+src/api/__tests__/paymentsApi.test.ts:6:// URL prefixes (growthproject://), Idempotency-Key on every mutation, and
+src/api/__tests__/paymentsApi.test.ts:47:// ── connectApi mutations carry Idempotency-Key ─────────────────────────────
+src/api/__tests__/paymentsApi.test.ts:49:describe('connectApi mutations send Idempotency-Key', () => {
+src/api/__tests__/paymentsApi.test.ts:56:    expect(config?.headers?.['Idempotency-Key']).toBeTruthy();
+src/api/__tests__/paymentsApi.test.ts:63:    expect(config?.headers?.['Idempotency-Key']).toBeTruthy();
+src/api/__tests__/paymentsApi.test.ts:70:    expect(config?.headers?.['Idempotency-Key']).toBeTruthy();
+src/api/__tests__/paymentsApi.test.ts:76:    const k1 = apiMock.post.mock.calls[0][2]?.headers?.['Idempotency-Key'];
+src/api/__tests__/paymentsApi.test.ts:77:    const k2 = apiMock.post.mock.calls[1][2]?.headers?.['Idempotency-Key'];
+src/api/__tests__/paymentsApi.test.ts:160:    expect(config?.headers?.['Idempotency-Key']).toBeTruthy();
+src/api/__tests__/paymentsApi.test.ts:217:    expect(config?.headers?.['Idempotency-Key']).toBeTruthy();
+src/api/__tests__/paymentsApi.test.ts:227:    expect(config?.headers?.['Idempotency-Key']).toBeTruthy();
+src/api/__tests__/paymentsApi.test.ts:259:    expect(config?.headers?.['Idempotency-Key']).toBeTruthy();
+src/api/__tests__/romanApi.test.ts:266:  it('POSTs the event-stream and returns the settled reply (no fabricated Idempotency-Key header)', async () => {
+src/api/__tests__/romanApi.test.ts:277:    // The backend does not implement Idempotency-Key handling; the client must
+src/api/__tests__/romanApi.test.ts:279:    expect(opts.headers['Idempotency-Key']).toBeUndefined();
+src/api/clientPaymentsApi.ts:420:   * `Idempotency-Key` (rule R19) so retries / double-taps don't mint
+src/api/clientPaymentsApi.ts:435:        { headers: { 'Idempotency-Key': generateIdempotencyKey() } },
+src/api/clientPaymentsApi.ts:636:   * so no client-supplied Idempotency-Key is needed.
+src/api/coachCommunityApi.test.ts:12: *   - that mutations send an Idempotency-Key header (R19).
+src/api/coachCommunityApi.test.ts:40:  generateIdempotencyKey: () => 'test-idempotency-key',
+src/api/coachCommunityApi.test.ts:135:describe('coachCommunityApi — mutations carry Idempotency-Key + no coachId', () => {
+src/api/coachCommunityApi.test.ts:142:      { headers: { 'Idempotency-Key': 'test-idempotency-key' } },
+src/api/coachCommunityApi.test.ts:185:      { headers: { 'Idempotency-Key': 'test-idempotency-key' } },
+src/api/coachCommunityApi.test.ts:206:      { headers: { 'Idempotency-Key': 'test-idempotency-key' } },
+src/api/coachCommunityApi.test.ts:216:      { headers: { 'Idempotency-Key': 'test-idempotency-key' } },
+src/api/coachCommunityApi.ts:23: *   - Mutations send an `Idempotency-Key` header (R19) so a double-tap or
+src/api/coachCommunityApi.ts:449:  return { headers: { 'Idempotency-Key': generateIdempotencyKey() } };
+src/api/communityApi.ts:22: *   - Mutations (create post / send DM / react) send an `Idempotency-Key`
+src/api/communityApi.ts:364:  return { headers: { 'Idempotency-Key': generateIdempotencyKey() } };
+src/api/connectApi.ts:37:function idemHeaders(key?: string): { headers: { 'Idempotency-Key': string } } {
+src/api/connectApi.ts:38:  return { headers: { 'Idempotency-Key': key ?? generateIdempotencyKey() } };
+src/api/connectApi.ts:47:    idempotencyKey?: string,
+src/api/connectApi.ts:52:      idemHeaders(idempotencyKey),
+src/api/connectApi.ts:55:  createOnboardingLink: (idempotencyKey?: string) =>
+src/api/connectApi.ts:59:      idemHeaders(idempotencyKey),
+src/api/connectApi.ts:62:  createDashboardLink: (idempotencyKey?: string) =>
+src/api/connectApi.ts:66:      idemHeaders(idempotencyKey),
+src/api/packageContentsApi.ts:12://   • POST   v1/coach/packages/:id/contents                       (attach)  + Idempotency-Key
+src/api/packageContentsApi.ts:14://   • PATCH  v1/coach/packages/:id/contents/:contentId            (patch)   + Idempotency-Key
+src/api/packageContentsApi.ts:17://   • POST   v1/coach/packages/:id/contents/:contentId/push                 + Idempotency-Key
+src/api/packageContentsApi.ts:23:// `Idempotency-Key` header via the shared idemHeaders helper (decision #8)
+src/api/packageContentsApi.ts:126:function idemHeaders(key?: string): { headers: { 'Idempotency-Key': string } } {
+src/api/packageContentsApi.ts:127:  return { headers: { 'Idempotency-Key': key ?? generateIdempotencyKey() } };
+src/api/packagesApi.ts:18:// Every mutation sends a client-generated UUID `Idempotency-Key` header so
+src/api/packagesApi.ts:290:export function idemHeaders(key?: string): { headers: { 'Idempotency-Key': string } } {
+src/api/packagesApi.ts:291:  return { headers: { 'Idempotency-Key': key ?? generateIdempotencyKey() } };
+src/api/packagesApi.ts:466:  create: async (input: PackageCreateInput, idempotencyKey?: string) => {
+src/api/packagesApi.ts:470:      idemHeaders(idempotencyKey),
+src/api/packagesApi.ts:478:    idempotencyKey?: string,
+src/api/packagesApi.ts:483:      idemHeaders(idempotencyKey),
+src/api/packagesApi.ts:488:  archive: async (id: string, idempotencyKey?: string) => {
+src/api/packagesApi.ts:491:      idemHeaders(idempotencyKey),
+src/api/packagesApi.ts:546:    idempotencyKey?: string,
+src/api/packagesApi.ts:560:      idemHeaders(idempotencyKey),
+src/components/PackageSelectionSheet.tsx:286:      const idempotencyKey = generateIdempotencyKey();
+src/components/PackageSelectionSheet.tsx:289:        { package_id: selectedId, idempotency_key: idempotencyKey },
+src/screens/client/ActiveWorkoutScreen.tsx:112:  const idempotencyKeyRef = useRef<string>(
+src/screens/client/ActiveWorkoutScreen.tsx:188:      idempotencyKeyRef.current = session.idempotencyKey;
+src/screens/client/ActiveWorkoutScreen.tsx:368:      idempotencyKey: idempotencyKeyRef.current,
+src/screens/client/ActiveWorkoutScreen.tsx:728:                    idempotency_key: idempotencyKeyRef.current,
+src/screens/client/ActiveWorkoutScreen.tsx:755:                    idempotencyKey: idempotencyKeyRef.current,
+src/screens/client/__tests__/ActiveWorkoutScreen.persistence.test.tsx:53:  idempotencyKey: 'asg_1:abc',
+src/screens/client/__tests__/ActiveWorkoutScreen.persistence.test.tsx:187:      baseSession({ idempotencyKey: 'asg_42:xyz' }),
+src/screens/client/__tests__/ActiveWorkoutScreen.persistence.test.tsx:191:    expect(result!.session.idempotencyKey).toBe('asg_42:xyz');
+src/services/__tests__/billingAndAccountApi.test.ts:56:        headers: expect.objectContaining({ 'Idempotency-Key': expect.any(String) }),
+src/services/__tests__/billingAndAccountApi.test.ts:67:        headers: expect.objectContaining({ 'Idempotency-Key': expect.any(String) }),
+src/services/aiGatewayClient.ts:141:    req: Omit<AIGatewayDraftRequest, 'idempotencyKey'> & {
+src/services/aiGatewayClient.ts:142:      idempotencyKey?: string;
+src/services/aiGatewayClient.ts:150:    const idempotencyKey = req.idempotencyKey ?? generateIdempotencyKey();
+src/services/aiGatewayClient.ts:164:        idempotency_key: idempotencyKey,
+src/services/api.ts:837:  createPortalSession: (returnPath?: string, idempotencyKey?: string) => {
+src/services/api.ts:838:    // Idempotency-Key prevents duplicate portal sessions on double-tap (R19).
+src/services/api.ts:842:      { headers: { 'Idempotency-Key': idempotencyKey ?? generateIdempotencyKey() } },
+src/storage/activeWorkoutSession.ts:68:  idempotencyKey: string;
+src/storage/activeWorkoutSession.ts:87:    typeof v.idempotencyKey === 'string' &&
+src/types/aiGateway.ts:55:  idempotencyKey: string;
+PR-touched idempotency refs
+266:  it('POSTs the event-stream and returns the settled reply (no fabricated Idempotency-Key header)', async () => {
+277:    // The backend does not implement Idempotency-Key handling; the client must
+279:    expect(opts.headers['Idempotency-Key']).toBeUndefined();
+-- src/api/__tests__/romanApi.test.ts

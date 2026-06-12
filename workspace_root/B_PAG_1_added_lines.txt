@@ -1,0 +1,885 @@
+jest.config.js:17:  // v3-1 adds `src/community/challenges` as a FOURTH narrowly-scoped root so the
+jest.config.js:18:  // pagination-enforcement specs colocated under
+jest.config.js:19:  // src/community/challenges/__tests__/*.spec.ts (D-040) are discovered. Same
+jest.config.js:20:  // rationale: the slice owns those spec files in the source tree, and the root
+jest.config.js:21:  // is intentionally NOT the whole `src/` tree (unrelated src-colocated specs
+jest.config.js:22:  // were never part of this default suite).
+jest.config.js:23:  roots: [
+jest.config.js:24:    '<rootDir>/test',
+jest.config.js:25:    '<rootDir>/src/roman/voice',
+jest.config.js:26:    '<rootDir>/src/community/ack',
+jest.config.js:27:    '<rootDir>/src/community/challenges',
+jest.config.js:28:  ],
+src/community/challenges/__tests__/pagination.controller.spec.ts:1:/**
+src/community/challenges/__tests__/pagination.controller.spec.ts:2: * v3-1 controller pagination wiring (D-040, B-PAG-1).
+src/community/challenges/__tests__/pagination.controller.spec.ts:3: *
+src/community/challenges/__tests__/pagination.controller.spec.ts:4: * The leaderboard and comments GET handlers had NO @Query() before this slice;
+src/community/challenges/__tests__/pagination.controller.spec.ts:5: * they now accept a PaginationQueryDto and forward it to the service unchanged.
+src/community/challenges/__tests__/pagination.controller.spec.ts:6: * The challenge list handler already had a @Query() — its DTO now extends
+src/community/challenges/__tests__/pagination.controller.spec.ts:7: * PaginationQueryDto, so limit/cursor ride through too. These tests construct
+src/community/challenges/__tests__/pagination.controller.spec.ts:8: * the controller with a faked service (no Nest container, no HTTP server) and
+src/community/challenges/__tests__/pagination.controller.spec.ts:9: * assert the handler passes the parsed query straight through with the
+src/community/challenges/__tests__/pagination.controller.spec.ts:10: * authenticated user + path param.
+src/community/challenges/__tests__/pagination.controller.spec.ts:11: */
+src/community/challenges/__tests__/pagination.controller.spec.ts:12:import type { AuthedRequest } from '../../../auth/auth-request';
+src/community/challenges/__tests__/pagination.controller.spec.ts:13:import { CommunityChallengesController } from '../community-challenges.controller';
+src/community/challenges/__tests__/pagination.controller.spec.ts:14:import {
+src/community/challenges/__tests__/pagination.controller.spec.ts:15:  ListChallengesQueryDto,
+src/community/challenges/__tests__/pagination.controller.spec.ts:16:  PaginationQueryDto,
+src/community/challenges/__tests__/pagination.controller.spec.ts:17:} from '../community-challenges.dto';
+src/community/challenges/__tests__/pagination.controller.spec.ts:18:
+src/community/challenges/__tests__/pagination.controller.spec.ts:19:const USER_ID = '55555555-5555-5555-8555-555555555555';
+src/community/challenges/__tests__/pagination.controller.spec.ts:20:const WS = '11111111-1111-1111-8111-111111111111';
+src/community/challenges/__tests__/pagination.controller.spec.ts:21:const CH = '44444444-4444-4444-8444-444444444444';
+src/community/challenges/__tests__/pagination.controller.spec.ts:22:const CURSOR = '66666666-6666-4666-8666-666666666666';
+src/community/challenges/__tests__/pagination.controller.spec.ts:23:
+src/community/challenges/__tests__/pagination.controller.spec.ts:24:interface TestUser {
+src/community/challenges/__tests__/pagination.controller.spec.ts:25:  id: string;
+src/community/challenges/__tests__/pagination.controller.spec.ts:26:  role: string;
+src/community/challenges/__tests__/pagination.controller.spec.ts:27:}
+src/community/challenges/__tests__/pagination.controller.spec.ts:28:
+src/community/challenges/__tests__/pagination.controller.spec.ts:29:function reqFor(user: TestUser): AuthedRequest {
+src/community/challenges/__tests__/pagination.controller.spec.ts:30:  return { user } as Pick<AuthedRequest, 'user'> as AuthedRequest;
+src/community/challenges/__tests__/pagination.controller.spec.ts:31:}
+src/community/challenges/__tests__/pagination.controller.spec.ts:32:
+src/community/challenges/__tests__/pagination.controller.spec.ts:33:function pagination(over: Partial<PaginationQueryDto>): PaginationQueryDto {
+src/community/challenges/__tests__/pagination.controller.spec.ts:34:  const dto = new PaginationQueryDto();
+src/community/challenges/__tests__/pagination.controller.spec.ts:35:  Object.assign(dto, over);
+src/community/challenges/__tests__/pagination.controller.spec.ts:36:  return dto;
+src/community/challenges/__tests__/pagination.controller.spec.ts:37:}
+src/community/challenges/__tests__/pagination.controller.spec.ts:38:
+src/community/challenges/__tests__/pagination.controller.spec.ts:39:describe('CommunityChallengesController pagination wiring (D-040)', () => {
+src/community/challenges/__tests__/pagination.controller.spec.ts:40:  const user: TestUser = { id: USER_ID, role: 'student' };
+src/community/challenges/__tests__/pagination.controller.spec.ts:41:  let service: {
+src/community/challenges/__tests__/pagination.controller.spec.ts:42:    list: jest.Mock;
+src/community/challenges/__tests__/pagination.controller.spec.ts:43:    getLeaderboard: jest.Mock;
+src/community/challenges/__tests__/pagination.controller.spec.ts:44:    listComments: jest.Mock;
+src/community/challenges/__tests__/pagination.controller.spec.ts:45:  };
+src/community/challenges/__tests__/pagination.controller.spec.ts:46:  let controller: CommunityChallengesController;
+src/community/challenges/__tests__/pagination.controller.spec.ts:47:
+src/community/challenges/__tests__/pagination.controller.spec.ts:48:  beforeEach(() => {
+src/community/challenges/__tests__/pagination.controller.spec.ts:49:    service = {
+src/community/challenges/__tests__/pagination.controller.spec.ts:50:      list: jest.fn(async () => ({ challenges: [], next_cursor: null })),
+src/community/challenges/__tests__/pagination.controller.spec.ts:51:      getLeaderboard: jest.fn(async () => ({
+src/community/challenges/__tests__/pagination.controller.spec.ts:52:        available: false,
+src/community/challenges/__tests__/pagination.controller.spec.ts:53:        opted_in: false,
+src/community/challenges/__tests__/pagination.controller.spec.ts:54:        rows: [],
+src/community/challenges/__tests__/pagination.controller.spec.ts:55:        next_cursor: null,
+src/community/challenges/__tests__/pagination.controller.spec.ts:56:      })),
+src/community/challenges/__tests__/pagination.controller.spec.ts:57:      listComments: jest.fn(async () => ({ comments: [], next_cursor: null })),
+src/community/challenges/__tests__/pagination.controller.spec.ts:58:    };
+src/community/challenges/__tests__/pagination.controller.spec.ts:59:    controller = new CommunityChallengesController(service as never);
+src/community/challenges/__tests__/pagination.controller.spec.ts:60:  });
+src/community/challenges/__tests__/pagination.controller.spec.ts:61:
+src/community/challenges/__tests__/pagination.controller.spec.ts:62:  it('leaderboard forwards limit + cursor to the service', async () => {
+src/community/challenges/__tests__/pagination.controller.spec.ts:63:    const query = pagination({ limit: 20, cursor: CURSOR });
+src/community/challenges/__tests__/pagination.controller.spec.ts:64:    await controller.leaderboard(reqFor(user), CH, query);
+src/community/challenges/__tests__/pagination.controller.spec.ts:65:    expect(service.getLeaderboard).toHaveBeenCalledWith(user, CH, query);
+src/community/challenges/__tests__/pagination.controller.spec.ts:66:    expect(service.getLeaderboard.mock.calls[0][2]).toMatchObject({
+src/community/challenges/__tests__/pagination.controller.spec.ts:67:      limit: 20,
+src/community/challenges/__tests__/pagination.controller.spec.ts:68:      cursor: CURSOR,
+src/community/challenges/__tests__/pagination.controller.spec.ts:69:    });
+src/community/challenges/__tests__/pagination.controller.spec.ts:70:  });
+src/community/challenges/__tests__/pagination.controller.spec.ts:71:
+src/community/challenges/__tests__/pagination.controller.spec.ts:72:  it('leaderboard forwards an empty pagination query (defaults resolved downstream)', async () => {
+src/community/challenges/__tests__/pagination.controller.spec.ts:73:    const query = pagination({});
+src/community/challenges/__tests__/pagination.controller.spec.ts:74:    await controller.leaderboard(reqFor(user), CH, query);
+src/community/challenges/__tests__/pagination.controller.spec.ts:75:    expect(service.getLeaderboard).toHaveBeenCalledWith(user, CH, query);
+src/community/challenges/__tests__/pagination.controller.spec.ts:76:  });
+src/community/challenges/__tests__/pagination.controller.spec.ts:77:
+src/community/challenges/__tests__/pagination.controller.spec.ts:78:  it('comments forwards limit + cursor to the service', async () => {
+src/community/challenges/__tests__/pagination.controller.spec.ts:79:    const query = pagination({ limit: 50, cursor: CURSOR });
+src/community/challenges/__tests__/pagination.controller.spec.ts:80:    await controller.listComments(reqFor(user), CH, query);
+src/community/challenges/__tests__/pagination.controller.spec.ts:81:    expect(service.listComments).toHaveBeenCalledWith(user, CH, query);
+src/community/challenges/__tests__/pagination.controller.spec.ts:82:    expect(service.listComments.mock.calls[0][2]).toMatchObject({
+src/community/challenges/__tests__/pagination.controller.spec.ts:83:      limit: 50,
+src/community/challenges/__tests__/pagination.controller.spec.ts:84:      cursor: CURSOR,
+src/community/challenges/__tests__/pagination.controller.spec.ts:85:    });
+src/community/challenges/__tests__/pagination.controller.spec.ts:86:  });
+src/community/challenges/__tests__/pagination.controller.spec.ts:87:
+src/community/challenges/__tests__/pagination.controller.spec.ts:88:  it('challenge list forwards inherited limit + cursor alongside cohort_id/status', async () => {
+src/community/challenges/__tests__/pagination.controller.spec.ts:89:    const query = new ListChallengesQueryDto();
+src/community/challenges/__tests__/pagination.controller.spec.ts:90:    Object.assign(query, { status: 'active', limit: 10, cursor: CURSOR });
+src/community/challenges/__tests__/pagination.controller.spec.ts:91:    await controller.list(reqFor(user), WS, query);
+src/community/challenges/__tests__/pagination.controller.spec.ts:92:    expect(service.list).toHaveBeenCalledWith(user, WS, query);
+src/community/challenges/__tests__/pagination.controller.spec.ts:93:    expect(service.list.mock.calls[0][2]).toMatchObject({
+src/community/challenges/__tests__/pagination.controller.spec.ts:94:      status: 'active',
+src/community/challenges/__tests__/pagination.controller.spec.ts:95:      limit: 10,
+src/community/challenges/__tests__/pagination.controller.spec.ts:96:      cursor: CURSOR,
+src/community/challenges/__tests__/pagination.controller.spec.ts:97:    });
+src/community/challenges/__tests__/pagination.controller.spec.ts:98:  });
+src/community/challenges/__tests__/pagination.controller.spec.ts:99:});
+src/community/challenges/__tests__/pagination.dto.spec.ts:1:/**
+src/community/challenges/__tests__/pagination.dto.spec.ts:2: * v3-1 pagination DTO validation (D-040, B-PAG-1).
+src/community/challenges/__tests__/pagination.dto.spec.ts:3: *
+src/community/challenges/__tests__/pagination.dto.spec.ts:4: * The community challenges read endpoints are defended request-side by the
+src/community/challenges/__tests__/pagination.dto.spec.ts:5: * shared PaginationQueryDto (and ListChallengesQueryDto, which extends it). The
+src/community/challenges/__tests__/pagination.dto.spec.ts:6: * global ValidationPipe in main.ts runs with { whitelist: true,
+src/community/challenges/__tests__/pagination.dto.spec.ts:7: * forbidNonWhitelisted: true, transform: true }, so these tests mirror that
+src/community/challenges/__tests__/pagination.dto.spec.ts:8: * transform + validate pipeline exactly:
+src/community/challenges/__tests__/pagination.dto.spec.ts:9: *
+src/community/challenges/__tests__/pagination.dto.spec.ts:10: *   - `limit` is OPTIONAL and arrives as a query-string value; it is coerced to
+src/community/challenges/__tests__/pagination.dto.spec.ts:11: *     an integer, then bounded to 1..50. `abc`, `1.5`, `0`, `-1`, `51` are all
+src/community/challenges/__tests__/pagination.dto.spec.ts:12: *     rejected; `1`, `20`, `50` (and their string forms) are accepted.
+src/community/challenges/__tests__/pagination.dto.spec.ts:13: *   - The default of 20 is NOT applied by the DTO (limit stays undefined when
+src/community/challenges/__tests__/pagination.dto.spec.ts:14: *     omitted) — the default lives in the repository's clampLimit, so this spec
+src/community/challenges/__tests__/pagination.dto.spec.ts:15: *     pins both halves: the DTO leaves a missing limit undefined, and the
+src/community/challenges/__tests__/pagination.dto.spec.ts:16: *     repository spec proves the 20 default is then applied.
+src/community/challenges/__tests__/pagination.dto.spec.ts:17: *   - `cursor` is OPTIONAL and must be a v4 uuid when present.
+src/community/challenges/__tests__/pagination.dto.spec.ts:18: *   - ListChallengesQueryDto inherits limit/cursor AND keeps cohort_id/status.
+src/community/challenges/__tests__/pagination.dto.spec.ts:19: */
+src/community/challenges/__tests__/pagination.dto.spec.ts:20:import 'reflect-metadata';
+src/community/challenges/__tests__/pagination.dto.spec.ts:21:import { plainToInstance } from 'class-transformer';
+src/community/challenges/__tests__/pagination.dto.spec.ts:22:import { validate } from 'class-validator';
+src/community/challenges/__tests__/pagination.dto.spec.ts:23:import {
+src/community/challenges/__tests__/pagination.dto.spec.ts:24:  ListChallengesQueryDto,
+src/community/challenges/__tests__/pagination.dto.spec.ts:25:  PAGINATION_DEFAULT_LIMIT,
+src/community/challenges/__tests__/pagination.dto.spec.ts:26:  PAGINATION_MAX_LIMIT,
+src/community/challenges/__tests__/pagination.dto.spec.ts:27:  PaginationQueryDto,
+src/community/challenges/__tests__/pagination.dto.spec.ts:28:} from '../community-challenges.dto';
+src/community/challenges/__tests__/pagination.dto.spec.ts:29:
+src/community/challenges/__tests__/pagination.dto.spec.ts:30:const UUID = '44444444-4444-4444-8444-444444444444';
+src/community/challenges/__tests__/pagination.dto.spec.ts:31:
+src/community/challenges/__tests__/pagination.dto.spec.ts:32:async function validatePagination(
+src/community/challenges/__tests__/pagination.dto.spec.ts:33:  payload: object,
+src/community/challenges/__tests__/pagination.dto.spec.ts:34:): Promise<{ errors: string[]; dto: PaginationQueryDto }> {
+src/community/challenges/__tests__/pagination.dto.spec.ts:35:  const dto = plainToInstance(PaginationQueryDto, payload, {
+src/community/challenges/__tests__/pagination.dto.spec.ts:36:    enableImplicitConversion: false,
+src/community/challenges/__tests__/pagination.dto.spec.ts:37:  });
+src/community/challenges/__tests__/pagination.dto.spec.ts:38:  const errors = await validate(dto as object, {
+src/community/challenges/__tests__/pagination.dto.spec.ts:39:    whitelist: true,
+src/community/challenges/__tests__/pagination.dto.spec.ts:40:    forbidNonWhitelisted: true,
+src/community/challenges/__tests__/pagination.dto.spec.ts:41:  });
+src/community/challenges/__tests__/pagination.dto.spec.ts:42:  return { errors: errors.map((e) => e.property), dto };
+src/community/challenges/__tests__/pagination.dto.spec.ts:43:}
+src/community/challenges/__tests__/pagination.dto.spec.ts:44:
+src/community/challenges/__tests__/pagination.dto.spec.ts:45:async function validateList(payload: object): Promise<string[]> {
+src/community/challenges/__tests__/pagination.dto.spec.ts:46:  const dto = plainToInstance(ListChallengesQueryDto, payload, {
+src/community/challenges/__tests__/pagination.dto.spec.ts:47:    enableImplicitConversion: false,
+src/community/challenges/__tests__/pagination.dto.spec.ts:48:  });
+src/community/challenges/__tests__/pagination.dto.spec.ts:49:  const errors = await validate(dto as object, {
+src/community/challenges/__tests__/pagination.dto.spec.ts:50:    whitelist: true,
+src/community/challenges/__tests__/pagination.dto.spec.ts:51:    forbidNonWhitelisted: true,
+src/community/challenges/__tests__/pagination.dto.spec.ts:52:  });
+src/community/challenges/__tests__/pagination.dto.spec.ts:53:  return errors.map((e) => e.property);
+src/community/challenges/__tests__/pagination.dto.spec.ts:54:}
+src/community/challenges/__tests__/pagination.dto.spec.ts:55:
+src/community/challenges/__tests__/pagination.dto.spec.ts:56:describe('PaginationQueryDto (D-040)', () => {
+src/community/challenges/__tests__/pagination.dto.spec.ts:57:  it('exposes the documented default (20) and max (50) bounds', () => {
+src/community/challenges/__tests__/pagination.dto.spec.ts:58:    expect(PAGINATION_DEFAULT_LIMIT).toBe(20);
+src/community/challenges/__tests__/pagination.dto.spec.ts:59:    expect(PAGINATION_MAX_LIMIT).toBe(50);
+src/community/challenges/__tests__/pagination.dto.spec.ts:60:  });
+src/community/challenges/__tests__/pagination.dto.spec.ts:61:
+src/community/challenges/__tests__/pagination.dto.spec.ts:62:  it('accepts an empty query — limit/cursor both optional, limit stays undefined', async () => {
+src/community/challenges/__tests__/pagination.dto.spec.ts:63:    const { errors, dto } = await validatePagination({});
+src/community/challenges/__tests__/pagination.dto.spec.ts:64:    expect(errors).toHaveLength(0);
+src/community/challenges/__tests__/pagination.dto.spec.ts:65:    // The DTO does NOT inject the default; a missing limit is left undefined so
+src/community/challenges/__tests__/pagination.dto.spec.ts:66:    // the repository applies PAGINATION_DEFAULT_LIMIT (proven in the repo spec).
+src/community/challenges/__tests__/pagination.dto.spec.ts:67:    expect(dto.limit).toBeUndefined();
+src/community/challenges/__tests__/pagination.dto.spec.ts:68:    expect(dto.cursor).toBeUndefined();
+src/community/challenges/__tests__/pagination.dto.spec.ts:69:  });
+src/community/challenges/__tests__/pagination.dto.spec.ts:70:
+src/community/challenges/__tests__/pagination.dto.spec.ts:71:  it('accepts a numeric limit of 20', async () => {
+src/community/challenges/__tests__/pagination.dto.spec.ts:72:    const { errors, dto } = await validatePagination({ limit: 20 });
+src/community/challenges/__tests__/pagination.dto.spec.ts:73:    expect(errors).toHaveLength(0);
+src/community/challenges/__tests__/pagination.dto.spec.ts:74:    expect(dto.limit).toBe(20);
+src/community/challenges/__tests__/pagination.dto.spec.ts:75:  });
+src/community/challenges/__tests__/pagination.dto.spec.ts:76:
+src/community/challenges/__tests__/pagination.dto.spec.ts:77:  it('coerces a string limit "20" (query params arrive as strings)', async () => {
+src/community/challenges/__tests__/pagination.dto.spec.ts:78:    const { errors, dto } = await validatePagination({ limit: '20' });
+src/community/challenges/__tests__/pagination.dto.spec.ts:79:    expect(errors).toHaveLength(0);
+src/community/challenges/__tests__/pagination.dto.spec.ts:80:    expect(dto.limit).toBe(20);
+src/community/challenges/__tests__/pagination.dto.spec.ts:81:    expect(typeof dto.limit).toBe('number');
+src/community/challenges/__tests__/pagination.dto.spec.ts:82:  });
+src/community/challenges/__tests__/pagination.dto.spec.ts:83:
+src/community/challenges/__tests__/pagination.dto.spec.ts:84:  it('accepts the lower bound limit=1 and the upper bound limit=50', async () => {
+src/community/challenges/__tests__/pagination.dto.spec.ts:85:    expect((await validatePagination({ limit: 1 })).errors).toHaveLength(0);
+src/community/challenges/__tests__/pagination.dto.spec.ts:86:    expect((await validatePagination({ limit: 50 })).errors).toHaveLength(0);
+src/community/challenges/__tests__/pagination.dto.spec.ts:87:    expect((await validatePagination({ limit: '1' })).errors).toHaveLength(0);
+src/community/challenges/__tests__/pagination.dto.spec.ts:88:    expect((await validatePagination({ limit: '50' })).errors).toHaveLength(0);
+src/community/challenges/__tests__/pagination.dto.spec.ts:89:  });
+src/community/challenges/__tests__/pagination.dto.spec.ts:90:
+src/community/challenges/__tests__/pagination.dto.spec.ts:91:  it('rejects limit=0 (below the minimum of 1)', async () => {
+src/community/challenges/__tests__/pagination.dto.spec.ts:92:    expect((await validatePagination({ limit: 0 })).errors).toContain('limit');
+src/community/challenges/__tests__/pagination.dto.spec.ts:93:  });
+src/community/challenges/__tests__/pagination.dto.spec.ts:94:
+src/community/challenges/__tests__/pagination.dto.spec.ts:95:  it('rejects a negative limit', async () => {
+src/community/challenges/__tests__/pagination.dto.spec.ts:96:    expect((await validatePagination({ limit: -1 })).errors).toContain('limit');
+src/community/challenges/__tests__/pagination.dto.spec.ts:97:  });
+src/community/challenges/__tests__/pagination.dto.spec.ts:98:
+src/community/challenges/__tests__/pagination.dto.spec.ts:99:  it('rejects limit above the max of 50', async () => {
+src/community/challenges/__tests__/pagination.dto.spec.ts:100:    expect((await validatePagination({ limit: 51 })).errors).toContain('limit');
+src/community/challenges/__tests__/pagination.dto.spec.ts:101:    expect((await validatePagination({ limit: '99' })).errors).toContain(
+src/community/challenges/__tests__/pagination.dto.spec.ts:102:      'limit',
+src/community/challenges/__tests__/pagination.dto.spec.ts:103:    );
+src/community/challenges/__tests__/pagination.dto.spec.ts:104:  });
+src/community/challenges/__tests__/pagination.dto.spec.ts:105:
+src/community/challenges/__tests__/pagination.dto.spec.ts:106:  it('rejects a non-integer limit', async () => {
+src/community/challenges/__tests__/pagination.dto.spec.ts:107:    expect((await validatePagination({ limit: 1.5 })).errors).toContain(
+src/community/challenges/__tests__/pagination.dto.spec.ts:108:      'limit',
+src/community/challenges/__tests__/pagination.dto.spec.ts:109:    );
+src/community/challenges/__tests__/pagination.dto.spec.ts:110:    expect((await validatePagination({ limit: 'abc' })).errors).toContain(
+src/community/challenges/__tests__/pagination.dto.spec.ts:111:      'limit',
+src/community/challenges/__tests__/pagination.dto.spec.ts:112:    );
+src/community/challenges/__tests__/pagination.dto.spec.ts:113:  });
+src/community/challenges/__tests__/pagination.dto.spec.ts:114:
+src/community/challenges/__tests__/pagination.dto.spec.ts:115:  it('accepts a valid uuid cursor', async () => {
+src/community/challenges/__tests__/pagination.dto.spec.ts:116:    const { errors, dto } = await validatePagination({ cursor: UUID });
+src/community/challenges/__tests__/pagination.dto.spec.ts:117:    expect(errors).toHaveLength(0);
+src/community/challenges/__tests__/pagination.dto.spec.ts:118:    expect(dto.cursor).toBe(UUID);
+src/community/challenges/__tests__/pagination.dto.spec.ts:119:  });
+src/community/challenges/__tests__/pagination.dto.spec.ts:120:
+src/community/challenges/__tests__/pagination.dto.spec.ts:121:  it('rejects a non-uuid cursor', async () => {
+src/community/challenges/__tests__/pagination.dto.spec.ts:122:    expect((await validatePagination({ cursor: 'not-a-uuid' })).errors).toContain(
+src/community/challenges/__tests__/pagination.dto.spec.ts:123:      'cursor',
+src/community/challenges/__tests__/pagination.dto.spec.ts:124:    );
+src/community/challenges/__tests__/pagination.dto.spec.ts:125:  });
+src/community/challenges/__tests__/pagination.dto.spec.ts:126:
+src/community/challenges/__tests__/pagination.dto.spec.ts:127:  it('rejects an unknown query property (whitelist)', async () => {
+src/community/challenges/__tests__/pagination.dto.spec.ts:128:    const dto = plainToInstance(PaginationQueryDto, { bogus: 1 });
+src/community/challenges/__tests__/pagination.dto.spec.ts:129:    const errors = await validate(dto as object, {
+src/community/challenges/__tests__/pagination.dto.spec.ts:130:      whitelist: true,
+src/community/challenges/__tests__/pagination.dto.spec.ts:131:      forbidNonWhitelisted: true,
+src/community/challenges/__tests__/pagination.dto.spec.ts:132:    });
+src/community/challenges/__tests__/pagination.dto.spec.ts:133:    expect(errors.map((e) => e.property)).toContain('bogus');
+src/community/challenges/__tests__/pagination.dto.spec.ts:134:  });
+src/community/challenges/__tests__/pagination.dto.spec.ts:135:});
+src/community/challenges/__tests__/pagination.dto.spec.ts:136:
+src/community/challenges/__tests__/pagination.dto.spec.ts:137:describe('ListChallengesQueryDto inherits pagination (D-040)', () => {
+src/community/challenges/__tests__/pagination.dto.spec.ts:138:  it('accepts cohort_id + status + limit + cursor together', async () => {
+src/community/challenges/__tests__/pagination.dto.spec.ts:139:    const errors = await validateList({
+src/community/challenges/__tests__/pagination.dto.spec.ts:140:      cohort_id: UUID,
+src/community/challenges/__tests__/pagination.dto.spec.ts:141:      status: 'active',
+src/community/challenges/__tests__/pagination.dto.spec.ts:142:      limit: 20,
+src/community/challenges/__tests__/pagination.dto.spec.ts:143:      cursor: UUID,
+src/community/challenges/__tests__/pagination.dto.spec.ts:144:    });
+src/community/challenges/__tests__/pagination.dto.spec.ts:145:    expect(errors).toHaveLength(0);
+src/community/challenges/__tests__/pagination.dto.spec.ts:146:  });
+src/community/challenges/__tests__/pagination.dto.spec.ts:147:
+src/community/challenges/__tests__/pagination.dto.spec.ts:148:  it('still rejects an invalid limit on the list query', async () => {
+src/community/challenges/__tests__/pagination.dto.spec.ts:149:    expect(await validateList({ limit: 0 })).toContain('limit');
+src/community/challenges/__tests__/pagination.dto.spec.ts:150:  });
+src/community/challenges/__tests__/pagination.dto.spec.ts:151:});
+src/community/challenges/__tests__/pagination.repository.spec.ts:1:/**
+src/community/challenges/__tests__/pagination.repository.spec.ts:2: * v3-1 repository pagination boundaries (D-040, B-PAG-1).
+src/community/challenges/__tests__/pagination.repository.spec.ts:3: *
+src/community/challenges/__tests__/pagination.repository.spec.ts:4: * Pins the cursor/limit enforcement added to the four paginated reads with a
+src/community/challenges/__tests__/pagination.repository.spec.ts:5: * fully-faked PrismaService (no DB). Each findMany double captures the args it
+src/community/challenges/__tests__/pagination.repository.spec.ts:6: * was called with so we can assert the over-fetch contract directly, and
+src/community/challenges/__tests__/pagination.repository.spec.ts:7: * returns a caller-supplied row set so we can assert the slice + cursor:
+src/community/challenges/__tests__/pagination.repository.spec.ts:8: *
+src/community/challenges/__tests__/pagination.repository.spec.ts:9: *   - over-fetch: every paginated query issues `take: limit + 1` so the
+src/community/challenges/__tests__/pagination.repository.spec.ts:10: *     presence of an overflow row reveals a further page with no COUNT;
+src/community/challenges/__tests__/pagination.repository.spec.ts:11: *   - default: a missing limit clamps to the documented default of 20;
+src/community/challenges/__tests__/pagination.repository.spec.ts:12: *   - clamp: an over-max / sub-min / non-finite limit is bounded to 1..50;
+src/community/challenges/__tests__/pagination.repository.spec.ts:13: *   - boundary (limit=20, 21 rows): returns 20 items + nextCursor = id of the
+src/community/challenges/__tests__/pagination.repository.spec.ts:14: *     20th (kept) row, NOT the dropped 21st;
+src/community/challenges/__tests__/pagination.repository.spec.ts:15: *   - boundary (limit=20, 19 rows): returns 19 items + nextCursor = null;
+src/community/challenges/__tests__/pagination.repository.spec.ts:16: *   - cursor advance: a supplied cursor becomes `cursor` + `skip: 1` so the
+src/community/challenges/__tests__/pagination.repository.spec.ts:17: *     anchor row is excluded from the next page;
+src/community/challenges/__tests__/pagination.repository.spec.ts:18: *   - comments composite PK: the bare-id public cursor is resolved to the
+src/community/challenges/__tests__/pagination.repository.spec.ts:19: *     `id_created_at` compound Prisma cursor, and a stale cursor degrades to
+src/community/challenges/__tests__/pagination.repository.spec.ts:20: *     the first page rather than throwing;
+src/community/challenges/__tests__/pagination.repository.spec.ts:21: *   - listOptedInUserIds stays UNBOUNDED (internal-only set, never paginated).
+src/community/challenges/__tests__/pagination.repository.spec.ts:22: */
+src/community/challenges/__tests__/pagination.repository.spec.ts:23:import type {
+src/community/challenges/__tests__/pagination.repository.spec.ts:24:  CommunityChallenge,
+src/community/challenges/__tests__/pagination.repository.spec.ts:25:  CommunityChallengeParticipation,
+src/community/challenges/__tests__/pagination.repository.spec.ts:26:  CommunityMessage,
+src/community/challenges/__tests__/pagination.repository.spec.ts:27:} from '@prisma/client';
+src/community/challenges/__tests__/pagination.repository.spec.ts:28:import { Prisma } from '@prisma/client';
+src/community/challenges/__tests__/pagination.repository.spec.ts:29:import {
+src/community/challenges/__tests__/pagination.repository.spec.ts:30:  CHALLENGE_COMMENT_CONTEXT_TYPE,
+src/community/challenges/__tests__/pagination.repository.spec.ts:31:  CommunityChallengesRepository,
+src/community/challenges/__tests__/pagination.repository.spec.ts:32:} from '../community-challenges.repository';
+src/community/challenges/__tests__/pagination.repository.spec.ts:33:
+src/community/challenges/__tests__/pagination.repository.spec.ts:34:const CH = '44444444-4444-4444-4444-444444444444';
+src/community/challenges/__tests__/pagination.repository.spec.ts:35:const WS = '11111111-1111-1111-1111-111111111111';
+src/community/challenges/__tests__/pagination.repository.spec.ts:36:
+src/community/challenges/__tests__/pagination.repository.spec.ts:37:function id(n: number): string {
+src/community/challenges/__tests__/pagination.repository.spec.ts:38:  // Deterministic, distinguishable v4-shaped ids: ...-0000000000NN.
+src/community/challenges/__tests__/pagination.repository.spec.ts:39:  return `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+src/community/challenges/__tests__/pagination.repository.spec.ts:40:}
+src/community/challenges/__tests__/pagination.repository.spec.ts:41:
+src/community/challenges/__tests__/pagination.repository.spec.ts:42:function challengeRow(n: number): CommunityChallenge {
+src/community/challenges/__tests__/pagination.repository.spec.ts:43:  return {
+src/community/challenges/__tests__/pagination.repository.spec.ts:44:    id: id(n),
+src/community/challenges/__tests__/pagination.repository.spec.ts:45:    workspace_id: WS,
+src/community/challenges/__tests__/pagination.repository.spec.ts:46:    cohort_id: null,
+src/community/challenges/__tests__/pagination.repository.spec.ts:47:    created_by_id: WS,
+src/community/challenges/__tests__/pagination.repository.spec.ts:48:    title: `c${n}`,
+src/community/challenges/__tests__/pagination.repository.spec.ts:49:    description: null,
+src/community/challenges/__tests__/pagination.repository.spec.ts:50:    status: 'active',
+src/community/challenges/__tests__/pagination.repository.spec.ts:51:    starts_at: null,
+src/community/challenges/__tests__/pagination.repository.spec.ts:52:    ends_at: null,
+src/community/challenges/__tests__/pagination.repository.spec.ts:53:    metric_key: null,
+src/community/challenges/__tests__/pagination.repository.spec.ts:54:    target_value: null,
+src/community/challenges/__tests__/pagination.repository.spec.ts:55:    unit: null,
+src/community/challenges/__tests__/pagination.repository.spec.ts:56:    leaderboard_enabled: false,
+src/community/challenges/__tests__/pagination.repository.spec.ts:57:    created_at: new Date('2026-03-01T00:00:00.000Z'),
+src/community/challenges/__tests__/pagination.repository.spec.ts:58:    updated_at: new Date('2026-03-01T00:00:00.000Z'),
+src/community/challenges/__tests__/pagination.repository.spec.ts:59:    archived_at: null,
+src/community/challenges/__tests__/pagination.repository.spec.ts:60:  } as CommunityChallenge;
+src/community/challenges/__tests__/pagination.repository.spec.ts:61:}
+src/community/challenges/__tests__/pagination.repository.spec.ts:62:
+src/community/challenges/__tests__/pagination.repository.spec.ts:63:function participationRow(n: number): CommunityChallengeParticipation {
+src/community/challenges/__tests__/pagination.repository.spec.ts:64:  return {
+src/community/challenges/__tests__/pagination.repository.spec.ts:65:    id: id(n),
+src/community/challenges/__tests__/pagination.repository.spec.ts:66:    workspace_id: WS,
+src/community/challenges/__tests__/pagination.repository.spec.ts:67:    challenge_id: CH,
+src/community/challenges/__tests__/pagination.repository.spec.ts:68:    user_id: id(1000 + n),
+src/community/challenges/__tests__/pagination.repository.spec.ts:69:    progress_value: new Prisma.Decimal(100 - n),
+src/community/challenges/__tests__/pagination.repository.spec.ts:70:    completed_at: null,
+src/community/challenges/__tests__/pagination.repository.spec.ts:71:    last_logged_at: new Date('2026-03-01T00:00:00.000Z'),
+src/community/challenges/__tests__/pagination.repository.spec.ts:72:    created_at: new Date('2026-03-01T00:00:00.000Z'),
+src/community/challenges/__tests__/pagination.repository.spec.ts:73:    updated_at: new Date('2026-03-01T00:00:00.000Z'),
+src/community/challenges/__tests__/pagination.repository.spec.ts:74:  } as CommunityChallengeParticipation;
+src/community/challenges/__tests__/pagination.repository.spec.ts:75:}
+src/community/challenges/__tests__/pagination.repository.spec.ts:76:
+src/community/challenges/__tests__/pagination.repository.spec.ts:77:function commentRow(n: number): CommunityMessage {
+src/community/challenges/__tests__/pagination.repository.spec.ts:78:  return {
+src/community/challenges/__tests__/pagination.repository.spec.ts:79:    id: id(n),
+src/community/challenges/__tests__/pagination.repository.spec.ts:80:    created_at: new Date(`2026-03-01T00:00:${String(n).padStart(2, '0')}.000Z`),
+src/community/challenges/__tests__/pagination.repository.spec.ts:81:    workspace_id: WS,
+src/community/challenges/__tests__/pagination.repository.spec.ts:82:    cohort_id: null,
+src/community/challenges/__tests__/pagination.repository.spec.ts:83:    scope: 'cohort',
+src/community/challenges/__tests__/pagination.repository.spec.ts:84:    dm_key: null,
+src/community/challenges/__tests__/pagination.repository.spec.ts:85:    recipient_user_id: null,
+src/community/challenges/__tests__/pagination.repository.spec.ts:86:    sender_id: WS,
+src/community/challenges/__tests__/pagination.repository.spec.ts:87:    kind: 'text',
+src/community/challenges/__tests__/pagination.repository.spec.ts:88:    body: `m${n}`,
+src/community/challenges/__tests__/pagination.repository.spec.ts:89:    voice_url: null,
+src/community/challenges/__tests__/pagination.repository.spec.ts:90:    voice_duration_ms: null,
+src/community/challenges/__tests__/pagination.repository.spec.ts:91:    voice_mime_type: null,
+src/community/challenges/__tests__/pagination.repository.spec.ts:92:    voice_size_bytes: null,
+src/community/challenges/__tests__/pagination.repository.spec.ts:93:    plan_context_type: CHALLENGE_COMMENT_CONTEXT_TYPE,
+src/community/challenges/__tests__/pagination.repository.spec.ts:94:    plan_context_id: CH,
+src/community/challenges/__tests__/pagination.repository.spec.ts:95:    plan_week_start: null,
+src/community/challenges/__tests__/pagination.repository.spec.ts:96:    plan_context_payload: null,
+src/community/challenges/__tests__/pagination.repository.spec.ts:97:    parent_message_id: null,
+src/community/challenges/__tests__/pagination.repository.spec.ts:98:    parent_message_at: null,
+src/community/challenges/__tests__/pagination.repository.spec.ts:99:    coach_seen_at: null,
+src/community/challenges/__tests__/pagination.repository.spec.ts:100:    coach_acked_at: null,
+src/community/challenges/__tests__/pagination.repository.spec.ts:101:    coach_replied_at: null,
+src/community/challenges/__tests__/pagination.repository.spec.ts:102:    visibility: 'active',
+src/community/challenges/__tests__/pagination.repository.spec.ts:103:    deleted_at: null,
+src/community/challenges/__tests__/pagination.repository.spec.ts:104:    updated_at: new Date('2026-03-01T00:00:00.000Z'),
+src/community/challenges/__tests__/pagination.repository.spec.ts:105:  };
+src/community/challenges/__tests__/pagination.repository.spec.ts:106:}
+src/community/challenges/__tests__/pagination.repository.spec.ts:107:
+src/community/challenges/__tests__/pagination.repository.spec.ts:108:/**
+src/community/challenges/__tests__/pagination.repository.spec.ts:109: * Build a typed PrismaService double whose findMany calls capture their args
+src/community/challenges/__tests__/pagination.repository.spec.ts:110: * and return the rows the test stages. Only the methods the repository touches
+src/community/challenges/__tests__/pagination.repository.spec.ts:111: * are implemented; the cast is to the narrow shape the repository consumes.
+src/community/challenges/__tests__/pagination.repository.spec.ts:112: */
+src/community/challenges/__tests__/pagination.repository.spec.ts:113:function makePrisma() {
+src/community/challenges/__tests__/pagination.repository.spec.ts:114:  const calls: { model: string; args: Record<string, unknown> }[] = [];
+src/community/challenges/__tests__/pagination.repository.spec.ts:115:  let challengeRows: CommunityChallenge[] = [];
+src/community/challenges/__tests__/pagination.repository.spec.ts:116:  let participationRows: CommunityChallengeParticipation[] = [];
+src/community/challenges/__tests__/pagination.repository.spec.ts:117:  let commentRows: CommunityMessage[] = [];
+src/community/challenges/__tests__/pagination.repository.spec.ts:118:  let commentFindFirst: CommunityMessage | null = null;
+src/community/challenges/__tests__/pagination.repository.spec.ts:119:  const optInFindManyArgs: Record<string, unknown>[] = [];
+src/community/challenges/__tests__/pagination.repository.spec.ts:120:
+src/community/challenges/__tests__/pagination.repository.spec.ts:121:  const prisma = {
+src/community/challenges/__tests__/pagination.repository.spec.ts:122:    communityChallenge: {
+src/community/challenges/__tests__/pagination.repository.spec.ts:123:      findMany: jest.fn(async (args: Record<string, unknown>) => {
+src/community/challenges/__tests__/pagination.repository.spec.ts:124:        calls.push({ model: 'communityChallenge', args });
+src/community/challenges/__tests__/pagination.repository.spec.ts:125:        return challengeRows;
+src/community/challenges/__tests__/pagination.repository.spec.ts:126:      }),
+src/community/challenges/__tests__/pagination.repository.spec.ts:127:    },
+src/community/challenges/__tests__/pagination.repository.spec.ts:128:    communityChallengeParticipation: {
+src/community/challenges/__tests__/pagination.repository.spec.ts:129:      findMany: jest.fn(async (args: Record<string, unknown>) => {
+src/community/challenges/__tests__/pagination.repository.spec.ts:130:        calls.push({ model: 'communityChallengeParticipation', args });
+src/community/challenges/__tests__/pagination.repository.spec.ts:131:        return participationRows;
+src/community/challenges/__tests__/pagination.repository.spec.ts:132:      }),
+src/community/challenges/__tests__/pagination.repository.spec.ts:133:    },
+src/community/challenges/__tests__/pagination.repository.spec.ts:134:    communityMessage: {
+src/community/challenges/__tests__/pagination.repository.spec.ts:135:      findMany: jest.fn(async (args: Record<string, unknown>) => {
+src/community/challenges/__tests__/pagination.repository.spec.ts:136:        // listOptedInUserIds selects sender_id only — route it separately so
+src/community/challenges/__tests__/pagination.repository.spec.ts:137:        // the comments findMany assertions are not polluted.
+src/community/challenges/__tests__/pagination.repository.spec.ts:138:        if (
+src/community/challenges/__tests__/pagination.repository.spec.ts:139:          (args.select as { sender_id?: boolean } | undefined)?.sender_id
+src/community/challenges/__tests__/pagination.repository.spec.ts:140:        ) {
+src/community/challenges/__tests__/pagination.repository.spec.ts:141:          optInFindManyArgs.push(args);
+src/community/challenges/__tests__/pagination.repository.spec.ts:142:          return [];
+src/community/challenges/__tests__/pagination.repository.spec.ts:143:        }
+src/community/challenges/__tests__/pagination.repository.spec.ts:144:        calls.push({ model: 'communityMessage', args });
+src/community/challenges/__tests__/pagination.repository.spec.ts:145:        return commentRows;
+src/community/challenges/__tests__/pagination.repository.spec.ts:146:      }),
+src/community/challenges/__tests__/pagination.repository.spec.ts:147:      findFirst: jest.fn(async () => commentFindFirst),
+src/community/challenges/__tests__/pagination.repository.spec.ts:148:    },
+src/community/challenges/__tests__/pagination.repository.spec.ts:149:  };
+src/community/challenges/__tests__/pagination.repository.spec.ts:150:
+src/community/challenges/__tests__/pagination.repository.spec.ts:151:  return {
+src/community/challenges/__tests__/pagination.repository.spec.ts:152:    repo: new CommunityChallengesRepository(prisma as never),
+src/community/challenges/__tests__/pagination.repository.spec.ts:153:    calls,
+src/community/challenges/__tests__/pagination.repository.spec.ts:154:    optInFindManyArgs,
+src/community/challenges/__tests__/pagination.repository.spec.ts:155:    setChallengeRows: (r: CommunityChallenge[]) => (challengeRows = r),
+src/community/challenges/__tests__/pagination.repository.spec.ts:156:    setParticipationRows: (r: CommunityChallengeParticipation[]) =>
+src/community/challenges/__tests__/pagination.repository.spec.ts:157:      (participationRows = r),
+src/community/challenges/__tests__/pagination.repository.spec.ts:158:    setCommentRows: (r: CommunityMessage[]) => (commentRows = r),
+src/community/challenges/__tests__/pagination.repository.spec.ts:159:    setCommentFindFirst: (r: CommunityMessage | null) =>
+src/community/challenges/__tests__/pagination.repository.spec.ts:160:      (commentFindFirst = r),
+src/community/challenges/__tests__/pagination.repository.spec.ts:161:    prisma,
+src/community/challenges/__tests__/pagination.repository.spec.ts:162:  };
+src/community/challenges/__tests__/pagination.repository.spec.ts:163:}
+src/community/challenges/__tests__/pagination.repository.spec.ts:164:
+src/community/challenges/__tests__/pagination.repository.spec.ts:165:describe('listChallenges pagination (D-040)', () => {
+src/community/challenges/__tests__/pagination.repository.spec.ts:166:  it('over-fetches limit+1 and applies the default of 20 when no limit given', async () => {
+src/community/challenges/__tests__/pagination.repository.spec.ts:167:    const h = makePrisma();
+src/community/challenges/__tests__/pagination.repository.spec.ts:168:    h.setChallengeRows([challengeRow(1)]);
+src/community/challenges/__tests__/pagination.repository.spec.ts:169:    await h.repo.listChallenges({ workspaceId: WS, cohortId: null, status: null });
+src/community/challenges/__tests__/pagination.repository.spec.ts:170:    const args = h.calls[0].args;
+src/community/challenges/__tests__/pagination.repository.spec.ts:171:    // default 20 → take 21, no cursor/skip clause
+src/community/challenges/__tests__/pagination.repository.spec.ts:172:    expect(args.take).toBe(21);
+src/community/challenges/__tests__/pagination.repository.spec.ts:173:    expect(args.cursor).toBeUndefined();
+src/community/challenges/__tests__/pagination.repository.spec.ts:174:    expect(args.skip).toBeUndefined();
+src/community/challenges/__tests__/pagination.repository.spec.ts:175:  });
+src/community/challenges/__tests__/pagination.repository.spec.ts:176:
+src/community/challenges/__tests__/pagination.repository.spec.ts:177:  it('limit=20 with 21 rows returns 20 items + nextCursor = id of the 20th', async () => {
+src/community/challenges/__tests__/pagination.repository.spec.ts:178:    const h = makePrisma();
+src/community/challenges/__tests__/pagination.repository.spec.ts:179:    const rows = Array.from({ length: 21 }, (_, i) => challengeRow(i + 1));
+src/community/challenges/__tests__/pagination.repository.spec.ts:180:    h.setChallengeRows(rows);
+src/community/challenges/__tests__/pagination.repository.spec.ts:181:    const page = await h.repo.listChallenges({
+src/community/challenges/__tests__/pagination.repository.spec.ts:182:      workspaceId: WS,
+src/community/challenges/__tests__/pagination.repository.spec.ts:183:      cohortId: null,
+src/community/challenges/__tests__/pagination.repository.spec.ts:184:      status: null,
+src/community/challenges/__tests__/pagination.repository.spec.ts:185:      limit: 20,
+src/community/challenges/__tests__/pagination.repository.spec.ts:186:    });
+src/community/challenges/__tests__/pagination.repository.spec.ts:187:    expect(h.calls[0].args.take).toBe(21);
+src/community/challenges/__tests__/pagination.repository.spec.ts:188:    expect(page.items).toHaveLength(20);
+src/community/challenges/__tests__/pagination.repository.spec.ts:189:    expect(page.nextCursor).toBe(id(20));
+src/community/challenges/__tests__/pagination.repository.spec.ts:190:    // The 21st (overflow) row is NOT returned.
+src/community/challenges/__tests__/pagination.repository.spec.ts:191:    expect(page.items.map((c) => c.id)).not.toContain(id(21));
+src/community/challenges/__tests__/pagination.repository.spec.ts:192:  });
+src/community/challenges/__tests__/pagination.repository.spec.ts:193:
+src/community/challenges/__tests__/pagination.repository.spec.ts:194:  it('limit=20 with 19 rows returns 19 items + null cursor (final page)', async () => {
+src/community/challenges/__tests__/pagination.repository.spec.ts:195:    const h = makePrisma();
+src/community/challenges/__tests__/pagination.repository.spec.ts:196:    const rows = Array.from({ length: 19 }, (_, i) => challengeRow(i + 1));
+src/community/challenges/__tests__/pagination.repository.spec.ts:197:    h.setChallengeRows(rows);
+src/community/challenges/__tests__/pagination.repository.spec.ts:198:    const page = await h.repo.listChallenges({
+src/community/challenges/__tests__/pagination.repository.spec.ts:199:      workspaceId: WS,
+src/community/challenges/__tests__/pagination.repository.spec.ts:200:      cohortId: null,
+src/community/challenges/__tests__/pagination.repository.spec.ts:201:      status: null,
+src/community/challenges/__tests__/pagination.repository.spec.ts:202:      limit: 20,
+src/community/challenges/__tests__/pagination.repository.spec.ts:203:    });
+src/community/challenges/__tests__/pagination.repository.spec.ts:204:    expect(page.items).toHaveLength(19);
+src/community/challenges/__tests__/pagination.repository.spec.ts:205:    expect(page.nextCursor).toBeNull();
+src/community/challenges/__tests__/pagination.repository.spec.ts:206:  });
+src/community/challenges/__tests__/pagination.repository.spec.ts:207:
+src/community/challenges/__tests__/pagination.repository.spec.ts:208:  it('a supplied cursor advances the page via cursor + skip:1', async () => {
+src/community/challenges/__tests__/pagination.repository.spec.ts:209:    const h = makePrisma();
+src/community/challenges/__tests__/pagination.repository.spec.ts:210:    h.setChallengeRows([challengeRow(5)]);
+src/community/challenges/__tests__/pagination.repository.spec.ts:211:    await h.repo.listChallenges({
+src/community/challenges/__tests__/pagination.repository.spec.ts:212:      workspaceId: WS,
+src/community/challenges/__tests__/pagination.repository.spec.ts:213:      cohortId: null,
+src/community/challenges/__tests__/pagination.repository.spec.ts:214:      status: null,
+src/community/challenges/__tests__/pagination.repository.spec.ts:215:      limit: 10,
+src/community/challenges/__tests__/pagination.repository.spec.ts:216:      cursor: id(4),
+src/community/challenges/__tests__/pagination.repository.spec.ts:217:    });
+src/community/challenges/__tests__/pagination.repository.spec.ts:218:    const args = h.calls[0].args;
+src/community/challenges/__tests__/pagination.repository.spec.ts:219:    expect(args.take).toBe(11);
+src/community/challenges/__tests__/pagination.repository.spec.ts:220:    expect(args.cursor).toEqual({ id: id(4) });
+src/community/challenges/__tests__/pagination.repository.spec.ts:221:    expect(args.skip).toBe(1);
+src/community/challenges/__tests__/pagination.repository.spec.ts:222:  });
+src/community/challenges/__tests__/pagination.repository.spec.ts:223:
+src/community/challenges/__tests__/pagination.repository.spec.ts:224:  it('clamps an over-max limit down to 50 (take 51) and a sub-min limit up to 1', async () => {
+src/community/challenges/__tests__/pagination.repository.spec.ts:225:    const over = makePrisma();
+src/community/challenges/__tests__/pagination.repository.spec.ts:226:    over.setChallengeRows([]);
+src/community/challenges/__tests__/pagination.repository.spec.ts:227:    await over.repo.listChallenges({
+src/community/challenges/__tests__/pagination.repository.spec.ts:228:      workspaceId: WS,
+src/community/challenges/__tests__/pagination.repository.spec.ts:229:      cohortId: null,
+src/community/challenges/__tests__/pagination.repository.spec.ts:230:      status: null,
+src/community/challenges/__tests__/pagination.repository.spec.ts:231:      limit: 9999,
+src/community/challenges/__tests__/pagination.repository.spec.ts:232:    });
+src/community/challenges/__tests__/pagination.repository.spec.ts:233:    expect(over.calls[0].args.take).toBe(51);
+src/community/challenges/__tests__/pagination.repository.spec.ts:234:
+src/community/challenges/__tests__/pagination.repository.spec.ts:235:    const under = makePrisma();
+src/community/challenges/__tests__/pagination.repository.spec.ts:236:    under.setChallengeRows([]);
+src/community/challenges/__tests__/pagination.repository.spec.ts:237:    await under.repo.listChallenges({
+src/community/challenges/__tests__/pagination.repository.spec.ts:238:      workspaceId: WS,
+src/community/challenges/__tests__/pagination.repository.spec.ts:239:      cohortId: null,
+src/community/challenges/__tests__/pagination.repository.spec.ts:240:      status: null,
+src/community/challenges/__tests__/pagination.repository.spec.ts:241:      limit: 0,
+src/community/challenges/__tests__/pagination.repository.spec.ts:242:    });
+src/community/challenges/__tests__/pagination.repository.spec.ts:243:    expect(under.calls[0].args.take).toBe(2); // clamped to 1 → take 1+1
+src/community/challenges/__tests__/pagination.repository.spec.ts:244:  });
+src/community/challenges/__tests__/pagination.repository.spec.ts:245:});
+src/community/challenges/__tests__/pagination.repository.spec.ts:246:
+src/community/challenges/__tests__/pagination.repository.spec.ts:247:describe('listParticipationsByProgress pagination (D-040)', () => {
+src/community/challenges/__tests__/pagination.repository.spec.ts:248:  it('over-fetches limit+1 and keeps the progress ordering with a stable id tiebreak', async () => {
+src/community/challenges/__tests__/pagination.repository.spec.ts:249:    const h = makePrisma();
+src/community/challenges/__tests__/pagination.repository.spec.ts:250:    h.setParticipationRows([participationRow(1)]);
+src/community/challenges/__tests__/pagination.repository.spec.ts:251:    await h.repo.listParticipationsByProgress({ challengeId: CH, limit: 20 });
+src/community/challenges/__tests__/pagination.repository.spec.ts:252:    const args = h.calls[0].args;
+src/community/challenges/__tests__/pagination.repository.spec.ts:253:    expect(args.take).toBe(21);
+src/community/challenges/__tests__/pagination.repository.spec.ts:254:    expect(args.orderBy).toEqual([
+src/community/challenges/__tests__/pagination.repository.spec.ts:255:      { progress_value: 'desc' },
+src/community/challenges/__tests__/pagination.repository.spec.ts:256:      { last_logged_at: 'asc' },
+src/community/challenges/__tests__/pagination.repository.spec.ts:257:      { id: 'asc' },
+src/community/challenges/__tests__/pagination.repository.spec.ts:258:    ]);
+src/community/challenges/__tests__/pagination.repository.spec.ts:259:  });
+src/community/challenges/__tests__/pagination.repository.spec.ts:260:
+src/community/challenges/__tests__/pagination.repository.spec.ts:261:  it('limit=20 with 21 rows → 20 items + nextCursor = 20th id; with 19 → null', async () => {
+src/community/challenges/__tests__/pagination.repository.spec.ts:262:    const many = makePrisma();
+src/community/challenges/__tests__/pagination.repository.spec.ts:263:    many.setParticipationRows(
+src/community/challenges/__tests__/pagination.repository.spec.ts:264:      Array.from({ length: 21 }, (_, i) => participationRow(i + 1)),
+src/community/challenges/__tests__/pagination.repository.spec.ts:265:    );
+src/community/challenges/__tests__/pagination.repository.spec.ts:266:    const full = await many.repo.listParticipationsByProgress({
+src/community/challenges/__tests__/pagination.repository.spec.ts:267:      challengeId: CH,
+src/community/challenges/__tests__/pagination.repository.spec.ts:268:      limit: 20,
+src/community/challenges/__tests__/pagination.repository.spec.ts:269:    });
+src/community/challenges/__tests__/pagination.repository.spec.ts:270:    expect(full.items).toHaveLength(20);
+src/community/challenges/__tests__/pagination.repository.spec.ts:271:    expect(full.nextCursor).toBe(id(20));
+src/community/challenges/__tests__/pagination.repository.spec.ts:272:
+src/community/challenges/__tests__/pagination.repository.spec.ts:273:    const few = makePrisma();
+src/community/challenges/__tests__/pagination.repository.spec.ts:274:    few.setParticipationRows(
+src/community/challenges/__tests__/pagination.repository.spec.ts:275:      Array.from({ length: 19 }, (_, i) => participationRow(i + 1)),
+src/community/challenges/__tests__/pagination.repository.spec.ts:276:    );
+src/community/challenges/__tests__/pagination.repository.spec.ts:277:    const last = await few.repo.listParticipationsByProgress({
+src/community/challenges/__tests__/pagination.repository.spec.ts:278:      challengeId: CH,
+src/community/challenges/__tests__/pagination.repository.spec.ts:279:      limit: 20,
+src/community/challenges/__tests__/pagination.repository.spec.ts:280:    });
+src/community/challenges/__tests__/pagination.repository.spec.ts:281:    expect(last.items).toHaveLength(19);
+src/community/challenges/__tests__/pagination.repository.spec.ts:282:    expect(last.nextCursor).toBeNull();
+src/community/challenges/__tests__/pagination.repository.spec.ts:283:  });
+src/community/challenges/__tests__/pagination.repository.spec.ts:284:
+src/community/challenges/__tests__/pagination.repository.spec.ts:285:  it('cursor advances via cursor + skip:1', async () => {
+src/community/challenges/__tests__/pagination.repository.spec.ts:286:    const h = makePrisma();
+src/community/challenges/__tests__/pagination.repository.spec.ts:287:    h.setParticipationRows([participationRow(3)]);
+src/community/challenges/__tests__/pagination.repository.spec.ts:288:    await h.repo.listParticipationsByProgress({
+src/community/challenges/__tests__/pagination.repository.spec.ts:289:      challengeId: CH,
+src/community/challenges/__tests__/pagination.repository.spec.ts:290:      limit: 5,
+src/community/challenges/__tests__/pagination.repository.spec.ts:291:      cursor: id(2),
+src/community/challenges/__tests__/pagination.repository.spec.ts:292:    });
+src/community/challenges/__tests__/pagination.repository.spec.ts:293:    expect(h.calls[0].args.cursor).toEqual({ id: id(2) });
+src/community/challenges/__tests__/pagination.repository.spec.ts:294:    expect(h.calls[0].args.skip).toBe(1);
+src/community/challenges/__tests__/pagination.repository.spec.ts:295:  });
+src/community/challenges/__tests__/pagination.repository.spec.ts:296:});
+src/community/challenges/__tests__/pagination.repository.spec.ts:297:
+src/community/challenges/__tests__/pagination.repository.spec.ts:298:describe('listComments pagination (D-040, composite PK)', () => {
+src/community/challenges/__tests__/pagination.repository.spec.ts:299:  it('over-fetches limit+1 with (created_at asc, id asc) and no cursor by default', async () => {
+src/community/challenges/__tests__/pagination.repository.spec.ts:300:    const h = makePrisma();
+src/community/challenges/__tests__/pagination.repository.spec.ts:301:    h.setCommentRows([commentRow(1)]);
+src/community/challenges/__tests__/pagination.repository.spec.ts:302:    await h.repo.listComments({ challengeId: CH, limit: 20 });
+src/community/challenges/__tests__/pagination.repository.spec.ts:303:    const args = h.calls[0].args;
+src/community/challenges/__tests__/pagination.repository.spec.ts:304:    expect(args.take).toBe(21);
+src/community/challenges/__tests__/pagination.repository.spec.ts:305:    expect(args.orderBy).toEqual([{ created_at: 'asc' }, { id: 'asc' }]);
+src/community/challenges/__tests__/pagination.repository.spec.ts:306:    expect(args.cursor).toBeUndefined();
+src/community/challenges/__tests__/pagination.repository.spec.ts:307:    expect(args.skip).toBeUndefined();
+src/community/challenges/__tests__/pagination.repository.spec.ts:308:  });
+src/community/challenges/__tests__/pagination.repository.spec.ts:309:
+src/community/challenges/__tests__/pagination.repository.spec.ts:310:  it('resolves a bare-id cursor to the id_created_at compound cursor + skip:1', async () => {
+src/community/challenges/__tests__/pagination.repository.spec.ts:311:    const h = makePrisma();
+src/community/challenges/__tests__/pagination.repository.spec.ts:312:    const anchor = commentRow(4);
+src/community/challenges/__tests__/pagination.repository.spec.ts:313:    h.setCommentFindFirst(anchor);
+src/community/challenges/__tests__/pagination.repository.spec.ts:314:    h.setCommentRows([commentRow(5)]);
+src/community/challenges/__tests__/pagination.repository.spec.ts:315:    await h.repo.listComments({ challengeId: CH, limit: 10, cursor: id(4) });
+src/community/challenges/__tests__/pagination.repository.spec.ts:316:    const args = h.calls[0].args;
+src/community/challenges/__tests__/pagination.repository.spec.ts:317:    expect(args.cursor).toEqual({
+src/community/challenges/__tests__/pagination.repository.spec.ts:318:      id_created_at: { id: anchor.id, created_at: anchor.created_at },
+src/community/challenges/__tests__/pagination.repository.spec.ts:319:    });
+src/community/challenges/__tests__/pagination.repository.spec.ts:320:    expect(args.skip).toBe(1);
+src/community/challenges/__tests__/pagination.repository.spec.ts:321:    expect(h.prisma.communityMessage.findFirst).toHaveBeenCalledTimes(1);
+src/community/challenges/__tests__/pagination.repository.spec.ts:322:  });
+src/community/challenges/__tests__/pagination.repository.spec.ts:323:
+src/community/challenges/__tests__/pagination.repository.spec.ts:324:  it('degrades a stale (unresolvable) cursor to the FIRST page, not an error', async () => {
+src/community/challenges/__tests__/pagination.repository.spec.ts:325:    const h = makePrisma();
+src/community/challenges/__tests__/pagination.repository.spec.ts:326:    h.setCommentFindFirst(null); // cursor id no longer resolves
+src/community/challenges/__tests__/pagination.repository.spec.ts:327:    h.setCommentRows([commentRow(1)]);
+src/community/challenges/__tests__/pagination.repository.spec.ts:328:    const page = await h.repo.listComments({
+src/community/challenges/__tests__/pagination.repository.spec.ts:329:      challengeId: CH,
+src/community/challenges/__tests__/pagination.repository.spec.ts:330:      limit: 10,
+src/community/challenges/__tests__/pagination.repository.spec.ts:331:      cursor: id(999),
+src/community/challenges/__tests__/pagination.repository.spec.ts:332:    });
+src/community/challenges/__tests__/pagination.repository.spec.ts:333:    const args = h.calls[0].args;
+src/community/challenges/__tests__/pagination.repository.spec.ts:334:    expect(args.cursor).toBeUndefined();
+src/community/challenges/__tests__/pagination.repository.spec.ts:335:    expect(args.skip).toBeUndefined();
+src/community/challenges/__tests__/pagination.repository.spec.ts:336:    expect(page.items).toHaveLength(1);
+src/community/challenges/__tests__/pagination.repository.spec.ts:337:  });
+src/community/challenges/__tests__/pagination.repository.spec.ts:338:
+src/community/challenges/__tests__/pagination.repository.spec.ts:339:  it('limit=20 with 21 rows → 20 + cursor; with 19 → 19 + null', async () => {
+src/community/challenges/__tests__/pagination.repository.spec.ts:340:    const many = makePrisma();
+src/community/challenges/__tests__/pagination.repository.spec.ts:341:    many.setCommentRows(Array.from({ length: 21 }, (_, i) => commentRow(i + 1)));
+src/community/challenges/__tests__/pagination.repository.spec.ts:342:    const full = await many.repo.listComments({ challengeId: CH, limit: 20 });
+src/community/challenges/__tests__/pagination.repository.spec.ts:343:    expect(full.items).toHaveLength(20);
+src/community/challenges/__tests__/pagination.repository.spec.ts:344:    expect(full.nextCursor).toBe(id(20));
+src/community/challenges/__tests__/pagination.repository.spec.ts:345:
+src/community/challenges/__tests__/pagination.repository.spec.ts:346:    const few = makePrisma();
+src/community/challenges/__tests__/pagination.repository.spec.ts:347:    few.setCommentRows(Array.from({ length: 19 }, (_, i) => commentRow(i + 1)));
+src/community/challenges/__tests__/pagination.repository.spec.ts:348:    const last = await few.repo.listComments({ challengeId: CH, limit: 20 });
+src/community/challenges/__tests__/pagination.repository.spec.ts:349:    expect(last.items).toHaveLength(19);
+src/community/challenges/__tests__/pagination.repository.spec.ts:350:    expect(last.nextCursor).toBeNull();
+src/community/challenges/__tests__/pagination.repository.spec.ts:351:  });
+src/community/challenges/__tests__/pagination.repository.spec.ts:352:});
+src/community/challenges/__tests__/pagination.repository.spec.ts:353:
+src/community/challenges/__tests__/pagination.repository.spec.ts:354:describe('listOptedInUserIds stays unbounded (D-040 scope guard)', () => {
+src/community/challenges/__tests__/pagination.repository.spec.ts:355:  it('issues NO take/cursor/skip — the opt-in set is internal-only, never paged', async () => {
+src/community/challenges/__tests__/pagination.repository.spec.ts:356:    const h = makePrisma();
+src/community/challenges/__tests__/pagination.repository.spec.ts:357:    await h.repo.listOptedInUserIds(CH);
+src/community/challenges/__tests__/pagination.repository.spec.ts:358:    expect(h.optInFindManyArgs).toHaveLength(1);
+src/community/challenges/__tests__/pagination.repository.spec.ts:359:    const args = h.optInFindManyArgs[0];
+src/community/challenges/__tests__/pagination.repository.spec.ts:360:    expect(args.take).toBeUndefined();
+src/community/challenges/__tests__/pagination.repository.spec.ts:361:    expect(args.cursor).toBeUndefined();
+src/community/challenges/__tests__/pagination.repository.spec.ts:362:    expect(args.skip).toBeUndefined();
+src/community/challenges/__tests__/pagination.repository.spec.ts:363:  });
+src/community/challenges/__tests__/pagination.repository.spec.ts:364:});
+src/community/challenges/community-challenges.controller.ts:31:  PaginationQueryDto,
+src/community/challenges/community-challenges.controller.ts:144:    @Query() query: PaginationQueryDto,
+src/community/challenges/community-challenges.controller.ts:146:    return this.challenges.getLeaderboard(req.user, challengeId, query);
+src/community/challenges/community-challenges.controller.ts:156:    @Query() query: PaginationQueryDto,
+src/community/challenges/community-challenges.controller.ts:158:    return this.challenges.listComments(req.user, challengeId, query);
+src/community/challenges/community-challenges.dto.ts:3:  IsInt,
+src/community/challenges/community-challenges.dto.ts:9:  Max,
+src/community/challenges/community-challenges.dto.ts:20:/**
+src/community/challenges/community-challenges.dto.ts:21: * Defensive page size for every paginated challenge read (D-040). The mobile
+src/community/challenges/community-challenges.dto.ts:22: * client (Mobile #235) already sends `{ limit: 20 }`, but the backend
+src/community/challenges/community-challenges.dto.ts:23: * repositories read unbounded until this slice; the DTO is the authoritative
+src/community/challenges/community-challenges.dto.ts:24: * clamp so a hand-crafted request (or an older client) can never ask the
+src/community/challenges/community-challenges.dto.ts:25: * database for an unbounded result set.
+src/community/challenges/community-challenges.dto.ts:26: */
+src/community/challenges/community-challenges.dto.ts:27:export const PAGINATION_DEFAULT_LIMIT = 20;
+src/community/challenges/community-challenges.dto.ts:28:export const PAGINATION_MAX_LIMIT = 50;
+src/community/challenges/community-challenges.dto.ts:29:
+src/community/challenges/community-challenges.dto.ts:30:/**
+src/community/challenges/community-challenges.dto.ts:31: * Coerce an inbound query-string `limit` to an integer. Query params arrive as
+src/community/challenges/community-challenges.dto.ts:32: * strings, so a bare `@IsInt()` would reject the valid `?limit=20`; this parses
+src/community/challenges/community-challenges.dto.ts:33: * the string to a number and leaves it untouched (so @IsInt/@Min/@Max can
+src/community/challenges/community-challenges.dto.ts:34: * reject `abc`, `1.5`, `0`, `99`). A missing value stays undefined so the
+src/community/challenges/community-challenges.dto.ts:35: * `?? PAGINATION_DEFAULT_LIMIT` default applies downstream.
+src/community/challenges/community-challenges.dto.ts:36: */
+src/community/challenges/community-challenges.dto.ts:37:const toIntLimit = ({ value }: { value: unknown }): unknown => {
+src/community/challenges/community-challenges.dto.ts:38:  if (value === undefined || value === null || value === '') return undefined;
+src/community/challenges/community-challenges.dto.ts:39:  if (typeof value === 'number') return value;
+src/community/challenges/community-challenges.dto.ts:40:  if (typeof value === 'string') {
+src/community/challenges/community-challenges.dto.ts:41:    const trimmed = value.trim();
+src/community/challenges/community-challenges.dto.ts:42:    if (!/^-?\d+$/.test(trimmed)) return value; // let @IsInt reject non-integers
+src/community/challenges/community-challenges.dto.ts:43:    return Number(trimmed);
+src/community/challenges/community-challenges.dto.ts:44:  }
+src/community/challenges/community-challenges.dto.ts:45:  return value;
+src/community/challenges/community-challenges.dto.ts:46:};
+src/community/challenges/community-challenges.dto.ts:47:
+src/community/challenges/community-challenges.dto.ts:182:/**
+src/community/challenges/community-challenges.dto.ts:183: * Cursor/limit page controls shared by every paginated challenge read (D-040).
+src/community/challenges/community-challenges.dto.ts:184: * `limit` is clamped to 1..50 with a default of 20; `cursor` is the opaque id
+src/community/challenges/community-challenges.dto.ts:185: * of the last item from the previous page (the `next_cursor` returned by this
+src/community/challenges/community-challenges.dto.ts:186: * API). Both arrive as query-string values, so `limit` is coerced from its
+src/community/challenges/community-challenges.dto.ts:187: * string form before integer validation.
+src/community/challenges/community-challenges.dto.ts:188: */
+src/community/challenges/community-challenges.dto.ts:189:export class PaginationQueryDto {
+src/community/challenges/community-challenges.dto.ts:190:  @IsOptional()
+src/community/challenges/community-challenges.dto.ts:191:  @Transform(toIntLimit)
+src/community/challenges/community-challenges.dto.ts:192:  @IsInt({ message: 'limit must be an integer' })
+src/community/challenges/community-challenges.dto.ts:193:  @Min(1, { message: 'limit must be at least 1' })
+src/community/challenges/community-challenges.dto.ts:194:  @Max(PAGINATION_MAX_LIMIT, {
+src/community/challenges/community-challenges.dto.ts:195:    message: `limit must be ${PAGINATION_MAX_LIMIT} or fewer`,
+src/community/challenges/community-challenges.dto.ts:196:  })
+src/community/challenges/community-challenges.dto.ts:197:  limit?: number;
+src/community/challenges/community-challenges.dto.ts:198:
+src/community/challenges/community-challenges.dto.ts:199:  @IsOptional()
+src/community/challenges/community-challenges.dto.ts:200:  @Transform(trim)
+src/community/challenges/community-challenges.dto.ts:201:  @IsUUID('4', { message: 'cursor must be a valid id' })
+src/community/challenges/community-challenges.dto.ts:202:  cursor?: string;
+src/community/challenges/community-challenges.dto.ts:203:}
+src/community/challenges/community-challenges.dto.ts:204:
+src/community/challenges/community-challenges.dto.ts:205:export class ListChallengesQueryDto extends PaginationQueryDto {
+src/community/challenges/community-challenges.dto.ts:270:/**
+src/community/challenges/community-challenges.dto.ts:271: * Paginated challenge list (D-040). `challenges` is the page; `next_cursor` is
+src/community/challenges/community-challenges.dto.ts:272: * the id to pass back as `cursor` for the following page, or null when this is
+src/community/challenges/community-challenges.dto.ts:273: * the last page. The `{ items, next_cursor }` contract is mirrored across every
+src/community/challenges/community-challenges.dto.ts:274: * paginated challenge read (leaderboard rows + comments below) — here the page
+src/community/challenges/community-challenges.dto.ts:275: * array keeps its domain name `challenges` for backward compatibility with the
+src/community/challenges/community-challenges.dto.ts:276: * shape shipped in #390.
+src/community/challenges/community-challenges.dto.ts:277: */
+src/community/challenges/community-challenges.dto.ts:279:  .object({
+src/community/challenges/community-challenges.dto.ts:280:    challenges: z.array(ChallengeSchema),
+src/community/challenges/community-challenges.dto.ts:281:    next_cursor: z.string().uuid().nullable(),
+src/community/challenges/community-challenges.dto.ts:282:  })
+src/community/challenges/community-challenges.dto.ts:316:    /**
+src/community/challenges/community-challenges.dto.ts:317:     * Page cursor for the ranked rows (D-040): the user_id of the last row when
+src/community/challenges/community-challenges.dto.ts:318:     * a further page exists, else null. Null whenever the board is unavailable
+src/community/challenges/community-challenges.dto.ts:319:     * (rows are empty), so an opted-out caller never receives a cursor.
+src/community/challenges/community-challenges.dto.ts:320:     */
+src/community/challenges/community-challenges.dto.ts:321:    next_cursor: z.string().uuid().nullable(),
+src/community/challenges/community-challenges.dto.ts:345:  .object({
+src/community/challenges/community-challenges.dto.ts:346:    comments: z.array(ChallengeCommentSchema),
+src/community/challenges/community-challenges.dto.ts:347:    /** Page cursor (D-040): id of the last comment when more remain, else null. */
+src/community/challenges/community-challenges.dto.ts:348:    next_cursor: z.string().uuid().nullable(),
+src/community/challenges/community-challenges.dto.ts:349:  })
+src/community/challenges/community-challenges.repository.ts:11:/**
+src/community/challenges/community-challenges.repository.ts:12: * A single page of a cursor-paginated read (D-040). `items` is at most `limit`
+src/community/challenges/community-challenges.repository.ts:13: * rows; `nextCursor` is the id of the last item when a further page exists
+src/community/challenges/community-challenges.repository.ts:14: * (the repository fetched `limit + 1` rows and saw the overflow row), else
+src/community/challenges/community-challenges.repository.ts:15: * null. The service maps this directly onto the `{ items, next_cursor }` API
+src/community/challenges/community-challenges.repository.ts:16: * contract — `next_cursor` is therefore always an id the caller can replay as
+src/community/challenges/community-challenges.repository.ts:17: * `cursor` to fetch the following page.
+src/community/challenges/community-challenges.repository.ts:18: */
+src/community/challenges/community-challenges.repository.ts:19:export interface Page<T> {
+src/community/challenges/community-challenges.repository.ts:20:  items: T[];
+src/community/challenges/community-challenges.repository.ts:21:  nextCursor: string | null;
+src/community/challenges/community-challenges.repository.ts:22:}
+src/community/challenges/community-challenges.repository.ts:23:
+src/community/challenges/community-challenges.repository.ts:24:/**
+src/community/challenges/community-challenges.repository.ts:25: * Clamp a repository limit defensively. The DTO already enforces 1..50, but the
+src/community/challenges/community-challenges.repository.ts:26: * repository is the last line before the database, so an internal caller that
+src/community/challenges/community-challenges.repository.ts:27: * bypasses the DTO still cannot trigger an unbounded or absurd `take`. A
+src/community/challenges/community-challenges.repository.ts:28: * missing limit falls back to the shared default page size.
+src/community/challenges/community-challenges.repository.ts:29: */
+src/community/challenges/community-challenges.repository.ts:30:function clampLimit(limit: number | undefined): number {
+src/community/challenges/community-challenges.repository.ts:31:  const n = limit ?? PAGE_DEFAULT_LIMIT;
+src/community/challenges/community-challenges.repository.ts:32:  if (!Number.isFinite(n)) return PAGE_DEFAULT_LIMIT;
+src/community/challenges/community-challenges.repository.ts:33:  return Math.max(1, Math.min(PAGE_MAX_LIMIT, Math.trunc(n)));
+src/community/challenges/community-challenges.repository.ts:34:}
+src/community/challenges/community-challenges.repository.ts:35:
+src/community/challenges/community-challenges.repository.ts:36:const PAGE_DEFAULT_LIMIT = 20;
+src/community/challenges/community-challenges.repository.ts:37:const PAGE_MAX_LIMIT = 50;
+src/community/challenges/community-challenges.repository.ts:38:
+src/community/challenges/community-challenges.repository.ts:110:  /**
+src/community/challenges/community-challenges.repository.ts:111:   * Cursor-paginated challenge list (D-040). Fetches `limit + 1` rows so the
+src/community/challenges/community-challenges.repository.ts:112:   * presence of an overflow row reveals whether a further page exists without a
+src/community/challenges/community-challenges.repository.ts:113:   * second COUNT query; the overflow row is dropped and its predecessor's id
+src/community/challenges/community-challenges.repository.ts:114:   * becomes `nextCursor`. `cursor` (when present) is the id of the last item of
+src/community/challenges/community-challenges.repository.ts:115:   * the previous page; `skip: 1` excludes that anchor row from this page.
+src/community/challenges/community-challenges.repository.ts:116:   */
+src/community/challenges/community-challenges.repository.ts:121:    limit?: number;
+src/community/challenges/community-challenges.repository.ts:122:    cursor?: string;
+src/community/challenges/community-challenges.repository.ts:123:  }): Promise<Page<CommunityChallenge>> {
+src/community/challenges/community-challenges.repository.ts:124:    const limit = clampLimit(params.limit);
+src/community/challenges/community-challenges.repository.ts:125:    const rows = await this.prisma.communityChallenge.findMany({
+src/community/challenges/community-challenges.repository.ts:133:      take: limit + 1,
+src/community/challenges/community-challenges.repository.ts:134:      ...(params.cursor
+src/community/challenges/community-challenges.repository.ts:135:        ? { cursor: { id: params.cursor }, skip: 1 }
+src/community/challenges/community-challenges.repository.ts:136:        : {}),
+src/community/challenges/community-challenges.repository.ts:138:    return this.paginate(rows, limit);
+src/community/challenges/community-challenges.repository.ts:139:  }
+src/community/challenges/community-challenges.repository.ts:140:
+src/community/challenges/community-challenges.repository.ts:141:  /**
+src/community/challenges/community-challenges.repository.ts:142:   * Slice a `limit + 1` fetch down to one page and derive the cursor. When the
+src/community/challenges/community-challenges.repository.ts:143:   * extra row is present a further page exists, so the overflow row is dropped
+src/community/challenges/community-challenges.repository.ts:144:   * and the last KEPT row's id is the cursor; otherwise this is the final page
+src/community/challenges/community-challenges.repository.ts:145:   * and the cursor is null. Shared by every id-keyed paginated read here.
+src/community/challenges/community-challenges.repository.ts:146:   */
+src/community/challenges/community-challenges.repository.ts:147:  private paginate<T extends { id: string }>(
+src/community/challenges/community-challenges.repository.ts:148:    rows: T[],
+src/community/challenges/community-challenges.repository.ts:149:    limit: number,
+src/community/challenges/community-challenges.repository.ts:150:  ): Page<T> {
+src/community/challenges/community-challenges.repository.ts:151:    if (rows.length > limit) {
+src/community/challenges/community-challenges.repository.ts:152:      const items = rows.slice(0, limit);
+src/community/challenges/community-challenges.repository.ts:153:      return { items, nextCursor: items[items.length - 1].id };
+src/community/challenges/community-challenges.repository.ts:154:    }
+src/community/challenges/community-challenges.repository.ts:155:    return { items: rows, nextCursor: null };
+src/community/challenges/community-challenges.repository.ts:322:  /**
+src/community/challenges/community-challenges.repository.ts:323:   * Leaderboard ordering: highest progress first, earliest completion as
+src/community/challenges/community-challenges.repository.ts:324:   * tiebreak. Cursor-paginated (D-040): fetches `limit + 1` rows ordered by
+src/community/challenges/community-challenges.repository.ts:325:   * (progress_value desc, last_logged_at asc) with a stable `id` tiebreak so
+src/community/challenges/community-challenges.repository.ts:326:   * the cursor is deterministic across equal-progress rows. `cursor` is the id
+src/community/challenges/community-challenges.repository.ts:327:   * of the previous page's last participation; `skip: 1` drops that anchor.
+src/community/challenges/community-challenges.repository.ts:328:   * `nextCursor` is the last kept participation id when an overflow row exists.
+src/community/challenges/community-challenges.repository.ts:329:   */
+src/community/challenges/community-challenges.repository.ts:330:  async listParticipationsByProgress(params: {
+src/community/challenges/community-challenges.repository.ts:331:    challengeId: string;
+src/community/challenges/community-challenges.repository.ts:332:    limit?: number;
+src/community/challenges/community-challenges.repository.ts:333:    cursor?: string;
+src/community/challenges/community-challenges.repository.ts:334:  }): Promise<Page<CommunityChallengeParticipation>> {
+src/community/challenges/community-challenges.repository.ts:335:    const limit = clampLimit(params.limit);
+src/community/challenges/community-challenges.repository.ts:336:    const rows = await this.prisma.communityChallengeParticipation.findMany({
+src/community/challenges/community-challenges.repository.ts:337:      where: { challenge_id: params.challengeId },
+src/community/challenges/community-challenges.repository.ts:338:      orderBy: [
+src/community/challenges/community-challenges.repository.ts:339:        { progress_value: 'desc' },
+src/community/challenges/community-challenges.repository.ts:340:        { last_logged_at: 'asc' },
+src/community/challenges/community-challenges.repository.ts:341:        { id: 'asc' },
+src/community/challenges/community-challenges.repository.ts:342:      ],
+src/community/challenges/community-challenges.repository.ts:343:      take: limit + 1,
+src/community/challenges/community-challenges.repository.ts:344:      ...(params.cursor
+src/community/challenges/community-challenges.repository.ts:345:        ? { cursor: { id: params.cursor }, skip: 1 }
+src/community/challenges/community-challenges.repository.ts:346:        : {}),
+src/community/challenges/community-challenges.repository.ts:348:    return this.paginate(rows, limit);
+src/community/challenges/community-challenges.repository.ts:444:  /**
+src/community/challenges/community-challenges.repository.ts:445:   * Cursor-paginated challenge comments (D-040). community_messages has a
+src/community/challenges/community-challenges.repository.ts:446:   * COMPOSITE primary key [id, created_at] (range partitioning), so Prisma's
+src/community/challenges/community-challenges.repository.ts:447:   * `cursor` cannot key on the bare id: it needs the `id_created_at` compound
+src/community/challenges/community-challenges.repository.ts:448:   * selector. The public cursor token is just the comment id, so when a cursor
+src/community/challenges/community-challenges.repository.ts:449:   * is supplied we first resolve that row's created_at (findFirst by id, any
+src/community/challenges/community-challenges.repository.ts:450:   * partition) and use it to build the compound cursor. A cursor that no longer
+src/community/challenges/community-challenges.repository.ts:451:   * resolves (deleted/foreign id) yields the FIRST page rather than throwing,
+src/community/challenges/community-challenges.repository.ts:452:   * so a stale client cursor degrades gracefully instead of erroring. Fetches
+src/community/challenges/community-challenges.repository.ts:453:   * `limit + 1` to derive nextCursor the same way as the other reads.
+src/community/challenges/community-challenges.repository.ts:454:   */
+src/community/challenges/community-challenges.repository.ts:455:  async listComments(params: {
+src/community/challenges/community-challenges.repository.ts:456:    challengeId: string;
+src/community/challenges/community-challenges.repository.ts:457:    limit?: number;
+src/community/challenges/community-challenges.repository.ts:458:    cursor?: string;
+src/community/challenges/community-challenges.repository.ts:459:  }): Promise<Page<CommunityMessage>> {
+src/community/challenges/community-challenges.repository.ts:460:    const limit = clampLimit(params.limit);
+src/community/challenges/community-challenges.repository.ts:461:
+src/community/challenges/community-challenges.repository.ts:462:    let cursorClause: {
+src/community/challenges/community-challenges.repository.ts:463:      cursor: Prisma.CommunityMessageWhereUniqueInput;
+src/community/challenges/community-challenges.repository.ts:464:      skip: number;
+src/community/challenges/community-challenges.repository.ts:465:    } | null = null;
+src/community/challenges/community-challenges.repository.ts:466:    if (params.cursor) {
+src/community/challenges/community-challenges.repository.ts:467:      const anchor = await this.prisma.communityMessage.findFirst({
+src/community/challenges/community-challenges.repository.ts:468:        where: { id: params.cursor },
+src/community/challenges/community-challenges.repository.ts:469:        select: { id: true, created_at: true },
+src/community/challenges/community-challenges.repository.ts:470:      });
+src/community/challenges/community-challenges.repository.ts:471:      if (anchor) {
+src/community/challenges/community-challenges.repository.ts:472:        cursorClause = {
+src/community/challenges/community-challenges.repository.ts:473:          cursor: {
+src/community/challenges/community-challenges.repository.ts:474:            id_created_at: { id: anchor.id, created_at: anchor.created_at },
+src/community/challenges/community-challenges.repository.ts:475:          },
+src/community/challenges/community-challenges.repository.ts:476:          skip: 1,
+src/community/challenges/community-challenges.repository.ts:477:        };
+src/community/challenges/community-challenges.repository.ts:478:      }
+src/community/challenges/community-challenges.repository.ts:479:    }
+src/community/challenges/community-challenges.repository.ts:480:
+src/community/challenges/community-challenges.repository.ts:481:    const rows = await this.prisma.communityMessage.findMany({
+src/community/challenges/community-challenges.repository.ts:484:        plan_context_id: params.challengeId,
+src/community/challenges/community-challenges.repository.ts:487:      orderBy: [{ created_at: 'asc' }, { id: 'asc' }],
+src/community/challenges/community-challenges.repository.ts:488:      take: limit + 1,
+src/community/challenges/community-challenges.repository.ts:489:      ...(cursorClause ?? {}),
+src/community/challenges/community-challenges.repository.ts:491:    return this.paginate(rows, limit);
+src/community/challenges/community-challenges.service.ts:328:    query: { cohort_id?: string; status?: string; limit?: number; cursor?: string },
+src/community/challenges/community-challenges.service.ts:354:    const page = await this.repo.listChallenges({
+src/community/challenges/community-challenges.service.ts:358:      limit: query.limit,
+src/community/challenges/community-challenges.service.ts:359:      cursor: query.cursor,
+src/community/challenges/community-challenges.service.ts:364:    // The cursor is derived from the REPOSITORY page boundary (page.nextCursor),
+src/community/challenges/community-challenges.service.ts:365:    // NOT from the post-filter slice: the next page must resume after the last
+src/community/challenges/community-challenges.service.ts:366:    // row the DB returned, otherwise a page that is fully filtered out for this
+src/community/challenges/community-challenges.service.ts:367:    // caller would wrongly look like the end of the list and silently strand
+src/community/challenges/community-challenges.service.ts:368:    // the challenges that follow it.
+src/community/challenges/community-challenges.service.ts:370:    for (const c of page.items) {
+src/community/challenges/community-challenges.service.ts:383:      next_cursor: page.nextCursor,
+src/community/challenges/community-challenges.service.ts:557:    query: { limit?: number; cursor?: string } = {},
+src/community/challenges/community-challenges.service.ts:568:        // An unavailable board exposes no rows, so it can never hand back a
+src/community/challenges/community-challenges.service.ts:569:        // cursor an opted-out caller could replay.
+src/community/challenges/community-challenges.service.ts:570:        next_cursor: null,
+src/community/challenges/community-challenges.service.ts:575:    const page = await this.repo.listParticipationsByProgress({
+src/community/challenges/community-challenges.service.ts:577:      limit: query.limit,
+src/community/challenges/community-challenges.service.ts:578:      cursor: query.cursor,
+src/community/challenges/community-challenges.service.ts:579:    });
+src/community/challenges/community-challenges.service.ts:580:    // Ranks are page-local (1-based within the returned page): the cursor walks
+src/community/challenges/community-challenges.service.ts:581:    // the participation ordering and the opt-in filter only hides
+src/community/challenges/community-challenges.service.ts:582:    // non-consenting rows within the page. next_cursor comes from the
+src/community/challenges/community-challenges.service.ts:583:    // REPOSITORY page boundary (the last participation the DB returned, opted
+src/community/challenges/community-challenges.service.ts:584:    // in or not), so the following page resumes at the correct row even when
+src/community/challenges/community-challenges.service.ts:585:    // the tail of this page was entirely non-consenting.
+src/community/challenges/community-challenges.service.ts:588:    for (const p of page.items) {
+src/community/challenges/community-challenges.service.ts:602:      next_cursor: page.nextCursor,
+src/community/challenges/community-challenges.service.ts:629:    query: { limit?: number; cursor?: string } = {},
+src/community/challenges/community-challenges.service.ts:632:    const page = await this.repo.listComments({
+src/community/challenges/community-challenges.service.ts:633:      challengeId,
+src/community/challenges/community-challenges.service.ts:634:      limit: query.limit,
+src/community/challenges/community-challenges.service.ts:635:      cursor: query.cursor,
+src/community/challenges/community-challenges.service.ts:636:    });
+src/community/challenges/community-challenges.service.ts:638:      comments: page.items.map((m) => this.commentView(m)),
+src/community/challenges/community-challenges.service.ts:639:      next_cursor: page.nextCursor,
+test/community/challenges/community-challenges.service.spec.ts:438:      // v3-1 (D-040): listParticipationsByProgress now returns a paginated
+test/community/challenges/community-challenges.service.spec.ts:439:      // { items, nextCursor } page rather than a bare array.
+test/community/challenges/community-challenges.service.spec.ts:440:      repo.listParticipationsByProgress.mockResolvedValue({
+test/community/challenges/community-challenges.service.spec.ts:441:        items: [
+test/community/challenges/community-challenges.service.spec.ts:442:          participation({ user_id: PEER_ID, progress_value: new Prisma.Decimal(90) }),
+test/community/challenges/community-challenges.service.spec.ts:443:          participation({ user_id: MEMBER_ID, progress_value: new Prisma.Decimal(40) }),
+test/community/challenges/community-challenges.service.spec.ts:444:          // A non-consenting participant — must NOT appear.
+test/community/challenges/community-challenges.service.spec.ts:445:          participation({ user_id: LURKER_ID, progress_value: new Prisma.Decimal(99) }),
+test/community/challenges/community-challenges.service.spec.ts:446:        ],
+test/community/challenges/community-challenges.service.spec.ts:447:        nextCursor: null,
+test/community/challenges/community-challenges.service.spec.ts:448:      });

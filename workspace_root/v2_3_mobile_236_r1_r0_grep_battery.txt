@@ -1,0 +1,2 @@
++ * response DTO at growth-project-backend PR #389 HEAD `c6799955`
++      }) as unknown as typeof AccessibilityInfo.addEventListener);

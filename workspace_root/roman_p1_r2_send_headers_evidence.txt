@@ -1,0 +1,51 @@
+   380	    const parsed = RomanStreamChunkSchema.safeParse(json);
+   381	    if (!parsed.success) {
+   382	      throw new RomanWireError(
+   383	        `roman stream chunk drifted from contract: ${parsed.error.message}`,
+   384	      );
+   385	    }
+   386	    chunks.push(parsed.data);
+   387	  }
+   388	  return { chunks, streamError };
+   389	}
+   390	
+   391	/**
+   392	 * POST /roman/sessions/:id/messages — persist the user turn and return Roman's
+   393	 * settled reply. See the DECLARED DEVIATION in the file header: we read the SSE
+   394	 * response as a single buffered body (RN has no streaming `response.body`),
+   395	 * then recover the terminal `done` chunk.
+   396	 *
+   397	 * Uses the same base URL + bearer token as the shared axios client so auth and
+   398	 * environment parity are preserved; axios is bypassed ONLY here because we need
+   399	 * the raw text body of an event-stream response.
+   400	 */
+   401	export async function sendMessage(
+   402	  sessionId: string,
+   403	  content: string,
+   404	): Promise<RomanAssistantReply> {
+   405	  const token = await secureStorage.getItem('supabase_token');
+   406	  const url = `${env.API_URL}/roman/sessions/${encodeURIComponent(sessionId)}/messages`;
+   407	
+   408	  const controller = new AbortController();
+   409	  // Fail fast rather than hang on a wedged stream (FIFTY_FAILURES #35).
+   410	  const timeout = setTimeout(() => controller.abort(), 60000);
+   411	
+   412	  let response: Response;
+   413	  try {
+   414	    response = await fetch(url, {
+   415	      method: 'POST',
+   416	      headers: {
+   417	        'Content-Type': 'application/json',
+   418	        Accept: 'text/event-stream',
+   419	        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+   420	      },
+   421	      body: JSON.stringify({ content }),
+   422	      signal: controller.signal,
+   423	    });
+   424	  } catch (err) {
+   425	    clearTimeout(timeout);
+   426	    // AbortError (timeout) or a transport failure → treated as offline; the
+   427	    // composer preserves the message so the user can retry.
+   428	    logger.warn('romanApi.sendMessage transport', err);
+   429	    throw new RomanApiError('offline', 'No connection to Roman right now.');
+   430	  }

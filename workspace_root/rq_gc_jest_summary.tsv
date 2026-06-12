@@ -1,0 +1,6 @@
+suite	exit_code	did_not_exit_warning	log
+src/hooks/useWearablePreference.test.tsx	0	NO	/home/user/workspace/rq_gc_jest_logs/src_hooks_useWearablePreference_test_tsx.log
+src/screens/client/wearables/__tests__/cards.test.tsx	0	NO	/home/user/workspace/rq_gc_jest_logs/src_screens_client_wearables___tests___cards_test_tsx.log
+src/__tests__/coachLtvDashboard.test.tsx	0	NO	/home/user/workspace/rq_gc_jest_logs/src___tests___coachLtvDashboard_test_tsx.log
+src/components/coach/ai-budget/__tests__/AIBudgetMount.test.tsx	0	NO	/home/user/workspace/rq_gc_jest_logs/src_components_coach_ai-budget___tests___AIBudgetMount_test_tsx.log
+src/screens/day-one/__tests__/day1OnboardingScreens.test.tsx	0	NO	/home/user/workspace/rq_gc_jest_logs/src_screens_day-one___tests___day1OnboardingScreens_test_tsx.log

@@ -1,0 +1,393 @@
+--- feature flag refs
+src/screens/community/CommunityChallengesScreen.tsx:17: * `featureFlags.communityChallenges` is true. A defense-in-depth guard renders a
+src/screens/community/CommunityChallengesScreen.tsx:34:  communityChallengesApi,
+src/screens/community/CommunityChallengesScreen.tsx:36:} from '../../api/communityChallengesApi';
+src/screens/community/CommunityChallengesScreen.tsx:54:    queryFn: () => communityChallengesApi.listChallenges(workspaceId as string),
+src/screens/community/CommunityChallengesScreen.tsx:55:    enabled: !!workspaceId && featureFlags.communityChallenges,
+src/screens/community/CommunityChallengesScreen.tsx:74:  if (!featureFlags.communityChallenges) {
+.env.example:100:EXPO_PUBLIC_FF_COMMUNITY_ACKS=false
+.env.example:103:EXPO_PUBLIC_FF_COMMUNITY_CHALLENGES=false
+src/screens/community/CommunityChallengeDetailScreen.tsx:17: * `featureFlags.communityChallenges` is true, so when the flag is OFF the screen
+src/screens/community/CommunityChallengeDetailScreen.tsx:21: * DATA: uses `communityChallengesApi` directly via react-query (the shared
+src/screens/community/CommunityChallengeDetailScreen.tsx:53:  communityChallengesApi,
+src/screens/community/CommunityChallengeDetailScreen.tsx:56:} from '../../api/communityChallengesApi';
+src/screens/community/CommunityChallengeDetailScreen.tsx:100:    queryFn: () => communityChallengesApi.getChallenge(challengeId),
+src/screens/community/CommunityChallengeDetailScreen.tsx:101:    enabled: !!challengeId && featureFlags.communityChallenges,
+src/screens/community/CommunityChallengeDetailScreen.tsx:106:    queryFn: () => communityChallengesApi.listComments(challengeId),
+src/screens/community/CommunityChallengeDetailScreen.tsx:107:    enabled: !!challengeId && featureFlags.communityChallenges,
+src/screens/community/CommunityChallengeDetailScreen.tsx:119:    queryFn: () => communityChallengesApi.getLeaderboard(challengeId),
+src/screens/community/CommunityChallengeDetailScreen.tsx:122:      featureFlags.communityChallenges &&
+src/screens/community/CommunityChallengeDetailScreen.tsx:152:    mutationFn: () => communityChallengesApi.join(challengeId),
+src/screens/community/CommunityChallengeDetailScreen.tsx:165:      communityChallengesApi.updateProgress(challengeId, value),
+src/screens/community/CommunityChallengeDetailScreen.tsx:186:      communityChallengesApi.setLeaderboardOptIn(challengeId, next),
+src/screens/community/CommunityChallengeDetailScreen.tsx:202:      communityChallengesApi.addComment(challengeId, body),
+src/screens/community/CommunityChallengeDetailScreen.tsx:214:      communityChallengesApi.reportComment(
+src/screens/community/CommunityChallengeDetailScreen.tsx:257:  if (!featureFlags.communityChallenges) {
+src/screens/community/communityNavTypes.ts:31:  /** Single challenge detail (v3-1). Registered only behind communityChallenges. */
+src/screens/community/communityNavTypes.ts:33:  /** Challenge discovery list (v3-1). Registered only behind communityChallenges. */
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:6: *   1. Flag-off invariance: when `communityChallenges` is false the screen
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:15: * The data layer (`communityChallengesApi`) is mocked and a real QueryClient is
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:43:const flags = { communityChallenges: true };
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:56:jest.mock('../../../api/communityChallengesApi', () => ({
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:57:  communityChallengesApi: {
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:69:import { communityChallengesApi } from '../../../api/communityChallengesApi';
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:73:} from '../../../api/communityChallengesApi';
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:83:const api = jest.mocked(communityChallengesApi);
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:138:  flags.communityChallenges = true;
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:146:    flags.communityChallenges = false;
+src/screens/community/CommunityTodayScreen.tsx:60:    if (featureFlags.communityChallenges) {
+src/navigation/__tests__/communityChallengesFlagOff.test.ts:6: * `featureFlags.communityChallenges` is true. We assert this STATICALLY by
+src/navigation/__tests__/communityChallengesFlagOff.test.ts:14: * `featureFlags.communityChallenges ? (...) : null` ternary in source order.
+src/navigation/__tests__/communityChallengesFlagOff.test.ts:27:  it('gates the CommunityChallenges discovery route behind featureFlags.communityChallenges', () => {
+src/navigation/__tests__/communityChallengesFlagOff.test.ts:30:      /\{featureFlags\.communityChallenges\s*\?/,
+src/navigation/__tests__/communityChallengesFlagOff.test.ts:41:      /\{featureFlags\.communityChallenges\s*\?/,
+src/navigation/__tests__/communityChallengesFlagOff.test.ts:56:      COMMUNITY_NAV.match(/\{featureFlags\.communityChallenges\s*\?/g) ?? [];
+src/navigation/__tests__/communityFlagOff.test.ts:79:      'EXPO_PUBLIC_FF_COMMUNITY_TAB',
+src/navigation/__tests__/communityFlagOff.test.ts:80:      'EXPO_PUBLIC_FF_COMMUNITY_HALL',
+src/navigation/__tests__/communityFlagOff.test.ts:81:      'EXPO_PUBLIC_FF_COMMUNITY_COHORTS',
+src/navigation/__tests__/communityFlagOff.test.ts:82:      'EXPO_PUBLIC_FF_COMMUNITY_DM',
+src/navigation/CommunityNavigator.tsx:42:      {featureFlags.communityChallenges ? (
+src/navigation/CommunityNavigator.tsx:48:      {featureFlags.communityChallenges ? (
+src/screens/community/CoachCommunityInboxScreen.tsx:499: * when EXPO_PUBLIC_FF_COMMUNITY_ACKS is on (the parent gates this with
+src/config/featureFlags.ts:56:  communityVoiceNotes: readFlag('EXPO_PUBLIC_FF_COMMUNITY_VOICE_NOTES', false),
+src/config/featureFlags.ts:104:  communityTab: readFlag('EXPO_PUBLIC_FF_COMMUNITY_TAB', false),
+src/config/featureFlags.ts:106:  communityHall: readFlag('EXPO_PUBLIC_FF_COMMUNITY_HALL', false),
+src/config/featureFlags.ts:108:  communityCohorts: readFlag('EXPO_PUBLIC_FF_COMMUNITY_COHORTS', false),
+src/config/featureFlags.ts:110:  communityDm: readFlag('EXPO_PUBLIC_FF_COMMUNITY_DM', false),
+src/config/featureFlags.ts:139:  // env: EXPO_PUBLIC_FF_COMMUNITY_ACKS
+src/config/featureFlags.ts:140:  communityAcks: readFlag('EXPO_PUBLIC_FF_COMMUNITY_ACKS', false),
+src/config/featureFlags.ts:146:  // is dead code at build time. The backend gate (FEATURE_COMMUNITY_CHALLENGES)
+src/config/featureFlags.ts:149:  // env: EXPO_PUBLIC_FF_COMMUNITY_CHALLENGES
+src/config/featureFlags.ts:150:  communityChallenges: readFlag('EXPO_PUBLIC_FF_COMMUNITY_CHALLENGES', false),
+src/screens/client/COMMUNITY_HUB_README.md:44:| `communityVoiceNotes` | `EXPO_PUBLIC_FF_COMMUNITY_VOICE_NOTES` | `false` | `false` | Enables voice-note attachments in posts (always OFF until upload pipeline ships) |
+src/api/communityChallengesApi.ts:2: * communityChallengesApi — typed client for the v3-1 Community Challenges
+src/api/communityChallengesApi.ts:206:export const communityChallengesApi = {
+src/api/communityChallengesApi.ts:313:export type CommunityChallengesApi = typeof communityChallengesApi;
+src/api/__tests__/communityChallengesApi.drift.test.ts:2: * F2 — contract-drift tests for communityChallengesApi.
+src/api/__tests__/communityChallengesApi.drift.test.ts:19:import { communityChallengesApi } from '../communityChallengesApi';
+src/api/__tests__/communityChallengesApi.drift.test.ts:89:describe('communityChallengesApi — happy-path parse', () => {
+src/api/__tests__/communityChallengesApi.drift.test.ts:92:    const res = await communityChallengesApi.listChallenges(WS);
+src/api/__tests__/communityChallengesApi.drift.test.ts:104:    const res = await communityChallengesApi.getChallenge(CID);
+src/api/__tests__/communityChallengesApi.drift.test.ts:109:describe('communityChallengesApi — strict drift rejection (F2)', () => {
+src/api/__tests__/communityChallengesApi.drift.test.ts:113:    await expect(communityChallengesApi.listChallenges(WS)).rejects.toMatchObject({
+src/api/__tests__/communityChallengesApi.drift.test.ts:122:    await expect(communityChallengesApi.listChallenges(WS)).rejects.toMatchObject({
+src/api/__tests__/communityChallengesApi.drift.test.ts:130:    await expect(communityChallengesApi.getChallenge(CID)).rejects.toMatchObject({
+src/api/__tests__/communityChallengesApi.drift.test.ts:138:    await expect(communityChallengesApi.getChallenge(CID)).rejects.toMatchObject({
+src/api/__tests__/communityChallengesApi.drift.test.ts:151:    await expect(communityChallengesApi.getLeaderboard(CID)).rejects.toMatchObject({
+src/api/__tests__/communityChallengesApi.drift.test.ts:160:      communityChallengesApi.updateProgress(CID, 30000),
+src/api/__tests__/communityChallengesApi.drift.test.ts:178:    await expect(communityChallengesApi.listComments(CID)).rejects.toMatchObject({
+src/api/__tests__/communityChallengesApi.drift.test.ts:186:    const e = await communityChallengesApi.listChallenges(WS).catch((x) => x);
+src/api/__tests__/communityChallengesApi.drift.test.ts:192:describe('communityChallengesApi — 409 classified as conflict (F3)', () => {
+src/api/__tests__/communityChallengesApi.drift.test.ts:207:      communityChallengesApi.updateProgress(CID, 40000),
+src/components/community/ChallengeProgressSheet.tsx:39:} from '../../api/communityChallengesApi';
+src/components/community/ChallengeCard.tsx:26:} from '../../api/communityChallengesApi';
+--- allowlist refs
+src/theme/tokens.ts:143:    fontWeight:    '400' as const,
+src/theme/tokens.ts:150:    fontWeight:    '400' as const,
+src/theme/tokens.ts:157:    fontWeight:    '400' as const,
+src/theme/tokens.ts:164:    fontWeight:    '500' as const,
+src/theme/tokens.ts:171:    fontWeight:    '500' as const,
+src/theme/tokens.ts:178:    fontWeight:    '400' as const,
+src/theme/tokens.ts:185:    fontWeight:    '500' as const,
+src/theme/tokens.ts:192:    fontWeight:    '400' as const,
+src/theme/tokens.ts:199:    fontWeight:    '500' as const,
+src/theme/tokens.ts:206:    fontWeight:     '500' as const,
+src/theme/tokens.ts:214:    fontWeight:    '600' as const,
+src/screens/community/CommunityChallengesScreen.tsx:186:  retryLabel: { fontSize: 14, fontWeight: '600' },
+src/screens/community/CommunityChallengeDetailScreen.tsx:8: *   - The cohort-LOCAL leaderboard (Strava §3.2) is STRICTLY OPT-IN: it is shown
+src/screens/community/CommunityChallengeDetailScreen.tsx:112:  const optedIn = participation?.leaderboard_opted_in ?? false;
+src/screens/community/CommunityChallengeDetailScreen.tsx:113:  const leaderboardEnabled = detail.data?.challenge.leaderboard_enabled ?? false;
+src/screens/community/CommunityChallengeDetailScreen.tsx:117:  const leaderboard = useQuery({
+src/screens/community/CommunityChallengeDetailScreen.tsx:118:    queryKey: ['community', 'challenge', challengeId, 'leaderboard'],
+src/screens/community/CommunityChallengeDetailScreen.tsx:123:      leaderboardEnabled &&
+src/screens/community/CommunityChallengeDetailScreen.tsx:129:  // The original P0 was that this surface rendered LOCAL Roman copy from
+src/screens/community/CommunityChallengeDetailScreen.tsx:132:  // surface and the Roman voice-policy has no `challenge_comments_empty` key.
+src/screens/community/CommunityChallengeDetailScreen.tsx:134:  // honest resolution is a NEUTRAL, non-Roman-voiced empty state derived from
+src/screens/community/CommunityChallengeDetailScreen.tsx:135:  // this query result -- no local Roman copy, no invented backend endpoint.
+src/screens/community/CommunityChallengeDetailScreen.tsx:147:      queryKey: ['community', 'challenge', challengeId, 'leaderboard'],
+src/screens/community/CommunityChallengeDetailScreen.tsx:173:      // + leaderboard so the next attempt starts from the true value
+src/screens/community/CommunityChallengeDetailScreen.tsx:347:  // a true empty (server confirmed zero rows) gets a NEUTRAL, non-Roman empty
+src/screens/community/CommunityChallengeDetailScreen.tsx:348:  // state with a real CTA (no local Roman copy, no invented backend payload).
+src/screens/community/CommunityChallengeDetailScreen.tsx:353:  // Neutral, non-Roman UI copy for the true-empty surface. This is a plain UI
+src/screens/community/CommunityChallengeDetailScreen.tsx:354:  // affordance string, NOT Roman voice and NOT sourced from `romanVoice.ts`.
+src/screens/community/CommunityChallengeDetailScreen.tsx:463:      {/* Strictly opt-in, cohort-local leaderboard (Strava §3.2). */}
+src/screens/community/CommunityChallengeDetailScreen.tsx:464:      {leaderboardEnabled ? (
+src/screens/community/CommunityChallengeDetailScreen.tsx:465:        <View style={styles.lbBlock} testID="community-challenge-leaderboard">
+src/screens/community/CommunityChallengeDetailScreen.tsx:467:            Cohort leaderboard
+src/screens/community/CommunityChallengeDetailScreen.tsx:471:              Join the challenge to take part in the leaderboard.
+src/screens/community/CommunityChallengeDetailScreen.tsx:481:                cohort's leaderboard; logging works either way, and you can
+src/screens/community/CommunityChallengeDetailScreen.tsx:519:          ) : leaderboard.isLoading ? (
+src/screens/community/CommunityChallengeDetailScreen.tsx:523:          ) : leaderboard.isError || !leaderboard.data ? (
+src/screens/community/CommunityChallengeDetailScreen.tsx:525:              We could not load the leaderboard right now.
+src/screens/community/CommunityChallengeDetailScreen.tsx:527:          ) : leaderboard.data.rows.length === 0 ? (
+src/screens/community/CommunityChallengeDetailScreen.tsx:533:              {leaderboard.data.rows.map(renderLeaderboardRow)}
+src/screens/community/CommunityChallengeDetailScreen.tsx:539:                accessibilityLabel="Stop sharing my progress on the leaderboard"
+src/screens/community/CommunityChallengeDetailScreen.tsx:562:  //   2. comments TRUE EMPTY  -> a NEUTRAL (non-Roman) empty state with a REAL
+src/screens/community/CommunityChallengeDetailScreen.tsx:563:  //      focus CTA. No local Roman copy (the P0) and no invented backend
+src/screens/community/CommunityChallengeDetailScreen.tsx:666:  errorTitle: { fontSize: 16, fontWeight: '600', textAlign: 'center' },
+src/screens/community/CommunityChallengeDetailScreen.tsx:676:  retryLabel: { fontSize: 14, fontWeight: '600' },
+src/screens/community/CommunityChallengeDetailScreen.tsx:681:  sectionLabel: { fontSize: 13, fontWeight: '600' },
+src/screens/community/CommunityChallengeDetailScreen.tsx:689:  progressText: { fontSize: 15, fontWeight: '600', marginTop: spacing.xs },
+src/screens/community/CommunityChallengeDetailScreen.tsx:696:  ctaLabel: { fontSize: 15, fontWeight: '600' },
+src/screens/community/CommunityChallengeDetailScreen.tsx:733:  optInLabel: { fontSize: 14, fontWeight: '600' },
+src/screens/community/CommunityChallengeDetailScreen.tsx:743:  lbRank: { fontSize: 14, fontWeight: '600', minWidth: 24 },
+src/screens/community/CommunityChallengeDetailScreen.tsx:745:  lbValue: { fontSize: 14, fontWeight: '600' },
+src/screens/community/CommunityChallengeDetailScreen.tsx:747:  optOutLabel: { fontSize: 13, fontWeight: '500' },
+src/screens/community/__tests__/communityScreens.test.tsx:7: *   - Empty states render the Roman copy + a PRIMARY ACTION (NOT a spinner) and
+src/screens/community/__tests__/communityScreens.test.tsx:146:describe('Community empty states — Roman copy + primary action (NOT spinner)', () => {
+src/screens/community/__tests__/coachCommunityScreens.test.tsx:9: *     renders <RomanAvatar /> (by `${root}-avatar` testID) AND the BACKEND
+src/screens/community/__tests__/coachCommunityScreens.test.tsx:18: *     honest spinner/CoachErrorState — never Roman copy from a local constant.
+src/screens/community/__tests__/coachCommunityScreens.test.tsx:40:  type RomanCopyPayload,
+src/screens/community/__tests__/coachCommunityScreens.test.tsx:110:const SYNTHETIC_EMPTY: Record<CoachEmptyStateSurfaceKey, RomanCopyPayload> = {
+src/screens/community/__tests__/coachCommunityScreens.test.tsx:148: * CoachErrorState rather than Roman copy when the payload is not yet ready.
+src/screens/community/__tests__/coachCommunityScreens.test.tsx:150:type RomanResult =
+src/screens/community/__tests__/coachCommunityScreens.test.tsx:153:  | { status: 'ready'; payload: RomanCopyPayload };
+src/screens/community/__tests__/coachCommunityScreens.test.tsx:155:  current: Partial<Record<CoachEmptyStateSurfaceKey, RomanResult>>;
+src/screens/community/__tests__/coachCommunityScreens.test.tsx:461:describe('FACE + VOICE contract — RomanAvatar + BACKEND-PAYLOAD copy on every empty state', () => {
+src/screens/community/__tests__/coachCommunityScreens.test.tsx:515:    expect(avatar.props.accessibilityLabel).toBe('Roman, pleased');
+src/screens/community/__tests__/coachCommunityScreens.test.tsx:521:  it('Home: payload still loading on a quiet dashboard renders a spinner, NOT Roman copy', () => {
+src/screens/community/__tests__/coachCommunityScreens.test.tsx:523:    // is still in flight. The screen must show the non-Roman loading branch,
+src/screens/community/__tests__/coachCommunityScreens.test.tsx:537:    // No Roman face and no Roman copy while the policy loads.
+src/screens/community/__tests__/coachCommunityScreens.test.tsx:542:  it('Cohorts: a CONTRACT failure (200 missing surface) renders CoachErrorState, NOT Roman copy', () => {
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:11: *   3. The leaderboard is STRICTLY OPT-IN: even when the coach enabled it, a
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:74:// The local Roman empty-state copy that this surface must NEVER render (the
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:101:    leaderboard_enabled: false,
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:121:    leaderboard_opted_in: false,
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:187:describe('CommunityChallengeDetailScreen — leaderboard opt-in posture', () => {
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:190:      challenge: challenge({ leaderboard_enabled: true }),
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:191:      participation: participation({ leaderboard_opted_in: false }),
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:203:      challenge: challenge({ leaderboard_enabled: true }),
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:204:      participation: participation({ leaderboard_opted_in: true }),
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:217:  it('hides the leaderboard entirely when the coach has not enabled it', async () => {
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:219:      challenge: challenge({ leaderboard_enabled: false }),
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:220:      participation: participation({ leaderboard_opted_in: false }),
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:225:    expect(screen.queryByTestId('community-challenge-leaderboard')).toBeNull();
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:241:  it('renders a NEUTRAL true-empty state and NEVER the local Roman threadEmpty copy (F1 P0)', async () => {
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:244:    // Roman voice-policy. Per the brief ("missing payload => honest state, never
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:245:    // local fallback") the only honest option is a NEUTRAL, non-Roman empty
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:246:    // state. This pins that the local Roman threadEmpty line is ABSENT (the
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:262:    // The distinctive Roman threadEmpty phrase (token-free prefix) must be
+src/screens/community/__tests__/coachCommunityEmptyStateContract.integration.test.tsx:11: * `CoachErrorState` (with retry) — never the calm Roman empty state, never the
+src/screens/community/__tests__/coachCommunityEmptyStateContract.integration.test.tsx:12: * Roman empty-state face, never local fallback copy.
+src/screens/community/__tests__/coachCommunityEmptyStateContract.integration.test.tsx:21: *     error/retry branch and asserts the Roman EMPTY-state surface (its
+src/screens/community/__tests__/coachCommunityEmptyStateContract.integration.test.tsx:26: * renders a NEUTRAL Roman avatar under a DIFFERENT testID
+src/screens/community/__tests__/coachCommunityEmptyStateContract.integration.test.tsx:37:  RomanCopyPayload,
+src/screens/community/__tests__/coachCommunityEmptyStateContract.integration.test.tsx:100:/** A valid Roman copy payload for one surface (live, non-fallback variant). */
+src/screens/community/__tests__/coachCommunityEmptyStateContract.integration.test.tsx:101:function payloadFor(surface: SurfaceKey): RomanCopyPayload {
+src/screens/community/__tests__/coachCommunityEmptyStateContract.integration.test.tsx:118:): Partial<Record<CoachEmptyStateSurfaceKey, RomanCopyPayload>> {
+src/screens/community/__tests__/coachCommunityEmptyStateContract.integration.test.tsx:119:  const out: Partial<Record<CoachEmptyStateSurfaceKey, RomanCopyPayload>> = {};
+src/screens/community/__tests__/coachCommunityEmptyStateContract.integration.test.tsx:147:  it('Cohorts: a 200 missing coach_community_cohorts_empty renders CoachErrorState + retry — never the Roman empty state, face, or fallback copy', async () => {
+src/screens/community/__tests__/coachCommunityEmptyStateContract.integration.test.tsx:149:    // reaches its "quiet" branch and must resolve the Roman copy from the
+src/screens/community/__tests__/coachCommunityEmptyStateContract.integration.test.tsx:170:    // The calm Roman EMPTY state and its face image are NOT rendered.
+src/screens/community/__tests__/coachCommunityEmptyStateContract.integration.test.tsx:208:  it('Inbox: a 200 missing coach_community_inbox_empty renders CoachErrorState + retry — never the Roman empty state, face, or fallback copy', async () => {
+src/screens/community/__tests__/coachCommunityEmptyStateContract.integration.test.tsx:238:  it('Cohorts: while the policy fetch is in flight the screen shows a non-Roman spinner — never the empty-state face or copy', async () => {
+src/screens/community/__tests__/coachCommunityEmptyStateContract.integration.test.tsx:248:    // The non-Roman loading spinner for the empty-state surface appears once the
+src/screens/community/__tests__/coachCommunityEmptyStateContract.integration.test.tsx:256:    // No Roman EMPTY state, no face, no error surface, no fallback copy while
+src/screens/community/CommunityTodayScreen.tsx:7: * today content, we render a Roman-voiced empty state with a PRIMARY ACTION
+src/screens/community/CommunityTodayScreen.tsx:67:  // Empty state: friendly Roman copy + a primary action (never a bare spinner).
+src/screens/community/CommunityTodayScreen.tsx:238:    fontWeight: '600',
+src/screens/community/CommunityTodayScreen.tsx:250:    fontWeight: '600',
+src/screens/community/CommunityTodayScreen.tsx:256:    fontWeight: '600',
+src/screens/community/CommunityThreadScreen.tsx:7: * Empty comments → Roman-voiced empty state with a primary action. Standardized
+src/screens/community/CommunitySpaceScreen.tsx:6: * Empty state uses Roman voice + a primary action ("Be the first to post").
+src/screens/community/CommunityDmThreadScreen.tsx:8: * Empty conversation → Roman-voiced empty state with a primary action.
+src/screens/community/CommunityDmListScreen.tsx:5: * single conversation. Coach threads carry the Roman monogram accent.
+src/screens/community/CommunityDmListScreen.tsx:7: * Empty inbox → Roman-voiced empty state with a primary action ("Send your
+src/screens/community/CommunityComposerScreen.tsx:8: * On a successful post we surface the Roman `postPublished` line, then pop back
+src/screens/community/CommunityComposerScreen.tsx:82:          // Brief Roman confirmation, then return to the feed.
+src/screens/community/CommunityComposerScreen.tsx:210:    fontWeight: '600',
+src/screens/community/CommunityComposerScreen.tsx:243:    fontWeight: '600',
+src/screens/community/CoachCommunityPostDetailScreen.tsx:189:    fontWeight: '600',
+src/screens/community/CoachCommunityPostDetailScreen.tsx:194:    fontWeight: '600',
+src/screens/community/CoachCommunityPostDetailScreen.tsx:210:    fontWeight: '600',
+src/screens/community/CoachCommunityPostDetailScreen.tsx:226:    fontWeight: '600',
+src/screens/community/CoachCommunityModerationScreen.tsx:24: * — when the queue is genuinely clear — the operator-locked Roman-voiced empty
+src/screens/community/CoachCommunityModerationScreen.tsx:43:  CoachRomanEmptyState,
+src/screens/community/CoachCommunityModerationScreen.tsx:200:        <CoachRomanEmptyState
+src/screens/community/CoachCommunityModerationScreen.tsx:266:    fontWeight: '600',
+src/screens/community/CoachCommunityModerationScreen.tsx:283:    fontWeight: '600',
+src/screens/community/CoachCommunityModerationScreen.tsx:303:    fontWeight: '600',
+src/screens/community/CoachCommunityInboxScreen.tsx:19: * genuinely empty inbox — the operator-locked Roman-voiced empty state whose
+src/screens/community/CoachCommunityInboxScreen.tsx:36:  CoachRomanEmptyState,
+src/screens/community/CoachCommunityInboxScreen.tsx:262:        <CoachRomanEmptyState
+src/screens/community/CoachCommunityInboxScreen.tsx:600:    fontWeight: '600',
+src/screens/community/CoachCommunityInboxScreen.tsx:625:    fontWeight: '600',
+src/screens/community/CoachCommunityInboxScreen.tsx:638:    fontWeight: '600',
+src/screens/community/CoachCommunityInboxScreen.tsx:662:    fontWeight: '600',
+src/screens/community/CoachCommunityInboxScreen.tsx:682:    fontWeight: '600',
+src/screens/community/CoachCommunityInboxScreen.tsx:701:    fontWeight: '600',
+src/screens/community/CoachCommunityHomeScreen.tsx:11: * flagged) — the operator-locked Roman-voiced empty state. The empty-state copy
+src/screens/community/CoachCommunityHomeScreen.tsx:29:import { CoachRomanEmptyState, CoachErrorState } from '../../components/community/coach';
+src/screens/community/CoachCommunityHomeScreen.tsx:88:        <CoachRomanEmptyState
+src/screens/community/CoachCommunityHomeScreen.tsx:260:    fontWeight: '600',
+src/screens/community/CoachCommunityHomeScreen.tsx:276:    fontWeight: '600',
+src/screens/community/CoachCommunityHomeScreen.tsx:282:    fontWeight: '600',
+src/screens/community/CoachCommunityCohortsScreen.tsx:14: * genuinely empty cohort list — the operator-locked Roman-voiced empty state
+src/screens/community/CoachCommunityCohortsScreen.tsx:34:import { CoachRomanEmptyState, CoachErrorState } from '../../components/community/coach';
+src/screens/community/CoachCommunityCohortsScreen.tsx:141:        <CoachRomanEmptyState
+src/screens/community/CoachCommunityCohortsScreen.tsx:299:    fontWeight: '600',
+src/screens/community/CoachCommunityCohortsScreen.tsx:316:    fontWeight: '600',
+src/screens/community/CoachCommunityCohortsScreen.tsx:334:    fontWeight: '600',
+src/screens/community/CoachCommunityCohortsScreen.tsx:361:    fontWeight: '600',
+src/screens/community/CoachCommunityCohortsScreen.tsx:365:    fontWeight: '600',
+src/screens/community/CoachCommunityCohortDetailScreen.tsx:18: * cohort with no members — the operator-locked Roman-voiced empty state whose
+src/screens/community/CoachCommunityCohortDetailScreen.tsx:42:  CoachRomanEmptyState,
+src/screens/community/CoachCommunityCohortDetailScreen.tsx:204:        <CoachRomanEmptyState
+src/screens/community/CoachCommunityCohortDetailScreen.tsx:412:    fontWeight: '600',
+src/screens/community/CoachCommunityCohortDetailScreen.tsx:437:    fontWeight: '600',
+src/screens/community/CoachCommunityCohortDetailScreen.tsx:451:    fontWeight: '600',
+src/screens/community/CoachCommunityCohortDetailScreen.tsx:471:    fontWeight: '600',
+src/screens/community/CoachCommunityCohortDetailScreen.tsx:485:    fontWeight: '600',
+src/screens/community/CoachCommunityCohortDetailScreen.tsx:503:    fontWeight: '600',
+src/screens/community/CoachCommunityCohortDetailScreen.tsx:530:    fontWeight: '600',
+src/screens/community/CoachCommunityCohortDetailScreen.tsx:534:    fontWeight: '600',
+src/__tests__/quietLuxuryDoctrine.test.ts:26:// Phase 7C introduces opt-in leaderboard screens. These files intentionally
+src/__tests__/quietLuxuryDoctrine.test.ts:31:// Phase 7C introduces opt-in leaderboard screens. v3-1 extends the same
+src/__tests__/quietLuxuryDoctrine.test.ts:35:const ALLOWLIST_LEADERBOARD_REFERENCE: Set<string> = new Set([
+src/__tests__/quietLuxuryDoctrine.test.ts:72:  it('does not use fontWeight 700 or 800 in shipped screens or components', () => {
+src/__tests__/quietLuxuryDoctrine.test.ts:74:    const re = /fontWeight\s*:\s*['"](?:700|800)['"]/;
+src/__tests__/quietLuxuryDoctrine.test.ts:159:      // Phase 7C leaderboard screens are intentionally named and use the term.
+src/__tests__/quietLuxuryDoctrine.test.ts:162:      if (ALLOWLIST_LEADERBOARD_REFERENCE.has(file)) continue;
+src/components/community/ChallengeProgressSheet.tsx:433:  title: { flex: 1, fontSize: 20, fontWeight: '600' },
+src/components/community/ChallengeProgressSheet.tsx:440:  subtitle: { fontSize: 13, fontWeight: '600', marginTop: spacing.xs },
+src/components/community/ChallengeProgressSheet.tsx:448:  goalLabel: { fontSize: 15, fontWeight: '600', marginTop: spacing.sm },
+src/components/community/ChallengeProgressSheet.tsx:455:  completeText: { fontSize: 14, fontWeight: '600' },
+src/components/community/ChallengeProgressSheet.tsx:457:  celebrateTitle: { flex: 1, fontSize: 17, fontWeight: '600' },
+src/components/community/ChallengeProgressSheet.tsx:460:  errorText: { fontSize: 14, fontWeight: '600', marginTop: spacing.xs },
+src/components/community/ChallengeProgressSheet.tsx:477:  ctaLabel: { fontSize: 15, fontWeight: '600' },
+src/components/community/ChallengeCommentsEmptyState.tsx:6: * was that this surface rendered LOCAL Roman-voiced copy from `romanVoice.ts`
+src/components/community/ChallengeCommentsEmptyState.tsx:7: * (`threadEmpty`). The face+voice rule is that Roman's *voice* may only be
+src/components/community/ChallengeCommentsEmptyState.tsx:13: * state` route, and the Roman voice-policy has no `challenge_comments_empty`
+src/components/community/ChallengeCommentsEmptyState.tsx:17: * non-Roman-voiced encouragement line here: plain UI copy, no RomanAvatar, no
+src/components/community/ChallengeCommentsEmptyState.tsx:18: * Roman voice. This satisfies the P0 (no local Roman copy) without inventing a
+src/components/community/ChallengeCommentsEmptyState.tsx:35:   * Neutral, non-Roman UI copy for the true-empty surface. Supplied by the
+src/components/community/ChallengeCommentsEmptyState.tsx:36:   * caller as a plain string (a UI label, not Roman voice) so the component
+src/components/community/ChallengeCommentsEmptyState.tsx:37:   * never reaches for a local Roman constant.
+src/components/community/ChallengeCommentsEmptyState.tsx:40:  /** Primary action label (a UI affordance label, not Roman copy). */
+src/components/community/ChallengeCommentsEmptyState.tsx:106:    fontWeight: '600',
+src/components/community/ChallengeCard.tsx:154:  title: { flex: 1, fontSize: 17, fontWeight: '600' },
+src/components/community/ChallengeCard.tsx:179:  actionLabel: { fontSize: 13, fontWeight: '600' },
+src/components/community/romanVoice.ts:2: * romanVoice — Phase 1 (Option 3) Roman voice strings for the Community tab.
+src/components/community/romanVoice.ts:23: * literally roll a 0.125 die at runtime, so `pickRomanLine` exposes the
+src/components/community/romanVoice.ts:31:export interface RomanLine {
+src/components/community/romanVoice.ts:34:  /** Dry Roman variant (contractions allowed). Joke at the situation. */
+src/components/community/romanVoice.ts:99:export type RomanCommunityStem = keyof typeof ROMAN_COMMUNITY_LINES;
+src/components/community/romanVoice.ts:107: * Callers that render multiple Roman lines on one screen pass distinct seeds;
+src/components/community/romanVoice.ts:125: * Resolve a Roman community stem into a final string. Picks the dry variant per
+src/components/community/romanVoice.ts:131:  stem: RomanCommunityStem,
+src/components/community/romanVoice.ts:134:  const pair: RomanLine = ROMAN_COMMUNITY_LINES[stem];
+src/components/community/romanAvatarAssets.ts:2: * romanAvatarAssets — the bundled Roman brand-character face assets (Option A).
+src/components/community/romanAvatarAssets.ts:5: * Roman-voiced surface to render Roman's actual face, not a monogram. These are
+src/components/community/romanAvatarAssets.ts:9: * `RomanAvatar` is now ONLY an image-load-failure fallback (`onError`), never
+src/components/community/romanAvatarAssets.ts:19:import type { RomanCrop } from './RomanAvatar';
+src/components/community/romanAvatarAssets.ts:25:export function romanFaceAsset(crop: RomanCrop): ImageSourcePropType | null {
+src/components/community/coach/index.ts:11:export { default as CoachRomanEmptyState } from './CoachRomanEmptyState';
+src/components/community/coach/index.ts:12:export type { CoachRomanEmptyStateProps } from './CoachRomanEmptyState';
+src/components/community/coach/coachVoice.ts:14: * non-Roman skeleton, on error it renders `CoachErrorState`, and Roman copy is
+src/components/community/coach/coachVoice.ts:23: * "Oops/Whoops/Uh oh", one next step per message, optional `— Roman` sign-off
+src/components/community/coach/coachVoice.ts:30:  RomanCopyPayload,
+src/components/community/coach/coachVoice.ts:42:    copy: 'Quiet morning. When your cohorts need you, I will bring it here. — Roman',
+src/components/community/coach/coachVoice.ts:54:    copy: 'This cohort is waiting. Invite the first client when you are ready. — Roman',
+src/components/community/coach/coachVoice.ts:63: * Build a fully-typed RomanCopyPayload fallback for a surface. NOT wired into
+src/components/community/coach/coachVoice.ts:72:): RomanCopyPayload {
+src/components/community/coach/__tests__/romanFaceAndConfirm.test.tsx:2: * RomanAvatar (BLOCKER 3) + ConfirmModal variant (MAJOR UX-03) component tests.
+src/components/community/coach/__tests__/romanFaceAndConfirm.test.tsx:4: * RomanAvatar:
+src/components/community/coach/__tests__/romanFaceAndConfirm.test.tsx:7: *     is the launch contract: Roman's face appears on a Roman-voiced empty
+src/components/community/coach/__tests__/romanFaceAndConfirm.test.tsx:37:import RomanAvatar from '../../RomanAvatar';
+src/components/community/coach/__tests__/romanFaceAndConfirm.test.tsx:51:describe('RomanAvatar — bundled face is the default, monogram only on fallback', () => {
+src/components/community/coach/__tests__/romanFaceAndConfirm.test.tsx:54:      <RomanAvatar crop="neutral" size={64} testID="roman" />,
+src/components/community/coach/__tests__/romanFaceAndConfirm.test.tsx:58:    // Accessible as Roman, neutral register.
+src/components/community/coach/__tests__/romanFaceAndConfirm.test.tsx:59:    expect(node.props.accessibilityLabel).toBe('Roman');
+src/components/community/coach/__tests__/romanFaceAndConfirm.test.tsx:66:      <RomanAvatar crop="smile" size={64} testID="roman" />,
+src/components/community/coach/__tests__/romanFaceAndConfirm.test.tsx:70:    expect(node.props.accessibilityLabel).toBe('Roman, pleased');
+src/components/community/coach/__tests__/romanFaceAndConfirm.test.tsx:75:      <RomanAvatar
+src/components/community/coach/__tests__/romanFaceAndConfirm.test.tsx:91:      <RomanAvatar crop="monogram" size={28} testID="roman" />,
+src/components/community/coach/__tests__/romanFaceAndConfirm.test.tsx:101:      <RomanAvatar crop="neutral" size={64} testID="roman" />,
+src/components/community/coach/MonogramBadge.tsx:7: * Distinct from RomanAvatar: this represents a CLIENT, not Roman. Roman's
+src/components/community/coach/MonogramBadge.tsx:8: * monogram crop is reserved for Roman; a client monogram derives its initials
+src/components/community/coach/MonogramBadge.tsx:115:    fontWeight: '600',
+src/components/community/coach/ConfirmModal.tsx:179:    fontWeight: '600',
+src/components/community/coach/ConfirmModal.tsx:204:    fontWeight: '600',
+src/components/community/coach/ConfirmModal.tsx:208:    fontWeight: '600',
+src/components/community/coach/CoachRomanEmptyState.tsx:2: * CoachRomanEmptyState — renders the stateful Roman empty-state result for a
+src/components/community/coach/CoachRomanEmptyState.tsx:6: * loaded successfully and is genuinely empty. At that point the Roman copy +
+src/components/community/coach/CoachRomanEmptyState.tsx:12: *   - `loading` \u2192 a non-Roman spinner (NEVER Roman copy while the policy loads).
+src/components/community/coach/CoachRomanEmptyState.tsx:16: *     branch that renders Roman's calm/celebratory copy and his face.
+src/components/community/coach/CoachRomanEmptyState.tsx:27:import type { RomanEmptyStateResult } from '../../../hooks/useCoachCommunity';
+src/components/community/coach/CoachRomanEmptyState.tsx:29:export interface CoachRomanEmptyStateProps {
+src/components/community/coach/CoachRomanEmptyState.tsx:31:  result: RomanEmptyStateResult;
+src/components/community/coach/CoachRomanEmptyState.tsx:36:export default function CoachRomanEmptyState({
+src/components/community/coach/CoachRomanEmptyState.tsx:39:}: CoachRomanEmptyStateProps): React.ReactElement {
+src/components/community/coach/CoachErrorState.tsx:8: * error branch: it renders Roman's NEUTRAL face (never the celebratory smile),
+src/components/community/coach/CoachErrorState.tsx:9: * an honest "could not load" line in Roman's voice register (no
+src/components/community/coach/CoachErrorState.tsx:20:import RomanAvatar from '../RomanAvatar';
+src/components/community/coach/CoachErrorState.tsx:45:      <RomanAvatar
+src/components/community/coach/CoachErrorState.tsx:115:    fontWeight: '600',
+src/components/community/coach/CoachErrorState.tsx:135:    fontWeight: '600',
+src/components/community/coach/CoachEmptyState.tsx:5: * OPERATOR RULE: Roman's voice is never disembodied. Every empty state that
+src/components/community/coach/CoachEmptyState.tsx:6: * speaks in Roman's voice MUST render his face above the copy so the coach
+src/components/community/coach/CoachEmptyState.tsx:7: * immediately knows it is Roman speaking — not generic app copy. This component
+src/components/community/coach/CoachEmptyState.tsx:8: * is the single enforcement point: it always renders `<RomanAvatar />` above a
+src/components/community/coach/CoachEmptyState.tsx:12: * `avatar_crop` come from the backend Roman voice-policy payload
+src/components/community/coach/CoachEmptyState.tsx:14: * The screen passes the resolved `RomanCopyPayload` straight through here, so
+src/components/community/coach/CoachEmptyState.tsx:26: * Size: 64pt on full-screen empty states. The RomanAvatar carries its own
+src/components/community/coach/CoachEmptyState.tsx:27: * `accessibilityLabel` defaults, so screen readers announce "Roman".
+src/components/community/coach/CoachEmptyState.tsx:31:import RomanAvatar from '../RomanAvatar';
+src/components/community/coach/CoachEmptyState.tsx:34:import type { RomanCopyPayload } from '../../../api/coachCommunityApi';
+src/components/community/coach/CoachEmptyState.tsx:38:   * The backend Roman copy payload for this surface. The component renders
+src/components/community/coach/CoachEmptyState.tsx:39:   * `payload.text` beneath `<RomanAvatar crop={payload.avatar_crop} />` so the
+src/components/community/coach/CoachEmptyState.tsx:42:  payload: RomanCopyPayload;
+src/components/community/coach/CoachEmptyState.tsx:57:      <RomanAvatar
+src/components/community/__tests__/ChallengeProgressSheet.reducedMotion.test.tsx:48:  leaderboard_enabled: false,
+src/components/community/__tests__/ChallengeProgressSheet.reducedMotion.test.tsx:63:  leaderboard_opted_in: false,
+src/components/community/__tests__/ChallengeCard.test.tsx:46:    leaderboard_enabled: false,
+src/components/community/__tests__/ChallengeCard.test.tsx:64:    leaderboard_opted_in: false,
+src/components/community/UnreadBadge.tsx:75:    fontWeight: '600',
+src/components/community/TimelineMarker.tsx:50:    fontWeight: '600',
+src/components/community/ThreadHeader.tsx:56:    fontWeight: '600',
+src/components/community/SpaceTabBar.tsx:121:    fontWeight: '600',
+src/components/community/CompletionToast.tsx:12: * Copy rules (Roman voice register): a short, declarative confirmation with no
+src/components/community/CompletionToast.tsx:199:    fontWeight: '600',
+src/components/community/CommunityWinCard.tsx:85:    fontWeight: '500',
+src/components/community/CommunityWinCard.tsx:92:    fontWeight: '500',
+src/components/community/CommunityWinCard.tsx:102:    fontWeight: '500',
+src/components/community/CoachAckBadge.tsx:331:    fontWeight: '600',
+src/components/community/CoachAckBadge.tsx:336:    fontWeight: '600',
+src/components/community/index.ts:10:export { default as RomanAvatar } from './RomanAvatar';
+src/components/community/index.ts:11:export type { RomanAvatarProps, RomanCrop } from './RomanAvatar';
+src/components/community/index.ts:40:export type { RomanCommunityStem, RomanLine } from './romanVoice';
+src/components/community/AckSignalChip.tsx:80:    fontWeight: '600',
+src/components/community/EmptyState.tsx:2: * CommunityEmptyState — friendly empty state with Roman voice + a PRIMARY
+src/components/community/EmptyState.tsx:5: * Every Community empty surface renders: a Roman monogram accent, a stem of
+src/components/community/EmptyState.tsx:6: * Roman copy (Phase 1 in-app scope only), and exactly one primary call to
+src/components/community/EmptyState.tsx:17:import RomanAvatar from './RomanAvatar';
+src/components/community/EmptyState.tsx:20:  type RomanCommunityStem,
+src/components/community/EmptyState.tsx:24:  /** Roman voice stem to render as the body copy. */
+src/components/community/EmptyState.tsx:25:  stem: RomanCommunityStem;
+src/components/community/EmptyState.tsx:26:  /** Calling client's first name for the Roman copy interpolation. */
+src/components/community/EmptyState.tsx:28:  /** Short title above the Roman copy (e.g. "The Hall is quiet"). */
+src/components/community/EmptyState.tsx:53:      <RomanAvatar crop="monogram" size={48} testID="community-empty-roman" />
+src/components/community/EmptyState.tsx:85:    fontWeight: '600',
+src/components/community/EmptyState.tsx:103:    fontWeight: '600',
+src/components/community/DmRow.tsx:3: * the Roman monogram accent per voice policy §4), shows the other participant,
+src/components/community/DmRow.tsx:15:import RomanAvatar from './RomanAvatar';
+src/components/community/DmRow.tsx:65:        <RomanAvatar crop="monogram" size={40} testID="dm-row-roman" />
+src/components/community/DmRow.tsx:114:    fontWeight: '600',
+src/components/community/DmRow.tsx:122:    fontWeight: '600',
+src/components/community/PostCard.tsx:103:    fontWeight: '600',
+src/components/community/PostCard.tsx:111:    fontWeight: '600',
+src/components/community/ReactionBar.tsx:118:    fontWeight: '600',
+src/components/community/RomanAvatar.tsx:2: * RomanAvatar — Roman brand-character avatar for Community surfaces.
+src/components/community/RomanAvatar.tsx:5: *   - `neutral` — generic empty states. Renders Roman's neutral face.
+src/components/community/RomanAvatar.tsx:7: *     moderation queue). Renders Roman's pleased face with a celebratory ring.
+src/components/community/RomanAvatar.tsx:12: *   The operator-locked rule requires Roman's literal face on every Roman-voiced
+src/components/community/RomanAvatar.tsx:13: *   empty state. Roman's brand-character face is now BUNDLED at
+src/components/community/RomanAvatar.tsx:40:export type RomanCrop = 'monogram' | 'smile' | 'neutral';
+src/components/community/RomanAvatar.tsx:42:export interface RomanAvatarProps {
+src/components/community/RomanAvatar.tsx:44:  crop?: RomanCrop;
+src/components/community/RomanAvatar.tsx:59:// Deep-gold accent from the Roman avatar run summary (ROMAN_VOICE_POLICY §8).
+src/components/community/RomanAvatar.tsx:66:  crop: RomanCrop,
+src/components/community/RomanAvatar.tsx:77:export default function RomanAvatar({
+src/components/community/RomanAvatar.tsx:82:}: RomanAvatarProps): React.ReactElement {
+src/components/community/RomanAvatar.tsx:83:  const a11y = crop === 'smile' ? 'Roman, pleased' : 'Roman';
+src/components/community/RomanAvatar.tsx:150:    fontWeight: '600',

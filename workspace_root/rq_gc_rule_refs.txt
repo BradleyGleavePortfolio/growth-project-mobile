@@ -1,0 +1,77 @@
+docs/HANDOFF.md:317:4. `initApp()` (effect): `initDatabase()` (creates tables, seeds exercises/recipes/foods/lessons/community), `requestNotificationPermissions()`, fires `track('app_opened')`. Errors are swallowed in production (Metro strips `__DEV__`).
+src/__tests__/CoachPackageContentsScreen.test.tsx:681:    // A second confirm tap WHILE the push is in flight must be swallowed by the
+src/api/__tests__/communityAiTriageApi.test.ts:12: *     (never coerced into a fake "all clear" — #36 silent failure).
+src/api/__tests__/communityApi.test.ts:6: * normalises into a CommunityApiError (no soft-success, no swallowed 4xx/5xx).
+src/api/__tests__/messagesApi.test.ts:12: *   - report(): non-2xx throws (no soft-success / no swallowed 4xx)
+src/api/__tests__/romanApi.test.ts:241:  it('throws RomanWireError on a non-JSON data frame rather than silently skipping it (#36)', () => {
+src/api/__tests__/wearableInsightsApi.test.ts:11: *     degraded success that would hide a deploy/route regression, #36),
+src/api/__tests__/wearableInsightsApi.test.ts:12: *   • the approve 500 → re-throw (never silently masked, #36).
+src/api/__tests__/wearableInsightsApi.test.ts:114:  it('propagates a 403 (forbidden) error — never swallowed', async () => {
+src/api/__tests__/wearableInsightsApi.test.ts:121:  it('propagates a 500 (server) error — never swallowed', async () => {
+src/api/__tests__/wearableInsightsApi.test.ts:171:  it('propagates a 404 to the caller — the HK-6a route is live, so a 404 is a real regression, never coerced to a fake success (#36)', async () => {
+src/api/clientPaymentsApi.ts:26: * call 404'd and the 404 was swallowed as "not_configured".
+src/api/coachAiExecutionApi.ts:21: * production builds silently swallowed every coach action. The default is
+src/api/wearableInsightsApi.ts:34: *      success, which would hide a real outage (#36 silent failure).
+src/api/wearableInsightsApi.ts:155:// error rather than masking an outage as expected behavior (#36).
+src/api/wearableInsightsApi.ts:196:  // recoverable error, never a silent failure (#36) and never raw internals.
+src/api/wearablesSamplesApi.ts:216: * logging WITHOUT swallowing it (#36).
+src/api/wearablesSamplesApi.ts:323:   * swallow either (#36): a `WearableSamplesError` always preserves the
+src/components/roman/RomanTypingIndicator.tsx:46:        // failed platform probe so the swallowed signal is still observable.
+src/hooks/__tests__/useCommunityEvents.test.tsx:228:    // Assert the rejection explicitly (R65 / Failure #36: never swallow a
+src/hooks/__tests__/useCommunityEvents.test.tsx:295:    // Assert the rejection explicitly rather than swallowing it (R65 / #36).
+src/hooks/useCoachCommunity.ts:455:// NOTE (R0 / fixer G10.2 Option A): the no-network `useApproveFlagged` stub was
+src/hooks/useSamsungHealthSync.test.tsx:11: *   • a failed sync surfaces the error (it is not swallowed).
+src/hooks/useSamsungHealthSync.test.tsx:132:    it('surfaces a sync error (not swallowed)', async () => {
+src/hooks/useWearableInsight.ts:7: * The mutation surfaces real errors (#36): the HK-6a approve endpoint is live,
+src/hooks/useWearablePreference.test.tsx:11: *     `isError` (so the screen's actionable toast can fire — #36 no silent
+src/hooks/useWearablePreference.test.tsx:333:    // the bound return reflects the failed clear (R65 #36).
+src/hooks/useWearablePreference.ts:86:   * True when the most recent set OR clear write failed. Surfaced (R65 #36) so
+src/hooks/useWearablePreference.ts:120:      // `isError`/`onError` so the actionable toast can fire (#36).
+src/hooks/useWearablePreference.ts:148: * (R65 #36). Previously the clear path called the API directly, bypassing the
+src/hooks/useWearablePreference.ts:235:    // never consumes/suppresses these flags (R65 #36 — no silent failure). We
+src/hooks/useWearablePreference.ts:248:        // (no silent failure — R65 #36).
+src/hooks/useWearableSamples.test.tsx:6: *   • error path — a rejected query surfaces `isError` (NOT swallowed),
+src/hooks/useWearableSamples.ts:135: * Errors (400/403/503 from the backend, or a Zod drift) are NOT swallowed —
+src/hooks/useWearableSamples.ts:138: * (#36 no silent failures, brief §4.5).
+src/screens/auth/__tests__/RoleSelectionScreen.test.ts:4:// Previously every failure from attachInviteCode was swallowed in an
+src/screens/client/CheckoutReturnScreen.tsx:17: * The 404 used to be swallowed as `reason: 'not_configured'`, which
+src/screens/client/CoachGuidelinesScreen.tsx:24:  // previous implementation swallowed errors silently, so a network
+src/screens/client/__tests__/CoachGuidelinesScreen.test.ts:2:// CoachGuidelinesScreen. Previously the catch swallowed the error
+src/screens/client/wearables/ClientWearableInsightPanel.tsx:25: * Honesty / graceful degradation (#35/#36/#50): every branch renders real copy
+src/screens/client/wearables/ClientWearableInsightPanel.tsx:26: * — loading is a skeleton (never a bare spinner, R0), error is a sanitized
+src/screens/client/wearables/ClientWearableInsightPanel.tsx:152:      // breadcrumb — never a thrown error, never a silent swallow (#36).
+src/screens/client/wearables/ClientWearableInsightPanel.tsx:185:  // ── Loading: skeleton-of-the-real-layout, never a bare spinner (R0). ──
+src/screens/client/wearables/ClientWearableInsightPanel.tsx:206:  // ── Error: sanitized one-liner + Retry (R0: copy + CTA, never a dead end). ──
+src/screens/client/wearables/SleepRecoveryScreen.tsx:19: * #36/#50: query errors surface a typed error state with retry + cached fallback,
+src/screens/client/wearables/SleepRecoveryScreen.tsx:20: * never a swallowed failure or a spinner.
+src/screens/client/wearables/SleepRecoveryScreen.tsx:107:    // #36 — never swallow: log the recovery attempt (NO sample values, #34) and
+src/screens/client/wearables/__tests__/ClientWearableInsightPanel.test.tsx:7: *   - loading skeleton (anti-spinner, R0): no ActivityIndicator in the tree,
+src/screens/client/wearables/__tests__/ClientWearableInsightPanel.test.tsx:185:    // No spinner anywhere in the tree (R0 / brief test #1).
+src/screens/client/wearables/__tests__/ClientWearableInsightPanel.test.tsx:270:    // without reaching for a wildcard type-escape (R0-forbidden). The hook is
+src/screens/client/wearables/__tests__/ClientWearableInsightPanel.test.tsx:374:    // component's own defence-in-depth guard refuses it (R0: no wildcard cast).
+src/screens/client/wearables/components/CalmSlowReveal.tsx:56:        // graceful, observable degradation — not a swallowed error — and the
+src/screens/client/wearables/components/useReduceMotion.ts:34:        // not a swallowed error (#36): the only failure mode is "the probe
+src/screens/client/wearables/empty/SleepRecoveryErrorState.tsx:3: * (#36 surfaced failures, #50 graceful degradation): a clear, actionable retry +
+src/screens/client/wearables/empty/SleepRecoveryErrorState.tsx:4: * a "last synced" line when cached data exists. NEVER a swallowed error, NEVER
+src/screens/client/wearables/testSupport/accessibilityMocks.ts:10: * `as EmitterSubscription` (TS rejects the partial overlap), and the Bradley R0
+src/screens/client/wearables/testSupport/accessibilityMocks.ts:12: * R0 explicitly permits is `@ts-expect-error` with a justification — applied
+src/screens/coach/client-detail/SleepRecoveryTab.tsx:81:    // coach-side retry surfaces in diagnostics (#36).
+src/screens/coach/client-detail/SleepRecoveryTab.tsx:93:  // ── Other errors — actionable retry, never swallowed (#36). ──
+src/screens/coach/client-detail/WearableInsightPanel.tsx:16: *     carries copy + (where applicable) a CTA; never a bare spinner (R0).
+src/screens/coach/client-detail/WearableInsightPanel.tsx:20: * Honesty / graceful degradation (#36/#50): the approve endpoint is LIVE as of
+src/screens/coach/client-detail/WearableInsightPanel.tsx:105: * recoverable error, not masked as success (#36).
+src/screens/coach/client-detail/WearableInsightPanel.tsx:203:  // ── Loading: skeleton, never a bare spinner (R0). ──
+src/screens/coach/client-detail/WearableInsightPanel.tsx:221:  // ── Error: sanitized copy + secondary line + Retry (R0: copy + CTA). ──
+src/screens/coach/client-detail/WearableInsightPanel.tsx:391: * and shows sanitized, recoverable error copy + a Retry CTA (#36/#50).
+src/screens/coach/client-detail/__tests__/SleepRecoveryTab.test.tsx:4: * render with data, and a non-403 error surfaces a retry (never swallowed, #36).
+src/screens/coach/client-detail/__tests__/SleepRecoveryTab.test.tsx:98:describe('SleepRecoveryTab — other errors (#36)', () => {
+src/screens/coach/client-detail/__tests__/WearableInsightPanel.test.tsx:5: *   - loading skeleton (anti-spinner, R0),
+src/screens/roman/RomanChatScreen.tsx:125:        // (Bradley #36 — no silently swallowed catch).
+src/screens/roman/__tests__/romanA11yR3.test.tsx:190:    // The probe failure is logged, never silently swallowed (Bradley #36).
+src/services/health/healthConnect/__tests__/healthConnectIosNoop.test.ts:121:      // evaluated, and NOT a swallowed/empty success.
+src/services/health/healthConnect/errors.ts:5:// (50-Failures #36 "no silent swallow", #50 "fail explicit").
+src/services/health/healthConnect/healthConnectSyncService.ts:9:// unrecoverable errors (#36/#50); a per-record-type read failure degrades
+src/services/health/healthConnect/healthConnectSyncService.ts:136: * retried over the same window next time (no silent data gap, #36).
+src/services/health/healthkit/healthKitClient.ts:17: *    fail loud and clear instead, 50-Failures #36/#50).
+src/services/health/samsungHealth/errors.ts:4: * Errors are explicit and typed (50-Failures #36 "no silent swallow", #50
+src/ui/skeletons/Skeleton.tsx:67:        // we default to motion-on and log the swallowed signal (Bradley #36).

@@ -1,0 +1,20 @@
+PASS src/__tests__/coachWorkoutBuilderRowIdAdoption.test.tsx (8.222 s)
+  CoachWorkoutBuilderScreen — P1 row-ID adoption on autosave insert
+    ✓ add -> autosave 200 -> edit same row: a SINGLE upsert WITH the adopted row_id (no duplicate insert) (5659 ms)
+    ✓ add -> autosave 200 -> delete same row: emits remove_exercise for the adopted id (not a silent skip) (85 ms)
+    ✓ add -> autosave 200 -> reorder: the reorder names the now-adopted id (95 ms)
+    ✓ a metadata-only save does NOT trigger a row-id refetch (no needless round-trip) (35 ms)
+  CoachWorkoutBuilderScreen — P1 row-ID adoption RACE (edit before refetch resolves)
+    ✓ edit before refetch resolves: the edit is preserved AND the next autosave names the adopted id (no clobber) (110 ms)
+    ✓ delete before refetch resolves: the delete is preserved AND emits remove_exercise for the adopted id (83 ms)
+    ✓ reorder before refetch resolves: the reorder is preserved AND names the adopted id (65 ms)
+  CoachWorkoutBuilderScreen — D-045 delete-before-adoption (op-empty window)
+    ✓ add -> insert 200 -> delete id-less row -> settle refetch: row stays deleted AND next autosave emits remove_exercise for the server id (43 ms)
+    ✓ double-delete: deleting the id-less row TWICE across two refetch settles stays deleted (no resurrection, idempotent remove) (44 ms)
+    ✓ add-delete-add interleaving: re-adding the SAME exercise after a delete-before-adoption keeps the new row (only the deleted one is dropped) (45 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       10 passed, 10 total
+Snapshots:   0 total
+Time:        9.246 s
+Ran all test suites matching /src\/__tests__\/coachWorkoutBuilderRowIdAdoption.test.tsx/i.

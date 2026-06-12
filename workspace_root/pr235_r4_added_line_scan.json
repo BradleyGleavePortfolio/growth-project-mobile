@@ -1,0 +1,156 @@
+{
+  "base": "e2d2e99ef2dfe4e03da22224fab9ff529fd49a44",
+  "added_lines": 3796,
+  "findings": [
+    {
+      "check": "R0_raw_magic_rgba_hex",
+      "file": "src/api/__tests__/communityChallengesApi.drift.test.ts",
+      "line": 9,
+      "text": "* (growth-project-backend community-challenges.dto.ts, PR #390); this is the"
+    },
+    {
+      "check": "R0_raw_magic_rgba_hex",
+      "file": "src/api/__tests__/communityChallengesApi.drift.test.ts",
+      "line": 13,
+      "text": "* endpoint here \u2014 the backend exposes none (PR #390 head: no"
+    },
+    {
+      "check": "R0_suppression",
+      "file": "src/api/__tests__/communityChallengesApi.drift.test.ts",
+      "line": 32,
+      "text": "// eslint-disable-next-line @typescript-eslint/no-var-requires"
+    },
+    {
+      "check": "R0_raw_magic_rgba_hex",
+      "file": "src/api/communityChallengesApi.ts",
+      "line": 135,
+      "text": "// challenge *comments* surface. The binding backend branch (PR #390 head,"
+    },
+    {
+      "check": "R0_raw_magic_rgba_hex",
+      "file": "src/api/communityChallengesApi.ts",
+      "line": 209,
+      "text": "// parameters: the backend contract (PR #390 community-challenges.dto.ts) does"
+    },
+    {
+      "check": "R0_raw_magic_rgba_hex",
+      "file": "src/api/communityChallengesApi.ts",
+      "line": 351,
+      "text": "// The binding backend (PR #390 head, community-challenges.controller.ts)"
+    },
+    {
+      "check": "R0_raw_magic_rgba_hex",
+      "file": "src/components/community/ChallengeCommentsEmptyState.tsx",
+      "line": 12,
+      "text": "* binding backend branch (PR #390 head) exposes no challenge `comments/empty-"
+    },
+    {
+      "check": "R65_any_unknown_boundary",
+      "file": "src/components/community/ChallengeProgressSheet.tsx",
+      "line": 91,
+      "text": "// Also clear any prior error / celebration when the sheet (re)opens."
+    },
+    {
+      "check": "R65_sql_concat",
+      "file": "src/components/community/ChallengeProgressSheet.tsx",
+      "line": 337,
+      "text": "{unit ? `Update your total (${unit})` : 'Update your total'}"
+    },
+    {
+      "check": "R0_comments_todo_fixme_hack",
+      "file": "src/components/community/ChallengeProgressSheet.tsx",
+      "line": 346,
+      "text": "placeholder={String(current)}"
+    },
+    {
+      "check": "R0_comments_todo_fixme_hack",
+      "file": "src/components/community/ComposerInput.tsx",
+      "line": 41,
+      "text": "{ placeholder, maxLength, sending = false, onSubmit, testID },"
+    },
+    {
+      "check": "R0_comments_todo_fixme_hack",
+      "file": "src/components/community/__tests__/ChallengeProgressSheet.reducedMotion.test.tsx",
+      "line": 31,
+      "text": "// @ts-expect-error \u2014 remove-only stub; cleanup only calls remove()"
+    },
+    {
+      "check": "R0_suppression",
+      "file": "src/components/community/__tests__/ChallengeProgressSheet.reducedMotion.test.tsx",
+      "line": 31,
+      "text": "// @ts-expect-error \u2014 remove-only stub; cleanup only calls remove()"
+    },
+    {
+      "check": "R65_any_unknown_boundary",
+      "file": "src/components/community/__tests__/ChallengeProgressSheet.reducedMotion.test.tsx",
+      "line": 126,
+      "text": "// Allow the reduce-motion state to flush, THEN clear any mount-time call and"
+    },
+    {
+      "check": "R65_sync_io_interval",
+      "file": "src/navigation/__tests__/communityChallengesFlagOff.test.ts",
+      "line": 21,
+      "text": "const COMMUNITY_NAV = fs.readFileSync("
+    },
+    {
+      "check": "R0_raw_magic_rgba_hex",
+      "file": "src/screens/community/CommunityChallengeDetailScreen.tsx",
+      "line": 168,
+      "text": "// backend (PR #390 head) serves NO empty-state payload for this participant"
+    },
+    {
+      "check": "R65_any_unknown_boundary",
+      "file": "src/screens/community/CommunityChallengeDetailScreen.tsx",
+      "line": 601,
+      "text": "change this any time."
+    },
+    {
+      "check": "R0_comments_todo_fixme_hack",
+      "file": "src/screens/community/CommunityChallengeDetailScreen.tsx",
+      "line": 788,
+      "text": "placeholder=\"Send a word of encouragement\u2026\""
+    },
+    {
+      "check": "R0_comments_todo_fixme_hack",
+      "file": "src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx",
+      "line": 50,
+      "text": "// \u2500\u2500 Safe-area stub \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"
+    },
+    {
+      "check": "R0_raw_magic_rgba_hex",
+      "file": "src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx",
+      "line": 255,
+      "text": "// F1 correction: the backend (PR #390 head) exposes NO participant-facing"
+    },
+    {
+      "check": "R0_comments_todo_fixme_hack",
+      "file": "src/screens/community/__tests__/CommunityChallengesScreen.test.tsx",
+      "line": 46,
+      "text": "// \u2500\u2500 Safe-area stub \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"
+    },
+    {
+      "check": "R0_raw_magic_rgba_hex",
+      "file": "src/theme/tokens.ts",
+      "line": 362,
+      "text": "// Ink (#1A1A18) at 0.40 \u2014 a calm dim that keeps the underlying screen legible."
+    },
+    {
+      "check": "R0_raw_magic_rgba_hex",
+      "file": "src/theme/tokens.ts",
+      "line": 363,
+      "text": "overlay:     'rgba(26, 26, 24, 0.40)',"
+    },
+    {
+      "check": "R0_raw_magic_rgba_hex",
+      "file": "src/theme/tokens.ts",
+      "line": 383,
+      "text": "// already-dark surfaces without washing out (#000 at 0.55)."
+    },
+    {
+      "check": "R0_raw_magic_rgba_hex",
+      "file": "src/theme/tokens.ts",
+      "line": 384,
+      "text": "overlay:     'rgba(0, 0, 0, 0.55)',"
+    }
+  ]
+}

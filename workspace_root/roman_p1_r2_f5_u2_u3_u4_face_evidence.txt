@@ -1,0 +1,279 @@
+useRomanChat send
+     1	/**
+     2	 * useRomanChat — chat state machine for RomanChatScreen.
+     3	 *
+     4	 * Owns: open-or-resume the session, load the first page of messages
+     5	 * (newest-first, paged per ListMessagesQueryDto), append a user turn, send it,
+     6	 * and fold Roman's settled reply (DECLARED DEVIATION: buffered SSE read — see
+     7	 * romanApi header) back into the list. All backend calls go through romanApi,
+     8	 * which validates every response against the cited contract and maps errors to
+     9	 * the typed RomanApiError union.
+    10	 *
+    11	 * Concurrency / cleanup (FIFTY_FAILURES #31/#32): an `active` ref gates every
+    12	 * post-await setState so a state update never lands after unmount, and an
+    13	 * in-flight send is guarded by `sendingRef` so a double-tap cannot fire two
+    14	 * turns. Failed sends DO NOT clear the draft — the screen preserves it for
+    15	 * retry (brief §3).
+    16	 */
+    17	import { useCallback, useEffect, useRef, useState } from 'react';
+    18	import {
+    19	  deleteSession as apiDeleteSession,
+    20	  listMessages,
+    21	  openOrResumeSession,
+    22	  RomanApiError,
+    23	  sendMessage,
+    24	  type RomanAssistantReply,
+    25	  type RomanMessage,
+    26	  type RomanSession,
+    27	  type RomanSurface,
+    28	} from '../../api/romanApi';
+    29	import { logger } from '../../utils/logger';
+    30	
+    31	/** Page size for the initial / "load older" message fetch (<= backend cap 100). */
+    32	const PAGE_LIMIT = 30;
+    33	
+    34	export type RomanChatPhase =
+    35	  | 'loading' // opening the session / loading first page
+    36	  | 'ready' // session open, messages (possibly empty) shown
+    37	  | 'unavailable' // backend feature gate off (404) — calm typed state
+    38	  | 'offline' // no connection
+    39	  | 'error'; // generic load failure
+    40	
+    41	export interface RomanSendError {
+    42	  kind: RomanApiError['kind'];
+    43	  message: string;
+    44	  retryAfterSeconds?: number;
+    45	}
+    46	
+    47	/**
+    48	 * Outcome of a send attempt, so the screen can distinguish the two failure
+    49	 * modes the R1 code audit (F5) requires us to keep separate:
+    50	 *   - 'sent'        — the turn persisted; clear the composer.
+    51	 *   - 'send-failed' — the turn did NOT persist; keep the draft for retry.
+    52	 *   - 'noop'        — nothing was sent (empty/duplicate guard).
+    53	 */
+    54	export type RomanSendOutcome = 'sent' | 'send-failed' | 'noop';
+    55	
+    56	export interface UseRomanChatResult {
+    57	  phase: RomanChatPhase;
+    58	  session: RomanSession | null;
+    59	  /**
+    60	   * True when the resumed session had no prior messages on open — i.e. this is
+    61	   * the user's first encounter with Roman, so the greeting shows the §2.1
+    62	   * self-introduction rather than returning-user copy (U1). Latched at open and
+    63	   * not flipped by the optimistic append of the first turn.
+    64	   */
+    65	  isFirstOpen: boolean;
+    66	  /** Oldest-first; presented newest-at-bottom and always scrolled into view. */
+    67	  messages: RomanMessage[];
+    68	  sending: boolean;
+    69	  /** Set when the last send failed (turn NOT persisted); screen shows retry. */
+    70	  sendError: RomanSendError | null;
+    71	  nextCursor: string | null;
+    72	  loadingOlder: boolean;
+    73	  reload: () => void;
+    74	  loadOlder: () => void;
+    75	  send: (content: string) => Promise<RomanSendOutcome>;
+    76	  clearSendError: () => void;
+    77	}
+    78	
+    79	function phaseFromError(err: unknown): RomanChatPhase {
+    80	  if (err instanceof RomanApiError) {
+   145	      if (!active.current) return;
+   146	      // Older messages prepend (oldest-first list).
+   147	      setMessages((prev) => [...[...page.messages].reverse(), ...prev]);
+   148	      setNextCursor(page.nextCursor);
+   149	    } catch (err) {
+   150	      logger.warn('useRomanChat.loadOlder', err);
+   151	      // A paging failure is non-fatal: keep the current list, surface nothing
+   152	      // destructive. The user can pull again.
+   153	    } finally {
+   154	      if (active.current) setLoadingOlder(false);
+   155	    }
+   156	  }, [nextCursor, loadingOlder]);
+   157	
+   158	  const send = useCallback(async (content: string): Promise<RomanSendOutcome> => {
+   159	    const trimmed = content.trim();
+   160	    const s = sessionRef.current;
+   161	    if (trimmed === '' || !s || sendingRef.current) return 'noop';
+   162	    sendingRef.current = true;
+   163	    setSending(true);
+   164	    setSendError(null);
+   165	
+   166	    // Optimistically append the user turn with a temporary id so the list
+   167	    // updates immediately. We ROLL IT BACK ONLY when the SEND itself fails
+   168	    // (FIFTY_FAILURES #30) — never when a post-send refresh fails (F5).
+   169	    const optimisticId = `optimistic-${Date.now()}`;
+   170	    const optimistic: RomanMessage = {
+   171	      id: optimisticId,
+   172	      role: 'user',
+   173	      content: trimmed,
+   174	      interrupted: false,
+   175	      createdAt: new Date().toISOString(),
+   176	    };
+   177	    if (active.current) setMessages((prev) => [...prev, optimistic]);
+   178	
+   179	    let reply: RomanAssistantReply;
+   180	    try {
+   181	      reply = await sendMessage(s.id, trimmed);
+   182	    } catch (err) {
+   183	      // The SEND failed: the backend did not persist the turn. Roll the
+   184	      // optimistic user turn back and surface a retryable send error. The
+   185	      // screen preserves the draft so the user can send it again.
+   186	      logger.warn('useRomanChat.send', err);
+   187	      if (active.current) {
+   188	        setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
+   189	        const e = err instanceof RomanApiError ? err : null;
+   190	        setSendError({
+   191	          kind: e?.kind ?? 'generic',
+   192	          message: e?.message ?? 'That request did not complete.',
+   193	          retryAfterSeconds: e?.retryAfterSeconds,
+   194	        });
+   195	      }
+   196	      sendingRef.current = false;
+   197	      if (active.current) setSending(false);
+   198	      return 'send-failed';
+   199	    }
+   200	
+   201	    // The send SUCCEEDED: the user turn (and Roman's reply) are persisted. From
+   202	    // here on we must NOT roll the user turn back, even if the canonical
+   203	    // refresh fails — doing so would discard a persisted turn and (without send
+   204	    // idempotency) invite a duplicate on retry (F5).
+   205	    if (!active.current) {
+   206	      sendingRef.current = false;
+   207	      return 'sent';
+   208	    }
+   209	
+   210	    // Fold Roman's settled reply in beside the optimistic user turn so the
+   211	    // thread is complete immediately, independent of the refresh below.
+   212	    const localAssistant: RomanMessage = {
+   213	      id: reply.messageId ?? `assistant-${Date.now()}`,
+   214	      role: 'assistant',
+   215	      content: reply.text,
+   216	      interrupted: reply.interrupted,
+   217	      createdAt: new Date().toISOString(),
+   218	    };
+   219	    setMessages((prev) => [...prev, localAssistant]);
+   220	
+   221	    try {
+   222	      // Reconcile with the canonical backend page so the optimistic stand-ins
+   223	      // are replaced by their persisted shapes (real ids, ordering, cursor).
+   224	      const page = await listMessages(s.id, { limit: PAGE_LIMIT });
+   225	      if (active.current) {
+   226	        setMessages([...page.messages].reverse());
+   227	        setNextCursor(page.nextCursor);
+   228	      }
+   229	    } catch (err) {
+   230	      // A refresh failure is NON-destructive: the turn is already persisted and
+RomanChatScreen
+   145	  // Re-send the current draft from the visible retry affordance (U2).
+   146	  const onRetrySend = useCallback(() => {
+   147	    void onSend();
+   148	  }, [onSend]);
+   149	
+   150	  const renderItem = useCallback(
+   151	    ({ item }: ListRenderItemInfo<RomanMessage>) => (
+   152	      <RomanMessageBubble message={item} testID={`roman-message-${item.id}`} />
+   153	    ),
+   154	    [],
+   155	  );
+   156	
+   157	  const header = (
+   158	    <View style={styles.header}>
+   159	      <RomanAvatar crop="neutral" size={36} testID="roman-header-avatar" />
+   160	      <Text style={styles.headerTitle} accessibilityRole="header">
+   161	        Roman
+   162	      </Text>
+   163	    </View>
+   164	  );
+   165	
+   166	  if (phase === 'loading') {
+   167	    return (
+   168	      <SafeAreaView style={styles.safe} edges={['top']} testID="roman-chat-screen">
+   169	        {header}
+   170	        <LoadingSkeleton />
+   171	      </SafeAreaView>
+   172	    );
+   173	  }
+   174	
+   175	  if (phase === 'unavailable' || phase === 'offline' || phase === 'error') {
+   176	    return (
+   177	      <SafeAreaView style={styles.safe} edges={['top']} testID="roman-chat-screen">
+   178	        {header}
+   179	        <RomanState
+   180	          kind={phase}
+   181	          onRetry={phase === 'unavailable' ? undefined : reload}
+   182	          testID="roman-chat-state"
+   183	        />
+   184	      </SafeAreaView>
+   185	    );
+   186	  }
+   187	
+   188	  const isEmpty = messages.length === 0;
+   189	  const sendErrorCopy =
+   190	    sendError == null
+   191	      ? null
+   192	      : sendError.kind === 'rateLimited'
+   193	        ? romanRateLimited(sendError.retryAfterSeconds)
+   194	        : ROMAN_SEND_FAILED;
+   195	
+   196	  return (
+   197	    <SafeAreaView style={styles.safe} edges={['top']} testID="roman-chat-screen">
+   198	      {header}
+   199	      <KeyboardAvoidingView
+   200	        style={styles.flex}
+   201	        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+   202	      >
+   203	        {isEmpty ? (
+   204	          <View style={styles.flex}>
+   205	            <RomanGreeting
+   206	              surface={surface}
+   207	              isFirstOpen={isFirstOpen}
+   208	              firstName={user?.firstName}
+   209	              testID="roman-empty-greeting"
+   210	            />
+   211	          </View>
+   212	        ) : (
+   213	          <FlatList
+   214	            ref={listRef}
+   215	            style={styles.flex}
+   216	            contentContainerStyle={styles.listContent}
+   217	            data={messages}
+   218	            keyExtractor={(m) => m.id}
+   219	            renderItem={renderItem}
+   220	            onEndReachedThreshold={0.4}
+   221	            onEndReached={nextCursor != null ? loadOlder : undefined}
+   222	            onContentSizeChange={scrollToLatest}
+   223	            ListFooterComponent={
+   224	              loadingOlder ? (
+   225	                <View style={styles.olderNote} testID="roman-loading-older">
+   226	                  <RomanAvatar crop="neutral" size={24} />
+   227	                  <Text style={styles.olderNoteText} accessibilityRole="text">
+   228	                    {ROMAN_LOADING_OLDER}
+   229	                  </Text>
+   230	                </View>
+   231	              ) : null
+   232	            }
+   233	            testID="roman-message-list"
+   234	          />
+   235	        )}
+   236	
+   237	        {sending ? <RomanTypingIndicator testID="roman-typing" /> : null}
+   238	
+   239	        {sendErrorCopy != null ? (
+   240	          <View style={styles.sendError} testID="roman-send-error">
+   241	            <RomanAvatar crop="neutral" size={28} />
+   242	            <Text style={styles.sendErrorText} accessibilityRole="text">
+   243	              {sendErrorCopy}
+   244	            </Text>
+   245	            {sendError?.kind !== 'rateLimited' ? (
+   246	              <TouchableOpacity
+   247	                style={styles.retryButton}
+   248	                onPress={onRetrySend}
+   249	                disabled={sending}
+   250	                accessibilityRole="button"
+   251	                accessibilityLabel="Send again"
+   252	                accessibilityState={{ disabled: sending }}
+   253	                testID="roman-send-retry"
+   254	              >
+   255	                <Text style={styles.retryLabel}>Send again</Text>

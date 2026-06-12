@@ -1,0 +1,181 @@
+     1	/**
+     2	 * Enforces the rules from docs/QUIET_LUXURY_DOCTRINE.md by scanning the
+     3	 * shipped surface of the app. If any of these assertions fail, do NOT add
+     4	 * the offending file to an allowlist — fix the file. The doctrine is the
+     5	 * point.
+     6	 *
+     7	 * Scope: src/screens, src/components. Tests, types, and the legacy onboarding
+     8	 * step files are excluded (the long-flow onboarding is no longer reachable;
+     9	 * sweeping it is out of scope for Wave 5b).
+    10	 */
+    11	
+    12	import * as fs from 'fs';
+    13	import * as path from 'path';
+    14	
+    15	const ROOT = path.resolve(__dirname, '..');
+    16	
+    17	const SCAN_DIRS = [
+    18	  path.join(ROOT, 'screens'),
+    19	  path.join(ROOT, 'components'),
+    20	];
+    21	
+    22	// Files explicitly allowed to slip through individual rules. Keep this list
+    23	// short and motivated; do not pad it.
+    24	const ALLOWLIST_HEAVY_WEIGHT: Set<string> = new Set();
+    25	
+    26	// Phase 7C introduces opt-in leaderboard screens. These files intentionally
+    27	// contain the word "Leaderboard" as part of their feature identity.
+    28	// They are doctrine-compliant (no emoji, no trophy/podium chrome, no raw
+    29	// health or financial data surfaced). The allowlist is scoped to the
+    30	// Leaderboard-reference check only — all other doctrine rules still apply.
+    31	// Phase 7C introduces opt-in leaderboard screens. v3-1 extends the same
+    32	// opt-in cohort-local concept to community challenges (default OFF, opt-in,
+    33	// no trophy/podium chrome, no raw health/financial data). Doctrine-compliant
+    34	// by all other rules.
+    35	const ALLOWLIST_LEADERBOARD_REFERENCE: Set<string> = new Set([
+    36	  path.join(ROOT, 'screens', 'client', 'LeaderboardScreen.tsx'),
+    37	  path.join(ROOT, 'screens', 'client', 'LeaderboardSettingsScreen.tsx'),
+    38	  path.join(ROOT, 'screens', 'community', 'CommunityChallengeDetailScreen.tsx'),
+    39	  path.join(ROOT, 'screens', 'community', '__tests__', 'CommunityChallengeDetailScreen.test.tsx'),
+    40	]);
+    41	
+    42	function walk(dir: string): string[] {
+    43	  if (!fs.existsSync(dir)) return [];
+    44	  const out: string[] = [];
+    45	  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    46	    const full = path.join(dir, entry.name);
+    47	    if (entry.isDirectory()) {
+    48	      out.push(...walk(full));
+    49	    } else if (entry.isFile() && /\.(ts|tsx)$/.test(entry.name)) {
+    50	      // Skip the legacy long-form onboarding files — out of scope for Wave 5b.
+    51	      if (/onboarding\/OnboardingStep\d+\.tsx$/.test(full)) continue;
+    52	      if (/onboarding\/OnboardingResults\.tsx$/.test(full)) continue;
+    53	      out.push(full);
+    54	    }
+    55	  }
+    56	  return out;
+    57	}
+    58	
+    59	const FILES = SCAN_DIRS.flatMap(walk);
+    60	
+    61	// Strip line and block comments before scanning so an explanatory note in a
+    62	// header comment doesn't trip the assertion.
+    63	function stripComments(src: string): string {
+    64	  // Block comments
+    65	  let out = src.replace(/\/\*[\s\S]*?\*\//g, '');
+    66	  // Line comments
+    67	  out = out.replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+    68	  return out;
+    69	}
+    70	
+    71	describe('Quiet-luxury doctrine (docs/QUIET_LUXURY_DOCTRINE.md)', () => {
+    72	  it('does not use fontWeight 700 or 800 in shipped screens or components', () => {
+    73	    const offenders: string[] = [];
+    74	    const re = /fontWeight\s*:\s*['"](?:700|800)['"]/;
+    75	    for (const file of FILES) {
+    76	      if (ALLOWLIST_HEAVY_WEIGHT.has(file)) continue;
+    77	      const src = stripComments(fs.readFileSync(file, 'utf8'));
+    78	      if (re.test(src)) offenders.push(path.relative(ROOT, file));
+    79	    }
+    80	    expect(offenders).toEqual([]);
+    81	  });
+    82	
+    83	  it('does not contain "Coming Soon" / "In Development" / "Planned" placeholder copy', () => {
+    84	    const offenders: string[] = [];
+    85	    const re = /["'`](?:Coming Soon|Coming soon|In Development|in development)["'`]/;
+    86	    for (const file of FILES) {
+    87	      const src = stripComments(fs.readFileSync(file, 'utf8'));
+    88	      if (re.test(src)) offenders.push(path.relative(ROOT, file));
+    89	    }
+    90	    expect(offenders).toEqual([]);
+    91	  });
+    92	
+    93	  it('does not contain TODO / FIXME / XXX comments', () => {
+    94	    const offenders: string[] = [];
+    95	    const re = /\b(?:TODO|FIXME|XXX)\b/;
+    96	    for (const file of FILES) {
+    97	      const src = fs.readFileSync(file, 'utf8');
+    98	      if (re.test(src)) offenders.push(path.relative(ROOT, file));
+    99	    }
+   100	    expect(offenders).toEqual([]);
+   101	  });
+   102	
+   103	  it('does not contain trophy / confetti / first-win celebration chrome', () => {
+   104	    const offenders: string[] = [];
+   105	    // Allow incidental references inside the doctrine module name itself.
+   106	    const re = /(FirstWinCelebration|TrophyArtifact|TrophyShareScreen|confetti)/i;
+   107	    for (const file of FILES) {
+   108	      const src = stripComments(fs.readFileSync(file, 'utf8'));
+   109	      if (re.test(src)) offenders.push(path.relative(ROOT, file));
+   110	    }
+   111	    expect(offenders).toEqual([]);
+   112	  });
+   113	
+   114	  it('does not use Ionicons name="flame" anywhere in shipped surface', () => {
+   115	    const offenders: string[] = [];
+   116	    const re = /Ionicons[\s\S]*?name\s*=\s*["'`]flame(?:-[a-z]+)?["'`]/;
+   117	    const reInline = /name\s*=\s*["'`]flame(?:-[a-z]+)?["'`]/;
+   118	    for (const file of FILES) {
+   119	      const src = stripComments(fs.readFileSync(file, 'utf8'));
+   120	      if (re.test(src) || reInline.test(src)) offenders.push(path.relative(ROOT, file));
+   121	    }
+   122	    expect(offenders).toEqual([]);
+   123	  });
+   124	
+   125	  it('does not use Ionicons name="trophy" anywhere in shipped surface', () => {
+   126	    const offenders: string[] = [];
+   127	    const re = /name\s*=\s*["'`]trophy(?:-[a-z]+)?["'`]/;
+   128	    for (const file of FILES) {
+   129	      const src = stripComments(fs.readFileSync(file, 'utf8'));
+   130	      if (re.test(src)) offenders.push(path.relative(ROOT, file));
+   131	    }
+   132	    expect(offenders).toEqual([]);
+   133	  });
+   134	
+   135	  it('does not reference the legacy BadgeCabinet identifier', () => {
+   136	    const offenders: string[] = [];
+   137	    const re = /BadgeCabinet/;
+   138	    for (const file of FILES) {
+   139	      const src = stripComments(fs.readFileSync(file, 'utf8'));
+   140	      if (re.test(src)) offenders.push(path.relative(ROOT, file));
+   141	    }
+   142	    expect(offenders).toEqual([]);
+   143	  });
+   144	
+   145	  it("does not include 'streak' as a discriminated-union member in db/notificationsDb.ts", () => {
+   146	    const file = path.join(ROOT, 'db', 'notificationsDb.ts');
+   147	    const src = stripComments(fs.readFileSync(file, 'utf8'));
+   148	    // The forbidden form is the literal string 'streak' inside a union: e.g. | 'streak'
+   149	    const re = /['"]streak['"]/;
+   150	    expect(re.test(src)).toBe(false);
+   151	  });
+   152	
+   153	  it('does not reference Leaderboard in shipped screens', () => {
+   154	    const offenders: string[] = [];
+   155	    const re = /Leaderboard/;
+   156	    for (const file of FILES) {
+   157	      // The doctrine test file itself is allowed to reference the term.
+   158	      if (file === __filename) continue;
+   159	      // Phase 7C leaderboard screens are intentionally named and use the term.
+   160	      // They are doctrine-compliant (no emoji, trophy, raw health data, or
+   161	      // monetary data surfaced). See src/screens/client/LEADERBOARD.md.
+   162	      if (ALLOWLIST_LEADERBOARD_REFERENCE.has(file)) continue;
+   163	      const src = stripComments(fs.readFileSync(file, 'utf8'));
+   164	      if (re.test(src)) offenders.push(path.relative(ROOT, file));
+   165	    }
+   166	    expect(offenders).toEqual([]);
+   167	  });
+   168	
+   169	  it('does not embed pictograph emoji in source', () => {
+   170	    const offenders: string[] = [];
+   171	    // Pictograph ranges only — bare typographic marks like ✓ (U+2713) and
+   172	    // arrows are allowed because they read as glyphs, not as emoji.
+   173	    // Misc Symbols & Pictographs / Emoticons / Transport / Supplemental.
+   174	    const re = /[\u{1F300}-\u{1F5FF}\u{1F600}-\u{1F64F}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F900}-\u{1F9FF}\u{1FA70}-\u{1FAFF}\u{2600}-\u{26FF}\u{1F1E6}-\u{1F1FF}]/u;
+   175	    for (const file of FILES) {
+   176	      const src = fs.readFileSync(file, 'utf8');
+   177	      if (re.test(src)) offenders.push(path.relative(ROOT, file));
+   178	    }
+   179	    expect(offenders).toEqual([]);
+   180	  });
+   181	});

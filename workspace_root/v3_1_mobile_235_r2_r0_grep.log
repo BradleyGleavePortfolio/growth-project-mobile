@@ -1,0 +1,8 @@
++ * (growth-project-backend community-challenges.dto.ts, PR #390); this is the
++ * endpoint here — the backend exposes none (PR #390 head: no
++// challenge *comments* surface. The binding backend branch (PR #390 head,
++ * binding backend branch (PR #390 head) exposes no challenge `comments/empty-
++  // backend (PR #390 head) serves NO empty-state payload for this participant
++    // F1 correction: the backend (PR #390 head) exposes NO participant-facing
++  // Ink (#1A1A18) at 0.40 — a calm dim that keeps the underlying screen legible.
++  // already-dark surfaces without washing out (#000 at 0.55).

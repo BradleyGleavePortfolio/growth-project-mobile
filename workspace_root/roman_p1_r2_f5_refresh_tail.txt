@@ -1,0 +1,42 @@
+   221	    try {
+   222	      // Reconcile with the canonical backend page so the optimistic stand-ins
+   223	      // are replaced by their persisted shapes (real ids, ordering, cursor).
+   224	      const page = await listMessages(s.id, { limit: PAGE_LIMIT });
+   225	      if (active.current) {
+   226	        setMessages([...page.messages].reverse());
+   227	        setNextCursor(page.nextCursor);
+   228	      }
+   229	    } catch (err) {
+   230	      // A refresh failure is NON-destructive: the turn is already persisted and
+   231	      // shown via the optimistic + local-reply pair. Log it and leave the
+   232	      // visible thread intact; the next reload reconciles ids.
+   233	      logger.warn('useRomanChat.send.refresh', err);
+   234	    } finally {
+   235	      sendingRef.current = false;
+   236	      if (active.current) setSending(false);
+   237	    }
+   238	    return 'sent';
+   239	  }, []);
+   240	
+   241	  const clearSendError = useCallback(() => setSendError(null), []);
+   242	
+   243	  return {
+   244	    phase,
+   245	    session,
+   246	    isFirstOpen,
+   247	    messages,
+   248	    sending,
+   249	    sendError,
+   250	    nextCursor,
+   251	    loadingOlder,
+   252	    reload: open,
+   253	    loadOlder,
+   254	    send,
+   255	    clearSendError,
+   256	  };
+   257	}
+   258	
+   259	/** Exposed for an explicit "clear conversation" affordance (soft-delete). */
+   260	export async function softDeleteRomanSession(sessionId: string): Promise<void> {
+   261	  return apiDeleteSession(sessionId);
+   262	}

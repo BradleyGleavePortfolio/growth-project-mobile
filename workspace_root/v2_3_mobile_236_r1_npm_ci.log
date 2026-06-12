@@ -1,0 +1,43 @@
+npm warn deprecated rimraf@3.0.2: Rimraf versions prior to v4 are no longer supported
+npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+npm warn deprecated domexception@4.0.0: Use your platform's native DOMException instead
+npm warn deprecated abab@2.0.6: Use your platform's native atob() and btoa() methods instead
+npm warn deprecated @humanwhocodes/object-schema@2.0.3: Use @eslint/object-schema instead
+npm warn deprecated @humanwhocodes/config-array@0.13.0: Use @eslint/config-array instead
+npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+npm warn deprecated glob@7.1.6: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+npm warn deprecated @xmldom/xmldom@0.7.13: this version has critical issues, please update to the latest version
+npm warn cleanup Failed to remove some directories [
+npm warn cleanup   [
+npm warn cleanup     '/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/node_modules/react-native',
+npm warn cleanup     [Error: ENOTEMPTY: directory not empty, rmdir '/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/node_modules/react-native/ReactAndroid/src/main/res/devsupport'] {
+npm warn cleanup       errno: -39,
+npm warn cleanup       code: 'ENOTEMPTY',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/node_modules/react-native/ReactAndroid/src/main/res/devsupport'
+npm warn cleanup     }
+npm warn cleanup   ],
+npm warn cleanup   [
+npm warn cleanup     '/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/node_modules',
+npm warn cleanup     [Error: ENOTEMPTY: directory not empty, rmdir '/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/node_modules/react-native/ReactAndroid/src/main/res/devsupport'] {
+npm warn cleanup       errno: -39,
+npm warn cleanup       code: 'ENOTEMPTY',
+npm warn cleanup       syscall: 'rmdir',
+npm warn cleanup       path: '/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/node_modules/react-native/ReactAndroid/src/main/res/devsupport'
+npm warn cleanup     }
+npm warn cleanup   ]
+npm warn cleanup ]
+npm error code EEXIST
+npm error syscall rename
+npm error path /home/user/.npm/_cacache/tmp/7b9e1377
+npm error dest /home/user/.npm/_cacache/content-v2/sha512/79/f2/36b5569540faad3a1d75e25a0c2ff67cd18e0d3f7c9cf857f47d889924f6ae35e599788a7f6d1143ec8f5b7e608e60187f3c7c6582543dfb0be5c273e291
+npm error errno -2
+npm error ENOENT: no such file or directory, rename '/home/user/.npm/_cacache/tmp/7b9e1377' -> '/home/user/.npm/_cacache/content-v2/sha512/79/f2/36b5569540faad3a1d75e25a0c2ff67cd18e0d3f7c9cf857f47d889924f6ae35e599788a7f6d1143ec8f5b7e608e60187f3c7c6582543dfb0be5c273e291'
+npm error File exists: /home/user/.npm/_cacache/content-v2/sha512/79/f2/36b5569540faad3a1d75e25a0c2ff67cd18e0d3f7c9cf857f47d889924f6ae35e599788a7f6d1143ec8f5b7e608e60187f3c7c6582543dfb0be5c273e291
+npm error Remove the existing file and try again, or run npm
+npm error with --force to overwrite files recklessly.
+npm error A complete log of this run can be found in: /home/user/.npm/_logs/2026-06-12T08_51_18_395Z-debug-0.log

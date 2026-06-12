@@ -1,0 +1,29 @@
+src/api/communityEventsApi.ts:115:    next_before: z.string().nullable(),
+src/api/communityEventsApi.ts:276:  limit?: number;
+src/api/communityEventsApi.ts:293:    if (opts.limit != null) params.limit = String(opts.limit);
+src/hooks/useCommunityEvents.ts:69:export function useCommunityEventsList(
+src/hooks/useCommunityEvents.ts:74:    queryKey: communityEventsKeys.list(workspaceId ?? '∅', opts),
+src/hooks/useCommunityEvents.ts:167:      const key = communityEventsKeys.list(workspaceId);
+src/hooks/useCommunityEvents.ts:197:        next_before: prev?.next_before ?? null,
+src/hooks/useCommunityEvents.ts:204:        qc.setQueryData(communityEventsKeys.list(workspaceId), c.prev);
+src/screens/community/__tests__/coachCommunityEmptyStateContract.integration.test.tsx:209:    mockGetInbox.mockResolvedValue({ items: [], next_before: null });
+src/screens/community/__tests__/coachCommunityInboxFlagOff.test.tsx:116:    data: { items: [inboxItem()], next_before: null },
+src/screens/community/__tests__/coachCommunityScreens.test.tsx:91:  inbox: { data: { items: [], next_before: null }, isLoading: false, isError: false },
+src/screens/community/__tests__/coachCommunityScreens.test.tsx:337:  mockState.inbox = { data: { items: [], next_before: null }, isLoading: false, isError: false, isRefetching: false, refetch: jest.fn() };
+src/screens/community/__tests__/coachCommunityScreens.test.tsx:369:        next_before: null,
+src/screens/community/__tests__/coachCommunityScreens.test.tsx:738:      data: { items: [inboxItem()], next_before: null },
+src/screens/community/__tests__/coachCommunityScreens.test.tsx:874:        next_before: null,
+src/screens/community/__tests__/coachCommunityScreens.test.tsx:911:        next_before: null,
+src/screens/community/__tests__/coachCommunityScreens.test.tsx:995:      data: { items: [inboxItem()], next_before: null },
+src/screens/community/__tests__/communityEventsScreens.test.tsx:81:  list: { data: { events: [], next_before: null }, isLoading: false, isError: false, isRefetching: false, refetch: jest.fn() } as Record<string, unknown>,
+src/screens/community/__tests__/communityEventsScreens.test.tsx:86:  useCommunityEventsList: () => mockEventHooks.list,
+src/screens/community/__tests__/communityEventsScreens.test.tsx:134:    data: { events: [], next_before: null },
+src/screens/community/__tests__/communityEventsScreens.test.tsx:258:    mockEventHooks.list = { ...mockEventHooks.list, data: { events: [], next_before: null } };
+src/screens/community/__tests__/communityEventsScreens.test.tsx:268:      data: { events: [makeEvent()], next_before: null },
+src/screens/community/__tests__/communityEventsScreens.test.tsx:298:      data: { events: [makeEvent()], next_before: null },
+src/screens/community/__tests__/communityEventsScreens.test.tsx:308:      data: { events: [makeEvent({ id: 'ev-9', state: 'scheduled' })], next_before: null },
+src/screens/community/__tests__/communityEventsScreens.test.tsx:320:      data: { events: [makeEvent({ id: 'ev-7', state: 'live' })], next_before: null },
+src/screens/community/__tests__/communityEventsScreens.test.tsx:338:      data: { events: [makeEvent({ id: 'ev-5', state: 'replay' })], next_before: null },
+src/screens/community/__tests__/communityEventsScreens.test.tsx:354:      data: { events: [makeEvent({ id: 'ev-3', state: 'live' })], next_before: null },
+src/screens/community/CoachCommunityEventsScreen.tsx:65:  useCommunityEventsList,
+src/screens/community/CoachCommunityEventsScreen.tsx:134:  const events = useCommunityEventsList(workspaceId);

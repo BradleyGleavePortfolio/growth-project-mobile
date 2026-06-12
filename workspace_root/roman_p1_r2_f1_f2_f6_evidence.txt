@@ -1,0 +1,377 @@
+romanApi.ts
+    90	/**
+    91	 * WIRE roles — mirror the backend Prisma enum `RomanMessageRole { user, roman }`
+    92	 * (schema.prisma L6044-6049) exactly. The backend persists assistant turns with
+    93	 * `role: 'roman'` (roman.service.ts L437-439) and the controller emits it
+    94	 * verbatim in toMessageView (controller L213). The wire schema therefore parses
+    95	 * `'roman'` STRICTLY; any other role value is wire drift and is rejected.
+    96	 */
+    97	export const ROMAN_WIRE_MESSAGE_ROLES = ['user', 'roman'] as const;
+    98	export type RomanWireMessageRole = (typeof ROMAN_WIRE_MESSAGE_ROLES)[number];
+    99	
+   100	/**
+   101	 * INTERNAL UI roles — what the rest of the app reasons about. The wire `'roman'`
+   102	 * value is mapped to the internal `'assistant'` role AFTER strict validation
+   103	 * (see `toMessage`), so UI code keeps a single stable name for Roman's turns
+   104	 * while the wire boundary stays pinned to the backend contract.
+   105	 */
+   106	export const ROMAN_MESSAGE_ROLES = ['user', 'assistant'] as const;
+   107	export type RomanMessageRole = (typeof ROMAN_MESSAGE_ROLES)[number];
+   108	
+   109	/** Map a validated wire role to the internal UI role. */
+   110	function toUiRole(wire: RomanWireMessageRole): RomanMessageRole {
+   111	  return wire === 'roman' ? 'assistant' : 'user';
+   112	}
+   113	
+   114	/** Mirrors toMessageView (controller L204-218) — wire shape, strict. */
+   115	export const RomanWireMessageSchema = z
+   116	  .object({
+   117	    id: z.string().uuid(),
+   118	    role: z.enum(ROMAN_WIRE_MESSAGE_ROLES),
+   119	    content: z.string(),
+   120	    interrupted: z.boolean(),
+   121	    createdAt: z.string().datetime({ offset: true }),
+   122	  })
+   123	  .strict();
+   124	export type RomanWireMessage = z.infer<typeof RomanWireMessageSchema>;
+   125	
+   126	/** The internal message shape consumed by the UI (role mapped from the wire). */
+   127	export interface RomanMessage {
+   128	  id: string;
+   129	  role: RomanMessageRole;
+   130	  content: string;
+   131	  interrupted: boolean;
+   132	  createdAt: string;
+   133	}
+   134	
+   135	/** Validate + map a single wire message into the internal UI shape. */
+   136	function toMessage(wire: RomanWireMessage): RomanMessage {
+   137	  return {
+   138	    id: wire.id,
+   139	    role: toUiRole(wire.role),
+   140	    content: wire.content,
+   141	    interrupted: wire.interrupted,
+   142	    createdAt: wire.createdAt,
+   143	  };
+   144	}
+   145	
+   146	/** Mirrors the list response (controller L80-87) — wire shape, strict. */
+   147	export const RomanWireMessagePageSchema = z
+   148	  .object({
+   149	    messages: z.array(RomanWireMessageSchema),
+   150	    nextCursor: z.string().max(64).nullable(),
+   180	
+   181	// ─── Typed error union ───────────────────────────────────────────────────────
+   182	
+   183	export type RomanErrorKind =
+   184	  | 'unavailable' // 404 — feature flag off OR session not found / not owned
+   185	  | 'rateLimited' // 429 — @Throttle / per-tier cap
+   186	  | 'offline' // no network reachability
+   187	  | 'generic'; // anything else (5xx, malformed, unknown)
+   188	
+   189	export class RomanApiError extends Error {
+   190	  readonly kind: RomanErrorKind;
+   191	  /** Present only for `rateLimited`; seconds the caller should wait. */
+   192	  readonly retryAfterSeconds?: number;
+   193	
+   194	  constructor(kind: RomanErrorKind, message: string, retryAfterSeconds?: number) {
+   195	    super(message);
+   196	    this.name = 'RomanApiError';
+   197	    this.kind = kind;
+   198	    this.retryAfterSeconds = retryAfterSeconds;
+   199	  }
+   200	}
+   201	
+   202	/** Thrown when a backend response shape drifts from the cited contract. */
+   203	export class RomanWireError extends Error {
+   204	  constructor(message: string) {
+   205	    super(message);
+   206	    this.name = 'RomanWireError';
+   207	  }
+   208	}
+   209	
+   210	// ─── Error mapping ─────────────────────────────────────────────────────────
+   211	
+   212	function parseRetryAfter(value: unknown): number | undefined {
+   213	  if (typeof value === 'string' && value.trim() !== '') {
+   214	    const n = Number(value);
+   215	    if (Number.isFinite(n) && n >= 0) return Math.ceil(n);
+   216	  }
+   217	  return undefined;
+   218	}
+   219	
+   220	/** Map any thrown error (axios or otherwise) to a typed RomanApiError. */
+   221	function toRomanApiError(err: unknown): RomanApiError {
+   222	  if (err instanceof RomanApiError) return err;
+   223	  if (axios.isAxiosError(err)) {
+   224	    if (err.response) {
+   225	      const status = err.response.status;
+   226	      if (status === 404) {
+   227	        return new RomanApiError(
+   228	          'unavailable',
+   229	          'Roman is not available right now.',
+   230	        );
+   300	    }
+   301	    // Map the validated wire roles ('roman') to the internal UI role
+   302	    // ('assistant') AFTER the strict boundary, never before.
+   303	    return {
+   304	      messages: parsed.data.messages.map(toMessage),
+   305	      nextCursor: parsed.data.nextCursor,
+   306	    };
+   307	  } catch (err) {
+   308	    if (err instanceof RomanWireError) throw err;
+   309	    throw toRomanApiError(err);
+   310	  }
+   311	}
+   312	
+   313	/** DELETE /roman/sessions/:id — soft-delete (controller L162-169, 204 No Content). */
+   314	export async function deleteSession(sessionId: string): Promise<void> {
+   315	  try {
+   316	    await api.delete(`/roman/sessions/${encodeURIComponent(sessionId)}`);
+   317	  } catch (err) {
+   318	    throw toRomanApiError(err);
+   319	  }
+   320	}
+   321	
+   322	// ─── SSE: send a turn, buffer the reply (DECLARED DEVIATION — see header) ────
+   323	
+   324	/** The settled assistant turn recovered from the buffered SSE stream. */
+   325	export interface RomanAssistantReply {
+   326	  /** Full assistant text (terminal `done` chunk text, service L446-451). */
+   327	  text: string;
+   328	  /** Persisted assistant message id (present on `done`, service L449). */
+   329	  messageId?: string;
+   330	  /** True when the backend persisted a partial (interrupted) turn. */
+   331	  interrupted: boolean;
+   332	}
+   333	
+   334	/**
+   335	 * Parse a buffered SSE body into ordered chunks. Recognises both the
+   336	 * `data: {json}` frames the controller writes for normal chunks (controller
+   337	 * L143) and the `event: error\ndata: {json}` frame it writes on failure
+   338	 * (controller L150-153). Frames are separated by a blank line.
+   339	 */
+   340	export function parseSseChunks(
+   341	  body: string,
+   342	): { chunks: RomanStreamChunk[]; streamError?: RomanStreamError } {
+   343	  const chunks: RomanStreamChunk[] = [];
+   344	  let streamError: RomanStreamError | undefined;
+   345	  const frames = body.split(/\n\n/);
+   346	  for (const frame of frames) {
+   347	    const trimmed = frame.trim();
+   348	    if (trimmed === '') continue;
+   349	    let isErrorEvent = false;
+   350	    const dataLines: string[] = [];
+   351	    for (const line of trimmed.split('\n')) {
+   352	      if (line.startsWith('event:')) {
+   353	        if (line.slice('event:'.length).trim() === 'error') isErrorEvent = true;
+   354	      } else if (line.startsWith('data:')) {
+   355	        dataLines.push(line.slice('data:'.length).trim());
+   356	      }
+   357	    }
+   358	    if (dataLines.length === 0) continue;
+   359	    let json: unknown;
+   360	    try {
+   361	      json = JSON.parse(dataLines.join('\n'));
+   362	    } catch {
+   363	      // A non-JSON data frame is contract drift. Surface it as a typed wire
+   364	      // error rather than silently discarding it — a malformed frame before a
+   365	      // later `done` must NOT be treated as success (R1 code finding F6).
+   366	      throw new RomanWireError(
+   367	        'roman stream carried a non-JSON data frame',
+   368	      );
+   369	    }
+   370	    if (isErrorEvent) {
+   371	      const parsed = RomanStreamErrorSchema.safeParse(json);
+   372	      if (!parsed.success) {
+   373	        throw new RomanWireError(
+   374	          `roman stream error frame drifted from contract: ${parsed.error.message}`,
+   375	        );
+   376	      }
+   377	      streamError = parsed.data;
+   378	      continue;
+   379	    }
+   380	    const parsed = RomanStreamChunkSchema.safeParse(json);
+   430	  }
+   431	
+   432	  try {
+   433	    if (!response.ok) {
+   434	      if (response.status === 404) {
+   435	        throw new RomanApiError('unavailable', 'Roman is not available right now.');
+   436	      }
+   437	      if (response.status === 429) {
+   438	        const retry = parseRetryAfter(response.headers.get('retry-after'));
+   439	        throw new RomanApiError(
+   440	          'rateLimited',
+   441	          'Roman needs a brief moment before the next message.',
+   442	          retry,
+   443	        );
+   444	      }
+   445	      throw new RomanApiError('generic', 'That request did not complete.');
+   446	    }
+   447	
+   448	    const bodyText = await response.text();
+   449	    const { chunks, streamError } = parseSseChunks(bodyText);
+   450	
+   451	    if (streamError) {
+   452	      // Structured in-stream error (e.g. ROMAN_UNAVAILABLE, controller L152).
+   453	      const kind: RomanErrorKind =
+   454	        streamError.code === 'ROMAN_UNAVAILABLE' ? 'unavailable' : 'generic';
+   455	      throw new RomanApiError(kind, streamError.message);
+   456	    }
+   457	
+   458	    const done = chunks.find((c) => c.type === 'done');
+   459	    if (!done) {
+   460	      // No terminal frame in a 200 body is a contract drift.
+   461	      throw new RomanWireError(
+   462	        'roman stream completed without a terminal `done` chunk',
+   463	      );
+   464	    }
+   465	    return {
+   466	      text: done.text ?? '',
+   467	      messageId: done.messageId,
+   468	      interrupted: done.interrupted === true,
+   469	    };
+   470	  } catch (err) {
+romanApi tests
+    70	  return err;
+    71	}
+    72	
+    73	function networkError(): Error {
+    74	  const err = new Error('Network Error') as Error & { isAxiosError: boolean };
+    75	  err.isAxiosError = true;
+    76	  // No `response` → axios treats this as a transport/offline failure.
+    77	  return err;
+    78	}
+    79	
+    80	const SESSION_ID = '11111111-1111-4111-8111-111111111111';
+    81	
+    82	const validSession: RomanSession = {
+    83	  id: SESSION_ID,
+    84	  surface: 'client',
+    85	  messageCount: 2,
+    86	  startedAt: '2026-01-01T00:00:00.000Z',
+    87	  lastActivityAt: '2026-01-01T00:05:00.000Z',
+    88	};
+    89	
+    90	// Real backend wire shape: assistant turns carry `role: 'roman'` verbatim
+    91	// (Prisma RomanMessageRole, roman.service.ts L437-439, controller L213).
+    92	const validWireMessage = {
+    93	  id: '22222222-2222-4222-8222-222222222222',
+    94	  role: 'roman' as const,
+    95	  content: 'Good day.',
+    96	  interrupted: false,
+    97	  createdAt: '2026-01-01T00:05:00.000Z',
+    98	};
+    99	const validUserWireMessage = {
+   100	  id: '33333333-3333-4333-8333-333333333333',
+   101	  role: 'user' as const,
+   102	  content: 'Hello.',
+   103	  interrupted: false,
+   104	  createdAt: '2026-01-01T00:04:00.000Z',
+   105	};
+   106	
+   107	describe('romanApi — REST endpoints (URL + method pinning)', () => {
+   108	  it('openOrResumeSession POSTs /roman/sessions with the surface and parses the view', async () => {
+   109	    api.post.mockResolvedValueOnce({ data: validSession });
+   110	    const result = await openOrResumeSession('client');
+   111	    expect(api.post).toHaveBeenCalledWith('/roman/sessions', { surface: 'client' });
+   112	    expect(result).toEqual(validSession);
+   113	  });
+   114	
+   115	  it('listMessages GETs /roman/sessions/:id/messages and clamps limit to the backend ceiling', async () => {
+   116	    api.get.mockResolvedValueOnce({ data: { messages: [validWireMessage], nextCursor: null } });
+   117	    const page = await listMessages(SESSION_ID, { limit: 9999 });
+   118	    expect(api.get).toHaveBeenCalledWith(
+   119	      `/roman/sessions/${SESSION_ID}/messages`,
+   120	      { params: { limit: ROMAN_MESSAGES_MAX_LIMIT } },
+   210	    api.get.mockRejectedValueOnce(networkError());
+   211	    await expect(listMessages(SESSION_ID)).rejects.toMatchObject({ kind: 'offline' });
+   212	  });
+   213	
+   214	  it('produces a RomanApiError instance for delete failures', async () => {
+   215	    api.delete.mockRejectedValueOnce(axiosError(500));
+   216	    await expect(deleteSession(SESSION_ID)).rejects.toBeInstanceOf(RomanApiError);
+   217	  });
+   218	});
+   219	
+   220	describe('romanApi — SSE frame parsing (DECLARED DEVIATION: buffered read)', () => {
+   221	  it('parses ordered data: frames and recovers delta + terminal done', () => {
+   222	    const body =
+   223	      'data: {"type":"delta","text":"Good "}\n\n' +
+   224	      'data: {"type":"delta","text":"day."}\n\n' +
+   225	      `data: {"type":"done","text":"Good day.","messageId":"${validWireMessage.id}","interrupted":false}\n\n`;
+   226	    const { chunks, streamError } = parseSseChunks(body);
+   227	    expect(streamError).toBeUndefined();
+   228	    expect(chunks).toHaveLength(3);
+   229	    expect(chunks[chunks.length - 1]).toMatchObject({ type: 'done', text: 'Good day.' });
+   230	  });
+   231	
+   232	  it('captures an `event: error` frame as a typed stream error', () => {
+   233	    const body = 'event: error\ndata: {"code":"ROMAN_UNAVAILABLE","message":"Roman is not available right now."}\n\n';
+   234	    const { streamError } = parseSseChunks(body);
+   235	    expect(streamError).toEqual({
+   236	      code: 'ROMAN_UNAVAILABLE',
+   237	      message: 'Roman is not available right now.',
+   238	    });
+   239	  });
+   240	
+   241	  it('throws RomanWireError on a non-JSON data frame rather than silently skipping it (#36)', () => {
+   242	    const body = 'data: not json at all\n\ndata: {"type":"done","text":"ok","interrupted":false}\n\n';
+   243	    expect(() => parseSseChunks(body)).toThrow(RomanWireError);
+   244	  });
+   245	});
+   246	
+   247	describe('romanApi — sendMessage (buffered SSE over fetch)', () => {
+   248	  const realFetch = global.fetch;
+   249	
+   250	  afterEach(() => {
+   251	    global.fetch = realFetch;
+   252	  });
+   253	
+   254	  function mockFetchOnce(init: { ok?: boolean; status?: number; text?: string; headers?: Record<string, string> }) {
+   255	    const headers = init.headers ?? {};
+   256	    const response: Pick<Response, 'ok' | 'status' | 'headers' | 'text'> = {
+   257	      ok: init.ok ?? true,
+   258	      status: init.status ?? 200,
+   259	      headers: { get: (k: string) => headers[k.toLowerCase()] ?? null } as Headers,
+   260	      text: async () => init.text ?? '',
+   270	        `data: {"type":"done","text":"Good day.","messageId":"${validWireMessage.id}","interrupted":false}\n\n`,
+   271	    });
+   272	    const reply = await sendMessage(SESSION_ID, 'hello');
+   273	    const fetchMock = global.fetch as jest.Mock;
+   274	    const [url, opts] = fetchMock.mock.calls[0];
+   275	    expect(url).toBe(`http://test.local/api/roman/sessions/${SESSION_ID}/messages`);
+   276	    expect(opts.method).toBe('POST');
+   277	    // The backend does not implement Idempotency-Key handling; the client must
+   278	    // not advertise a guarantee that does not exist (#2 fabrication).
+   279	    expect(opts.headers['Idempotency-Key']).toBeUndefined();
+   280	    expect(opts.headers.Accept).toBe('text/event-stream');
+   281	    expect(reply).toEqual({ text: 'Good day.', messageId: validWireMessage.id, interrupted: false });
+   282	  });
+   283	
+   284	  it('maps a 404 send response to kind=unavailable', async () => {
+   285	    mockFetchOnce({ ok: false, status: 404 });
+   286	    await expect(sendMessage(SESSION_ID, 'hi')).rejects.toMatchObject({ kind: 'unavailable' });
+   287	  });
+   288	
+   289	  it('maps a 429 send response to kind=rateLimited with Retry-After', async () => {
+   290	    mockFetchOnce({ ok: false, status: 429, headers: { 'retry-after': '5' } });
+   291	    await expect(sendMessage(SESSION_ID, 'hi')).rejects.toMatchObject({
+   292	      kind: 'rateLimited',
+   293	      retryAfterSeconds: 5,
+   294	    });
+   295	  });
+   296	
+   297	  it('throws RomanWireError when a 200 stream carries no terminal done chunk', async () => {
+   298	    mockFetchOnce({ text: 'data: {"type":"delta","text":"partial"}\n\n' });
+   299	    await expect(sendMessage(SESSION_ID, 'hi')).rejects.toBeInstanceOf(RomanWireError);
+   300	  });
+   301	
+   302	  it('maps an in-stream error event to a typed RomanApiError', async () => {
+   303	    mockFetchOnce({
+   304	      text: 'event: error\ndata: {"code":"ROMAN_UNAVAILABLE","message":"Roman is not available right now."}\n\n',
+   305	    });
+   306	    await expect(sendMessage(SESSION_ID, 'hi')).rejects.toMatchObject({ kind: 'unavailable' });
+   307	  });
+   308	});

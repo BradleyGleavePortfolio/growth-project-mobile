@@ -1,0 +1,87 @@
+     1	/**
+     2	 * Community shared-component barrel (v1-5 client surface). Re-exports the
+     3	 * shared components consumed by the 7 Community screens. See each module for
+     4	 * the product-plan / voice-policy references it implements.
+     5	 */
+     6	export { default as CommunityEmptyState } from './EmptyState';
+     7	export type { CommunityEmptyStateProps } from './EmptyState';
+     8	export { default as UnreadBadge } from './UnreadBadge';
+     9	export type { UnreadBadgeProps } from './UnreadBadge';
+    10	export { default as RomanAvatar } from './RomanAvatar';
+    11	export type { RomanAvatarProps, RomanCrop } from './RomanAvatar';
+    12	export { default as SpaceTabBar } from './SpaceTabBar';
+    13	export type {
+    14	  SpaceTabBarProps,
+    15	  SpaceTab,
+    16	  CommunitySpaceKey,
+    17	} from './SpaceTabBar';
+    18	export { default as PostCard } from './PostCard';
+    19	export type { PostCardProps } from './PostCard';
+    20	export { default as ThreadHeader } from './ThreadHeader';
+    21	export type { ThreadHeaderProps } from './ThreadHeader';
+    22	export { default as ReactionBar } from './ReactionBar';
+    23	export type { ReactionBarProps } from './ReactionBar';
+    24	export { default as DmRow } from './DmRow';
+    25	export type { DmRowProps } from './DmRow';
+    26	export { default as MessageBubble } from './MessageBubble';
+    27	export type { MessageBubbleProps } from './MessageBubble';
+    28	export { default as ComposerInput } from './ComposerInput';
+    29	export type { ComposerInputProps } from './ComposerInput';
+    30	export { default as TimelineMarker } from './TimelineMarker';
+    31	export type { TimelineMarkerProps } from './TimelineMarker';
+    32	export { default as AckSignalChip } from './AckSignalChip';
+    33	export type { AckSignalChipProps, AckSignal } from './AckSignalChip';
+    34	export {
+    35	  romanCopy,
+    36	  shouldUseDryQuip,
+    37	  ROMAN_COMMUNITY_LINES,
+    38	  ROMAN_QUIP_RATE_CLIENT,
+    39	} from './romanVoice';
+    40	export type { RomanCommunityStem, RomanLine } from './romanVoice';
+    41	// ─── Community v3-1 challenges (flag-gated host vocabulary) ───────────────
+    42	export { default as ChallengeCard } from './ChallengeCard';
+    43	export type { ChallengeCardProps } from './ChallengeCard';
+    44	export { default as ChallengeCommentsEmptyState } from './ChallengeCommentsEmptyState';
+    45	export type { ChallengeCommentsEmptyStateProps } from './ChallengeCommentsEmptyState';
+     1	/**
+     2	 * communityNavTypes — typed param list + shared nav props for the Community
+     3	 * sub-stack (v1-5). The stack is mounted by ClientNavigator ONLY when
+     4	 * `featureFlags.communityTab` is true (see ClientNavigator.tsx). The deep-link
+     5	 * route is likewise registered only behind that flag.
+     6	 */
+     7	import type {
+     8	  NavigationProp,
+     9	  RouteProp,
+    10	  ParamListBase,
+    11	} from '@react-navigation/native';
+    12	
+    13	export type CommunityStackParamList = {
+    14	  /** Container with the Space sub-tab switcher (Today / Hall / Cohorts / DMs). */
+    15	  CommunityTab: undefined;
+    16	  /** The "today" object — universal home for what's happening for the client. */
+    17	  CommunityToday: undefined;
+    18	  /** A Space view: Hall (workspace) or a specific Cohort. */
+    19	  CommunitySpace: { space: 'hall' | 'cohort'; cohortId?: string };
+    20	  /** Single thread / post detail. */
+    21	  CommunityThread: { postId: string };
+    22	  /** DM inbox. */
+    23	  CommunityDmList: undefined;
+    24	  /** Single DM conversation. */
+    25	  CommunityDmThread: { recipientId: string; participantLabel?: string };
+    26	  /** Compose a post (or, with a recipient, a DM). */
+    27	  CommunityComposer:
+    28	    | { mode: 'post' }
+    29	    | { mode: 'dm'; recipientId: string }
+    30	    | undefined;
+    31	  /** Single challenge detail (v3-1). Registered only behind communityChallenges. */
+    32	  CommunityChallengeDetail: { challengeId: string };
+    33	  /** Challenge discovery list (v3-1). Registered only behind communityChallenges. */
+    34	  CommunityChallenges: undefined;
+    35	};
+    36	
+    37	/** Loosely-typed nav prop used by the screens (matches the codebase pattern). */
+    38	export type CommunityNav = NavigationProp<ParamListBase>;
+    39	export type CommunityRoute<T extends keyof CommunityStackParamList> = RouteProp<
+    40	  Record<string, CommunityStackParamList[T]>,
+    41	  string
+    42	>;

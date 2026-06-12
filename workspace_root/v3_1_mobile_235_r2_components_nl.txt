@@ -1,0 +1,959 @@
+--- CommunityChallengesScreen
+     1	/**
+     2	 * CommunityChallengesScreen — the discovery surface for community challenges
+     3	 * (v3-1, F6). Lists the workspace's challenges as ChallengeCards; tapping a card
+     4	 * opens its detail (where the caller's own participation is loaded). Without a
+     5	 * discovery surface the detail screen was unreachable except by deep link — this
+     6	 * surface is what makes challenges findable.
+     7	 *
+     8	 * BEHAVIORAL DESIGN (DESIGN_INTELLIGENCE Part III):
+     9	 *   - Each row foregrounds the challenge itself (a calm "Join" affordance), not a
+    10	 *     ranking — competence over comparison (§3.7, §3.4).
+    11	 *   - Real loading / empty / error states (no spinner-only screens, no dead
+    12	 *     ends). The list-level fetch only knows the challenge definitions, so the
+    13	 *     card shows the neutral "Join" affordance until the detail confirms the
+    14	 *     caller's own progress.
+    15	 *
+    16	 * FLAG POSTURE: registered in CommunityNavigator ONLY when
+    17	 * `featureFlags.communityChallenges` is true. A defense-in-depth guard renders a
+    18	 * neutral "not available" state if it is somehow reached with the flag off.
+    19	 *
+    20	 * Tokens only (no raw hex); line Ionicons only (no emoji).
+    21	 */
+    22	import React from 'react';
+    23	import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
+    24	import { SafeAreaView } from 'react-native-safe-area-context';
+    25	import { useNavigation } from '@react-navigation/native';
+    26	import { useQuery } from '@tanstack/react-query';
+    27	import { Ionicons } from '@expo/vector-icons';
+    28	import { useTheme } from '../../theme/useTheme';
+    29	import { spacing, radius } from '../../theme/tokens';
+    30	import { featureFlags } from '../../config/featureFlags';
+    31	import { ThreadHeader, ChallengeCard } from '../../components/community';
+    32	import HapticPressable from '../../components/HapticPressable';
+    33	import {
+    34	  communityChallengesApi,
+    35	  type CommunityChallenge,
+    36	} from '../../api/communityChallengesApi';
+    37	import type { CommunityNav } from './communityNavTypes';
+    38	
+    39	interface Props {
+    40	  embedded?: boolean;
+    41	  /** Workspace id — challenges are workspace-scoped on the backend. */
+    42	  workspaceId?: string | null;
+    43	}
+    44	
+    45	export default function CommunityChallengesScreen({
+    46	  embedded,
+    47	  workspaceId,
+    48	}: Props): React.ReactElement {
+    49	  const { semanticColors } = useTheme();
+    50	  const navigation = useNavigation<CommunityNav>();
+    51	
+    52	  const challenges = useQuery({
+    53	    queryKey: ['community', 'challenges', workspaceId ?? '∅'],
+    54	    queryFn: () => communityChallengesApi.listChallenges(workspaceId as string),
+    55	    enabled: !!workspaceId && featureFlags.communityChallenges,
+    56	  });
+    57	
+    58	  const open = (challenge: CommunityChallenge) =>
+    59	    navigation.navigate('CommunityChallengeDetail', { challengeId: challenge.id });
+    60	
+    61	  const Container: React.ComponentType<{ children: React.ReactNode }> = embedded
+    62	    ? ({ children }) => <View style={styles.flex}>{children}</View>
+    63	    : ({ children }) => (
+    64	        <SafeAreaView
+    65	          style={[styles.flex, { backgroundColor: semanticColors.bgPrimary }]}
+    66	          edges={['top']}
+    67	        >
+    68	          {children}
+    69	        </SafeAreaView>
+    70	      );
+    71	
+    72	  // Defense-in-depth: never reachable with the flag off (the route is not
+    73	  // registered), but render a neutral state rather than a blank screen.
+    74	  if (!featureFlags.communityChallenges) {
+    75	    return (
+    76	      <Container>
+    77	        <ThreadHeader title="Challenges" testID="community-challenges-header" />
+    78	        <View style={styles.center}>
+    79	          <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
+    80	            Challenges are not available right now.
+    81	          </Text>
+    82	        </View>
+    83	      </Container>
+    84	    );
+    85	  }
+    86	
+    87	  if (challenges.isLoading) {
+    88	    return (
+    89	      <Container>
+    90	        <ThreadHeader title="Challenges" testID="community-challenges-header" />
+    91	        <View style={styles.center} testID="community-challenges-loading">
+    92	          <ActivityIndicator color={semanticColors.accent} />
+    93	          <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
+    94	            Loading challenges…
+    95	          </Text>
+    96	        </View>
+    97	      </Container>
+    98	    );
+    99	  }
+   100	
+   101	  if (challenges.isError) {
+   102	    return (
+   103	      <Container>
+   104	        <ThreadHeader title="Challenges" testID="community-challenges-header" />
+   105	        <View style={styles.center} testID="community-challenges-error">
+   106	          <Ionicons
+   107	            name="alert-circle-outline"
+   108	            size={28}
+   109	            color={semanticColors.textMuted}
+   110	          />
+   111	          <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
+   112	            We could not load challenges. Please try again.
+   113	          </Text>
+   114	          <HapticPressable
+   115	            intent="light"
+   116	            onPress={() => void challenges.refetch()}
+   117	            accessibilityRole="button"
+   118	            accessibilityLabel="Try again"
+   119	            testID="community-challenges-retry"
+   120	            style={[styles.retry, { borderColor: semanticColors.accent }]}
+   121	          >
+   122	            <Text style={[styles.retryLabel, { color: semanticColors.accent }]}>
+   123	              Try again
+   124	            </Text>
+   125	          </HapticPressable>
+   126	        </View>
+   127	      </Container>
+   128	    );
+   129	  }
+   130	
+   131	  const data = challenges.data ?? [];
+   132	
+   133	  if (data.length === 0) {
+   134	    return (
+   135	      <Container>
+   136	        <ThreadHeader title="Challenges" testID="community-challenges-header" />
+   137	        <View style={styles.center} testID="community-challenges-empty">
+   138	          <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
+   139	            No challenges yet. Your coach will add one when it is time.
+   140	          </Text>
+   141	        </View>
+   142	      </Container>
+   143	    );
+   144	  }
+   145	
+   146	  return (
+   147	    <Container>
+   148	      <ThreadHeader title="Challenges" testID="community-challenges-header" />
+   149	      <FlatList
+   150	        data={data}
+   151	        renderItem={({ item }) => (
+   152	          <ChallengeCard
+   153	            challenge={item}
+   154	            participation={null}
+   155	            onPress={open}
+   156	            testID={`community-challenge-card-${item.id}`}
+   157	          />
+   158	        )}
+   159	        keyExtractor={(item) => item.id}
+   160	        contentContainerStyle={styles.listContent}
+   161	        testID="community-challenges-list"
+   162	      />
+   163	    </Container>
+   164	  );
+   165	}
+   166	
+   167	const styles = StyleSheet.create({
+   168	  flex: { flex: 1 },
+   169	  center: {
+   170	    flex: 1,
+   171	    alignItems: 'center',
+   172	    justifyContent: 'center',
+   173	    gap: spacing.sm,
+   174	    paddingHorizontal: spacing.xl,
+   175	  },
+   176	  muted: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
+   177	  retry: {
+   178	    marginTop: spacing.sm,
+   179	    borderWidth: StyleSheet.hairlineWidth,
+   180	    borderRadius: radius.pill,
+   181	    paddingHorizontal: spacing.lg,
+   182	    paddingVertical: spacing.sm,
+   183	    minHeight: 48,
+   184	    justifyContent: 'center',
+   185	  },
+   186	  retryLabel: { fontSize: 14, fontWeight: '600' },
+   187	  listContent: { padding: spacing.lg, gap: spacing.sm },
+   188	});
+--- ChallengeCard
+     1	/**
+     2	 * ChallengeCard — a single community challenge in a list (v3-1).
+     3	 *
+     4	 * BEHAVIORAL DESIGN (DESIGN_INTELLIGENCE Part III):
+     5	 *   - Participation-focused: the card foregrounds the caller's OWN progress
+     6	 *     (a compact bar + "X of Y") — a competence signal (§3.7), never a ranking
+     7	 *     and never a "behind" framing (§3.4, no public failure).
+     8	 *   - ONE clear affordance per card (Hick's Law, UX finding 13): a single chip
+     9	 *     that both states where you are AND what tapping does — "Join" when not
+    10	 *     joined, "Continue" when in progress, and a calm "Goal reached" closure when
+    11	 *     complete. There is no separate status label competing with the action.
+    12	 *   - Completed state is a positive closure, shown with a line check icon — not
+    13	 *     a trophy/badge (avoids badge theater) and never a comparison.
+    14	 *
+    15	 * Tokens only (no raw hex). Line Ionicons only (no emoji). >=48dp touch target.
+    16	 */
+    17	import React from 'react';
+    18	import { View, Text, StyleSheet } from 'react-native';
+    19	import { Ionicons } from '@expo/vector-icons';
+    20	import HapticPressable from '../HapticPressable';
+    21	import { useTheme } from '../../theme/useTheme';
+    22	import { spacing, radius } from '../../theme/tokens';
+    23	import type {
+    24	  CommunityChallenge,
+    25	  CommunityChallengeParticipation,
+    26	} from '../../api/communityChallengesApi';
+    27	
+    28	export interface ChallengeCardProps {
+    29	  challenge: CommunityChallenge;
+    30	  /** The caller's participation, or null when they have not joined. */
+    31	  participation: CommunityChallengeParticipation | null;
+    32	  /** Open the challenge detail. */
+    33	  onPress: (challenge: CommunityChallenge) => void;
+    34	  testID?: string;
+    35	}
+    36	
+    37	function fractionFor(value: number, target: number | null): number | null {
+    38	  if (target === null || target <= 0) return null;
+    39	  return Math.min(Math.max(value / target, 0), 1);
+    40	}
+    41	
+    42	export default function ChallengeCard({
+    43	  challenge,
+    44	  participation,
+    45	  onPress,
+    46	  testID,
+    47	}: ChallengeCardProps): React.ReactElement {
+    48	  const { semanticColors } = useTheme();
+    49	  const joined = participation !== null;
+    50	  const completed = participation?.completed ?? false;
+    51	  const value = participation?.progress_value ?? 0;
+    52	  const target = challenge.target_value;
+    53	  const unit = challenge.unit ?? '';
+    54	  const fraction = fractionFor(value, target);
+    55	
+    56	  // A SINGLE affordance that encodes both status and the tap outcome (F13).
+    57	  const actionLabel = completed ? 'Goal reached' : joined ? 'Continue' : 'Join';
+    58	
+    59	  const progressLabel =
+    60	    !joined
+    61	      ? challenge.description ?? 'Tap to see what this challenge is about.'
+    62	      : target === null
+    63	        ? `${value}${unit ? ` ${unit}` : ''} logged so far`
+    64	        : `${value} of ${target}${unit ? ` ${unit}` : ''}`;
+    65	
+    66	  return (
+    67	    <HapticPressable
+    68	      intent="light"
+    69	      onPress={() => onPress(challenge)}
+    70	      accessibilityRole="button"
+    71	      accessibilityLabel={`Open challenge ${challenge.title}. ${actionLabel}.`}
+    72	      testID={testID}
+    73	      style={[
+    74	        styles.card,
+    75	        { backgroundColor: semanticColors.bgSurface, borderColor: semanticColors.border },
+    76	      ]}
+    77	    >
+    78	      <View style={styles.headerRow}>
+    79	        <Text
+    80	          style={[styles.title, { color: semanticColors.textPrimary }]}
+    81	          numberOfLines={2}
+    82	        >
+    83	          {challenge.title}
+    84	        </Text>
+    85	        {completed ? (
+    86	          <Ionicons
+    87	            name="checkmark-circle-outline"
+    88	            size={20}
+    89	            color={semanticColors.accent}
+    90	            testID={`${testID ?? 'challenge-card'}-complete-icon`}
+    91	          />
+    92	        ) : null}
+    93	      </View>
+    94	
+    95	      <Text
+    96	        style={[styles.progress, { color: semanticColors.textMuted }]}
+    97	        numberOfLines={2}
+    98	      >
+    99	        {progressLabel}
+   100	      </Text>
+   101	
+   102	      {joined && fraction !== null ? (
+   103	        <View
+   104	          style={[styles.track, { backgroundColor: semanticColors.bgPrimary }]}
+   105	          accessibilityRole="progressbar"
+   106	          accessibilityLabel={`Your progress: ${Math.round(fraction * 100)} percent`}
+   107	        >
+   108	          <View
+   109	            style={[
+   110	              styles.fill,
+   111	              { backgroundColor: semanticColors.accent, width: `${fraction * 100}%` },
+   112	            ]}
+   113	            testID={`${testID ?? 'challenge-card'}-fill`}
+   114	          />
+   115	        </View>
+   116	      ) : null}
+   117	
+   118	      {/* F13: a single chip is the only footer affordance. */}
+   119	      <View style={styles.footerRow}>
+   120	        <View
+   121	          style={[styles.actionChip, { borderColor: semanticColors.accent }]}
+   122	          testID={`${testID ?? 'challenge-card'}-action`}
+   123	        >
+   124	          {completed ? (
+   125	            <Ionicons
+   126	              name="checkmark-circle-outline"
+   127	              size={15}
+   128	              color={semanticColors.accent}
+   129	            />
+   130	          ) : null}
+   131	          <Text style={[styles.actionLabel, { color: semanticColors.accent }]}>
+   132	            {actionLabel}
+   133	          </Text>
+   134	        </View>
+   135	      </View>
+   136	    </HapticPressable>
+   137	  );
+   138	}
+   139	
+   140	const styles = StyleSheet.create({
+   141	  card: {
+   142	    borderWidth: StyleSheet.hairlineWidth,
+   143	    borderRadius: radius.lg,
+   144	    padding: spacing.lg,
+   145	    gap: spacing.sm,
+   146	    minHeight: 48,
+   147	  },
+   148	  headerRow: {
+   149	    flexDirection: 'row',
+   150	    alignItems: 'flex-start',
+   151	    justifyContent: 'space-between',
+   152	    gap: spacing.sm,
+   153	  },
+   154	  title: { flex: 1, fontSize: 17, fontWeight: '600' },
+   155	  progress: { fontSize: 14, lineHeight: 20 },
+   156	  track: {
+   157	    height: 8,
+   158	    borderRadius: radius.pill,
+   159	    overflow: 'hidden',
+   160	    marginTop: spacing.xs,
+   161	  },
+   162	  fill: { height: '100%', borderRadius: radius.pill },
+   163	  footerRow: {
+   164	    flexDirection: 'row',
+   165	    alignItems: 'center',
+   166	    justifyContent: 'flex-start',
+   167	    marginTop: spacing.xs,
+   168	  },
+   169	  actionChip: {
+   170	    flexDirection: 'row',
+   171	    alignItems: 'center',
+   172	    gap: spacing.xs,
+   173	    borderWidth: StyleSheet.hairlineWidth,
+   174	    borderRadius: radius.pill,
+   175	    paddingHorizontal: spacing.md,
+   176	    paddingVertical: spacing.xs,
+   177	    minHeight: 32,
+   178	  },
+   179	  actionLabel: { fontSize: 13, fontWeight: '600' },
+   180	});
+--- ChallengeProgressSheet
+     1	/**
+     2	 * ChallengeProgressSheet — the bottom sheet where a participant logs progress
+     3	 * toward their OWN target for a community challenge (v3-1).
+     4	 *
+     5	 * BEHAVIORAL DESIGN (DESIGN_INTELLIGENCE Part III + §5.1):
+     6	 *   - Emotional target: the participant leaves feeling CAPABLE — they see their
+     7	 *     own progress grow in real metric units (competence feedback §3.7), never
+     8	 *     a comparison against anyone else here.
+     9	 *   - Primary path (§5.1 Step 2): a single "Log progress" action. The current
+    10	 *     value is pre-filled (smart default, Hick's Law) so the common case is one
+    11	 *     adjustment + one tap.
+    12	 *   - Progress is MONOTONIC and framed only as growth: the bar never shrinks and
+    13	 *     there is no "behind"/"failed"/"you're losing" state (§3.4, no public
+    14	 *     failure). Reaching the goal is a positive closure celebration (§5.1 Step 6).
+    15	 *   - Reduced motion: the fill animation collapses to an instant set when the OS
+    16	 *     "Reduce Motion" setting is on.
+    17	 *
+    18	 * Tokens only (no raw hex). Line Ionicons only (no emoji). Accessible (>=48dp
+    19	 * targets, labelled controls, live region on the progress value).
+    20	 */
+    21	import React, { useCallback, useEffect, useRef, useState } from 'react';
+    22	import {
+    23	  AccessibilityInfo,
+    24	  Animated,
+    25	  Modal,
+    26	  StyleSheet,
+    27	  Text,
+    28	  TextInput,
+    29	  View,
+    30	} from 'react-native';
+    31	import * as Haptics from 'expo-haptics';
+    32	import { Ionicons } from '@expo/vector-icons';
+    33	import HapticPressable from '../HapticPressable';
+    34	import { useTheme } from '../../theme/useTheme';
+    35	import { spacing, radius, motion } from '../../theme/tokens';
+    36	import type {
+    37	  CommunityChallenge,
+    38	  CommunityChallengeParticipation,
+    39	} from '../../api/communityChallengesApi';
+    40	
+    41	export interface ChallengeProgressSheetProps {
+    42	  visible: boolean;
+    43	  challenge: CommunityChallenge;
+    44	  /** The caller's participation, or null when they have not joined yet. */
+    45	  participation: CommunityChallengeParticipation | null;
+    46	  /**
+    47	   * Persist a new cumulative progress value. Resolves with the server-confirmed
+    48	   * outcome (whether the goal is now complete) so the sheet can stage the
+    49	   * completion peak; REJECTS when the write fails so the sheet surfaces a calm
+    50	   * error and keeps the user's draft (no silent swallow, FIFTY_FAILURES #36).
+    51	   */
+    52	  onSubmit: (progressValue: number) => Promise<{ completed: boolean }>;
+    53	  onClose: () => void;
+    54	  /** Submission in flight — disables the primary action and shows progress copy. */
+    55	  submitting?: boolean;
+    56	  testID?: string;
+    57	}
+    58	
+    59	/** Clamp a fraction into [0, 1]; null target → null (no bar, only a raw value). */
+    60	function fractionFor(value: number, target: number | null): number | null {
+    61	  if (target === null || target <= 0) return null;
+    62	  return Math.min(Math.max(value / target, 0), 1);
+    63	}
+    64	
+    65	export default function ChallengeProgressSheet({
+    66	  visible,
+    67	  challenge,
+    68	  participation,
+    69	  onSubmit,
+    70	  onClose,
+    71	  submitting = false,
+    72	  testID,
+    73	}: ChallengeProgressSheetProps): React.ReactElement {
+    74	  const { semanticColors } = useTheme();
+    75	  const current = participation?.progress_value ?? 0;
+    76	  const target = challenge.target_value;
+    77	  const unit = challenge.unit ?? '';
+    78	  const [draft, setDraft] = useState<string>(String(current));
+    79	  const [reduceMotion, setReduceMotion] = useState(false);
+    80	  // Calm, surfaced error for a rejected submit (no silent swallow).
+    81	  const [submitError, setSubmitError] = useState<string | null>(null);
+    82	  // Completion PEAK: after a server-confirmed goal completion the sheet stays
+    83	  // open in this state (fill at 100%, success haptic, closure copy + Done).
+    84	  const [celebrating, setCelebrating] = useState(false);
+    85	  const fill = useRef(new Animated.Value(fractionFor(current, target) ?? 0)).current;
+    86	
+    87	  // Re-seed the draft to the current value whenever the sheet (re)opens — the
+    88	  // smart default is "your number so far", so logging more is a small edit.
+    89	  // Also clear any prior error / celebration when the sheet (re)opens.
+    90	  useEffect(() => {
+    91	    if (visible) {
+    92	      setDraft(String(current));
+    93	      setSubmitError(null);
+    94	      setCelebrating(false);
+    95	    }
+    96	  }, [visible, current]);
+    97	
+    98	  useEffect(() => {
+    99	    let mounted = true;
+   100	    void AccessibilityInfo.isReduceMotionEnabled().then((on) => {
+   101	      if (mounted) setReduceMotion(on);
+   102	    });
+   103	    const sub = AccessibilityInfo.addEventListener(
+   104	      'reduceMotionChanged',
+   105	      (on) => setReduceMotion(on),
+   106	    );
+   107	    return () => {
+   108	      mounted = false;
+   109	      sub.remove();
+   110	    };
+   111	  }, []);
+   112	
+   113	  const draftValue = Number(draft);
+   114	  const draftValid = draft.trim() !== '' && Number.isFinite(draftValue) && draftValue >= 0;
+   115	  // Monotonic: a log can only hold or raise the visible number.
+   116	  const nextValue = draftValid ? Math.max(draftValue, current) : current;
+   117	  // When the typed number is BELOW the saved total we silently keep the higher
+   118	  // saved value (monotonic). We explain that inline as reassurance, NOT as an
+   119	  // error (no red, no shame) — UX finding 11 / §3.4.
+   120	  const isClampedDown = draftValid && current > 0 && draftValue < current;
+   121	  const nextFraction = fractionFor(nextValue, target);
+   122	  const willComplete =
+   123	    target !== null && target > 0 && nextValue >= target && current < target;
+   124	
+   125	  // Animate the bar toward the DRAFT fraction so the user previews their gain
+   126	  // before committing — anticipation, then the submit confirms it. During the
+   127	  // completion PEAK the bar is driven to a full 100% instead (see below), so we
+   128	  // skip the draft-preview animation while celebrating.
+   129	  useEffect(() => {
+   130	    if (celebrating) return;
+   131	    const toValue = nextFraction ?? 0;
+   132	    if (reduceMotion) {
+   133	      fill.setValue(toValue);
+   134	      return;
+   135	    }
+   136	    const anim = Animated.timing(fill, {
+   137	      toValue,
+   138	      duration: motion.duration.base,
+   139	      useNativeDriver: false,
+   140	    });
+   141	    anim.start();
+   142	    return () => anim.stop();
+   143	  }, [nextFraction, reduceMotion, fill, celebrating]);
+   144	
+   145	  // Completion PEAK (UX finding 4 / §5.1 Step 6): once the server confirms the
+   146	  // goal is reached we keep the sheet open and drive the fill to a full 100%.
+   147	  // Reduced motion collapses the animation to an instant set; either way a
+   148	  // single success haptic fires — calm, deliberate closure, no confetti.
+   149	  useEffect(() => {
+   150	    if (!celebrating) return;
+   151	    if (reduceMotion) {
+   152	      fill.setValue(1);
+   153	    } else {
+   154	      const anim = Animated.timing(fill, {
+   155	        toValue: 1,
+   156	        duration: motion.duration.base,
+   157	        useNativeDriver: false,
+   158	      });
+   159	      anim.start();
+   160	    }
+   161	    void Haptics.notificationAsync(
+   162	      Haptics.NotificationFeedbackType.Success,
+   163	    ).catch(() => {
+   164	      // Web / unsupported hardware — the visual closure still stands.
+   165	    });
+   166	  }, [celebrating, reduceMotion, fill]);
+   167	
+   168	  const handleSubmit = useCallback(async () => {
+   169	    if (!draftValid || submitting) return;
+   170	    setSubmitError(null);
+   171	    try {
+   172	      const result = await onSubmit(nextValue);
+   173	      if (result.completed) {
+   174	        // Stay open for the closure peak; the user dismisses with Done.
+   175	        setCelebrating(true);
+   176	      } else {
+   177	        onClose();
+   178	      }
+   179	    } catch {
+   180	      // Surface a calm, non-shaming error and KEEP the draft so the user can
+   181	      // retry (no silent swallow, no optimistic state left dangling — #30/#36).
+   182	      setSubmitError(
+   183	        'We could not save your progress just now. Please try again.',
+   184	      );
+   185	    }
+   186	  }, [draftValid, submitting, onSubmit, nextValue, onClose]);
+   187	
+   188	  const widthInterpolation = fill.interpolate({
+   189	    inputRange: [0, 1],
+   190	    outputRange: ['0%', '100%'],
+   191	    extrapolate: 'clamp',
+   192	  });
+   193	
+   194	  const percentLabel =
+   195	    nextFraction === null ? null : `${Math.round(nextFraction * 100)}%`;
+   196	  const goalLabel =
+   197	    target === null
+   198	      ? `${nextValue}${unit ? ` ${unit}` : ''} logged`
+   199	      : `${nextValue} of ${target}${unit ? ` ${unit}` : ''}`;
+   200	
+   201	  return (
+   202	    <Modal
+   203	      visible={visible}
+   204	      animationType={reduceMotion ? 'fade' : 'slide'}
+   205	      transparent
+   206	      onRequestClose={onClose}
+   207	      testID={testID}
+   208	    >
+   209	      <View style={[styles.backdrop, { backgroundColor: semanticColors.overlay }]}>
+   210	        <View
+   211	          style={[
+   212	            styles.sheet,
+   213	            { backgroundColor: semanticColors.bgSurface, borderColor: semanticColors.border },
+   214	          ]}
+   215	        >
+   216	          <View style={styles.handleRow}>
+   217	            <View style={[styles.grabber, { backgroundColor: semanticColors.border }]} />
+   218	          </View>
+   219	
+   220	          <View style={styles.headerRow}>
+   221	            <Text
+   222	              style={[styles.title, { color: semanticColors.textPrimary }]}
+   223	              numberOfLines={2}
+   224	            >
+   225	              {challenge.title}
+   226	            </Text>
+   227	            <HapticPressable
+   228	              intent="light"
+   229	              onPress={onClose}
+   230	              accessibilityRole="button"
+   231	              accessibilityLabel="Close progress sheet"
+   232	              testID={`${testID ?? 'challenge-progress'}-close`}
+   233	              style={styles.iconButton}
+   234	            >
+   235	              <Ionicons name="close" size={22} color={semanticColors.textMuted} />
+   236	            </HapticPressable>
+   237	          </View>
+   238	
+   239	          <Text style={[styles.subtitle, { color: semanticColors.textMuted }]}>
+   240	            Your progress
+   241	          </Text>
+   242	
+   243	          {nextFraction !== null ? (
+   244	            <View
+   245	              style={[styles.track, { backgroundColor: semanticColors.bgPrimary }]}
+   246	              accessibilityRole="progressbar"
+   247	              accessibilityLabel={`Your progress: ${percentLabel} toward your goal`}
+   248	            >
+   249	              <Animated.View
+   250	                style={[
+   251	                  styles.fill,
+   252	                  { backgroundColor: semanticColors.accent, width: widthInterpolation },
+   253	                ]}
+   254	                testID={`${testID ?? 'challenge-progress'}-fill`}
+   255	              />
+   256	            </View>
+   257	          ) : null}
+   258	
+   259	          <Text
+   260	            style={[styles.goalLabel, { color: semanticColors.textPrimary }]}
+   261	            accessibilityLiveRegion="polite"
+   262	            testID={`${testID ?? 'challenge-progress'}-value`}
+   263	          >
+   264	            {goalLabel}
+   265	            {percentLabel ? `  ·  ${percentLabel}` : ''}
+   266	          </Text>
+   267	
+   268	          {willComplete && !celebrating ? (
+   269	            <View style={styles.completeRow} testID={`${testID ?? 'challenge-progress'}-complete`}>
+   270	              <Ionicons
+   271	                name="checkmark-circle-outline"
+   272	                size={18}
+   273	                color={semanticColors.accent}
+   274	              />
+   275	              <Text style={[styles.completeText, { color: semanticColors.accent }]}>
+   276	                You will reach your goal — nice work.
+   277	              </Text>
+   278	            </View>
+   279	          ) : null}
+   280	
+   281	          {celebrating ? (
+   282	            <View
+   283	              style={styles.celebrateBlock}
+   284	              testID={`${testID ?? 'challenge-progress'}-celebrate`}
+   285	            >
+   286	              <View style={styles.completeRow}>
+   287	                <Ionicons
+   288	                  name="checkmark-circle"
+   289	                  size={22}
+   290	                  color={semanticColors.accent}
+   291	                />
+   292	                <Text
+   293	                  style={[styles.celebrateTitle, { color: semanticColors.textPrimary }]}
+   294	                  accessibilityLiveRegion="polite"
+   295	                >
+   296	                  Goal reached — progress saved.
+   297	                </Text>
+   298	              </View>
+   299	              <Text style={[styles.celebrateBody, { color: semanticColors.textMuted }]}>
+   300	                Nicely done. Your total is locked in.
+   301	              </Text>
+   302	              <HapticPressable
+   303	                intent="light"
+   304	                onPress={onClose}
+   305	                accessibilityRole="button"
+   306	                accessibilityLabel="Done"
+   307	                testID={`${testID ?? 'challenge-progress'}-done`}
+   308	                style={[styles.cta, { backgroundColor: semanticColors.accent }]}
+   309	              >
+   310	                <Text style={[styles.ctaLabel, { color: semanticColors.textOnAccent }]}>
+   311	                  Done
+   312	                </Text>
+   313	              </HapticPressable>
+   314	            </View>
+   315	          ) : (
+   316	          <>
+   317	          <Text style={[styles.inputLabel, { color: semanticColors.textMuted }]}>
+   318	            {unit ? `Update your total (${unit})` : 'Update your total'}
+   319	          </Text>
+   320	          <TextInput
+   321	            value={draft}
+   322	            onChangeText={setDraft}
+   323	            keyboardType="numeric"
+   324	            inputMode="decimal"
+   325	            editable={!submitting}
+   326	            accessibilityLabel="Your progress value"
+   327	            placeholder={String(current)}
+   328	            placeholderTextColor={semanticColors.textMuted}
+   329	            testID={`${testID ?? 'challenge-progress'}-input`}
+   330	            style={[
+   331	              styles.input,
+   332	              {
+   333	                color: semanticColors.textPrimary,
+   334	                borderColor: semanticColors.border,
+   335	                backgroundColor: semanticColors.bgPrimary,
+   336	              },
+   337	            ]}
+   338	          />
+   339	
+   340	          {/* Monotonic explanation (always present, calm) + inline note when the
+   341	              typed value is below the saved total — UX finding 11. */}
+   342	          <Text
+   343	            style={[styles.helperText, { color: semanticColors.textMuted }]}
+   344	            testID={`${testID ?? 'challenge-progress'}-monotonic-help`}
+   345	          >
+   346	            Enter your total so far. Totals only move up.
+   347	          </Text>
+   348	          {isClampedDown ? (
+   349	            <Text
+   350	              style={[styles.helperText, { color: semanticColors.textMuted }]}
+   351	              accessibilityLiveRegion="polite"
+   352	              testID={`${testID ?? 'challenge-progress'}-monotonic-clamp`}
+   353	            >
+   354	              {`Keeping your saved total at ${current}${unit ? ` ${unit}` : ''}.`}
+   355	            </Text>
+   356	          ) : null}
+   357	
+   358	          {submitError ? (
+   359	            <Text
+   360	              style={[styles.errorText, { color: semanticColors.textMuted }]}
+   361	              accessibilityLiveRegion="polite"
+   362	              testID={`${testID ?? 'challenge-progress'}-error`}
+   363	            >
+   364	              {submitError}
+   365	            </Text>
+   366	          ) : null}
+   367	
+   368	          <HapticPressable
+   369	            intent="success"
+   370	            onPress={handleSubmit}
+   371	            disabled={!draftValid || submitting}
+   372	            accessibilityRole="button"
+   373	            accessibilityLabel="Log progress"
+   374	            testID={`${testID ?? 'challenge-progress'}-submit`}
+   375	            style={[
+   376	              styles.cta,
+   377	              {
+   378	                backgroundColor: draftValid && !submitting
+   379	                  ? semanticColors.accent
+   380	                  : semanticColors.disabledBg,
+   381	              },
+   382	            ]}
+   383	          >
+   384	            <Text
+   385	              style={[
+   386	                styles.ctaLabel,
+   387	                {
+   388	                  color: draftValid && !submitting
+   389	                    ? semanticColors.textOnAccent
+   390	                    : semanticColors.textOnDisabled,
+   391	                },
+   392	              ]}
+   393	            >
+   394	              {submitting
+   395	                ? 'Saving your progress…'
+   396	                : submitError
+   397	                  ? 'Try again'
+   398	                  : 'Log progress'}
+   399	            </Text>
+   400	          </HapticPressable>
+   401	          </>
+   402	          )}
+   403	        </View>
+   404	      </View>
+   405	    </Modal>
+   406	  );
+   407	}
+   408	
+   409	const styles = StyleSheet.create({
+   410	  backdrop: {
+   411	    // Color comes from the semantic `overlay` token (theme-anchored scrim,
+   412	    // dark-mode aware) applied inline — not a raw rgba literal.
+   413	    flex: 1,
+   414	    justifyContent: 'flex-end',
+   415	  },
+   416	  sheet: {
+   417	    borderTopLeftRadius: radius.lg,
+   418	    borderTopRightRadius: radius.lg,
+   419	    borderWidth: StyleSheet.hairlineWidth,
+   420	    paddingHorizontal: spacing.xl,
+   421	    paddingBottom: spacing['2xl'],
+   422	    paddingTop: spacing.sm,
+   423	    gap: spacing.sm,
+   424	  },
+   425	  handleRow: { alignItems: 'center', paddingBottom: spacing.sm },
+   426	  grabber: { width: 36, height: 4, borderRadius: radius.pill },
+   427	  headerRow: {
+   428	    flexDirection: 'row',
+   429	    alignItems: 'flex-start',
+   430	    justifyContent: 'space-between',
+   431	    gap: spacing.md,
+   432	  },
+   433	  title: { flex: 1, fontSize: 20, fontWeight: '600' },
+   434	  iconButton: {
+   435	    minWidth: 48,
+   436	    minHeight: 48,
+   437	    alignItems: 'flex-end',
+   438	    justifyContent: 'center',
+   439	  },
+   440	  subtitle: { fontSize: 13, fontWeight: '600', marginTop: spacing.xs },
+   441	  track: {
+   442	    height: 12,
+   443	    borderRadius: radius.pill,
+   444	    overflow: 'hidden',
+   445	    marginTop: spacing.xs,
+   446	  },
+   447	  fill: { height: '100%', borderRadius: radius.pill },
+   448	  goalLabel: { fontSize: 15, fontWeight: '600', marginTop: spacing.sm },
+   449	  completeRow: {
+   450	    flexDirection: 'row',
+   451	    alignItems: 'center',
+   452	    gap: spacing.xs,
+   453	    marginTop: spacing.xs,
+   454	  },
+   455	  completeText: { fontSize: 14, fontWeight: '600' },
+   456	  celebrateBlock: { gap: spacing.sm, marginTop: spacing.md },
+   457	  celebrateTitle: { flex: 1, fontSize: 17, fontWeight: '600' },
+   458	  celebrateBody: { fontSize: 14 },
+   459	  helperText: { fontSize: 13, marginTop: spacing.xs },
+   460	  errorText: { fontSize: 14, fontWeight: '600', marginTop: spacing.xs },
+   461	  inputLabel: { fontSize: 13, marginTop: spacing.md },
+   462	  input: {
+   463	    minHeight: 48,
+   464	    borderWidth: StyleSheet.hairlineWidth,
+   465	    borderRadius: radius.md,
+   466	    paddingHorizontal: spacing.md,
+   467	    fontSize: 16,
+   468	    marginTop: spacing.xs,
+   469	  },
+   470	  cta: {
+   471	    marginTop: spacing.lg,
+   472	    minHeight: 48,
+   473	    borderRadius: radius.sm,
+   474	    alignItems: 'center',
+   475	    justifyContent: 'center',
+   476	  },
+   477	  ctaLabel: { fontSize: 15, fontWeight: '600' },
+   478	});
+--- ChallengeCommentsEmptyState
+     1	/**
+     2	 * ChallengeCommentsEmptyState — the TRUE-EMPTY state for the challenge comments
+     3	 * surface (v3-1).
+     4	 *
+     5	 * FACE+VOICE CONTRACT (gate 9 / DESIGN_INTELLIGENCE Part III): the original P0
+     6	 * was that this surface rendered LOCAL Roman-voiced copy from `romanVoice.ts`
+     7	 * (`threadEmpty`). The face+voice rule is that Roman's *voice* may only be
+     8	 * emitted alongside a backend-composed `{ text, avatar_crop, surface_key,
+     9	 * voice_variant }` payload — never from a local constant.
+    10	 *
+    11	 * There is NO backend payload source for this participant-facing surface: the
+    12	 * binding backend branch (PR #390 head) exposes no challenge `comments/empty-
+    13	 * state` route, and the Roman voice-policy has no `challenge_comments_empty`
+    14	 * surface key (it covers only the ten P2 notification surfaces and the five
+    15	 * coach-community surfaces). Per the brief ("missing payload ⇒ honest state,
+    16	 * never local fallback") the honest resolution is to render a NEUTRAL,
+    17	 * non-Roman-voiced encouragement line here: plain UI copy, no RomanAvatar, no
+    18	 * Roman voice. This satisfies the P0 (no local Roman copy) without inventing a
+    19	 * backend contract.
+    20	 *
+    21	 * The CTA is a REAL action (no dead no-op, UX finding 3 / F8): pressing it
+    22	 * focuses the composer below so the member can leave the first note immediately.
+    23	 *
+    24	 * Tokens only (no raw hex). >=48dp touch target.
+    25	 */
+    26	import React from 'react';
+    27	import { View, Text, StyleSheet } from 'react-native';
+    28	import { Ionicons } from '@expo/vector-icons';
+    29	import HapticPressable from '../HapticPressable';
+    30	import { useTheme } from '../../theme/useTheme';
+    31	import { spacing, radius } from '../../theme/tokens';
+    32	
+    33	export interface ChallengeCommentsEmptyStateProps {
+    34	  /**
+    35	   * Neutral, non-Roman UI copy for the true-empty surface. Supplied by the
+    36	   * caller as a plain string (a UI label, not Roman voice) so the component
+    37	   * never reaches for a local Roman constant.
+    38	   */
+    39	  message: string;
+    40	  /** Primary action label (a UI affordance label, not Roman copy). */
+    41	  actionLabel: string;
+    42	  /** REAL action — focuses/scrolls the composer into view (no dead no-op). */
+    43	  onAction: () => void;
+    44	  testID?: string;
+    45	}
+    46	
+    47	export default function ChallengeCommentsEmptyState({
+    48	  message,
+    49	  actionLabel,
+    50	  onAction,
+    51	  testID,
+    52	}: ChallengeCommentsEmptyStateProps): React.ReactElement {
+    53	  const { semanticColors } = useTheme();
+    54	
+    55	  return (
+    56	    <View style={styles.container} testID={testID}>
+    57	      <Ionicons
+    58	        name="chatbubble-ellipses-outline"
+    59	        size={28}
+    60	        color={semanticColors.textMuted}
+    61	      />
+    62	      <Text
+    63	        style={[styles.body, { color: semanticColors.textMuted }]}
+    64	        testID="community-challenge-comments-empty-text"
+    65	      >
+    66	        {message}
+    67	      </Text>
+    68	      <HapticPressable
+    69	        intent="medium"
+    70	        onPress={onAction}
+    71	        accessibilityRole="button"
+    72	        accessibilityLabel={actionLabel}
+    73	        testID={`${testID ?? 'community-challenge-comments-empty'}-action`}
+    74	        style={[styles.cta, { backgroundColor: semanticColors.accent }]}
+    75	      >
+    76	        <Text style={[styles.ctaLabel, { color: semanticColors.textOnAccent }]}>
+    77	          {actionLabel}
+    78	        </Text>
+    79	      </HapticPressable>
+    80	    </View>
+    81	  );
+    82	}
+    83	
+    84	const styles = StyleSheet.create({
+    85	  container: {
+    86	    alignItems: 'center',
+    87	    paddingVertical: spacing['3xl'],
+    88	    paddingHorizontal: spacing.xl,
+    89	    gap: spacing.sm,
+    90	  },
+    91	  body: {
+    92	    fontSize: 14,
+    93	    lineHeight: 20,
+    94	    textAlign: 'center',
+    95	    marginTop: spacing.md,
+    96	  },
+    97	  cta: {
+    98	    marginTop: spacing.lg,
+    99	    minHeight: 48,
+   100	    paddingHorizontal: spacing.xl,
+   101	    justifyContent: 'center',
+   102	    borderRadius: radius.md,
+   103	  },
+   104	  ctaLabel: {
+   105	    fontSize: 15,
+   106	    fontWeight: '600',
+   107	    textAlign: 'center',
+   108	  },
+   109	});

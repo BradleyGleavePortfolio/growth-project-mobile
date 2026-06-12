@@ -1,0 +1,4 @@
+=== schema diff ===
+=== added-line grep battery ===
+1382:+      }) as unknown as typeof AccessibilityInfo.addEventListener);
+=== swallowed catch broad ===

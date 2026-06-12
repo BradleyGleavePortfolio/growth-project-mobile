@@ -1,0 +1,14 @@
+M	.env.example
+A	src/__tests__/coachWorkoutBuilderAutosave.test.tsx
+A	src/__tests__/coachWorkoutBuilderRowIdAdoption.test.tsx
+A	src/api/__tests__/workoutAutosaveApi.test.ts
+A	src/api/workoutAutosaveApi.ts
+A	src/components/workout/AutosaveStatusPill.tsx
+M	src/config/featureFlags.ts
+A	src/hooks/__tests__/useAutosave.test.tsx
+A	src/hooks/useAutosave.ts
+M	src/screens/coach/CoachWorkoutBuilderScreen.tsx
+A	src/screens/coach/__tests__/workoutBuilderAutosaveDiff.test.ts
+A	src/screens/coach/workoutBuilderAutosaveDiff.ts
+A	src/storage/autosaveMirror.ts
+A	src/utils/clientId.ts

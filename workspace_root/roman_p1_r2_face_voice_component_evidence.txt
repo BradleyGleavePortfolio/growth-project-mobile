@@ -1,0 +1,248 @@
+RomanGreeting
+     1	/**
+     2	 * RomanGreeting — the FACE+VOICE empty state for an empty Roman chat.
+     3	 *
+     4	 * Operator rule (P0 if violated): Roman's face renders with every Roman-voiced
+     5	 * string. Here the bundled RomanAvatar (neutral crop) sits above the §2.2
+     6	 * returning-user greeting so the voice is never disembodied. RomanAvatar is the
+     7	 * existing Community component (reused, not forked — brief lane rule); it paints
+     8	 * the bundled brand face offline on first frame and falls back to the accessible
+     9	 * monogram only on image-load failure.
+    10	 *
+    11	 * Emotional target (DESIGN_INTELLIGENCE §5.1 step 1): the user should leave this
+    12	 * screen feeling WELCOMED and in capable hands — not "informed".
+    13	 */
+    14	import React from 'react';
+    15	import { StyleSheet, Text, View } from 'react-native';
+    16	import RomanAvatar from '../community/RomanAvatar';
+    17	import {
+    18	  romanGreeting,
+    19	  ROMAN_GREETING_SUBTITLE,
+    20	  type RomanGreetingSurface,
+    21	} from './romanVoice';
+    22	import { colors, spacing, typography } from '../../theme/tokens';
+    23	
+    24	export interface RomanGreetingProps {
+    25	  /** Host surface — selects the client vs coach greeting register (U1). */
+    26	  surface: RomanGreetingSurface;
+    27	  /** True when Roman has no prior history, so the §2.1 intro is shown (U1). */
+    28	  isFirstOpen: boolean;
+    29	  firstName?: string | null;
+    30	  testID?: string;
+    31	}
+    32	
+    33	export default function RomanGreeting({
+    34	  surface,
+    35	  isFirstOpen,
+    36	  firstName,
+    37	  testID,
+    38	}: RomanGreetingProps): React.ReactElement {
+    39	  return (
+    40	    <View style={styles.container} testID={testID}>
+    41	      <RomanAvatar crop="neutral" size={72} testID="roman-greeting-avatar" />
+    42	      <Text
+    43	        style={styles.greeting}
+    44	        accessibilityRole="text"
+    45	        // The greeting text already names Roman; the avatar above carries the
+    46	        // face. State is conveyed in the visible copy, no extra a11y state here.
+    47	      >
+    48	        {romanGreeting({ surface, isFirstOpen, firstName })}
+    49	      </Text>
+    50	      <Text style={styles.subtitle} accessibilityRole="text">
+    51	        {ROMAN_GREETING_SUBTITLE}
+    52	      </Text>
+    53	    </View>
+    54	  );
+    55	}
+    56	
+    57	const styles = StyleSheet.create({
+    58	  container: {
+    59	    alignItems: 'center',
+    60	    justifyContent: 'center',
+    61	    paddingHorizontal: spacing.xl,
+    62	    paddingVertical: spacing['3xl'],
+    63	    gap: spacing.md,
+    64	  },
+    65	  greeting: {
+    66	    ...typography.h3,
+    67	    color: colors.ink,
+    68	    textAlign: 'center',
+    69	  },
+    70	  subtitle: {
+    71	    ...typography.body,
+    72	    color: colors.charcoal,
+    73	    textAlign: 'center',
+    74	  },
+    75	});
+RomanState
+     1	/**
+     2	 * RomanState — typed full-surface state for the chat screen (loading /
+     3	 * unavailable / offline / error). NOT for per-message send failures (those
+     4	 * stay inline with a retry affordance in the screen).
+     5	 *
+     6	 * FACE+VOICE: every Roman-voiced state renders Roman's face (reused
+     7	 * RomanAvatar) beside the copy. All copy comes from romanVoice.ts, which is
+     8	 * sourced verbatim from the identity spec §1.6/§2.10 (cited there).
+     9	 *
+    10	 * The "unavailable" state (backend feature gate off → 404 on every /roman
+    11	 * route, roman-feature.guard.ts) is calm and offers NO retry — there is nothing
+    12	 * for the user to retry until ops enables the feature, so an error-toast loop
+    13	 * (brief §3) is structurally impossible here.
+    14	 */
+    15	import React from 'react';
+    16	import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+    17	import RomanAvatar from '../community/RomanAvatar';
+    18	import {
+    19	  ROMAN_ERROR_TRANSIENT,
+    20	  ROMAN_OFFLINE_BODY,
+    21	  ROMAN_OFFLINE_TITLE,
+    22	  ROMAN_UNAVAILABLE_BODY,
+    23	  ROMAN_UNAVAILABLE_TITLE,
+    24	} from './romanVoice';
+    25	import { colors, radius, spacing, typography } from '../../theme/tokens';
+    26	
+    27	export type RomanStateKind = 'unavailable' | 'offline' | 'error';
+    28	
+    29	export interface RomanStateProps {
+    30	  kind: RomanStateKind;
+    31	  /** When provided, renders a retry control (omitted for `unavailable`). */
+    32	  onRetry?: () => void;
+    33	  testID?: string;
+    34	}
+    35	
+    36	function copyFor(kind: RomanStateKind): { title: string; body: string } {
+    37	  switch (kind) {
+    38	    case 'unavailable':
+    39	      return { title: ROMAN_UNAVAILABLE_TITLE, body: ROMAN_UNAVAILABLE_BODY };
+    40	    case 'offline':
+    41	      return { title: ROMAN_OFFLINE_TITLE, body: ROMAN_OFFLINE_BODY };
+    42	    case 'error':
+    43	    default:
+    44	      return { title: ROMAN_ERROR_TRANSIENT, body: '' };
+    45	  }
+    46	}
+    47	
+    48	export default function RomanState({
+    49	  kind,
+    50	  onRetry,
+    51	  testID,
+    52	}: RomanStateProps): React.ReactElement {
+    53	  const { title, body } = copyFor(kind);
+    54	  // `unavailable` never offers retry — there is nothing the user can do until
+    55	  // the backend gate flips, so we suppress the affordance to avoid a loop.
+    56	  const showRetry = kind !== 'unavailable' && typeof onRetry === 'function';
+    57	
+    58	  return (
+    59	    <View style={styles.container} testID={testID}>
+    60	      <RomanAvatar crop="neutral" size={64} testID="roman-state-avatar" />
+    61	      <Text style={styles.title} accessibilityRole="header">
+    62	        {title}
+    63	      </Text>
+    64	      {body !== '' ? (
+    65	        <Text style={styles.body} accessibilityRole="text">
+    66	          {body}
+    67	        </Text>
+    68	      ) : null}
+    69	      {showRetry ? (
+    70	        <TouchableOpacity
+    71	          style={styles.retryButton}
+    72	          onPress={onRetry}
+    73	          accessibilityRole="button"
+    74	          accessibilityLabel="Try again"
+    75	          testID="roman-state-retry"
+    76	        >
+    77	          <Text style={styles.retryLabel}>Try again</Text>
+    78	        </TouchableOpacity>
+    79	      ) : null}
+    80	    </View>
+RomanTypingIndicator
+     1	/**
+     2	 * RomanTypingIndicator — "Roman is preparing a reply" affordance shown while a
+     3	 * turn is in flight.
+     4	 *
+     5	 * FACE+VOICE: Roman's face renders beside the indicator so the "is typing"
+     6	 * state is attributed to Roman, not a faceless spinner.
+     7	 *
+     8	 * A11y carries STATE (brief §7): the row exposes `accessibilityLabel="Roman is
+     9	 * typing"` so a screen reader announces the pending state, not just decoration.
+    10	 *
+    11	 * Reduced-motion parity (brief §7): the three pulsing dots animate via RN
+    12	 * `Animated` only when the OS "Reduce Motion" setting is OFF. When it is ON the
+    13	 * dots render static (no looping animation) but the row, copy, and a11y label
+    14	 * are identical — the information is conveyed without motion.
+    15	 */
+    16	import React, { useEffect, useRef, useState } from 'react';
+    17	import { AccessibilityInfo, Animated, StyleSheet, Text, View } from 'react-native';
+    18	import RomanAvatar from '../community/RomanAvatar';
+    19	import { ROMAN_TYPING_A11Y_LABEL, ROMAN_TYPING_LABEL } from './romanVoice';
+    20	import { colors, radius, spacing, typography } from '../../theme/tokens';
+    21	
+    22	export interface RomanTypingIndicatorProps {
+    23	  testID?: string;
+    24	}
+    25	
+    26	const DOT_COUNT = 3;
+    27	
+    28	export default function RomanTypingIndicator({
+    29	  testID,
+    30	}: RomanTypingIndicatorProps): React.ReactElement {
+    31	  const [reduceMotion, setReduceMotion] = useState(false);
+    32	  const dots = useRef(
+    33	    Array.from({ length: DOT_COUNT }, () => new Animated.Value(0.4)),
+    34	  ).current;
+    35	
+    36	  useEffect(() => {
+    37	    let mounted = true;
+    38	    AccessibilityInfo.isReduceMotionEnabled()
+    39	      .then((enabled) => {
+    40	        if (mounted) setReduceMotion(enabled);
+    41	      })
+    42	      .catch(() => {
+    43	        // Default to motion-on when the query fails; the animation is purely
+    44	        // decorative so a failed probe never blocks the indicator.
+    45	      });
+    46	    return () => {
+    47	      mounted = false;
+    48	    };
+    49	  }, []);
+    50	
+    51	  useEffect(() => {
+    52	    if (reduceMotion) return undefined;
+    53	    const animations = dots.map((dot, i) =>
+    54	      Animated.loop(
+    55	        Animated.sequence([
+    56	          Animated.delay(i * 160),
+    57	          Animated.timing(dot, { toValue: 1, duration: 400, useNativeDriver: true }),
+    58	          Animated.timing(dot, { toValue: 0.4, duration: 400, useNativeDriver: true }),
+    59	        ]),
+    60	      ),
+    61	    );
+    62	    animations.forEach((a) => a.start());
+    63	    return () => animations.forEach((a) => a.stop());
+    64	  }, [reduceMotion, dots]);
+    65	
+    66	  return (
+    67	    <View
+    68	      style={styles.row}
+    69	      testID={testID}
+    70	      accessibilityRole="text"
+    71	      accessibilityLabel={ROMAN_TYPING_A11Y_LABEL}
+    72	      accessibilityLiveRegion="polite"
+    73	    >
+    74	      <RomanAvatar crop="neutral" size={32} testID="roman-typing-avatar" />
+    75	      <View style={styles.bubble}>
+    76	        <Text style={styles.label}>{ROMAN_TYPING_LABEL}</Text>
+    77	        <View style={styles.dots} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+    78	          {dots.map((dot, i) => (
+    79	            <Animated.View
+    80	              // eslint-disable-next-line react/no-array-index-key
+    81	              key={i}
+    82	              style={[styles.dot, { opacity: dot }]}
+    83	            />
+    84	          ))}
+    85	        </View>
+    86	      </View>
+    87	    </View>
+    88	  );
+    89	}
+    90	

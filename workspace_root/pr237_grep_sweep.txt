@@ -1,0 +1,150 @@
+## swallowed_catch_or_empty_catch: 10
+src/api/__tests__/workoutAutosaveApi.test.ts:278:     } catch (err) {
+src/api/workoutAutosaveApi.ts:451:     } catch (err) {
+src/api/workoutAutosaveApi.ts:480:     } catch (err) {
+src/hooks/useAutosave.ts:498:       } catch (err) {
+src/hooks/useAutosave.ts:620:       } catch (err) {
+src/storage/autosaveMirror.ts:101:   } catch (err) {
+src/storage/autosaveMirror.ts:112:   } catch (err) {
+src/storage/autosaveMirror.ts:135:   } catch (err) {
+src/storage/autosaveMirror.ts:161:   } catch (err) {
+src/storage/autosaveMirror.ts:170:   } catch (err) {
+## eslint_disable: 8
+src/__tests__/coachWorkoutBuilderAutosave.test.tsx:181:   // eslint-disable-next-line @typescript-eslint/no-var-requires
+src/__tests__/coachWorkoutBuilderRowIdAdoption.test.tsx:226:   // eslint-disable-next-line @typescript-eslint/no-var-requires
+src/api/__tests__/workoutAutosaveApi.test.ts:24: // eslint-disable-next-line @typescript-eslint/no-var-requires
+src/hooks/useAutosave.ts:599:     // eslint-disable-next-line react-hooks/exhaustive-deps
+src/hooks/useAutosave.ts:668:     // eslint-disable-next-line react-hooks/exhaustive-deps
+src/hooks/useAutosave.ts:722:     // eslint-disable-next-line react-hooks/exhaustive-deps
+src/hooks/useAutosave.ts:746:     // eslint-disable-next-line react-hooks/exhaustive-deps
+src/hooks/useAutosave.ts:781:     // eslint-disable-next-line react-hooks/exhaustive-deps
+## ts_ignore_expect: 0
+## console: 0
+## todo_fixme_hack: 1
+src/hooks/useAutosave.ts:52:  *   - No `as unknown as`, no `as any`, no empty catch, no TODO/placeholder.
+## only_skip: 0
+## focused_fit_fdescribe: 0
+## dangerously_set_inner_html: 0
+## eval_or_function_ctor: 0
+## hardcoded_secret: 4
+src/__tests__/coachWorkoutBuilderAutosave.test.tsx:189:     lock_token: 'feedfacefeedface',
+src/__tests__/coachWorkoutBuilderRowIdAdoption.test.tsx:246:     lock_token: 'feedfacefeedface',
+src/api/__tests__/workoutAutosaveApi.test.ts:43: const VALID_TOKEN = 'a1b2c3d4e5f60718';
+src/screens/coach/CoachWorkoutBuilderScreen.tsx:85: const AUTOSAVE_BOOTSTRAP_LOCK_TOKEN = '0000000000000000';
+## any_type: 24
+src/__tests__/coachWorkoutBuilderAutosave.test.tsx:196:   // Clear any timers the screen's autosave hook left armed before restoring the
+src/__tests__/coachWorkoutBuilderAutosave.test.tsx:234:     // The pill is hidden in the 'idle' state (zero residue before any edit;
+src/api/__tests__/workoutAutosaveApi.test.ts:229:       expect.any(Object),
+src/api/__tests__/workoutAutosaveApi.test.ts:376:       expect.any(Object),
+src/api/workoutAutosaveApi.ts:52:  *     no loose strings, no `as unknown as`, no `as any`.
+src/api/workoutAutosaveApi.ts:243:  *                      error or advance any baseline.
+src/api/workoutAutosaveApi.ts:435:    * Throws WorkoutAutosaveApiError on any failure; a 409 carries the parsed
+src/hooks/__tests__/useAutosave.test.tsx:138: // inert stub before any test runs, preventing the lazy expo require entirely.
+src/hooks/__tests__/useAutosave.test.tsx:162: /** A trivial diff: any change to `n` emits one plan_meta-shaped op. */
+src/hooks/__tests__/useAutosave.test.tsx:189:   // Unmount any still-mounted hook WHILE the fake clock is active. RTL's own
+src/hooks/__tests__/useAutosave.test.tsx:196:     // Let the unmount flush + any armed debounce/backoff/saved-settle timers
+src/hooks/useAutosave.ts:52:  *   - No `as unknown as`, no `as any`, no empty catch, no TODO/placeholder.
+src/hooks/useAutosave.ts:297:   // True once ANY batch has confirmed (200) this session. Distinguishes the
+src/hooks/useAutosave.ts:340:   // in lockstep so `computeHasPending` (which reads the ref) and any re-render
+src/hooks/useAutosave.ts:466:         // A real save landed: any later 409 is now a genuine external-edit
+src/hooks/useAutosave.ts:518:           //   - `autosave_lock_stale` BEFORE any successful save is the
+src/hooks/useAutosave.ts:523:           //   - `autosave_conflict_retry`, OR any 409 AFTER a successful save,
+src/hooks/useAutosave.ts:673:    * Build the pending batch from the current diff (if any), write it to the
+src/hooks/useAutosave.ts:803:         // Reconnected: drop any pending backoff, reset attempts, replay now.
+src/hooks/useAutosave.ts:814:   // ─── Replay any mirrored batch on mount / reconnect ─────────────────────────
+src/screens/coach/CoachWorkoutBuilderScreen.tsx:391:       // A full replace fully reconciles to server truth, so any outstanding
+src/screens/coach/workoutBuilderAutosaveDiff.ts:92: /** True when two saved rows differ in any field the backend persists. */
+src/storage/autosaveMirror.ts:78:  * Persist `entry` to the mirror, OVERWRITING any prior pending batch for the
+src/storage/autosaveMirror.ts:147:  * entry we actually confirmed, leaving any superseding batch intact to send.
+## non_null_assertion: 0
+## set_timeout_interval: 4
+src/components/workout/AutosaveStatusPill.tsx:113:     const id = setInterval(() => setNow(Date.now()), 1000);
+src/hooks/useAutosave.ts:370:     savedSettleRef.current = setTimeout(() => {
+src/hooks/useAutosave.ts:664:     backoffTimerRef.current = setTimeout(() => {
+src/hooks/useAutosave.ts:772:     debounceRef.current = setTimeout(() => {
+## async_void_float: 7
+src/hooks/useAutosave.ts:644:     void sendBatch(next);
+src/hooks/useAutosave.ts:773:       void flush();
+src/hooks/useAutosave.ts:789:         void flush();
+src/hooks/useAutosave.ts:868:         void flush().finally(() => {
+src/screens/coach/CoachWorkoutBuilderScreen.tsx:274:     void refetchPlan();
+src/screens/coach/CoachWorkoutBuilderScreen.tsx:294:     void refetchPlan();
+src/screens/coach/CoachWorkoutBuilderScreen.tsx:320:       void autosaveFlush();
+## alert: 0
+## schema_migration: 76
+src/api/__tests__/workoutAutosaveApi.test.ts:32:   AutosaveBatchSchema,
+src/api/__tests__/workoutAutosaveApi.test.ts:33:   AutosaveConflictSchema,
+src/api/__tests__/workoutAutosaveApi.test.ts:34:   AutosaveOpSchema,
+src/api/__tests__/workoutAutosaveApi.test.ts:35:   AutosaveResponseSchema,
+src/api/__tests__/workoutAutosaveApi.test.ts:36:   UpsertExerciseRowSchema,
+src/api/__tests__/workoutAutosaveApi.test.ts:93: describe('strict request schemas reject drift', () => {
+src/api/__tests__/workoutAutosaveApi.test.ts:94:   it('UpsertExerciseRowSchema rejects an unknown extra field', () => {
+src/api/__tests__/workoutAutosaveApi.test.ts:95:     const res = UpsertExerciseRowSchema.safeParse({
+src/api/__tests__/workoutAutosaveApi.test.ts:105:   it('UpsertExerciseRowSchema rejects a non-integer sets value', () => {
+src/api/__tests__/workoutAutosaveApi.test.ts:106:     const res = UpsertExerciseRowSchema.safeParse({
+src/api/__tests__/workoutAutosaveApi.test.ts:115:   it('AutosaveOpSchema requires a uuid row_id for remove_exercise', () => {
+src/api/__tests__/workoutAutosaveApi.test.ts:117:       AutosaveOpSchema.safeParse({ op: 'remove_exercise', row_id: 'not-a-uuid' })
+src/api/__tests__/workoutAutosaveApi.test.ts:121:       AutosaveOpSchema.safeParse({ op: 'remove_exercise', row_id: VALID_UUID })
+src/api/__tests__/workoutAutosaveApi.test.ts:126:   it('AutosaveBatchSchema rejects a non-hex lock_token', () => {
+src/api/__tests__/workoutAutosaveApi.test.ts:128:       AutosaveBatchSchema.safeParse(validBatch({ lock_token: 'ZZZZ' })).success,
+src/api/__tests__/workoutAutosaveApi.test.ts:132:   it('AutosaveBatchSchema rejects an empty ops array', () => {
+src/api/__tests__/workoutAutosaveApi.test.ts:133:     expect(AutosaveBatchSchema.safeParse(validBatch({ ops: [] })).success).toBe(
+src/api/__tests__/workoutAutosaveApi.test.ts:138:   it('AutosaveBatchSchema rejects an extra top-level key', () => {
+src/api/__tests__/workoutAutosaveApi.test.ts:140:     expect(AutosaveBatchSchema.safeParse(bad).success).toBe(false);
+src/api/__tests__/workoutAutosaveApi.test.ts:144: describe('strict response schemas reject drift', () => {
+src/api/__tests__/workoutAutosaveApi.test.ts:145:   it('AutosaveResponseSchema rejects a non-ISO saved_at', () => {
+src/api/__tests__/workoutAutosaveApi.test.ts:147:       AutosaveResponseSchema.safeParse({
+src/api/__tests__/workoutAutosaveApi.test.ts:155:   it('AutosaveResponseSchema accepts a well-formed body', () => {
+src/api/__tests__/workoutAutosaveApi.test.ts:157:       AutosaveResponseSchema.safeParse({
+src/api/__tests__/workoutAutosaveApi.test.ts:165:   it('AutosaveConflictSchema requires a known error literal', () => {
+src/api/__tests__/workoutAutosaveApi.test.ts:167:       AutosaveConflictSchema.safeParse({
+src/api/workoutAutosaveApi.ts:31:  *     400 -> invalid body / ops (strict schema reject server-side)
+src/api/workoutAutosaveApi.ts:47:  *   - Every schema is `.strict()`; uuids are `z.string().uuid()`, the saved_at
+src/api/workoutAutosaveApi.ts:78: // ─── Exercise-row payload (mirror UpsertExerciseRowSchema) ───────────────────
+src/api/workoutAutosaveApi.ts:81:  * Mirror of the backend UpsertExerciseRowSchema, field-for-field. Kept strict
+src/api/workoutAutosaveApi.ts:85: export const UpsertExerciseRowSchema = z
+src/api/workoutAutosaveApi.ts:97: export type AutosaveUpsertExerciseRow = z.infer<typeof UpsertExerciseRowSchema>;
+src/api/workoutAutosaveApi.ts:102: export const UpsertExerciseOpSchema = z
+src/api/workoutAutosaveApi.ts:107:     payload: UpsertExerciseRowSchema,
+src/api/workoutAutosaveApi.ts:112: export const RemoveExerciseOpSchema = z
+src/api/workoutAutosaveApi.ts:120: export const ReorderOpSchema = z
+src/api/workoutAutosaveApi.ts:128: export const PlanMetaOpSchema = z
+src/api/workoutAutosaveApi.ts:147: export const AutosaveOpSchema = z.discriminatedUnion('op', [
+src/api/workoutAutosaveApi.ts:148:   UpsertExerciseOpSchema,
+src/api/workoutAutosaveApi.ts:149:   RemoveExerciseOpSchema,
+src/api/workoutAutosaveApi.ts:150:   ReorderOpSchema,
+src/api/workoutAutosaveApi.ts:151:   PlanMetaOpSchema,
+src/api/workoutAutosaveApi.ts:153: export type AutosaveOp = z.infer<typeof AutosaveOpSchema>;
+src/api/workoutAutosaveApi.ts:156: export const AutosaveCauseSchema = z.enum(['manual_edit', 'autosave', 'ai_apply']);
+src/api/workoutAutosaveApi.ts:157: export type AutosaveCause = z.infer<typeof AutosaveCauseSchema>;
+src/api/workoutAutosaveApi.ts:159: // ─── Request body (mirror AutosaveBatchSchema) ───────────────────────────────
+src/api/workoutAutosaveApi.ts:163:  * OUTGOING body against the same strict schema the backend will, so a malformed
+src/api/workoutAutosaveApi.ts:168: export const AutosaveBatchSchema = z
+src/api/workoutAutosaveApi.ts:174:     ops: z.array(AutosaveOpSchema).min(AUTOSAVE_OPS_MIN).max(AUTOSAVE_OPS_MAX),
+src/api/workoutAutosaveApi.ts:175:     cause: AutosaveCauseSchema,
+src/api/workoutAutosaveApi.ts:178: export type AutosaveBatch = z.infer<typeof AutosaveBatchSchema>;
+src/api/workoutAutosaveApi.ts:181: export const UndoRequestSchema = z
+src/api/workoutAutosaveApi.ts:186: export type UndoRequest = z.infer<typeof UndoRequestSchema>;
+src/api/workoutAutosaveApi.ts:188: // ─── Response schemas (mirror AutosaveResponseDto / UndoResponseDto) ─────────
+src/api/workoutAutosaveApi.ts:191: export const AutosaveResponseSchema = z
+src/api/workoutAutosaveApi.ts:198: export type AutosaveResponse = z.infer<typeof AutosaveResponseSchema>;
+src/api/workoutAutosaveApi.ts:201: export const UndoResponseSchema = z
+src/api/workoutAutosaveApi.ts:207: export type UndoResponse = z.infer<typeof UndoResponseSchema>;
+src/api/workoutAutosaveApi.ts:214: export const AutosaveConflictSchema = z
+src/api/workoutAutosaveApi.ts:221: export type AutosaveConflict = z.infer<typeof AutosaveConflictSchema>;
+src/api/workoutAutosaveApi.ts:293:  * the body against AutosaveConflictSchema; a malformed conflict body still
+src/api/workoutAutosaveApi.ts:323:       const parsed = AutosaveConflictSchema.safeParse(err.response?.data);
+src/api/workoutAutosaveApi.ts:349: /** Parse a 200 response against `schema` or throw a `contract` error. */
+src/api/workoutAutosaveApi.ts:350: function parseResponse<T>(schema: z.ZodType<T>, data: unknown): T {
+src/api/workoutAutosaveApi.ts:351:   const result = schema.safeParse(data);
+src/api/workoutAutosaveApi.ts:365:  * Guard the OUTGOING batch against the strict schema before it leaves the
+src/api/workoutAutosaveApi.ts:370:   const result = AutosaveBatchSchema.safeParse(body);
+src/api/workoutAutosaveApi.ts:454:     return parseResponse(AutosaveResponseSchema, data);
+src/api/workoutAutosaveApi.ts:462:     const validated = UndoRequestSchema.safeParse(body);
+src/api/workoutAutosaveApi.ts:483:     return parseResponse(UndoResponseSchema, data);
+src/screens/coach/__tests__/workoutBuilderAutosaveDiff.test.ts:9:  * Every produced op is ALSO round-tripped through the strict AutosaveOpSchema
+src/screens/coach/__tests__/workoutBuilderAutosaveDiff.test.ts:17: import { AutosaveOpSchema, type AutosaveOp } from '../../../api/workoutAutosaveApi';
+src/screens/coach/__tests__/workoutBuilderAutosaveDiff.test.ts:46: /** Assert every op validates against the strict backend-mirror schema. */
+src/screens/coach/__tests__/workoutBuilderAutosaveDiff.test.ts:49:     expect(AutosaveOpSchema.safeParse(op).success).toBe(true);
+src/screens/coach/workoutBuilderAutosaveDiff.ts:74: /** Build the strict-schema row payload from a working-copy row. */
+src/storage/autosaveMirror.ts:39: /** Schema version — bump to discard incompatible on-disk payloads on read. */

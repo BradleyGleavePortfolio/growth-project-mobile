@@ -1,0 +1,31 @@
+    35	
+    36	const mockUseIsFocused = jest.fn<boolean, []>();
+    37	const mockNavigate = jest.fn();
+    38	
+    39	// @sentry/react-native starts a module-load setInterval (its AsyncExpiringMap
+    40	// cleanup loop, pulled in transitively via ErrorBoundary -> services/sentry).
+    41	// That interval is the open handle behind the "Jest did not exit" warning for
+    42	// this suite -- it is unrelated to anything under test here. Stub the module to
+    43	// a set of inert no-ops so no background timer is ever scheduled.
+    44	jest.mock('@sentry/react-native', () => ({
+    45	  init: jest.fn(),
+    46	  wrap: <T,>(c: T): T => c,
+    47	  withScope: (fn: (scope: { setExtra: jest.Mock }) => void) =>
+    48	    fn({ setExtra: jest.fn() }),
+    49	  captureException: jest.fn(),
+    50	  setUser: jest.fn(),
+    51	}));
+    52	
+    53	jest.mock('@react-navigation/native', () => ({
+    54	  useIsFocused: () => mockUseIsFocused(),
+    55	  useNavigation: () => ({ navigate: mockNavigate, goBack: jest.fn() }),
+    56	}));
+    57	
+    58	// Spy that captures the options arg `useAIBudget(...)` is called with.
+    59	// Returns a stable "loading, no data" shape so the component renders
+    60	// nothing (return path at the `if (!budget || surface === 'hidden')`
+    61	// branch) and we avoid having to mock the sub-surfaces.
+    62	const mockUseAIBudget = jest.fn<{ data: undefined }, [unknown]>(() => ({
+    63	  data: undefined,
+    64	}));
+    65	

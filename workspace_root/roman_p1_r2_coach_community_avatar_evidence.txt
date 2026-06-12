@@ -1,0 +1,161 @@
+coach community screens Roman empty state refs
+src/screens/community/CoachCommunityCohortDetailScreen.tsx:54:  useCoachEmptyStatePayload,
+src/screens/community/CoachCommunityCohortDetailScreen.tsx:73:  const emptyState = useCoachEmptyStatePayload(
+src/screens/community/CoachCommunityCohortsScreen.tsx:41:  useCoachEmptyStatePayload,
+src/screens/community/CoachCommunityCohortsScreen.tsx:51:  const emptyState = useCoachEmptyStatePayload('coach_community_cohorts_empty');
+src/screens/community/CoachCommunityHomeScreen.tsx:13: * resolved via useCoachEmptyStatePayload. Colours come from semanticColors;
+src/screens/community/CoachCommunityHomeScreen.tsx:32:  useCoachEmptyStatePayload,
+src/screens/community/CoachCommunityHomeScreen.tsx:40:  const emptyState = useCoachEmptyStatePayload('coach_community_home_empty');
+src/screens/community/CoachCommunityInboxScreen.tsx:51:  useCoachEmptyStatePayload,
+src/screens/community/CoachCommunityInboxScreen.tsx:117:  const emptyState = useCoachEmptyStatePayload('coach_community_inbox_empty');
+src/screens/community/CoachCommunityModerationScreen.tsx:54:  useCoachEmptyStatePayload,
+src/screens/community/CoachCommunityModerationScreen.tsx:64:  const emptyState = useCoachEmptyStatePayload(
+src/screens/community/CommunityComposerScreen.tsx:34:import { romanCopy } from '../../components/community/romanVoice';
+src/screens/community/CommunityComposerScreen.tsx:81:          setConfirmation(romanCopy('postPublished', { firstName }));
+src/screens/community/__tests__/coachCommunityEmptyStateContract.integration.test.tsx:6: * `useCoachCommunity` module (including `useCoachEmptyStatePayload`) and injects
+src/screens/community/__tests__/coachCommunityEmptyStateContract.integration.test.tsx:9: * end-to-end screen + REAL hook + `coachCommunityApi.getCoachEmptyStates()`
+src/screens/community/__tests__/coachCommunityEmptyStateContract.integration.test.tsx:16: *   - exercises the REAL `useCoachEmptyStatePayload` / `useCoachEmptyStates`
+src/screens/community/__tests__/coachCommunityEmptyStateContract.integration.test.tsx:18: *   - mocks ONLY the API layer (`coachCommunityApi.getCoachEmptyStates` plus the
+src/screens/community/__tests__/coachCommunityEmptyStateContract.integration.test.tsx:22: *     `CoachEmptyState` container, its `*-avatar` face image, and the local
+src/screens/community/__tests__/coachCommunityEmptyStateContract.integration.test.tsx:36:  CoachEmptyStateSurfaceKey,
+src/screens/community/__tests__/coachCommunityEmptyStateContract.integration.test.tsx:72:// so the real `useCoachEmptyStates` runtime invariant runs for real. ──
+src/screens/community/__tests__/coachCommunityEmptyStateContract.integration.test.tsx:79:      getCoachEmptyStates: jest.fn(),
+src/screens/community/__tests__/coachCommunityEmptyStateContract.integration.test.tsx:89:  type CoachEmptyStateSurfaceKey as SurfaceKey,
+src/screens/community/__tests__/coachCommunityEmptyStateContract.integration.test.tsx:96:  coachCommunityApi.getCoachEmptyStates as jest.Mock;
+src/screens/community/__tests__/coachCommunityEmptyStateContract.integration.test.tsx:114: * the audit requires. `useCoachEmptyStates` must throw a typed `contract` error.
+src/screens/community/__tests__/coachCommunityEmptyStateContract.integration.test.tsx:118:): Partial<Record<CoachEmptyStateSurfaceKey, RomanCopyPayload>> {
+src/screens/community/__tests__/coachCommunityEmptyStateContract.integration.test.tsx:119:  const out: Partial<Record<CoachEmptyStateSurfaceKey, RomanCopyPayload>> = {};
+src/screens/community/__tests__/coachCommunityInboxFlagOff.test.tsx:45:    useCoachEmptyStatePayload: () => ({
+src/screens/community/__tests__/coachCommunityScreens.test.tsx:9: *     renders <RomanAvatar /> (by `${root}-avatar` testID) AND the BACKEND
+src/screens/community/__tests__/coachCommunityScreens.test.tsx:11: *     `useCoachEmptyStatePayload` is mocked to return the discriminated
+src/screens/community/__tests__/coachCommunityScreens.test.tsx:39:  type CoachEmptyStateSurfaceKey,
+src/screens/community/__tests__/coachCommunityScreens.test.tsx:110:const SYNTHETIC_EMPTY: Record<CoachEmptyStateSurfaceKey, RomanCopyPayload> = {
+src/screens/community/__tests__/coachCommunityScreens.test.tsx:155:  current: Partial<Record<CoachEmptyStateSurfaceKey, RomanResult>>;
+src/screens/community/__tests__/coachCommunityScreens.test.tsx:179:    useCoachEmptyStatePayload: (surfaceKey: CoachEmptyStateSurfaceKey) =>
+src/screens/community/__tests__/coachCommunityScreens.test.tsx:461:describe('FACE + VOICE contract — RomanAvatar + BACKEND-PAYLOAD copy on every empty state', () => {
+src/components/community/coach/CoachEmptyState.tsx:2: * CoachEmptyState — the FACE + VOICE contract component for every v1-6 coach
+src/components/community/coach/CoachEmptyState.tsx:8: * is the single enforcement point: it always renders `<RomanAvatar />` above a
+src/components/community/coach/CoachEmptyState.tsx:13: * (`GET /community/coach/empty-states`, surfaced via `useCoachEmptyStates`).
+src/components/community/coach/CoachEmptyState.tsx:26: * Size: 64pt on full-screen empty states. The RomanAvatar carries its own
+src/components/community/coach/CoachEmptyState.tsx:31:import RomanAvatar from '../RomanAvatar';
+src/components/community/coach/CoachEmptyState.tsx:36:export interface CoachEmptyStateProps {
+src/components/community/coach/CoachEmptyState.tsx:39:   * `payload.text` beneath `<RomanAvatar crop={payload.avatar_crop} />` so the
+src/components/community/coach/CoachEmptyState.tsx:47:export default function CoachEmptyState({
+src/components/community/coach/CoachEmptyState.tsx:50:}: CoachEmptyStateProps): React.ReactElement {
+src/components/community/coach/CoachEmptyState.tsx:57:      <RomanAvatar
+src/components/community/coach/CoachErrorState.tsx:13: * It is intentionally visually distinct from `CoachEmptyState`:
+src/components/community/coach/CoachErrorState.tsx:20:import RomanAvatar from '../RomanAvatar';
+src/components/community/coach/CoachErrorState.tsx:45:      <RomanAvatar
+src/components/community/coach/CoachRomanEmptyState.tsx:8: * (`useCoachEmptyStatePayload`), which is a separate query. This component
+src/components/community/coach/CoachRomanEmptyState.tsx:15: *   - `ready`   \u2192 `CoachEmptyState` with the live backend payload \u2014 the ONLY
+src/components/community/coach/CoachRomanEmptyState.tsx:24:import CoachEmptyState from './CoachEmptyState';
+src/components/community/coach/CoachRomanEmptyState.tsx:30:  /** The discriminated result from `useCoachEmptyStatePayload(surfaceKey)`. */
+src/components/community/coach/CoachRomanEmptyState.tsx:67:  return <CoachEmptyState payload={result.payload} testID={testID} />;
+src/components/community/coach/MonogramBadge.tsx:7: * Distinct from RomanAvatar: this represents a CLIENT, not Roman. Roman's
+src/components/community/coach/__tests__/romanFaceAndConfirm.test.tsx:2: * RomanAvatar (BLOCKER 3) + ConfirmModal variant (MAJOR UX-03) component tests.
+src/components/community/coach/__tests__/romanFaceAndConfirm.test.tsx:4: * RomanAvatar:
+src/components/community/coach/__tests__/romanFaceAndConfirm.test.tsx:37:import RomanAvatar from '../../RomanAvatar';
+src/components/community/coach/__tests__/romanFaceAndConfirm.test.tsx:51:describe('RomanAvatar — bundled face is the default, monogram only on fallback', () => {
+src/components/community/coach/__tests__/romanFaceAndConfirm.test.tsx:54:      <RomanAvatar crop="neutral" size={64} testID="roman" />,
+src/components/community/coach/__tests__/romanFaceAndConfirm.test.tsx:66:      <RomanAvatar crop="smile" size={64} testID="roman" />,
+src/components/community/coach/__tests__/romanFaceAndConfirm.test.tsx:75:      <RomanAvatar
+src/components/community/coach/__tests__/romanFaceAndConfirm.test.tsx:91:      <RomanAvatar crop="monogram" size={28} testID="roman" />,
+src/components/community/coach/__tests__/romanFaceAndConfirm.test.tsx:101:      <RomanAvatar crop="neutral" size={64} testID="roman" />,
+src/components/community/coach/coachVoice.ts:7: * useCoachEmptyStates). These constants are NO LONGER the success-path source
+src/components/community/coach/coachVoice.ts:11: * is NOT wired into the live render path: `useCoachEmptyStatePayload` (fixer R2,
+src/components/community/coach/coachVoice.ts:15: * rendered ONLY from the live backend payload. `getCoachEmptyStateFallback` is
+src/components/community/coach/coachVoice.ts:20: * (`getCoachEmptyStateFallback\(`) therefore matches only this definition.
+src/components/community/coach/coachVoice.ts:29:  CoachEmptyStateSurfaceKey,
+src/components/community/coach/coachVoice.ts:38:  Record<CoachEmptyStateSurfaceKey, { crop: 'neutral' | 'smile'; copy: string }>
+src/components/community/coach/coachVoice.ts:65: * the error path renders `CoachErrorState` (see `useCoachEmptyStatePayload`).
+src/components/community/coach/coachVoice.ts:70:export function getCoachEmptyStateFallback(
+src/components/community/coach/coachVoice.ts:71:  surfaceKey: CoachEmptyStateSurfaceKey,
+src/components/community/coach/index.ts:7:export { default as CoachEmptyState } from './CoachEmptyState';
+src/components/community/coach/index.ts:8:export type { CoachEmptyStateProps } from './CoachEmptyState';
+src/components/community/coach/index.ts:20:  getCoachEmptyStateFallback,
+CoachEmptyState
+     1	/**
+     2	 * CoachEmptyState — the FACE + VOICE contract component for every v1-6 coach
+     3	 * community empty state (operator-locked 2026-06-10).
+     4	 *
+     5	 * OPERATOR RULE: Roman's voice is never disembodied. Every empty state that
+     6	 * speaks in Roman's voice MUST render his face above the copy so the coach
+     7	 * immediately knows it is Roman speaking — not generic app copy. This component
+     8	 * is the single enforcement point: it always renders `<RomanAvatar />` above a
+     9	 * centered copy line, with >= 12pt spacing between them.
+    10	 *
+    11	 * Payload source of truth (fixer R1, face+voice contract): the `text` and
+    12	 * `avatar_crop` come from the backend Roman voice-policy payload
+    13	 * (`GET /community/coach/empty-states`, surfaced via `useCoachEmptyStates`).
+    14	 * The screen passes the resolved `RomanCopyPayload` straight through here, so
+    15	 * the copy and crop are NEVER hardcoded at the call site — they are whatever
+    16	 * the backend policy says they are. On a network/5xx error the screen renders
+    17	 * `CoachErrorState` instead (honest error copy), never this celebratory/calm
+    18	 * empty state, so an error can never masquerade as "all clear".
+    19	 *
+    20	 * Crop selection per surface is decided by the backend policy
+    21	 * (SURFACE_AVATAR_CROP):
+    22	 *   - `neutral` — generic empty states (home blank, inbox empty, cohorts empty,
+    23	 *     empty cohort members).
+    24	 *   - `smile`   — celebratory empty states only (moderation queue cleared).
+    25	 *
+    26	 * Size: 64pt on full-screen empty states. The RomanAvatar carries its own
+    27	 * `accessibilityLabel` defaults, so screen readers announce "Roman".
+    28	 */
+    29	import React from 'react';
+    30	import { View, Text, StyleSheet } from 'react-native';
+    31	import RomanAvatar from '../RomanAvatar';
+    32	import { useTheme } from '../../../theme/useTheme';
+    33	import { spacing } from '../../../theme/tokens';
+    34	import type { RomanCopyPayload } from '../../../api/coachCommunityApi';
+    35	
+    36	export interface CoachEmptyStateProps {
+    37	  /**
+    38	   * The backend Roman copy payload for this surface. The component renders
+    39	   * `payload.text` beneath `<RomanAvatar crop={payload.avatar_crop} />` so the
+    40	   * face + voice contract is satisfied with backend-driven content only.
+    41	   */
+    42	  payload: RomanCopyPayload;
+    43	  /** Root testID — the avatar nested inside uses `${testID}-avatar`. */
+    44	  testID?: string;
+    45	}
+    46	
+    47	export default function CoachEmptyState({
+    48	  payload,
+    49	  testID,
+    50	}: CoachEmptyStateProps): React.ReactElement {
+    51	  const { semanticColors } = useTheme();
+    52	  // The backend payload only ever carries `neutral` or `smile` for an empty
+    53	  // state; `monogram` is a dense-row crop and never reaches an empty surface.
+    54	  const crop = payload.avatar_crop === 'smile' ? 'smile' : 'neutral';
+    55	  return (
+    56	    <View style={styles.container} testID={testID}>
+    57	      <RomanAvatar
+    58	        crop={crop}
+    59	        size={64}
+    60	        testID={testID ? `${testID}-avatar` : 'empty-roman-avatar'}
+    61	      />
+    62	      <Text style={[styles.copy, { color: semanticColors.textMuted }]}>
+    63	        {payload.text}
+    64	      </Text>
+    65	    </View>
+    66	  );
+    67	}
+    68	
+    69	const styles = StyleSheet.create({
+    70	  container: {
+    71	    flexGrow: 1,
+    72	    alignItems: 'center',
+    73	    justifyContent: 'center',
+    74	    paddingVertical: spacing['3xl'],
+    75	    paddingHorizontal: spacing.xl,
+    76	    // Face above text, centered, with >= 12pt spacing (spacing.md === 12).
+    77	    gap: spacing.md,
+    78	  },
+    79	  copy: {
+    80	    fontSize: 16,
+    81	    lineHeight: 24,
+    82	    textAlign: 'center',
+    83	    maxWidth: 320,
+    84	  },
+    85	});

@@ -1,0 +1,523 @@
+
+/**
+ * D-045 — delete-BEFORE-adoption resurrection (MWB-4 #237 R5 P1).
+ *
+ * The blocking gap the prior race tests miss: the coach deletes a row that was
+ * inserted id-less and whose insert autosave has ALREADY 200'd, but BEFORE the
+ * post-insert refetch resolves. Deleting an id-less row produces NO
+ * remove_exercise op (the diff needs a row_id), so the hook's dirty signal
+ * stays FALSE — `hasPending` is false in this window. When the deferred refetch
+ * then resolves, the adoption effect takes the NON-pending full-replace path
+ * and, before D-045, RESURRECTED the deleted row from server truth.
+ *
+ * With D-045 the screen tracks the deleted row's stable clientId, the adoption
+ * filters the resurrected server row out by composite signature, anchors the
+ * diff baseline to the FULL server copy, and the next autosave emits a
+ * remove_exercise for the now-known server row_id — re-deleting it server-side.
+ */
+describe('CoachWorkoutBuilderScreen — D-045 delete-before-adoption (op-empty window)', () => {
+  /**
+   * Add a new row, drive its insert autosave 200, with the post-insert refetch
+   * DEFERRED (parked, not yet resolved). The server has staged the new row WITH
+   * an id (`NEW_SERVER_ROW_ID`) that the refetch WILL read once settled, but the
+   * screen has NOT adopted it. Returns the testing-library queries parked in the
+   * exact op-empty window; the caller deletes the id-less row, then settles.
+   */
+  async function addThenInsert200DeferRefetch() {
+    jest.useFakeTimers();
+    deferRefetch = true;
+    const Screen = loadScreen();
+    const utils = render(<Screen />);
+    const { getByLabelText } = utils;
+
+    await act(async () => {
+      fireEvent.changeText(getByLabelText('Search exercise catalog'), 'squat');
+    });
+    await act(async () => {
+      fireEvent.press(utils.getByText('Squat'));
+    });
+
+    // Stage the server-side row WITH its id (what the refetch reads on settle).
+    mockServerPlan = {
+      ...mockServerPlan,
+      exercises: [
+        ...mockServerPlan.exercises,
+        {
+          id: NEW_SERVER_ROW_ID,
+          workout_plan_id: 'plan-1',
+          exercise_external_id: 'squat',
+          order: 2,
+          sets: 3,
+          reps_or_duration_seconds: 10,
+          weight_lbs: null,
+          rest_seconds: 60,
+          superset_group_id: null,
+          notes: null,
+        },
+      ],
+    };
+
+    // Debounce -> insert autosave 200 -> onSaved dispatches the deferred refetch.
+    await act(async () => {
+      jest.advanceTimersByTime(900);
+    });
+    await waitFor(() => expect(mockAutosaveCall).toHaveBeenCalled());
+    const firstOps = (mockAutosaveCall.mock.calls[0][0] as {
+      body: { ops: { op: string; row_id?: string }[] };
+    }).body.ops;
+    const firstUpsert = firstOps.find((o) => o.op === 'upsert_exercise');
+    expect(firstUpsert).toBeDefined();
+    // It was an id-less insert: the server assigned the id we have NOT adopted.
+    expect(firstUpsert?.row_id).toBeUndefined();
+    await waitFor(() => expect(mockRefetch).toHaveBeenCalled());
+    expect(settleRefetch).not.toBeNull();
+    return utils;
+  }
+
+  it('add -> insert 200 -> delete id-less row -> settle refetch: row stays deleted AND next autosave emits remove_exercise for the server id', async () => {
+    const utils = await addThenInsert200DeferRefetch();
+    const { getAllByLabelText, queryAllByLabelText } = utils;
+
+    // Two rows present (bench + the just-inserted squat), insert already 200'd.
+    expect(getAllByLabelText('Remove exercise')).toHaveLength(2);
+
+    // Delete the id-less squat row WHILE the refetch is parked. This produces
+    // NO remove_exercise op (no row_id), so the autosave dirty signal stays
+    // false — the exact op-empty window the audit flagged.
+    const removeButtons = getAllByLabelText('Remove exercise');
+    await act(async () => {
+      fireEvent.press(removeButtons[removeButtons.length - 1]);
+    });
+    // Only the original bench row remains locally.
+    expect(queryAllByLabelText('Remove exercise')).toHaveLength(1);
+
+    // NOW settle the refetch: the full-replace adoption MUST NOT resurrect the
+    // deleted row.
+    mockAutosaveCall.mockClear();
+    await act(async () => {
+      settleRefetch?.();
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(50);
+    });
+
+    // The delete survived adoption: still only the bench row in the UI.
+    expect(queryAllByLabelText('Remove exercise')).toHaveLength(1);
+
+    // The post-adoption diff (baseline = full server incl the resurrected row,
+    // working copy = bench only) emits a remove_exercise naming the server id.
+    await act(async () => {
+      jest.advanceTimersByTime(900);
+    });
+    await waitFor(() => expect(mockAutosaveCall).toHaveBeenCalled());
+    const ops = lastOpsBody();
+    expect(ops).toContainEqual({ op: 'remove_exercise', row_id: NEW_SERVER_ROW_ID });
+  });
+
+  it('double-delete: deleting the id-less row TWICE across two refetch settles stays deleted (no resurrection, idempotent remove)', async () => {
+    const utils = await addThenInsert200DeferRefetch();
+    const { getAllByLabelText, queryAllByLabelText } = utils;
+
+    // First delete in the op-empty window.
+    await act(async () => {
+      const buttons = getAllByLabelText('Remove exercise');
+      fireEvent.press(buttons[buttons.length - 1]);
+    });
+    expect(queryAllByLabelText('Remove exercise')).toHaveLength(1);
+
+    // Settle the FIRST refetch — must not resurrect.
+    await act(async () => {
+      settleRefetch?.();
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(50);
+    });
+    expect(queryAllByLabelText('Remove exercise')).toHaveLength(1);
+
+    // A SECOND refetch resolves while the remove has not yet been confirmed on
+    // the server (mockServerPlan still holds the row). The row must STILL be
+    // dropped — the clientId stays tracked until the server confirms removal.
+    settleRefetch = () => forceUpdate?.();
+    mockAutosaveCall.mockClear();
+    await act(async () => {
+      settleRefetch?.();
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(50);
+    });
+    expect(queryAllByLabelText('Remove exercise')).toHaveLength(1);
+
+    // The diff continues to express the remove for the server id (re-issued, not
+    // resurrected).
+    await act(async () => {
+      jest.advanceTimersByTime(900);
+    });
+    await waitFor(() => expect(mockAutosaveCall).toHaveBeenCalled());
+    const ops = lastOpsBody();
+    expect(ops).toContainEqual({ op: 'remove_exercise', row_id: NEW_SERVER_ROW_ID });
+  });
+
+  it('add-delete-add interleaving: re-adding the SAME exercise after a delete-before-adoption keeps the new row (only the deleted one is dropped)', async () => {
+    const utils = await addThenInsert200DeferRefetch();
+    const { getAllByLabelText, queryAllByLabelText, getByLabelText } = utils;
+
+    // Delete the id-less squat row in the op-empty window.
+    await act(async () => {
+      const buttons = getAllByLabelText('Remove exercise');
+      fireEvent.press(buttons[buttons.length - 1]);
+    });
+    expect(queryAllByLabelText('Remove exercise')).toHaveLength(1);
+
+    // Re-add a NEW squat row (a distinct clientId) BEFORE the refetch settles.
+    await act(async () => {
+      fireEvent.changeText(getByLabelText('Search exercise catalog'), 'squat');
+    });
+    await act(async () => {
+      fireEvent.press(utils.getByText('Squat'));
+    });
+    // Bench + the freshly re-added squat = two rows locally.
+    expect(queryAllByLabelText('Remove exercise')).toHaveLength(2);
+
+    // Settle the refetch: the server still has only the ORIGINAL resurrected
+    // squat (NEW_SERVER_ROW_ID). The deleted clientId must drop THAT row by
+    // signature, NOT the freshly re-added local row.
+    mockAutosaveCall.mockClear();
+    await act(async () => {
+      settleRefetch?.();
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(50);
+    });
+
+    // Two rows still present: bench + the new squat (the resurrected one stayed
+    // dropped). The new row is NOT erroneously dropped by the signature match.
+    expect(queryAllByLabelText('Remove exercise')).toHaveLength(2);
+  });
+});
+export interface UseAutosaveResult<TWorkingCopy = unknown> {
+  /**
+   * Re-anchor the diff baseline to an EXPLICIT server copy rather than the
+   * current working copy. Used by the delete-before-adoption fix (MWB-4 #237
+   * D-045): when a refetch resurrects a row the coach deleted in the adoption
+   * window, the screen adopts the FILTERED rows (without the deleted one) into
+   * its local state but anchors the baseline to the FULL server truth (which
+   * still holds that row). The very next diff then emits a `remove_exercise`
+   * for the now-known server row_id — preserving the delete on the server —
+   * instead of the full-replace path resurrecting it. Like {@link rebaseline}
+   * it refuses to run mid-flight so a genuine pending batch is never discarded.
+   */
+  rebaselineTo: (serverCopy: TWorkingCopy) => void;
+): UseAutosaveResult<TWorkingCopy> {
+  /**
+   * Re-anchor the diff baseline to an EXPLICIT server copy (D-045). Unlike
+   * {@link rebaseline} this does NOT clear the dirty signal: the whole point is
+   * that the explicit server copy may DIFFER from the current working copy (it
+   * still holds a row the coach deleted in the adoption window), so the next
+   * diff SHOULD see a delta (a `remove_exercise`) and re-flush. We recompute
+   * the dirty signal honestly against the new baseline so `hasPending` reflects
+   * that outstanding delete. Like the other re-anchors it refuses to run while
+   * a real batch is in flight or queued so a genuine pending edit is preserved.
+   */
+  const rebaselineTo = useCallback(
+    (serverCopy: TWorkingCopy): void => {
+      if (!enabledRef.current) return;
+      if (currentInFlightRef.current !== null || pendingNextRef.current !== null) {
+        return;
+      }
+      lastSavedValueRef.current = serverCopy;
+      // Recompute dirty against the explicit baseline: if the current working
+      // copy diverges (the deleted row is absent here but present in the server
+      // copy) we stay dirty so the next debounce flush emits the remove op.
+      setDirty(
+        diffRef.current(lastSavedValueRef.current, latestValueRef.current).length > 0,
+      );
+      safeSet(setHasPending, computeHasPending());
+    },
+    [setDirty, safeSet, computeHasPending],
+  );
+
+      rebaselineTo,
+    [status, lastSavedAt, version, tokenState, flush, hasPending, rebaseline, rebaselineTo],
+  WorkoutPlanExercise,
+import { generateClientId } from '../../utils/clientId';
+  /**
+   * Stable per-row CLIENT identifier, generated once when the row first exists
+   * on this device (a server-loaded row gets one on adoption; a brand-new row
+   * gets one in `addExercise`). It persists with the row for its whole life and
+   * is NEVER sent to the server — the autosave working copy (and the legacy PUT
+   * payload) carry only server-facing fields, so the wire contract / DB schema
+   * are unchanged (R69). MWB-4 #237 (D-045) uses it to track a row deleted in
+   * the autosave insert/adoption window (when it has no `row_id` yet) so the
+   * post-insert refetch does not resurrect it.
+   */
+  clientId: string;
+/**
+ * The server-facing fields that identify a row's CONTENT (everything the
+ * backend persists EXCEPT identity + order). Shared by the local DraftExerciseRow
+ * and a server WorkoutPlanExercise so a row deleted before its row_id existed
+ * can be matched back to the server row the post-insert refetch resurrects
+ * (D-045). Order is intentionally excluded — the resurrected row may land at a
+ * different index than where it was added/deleted.
+ */
+function rowCompositeSignature(row: {
+  exercise_external_id: string;
+  sets: number;
+  reps_or_duration_seconds: number;
+  rest_seconds: number | null;
+  weight_lbs: number | null;
+  superset_group_id: string | null;
+  notes: string | null;
+}): string {
+  return JSON.stringify([
+    row.exercise_external_id,
+    row.sets,
+    row.reps_or_duration_seconds,
+    row.rest_seconds,
+    row.weight_lbs,
+    row.superset_group_id,
+    row.notes,
+  ]);
+}
+
+/** Composite signature for a server exercise row (same field order as above). */
+function serverRowCompositeSignature(e: WorkoutPlanExercise): string {
+  return rowCompositeSignature({
+    exercise_external_id: e.exercise_external_id,
+    sets: e.sets,
+    reps_or_duration_seconds: e.reps_or_duration_seconds,
+    rest_seconds: e.rest_seconds,
+    weight_lbs: e.weight_lbs,
+    superset_group_id: e.superset_group_id,
+    notes: e.notes,
+  });
+}
+
+  // Map a server exercise row into a local DraftExerciseRow, reusing the stable
+  // clientId we already minted for that server row_id when one exists so the
+  // identity survives a refetch/adoption (and the deletedKeysRef bookkeeping
+  // below can match it). A row_id we have never seen gets a fresh clientId.
+  const rowIdToClientIdRef = useRef<Map<string, string>>(new Map());
+  const clientIdForServerRow = useCallback((serverRowId: string): string => {
+    const existing = rowIdToClientIdRef.current.get(serverRowId);
+    if (existing) return existing;
+    const minted = generateClientId();
+    rowIdToClientIdRef.current.set(serverRowId, minted);
+    return minted;
+  }, []);
+
+  const [rows, setRows] = useState<DraftExerciseRow[]>(() =>
+      clientId: clientIdForServerRow(e.id),
+  // MWB-4 #237 (D-045): clientIds of rows the coach has removed. A row deleted
+  // BEFORE its server row_id was adopted produces NO remove_exercise op (the
+  // diff needs a row_id), so the dirty signal can stay false and the
+  // post-insert refetch's full-replace adoption would otherwise RESURRECT it.
+  // We record the stable clientId on removal (regardless of row_id presence)
+  // and the adoption effect filters server rows through this set so the delete
+  // is preserved — then re-issued as a remove_exercise once the server row_id
+  // is known. Entries are pruned once the server confirms the row is gone.
+  const deletedKeysRef = useRef<Set<string>>(new Set());
+
+        // Stable client identity for this on-device row, minted once at
+        // creation. Tracks the row across the id-less insert / adoption window
+        // (D-045) and is never serialized to the server.
+        clientId: generateClientId(),
+  // Composite signature of a deleted id-less row -> the clientIds removed with
+  // that signature. A row deleted before adoption has no row_id, so the only
+  // way to recognise the server row that the post-insert refetch resurrects is
+  // to match its server-facing fields (D-045). Stored as a FIFO list per
+  // signature so two identical rows added-then-one-deleted are matched one for
+  // one rather than both being dropped.
+  const deletedSignaturesRef = useRef<Map<string, string[]>>(new Map());
+
+    setRows((cur) => {
+      const target = cur[idx];
+      // Record the stable clientId of the removed row REGARDLESS of whether it
+      // has a server row_id yet (D-045). If it was deleted in the id-less
+      // insert/adoption window the diff cannot emit a remove_exercise, so this
+      // is the only durable record of the coach's intent; the adoption effect
+      // reads it to keep the row deleted (and re-issue the server-side remove
+      // once the row_id is known) instead of letting the refetch resurrect it.
+      if (target) {
+        deletedKeysRef.current.add(target.clientId);
+        // Index by composite signature too, so a resurrected server row with a
+        // brand-new row_id (the id-less insert the coach then deleted) can be
+        // matched back to this clientId and dropped.
+        const sig = rowCompositeSignature(target);
+        const list = deletedSignaturesRef.current.get(sig) ?? [];
+        list.push(target.clientId);
+        deletedSignaturesRef.current.set(sig, list);
+      }
+      return cur.filter((_, i) => i !== idx);
+    });
+  const autosaveRebaselineTo = autosave.rebaselineTo;
+
+  // Build the FULL server working copy (every server row, with its real
+  // row_id). Used as the explicit diff baseline when the non-pending adoption
+  // DROPS a resurrected-then-deleted row from the local rows (D-045): anchoring
+  // the baseline to the full server truth makes the very next diff emit a
+  // remove_exercise for the dropped row's now-known row_id, re-deleting it on
+  // the server instead of letting the refetch resurrect it.
+  const buildServerWorkingCopy = useCallback(
+    (exercises: WorkoutPlanExercise[]): WorkoutBuilderWorkingCopy => ({
+      meta: { name, type },
+      rows: exercises.map((e) => ({
+        rowId: e.id,
+        exerciseExternalId: e.exercise_external_id,
+        sets: e.sets,
+        repsOrDurationSeconds: e.reps_or_duration_seconds,
+        restSeconds: e.rest_seconds,
+        weightLbs: e.weight_lbs,
+        supersetGroupId: e.superset_group_id,
+        notes: e.notes,
+      })),
+    }),
+    [name, type],
+  );
+      // D-045 — delete-before-adoption guard. A server row is DROPPED from the
+      // adopted local rows when it is the resurrection of a row the coach
+      // deleted in the id-less insert/adoption window. We recognise it two
+      // ways: (1) a server row_id we already mapped to a clientId now in
+      // `deletedKeysRef`, or (2) a server row_id we have never seen whose
+      // composite signature matches a row removed while still id-less
+      // (`deletedSignaturesRef`). Matching consumes one entry per signature so
+      // identical rows are dropped one-for-one. Kept rows are mapped verbatim
+      // from server truth (the FULL replace); dropped rows are re-deleted by
+      // the rebaselineTo below.
+      const sigPool = new Map<string, string[]>();
+      for (const [sig, list] of deletedSignaturesRef.current) {
+        sigPool.set(sig, list.slice());
+      }
+      const keptExercises: WorkoutPlanExercise[] = [];
+      const droppedRowIds: string[] = [];
+      for (const e of serverExercises) {
+        // (1) Known server row_id whose clientId was deleted.
+        const mappedClientId = rowIdToClientIdRef.current.get(e.id);
+        if (mappedClientId && deletedKeysRef.current.has(mappedClientId)) {
+          droppedRowIds.push(e.id);
+          continue;
+        }
+        // (2) Unseen server row_id matching a deleted id-less row by signature.
+        if (!mappedClientId) {
+          const sig = serverRowCompositeSignature(e);
+          const pending = sigPool.get(sig);
+          if (pending && pending.length > 0) {
+            const clientId = pending.shift() as string;
+            // Bind this server row_id to the deleted clientId so a later
+            // refetch (before the remove lands) keeps recognising + dropping
+            // it, and so the cleanup below can prune it once the server row
+            // is gone.
+            rowIdToClientIdRef.current.set(e.id, clientId);
+            droppedRowIds.push(e.id);
+            continue;
+          }
+        }
+        keptExercises.push(e);
+      }
+
+        keptExercises.map((e) => ({
+          clientId: clientIdForServerRow(e.id),
+
+      // Cleanup (D-045 step 6): prune any tracked-deleted clientId whose mapped
+      // server row_id is no longer in server truth — the remove_exercise has
+      // landed, so the intent is fulfilled and we must stop filtering (else a
+      // later re-add of the same exercise could be wrongly dropped).
+      const liveServerRowIds = new Set(serverExercises.map((e) => e.id));
+      for (const [rowId, clientId] of rowIdToClientIdRef.current) {
+        if (
+          deletedKeysRef.current.has(clientId) &&
+          !liveServerRowIds.has(rowId)
+        ) {
+          deletedKeysRef.current.delete(clientId);
+          rowIdToClientIdRef.current.delete(rowId);
+        }
+      }
+
+      if (droppedRowIds.length > 0) {
+        // We dropped a resurrected-then-deleted row. Anchor the diff baseline to
+        // the FULL server copy (which still holds those rows) so the next diff
+        // emits a remove_exercise for each dropped row_id and re-deletes it on
+        // the server. Do NOT set pendingRebaselineSigRef here: that path would
+        // re-anchor to the (filtered) local copy and erase the pending delete.
+        autosaveRebaselineTo(buildServerWorkingCopy(serverExercises));
+        pendingRebaselineSigRef.current = null;
+      } else {
+        // Clean full replace (no outstanding delete): re-anchor to the adopted
+        // copy once `workingCopy` reflects it, exactly as before.
+        pendingRebaselineSigRef.current = serverRowSignature;
+      }
+        // Bind the adopted server row_id to this row's stable clientId so the
+        // D-045 delete-tracking + cleanup can recognise it on a later refetch.
+        rowIdToClientIdRef.current.set(adoptedId, r.clientId);
+  }, [
+    autosaveEnabled,
+    autosave.hasPending,
+    existingPlan,
+    serverRowSignature,
+    refetchSeq,
+    clientIdForServerRow,
+    autosaveRebaselineTo,
+    buildServerWorkingCopy,
+  ]);
+/**
+ * generateClientId — a stable, crypto-grade per-row client identifier.
+ *
+ * MWB-4 #237 (D-045): the coach workout builder must distinguish "this exact
+ * on-device row" across the autosave insert/adoption window. A row added on
+ * device has no server `row_id` until the post-insert refetch adopts one, so a
+ * delete issued in that window cannot be named by server id. We therefore stamp
+ * every local row with a `clientId` at creation and track deletes by that
+ * stable key, so a delete-before-adoption is preserved (and re-deleted on the
+ * server) rather than resurrected by the refetch.
+ *
+ * This is a CLIENT-ONLY field: it is never serialized into the autosave op diff
+ * or the explicit-Save (PUT replace-all) payload — the working copy the diff
+ * runs over carries only the server-facing fields, so the wire contract and the
+ * DB schema are unchanged (R69).
+ *
+ * Crypto source: `crypto.getRandomValues` (Web Crypto API), polyfilled for
+ * React Native / Hermes by `react-native-get-random-values` (imported as the
+ * very first module in `index.ts`). This mirrors `generateIdempotencyKey` so
+ * there is a single crypto-grade code path in ALL builds — dev, Expo Go, and
+ * production — with NO `Math.random` fallback anywhere (R19). If the polyfill
+ * is missing the function THROWS rather than silently emitting a weak id.
+ */
+
+function uuidV4FromBytes(bytes: Uint8Array): string {
+  // Set v4 (random) version + RFC 4122 variant bits.
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex: string[] = [];
+  for (let i = 0; i < bytes.length; i += 1) {
+    hex.push(bytes[i].toString(16).padStart(2, '0'));
+  }
+  return (
+    `${hex.slice(0, 4).join('')}-${hex.slice(4, 6).join('')}-` +
+    `${hex.slice(6, 8).join('')}-${hex.slice(8, 10).join('')}-` +
+    `${hex.slice(10, 16).join('')}`
+  );
+}
+
+export function generateClientId(): string {
+  // Single crypto-grade path: Web Crypto API polyfilled by
+  // react-native-get-random-values (imported at the top of index.ts). Works
+  // identically in dev builds, Expo Go, and production — no Math.random
+  // fallback at any layer (R19).
+  const c = (
+    globalThis as {
+      crypto?: { getRandomValues?: <T extends ArrayBufferView>(array: T) => T };
+    }
+  ).crypto;
+  if (c?.getRandomValues) {
+    const bytes = new Uint8Array(16);
+    c.getRandomValues(bytes);
+    return uuidV4FromBytes(bytes);
+  }
+
+  // R19 — no Math.random fallback. If crypto.getRandomValues is unavailable
+  // (polyfill not imported before this module), throw rather than silently
+  // emit a weak key.
+  throw new Error(
+    'generateClientId: crypto.getRandomValues is unavailable. ' +
+      'Ensure react-native-get-random-values is imported first in index.ts.',
+  );
+}

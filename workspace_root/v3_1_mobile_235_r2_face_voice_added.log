@@ -1,0 +1,42 @@
++// and no `challenge_comments_empty` surface key exists anywhere in the Roman
++// true-empty surface is therefore a NEUTRAL, non-Roman-voiced state derived from
++// the comments query itself (no local `romanVoice.ts` Roman copy — that local
++// Roman copy was the original P0 — and no invented backend payload). See
++ * ChallengeCommentsEmptyState — the TRUE-EMPTY state for the challenge comments
++ * was that this surface rendered LOCAL Roman-voiced copy from `romanVoice.ts`
++ * (`threadEmpty`). The face+voice rule is that Roman's *voice* may only be
++ * state` route, and the Roman voice-policy has no `challenge_comments_empty`
++ * non-Roman-voiced encouragement line here: plain UI copy, no RomanAvatar, no
++ * Roman voice. This satisfies the P0 (no local Roman copy) without inventing a
++export interface ChallengeCommentsEmptyStateProps {
++   * Neutral, non-Roman UI copy for the true-empty surface. Supplied by the
++   * caller as a plain string (a UI label, not Roman voice) so the component
++   * never reaches for a local Roman constant.
++  /** Primary action label (a UI affordance label, not Roman copy). */
++export default function ChallengeCommentsEmptyState({
++}: ChallengeCommentsEmptyStateProps): React.ReactElement {
++export { default as ChallengeCommentsEmptyState } from './ChallengeCommentsEmptyState';
++export type { ChallengeCommentsEmptyStateProps } from './ChallengeCommentsEmptyState';
++import ChallengeCommentsEmptyState from '../../components/community/ChallengeCommentsEmptyState';
++  // The original P0 was that this surface rendered LOCAL Roman copy from
++  // `romanVoice.ts`; the brief's remedy is a backend payload, but the binding
++  // surface and the Roman voice-policy has no `challenge_comments_empty` key.
++  // honest resolution is a NEUTRAL, non-Roman-voiced empty state derived from
++  // this query result -- no local Roman copy, no invented backend endpoint.
++  // a true empty (server confirmed zero rows) gets a NEUTRAL, non-Roman empty
++  // state with a real CTA (no local Roman copy, no invented backend payload).
++  // Neutral, non-Roman UI copy for the true-empty surface. This is a plain UI
++  // affordance string, NOT Roman voice and NOT sourced from `romanVoice.ts`.
++  //   2. comments TRUE EMPTY  -> a NEUTRAL (non-Roman) empty state with a REAL
++  //      focus CTA. No local Roman copy (the P0) and no invented backend
++      <ChallengeCommentsEmptyState
++// The local Roman empty-state copy that this surface must NEVER render (the
++import { ROMAN_COMMUNITY_LINES } from '../../../components/community/romanVoice';
++  it('renders a NEUTRAL true-empty state and NEVER the local Roman threadEmpty copy (F1 P0)', async () => {
++    // Roman voice-policy. Per the brief ("missing payload => honest state, never
++    // local fallback") the only honest option is a NEUTRAL, non-Roman empty
++    // state. This pins that the local Roman threadEmpty line is ABSENT (the
++    // The distinctive Roman threadEmpty phrase (token-free prefix) must be
++    const romanPrefix = ROMAN_COMMUNITY_LINES.threadEmpty.straight.split(
++    expect(romanPrefix.length).toBeGreaterThan(0);
++    const escaped = romanPrefix.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

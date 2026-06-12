@@ -1,0 +1,4 @@
+R0 added-line grep patterns:
+forceExit|detectOpenHandles|\.only|\.skip|fdescribe|fit\(|xit\(|xtest\(|@ts-ignore|@ts-expect-error|eslint-disable|console\.|as any|\bany\b|TODO|FIXME|HACK|catch
+Matches:
+All modified-file focus markers:

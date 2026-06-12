@@ -1,0 +1,232 @@
+diff --git a/src/components/roman/RomanAvatar.tsx b/src/components/roman/RomanAvatar.tsx
+index e295bc8..46efde2 100644
+--- a/src/components/roman/RomanAvatar.tsx
++++ b/src/components/roman/RomanAvatar.tsx
+@@ -40,9 +40,26 @@ import { romanFaceAsset } from './romanAvatarAssets';
+ /** Approved crops used on Community surfaces (subset of the §4 matrix). */
+ export type RomanCrop = 'monogram' | 'smile' | 'neutral';
+ 
++/**
++ * Spec §3.8 expression invariant. Named after the SPEC register rather than the
++ * underlying crop asset so call sites read against the spec ("slight_smile" is
++ * the §3.8 milestone register). `slight_smile` maps to the celebratory smile
++ * crop asset (the repo's bundled milestone face); `neutral` maps to the neutral
++ * crop. When `expression` is supplied it takes precedence over `crop`.
++ */
++export type RomanExpression = 'neutral' | 'slight_smile';
++
+ export interface RomanAvatarProps {
+   /** Which approved crop to show. Defaults to the compact monogram. */
+   crop?: RomanCrop;
++  /**
++   * Optional §3.8 expression register. When set it selects the crop asset for
++   * that expression (`slight_smile` → the milestone smile face, `neutral` →
++   * the neutral face) and the matching accessibility label, taking precedence
++   * over `crop`. This exposes the spec API name at call sites without changing
++   * the underlying bundled assets.
++   */
++  expression?: RomanExpression;
+   /**
+    * Optional face image OVERRIDE. Accepts either a CDN/remote URL string (e.g.
+    * a future backend `avatar_url`) or a resolved React Native image source
+@@ -76,24 +93,38 @@ function resolveSource(
+   return romanFaceAsset(crop);
+ }
+ 
++/** Map a §3.8 expression register onto the underlying crop asset. */
++function cropForExpression(expression: RomanExpression): RomanCrop {
++  return expression === 'slight_smile' ? 'smile' : 'neutral';
++}
++
+ export default function RomanAvatar({
+   crop = 'monogram',
++  expression,
+   source,
+   size = 28,
+   testID,
+ }: RomanAvatarProps): React.ReactElement {
+-  const a11y = crop === 'smile' ? 'Roman, pleased' : 'Roman';
++  // `expression` (the §3.8 spec register) wins over `crop` when supplied.
++  const effectiveCrop: RomanCrop =
++    expression != null ? cropForExpression(expression) : crop;
++  const a11y =
++    expression === 'slight_smile'
++      ? 'Roman, slight smile'
++      : effectiveCrop === 'smile'
++        ? 'Roman, pleased'
++        : 'Roman';
+   // The celebratory ring distinguishes the smile crop from neutral (carried on
+   // both the face image and the monogram fallback).
+-  const showRing = crop === 'smile';
++  const showRing = effectiveCrop === 'smile';
+ 
+   // Track an image-load failure so we can fall back to the accessible monogram
+   // tile WITHOUT silently showing a broken image. This is the ONLY path to the
+   // monogram for a neutral/smile crop.
+   const [failed, setFailed] = React.useState(false);
+   // Reset the failure flag if the resolved image identity changes.
+-  const resolved = resolveSource(source, crop);
+-  const resolvedKey = typeof source === 'string' ? source : crop;
++  const resolved = resolveSource(source, effectiveCrop);
++  const resolvedKey = typeof source === 'string' ? source : effectiveCrop;
+   React.useEffect(() => {
+     setFailed(false);
+   }, [resolvedKey]);
+diff --git a/src/screens/client/progress/ProgressChartCard.tsx b/src/screens/client/progress/ProgressChartCard.tsx
+index 1c9aa3e..24a9754 100644
+--- a/src/screens/client/progress/ProgressChartCard.tsx
++++ b/src/screens/client/progress/ProgressChartCard.tsx
+@@ -75,13 +75,12 @@ const FLAG_SIZE = 12;
+ 
+ /** Fire selection haptic, gated so it never throws on web/unsupported. */
+ function selectionHaptic(): void {
+-  // expo-haptics' selectionAsync rejects (not throws) on web. We attach a
+-  // no-op rejection handler so an unsupported platform degrades silently to
+-  // "no haptic" WITHOUT an unhandled rejection. This is the ONE place a caught
+-  // error is intentionally a no-op — a missing haptic motor is not a
+-  // user-facing failure (documented; mirrors RevolutGlowChart).
+-  Haptics.selectionAsync().catch(() => {
+-    /* haptics unavailable on this platform — non-fatal, intentionally ignored */
++  // expo-haptics' selectionAsync rejects (not throws) on web. A missing haptic
++  // motor is non-fatal (the chart still scrubs), but we never silently swallow
++  // the rejection (Bradley Law #36) — we record WHY the haptic degraded so an
++  // unexpected failure on a supported device is diagnosable.
++  Haptics.selectionAsync().catch((err) => {
++    console.warn('[ProgressChartCard] haptic failed', err);
+   });
+ }
+ 
+@@ -309,8 +308,16 @@ export default function ProgressChartCard({
+       {/* Roman commentary on PR detection — FACE + VOICE in the same tree. */}
+       {pr && (
+         <View style={styles.romanRow} testID="progress-pr-commentary">
+-          <RomanAvatar crop="smile" size={28} testID="progress-pr-avatar" />
+-          <Text style={styles.romanText} testID="progress-pr-text">
++          <RomanAvatar
++            expression="slight_smile"
++            size={28}
++            testID="progress-pr-avatar"
++          />
++          <Text
++            style={styles.romanText}
++            testID="progress-pr-text"
++            accessibilityLiveRegion="polite"
++          >
+             {romanPRDetected({ liftName, weight: pr.point.y })}
+           </Text>
+         </View>
+diff --git a/src/screens/coach/ed/FirstPaymentWowHost.tsx b/src/screens/coach/ed/FirstPaymentWowHost.tsx
+index 3ff2af8..124a8e0 100644
+--- a/src/screens/coach/ed/FirstPaymentWowHost.tsx
++++ b/src/screens/coach/ed/FirstPaymentWowHost.tsx
+@@ -54,11 +54,21 @@ export default function FirstPaymentWowHost({
+     onFirstPayment: handleFirstPayment,
+   });
+ 
+-  const handleDismiss = useCallback(() => {
+-    // Close the gate FIRST so the celebration can never re-arm, THEN clear the
+-    // overlay (return to coach home). The gate write is fire-and-forget but
+-    // ordered before the state clear.
+-    if (coachId) void markFirstPaymentSeen(coachId);
++  const handleDismiss = useCallback(async () => {
++    // Close the gate (await its persistence) FIRST so the celebration can never
++    // re-arm, THEN clear the overlay (return to coach home). On a write failure
++    // we log via console.warn — never swallow (Bradley Law #36) — but STILL
++    // clear the UI so the coach is never trapped behind the overlay.
++    if (coachId) {
++      try {
++        await markFirstPaymentSeen(coachId);
++      } catch (err) {
++        console.warn(
++          '[FirstPaymentWowHost] markFirstPaymentSeen failed',
++          err,
++        );
++      }
++    }
+     setEvent(null);
+   }, [coachId]);
+ 
+diff --git a/src/screens/coach/ed/FirstPaymentWowScreen.tsx b/src/screens/coach/ed/FirstPaymentWowScreen.tsx
+index 53bdd76..66698d1 100644
+--- a/src/screens/coach/ed/FirstPaymentWowScreen.tsx
++++ b/src/screens/coach/ed/FirstPaymentWowScreen.tsx
+@@ -98,8 +98,13 @@ export default function FirstPaymentWowScreen({
+ 
+       <View style={styles.content}>
+         <Animated.View style={mascotStyle}>
+-          {/* FACE+VOICE: the "knowing slight smile" mascot beside the voice. */}
+-          <RomanAvatar crop="smile" size={132} testID="first-payment-avatar" />
++          {/* FACE+VOICE: the "knowing slight smile" mascot beside the voice.
++              §3.8 milestone register expressed via the expression prop. */}
++          <RomanAvatar
++            expression="slight_smile"
++            size={132}
++            testID="first-payment-avatar"
++          />
+         </Animated.View>
+ 
+         <Text
+@@ -152,6 +157,10 @@ const styles = StyleSheet.create({
+     paddingHorizontal: spacing.xl,
+     borderRadius: radius.sm,
+     alignItems: 'center',
++    // WCAG 2.5.5 / a11y minimum touch target (44×44 logical px).
++    minHeight: 44,
++    minWidth: 44,
++    justifyContent: 'center',
+   },
+   buttonLabel: {
+     color: colors.bone,
+diff --git a/src/screens/coach/ed/useFirstPaymentRealtime.ts b/src/screens/coach/ed/useFirstPaymentRealtime.ts
+index 5fd9cd6..fbe801c 100644
+--- a/src/screens/coach/ed/useFirstPaymentRealtime.ts
++++ b/src/screens/coach/ed/useFirstPaymentRealtime.ts
+@@ -164,14 +164,23 @@ export function useFirstPaymentRealtime({
+             (payload) => {
+               // Re-check the gate at fire time: a payment that lands AFTER the
+               // coach already saw their first celebration must not re-trigger.
+-              void hasSeenFirstPayment(coachId as string).then((already) => {
+-                if (already || cancelled) return;
+-                const row = (payload.new ?? {}) as Record<string, unknown>;
+-                cbRef.current({
+-                  amount: formatAmount(row),
+-                  clientName: readClientName(row),
++              hasSeenFirstPayment(coachId as string)
++                .then((already) => {
++                  if (already || cancelled) return;
++                  const row = (payload.new ?? {}) as Record<string, unknown>;
++                  cbRef.current({
++                    amount: formatAmount(row),
++                    clientName: readClientName(row),
++                  });
++                })
++                .catch((err) => {
++                  // Gate re-check failed — do not swallow (Law #36). We skip
++                  // firing (fail-closed) and record why the celebration was
++                  // suppressed on this INSERT.
++                  logger.warn('ed3', 'hasSeenFirstPayment re-check failed', {
++                    reason: errorMessage(err, 'gate re-check failed'),
++                  });
+                 });
+-              });
+             },
+           )
+           .subscribe((status) => {
+@@ -197,7 +206,16 @@ export function useFirstPaymentRealtime({
+       cancelled = true;
+       try {
+         if (channel) channel.unsubscribe();
+-        if (client) void client.removeAllChannels();
++        if (client) {
++          // removeAllChannels() returns a promise; a cleanup cannot be async,
++          // so we capture the promise and attach a rejection handler rather
++          // than swallow it (Law #36).
++          Promise.resolve(client.removeAllChannels()).catch((err) => {
++            logger.warn('ed3', 'removeAllChannels failed', {
++              reason: errorMessage(err, 'removeAllChannels failed'),
++            });
++          });
++        }
+       } catch (err) {
+         // Teardown failure is non-fatal but must be recorded (Law #36).
+         logger.warn('ed3', 'realtime teardown failed', {

@@ -1,0 +1,71 @@
+    25	}));
+    26	
+    27	import { wearablesSamplesApi } from '../api/wearablesSamplesApi';
+    28	import {
+    29	  useWearablePreference,
+    30	  wearablePreferenceQueryKey,
+    31	} from './useWearablePreference';
+    32	import { WEARABLE_SAMPLES_ROOT_KEY } from './useWearableSamples';
+    33	
+    34	const mockedSet = wearablesSamplesApi.setPreference as jest.MockedFunction<
+    35	  typeof wearablesSamplesApi.setPreference
+    36	>;
+    37	const mockedClearFn = wearablesSamplesApi.clearPreference as jest.MockedFunction<
+    38	  typeof wearablesSamplesApi.clearPreference
+    39	>;
+    40	
+    41	// D-011 RQ-GC surgical sweep: track the QueryClients minted per test so we can
+    42	// tear them down in afterEach. A finite gcTime (the previous 60_000) leaves a
+    43	// real GC timer pending for a full minute after the suite finishes, which is
+    44	// the open handle behind the "Jest did not exit one second after the test run
+    45	// has completed" warning. gcTime: Infinity is never scheduled as a timer, so
+    46	// the per-metric preference cache entry still survives the synchronous
+    47	// getQueryData reads below (it is only collected on an explicit clear) while
+    48	// nothing remains pending after the run.
+    49	const mintedClients: QueryClient[] = [];
+    50	
+    51	function makeWrapper() {
+    52	  const qc = new QueryClient({
+    53	    defaultOptions: {
+    54	      // gcTime must be non-zero here: we read the per-metric preference cache
+    55	      // entry directly via getQueryData and it has no React Query observer, so
+    56	      // a gcTime of 0 would garbage-collect it the instant it's written and
+    57	      // the assertions below would race against the sweep. Infinity keeps the
+    58	      // entry alive for the test AND schedules no GC timer (no leak).
+    59	      queries: { retry: false, gcTime: Infinity, staleTime: 0 },
+    60	      // The mutation cache GC is the real open handle here: every settled
+    61	      // mutation schedules a removal timer (RQ default 5 min) that keeps the
+    62	      // Node event loop alive long after the test finishes — this is what
+    63	      // produced the "Jest did not exit" warning. Infinity is never scheduled.
+    64	      mutations: { retry: false, gcTime: Infinity },
+    65	    },
+    66	  });
+    67	  mintedClients.push(qc);
+    68	  const Wrapper = ({ children }: { children: React.ReactNode }) => (
+    69	    <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    70	  );
+    71	  return { qc, Wrapper };
+    72	}
+    73	
+    74	beforeEach(() => {
+    75	  mockedSet.mockReset();
+    76	  mockedClearFn.mockReset();
+    77	});
+    78	
+    79	afterEach(() => {
+    80	  // Drop every cache entry and detach the client created during the test, then
+    81	  // forget our references so nothing is retained. unmount() releases the
+    82	  // focus/online subscriptions the provider wired up; clear() empties the
+    83	  // query + mutation caches so no entry can keep a timer alive.
+    84	  while (mintedClients.length > 0) {
+    85	    const qc = mintedClients.pop();
+    86	    qc?.unmount();
+    87	    qc?.clear();
+    88	  }
+    89	});
+    90	
+    91	describe('useWearablePreference', () => {
+    92	  it('optimistically writes the new provider, then settles on the server value', async () => {
+    93	    mockedSet.mockResolvedValueOnce({
+    94	      metric: 'STEPS',
+    95	      preferred_provider: 'WHOOP',

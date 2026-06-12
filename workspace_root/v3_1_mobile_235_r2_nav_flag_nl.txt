@@ -1,0 +1,204 @@
+--- CommunityNavigator
+     1	/**
+     2	 * CommunityNavigator — the Community sub-stack (v1-5 client surface). Registers
+     3	 * the seven Community screens against the typed CommunityStackParamList.
+     4	 *
+     5	 * IMPORTANT (flag posture): this navigator is only ever MOUNTED by
+     6	 * ClientNavigator when `featureFlags.communityTab` is true. When the flag is
+     7	 * OFF the Community tab is not rendered and this stack never enters the tree,
+     8	 * so none of these routes are reachable. See ClientNavigator.tsx.
+     9	 */
+    10	import React from 'react';
+    11	import { createNativeStackNavigator } from '@react-navigation/native-stack';
+    12	import { colors } from '../theme/tokens';
+    13	import CommunityTabScreen from '../screens/community/CommunityTabScreen';
+    14	import CommunityTodayScreen from '../screens/community/CommunityTodayScreen';
+    15	import CommunitySpaceScreen from '../screens/community/CommunitySpaceScreen';
+    16	import CommunityThreadScreen from '../screens/community/CommunityThreadScreen';
+    17	import CommunityDmListScreen from '../screens/community/CommunityDmListScreen';
+    18	import CommunityDmThreadScreen from '../screens/community/CommunityDmThreadScreen';
+    19	import CommunityComposerScreen from '../screens/community/CommunityComposerScreen';
+    20	import CommunityChallengeDetailScreen from '../screens/community/CommunityChallengeDetailScreen';
+    21	import CommunityChallengesScreen from '../screens/community/CommunityChallengesScreen';
+    22	import { featureFlags } from '../config/featureFlags';
+    23	import type { CommunityStackParamList } from '../screens/community/communityNavTypes';
+    24	
+    25	const CommunityStack = createNativeStackNavigator<CommunityStackParamList>();
+    26	
+    27	export default function CommunityNavigator(): React.ReactElement {
+    28	  return (
+    29	    <CommunityStack.Navigator
+    30	      screenOptions={{
+    31	        headerShown: false,
+    32	        contentStyle: { backgroundColor: colors.bone },
+    33	      }}
+    34	    >
+    35	      <CommunityStack.Screen name="CommunityTab" component={CommunityTabScreen} />
+    36	      <CommunityStack.Screen name="CommunityToday" component={CommunityTodayScreen} />
+    37	      <CommunityStack.Screen name="CommunitySpace" component={CommunitySpaceScreen} />
+    38	      <CommunityStack.Screen name="CommunityThread" component={CommunityThreadScreen} />
+    39	      <CommunityStack.Screen name="CommunityDmList" component={CommunityDmListScreen} />
+    40	      <CommunityStack.Screen name="CommunityDmThread" component={CommunityDmThreadScreen} />
+    41	      <CommunityStack.Screen name="CommunityComposer" component={CommunityComposerScreen} />
+    42	      {featureFlags.communityChallenges ? (
+    43	        <CommunityStack.Screen
+    44	          name="CommunityChallenges"
+    45	          component={CommunityChallengesScreen}
+    46	        />
+    47	      ) : null}
+    48	      {featureFlags.communityChallenges ? (
+    49	        <CommunityStack.Screen
+    50	          name="CommunityChallengeDetail"
+    51	          component={CommunityChallengeDetailScreen}
+    52	        />
+    53	      ) : null}
+    54	    </CommunityStack.Navigator>
+    55	  );
+    56	}
+--- CommunityTodayScreen
+     1	/**
+     2	 * CommunityTodayScreen — the "today" object (product plan §2.6): the universal
+     3	 * home for what's happening for the calling client today. Aggregates the
+     4	 * coach's one post / one event / one prompt + the client's cohort context.
+     5	 *
+     6	 * Entry point for the Community tab. When the client has no membership or no
+     7	 * today content, we render a Roman-voiced empty state with a PRIMARY ACTION
+     8	 * (no spinner-only states, UX HARD gate). Standardized on semanticColors.
+     9	 */
+    10	import React from 'react';
+    11	import { View, Text, StyleSheet, ScrollView } from 'react-native';
+    12	import { useNavigation } from '@react-navigation/native';
+    13	import { useTheme } from '../../theme/useTheme';
+    14	import { spacing, radius } from '../../theme/tokens';
+    15	import { useCurrentUser } from '../../hooks/useCurrentUser';
+    16	import { useCommunityToday } from '../../hooks/useCommunity';
+    17	import HapticPressable from '../../components/HapticPressable';
+    18	import { CommunityEmptyState } from '../../components/community';
+    19	import { featureFlags } from '../../config/featureFlags';
+    20	import type { CommunityNav } from './communityNavTypes';
+    21	
+    22	interface Props {
+    23	  /** When embedded in the Tab container the screen omits its own SafeArea. */
+    24	  embedded?: boolean;
+    25	}
+    26	
+    27	export default function CommunityTodayScreen({
+    28	  embedded,
+    29	}: Props): React.ReactElement {
+    30	  const { semanticColors } = useTheme();
+    31	  const navigation = useNavigation<CommunityNav>();
+    32	  const client = useCurrentUser();
+    33	  const today = useCommunityToday();
+    34	
+    35	  const data = today.data;
+    36	  const isEmpty =
+    37	    !today.isLoading &&
+    38	    !today.isError &&
+    39	    data != null &&
+    40	    !data.cohort &&
+    41	    !data.event &&
+    42	    !data.pinned_post &&
+    43	    !data.challenge;
+    44	
+    45	  const goToMessages = () => {
+    46	    if (featureFlags.communityDm) navigation.navigate('CommunityDmList');
+    47	  };
+    48	  const goToHall = () => {
+    49	    if (featureFlags.communityHall) {
+    50	      navigation.navigate('CommunitySpace', { space: 'hall' });
+    51	    } else {
+    52	      goToMessages();
+    53	    }
+    54	  };
+    55	  // F6 (discovery): the Today challenge card opens the challenge detail when the
+    56	  // challenges feature is on. With the flag OFF the detail route is not even
+    57	  // registered, so we fall back to the Hall rather than navigate to a missing
+    58	  // route (the card is never a dead end).
+    59	  const goToChallenge = (challengeId: string) => {
+    60	    if (featureFlags.communityChallenges) {
+    61	      navigation.navigate('CommunityChallengeDetail', { challengeId });
+    62	    } else {
+    63	      goToHall();
+    64	    }
+    65	  };
+    66	
+    67	  // Empty state: friendly Roman copy + a primary action (never a bare spinner).
+    68	  if (isEmpty || today.isError) {
+    69	    const noMembership = data?.empty_reason === 'no_membership';
+    70	    return (
+    71	      <ScrollView
+    72	        contentContainerStyle={styles.center}
+    73	        style={{ backgroundColor: semanticColors.bgPrimary }}
+    74	        testID="community-today-screen"
+    75	      >
+    76	        <CommunityEmptyState
+    77	          stem={noMembership ? 'noCohorts' : 'todayEmpty'}
+    78	          firstName={client?.firstName ?? client?.name ?? null}
+    79	          title={noMembership ? 'No cohort yet' : 'Nothing waiting today'}
+    80	          actionLabel={
+    81	            noMembership ? 'Send your coach a message' : 'Visit the Hall'
+    82	          }
+    83	          onAction={noMembership ? goToMessages : goToHall}
+    84	          testID="community-today-empty"
+    85	        />
+    86	      </ScrollView>
+    87	    );
+    88	  }
+    89	
+    90	  return (
+    91	    <ScrollView
+    92	      contentContainerStyle={styles.content}
+    93	      style={{ backgroundColor: semanticColors.bgPrimary }}
+    94	      testID="community-today-screen"
+    95	    >
+    96	      <Text style={[styles.heading, { color: semanticColors.textPrimary }]}>
+    97	        Today
+    98	      </Text>
+    99	
+   100	      {data?.cohort ? (
+   101	        <Card
+   102	          color={semanticColors.bgSurface}
+   103	          border={semanticColors.border}
+   104	          onPress={() =>
+   105	            navigation.navigate('CommunitySpace', {
+   106	              space: 'cohort',
+   107	              cohortId: data.cohort?.id,
+   108	            })
+   109	          }
+   110	          testID="community-today-cohort"
+--- featureFlags
+   130	  // transitions (seen -> acked -> replied) plus a read-time SLA snapshot per
+   131	  // message. This mobile flag gates the coach-side surface that consumes them:
+   132	  // the CoachAckBadge on each inbox row and the per-row "Mark acked"
+   133	  // quick-action. Defaults OFF UNCONDITIONALLY (not `isDev`). When false the
+   134	  // inbox renders exactly as the v1-6 surface does today (no badge, no
+   135	  // quick-action) so the kill switch hides the new UI without breaking the
+   136	  // existing inbox. The backend gate is also OFF in prod, so a dev build that
+   137	  // flips this on still degrades gracefully.
+   138	  //
+   139	  // env: EXPO_PUBLIC_FF_COMMUNITY_ACKS
+   140	  communityAcks: readFlag('EXPO_PUBLIC_FF_COMMUNITY_ACKS', false),
+   141	
+   142	  // ─── Community v3-1 — opt-in challenges ──────────────────────────────────
+   143	  // Cohort challenges with personal-progress logging and a STRICTLY OPT-IN,
+   144	  // cohort-local leaderboard. Defaults OFF UNCONDITIONALLY (not `isDev`): when
+   145	  // false the CommunityChallengeDetail route MUST NOT register and the screen
+   146	  // is dead code at build time. The backend gate (FEATURE_COMMUNITY_CHALLENGES)
+   147	  // is also OFF in prod, so a dev build that flips this on degrades gracefully.
+   148	  //
+   149	  // env: EXPO_PUBLIC_FF_COMMUNITY_CHALLENGES
+   150	  communityChallenges: readFlag('EXPO_PUBLIC_FF_COMMUNITY_CHALLENGES', false),
+   151	} as const;
+   152	
+   153	export type FeatureFlagKey = keyof typeof featureFlags;
+   154	
+   155	export function isFeatureEnabled(key: FeatureFlagKey): boolean {
+--- .env.example
+    96	# v1-6 coach community surface — default OFF until launch
+    97	EXPO_PUBLIC_FF_COACH_COMMUNITY=false
+    98	
+    99	# v2-2 coach ack signals + inbox SLA badges — default OFF until launch
+   100	EXPO_PUBLIC_FF_COMMUNITY_ACKS=false
+   101	
+   102	# v3-1 community challenges (opt-in leaderboard) — default OFF until launch
+   103	EXPO_PUBLIC_FF_COMMUNITY_CHALLENGES=false

@@ -1,0 +1,234 @@
+diff --git a/src/components/roman/RomanBriefCard.tsx b/src/components/roman/RomanBriefCard.tsx
+index 808f991..6067c39 100644
+--- a/src/components/roman/RomanBriefCard.tsx
++++ b/src/components/roman/RomanBriefCard.tsx
+@@ -41,7 +41,11 @@ export default function RomanBriefCard({
+     <View style={styles.card} testID={testID} accessibilityRole="summary">
+       {/* FACE+VOICE: avatar co-located with the §2.3 brief copy. */}
+       <RomanAvatar crop={crop} size={40} testID="roman-brief-avatar" />
+-      <Text style={styles.copy} accessibilityRole="text">
++      <Text
++        style={styles.copy}
++        accessibilityRole="text"
++        accessibilityLiveRegion="polite"
++      >
+         {line}
+       </Text>
+     </View>
+diff --git a/src/components/roman/RomanCheckInNotice.tsx b/src/components/roman/RomanCheckInNotice.tsx
+index 452a9de..2459248 100644
+--- a/src/components/roman/RomanCheckInNotice.tsx
++++ b/src/components/roman/RomanCheckInNotice.tsx
+@@ -33,7 +33,11 @@ export default function RomanCheckInNotice({
+     <View style={styles.row} testID={testID} accessibilityRole="summary">
+       {/* FACE+VOICE: avatar co-located with the §2.4 check-in copy. */}
+       <RomanAvatar crop={crop} size={32} testID="roman-checkin-avatar" />
+-      <Text style={styles.copy} accessibilityRole="text">
++      <Text
++        style={styles.copy}
++        accessibilityRole="text"
++        accessibilityLiveRegion="polite"
++      >
+         {line}
+       </Text>
+     </View>
+diff --git a/src/components/roman/RomanNewClientNotice.tsx b/src/components/roman/RomanNewClientNotice.tsx
+index e9351a4..a260dc3 100644
+--- a/src/components/roman/RomanNewClientNotice.tsx
++++ b/src/components/roman/RomanNewClientNotice.tsx
+@@ -36,7 +36,11 @@ export default function RomanNewClientNotice({
+     <View style={styles.row} testID={testID} accessibilityRole="summary">
+       {/* FACE+VOICE: avatar co-located with the §2.5 onboarded copy. */}
+       <RomanAvatar crop={crop} size={32} testID="roman-newclient-avatar" />
+-      <Text style={styles.copy} accessibilityRole="text">
++      <Text
++        style={styles.copy}
++        accessibilityRole="text"
++        accessibilityLiveRegion="polite"
++      >
+         {line}
+       </Text>
+     </View>
+diff --git a/src/components/roman/RomanPayoutNotice.tsx b/src/components/roman/RomanPayoutNotice.tsx
+index 326fd46..c0f1f6c 100644
+--- a/src/components/roman/RomanPayoutNotice.tsx
++++ b/src/components/roman/RomanPayoutNotice.tsx
+@@ -41,7 +41,11 @@ export default function RomanPayoutNotice({
+     <View style={styles.row} testID={testID} accessibilityRole="summary">
+       {/* FACE+VOICE: avatar co-located with the §2.12 payout copy. */}
+       <RomanAvatar crop={crop} size={32} testID="roman-payout-avatar" />
+-      <Text style={styles.copy} accessibilityRole="text">
++      <Text
++        style={styles.copy}
++        accessibilityRole="text"
++        accessibilityLiveRegion="polite"
++      >
+         {line}
+       </Text>
+     </View>
+diff --git a/src/components/roman/RomanStreakCard.tsx b/src/components/roman/RomanStreakCard.tsx
+index beca8d6..f78d8c6 100644
+--- a/src/components/roman/RomanStreakCard.tsx
++++ b/src/components/roman/RomanStreakCard.tsx
+@@ -54,7 +54,11 @@ export default function RomanStreakCard({
+     <View style={styles.card} testID={testID} accessibilityRole="summary">
+       {/* FACE+VOICE: avatar co-located with the §2.7 streak copy. */}
+       <RomanAvatar crop={crop} size={48} testID="roman-streak-avatar" />
+-      <Text style={styles.copy} accessibilityRole="text">
++      <Text
++        style={styles.copy}
++        accessibilityRole="text"
++        accessibilityLiveRegion="polite"
++      >
+         {line}
+       </Text>
+     </View>
+diff --git a/src/components/roman/RomanVoiceLogReadback.tsx b/src/components/roman/RomanVoiceLogReadback.tsx
+index 85fd5d5..477c172 100644
+--- a/src/components/roman/RomanVoiceLogReadback.tsx
++++ b/src/components/roman/RomanVoiceLogReadback.tsx
+@@ -40,7 +40,11 @@ export default function RomanVoiceLogReadback({
+     <View style={styles.row} testID={testID} accessibilityRole="summary">
+       {/* FACE+VOICE: small avatar co-located with the §2.9 readback copy. */}
+       <RomanAvatar crop={crop} size={24} testID="roman-voicelog-avatar" />
+-      <Text style={styles.copy} accessibilityRole="text">
++      <Text
++        style={styles.copy}
++        accessibilityRole="text"
++        accessibilityLiveRegion="polite"
++      >
+         {line}
+       </Text>
+     </View>
+diff --git a/src/components/roman/RomanWorkoutCompleteCard.tsx b/src/components/roman/RomanWorkoutCompleteCard.tsx
+index 3943fb8..e0b235f 100644
+--- a/src/components/roman/RomanWorkoutCompleteCard.tsx
++++ b/src/components/roman/RomanWorkoutCompleteCard.tsx
+@@ -31,16 +31,26 @@ export default function RomanWorkoutCompleteCard({
+   liftName,
+   testID,
+ }: RomanWorkoutCompleteCardProps): React.ReactElement {
+-  // §3.8 / §4: slight smile only on the PR celebration.
+-  const crop = mode === 'celebration' ? 'smile' : 'neutral';
++  // §3.8 / §4: slight smile only on a genuine PR celebration. A celebration
++  // needs a lift name; without one the copy falls back to the default line, so
++  // derive the effective state once and drive BOTH the face and the copy from
++  // it. This keeps the smile from appearing over the default line.
++  const isCelebration = mode === 'celebration' && Boolean(liftName?.trim());
++  const crop = isCelebration ? 'smile' : 'neutral';
+   // Deferred (roman-quip-budget): §2.8 permits a situation-aimed quip
+   // ("The weights have no comment."). Gate on the ~1-in-8 ceiling (§1.5).
+-  const line = romanWorkoutComplete({ mode, liftName });
++  const line = isCelebration
++    ? romanWorkoutComplete({ mode: 'celebration', liftName })
++    : romanWorkoutComplete({ mode: mode === 'celebration' ? 'default' : mode });
+   return (
+     <View style={styles.card} testID={testID} accessibilityRole="summary">
+       {/* FACE+VOICE: avatar co-located with the §2.8 workout-complete copy. */}
+       <RomanAvatar crop={crop} size={48} testID="roman-workout-avatar" />
+-      <Text style={styles.copy} accessibilityRole="text">
++      <Text
++        style={styles.copy}
++        accessibilityRole="text"
++        accessibilityLiveRegion="polite"
++      >
+         {line}
+       </Text>
+     </View>
+diff --git a/src/components/roman/__tests__/romanP3Surfaces.test.tsx b/src/components/roman/__tests__/romanP3Surfaces.test.tsx
+index 47815cb..c6a5930 100644
+--- a/src/components/roman/__tests__/romanP3Surfaces.test.tsx
++++ b/src/components/roman/__tests__/romanP3Surfaces.test.tsx
+@@ -147,6 +147,92 @@ describe('RomanWorkoutCompleteCard (§2.8)', () => {
+     expect(getByTestId('roman-workout-avatar').props.accessibilityLabel).toBe(NEUTRAL);
+     expect(getByText('Your workout is finished, but I have not yet been able to save it. Do not close the app — I am writing it down now.')).toBeTruthy();
+   });
++  it('celebration with a valid lift name — SMILE + PR copy (coherent)', () => {
++    const { getByTestId, getByText } = render(
++      <RomanWorkoutCompleteCard mode="celebration" liftName="Squat" />,
++    );
++    expect(getByTestId('roman-workout-avatar').props.accessibilityLabel).toBe(PLEASED);
++    expect(getByText('Workout complete — and a personal best on Squat, no less. Noted with admiration!')).toBeTruthy();
++  });
++  it('celebration with a blank lift name — NEUTRAL + default copy (no mismatch)', () => {
++    const { getByTestId, getByText } = render(
++      <RomanWorkoutCompleteCard mode="celebration" liftName="" />,
++    );
++    expect(getByTestId('roman-workout-avatar').props.accessibilityLabel).toBe(NEUTRAL);
++    expect(getByText('Workout complete. Recorded. That is one more behind you.')).toBeTruthy();
++  });
++  it('celebration with an undefined lift name — NEUTRAL + default copy (no mismatch)', () => {
++    const { getByTestId, getByText } = render(
++      <RomanWorkoutCompleteCard mode="celebration" liftName={undefined} />,
++    );
++    expect(getByTestId('roman-workout-avatar').props.accessibilityLabel).toBe(NEUTRAL);
++    expect(getByText('Workout complete. Recorded. That is one more behind you.')).toBeTruthy();
++  });
++  it('celebration with a whitespace-only lift name — NEUTRAL + default copy', () => {
++    const { getByTestId, getByText } = render(
++      <RomanWorkoutCompleteCard mode="celebration" liftName="   " />,
++    );
++    expect(getByTestId('roman-workout-avatar').props.accessibilityLabel).toBe(NEUTRAL);
++    expect(getByText('Workout complete. Recorded. That is one more behind you.')).toBeTruthy();
++  });
++});
++
++// ── P1-UX-01: dynamic copy announced to assistive tech (live regions) ─────────
++describe('Roman P3 dynamic-copy live regions (P1-UX-01)', () => {
++  it('RomanBriefCard copy is a polite live region', () => {
++    const { getByText } = render(
++      <RomanBriefCard coachName="Marcus" clientCount={6} mode="default" />,
++    );
++    expect(
++      getByText(
++        'Good morning, Marcus. Your brief is ready. 6 clients need attention today, and two check-ins arrived overnight.',
++      ).props.accessibilityLiveRegion,
++    ).toBe('polite');
++  });
++  it('RomanCheckInNotice copy is a polite live region', () => {
++    const { getByText } = render(<RomanCheckInNotice clientName="Dana" mode="default" />);
++    expect(
++      getByText('Dana has submitted a check-in. I have placed it at the top of your queue.').props
++        .accessibilityLiveRegion,
++    ).toBe('polite');
++  });
++  it('RomanNewClientNotice copy is a polite live region', () => {
++    const { getByText } = render(
++      <RomanNewClientNotice clientName="Dana" clientCount={4} mode="default" />,
++    );
++    expect(
++      getByText('Dana has joined your roster. Their file is prepared and waiting for you.').props
++        .accessibilityLiveRegion,
++    ).toBe('polite');
++  });
++  it('RomanPayoutNotice copy is a polite live region', () => {
++    const { getByText } = render(
++      <RomanPayoutNotice amount="$240.00" bankLast4="4242" settleDays={2} mode="default" />,
++    );
++    expect(
++      getByText(
++        'Your payout of $240.00 is on its way to the account ending 4242. Funds typically settle within 2 business days.',
++      ).props.accessibilityLiveRegion,
++    ).toBe('polite');
++  });
++  it('RomanStreakCard copy is a polite live region', () => {
++    const { getByText } = render(<RomanStreakCard tier={3} firstName="Sam" mode="default" />);
++    expect(
++      getByText('Three days running. A streak is just consistency that has been counting. Keep it.')
++        .props.accessibilityLiveRegion,
++    ).toBe('polite');
++  });
++  it('RomanVoiceLogReadback copy is a polite live region (highest priority)', () => {
++    const { getByText } = render(<RomanVoiceLogReadback weight={315} reps={5} mode="default" />);
++    expect(getByText('315 pounds, 5 reps. Recorded.').props.accessibilityLiveRegion).toBe('polite');
++  });
++  it('RomanWorkoutCompleteCard copy is a polite live region', () => {
++    const { getByText } = render(<RomanWorkoutCompleteCard mode="default" />);
++    expect(
++      getByText('Workout complete. Recorded. That is one more behind you.').props
++        .accessibilityLiveRegion,
++    ).toBe('polite');
++  });
+ });
+ 
+ // ── §2.9 Voice-log confirmation ───────────────────────────────────────────────

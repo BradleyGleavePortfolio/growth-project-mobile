@@ -1,0 +1,226 @@
+--- hardcoded secrets patterns ---
+622:+ * a >= 48dp HapticPressable on semanticColors / tokens.ts, an Ionicons line
+637:+import { spacing, radius, withAlpha } from '../../theme/tokens';
+856:+ * useTheme is mocked to the real light tokens so semanticColors keys resolve
+863:+  const { lightTokens } = jest.requireActual('../../../theme/tokens');
+865:+    useTheme: () => ({ colorScheme: 'light', semanticColors: lightTokens }),
+2004:+import { spacing, radius, withAlpha, semantic } from '../../theme/tokens';
+3176:+import { spacing, radius, withAlpha, semantic } from '../../theme/tokens';
+3862:+ * tokens so semanticColors keys resolve without the ThemeProvider — mirroring
+3869:+// ── Theme: real tokens, no ThemeProvider ─────────────────────────────────────
+3871:+  const { lightTokens } = jest.requireActual('../../../theme/tokens');
+3873:+    useTheme: () => ({ colorScheme: 'light', semanticColors: lightTokens }),
+--- raw SQL / unsafe HTML / raw eval URL schemes ---
+378:+  fn: () => Promise<{ data: unknown }>,
+380:+  let res: { data: unknown };
+3907:+  useCommunityMe: () => ({ data: { workspace_id: 'ws-1' } }),
+3920:+  detail: { data: undefined, isLoading: false, isError: false, isRefetching: false, refetch: jest.fn() } as Record<string, unknown>,
+3921:+  list: { data: { events: [], next_before: null }, isLoading: false, isError: false, isRefetching: false, refetch: jest.fn() } as Record<string, unknown>,
+3967:+    data: undefined,
+3974:+    data: { events: [], next_before: null },
+4000:+    mockEventHooks.detail = { ...mockEventHooks.detail, data: undefined };
+4007:+    mockEventHooks.detail = { ...mockEventHooks.detail, data: makeEvent() };
+4018:+    mockEventHooks.detail = { ...mockEventHooks.detail, data: undefined };
+4029:+      data: makeEvent({ state: 'live', external_url: 'https://example.com/live' }),
+4042:+      data: makeEvent({ state: 'replay', external_url: 'https://example.com/replay' }),
+4052:+      data: makeEvent({ state: 'live', external_url: 'javascript:alert(1)' }),
+4064:+      data: makeEvent({ state: 'live', external_url: 'https://example.com/live' }),
+4073:+      data: makeEvent({ state: 'reflected', reflected_at: '2026-07-02T00:00:00.000Z' }),
+4098:+    mockEventHooks.list = { ...mockEventHooks.list, data: { events: [], next_before: null } };
+4108:+      data: { events: [makeEvent()], next_before: null },
+4138:+      data: { events: [makeEvent()], next_before: null },
+4148:+      data: { events: [makeEvent({ id: 'ev-9', state: 'scheduled' })], next_before: null },
+4160:+      data: { events: [makeEvent({ id: 'ev-7', state: 'live' })], next_before: null },
+4178:+      data: { events: [makeEvent({ id: 'ev-5', state: 'replay' })], next_before: null },
+4194:+      data: { events: [makeEvent({ id: 'ev-3', state: 'live' })], next_before: null },
+4240:+ * (`javascript:`, `data:`, plain `http:`) plus the calm null-on-garbage path.
+4251:+  it('rejects a javascript: scheme (no code execution)', () => {
+4252:+    expect(safeExternalEventUrl('javascript:alert(1)')).toBeNull();
+4255:+  it('rejects a data: scheme', () => {
+4256:+    expect(safeExternalEventUrl('data:text/html,<script>1</script>')).toBeNull();
+4263:+  it('rejects a file: scheme', () => {
+4264:+    expect(safeExternalEventUrl('file:///etc/passwd')).toBeNull();
+4285:+ * never a `javascript:` / `data:` / `file:` / plain `http:` scheme that could
+--- unbounded timers/subscriptions/list intervals ---
+1353:+      .spyOn(AccessibilityInfo, 'addEventListener')
+1357:+      }) as unknown as typeof AccessibilityInfo.addEventListener);
+1728:+    const sub = AccessibilityInfo.addEventListener(
+1982:+  FlatList,
+2212:+        <FlatList
+--- direct mutation/fetch/axios points ---
+247:+import axios from 'axios';
+372:+ * Run an axios call and normalise failures into a CommunityApiError. ZodErrors
+384:+    if (axios.isAxiosError(err)) {
+513:+      api.get<unknown>(`/community/workspaces/${workspaceId}/events`, {
+522:+      api.get<unknown>(`/community/events/${eventId}`),
+532:+      api.post<unknown>(
+546:+      api.patch<unknown>(
+564:+      api.post<unknown>(
+579:+      api.post<unknown>(
+593:+      api.post<unknown>(
+1121:+  getOne: jest.mocked(communityEventsApi.getOne),
+1164:+  mockApi.getOne.mockReset();
+1186:+    qc.setQueryData<CommunityEvent>(detailKey, baseEvent());
+1221:+    qc.setQueryData<CommunityEvent>(detailKey, prior);
+1249:+    qc.setQueryData<CommunityEventListResponse>(listKey, {
+1284:+    qc.setQueryData<CommunityEventListResponse>(listKey, empty);
+1456:+    queryFn: () => communityEventsApi.getOne(eventId as string),
+1498:+      await qc.cancelQueries({ queryKey: key });
+1501:+        qc.setQueryData<CommunityEvent>(key, applyOptimisticRsvp(prev, status));
+1508:+        qc.setQueryData(communityEventsKeys.detail(eventId), c.prev);
+1512:+      qc.invalidateQueries({ queryKey: communityEventsKeys.detail(eventId) });
+1514:+        qc.invalidateQueries({
+1537:+      await qc.cancelQueries({ queryKey: key });
+1564:+      qc.setQueryData<CommunityEventListResponse>(key, {
+1573:+        qc.setQueryData(communityEventsKeys.list(workspaceId), c.prev);
+1577:+      qc.invalidateQueries({
+1599:+      qc.setQueryData<CommunityEvent>(
+1605:+      qc.invalidateQueries({ queryKey: communityEventsKeys.detail(eventId) });
+1607:+        qc.invalidateQueries({
+1617:+ * variable is the target `state`, so call sites read `transition.mutate('live')`
+1631:+      qc.setQueryData<CommunityEvent>(
+1637:+      qc.invalidateQueries({ queryKey: communityEventsKeys.detail(eventId) });
+1639:+        qc.invalidateQueries({
+1657:+      qc.setQueryData<CommunityEvent>(
+1663:+      qc.invalidateQueries({ queryKey: communityEventsKeys.detail(eventId) });
+1665:+        qc.invalidateQueries({
+1682:+      qc.setQueryData<CommunityEvent>(
+1688:+      qc.invalidateQueries({ queryKey: communityEventsKeys.detail(eventId) });
+1690:+        qc.invalidateQueries({
+2107:+    createEvent.mutate(
+2123:+          if (info.conflict) void events.refetch();
+2178:+          onRetry={() => events.refetch()}
+2220:+              onRefresh={() => events.refetch()}
+2559:+    transition.mutate(advanceTo, {
+2568:+    attachReplay.mutate(trimmedReplay, {
+2580:+    reflect.mutate(undefined, {
+3135:+ * (https only) before they ever reach `Linking.openURL`.
+3210:+    void Linking.openURL(safe).catch(() => {
+3219:+      rsvp.mutate(status, {
+3224:+          if (info.conflict) void eventQuery.refetch();
+3268:+            onPress={() => eventQuery.refetch()}
+4238:+ * native room (Step 0). Before any `Linking.openURL`, the URL must be proven
+4284:+ * we ever hand a URL to `Linking.openURL`, we MUST confirm it is an https URL,
+--- a11y interactive elements ---
+9:+ * a >= 48dp HapticPressable on semanticColors / tokens.ts, an Ionicons line
+22:+import HapticPressable from '../HapticPressable';
+118:+  const accessibilityLabel = `Open event ${event.title}, ${meta.label}, starts ${start}`;
+121:+    <HapticPressable
+124:+      accessibilityRole="button"
+125:+      accessibilityLabel={accessibilityLabel}
+176:+    </HapticPressable>
+848:+  TextInput,
+856:+import HapticPressable from '../../components/HapticPressable';
+1058:+          <HapticPressable
+1061:+            accessibilityRole="button"
+1062:+            accessibilityLabel="Schedule your first event"
+1071:+          </HapticPressable>
+1090:+        <HapticPressable
+1093:+          accessibilityRole="button"
+1094:+          accessibilityLabel="Schedule a new event"
+1101:+        </HapticPressable>
+1224:+          <TextInput
+1230:+            accessibilityLabel="Event title"
+1238:+            <HapticPressable
+1241:+              accessibilityRole="button"
+1242:+              accessibilityLabel="Pick start date and time"
+1263:+            </HapticPressable>
+1264:+            <HapticPressable
+1267:+              accessibilityRole="button"
+1268:+              accessibilityLabel="Pick start time"
+1283:+            </HapticPressable>
+1305:+          <TextInput
+1312:+            accessibilityLabel="External event link, optional"
+1326:+            <HapticPressable
+1329:+              accessibilityRole="button"
+1330:+              accessibilityLabel="Cancel"
+1333:+                styles.modalButton,
+1343:+            </HapticPressable>
+1344:+            <HapticPressable
+1348:+              accessibilityRole="button"
+1349:+              accessibilityLabel="Create event"
+1350:+              accessibilityState={{ disabled: !canSubmit }}
+1353:+                styles.modalButton,
+1373:+            </HapticPressable>
+1492:+            <HapticPressable
+1496:+              accessibilityRole="button"
+1497:+              accessibilityLabel={`Advance to ${stateLabel(advanceTo)}`}
+1498:+              accessibilityState={{ disabled: busy }}
+1501:+                styles.manageButton,
+1511:+                  styles.manageButtonLabel,
+1521:+            </HapticPressable>
+1526:+              <TextInput
+1533:+                accessibilityLabel="External replay link"
+1537:+              <HapticPressable
+1541:+                accessibilityRole="button"
+1542:+                accessibilityLabel="Attach replay link"
+1543:+                accessibilityState={{
+1548:+                  styles.manageButton,
+1558:+              </HapticPressable>
+1560:+              <HapticPressable
+1564:+                accessibilityRole="button"
+1565:+                accessibilityLabel="Reflect and close the event"
+1566:+                accessibilityHint="Posts the recap and closes the event"
+1567:+                accessibilityState={{ disabled: busy }}
+1576:+              </HapticPressable>
+1594:+          <HapticPressable
+1597:+            accessibilityRole="button"
+1598:+            accessibilityLabel="Done"
+1601:+              styles.modalButton,
+1610:+          </HapticPressable>
+1646:+              <HapticPressable
+1649:+                accessibilityRole="button"
+1650:+                accessibilityLabel="Keep the event open"
+1653:+                  styles.modalButton,
+1662:+              </HapticPressable>
+1663:+              <HapticPressable
+1667:+                accessibilityRole="button"
+1668:+                accessibilityLabel="Reflect and close"
+1669:+                accessibilityState={{ disabled: busy }}
+1672:+                  styles.modalButton,
+1682:+              </HapticPressable>
+1844:+  modalButton: {
+1869:+  manageButton: {
+1876:+  manageButtonLabel: {
+1919:+        <HapticPressable
+1922:+          accessibilityRole="button"
+1923:+          accessibilityLabel="Events: schedule and manage live sessions"
+1951:+        </HapticPressable>
+2007:+ * buttons — when the viewer has not responded, "Going" is the primary action
+2028:+import HapticPressable from '../../components/HapticPressable';
+2128:+          <HapticPressable
+2132:+            accessibilityRole="button"
+2133:+            accessibilityLabel="Try again"
+2134:+            accessibilityState={{ disabled: eventQuery.isRefetching }}
+2157:+          </HapticPressable>
+2184:+          <HapticPressable
+2187:+            accessibilityRole="button"
+2188:+            accessibilityLabel="Back to community"
+2197:+          </HapticPressable>
+2264:+            <HapticPressable
+2267:+              accessibilityRole="link"
+2268:+              accessibilityLabel={`${linkLabel(event.state)} (opens outside the app)`}
+2270:+              style={[styles.linkButton, { borderColor: semanticColors.accent }]}
+2280:+            </HapticPressable>
+2358:+          accessibilityRole="text"
+2359:+          accessibilityLabel="You're going. RSVP'd: going."
+2368:+          <QuietRsvpButton
+2377:+          <QuietRsvpButton
+2398:+      <PrimaryRsvpButton
+2408:+        <QuietRsvpButton
+2419:+          <QuietRsvpButton
+2434:+function PrimaryRsvpButton({
+2452:+    <HapticPressable
+2456:+      accessibilityRole="button"
+2457:+      accessibilityLabel={a11y}
+2458:+      accessibilityState={{ selected, disabled }}
+2468:+    </HapticPressable>
+2472:+function QuietRsvpButton({
+2492:+    <HapticPressable
+2496:+      accessibilityRole="button"
+2497:+      accessibilityLabel={a11y}
+2498:+      accessibilityState={{ selected, disabled }}
+2504:+    </HapticPressable>
+2551:+  linkButton: {
+2732:+  const { Pressable } = require('react-native');
+2738:+      React.createElement(Pressable, {

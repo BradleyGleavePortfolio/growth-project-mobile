@@ -1,0 +1,17 @@
+added_lines=4752
+swallowed_catch_or_empty_catch: 10
+eslint_disable: 8
+ts_ignore_expect: 0
+console: 0
+todo_fixme_hack: 1
+only_skip: 0
+focused_fit_fdescribe: 0
+dangerously_set_inner_html: 0
+eval_or_function_ctor: 0
+hardcoded_secret: 4
+any_type: 24
+non_null_assertion: 0
+set_timeout_interval: 4
+async_void_float: 7
+alert: 0
+schema_migration: 76

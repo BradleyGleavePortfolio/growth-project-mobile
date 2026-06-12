@@ -1,0 +1,164 @@
+     1	/**
+     2	 * RomanComposer — the message input + send control.
+     3	 *
+     4	 * Controlled input: the parent screen owns the draft so a send-FAILURE can
+     5	 * preserve the text in the composer for retry (brief §3) — the composer never
+     6	 * clears optimistically. Send is disabled while empty/over-cap/sending so a
+     7	 * blank or oversized turn can never reach the backend (mirrors SendMessageDto
+     8	 * @MinLength(1)/@MaxLength(8000), roman.dto.ts L30-33).
+     9	 *
+    10	 * Touch target: the send control is a minimum 48x48dp hit area (brief §7 /
+    11	 * Apple HIG), enforced in `styles.sendButton`.
+    12	 *
+    13	 * Composer growth (R1 UX finding P2): the input grows with its content rather
+    14	 * than being pinned to a fixed 120dp cap, which becomes cramped at large
+    15	 * dynamic-type sizes. The cap is derived from the current window height (a
+    16	 * fraction of the viewport, floored at a sensible minimum), and the input only
+    17	 * starts to scroll once it reaches that dynamic ceiling.
+    18	 */
+    19	import React, { useState } from 'react';
+    20	import {
+    21	  ActivityIndicator,
+    22	  StyleSheet,
+    23	  Text,
+    24	  TextInput,
+    25	  TouchableOpacity,
+    26	  useWindowDimensions,
+    27	  View,
+    28	  type NativeSyntheticEvent,
+    29	  type TextInputContentSizeChangeEventData,
+    30	} from 'react-native';
+    31	import { ROMAN_MESSAGE_MAX_LENGTH } from '../../api/romanApi';
+    32	import { colors, radius, spacing, typography } from '../../theme/tokens';
+    33	
+    34	/** Single-line input floor (matches the 48dp touch target). */
+    35	const COMPOSER_MIN_HEIGHT = 48;
+    36	/**
+    37	 * Fraction of the window height the composer may grow to before it scrolls.
+    38	 * Viewport-relative (not a fixed 120dp) so it stays comfortable under large
+    39	 * accessibility font scales; floored so a very short window still allows a few
+    40	 * lines.
+    41	 */
+    42	const COMPOSER_MAX_HEIGHT_FRACTION = 0.3;
+    43	const COMPOSER_MAX_HEIGHT_FLOOR = 120;
+    44	
+    45	export interface RomanComposerProps {
+    46	  value: string;
+    47	  onChangeText: (text: string) => void;
+    48	  onSend: () => void;
+    49	  sending: boolean;
+    50	  /** Disables input + send entirely (e.g. Roman unavailable). */
+    51	  disabled?: boolean;
+    52	  testID?: string;
+    53	}
+    54	
+    55	export default function RomanComposer({
+    56	  value,
+    57	  onChangeText,
+    58	  onSend,
+    59	  sending,
+    60	  disabled = false,
+    61	  testID,
+    62	}: RomanComposerProps): React.ReactElement {
+    63	  const trimmed = value.trim();
+    64	  const overCap = value.length > ROMAN_MESSAGE_MAX_LENGTH;
+    65	  const canSend = !disabled && !sending && trimmed.length > 0 && !overCap;
+    66	
+    67	  const { height: windowHeight } = useWindowDimensions();
+    68	  const maxHeight = Math.max(
+    69	    COMPOSER_MAX_HEIGHT_FLOOR,
+    70	    Math.round(windowHeight * COMPOSER_MAX_HEIGHT_FRACTION),
+    71	  );
+    72	  const [contentHeight, setContentHeight] = useState(COMPOSER_MIN_HEIGHT);
+    73	  const inputHeight = Math.min(
+    74	    Math.max(COMPOSER_MIN_HEIGHT, contentHeight),
+    75	    maxHeight,
+    76	  );
+    77	  // Only scroll inside the input once it has reached the dynamic ceiling.
+    78	  const inputScrollEnabled = contentHeight >= maxHeight;
+    79	
+    80	  const onContentSizeChange = (
+    81	    e: NativeSyntheticEvent<TextInputContentSizeChangeEventData>,
+    82	  ): void => {
+    83	    setContentHeight(e.nativeEvent.contentSize.height);
+    84	  };
+    85	
+    86	  return (
+    87	    <View style={styles.container} testID={testID}>
+    88	      {overCap ? (
+    89	        <Text style={styles.capNote} accessibilityRole="text">
+    90	          {`Message is too long by ${value.length - ROMAN_MESSAGE_MAX_LENGTH} characters.`}
+    91	        </Text>
+    92	      ) : null}
+    93	      <View style={styles.row}>
+    94	        <TextInput
+    95	          style={[styles.input, { height: inputHeight, maxHeight }]}
+    96	          value={value}
+    97	          onChangeText={onChangeText}
+    98	          onContentSizeChange={onContentSizeChange}
+    99	          scrollEnabled={inputScrollEnabled}
+   100	          editable={!disabled && !sending}
+   101	          placeholder="Message Roman"
+   102	          placeholderTextColor={colors.stone}
+   103	          multiline
+   104	          maxLength={ROMAN_MESSAGE_MAX_LENGTH + 1}
+   105	          accessibilityLabel="Message Roman"
+   106	          testID="roman-composer-input"
+   107	        />
+   108	        <TouchableOpacity
+   109	          style={[styles.sendButton, !canSend && styles.sendButtonDisabled]}
+   110	          onPress={onSend}
+   111	          disabled={!canSend}
+   112	          accessibilityRole="button"
+   113	          accessibilityState={{ disabled: !canSend, busy: sending }}
+   114	          accessibilityLabel={sending ? 'Sending message' : 'Send message'}
+   115	          testID="roman-composer-send"
+   116	        >
+   117	          {sending ? (
+   118	            <ActivityIndicator color={colors.bone} testID="roman-composer-spinner" />
+   119	          ) : (
+   120	            <Text style={styles.sendLabel}>Send</Text>
+   121	          )}
+   122	        </TouchableOpacity>
+   123	      </View>
+   124	    </View>
+   125	  );
+   126	}
+   127	
+   128	const styles = StyleSheet.create({
+   129	  container: {
+   130	    borderTopWidth: 0.5,
+   140	    alignItems: 'flex-end',
+   141	    gap: spacing.sm,
+   142	  },
+   143	  input: {
+   144	    flex: 1,
+   145	    minHeight: COMPOSER_MIN_HEIGHT,
+   146	    ...typography.body,
+   147	    color: colors.ink,
+   148	    backgroundColor: colors.cream,
+   149	    borderRadius: radius.lg,
+   150	    paddingHorizontal: spacing.lg,
+   151	    paddingVertical: spacing.md,
+   152	  },
+   153	  sendButton: {
+   154	    minWidth: 48,
+   155	    minHeight: 48,
+   156	    paddingHorizontal: spacing.lg,
+   157	    alignItems: 'center',
+   158	    justifyContent: 'center',
+   159	    backgroundColor: colors.forest,
+   160	    borderRadius: radius.lg,
+   161	  },
+   162	  sendButtonDisabled: {
+   163	    backgroundColor: colors.stone,
+   164	  },
+   165	  sendLabel: {
+   166	    ...typography.bodyMd,
+   167	    color: colors.bone,
+   168	  },
+   169	  capNote: {
+   170	    ...typography.bodySmall,
+   171	    color: colors.error,
+   172	  },
+   173	});

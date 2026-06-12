@@ -1,0 +1,59 @@
+{
+  "repo": "/home/user/workspace/tgp/audit-roman-p3",
+  "pr": 241,
+  "head": "d79fda2837279d19d78c52119196f937bd74b507",
+  "branch": "feature/roman-p3-voice-expansion",
+  "npm_ci": "pass",
+  "full_jest": "killed_exit_code_-1",
+  "targeted_jest": "pass_3_suites_147_tests",
+  "npm_audit": {
+    "json_path": "/home/user/workspace/roman_p3_npm_audit.json",
+    "total": 18,
+    "moderate": 14,
+    "high": 4,
+    "critical": 0
+  },
+  "verdicts": {
+    "code": "NOT CLEAN",
+    "ux": "NOT CLEAN"
+  },
+  "findings": [
+    {
+      "id": "P1-CODE-01",
+      "title": "Full Jest baseline did not complete",
+      "evidence": "npx jest --runInBand killed with exit_code -1"
+    },
+    {
+      "id": "P1-CODE-02",
+      "title": "Bradley Law #36 swallowed catches remain at HEAD",
+      "examples": [
+        "src/components/HeroAction.tsx:33",
+        "src/components/coach/ai-budget/AIBudgetTutorialModal.tsx:144",
+        "src/navigation/RootNavigator.tsx:460",
+        "src/services/secureStorage.ts:106"
+      ]
+    },
+    {
+      "id": "P1-CODE-03",
+      "title": "npm audit high vulnerabilities remain",
+      "evidence": "/home/user/workspace/roman_p3_npm_audit.json"
+    },
+    {
+      "id": "P2-CODE-01/P2-UX-01",
+      "title": "Workout celebration face can disagree with default fallback copy",
+      "evidence": [
+        "src/lib/roman/copy.ts:201-204",
+        "src/components/roman/RomanWorkoutCompleteCard.tsx:34-42"
+      ]
+    },
+    {
+      "id": "P1-UX-01",
+      "title": "Dynamic Roman copy lacks live-region announcements",
+      "evidence": [
+        "src/components/roman/RomanBriefCard.tsx:39,44-46",
+        "src/components/roman/RomanVoiceLogReadback.tsx:38,43-45",
+        "src/components/roman/RomanWorkoutCompleteCard.tsx:38,43-45"
+      ]
+    }
+  ]
+}

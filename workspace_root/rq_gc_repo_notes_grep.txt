@@ -1,0 +1,45 @@
+./src/components/coach/ai-budget/AIBudgetMount.tsx:2: * AIBudgetMount — single-mount orchestrator for the AI budget surfaces.
+./src/components/coach/ai-budget/AIBudgetMount.tsx:41:export interface AIBudgetMountProps {
+./src/components/coach/ai-budget/AIBudgetMount.tsx:55:export function AIBudgetMount({
+./src/components/coach/ai-budget/AIBudgetMount.tsx:59:}: AIBudgetMountProps): React.ReactElement | null {
+./src/components/coach/ai-budget/AIBudgetMount.tsx:166:export default AIBudgetMount;
+./src/components/coach/ai-budget/__tests__/AIBudgetMount.test.tsx:2: * AIBudgetMount — focus-gated polling test (Round-2 fix NEW-P2-1).
+./src/components/coach/ai-budget/__tests__/AIBudgetMount.test.tsx:41:// That interval is the open handle behind the "Jest did not exit" warning for
+./src/components/coach/ai-budget/__tests__/AIBudgetMount.test.tsx:79:import { AIBudgetMount } from '../AIBudgetMount';
+./src/components/coach/ai-budget/__tests__/AIBudgetMount.test.tsx:81:describe('AIBudgetMount — focus-gated polling (NEW-P2-1)', () => {
+./src/components/coach/ai-budget/__tests__/AIBudgetMount.test.tsx:90:    render(<AIBudgetMount enabled />);
+./src/components/coach/ai-budget/__tests__/AIBudgetMount.test.tsx:104:    render(<AIBudgetMount enabled />);
+./src/components/coach/ai-budget/__tests__/AIBudgetMount.test.tsx:113:    render(<AIBudgetMount enabled={false} />);
+./src/components/coach/ai-budget/__tests__/AIBudgetMount.test.tsx:125:    render(<AIBudgetMount />);
+./src/hooks/usePendingAiDrafts.ts:10: * mirror the pattern from `AIBudgetMount` so a screen blur immediately
+./src/hooks/useWearablePreference.test.tsx:2: * useWearablePreference — optimistic-update + rollback tests.
+./src/hooks/useWearablePreference.test.tsx:29:  useWearablePreference,
+./src/hooks/useWearablePreference.test.tsx:31:} from './useWearablePreference';
+./src/hooks/useWearablePreference.test.tsx:41:// D-011 RQ-GC surgical sweep: track the QueryClients minted per test so we can
+./src/hooks/useWearablePreference.test.tsx:44:// the open handle behind the "Jest did not exit one second after the test run
+./src/hooks/useWearablePreference.test.tsx:63:      // produced the "Jest did not exit" warning. Infinity is never scheduled.
+./src/hooks/useWearablePreference.test.tsx:91:describe('useWearablePreference', () => {
+./src/hooks/useWearablePreference.test.tsx:102:    const { result } = renderHook(() => useWearablePreference(), {
+./src/hooks/useWearablePreference.test.tsx:124:    const { result } = renderHook(() => useWearablePreference(), {
+./src/hooks/useWearablePreference.test.tsx:147:    const { result } = renderHook(() => useWearablePreference(), {
+./src/hooks/useWearablePreference.test.tsx:166:    const { result } = renderHook(() => useWearablePreference(), {
+./src/hooks/useWearablePreference.test.tsx:179:describe('useWearablePreference({ metric }) — HK-3b contract overload (R1 P0 #5)', () => {
+./src/hooks/useWearablePreference.test.tsx:189:      () => useWearablePreference({ metric: 'STEPS' }),
+./src/hooks/useWearablePreference.test.tsx:215:      () => useWearablePreference({ metric: 'STEPS' }),
+./src/hooks/useWearablePreference.test.tsx:230:      () => useWearablePreference({ metric: 'STEPS' }),
+./src/hooks/useWearablePreference.test.tsx:258:      () => useWearablePreference({ metric: 'STEPS' }),
+./src/hooks/useWearablePreference.test.tsx:296:      () => useWearablePreference({ metric: 'STEPS' }),
+./src/hooks/useWearablePreference.test.tsx:321:      () => useWearablePreference({ metric: 'STEPS' }),
+./src/hooks/useWearablePreference.ts:2: * useWearablePreference — write hook for the preferred-source toggle on the
+./src/hooks/useWearablePreference.ts:172:      logger.error('useWearablePreference.clear', { metric, error });
+./src/hooks/useWearablePreference.ts:200:export function useWearablePreference(): PreferenceMutation;
+./src/hooks/useWearablePreference.ts:202:export function useWearablePreference(args: {
+./src/hooks/useWearablePreference.ts:205:export function useWearablePreference(args?: {
+./src/screens/client/wearables/__tests__/ClientWearableInsightPanel.test.tsx:6: * "Jest did not exit" warning, #48). Covers the full state matrix:
+./src/screens/client/wearables/__tests__/ProviderOverlapChips.test.tsx:14:import { wearablePreferenceQueryKey } from '../../../../hooks/useWearablePreference';
+./src/screens/client/wearables/components/ProviderOverlapChips.tsx:10: * Tapping a chip writes the preference via `useWearablePreference()`, which
+./src/screens/client/wearables/components/ProviderOverlapChips.tsx:34:  useWearablePreference,
+./src/screens/client/wearables/components/ProviderOverlapChips.tsx:35:} from '../../../../hooks/useWearablePreference';
+./src/screens/client/wearables/components/ProviderOverlapChips.tsx:65:  const preference = useWearablePreference();
+./src/screens/coach/CoachHomeScreen.tsx:26:import AIBudgetMount from '../../components/coach/ai-budget/AIBudgetMount';
+./src/screens/coach/CoachHomeScreen.tsx:240:      <AIBudgetMount />

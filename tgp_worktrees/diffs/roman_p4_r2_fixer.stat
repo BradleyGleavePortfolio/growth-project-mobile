@@ -1,0 +1,12 @@
+commit 9bb64e35240221bc6dbd8c205e851abe7b5588bd
+Author: Dynasia G <dynasia@trygrowthproject.com>
+Date:   Fri Jun 12 17:47:12 2026 +0000
+
+    WIP: roman P4 R2 fixer snapshot (subagent OOC mid-flight — NOT VERIFIED)
+
+ src/components/roman/RomanAvatar.tsx              | 39 ++++++++++++++++++++---
+ src/screens/client/progress/ProgressChartCard.tsx | 25 +++++++++------
+ src/screens/coach/ed/FirstPaymentWowHost.tsx      | 20 +++++++++---
+ src/screens/coach/ed/FirstPaymentWowScreen.tsx    | 13 ++++++--
+ src/screens/coach/ed/useFirstPaymentRealtime.ts   | 34 +++++++++++++++-----
+ 5 files changed, 103 insertions(+), 28 deletions(-)

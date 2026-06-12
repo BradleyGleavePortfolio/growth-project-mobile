@@ -1,0 +1,61 @@
+diff --git a/src/components/coach/ai-budget/__tests__/AIBudgetMount.test.tsx b/src/components/coach/ai-budget/__tests__/AIBudgetMount.test.tsx
+index dc6426d..ab9a5e3 100644
+--- a/src/components/coach/ai-budget/__tests__/AIBudgetMount.test.tsx
++++ b/src/components/coach/ai-budget/__tests__/AIBudgetMount.test.tsx
+@@ -38,0 +39,14 @@ const mockNavigate = jest.fn();
++// @sentry/react-native starts a module-load setInterval (its AsyncExpiringMap
++// cleanup loop, pulled in transitively via ErrorBoundary -> services/sentry).
++// That interval is the open handle behind the "Jest did not exit" warning for
++// this suite -- it is unrelated to anything under test here. Stub the module to
++// a set of inert no-ops so no background timer is ever scheduled.
++jest.mock('@sentry/react-native', () => ({
++  init: jest.fn(),
++  wrap: <T,>(c: T): T => c,
++  withScope: (fn: (scope: { setExtra: jest.Mock }) => void) =>
++    fn({ setExtra: jest.fn() }),
++  captureException: jest.fn(),
++  setUser: jest.fn(),
++}));
++
+diff --git a/src/hooks/useWearablePreference.test.tsx b/src/hooks/useWearablePreference.test.tsx
+index 36b2977..7c40ac8 100644
+--- a/src/hooks/useWearablePreference.test.tsx
++++ b/src/hooks/useWearablePreference.test.tsx
+@@ -40,0 +41,10 @@ const mockedClearFn = wearablesSamplesApi.clearPreference as jest.MockedFunction
++// D-011 RQ-GC surgical sweep: track the QueryClients minted per test so we can
++// tear them down in afterEach. A finite gcTime (the previous 60_000) leaves a
++// real GC timer pending for a full minute after the suite finishes, which is
++// the open handle behind the "Jest did not exit one second after the test run
++// has completed" warning. gcTime: Infinity is never scheduled as a timer, so
++// the per-metric preference cache entry still survives the synchronous
++// getQueryData reads below (it is only collected on an explicit clear) while
++// nothing remains pending after the run.
++const mintedClients: QueryClient[] = [];
++
+@@ -47,3 +57,8 @@ function makeWrapper() {
+-      // the assertions below would race against the sweep.
+-      queries: { retry: false, gcTime: 60_000, staleTime: 0 },
+-      mutations: { retry: false },
++      // the assertions below would race against the sweep. Infinity keeps the
++      // entry alive for the test AND schedules no GC timer (no leak).
++      queries: { retry: false, gcTime: Infinity, staleTime: 0 },
++      // The mutation cache GC is the real open handle here: every settled
++      // mutation schedules a removal timer (RQ default 5 min) that keeps the
++      // Node event loop alive long after the test finishes — this is what
++      // produced the "Jest did not exit" warning. Infinity is never scheduled.
++      mutations: { retry: false, gcTime: Infinity },
+@@ -51,0 +67 @@ function makeWrapper() {
++  mintedClients.push(qc);
+@@ -62,0 +79,12 @@ beforeEach(() => {
++afterEach(() => {
++  // Drop every cache entry and detach the client created during the test, then
++  // forget our references so nothing is retained. unmount() releases the
++  // focus/online subscriptions the provider wired up; clear() empties the
++  // query + mutation caches so no entry can keep a timer alive.
++  while (mintedClients.length > 0) {
++    const qc = mintedClients.pop();
++    qc?.unmount();
++    qc?.clear();
++  }
++});
++

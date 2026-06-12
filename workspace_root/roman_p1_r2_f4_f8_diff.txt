@@ -1,0 +1,27 @@
+diff --git a/.env.example b/.env.example
+index de97a79..341885f 100644
+--- a/.env.example
++++ b/.env.example
+@@ -98,3 +98,7 @@ EXPO_PUBLIC_FF_COACH_COMMUNITY=false
+ 
+ # v2-2 coach ack signals + inbox SLA badges — default OFF until launch
+ EXPO_PUBLIC_FF_COMMUNITY_ACKS=false
++
++# Roman P1 chat surface (client + coach) — default OFF until ops flips it on
++# alongside the backend FEATURE_ROMAN_CHAT_ENABLED gate.
++EXPO_PUBLIC_FF_ROMAN_CHAT=false
+diff --git a/src/config/featureFlags.ts b/src/config/featureFlags.ts
+index 31fc41a..e43b063 100644
+--- a/src/config/featureFlags.ts
++++ b/src/config/featureFlags.ts
+@@ -138,6 +138,10 @@ export const featureFlags = {
+   //
+   // env: EXPO_PUBLIC_FF_COMMUNITY_ACKS
+   communityAcks: readFlag('EXPO_PUBLIC_FF_COMMUNITY_ACKS', false),
++
++  // ─── Roman P1 — mobile chat (client + coach surfaces) ────────────────────
++  /** Roman P1 mobile chat surface. OFF until ops flips it alongside the backend FEATURE_ROMAN_CHAT_ENABLED gate. env: EXPO_PUBLIC_FF_ROMAN_CHAT */
++  romanChat: readFlag('EXPO_PUBLIC_FF_ROMAN_CHAT', false),
+ } as const;
+ 
+ export type FeatureFlagKey = keyof typeof featureFlags;

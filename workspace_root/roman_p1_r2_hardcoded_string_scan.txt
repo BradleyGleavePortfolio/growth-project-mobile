@@ -1,0 +1,7 @@
+src/components/roman/RomanComposer.tsx:101:          placeholder="Message Roman"
+src/components/roman/RomanComposer.tsx:105:          accessibilityLabel="Message Roman"
+src/components/roman/RomanComposer.tsx:120:            <Text style={styles.sendLabel}>Send</Text>
+src/components/roman/RomanState.tsx:74:          accessibilityLabel="Try again"
+src/components/roman/RomanState.tsx:77:          <Text style={styles.retryLabel}>Try again</Text>
+src/screens/roman/RomanChatScreen.tsx:251:                accessibilityLabel="Send again"
+src/screens/roman/RomanChatScreen.tsx:255:                <Text style={styles.retryLabel}>Send again</Text>

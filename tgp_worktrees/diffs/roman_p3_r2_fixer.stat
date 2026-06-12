@@ -1,0 +1,15 @@
+commit 0b27884e945c6597861a471802ee64babfac67ac
+Author: Dynasia G <dynasia@trygrowthproject.com>
+Date:   Fri Jun 12 17:47:10 2026 +0000
+
+    WIP: roman P3 R2 fixer snapshot (subagent OOC mid-flight — NOT VERIFIED)
+
+ src/components/roman/RomanBriefCard.tsx            |  6 +-
+ src/components/roman/RomanCheckInNotice.tsx        |  6 +-
+ src/components/roman/RomanNewClientNotice.tsx      |  6 +-
+ src/components/roman/RomanPayoutNotice.tsx         |  6 +-
+ src/components/roman/RomanStreakCard.tsx           |  6 +-
+ src/components/roman/RomanVoiceLogReadback.tsx     |  6 +-
+ src/components/roman/RomanWorkoutCompleteCard.tsx  | 18 ++++-
+ .../roman/__tests__/romanP3Surfaces.test.tsx       | 86 ++++++++++++++++++++++
+ 8 files changed, 130 insertions(+), 10 deletions(-)

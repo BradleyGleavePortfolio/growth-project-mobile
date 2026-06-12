@@ -1,0 +1,119 @@
+Roman avatar files
+src/components/community/RomanAvatar.tsx
+community RomanAvatar raw hex
+     1	/**
+     2	 * RomanAvatar — Roman brand-character avatar for Community surfaces.
+     3	 *
+     4	 * Per ROMAN_VOICE_POLICY.md §4 avatar matrix:
+     5	 *   - `neutral` — generic empty states. Renders Roman's neutral face.
+     6	 *   - `smile`   — success / recovery / milestone moments only (e.g. a cleared
+     7	 *     moderation queue). Renders Roman's pleased face with a celebratory ring.
+     8	 *   - `monogram` — compact spots (dense in-app rows) and the universal
+     9	 *     image-load-failure fallback. Renders the deep-gold "R" tile.
+    10	 *
+    11	 * FACE+VOICE CONTRACT (fixer R2 — Option A, RESOLVED):
+    12	 *   The operator-locked rule requires Roman's literal face on every Roman-voiced
+    13	 *   empty state. Roman's brand-character face is now BUNDLED at
+    14	 *   `assets/roman/{neutral,smile}.png` (with @2x/@3x densities) and is the
+    15	 *   DEFAULT render for the `neutral`/`smile` crops — resolved through
+    16	 *   `romanFaceAsset(crop)`. The face paints offline on first frame, with no
+    17	 *   network/CDN dependency.
+    18	 *
+    19	 *   An optional `source` override (a bundled `ImageSourcePropType` or a CDN
+    20	 *   `{ uri }` / URL string from a future backend `avatar_url`) takes precedence
+    21	 *   over the bundled asset when supplied, so a backend-served face can swap in
+    22	 *   without another code change.
+    23	 *
+    24	 *   The monogram is reached ONLY when (a) the crop is explicitly `monogram`, or
+    25	 *   (b) the resolved face image fails to load at runtime (`onError`). It is
+    26	 *   never the default for an empty-state surface — that was the launch blocker
+    27	 *   this fix removes.
+    28	 */
+    29	import React from 'react';
+    30	import {
+    31	  View,
+    32	  Text,
+    33	  Image,
+    34	  StyleSheet,
+    35	  type ImageSourcePropType,
+    36	} from 'react-native';
+    37	import { romanFaceAsset } from './romanAvatarAssets';
+    38	
+    39	/** Approved crops used on Community surfaces (subset of the §4 matrix). */
+    40	export type RomanCrop = 'monogram' | 'smile' | 'neutral';
+    41	
+    42	export interface RomanAvatarProps {
+    43	  /** Which approved crop to show. Defaults to the compact monogram. */
+    44	  crop?: RomanCrop;
+    45	  /**
+    46	   * Optional face image OVERRIDE. Accepts either a CDN/remote URL string (e.g.
+    47	   * a future backend `avatar_url`) or a resolved React Native image source
+    48	   * (bundled `require()` / `{ uri }`). When provided it takes precedence over
+    49	   * the bundled brand asset selected by `crop`. When absent, the bundled face
+    50	   * for the crop renders. When the chosen image fails to load, the monogram
+    51	   * fallback renders.
+    52	   */
+    53	  source?: string | ImageSourcePropType | null;
+    54	  /** Pixel size of the square avatar. Default 28 (dense row). */
+    55	  size?: number;
+    56	  testID?: string;
+    57	}
+    58	
+    59	// Deep-gold accent from the Roman avatar run summary (ROMAN_VOICE_POLICY §8).
+    60	const ROMAN_ACCENT = '#C9A961';
+    61	const ROMAN_INK = '#1A1A18';
+    62	
+    63	/** Normalize the `source` prop / bundled asset into an Image `source` value. */
+    64	function resolveSource(
+    65	  override: string | ImageSourcePropType | null | undefined,
+    66	  crop: RomanCrop,
+    67	): ImageSourcePropType | null {
+    68	  if (typeof override === 'string') {
+    69	    return override.length > 0 ? { uri: override } : null;
+    70	  }
+    71	  if (override != null) return override;
+    72	  // No override: use the bundled brand face for neutral/smile (null for
+    73	  // monogram, which renders the text tile).
+    74	  return romanFaceAsset(crop);
+    75	}
+    76	
+    77	export default function RomanAvatar({
+    78	  crop = 'monogram',
+    79	  source,
+    80	  size = 28,
+    81	  testID,
+    82	}: RomanAvatarProps): React.ReactElement {
+    83	  const a11y = crop === 'smile' ? 'Roman, pleased' : 'Roman';
+    84	  // The celebratory ring distinguishes the smile crop from neutral (carried on
+    85	  // both the face image and the monogram fallback).
+    86	  const showRing = crop === 'smile';
+    87	
+    88	  // Track an image-load failure so we can fall back to the accessible monogram
+    89	  // tile WITHOUT silently showing a broken image. This is the ONLY path to the
+    90	  // monogram for a neutral/smile crop.
+    91	  const [failed, setFailed] = React.useState(false);
+    92	  // Reset the failure flag if the resolved image identity changes.
+    93	  const resolved = resolveSource(source, crop);
+    94	  const resolvedKey = typeof source === 'string' ? source : crop;
+    95	  React.useEffect(() => {
+    96	    setFailed(false);
+    97	  }, [resolvedKey]);
+    98	
+    99	  const ringStyle = {
+   100	    borderColor: showRing ? ROMAN_ACCENT : 'transparent',
+   101	    borderWidth: showRing ? 1 : 0,
+   102	  };
+   103	
+   104	  if (resolved != null && !failed) {
+   105	    return (
+   106	      <Image
+   107	        testID={testID}
+   108	        accessibilityRole="image"
+   109	        accessibilityLabel={a11y}
+   110	        source={resolved}
+roman components imports
+src/components/roman/RomanGreeting.tsx:16:import RomanAvatar from '../community/RomanAvatar';
+src/components/roman/RomanMessageBubble.tsx:16:import RomanAvatar from '../community/RomanAvatar';
+src/components/roman/RomanState.tsx:17:import RomanAvatar from '../community/RomanAvatar';
+src/components/roman/RomanTypingIndicator.tsx:18:import RomanAvatar from '../community/RomanAvatar';
+src/screens/roman/RomanChatScreen.tsx:37:import RomanAvatar from '../../components/community/RomanAvatar';

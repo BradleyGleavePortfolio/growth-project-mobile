@@ -1,0 +1,31 @@
+HEAD=e7c5ef69b749ee4e88b52449142f5d81a02ee7c4
+BASE_EXISTS=commit
+MERGE_BASE=e2d2e99ef2dfe4e03da22224fab9ff529fd49a44
+CHANGED_FILES:
+M	.env.example
+M	src/__tests__/quietLuxuryDoctrine.test.ts
+A	src/api/__tests__/communityChallengesApi.drift.test.ts
+A	src/api/communityChallengesApi.ts
+M	src/components/HapticPressable.tsx
+A	src/components/__tests__/HapticPressable.test.tsx
+A	src/components/community/ChallengeCard.tsx
+A	src/components/community/ChallengeCommentsEmptyState.tsx
+A	src/components/community/ChallengeProgressSheet.tsx
+M	src/components/community/ComposerInput.tsx
+M	src/components/community/SpaceTabBar.tsx
+A	src/components/community/__tests__/ChallengeCard.test.tsx
+A	src/components/community/__tests__/ChallengeProgressSheet.reducedMotion.test.tsx
+M	src/components/community/index.ts
+M	src/config/featureFlags.ts
+M	src/navigation/CommunityNavigator.tsx
+A	src/navigation/__tests__/communityChallengesFlagOff.test.ts
+A	src/screens/community/CommunityChallengeDetailScreen.tsx
+A	src/screens/community/CommunityChallengesScreen.tsx
+M	src/screens/community/CommunityTabScreen.tsx
+M	src/screens/community/CommunityTodayScreen.tsx
+A	src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx
+A	src/screens/community/__tests__/CommunityChallengesScreen.test.tsx
+M	src/screens/community/communityNavTypes.ts
+A	src/theme/__tests__/contrastTokens.test.ts
+M	src/theme/tokens.ts
+4343 /home/user/workspace/pr235_r5_code_added_lines.tsv

@@ -1,0 +1,4302 @@
+diff --git a/src/api/__tests__/communityEventsApi.drift.test.ts b/src/api/__tests__/communityEventsApi.drift.test.ts
+new file mode 100644
+index 0000000..38e9b83
+--- /dev/null
++++ b/src/api/__tests__/communityEventsApi.drift.test.ts
+@@ -0,0 +1,130 @@
++/**
++ * communityEventsApi — schema-drift tests (F6).
++ *
++ * The mobile `CommunityEventSchema` is a STRICT mirror of the backend event
++ * response DTO at growth-project-backend PR #389 HEAD `c6799955`
++ * (`src/community/dto/community-event.dto.ts`). These tests pin that parity so
++ * a backend shape change (an added/removed field, a loosened timestamp, a new
++ * lifecycle/RSVP enum member, a relaxed UUID) fails LOUDLY here rather than
++ * silently corrupting the client at runtime.
++ *
++ * Backend contract mirrored:
++ *   EVENT_STATES   = [scheduled, tomorrow, live, replay, reflected]
++ *   RSVP_STATUSES  = [going, maybe, declined, attended, missed]
++ *   id/workspace_id/cohort_id/created_by_user_id: z.string().uuid()
++ *   starts_at/ends_at/reflected_at/created_at/updated_at: z.string().datetime()
++ *   rsvp_counts: strict object of nonnegative ints
++ *   .strict() at the object level (extra fields rejected)
++ */
++
++import {
++  CommunityEventSchema,
++  COMMUNITY_EVENT_STATES,
++  COMMUNITY_RSVP_STATUSES,
++} from '../communityEventsApi';
++
++/** A canonical, backend-shaped event fixture (every field present + valid). */
++function validEvent(): Record<string, unknown> {
++  return {
++    id: '11111111-1111-4111-8111-111111111111',
++    workspace_id: '22222222-2222-4222-8222-222222222222',
++    cohort_id: null,
++    created_by_user_id: '33333333-3333-4333-8333-333333333333',
++    title: 'Live Q&A',
++    description: null,
++    state: 'scheduled',
++    starts_at: '2026-07-01T18:00:00.000Z',
++    ends_at: null,
++    external_url: null,
++    reflected_at: null,
++    canceled: false,
++    rsvp_counts: {
++      going: 12,
++      maybe: 3,
++      declined: 1,
++      attended: 0,
++      missed: 0,
++    },
++    viewer_rsvp_status: null,
++    created_at: '2026-06-01T12:00:00.000Z',
++    updated_at: '2026-06-01T12:00:00.000Z',
++  };
++}
++
++describe('CommunityEventSchema drift parity (backend c6799955)', () => {
++  it('parses a valid backend-shaped event', () => {
++    const parsed = CommunityEventSchema.safeParse(validEvent());
++    expect(parsed.success).toBe(true);
++  });
++
++  it('mirrors the backend lifecycle states exactly', () => {
++    expect([...COMMUNITY_EVENT_STATES]).toEqual([
++      'scheduled',
++      'tomorrow',
++      'live',
++      'replay',
++      'reflected',
++    ]);
++  });
++
++  it('mirrors the backend RSVP statuses exactly', () => {
++    expect([...COMMUNITY_RSVP_STATUSES]).toEqual([
++      'going',
++      'maybe',
++      'declined',
++      'attended',
++      'missed',
++    ]);
++  });
++
++  it('rejects an unknown extra field (strict drift guard)', () => {
++    const drifted = { ...validEvent(), surprise_field: 'nope' };
++    const parsed = CommunityEventSchema.safeParse(drifted);
++    expect(parsed.success).toBe(false);
++  });
++
++  it('rejects a non-ISO / bad timestamp on starts_at', () => {
++    const drifted = { ...validEvent(), starts_at: 'July 1 2026 6pm' };
++    const parsed = CommunityEventSchema.safeParse(drifted);
++    expect(parsed.success).toBe(false);
++  });
++
++  it('rejects a non-UUID id', () => {
++    const drifted = { ...validEvent(), id: 'not-a-uuid' };
++    const parsed = CommunityEventSchema.safeParse(drifted);
++    expect(parsed.success).toBe(false);
++  });
++
++  it('rejects an out-of-contract lifecycle state', () => {
++    const drifted = { ...validEvent(), state: 'archived' };
++    const parsed = CommunityEventSchema.safeParse(drifted);
++    expect(parsed.success).toBe(false);
++  });
++
++  it('rejects an out-of-contract viewer RSVP status', () => {
++    const drifted = { ...validEvent(), viewer_rsvp_status: 'interested' };
++    const parsed = CommunityEventSchema.safeParse(drifted);
++    expect(parsed.success).toBe(false);
++  });
++
++  it('rejects a missing required field (canceled)', () => {
++    const base = validEvent();
++    delete base.canceled;
++    const parsed = CommunityEventSchema.safeParse(base);
++    expect(parsed.success).toBe(false);
++  });
++
++  it('rejects an extra field nested in rsvp_counts (strict)', () => {
++    const drifted = validEvent();
++    drifted.rsvp_counts = {
++      going: 1,
++      maybe: 0,
++      declined: 0,
++      attended: 0,
++      missed: 0,
++      waitlisted: 5,
++    };
++    const parsed = CommunityEventSchema.safeParse(drifted);
++    expect(parsed.success).toBe(false);
++  });
++});
+diff --git a/src/api/__tests__/communityEventsApi.mutationError.test.ts b/src/api/__tests__/communityEventsApi.mutationError.test.ts
+new file mode 100644
+index 0000000..0bf375c
+--- /dev/null
++++ b/src/api/__tests__/communityEventsApi.mutationError.test.ts
+@@ -0,0 +1,50 @@
++/**
++ * describeMutationError — calm, surfaced mutation-failure mapping (F4).
++ *
++ * Every failed RSVP / create / transition / replay / reflect passes its caught
++ * error here so the screen can show something honest instead of failing
++ * silently. A 409 maps to `conflict: true` (the event moved underneath the
++ * caller) so the screen reconciles by refetching; everything else maps to a
++ * calm, specific message with `conflict: false`.
++ */
++import { CommunityApiError } from '../communityApi';
++import { describeMutationError } from '../communityEventsApi';
++
++describe('describeMutationError (F4)', () => {
++  it('classifies a 409 as a conflict that prompts a refetch', () => {
++    const err = new CommunityApiError('conflict', 409, 'conflict');
++    const info = describeMutationError(err);
++    expect(info.conflict).toBe(true);
++    expect(info.message).toMatch(/just changed|refreshed/i);
++  });
++
++  it('surfaces an unauthorized failure calmly (no conflict)', () => {
++    const info = describeMutationError(
++      new CommunityApiError('unauthorized', 401, 'unauthorized'),
++    );
++    expect(info.conflict).toBe(false);
++    expect(info.message).toMatch(/session|sign in/i);
++  });
++
++  it('surfaces a forbidden failure calmly', () => {
++    const info = describeMutationError(
++      new CommunityApiError('forbidden', 403, 'forbidden'),
++    );
++    expect(info.conflict).toBe(false);
++    expect(info.message).toMatch(/permission/i);
++  });
++
++  it('surfaces a server failure calmly', () => {
++    const info = describeMutationError(
++      new CommunityApiError('server', 500, 'server'),
++    );
++    expect(info.conflict).toBe(false);
++    expect(info.message).toMatch(/our end|went wrong/i);
++  });
++
++  it('falls back to a calm generic message for an unknown error', () => {
++    const info = describeMutationError(new Error('boom'));
++    expect(info.conflict).toBe(false);
++    expect(info.message.length).toBeGreaterThan(0);
++  });
++});
+diff --git a/src/api/communityApi.ts b/src/api/communityApi.ts
+index 67d476b..b925d9e 100644
+--- a/src/api/communityApi.ts
++++ b/src/api/communityApi.ts
+@@ -297,6 +297,7 @@ export class CommunityApiError extends Error {
+       | 'unauthorized'
+       | 'forbidden'
+       | 'gone'
++      | 'conflict'
+       | 'server'
+       | 'network'
+       | 'contract'
+@@ -314,6 +315,7 @@ export class CommunityApiError extends Error {
+ function classify(status: number): CommunityApiError['kind'] {
+   if (status === 401) return 'unauthorized';
+   if (status === 403) return 'forbidden';
++  if (status === 409) return 'conflict';
+   if (status === 410) return 'gone';
+   if (status >= 500) return 'server';
+   if (status === 0) return 'network';
+diff --git a/src/api/communityEventsApi.ts b/src/api/communityEventsApi.ts
+new file mode 100644
+index 0000000..3288d21
+--- /dev/null
++++ b/src/api/communityEventsApi.ts
+@@ -0,0 +1,384 @@
++/**
++ * communityEventsApi — typed client for the v2-3 Community EVENTS backend
++ * surface (BradleyGleavePortfolio/growth-project-backend@feature/community-v2-events).
++ *
++ * Backend contract source of truth (binding — do NOT drift):
++ *   growth-project-backend/src/community/events/community-events.controller.ts
++ *   growth-project-backend/src/community/dto/community-event.dto.ts
++ *
++ * Wire posture (mirrors the existing communityApi.ts doctrine):
++ *   - Every response is Zod-validated at the wire boundary so a shape that
++ *     drifts from the backend DTO THROWS here (a `contract` error) instead of
++ *     feeding malformed data into React state.
++ *   - Mutations (create / update / rsvp / replay / reflect) send an
++ *     `Idempotency-Key` header (R19) so a double-tap or retry from the same
++ *     logical action deduplicates server-side. Optimistic-update rollback
++ *     lives in the screen hooks (useCommunityEvents.ts).
++ *
++ * NO NATIVE LIVE ROOM (Step 0): there is no video provider and no in-app room.
++ * An event's `external_url` is an externally-hosted, host-allowlisted link the
++ * client opens in the system browser — never a "join native room" affordance.
++ *
++ * This module imports the EXPORTED `CommunityApiError` from `./communityApi`
++ * (the shared typed transport error) and reimplements thin, module-private
++ * `call` / `classify` / `idempotentHeaders` helpers locally because those are
++ * module-private in communityApi.ts and not re-exported.
++ */
++
++import { z } from 'zod';
++import axios from 'axios';
++import api from '../services/api';
++import { generateIdempotencyKey } from '../utils/idempotency';
++import { CommunityApiError } from './communityApi';
++
++// ─── Shared enums (mirror backend community-event.dto.ts) ────────────────────
++
++/** Forward-only lifecycle states (Prisma `CommunityEventState`). */
++export const COMMUNITY_EVENT_STATES = [
++  'scheduled',
++  'tomorrow',
++  'live',
++  'replay',
++  'reflected',
++] as const;
++export type CommunityEventState = (typeof COMMUNITY_EVENT_STATES)[number];
++
++/** All RSVP statuses, including system/coach-derived attendance outcomes. */
++export const COMMUNITY_RSVP_STATUSES = [
++  'going',
++  'maybe',
++  'declined',
++  'attended',
++  'missed',
++] as const;
++export type CommunityRsvpStatus = (typeof COMMUNITY_RSVP_STATUSES)[number];
++
++/**
++ * RSVP statuses a CLIENT may set on themselves. `attended` / `missed` are
++ * system/coach-derived attendance outcomes, never self-asserted — so the
++ * client UI only ever sends one of these three.
++ */
++export const COMMUNITY_CLIENT_RSVP_STATUSES = [
++  'going',
++  'maybe',
++  'declined',
++] as const;
++export type CommunityClientRsvpStatus =
++  (typeof COMMUNITY_CLIENT_RSVP_STATUSES)[number];
++
++// ─── Response schemas (Zod, strict — mirror backend) ─────────────────────────
++
++const CommunityEventRsvpCountsSchema = z
++  .object({
++    going: z.number().int().nonnegative(),
++    maybe: z.number().int().nonnegative(),
++    declined: z.number().int().nonnegative(),
++    attended: z.number().int().nonnegative(),
++    missed: z.number().int().nonnegative(),
++  })
++  .strict();
++export type CommunityEventRsvpCounts = z.infer<
++  typeof CommunityEventRsvpCountsSchema
++>;
++
++export const CommunityEventSchema = z
++  .object({
++    id: z.string().uuid(),
++    workspace_id: z.string().uuid(),
++    cohort_id: z.string().uuid().nullable(),
++    created_by_user_id: z.string().uuid(),
++    title: z.string(),
++    description: z.string().nullable(),
++    state: z.enum(COMMUNITY_EVENT_STATES),
++    starts_at: z.string().datetime(),
++    ends_at: z.string().datetime().nullable(),
++    /** External live OR replay link (no native room exists — Step 0). */
++    external_url: z.string().nullable(),
++    reflected_at: z.string().datetime().nullable(),
++    canceled: z.boolean(),
++    rsvp_counts: CommunityEventRsvpCountsSchema,
++    /** The caller's own RSVP status, or null when they have not responded. */
++    viewer_rsvp_status: z.enum(COMMUNITY_RSVP_STATUSES).nullable(),
++    created_at: z.string().datetime(),
++    updated_at: z.string().datetime(),
++  })
++  .strict();
++export type CommunityEvent = z.infer<typeof CommunityEventSchema>;
++
++const CommunityEventResponseSchema = z
++  .object({ event: CommunityEventSchema })
++  .strict();
++
++const CommunityEventListResponseSchema = z
++  .object({
++    events: z.array(CommunityEventSchema),
++    next_before: z.string().nullable(),
++  })
++  .strict();
++export type CommunityEventListResponse = z.infer<
++  typeof CommunityEventListResponseSchema
++>;
++
++const CommunityRsvpSchema = z
++  .object({
++    event_id: z.string().uuid(),
++    user_id: z.string().uuid(),
++    status: z.enum(COMMUNITY_RSVP_STATUSES),
++    created_at: z.string().datetime(),
++    updated_at: z.string().datetime(),
++  })
++  .strict();
++export type CommunityRsvp = z.infer<typeof CommunityRsvpSchema>;
++
++const CommunityRsvpResponseSchema = z
++  .object({ rsvp: CommunityRsvpSchema })
++  .strict();
++
++// ─── Transport helpers (local — communityApi's are module-private) ───────────
++
++function classify(status: number): CommunityApiError['kind'] {
++  if (status === 401) return 'unauthorized';
++  if (status === 403) return 'forbidden';
++  // 409 = the event moved underneath the caller (a coach advanced the
++  // lifecycle, or the RSVP raced a concurrent change). The screen reconciles
++  // by refetching and shows a calm "this event just changed" message rather
++  // than a hard error. (F4: classify conflict instead of falling to unknown.)
++  if (status === 409) return 'conflict';
++  if (status === 410) return 'gone';
++  if (status >= 500) return 'server';
++  if (status === 0) return 'network';
++  return 'unknown';
++}
++
++/**
++ * Run an axios call and normalise failures into a CommunityApiError. ZodErrors
++ * (contract drift) are re-wrapped as `contract` so a screen can show a calm
++ * "we could not load this" state instead of crashing on a parse throw.
++ */
++async function call<T>(
++  schema: z.ZodType<T>,
++  fn: () => Promise<{ data: unknown }>,
++): Promise<T> {
++  let res: { data: unknown };
++  try {
++    res = await fn();
++  } catch (err) {
++    if (axios.isAxiosError(err)) {
++      const status = err.response?.status ?? 0;
++      throw new CommunityApiError(
++        classify(status),
++        status,
++        `community events request failed (${status || 'network'})`,
++        err,
++      );
++    }
++    throw new CommunityApiError(
++      'unknown',
++      -1,
++      'community events request failed',
++      err,
++    );
++  }
++  try {
++    return schema.parse(res.data);
++  } catch (err) {
++    if (err instanceof z.ZodError) {
++      throw new CommunityApiError(
++        'contract',
++        200,
++        'community events response shape drifted from the backend contract',
++        err,
++      );
++    }
++    throw err;
++  }
++}
++
++/**
++ * Map a mutation failure to a CALM, user-facing message plus a `conflict` flag
++ * the screen uses to decide whether to refetch/reconcile (F4). Mutation call
++ * sites pass their caught error here so EVERY failed RSVP / create / transition
++ * / replay / reflect surfaces something honest to the user instead of silently
++ * doing nothing. A 409 (`conflict`) means the event moved underneath the
++ * caller, so the screen also refetches to show the now-current state.
++ */
++export interface MutationErrorInfo {
++  message: string;
++  conflict: boolean;
++}
++
++export function describeMutationError(err: unknown): MutationErrorInfo {
++  if (err instanceof CommunityApiError) {
++    switch (err.kind) {
++      case 'conflict':
++        return {
++          message: 'This event just changed. We refreshed it for you.',
++          conflict: true,
++        };
++      case 'unauthorized':
++        return {
++          message: 'Your session expired. Sign in and try again.',
++          conflict: false,
++        };
++      case 'forbidden':
++        return {
++          message: 'You do not have permission to do that.',
++          conflict: false,
++        };
++      case 'gone':
++        return { message: 'This event is no longer available.', conflict: false };
++      case 'network':
++        return {
++          message: 'Check your connection and try again.',
++          conflict: false,
++        };
++      case 'server':
++        return {
++          message: 'Something went wrong on our end. Please try again.',
++          conflict: false,
++        };
++      default:
++        return { message: 'That didn\u2019t go through. Please try again.', conflict: false };
++    }
++  }
++  return { message: 'That didn\u2019t go through. Please try again.', conflict: false };
++}
++
++function idempotentHeaders(): { headers: Record<string, string> } {
++  // R19 — client-generated key so a retried mutation deduplicates server-side.
++  return { headers: { 'Idempotency-Key': generateIdempotencyKey() } };
++}
++
++// ─── Request input types ─────────────────────────────────────────────────────
++
++export interface CreateEventInput {
++  title: string;
++  starts_at: string;
++  description?: string;
++  ends_at?: string;
++  cohort_id?: string;
++  live_url?: string;
++}
++
++export interface UpdateEventInput {
++  title?: string;
++  description?: string;
++  starts_at?: string;
++  ends_at?: string;
++  live_url?: string;
++  /** Forward-only lifecycle advance; validated by the backend state machine. */
++  state?: CommunityEventState;
++}
++
++export interface ListEventsOptions {
++  state?: CommunityEventState;
++  cohort_id?: string;
++  limit?: number;
++}
++
++// ─── Endpoint object ─────────────────────────────────────────────────────────
++
++export const communityEventsApi = {
++  /**
++   * GET /community/workspaces/:workspaceId/events — list events for a
++   * workspace, optionally filtered by lifecycle `state` and/or `cohort_id`.
++   */
++  list(
++    workspaceId: string,
++    opts: ListEventsOptions = {},
++  ): Promise<CommunityEventListResponse> {
++    const params: Record<string, string> = {};
++    if (opts.state) params.state = opts.state;
++    if (opts.cohort_id) params.cohort_id = opts.cohort_id;
++    if (opts.limit != null) params.limit = String(opts.limit);
++    return call(CommunityEventListResponseSchema, () =>
++      api.get<unknown>(`/community/workspaces/${workspaceId}/events`, {
++        params,
++      }),
++    );
++  },
++
++  /** GET /community/events/:eventId — single event detail. */
++  getOne(eventId: string): Promise<CommunityEvent> {
++    return call(CommunityEventResponseSchema, () =>
++      api.get<unknown>(`/community/events/${eventId}`),
++    ).then((r) => r.event);
++  },
++
++  /**
++   * POST /community/workspaces/:workspaceId/events — coach creates an event.
++   * Idempotent (R19). Coach-only write enforced server-side.
++   */
++  create(workspaceId: string, input: CreateEventInput): Promise<CommunityEvent> {
++    return call(CommunityEventResponseSchema, () =>
++      api.post<unknown>(
++        `/community/workspaces/${workspaceId}/events`,
++        input,
++        idempotentHeaders(),
++      ),
++    ).then((r) => r.event);
++  },
++
++  /**
++   * PATCH /community/events/:eventId — coach edits fields and/or advances the
++   * lifecycle state (forward-only). Idempotent (R19).
++   */
++  update(eventId: string, input: UpdateEventInput): Promise<CommunityEvent> {
++    return call(CommunityEventResponseSchema, () =>
++      api.patch<unknown>(
++        `/community/events/${eventId}`,
++        input,
++        idempotentHeaders(),
++      ),
++    ).then((r) => r.event);
++  },
++
++  /**
++   * POST /community/events/:eventId/rsvp — client sets/updates their own RSVP.
++   * `status` is constrained to going / maybe / declined (attended / missed are
++   * system-derived). Idempotent (R19).
++   */
++  rsvp(
++    eventId: string,
++    status: CommunityClientRsvpStatus,
++  ): Promise<CommunityRsvp> {
++    return call(CommunityRsvpResponseSchema, () =>
++      api.post<unknown>(
++        `/community/events/${eventId}/rsvp`,
++        { status },
++        idempotentHeaders(),
++      ),
++    ).then((r) => r.rsvp);
++  },
++
++  /**
++   * POST /community/events/:eventId/replay — coach attaches an EXTERNAL replay
++   * link (host-allowlisted). There is no native replay player — this is an
++   * external URL only. Idempotent (R19).
++   */
++  attachReplay(eventId: string, replayUrl: string): Promise<CommunityEvent> {
++    return call(CommunityEventResponseSchema, () =>
++      api.post<unknown>(
++        `/community/events/${eventId}/replay`,
++        { replay_url: replayUrl },
++        idempotentHeaders(),
++      ),
++    ).then((r) => r.event);
++  },
++
++  /**
++   * POST /community/events/:eventId/reflect — coach closes the loop by moving
++   * the event to the `reflected` state. Idempotent (R19).
++   */
++  reflect(eventId: string): Promise<CommunityEvent> {
++    return call(CommunityEventResponseSchema, () =>
++      api.post<unknown>(
++        `/community/events/${eventId}/reflect`,
++        {},
++        idempotentHeaders(),
++      ),
++    ).then((r) => r.event);
++  },
++};
++
++export type CommunityEventsApi = typeof communityEventsApi;
+diff --git a/src/components/community/EventCard.tsx b/src/components/community/EventCard.tsx
+new file mode 100644
+index 0000000..185324d
+--- /dev/null
++++ b/src/components/community/EventCard.tsx
+@@ -0,0 +1,220 @@
++/**
++ * EventCard — a single community EVENT row in a feed (v2-3). Mirrors PostCard:
++ * a >= 48dp HapticPressable on semanticColors / tokens.ts, an Ionicons line
++ * icon, a state badge, the start time, and a compact RSVP summary. Tapping
++ * routes into the event detail.
++ *
++ * NO NATIVE LIVE ROOM (Step 0): the card never offers a "join room" affordance.
++ * The live/replay link is an external URL surfaced only on the detail screen.
++ *
++ * Optimistic (provisional) events render with a subtle "saving" treatment until
++ * the server reconciles.
++ */
++import React from 'react';
++import { View, Text, StyleSheet } from 'react-native';
++import { Ionicons } from '@expo/vector-icons';
++import HapticPressable from '../HapticPressable';
++import { useTheme } from '../../theme/useTheme';
++import { spacing, radius, withAlpha } from '../../theme/tokens';
++import { isOptimisticEventId } from '../../hooks/useCommunityEvents';
++import type {
++  CommunityEvent,
++  CommunityEventState,
++} from '../../api/communityEventsApi';
++
++export interface EventCardProps {
++  event: CommunityEvent;
++  onPress: (event: CommunityEvent) => void;
++  /** Override "now" for deterministic rendering in tests. */
++  nowMs?: number;
++  testID?: string;
++}
++
++/** Line-icon glyph + human, status-honest label for each lifecycle state. */
++export interface EventStateMeta {
++  label: string;
++  icon: keyof typeof Ionicons.glyphMap;
++}
++
++/**
++ * Lifecycle copy is STATUS-HONEST (UX): "Live now" / "Replay available" /
++ * "Recap posted" tell the member what they can actually do right now, not a
++ * bare noun. These labels are shared across the card badge, the client detail
++ * badge, and the coach manage surface so the vocabulary never diverges.
++ */
++const STATE_META: Record<CommunityEventState, EventStateMeta> = {
++  scheduled: { label: 'Scheduled', icon: 'calendar-outline' },
++  tomorrow: { label: 'Tomorrow', icon: 'time-outline' },
++  live: { label: 'Live now', icon: 'radio-outline' },
++  replay: { label: 'Replay available', icon: 'play-circle-outline' },
++  reflected: { label: 'Recap posted', icon: 'document-text-outline' },
++};
++
++/**
++ * Resolve the badge label + icon for an event state, with a CALM fallback for
++ * any value not in the known set. A backend that adds a sixth state, or a
++ * malformed/hostile payload that slips a bogus state past the type system,
++ * must never crash a `meta.label` / `meta.icon` dereference — it degrades to a
++ * neutral "Event" + calendar glyph. (F5: unknown-state safety.)
++ */
++export function stateMeta(state: CommunityEventState | string): EventStateMeta {
++  return (
++    STATE_META[state as CommunityEventState] ?? {
++      label: 'Event',
++      icon: 'calendar-outline',
++    }
++  );
++}
++
++/**
++ * Format an ISO start time as a compact, locale-aware "Mon 14 · 6:00 PM" label.
++ * Pure (epoch-based) and degrades to a calm dash on an unparseable input rather
++ * than printing "Invalid Date".
++ */
++export function formatEventStart(iso: string): string {
++  const ms = Date.parse(iso);
++  if (Number.isNaN(ms)) return '—';
++  const d = new Date(ms);
++  const date = d.toLocaleDateString(undefined, {
++    weekday: 'short',
++    month: 'short',
++    day: 'numeric',
++  });
++  const time = d.toLocaleTimeString(undefined, {
++    hour: 'numeric',
++    minute: '2-digit',
++  });
++  return `${date} · ${time}`;
++}
++
++/** Compact RSVP summary, e.g. "12 going · 3 maybe". Empty string when none. */
++export function rsvpSummary(event: CommunityEvent): string {
++  const parts: string[] = [];
++  if (event.rsvp_counts.going > 0) {
++    parts.push(`${event.rsvp_counts.going} going`);
++  }
++  if (event.rsvp_counts.maybe > 0) {
++    parts.push(`${event.rsvp_counts.maybe} maybe`);
++  }
++  return parts.join(' · ');
++}
++
++export default function EventCard({
++  event,
++  onPress,
++  testID,
++}: EventCardProps): React.ReactElement {
++  const { semanticColors } = useTheme();
++  const saving = isOptimisticEventId(event.id);
++  const meta = stateMeta(event.state);
++  const start = formatEventStart(event.starts_at);
++  const summary = rsvpSummary(event);
++  const accessibilityLabel = `Open event ${event.title}, ${meta.label}, starts ${start}`;
++
++  return (
++    <HapticPressable
++      intent="light"
++      onPress={() => onPress(event)}
++      accessibilityRole="button"
++      accessibilityLabel={accessibilityLabel}
++      testID={testID}
++      disabled={saving}
++      style={[
++        styles.card,
++        {
++          backgroundColor: semanticColors.bgSurface,
++          borderColor: semanticColors.border,
++          opacity: saving ? 0.6 : 1,
++        },
++      ]}
++    >
++      <View style={styles.header}>
++        <View
++          style={[
++            styles.badge,
++            { backgroundColor: withAlpha(semanticColors.accent, 0.12) },
++          ]}
++        >
++          <Ionicons
++            name={meta.icon}
++            size={13}
++            color={semanticColors.accent}
++            style={styles.badgeIcon}
++          />
++          <Text style={[styles.badgeLabel, { color: semanticColors.accent }]}>
++            {event.canceled ? 'Canceled' : meta.label}
++          </Text>
++        </View>
++        <Text
++          style={[styles.start, { color: semanticColors.textMuted }]}
++          numberOfLines={1}
++        >
++          {start}
++        </Text>
++      </View>
++
++      <Text
++        style={[styles.title, { color: semanticColors.textPrimary }]}
++        numberOfLines={2}
++      >
++        {event.title}
++      </Text>
++
++      <Text style={[styles.summary, { color: semanticColors.textMuted }]}>
++        {saving
++          ? 'Saving…'
++          : summary.length > 0
++            ? summary
++            : 'No RSVPs yet'}
++      </Text>
++    </HapticPressable>
++  );
++}
++
++const styles = StyleSheet.create({
++  card: {
++    minHeight: 48,
++    marginHorizontal: spacing.lg,
++    marginVertical: spacing.xs,
++    padding: spacing.lg,
++    borderRadius: radius.lg,
++    borderWidth: StyleSheet.hairlineWidth,
++    gap: spacing.xs,
++  },
++  header: {
++    flexDirection: 'row',
++    alignItems: 'center',
++    justifyContent: 'space-between',
++    gap: spacing.sm,
++  },
++  badge: {
++    flexDirection: 'row',
++    alignItems: 'center',
++    paddingHorizontal: spacing.sm,
++    paddingVertical: 2,
++    borderRadius: radius.pill,
++    gap: spacing.xs,
++  },
++  badgeIcon: {
++    marginRight: 0,
++  },
++  badgeLabel: {
++    fontSize: 11,
++    fontWeight: '600',
++    letterSpacing: 0.4,
++    textTransform: 'uppercase',
++  },
++  start: {
++    flexShrink: 1,
++    fontSize: 12,
++    fontWeight: '500',
++    textAlign: 'right',
++  },
++  title: {
++    fontSize: 16,
++    fontWeight: '600',
++  },
++  summary: {
++    fontSize: 13,
++  },
++});
+diff --git a/src/components/community/__tests__/EventCard.test.tsx b/src/components/community/__tests__/EventCard.test.tsx
+new file mode 100644
+index 0000000..88abcf4
+--- /dev/null
++++ b/src/components/community/__tests__/EventCard.test.tsx
+@@ -0,0 +1,188 @@
++/**
++ * EventCard — render + helper tests (v2-3).
++ *
++ * Covers:
++ *   - Renders the title, the state badge label, and the RSVP summary.
++ *   - Tapping fires onPress with the event.
++ *   - A provisional (optimistic) event renders the "Saving…" treatment and is
++ *     non-interactive (disabled).
++ *   - The `formatEventStart` / `rsvpSummary` pure helpers degrade gracefully.
++ *
++ * useTheme is mocked to the real light tokens so semanticColors keys resolve
++ * without standing up the ThemeProvider (mirrors the v1-5 screen-test harness).
++ */
++import React from 'react';
++import { render, fireEvent } from '@testing-library/react-native';
++
++jest.mock('../../../theme/useTheme', () => {
++  const { lightTokens } = jest.requireActual('../../../theme/tokens');
++  return {
++    useTheme: () => ({ colorScheme: 'light', semanticColors: lightTokens }),
++  };
++});
++
++import EventCard, {
++  formatEventStart,
++  rsvpSummary,
++  stateMeta,
++} from '../EventCard';
++import type { CommunityEvent } from '../../../api/communityEventsApi';
++
++function makeEvent(overrides: Partial<CommunityEvent> = {}): CommunityEvent {
++  return {
++    id: '11111111-1111-4111-8111-111111111111',
++    workspace_id: '22222222-2222-4222-8222-222222222222',
++    cohort_id: null,
++    created_by_user_id: '33333333-3333-4333-8333-333333333333',
++    title: 'Live Q&A',
++    description: null,
++    state: 'scheduled',
++    starts_at: '2026-07-01T18:00:00.000Z',
++    ends_at: null,
++    external_url: null,
++    reflected_at: null,
++    canceled: false,
++    rsvp_counts: { going: 12, maybe: 3, declined: 1, attended: 0, missed: 0 },
++    viewer_rsvp_status: null,
++    created_at: '2026-06-01T00:00:00.000Z',
++    updated_at: '2026-06-01T00:00:00.000Z',
++    ...overrides,
++  };
++}
++
++describe('EventCard', () => {
++  it('renders the title, state badge, and rsvp summary', () => {
++    const { getByText, getByTestId } = render(
++      <EventCard event={makeEvent()} onPress={jest.fn()} testID="card" />,
++    );
++    expect(getByTestId('card')).toBeTruthy();
++    expect(getByText('Live Q&A')).toBeTruthy();
++    expect(getByText('Scheduled')).toBeTruthy();
++    expect(getByText('12 going · 3 maybe')).toBeTruthy();
++  });
++
++  it('fires onPress with the event when tapped', () => {
++    const onPress = jest.fn();
++    const event = makeEvent();
++    const { getByTestId } = render(
++      <EventCard event={event} onPress={onPress} testID="card" />,
++    );
++    fireEvent.press(getByTestId('card'));
++    expect(onPress).toHaveBeenCalledWith(event);
++  });
++
++  it('renders a provisional event as saving and disabled', () => {
++    const onPress = jest.fn();
++    const event = makeEvent({ id: 'optimistic:abc' });
++    const { getByText, getByTestId } = render(
++      <EventCard event={event} onPress={onPress} testID="card" />,
++    );
++    expect(getByText('Saving…')).toBeTruthy();
++    fireEvent.press(getByTestId('card'));
++    expect(onPress).not.toHaveBeenCalled();
++  });
++
++  it('shows the canceled label over the lifecycle state when canceled', () => {
++    const { getByText, queryByText } = render(
++      <EventCard event={makeEvent({ canceled: true })} onPress={jest.fn()} />,
++    );
++    expect(getByText('Canceled')).toBeTruthy();
++    expect(queryByText('Scheduled')).toBeNull();
++  });
++
++  it('falls back to "No RSVPs yet" when there are none', () => {
++    const { getByText } = render(
++      <EventCard
++        event={makeEvent({
++          rsvp_counts: {
++            going: 0,
++            maybe: 0,
++            declined: 0,
++            attended: 0,
++            missed: 0,
++          },
++        })}
++        onPress={jest.fn()}
++      />,
++    );
++    expect(getByText('No RSVPs yet')).toBeTruthy();
++  });
++});
++
++describe('stateMeta (F5 unknown-state safety + F13 lifecycle labels)', () => {
++  it('maps each known lifecycle state to its status-honest label', () => {
++    const table: Array<[string, string]> = [
++      ['scheduled', 'Scheduled'],
++      ['tomorrow', 'Tomorrow'],
++      ['live', 'Live now'],
++      ['replay', 'Replay available'],
++      ['reflected', 'Recap posted'],
++    ];
++    table.forEach(([state, label]) => {
++      expect(stateMeta(state).label).toBe(label);
++      // Every entry resolves a real glyph (never undefined).
++      expect(stateMeta(state).icon).toBeTruthy();
++    });
++  });
++
++  it('degrades a hostile / unknown state to a neutral fallback (no crash)', () => {
++    expect(stateMeta('definitely-not-a-state').label).toBe('Event');
++    expect(stateMeta('definitely-not-a-state').icon).toBe('calendar-outline');
++    // An empty string and an upstream typo also degrade calmly.
++    expect(stateMeta('').label).toBe('Event');
++    expect(stateMeta('LIVE').label).toBe('Event');
++  });
++
++  it('renders the fallback label on a card given an out-of-contract state', () => {
++    // Cast through the public string overload using a plain typed assertion.
++    const hostile = makeEvent({ state: 'archived' as CommunityEvent['state'] });
++    const { getByText } = render(<EventCard event={hostile} onPress={jest.fn()} />);
++    expect(getByText('Event')).toBeTruthy();
++  });
++});
++
++describe('formatEventStart', () => {
++  it('degrades to an em dash for an unparseable timestamp', () => {
++    expect(formatEventStart('not-a-date')).toBe('—');
++  });
++
++  it('formats a valid timestamp into a date · time string', () => {
++    const out = formatEventStart('2026-07-01T18:00:00.000Z');
++    expect(out).toContain('·');
++    expect(out.length).toBeGreaterThan(3);
++  });
++});
++
++describe('rsvpSummary', () => {
++  it('lists only the non-zero going / maybe counts', () => {
++    expect(
++      rsvpSummary(
++        makeEvent({
++          rsvp_counts: {
++            going: 5,
++            maybe: 0,
++            declined: 2,
++            attended: 0,
++            missed: 0,
++          },
++        }),
++      ),
++    ).toBe('5 going');
++  });
++
++  it('returns an empty string when there are no going/maybe RSVPs', () => {
++    expect(
++      rsvpSummary(
++        makeEvent({
++          rsvp_counts: {
++            going: 0,
++            maybe: 0,
++            declined: 4,
++            attended: 0,
++            missed: 0,
++          },
++        }),
++      ),
++    ).toBe('');
++  });
++});
+diff --git a/src/components/community/index.ts b/src/components/community/index.ts
+index d853f78..75163bf 100644
+--- a/src/components/community/index.ts
++++ b/src/components/community/index.ts
+@@ -17,6 +17,8 @@ export type {
+ } from './SpaceTabBar';
+ export { default as PostCard } from './PostCard';
+ export type { PostCardProps } from './PostCard';
++export { default as EventCard, stateMeta, formatEventStart, rsvpSummary } from './EventCard';
++export type { EventCardProps, EventStateMeta } from './EventCard';
+ export { default as ThreadHeader } from './ThreadHeader';
+ export type { ThreadHeaderProps } from './ThreadHeader';
+ export { default as ReactionBar } from './ReactionBar';
+diff --git a/src/config/featureFlags.ts b/src/config/featureFlags.ts
+index 31fc41a..8090367 100644
+--- a/src/config/featureFlags.ts
++++ b/src/config/featureFlags.ts
+@@ -138,6 +138,25 @@ export const featureFlags = {
+   //
+   // env: EXPO_PUBLIC_FF_COMMUNITY_ACKS
+   communityAcks: readFlag('EXPO_PUBLIC_FF_COMMUNITY_ACKS', false),
++
++  // ─── Community v2-3 — event objects (client RSVP + coach lifecycle) ───────
++  // The v2-3 backend (community/events controller — create / list / detail /
++  // edit / transition / rsvp / replay / reflect) is behind FEATURE_COMMUNITY_
++  // EVENTS. This flag gates the matching mobile surface: the client event
++  // detail (RSVP + external link) and the coach event list + lifecycle screen.
++  //
++  // Defaults OFF UNCONDITIONALLY (not `isDev`). When false, the
++  // CommunityEventDetail / CoachCommunityEvents routes are NOT registered on
++  // the (already flag-gated) community stacks at all — the route screens are
++  // wrapped in a `featureFlags.communityEvents && ...` guard in both navigators
++  // — so there is zero event UI, no navigator target, and no reachable event
++  // surface. Consuming surfaces also read this flag before exposing entry
++  // points (discovery cards), giving belt-and-braces containment.
++  // There is NO native live room — events carry an external, host-allowlisted
++  // link only (Step 0).
++  //
++  // env: EXPO_PUBLIC_FF_COMMUNITY_EVENTS
++  communityEvents: readFlag('EXPO_PUBLIC_FF_COMMUNITY_EVENTS', false),
+ } as const;
+ 
+ export type FeatureFlagKey = keyof typeof featureFlags;
+diff --git a/src/hooks/__tests__/useCommunityEvents.test.tsx b/src/hooks/__tests__/useCommunityEvents.test.tsx
+new file mode 100644
+index 0000000..a37ac16
+--- /dev/null
++++ b/src/hooks/__tests__/useCommunityEvents.test.tsx
+@@ -0,0 +1,231 @@
++/**
++ * useCommunityEvents — hook behaviour tests for the v2-3 Community events
++ * surface.
++ *
++ * Verifies:
++ *   - useRsvpEvent applies an OPTIMISTIC detail update (sets viewer_rsvp_status,
++ *     moves the count) then ROLLS BACK to the prior snapshot on server reject.
++ *   - useCreateEvent inserts an OPTIMISTIC provisional event at the top of the
++ *     workspace list, then ROLLS BACK on failure.
++ *   - isOptimisticEventId recognises provisional ids.
++ *
++ * communityEventsApi is mocked so the tests are deterministic and never touch
++ * the network. Reads are seeded via `setQueryDefaults` with a queryFn so the
++ * `onSettled` invalidation has a deterministic server snapshot to reconcile to
++ * (mirrors the v1-5 useCommunity optimistic-rollback harness).
++ */
++import React from 'react';
++import { renderHook, waitFor, act } from '@testing-library/react-native';
++import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
++
++jest.mock('../../api/communityEventsApi', () => ({
++  communityEventsApi: {
++    list: jest.fn(),
++    getOne: jest.fn(),
++    create: jest.fn(),
++    update: jest.fn(),
++    rsvp: jest.fn(),
++    attachReplay: jest.fn(),
++    reflect: jest.fn(),
++  },
++}));
++
++import { communityEventsApi } from '../../api/communityEventsApi';
++import type {
++  CommunityEvent,
++  CommunityEventListResponse,
++} from '../../api/communityEventsApi';
++import {
++  communityEventsKeys,
++  useRsvpEvent,
++  useCreateEvent,
++  isOptimisticEventId,
++} from '../useCommunityEvents';
++
++const WS = '11111111-1111-4111-8111-111111111111';
++const UID = '22222222-2222-4222-8222-222222222222';
++const EV = '33333333-3333-4333-8333-333333333333';
++
++const mockApi = {
++  getOne: jest.mocked(communityEventsApi.getOne),
++  rsvp: jest.mocked(communityEventsApi.rsvp),
++  create: jest.mocked(communityEventsApi.create),
++};
++
++function baseEvent(overrides: Partial<CommunityEvent> = {}): CommunityEvent {
++  return {
++    id: EV,
++    workspace_id: WS,
++    cohort_id: null,
++    created_by_user_id: UID,
++    title: 'Live Q&A',
++    description: null,
++    state: 'scheduled',
++    starts_at: '2026-07-01T18:00:00.000Z',
++    ends_at: null,
++    external_url: null,
++    reflected_at: null,
++    canceled: false,
++    rsvp_counts: { going: 2, maybe: 0, declined: 0, attended: 0, missed: 0 },
++    viewer_rsvp_status: null,
++    created_at: '2026-06-01T00:00:00.000Z',
++    updated_at: '2026-06-01T00:00:00.000Z',
++    ...overrides,
++  };
++}
++
++function makeWrapper() {
++  // gcTime: Infinity so a cache entry that loses its observer (after the
++  // mutation settles and the rendered hook unmounts) is NOT immediately
++  // garbage-collected — the rollback assertions read the post-settle snapshot.
++  const qc = new QueryClient({
++    defaultOptions: {
++      queries: { retry: false, gcTime: Infinity, staleTime: 0 },
++    },
++  });
++  const Wrapper = ({ children }: { children: React.ReactNode }) => (
++    <QueryClientProvider client={qc}>{children}</QueryClientProvider>
++  );
++  return { qc, Wrapper };
++}
++
++beforeEach(() => {
++  mockApi.getOne.mockReset();
++  mockApi.rsvp.mockReset();
++  mockApi.create.mockReset();
++});
++
++describe('isOptimisticEventId', () => {
++  it('recognises provisional ids and rejects server ids', () => {
++    expect(isOptimisticEventId('optimistic:123')).toBe(true);
++    expect(isOptimisticEventId(EV)).toBe(false);
++  });
++});
++
++describe('useRsvpEvent — optimistic detail update + rollback', () => {
++  it('optimistically sets viewer status and moves the count before settle', async () => {
++    const { qc, Wrapper } = makeWrapper();
++    const detailKey = communityEventsKeys.detail(EV);
++    // Server snapshot the invalidation refetches: the RSVP already applied.
++    const reconciled = baseEvent({
++      viewer_rsvp_status: 'going',
++      rsvp_counts: { going: 3, maybe: 0, declined: 0, attended: 0, missed: 0 },
++    });
++    qc.setQueryDefaults(detailKey, { queryFn: async () => reconciled });
++    qc.setQueryData<CommunityEvent>(detailKey, baseEvent());
++
++    // Capture the snapshot WHILE the request is in flight (optimistic state).
++    let inflight: CommunityEvent | undefined;
++    mockApi.rsvp.mockImplementation(async () => {
++      inflight = qc.getQueryData<CommunityEvent>(detailKey);
++      return {
++        event_id: EV,
++        user_id: UID,
++        status: 'going',
++        created_at: '2026-06-02T00:00:00.000Z',
++        updated_at: '2026-06-02T00:00:00.000Z',
++      };
++    });
++
++    const { result } = renderHook(() => useRsvpEvent(EV, WS), {
++      wrapper: Wrapper,
++    });
++
++    await act(async () => {
++      await result.current.mutateAsync('going');
++    });
++
++    // Optimistic state observed mid-flight: viewer=going, going count bumped.
++    expect(inflight?.viewer_rsvp_status).toBe('going');
++    expect(inflight?.rsvp_counts.going).toBe(3);
++    expect(mockApi.rsvp).toHaveBeenCalledWith(EV, 'going');
++  });
++
++  it('rolls back to the prior snapshot when the server rejects', async () => {
++    const { qc, Wrapper } = makeWrapper();
++    const detailKey = communityEventsKeys.detail(EV);
++    const prior = baseEvent();
++    // The server snapshot the rollback-invalidation refetches is the prior.
++    qc.setQueryDefaults(detailKey, { queryFn: async () => prior });
++    qc.setQueryData<CommunityEvent>(detailKey, prior);
++    mockApi.rsvp.mockRejectedValueOnce(new Error('boom'));
++
++    const { result } = renderHook(() => useRsvpEvent(EV, WS), {
++      wrapper: Wrapper,
++    });
++
++    await act(async () => {
++      await result.current.mutateAsync('maybe').catch(() => undefined);
++    });
++
++    await waitFor(() => {
++      const cached = qc.getQueryData<CommunityEvent>(detailKey);
++      expect(cached?.viewer_rsvp_status).toBeNull();
++      expect(cached?.rsvp_counts.maybe).toBe(0);
++    });
++  });
++});
++
++describe('useCreateEvent — optimistic insert + rollback', () => {
++  it('inserts a provisional event at the top while in flight', async () => {
++    const { qc, Wrapper } = makeWrapper();
++    const listKey = communityEventsKeys.list(WS);
++    const server: CommunityEventListResponse = {
++      events: [baseEvent({ id: 'server-new' })],
++      next_before: null,
++    };
++    qc.setQueryDefaults(listKey, { queryFn: async () => server });
++    qc.setQueryData<CommunityEventListResponse>(listKey, {
++      events: [],
++      next_before: null,
++    });
++
++    let inflight: CommunityEventListResponse | undefined;
++    mockApi.create.mockImplementation(async () => {
++      inflight = qc.getQueryData<CommunityEventListResponse>(listKey);
++      return baseEvent({ id: 'server-new' });
++    });
++
++    const { result } = renderHook(() => useCreateEvent(WS, UID), {
++      wrapper: Wrapper,
++    });
++
++    await act(async () => {
++      await result.current.mutateAsync({
++        title: 'Workshop',
++        starts_at: '2026-08-01T18:00:00.000Z',
++      });
++    });
++
++    expect(inflight?.events[0].title).toBe('Workshop');
++    expect(isOptimisticEventId(inflight?.events[0].id ?? '')).toBe(true);
++    expect(mockApi.create).toHaveBeenCalledWith(
++      WS,
++      expect.objectContaining({ title: 'Workshop' }),
++    );
++  });
++
++  it('rolls back to the prior (empty) list when the server rejects', async () => {
++    const { qc, Wrapper } = makeWrapper();
++    const listKey = communityEventsKeys.list(WS);
++    const empty: CommunityEventListResponse = { events: [], next_before: null };
++    qc.setQueryDefaults(listKey, { queryFn: async () => empty });
++    qc.setQueryData<CommunityEventListResponse>(listKey, empty);
++    mockApi.create.mockRejectedValueOnce(new Error('nope'));
++
++    const { result } = renderHook(() => useCreateEvent(WS, UID), {
++      wrapper: Wrapper,
++    });
++
++    await act(async () => {
++      await result.current
++        .mutateAsync({ title: 'X', starts_at: '2026-08-01T18:00:00.000Z' })
++        .catch(() => undefined);
++    });
++
++    await waitFor(() => {
++      const cached = qc.getQueryData<CommunityEventListResponse>(listKey);
++      expect(cached?.events).toHaveLength(0);
++    });
++  });
++});
+diff --git a/src/hooks/__tests__/useReducedMotion.test.tsx b/src/hooks/__tests__/useReducedMotion.test.tsx
+new file mode 100644
+index 0000000..7c934c7
+--- /dev/null
++++ b/src/hooks/__tests__/useReducedMotion.test.tsx
+@@ -0,0 +1,55 @@
++/**
++ * useReducedMotion — reduced-motion accessibility hook (F7).
++ *
++ * Verifies the hook (a) reads `AccessibilityInfo.isReduceMotionEnabled()` on
++ * mount, (b) subscribes to `reduceMotionChanged`, and (c) returns the live
++ * value so animated surfaces (the coach event modals) can drop their entrance
++ * animation to `none`.
++ */
++import React from 'react';
++import { AccessibilityInfo, Text } from 'react-native';
++import { render, waitFor, act } from '@testing-library/react-native';
++
++import { useReducedMotion } from '../useReducedMotion';
++
++function Probe(): React.ReactElement {
++  const reduced = useReducedMotion();
++  return <Text testID="probe">{reduced ? 'reduced' : 'full'}</Text>;
++}
++
++describe('useReducedMotion', () => {
++  afterEach(() => jest.restoreAllMocks());
++
++  it('reflects the initial isReduceMotionEnabled() probe', async () => {
++    jest
++      .spyOn(AccessibilityInfo, 'isReduceMotionEnabled')
++      .mockResolvedValue(true);
++    const { getByTestId } = render(<Probe />);
++    await waitFor(() => expect(getByTestId('probe')).toHaveTextContent('reduced'));
++  });
++
++  it('defaults to full motion when reduce-motion is off', async () => {
++    jest
++      .spyOn(AccessibilityInfo, 'isReduceMotionEnabled')
++      .mockResolvedValue(false);
++    const { getByTestId } = render(<Probe />);
++    await waitFor(() => expect(getByTestId('probe')).toHaveTextContent('full'));
++  });
++
++  it('updates live when the OS reduceMotionChanged event fires', async () => {
++    jest
++      .spyOn(AccessibilityInfo, 'isReduceMotionEnabled')
++      .mockResolvedValue(false);
++    let handler: ((enabled: boolean) => void) | undefined;
++    jest
++      .spyOn(AccessibilityInfo, 'addEventListener')
++      .mockImplementation(((event: string, cb: (e: boolean) => void) => {
++        if (event === 'reduceMotionChanged') handler = cb;
++        return { remove: jest.fn() };
++      }) as unknown as typeof AccessibilityInfo.addEventListener);
++    const { getByTestId } = render(<Probe />);
++    await waitFor(() => expect(getByTestId('probe')).toHaveTextContent('full'));
++    act(() => handler?.(true));
++    await waitFor(() => expect(getByTestId('probe')).toHaveTextContent('reduced'));
++  });
++});
+diff --git a/src/hooks/useCommunityEvents.ts b/src/hooks/useCommunityEvents.ts
+new file mode 100644
+index 0000000..847b7f2
+--- /dev/null
++++ b/src/hooks/useCommunityEvents.ts
+@@ -0,0 +1,327 @@
++/**
++ * useCommunityEvents — @tanstack/react-query hooks for the v2-3 Community
++ * EVENTS surface (client RSVP + coach create / edit / transition / replay /
++ * reflect).
++ *
++ * Read hooks (useQuery) fetch through communityEventsApi (which Zod-validates
++ * the wire shape). Mutation hooks (useMutation) apply OPTIMISTIC updates with
++ * rollback on failure, mirroring useCommunity.ts / useCoachCommunity.ts:
++ *   - RSVP reflects instantly on the event detail (and the count it moves),
++ *     then reconciles with the server RSVP row or rolls back.
++ *   - Coach create inserts a provisional event at the top of the list.
++ *   - Coach edit / transition / replay / reflect reconcile via invalidation.
++ *
++ * NO NATIVE LIVE ROOM (Step 0): events carry an external, host-allowlisted
++ * `external_url` only. Nothing here implies an in-app room.
++ */
++import {
++  useQuery,
++  useMutation,
++  useQueryClient,
++  type UseQueryResult,
++  type UseMutationResult,
++} from '@tanstack/react-query';
++import {
++  communityEventsApi,
++  type CommunityEvent,
++  type CommunityEventListResponse,
++  type CommunityRsvp,
++  type CommunityClientRsvpStatus,
++  type CommunityEventState,
++  type CreateEventInput,
++  type UpdateEventInput,
++  type ListEventsOptions,
++} from '../api/communityEventsApi';
++
++// ─── Query keys (stable, namespaced) ─────────────────────────────────────────
++
++export const communityEventsKeys = {
++  all: ['communityEvents'] as const,
++  list: (workspaceId: string, opts: ListEventsOptions = {}) =>
++    [
++      ...communityEventsKeys.all,
++      'list',
++      workspaceId,
++      opts.state ?? '∅',
++      opts.cohort_id ?? '∅',
++    ] as const,
++  detail: (eventId: string) =>
++    [...communityEventsKeys.all, 'detail', eventId] as const,
++};
++
++const OPTIMISTIC_PREFIX = 'optimistic:';
++
++/** True when an id is a provisional, not-yet-server-reconciled event. */
++export function isOptimisticEventId(id: string): boolean {
++  return id.startsWith(OPTIMISTIC_PREFIX);
++}
++
++function tempEventId(): string {
++  return `${OPTIMISTIC_PREFIX}${Date.now()}-${Math.round(Math.random() * 1e6)}`;
++}
++
++// ─── Read hooks ──────────────────────────────────────────────────────────────
++
++/**
++ * List events for a workspace. Disabled until a workspace id is known so the
++ * query never fires with an empty path segment.
++ */
++export function useCommunityEventsList(
++  workspaceId: string | undefined,
++  opts: ListEventsOptions = {},
++): UseQueryResult<CommunityEventListResponse> {
++  return useQuery({
++    queryKey: communityEventsKeys.list(workspaceId ?? '∅', opts),
++    queryFn: () => communityEventsApi.list(workspaceId as string, opts),
++    enabled: !!workspaceId,
++    staleTime: 30_000,
++  });
++}
++
++/** Single event detail. Disabled until an event id is known. */
++export function useCommunityEvent(
++  eventId: string | undefined,
++): UseQueryResult<CommunityEvent> {
++  return useQuery({
++    queryKey: communityEventsKeys.detail(eventId ?? '∅'),
++    queryFn: () => communityEventsApi.getOne(eventId as string),
++    enabled: !!eventId,
++    staleTime: 30_000,
++  });
++}
++
++// ─── Mutation hooks (optimistic + rollback) ──────────────────────────────────
++
++/**
++ * Apply a client RSVP to the cached event detail: set `viewer_rsvp_status`,
++ * decrement the previous client-status count, and increment the next one. Only
++ * the three client statuses (going / maybe / declined) move counts here; the
++ * server remains the source of truth on settle.
++ */
++function applyOptimisticRsvp(
++  event: CommunityEvent,
++  next: CommunityClientRsvpStatus,
++): CommunityEvent {
++  const counts = { ...event.rsvp_counts };
++  const prev = event.viewer_rsvp_status;
++  if (prev === 'going' || prev === 'maybe' || prev === 'declined') {
++    counts[prev] = Math.max(0, counts[prev] - 1);
++  }
++  counts[next] = counts[next] + 1;
++  return { ...event, viewer_rsvp_status: next, rsvp_counts: counts };
++}
++
++/**
++ * Set / update the caller's RSVP on an event with an optimistic detail update
++ * and rollback. Invalidates the detail (and any workspace list) on settle so
++ * the authoritative counts reconcile.
++ */
++export function useRsvpEvent(
++  eventId: string,
++  workspaceId?: string,
++): UseMutationResult<CommunityRsvp, unknown, CommunityClientRsvpStatus> {
++  const qc = useQueryClient();
++  return useMutation({
++    mutationFn: (status: CommunityClientRsvpStatus) =>
++      communityEventsApi.rsvp(eventId, status),
++    onMutate: async (status) => {
++      const key = communityEventsKeys.detail(eventId);
++      await qc.cancelQueries({ queryKey: key });
++      const prev = qc.getQueryData<CommunityEvent>(key);
++      if (prev) {
++        qc.setQueryData<CommunityEvent>(key, applyOptimisticRsvp(prev, status));
++      }
++      return { prev };
++    },
++    onError: (_err, _status, ctx) => {
++      const c = ctx as { prev?: CommunityEvent } | undefined;
++      if (c?.prev) {
++        qc.setQueryData(communityEventsKeys.detail(eventId), c.prev);
++      }
++    },
++    onSettled: () => {
++      qc.invalidateQueries({ queryKey: communityEventsKeys.detail(eventId) });
++      if (workspaceId) {
++        qc.invalidateQueries({
++          queryKey: [...communityEventsKeys.all, 'list', workspaceId],
++        });
++      }
++    },
++  });
++}
++
++/**
++ * Coach: create an event. Optimistically inserts a provisional event at the top
++ * of the (unfiltered) workspace list; reconciles with the server row on success
++ * and rolls back on failure.
++ */
++export function useCreateEvent(
++  workspaceId: string,
++  createdByUserId: string,
++): UseMutationResult<CommunityEvent, unknown, CreateEventInput> {
++  const qc = useQueryClient();
++  return useMutation({
++    mutationFn: (input: CreateEventInput) =>
++      communityEventsApi.create(workspaceId, input),
++    onMutate: async (input) => {
++      const key = communityEventsKeys.list(workspaceId);
++      await qc.cancelQueries({ queryKey: key });
++      const prev = qc.getQueryData<CommunityEventListResponse>(key);
++      const now = new Date().toISOString();
++      const optimistic: CommunityEvent = {
++        id: tempEventId(),
++        workspace_id: workspaceId,
++        cohort_id: input.cohort_id ?? null,
++        created_by_user_id: createdByUserId,
++        title: input.title,
++        description: input.description ?? null,
++        state: 'scheduled',
++        starts_at: input.starts_at,
++        ends_at: input.ends_at ?? null,
++        external_url: input.live_url ?? null,
++        reflected_at: null,
++        canceled: false,
++        rsvp_counts: {
++          going: 0,
++          maybe: 0,
++          declined: 0,
++          attended: 0,
++          missed: 0,
++        },
++        viewer_rsvp_status: null,
++        created_at: now,
++        updated_at: now,
++      };
++      qc.setQueryData<CommunityEventListResponse>(key, {
++        events: [optimistic, ...(prev?.events ?? [])],
++        next_before: prev?.next_before ?? null,
++      });
++      return { prev };
++    },
++    onError: (_err, _input, ctx) => {
++      const c = ctx as { prev?: CommunityEventListResponse } | undefined;
++      if (c?.prev) {
++        qc.setQueryData(communityEventsKeys.list(workspaceId), c.prev);
++      }
++    },
++    onSettled: () => {
++      qc.invalidateQueries({
++        queryKey: [...communityEventsKeys.all, 'list', workspaceId],
++      });
++    },
++  });
++}
++
++/**
++ * Coach: edit fields and/or advance the lifecycle state of an event. Reconciles
++ * the detail + workspace list via invalidation (a state transition can change
++ * which list filter the event belongs to, so a targeted optimistic patch would
++ * be misleading — invalidate and refetch instead).
++ */
++export function useUpdateEvent(
++  eventId: string,
++  workspaceId?: string,
++): UseMutationResult<CommunityEvent, unknown, UpdateEventInput> {
++  const qc = useQueryClient();
++  return useMutation({
++    mutationFn: (input: UpdateEventInput) =>
++      communityEventsApi.update(eventId, input),
++    onSuccess: (event) => {
++      qc.setQueryData<CommunityEvent>(
++        communityEventsKeys.detail(eventId),
++        event,
++      );
++    },
++    onSettled: () => {
++      qc.invalidateQueries({ queryKey: communityEventsKeys.detail(eventId) });
++      if (workspaceId) {
++        qc.invalidateQueries({
++          queryKey: [...communityEventsKeys.all, 'list', workspaceId],
++        });
++      }
++    },
++  });
++}
++
++/**
++ * Coach: advance only the lifecycle state. A first-class mutation whose
++ * variable is the target `state`, so call sites read `transition.mutate('live')`
++ * rather than threading a full UpdateEventInput. Mirrors useUpdateEvent's
++ * reconciliation posture (a transition can move the event between list
++ * filters, so invalidate-and-refetch rather than an optimistic patch).
++ */
++export function useTransitionEvent(
++  eventId: string,
++  workspaceId?: string,
++): UseMutationResult<CommunityEvent, unknown, CommunityEventState> {
++  const qc = useQueryClient();
++  return useMutation({
++    mutationFn: (state: CommunityEventState) =>
++      communityEventsApi.update(eventId, { state }),
++    onSuccess: (event) => {
++      qc.setQueryData<CommunityEvent>(
++        communityEventsKeys.detail(eventId),
++        event,
++      );
++    },
++    onSettled: () => {
++      qc.invalidateQueries({ queryKey: communityEventsKeys.detail(eventId) });
++      if (workspaceId) {
++        qc.invalidateQueries({
++          queryKey: [...communityEventsKeys.all, 'list', workspaceId],
++        });
++      }
++    },
++  });
++}
++
++/** Coach: attach an EXTERNAL replay link. Reconciles detail + list on settle. */
++export function useAttachReplay(
++  eventId: string,
++  workspaceId?: string,
++): UseMutationResult<CommunityEvent, unknown, string> {
++  const qc = useQueryClient();
++  return useMutation({
++    mutationFn: (replayUrl: string) =>
++      communityEventsApi.attachReplay(eventId, replayUrl),
++    onSuccess: (event) => {
++      qc.setQueryData<CommunityEvent>(
++        communityEventsKeys.detail(eventId),
++        event,
++      );
++    },
++    onSettled: () => {
++      qc.invalidateQueries({ queryKey: communityEventsKeys.detail(eventId) });
++      if (workspaceId) {
++        qc.invalidateQueries({
++          queryKey: [...communityEventsKeys.all, 'list', workspaceId],
++        });
++      }
++    },
++  });
++}
++
++/** Coach: move the event to `reflected`. Reconciles detail + list on settle. */
++export function useReflectEvent(
++  eventId: string,
++  workspaceId?: string,
++): UseMutationResult<CommunityEvent, unknown, void> {
++  const qc = useQueryClient();
++  return useMutation({
++    mutationFn: () => communityEventsApi.reflect(eventId),
++    onSuccess: (event) => {
++      qc.setQueryData<CommunityEvent>(
++        communityEventsKeys.detail(eventId),
++        event,
++      );
++    },
++    onSettled: () => {
++      qc.invalidateQueries({ queryKey: communityEventsKeys.detail(eventId) });
++      if (workspaceId) {
++        qc.invalidateQueries({
++          queryKey: [...communityEventsKeys.all, 'list', workspaceId],
++        });
++      }
++    },
++  });
++}
+diff --git a/src/hooks/useReducedMotion.ts b/src/hooks/useReducedMotion.ts
+new file mode 100644
+index 0000000..050075c
+--- /dev/null
++++ b/src/hooks/useReducedMotion.ts
+@@ -0,0 +1,40 @@
++/**
++ * useReducedMotion — a small shared hook that mirrors the OS "Reduce Motion"
++ * accessibility setting (UX motion parity). It reads
++ * `AccessibilityInfo.isReduceMotionEnabled()` on mount and subscribes to the
++ * `reduceMotionChanged` event so a mid-session settings change is honoured.
++ *
++ * This is the reusable form of the pattern already proven in
++ * `components/community/CompletionToast.tsx`. Surfaces that animate (e.g. the
++ * coach event create / manage modals) consume this to drop their entrance/exit
++ * animation to `none` when the user has asked the system to reduce motion.
++ *
++ * Returns the current boolean. SSR/headless-safe default is `false` (no
++ * reduction) until the async probe resolves.
++ */
++import { useEffect, useState } from 'react';
++import { AccessibilityInfo } from 'react-native';
++
++export function useReducedMotion(): boolean {
++  const [reduced, setReduced] = useState(false);
++
++  useEffect(() => {
++    let mounted = true;
++    void AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
++      if (mounted) setReduced(enabled);
++    });
++    const sub = AccessibilityInfo.addEventListener(
++      'reduceMotionChanged',
++      (enabled: boolean) => {
++        if (mounted) setReduced(enabled);
++      },
++    );
++    return () => {
++      mounted = false;
++      // RN >= 0.65 returns a subscription with `.remove()`.
++      sub?.remove?.();
++    };
++  }, []);
++
++  return reduced;
++}
+diff --git a/src/navigation/CoachCommunityNavigator.tsx b/src/navigation/CoachCommunityNavigator.tsx
+index 23cfd96..5ab3bd5 100644
+--- a/src/navigation/CoachCommunityNavigator.tsx
++++ b/src/navigation/CoachCommunityNavigator.tsx
+@@ -8,16 +8,23 @@
+  * OFF the Community tab is not rendered and this stack never enters the tree,
+  * so none of these routes are reachable (the flag-OFF deep-link test asserts
+  * exactly this). See CoachNavigator.tsx.
++ *
++ * v2-3 EVENTS containment: the CoachCommunityEvents route is registered ONLY
++ * when `featureFlags.communityEvents` is true. With that flag OFF the route
++ * never registers, so there is zero event UI and no reachable event surface —
++ * even though the coach Community tab itself may be on.
+  */
+ import React from 'react';
+ import { createNativeStackNavigator } from '@react-navigation/native-stack';
+ import { Colors } from '../theme';
++import { featureFlags } from '../config/featureFlags';
+ import CoachCommunityHomeScreen from '../screens/community/CoachCommunityHomeScreen';
+ import CoachCommunityInboxScreen from '../screens/community/CoachCommunityInboxScreen';
+ import CoachCommunityCohortsScreen from '../screens/community/CoachCommunityCohortsScreen';
+ import CoachCommunityCohortDetailScreen from '../screens/community/CoachCommunityCohortDetailScreen';
+ import CoachCommunityPostDetailScreen from '../screens/community/CoachCommunityPostDetailScreen';
+ import CoachCommunityModerationScreen from '../screens/community/CoachCommunityModerationScreen';
++import CoachCommunityEventsScreen from '../screens/community/CoachCommunityEventsScreen';
+ import type { CoachCommunityStackParamList } from '../screens/community/coachCommunityNavTypes';
+ 
+ const CoachCommunityStack =
+@@ -63,6 +70,13 @@ export default function CoachCommunityNavigator(): React.ReactElement {
+         component={CoachCommunityModerationScreen}
+         options={{ title: 'Moderation' }}
+       />
++      {featureFlags.communityEvents && (
++        <CoachCommunityStack.Screen
++          name="CoachCommunityEvents"
++          component={CoachCommunityEventsScreen}
++          options={{ title: 'Events' }}
++        />
++      )}
+     </CoachCommunityStack.Navigator>
+   );
+ }
+diff --git a/src/navigation/CommunityNavigator.tsx b/src/navigation/CommunityNavigator.tsx
+index 930ed68..cb97759 100644
+--- a/src/navigation/CommunityNavigator.tsx
++++ b/src/navigation/CommunityNavigator.tsx
+@@ -6,14 +6,21 @@
+  * ClientNavigator when `featureFlags.communityTab` is true. When the flag is
+  * OFF the Community tab is not rendered and this stack never enters the tree,
+  * so none of these routes are reachable. See ClientNavigator.tsx.
++ *
++ * v2-3 EVENTS containment: the CommunityEventDetail route is registered ONLY
++ * when `featureFlags.communityEvents` is true. With that flag OFF the route
++ * never registers, so there is zero event UI, no event navigator target, and
++ * no reachable event surface — even though the Community tab itself may be on.
+  */
+ import React from 'react';
+ import { createNativeStackNavigator } from '@react-navigation/native-stack';
+ import { colors } from '../theme/tokens';
++import { featureFlags } from '../config/featureFlags';
+ import CommunityTabScreen from '../screens/community/CommunityTabScreen';
+ import CommunityTodayScreen from '../screens/community/CommunityTodayScreen';
+ import CommunitySpaceScreen from '../screens/community/CommunitySpaceScreen';
+ import CommunityThreadScreen from '../screens/community/CommunityThreadScreen';
++import CommunityEventDetailScreen from '../screens/community/CommunityEventDetailScreen';
+ import CommunityDmListScreen from '../screens/community/CommunityDmListScreen';
+ import CommunityDmThreadScreen from '../screens/community/CommunityDmThreadScreen';
+ import CommunityComposerScreen from '../screens/community/CommunityComposerScreen';
+@@ -33,6 +40,9 @@ export default function CommunityNavigator(): React.ReactElement {
+       <CommunityStack.Screen name="CommunityToday" component={CommunityTodayScreen} />
+       <CommunityStack.Screen name="CommunitySpace" component={CommunitySpaceScreen} />
+       <CommunityStack.Screen name="CommunityThread" component={CommunityThreadScreen} />
++      {featureFlags.communityEvents && (
++        <CommunityStack.Screen name="CommunityEventDetail" component={CommunityEventDetailScreen} />
++      )}
+       <CommunityStack.Screen name="CommunityDmList" component={CommunityDmListScreen} />
+       <CommunityStack.Screen name="CommunityDmThread" component={CommunityDmThreadScreen} />
+       <CommunityStack.Screen name="CommunityComposer" component={CommunityComposerScreen} />
+diff --git a/src/navigation/__tests__/coachCommunityFlagOff.test.ts b/src/navigation/__tests__/coachCommunityFlagOff.test.ts
+index 1a4b646..f654aaf 100644
+--- a/src/navigation/__tests__/coachCommunityFlagOff.test.ts
++++ b/src/navigation/__tests__/coachCommunityFlagOff.test.ts
+@@ -25,6 +25,46 @@ const FLAGS = fs.readFileSync(
+   path.join(ROOT, 'config', 'featureFlags.ts'),
+   'utf8',
+ );
++const COACH_COMMUNITY_NAV = fs.readFileSync(
++  path.join(ROOT, 'navigation', 'CoachCommunityNavigator.tsx'),
++  'utf8',
++);
++const COACH_HOME = fs.readFileSync(
++  path.join(ROOT, 'screens', 'community', 'CoachCommunityHomeScreen.tsx'),
++  'utf8',
++);
++
++describe('Coach Community EVENTS route — flag-gated registration (F1)', () => {
++  it('registers the CoachCommunityEvents <Stack.Screen> only behind featureFlags.communityEvents', () => {
++    expect(COACH_COMMUNITY_NAV).toMatch(
++      /\{featureFlags\.communityEvents\s*&&/,
++    );
++    const guardIdx = COACH_COMMUNITY_NAV.search(
++      /\{featureFlags\.communityEvents\s*&&/,
++    );
++    const screenIdx = COACH_COMMUNITY_NAV.search(
++      /name=["']CoachCommunityEvents["']/,
++    );
++    expect(guardIdx).toBeGreaterThan(-1);
++    expect(screenIdx).toBeGreaterThan(guardIdx);
++  });
++
++  it('does not register the coach events route unconditionally', () => {
++    const occurrences =
++      COACH_COMMUNITY_NAV.match(/name=["']CoachCommunityEvents["']/g) ?? [];
++    expect(occurrences).toHaveLength(1);
++  });
++
++  it('gates the coach Home events discovery card behind featureFlags.communityEvents', () => {
++    // The visible Events entry point on coach Home is flag-gated, so the card
++    // and its navigation never appear in a flag-off build (F1 + F9).
++    expect(COACH_HOME).toMatch(/featureFlags\.communityEvents/);
++    const guardIdx = COACH_HOME.search(/featureFlags\.communityEvents\s*\?/);
++    const navIdx = COACH_HOME.search(/navigate\(['"]CoachCommunityEvents['"]/);
++    expect(guardIdx).toBeGreaterThan(-1);
++    expect(navIdx).toBeGreaterThan(guardIdx);
++  });
++});
+ 
+ describe('Coach Community tab — flag-gated mount (default OFF)', () => {
+   it('renders the CommunityStack <Tab.Screen> only behind featureFlags.coachCommunity', () => {
+diff --git a/src/navigation/__tests__/communityFlagOff.test.ts b/src/navigation/__tests__/communityFlagOff.test.ts
+index 17c5ef4..7eeec68 100644
+--- a/src/navigation/__tests__/communityFlagOff.test.ts
++++ b/src/navigation/__tests__/communityFlagOff.test.ts
+@@ -27,6 +27,14 @@ const FLAGS = fs.readFileSync(
+   path.join(ROOT, 'config', 'featureFlags.ts'),
+   'utf8',
+ );
++const COMMUNITY_NAV = fs.readFileSync(
++  path.join(ROOT, 'navigation', 'CommunityNavigator.tsx'),
++  'utf8',
++);
++const TODAY_SCREEN = fs.readFileSync(
++  path.join(ROOT, 'screens', 'community', 'CommunityTodayScreen.tsx'),
++  'utf8',
++);
+ 
+ describe('Community tab — flag-gated mount (default OFF)', () => {
+   it('renders the CommunityTab <Tab.Screen> only behind featureFlags.communityTab', () => {
+@@ -71,6 +79,43 @@ describe('Community tab — flag-gated mount (default OFF)', () => {
+   });
+ });
+ 
++describe('Community EVENTS route — flag-gated registration (F1)', () => {
++  it('registers the CommunityEventDetail <Stack.Screen> only behind featureFlags.communityEvents', () => {
++    // The event detail screen registration must be wrapped in a
++    // `{featureFlags.communityEvents && (...)}` guard — when OFF, no event
++    // route, UI, or data path exists in the member stack.
++    expect(COMMUNITY_NAV).toMatch(
++      /\{featureFlags\.communityEvents\s*&&/,
++    );
++    const guardIdx = COMMUNITY_NAV.search(
++      /\{featureFlags\.communityEvents\s*&&/,
++    );
++    const screenIdx = COMMUNITY_NAV.search(
++      /name=["']CommunityEventDetail["']/,
++    );
++    expect(guardIdx).toBeGreaterThan(-1);
++    expect(screenIdx).toBeGreaterThan(guardIdx);
++  });
++
++  it('does not register the event detail route unconditionally', () => {
++    // There must be exactly one CommunityEventDetail registration, and it lives
++    // inside the flag guard (asserted above).
++    const occurrences =
++      COMMUNITY_NAV.match(/name=["']CommunityEventDetail["']/g) ?? [];
++    expect(occurrences).toHaveLength(1);
++  });
++
++  it('gates the Today event card navigation behind featureFlags.communityEvents', () => {
++    // The discovery hop into the event detail must itself be flag-gated so a
++    // flag-off build never navigates to an unregistered route (F1 + F9).
++    expect(TODAY_SCREEN).toMatch(/featureFlags\.communityEvents/);
++    const guardIdx = TODAY_SCREEN.search(/if\s*\(featureFlags\.communityEvents\)/);
++    const navIdx = TODAY_SCREEN.search(/navigate\(['"]CommunityEventDetail['"]/);
++    expect(guardIdx).toBeGreaterThan(-1);
++    expect(navIdx).toBeGreaterThan(guardIdx);
++  });
++});
++
+ describe('Expo feature flags — default OFF', () => {
+   it('declares the four community flags reading EXPO_PUBLIC_FF_* with a false default', () => {
+     // Each flag must read its env var via readFlag(..., false) so the default
+diff --git a/src/screens/community/CoachCommunityEventsScreen.tsx b/src/screens/community/CoachCommunityEventsScreen.tsx
+new file mode 100644
+index 0000000..7bf80ba
+--- /dev/null
++++ b/src/screens/community/CoachCommunityEventsScreen.tsx
+@@ -0,0 +1,1092 @@
++/**
++ * CoachCommunityEventsScreen — the coach's event list + management surface
++ * (v2-3). Consumes the v2-3 events backend:
++ *   GET  /community/workspaces/:workspaceId/events
++ *   POST /community/workspaces/:workspaceId/events            (create)
++ *   PATCH /community/events/:eventId                           (edit / transition)
++ *   POST /community/events/:eventId/replay                     (attach replay)
++ *   POST /community/events/:eventId/reflect                    (reflect / close)
++ *
++ * Mirrors CoachCommunityCohortsScreen (the gold-standard list pattern):
++ *   - Pull-to-refresh on the list.
++ *   - A FAB opens a create-event modal (title + start time + optional external
++ *     link); submitting fires an optimistic create that reconciles on success.
++ *   - Tapping a row opens a MANAGE modal: advance the lifecycle state
++ *     (forward-only), attach an EXTERNAL replay link, or reflect (close).
++ *   - A CompletionToast confirms each successful mutation (G11).
++ *
++ * THREE distinct branches (UX P0.2): a loading spinner; an honest
++ * CoachErrorState on failure (never a calm/empty masquerade); and — on a
++ * genuinely empty list — an honest, NEUTRAL (non-Roman) empty state with a
++ * create action.
++ *
++ * FACE + VOICE CONTRACT (operator rule 2026-06-10): an empty state that speaks
++ * in Roman's VOICE must (a) render Roman's FACE and (b) source its copy from
++ * the backend Roman voice-policy payload — never hardcoded. The backend
++ * coach empty-states payload has NO events surface key, so there is no Roman
++ * copy to vend for this surface. Rather than invent client-side "Roman" copy
++ * (a face+voice violation) or call the operator-locked CoachEmptyState (which
++ * would throw a contract error for an unvended surface), this screen renders a
++ * plain functional empty state: a neutral Ionicons line glyph (NOT RomanAvatar)
++ * above functional UI copy. It does not speak in Roman's voice, so the
++ * face+voice contract does not apply.
++ *
++ * NO NATIVE LIVE ROOM (Step 0): the "live" / "replay" links are EXTERNAL,
++ * host-allowlisted URLs. Nothing here creates or implies an in-app room.
++ */
++import React, { useCallback, useMemo, useState } from 'react';
++import {
++  View,
++  Text,
++  StyleSheet,
++  FlatList,
++  ActivityIndicator,
++  RefreshControl,
++  Modal,
++  TextInput,
++  Platform,
++} from 'react-native';
++import DateTimePicker, {
++  type DateTimePickerEvent,
++} from '@react-native-community/datetimepicker';
++import { useTheme } from '../../theme/useTheme';
++import { spacing, radius, withAlpha, semantic } from '../../theme/tokens';
++import HapticPressable from '../../components/HapticPressable';
++import { Ionicons } from '@expo/vector-icons';
++import { CoachErrorState } from '../../components/community/coach';
++import CompletionToast, {
++  useCompletionToast,
++} from '../../components/community/CompletionToast';
++import EventCard, { stateMeta } from '../../components/community/EventCard';
++import { useCurrentUser } from '../../hooks/useCurrentUser';
++import { useCommunityMe } from '../../hooks/useCommunity';
++import { useReducedMotion } from '../../hooks/useReducedMotion';
++import {
++  useCommunityEventsList,
++  useCreateEvent,
++  useTransitionEvent,
++  useAttachReplay,
++  useReflectEvent,
++} from '../../hooks/useCommunityEvents';
++import { describeMutationError } from '../../api/communityEventsApi';
++import type {
++  CommunityEvent,
++  CommunityEventState,
++} from '../../api/communityEventsApi';
++
++
++/**
++ * Forward-only lifecycle order. The state machine on the backend is the
++ * authority (it also permits legal skips); the UI offers the single immediate
++ * next state as the primary advance affordance.
++ */
++const STATE_ORDER: CommunityEventState[] = [
++  'scheduled',
++  'tomorrow',
++  'live',
++  'replay',
++  'reflected',
++];
++
++/** Status-honest lifecycle label, shared with the card/detail via stateMeta. */
++function stateLabel(state: CommunityEventState | string): string {
++  return stateMeta(state).label;
++}
++
++/** The immediate next lifecycle state, or null when already terminal. */
++function nextState(state: CommunityEventState): CommunityEventState | null {
++  const i = STATE_ORDER.indexOf(state);
++  if (i < 0 || i >= STATE_ORDER.length - 1) return null;
++  return STATE_ORDER[i + 1];
++}
++
++/**
++ * Local-timezone hint for the create form so a coach knows the time they pick
++ * is interpreted in THEIR timezone (serialized to UTC ISO behind the scenes).
++ */
++function localTimezoneHint(): string {
++  try {
++    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
++    return tz ? `Times are in your local timezone (${tz}).` : 'Times are in your local timezone.';
++  } catch {
++    return 'Times are in your local timezone.';
++  }
++}
++
++/** Human-readable local rendering of a chosen start Date. */
++function formatLocalDateTime(d: Date | null): string {
++  if (!d) return 'Pick a date and time';
++  return d.toLocaleString(undefined, {
++    weekday: 'short',
++    month: 'short',
++    day: 'numeric',
++    hour: 'numeric',
++    minute: '2-digit',
++  });
++}
++
++export default function CoachCommunityEventsScreen(): React.ReactElement {
++  const { semanticColors } = useTheme();
++  const coach = useCurrentUser();
++  const me = useCommunityMe();
++  const workspaceId = me.data?.workspace_id ?? undefined;
++
++  const events = useCommunityEventsList(workspaceId);
++  const createEvent = useCreateEvent(workspaceId ?? '', coach?.id ?? '');
++  const completion = useCompletionToast();
++  const reduceMotion = useReducedMotion();
++
++  // ── Create modal ───────────────────────────────────────────────────────────
++  const [createOpen, setCreateOpen] = useState(false);
++  const [title, setTitle] = useState('');
++  // F12: the coach picks a date/time via native pickers; we hold a Date and
++  // serialize to a UTC ISO string only at submit time.
++  const [startsAt, setStartsAt] = useState<Date | null>(null);
++  const [liveUrl, setLiveUrl] = useState('');
++  const [createError, setCreateError] = useState<string | null>(null);
++
++  const trimmedTitle = title.trim();
++  const trimmedLive = liveUrl.trim();
++  const canCreate =
++    trimmedTitle.length > 0 &&
++    startsAt != null &&
++    !!workspaceId &&
++    !createEvent.isPending;
++
++  const resetCreate = useCallback(() => {
++    setTitle('');
++    setStartsAt(null);
++    setLiveUrl('');
++    setCreateError(null);
++    setCreateOpen(false);
++  }, []);
++
++  const onCreate = useCallback(() => {
++    if (!canCreate || startsAt == null) return;
++    setCreateError(null);
++    createEvent.mutate(
++      {
++        title: trimmedTitle,
++        // Serialize the picked local time to a UTC ISO-8601 string behind the
++        // scenes (the backend DTO validates IsISO8601 strict).
++        starts_at: startsAt.toISOString(),
++        ...(trimmedLive.length > 0 ? { live_url: trimmedLive } : {}),
++      },
++      {
++        onSuccess: () => {
++          resetCreate();
++          completion.show('Event created.');
++        },
++        onError: (err) => {
++          const info = describeMutationError(err);
++          setCreateError(info.message);
++          if (info.conflict) void events.refetch();
++        },
++      },
++    );
++  }, [
++    canCreate,
++    startsAt,
++    createEvent,
++    trimmedTitle,
++    trimmedLive,
++    resetCreate,
++    completion,
++    events,
++  ]);
++
++  // ── Manage modal (per-event lifecycle) ───────────────────────────────────────
++  const [managed, setManaged] = useState<CommunityEvent | null>(null);
++
++  const data = useMemo(() => events.data?.events ?? [], [events.data]);
++  const isEmpty =
++    !events.isLoading && !events.isError && data.length === 0;
++
++  const renderItem = useCallback(
++    ({ item }: { item: CommunityEvent }) => (
++      <EventCard
++        event={item}
++        onPress={(e) => setManaged(e)}
++        testID={`coach-community-event-row-${item.id}`}
++      />
++    ),
++    [],
++  );
++
++  if (events.isLoading) {
++    return (
++      <View
++        style={[styles.center, { backgroundColor: semanticColors.bgPrimary }]}
++        testID="coach-community-events-screen"
++      >
++        <ActivityIndicator
++          color={semanticColors.accent}
++          testID="coach-community-events-loading"
++        />
++      </View>
++    );
++  }
++
++  return (
++    <View
++      style={[styles.flex, { backgroundColor: semanticColors.bgPrimary }]}
++      testID="coach-community-events-screen"
++    >
++      {events.isError ? (
++        <CoachErrorState
++          message="Could not load your events. Pull to retry."
++          onRetry={() => events.refetch()}
++          retrying={events.isRefetching}
++          testID="coach-community-events-error"
++        />
++      ) : isEmpty ? (
++        <View style={styles.emptyWrap} testID="coach-community-events-empty">
++          <Ionicons
++            name="calendar-outline"
++            size={64}
++            color={semanticColors.textMuted}
++          />
++          <Text style={[styles.emptyTitle, { color: semanticColors.textPrimary }]}>
++            No events yet
++          </Text>
++          <Text style={[styles.emptyBody, { color: semanticColors.textMuted }]}>
++            Schedule a live session or workshop. Your members will see it and can
++            RSVP — and you can add an external link when it goes live.
++          </Text>
++          <HapticPressable
++            intent="medium"
++            onPress={() => setCreateOpen(true)}
++            accessibilityRole="button"
++            accessibilityLabel="Schedule your first event"
++            testID="coach-community-events-empty-action"
++            style={[styles.emptyCta, { backgroundColor: semanticColors.accent }]}
++          >
++            <Text
++              style={[styles.emptyCtaLabel, { color: semanticColors.textOnAccent }]}
++            >
++              Schedule an event
++            </Text>
++          </HapticPressable>
++        </View>
++      ) : (
++        <FlatList
++          data={data}
++          keyExtractor={(e) => e.id}
++          renderItem={renderItem}
++          contentContainerStyle={styles.listContent}
++          refreshControl={
++            <RefreshControl
++              refreshing={events.isRefetching}
++              onRefresh={() => events.refetch()}
++              tintColor={semanticColors.accent}
++            />
++          }
++        />
++      )}
++
++      {!isEmpty ? (
++        <HapticPressable
++          intent="medium"
++          onPress={() => setCreateOpen(true)}
++          accessibilityRole="button"
++          accessibilityLabel="Schedule a new event"
++          testID="coach-community-events-fab"
++          style={[styles.fab, { backgroundColor: semanticColors.accent }]}
++        >
++          <Text style={[styles.fabLabel, { color: semanticColors.textOnAccent }]}>
++            New event
++          </Text>
++        </HapticPressable>
++      ) : null}
++
++      <CreateEventModal
++        visible={createOpen}
++        reduceMotion={reduceMotion}
++        title={title}
++        startsAt={startsAt}
++        liveUrl={liveUrl}
++        canSubmit={canCreate}
++        errorMessage={createError}
++        onChangeTitle={setTitle}
++        onChangeStartsAt={setStartsAt}
++        onChangeLiveUrl={setLiveUrl}
++        onCancel={resetCreate}
++        onSubmit={onCreate}
++      />
++
++      <ManageEventModal
++        event={managed}
++        workspaceId={workspaceId}
++        reduceMotion={reduceMotion}
++        onClose={() => setManaged(null)}
++        onConfirm={(message) => {
++          setManaged(null);
++          completion.show(message);
++        }}
++      />
++
++      <CompletionToast state={completion.toast} />
++    </View>
++  );
++}
++
++// ─── Create modal ─────────────────────────────────────────────────────────────
++
++interface CreateEventModalProps {
++  visible: boolean;
++  reduceMotion: boolean;
++  title: string;
++  startsAt: Date | null;
++  liveUrl: string;
++  canSubmit: boolean;
++  errorMessage: string | null;
++  onChangeTitle: (v: string) => void;
++  onChangeStartsAt: (v: Date) => void;
++  onChangeLiveUrl: (v: string) => void;
++  onCancel: () => void;
++  onSubmit: () => void;
++}
++
++function CreateEventModal({
++  visible,
++  reduceMotion,
++  title,
++  startsAt,
++  liveUrl,
++  canSubmit,
++  errorMessage,
++  onChangeTitle,
++  onChangeStartsAt,
++  onChangeLiveUrl,
++  onCancel,
++  onSubmit,
++}: CreateEventModalProps): React.ReactElement {
++  const { semanticColors } = useTheme();
++  // F12: native date + time pickers replace the raw ISO text field. We keep a
++  // single Date in the parent; the two pickers edit the date and the time of
++  // that same instant. Android shows pickers as transient dialogs (open on
++  // demand); iOS renders them inline when open.
++  const [showDate, setShowDate] = useState(false);
++  const [showTime, setShowTime] = useState(false);
++
++  const onPickDate = useCallback(
++    (_e: DateTimePickerEvent, picked?: Date) => {
++      setShowDate(Platform.OS === 'ios');
++      if (!picked) return;
++      const base = startsAt ?? new Date();
++      const next = new Date(base);
++      next.setFullYear(picked.getFullYear(), picked.getMonth(), picked.getDate());
++      onChangeStartsAt(next);
++    },
++    [startsAt, onChangeStartsAt],
++  );
++
++  const onPickTime = useCallback(
++    (_e: DateTimePickerEvent, picked?: Date) => {
++      setShowTime(Platform.OS === 'ios');
++      if (!picked) return;
++      const base = startsAt ?? new Date();
++      const next = new Date(base);
++      next.setHours(picked.getHours(), picked.getMinutes(), 0, 0);
++      onChangeStartsAt(next);
++    },
++    [startsAt, onChangeStartsAt],
++  );
++
++  return (
++    <Modal
++      visible={visible}
++      transparent
++      animationType={reduceMotion ? 'none' : 'fade'}
++      onRequestClose={onCancel}
++      testID="coach-community-events-create-modal"
++    >
++      <View
++        style={[
++          styles.scrim,
++          { backgroundColor: withAlpha(semanticColors.textPrimary, 0.45) },
++        ]}
++      >
++        <View
++          style={[
++            styles.modalCard,
++            {
++              backgroundColor: semanticColors.bgSurface,
++              borderColor: semanticColors.border,
++            },
++          ]}
++        >
++          <Text style={[styles.modalTitle, { color: semanticColors.textPrimary }]}>
++            Schedule an event
++          </Text>
++          <TextInput
++            value={title}
++            onChangeText={onChangeTitle}
++            autoFocus
++            placeholder="Live Q&A"
++            placeholderTextColor={semanticColors.textMuted}
++            accessibilityLabel="Event title"
++            testID="coach-community-events-title-input"
++            style={inputStyle(semanticColors)}
++          />
++          <Text style={[styles.fieldLabel, { color: semanticColors.textMuted }]}>
++            Starts at
++          </Text>
++          <View style={styles.pickerRow}>
++            <HapticPressable
++              intent="light"
++              onPress={() => setShowDate(true)}
++              accessibilityRole="button"
++              accessibilityLabel="Pick start date and time"
++              testID="coach-community-events-date-trigger"
++              style={[
++                styles.pickerField,
++                {
++                  backgroundColor: semanticColors.bgPrimary,
++                  borderColor: semanticColors.border,
++                },
++              ]}
++            >
++              <Ionicons
++                name="calendar-outline"
++                size={16}
++                color={semanticColors.textMuted}
++              />
++              <Text
++                style={[styles.pickerText, { color: semanticColors.textPrimary }]}
++                numberOfLines={1}
++              >
++                {formatLocalDateTime(startsAt)}
++              </Text>
++            </HapticPressable>
++            <HapticPressable
++              intent="light"
++              onPress={() => setShowTime(true)}
++              accessibilityRole="button"
++              accessibilityLabel="Pick start time"
++              testID="coach-community-events-time-trigger"
++              style={[
++                styles.pickerTime,
++                {
++                  backgroundColor: semanticColors.bgPrimary,
++                  borderColor: semanticColors.border,
++                },
++              ]}
++            >
++              <Ionicons
++                name="time-outline"
++                size={16}
++                color={semanticColors.textMuted}
++              />
++            </HapticPressable>
++          </View>
++          {showDate ? (
++            <DateTimePicker
++              value={startsAt ?? new Date()}
++              mode="date"
++              onChange={onPickDate}
++              testID="coach-community-events-date-picker"
++            />
++          ) : null}
++          {showTime ? (
++            <DateTimePicker
++              value={startsAt ?? new Date()}
++              mode="time"
++              onChange={onPickTime}
++              testID="coach-community-events-time-picker"
++            />
++          ) : null}
++          <Text style={[styles.tzHint, { color: semanticColors.textMuted }]}>
++            {localTimezoneHint()}
++          </Text>
++
++          <TextInput
++            value={liveUrl}
++            onChangeText={onChangeLiveUrl}
++            placeholder="External link (optional)"
++            placeholderTextColor={semanticColors.textMuted}
++            autoCapitalize="none"
++            keyboardType="url"
++            accessibilityLabel="External event link, optional"
++            testID="coach-community-events-link-input"
++            style={inputStyle(semanticColors)}
++          />
++          {errorMessage ? (
++            <Text
++              style={[styles.modalError, { color: semantic.danger.fg }]}
++              accessibilityLiveRegion="polite"
++              testID="coach-community-events-create-error"
++            >
++              {errorMessage}
++            </Text>
++          ) : null}
++          <View style={styles.modalActions}>
++            <HapticPressable
++              intent="light"
++              onPress={onCancel}
++              accessibilityRole="button"
++              accessibilityLabel="Cancel"
++              testID="coach-community-events-create-cancel"
++              style={[
++                styles.modalButton,
++                styles.modalCancel,
++                { borderColor: semanticColors.border },
++              ]}
++            >
++              <Text
++                style={[styles.modalCancelLabel, { color: semanticColors.textPrimary }]}
++              >
++                Cancel
++              </Text>
++            </HapticPressable>
++            <HapticPressable
++              intent="success"
++              onPress={onSubmit}
++              disabled={!canSubmit}
++              accessibilityRole="button"
++              accessibilityLabel="Create event"
++              accessibilityState={{ disabled: !canSubmit }}
++              testID="coach-community-events-create-submit"
++              style={[
++                styles.modalButton,
++                {
++                  backgroundColor: canSubmit
++                    ? semanticColors.accent
++                    : semanticColors.disabledBg,
++                },
++              ]}
++            >
++              <Text
++                style={[
++                  styles.modalSubmitLabel,
++                  {
++                    color: canSubmit
++                      ? semanticColors.textOnAccent
++                      : semanticColors.textOnDisabled,
++                  },
++                ]}
++              >
++                Create
++              </Text>
++            </HapticPressable>
++          </View>
++        </View>
++      </View>
++    </Modal>
++  );
++}
++
++// ─── Manage modal (lifecycle: advance / replay / reflect) ────────────────────
++
++interface ManageEventModalProps {
++  event: CommunityEvent | null;
++  workspaceId: string | undefined;
++  reduceMotion: boolean;
++  onClose: () => void;
++  onConfirm: (message: string) => void;
++}
++
++function ManageEventModal({
++  event,
++  workspaceId,
++  reduceMotion,
++  onClose,
++  onConfirm,
++}: ManageEventModalProps): React.ReactElement | null {
++  const { semanticColors } = useTheme();
++  const eventId = event?.id ?? '';
++  const transition = useTransitionEvent(eventId, workspaceId);
++  const attachReplay = useAttachReplay(eventId, workspaceId);
++  const reflect = useReflectEvent(eventId, workspaceId);
++
++  const [replayUrl, setReplayUrl] = useState('');
++  const trimmedReplay = replayUrl.trim();
++  // F4: surface every mutation failure (not just the create path). 409s are
++  // classified as conflicts (stale state) and prompt a calm reconcile message.
++  const [manageError, setManageError] = useState<string | null>(null);
++  // F14: the destructive Reflect (close) action sits behind a calm confirm
++  // sheet whose default focus is Cancel — never fired on a single stray tap.
++  const [confirmReflect, setConfirmReflect] = useState(false);
++
++  const busy =
++    transition.isPending || attachReplay.isPending || reflect.isPending;
++
++  const advanceTo = event ? nextState(event.state) : null;
++
++  const onAdvance = useCallback(() => {
++    if (!advanceTo || busy) return;
++    setManageError(null);
++    transition.mutate(advanceTo, {
++      onSuccess: () => onConfirm(`Moved to ${stateLabel(advanceTo)}.`),
++      onError: (err) => setManageError(describeMutationError(err).message),
++    });
++  }, [advanceTo, busy, transition, onConfirm]);
++
++  const onAttachReplay = useCallback(() => {
++    if (trimmedReplay.length === 0 || busy) return;
++    setManageError(null);
++    attachReplay.mutate(trimmedReplay, {
++      onSuccess: () => {
++        setReplayUrl('');
++        onConfirm('Replay attached.');
++      },
++      onError: (err) => setManageError(describeMutationError(err).message),
++    });
++  }, [trimmedReplay, busy, attachReplay, onConfirm]);
++
++  const onReflect = useCallback(() => {
++    if (busy) return;
++    setManageError(null);
++    reflect.mutate(undefined, {
++      onSuccess: () => {
++        setConfirmReflect(false);
++        onConfirm('Recap posted.');
++      },
++      onError: (err) => {
++        setConfirmReflect(false);
++        setManageError(describeMutationError(err).message);
++      },
++    });
++  }, [busy, reflect, onConfirm]);
++
++  if (!event) return null;
++
++  const isReflected = event.state === 'reflected';
++
++  return (
++    <Modal
++      visible={event != null}
++      transparent
++      animationType={reduceMotion ? 'none' : 'fade'}
++      onRequestClose={onClose}
++      testID="coach-community-events-manage-modal"
++    >
++      <View
++        style={[
++          styles.scrim,
++          { backgroundColor: withAlpha(semanticColors.textPrimary, 0.45) },
++        ]}
++      >
++        <View
++          style={[
++            styles.modalCard,
++            {
++              backgroundColor: semanticColors.bgSurface,
++              borderColor: semanticColors.border,
++            },
++          ]}
++        >
++          <Text
++            style={[styles.modalTitle, { color: semanticColors.textPrimary }]}
++            numberOfLines={2}
++          >
++            {event.title}
++          </Text>
++          <Text style={[styles.manageState, { color: semanticColors.textMuted }]}>
++            {event.canceled ? 'Canceled' : stateLabel(event.state)}
++          </Text>
++
++          {advanceTo ? (
++            <HapticPressable
++              intent="medium"
++              onPress={onAdvance}
++              disabled={busy}
++              accessibilityRole="button"
++              accessibilityLabel={`Advance to ${stateLabel(advanceTo)}`}
++              accessibilityState={{ disabled: busy }}
++              testID="coach-community-events-advance"
++              style={[
++                styles.manageButton,
++                {
++                  backgroundColor: busy
++                    ? semanticColors.disabledBg
++                    : semanticColors.accent,
++                },
++              ]}
++            >
++              <Text
++                style={[
++                  styles.manageButtonLabel,
++                  {
++                    color: busy
++                      ? semanticColors.textOnDisabled
++                      : semanticColors.textOnAccent,
++                  },
++                ]}
++              >
++                Move to {stateLabel(advanceTo)}
++              </Text>
++            </HapticPressable>
++          ) : null}
++
++          {!isReflected ? (
++            <>
++              <TextInput
++                value={replayUrl}
++                onChangeText={setReplayUrl}
++                placeholder="External replay link"
++                placeholderTextColor={semanticColors.textMuted}
++                autoCapitalize="none"
++                keyboardType="url"
++                accessibilityLabel="External replay link"
++                testID="coach-community-events-replay-input"
++                style={inputStyle(semanticColors)}
++              />
++              <HapticPressable
++                intent="medium"
++                onPress={onAttachReplay}
++                disabled={busy || trimmedReplay.length === 0}
++                accessibilityRole="button"
++                accessibilityLabel="Attach replay link"
++                accessibilityState={{
++                  disabled: busy || trimmedReplay.length === 0,
++                }}
++                testID="coach-community-events-attach-replay"
++                style={[
++                  styles.manageButton,
++                  styles.manageSecondary,
++                  { borderColor: semanticColors.accent },
++                ]}
++              >
++                <Text
++                  style={[styles.manageSecondaryLabel, { color: semanticColors.accent }]}
++                >
++                  Attach replay
++                </Text>
++              </HapticPressable>
++
++              <HapticPressable
++                intent="light"
++                onPress={() => setConfirmReflect(true)}
++                disabled={busy}
++                accessibilityRole="button"
++                accessibilityLabel="Reflect and close the event"
++                accessibilityHint="Posts the recap and closes the event"
++                accessibilityState={{ disabled: busy }}
++                testID="coach-community-events-reflect"
++                style={styles.reflectTrigger}
++              >
++                <Text
++                  style={[styles.reflectTriggerLabel, { color: semanticColors.textMuted }]}
++                >
++                  Reflect (close)
++                </Text>
++              </HapticPressable>
++            </>
++          ) : (
++            <Text style={[styles.manageDone, { color: semanticColors.textMuted }]}>
++              This event is reflected and closed.
++            </Text>
++          )}
++
++          {manageError ? (
++            <Text
++              style={[styles.modalError, { color: semantic.danger.fg }]}
++              accessibilityLiveRegion="polite"
++              testID="coach-community-events-manage-error"
++            >
++              {manageError}
++            </Text>
++          ) : null}
++
++          <HapticPressable
++            intent="light"
++            onPress={onClose}
++            accessibilityRole="button"
++            accessibilityLabel="Done"
++            testID="coach-community-events-manage-close"
++            style={[
++              styles.modalButton,
++              styles.modalCancel,
++              styles.manageClose,
++              { borderColor: semanticColors.border },
++            ]}
++          >
++            <Text style={[styles.modalCancelLabel, { color: semanticColors.textPrimary }]}>
++              Done
++            </Text>
++          </HapticPressable>
++        </View>
++      </View>
++
++      {/* F14: calm confirm sheet for the irreversible Reflect (close). Cancel is
++          the default, prominent affordance; confirm is the secondary one. */}
++      <Modal
++        visible={confirmReflect}
++        transparent
++        animationType={reduceMotion ? 'none' : 'fade'}
++        onRequestClose={() => setConfirmReflect(false)}
++        testID="coach-community-events-reflect-confirm"
++      >
++        <View
++          style={[
++            styles.scrim,
++            { backgroundColor: withAlpha(semanticColors.textPrimary, 0.45) },
++          ]}
++        >
++          <View
++            style={[
++              styles.modalCard,
++              {
++                backgroundColor: semanticColors.bgSurface,
++                borderColor: semanticColors.border,
++              },
++            ]}
++          >
++            <Text style={[styles.modalTitle, { color: semanticColors.textPrimary }]}>
++              Reflect and close this event?
++            </Text>
++            <Text style={[styles.manageDone, { color: semanticColors.textMuted }]}>
++              This posts the recap and closes the event. You can’t reopen it
++              afterward.
++            </Text>
++            <View style={styles.modalActions}>
++              <HapticPressable
++                intent="medium"
++                onPress={() => setConfirmReflect(false)}
++                accessibilityRole="button"
++                accessibilityLabel="Keep the event open"
++                testID="coach-community-events-reflect-cancel"
++                style={[
++                  styles.modalButton,
++                  { backgroundColor: semanticColors.accent },
++                ]}
++              >
++                <Text
++                  style={[styles.modalSubmitLabel, { color: semanticColors.textOnAccent }]}
++                >
++                  Keep open
++                </Text>
++              </HapticPressable>
++              <HapticPressable
++                intent="light"
++                onPress={onReflect}
++                disabled={busy}
++                accessibilityRole="button"
++                accessibilityLabel="Reflect and close"
++                accessibilityState={{ disabled: busy }}
++                testID="coach-community-events-reflect-confirm-action"
++                style={[
++                  styles.modalButton,
++                  styles.modalCancel,
++                  { borderColor: semanticColors.border },
++                ]}
++              >
++                <Text
++                  style={[styles.modalCancelLabel, { color: semanticColors.textMuted }]}
++                >
++                  Reflect (close)
++                </Text>
++              </HapticPressable>
++            </View>
++          </View>
++        </View>
++      </Modal>
++    </Modal>
++  );
++}
++
++function inputStyle(semanticColors: {
++  bgPrimary: string;
++  border: string;
++  textPrimary: string;
++}) {
++  return [
++    styles.modalInput,
++    {
++      backgroundColor: semanticColors.bgPrimary,
++      borderColor: semanticColors.border,
++      color: semanticColors.textPrimary,
++    },
++  ];
++}
++
++const styles = StyleSheet.create({
++  flex: { flex: 1 },
++  center: {
++    flex: 1,
++    justifyContent: 'center',
++    alignItems: 'center',
++  },
++  listContent: {
++    paddingVertical: spacing.md,
++    paddingBottom: 96,
++  },
++  emptyWrap: {
++    flex: 1,
++    alignItems: 'center',
++    justifyContent: 'center',
++    paddingHorizontal: spacing.xl,
++    gap: spacing.sm,
++  },
++  emptyTitle: {
++    fontSize: 18,
++    fontWeight: '600',
++    marginTop: spacing.md,
++    textAlign: 'center',
++  },
++  emptyBody: {
++    fontSize: 14,
++    lineHeight: 21,
++    textAlign: 'center',
++    maxWidth: 320,
++  },
++  emptyCta: {
++    marginTop: spacing.lg,
++    minHeight: 48,
++    paddingHorizontal: spacing.xl,
++    justifyContent: 'center',
++    borderRadius: radius.md,
++  },
++  emptyCtaLabel: {
++    fontSize: 15,
++    fontWeight: '600',
++  },
++  fab: {
++    position: 'absolute',
++    right: spacing.lg,
++    bottom: spacing.xl,
++    minHeight: 48,
++    paddingHorizontal: spacing.xl,
++    borderRadius: radius.pill,
++    justifyContent: 'center',
++    alignItems: 'center',
++  },
++  fabLabel: {
++    fontSize: 15,
++    fontWeight: '600',
++  },
++  scrim: {
++    flex: 1,
++    justifyContent: 'center',
++    alignItems: 'center',
++    padding: spacing.xl,
++  },
++  modalCard: {
++    width: '100%',
++    maxWidth: 360,
++    padding: spacing.xl,
++    borderRadius: radius.lg,
++    borderWidth: StyleSheet.hairlineWidth,
++    gap: spacing.md,
++  },
++  modalTitle: {
++    fontSize: 18,
++    fontWeight: '600',
++  },
++  modalInput: {
++    minHeight: 48,
++    borderRadius: radius.md,
++    borderWidth: StyleSheet.hairlineWidth,
++    paddingHorizontal: spacing.md,
++    fontSize: 16,
++  },
++  fieldLabel: {
++    fontSize: 13,
++    fontWeight: '600',
++    marginBottom: -spacing.xs,
++  },
++  pickerRow: {
++    flexDirection: 'row',
++    gap: spacing.sm,
++  },
++  pickerField: {
++    flex: 1,
++    minHeight: 48,
++    flexDirection: 'row',
++    alignItems: 'center',
++    gap: spacing.sm,
++    borderRadius: radius.md,
++    borderWidth: StyleSheet.hairlineWidth,
++    paddingHorizontal: spacing.md,
++  },
++  pickerTime: {
++    minHeight: 48,
++    minWidth: 48,
++    alignItems: 'center',
++    justifyContent: 'center',
++    borderRadius: radius.md,
++    borderWidth: StyleSheet.hairlineWidth,
++    paddingHorizontal: spacing.md,
++  },
++  pickerText: {
++    flex: 1,
++    fontSize: 15,
++  },
++  tzHint: {
++    fontSize: 12,
++    lineHeight: 16,
++    marginTop: -spacing.xs,
++  },
++  modalError: {
++    fontSize: 13,
++    lineHeight: 18,
++    fontWeight: '600',
++  },
++  reflectTrigger: {
++    minHeight: 44,
++    alignItems: 'center',
++    justifyContent: 'center',
++    paddingHorizontal: spacing.lg,
++  },
++  reflectTriggerLabel: {
++    fontSize: 14,
++    fontWeight: '500',
++    textDecorationLine: 'underline',
++  },
++  modalActions: {
++    flexDirection: 'row',
++    justifyContent: 'flex-end',
++    gap: spacing.sm,
++  },
++  modalButton: {
++    minHeight: 44,
++    minWidth: 96,
++    paddingHorizontal: spacing.lg,
++    justifyContent: 'center',
++    alignItems: 'center',
++    borderRadius: radius.md,
++  },
++  modalCancel: {
++    borderWidth: StyleSheet.hairlineWidth,
++  },
++  modalCancelLabel: {
++    fontSize: 15,
++    fontWeight: '600',
++  },
++  modalSubmitLabel: {
++    fontSize: 15,
++    fontWeight: '600',
++  },
++  manageState: {
++    fontSize: 13,
++    fontWeight: '600',
++    textTransform: 'uppercase',
++    letterSpacing: 0.4,
++  },
++  manageButton: {
++    minHeight: 48,
++    paddingHorizontal: spacing.lg,
++    justifyContent: 'center',
++    alignItems: 'center',
++    borderRadius: radius.md,
++  },
++  manageButtonLabel: {
++    fontSize: 15,
++    fontWeight: '600',
++  },
++  manageSecondary: {
++    borderWidth: StyleSheet.hairlineWidth,
++  },
++  manageSecondaryLabel: {
++    fontSize: 15,
++    fontWeight: '600',
++  },
++  manageDone: {
++    fontSize: 14,
++    lineHeight: 21,
++  },
++  manageClose: {
++    alignSelf: 'flex-end',
++  },
++});
+diff --git a/src/screens/community/CoachCommunityHomeScreen.tsx b/src/screens/community/CoachCommunityHomeScreen.tsx
+index 345e233..69a0fbc 100644
+--- a/src/screens/community/CoachCommunityHomeScreen.tsx
++++ b/src/screens/community/CoachCommunityHomeScreen.tsx
+@@ -25,7 +25,9 @@ import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-nat
+ import { useNavigation } from '@react-navigation/native';
+ import { useTheme } from '../../theme/useTheme';
+ import { spacing, radius, withAlpha } from '../../theme/tokens';
++import { Ionicons } from '@expo/vector-icons';
+ import HapticPressable from '../../components/HapticPressable';
++import { featureFlags } from '../../config/featureFlags';
+ import { CoachRomanEmptyState, CoachErrorState } from '../../components/community/coach';
+ import {
+   useCoachDashboard,
+@@ -163,6 +165,46 @@ export default function CoachCommunityHomeScreen(): React.ReactElement {
+           testID={card.testID}
+         />
+       ))}
++
++      {/* F9 (discovery): a visible entry point into the events surface, gated on
++          the events flag so nothing about events appears when it is off (F1).
++          Events have no dashboard count, so this is a navigation card rather
++          than a StatCard. */}
++      {featureFlags.communityEvents ? (
++        <HapticPressable
++          intent="light"
++          onPress={() => navigation.navigate('CoachCommunityEvents')}
++          accessibilityRole="button"
++          accessibilityLabel="Events: schedule and manage live sessions"
++          testID="coach-community-home-events-card"
++          style={[
++            styles.navCard,
++            {
++              backgroundColor: semanticColors.bgSurface,
++              borderColor: semanticColors.border,
++            },
++          ]}
++        >
++          <Ionicons
++            name="calendar-outline"
++            size={24}
++            color={semanticColors.accent}
++          />
++          <View style={styles.navCardText}>
++            <Text style={[styles.navCardTitle, { color: semanticColors.textPrimary }]}>
++              Events
++            </Text>
++            <Text style={[styles.navCardSub, { color: semanticColors.textMuted }]}>
++              Schedule and manage live sessions
++            </Text>
++          </View>
++          <Ionicons
++            name="chevron-forward"
++            size={20}
++            color={semanticColors.textMuted}
++          />
++        </HapticPressable>
++      ) : null}
+     </ScrollView>
+   );
+ }
+@@ -287,4 +329,24 @@ const styles = StyleSheet.create({
+   cardLabel: {
+     fontSize: 14,
+   },
++  navCard: {
++    minHeight: 64,
++    flexDirection: 'row',
++    alignItems: 'center',
++    gap: spacing.md,
++    padding: spacing.lg,
++    borderRadius: radius.lg,
++    borderWidth: StyleSheet.hairlineWidth,
++  },
++  navCardText: {
++    flex: 1,
++    gap: 2,
++  },
++  navCardTitle: {
++    fontSize: 16,
++    fontWeight: '600',
++  },
++  navCardSub: {
++    fontSize: 13,
++  },
+ });
+diff --git a/src/screens/community/CommunityEventDetailScreen.tsx b/src/screens/community/CommunityEventDetailScreen.tsx
+new file mode 100644
+index 0000000..b3b8837
+--- /dev/null
++++ b/src/screens/community/CommunityEventDetailScreen.tsx
+@@ -0,0 +1,680 @@
++/**
++ * CommunityEventDetailScreen — the client-facing detail for a single community
++ * EVENT (v2-3). Shows the event title, lifecycle state, schedule, description,
++ * a live RSVP summary, a state-aware RSVP affordance, and — when present — a
++ * single EXTERNAL link the client opens in the system browser.
++ *
++ * NO NATIVE LIVE ROOM (Step 0): there is no in-app room or player. The
++ * `external_url` is an externally-hosted, host-allowlisted link; opening it
++ * hands off to the OS browser and the VISIBLE copy says so ("… in browser").
++ * Nothing here says "join native room". External links are scheme-guarded
++ * (https only) before they ever reach `Linking.openURL`.
++ *
++ * THREE distinct branches (UX P0.2 / doctrine §6.2): a loading spinner; an
++ * honest error surface with retry on failure (never a calm/empty masquerade);
++ * and a NEUTRAL event empty state (a calm line icon + direct copy + one "Back
++ * to community" action — no mascot voice or avatar) when the event id resolves
++ * to nothing. RSVP is optimistic with rollback, and a failed RSVP surfaces a
++ * calm inline error (a 409 also refetches to reconcile).
++ *
++ * RSVP hierarchy (UX): the affordance is state-specific rather than three equal
++ * buttons — when the viewer has not responded, "Going" is the primary action
++ * and "Maybe" is secondary; once they are going, the surface shows a calm
++ * "You're going" confirmation with quiet Change / Withdraw; a "maybe" viewer
++ * gets a primary "Switch to going". A successful save or withdraw shows a brief
++ * confirmation. Accessibility labels carry the RSVP'd status; the selected
++ * state is never colour-only (a check glyph + label back it up).
++ */
++import React, { useCallback, useState } from 'react';
++import {
++  View,
++  Text,
++  StyleSheet,
++  ScrollView,
++  ActivityIndicator,
++  Linking,
++} from 'react-native';
++import { SafeAreaView } from 'react-native-safe-area-context';
++import { Ionicons } from '@expo/vector-icons';
++import { useNavigation, useRoute } from '@react-navigation/native';
++import { useTheme } from '../../theme/useTheme';
++import { spacing, radius, withAlpha, semantic } from '../../theme/tokens';
++import HapticPressable from '../../components/HapticPressable';
++import { stateMeta, formatEventStart, rsvpSummary } from '../../components/community/EventCard';
++import CompletionToast, {
++  useCompletionToast,
++} from '../../components/community/CompletionToast';
++import { useCommunityMe } from '../../hooks/useCommunity';
++import { useCommunityEvent, useRsvpEvent } from '../../hooks/useCommunityEvents';
++import { describeMutationError } from '../../api/communityEventsApi';
++import { safeExternalEventUrl } from '../../utils/safeExternalEventUrl';
++import type {
++  CommunityClientRsvpStatus,
++  CommunityEventState,
++} from '../../api/communityEventsApi';
++import type { CommunityNav, CommunityRoute } from './communityNavTypes';
++
++/** Link affordance copy by state — HONEST that it leaves the app for the browser. */
++function linkLabel(state: CommunityEventState | string): string {
++  if (state === 'replay' || state === 'reflected') return 'Watch replay in browser';
++  return 'Open link in browser';
++}
++
++export default function CommunityEventDetailScreen(): React.ReactElement {
++  const { semanticColors } = useTheme();
++  const navigation = useNavigation<CommunityNav>();
++  const route = useRoute<CommunityRoute<'CommunityEventDetail'>>();
++  const eventId = route.params?.eventId ?? '';
++  const me = useCommunityMe();
++  const completion = useCompletionToast();
++
++  const eventQuery = useCommunityEvent(eventId.length > 0 ? eventId : undefined);
++  const rsvp = useRsvpEvent(eventId, me.data?.workspace_id ?? undefined);
++  const event = eventQuery.data;
++
++  // Calm inline error for a failed external-link open or a failed RSVP.
++  const [linkError, setLinkError] = useState<string | null>(null);
++  const [rsvpError, setRsvpError] = useState<string | null>(null);
++
++  const onOpenLink = useCallback(() => {
++    setLinkError(null);
++    const safe = safeExternalEventUrl(event?.external_url);
++    if (!safe) {
++      setLinkError('This link can’t be opened safely.');
++      return;
++    }
++    void Linking.openURL(safe).catch(() => {
++      setLinkError('We couldn’t open that link. Please try again.');
++    });
++  }, [event?.external_url]);
++
++  const onRsvp = useCallback(
++    (status: CommunityClientRsvpStatus, confirmation: string) => {
++      if (rsvp.isPending) return;
++      setRsvpError(null);
++      rsvp.mutate(status, {
++        onSuccess: () => completion.show(confirmation),
++        onError: (err) => {
++          const info = describeMutationError(err);
++          setRsvpError(info.message);
++          if (info.conflict) void eventQuery.refetch();
++        },
++      });
++    },
++    [rsvp, completion, eventQuery],
++  );
++
++  // ── Loading ────────────────────────────────────────────────────────────────
++  if (eventQuery.isLoading) {
++    return (
++      <SafeAreaView
++        style={[styles.safe, { backgroundColor: semanticColors.bgPrimary }]}
++        edges={['top']}
++        testID="community-event-detail-screen"
++      >
++        <View style={styles.center}>
++          <ActivityIndicator
++            color={semanticColors.accent}
++            testID="community-event-detail-loading"
++          />
++        </View>
++      </SafeAreaView>
++    );
++  }
++
++  // ── Error ────────────────────────────────────────────────────────────────────
++  if (eventQuery.isError) {
++    return (
++      <SafeAreaView
++        style={[styles.safe, { backgroundColor: semanticColors.bgPrimary }]}
++        edges={['top']}
++        testID="community-event-detail-screen"
++      >
++        <View style={styles.center}>
++          <Ionicons
++            name="cloud-offline-outline"
++            size={40}
++            color={semanticColors.textMuted}
++          />
++          <Text style={[styles.errorCopy, { color: semanticColors.textPrimary }]}>
++            We could not load this event. Check your connection and try again.
++          </Text>
++          <HapticPressable
++            intent="medium"
++            onPress={() => eventQuery.refetch()}
++            disabled={eventQuery.isRefetching}
++            accessibilityRole="button"
++            accessibilityLabel="Try again"
++            accessibilityState={{ disabled: eventQuery.isRefetching }}
++            testID="community-event-detail-retry"
++            style={[
++              styles.retry,
++              {
++                backgroundColor: eventQuery.isRefetching
++                  ? semanticColors.disabledBg
++                  : semanticColors.accent,
++              },
++            ]}
++          >
++            <Text
++              style={[
++                styles.retryLabel,
++                {
++                  color: eventQuery.isRefetching
++                    ? semanticColors.textOnDisabled
++                    : semanticColors.textOnAccent,
++                },
++              ]}
++            >
++              Try again
++            </Text>
++          </HapticPressable>
++        </View>
++      </SafeAreaView>
++    );
++  }
++
++  // ── Empty (no such event) — NEUTRAL, never a mascot voice/avatar ─────────────
++  if (!event) {
++    return (
++      <SafeAreaView
++        style={[styles.safe, { backgroundColor: semanticColors.bgPrimary }]}
++        edges={['top']}
++        testID="community-event-detail-screen"
++      >
++        <View style={styles.center} testID="community-event-detail-empty">
++          <Ionicons
++            name="calendar-outline"
++            size={48}
++            color={semanticColors.textMuted}
++          />
++          <Text style={[styles.emptyTitle, { color: semanticColors.textPrimary }]}>
++            This event is gone
++          </Text>
++          <Text style={[styles.emptyBody, { color: semanticColors.textMuted }]}>
++            It may have been removed or never existed. Head back to find what’s
++            happening now.
++          </Text>
++          <HapticPressable
++            intent="medium"
++            onPress={() => navigation.goBack()}
++            accessibilityRole="button"
++            accessibilityLabel="Back to community"
++            testID="community-event-detail-empty-action"
++            style={[styles.emptyCta, { backgroundColor: semanticColors.accent }]}
++          >
++            <Text
++              style={[styles.emptyCtaLabel, { color: semanticColors.textOnAccent }]}
++            >
++              Back to community
++            </Text>
++          </HapticPressable>
++        </View>
++      </SafeAreaView>
++    );
++  }
++
++  const summary = rsvpSummary(event);
++  const meta = stateMeta(event.state);
++  const viewerStatus = event.viewer_rsvp_status;
++  const showRsvp = !event.canceled && event.state !== 'reflected';
++
++  return (
++    <SafeAreaView
++      style={[styles.safe, { backgroundColor: semanticColors.bgPrimary }]}
++      edges={['top']}
++      testID="community-event-detail-screen"
++    >
++      <ScrollView contentContainerStyle={styles.content}>
++        <View
++          style={[
++            styles.badge,
++            { backgroundColor: withAlpha(semanticColors.accent, 0.12) },
++          ]}
++        >
++          <Text style={[styles.badgeLabel, { color: semanticColors.accent }]}>
++            {event.canceled ? 'Canceled' : meta.label}
++          </Text>
++        </View>
++
++        <Text style={[styles.title, { color: semanticColors.textPrimary }]}>
++          {event.title}
++        </Text>
++
++        <View style={styles.metaRow}>
++          <Ionicons
++            name="calendar-outline"
++            size={16}
++            color={semanticColors.textMuted}
++          />
++          <Text style={[styles.meta, { color: semanticColors.textMuted }]}>
++            {formatEventStart(event.starts_at)}
++          </Text>
++        </View>
++
++        {summary.length > 0 ? (
++          <View style={styles.metaRow}>
++            <Ionicons
++              name="people-outline"
++              size={16}
++              color={semanticColors.textMuted}
++            />
++            <Text style={[styles.meta, { color: semanticColors.textMuted }]}>
++              {summary}
++            </Text>
++          </View>
++        ) : null}
++
++        {event.description ? (
++          <Text
++            style={[styles.description, { color: semanticColors.textPrimary }]}
++          >
++            {event.description}
++          </Text>
++        ) : null}
++
++        {event.external_url ? (
++          <>
++            <HapticPressable
++              intent="medium"
++              onPress={onOpenLink}
++              accessibilityRole="link"
++              accessibilityLabel={`${linkLabel(event.state)} (opens outside the app)`}
++              testID="community-event-detail-link"
++              style={[styles.linkButton, { borderColor: semanticColors.accent }]}
++            >
++              <Ionicons
++                name="open-outline"
++                size={16}
++                color={semanticColors.accent}
++              />
++              <Text style={[styles.linkLabel, { color: semanticColors.accent }]}>
++                {linkLabel(event.state)}
++              </Text>
++            </HapticPressable>
++            {linkError ? (
++              <Text
++                style={[styles.inlineError, { color: semantic.danger.fg }]}
++                testID="community-event-detail-link-error"
++              >
++                {linkError}
++              </Text>
++            ) : null}
++          </>
++        ) : null}
++
++        {showRsvp ? (
++          <View style={styles.rsvpBlock}>
++            <RsvpSection
++              status={viewerStatus}
++              pending={rsvp.isPending}
++              onRsvp={onRsvp}
++              colors={semanticColors}
++            />
++            {rsvpError ? (
++              <Text
++                style={[styles.inlineError, { color: semantic.danger.fg }]}
++                testID="community-event-rsvp-error"
++              >
++                {rsvpError}
++              </Text>
++            ) : null}
++          </View>
++        ) : null}
++      </ScrollView>
++
++      <CompletionToast state={completion.toast} />
++    </SafeAreaView>
++  );
++}
++
++// ─── RSVP section: state-specific hierarchy (UX) ─────────────────────────────
++
++interface RsvpColors {
++  textPrimary: string;
++  textMuted: string;
++  textOnAccent: string;
++  accent: string;
++  bgSurface: string;
++  border: string;
++}
++
++interface RsvpSectionProps {
++  status: string | null;
++  pending: boolean;
++  onRsvp: (status: CommunityClientRsvpStatus, confirmation: string) => void;
++  colors: RsvpColors;
++}
++
++/**
++ * Renders ONE primary RSVP path for the viewer's current state (Hick's Law:
++ * a single obvious next action, secondary choices de-emphasised):
++ *   - not responded → primary "Going" + secondary "Maybe"
++ *   - going         → calm "You're going" confirmation + quiet Change / Withdraw
++ *   - maybe         → primary "Switch to going" + quiet Change / Withdraw
++ *   - declined      → primary "Going" + secondary "Maybe" (re-offer)
++ * Selected state is reinforced with a check glyph + label, never colour alone.
++ */
++function RsvpSection({
++  status,
++  pending,
++  onRsvp,
++  colors,
++}: RsvpSectionProps): React.ReactElement {
++  const going = status === 'going';
++  const maybe = status === 'maybe';
++
++  if (going) {
++    return (
++      <View style={styles.rsvpStateWrap}>
++        <View
++          style={styles.rsvpConfirmRow}
++          accessibilityRole="text"
++          accessibilityLabel="You're going. RSVP'd: going."
++          testID="community-event-rsvp-going-state"
++        >
++          <Ionicons name="checkmark-circle" size={20} color={semantic.success.icon} />
++          <Text style={[styles.rsvpConfirmText, { color: colors.textPrimary }]}>
++            You’re going
++          </Text>
++        </View>
++        <View style={styles.rsvpQuietRow}>
++          <QuietRsvpButton
++            label="Change to maybe"
++            a11y="Change RSVP to maybe"
++            disabled={pending}
++            onPress={() => onRsvp('maybe', 'Changed to maybe.')}
++            color={colors.textMuted}
++            border={colors.border}
++            testID="community-event-rsvp-maybe"
++          />
++          <QuietRsvpButton
++            label="Withdraw"
++            a11y="Withdraw your RSVP"
++            disabled={pending}
++            onPress={() => onRsvp('declined', 'RSVP withdrawn.')}
++            color={colors.textMuted}
++            border={colors.border}
++            testID="community-event-rsvp-declined"
++          />
++        </View>
++      </View>
++    );
++  }
++
++  // maybe → primary switch to going; not-responded / declined → offer Going.
++  const heading = maybe ? 'You said maybe' : 'Will you be there?';
++  return (
++    <View style={styles.rsvpStateWrap}>
++      <Text style={[styles.rsvpHeading, { color: colors.textPrimary }]}>
++        {heading}
++      </Text>
++      <PrimaryRsvpButton
++        label={maybe ? 'Switch to going' : 'Going'}
++        a11y={maybe ? "Switch RSVP to going" : "RSVP going"}
++        selected={false}
++        disabled={pending}
++        onPress={() => onRsvp('going', "You're going.")}
++        colors={colors}
++        testID="community-event-rsvp-going"
++      />
++      <View style={styles.rsvpQuietRow}>
++        <QuietRsvpButton
++          label={maybe ? 'Selected: maybe' : 'Maybe'}
++          a11y={maybe ? "RSVP'd: maybe" : 'RSVP maybe'}
++          disabled={pending}
++          selected={maybe}
++          onPress={() => onRsvp('maybe', 'Marked as maybe.')}
++          color={maybe ? colors.accent : colors.textMuted}
++          border={maybe ? colors.accent : colors.border}
++          testID="community-event-rsvp-maybe"
++        />
++        {!maybe ? (
++          <QuietRsvpButton
++            label="Can’t make it"
++            a11y="RSVP can't make it"
++            disabled={pending}
++            onPress={() => onRsvp('declined', 'Marked as can’t make it.')}
++            color={colors.textMuted}
++            border={colors.border}
++            testID="community-event-rsvp-declined"
++          />
++        ) : null}
++      </View>
++    </View>
++  );
++}
++
++function PrimaryRsvpButton({
++  label,
++  a11y,
++  selected,
++  disabled,
++  onPress,
++  colors,
++  testID,
++}: {
++  label: string;
++  a11y: string;
++  selected: boolean;
++  disabled: boolean;
++  onPress: () => void;
++  colors: RsvpColors;
++  testID: string;
++}): React.ReactElement {
++  return (
++    <HapticPressable
++      intent="success"
++      onPress={onPress}
++      disabled={disabled}
++      accessibilityRole="button"
++      accessibilityLabel={a11y}
++      accessibilityState={{ selected, disabled }}
++      testID={testID}
++      style={[styles.rsvpPrimary, { backgroundColor: colors.accent }]}
++    >
++      {selected ? (
++        <Ionicons name="checkmark" size={16} color={colors.textOnAccent} />
++      ) : null}
++      <Text style={[styles.rsvpPrimaryLabel, { color: colors.textOnAccent }]}>
++        {label}
++      </Text>
++    </HapticPressable>
++  );
++}
++
++function QuietRsvpButton({
++  label,
++  a11y,
++  disabled,
++  selected = false,
++  onPress,
++  color,
++  border,
++  testID,
++}: {
++  label: string;
++  a11y: string;
++  disabled: boolean;
++  selected?: boolean;
++  onPress: () => void;
++  color: string;
++  border: string;
++  testID: string;
++}): React.ReactElement {
++  return (
++    <HapticPressable
++      intent="light"
++      onPress={onPress}
++      disabled={disabled}
++      accessibilityRole="button"
++      accessibilityLabel={a11y}
++      accessibilityState={{ selected, disabled }}
++      testID={testID}
++      style={[styles.rsvpQuiet, { borderColor: border }]}
++    >
++      {selected ? <Ionicons name="checkmark" size={14} color={color} /> : null}
++      <Text style={[styles.rsvpQuietLabel, { color }]}>{label}</Text>
++    </HapticPressable>
++  );
++}
++
++const styles = StyleSheet.create({
++  safe: { flex: 1 },
++  center: {
++    flex: 1,
++    alignItems: 'center',
++    justifyContent: 'center',
++    paddingHorizontal: spacing.xl,
++    gap: spacing.md,
++  },
++  content: {
++    padding: spacing.lg,
++    gap: spacing.md,
++  },
++  badge: {
++    alignSelf: 'flex-start',
++    paddingHorizontal: spacing.md,
++    paddingVertical: spacing.xs,
++    borderRadius: radius.pill,
++  },
++  badgeLabel: {
++    fontSize: 12,
++    fontWeight: '600',
++    letterSpacing: 0.4,
++    textTransform: 'uppercase',
++  },
++  title: {
++    fontSize: 22,
++    fontWeight: '600',
++  },
++  metaRow: {
++    flexDirection: 'row',
++    alignItems: 'center',
++    gap: spacing.sm,
++  },
++  meta: {
++    fontSize: 14,
++    fontWeight: '500',
++  },
++  description: {
++    fontSize: 15,
++    lineHeight: 23,
++    marginTop: spacing.xs,
++  },
++  linkButton: {
++    flexDirection: 'row',
++    alignItems: 'center',
++    justifyContent: 'center',
++    gap: spacing.sm,
++    minHeight: 48,
++    paddingHorizontal: spacing.lg,
++    borderRadius: radius.md,
++    borderWidth: StyleSheet.hairlineWidth,
++    marginTop: spacing.sm,
++  },
++  linkLabel: {
++    fontSize: 15,
++    fontWeight: '600',
++  },
++  inlineError: {
++    fontSize: 13,
++    fontWeight: '500',
++    marginTop: spacing.xs,
++  },
++  rsvpBlock: {
++    marginTop: spacing.lg,
++    gap: spacing.sm,
++  },
++  rsvpStateWrap: {
++    gap: spacing.sm,
++  },
++  rsvpHeading: {
++    fontSize: 16,
++    fontWeight: '600',
++  },
++  rsvpConfirmRow: {
++    flexDirection: 'row',
++    alignItems: 'center',
++    gap: spacing.sm,
++  },
++  rsvpConfirmText: {
++    fontSize: 16,
++    fontWeight: '600',
++  },
++  rsvpPrimary: {
++    flexDirection: 'row',
++    alignItems: 'center',
++    justifyContent: 'center',
++    gap: spacing.xs,
++    minHeight: 48,
++    paddingHorizontal: spacing.lg,
++    borderRadius: radius.md,
++  },
++  rsvpPrimaryLabel: {
++    fontSize: 15,
++    fontWeight: '600',
++    textAlign: 'center',
++  },
++  rsvpQuietRow: {
++    flexDirection: 'row',
++    gap: spacing.sm,
++  },
++  rsvpQuiet: {
++    flex: 1,
++    flexDirection: 'row',
++    alignItems: 'center',
++    justifyContent: 'center',
++    gap: spacing.xs,
++    minHeight: 44,
++    paddingHorizontal: spacing.sm,
++    borderRadius: radius.md,
++    borderWidth: StyleSheet.hairlineWidth,
++  },
++  rsvpQuietLabel: {
++    fontSize: 14,
++    fontWeight: '600',
++    textAlign: 'center',
++  },
++  emptyTitle: {
++    fontSize: 18,
++    fontWeight: '600',
++    textAlign: 'center',
++  },
++  emptyBody: {
++    fontSize: 14,
++    lineHeight: 20,
++    textAlign: 'center',
++    maxWidth: 320,
++  },
++  emptyCta: {
++    marginTop: spacing.sm,
++    minHeight: 48,
++    paddingHorizontal: spacing.xl,
++    justifyContent: 'center',
++    borderRadius: radius.md,
++  },
++  emptyCtaLabel: {
++    fontSize: 15,
++    fontWeight: '600',
++    textAlign: 'center',
++  },
++  errorCopy: {
++    fontSize: 16,
++    lineHeight: 24,
++    textAlign: 'center',
++    maxWidth: 320,
++  },
++  retry: {
++    minHeight: 44,
++    minWidth: 120,
++    paddingHorizontal: spacing.xl,
++    justifyContent: 'center',
++    alignItems: 'center',
++    borderRadius: radius.md,
++  },
++  retryLabel: {
++    fontSize: 15,
++    fontWeight: '600',
++  },
++});
+diff --git a/src/screens/community/CommunityTodayScreen.tsx b/src/screens/community/CommunityTodayScreen.tsx
+index bb1ef8d..9d3b5a9 100644
+--- a/src/screens/community/CommunityTodayScreen.tsx
++++ b/src/screens/community/CommunityTodayScreen.tsx
+@@ -52,6 +52,16 @@ export default function CommunityTodayScreen({
+       goToMessages();
+     }
+   };
++  // F9 (discovery): behind the events flag, the Today event card opens the
++  // event's own detail screen. When the flag is off we fall back to the Hall so
++  // the card never strands the member (and registers no event route — F1).
++  const goToEvent = (eventId: string) => {
++    if (featureFlags.communityEvents) {
++      navigation.navigate('CommunityEventDetail', { eventId });
++    } else {
++      goToHall();
++    }
++  };
+ 
+   // Empty state: friendly Roman copy + a primary action (never a bare spinner).
+   if (isEmpty || today.isError) {
+@@ -130,7 +140,7 @@ export default function CommunityTodayScreen({
+         <Card
+           color={semanticColors.bgSurface}
+           border={semanticColors.border}
+-          onPress={goToHall}
++          onPress={() => goToEvent(data.event!.id)}
+           testID="community-today-event"
+         >
+           <CardLabel color={semanticColors.textMuted}>Upcoming event</CardLabel>
+diff --git a/src/screens/community/__tests__/communityEventsScreens.test.tsx b/src/screens/community/__tests__/communityEventsScreens.test.tsx
+new file mode 100644
+index 0000000..e75ec76
+--- /dev/null
++++ b/src/screens/community/__tests__/communityEventsScreens.test.tsx
+@@ -0,0 +1,361 @@
++/**
++ * Render + branch tests for the two v2-3 Community EVENTS screens:
++ *   - CommunityEventDetailScreen (client): loading / error / empty / data, the
++ *     three RSVP actions, and the EXTERNAL link open path (never a native room).
++ *   - CoachCommunityEventsScreen (coach): loading / error / empty / data, the
++ *     create FAB + modal, and the per-event manage modal (advance / replay /
++ *     reflect).
++ *
++ * Every data hook is mocked so each render path is deterministic and the suite
++ * exits clean (no React Query timers). useTheme is mocked to the real light
++ * tokens so semanticColors keys resolve without the ThemeProvider — mirroring
++ * the v1-5/v1-6 screen-test harness.
++ */
++import React from 'react';
++import { Linking } from 'react-native';
++import { render, fireEvent } from '@testing-library/react-native';
++
++// ── Theme: real tokens, no ThemeProvider ─────────────────────────────────────
++jest.mock('../../../theme/useTheme', () => {
++  const { lightTokens } = jest.requireActual('../../../theme/tokens');
++  return {
++    useTheme: () => ({ colorScheme: 'light', semanticColors: lightTokens }),
++  };
++});
++
++// ── DateTimePicker: a headless stub that fires onChange with a fixed instant
++//    when pressed, so the create-flow test can drive the F12 pickers ──────────
++jest.mock('@react-native-community/datetimepicker', () => {
++  const React = require('react');
++  const { Pressable } = require('react-native');
++  // A fixed local instant used by both the date and time picker stubs.
++  const FIXED = new Date('2026-08-01T18:00:00.000Z');
++  return {
++    __esModule: true,
++    default: ({ onChange, testID }: { onChange: (e: unknown, d: Date) => void; testID?: string }) =>
++      React.createElement(Pressable, {
++        testID,
++        onPress: () => onChange({ type: 'set' }, FIXED),
++      }),
++  };
++});
++
++// ── Safe-area: provide stub insets so SafeAreaView renders headlessly ─────────
++jest.mock('react-native-safe-area-context', () => {
++  const actual = jest.requireActual('react-native-safe-area-context');
++  return {
++    ...actual,
++    SafeAreaView: ({ children }: { children: React.ReactNode }) => children,
++    useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
++  };
++});
++
++// ── Navigation ────────────────────────────────────────────────────────────────
++const mockNavigate = jest.fn();
++const mockGoBack = jest.fn();
++const mockRouteParams: { current: Record<string, unknown> } = { current: {} };
++jest.mock('@react-navigation/native', () => ({
++  useNavigation: () => ({ navigate: mockNavigate, goBack: mockGoBack }),
++  useRoute: () => ({ params: mockRouteParams.current }),
++}));
++
++// ── Current user + community/me ───────────────────────────────────────────────
++jest.mock('../../../hooks/useCurrentUser', () => ({
++  useCurrentUser: () => ({ id: 'me-1', firstName: 'Dana', name: 'Dana' }),
++}));
++jest.mock('../../../hooks/useCommunity', () => ({
++  useCommunityMe: () => ({ data: { workspace_id: 'ws-1' } }),
++}));
++
++// ── Events hooks (the unit under test wires these) ───────────────────────────
++const mockMutate = {
++  rsvp: jest.fn(),
++  create: jest.fn(),
++  transition: jest.fn(),
++  attachReplay: jest.fn(),
++  reflect: jest.fn(),
++};
++
++const mockEventHooks = {
++  detail: { data: undefined, isLoading: false, isError: false, isRefetching: false, refetch: jest.fn() } as Record<string, unknown>,
++  list: { data: { events: [], next_before: null }, isLoading: false, isError: false, isRefetching: false, refetch: jest.fn() } as Record<string, unknown>,
++};
++
++jest.mock('../../../hooks/useCommunityEvents', () => ({
++  useCommunityEvent: () => mockEventHooks.detail,
++  useCommunityEventsList: () => mockEventHooks.list,
++  useRsvpEvent: () => ({ mutate: mockMutate.rsvp, isPending: false }),
++  useCreateEvent: () => ({ mutate: mockMutate.create, isPending: false }),
++  useTransitionEvent: () => ({ mutate: mockMutate.transition, isPending: false }),
++  useAttachReplay: () => ({ mutate: mockMutate.attachReplay, isPending: false }),
++  useReflectEvent: () => ({ mutate: mockMutate.reflect, isPending: false }),
++  isOptimisticEventId: (id: string) => id.startsWith('optimistic:'),
++}));
++
++import CommunityEventDetailScreen from '../CommunityEventDetailScreen';
++import CoachCommunityEventsScreen from '../CoachCommunityEventsScreen';
++import type { CommunityEvent } from '../../../api/communityEventsApi';
++
++function makeEvent(overrides: Partial<CommunityEvent> = {}): CommunityEvent {
++  return {
++    id: 'ev-1',
++    workspace_id: 'ws-1',
++    cohort_id: null,
++    created_by_user_id: 'coach-1',
++    title: 'Live Q&A',
++    description: 'Bring your questions.',
++    state: 'scheduled',
++    starts_at: '2026-07-01T18:00:00.000Z',
++    ends_at: null,
++    external_url: null,
++    reflected_at: null,
++    canceled: false,
++    rsvp_counts: { going: 4, maybe: 1, declined: 0, attended: 0, missed: 0 },
++    viewer_rsvp_status: null,
++    created_at: '2026-06-01T00:00:00.000Z',
++    updated_at: '2026-06-01T00:00:00.000Z',
++    ...overrides,
++  };
++}
++
++beforeEach(() => {
++  Object.values(mockMutate).forEach((m) => m.mockReset());
++  mockNavigate.mockReset();
++  mockGoBack.mockReset();
++  mockRouteParams.current = { eventId: 'ev-1' };
++  mockEventHooks.detail = {
++    data: undefined,
++    isLoading: false,
++    isError: false,
++    isRefetching: false,
++    refetch: jest.fn(),
++  };
++  mockEventHooks.list = {
++    data: { events: [], next_before: null },
++    isLoading: false,
++    isError: false,
++    isRefetching: false,
++    refetch: jest.fn(),
++  };
++});
++
++// ─── CommunityEventDetailScreen (client) ─────────────────────────────────────
++
++describe('CommunityEventDetailScreen', () => {
++  it('renders a loading branch', () => {
++    mockEventHooks.detail = { ...mockEventHooks.detail, isLoading: true };
++    const { getByTestId } = render(<CommunityEventDetailScreen />);
++    expect(getByTestId('community-event-detail-loading')).toBeTruthy();
++  });
++
++  it('renders an honest error branch with retry (not an empty masquerade)', () => {
++    const refetch = jest.fn();
++    mockEventHooks.detail = { ...mockEventHooks.detail, isError: true, refetch };
++    const { getByTestId } = render(<CommunityEventDetailScreen />);
++    fireEvent.press(getByTestId('community-event-detail-retry'));
++    expect(refetch).toHaveBeenCalled();
++  });
++
++  it('renders an empty state with a back action when the event is missing', () => {
++    mockEventHooks.detail = { ...mockEventHooks.detail, data: undefined };
++    const { getByTestId } = render(<CommunityEventDetailScreen />);
++    fireEvent.press(getByTestId('community-event-detail-empty-action'));
++    expect(mockGoBack).toHaveBeenCalled();
++  });
++
++  it('renders event detail and fires RSVP with the client status', () => {
++    mockEventHooks.detail = { ...mockEventHooks.detail, data: makeEvent() };
++    const { getByText, getByTestId } = render(<CommunityEventDetailScreen />);
++    expect(getByText('Live Q&A')).toBeTruthy();
++    expect(getByText('Bring your questions.')).toBeTruthy();
++    fireEvent.press(getByTestId('community-event-rsvp-going'));
++    // F4/F10: mutate now carries success/error callbacks for confirmation +
++    // surfaced failure, so the second arg is the mutation options object.
++    expect(mockMutate.rsvp).toHaveBeenCalledWith('going', expect.any(Object));
++  });
++
++  it('does NOT render a mascot-voiced empty state on the event surface (F2)', () => {
++    mockEventHooks.detail = { ...mockEventHooks.detail, data: undefined };
++    const { queryByTestId } = render(<CommunityEventDetailScreen />);
++    // The neutral event empty state must not borrow the mascot-voiced surface.
++    expect(queryByTestId('community-empty-roman')).toBeNull();
++    expect(queryByTestId('community-event-detail-empty')).toBeTruthy();
++  });
++
++  it('opens an EXTERNAL https link in the system browser (never a native room)', () => {
++    const openUrl = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
++    mockEventHooks.detail = {
++      ...mockEventHooks.detail,
++      data: makeEvent({ state: 'live', external_url: 'https://example.com/live' }),
++    };
++    const { getByTestId, queryByText } = render(<CommunityEventDetailScreen />);
++    // Copy never promises a native room.
++    expect(queryByText(/join native room/i)).toBeNull();
++    fireEvent.press(getByTestId('community-event-detail-link'));
++    expect(openUrl).toHaveBeenCalledWith('https://example.com/live');
++    openUrl.mockRestore();
++  });
++
++  it('F11: external-link copy says it opens in the browser', () => {
++    mockEventHooks.detail = {
++      ...mockEventHooks.detail,
++      data: makeEvent({ state: 'replay', external_url: 'https://example.com/replay' }),
++    };
++    const { getByText } = render(<CommunityEventDetailScreen />);
++    expect(getByText(/in browser/i)).toBeTruthy();
++  });
++
++  it('F3: refuses a non-https external link with a calm inline error', () => {
++    const openUrl = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
++    mockEventHooks.detail = {
++      ...mockEventHooks.detail,
++      data: makeEvent({ state: 'live', external_url: 'javascript:alert(1)' }),
++    };
++    const { getByTestId } = render(<CommunityEventDetailScreen />);
++    fireEvent.press(getByTestId('community-event-detail-link'));
++    expect(openUrl).not.toHaveBeenCalled();
++    expect(getByTestId('community-event-detail-link-error')).toBeTruthy();
++    openUrl.mockRestore();
++  });
++
++  it('F13: shows the status-honest live lifecycle label', () => {
++    mockEventHooks.detail = {
++      ...mockEventHooks.detail,
++      data: makeEvent({ state: 'live', external_url: 'https://example.com/live' }),
++    };
++    const { getByText } = render(<CommunityEventDetailScreen />);
++    expect(getByText('Live now')).toBeTruthy();
++  });
++
++  it('hides RSVP actions once the event is reflected', () => {
++    mockEventHooks.detail = {
++      ...mockEventHooks.detail,
++      data: makeEvent({ state: 'reflected', reflected_at: '2026-07-02T00:00:00.000Z' }),
++    };
++    const { queryByTestId } = render(<CommunityEventDetailScreen />);
++    expect(queryByTestId('community-event-rsvp-going')).toBeNull();
++  });
++});
++
++// ─── CoachCommunityEventsScreen (coach) ──────────────────────────────────────
++
++describe('CoachCommunityEventsScreen', () => {
++  it('renders a loading branch', () => {
++    mockEventHooks.list = { ...mockEventHooks.list, isLoading: true };
++    const { getByTestId } = render(<CoachCommunityEventsScreen />);
++    expect(getByTestId('coach-community-events-loading')).toBeTruthy();
++  });
++
++  it('renders an honest error branch with retry', () => {
++    const refetch = jest.fn();
++    mockEventHooks.list = { ...mockEventHooks.list, isError: true, refetch };
++    const { getByTestId } = render(<CoachCommunityEventsScreen />);
++    fireEvent.press(getByTestId('coach-community-events-error-retry'));
++    expect(refetch).toHaveBeenCalled();
++  });
++
++  it('renders an honest empty state with a create action', () => {
++    mockEventHooks.list = { ...mockEventHooks.list, data: { events: [], next_before: null } };
++    const { getByTestId } = render(<CoachCommunityEventsScreen />);
++    expect(getByTestId('coach-community-events-empty')).toBeTruthy();
++    fireEvent.press(getByTestId('coach-community-events-empty-action'));
++    expect(getByTestId('coach-community-events-create-modal')).toBeTruthy();
++  });
++
++  it('F12: creates an event using the date/time pickers (ISO serialized)', () => {
++    mockEventHooks.list = {
++      ...mockEventHooks.list,
++      data: { events: [makeEvent()], next_before: null },
++    };
++    const { getByTestId, getByText } = render(<CoachCommunityEventsScreen />);
++    fireEvent.press(getByTestId('coach-community-events-fab'));
++    fireEvent.changeText(getByTestId('coach-community-events-title-input'), 'Workshop');
++    // A visible local-timezone hint accompanies the pickers (no raw ISO input).
++    expect(getByText(/local timezone/i)).toBeTruthy();
++    // Open each picker; the stubbed pickers fire onChange with the fixed
++    // instant, setting the date and time of the held Date respectively.
++    fireEvent.press(getByTestId('coach-community-events-date-trigger'));
++    fireEvent.press(getByTestId('coach-community-events-date-picker'));
++    fireEvent.press(getByTestId('coach-community-events-time-trigger'));
++    fireEvent.press(getByTestId('coach-community-events-time-picker'));
++    fireEvent.press(getByTestId('coach-community-events-create-submit'));
++    // The picked local time serializes to a UTC ISO-8601 string behind the
++    // scenes. We assert the date + minute precision is preserved end-to-end by
++    // checking it parses back to the same instant the picker emitted.
++    const call = mockMutate.create.mock.calls[0][0] as { starts_at: string };
++    expect(new Date(call.starts_at).getTime()).toBe(
++      new Date('2026-08-01T18:00:00.000Z').getTime(),
++    );
++    expect(mockMutate.create).toHaveBeenCalledWith(
++      expect.objectContaining({ title: 'Workshop' }),
++      expect.any(Object),
++    );
++  });
++
++  it('F12: the raw ISO start-time text input is gone', () => {
++    mockEventHooks.list = {
++      ...mockEventHooks.list,
++      data: { events: [makeEvent()], next_before: null },
++    };
++    const { getByTestId, queryByTestId } = render(<CoachCommunityEventsScreen />);
++    fireEvent.press(getByTestId('coach-community-events-fab'));
++    expect(queryByTestId('coach-community-events-starts-input')).toBeNull();
++  });
++
++  it('advances lifecycle state from the manage modal', () => {
++    mockEventHooks.list = {
++      ...mockEventHooks.list,
++      data: { events: [makeEvent({ id: 'ev-9', state: 'scheduled' })], next_before: null },
++    };
++    const { getByTestId } = render(<CoachCommunityEventsScreen />);
++    fireEvent.press(getByTestId('coach-community-event-row-ev-9'));
++    fireEvent.press(getByTestId('coach-community-events-advance'));
++    // scheduled → tomorrow is the immediate next state.
++    expect(mockMutate.transition).toHaveBeenCalledWith('tomorrow', expect.any(Object));
++  });
++
++  it('attaches an EXTERNAL replay link from the manage modal', () => {
++    mockEventHooks.list = {
++      ...mockEventHooks.list,
++      data: { events: [makeEvent({ id: 'ev-7', state: 'live' })], next_before: null },
++    };
++    const { getByTestId } = render(<CoachCommunityEventsScreen />);
++    fireEvent.press(getByTestId('coach-community-event-row-ev-7'));
++    fireEvent.changeText(
++      getByTestId('coach-community-events-replay-input'),
++      'https://example.com/replay',
++    );
++    fireEvent.press(getByTestId('coach-community-events-attach-replay'));
++    expect(mockMutate.attachReplay).toHaveBeenCalledWith(
++      'https://example.com/replay',
++      expect.any(Object),
++    );
++  });
++
++  it('F14: reflect (close) is gated behind a calm confirm sheet', () => {
++    mockEventHooks.list = {
++      ...mockEventHooks.list,
++      data: { events: [makeEvent({ id: 'ev-5', state: 'replay' })], next_before: null },
++    };
++    const { getByTestId } = render(<CoachCommunityEventsScreen />);
++    fireEvent.press(getByTestId('coach-community-event-row-ev-5'));
++    // Tapping reflect opens the confirm sheet — it does NOT fire the mutation.
++    fireEvent.press(getByTestId('coach-community-events-reflect'));
++    expect(mockMutate.reflect).not.toHaveBeenCalled();
++    expect(getByTestId('coach-community-events-reflect-confirm')).toBeTruthy();
++    // Confirming in the sheet fires the close.
++    fireEvent.press(getByTestId('coach-community-events-reflect-confirm-action'));
++    expect(mockMutate.reflect).toHaveBeenCalledWith(undefined, expect.any(Object));
++  });
++
++  it('F13: the manage modal shows status-honest lifecycle labels', () => {
++    mockEventHooks.list = {
++      ...mockEventHooks.list,
++      data: { events: [makeEvent({ id: 'ev-3', state: 'live' })], next_before: null },
++    };
++    const { getByTestId, getAllByText } = render(<CoachCommunityEventsScreen />);
++    fireEvent.press(getByTestId('coach-community-event-row-ev-3'));
++    // 'Live now' appears for the live state (label is shared via stateMeta).
++    expect(getAllByText(/Live now/i).length).toBeGreaterThan(0);
++  });
++});
+diff --git a/src/screens/community/coachCommunityNavTypes.ts b/src/screens/community/coachCommunityNavTypes.ts
+index 4b7f80b..9ebe89a 100644
+--- a/src/screens/community/coachCommunityNavTypes.ts
++++ b/src/screens/community/coachCommunityNavTypes.ts
+@@ -23,6 +23,8 @@ export type CoachCommunityStackParamList = {
+   CoachCommunityPostDetail: { postId: string; flagged?: boolean };
+   /** Flagged-content moderation queue (hide, confirmed). */
+   CoachCommunityModeration: undefined;
++  /** Coach event list + lifecycle management (v2-3). */
++  CoachCommunityEvents: undefined;
+ };
+ 
+ /** Loosely-typed nav prop used by the screens (matches the codebase pattern). */
+diff --git a/src/screens/community/communityNavTypes.ts b/src/screens/community/communityNavTypes.ts
+index e813025..f513420 100644
+--- a/src/screens/community/communityNavTypes.ts
++++ b/src/screens/community/communityNavTypes.ts
+@@ -19,6 +19,8 @@ export type CommunityStackParamList = {
+   CommunitySpace: { space: 'hall' | 'cohort'; cohortId?: string };
+   /** Single thread / post detail. */
+   CommunityThread: { postId: string };
++  /** Single community event detail (v2-3). */
++  CommunityEventDetail: { eventId: string };
+   /** DM inbox. */
+   CommunityDmList: undefined;
+   /** Single DM conversation. */
+diff --git a/src/utils/__tests__/safeExternalEventUrl.test.ts b/src/utils/__tests__/safeExternalEventUrl.test.ts
+new file mode 100644
+index 0000000..ab6c80d
+--- /dev/null
++++ b/src/utils/__tests__/safeExternalEventUrl.test.ts
+@@ -0,0 +1,40 @@
++/**
++ * safeExternalEventUrl — https-only scheme guard (F3).
++ *
++ * The single EXTERNAL event link is opened in the system browser; there is no
++ * native room (Step 0). Before any `Linking.openURL`, the URL must be proven
++ * `https:`. This pins the hostile-scheme rejections the audit called out
++ * (`javascript:`, `data:`, plain `http:`) plus the calm null-on-garbage path.
++ */
++import { safeExternalEventUrl } from '../safeExternalEventUrl';
++
++describe('safeExternalEventUrl', () => {
++  it('returns the normalised href for a valid https URL', () => {
++    expect(safeExternalEventUrl('https://example.com/live')).toBe(
++      'https://example.com/live',
++    );
++  });
++
++  it('rejects a javascript: scheme (no code execution)', () => {
++    expect(safeExternalEventUrl('javascript:alert(1)')).toBeNull();
++  });
++
++  it('rejects a data: scheme', () => {
++    expect(safeExternalEventUrl('data:text/html,<script>1</script>')).toBeNull();
++  });
++
++  it('rejects plain http: (no downgrade)', () => {
++    expect(safeExternalEventUrl('http://example.com/live')).toBeNull();
++  });
++
++  it('rejects a file: scheme', () => {
++    expect(safeExternalEventUrl('file:///etc/passwd')).toBeNull();
++  });
++
++  it('returns null for unparseable, empty, null, or undefined input', () => {
++    expect(safeExternalEventUrl('not a url')).toBeNull();
++    expect(safeExternalEventUrl('')).toBeNull();
++    expect(safeExternalEventUrl(null)).toBeNull();
++    expect(safeExternalEventUrl(undefined)).toBeNull();
++  });
++});
+diff --git a/src/utils/safeExternalEventUrl.ts b/src/utils/safeExternalEventUrl.ts
+new file mode 100644
+index 0000000..9e19a7a
+--- /dev/null
++++ b/src/utils/safeExternalEventUrl.ts
+@@ -0,0 +1,23 @@
++/**
++ * safeExternalEventUrl — scheme guard for the single EXTERNAL link a community
++ * event may carry (v2-3). There is NO native room (Step 0): a live/replay link
++ * is an externally-hosted URL the client opens in the system browser. Before
++ * we ever hand a URL to `Linking.openURL`, we MUST confirm it is an https URL,
++ * never a `javascript:` / `data:` / `file:` / plain `http:` scheme that could
++ * exfiltrate, execute, or downgrade.
++ *
++ * Returns the normalised href when the input parses to an `https:` URL, or
++ * `null` for anything else (unparseable, wrong scheme, empty). The caller
++ * surfaces a calm error when this returns null rather than opening anything.
++ */
++export function safeExternalEventUrl(raw: string | null | undefined): string | null {
++  if (!raw || typeof raw !== 'string') return null;
++  let parsed: URL;
++  try {
++    parsed = new URL(raw);
++  } catch {
++    return null;
++  }
++  if (parsed.protocol !== 'https:') return null;
++  return parsed.href;
++}

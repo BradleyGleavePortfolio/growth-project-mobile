@@ -1,0 +1,21 @@
+## R0 BATTERY ON ADDED LINES (523 lines)
+## swallowed_empty_catch:
+  CLEAN
+## eslint_disable:
+  CLEAN
+## ts_ignore:
+  CLEAN
+## console:
+  CLEAN
+## todo_fixme_hack:
+  CLEAN
+## only_skip_focused:
+  CLEAN
+## as_any_unknown:
+  CLEAN
+## any_type:
+  CLEAN
+## dangerously_eval:
+  CLEAN
+## debugger:
+  CLEAN

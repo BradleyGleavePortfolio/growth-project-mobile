@@ -1,0 +1,9 @@
+PASS src/hooks/__tests__/useAutosave.test.tsx
+PASS src/api/__tests__/workoutAutosaveApi.test.ts
+PASS src/__tests__/coachWorkoutBuilderAutosave.test.tsx
+PASS src/screens/coach/__tests__/workoutBuilderAutosaveDiff.test.ts
+
+Test Suites: 4 passed, 4 total
+Tests:       54 passed, 54 total
+Snapshots:   0 total
+Time:        1.829 s

@@ -1,0 +1,61 @@
+   150	
+   151	describe('romanApi — strict Zod drift (anti-fabrication boundary)', () => {
+   152	  it('rejects an EXTRA field on the session view (.strict())', () => {
+   153	    const parsed = RomanSessionSchema.safeParse({ ...validSession, surfaceKey: 'roman.greeting' });
+   154	    expect(parsed.success).toBe(false);
+   155	  });
+   156	
+   157	  it('accepts the real backend `roman` role on the wire message view', () => {
+   158	    const parsed = RomanWireMessageSchema.safeParse(validWireMessage);
+   159	    expect(parsed.success).toBe(true);
+   160	  });
+   161	
+   162	  it('rejects the legacy fabricated `assistant` wire role (drift)', () => {
+   163	    const parsed = RomanWireMessageSchema.safeParse({ ...validWireMessage, role: 'assistant' });
+   164	    expect(parsed.success).toBe(false);
+   165	  });
+   166	
+   167	  it('rejects an unknown role value on the wire message view', () => {
+   168	    const parsed = RomanWireMessageSchema.safeParse({ ...validWireMessage, role: 'system' });
+   169	    expect(parsed.success).toBe(false);
+   170	  });
+   171	
+   172	  it('rejects an EXTRA field on the wire message view (.strict())', () => {
+   173	    const parsed = RomanWireMessageSchema.safeParse({ ...validWireMessage, extra: true });
+   174	    expect(parsed.success).toBe(false);
+   175	  });
+   176	
+   177	  it('rejects a non-RFC3339 timestamp on the wire message view', () => {
+   178	    const parsed = RomanWireMessageSchema.safeParse({ ...validWireMessage, createdAt: 'not-a-timestamp' });
+   179	    expect(parsed.success).toBe(false);
+   180	  });
+   181	
+   182	  it('rejects a drifted `roman` message inside a real list payload', async () => {
+   183	    api.get.mockResolvedValueOnce({
+   184	      data: { messages: [{ ...validWireMessage, role: 'assistant' }], nextCursor: null },
+   185	    });
+   186	    await expect(listMessages(SESSION_ID)).rejects.toBeInstanceOf(RomanWireError);
+   187	  });
+   188	
+   189	  it('throws RomanWireError (not a typed API error) when the response shape drifts', async () => {
+   190	    api.post.mockResolvedValueOnce({ data: { ...validSession, bogus: true } });
+   191	    await expect(openOrResumeSession('client')).rejects.toBeInstanceOf(RomanWireError);
+   192	  });
+   193	});
+   194	
+   195	describe('romanApi — HTTP error → typed RomanApiError mapping', () => {
+   196	  it('maps 404 to kind=unavailable (feature gate off / not found)', async () => {
+   197	    api.post.mockRejectedValueOnce(axiosError(404));
+   198	    await expect(openOrResumeSession('client')).rejects.toMatchObject({ kind: 'unavailable' });
+   199	  });
+   200	
+   201	  it('maps 429 to kind=rateLimited and reads Retry-After seconds', async () => {
+   202	    api.get.mockRejectedValueOnce(axiosError(429, { headers: { 'retry-after': '12' } }));
+   203	    await expect(listMessages(SESSION_ID)).rejects.toMatchObject({
+   204	      kind: 'rateLimited',
+   205	      retryAfterSeconds: 12,
+   206	    });
+   207	  });
+   208	
+   209	  it('maps a transport failure (no response) to kind=offline', async () => {
+   210	    api.get.mockRejectedValueOnce(networkError());

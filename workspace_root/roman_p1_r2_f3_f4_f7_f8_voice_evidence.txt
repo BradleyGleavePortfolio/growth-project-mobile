@@ -1,0 +1,245 @@
+romanVoice test
+    60	  { label: 'rate limited (1 second)', value: romanRateLimited(1) },
+    61	];
+    62	
+    63	// §1.3 / §1.4 / §5 banned vocabulary — matched case-insensitively as whole words.
+    64	const BANNED_WORDS = [
+    65	  // §1.3 corporate-speak
+    66	  'synergy', 'leverage', 'circle back', 'touch base', 'bandwidth', 'action item', "let's align",
+    67	  // §1.3 hype words
+    68	  'amazing', 'incredible', 'awesome', 'epic', 'insane', 'game-changer',
+    69	  // §1.4 startup slang
+    70	  'ship it', 'mvp', 'north star', 'low-hanging fruit',
+    71	  // §1.4 fitness-bro clichés
+    72	  'crushing it', "let's go", 'beast mode', 'no pain no gain', 'grind', "let's get it",
+    73	  // §1.4 Gen-Z slang
+    74	  'slay', 'no cap', 'rizz', 'lowkey', "it's giving",
+    75	];
+    76	
+    77	// Pictographic emoji ranges (covers the common emoji blocks). Each range is its
+    78	// own alternation branch with the `u` flag so no combining marks are mixed into
+    79	// a single character class — that mixing is exactly what eslint's
+    80	// `no-misleading-character-class` rule flags. Variation selectors
+    81	// (U+FE00–U+FE0F), which are combining marks, are matched as their own branch.
+    82	const EMOJI_RE = new RegExp(
+    83	  [
+    84	    '[\\u{1F300}-\\u{1FAFF}]',
+    85	    '[\\u{2600}-\\u{27BF}]',
+    86	    '[\\u{2190}-\\u{21FF}]',
+    87	    '[\\u{2B00}-\\u{2BFF}]',
+    88	    '[\\u{1F000}-\\u{1F02F}]',
+    89	    '[\\u{1F1E6}-\\u{1F1FF}]',
+    90	    '[\\u{FE00}-\\u{FE0F}]',
+romanVoice
+    50	 *     coach name is unknown the nameless variant `"I am ready. What needs
+    51	 *     attention?"` is used so we never render "Good morning, .".
+    52	 */
+    53	export function romanGreeting(input: RomanGreetingInput): string {
+    54	  const name = (input.firstName ?? '').trim();
+    55	
+    56	  if (input.isFirstOpen) {
+    57	    // identity spec §2.1 first-launch self-introduction (both surfaces).
+    58	    return 'Good day. My name is Roman. I will be looking after things here. Whenever you need me, I am present.';
+    59	  }
+    60	
+    61	  if (input.surface === 'coach') {
+    62	    // identity spec §2.3 coach operational register.
+    63	    if (name === '') {
+    64	      return 'I am ready. What needs attention?';
+    65	    }
+    66	    return `Good morning, ${name}. I am ready. What needs attention?`;
+    67	  }
+    68	
+    69	  // Returning client — identity spec §2.2 Default.
+    70	  if (name === '') {
+    71	    // Nameless ambient register — identity spec §2.1 greeting clause.
+    72	    return 'Good day. Everything is in order. Where shall we begin?';
+    73	  }
+    74	  return `Welcome back, ${name}. Everything is in order. Where shall we begin?`;
+    75	}
+    76	
+    77	/**
+    78	 * One-line sub-copy under the greeting, inviting the first message. Derived
+    79	 * from the identity spec §2.1 Default presence line ("Whenever you need me, I
+    80	 * am present.") — restated as the empty-composer prompt with no new claim.
+    81	 */
+    82	export const ROMAN_GREETING_SUBTITLE =
+    83	  'Whenever you need me, I am present. Send a message to begin.';
+    84	
+    85	/**
+    86	 * Transient send/system failure (retry available). Source: identity spec §2.10
+    87	 * "Generic error / system failure", Default variant — `"That request did not
+    88	 * complete. I will try again."`
+    89	 */
+    90	export const ROMAN_ERROR_TRANSIENT = 'That request did not complete. I will try again.';
+    91	
+    92	/**
+    93	 * Hard failure after retries are exhausted. Source: identity spec §2.10 Error
+    94	 * variant — `"That request did not complete, and my attempts to retry have not
+    95	 * succeeded either. I have logged the matter. Please try again in a few
+    96	 * minutes."`
+    97	 */
+    98	export const ROMAN_ERROR_EXHAUSTED =
+    99	  'That request did not complete, and my attempts to retry have not succeeded either. I have logged the matter. Please try again in a few minutes.';
+   100	
+   101	/**
+   102	 * "Roman unavailable" state — backend feature gate is off (404 on every
+   103	 * /roman route, roman-feature.guard.ts). This is not a crash and not a hard
+   104	 * data-loss failure, so per §1.6 Roman states the fact plainly without
+   105	 * apology. Phrased from the §1.6 failure-tone pattern ("state the fact, state
+   106	 * the remedy, and stop") and the backend's own ROMAN_UNAVAILABLE copy ("Roman
+   107	 * is not available right now.", roman.service.ts L353/L359).
+   108	 */
+   109	export const ROMAN_UNAVAILABLE_TITLE = 'Roman is not available right now.';
+   110	export const ROMAN_UNAVAILABLE_BODY =
+   111	  'I am not able to attend to this just yet. I will be here when the service is ready.';
+   112	
+   113	/**
+   114	 * Offline state. §1.6 failure tone — fact then remedy, no panic. The dry
+   115	 * self-deprecating network quip is a §2.10-permitted option but is held back
+   116	 * here so the offline state stays plainly reassuring (one quip per ~8 messages
+   117	 * ceiling, §1.5).
+   118	 */
+   119	export const ROMAN_OFFLINE_TITLE = 'I cannot reach the service.';
+   120	export const ROMAN_OFFLINE_BODY =
+   121	  'There appears to be no connection at the moment. I will try again once it returns.';
+   122	
+   123	/**
+   124	 * Rate-limited (backend @Throttle / per-tier cap → 429). Calm backoff copy in
+   125	 * the §1.6 register: states the fact, states the remedy (wait), and stops.
+   126	 * `seconds`, when known from the Retry-After header, is folded into the remedy
+   127	 * clause; otherwise the generic measured line is used.
+   128	 */
+   129	export function romanRateLimited(seconds?: number): string {
+   130	  if (typeof seconds === 'number' && seconds > 0) {
+   131	    const unit = seconds === 1 ? 'second' : 'seconds';
+   132	    return `A moment, if you would. Send your next message in about ${seconds} ${unit}.`;
+   133	  }
+   134	  return 'A moment, if you would. Send your next message again shortly.';
+   135	}
+   136	
+   137	/** Accessibility label announced while Roman's reply is being prepared (§2.9 readback register). */
+   138	export const ROMAN_TYPING_A11Y_LABEL = 'Roman is typing';
+   139	/** Visible "preparing a reply" line — plain, composed (§1.1). */
+   140	export const ROMAN_TYPING_LABEL = 'Roman is preparing a reply';
+   141	
+   142	/**
+   143	 * Interrupted-reply note (R1 code finding F7 / UX finding P2). The backend
+   144	 * persisted a partial turn on client disconnect (toMessageView.interrupted,
+   145	 * roman.controller.ts L210). Roman states the fact and the remedy in his own
+   146	 * voice (§1.6 failure tone — state the fact, state the remedy, and stop)
+   147	 * rather than the prior generic system line. Lives here so all Roman prose is
+   148	 * sourced from one cited module, never hardcoded in a component.
+   149	 */
+   150	export const ROMAN_INTERRUPTED_NOTE =
+   151	  'This reply was interrupted. Send it again, and I will continue.';
+   152	
+   153	/**
+   154	 * Failed-send remedy (R1 UX finding P1). The app does NOT auto-retry — it
+   155	 * waits for the user to send again — so the copy must name the REAL remedy
+   156	 * (user re-sends) rather than promising Roman will retry on his own. §1.6
+   157	 * failure tone: state the fact, state the actual remedy, and stop.
+   158	 */
+   159	export const ROMAN_SEND_FAILED =
+   160	  'That request did not complete. Send it once more, and I will try again.';
+   161	
+   162	/**
+   163	 * "Loading earlier messages" footer prose (R1 UX finding P2 — generic copy on
+   164	 * a Roman surface). Roman-voiced and rendered beside his face so the line is
+   165	 * not disembodied. Derived from the §2.9 readback register ("I am gathering
+   166	 * …") with no new claim.
+   167	 */
+   168	export const ROMAN_LOADING_OLDER = 'I am gathering the earlier messages.';
+   169	
+   170	/** Accessibility prefix used when announcing a freshly arrived Roman reply (§2.9 readback). */
+   171	export const ROMAN_REPLY_ANNOUNCE_PREFIX = 'Roman said: ';
+RomanMessageBubble
+     1	/**
+     2	 * RomanMessageBubble — one chat turn.
+     3	 *
+     4	 * FACE+VOICE (operator rule, P0 if violated): every ASSISTANT bubble renders
+     5	 * Roman's face (reused RomanAvatar, neutral crop) to the left of the text, so
+     6	 * Roman's voice is never disembodied. User turns render right-aligned with no
+     7	 * avatar. An interrupted assistant turn (backend persisted a partial on client
+     8	 * disconnect — toMessageView.interrupted, controller L210) shows a calm, typed
+     9	 * note rather than silently presenting a truncated reply as complete.
+    10	 *
+    11	 * The bubble text is rendered as plain Text (never dangerouslySetInnerHTML /
+    12	 * HTML) — FIFTY_FAILURES #4 (XSS via unescaped output) does not apply.
+    13	 */
+    14	import React from 'react';
+    15	import { StyleSheet, Text, View } from 'react-native';
+    16	import RomanAvatar from '../community/RomanAvatar';
+    17	import { ROMAN_INTERRUPTED_NOTE } from './romanVoice';
+    18	import type { RomanMessage } from '../../api/romanApi';
+    19	import { colors, radius, spacing, typography, withAlpha } from '../../theme/tokens';
+    20	
+    21	export interface RomanMessageBubbleProps {
+    22	  message: RomanMessage;
+    23	  testID?: string;
+    24	}
+    25	
+    26	function RomanMessageBubbleComponent({
+    27	  message,
+    28	  testID,
+    29	}: RomanMessageBubbleProps): React.ReactElement {
+    30	  const isAssistant = message.role === 'assistant';
+    31	
+    32	  if (isAssistant) {
+    33	    return (
+    34	      <View style={styles.assistantRow} testID={testID}>
+    35	        <RomanAvatar crop="neutral" size={32} testID="roman-bubble-avatar" />
+    36	        <View style={styles.assistantBubble}>
+    37	          <Text
+    38	            style={styles.assistantText}
+    39	            accessibilityLabel={`Roman said: ${message.content}`}
+    40	          >
+    41	            {message.content}
+    42	          </Text>
+    43	          {message.interrupted ? (
+    44	            <Text style={styles.interruptedNote} accessibilityRole="text">
+    45	              {ROMAN_INTERRUPTED_NOTE}
+    46	            </Text>
+    47	          ) : null}
+    48	        </View>
+    49	      </View>
+    50	    );
+    51	  }
+    52	
+    53	  return (
+    54	    <View style={styles.userRow} testID={testID}>
+    55	      <View style={styles.userBubble}>
+    56	        <Text style={styles.userText} accessibilityLabel={`You said: ${message.content}`}>
+    57	          {message.content}
+    58	        </Text>
+    59	      </View>
+    60	    </View>
+    61	  );
+    62	}
+    63	
+    64	const RomanMessageBubble = React.memo(RomanMessageBubbleComponent);
+    65	export default RomanMessageBubble;
+    66	
+    67	const styles = StyleSheet.create({
+    68	  assistantRow: {
+    69	    flexDirection: 'row',
+    70	    alignItems: 'flex-start',
+featureFlags
+   135	  // quick-action) so the kill switch hides the new UI without breaking the
+   136	  // existing inbox. The backend gate is also OFF in prod, so a dev build that
+   137	  // flips this on still degrades gracefully.
+   138	  //
+   139	  // env: EXPO_PUBLIC_FF_COMMUNITY_ACKS
+   140	  communityAcks: readFlag('EXPO_PUBLIC_FF_COMMUNITY_ACKS', false),
+   141	
+   142	  // ─── Roman P1 — mobile chat (client + coach surfaces) ────────────────────
+   143	  /** Roman P1 mobile chat surface. OFF until ops flips it alongside the backend FEATURE_ROMAN_CHAT_ENABLED gate. env: EXPO_PUBLIC_FF_ROMAN_CHAT */
+   144	  romanChat: readFlag('EXPO_PUBLIC_FF_ROMAN_CHAT', false),
+   145	} as const;
+   146	
+   147	export type FeatureFlagKey = keyof typeof featureFlags;
+   148	
+.env.example
+100:   100	EXPO_PUBLIC_FF_COMMUNITY_ACKS=false
+103:   103	# alongside the backend FEATURE_ROMAN_CHAT_ENABLED gate.
+104:   104	EXPO_PUBLIC_FF_ROMAN_CHAT=false

@@ -1,0 +1,4 @@
+Minimal Prisma 6.19.3 sqlite cursor checks (separate temp schemas under /home/user/workspace/prisma_cursor_*):
+1) findMany({ orderBy: { id: 'asc' }, take: 2, cursor: { id: 'z' }, skip: 1 }) over rows a,b,c returned [] for nonexistent cursor z, not the first page.
+2) findMany({ where: { grp: 'A' }, orderBy: [{createdAt:'asc'}, {id:'asc'}], cursor: { id: 'b3' }, skip: 1 }) where b3 exists but is grp B returned [], not first page.
+Implication for PR #392: direct Prisma cursors in listChallenges/listParticipationsByProgress and unscoped comment anchor resolution do not guarantee the documented stale/foreign cursor -> first-page degradation.

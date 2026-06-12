@@ -1,0 +1,130 @@
+=== src___tests___coachLtvDashboard_test_tsx.log ===
+      ✓ renders Record badge when is_new_rpcm_record is true (56 ms)
+      ✓ does not render Record badge when not a new record (63 ms)
+    trend colours
+      ✓ shows "Growing" label for upward trend (58 ms)
+      ✓ shows "Declining" label for downward trend (59 ms)
+      ✓ shows "Holding" label for flat trend (55 ms)
+    error state
+      ✓ shows error message when API call fails (303 ms)
+      ✓ shows Retry button on error (78 ms)
+      ✓ retries when Retry button is pressed (66 ms)
+    accessibility
+      ✓ has testID for dashboard root (22 ms)
+      ✓ streak badge has accessibility label (65 ms)
+    milestone copy
+      ✓ uses singular "client" when clients_needed is 1 (57 ms)
+      ✓ uses plural "clients" when clients_needed > 1 (66 ms)
+    empty revenue state
+      ✓ renders without error when MRR is 0 (58 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       21 passed, 21 total
+Snapshots:   0 total
+Time:        4.606 s
+Ran all test suites matching /src\/__tests__\/coachLtvDashboard.test.tsx/i.
+===== EXIT 0 duration=7s =====
+=== src_components_coach_ai-budget___tests___AIBudgetMount_test_tsx.log ===
+      at warn (node_modules/react-native-worklets/src/debug/checkCppVersion.ts:10:12)
+      at new NativeWorklets (node_modules/react-native-worklets/src/WorkletsModule/NativeWorklets.native.ts:43:22)
+      at Object.<anonymous> (node_modules/react-native-worklets/src/WorkletsModule/NativeWorklets.native.ts:327:48)
+      at Object.require (node_modules/react-native-worklets/src/featureFlags/featureFlags.native.ts:3:1)
+      at Object.require (node_modules/react-native-worklets/src/initializers/initializers.native.ts:12:1)
+      at Object.require (node_modules/react-native-worklets/src/index.ts:3:1)
+      at Object.require (node_modules/react-native-reanimated/src/initializers.ts:2:1)
+      at Object.require (node_modules/react-native-reanimated/src/index.ts:5:1)
+      at Object.require (src/components/coach/ai-budget/AIBudgetTutorialModal.tsx:45:1)
+      at Object.require (src/components/coach/ai-budget/AIBudgetMount.tsx:37:1)
+      at Object.require (src/components/coach/ai-budget/__tests__/AIBudgetMount.test.tsx:79:1)
+
+PASS src/components/coach/ai-budget/__tests__/AIBudgetMount.test.tsx (5.103 s)
+  AIBudgetMount — focus-gated polling (NEW-P2-1)
+    ✓ passes { enabled: false } to useAIBudget when the screen is NOT focused (21 ms)
+    ✓ passes { enabled: true } to useAIBudget when focused AND enabled prop is true (2 ms)
+    ✓ passes { enabled: false } when the `enabled` prop is false even if focused (2 ms)
+    ✓ defaults `enabled` prop to true when omitted (focus still gates) (1 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       4 passed, 4 total
+Snapshots:   0 total
+Time:        5.268 s
+Ran all test suites matching /src\/components\/coach\/ai-budget\/__tests__\/AIBudgetMount.test.tsx/i.
+===== EXIT 0 duration=7s =====
+=== src_hooks_useWearablePreference_test_tsx.log ===
+      at flushSyncWorkAcrossRoots_impl (node_modules/react-test-renderer/cjs/react-test-renderer.development.js:2764:21)
+      at processRootScheduleInMicrotask (node_modules/react-test-renderer/cjs/react-test-renderer.development.js:2796:9)
+      at processRootScheduleInImmediateTask (node_modules/react-test-renderer/cjs/react-test-renderer.development.js:2772:7)
+      at Immediate.performWorkUntilDeadline [as _onImmediate] (node_modules/scheduler/cjs/scheduler.native.development.js:45:48)
+
+PASS src/hooks/useWearablePreference.test.tsx
+  useWearablePreference
+    ✓ optimistically writes the new provider, then settles on the server value (99 ms)
+    ✓ rolls back to the prior value and surfaces isError on failure (60 ms)
+    ✓ invalidates the samples subtree on settle (65 ms)
+    ✓ rollback clears the optimistic write when there was no prior value (58 ms)
+  useWearablePreference({ metric }) — HK-3b contract overload (R1 P0 #5)
+    ✓ returns { data, mutate, isPending } and mutate(provider) writes the metric (68 ms)
+    ✓ reads the optimistic provider back through `data` (6 ms)
+    ✓ mutate(null) clears the preference via the clear endpoint (58 ms)
+    ✓ clear routes through React Query: drops the preference, invalidates samples, exposes isPending (131 ms)
+    ✓ clear surfaces errors via opts.onError so the caller is notified (63 ms)
+    ✓ clear with a caller onError still reflects isError and error on the bound return (58 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       10 passed, 10 total
+Snapshots:   0 total
+Time:        5.132 s
+Ran all test suites matching /src\/hooks\/useWearablePreference.test.tsx/i.
+===== EXIT 0 duration=7s =====
+=== src_screens_client_wearables___tests___cards_test_tsx.log ===
+
+PASS src/screens/client/wearables/__tests__/cards.test.tsx (30.775 s)
+  RecoveryRingHero
+    ✓ shows the number AND a plain-language label, never a bare score (95 ms)
+    ✓ renders an em dash and the neutral Recovery label when score is null (24 ms)
+  SleepStagesCard — plain language
+    ✓ uses only plain-language labels (89 ms)
+    ✓ headline reads as reassurance + context (no jargon) (21 ms)
+    ✓ renders an empty bar with a value-first prompt when no stages (33 ms)
+  HrvTrendCard — never alarm
+    ✓ frames a dip as recovering, not "low" (980 ms)
+    ✓ shows an empty chart placeholder with no data (15 ms)
+  RespirationCard — soft clinician-referral suffix
+    ✓ appends a gentle clinician suggestion when SpO2 is low (35 ms)
+    ✓ stays calm when readings are normal (14 ms)
+  SleepConsistencyCard — CALM language
+    ✓ never says "inconsistent" (31 ms)
+    ✓ celebrates a tight schedule (19 ms)
+
+Test Suites: 1 passed, 1 total
+Tests:       11 passed, 11 total
+Snapshots:   0 total
+Time:        30.945 s
+Ran all test suites matching /src\/screens\/client\/wearables\/__tests__\/cards.test.tsx/i.
+===== EXIT 0 duration=32s =====
+=== src_screens_day-one___tests___day1OnboardingScreens_test_tsx.log ===
+    ✓ rehydrates the prior selection from the resume checkpoint (28 ms)
+  NotificationsScreen
+    ✓ renders 4/6 step text (7 ms)
+    ✓ navigates to CheckInTime after permission grant (20 ms)
+    ✓ does NOT block onboarding when permission is denied (17 ms)
+  CheckInTimeScreen
+    ✓ renders 5/6 step text (22 ms)
+    ✓ save includes the IANA timezone in the payload (155 ms)
+    ✓ offline path enqueues a checkin sync item with the timezone (23 ms)
+    ✓ restores the prior time from the resume checkpoint (19 ms)
+  ReadyScreen
+    ✓ renders 6/6 step text (17 ms)
+    ✓ happy path: completes, clears the resume checkpoint, and emits auth (12 ms)
+    ✓ failure surfaces the retry banner with the Continue offline CTA (12 ms)
+    ✓ Continue offline enqueues a complete sync item and emits auth (16 ms)
+  Force-close resume
+    ✓ writes resume state on advance and rehydrates it from storage (1 ms)
+    ✓ clears resume state when called
+
+Test Suites: 1 passed, 1 total
+Tests:       26 passed, 26 total
+Snapshots:   0 total
+Time:        4.162 s
+Ran all test suites matching /src\/screens\/day-one\/__tests__\/day1OnboardingScreens.test.tsx/i.
+===== EXIT 0 duration=5s =====

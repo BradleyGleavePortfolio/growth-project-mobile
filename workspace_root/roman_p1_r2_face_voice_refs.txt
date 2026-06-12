@@ -1,0 +1,197 @@
+romanVoice references
+src/api/__tests__/romanApi.test.ts:33:  ROMAN_MESSAGES_MAX_LIMIT,
+src/api/__tests__/romanApi.test.ts:120:      { params: { limit: ROMAN_MESSAGES_MAX_LIMIT } },
+src/api/__tests__/romanApi.test.ts:233:    const body = 'event: error\ndata: {"code":"ROMAN_UNAVAILABLE","message":"Roman is not available right now."}\n\n';
+src/api/__tests__/romanApi.test.ts:236:      code: 'ROMAN_UNAVAILABLE',
+src/api/__tests__/romanApi.test.ts:304:      text: 'event: error\ndata: {"code":"ROMAN_UNAVAILABLE","message":"Roman is not available right now."}\n\n',
+src/api/romanApi.ts:17: *     - ROMAN_SURFACES = ['client','coach']  (dto L18)
+src/api/romanApi.ts:18: *     - OpenSessionDto.surface @IsIn(ROMAN_SURFACES) (dto L22-25)
+src/api/romanApi.ts:25: *     - EVERY /roman route 404s while FEATURE_ROMAN_CHAT_ENABLED is OFF
+src/api/romanApi.ts:66:// ─── Surfaces (mirror backend ROMAN_SURFACES, dto L18) ───────────────────────
+src/api/romanApi.ts:68:export const ROMAN_SURFACES = ['client', 'coach'] as const;
+src/api/romanApi.ts:69:export type RomanSurface = (typeof ROMAN_SURFACES)[number];
+src/api/romanApi.ts:72:export const ROMAN_MESSAGE_MAX_LENGTH = 8000;
+src/api/romanApi.ts:74:export const ROMAN_MESSAGES_MAX_LIMIT = 100;
+src/api/romanApi.ts:82:    surface: z.enum(ROMAN_SURFACES),
+src/api/romanApi.ts:97:export const ROMAN_WIRE_MESSAGE_ROLES = ['user', 'roman'] as const;
+src/api/romanApi.ts:98:export type RomanWireMessageRole = (typeof ROMAN_WIRE_MESSAGE_ROLES)[number];
+src/api/romanApi.ts:106:export const ROMAN_MESSAGE_ROLES = ['user', 'assistant'] as const;
+src/api/romanApi.ts:107:export type RomanMessageRole = (typeof ROMAN_MESSAGE_ROLES)[number];
+src/api/romanApi.ts:118:    role: z.enum(ROMAN_WIRE_MESSAGE_ROLES),
+src/api/romanApi.ts:289:    params.limit = Math.min(Math.max(1, Math.trunc(opts.limit)), ROMAN_MESSAGES_MAX_LIMIT);
+src/api/romanApi.ts:452:      // Structured in-stream error (e.g. ROMAN_UNAVAILABLE, controller L152).
+src/api/romanApi.ts:454:        streamError.code === 'ROMAN_UNAVAILABLE' ? 'unavailable' : 'generic';
+src/components/community/EmptyState.tsx:21:} from './romanVoice';
+src/components/community/RomanAvatar.tsx:4: * Per ROMAN_VOICE_POLICY.md §4 avatar matrix:
+src/components/community/RomanAvatar.tsx:59:// Deep-gold accent from the Roman avatar run summary (ROMAN_VOICE_POLICY §8).
+src/components/community/RomanAvatar.tsx:60:const ROMAN_ACCENT = '#C9A961';
+src/components/community/RomanAvatar.tsx:61:const ROMAN_INK = '#1A1A18';
+src/components/community/RomanAvatar.tsx:100:    borderColor: showRing ? ROMAN_ACCENT : 'transparent',
+src/components/community/RomanAvatar.tsx:141:    backgroundColor: ROMAN_ACCENT,
+src/components/community/RomanAvatar.tsx:149:    color: ROMAN_INK,
+src/components/community/coach/coachVoice.ts:22: * Copy rules (ROMAN_VOICE_POLICY §4): no exclamation points, no emoji, no
+src/components/community/index.ts:37:  ROMAN_COMMUNITY_LINES,
+src/components/community/index.ts:38:  ROMAN_QUIP_RATE_CLIENT,
+src/components/community/index.ts:39:} from './romanVoice';
+src/components/community/index.ts:40:export type { RomanCommunityStem, RomanLine } from './romanVoice';
+src/components/community/romanVoice.ts:4: * Scope per V1_5_BUILDER_BRIEF + ROMAN_VOICE_POLICY.md:
+src/components/community/romanVoice.ts:20: * its policy stem in a `// ROMAN_VOICE:` comment.
+src/components/community/romanVoice.ts:29:export const ROMAN_QUIP_RATE_CLIENT = 0.125; // policy §5 — locked PostHog flag
+src/components/community/romanVoice.ts:40: * ROMAN_VOICE_POLICY.md §3.3 situation. `{firstName}` is interpolated by
+src/components/community/romanVoice.ts:43:export const ROMAN_COMMUNITY_LINES = {
+src/components/community/romanVoice.ts:44:  // ROMAN_VOICE: §3.3 "Onboarding / welcome (first contact)"
+src/components/community/romanVoice.ts:50:  // ROMAN_VOICE: §3.3 "Greeting / daily check-in" (Today empty)
+src/components/community/romanVoice.ts:56:  // ROMAN_VOICE: §3.3 "Greeting / daily check-in" (Hall / Lab feed empty)
+src/components/community/romanVoice.ts:62:  // ROMAN_VOICE: §3.3 "Greeting / daily check-in" (Cohort posts empty)
+src/components/community/romanVoice.ts:68:  // ROMAN_VOICE: §3.3 "Greeting / daily check-in" (no cohorts joined)
+src/components/community/romanVoice.ts:74:  // ROMAN_VOICE: §3.3 "Greeting / daily check-in" (thread / comments empty)
+src/components/community/romanVoice.ts:80:  // ROMAN_VOICE: §3.3 "Greeting / daily check-in" (DM inbox empty)
+src/components/community/romanVoice.ts:86:  // ROMAN_VOICE: §3.3 "Greeting / daily check-in" (DM thread empty)
+src/components/community/romanVoice.ts:92:  // ROMAN_VOICE: §3.3 "Milestone / personal best" (post published success)
+src/components/community/romanVoice.ts:99:export type RomanCommunityStem = keyof typeof ROMAN_COMMUNITY_LINES;
+src/components/community/romanVoice.ts:102: * Deterministic dry-quip selector. Returns true ~`ROMAN_QUIP_RATE_CLIENT` of
+src/components/community/romanVoice.ts:121:  return unit < ROMAN_QUIP_RATE_CLIENT;
+src/components/community/romanVoice.ts:134:  const pair: RomanLine = ROMAN_COMMUNITY_LINES[stem];
+src/components/roman/RomanComposer.tsx:31:import { ROMAN_MESSAGE_MAX_LENGTH } from '../../api/romanApi';
+src/components/roman/RomanComposer.tsx:64:  const overCap = value.length > ROMAN_MESSAGE_MAX_LENGTH;
+src/components/roman/RomanComposer.tsx:90:          {`Message is too long by ${value.length - ROMAN_MESSAGE_MAX_LENGTH} characters.`}
+src/components/roman/RomanComposer.tsx:104:          maxLength={ROMAN_MESSAGE_MAX_LENGTH + 1}
+src/components/roman/RomanGreeting.tsx:18:  romanGreeting,
+src/components/roman/RomanGreeting.tsx:19:  ROMAN_GREETING_SUBTITLE,
+src/components/roman/RomanGreeting.tsx:21:} from './romanVoice';
+src/components/roman/RomanGreeting.tsx:48:        {romanGreeting({ surface, isFirstOpen, firstName })}
+src/components/roman/RomanGreeting.tsx:51:        {ROMAN_GREETING_SUBTITLE}
+src/components/roman/RomanMessageBubble.tsx:17:import { ROMAN_INTERRUPTED_NOTE } from './romanVoice';
+src/components/roman/RomanMessageBubble.tsx:45:              {ROMAN_INTERRUPTED_NOTE}
+src/components/roman/RomanState.tsx:7: * RomanAvatar) beside the copy. All copy comes from romanVoice.ts, which is
+src/components/roman/RomanState.tsx:19:  ROMAN_ERROR_TRANSIENT,
+src/components/roman/RomanState.tsx:20:  ROMAN_OFFLINE_BODY,
+src/components/roman/RomanState.tsx:21:  ROMAN_OFFLINE_TITLE,
+src/components/roman/RomanState.tsx:22:  ROMAN_UNAVAILABLE_BODY,
+src/components/roman/RomanState.tsx:23:  ROMAN_UNAVAILABLE_TITLE,
+src/components/roman/RomanState.tsx:24:} from './romanVoice';
+src/components/roman/RomanState.tsx:39:      return { title: ROMAN_UNAVAILABLE_TITLE, body: ROMAN_UNAVAILABLE_BODY };
+src/components/roman/RomanState.tsx:41:      return { title: ROMAN_OFFLINE_TITLE, body: ROMAN_OFFLINE_BODY };
+src/components/roman/RomanState.tsx:44:      return { title: ROMAN_ERROR_TRANSIENT, body: '' };
+src/components/roman/RomanTypingIndicator.tsx:19:import { ROMAN_TYPING_A11Y_LABEL, ROMAN_TYPING_LABEL } from './romanVoice';
+src/components/roman/RomanTypingIndicator.tsx:71:      accessibilityLabel={ROMAN_TYPING_A11Y_LABEL}
+src/components/roman/RomanTypingIndicator.tsx:76:        <Text style={styles.label}>{ROMAN_TYPING_LABEL}</Text>
+src/components/roman/__tests__/romanVoice.test.ts:5: * The identity spec (AI_BUTLER_ROMAN_IDENTITY_SPEC.md §1.3-§1.4 / §5 anti-
+src/components/roman/__tests__/romanVoice.test.ts:20:  romanGreeting,
+src/components/roman/__tests__/romanVoice.test.ts:22:  ROMAN_ERROR_EXHAUSTED,
+src/components/roman/__tests__/romanVoice.test.ts:23:  ROMAN_ERROR_TRANSIENT,
+src/components/roman/__tests__/romanVoice.test.ts:24:  ROMAN_GREETING_SUBTITLE,
+src/components/roman/__tests__/romanVoice.test.ts:25:  ROMAN_INTERRUPTED_NOTE,
+src/components/roman/__tests__/romanVoice.test.ts:26:  ROMAN_LOADING_OLDER,
+src/components/roman/__tests__/romanVoice.test.ts:27:  ROMAN_OFFLINE_BODY,
+src/components/roman/__tests__/romanVoice.test.ts:28:  ROMAN_OFFLINE_TITLE,
+src/components/roman/__tests__/romanVoice.test.ts:29:  ROMAN_REPLY_ANNOUNCE_PREFIX,
+src/components/roman/__tests__/romanVoice.test.ts:30:  ROMAN_SEND_FAILED,
+src/components/roman/__tests__/romanVoice.test.ts:31:  ROMAN_TYPING_A11Y_LABEL,
+src/components/roman/__tests__/romanVoice.test.ts:32:  ROMAN_TYPING_LABEL,
+src/components/roman/__tests__/romanVoice.test.ts:33:  ROMAN_UNAVAILABLE_BODY,
+src/components/roman/__tests__/romanVoice.test.ts:34:  ROMAN_UNAVAILABLE_TITLE,
+src/components/roman/__tests__/romanVoice.test.ts:35:} from '../romanVoice';
+src/components/roman/__tests__/romanVoice.test.ts:39:  { label: 'greeting (first open, client)', value: romanGreeting({ surface: 'client', isFirstOpen: true, firstName: 'Sam' }) },
+src/components/roman/__tests__/romanVoice.test.ts:40:  { label: 'greeting (first open, coach)', value: romanGreeting({ surface: 'coach', isFirstOpen: true, firstName: 'Sam' }) },
+src/components/roman/__tests__/romanVoice.test.ts:41:  { label: 'greeting (returning client, named)', value: romanGreeting({ surface: 'client', isFirstOpen: false, firstName: 'Sam' }) },
+src/components/roman/__tests__/romanVoice.test.ts:42:  { label: 'greeting (returning client, nameless)', value: romanGreeting({ surface: 'client', isFirstOpen: false, firstName: null }) },
+src/components/roman/__tests__/romanVoice.test.ts:43:  { label: 'greeting (returning client, empty name)', value: romanGreeting({ surface: 'client', isFirstOpen: false, firstName: '   ' }) },
+src/components/roman/__tests__/romanVoice.test.ts:44:  { label: 'greeting (returning coach, named)', value: romanGreeting({ surface: 'coach', isFirstOpen: false, firstName: 'Sam' }) },
+src/components/roman/__tests__/romanVoice.test.ts:45:  { label: 'greeting (returning coach, nameless)', value: romanGreeting({ surface: 'coach', isFirstOpen: false, firstName: null }) },
+src/components/roman/__tests__/romanVoice.test.ts:46:  { label: 'greeting subtitle', value: ROMAN_GREETING_SUBTITLE },
+src/components/roman/__tests__/romanVoice.test.ts:47:  { label: 'error transient', value: ROMAN_ERROR_TRANSIENT },
+src/components/roman/__tests__/romanVoice.test.ts:48:  { label: 'error exhausted', value: ROMAN_ERROR_EXHAUSTED },
+src/components/roman/__tests__/romanVoice.test.ts:49:  { label: 'send failed', value: ROMAN_SEND_FAILED },
+src/components/roman/__tests__/romanVoice.test.ts:50:  { label: 'interrupted note', value: ROMAN_INTERRUPTED_NOTE },
+src/components/roman/__tests__/romanVoice.test.ts:51:  { label: 'loading older', value: ROMAN_LOADING_OLDER },
+src/components/roman/__tests__/romanVoice.test.ts:52:  { label: 'unavailable title', value: ROMAN_UNAVAILABLE_TITLE },
+src/components/roman/__tests__/romanVoice.test.ts:53:  { label: 'unavailable body', value: ROMAN_UNAVAILABLE_BODY },
+src/components/roman/__tests__/romanVoice.test.ts:54:  { label: 'offline title', value: ROMAN_OFFLINE_TITLE },
+src/components/roman/__tests__/romanVoice.test.ts:55:  { label: 'offline body', value: ROMAN_OFFLINE_BODY },
+src/components/roman/__tests__/romanVoice.test.ts:56:  { label: 'typing a11y', value: ROMAN_TYPING_A11Y_LABEL },
+src/components/roman/__tests__/romanVoice.test.ts:57:  { label: 'typing label', value: ROMAN_TYPING_LABEL },
+src/components/roman/__tests__/romanVoice.test.ts:119:    expect(romanGreeting({ surface: 'client', isFirstOpen: true, firstName: 'Sam' })).toContain('My name is Roman');
+src/components/roman/__tests__/romanVoice.test.ts:120:    expect(romanGreeting({ surface: 'coach', isFirstOpen: true, firstName: 'Sam' })).toContain('My name is Roman');
+src/components/roman/__tests__/romanVoice.test.ts:124:    const g = romanGreeting({ surface: 'client', isFirstOpen: false, firstName: 'Sam' });
+src/components/roman/__tests__/romanVoice.test.ts:130:    expect(romanGreeting({ surface: 'client', isFirstOpen: false, firstName: null })).not.toMatch(/Welcome back,\s*\./);
+src/components/roman/__tests__/romanVoice.test.ts:131:    expect(romanGreeting({ surface: 'client', isFirstOpen: false, firstName: '  ' })).not.toMatch(/Welcome back,\s*\./);
+src/components/roman/__tests__/romanVoice.test.ts:135:    const named = romanGreeting({ surface: 'coach', isFirstOpen: false, firstName: 'Sam' });
+src/components/roman/__tests__/romanVoice.test.ts:139:    const nameless = romanGreeting({ surface: 'coach', isFirstOpen: false, firstName: null });
+src/components/roman/__tests__/romanVoice.test.ts:150:    expect(ROMAN_REPLY_ANNOUNCE_PREFIX).toBe('Roman said: ');
+src/components/roman/__tests__/romanVoice.test.ts:151:    expect(ROMAN_REPLY_ANNOUNCE_PREFIX).not.toContain('!');
+src/components/roman/__tests__/romanVoice.test.ts:152:    expect(EMOJI_RE.test(ROMAN_REPLY_ANNOUNCE_PREFIX)).toBe(false);
+src/components/roman/romanVoice.ts:4: * (BradleyGleavePortfolio/tgp-agent-context strategy/AI_BUTLER_ROMAN_IDENTITY_SPEC.md),
+src/components/roman/romanVoice.ts:20: * The host surface a greeting is rendered on — mirrors ROMAN_SURFACES
+src/components/roman/romanVoice.ts:53:export function romanGreeting(input: RomanGreetingInput): string {
+src/components/roman/romanVoice.ts:82:export const ROMAN_GREETING_SUBTITLE =
+src/components/roman/romanVoice.ts:90:export const ROMAN_ERROR_TRANSIENT = 'That request did not complete. I will try again.';
+src/components/roman/romanVoice.ts:98:export const ROMAN_ERROR_EXHAUSTED =
+src/components/roman/romanVoice.ts:106: * the remedy, and stop") and the backend's own ROMAN_UNAVAILABLE copy ("Roman
+src/components/roman/romanVoice.ts:109:export const ROMAN_UNAVAILABLE_TITLE = 'Roman is not available right now.';
+src/components/roman/romanVoice.ts:110:export const ROMAN_UNAVAILABLE_BODY =
+src/components/roman/romanVoice.ts:119:export const ROMAN_OFFLINE_TITLE = 'I cannot reach the service.';
+src/components/roman/romanVoice.ts:120:export const ROMAN_OFFLINE_BODY =
+src/components/roman/romanVoice.ts:138:export const ROMAN_TYPING_A11Y_LABEL = 'Roman is typing';
+src/components/roman/romanVoice.ts:140:export const ROMAN_TYPING_LABEL = 'Roman is preparing a reply';
+src/components/roman/romanVoice.ts:150:export const ROMAN_INTERRUPTED_NOTE =
+src/components/roman/romanVoice.ts:159:export const ROMAN_SEND_FAILED =
+src/components/roman/romanVoice.ts:168:export const ROMAN_LOADING_OLDER = 'I am gathering the earlier messages.';
+src/components/roman/romanVoice.ts:171:export const ROMAN_REPLY_ANNOUNCE_PREFIX = 'Roman said: ';
+src/config/featureFlags.ts:143:  /** Roman P1 mobile chat surface. OFF until ops flips it alongside the backend FEATURE_ROMAN_CHAT_ENABLED gate. env: EXPO_PUBLIC_FF_ROMAN_CHAT */
+src/config/featureFlags.ts:144:  romanChat: readFlag('EXPO_PUBLIC_FF_ROMAN_CHAT', false),
+src/navigation/ClientNavigator.tsx:471:          The screen receives surface='client' so the backend @IsIn(ROMAN_SURFACES)
+src/navigation/CoachNavigator.tsx:399:          backend @IsIn(ROMAN_SURFACES) value is never guessed client-side. */}
+src/navigation/__tests__/romanFlagOff.test.ts:10: * Also asserts the romanChat flag reads its EXPO_PUBLIC_FF_ROMAN_CHAT env var
+src/navigation/__tests__/romanFlagOff.test.ts:83:  it('reads EXPO_PUBLIC_FF_ROMAN_CHAT via readFlag(..., false)', () => {
+src/navigation/__tests__/romanFlagOff.test.ts:84:    expect(FLAGS).toMatch(/readFlag\([^)]*EXPO_PUBLIC_FF_ROMAN_CHAT[^)]*,\s*false\s*\)/);
+src/screens/client/MoreScreen.tsx:129:const ROMAN_MORE_ITEM: MoreItem = {
+src/screens/client/MoreScreen.tsx:145:    () => (featureFlags.romanChat ? [ROMAN_MORE_ITEM, ...MORE_ITEMS] : MORE_ITEMS),
+src/screens/community/CommunityComposerScreen.tsx:34:import { romanCopy } from '../../components/community/romanVoice';
+src/screens/roman/RomanChatScreen.tsx:4: * One screen serves both ROMAN_SURFACES (roman.dto.ts L18). The host surface is
+src/screens/roman/RomanChatScreen.tsx:7: * the value is always one the backend @IsIn(ROMAN_SURFACES) accepts.
+src/screens/roman/RomanChatScreen.tsx:12: * client-side Roman prose exists beyond romanVoice.ts, which is sourced from the
+src/screens/roman/RomanChatScreen.tsx:46:  ROMAN_LOADING_OLDER,
+src/screens/roman/RomanChatScreen.tsx:47:  ROMAN_REPLY_ANNOUNCE_PREFIX,
+src/screens/roman/RomanChatScreen.tsx:48:  ROMAN_SEND_FAILED,
+src/screens/roman/RomanChatScreen.tsx:49:} from '../../components/roman/romanVoice';
+src/screens/roman/RomanChatScreen.tsx:120:          `${ROMAN_REPLY_ANNOUNCE_PREFIX}${m.content}`,
+src/screens/roman/RomanChatScreen.tsx:189:  const sendErrorCopy =
+src/screens/roman/RomanChatScreen.tsx:194:        : ROMAN_SEND_FAILED;
+src/screens/roman/RomanChatScreen.tsx:228:                    {ROMAN_LOADING_OLDER}
+src/screens/roman/RomanChatScreen.tsx:239:        {sendErrorCopy != null ? (
+src/screens/roman/RomanChatScreen.tsx:243:              {sendErrorCopy}
+RomanAvatar references
+src/components/community/DmRow.tsx:15:import RomanAvatar from './RomanAvatar';
+src/components/community/DmRow.tsx:65:        <RomanAvatar crop="monogram" size={40} testID="dm-row-roman" />
+src/components/community/EmptyState.tsx:17:import RomanAvatar from './RomanAvatar';
+src/components/community/EmptyState.tsx:53:      <RomanAvatar crop="monogram" size={48} testID="community-empty-roman" />
+src/components/community/coach/CoachEmptyState.tsx:8: * is the single enforcement point: it always renders `<RomanAvatar />` above a
+src/components/community/coach/CoachEmptyState.tsx:31:import RomanAvatar from '../RomanAvatar';
+src/components/community/coach/CoachEmptyState.tsx:39:   * `payload.text` beneath `<RomanAvatar crop={payload.avatar_crop} />` so the
+src/components/community/coach/CoachEmptyState.tsx:57:      <RomanAvatar
+src/components/community/coach/CoachErrorState.tsx:20:import RomanAvatar from '../RomanAvatar';
+src/components/community/coach/CoachErrorState.tsx:45:      <RomanAvatar
+src/components/community/coach/MonogramBadge.tsx:7: * Distinct from RomanAvatar: this represents a CLIENT, not Roman. Roman's
+src/components/community/coach/__tests__/romanFaceAndConfirm.test.tsx:37:import RomanAvatar from '../../RomanAvatar';
+src/components/community/coach/__tests__/romanFaceAndConfirm.test.tsx:54:      <RomanAvatar crop="neutral" size={64} testID="roman" />,
+src/components/community/coach/__tests__/romanFaceAndConfirm.test.tsx:66:      <RomanAvatar crop="smile" size={64} testID="roman" />,
+src/components/community/coach/__tests__/romanFaceAndConfirm.test.tsx:75:      <RomanAvatar
+src/components/community/coach/__tests__/romanFaceAndConfirm.test.tsx:91:      <RomanAvatar crop="monogram" size={28} testID="roman" />,
+src/components/community/coach/__tests__/romanFaceAndConfirm.test.tsx:101:      <RomanAvatar crop="neutral" size={64} testID="roman" />,
+src/components/community/index.ts:10:export { default as RomanAvatar } from './RomanAvatar';
+src/components/community/index.ts:11:export type { RomanAvatarProps, RomanCrop } from './RomanAvatar';
+src/components/community/romanAvatarAssets.ts:19:import type { RomanCrop } from './RomanAvatar';
+src/components/roman/RomanGreeting.tsx:16:import RomanAvatar from '../community/RomanAvatar';
+src/components/roman/RomanGreeting.tsx:41:      <RomanAvatar crop="neutral" size={72} testID="roman-greeting-avatar" />
+src/components/roman/RomanMessageBubble.tsx:16:import RomanAvatar from '../community/RomanAvatar';
+src/components/roman/RomanMessageBubble.tsx:35:        <RomanAvatar crop="neutral" size={32} testID="roman-bubble-avatar" />
+src/components/roman/RomanState.tsx:17:import RomanAvatar from '../community/RomanAvatar';
+src/components/roman/RomanState.tsx:60:      <RomanAvatar crop="neutral" size={64} testID="roman-state-avatar" />
+src/components/roman/RomanTypingIndicator.tsx:18:import RomanAvatar from '../community/RomanAvatar';
+src/components/roman/RomanTypingIndicator.tsx:74:      <RomanAvatar crop="neutral" size={32} testID="roman-typing-avatar" />
+src/screens/community/__tests__/coachCommunityScreens.test.tsx:9: *     renders <RomanAvatar /> (by `${root}-avatar` testID) AND the BACKEND
+src/screens/roman/RomanChatScreen.tsx:37:import RomanAvatar from '../../components/community/RomanAvatar';
+src/screens/roman/RomanChatScreen.tsx:159:      <RomanAvatar crop="neutral" size={36} testID="roman-header-avatar" />
+src/screens/roman/RomanChatScreen.tsx:226:                  <RomanAvatar crop="neutral" size={24} />
+src/screens/roman/RomanChatScreen.tsx:241:            <RomanAvatar crop="neutral" size={28} />

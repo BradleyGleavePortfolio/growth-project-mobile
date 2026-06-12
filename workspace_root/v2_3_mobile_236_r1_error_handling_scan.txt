@@ -1,0 +1,33 @@
+132:+ * describeMutationError — calm, surfaced mutation-failure mapping (F4).
+141:+import { describeMutationError } from '../communityEventsApi';
+143:+describe('describeMutationError (F4)', () => {
+146:+    const info = describeMutationError(err);
+152:+    const info = describeMutationError(
+160:+    const info = describeMutationError(
+168:+    const info = describeMutationError(
+176:+    const info = describeMutationError(new Error('boom'));
+347:+  } catch (err) {
+350:+      throw new CommunityApiError(
+357:+    throw new CommunityApiError(
+366:+  } catch (err) {
+368:+      throw new CommunityApiError(
+375:+    throw err;
+387:+export interface MutationErrorInfo {
+392:+export function describeMutationError(err: unknown): MutationErrorInfo {
+1153:+      await result.current.mutateAsync('maybe').catch(() => undefined);
+1218:+        .catch(() => undefined);
+1417:+    onError: (_err, _status, ctx) => {
+1482:+    onError: (_err, _input, ctx) => {
+1828:+import { describeMutationError } from '../../api/communityEventsApi';
+1868:+  } catch {
+1937:+        onError: (err) => {
+1938:+          const info = describeMutationError(err);
+2378:+      onError: (err) => setManageError(describeMutationError(err).message),
+2390:+      onError: (err) => setManageError(describeMutationError(err).message),
+2402:+      onError: (err) => {
+2404:+        setManageError(describeMutationError(err).message);
+2960:+import { describeMutationError } from '../../api/communityEventsApi';
+2997:+    void Linking.openURL(safe).catch(() => {
+3008:+        onError: (err) => {
+3009:+          const info = describeMutationError(err);
+4025:+  } catch {

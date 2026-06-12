@@ -1,0 +1,242 @@
+[2026-06-12T13:20:51Z] === CI Runner Recovery Watcher starting ===
+[2026-06-12T13:20:51Z] Repo: BradleyGleavePortfolio/growth-project-mobile | Workflow: 265423898
+[2026-06-12T13:20:51Z] PR #235 branch=feature/community-v3-challenges-mobile head=918fa47e3968ccb5ef18ec2312fb42c21b8a05f3
+[2026-06-12T13:20:51Z] PR #237 branch=feature/mwb-4-mobile-autosave head=21ce3e01f753b9d48089f25df2b07f54c032262b
+[2026-06-12T13:20:51Z] --- Health check 1/30 ---
+[2026-06-12T13:20:52Z] Recent runs: [{"conclusion":"failure","createdAt":"2026-06-12T13:13:53Z","databaseId":27417950034,"startedAt":"2026-06-12T13:13:53Z","status":"completed","updatedAt":"2026-06-12T13:13:59Z"},{"conclusion":"failure","createdAt":"2026-06-12T13:11:22Z","databaseId":27417818005,"startedAt":"2026-06-12T13:11:22Z","status":"completed","updatedAt":"2026-06-12T13:11:28Z"},{"conclusion":"failure","createdAt":"2026-06-12T13:08:58Z","databaseId":27417695976,"startedAt":"2026-06-12T13:08:58Z","status":"completed","updatedAt":"2026-06-12T13:09:05Z"},{"conclusion":"failure","createdAt":"2026-06-12T13:01:25Z","databaseId":27417302414,"startedAt":"2026-06-12T13:01:25Z","status":"completed","updatedAt":"2026-06-12T13:01:32Z"},{"conclusion":"failure","createdAt":"2026-06-12T12:59:01Z","databaseId":27417174544,"startedAt":"2026-06-12T12:59:01Z","status":"completed","updatedAt":"2026-06-12T12:59:07Z"},{"conclusion":"failure","createdAt":"2026-06-12T12:57:18Z","databaseId":27417090676,"startedAt":"2026-06-12T12:57:18Z","status":"completed","updatedAt":"2026-06-12T12:57:25Z"},{"conclusion":"failure","createdAt":"2026-06-12T12:56:32Z","databaseId":27417052575,"startedAt":"2026-06-12T12:56:32Z","status":"completed","updatedAt":"2026-06-12T12:56:38Z"},{"conclusion":"success","createdAt":"2026-06-12T12:39:44Z","databaseId":27416210948,"startedAt":"2026-06-12T12:39:44Z","status":"completed","updatedAt":"2026-06-12T12:47:55Z"},{"conclusion":"success","createdAt":"2026-06-12T12:30:54Z","databaseId":27415775990,"startedAt":"2026-06-12T12:30:54Z","status":"completed","updatedAt":"2026-06-12T12:38:48Z"},{"conclusion":"success","createdAt":"2026-06-12T12:30:52Z","databaseId":27415774197,"startedAt":"2026-06-12T12:30:52Z","status":"completed","updatedAt":"2026-06-12T12:38:54Z"}]
+  success run 27416210948: duration=491s age=1977s
+  success run 27415775990: duration=474s age=2524s
+  success run 27415774197: duration=482s age=2518s
+[2026-06-12T13:20:52Z]   health result: NOT_RECOVERED
+[2026-06-12T13:20:52Z] Still in outage. Sleeping 180s...
+[2026-06-12T13:25:43Z] === Watcher restart at 2026-06-12T13:25:43Z ===
+[2026-06-12T13:25:43Z] --- Health check 1/30 ---
+[2026-06-12T13:25:44Z] Runs:   27417950034 completed failure dur=6s
+  27417818005 completed failure dur=6s
+  27417695976 completed failure dur=7s
+  27417302414 completed failure dur=7s
+  27417174544 completed failure dur=6s
+  27417090676 completed failure dur=7s
+  27417052575 completed failure dur=6s
+  27416210948 completed success dur=491s
+  27415775990 completed success dur=474s
+  27415774197 completed success dur=482s
+  success run 27416210948: duration=491s age=2269s
+  success run 27415775990: duration=474s age=2816s
+  success run 27415774197: duration=482s age=2810s
+[2026-06-12T13:25:44Z]   health: NOT_RECOVERED (exit 1)
+[2026-06-12T13:25:44Z] Outage continues. Sleeping 180s...
+[2026-06-12T13:28:44Z] --- Health check 2/30 ---
+[2026-06-12T13:28:45Z] Runs:   27417950034 completed failure dur=6s
+  27417818005 completed failure dur=6s
+  27417695976 completed failure dur=7s
+  27417302414 completed failure dur=7s
+  27417174544 completed failure dur=6s
+  27417090676 completed failure dur=7s
+  27417052575 completed failure dur=6s
+  27416210948 completed success dur=491s
+  27415775990 completed success dur=474s
+  27415774197 completed success dur=482s
+  success run 27416210948: duration=491s age=2450s
+  success run 27415775990: duration=474s age=2997s
+  success run 27415774197: duration=482s age=2991s
+[2026-06-12T13:28:46Z]   health: NOT_RECOVERED (exit 1)
+[2026-06-12T13:28:46Z] Outage continues. Sleeping 180s...
+[2026-06-12T13:31:46Z] --- Health check 3/30 ---
+[2026-06-12T13:31:47Z] Runs:   27417950034 completed failure dur=6s
+  27417818005 completed failure dur=6s
+  27417695976 completed failure dur=7s
+  27417302414 completed failure dur=7s
+  27417174544 completed failure dur=6s
+  27417090676 completed failure dur=7s
+  27417052575 completed failure dur=6s
+  27416210948 completed success dur=491s
+  27415775990 completed success dur=474s
+  27415774197 completed success dur=482s
+  success run 27416210948: duration=491s age=2632s
+  success run 27415775990: duration=474s age=3179s
+  success run 27415774197: duration=482s age=3173s
+[2026-06-12T13:31:47Z]   health: NOT_RECOVERED (exit 1)
+[2026-06-12T13:31:47Z] Outage continues. Sleeping 180s...
+[2026-06-12T13:34:47Z] --- Health check 4/30 ---
+[2026-06-12T13:34:48Z] Runs:   27417950034 completed failure dur=6s
+  27417818005 completed failure dur=6s
+  27417695976 completed failure dur=7s
+  27417302414 completed failure dur=7s
+  27417174544 completed failure dur=6s
+  27417090676 completed failure dur=7s
+  27417052575 completed failure dur=6s
+  27416210948 completed success dur=491s
+  27415775990 completed success dur=474s
+  27415774197 completed success dur=482s
+  success run 27416210948: duration=491s age=2813s
+  success run 27415775990: duration=474s age=3360s
+  success run 27415774197: duration=482s age=3354s
+[2026-06-12T13:34:48Z]   health: NOT_RECOVERED (exit 1)
+[2026-06-12T13:34:48Z] Outage continues. Sleeping 180s...
+[2026-06-12T13:37:14Z] === Resuming: phase=polling iter=4 ===
+[2026-06-12T13:37:14Z] --- Health check 4/30 ---
+  success run 27416210948: duration=491s age=2960s
+  success run 27415775990: duration=474s age=3507s
+  success run 27415774197: duration=482s age=3501s
+[2026-06-12T13:37:15Z]   health[4]: NOT_RECOVERED
+[2026-06-12T13:37:15Z] State saved: phase=polling iter=5
+[2026-06-12T13:37:15Z] Outage continues. Sleeping 180s...
+[2026-06-12T13:40:15Z] --- Health check 5/30 ---
+  success run 27416210948: duration=491s age=3141s
+  success run 27415775990: duration=474s age=3688s
+  success run 27415774197: duration=482s age=3682s
+[2026-06-12T13:40:16Z]   health[5]: NOT_RECOVERED
+[2026-06-12T13:40:16Z] State saved: phase=polling iter=6
+[2026-06-12T13:40:16Z] Outage continues. Sleeping 180s...
+[2026-06-12T13:43:16Z] --- Health check 6/30 ---
+  success run 27416210948: duration=491s age=3322s
+  success run 27415775990: duration=474s age=3869s
+  success run 27415774197: duration=482s age=3863s
+[2026-06-12T13:43:17Z]   health[6]: NOT_RECOVERED
+[2026-06-12T13:43:17Z] State saved: phase=polling iter=7
+[2026-06-12T13:43:17Z] Approaching bash window limit. Saving state and exiting for resume.
+[2026-06-12T13:44:33Z] === Resuming: phase=polling iter=7 ===
+[2026-06-12T13:44:33Z] --- Health check 7/30 ---
+  success run 27416210948: duration=491s age=3398s
+  success run 27415775990: duration=474s age=3945s
+[2026-06-12T13:44:33Z]   health[7]: NOT_RECOVERED
+[2026-06-12T13:44:33Z] Outage continues. Sleeping 180s...
+[2026-06-12T13:47:34Z] --- Health check 8/30 ---
+  success run 27416210948: duration=491s age=3579s
+  success run 27415775990: duration=474s age=4126s
+[2026-06-12T13:47:35Z]   health[8]: NOT_RECOVERED
+[2026-06-12T13:47:35Z] Outage continues. Sleeping 180s...
+[2026-06-12T13:50:35Z] --- Health check 9/30 ---
+  success run 27416210948: duration=491s age=3760s
+  success run 27415775990: duration=474s age=4307s
+[2026-06-12T13:50:35Z]   health[9]: NOT_RECOVERED
+[2026-06-12T13:50:35Z] Approaching limit. Saving state for resume (iter=10).
+[2026-06-12T13:51:42Z] === Resuming: phase=polling iter=7 ===
+[2026-06-12T13:51:42Z] --- Health check 7/30 ---
+  success run 27416210948: duration=491s age=3828s
+  success run 27415775990: duration=474s age=4375s
+[2026-06-12T13:51:43Z]   health[7]: NOT_RECOVERED
+[2026-06-12T13:51:43Z] Outage. Sleeping 180s...
+[2026-06-12T13:54:43Z] --- Health check 8/30 ---
+  success run 27416210948: duration=491s age=4009s
+  success run 27415775990: duration=474s age=4556s
+[2026-06-12T13:54:44Z]   health[8]: NOT_RECOVERED
+[2026-06-12T13:54:44Z] Outage. Sleeping 180s...
+[2026-06-12T13:57:44Z] --- Health check 9/30 ---
+  success run 27416210948: duration=491s age=4190s
+  success run 27415775990: duration=474s age=4737s
+[2026-06-12T13:57:45Z]   health[9]: NOT_RECOVERED
+[2026-06-12T13:57:45Z] Approaching limit at iter=10. Exiting for resume.
+[2026-06-12T13:59:33Z] === Resuming: phase=polling iter=10 ===
+[2026-06-12T13:59:33Z] --- Health check 10/30 ---
+  success run 27416210948: duration=491s age=4299s
+  success run 27415775990: duration=474s age=4846s
+[2026-06-12T13:59:34Z]   health[10]: NOT_RECOVERED
+[2026-06-12T13:59:34Z] Outage. Sleeping 180s...
+[2026-06-12T14:02:34Z] --- Health check 11/30 ---
+  success run 27416210948: duration=491s age=4480s
+  success run 27415775990: duration=474s age=5027s
+[2026-06-12T14:02:35Z]   health[11]: NOT_RECOVERED
+[2026-06-12T14:02:35Z] Outage. Sleeping 180s...
+[2026-06-12T14:05:35Z] --- Health check 12/30 ---
+  success run 27416210948: duration=491s age=4661s
+  success run 27415775990: duration=474s age=5208s
+[2026-06-12T14:05:36Z]   health[12]: NOT_RECOVERED
+[2026-06-12T14:05:36Z] Window limit at iter=13. Exiting for resume.
+[2026-06-12T14:06:45Z] === Resuming: phase=polling iter=13 ===
+[2026-06-12T14:06:45Z] --- Health check 13/30 ---
+  success run 27416210948: duration=491s age=4731s
+  success run 27415775990: duration=474s age=5278s
+[2026-06-12T14:06:46Z]   health[13]: NOT_RECOVERED
+[2026-06-12T14:06:46Z] Outage. Sleeping 180s...
+[2026-06-12T14:09:46Z] --- Health check 14/30 ---
+  success run 27416210948: duration=491s age=4912s
+  success run 27415775990: duration=474s age=5459s
+[2026-06-12T14:09:47Z]   health[14]: NOT_RECOVERED
+[2026-06-12T14:09:47Z] Outage. Sleeping 180s...
+[2026-06-12T14:12:47Z] --- Health check 15/30 ---
+  success run 27416210948: duration=491s age=5093s
+  success run 27415775990: duration=474s age=5640s
+[2026-06-12T14:12:48Z]   health[15]: NOT_RECOVERED
+[2026-06-12T14:12:48Z] Window limit at iter=16. Exiting for resume.
+[2026-06-12T14:13:56Z] === Resuming: phase=polling iter=16 ===
+[2026-06-12T14:13:56Z] --- Health check 16/30 ---
+  success run 27416210948: duration=491s age=5162s
+  success run 27415775990: duration=474s age=5709s
+[2026-06-12T14:13:57Z]   health[16]: NOT_RECOVERED
+[2026-06-12T14:13:57Z] Outage. Sleeping 180s...
+[2026-06-12T14:16:57Z] --- Health check 17/30 ---
+  success run 27416210948: duration=491s age=5343s
+  success run 27415775990: duration=474s age=5890s
+[2026-06-12T14:16:58Z]   health[17]: NOT_RECOVERED
+[2026-06-12T14:16:58Z] Outage. Sleeping 180s...
+[2026-06-12T14:19:58Z] --- Health check 18/30 ---
+  success run 27416210948: duration=491s age=5524s
+  success run 27415775990: duration=474s age=6071s
+[2026-06-12T14:19:59Z]   health[18]: NOT_RECOVERED
+[2026-06-12T14:19:59Z] Window limit at iter=19. Exiting for resume.
+[2026-06-12T14:21:08Z] === Resuming: phase=polling iter=19 ===
+[2026-06-12T14:21:08Z] --- Health check 19/30 ---
+  success run 27416210948: duration=491s age=5594s
+  success run 27415775990: duration=474s age=6141s
+[2026-06-12T14:21:09Z]   health[19]: NOT_RECOVERED
+[2026-06-12T14:21:09Z] Outage. Sleeping 180s...
+[2026-06-12T14:24:09Z] --- Health check 20/30 ---
+  success run 27416210948: duration=491s age=5775s
+  success run 27415775990: duration=474s age=6322s
+[2026-06-12T14:24:10Z]   health[20]: NOT_RECOVERED
+[2026-06-12T14:24:10Z] Outage. Sleeping 180s...
+[2026-06-12T14:27:10Z] --- Health check 21/30 ---
+  success run 27416210948: duration=491s age=5956s
+  success run 27415775990: duration=474s age=6503s
+[2026-06-12T14:27:11Z]   health[21]: NOT_RECOVERED
+[2026-06-12T14:27:11Z] Window limit at iter=22. Exiting for resume.
+[2026-06-12T14:28:23Z] === Resuming: phase=polling iter=22 ===
+[2026-06-12T14:28:23Z] --- Health check 22/30 ---
+  success run 27416210948: duration=491s age=6029s
+  success run 27415775990: duration=474s age=6576s
+[2026-06-12T14:28:24Z]   health[22]: NOT_RECOVERED
+[2026-06-12T14:28:24Z] Outage. Sleeping 180s...
+[2026-06-12T14:31:24Z] --- Health check 23/30 ---
+  success run 27416210948: duration=491s age=6210s
+  success run 27415775990: duration=474s age=6757s
+[2026-06-12T14:31:25Z]   health[23]: NOT_RECOVERED
+[2026-06-12T14:31:25Z] Outage. Sleeping 180s...
+[2026-06-12T14:34:25Z] --- Health check 24/30 ---
+  success run 27416210948: duration=491s age=6391s
+  success run 27415775990: duration=474s age=6938s
+[2026-06-12T14:34:26Z]   health[24]: NOT_RECOVERED
+[2026-06-12T14:34:26Z] Window limit at iter=25. Exiting for resume.
+[2026-06-12T14:35:42Z] === Resuming: phase=polling iter=25 ===
+[2026-06-12T14:35:42Z] --- Health check 25/30 ---
+  success run 27416210948: duration=491s age=6468s
+  success run 27415775990: duration=474s age=7015s
+[2026-06-12T14:35:43Z]   health[25]: NOT_RECOVERED
+[2026-06-12T14:35:43Z] Outage. Sleeping 180s...
+[2026-06-12T14:38:43Z] --- Health check 26/30 ---
+  success run 27416210948: duration=491s age=6649s
+  success run 27415775990: duration=474s age=7196s
+[2026-06-12T14:38:44Z]   health[26]: NOT_RECOVERED
+[2026-06-12T14:38:44Z] Outage. Sleeping 180s...
+[2026-06-12T14:41:44Z] --- Health check 27/30 ---
+  success run 27416210948: duration=491s age=6830s
+  success run 27415775990: duration=474s age=7377s
+[2026-06-12T14:41:45Z]   health[27]: NOT_RECOVERED
+[2026-06-12T14:41:45Z] Window limit at iter=28. Exiting for resume.
+[2026-06-12T14:43:00Z] === Resuming: phase=polling iter=28 ===
+[2026-06-12T14:43:00Z] --- Health check 28/30 ---
+  success run 27416210948: duration=491s age=6906s
+  success run 27415775990: duration=474s age=7453s
+[2026-06-12T14:43:01Z]   health[28]: NOT_RECOVERED
+[2026-06-12T14:43:01Z] Outage. Sleeping 180s...
+[2026-06-12T14:46:01Z] --- Health check 29/30 ---
+  success run 27416210948: duration=491s age=7087s
+  success run 27415775990: duration=474s age=7634s
+[2026-06-12T14:46:02Z]   health[29]: NOT_RECOVERED
+[2026-06-12T14:46:02Z] Outage. Sleeping 180s...
+[2026-06-12T14:49:02Z] --- Health check 30/30 ---
+  success run 27416210948: duration=491s age=7268s
+  success run 27415775990: duration=474s age=7815s
+[2026-06-12T14:49:03Z]   health[30]: NOT_RECOVERED
+[2026-06-12T14:49:03Z] TIMEOUT written to /home/user/workspace/CI_OUTAGE_WATCH_REPORT.md

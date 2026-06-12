@@ -1,0 +1,15 @@
+  1788	 
+  1789	 export type FeatureFlagKey = keyof typeof featureFlags;
+  1790	diff --git a/src/navigation/ClientNavigator.tsx b/src/navigation/ClientNavigator.tsx
+  1791	index 8af4cb5..1a19661 100644
+  1792	--- a/src/navigation/ClientNavigator.tsx
+  1793	+++ b/src/navigation/ClientNavigator.tsx
+  1794	@@ -71,6 +71,7 @@ import BloodworkEntryScreen from '../screens/client/BloodworkEntryScreen';
+  1795	 // "Coming soon" surfaces never reach production).
+  1796	 import ClientPathCopilotScreen from '../screens/client/ClientPathCopilotScreen';
+  1797	 import PrivateCommunityHubScreen from '../screens/client/PrivateCommunityHubScreen';
+  1798	+import RomanChatScreen from '../screens/roman/RomanChatScreen';
+  1799	 import { featureFlags } from '../config/featureFlags';
+  1800	 import { HapticService } from '../ui/haptics/haptics.service';
+  1801	 // Phase 11 — Share Card
+  1802	@@ -226,6 +227,8 @@ export type MoreStackParamList = {

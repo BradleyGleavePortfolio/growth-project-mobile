@@ -1,0 +1,1304 @@
+=== HEAD ===
+5ded65c194a1e97c10bad27583f164418cc7f7b5
+=== BRANCH ===
+pr-238
+=== CHANGED FILES origin/main..HEAD ===
+.env.example
+src/api/__tests__/romanApi.test.ts
+src/api/romanApi.ts
+src/components/roman/RomanComposer.tsx
+src/components/roman/RomanGreeting.tsx
+src/components/roman/RomanMessageBubble.tsx
+src/components/roman/RomanState.tsx
+src/components/roman/RomanTypingIndicator.tsx
+src/components/roman/__tests__/romanVoice.test.ts
+src/components/roman/romanVoice.ts
+src/config/featureFlags.ts
+src/navigation/ClientNavigator.tsx
+src/navigation/CoachNavigator.tsx
+src/navigation/__tests__/romanFlagOff.test.ts
+src/screens/client/MoreScreen.tsx
+src/screens/coach/SettingsScreen.tsx
+src/screens/roman/RomanChatScreen.tsx
+src/screens/roman/useRomanChat.ts
+=== ROMAN FILES ===
+src/api/__tests__/romanApi.test.ts
+src/api/romanApi.ts
+src/components/community/RomanAvatar.tsx
+src/components/community/coach/CoachRomanEmptyState.tsx
+src/components/community/coach/__tests__/romanFaceAndConfirm.test.tsx
+src/components/community/romanAvatarAssets.ts
+src/components/community/romanVoice.ts
+src/components/roman
+src/components/roman/RomanComposer.tsx
+src/components/roman/RomanGreeting.tsx
+src/components/roman/RomanMessageBubble.tsx
+src/components/roman/RomanState.tsx
+src/components/roman/RomanTypingIndicator.tsx
+src/components/roman/__tests__
+src/components/roman/__tests__/romanVoice.test.ts
+src/components/roman/romanVoice.ts
+src/navigation/__tests__/romanFlagOff.test.ts
+src/screens/roman
+src/screens/roman/RomanChatScreen.tsx
+src/screens/roman/useRomanChat.ts
+=== romanVoice.ts ===
+     1	/**
+     2	 * romanVoice — the ONLY client-side Roman-voiced strings the chat surface
+     3	 * renders. Every string below is taken from the locked identity spec
+     4	 * (BradleyGleavePortfolio/tgp-agent-context strategy/AI_BUTLER_ROMAN_IDENTITY_SPEC.md),
+     5	 * cited per string with its §section. The Phase 1 backend serves NO greeting /
+     6	 * empty / error PROSE for the chat surface — the controller returns only
+     7	 * session/message views and SSE chunks (roman.controller.ts), and there are no
+     8	 * participant-facing Roman surface keys. So these surfaces consume the spec's
+     9	 * sample-copy patterns directly, per the operator FACE+VOICE rule (avatar
+    10	 * renders beside each of these strings via RomanGreeting / the screen header).
+    11	 *
+    12	 * Voice-contract compliance (spec §1.1-§1.6), verified against §1.4 forbidden
+    13	 * moves: no emoji, no exclamation points (the one rationed exclamation is a
+    14	 * milestone instrument not used on a chat empty/error state), no contractions
+    15	 * in the default tone, no hype words, no slang. Assistant REPLY prose is NOT
+    16	 * here — it comes from the backend SSE `done` chunk verbatim (romanApi).
+    17	 */
+    18	
+    19	/**
+    20	 * The host surface a greeting is rendered on — mirrors ROMAN_SURFACES
+    21	 * (roman.dto.ts L18) so the empty-state copy can speak the right register.
+    22	 */
+    23	export type RomanGreetingSurface = 'client' | 'coach';
+    24	
+    25	export interface RomanGreetingInput {
+    26	  /** Which surface is rendering — selects the client vs coach register. */
+    27	  surface: RomanGreetingSurface;
+    28	  /** True the very first time Roman is opened (no prior session history). */
+    29	  isFirstOpen: boolean;
+    30	  /** Authenticated user's first name, when known. */
+    31	  firstName?: string | null;
+    32	}
+    33	
+    34	/**
+    35	 * Empty-chat greeting, aware of BOTH the surface and whether this is the first
+    36	 * time Roman has been opened (R1 UX finding U1). The four registers are taken
+    37	 * verbatim from the identity spec:
+    38	 *
+    39	 *   - First open (client OR coach): the §2.1 first-launch self-introduction —
+    40	 *     `"Good day. My name is Roman. I will be looking after things here.
+    41	 *     Whenever you need me, I am present."` This is Roman's defining first
+    42	 *     impression and must NOT be replaced by returning-user copy.
+    43	 *   - Returning client (named): §2.2 "App boot / returning user" Default —
+    44	 *     `"Welcome back, {firstName}. Everything is in order. Where shall we
+    45	 *     begin?"`
+    46	 *   - Returning client (nameless): the §2.1 nameless ambient register, trimmed
+    47	 *     to the greeting clause, to avoid an empty "Welcome back, ." render.
+    48	 *   - Returning coach: the §2.3 coach operational register —
+    49	 *     `"Good morning, {coachName}. I am ready. What needs attention?"` When the
+    50	 *     coach name is unknown the nameless variant `"I am ready. What needs
+    51	 *     attention?"` is used so we never render "Good morning, .".
+    52	 */
+    53	export function romanGreeting(input: RomanGreetingInput): string {
+    54	  const name = (input.firstName ?? '').trim();
+    55	
+    56	  if (input.isFirstOpen) {
+    57	    // identity spec §2.1 first-launch self-introduction (both surfaces).
+    58	    return 'Good day. My name is Roman. I will be looking after things here. Whenever you need me, I am present.';
+    59	  }
+    60	
+    61	  if (input.surface === 'coach') {
+    62	    // identity spec §2.3 coach operational register.
+    63	    if (name === '') {
+    64	      return 'I am ready. What needs attention?';
+    65	    }
+    66	    return `Good morning, ${name}. I am ready. What needs attention?`;
+    67	  }
+    68	
+    69	  // Returning client — identity spec §2.2 Default.
+    70	  if (name === '') {
+    71	    // Nameless ambient register — identity spec §2.1 greeting clause.
+    72	    return 'Good day. Everything is in order. Where shall we begin?';
+    73	  }
+    74	  return `Welcome back, ${name}. Everything is in order. Where shall we begin?`;
+    75	}
+    76	
+    77	/**
+    78	 * One-line sub-copy under the greeting, inviting the first message. Derived
+    79	 * from the identity spec §2.1 Default presence line ("Whenever you need me, I
+    80	 * am present.") — restated as the empty-composer prompt with no new claim.
+    81	 */
+    82	export const ROMAN_GREETING_SUBTITLE =
+    83	  'Whenever you need me, I am present. Send a message to begin.';
+    84	
+    85	/**
+    86	 * Transient send/system failure (retry available). Source: identity spec §2.10
+    87	 * "Generic error / system failure", Default variant — `"That request did not
+    88	 * complete. I will try again."`
+    89	 */
+    90	export const ROMAN_ERROR_TRANSIENT = 'That request did not complete. I will try again.';
+    91	
+    92	/**
+    93	 * Hard failure after retries are exhausted. Source: identity spec §2.10 Error
+    94	 * variant — `"That request did not complete, and my attempts to retry have not
+    95	 * succeeded either. I have logged the matter. Please try again in a few
+    96	 * minutes."`
+    97	 */
+    98	export const ROMAN_ERROR_EXHAUSTED =
+    99	  'That request did not complete, and my attempts to retry have not succeeded either. I have logged the matter. Please try again in a few minutes.';
+   100	
+   101	/**
+   102	 * "Roman unavailable" state — backend feature gate is off (404 on every
+   103	 * /roman route, roman-feature.guard.ts). This is not a crash and not a hard
+   104	 * data-loss failure, so per §1.6 Roman states the fact plainly without
+   105	 * apology. Phrased from the §1.6 failure-tone pattern ("state the fact, state
+   106	 * the remedy, and stop") and the backend's own ROMAN_UNAVAILABLE copy ("Roman
+   107	 * is not available right now.", roman.service.ts L353/L359).
+   108	 */
+   109	export const ROMAN_UNAVAILABLE_TITLE = 'Roman is not available right now.';
+   110	export const ROMAN_UNAVAILABLE_BODY =
+   111	  'I am not able to attend to this just yet. I will be here when the service is ready.';
+   112	
+   113	/**
+   114	 * Offline state. §1.6 failure tone — fact then remedy, no panic. The dry
+   115	 * self-deprecating network quip is a §2.10-permitted option but is held back
+   116	 * here so the offline state stays plainly reassuring (one quip per ~8 messages
+   117	 * ceiling, §1.5).
+   118	 */
+   119	export const ROMAN_OFFLINE_TITLE = 'I cannot reach the service.';
+   120	export const ROMAN_OFFLINE_BODY =
+   121	  'There appears to be no connection at the moment. I will try again once it returns.';
+   122	
+   123	/**
+   124	 * Rate-limited (backend @Throttle / per-tier cap → 429). Calm backoff copy in
+   125	 * the §1.6 register: states the fact, states the remedy (wait), and stops.
+   126	 * `seconds`, when known from the Retry-After header, is folded into the remedy
+   127	 * clause; otherwise the generic measured line is used.
+   128	 */
+   129	export function romanRateLimited(seconds?: number): string {
+   130	  if (typeof seconds === 'number' && seconds > 0) {
+   131	    const unit = seconds === 1 ? 'second' : 'seconds';
+   132	    return `A moment, if you would. Send your next message in about ${seconds} ${unit}.`;
+   133	  }
+   134	  return 'A moment, if you would. Send your next message again shortly.';
+   135	}
+   136	
+   137	/** Accessibility label announced while Roman's reply is being prepared (§2.9 readback register). */
+   138	export const ROMAN_TYPING_A11Y_LABEL = 'Roman is typing';
+   139	/** Visible "preparing a reply" line — plain, composed (§1.1). */
+   140	export const ROMAN_TYPING_LABEL = 'Roman is preparing a reply';
+   141	
+   142	/**
+   143	 * Interrupted-reply note (R1 code finding F7 / UX finding P2). The backend
+   144	 * persisted a partial turn on client disconnect (toMessageView.interrupted,
+   145	 * roman.controller.ts L210). Roman states the fact and the remedy in his own
+   146	 * voice (§1.6 failure tone — state the fact, state the remedy, and stop)
+   147	 * rather than the prior generic system line. Lives here so all Roman prose is
+   148	 * sourced from one cited module, never hardcoded in a component.
+   149	 */
+   150	export const ROMAN_INTERRUPTED_NOTE =
+   151	  'This reply was interrupted. Send it again, and I will continue.';
+   152	
+   153	/**
+   154	 * Failed-send remedy (R1 UX finding P1). The app does NOT auto-retry — it
+   155	 * waits for the user to send again — so the copy must name the REAL remedy
+   156	 * (user re-sends) rather than promising Roman will retry on his own. §1.6
+   157	 * failure tone: state the fact, state the actual remedy, and stop.
+   158	 */
+   159	export const ROMAN_SEND_FAILED =
+   160	  'That request did not complete. Send it once more, and I will try again.';
+   161	
+   162	/**
+   163	 * "Loading earlier messages" footer prose (R1 UX finding P2 — generic copy on
+   164	 * a Roman surface). Roman-voiced and rendered beside his face so the line is
+   165	 * not disembodied. Derived from the §2.9 readback register ("I am gathering
+   166	 * …") with no new claim.
+   167	 */
+   168	export const ROMAN_LOADING_OLDER = 'I am gathering the earlier messages.';
+   169	
+   170	/** Accessibility prefix used when announcing a freshly arrived Roman reply (§2.9 readback). */
+   171	export const ROMAN_REPLY_ANNOUNCE_PREFIX = 'Roman said: ';
+=== RomanGreeting.tsx ===
+     1	/**
+     2	 * RomanGreeting — the FACE+VOICE empty state for an empty Roman chat.
+     3	 *
+     4	 * Operator rule (P0 if violated): Roman's face renders with every Roman-voiced
+     5	 * string. Here the bundled RomanAvatar (neutral crop) sits above the §2.2
+     6	 * returning-user greeting so the voice is never disembodied. RomanAvatar is the
+     7	 * existing Community component (reused, not forked — brief lane rule); it paints
+     8	 * the bundled brand face offline on first frame and falls back to the accessible
+     9	 * monogram only on image-load failure.
+    10	 *
+    11	 * Emotional target (DESIGN_INTELLIGENCE §5.1 step 1): the user should leave this
+    12	 * screen feeling WELCOMED and in capable hands — not "informed".
+    13	 */
+    14	import React from 'react';
+    15	import { StyleSheet, Text, View } from 'react-native';
+    16	import RomanAvatar from '../community/RomanAvatar';
+    17	import {
+    18	  romanGreeting,
+    19	  ROMAN_GREETING_SUBTITLE,
+    20	  type RomanGreetingSurface,
+    21	} from './romanVoice';
+    22	import { colors, spacing, typography } from '../../theme/tokens';
+    23	
+    24	export interface RomanGreetingProps {
+    25	  /** Host surface — selects the client vs coach greeting register (U1). */
+    26	  surface: RomanGreetingSurface;
+    27	  /** True when Roman has no prior history, so the §2.1 intro is shown (U1). */
+    28	  isFirstOpen: boolean;
+    29	  firstName?: string | null;
+    30	  testID?: string;
+    31	}
+    32	
+    33	export default function RomanGreeting({
+    34	  surface,
+    35	  isFirstOpen,
+    36	  firstName,
+    37	  testID,
+    38	}: RomanGreetingProps): React.ReactElement {
+    39	  return (
+    40	    <View style={styles.container} testID={testID}>
+    41	      <RomanAvatar crop="neutral" size={72} testID="roman-greeting-avatar" />
+    42	      <Text
+    43	        style={styles.greeting}
+    44	        accessibilityRole="text"
+    45	        // The greeting text already names Roman; the avatar above carries the
+    46	        // face. State is conveyed in the visible copy, no extra a11y state here.
+    47	      >
+    48	        {romanGreeting({ surface, isFirstOpen, firstName })}
+    49	      </Text>
+    50	      <Text style={styles.subtitle} accessibilityRole="text">
+    51	        {ROMAN_GREETING_SUBTITLE}
+    52	      </Text>
+    53	    </View>
+    54	  );
+    55	}
+    56	
+    57	const styles = StyleSheet.create({
+    58	  container: {
+    59	    alignItems: 'center',
+    60	    justifyContent: 'center',
+    61	    paddingHorizontal: spacing.xl,
+    62	    paddingVertical: spacing['3xl'],
+    63	    gap: spacing.md,
+    64	  },
+    65	  greeting: {
+    66	    ...typography.h3,
+    67	    color: colors.ink,
+    68	    textAlign: 'center',
+    69	  },
+    70	  subtitle: {
+    71	    ...typography.body,
+    72	    color: colors.charcoal,
+    73	    textAlign: 'center',
+    74	  },
+    75	});
+=== RomanChatScreen.tsx ===
+     1	/**
+     2	 * RomanChatScreen — the Roman Phase 1 chat surface (client + coach).
+     3	 *
+     4	 * One screen serves both ROMAN_SURFACES (roman.dto.ts L18). The host surface is
+     5	 * passed as a route param (`surface`) — ClientNavigator passes 'client',
+     6	 * CoachNavigator passes 'coach' — so there is no client-side role-guessing and
+     7	 * the value is always one the backend @IsIn(ROMAN_SURFACES) accepts.
+     8	 *
+     9	 * FACE+VOICE (operator rule, P0): Roman's face renders with every Roman-voiced
+    10	 * string — the header carries his avatar, the empty state (RomanGreeting), each
+    11	 * assistant bubble, the typing indicator, and every typed state. No new
+    12	 * client-side Roman prose exists beyond romanVoice.ts, which is sourced from the
+    13	 * identity spec (cited there per string).
+    14	 *
+    15	 * Typed states (brief §3): loading skeleton, "Roman unavailable" (404 flag-off
+    16	 * — calm, no retry loop), offline, generic error, send-failure (message stays
+    17	 * in the composer for retry), and rate-limited (calm backoff copy).
+    18	 *
+    19	 * Emotional target (DESIGN_INTELLIGENCE §5.1): the user leaves feeling attended
+    20	 * to and in capable hands. Primary path (Hick's Law §4.4): a single composer +
+    21	 * send — no competing actions on the surface.
+    22	 */
+    23	import React, { useCallback, useEffect, useRef, useState } from 'react';
+    24	import {
+    25	  AccessibilityInfo,
+    26	  FlatList,
+    27	  Keyboard,
+    28	  KeyboardAvoidingView,
+    29	  Platform,
+    30	  StyleSheet,
+    31	  Text,
+    32	  TouchableOpacity,
+    33	  View,
+    34	  type ListRenderItemInfo,
+    35	} from 'react-native';
+    36	import { SafeAreaView } from 'react-native-safe-area-context';
+    37	import RomanAvatar from '../../components/community/RomanAvatar';
+    38	import RomanGreeting from '../../components/roman/RomanGreeting';
+    39	import RomanMessageBubble from '../../components/roman/RomanMessageBubble';
+    40	import RomanTypingIndicator from '../../components/roman/RomanTypingIndicator';
+    41	import RomanComposer from '../../components/roman/RomanComposer';
+    42	import RomanState from '../../components/roman/RomanState';
+    43	import { Skeleton } from '../../ui/skeletons/Skeleton';
+    44	import {
+    45	  romanRateLimited,
+    46	  ROMAN_LOADING_OLDER,
+    47	  ROMAN_REPLY_ANNOUNCE_PREFIX,
+    48	  ROMAN_SEND_FAILED,
+    49	} from '../../components/roman/romanVoice';
+    50	import { useRomanChat } from './useRomanChat';
+    51	import { useCurrentUser } from '../../hooks/useCurrentUser';
+    52	import type { RomanMessage, RomanSurface } from '../../api/romanApi';
+    53	import { colors, radius, spacing, typography, withAlpha } from '../../theme/tokens';
+    54	
+    55	export interface RomanChatScreenProps {
+    56	  /** Host surface; defaults to 'client' when a route omits it. */
+    57	  surface?: RomanSurface;
+    58	}
+    59	
+    60	function LoadingSkeleton(): React.ReactElement {
+    61	  return (
+    62	    <View style={styles.skeletonWrap} testID="roman-loading-skeleton">
+    63	      <Skeleton width="70%" height={18} testID="roman-skeleton-line-1" />
+    64	      <Skeleton width="55%" height={18} />
+    65	      <Skeleton width="80%" height={18} />
+    66	    </View>
+    67	  );
+    68	}
+    69	
+    70	export default function RomanChatScreen({
+    71	  surface = 'client',
+    72	}: RomanChatScreenProps): React.ReactElement {
+    73	  const user = useCurrentUser();
+    74	  const {
+    75	    phase,
+    76	    isFirstOpen,
+    77	    messages,
+    78	    sending,
+    79	    sendError,
+    80	    nextCursor,
+    81	    loadingOlder,
+    82	    reload,
+    83	    loadOlder,
+    84	    send,
+    85	    clearSendError,
+    86	  } = useRomanChat(surface);
+    87	  const [draft, setDraft] = useState('');
+    88	
+    89	  const listRef = useRef<FlatList<RomanMessage>>(null);
+    90	  // Last assistant message id we announced to assistive tech, so a re-render
+    91	  // does not re-announce the same reply (U4).
+    92	  const lastAnnouncedId = useRef<string | null>(null);
+    93	
+    94	  const scrollToLatest = useCallback(() => {
+    95	    // Guard: scrollToEnd is a no-op (and warns) on an empty list.
+    96	    if (messages.length === 0) return;
+    97	    listRef.current?.scrollToEnd({ animated: true });
+    98	  }, [messages.length]);
+    99	
+   100	  // Scroll to the newest turn whenever the thread grows (send + receive), and
+   101	  // when the keyboard opens, so the latest message is never stranded (U3).
+   102	  useEffect(() => {
+   103	    scrollToLatest();
+   104	  }, [messages.length, sending, scrollToLatest]);
+   105	
+   106	  useEffect(() => {
+   107	    const show = Keyboard.addListener('keyboardDidShow', scrollToLatest);
+   108	    return () => show.remove();
+   109	  }, [scrollToLatest]);
+   110	
+   111	  // Announce a freshly arrived Roman reply for screen-reader users, deduped by
+   112	  // message id so the same reply is announced at most once (U4).
+   113	  useEffect(() => {
+   114	    for (let i = messages.length - 1; i >= 0; i -= 1) {
+   115	      const m = messages[i];
+   116	      if (m.role !== 'assistant') continue;
+   117	      if (m.id !== lastAnnouncedId.current) {
+   118	        lastAnnouncedId.current = m.id;
+   119	        AccessibilityInfo.announceForAccessibility(
+   120	          `${ROMAN_REPLY_ANNOUNCE_PREFIX}${m.content}`,
+   121	        );
+   122	      }
+   123	      break;
+   124	    }
+   125	  }, [messages]);
+   126	
+   127	  const onSend = useCallback(async () => {
+   128	    const text = draft;
+   129	    const outcome = await send(text);
+   130	    // Clear the composer ONLY when the turn actually persisted; on a send
+   131	    // failure the draft is preserved so the user can retry without retyping
+   132	    // (brief §3 / F5 RomanSendOutcome).
+   133	    if (outcome === 'sent') setDraft('');
+   134	  }, [draft, send]);
+   135	
+   136	  const onChangeDraft = useCallback(
+   137	    (text: string) => {
+   138	      setDraft(text);
+   139	      // A stale send-error must not linger while the user edits the draft (U2).
+   140	      if (sendError != null) clearSendError();
+   141	    },
+   142	    [sendError, clearSendError],
+   143	  );
+   144	
+   145	  // Re-send the current draft from the visible retry affordance (U2).
+   146	  const onRetrySend = useCallback(() => {
+   147	    void onSend();
+   148	  }, [onSend]);
+   149	
+   150	  const renderItem = useCallback(
+   151	    ({ item }: ListRenderItemInfo<RomanMessage>) => (
+   152	      <RomanMessageBubble message={item} testID={`roman-message-${item.id}`} />
+   153	    ),
+   154	    [],
+   155	  );
+   156	
+   157	  const header = (
+   158	    <View style={styles.header}>
+   159	      <RomanAvatar crop="neutral" size={36} testID="roman-header-avatar" />
+   160	      <Text style={styles.headerTitle} accessibilityRole="header">
+   161	        Roman
+   162	      </Text>
+   163	    </View>
+   164	  );
+   165	
+   166	  if (phase === 'loading') {
+   167	    return (
+   168	      <SafeAreaView style={styles.safe} edges={['top']} testID="roman-chat-screen">
+   169	        {header}
+   170	        <LoadingSkeleton />
+   171	      </SafeAreaView>
+   172	    );
+   173	  }
+   174	
+   175	  if (phase === 'unavailable' || phase === 'offline' || phase === 'error') {
+   176	    return (
+   177	      <SafeAreaView style={styles.safe} edges={['top']} testID="roman-chat-screen">
+   178	        {header}
+   179	        <RomanState
+   180	          kind={phase}
+   181	          onRetry={phase === 'unavailable' ? undefined : reload}
+   182	          testID="roman-chat-state"
+   183	        />
+   184	      </SafeAreaView>
+   185	    );
+   186	  }
+   187	
+   188	  const isEmpty = messages.length === 0;
+   189	  const sendErrorCopy =
+   190	    sendError == null
+   191	      ? null
+   192	      : sendError.kind === 'rateLimited'
+   193	        ? romanRateLimited(sendError.retryAfterSeconds)
+   194	        : ROMAN_SEND_FAILED;
+   195	
+   196	  return (
+   197	    <SafeAreaView style={styles.safe} edges={['top']} testID="roman-chat-screen">
+   198	      {header}
+   199	      <KeyboardAvoidingView
+   200	        style={styles.flex}
+   201	        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+   202	      >
+   203	        {isEmpty ? (
+   204	          <View style={styles.flex}>
+   205	            <RomanGreeting
+   206	              surface={surface}
+   207	              isFirstOpen={isFirstOpen}
+   208	              firstName={user?.firstName}
+   209	              testID="roman-empty-greeting"
+   210	            />
+   211	          </View>
+   212	        ) : (
+   213	          <FlatList
+   214	            ref={listRef}
+   215	            style={styles.flex}
+   216	            contentContainerStyle={styles.listContent}
+   217	            data={messages}
+   218	            keyExtractor={(m) => m.id}
+   219	            renderItem={renderItem}
+   220	            onEndReachedThreshold={0.4}
+   221	            onEndReached={nextCursor != null ? loadOlder : undefined}
+   222	            onContentSizeChange={scrollToLatest}
+   223	            ListFooterComponent={
+   224	              loadingOlder ? (
+   225	                <View style={styles.olderNote} testID="roman-loading-older">
+   226	                  <RomanAvatar crop="neutral" size={24} />
+   227	                  <Text style={styles.olderNoteText} accessibilityRole="text">
+   228	                    {ROMAN_LOADING_OLDER}
+   229	                  </Text>
+   230	                </View>
+   231	              ) : null
+   232	            }
+   233	            testID="roman-message-list"
+   234	          />
+   235	        )}
+   236	
+   237	        {sending ? <RomanTypingIndicator testID="roman-typing" /> : null}
+   238	
+   239	        {sendErrorCopy != null ? (
+   240	          <View style={styles.sendError} testID="roman-send-error">
+   241	            <RomanAvatar crop="neutral" size={28} />
+   242	            <Text style={styles.sendErrorText} accessibilityRole="text">
+   243	              {sendErrorCopy}
+   244	            </Text>
+   245	            {sendError?.kind !== 'rateLimited' ? (
+   246	              <TouchableOpacity
+   247	                style={styles.retryButton}
+   248	                onPress={onRetrySend}
+   249	                disabled={sending}
+   250	                accessibilityRole="button"
+   251	                accessibilityLabel="Send again"
+   252	                accessibilityState={{ disabled: sending }}
+   253	                testID="roman-send-retry"
+   254	              >
+   255	                <Text style={styles.retryLabel}>Send again</Text>
+   256	              </TouchableOpacity>
+   257	            ) : null}
+   258	          </View>
+   259	        ) : null}
+   260	
+   261	        <RomanComposer
+   262	          value={draft}
+   263	          onChangeText={onChangeDraft}
+   264	          onSend={onSend}
+   265	          sending={sending}
+   266	          testID="roman-composer"
+   267	        />
+   268	      </KeyboardAvoidingView>
+   269	    </SafeAreaView>
+   270	  );
+   271	}
+   272	
+   273	const styles = StyleSheet.create({
+   274	  safe: {
+   275	    flex: 1,
+   276	    backgroundColor: colors.bone,
+   277	  },
+   278	  flex: {
+   279	    flex: 1,
+   280	  },
+   281	  header: {
+   282	    flexDirection: 'row',
+   283	    alignItems: 'center',
+   284	    gap: spacing.sm,
+   285	    paddingHorizontal: spacing.lg,
+   286	    paddingVertical: spacing.md,
+   287	    borderBottomWidth: 0.5,
+   288	    borderBottomColor: colors.stone,
+   289	  },
+   290	  headerTitle: {
+   291	    ...typography.h4,
+   292	    color: colors.ink,
+   293	  },
+   294	  listContent: {
+   295	    paddingVertical: spacing.md,
+   296	  },
+   297	  skeletonWrap: {
+   298	    padding: spacing.xl,
+   299	    gap: spacing.md,
+   300	  },
+   301	  olderNote: {
+   302	    flexDirection: 'row',
+   303	    alignItems: 'center',
+   304	    justifyContent: 'center',
+   305	    gap: spacing.sm,
+   306	    paddingVertical: spacing.sm,
+   307	    paddingHorizontal: spacing.lg,
+   308	  },
+   309	  olderNoteText: {
+   310	    ...typography.bodySmall,
+   311	    color: colors.charcoal,
+   312	  },
+   313	  sendError: {
+   314	    flexDirection: 'row',
+   315	    alignItems: 'center',
+   316	    gap: spacing.sm,
+   317	    paddingHorizontal: spacing.lg,
+   318	    paddingVertical: spacing.sm,
+   319	  },
+   320	  sendErrorText: {
+   321	    ...typography.bodySmall,
+   322	    color: colors.charcoal,
+   323	    flex: 1,
+   324	  },
+   325	  retryButton: {
+   326	    minHeight: 48,
+   327	    minWidth: 48,
+   328	    paddingHorizontal: spacing.lg,
+   329	    alignItems: 'center',
+   330	    justifyContent: 'center',
+   331	    borderRadius: radius.lg,
+   332	    borderWidth: 0.5,
+   333	    borderColor: withAlpha(colors.forest, 0.45),
+   334	    backgroundColor: withAlpha(colors.forest, 0.08),
+   335	  },
+   336	  retryLabel: {
+   337	    ...typography.bodyMd,
+   338	    color: colors.forest,
+   339	  },
+   340	});
+=== useRomanChat.ts ===
+     1	/**
+     2	 * useRomanChat — chat state machine for RomanChatScreen.
+     3	 *
+     4	 * Owns: open-or-resume the session, load the first page of messages
+     5	 * (newest-first, paged per ListMessagesQueryDto), append a user turn, send it,
+     6	 * and fold Roman's settled reply (DECLARED DEVIATION: buffered SSE read — see
+     7	 * romanApi header) back into the list. All backend calls go through romanApi,
+     8	 * which validates every response against the cited contract and maps errors to
+     9	 * the typed RomanApiError union.
+    10	 *
+    11	 * Concurrency / cleanup (FIFTY_FAILURES #31/#32): an `active` ref gates every
+    12	 * post-await setState so a state update never lands after unmount, and an
+    13	 * in-flight send is guarded by `sendingRef` so a double-tap cannot fire two
+    14	 * turns. Failed sends DO NOT clear the draft — the screen preserves it for
+    15	 * retry (brief §3).
+    16	 */
+    17	import { useCallback, useEffect, useRef, useState } from 'react';
+    18	import {
+    19	  deleteSession as apiDeleteSession,
+    20	  listMessages,
+    21	  openOrResumeSession,
+    22	  RomanApiError,
+    23	  sendMessage,
+    24	  type RomanAssistantReply,
+    25	  type RomanMessage,
+    26	  type RomanSession,
+    27	  type RomanSurface,
+    28	} from '../../api/romanApi';
+    29	import { logger } from '../../utils/logger';
+    30	
+    31	/** Page size for the initial / "load older" message fetch (<= backend cap 100). */
+    32	const PAGE_LIMIT = 30;
+    33	
+    34	export type RomanChatPhase =
+    35	  | 'loading' // opening the session / loading first page
+    36	  | 'ready' // session open, messages (possibly empty) shown
+    37	  | 'unavailable' // backend feature gate off (404) — calm typed state
+    38	  | 'offline' // no connection
+    39	  | 'error'; // generic load failure
+    40	
+    41	export interface RomanSendError {
+    42	  kind: RomanApiError['kind'];
+    43	  message: string;
+    44	  retryAfterSeconds?: number;
+    45	}
+    46	
+    47	/**
+    48	 * Outcome of a send attempt, so the screen can distinguish the two failure
+    49	 * modes the R1 code audit (F5) requires us to keep separate:
+    50	 *   - 'sent'        — the turn persisted; clear the composer.
+    51	 *   - 'send-failed' — the turn did NOT persist; keep the draft for retry.
+    52	 *   - 'noop'        — nothing was sent (empty/duplicate guard).
+    53	 */
+    54	export type RomanSendOutcome = 'sent' | 'send-failed' | 'noop';
+    55	
+    56	export interface UseRomanChatResult {
+    57	  phase: RomanChatPhase;
+    58	  session: RomanSession | null;
+    59	  /**
+    60	   * True when the resumed session had no prior messages on open — i.e. this is
+    61	   * the user's first encounter with Roman, so the greeting shows the §2.1
+    62	   * self-introduction rather than returning-user copy (U1). Latched at open and
+    63	   * not flipped by the optimistic append of the first turn.
+    64	   */
+    65	  isFirstOpen: boolean;
+    66	  /** Oldest-first; presented newest-at-bottom and always scrolled into view. */
+    67	  messages: RomanMessage[];
+    68	  sending: boolean;
+    69	  /** Set when the last send failed (turn NOT persisted); screen shows retry. */
+    70	  sendError: RomanSendError | null;
+    71	  nextCursor: string | null;
+    72	  loadingOlder: boolean;
+    73	  reload: () => void;
+    74	  loadOlder: () => void;
+    75	  send: (content: string) => Promise<RomanSendOutcome>;
+    76	  clearSendError: () => void;
+    77	}
+    78	
+    79	function phaseFromError(err: unknown): RomanChatPhase {
+    80	  if (err instanceof RomanApiError) {
+    81	    if (err.kind === 'unavailable') return 'unavailable';
+    82	    if (err.kind === 'offline') return 'offline';
+    83	  }
+    84	  return 'error';
+    85	}
+    86	
+    87	export function useRomanChat(surface: RomanSurface): UseRomanChatResult {
+    88	  const [phase, setPhase] = useState<RomanChatPhase>('loading');
+    89	  const [session, setSession] = useState<RomanSession | null>(null);
+    90	  const [isFirstOpen, setIsFirstOpen] = useState(false);
+    91	  const [messages, setMessages] = useState<RomanMessage[]>([]);
+    92	  const [nextCursor, setNextCursor] = useState<string | null>(null);
+    93	  const [sending, setSending] = useState(false);
+    94	  const [loadingOlder, setLoadingOlder] = useState(false);
+    95	  const [sendError, setSendError] = useState<RomanSendError | null>(null);
+    96	
+    97	  const active = useRef(true);
+    98	  const sendingRef = useRef(false);
+    99	  const sessionRef = useRef<RomanSession | null>(null);
+   100	
+   101	  useEffect(() => {
+   102	    active.current = true;
+   103	    return () => {
+   104	      active.current = false;
+   105	    };
+   106	  }, []);
+   107	
+   108	  const open = useCallback(async () => {
+   109	    if (active.current) setPhase('loading');
+   110	    try {
+   111	      const s = await openOrResumeSession(surface);
+   112	      const page = await listMessages(s.id, { limit: PAGE_LIMIT });
+   113	      if (!active.current) return;
+   114	      sessionRef.current = s;
+   115	      setSession(s);
+   116	      // First open = the resumed session carries no prior turns. Latched here so
+   117	      // the greeting's §2.1 self-introduction is chosen on the empty state and
+   118	      // does not flip mid-conversation (U1).
+   119	      setIsFirstOpen(s.messageCount === 0 && page.messages.length === 0);
+   120	      // Backend returns newest-first; present oldest-first so the inverted
+   121	      // list reads naturally bottom-up.
+   122	      setMessages([...page.messages].reverse());
+   123	      setNextCursor(page.nextCursor);
+   124	      setPhase('ready');
+   125	    } catch (err) {
+   126	      logger.warn('useRomanChat.open', err);
+   127	      if (!active.current) return;
+   128	      setPhase(phaseFromError(err));
+   129	    }
+   130	  }, [surface]);
+   131	
+   132	  useEffect(() => {
+   133	    open();
+   134	  }, [open]);
+   135	
+   136	  const loadOlder = useCallback(async () => {
+   137	    const s = sessionRef.current;
+   138	    if (!s || nextCursor == null || loadingOlder) return;
+   139	    setLoadingOlder(true);
+   140	    try {
+   141	      const page = await listMessages(s.id, {
+   142	        cursor: nextCursor,
+   143	        limit: PAGE_LIMIT,
+   144	      });
+   145	      if (!active.current) return;
+   146	      // Older messages prepend (oldest-first list).
+   147	      setMessages((prev) => [...[...page.messages].reverse(), ...prev]);
+   148	      setNextCursor(page.nextCursor);
+   149	    } catch (err) {
+   150	      logger.warn('useRomanChat.loadOlder', err);
+   151	      // A paging failure is non-fatal: keep the current list, surface nothing
+   152	      // destructive. The user can pull again.
+   153	    } finally {
+   154	      if (active.current) setLoadingOlder(false);
+   155	    }
+   156	  }, [nextCursor, loadingOlder]);
+   157	
+   158	  const send = useCallback(async (content: string): Promise<RomanSendOutcome> => {
+   159	    const trimmed = content.trim();
+   160	    const s = sessionRef.current;
+   161	    if (trimmed === '' || !s || sendingRef.current) return 'noop';
+   162	    sendingRef.current = true;
+   163	    setSending(true);
+   164	    setSendError(null);
+   165	
+   166	    // Optimistically append the user turn with a temporary id so the list
+   167	    // updates immediately. We ROLL IT BACK ONLY when the SEND itself fails
+   168	    // (FIFTY_FAILURES #30) — never when a post-send refresh fails (F5).
+   169	    const optimisticId = `optimistic-${Date.now()}`;
+   170	    const optimistic: RomanMessage = {
+   171	      id: optimisticId,
+   172	      role: 'user',
+   173	      content: trimmed,
+   174	      interrupted: false,
+   175	      createdAt: new Date().toISOString(),
+   176	    };
+   177	    if (active.current) setMessages((prev) => [...prev, optimistic]);
+   178	
+   179	    let reply: RomanAssistantReply;
+   180	    try {
+   181	      reply = await sendMessage(s.id, trimmed);
+   182	    } catch (err) {
+   183	      // The SEND failed: the backend did not persist the turn. Roll the
+   184	      // optimistic user turn back and surface a retryable send error. The
+   185	      // screen preserves the draft so the user can send it again.
+   186	      logger.warn('useRomanChat.send', err);
+   187	      if (active.current) {
+   188	        setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
+   189	        const e = err instanceof RomanApiError ? err : null;
+   190	        setSendError({
+   191	          kind: e?.kind ?? 'generic',
+   192	          message: e?.message ?? 'That request did not complete.',
+   193	          retryAfterSeconds: e?.retryAfterSeconds,
+   194	        });
+   195	      }
+   196	      sendingRef.current = false;
+   197	      if (active.current) setSending(false);
+   198	      return 'send-failed';
+   199	    }
+   200	
+   201	    // The send SUCCEEDED: the user turn (and Roman's reply) are persisted. From
+   202	    // here on we must NOT roll the user turn back, even if the canonical
+   203	    // refresh fails — doing so would discard a persisted turn and (without send
+   204	    // idempotency) invite a duplicate on retry (F5).
+   205	    if (!active.current) {
+   206	      sendingRef.current = false;
+   207	      return 'sent';
+   208	    }
+   209	
+   210	    // Fold Roman's settled reply in beside the optimistic user turn so the
+   211	    // thread is complete immediately, independent of the refresh below.
+   212	    const localAssistant: RomanMessage = {
+   213	      id: reply.messageId ?? `assistant-${Date.now()}`,
+   214	      role: 'assistant',
+   215	      content: reply.text,
+   216	      interrupted: reply.interrupted,
+   217	      createdAt: new Date().toISOString(),
+   218	    };
+   219	    setMessages((prev) => [...prev, localAssistant]);
+   220	
+   221	    try {
+   222	      // Reconcile with the canonical backend page so the optimistic stand-ins
+   223	      // are replaced by their persisted shapes (real ids, ordering, cursor).
+   224	      const page = await listMessages(s.id, { limit: PAGE_LIMIT });
+   225	      if (active.current) {
+   226	        setMessages([...page.messages].reverse());
+   227	        setNextCursor(page.nextCursor);
+   228	      }
+   229	    } catch (err) {
+   230	      // A refresh failure is NON-destructive: the turn is already persisted and
+   231	      // shown via the optimistic + local-reply pair. Log it and leave the
+   232	      // visible thread intact; the next reload reconciles ids.
+   233	      logger.warn('useRomanChat.send.refresh', err);
+   234	    } finally {
+   235	      sendingRef.current = false;
+   236	      if (active.current) setSending(false);
+   237	    }
+   238	    return 'sent';
+   239	  }, []);
+   240	
+   241	  const clearSendError = useCallback(() => setSendError(null), []);
+   242	
+   243	  return {
+   244	    phase,
+   245	    session,
+   246	    isFirstOpen,
+   247	    messages,
+   248	    sending,
+   249	    sendError,
+   250	    nextCursor,
+   251	    loadingOlder,
+   252	    reload: open,
+   253	    loadOlder,
+   254	    send,
+   255	    clearSendError,
+   256	  };
+   257	}
+   258	
+   259	/** Exposed for an explicit "clear conversation" affordance (soft-delete). */
+   260	export async function softDeleteRomanSession(sessionId: string): Promise<void> {
+   261	  return apiDeleteSession(sessionId);
+   262	}
+=== RomanMessageBubble.tsx ===
+     1	/**
+     2	 * RomanMessageBubble — one chat turn.
+     3	 *
+     4	 * FACE+VOICE (operator rule, P0 if violated): every ASSISTANT bubble renders
+     5	 * Roman's face (reused RomanAvatar, neutral crop) to the left of the text, so
+     6	 * Roman's voice is never disembodied. User turns render right-aligned with no
+     7	 * avatar. An interrupted assistant turn (backend persisted a partial on client
+     8	 * disconnect — toMessageView.interrupted, controller L210) shows a calm, typed
+     9	 * note rather than silently presenting a truncated reply as complete.
+    10	 *
+    11	 * The bubble text is rendered as plain Text (never dangerouslySetInnerHTML /
+    12	 * HTML) — FIFTY_FAILURES #4 (XSS via unescaped output) does not apply.
+    13	 */
+    14	import React from 'react';
+    15	import { StyleSheet, Text, View } from 'react-native';
+    16	import RomanAvatar from '../community/RomanAvatar';
+    17	import { ROMAN_INTERRUPTED_NOTE } from './romanVoice';
+    18	import type { RomanMessage } from '../../api/romanApi';
+    19	import { colors, radius, spacing, typography, withAlpha } from '../../theme/tokens';
+    20	
+    21	export interface RomanMessageBubbleProps {
+    22	  message: RomanMessage;
+    23	  testID?: string;
+    24	}
+    25	
+    26	function RomanMessageBubbleComponent({
+    27	  message,
+    28	  testID,
+    29	}: RomanMessageBubbleProps): React.ReactElement {
+    30	  const isAssistant = message.role === 'assistant';
+    31	
+    32	  if (isAssistant) {
+    33	    return (
+    34	      <View style={styles.assistantRow} testID={testID}>
+    35	        <RomanAvatar crop="neutral" size={32} testID="roman-bubble-avatar" />
+    36	        <View style={styles.assistantBubble}>
+    37	          <Text
+    38	            style={styles.assistantText}
+    39	            accessibilityLabel={`Roman said: ${message.content}`}
+    40	          >
+    41	            {message.content}
+    42	          </Text>
+    43	          {message.interrupted ? (
+    44	            <Text style={styles.interruptedNote} accessibilityRole="text">
+    45	              {ROMAN_INTERRUPTED_NOTE}
+    46	            </Text>
+    47	          ) : null}
+    48	        </View>
+    49	      </View>
+    50	    );
+    51	  }
+    52	
+    53	  return (
+    54	    <View style={styles.userRow} testID={testID}>
+    55	      <View style={styles.userBubble}>
+    56	        <Text style={styles.userText} accessibilityLabel={`You said: ${message.content}`}>
+    57	          {message.content}
+    58	        </Text>
+    59	      </View>
+    60	    </View>
+    61	  );
+    62	}
+    63	
+    64	const RomanMessageBubble = React.memo(RomanMessageBubbleComponent);
+    65	export default RomanMessageBubble;
+    66	
+    67	const styles = StyleSheet.create({
+    68	  assistantRow: {
+    69	    flexDirection: 'row',
+    70	    alignItems: 'flex-start',
+    71	    gap: spacing.sm,
+    72	    paddingVertical: spacing.xs,
+    73	    paddingHorizontal: spacing.lg,
+    74	  },
+    75	  assistantBubble: {
+    76	    flex: 1,
+    77	    backgroundColor: colors.cream,
+    78	    borderRadius: radius.lg,
+    79	    paddingVertical: spacing.md,
+    80	    paddingHorizontal: spacing.lg,
+    81	  },
+    82	  assistantText: {
+    83	    ...typography.body,
+    84	    color: colors.ink,
+    85	  },
+    86	  interruptedNote: {
+    87	    ...typography.bodySmall,
+    88	    color: colors.charcoal,
+    89	    marginTop: spacing.xs,
+    90	  },
+    91	  userRow: {
+    92	    flexDirection: 'row',
+    93	    justifyContent: 'flex-end',
+    94	    paddingVertical: spacing.xs,
+    95	    paddingHorizontal: spacing.lg,
+    96	  },
+    97	  userBubble: {
+    98	    // Product plan §5.1: the forest accent is for outlines/text, NOT a filled
+    99	    // block (R1 UX finding P2). The user turn reads as a faint forest-tinted
+   100	    // surface (token-derived via withAlpha, no raw hex) with a hairline accent
+   101	    // border, and the text uses the forest accent itself — ink-legible on the
+   102	    // pale tint while keeping the surface calm rather than a saturated fill.
+   103	    maxWidth: '82%',
+   104	    backgroundColor: withAlpha(colors.forest, 0.08),
+   105	    borderWidth: 0.5,
+   106	    borderColor: withAlpha(colors.forest, 0.35),
+   107	    borderRadius: radius.lg,
+   108	    paddingVertical: spacing.md,
+   109	    paddingHorizontal: spacing.lg,
+   110	  },
+   111	  userText: {
+   112	    ...typography.body,
+   113	    color: colors.ink,
+   114	  },
+   115	});
+=== RomanComposer.tsx ===
+     1	/**
+     2	 * RomanComposer — the message input + send control.
+     3	 *
+     4	 * Controlled input: the parent screen owns the draft so a send-FAILURE can
+     5	 * preserve the text in the composer for retry (brief §3) — the composer never
+     6	 * clears optimistically. Send is disabled while empty/over-cap/sending so a
+     7	 * blank or oversized turn can never reach the backend (mirrors SendMessageDto
+     8	 * @MinLength(1)/@MaxLength(8000), roman.dto.ts L30-33).
+     9	 *
+    10	 * Touch target: the send control is a minimum 48x48dp hit area (brief §7 /
+    11	 * Apple HIG), enforced in `styles.sendButton`.
+    12	 *
+    13	 * Composer growth (R1 UX finding P2): the input grows with its content rather
+    14	 * than being pinned to a fixed 120dp cap, which becomes cramped at large
+    15	 * dynamic-type sizes. The cap is derived from the current window height (a
+    16	 * fraction of the viewport, floored at a sensible minimum), and the input only
+    17	 * starts to scroll once it reaches that dynamic ceiling.
+    18	 */
+    19	import React, { useState } from 'react';
+    20	import {
+    21	  ActivityIndicator,
+    22	  StyleSheet,
+    23	  Text,
+    24	  TextInput,
+    25	  TouchableOpacity,
+    26	  useWindowDimensions,
+    27	  View,
+    28	  type NativeSyntheticEvent,
+    29	  type TextInputContentSizeChangeEventData,
+    30	} from 'react-native';
+    31	import { ROMAN_MESSAGE_MAX_LENGTH } from '../../api/romanApi';
+    32	import { colors, radius, spacing, typography } from '../../theme/tokens';
+    33	
+    34	/** Single-line input floor (matches the 48dp touch target). */
+    35	const COMPOSER_MIN_HEIGHT = 48;
+    36	/**
+    37	 * Fraction of the window height the composer may grow to before it scrolls.
+    38	 * Viewport-relative (not a fixed 120dp) so it stays comfortable under large
+    39	 * accessibility font scales; floored so a very short window still allows a few
+    40	 * lines.
+    41	 */
+    42	const COMPOSER_MAX_HEIGHT_FRACTION = 0.3;
+    43	const COMPOSER_MAX_HEIGHT_FLOOR = 120;
+    44	
+    45	export interface RomanComposerProps {
+    46	  value: string;
+    47	  onChangeText: (text: string) => void;
+    48	  onSend: () => void;
+    49	  sending: boolean;
+    50	  /** Disables input + send entirely (e.g. Roman unavailable). */
+    51	  disabled?: boolean;
+    52	  testID?: string;
+    53	}
+    54	
+    55	export default function RomanComposer({
+    56	  value,
+    57	  onChangeText,
+    58	  onSend,
+    59	  sending,
+    60	  disabled = false,
+    61	  testID,
+    62	}: RomanComposerProps): React.ReactElement {
+    63	  const trimmed = value.trim();
+    64	  const overCap = value.length > ROMAN_MESSAGE_MAX_LENGTH;
+    65	  const canSend = !disabled && !sending && trimmed.length > 0 && !overCap;
+    66	
+    67	  const { height: windowHeight } = useWindowDimensions();
+    68	  const maxHeight = Math.max(
+    69	    COMPOSER_MAX_HEIGHT_FLOOR,
+    70	    Math.round(windowHeight * COMPOSER_MAX_HEIGHT_FRACTION),
+    71	  );
+    72	  const [contentHeight, setContentHeight] = useState(COMPOSER_MIN_HEIGHT);
+    73	  const inputHeight = Math.min(
+    74	    Math.max(COMPOSER_MIN_HEIGHT, contentHeight),
+    75	    maxHeight,
+    76	  );
+    77	  // Only scroll inside the input once it has reached the dynamic ceiling.
+    78	  const inputScrollEnabled = contentHeight >= maxHeight;
+    79	
+    80	  const onContentSizeChange = (
+    81	    e: NativeSyntheticEvent<TextInputContentSizeChangeEventData>,
+    82	  ): void => {
+    83	    setContentHeight(e.nativeEvent.contentSize.height);
+    84	  };
+    85	
+    86	  return (
+    87	    <View style={styles.container} testID={testID}>
+    88	      {overCap ? (
+    89	        <Text style={styles.capNote} accessibilityRole="text">
+    90	          {`Message is too long by ${value.length - ROMAN_MESSAGE_MAX_LENGTH} characters.`}
+    91	        </Text>
+    92	      ) : null}
+    93	      <View style={styles.row}>
+    94	        <TextInput
+    95	          style={[styles.input, { height: inputHeight, maxHeight }]}
+    96	          value={value}
+    97	          onChangeText={onChangeText}
+    98	          onContentSizeChange={onContentSizeChange}
+    99	          scrollEnabled={inputScrollEnabled}
+   100	          editable={!disabled && !sending}
+   101	          placeholder="Message Roman"
+   102	          placeholderTextColor={colors.stone}
+   103	          multiline
+   104	          maxLength={ROMAN_MESSAGE_MAX_LENGTH + 1}
+   105	          accessibilityLabel="Message Roman"
+   106	          testID="roman-composer-input"
+   107	        />
+   108	        <TouchableOpacity
+   109	          style={[styles.sendButton, !canSend && styles.sendButtonDisabled]}
+   110	          onPress={onSend}
+   111	          disabled={!canSend}
+   112	          accessibilityRole="button"
+   113	          accessibilityState={{ disabled: !canSend, busy: sending }}
+   114	          accessibilityLabel={sending ? 'Sending message' : 'Send message'}
+   115	          testID="roman-composer-send"
+   116	        >
+   117	          {sending ? (
+   118	            <ActivityIndicator color={colors.bone} testID="roman-composer-spinner" />
+   119	          ) : (
+   120	            <Text style={styles.sendLabel}>Send</Text>
+   121	          )}
+   122	        </TouchableOpacity>
+   123	      </View>
+   124	    </View>
+   125	  );
+   126	}
+   127	
+   128	const styles = StyleSheet.create({
+   129	  container: {
+   130	    borderTopWidth: 0.5,
+   131	    borderTopColor: colors.stone,
+   132	    backgroundColor: colors.bone,
+   133	    paddingHorizontal: spacing.lg,
+   134	    paddingTop: spacing.sm,
+   135	    paddingBottom: spacing.lg,
+   136	    gap: spacing.xs,
+   137	  },
+   138	  row: {
+   139	    flexDirection: 'row',
+   140	    alignItems: 'flex-end',
+   141	    gap: spacing.sm,
+   142	  },
+   143	  input: {
+   144	    flex: 1,
+   145	    minHeight: COMPOSER_MIN_HEIGHT,
+   146	    ...typography.body,
+   147	    color: colors.ink,
+   148	    backgroundColor: colors.cream,
+   149	    borderRadius: radius.lg,
+   150	    paddingHorizontal: spacing.lg,
+   151	    paddingVertical: spacing.md,
+   152	  },
+   153	  sendButton: {
+   154	    minWidth: 48,
+   155	    minHeight: 48,
+   156	    paddingHorizontal: spacing.lg,
+   157	    alignItems: 'center',
+   158	    justifyContent: 'center',
+   159	    backgroundColor: colors.forest,
+   160	    borderRadius: radius.lg,
+   161	  },
+   162	  sendButtonDisabled: {
+   163	    backgroundColor: colors.stone,
+   164	  },
+   165	  sendLabel: {
+   166	    ...typography.bodyMd,
+   167	    color: colors.bone,
+   168	  },
+   169	  capNote: {
+   170	    ...typography.bodySmall,
+   171	    color: colors.error,
+   172	  },
+   173	});
+=== RomanState.tsx ===
+     1	/**
+     2	 * RomanState — typed full-surface state for the chat screen (loading /
+     3	 * unavailable / offline / error). NOT for per-message send failures (those
+     4	 * stay inline with a retry affordance in the screen).
+     5	 *
+     6	 * FACE+VOICE: every Roman-voiced state renders Roman's face (reused
+     7	 * RomanAvatar) beside the copy. All copy comes from romanVoice.ts, which is
+     8	 * sourced verbatim from the identity spec §1.6/§2.10 (cited there).
+     9	 *
+    10	 * The "unavailable" state (backend feature gate off → 404 on every /roman
+    11	 * route, roman-feature.guard.ts) is calm and offers NO retry — there is nothing
+    12	 * for the user to retry until ops enables the feature, so an error-toast loop
+    13	 * (brief §3) is structurally impossible here.
+    14	 */
+    15	import React from 'react';
+    16	import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+    17	import RomanAvatar from '../community/RomanAvatar';
+    18	import {
+    19	  ROMAN_ERROR_TRANSIENT,
+    20	  ROMAN_OFFLINE_BODY,
+    21	  ROMAN_OFFLINE_TITLE,
+    22	  ROMAN_UNAVAILABLE_BODY,
+    23	  ROMAN_UNAVAILABLE_TITLE,
+    24	} from './romanVoice';
+    25	import { colors, radius, spacing, typography } from '../../theme/tokens';
+    26	
+    27	export type RomanStateKind = 'unavailable' | 'offline' | 'error';
+    28	
+    29	export interface RomanStateProps {
+    30	  kind: RomanStateKind;
+    31	  /** When provided, renders a retry control (omitted for `unavailable`). */
+    32	  onRetry?: () => void;
+    33	  testID?: string;
+    34	}
+    35	
+    36	function copyFor(kind: RomanStateKind): { title: string; body: string } {
+    37	  switch (kind) {
+    38	    case 'unavailable':
+    39	      return { title: ROMAN_UNAVAILABLE_TITLE, body: ROMAN_UNAVAILABLE_BODY };
+    40	    case 'offline':
+    41	      return { title: ROMAN_OFFLINE_TITLE, body: ROMAN_OFFLINE_BODY };
+    42	    case 'error':
+    43	    default:
+    44	      return { title: ROMAN_ERROR_TRANSIENT, body: '' };
+    45	  }
+    46	}
+    47	
+    48	export default function RomanState({
+    49	  kind,
+    50	  onRetry,
+    51	  testID,
+    52	}: RomanStateProps): React.ReactElement {
+    53	  const { title, body } = copyFor(kind);
+    54	  // `unavailable` never offers retry — there is nothing the user can do until
+    55	  // the backend gate flips, so we suppress the affordance to avoid a loop.
+    56	  const showRetry = kind !== 'unavailable' && typeof onRetry === 'function';
+    57	
+    58	  return (
+    59	    <View style={styles.container} testID={testID}>
+    60	      <RomanAvatar crop="neutral" size={64} testID="roman-state-avatar" />
+    61	      <Text style={styles.title} accessibilityRole="header">
+    62	        {title}
+    63	      </Text>
+    64	      {body !== '' ? (
+    65	        <Text style={styles.body} accessibilityRole="text">
+    66	          {body}
+    67	        </Text>
+    68	      ) : null}
+    69	      {showRetry ? (
+    70	        <TouchableOpacity
+    71	          style={styles.retryButton}
+    72	          onPress={onRetry}
+    73	          accessibilityRole="button"
+    74	          accessibilityLabel="Try again"
+    75	          testID="roman-state-retry"
+    76	        >
+    77	          <Text style={styles.retryLabel}>Try again</Text>
+    78	        </TouchableOpacity>
+    79	      ) : null}
+    80	    </View>
+    81	  );
+    82	}
+    83	
+    84	const styles = StyleSheet.create({
+    85	  container: {
+    86	    flex: 1,
+    87	    alignItems: 'center',
+    88	    justifyContent: 'center',
+    89	    paddingHorizontal: spacing.xl,
+    90	    gap: spacing.md,
+    91	  },
+    92	  title: {
+    93	    ...typography.h4,
+    94	    color: colors.ink,
+    95	    textAlign: 'center',
+    96	  },
+    97	  body: {
+    98	    ...typography.body,
+    99	    color: colors.charcoal,
+   100	    textAlign: 'center',
+   101	  },
+   102	  retryButton: {
+   103	    minHeight: 48,
+   104	    minWidth: 48,
+   105	    paddingHorizontal: spacing.xl,
+   106	    alignItems: 'center',
+   107	    justifyContent: 'center',
+   108	    backgroundColor: colors.forest,
+   109	    borderRadius: radius.lg,
+   110	    marginTop: spacing.sm,
+   111	  },
+   112	  retryLabel: {
+   113	    ...typography.bodyMd,
+   114	    color: colors.bone,
+   115	  },
+   116	});
+=== RomanAvatar.tsx ===

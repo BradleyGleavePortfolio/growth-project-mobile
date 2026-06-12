@@ -1,0 +1,8 @@
+src/navigation/ClientNavigator.tsx:71:// "Coming soon" surfaces never reach production).
+src/screens/client/wearables/HealthFitnessScreen.tsx:19: *     (real rings at 0% + connect CTA), NEVER "Coming soon".
+src/screens/client/wearables/__tests__/ThreeRingHero.test.tsx:5: * value-first connect prompt (NEVER "Coming soon"), and the populated state
+src/screens/client/wearables/cards/HeartCard.tsx:6: * we render a value-first prompt (NEVER a fake "0 bpm" or "Coming soon").
+src/screens/client/wearables/cards/ThreeRingHero.tsx:15: * "Coming soon" or a static placeholder image. We render the rings at 0% with
+src/screens/client/wearables/empty/HealthFitnessEmptyState.tsx:6: * and not "Coming soon". It renders the actual three-ring hero at 0% (real
+src/screens/coach/client-detail/HealthFitnessTab.tsx:12: * (value-first, never "Coming soon").
+src/components/community/EmptyState.tsx:3: * ACTION (UX HARD gate: no spinner-only empty states, no "Coming soon").

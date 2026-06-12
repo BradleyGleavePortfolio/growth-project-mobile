@@ -1,0 +1,772 @@
+     1	/**
+     2	 * CommunityChallengeDetailScreen — the full-screen detail for one community
+     3	 * challenge (v3-1). Route param: `challengeId`.
+     4	 *
+     5	 * BEHAVIORAL DESIGN (DESIGN_INTELLIGENCE Part III + §5.1 Screen Design Protocol):
+     6	 *   - The screen leads with the participant's OWN progress in real metric units
+     7	 *     — a competence signal (§3.7), never a "behind"/"losing" framing (§3.4).
+     8	 *   - The cohort-LOCAL leaderboard (Strava §3.2) is STRICTLY OPT-IN: it is shown
+     9	 *     only when the coach enabled it for the challenge AND the caller has opted
+    10	 *     in. Until then the surface offers a calm, no-pressure opt-in affordance and
+    11	 *     never reveals anyone's standing — zero shame, zero public failure (§3.4).
+    12	 *   - One primary action (Hick's Law): Join when not joined, otherwise Log
+    13	 *     progress via the ChallengeProgressSheet. Encouragement comments are a
+    14	 *     secondary, social-proof surface, reportable for moderation.
+    15	 *
+    16	 * FLAG POSTURE: this route is only registered in CommunityNavigator when
+    17	 * `featureFlags.communityChallenges` is true, so when the flag is OFF the screen
+    18	 * never enters the tree. As a defense-in-depth guard the body still renders a
+    19	 * neutral "not available" state if it is somehow reached with the flag off.
+    20	 *
+    21	 * DATA: uses `communityChallengesApi` directly via react-query (the shared
+    22	 * `useCommunity` hooks are out of this slice's scope). Every mutation invalidates
+    23	 * the relevant query so the UI reflects the server's monotonic truth. Tokens
+    24	 * only (no raw hex); line Ionicons only (no emoji); reduced-motion aware via the
+    25	 * progress sheet; real loading / empty / error states (no spinner-only screens).
+    26	 */
+    27	import React, { useCallback, useMemo, useRef, useState } from 'react';
+    28	import {
+    29	  ActivityIndicator,
+    30	  FlatList,
+    31	  StyleSheet,
+    32	  Text,
+    33	  View,
+    34	} from 'react-native';
+    35	import { SafeAreaView } from 'react-native-safe-area-context';
+    36	import { useRoute } from '@react-navigation/native';
+    37	import {
+    38	  useMutation,
+    39	  useQuery,
+    40	  useQueryClient,
+    41	} from '@tanstack/react-query';
+    42	import { Ionicons } from '@expo/vector-icons';
+    43	import { useTheme } from '../../theme/useTheme';
+    44	import { spacing, radius } from '../../theme/tokens';
+    45	import { useCurrentUser } from '../../hooks/useCurrentUser';
+    46	import { featureFlags } from '../../config/featureFlags';
+    47	import { ThreadHeader, ComposerInput } from '../../components/community';
+    48	import type { ComposerInputHandle } from '../../components/community/ComposerInput';
+    49	import HapticPressable from '../../components/HapticPressable';
+    50	import ChallengeProgressSheet from '../../components/community/ChallengeProgressSheet';
+    51	import ChallengeCommentsEmptyState from '../../components/community/ChallengeCommentsEmptyState';
+    52	import {
+    53	  communityChallengesApi,
+    54	  type CommunityChallengeComment,
+    55	  type CommunityChallengeLeaderboardRow,
+    56	} from '../../api/communityChallengesApi';
+    57	import { CommunityApiError } from '../../api/communityApi';
+    58	import type { CommunityRoute } from './communityNavTypes';
+    59	
+    60	const COMMENT_MAX = 2000; // mirror backend CreateChallengeCommentDto
+    61	
+    62	/** A human, non-shaming reason for an error surface (no raw error leakage). */
+    63	function describeError(err: unknown): string {
+    64	  if (err instanceof CommunityApiError) {
+    65	    switch (err.kind) {
+    66	      case 'forbidden':
+    67	        return 'This challenge belongs to a cohort you are not part of.';
+    68	      case 'gone':
+    69	        return 'This challenge is no longer available.';
+    70	      case 'conflict':
+    71	        return 'Your progress was updated elsewhere. We have refreshed it for you.';
+    72	      case 'network':
+    73	        return 'We could not reach the server. Check your connection and try again.';
+    74	      case 'contract':
+    75	        return 'Something looks off on our end. Please try again shortly.';
+    76	      default:
+    77	        return 'We could not load this challenge. Please try again.';
+    78	    }
+    79	  }
+    80	  return 'We could not load this challenge. Please try again.';
+    81	}
+    82	
+    83	export default function CommunityChallengeDetailScreen(): React.ReactElement {
+    84	  const { semanticColors } = useTheme();
+    85	  const route = useRoute<CommunityRoute<'CommunityChallengeDetail'>>();
+    86	  const challengeId = route.params?.challengeId ?? '';
+    87	  const client = useCurrentUser();
+    88	  const queryClient = useQueryClient();
+    89	
+    90	  const [sheetOpen, setSheetOpen] = useState(false);
+    91	  // A calm, surfaced banner for a failed write action (join / opt-in / report /
+    92	  // comment). No silent swallow (FIFTY_FAILURES #36): every mutation has an
+    93	  // onError that sets this, and the banner is dismissible.
+    94	  const [actionError, setActionError] = useState<string | null>(null);
+    95	  // Imperative handle to the composer so the empty-state CTA can focus it.
+    96	  const composerRef = useRef<ComposerInputHandle>(null);
+    97	
+    98	  const detail = useQuery({
+    99	    queryKey: ['community', 'challenge', challengeId],
+   100	    queryFn: () => communityChallengesApi.getChallenge(challengeId),
+   101	    enabled: !!challengeId && featureFlags.communityChallenges,
+   102	  });
+   103	
+   104	  const comments = useQuery({
+   105	    queryKey: ['community', 'challenge', challengeId, 'comments'],
+   106	    queryFn: () => communityChallengesApi.listComments(challengeId),
+   107	    enabled: !!challengeId && featureFlags.communityChallenges,
+   108	  });
+   109	
+   110	  const participation = detail.data?.participation ?? null;
+   111	  const joined = participation !== null;
+   112	  const optedIn = participation?.leaderboard_opted_in ?? false;
+   113	  const leaderboardEnabled = detail.data?.challenge.leaderboard_enabled ?? false;
+   114	
+   115	  // Leaderboard is fetched ONLY once the caller has opted in (and the coach
+   116	  // enabled it). Off by default — we never request standings without consent.
+   117	  const leaderboard = useQuery({
+   118	    queryKey: ['community', 'challenge', challengeId, 'leaderboard'],
+   119	    queryFn: () => communityChallengesApi.getLeaderboard(challengeId),
+   120	    enabled:
+   121	      !!challengeId &&
+   122	      featureFlags.communityChallenges &&
+   123	      leaderboardEnabled &&
+   124	      optedIn,
+   125	  });
+   126	
+   127	  // The TRUE-EMPTY surface is only shown once the comments query has actually
+   128	  // resolved to zero rows, so a load error never masquerades as "empty" (F8).
+   129	  // The original P0 was that this surface rendered LOCAL Roman copy from
+   130	  // `romanVoice.ts`; the brief's remedy is a backend payload, but the binding
+   131	  // backend (PR #390 head) serves NO empty-state payload for this participant
+   132	  // surface and the Roman voice-policy has no `challenge_comments_empty` key.
+   133	  // Per the brief ("missing payload => honest state, never local fallback") the
+   134	  // honest resolution is a NEUTRAL, non-Roman-voiced empty state derived from
+   135	  // this query result -- no local Roman copy, no invented backend endpoint.
+   136	  const commentsResolvedEmpty =
+   137	    comments.isSuccess && (comments.data?.length ?? 0) === 0;
+   138	
+   139	  const invalidateDetail = useCallback(() => {
+   140	    void queryClient.invalidateQueries({
+   141	      queryKey: ['community', 'challenge', challengeId],
+   142	    });
+   143	  }, [queryClient, challengeId]);
+   144	
+   145	  const invalidateLeaderboard = useCallback(() => {
+   146	    void queryClient.invalidateQueries({
+   147	      queryKey: ['community', 'challenge', challengeId, 'leaderboard'],
+   148	    });
+   149	  }, [queryClient, challengeId]);
+   150	
+   151	  const joinMutation = useMutation({
+   152	    mutationFn: () => communityChallengesApi.join(challengeId),
+   153	    onMutate: () => setActionError(null),
+   154	    onSuccess: invalidateDetail,
+   155	    onError: (err: unknown) => {
+   156	      if (err instanceof CommunityApiError && err.kind === 'conflict') {
+   157	        invalidateDetail();
+   158	      }
+   159	      setActionError(describeError(err));
+   160	    },
+   161	  });
+   162	
+   163	  const progressMutation = useMutation({
+   164	    mutationFn: (value: number) =>
+   165	      communityChallengesApi.updateProgress(challengeId, value),
+   166	    onMutate: () => setActionError(null),
+   167	    onSuccess: () => {
+   168	      invalidateDetail();
+   169	      invalidateLeaderboard();
+   170	    },
+   171	    onError: (err: unknown) => {
+   172	      // On a 409 the server's monotonic total moved under us -- re-fetch detail
+   173	      // + leaderboard so the next attempt starts from the true value
+   174	      // (FIFTY_FAILURES #30: never leave optimistic state dangling). The sheet
+   175	      // owns the inline error surface, so we do NOT raise the banner here; we
+   176	      // let mutateAsync reject into the sheet's calm catch.
+   177	      if (err instanceof CommunityApiError && err.kind === 'conflict') {
+   178	        invalidateDetail();
+   179	        invalidateLeaderboard();
+   180	      }
+   181	    },
+   182	  });
+   183	
+   184	  const optInMutation = useMutation({
+   185	    mutationFn: (next: boolean) =>
+   186	      communityChallengesApi.setLeaderboardOptIn(challengeId, next),
+   187	    onMutate: () => setActionError(null),
+   188	    onSuccess: () => {
+   189	      invalidateDetail();
+   190	      invalidateLeaderboard();
+   191	    },
+   192	    onError: (err: unknown) => {
+   193	      if (err instanceof CommunityApiError && err.kind === 'conflict') {
+   194	        invalidateDetail();
+   195	      }
+   196	      setActionError(describeError(err));
+   197	    },
+   198	  });
+   199	
+   200	  const commentMutation = useMutation({
+   201	    mutationFn: (body: string) =>
+   202	      communityChallengesApi.addComment(challengeId, body),
+   203	    onMutate: () => setActionError(null),
+   204	    onSuccess: () => {
+   205	      void queryClient.invalidateQueries({
+   206	        queryKey: ['community', 'challenge', challengeId, 'comments'],
+   207	      });
+   208	    },
+   209	    onError: (err: unknown) => setActionError(describeError(err)),
+   210	  });
+   211	
+   212	  const reportMutation = useMutation({
+   213	    mutationFn: (commentId: string) =>
+   214	      communityChallengesApi.reportComment(
+   215	        challengeId,
+   216	        commentId,
+   217	        'inappropriate',
+   218	      ),
+   219	    onMutate: () => setActionError(null),
+   220	    onSuccess: () =>
+   221	      setActionError('Thanks -- our team will take a look at this.'),
+   222	    onError: (err: unknown) => setActionError(describeError(err)),
+   223	  });
+   224	
+   225	  const handleSubmitProgress = useCallback(
+   226	    async (value: number): Promise<{ completed: boolean }> => {
+   227	      // Rejects on failure so the sheet keeps the draft + shows its calm inline
+   228	      // error; resolves with the server-confirmed completion so the sheet can
+   229	      // stage the completion peak (UX finding 4). The sheet, not the screen,
+   230	      // owns dismissal now.
+   231	      const result = await progressMutation.mutateAsync(value);
+   232	      return { completed: result.completed };
+   233	    },
+   234	    [progressMutation],
+   235	  );
+   236	
+   237	  const focusComposer = useCallback(() => {
+   238	    composerRef.current?.focus();
+   239	  }, []);
+   240	
+   241	  const handlePrimaryAction = useCallback(() => {
+   242	    if (!joined) {
+   243	      joinMutation.mutate(undefined, { onSuccess: () => setSheetOpen(true) });
+   244	      return;
+   245	    }
+   246	    setSheetOpen(true);
+   247	  }, [joined, joinMutation]);
+   248	
+   249	  const primaryLabel = useMemo(() => {
+   250	    if (joinMutation.isPending) return 'Joining…';
+   251	    if (!joined) return 'Join this challenge';
+   252	    if (participation?.completed) return 'Log more progress';
+   253	    return 'Log progress';
+   254	  }, [joined, joinMutation.isPending, participation?.completed]);
+   255	
+   256	  // ── Flag-off defense-in-depth ────────────────────────────────────────────
+   257	  if (!featureFlags.communityChallenges) {
+   258	    return (
+   259	      <SafeAreaView
+   260	        style={[styles.safe, { backgroundColor: semanticColors.bgPrimary }]}
+   261	        edges={['top']}
+   262	        testID="community-challenge-detail-screen"
+   263	      >
+   264	        <ThreadHeader title="Challenge" testID="community-challenge-header" />
+   265	        <View style={styles.center}>
+   266	          <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
+   267	            Challenges are not available right now.
+   268	          </Text>
+   269	        </View>
+   270	      </SafeAreaView>
+   271	    );
+   272	  }
+   273	
+   274	  // ── Loading ────────────────────────────────────────────────────────────────
+   275	  if (detail.isLoading) {
+   276	    return (
+   277	      <SafeAreaView
+   278	        style={[styles.safe, { backgroundColor: semanticColors.bgPrimary }]}
+   279	        edges={['top']}
+   280	        testID="community-challenge-detail-screen"
+   281	      >
+   282	        <ThreadHeader title="Challenge" testID="community-challenge-header" />
+   283	        <View style={styles.center} testID="community-challenge-loading">
+   284	          <ActivityIndicator color={semanticColors.accent} />
+   285	          <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
+   286	            Loading the challenge…
+   287	          </Text>
+   288	        </View>
+   289	      </SafeAreaView>
+   290	    );
+   291	  }
+   292	
+   293	  // ── Error ────────────────────────────────────────────────────────────────
+   294	  if (detail.isError || !detail.data) {
+   295	    return (
+   296	      <SafeAreaView
+   297	        style={[styles.safe, { backgroundColor: semanticColors.bgPrimary }]}
+   298	        edges={['top']}
+   299	        testID="community-challenge-detail-screen"
+   300	      >
+   301	        <ThreadHeader title="Challenge" testID="community-challenge-header" />
+   302	        <View style={styles.center} testID="community-challenge-error">
+   303	          <Ionicons
+   304	            name="alert-circle-outline"
+   305	            size={28}
+   306	            color={semanticColors.textMuted}
+   307	          />
+   308	          <Text style={[styles.errorTitle, { color: semanticColors.textPrimary }]}>
+   309	            We could not load this challenge
+   310	          </Text>
+   311	          <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
+   312	            {describeError(detail.error)}
+   313	          </Text>
+   314	          <HapticPressable
+   315	            intent="light"
+   316	            onPress={() => void detail.refetch()}
+   317	            accessibilityRole="button"
+   318	            accessibilityLabel="Try again"
+   319	            testID="community-challenge-retry"
+   320	            style={[styles.retry, { borderColor: semanticColors.accent }]}
+   321	          >
+   322	            <Text style={[styles.retryLabel, { color: semanticColors.accent }]}>
+   323	              Try again
+   324	            </Text>
+   325	          </HapticPressable>
+   326	        </View>
+   327	      </SafeAreaView>
+   328	    );
+   329	  }
+   330	
+   331	  const challenge = detail.data.challenge;
+   332	  const target = challenge.target_value;
+   333	  const unit = challenge.unit ?? '';
+   334	  const value = participation?.progress_value ?? 0;
+   335	  const fraction =
+   336	    target !== null && target > 0
+   337	      ? Math.min(Math.max(value / target, 0), 1)
+   338	      : null;
+   339	  const progressText =
+   340	    target === null
+   341	      ? `${value}${unit ? ` ${unit}` : ''} logged`
+   342	      : `${value} of ${target}${unit ? ` ${unit}` : ''}`;
+   343	
+   344	  const commentData = comments.data ?? [];
+   345	  // F8: a LOAD ERROR and a TRUE EMPTY are different states and must never be
+   346	  // conflated. A load error gets a calm retry (the composer stays available);
+   347	  // a true empty (server confirmed zero rows) gets a NEUTRAL, non-Roman empty
+   348	  // state with a real CTA (no local Roman copy, no invented backend payload).
+   349	  const commentsLoadError = comments.isError;
+   350	  const commentsTrueEmpty = commentsResolvedEmpty;
+   351	  const hasComments = commentData.length > 0;
+   352	
+   353	  // Neutral, non-Roman UI copy for the true-empty surface. This is a plain UI
+   354	  // affordance string, NOT Roman voice and NOT sourced from `romanVoice.ts`.
+   355	  const EMPTY_COMMENTS_MESSAGE =
+   356	    'No encouragement notes yet. Be the first to leave one.';
+   357	
+   358	  const renderComment = ({ item }: { item: CommunityChallengeComment }) => {
+   359	    const mine = item.author_user_id === client?.id;
+   360	    return (
+   361	      <View
+   362	        style={[styles.comment, { borderColor: semanticColors.border }]}
+   363	        testID={`community-challenge-comment-${item.id}`}
+   364	      >
+   365	        <Text style={[styles.commentBody, { color: semanticColors.textPrimary }]}>
+   366	          {item.body}
+   367	        </Text>
+   368	        {!mine ? (
+   369	          <HapticPressable
+   370	            intent="light"
+   371	            onPress={() => reportMutation.mutate(item.id)}
+   372	            accessibilityRole="button"
+   373	            accessibilityLabel="Report this comment"
+   374	            testID={`community-challenge-comment-${item.id}-report`}
+   375	            style={styles.reportButton}
+   376	          >
+   377	            <Ionicons
+   378	              name="flag-outline"
+   379	              size={16}
+   380	              color={semanticColors.textMuted}
+   381	            />
+   382	          </HapticPressable>
+   383	        ) : null}
+   384	      </View>
+   385	    );
+   386	  };
+   387	
+   388	  const renderLeaderboardRow = (row: CommunityChallengeLeaderboardRow) => (
+   389	    <View
+   390	      key={row.user_id}
+   391	      style={[
+   392	        styles.lbRow,
+   393	        { borderColor: semanticColors.border },
+   394	        row.is_self ? { backgroundColor: semanticColors.bgSurface } : null,
+   395	      ]}
+   396	      testID={`community-challenge-lb-${row.user_id}`}
+   397	    >
+   398	      <Text style={[styles.lbRank, { color: semanticColors.textMuted }]}>
+   399	        {row.rank}
+   400	      </Text>
+   401	      <Text style={[styles.lbName, { color: semanticColors.textPrimary }]}>
+   402	        {row.is_self ? 'You' : 'A cohort member'}
+   403	      </Text>
+   404	      <Text style={[styles.lbValue, { color: semanticColors.textPrimary }]}>
+   405	        {row.progress_value}
+   406	        {unit ? ` ${unit}` : ''}
+   407	      </Text>
+   408	    </View>
+   409	  );
+   410	
+   411	  const Header = (
+   412	    <View style={styles.headerBlock}>
+   413	      {challenge.description ? (
+   414	        <Text style={[styles.description, { color: semanticColors.textPrimary }]}>
+   415	          {challenge.description}
+   416	        </Text>
+   417	      ) : null}
+   418	
+   419	      {/* The participant's OWN progress, first and foremost. */}
+   420	      <View style={styles.progressBlock}>
+   421	        <Text style={[styles.sectionLabel, { color: semanticColors.textMuted }]}>
+   422	          Your progress
+   423	        </Text>
+   424	        {fraction !== null ? (
+   425	          <View
+   426	            style={[styles.track, { backgroundColor: semanticColors.bgSurface }]}
+   427	            accessibilityRole="progressbar"
+   428	            accessibilityLabel={`Your progress: ${Math.round(fraction * 100)} percent`}
+   429	            testID="community-challenge-progress-track"
+   430	          >
+   431	            <View
+   432	              style={[
+   433	                styles.fill,
+   434	                {
+   435	                  backgroundColor: semanticColors.accent,
+   436	                  width: `${fraction * 100}%`,
+   437	                },
+   438	              ]}
+   439	              testID="community-challenge-progress-fill"
+   440	            />
+   441	          </View>
+   442	        ) : null}
+   443	        <Text style={[styles.progressText, { color: semanticColors.textPrimary }]}>
+   444	          {joined ? progressText : 'Join to start logging your progress.'}
+   445	          {participation?.completed ? '  ·  Goal reached' : ''}
+   446	        </Text>
+   447	      </View>
+   448	
+   449	      <HapticPressable
+   450	        intent={joined ? 'medium' : 'success'}
+   451	        onPress={handlePrimaryAction}
+   452	        disabled={joinMutation.isPending}
+   453	        accessibilityRole="button"
+   454	        accessibilityLabel={primaryLabel}
+   455	        testID="community-challenge-primary-action"
+   456	        style={[styles.cta, { backgroundColor: semanticColors.accent }]}
+   457	      >
+   458	        <Text style={[styles.ctaLabel, { color: semanticColors.textOnAccent }]}>
+   459	          {primaryLabel}
+   460	        </Text>
+   461	      </HapticPressable>
+   462	
+   463	      {/* Strictly opt-in, cohort-local leaderboard (Strava §3.2). */}
+   464	      {leaderboardEnabled ? (
+   465	        <View style={styles.lbBlock} testID="community-challenge-leaderboard">
+   466	          <Text style={[styles.sectionLabel, { color: semanticColors.textMuted }]}>
+   467	            Cohort leaderboard
+   468	          </Text>
+   469	          {!joined ? (
+   470	            <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
+   471	              Join the challenge to take part in the leaderboard.
+   472	            </Text>
+   473	          ) : !optedIn ? (
+   474	            // F7: a NEUTRAL, equal-weight choice -- not a single nudge toward
+   475	            // sharing. Privacy is the stated default and is offered FIRST; both
+   476	            // options are the same visual weight (no primary/secondary framing)
+   477	            // so opting out is as easy as opting in (§3.4, no pressure).
+   478	            <View style={styles.optInBlock}>
+   479	              <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
+   480	                Private is the default. Sharing puts your progress on your
+   481	                cohort's leaderboard; logging works either way, and you can
+   482	                change this any time.
+   483	              </Text>
+   484	              <View style={styles.optInChoiceRow}>
+   485	                <HapticPressable
+   486	                  intent="light"
+   487	                  onPress={() => optInMutation.mutate(false)}
+   488	                  disabled={optInMutation.isPending}
+   489	                  accessibilityRole="button"
+   490	                  accessibilityLabel="Keep my progress private"
+   491	                  testID="community-challenge-keep-private"
+   492	                  style={[
+   493	                    styles.optInChoice,
+   494	                    { borderColor: semanticColors.border },
+   495	                  ]}
+   496	                >
+   497	                  <Text style={[styles.optInLabel, { color: semanticColors.textPrimary }]}>
+   498	                    Keep private
+   499	                  </Text>
+   500	                </HapticPressable>
+   501	                <HapticPressable
+   502	                  intent="medium"
+   503	                  onPress={() => optInMutation.mutate(true)}
+   504	                  disabled={optInMutation.isPending}
+   505	                  accessibilityRole="button"
+   506	                  accessibilityLabel="Share my progress with my cohort"
+   507	                  testID="community-challenge-optin"
+   508	                  style={[
+   509	                    styles.optInChoice,
+   510	                    { borderColor: semanticColors.accent },
+   511	                  ]}
+   512	                >
+   513	                  <Text style={[styles.optInLabel, { color: semanticColors.accent }]}>
+   514	                    {optInMutation.isPending ? 'Updating…' : 'Share progress'}
+   515	                  </Text>
+   516	                </HapticPressable>
+   517	              </View>
+   518	            </View>
+   519	          ) : leaderboard.isLoading ? (
+   520	            <View style={styles.lbLoading} testID="community-challenge-lb-loading">
+   521	              <ActivityIndicator color={semanticColors.accent} />
+   522	            </View>
+   523	          ) : leaderboard.isError || !leaderboard.data ? (
+   524	            <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
+   525	              We could not load the leaderboard right now.
+   526	            </Text>
+   527	          ) : leaderboard.data.rows.length === 0 ? (
+   528	            <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
+   529	              No one has shared progress yet. You are first — nicely done.
+   530	            </Text>
+   531	          ) : (
+   532	            <View>
+   533	              {leaderboard.data.rows.map(renderLeaderboardRow)}
+   534	              <HapticPressable
+   535	                intent="light"
+   536	                onPress={() => optInMutation.mutate(false)}
+   537	                disabled={optInMutation.isPending}
+   538	                accessibilityRole="button"
+   539	                accessibilityLabel="Stop sharing my progress on the leaderboard"
+   540	                testID="community-challenge-optout"
+   541	                style={styles.optOutButton}
+   542	              >
+   543	                <Text style={[styles.optOutLabel, { color: semanticColors.textMuted }]}>
+   544	                  Stop sharing my progress
+   545	                </Text>
+   546	              </HapticPressable>
+   547	            </View>
+   548	          )}
+   549	        </View>
+   550	      ) : null}
+   551	
+   552	      <Text
+   553	        style={[styles.sectionLabel, styles.commentsHeading, { color: semanticColors.textMuted }]}
+   554	      >
+   555	        Encouragement
+   556	      </Text>
+   557	    </View>
+   558	  );
+   559	
+   560	  // F1/F8: the footer below the comments list. Three honest, distinct states:
+   561	  //   1. comments LOAD ERROR  -> calm retry; the composer below stays usable.
+   562	  //   2. comments TRUE EMPTY  -> a NEUTRAL (non-Roman) empty state with a REAL
+   563	  //      focus CTA. No local Roman copy (the P0) and no invented backend
+   564	  //      payload (there is none on the binding backend branch).
+   565	  //   3. has comments         -> no footer.
+   566	  const commentsFooter = commentsLoadError ? (
+   567	    <View style={styles.emptyComments} testID="community-challenge-comments-load-error">
+   568	      <Ionicons
+   569	        name="cloud-offline-outline"
+   570	        size={24}
+   571	        color={semanticColors.textMuted}
+   572	      />
+   573	      <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
+   574	        We could not load the encouragement notes. Your message will still send.
+   575	      </Text>
+   576	      <HapticPressable
+   577	        intent="light"
+   578	        onPress={() => void comments.refetch()}
+   579	        accessibilityRole="button"
+   580	        accessibilityLabel="Try loading the notes again"
+   581	        testID="community-challenge-comments-retry"
+   582	        style={[styles.retry, { borderColor: semanticColors.accent }]}
+   583	      >
+   584	        <Text style={[styles.retryLabel, { color: semanticColors.accent }]}>
+   585	          Try again
+   586	        </Text>
+   587	      </HapticPressable>
+   588	    </View>
+   589	  ) : commentsTrueEmpty ? (
+   590	    <View style={styles.emptyComments}>
+   591	      <ChallengeCommentsEmptyState
+   592	        message={EMPTY_COMMENTS_MESSAGE}
+   593	        actionLabel="Leave the first note"
+   594	        onAction={focusComposer}
+   595	        testID="community-challenge-comments-empty"
+   596	      />
+   597	    </View>
+   598	  ) : null;
+   599	
+   600	  return (
+   601	    <SafeAreaView
+   602	      style={[styles.safe, { backgroundColor: semanticColors.bgPrimary }]}
+   603	      edges={['top']}
+   604	      testID="community-challenge-detail-screen"
+   605	    >
+   606	      <ThreadHeader title={challenge.title} testID="community-challenge-header" />
+   607	
+   608	      {actionError ? (
+   609	        <HapticPressable
+   610	          intent="light"
+   611	          onPress={() => setActionError(null)}
+   612	          accessibilityRole="button"
+   613	          accessibilityLabel="Dismiss this message"
+   614	          testID="community-challenge-action-error"
+   615	          style={[styles.banner, { backgroundColor: semanticColors.bgSurface, borderColor: semanticColors.border }]}
+   616	        >
+   617	          <Text style={[styles.bannerText, { color: semanticColors.textPrimary }]}>
+   618	            {actionError}
+   619	          </Text>
+   620	          <Ionicons name="close" size={16} color={semanticColors.textMuted} />
+   621	        </HapticPressable>
+   622	      ) : null}
+   623	
+   624	      <FlatList
+   625	        data={hasComments ? commentData : []}
+   626	        renderItem={renderComment}
+   627	        ListHeaderComponent={Header}
+   628	        ListFooterComponent={commentsFooter}
+   629	        keyExtractor={(item) => item.id}
+   630	        contentContainerStyle={styles.listContent}
+   631	        testID="community-challenge-comments"
+   632	      />
+   633	
+   634	      <ComposerInput
+   635	        ref={composerRef}
+   636	        onSubmit={(body) => commentMutation.mutate(body)}
+   637	        maxLength={COMMENT_MAX}
+   638	        sending={commentMutation.isPending}
+   639	        placeholder="Send a word of encouragement…"
+   640	        testID="community-challenge-composer"
+   641	      />
+   642	
+   643	      <ChallengeProgressSheet
+   644	        visible={sheetOpen}
+   645	        challenge={challenge}
+   646	        participation={participation}
+   647	        onSubmit={handleSubmitProgress}
+   648	        onClose={() => setSheetOpen(false)}
+   649	        submitting={progressMutation.isPending}
+   650	        testID="community-challenge-progress-sheet"
+   651	      />
+   652	    </SafeAreaView>
+   653	  );
+   654	}
+   655	
+   656	const styles = StyleSheet.create({
+   657	  safe: { flex: 1 },
+   658	  center: {
+   659	    flex: 1,
+   660	    alignItems: 'center',
+   661	    justifyContent: 'center',
+   662	    gap: spacing.sm,
+   663	    paddingHorizontal: spacing.xl,
+   664	  },
+   665	  muted: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
+   666	  errorTitle: { fontSize: 16, fontWeight: '600', textAlign: 'center' },
+   667	  retry: {
+   668	    marginTop: spacing.sm,
+   669	    borderWidth: StyleSheet.hairlineWidth,
+   670	    borderRadius: radius.pill,
+   671	    paddingHorizontal: spacing.lg,
+   672	    paddingVertical: spacing.sm,
+   673	    minHeight: 48,
+   674	    justifyContent: 'center',
+   675	  },
+   676	  retryLabel: { fontSize: 14, fontWeight: '600' },
+   677	  listContent: { padding: spacing.lg, gap: spacing.sm },
+   678	  headerBlock: { gap: spacing.md, marginBottom: spacing.md },
+   679	  description: { fontSize: 15, lineHeight: 22 },
+   680	  progressBlock: { gap: spacing.xs },
+   681	  sectionLabel: { fontSize: 13, fontWeight: '600' },
+   682	  track: {
+   683	    height: 12,
+   684	    borderRadius: radius.pill,
+   685	    overflow: 'hidden',
+   686	    marginTop: spacing.xs,
+   687	  },
+   688	  fill: { height: '100%', borderRadius: radius.pill },
+   689	  progressText: { fontSize: 15, fontWeight: '600', marginTop: spacing.xs },
+   690	  cta: {
+   691	    minHeight: 48,
+   692	    borderRadius: radius.sm,
+   693	    alignItems: 'center',
+   694	    justifyContent: 'center',
+   695	  },
+   696	  ctaLabel: { fontSize: 15, fontWeight: '600' },
+   697	  lbBlock: { gap: spacing.sm, marginTop: spacing.sm },
+   698	  optInBlock: { gap: spacing.sm },
+   699	  optInChoiceRow: { flexDirection: 'row', gap: spacing.sm },
+   700	  optInChoice: {
+   701	    flex: 1,
+   702	    borderWidth: StyleSheet.hairlineWidth,
+   703	    borderRadius: radius.pill,
+   704	    paddingHorizontal: spacing.lg,
+   705	    paddingVertical: spacing.sm,
+   706	    minHeight: 48,
+   707	    alignItems: 'center',
+   708	    justifyContent: 'center',
+   709	  },
+   710	  banner: {
+   711	    flexDirection: 'row',
+   712	    alignItems: 'center',
+   713	    justifyContent: 'space-between',
+   714	    gap: spacing.sm,
+   715	    marginHorizontal: spacing.lg,
+   716	    marginTop: spacing.sm,
+   717	    paddingHorizontal: spacing.md,
+   718	    paddingVertical: spacing.sm,
+   719	    borderWidth: StyleSheet.hairlineWidth,
+   720	    borderRadius: radius.md,
+   721	    minHeight: 48,
+   722	  },
+   723	  bannerText: { flex: 1, fontSize: 13, lineHeight: 18 },
+   724	  optInButton: {
+   725	    borderWidth: StyleSheet.hairlineWidth,
+   726	    borderRadius: radius.pill,
+   727	    paddingHorizontal: spacing.lg,
+   728	    paddingVertical: spacing.sm,
+   729	    minHeight: 48,
+   730	    alignItems: 'center',
+   731	    justifyContent: 'center',
+   732	  },
+   733	  optInLabel: { fontSize: 14, fontWeight: '600' },
+   734	  lbLoading: { paddingVertical: spacing.lg, alignItems: 'center' },
+   735	  lbRow: {
+   736	    flexDirection: 'row',
+   737	    alignItems: 'center',
+   738	    gap: spacing.md,
+   739	    paddingVertical: spacing.sm,
+   740	    paddingHorizontal: spacing.sm,
+   741	    borderBottomWidth: StyleSheet.hairlineWidth,
+   742	  },
+   743	  lbRank: { fontSize: 14, fontWeight: '600', minWidth: 24 },
+   744	  lbName: { flex: 1, fontSize: 14 },
+   745	  lbValue: { fontSize: 14, fontWeight: '600' },
+   746	  optOutButton: { paddingVertical: spacing.md, minHeight: 48, justifyContent: 'center' },
+   747	  optOutLabel: { fontSize: 13, fontWeight: '500' },
+   748	  commentsHeading: { marginTop: spacing.md },
+   749	  comment: {
+   750	    borderWidth: StyleSheet.hairlineWidth,
+   751	    borderRadius: radius.md,
+   752	    padding: spacing.md,
+   753	    flexDirection: 'row',
+   754	    alignItems: 'flex-start',
+   755	    justifyContent: 'space-between',
+   756	    gap: spacing.sm,
+   757	  },
+   758	  commentBody: { flex: 1, fontSize: 14, lineHeight: 20 },
+   759	  reportButton: {
+   760	    // >=48dp touch target (F5 / WCAG 2.5.5, design checklist §6.2). The icon is
+   761	    // visually small but the hit area is a full 48dp square.
+   762	    minWidth: 48,
+   763	    minHeight: 48,
+   764	    alignItems: 'center',
+   765	    justifyContent: 'center',
+   766	  },
+   767	  emptyComments: {
+   768	    paddingVertical: spacing.lg,
+   769	    alignItems: 'center',
+   770	    gap: spacing.sm,
+   771	  },
+   772	});

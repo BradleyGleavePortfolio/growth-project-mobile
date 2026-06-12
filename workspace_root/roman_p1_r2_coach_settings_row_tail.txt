@@ -1,0 +1,61 @@
+   300	        },
+   301	      ],
+   302	    );
+   303	  };
+   304	
+   305	  const handleSignOut = () => {
+   306	    warningTap();
+   307	    Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+   308	      { text: 'Cancel', style: 'cancel' },
+   309	      { text: 'Sign Out', style: 'destructive', onPress: signOut },
+   310	    ]);
+   311	  };
+   312	
+   313	  const initials = `${currentUser?.firstName?.[0] || ''}${currentUser?.lastName?.[0] || ''}`;
+   314	
+   315	  const formatPermanentDate = (iso?: string | null): string | null => {
+   316	    if (!iso) return null;
+   317	    const d = new Date(iso);
+   318	    if (isNaN(d.getTime())) return null;
+   319	    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+   320	  };
+   321	  const permanentDate = formatPermanentDate(accountStatus?.permanentDeletionAt);
+   322	
+   323	  return (
+   324	    <ScrollView style={styles.container} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+   325	      <View style={styles.header}>
+   326	        <Text style={styles.title}>Settings</Text>
+   327	      </View>
+   328	
+   329	      <ProfileSection
+   330	        initials={initials}
+   331	        firstName={currentUser?.firstName}
+   332	        lastName={currentUser?.lastName}
+   333	        email={currentUser?.email}
+   334	        bioText={bioText}
+   335	        onOpenBio={() => setShowBioModal(true)}
+   336	        onOpenPassword={() => setShowPasswordModal(true)}
+   337	        colors={colors}
+   338	        styles={styles}
+   339	      />
+   340	
+   341	      {/* Client Management */}
+   342	      <Text style={styles.sectionHeader}>Client Management</Text>
+   343	      <View style={styles.section}>
+   344	        <View style={styles.row}>
+   345	          <Ionicons name="people-outline" size={20} color={colors.textSecondary} />
+   346	          <Text style={styles.rowLabel}>Active Clients</Text>
+   347	          <Text style={styles.rowValueHighlight}>{clientCount}</Text>
+   348	        </View>
+   349	        <View style={styles.divider} />
+   350	        <TouchableOpacity
+   351	          style={styles.row}
+   352	          onPress={handleOpenInviteCodes}
+   353	          accessibilityRole="button"
+   354	          accessibilityLabel="Manage invite codes"
+   355	        >
+   356	          <Ionicons name="link-outline" size={20} color={colors.textSecondary} />
+   357	          <Text style={styles.rowLabel}>Invite Codes</Text>
+   358	          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+   359	        </TouchableOpacity>
+   360	        <View style={styles.divider} />

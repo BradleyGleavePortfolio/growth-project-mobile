@@ -1,0 +1,15 @@
+1777:+ * genuinely empty list — an honest, NEUTRAL (non-Roman) empty state with a
+1780:+ * FACE + VOICE CONTRACT (operator rule 2026-06-10): an empty state that speaks
+1781:+ * in Roman's VOICE must (a) render Roman's FACE and (b) source its copy from
+1782:+ * the backend Roman voice-policy payload — never hardcoded. The backend
+1783:+ * coach empty-states payload has NO events surface key, so there is no Roman
+1784:+ * copy to vend for this surface. Rather than invent client-side "Roman" copy
+1785:+ * (a face+voice violation) or call the operator-locked CoachEmptyState (which
+1787:+ * plain functional empty state: a neutral Ionicons line glyph (NOT RomanAvatar)
+1788:+ * above functional UI copy. It does not speak in Roman's voice, so the
+1789:+ * face+voice contract does not apply.
+2927:+ * to community" action — no mascot voice or avatar) when the event id resolves
+3088:+  // ── Empty (no such event) — NEUTRAL, never a mascot voice/avatar ─────────────
+3779:+  it('does NOT render a mascot-voiced empty state on the event surface (F2)', () => {
+3782:+    // The neutral event empty state must not borrow the mascot-voiced surface.
+3783:+    expect(queryByTestId('community-empty-roman')).toBeNull();

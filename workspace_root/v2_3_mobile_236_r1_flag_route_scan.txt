@@ -1,0 +1,77 @@
+src/navigation/CoachCommunityNavigator.tsx:12: * v2-3 EVENTS containment: the CoachCommunityEvents route is registered ONLY
+src/navigation/CoachCommunityNavigator.tsx:13: * when `featureFlags.communityEvents` is true. With that flag OFF the route
+src/navigation/CoachCommunityNavigator.tsx:27:import CoachCommunityEventsScreen from '../screens/community/CoachCommunityEventsScreen';
+src/navigation/CoachCommunityNavigator.tsx:73:      {featureFlags.communityEvents && (
+src/navigation/CoachCommunityNavigator.tsx:75:          name="CoachCommunityEvents"
+src/navigation/CoachCommunityNavigator.tsx:76:          component={CoachCommunityEventsScreen}
+src/navigation/CommunityNavigator.tsx:10: * v2-3 EVENTS containment: the CommunityEventDetail route is registered ONLY
+src/navigation/CommunityNavigator.tsx:11: * when `featureFlags.communityEvents` is true. With that flag OFF the route
+src/navigation/CommunityNavigator.tsx:23:import CommunityEventDetailScreen from '../screens/community/CommunityEventDetailScreen';
+src/navigation/CommunityNavigator.tsx:43:      {featureFlags.communityEvents && (
+src/navigation/CommunityNavigator.tsx:44:        <CommunityStack.Screen name="CommunityEventDetail" component={CommunityEventDetailScreen} />
+src/navigation/__tests__/coachCommunityFlagOff.test.ts:38:  it('registers the CoachCommunityEvents <Stack.Screen> only behind featureFlags.communityEvents', () => {
+src/navigation/__tests__/coachCommunityFlagOff.test.ts:40:      /\{featureFlags\.communityEvents\s*&&/,
+src/navigation/__tests__/coachCommunityFlagOff.test.ts:43:      /\{featureFlags\.communityEvents\s*&&/,
+src/navigation/__tests__/coachCommunityFlagOff.test.ts:46:      /name=["']CoachCommunityEvents["']/,
+src/navigation/__tests__/coachCommunityFlagOff.test.ts:54:      COACH_COMMUNITY_NAV.match(/name=["']CoachCommunityEvents["']/g) ?? [];
+src/navigation/__tests__/coachCommunityFlagOff.test.ts:58:  it('gates the coach Home events discovery card behind featureFlags.communityEvents', () => {
+src/navigation/__tests__/coachCommunityFlagOff.test.ts:61:    expect(COACH_HOME).toMatch(/featureFlags\.communityEvents/);
+src/navigation/__tests__/coachCommunityFlagOff.test.ts:62:    const guardIdx = COACH_HOME.search(/featureFlags\.communityEvents\s*\?/);
+src/navigation/__tests__/coachCommunityFlagOff.test.ts:63:    const navIdx = COACH_HOME.search(/navigate\(['"]CoachCommunityEvents['"]/);
+src/navigation/__tests__/communityFlagOff.test.ts:83:  it('registers the CommunityEventDetail <Stack.Screen> only behind featureFlags.communityEvents', () => {
+src/navigation/__tests__/communityFlagOff.test.ts:85:    // `{featureFlags.communityEvents && (...)}` guard — when OFF, no event
+src/navigation/__tests__/communityFlagOff.test.ts:88:      /\{featureFlags\.communityEvents\s*&&/,
+src/navigation/__tests__/communityFlagOff.test.ts:91:      /\{featureFlags\.communityEvents\s*&&/,
+src/navigation/__tests__/communityFlagOff.test.ts:94:      /name=["']CommunityEventDetail["']/,
+src/navigation/__tests__/communityFlagOff.test.ts:101:    // There must be exactly one CommunityEventDetail registration, and it lives
+src/navigation/__tests__/communityFlagOff.test.ts:104:      COMMUNITY_NAV.match(/name=["']CommunityEventDetail["']/g) ?? [];
+src/navigation/__tests__/communityFlagOff.test.ts:108:  it('gates the Today event card navigation behind featureFlags.communityEvents', () => {
+src/navigation/__tests__/communityFlagOff.test.ts:111:    expect(TODAY_SCREEN).toMatch(/featureFlags\.communityEvents/);
+src/navigation/__tests__/communityFlagOff.test.ts:112:    const guardIdx = TODAY_SCREEN.search(/if\s*\(featureFlags\.communityEvents\)/);
+src/navigation/__tests__/communityFlagOff.test.ts:113:    const navIdx = TODAY_SCREEN.search(/navigate\(['"]CommunityEventDetail['"]/);
+src/screens/community/CoachCommunityHomeScreen.tsx:173:      {featureFlags.communityEvents ? (
+src/screens/community/CoachCommunityHomeScreen.tsx:176:          onPress={() => navigation.navigate('CoachCommunityEvents')}
+src/screens/community/CommunityTodayScreen.tsx:59:    if (featureFlags.communityEvents) {
+src/screens/community/CommunityTodayScreen.tsx:60:      navigation.navigate('CommunityEventDetail', { eventId });
+src/screens/community/__tests__/communityEventsScreens.test.tsx:3: *   - CommunityEventDetailScreen (client): loading / error / empty / data, the
+src/screens/community/__tests__/communityEventsScreens.test.tsx:5: *   - CoachCommunityEventsScreen (coach): loading / error / empty / data, the
+src/screens/community/__tests__/communityEventsScreens.test.tsx:95:import CommunityEventDetailScreen from '../CommunityEventDetailScreen';
+src/screens/community/__tests__/communityEventsScreens.test.tsx:96:import CoachCommunityEventsScreen from '../CoachCommunityEventsScreen';
+src/screens/community/__tests__/communityEventsScreens.test.tsx:97:import type { CommunityEvent } from '../../../api/communityEventsApi';
+src/screens/community/__tests__/communityEventsScreens.test.tsx:142:// ─── CommunityEventDetailScreen (client) ─────────────────────────────────────
+src/screens/community/__tests__/communityEventsScreens.test.tsx:144:describe('CommunityEventDetailScreen', () => {
+src/screens/community/__tests__/communityEventsScreens.test.tsx:147:    const { getByTestId } = render(<CommunityEventDetailScreen />);
+src/screens/community/__tests__/communityEventsScreens.test.tsx:154:    const { getByTestId } = render(<CommunityEventDetailScreen />);
+src/screens/community/__tests__/communityEventsScreens.test.tsx:161:    const { getByTestId } = render(<CommunityEventDetailScreen />);
+src/screens/community/__tests__/communityEventsScreens.test.tsx:168:    const { getByText, getByTestId } = render(<CommunityEventDetailScreen />);
+src/screens/community/__tests__/communityEventsScreens.test.tsx:179:    const { queryByTestId } = render(<CommunityEventDetailScreen />);
+src/screens/community/__tests__/communityEventsScreens.test.tsx:191:    const { getByTestId, queryByText } = render(<CommunityEventDetailScreen />);
+src/screens/community/__tests__/communityEventsScreens.test.tsx:204:    const { getByText } = render(<CommunityEventDetailScreen />);
+src/screens/community/__tests__/communityEventsScreens.test.tsx:214:    const { getByTestId } = render(<CommunityEventDetailScreen />);
+src/screens/community/__tests__/communityEventsScreens.test.tsx:226:    const { getByText } = render(<CommunityEventDetailScreen />);
+src/screens/community/__tests__/communityEventsScreens.test.tsx:235:    const { queryByTestId } = render(<CommunityEventDetailScreen />);
+src/screens/community/__tests__/communityEventsScreens.test.tsx:240:// ─── CoachCommunityEventsScreen (coach) ──────────────────────────────────────
+src/screens/community/__tests__/communityEventsScreens.test.tsx:242:describe('CoachCommunityEventsScreen', () => {
+src/screens/community/__tests__/communityEventsScreens.test.tsx:245:    const { getByTestId } = render(<CoachCommunityEventsScreen />);
+src/screens/community/__tests__/communityEventsScreens.test.tsx:252:    const { getByTestId } = render(<CoachCommunityEventsScreen />);
+src/screens/community/__tests__/communityEventsScreens.test.tsx:259:    const { getByTestId } = render(<CoachCommunityEventsScreen />);
+src/screens/community/__tests__/communityEventsScreens.test.tsx:270:    const { getByTestId, getByText } = render(<CoachCommunityEventsScreen />);
+src/screens/community/__tests__/communityEventsScreens.test.tsx:300:    const { getByTestId, queryByTestId } = render(<CoachCommunityEventsScreen />);
+src/screens/community/__tests__/communityEventsScreens.test.tsx:310:    const { getByTestId } = render(<CoachCommunityEventsScreen />);
+src/screens/community/__tests__/communityEventsScreens.test.tsx:322:    const { getByTestId } = render(<CoachCommunityEventsScreen />);
+src/screens/community/__tests__/communityEventsScreens.test.tsx:340:    const { getByTestId } = render(<CoachCommunityEventsScreen />);
+src/screens/community/__tests__/communityEventsScreens.test.tsx:356:    const { getByTestId, getAllByText } = render(<CoachCommunityEventsScreen />);
+src/screens/community/coachCommunityNavTypes.ts:27:  CoachCommunityEvents: undefined;
+src/screens/community/communityNavTypes.ts:23:  CommunityEventDetail: { eventId: string };
+src/screens/community/CoachCommunityEventsScreen.tsx:2: * CoachCommunityEventsScreen — the coach's event list + management surface
+src/screens/community/CoachCommunityEventsScreen.tsx:71:import { describeMutationError } from '../../api/communityEventsApi';
+src/screens/community/CoachCommunityEventsScreen.tsx:75:} from '../../api/communityEventsApi';
+src/screens/community/CoachCommunityEventsScreen.tsx:128:export default function CoachCommunityEventsScreen(): React.ReactElement {
+src/screens/community/CommunityEventDetailScreen.tsx:2: * CommunityEventDetailScreen — the client-facing detail for a single community
+src/screens/community/CommunityEventDetailScreen.tsx:49:import { describeMutationError } from '../../api/communityEventsApi';
+src/screens/community/CommunityEventDetailScreen.tsx:54:} from '../../api/communityEventsApi';
+src/screens/community/CommunityEventDetailScreen.tsx:63:export default function CommunityEventDetailScreen(): React.ReactElement {
+src/screens/community/CommunityEventDetailScreen.tsx:66:  const route = useRoute<CommunityRoute<'CommunityEventDetail'>>();
+src/config/featureFlags.ts:149:  // CommunityEventDetail / CoachCommunityEvents routes are NOT registered on
+src/config/featureFlags.ts:151:  // wrapped in a `featureFlags.communityEvents && ...` guard in both navigators
+src/config/featureFlags.ts:159:  communityEvents: readFlag('EXPO_PUBLIC_FF_COMMUNITY_EVENTS', false),

@@ -1,0 +1,200 @@
+ClientNavigator
+   460	          flag is explicitly true, so stub/coming-soon copy never ships to
+   461	          production binaries (the screens still render an empty state if
+   462	          they ever do mount). */}
+   463	      {featureFlags.clientPathCopilot && (
+   464	        <MoreStackNav.Screen name="Copilot"           component={ClientPathCopilotScreen} />
+   465	      )}
+   466	      {featureFlags.privateCommunityHub && (
+   467	        <MoreStackNav.Screen name="PrivateCommunityHub" component={PrivateCommunityHubScreen} />
+   468	      )}
+   469	      {/* Roman P1 chat (client surface). Only registered when featureFlags.romanChat
+   470	          is explicitly true (default OFF), mirroring the Wave 11 gated-route pattern.
+   471	          The screen receives surface='client' so the backend @IsIn(ROMAN_SURFACES)
+   472	          value is fixed at the navigator, never guessed client-side. */}
+   473	      {featureFlags.romanChat && (
+   474	        <MoreStackNav.Screen name="RomanChat">
+   475	          {() => <RomanChatScreen surface="client" />}
+   476	        </MoreStackNav.Screen>
+   477	      )}
+   478	      {/* Phase 11 — Share Card. Rendered off-screen; captureRef then opens native share sheet. */}
+   479	      <MoreStackNav.Screen name="ShareCard" component={ShareCardScreen} />
+   480	      {/* Phase 11 — Notification category preferences (push taxonomy). */}
+CoachNavigator
+   390	          production binaries. */}
+   391	      {featureFlags.coachBrief && (
+   392	        <SettingsStack.Screen name="CoachBrief" component={CoachBriefScreen} />
+   393	      )}
+   394	      {featureFlags.adminControlRoom && (
+   395	        <SettingsStack.Screen name="AdminControlRoom" component={AdminControlRoomScreen} />
+   396	      )}
+   397	      {/* Roman P1 chat (coach surface). Only registered when featureFlags.romanChat
+   398	          is explicitly true (default OFF). surface='coach' is fixed here so the
+   399	          backend @IsIn(ROMAN_SURFACES) value is never guessed client-side. */}
+   400	      {featureFlags.romanChat && (
+   401	        <SettingsStack.Screen name="RomanChat">
+   402	          {() => <RomanChatScreen surface="coach" />}
+   403	        </SettingsStack.Screen>
+   404	      )}
+   405	      {/* Phase 11 Track 9 — Support Inbox */}
+   406	      <SettingsStack.Screen name="SupportInbox" component={SupportInboxScreen} />
+   407	      {/* Stage 3 — cross-pillar federated coach surface. The nested
+   408	          navigator handles practice-selection, dashboard, roster, detail,
+   409	          messages, and assignments under one settings entry. */}
+   410	      <SettingsStack.Screen name="BothPillars" component={CrossPillarNavigator} />
+Client More
+   120	];
+   121	
+   122	/**
+   123	 * Roman P1 chat entry row (client surface). Only present when
+   124	 * featureFlags.romanChat is true (default OFF) — when the flag is OFF the row is
+   125	 * not in the list, so there is no dead-end into an unregistered route. Routes to
+   126	 * the MoreStack 'RomanChat' screen, which itself is registered only behind the
+   127	 * same flag (ClientNavigator).
+   128	 */
+   129	const ROMAN_MORE_ITEM: MoreItem = {
+   130	  icon: 'sparkles-outline',
+   131	  label: 'Roman',
+   132	  // Roman is not "your AI" — he is Roman, shared across surfaces (identity
+   133	  // spec). Client row keeps the plain open-a-conversation register
+   134	  // (R1 UX finding P2).
+   135	  description: 'Open a conversation with Roman',
+   136	  target: { type: 'stack', screen: 'RomanChat' },
+   137	  a11yHint: 'Opens a conversation with Roman',
+   138	};
+   139	
+   140	export default function MoreScreen() {
+   141	  const { colors } = useTheme();
+   142	  const styles = useMemo(() => makeStyles(colors), [colors]);
+   143	  const navigation = useNavigation<NavigationProp<ParamListBase>>();
+   144	  const items = useMemo<MoreItem[]>(
+   145	    () => (featureFlags.romanChat ? [ROMAN_MORE_ITEM, ...MORE_ITEMS] : MORE_ITEMS),
+   146	    [],
+   147	  );
+   148	
+   149	  const handlePress = (item: MoreItem) => {
+   150	    if (item.target.type === 'stack') {
+   151	      navigation.navigate(item.target.screen);
+   152	    }
+   153	  };
+   154	
+   155	  return (
+Coach Settings
+     1	import React, { useEffect, useState, useCallback, useMemo } from 'react';
+     2	import {
+     3	  View,
+     4	  Text,
+     5	  ScrollView,
+     6	  TouchableOpacity,
+     7	  Alert,
+     8	  Modal,
+     9	  TextInput,
+    10	  Linking,
+    11	} from 'react-native';
+    12	import AsyncStorage from '@react-native-async-storage/async-storage';
+    13	import { Ionicons } from '@expo/vector-icons';
+    14	import { useCurrentUser } from '../../hooks/useCurrentUser';
+    15	// Security: sign-out now flows through authActions which clears tokens
+    16	// (in SecureStore), AsyncStorage, and notifies the auth event emitter —
+    17	// replacing the old useAuthStore.signOut() which only cleared tokens as a
+    18	// side effect and left previous-user data in memory for the next login.
+    19	import { signOut } from '../../services/authActions';
+    20	import { coachApi, profileApi, notificationsApi, usersApi, AccountStatus } from '../../services/api';
+    21	import { helpUrl } from '../../config/env';
+    22	import { featureFlags } from '../../config/featureFlags';
+    23	
+    24	import { mediumTap, warningTap, successTap } from '../../utils/haptics';
+    25	import { updateSupabasePassword } from '../../utils/supabaseAuth';
+    26	import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
+    27	import { useTheme } from '../../theme/ThemeProvider';
+    28	import { errorMessage, errorStatus } from '../../types/common';
+    29	import BiometricUnlockSetting from '../../components/BiometricUnlockSetting';
+    30	
+    31	import { makeStyles } from './settings/styles';
+    32	import { COACH_SETTINGS_KEY, DEFAULT_SETTINGS, type CoachSettings } from './settings/types';
+    33	import { ProfileSection } from './settings/ProfileSection';
+    34	import { SettingsToggles } from './settings/SettingsToggles';
+    35	import { BillingSection } from './settings/BillingSection';
+    36	import { DangerZone } from './settings/DangerZone';
+    37	
+    38	export default function SettingsScreen() {
+    39	  const { colors } = useTheme();
+    40	  const styles = useMemo(() => makeStyles(colors), [colors]);
+    41	  const navigation = useNavigation<NavigationProp<ParamListBase>>();
+    42	  const currentUser = useCurrentUser();
+    43	  // signOut imported directly — no store wiring needed.
+    44	  const [settings, setSettings] = useState<CoachSettings>(DEFAULT_SETTINGS);
+    45	  const [clientCount, setClientCount] = useState(0);
+    46	  const [bioText, setBioText] = useState('');
+    47	  const [showBioModal, setShowBioModal] = useState(false);
+    48	  const [showPasswordModal, setShowPasswordModal] = useState(false);
+    49	  const [newPassword, setNewPassword] = useState('');
+    50	  const [confirmPassword, setConfirmPassword] = useState('');
+    51	  const [passwordError, setPasswordError] = useState('');
+    52	  const [passwordBusy, setPasswordBusy] = useState(false);
+    53	  const [accountStatus, setAccountStatus] = useState<AccountStatus | null>(null);
+    54	  const [accountStatusLoading, setAccountStatusLoading] = useState(true);
+    55	  const [deletionBusy, setDeletionBusy] = useState(false);
+   210	    setConfirmPassword('');
+   211	    Alert.alert('Password updated', 'Your password has been changed.');
+   212	  };
+   213	
+   214	  const handleOpenInviteCodes = () => {
+   215	    mediumTap();
+   216	    navigation.navigate('ClientsStack', { screen: 'InviteCodes' });
+   217	  };
+   218	
+   219	  // Email Pipeline v1 — new bulk-invite + delivery surface.
+   220	  const handleOpenInvitesAndEmail = () => {
+   221	    mediumTap();
+   222	    navigation.navigate('ClientsStack', { screen: 'CoachInvites' });
+   223	  };
+   224	
+   225	  const handleOpenBulkInvite = () => {
+   226	    mediumTap();
+   227	    navigation.navigate('ClientsStack', { screen: 'BulkInvite' });
+   228	  };
+   229	
+   230	  const handleOpenBilling = () => {
+   231	    mediumTap();
+   232	    navigation.navigate('Billing');
+   233	  };
+   234	
+   235	  // Payments surface — packages marketplace, Connect onboarding, earnings.
+   236	  const handleOpenPackages = () => {
+   237	    mediumTap();
+   238	    navigation.navigate('CoachPackagesList');
+   239	  };
+   240	  const handleOpenConnect = () => {
+   241	    mediumTap();
+   242	    navigation.navigate('CoachConnect');
+   243	  };
+   244	  const handleOpenEarnings = () => {
+   245	    mediumTap();
+   246	    navigation.navigate('CoachEarnings');
+   247	  };
+   248	
+   249	  const handleOpenTrustCenter = () => {
+   250	    mediumTap();
+Flag off test
+    70	    expect(MORE_SCREEN).toMatch(/screen:\s*['"]RomanChat['"]/);
+    71	  });
+    72	
+    73	  it('coach Settings entry row is rendered behind featureFlags.romanChat', () => {
+    74	    expect(COACH_SETTINGS).toMatch(/featureFlags\.romanChat\s*\?/);
+    75	    const guardIdx = COACH_SETTINGS.search(/featureFlags\.romanChat\s*\?/);
+    76	    const navIdx = COACH_SETTINGS.search(/navigate\(['"]RomanChat['"]\)/);
+    77	    expect(guardIdx).toBeGreaterThan(-1);
+    78	    expect(navIdx).toBeGreaterThan(guardIdx);
+    79	  });
+    80	});
+    81	
+    82	describe('Roman chat — feature flag defaults OFF', () => {
+    83	  it('reads EXPO_PUBLIC_FF_ROMAN_CHAT via readFlag(..., false)', () => {
+    84	    expect(FLAGS).toMatch(/readFlag\([^)]*EXPO_PUBLIC_FF_ROMAN_CHAT[^)]*,\s*false\s*\)/);
+    85	  });
+    86	
+    87	  it('exposes a romanChat key on featureFlags', () => {
+    88	    expect(FLAGS).toMatch(/romanChat\s*:/);
+    89	  });
+    90	});

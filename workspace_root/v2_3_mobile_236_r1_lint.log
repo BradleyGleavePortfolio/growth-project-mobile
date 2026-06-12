@@ -1,0 +1,197 @@
+
+> growth-project-app@1.0.0 lint
+> eslint "src/**/*.{ts,tsx}" --max-warnings=99999
+
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/api/invites.ts
+  53:32   warning  Unnecessary escape character: \-  no-useless-escape
+  53:74   warning  Unnecessary escape character: \-  no-useless-escape
+  53:120  warning  Unnecessary escape character: \-  no-useless-escape
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/components/AppSplash.tsx
+  39:6  warning  React Hook useEffect has missing dependencies: 'containerOpacity', 'onFinish', and 'textOpacity'. Either include them or remove the dependency array. If 'onFinish' changes too often, find the parent component that defines it and wrap that definition in useCallback  react-hooks/exhaustive-deps
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/components/OnboardingLayout.tsx
+  46:6  warning  React Hook useEffect has a missing dependency: 'progressAnim'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/components/SkeletonLoader.tsx
+  16:6  warning  React Hook useEffect has a missing dependency: 'opacity'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/components/anticipation/MilestoneProgress.tsx
+  46:7  warning  'PULSE_DURATION' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/components/coach/NewClientBanner.tsx
+  15:10  warning  'View' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/components/coach/StripeSetupBanner.tsx
+  20:3  warning  'View' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/components/command-center/CoachLtvDashboard.tsx
+   32:3  warning  'AccessibilityInfo' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  554:9  warning  'mrr' is assigned a value but never used. Allowed unused vars must match /^_/u       @typescript-eslint/no-unused-vars
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/components/command-center/MockDataBanner.tsx
+  1:8  warning  'React' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/components/community/MilestoneCabinet.tsx
+  22:9  warning  The 'milestones' logical expression could make the dependencies of useEffect Hook (at line 36) change on every render. To fix this, wrap the initialization of 'milestones' in its own useMemo() Hook  react-hooks/exhaustive-deps
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/components/trust/TrustCueRow.tsx
+  12:22  warning  'View' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/db/habitsDb.ts
+  180:7   warning  'checkDate' is never reassigned. Use 'const' instead                          prefer-const
+  241:6   warning  'CheckInRow' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  273:10  warning  'mapCheckIn' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/hooks/useClientData.ts
+  15:6  warning  React Hook useEffect has missing dependencies: 'currentUser' and 'store'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/hooks/useCoachData.ts
+  13:6  warning  React Hook useEffect has missing dependencies: 'currentUser' and 'store'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/lib/finalizeLeanOnboarding.ts
+  44:10  warning  'readUserCache' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/navigation/RootNavigator.tsx
+   79:10  warning  'rewriteHttpsToScheme' is defined but never used. Allowed unused vars must match /^_/u                      @typescript-eslint/no-unused-vars
+  551:6   warning  React Hook useEffect has a missing dependency: 'network'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/screens/auth/CreateAccountScreen.tsx
+   24:15  warning  'NavigationProp' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+   24:31  warning  'ParamListBase' is defined but never used. Allowed unused vars must match /^_/u   @typescript-eslint/no-unused-vars
+  134:27  warning  Unnecessary escape character: \[                                                  no-useless-escape
+  134:44  warning  Unnecessary escape character: \/                                                  no-useless-escape
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/screens/auth/LoginScreen.tsx
+  25:15  warning  'NavigationProp' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  25:31  warning  'ParamListBase' is defined but never used. Allowed unused vars must match /^_/u   @typescript-eslint/no-unused-vars
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/screens/auth/ResetPasswordScreen.tsx
+  41:10  warning  'NativeStackNavigationProp' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/screens/client/AIGuideScreen.tsx
+   65:6  warning  React Hook useEffect has missing dependencies: 'dot1', 'dot2', and 'dot3'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+  108:6  warning  React Hook useEffect has a missing dependency: 'loadChat'. Either include it or remove the dependency array                    react-hooks/exhaustive-deps
+  226:5  warning  React Hook useCallback has an unnecessary dependency: 'currentUser'. Either exclude it or remove the dependency array          react-hooks/exhaustive-deps
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/screens/client/ActiveWorkoutScreen.tsx
+  139:10  warning  'restTotal' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/screens/client/BrandedCheckoutWebViewScreen.tsx
+  501:3  warning  'tokens' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/screens/client/DeliverablesScreen.tsx
+  317:53  warning  'tokens' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/screens/client/ExerciseDetailScreen.tsx
+  22:3  warning  'ActivityIndicator' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/screens/client/HomeScreen.tsx
+  194:6  warning  React Hook useEffect has a missing dependency: 'currentUser'. Either include it or remove the dependency array                                        react-hooks/exhaustive-deps
+  239:6  warning  React Hook useEffect has missing dependencies: 'currentUser', 'loadDayData', and 'loadProfile'. Either include them or remove the dependency array    react-hooks/exhaustive-deps
+  249:6  warning  React Hook useCallback has missing dependencies: 'currentUser', 'loadDayData', and 'loadProfile'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/screens/client/LogScreen.tsx
+  129:6  warning  React Hook useEffect has missing dependencies: 'currentUser' and 'loadDayData'. Either include them or remove the dependency array    react-hooks/exhaustive-deps
+  432:6  warning  React Hook useCallback has missing dependencies: 'currentUser' and 'loadDayData'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/screens/client/PackageCheckoutScreen.tsx
+  226:6  warning  React Hook useCallback has a missing dependency: 'navigation'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/screens/client/ProfileScreen.tsx
+  66:9  warning  'identityTitle' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/screens/client/ProgressScreen.tsx
+  25:26  warning  'Polyline' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+  25:44  warning  'SvgLine' is defined but never used. Allowed unused vars must match /^_/u   @typescript-eslint/no-unused-vars
+  25:61  warning  'SvgText' is defined but never used. Allowed unused vars must match /^_/u   @typescript-eslint/no-unused-vars
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/screens/client/PurchaseUnpackScreen.tsx
+  540:53  warning  'tokens' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/screens/client/RecipesScreen.tsx
+  161:6  warning  React Hook useEffect has a missing dependency: 'currentUser?.profile?.diet_restrictions'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/screens/client/ReportScreen.tsx
+  34:6  warning  React Hook useEffect has a missing dependency: 'loadReportData'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/screens/client/SettingsScreen.tsx
+  19:19  warning  'refreshProfile' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/screens/client/TimelineScreen.tsx
+   29:3   warning  'AccessibilityInfo' is defined but never used. Allowed unused vars must match /^_/u                                                             @typescript-eslint/no-unused-vars
+   34:10  warning  'timelineApi' is defined but never used. Allowed unused vars must match /^_/u                                                                   @typescript-eslint/no-unused-vars
+  137:6   warning  React Hook React.useEffect has a missing dependency: 'load'. Either include it or remove the dependency array                                   react-hooks/exhaustive-deps
+  137:7   warning  React Hook React.useEffect has a complex expression in the dependency array. Extract it to a separate variable so it can be statically checked  react-hooks/exhaustive-deps
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/screens/client/WorkoutAssignmentDetailScreen.tsx
+  13:3  warning  'ActivityIndicator' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/screens/coach/ClientInsightScreen.tsx
+  26:3  warning  'ActivityIndicator' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/screens/coach/ClientsListScreen.tsx
+  44:6  warning  React Hook useEffect has missing dependencies: 'currentUser' and 'loadClients'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/screens/coach/CoachHomeScreen.tsx
+    8:3  warning  'ActivityIndicator' is defined but never used. Allowed unused vars must match /^_/u                                                   @typescript-eslint/no-unused-vars
+  117:6  warning  React Hook useCallback has missing dependencies: 'currentUser' and 'loadClients'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+  153:6  warning  React Hook useEffect has a missing dependency: 'detectRedFlags'. Either include it or remove the dependency array                     react-hooks/exhaustive-deps
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/screens/coach/CoachInvitesScreen.tsx
+  265:6  warning  React Hook useCallback has a missing dependency: 'load'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/screens/coach/MessagesScreen.tsx
+  53:6  warning  React Hook useEffect has missing dependencies: 'currentUser' and 'loadClients'. Either include them or remove the dependency array    react-hooks/exhaustive-deps
+  80:6  warning  React Hook useCallback has missing dependencies: 'currentUser' and 'loadClients'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/screens/coach/ProgramTemplatesScreen.tsx
+  115:6  warning  React Hook useEffect has missing dependencies: 'currentUser' and 'loadClients'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/screens/coach/client-detail/TimelineTab.tsx
+  12:6  warning  React Hook React.useEffect has a missing dependency: 'onLoad'. Either include it or remove the dependency array. If 'onLoad' changes too often, find the parent component that defines it and wrap that definition in useCallback  react-hooks/exhaustive-deps
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/screens/coach/payments/CoachPackageContentsScreen.tsx
+  522:5  warning  React Hook useCallback has a missing dependency: 'tokens.semantic.warning.icon'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/screens/coach/payments/CoachPackageEditScreen.tsx
+  620:3  warning  'tokens' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/screens/coach/payments/CoachPackagesListScreen.tsx
+  208:3  warning  'tokens' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/screens/community/CommunityTabScreen.tsx
+  39:9  warning  'navigation' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/screens/community/CommunityThreadScreen.tsx
+  37:9  warning  'navigation' is assigned a value but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/screens/community/CommunityTodayScreen.tsx
+  11:10  warning  'View' is defined but never used. Allowed unused vars must match /^_/u      @typescript-eslint/no-unused-vars
+  28:3   warning  'embedded' is defined but never used. Allowed unused args must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/screens/notifications/NotificationCenterScreen.tsx
+   15:61  warning  'useState' is defined but never used. Allowed unused vars must match /^_/u                                       @typescript-eslint/no-unused-vars
+  214:5   warning  React Hook useCallback has a missing dependency: 'navigation'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/screens/onboarding/LeanQ5Screen.tsx
+   25:3   warning  'Dimensions' is defined but never used. Allowed unused vars must match /^_/u                                      @typescript-eslint/no-unused-vars
+   91:67  warning  'colors' is defined but never used. Allowed unused args must match /^_/u                                          @typescript-eslint/no-unused-vars
+  108:6   warning  React Hook useEffect has a missing dependency: 'selectedIndex'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  243:6   warning  React Hook useEffect has a missing dependency: 'units'. Either include it or remove the dependency array          react-hooks/exhaustive-deps
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/screens/support/SupportInboxScreen.tsx
+  23:3  warning  'ActivityIndicator' is defined but never used. Allowed unused vars must match /^_/u  @typescript-eslint/no-unused-vars
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/store/clientStore.ts
+  156:5  warning  Unnecessary try/catch wrapper  no-useless-catch
+
+/home/user/workspace/tgp/audit-v2-3-mobile-r1-code/src/ui/empty-states/EmptyStateNoClients.tsx
+   69:10  warning  'loading' is assigned a value but never used. Allowed unused vars must match /^_/u                       @typescript-eslint/no-unused-vars
+  114:6   warning  React Hook useEffect has a missing dependency: 'code'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+✖ 82 problems (0 errors, 82 warnings)
+  0 errors and 1 warning potentially fixable with the `--fix` option.
+
+EXIT_CODE:0

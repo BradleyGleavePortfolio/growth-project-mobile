@@ -1,0 +1,313 @@
+     1	/**
+     2	 * communityChallengesApi — typed client for the v3-1 Community Challenges
+     3	 * backend.
+     4	 *
+     5	 * Backend contract source of truth (binding — do NOT drift):
+     6	 *   growth-project-backend/src/community/challenges/community-challenges.controller.ts
+     7	 *   growth-project-backend/src/community/challenges/community-challenges.dto.ts
+     8	 *
+     9	 * Wire posture mirrors communityApi.ts:
+    10	 *   - Every response is validated with Zod at the boundary so a drifted shape
+    11	 *     THROWS here (wrapped as a `contract` error) instead of feeding malformed
+    12	 *     data into React state.
+    13	 *   - Mutations send an Idempotency-Key (R19) so a double-tap deduplicates.
+    14	 *   - Behavioral framing (design Part III): the leaderboard is OFF unless the
+    15	 *     coach enabled it AND the caller opted in; the API never returns a
+    16	 *     non-consenting participant's row and never a "you are losing" signal.
+    17	 */
+    18	import { z } from 'zod';
+    19	import axios from 'axios';
+    20	import api from '../services/api';
+    21	import { generateIdempotencyKey } from '../utils/idempotency';
+    22	import { CommunityApiError } from './communityApi';
+    23	
+    24	// ─── Enums (mirror backend) ───────────────────────────────────────────────────
+    25	
+    26	export const COMMUNITY_CHALLENGE_STATUSES = [
+    27	  'draft',
+    28	  'active',
+    29	  'completed',
+    30	  'archived',
+    31	] as const;
+    32	export type CommunityChallengeStatus =
+    33	  (typeof COMMUNITY_CHALLENGE_STATUSES)[number];
+    34	
+    35	// ─── Response schemas (mirror backend Zod) ────────────────────────────────────
+    36	
+    37	export const ChallengeSchema = z
+    38	  .object({
+    39	    id: z.string().uuid(),
+    40	    workspace_id: z.string().uuid(),
+    41	    cohort_id: z.string().uuid().nullable(),
+    42	    created_by_user_id: z.string().uuid(),
+    43	    title: z.string(),
+    44	    description: z.string().nullable(),
+    45	    status: z.enum(COMMUNITY_CHALLENGE_STATUSES),
+    46	    starts_at: z.string().datetime().nullable(),
+    47	    ends_at: z.string().datetime().nullable(),
+    48	    metric_key: z.string().nullable(),
+    49	    target_value: z.number().nullable(),
+    50	    unit: z.string().nullable(),
+    51	    leaderboard_enabled: z.boolean(),
+    52	    created_at: z.string().datetime(),
+    53	    updated_at: z.string().datetime(),
+    54	    archived: z.boolean(),
+    55	  })
+    56	  .strict();
+    57	export type CommunityChallenge = z.infer<typeof ChallengeSchema>;
+    58	
+    59	export const ParticipationSchema = z
+    60	  .object({
+    61	    challenge_id: z.string().uuid(),
+    62	    user_id: z.string().uuid(),
+    63	    progress_value: z.number(),
+    64	    target_value: z.number().nullable(),
+    65	    progress_fraction: z.number().nullable(),
+    66	    completed: z.boolean(),
+    67	    completed_at: z.string().datetime().nullable(),
+    68	    last_logged_at: z.string().datetime().nullable(),
+    69	    leaderboard_opted_in: z.boolean(),
+    70	  })
+    71	  .strict();
+    72	export type CommunityChallengeParticipation = z.infer<
+    73	  typeof ParticipationSchema
+    74	>;
+    75	
+    76	const ChallengeResponseSchema = z
+    77	  .object({
+    78	    challenge: ChallengeSchema,
+    79	    participation: ParticipationSchema.nullable(),
+    80	  })
+    81	  .strict();
+    82	export type CommunityChallengeDetail = z.infer<typeof ChallengeResponseSchema>;
+    83	
+    84	const ChallengeListResponseSchema = z
+    85	  .object({ challenges: z.array(ChallengeSchema) })
+    86	  .strict();
+    87	
+    88	const ParticipationResponseSchema = z
+    89	  .object({ participation: ParticipationSchema })
+    90	  .strict();
+    91	
+    92	export const LeaderboardRowSchema = z
+    93	  .object({
+    94	    user_id: z.string().uuid(),
+    95	    rank: z.number().int().positive(),
+    96	    progress_value: z.number(),
+    97	    is_self: z.boolean(),
+    98	  })
+    99	  .strict();
+   100	export type CommunityChallengeLeaderboardRow = z.infer<
+   101	  typeof LeaderboardRowSchema
+   102	>;
+   103	
+   104	const LeaderboardResponseSchema = z
+   105	  .object({
+   106	    available: z.boolean(),
+   107	    opted_in: z.boolean(),
+   108	    rows: z.array(LeaderboardRowSchema),
+   109	  })
+   110	  .strict();
+   111	export type CommunityChallengeLeaderboard = z.infer<
+   112	  typeof LeaderboardResponseSchema
+   113	>;
+   114	
+   115	export const ChallengeCommentSchema = z
+   116	  .object({
+   117	    id: z.string().uuid(),
+   118	    challenge_id: z.string().uuid(),
+   119	    author_user_id: z.string().uuid(),
+   120	    body: z.string(),
+   121	    created_at: z.string().datetime(),
+   122	  })
+   123	  .strict();
+   124	export type CommunityChallengeComment = z.infer<typeof ChallengeCommentSchema>;
+   125	
+   126	const ChallengeCommentListResponseSchema = z
+   127	  .object({ comments: z.array(ChallengeCommentSchema) })
+   128	  .strict();
+   129	
+   130	const ChallengeCommentResponseSchema = z
+   131	  .object({ comment: ChallengeCommentSchema })
+   132	  .strict();
+   133	
+   134	// NOTE (F1 correction): there is NO backend empty-state payload endpoint for the
+   135	// challenge *comments* surface. The binding backend branch (PR #390 head,
+   136	// community-challenges.controller.ts) exposes no `comments/empty-state` route,
+   137	// and no `challenge_comments_empty` surface key exists anywhere in the Roman
+   138	// voice-policy (voice-policy.constants.ts) — that policy only covers the ten P2
+   139	// notification surfaces and the five COACH_COMMUNITY_SURFACE_KEYS, none of which
+   140	// is participant-facing challenge comments. A prior revision invented a
+   141	// `getCommentsEmptyState` method + `challenge_comments_empty` enum + a
+   142	// `/comments/empty-state` route; that fabricated a contract the backend does not
+   143	// serve and is removed here (brief: "mirror the dto AS IT STANDS"). The honest
+   144	// true-empty surface is therefore a NEUTRAL, non-Roman-voiced state derived from
+   145	// the comments query itself (no local `romanVoice.ts` Roman copy — that local
+   146	// Roman copy was the original P0 — and no invented backend payload). See
+   147	// CommunityChallengeDetailScreen's commentsFooter.
+   148	
+   149	// ─── Transport helper (mirrors communityApi.call) ─────────────────────────────
+   150	
+   151	function classify(status: number): CommunityApiError['kind'] {
+   152	  if (status === 401) return 'unauthorized';
+   153	  if (status === 403) return 'forbidden';
+   154	  if (status === 409) return 'conflict';
+   155	  if (status === 410) return 'gone';
+   156	  if (status >= 500) return 'server';
+   157	  if (status === 0) return 'network';
+   158	  return 'unknown';
+   159	}
+   160	
+   161	async function call<T>(
+   162	  schema: z.ZodType<T>,
+   163	  fn: () => Promise<{ data: unknown }>,
+   164	): Promise<T> {
+   165	  let res: { data: unknown };
+   166	  try {
+   167	    res = await fn();
+   168	  } catch (err) {
+   169	    if (axios.isAxiosError(err)) {
+   170	      const status = err.response?.status ?? 0;
+   171	      throw new CommunityApiError(
+   172	        classify(status),
+   173	        status,
+   174	        `community challenge request failed (${status || 'network'})`,
+   175	        err,
+   176	      );
+   177	    }
+   178	    throw new CommunityApiError(
+   179	      'unknown',
+   180	      -1,
+   181	      'community challenge request failed',
+   182	      err,
+   183	    );
+   184	  }
+   185	  try {
+   186	    return schema.parse(res.data);
+   187	  } catch (err) {
+   188	    if (err instanceof z.ZodError) {
+   189	      throw new CommunityApiError(
+   190	        'contract',
+   191	        200,
+   192	        'challenge response shape drifted from the backend contract',
+   193	        err,
+   194	      );
+   195	    }
+   196	    throw err;
+   197	  }
+   198	}
+   199	
+   200	function idempotentHeaders(): { headers: Record<string, string> } {
+   201	  return { headers: { 'Idempotency-Key': generateIdempotencyKey() } };
+   202	}
+   203	
+   204	// ─── Endpoints ─────────────────────────────────────────────────────────────────
+   205	
+   206	export const communityChallengesApi = {
+   207	  /** GET /community/workspaces/:workspaceId/challenges */
+   208	  listChallenges(
+   209	    workspaceId: string,
+   210	    opts: { cohortId?: string; status?: CommunityChallengeStatus } = {},
+   211	  ): Promise<CommunityChallenge[]> {
+   212	    const params: Record<string, string> = {};
+   213	    if (opts.cohortId) params.cohort_id = opts.cohortId;
+   214	    if (opts.status) params.status = opts.status;
+   215	    return call(ChallengeListResponseSchema, () =>
+   216	      api.get<unknown>(`/community/workspaces/${workspaceId}/challenges`, {
+   217	        params,
+   218	      }),
+   219	    ).then((r) => r.challenges);
+   220	  },
+   221	
+   222	  /** GET /community/challenges/:challengeId — definition + caller's own row. */
+   223	  getChallenge(challengeId: string): Promise<CommunityChallengeDetail> {
+   224	    return call(ChallengeResponseSchema, () =>
+   225	      api.get<unknown>(`/community/challenges/${challengeId}`),
+   226	    );
+   227	  },
+   228	
+   229	  /** POST /community/challenges/:challengeId/join — idempotent join. */
+   230	  join(challengeId: string): Promise<CommunityChallengeParticipation> {
+   231	    return call(ParticipationResponseSchema, () =>
+   232	      api.post<unknown>(
+   233	        `/community/challenges/${challengeId}/join`,
+   234	        {},
+   235	        idempotentHeaders(),
+   236	      ),
+   237	    ).then((r) => r.participation);
+   238	  },
+   239	
+   240	  /** PUT /community/challenges/:challengeId/progress — log progress (monotonic). */
+   241	  updateProgress(
+   242	    challengeId: string,
+   243	    progressValue: number,
+   244	  ): Promise<CommunityChallengeParticipation> {
+   245	    return call(ParticipationResponseSchema, () =>
+   246	      api.put<unknown>(
+   247	        `/community/challenges/${challengeId}/progress`,
+   248	        { progress_value: progressValue },
+   249	        idempotentHeaders(),
+   250	      ),
+   251	    ).then((r) => r.participation);
+   252	  },
+   253	
+   254	  /** PUT /community/challenges/:challengeId/leaderboard-opt-in — opt in/out. */
+   255	  setLeaderboardOptIn(
+   256	    challengeId: string,
+   257	    optedIn: boolean,
+   258	  ): Promise<CommunityChallengeParticipation> {
+   259	    return call(ParticipationResponseSchema, () =>
+   260	      api.put<unknown>(
+   261	        `/community/challenges/${challengeId}/leaderboard-opt-in`,
+   262	        { opted_in: optedIn },
+   263	        idempotentHeaders(),
+   264	      ),
+   265	    ).then((r) => r.participation);
+   266	  },
+   267	
+   268	  /** GET /community/challenges/:challengeId/leaderboard — opt-in gated. */
+   269	  getLeaderboard(challengeId: string): Promise<CommunityChallengeLeaderboard> {
+   270	    return call(LeaderboardResponseSchema, () =>
+   271	      api.get<unknown>(`/community/challenges/${challengeId}/leaderboard`),
+   272	    );
+   273	  },
+   274	
+   275	  /** GET /community/challenges/:challengeId/comments */
+   276	  listComments(challengeId: string): Promise<CommunityChallengeComment[]> {
+   277	    return call(ChallengeCommentListResponseSchema, () =>
+   278	      api.get<unknown>(`/community/challenges/${challengeId}/comments`),
+   279	    ).then((r) => r.comments);
+   280	  },
+   281	
+   282	  /** POST /community/challenges/:challengeId/comments — encouragement. */
+   283	  addComment(
+   284	    challengeId: string,
+   285	    body: string,
+   286	  ): Promise<CommunityChallengeComment> {
+   287	    return call(ChallengeCommentResponseSchema, () =>
+   288	      api.post<unknown>(
+   289	        `/community/challenges/${challengeId}/comments`,
+   290	        { body },
+   291	        idempotentHeaders(),
+   292	      ),
+   293	    ).then((r) => r.comment);
+   294	  },
+   295	
+   296	  /** POST /community/challenges/:challengeId/comments/:commentId/report */
+   297	  reportComment(
+   298	    challengeId: string,
+   299	    commentId: string,
+   300	    reason: string,
+   301	    notes?: string,
+   302	  ): Promise<void> {
+   303	    return call(z.unknown(), () =>
+   304	      api.post<unknown>(
+   305	        `/community/challenges/${challengeId}/comments/${commentId}/report`,
+   306	        { target_type: 'comment', target_id: commentId, reason, notes },
+   307	        idempotentHeaders(),
+   308	      ),
+   309	    ).then(() => undefined);
+   310	  },
+   311	};
+   312	
+   313	export type CommunityChallengesApi = typeof communityChallengesApi;

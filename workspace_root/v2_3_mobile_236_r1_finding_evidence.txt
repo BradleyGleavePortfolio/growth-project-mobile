@@ -1,0 +1,121 @@
+--- swallowed catches ---
+   150	    qc.setQueryData<CommunityEvent>(detailKey, prior);
+   151	    mockApi.rsvp.mockRejectedValueOnce(new Error('boom'));
+   152	
+   153	    const { result } = renderHook(() => useRsvpEvent(EV, WS), {
+   154	      wrapper: Wrapper,
+   155	    });
+   156	
+   157	    await act(async () => {
+   158	      await result.current.mutateAsync('maybe').catch(() => undefined);
+   159	    });
+   160	
+   161	    await waitFor(() => {
+   162	      const cached = qc.getQueryData<CommunityEvent>(detailKey);
+   216	    const { result } = renderHook(() => useCreateEvent(WS, UID), {
+   217	      wrapper: Wrapper,
+   218	    });
+   219	
+   220	    await act(async () => {
+   221	      await result.current
+   222	        .mutateAsync({ title: 'X', starts_at: '2026-08-01T18:00:00.000Z' })
+   223	        .catch(() => undefined);
+   224	    });
+   225	
+   226	    await waitFor(() => {
+--- query key / limit evidence ---
+    38	export const communityEventsKeys = {
+    39	  all: ['communityEvents'] as const,
+    40	  list: (workspaceId: string, opts: ListEventsOptions = {}) =>
+    41	    [
+    42	      ...communityEventsKeys.all,
+    43	      'list',
+    44	      workspaceId,
+    45	      opts.state ?? '∅',
+    46	      opts.cohort_id ?? '∅',
+    47	    ] as const,
+    48	  detail: (eventId: string) =>
+    69	export function useCommunityEventsList(
+    70	  workspaceId: string | undefined,
+    71	  opts: ListEventsOptions = {},
+    72	): UseQueryResult<CommunityEventListResponse> {
+    73	  return useQuery({
+    74	    queryKey: communityEventsKeys.list(workspaceId ?? '∅', opts),
+    75	    queryFn: () => communityEventsApi.list(workspaceId as string, opts),
+    76	    enabled: !!workspaceId,
+    77	    staleTime: 30_000,
+    78	  });
+   273	export interface ListEventsOptions {
+   274	  state?: CommunityEventState;
+   275	  cohort_id?: string;
+   276	  limit?: number;
+   277	}
+   278	
+   279	// ─── Endpoint object ─────────────────────────────────────────────────────────
+   280	
+   281	export const communityEventsApi = {
+   282	  /**
+   283	   * GET /community/workspaces/:workspaceId/events — list events for a
+   284	   * workspace, optionally filtered by lifecycle `state` and/or `cohort_id`.
+   285	   */
+   286	  list(
+   287	    workspaceId: string,
+   288	    opts: ListEventsOptions = {},
+   289	  ): Promise<CommunityEventListResponse> {
+   290	    const params: Record<string, string> = {};
+   291	    if (opts.state) params.state = opts.state;
+   292	    if (opts.cohort_id) params.cohort_id = opts.cohort_id;
+   293	    if (opts.limit != null) params.limit = String(opts.limit);
+   294	    return call(CommunityEventListResponseSchema, () =>
+--- pagination UI evidence ---
+   272	        <FlatList
+   273	          data={data}
+   274	          keyExtractor={(e) => e.id}
+   275	          renderItem={renderItem}
+   276	          contentContainerStyle={styles.listContent}
+   277	          refreshControl={
+   278	            <RefreshControl
+   279	              refreshing={events.isRefetching}
+   280	              onRefresh={() => events.refetch()}
+   281	              tintColor={semanticColors.accent}
+   282	            />
+   283	          }
+   284	        />
+--- tap target evidence ---
+  1021	  modalError: {
+  1022	    fontSize: 13,
+  1023	    lineHeight: 18,
+  1024	    fontWeight: '600',
+  1025	  },
+  1026	  reflectTrigger: {
+  1027	    minHeight: 44,
+  1028	    alignItems: 'center',
+  1029	    justifyContent: 'center',
+  1030	    paddingHorizontal: spacing.lg,
+  1031	  },
+  1032	  reflectTriggerLabel: {
+  1033	    fontSize: 14,
+  1034	    fontWeight: '500',
+  1035	    textDecorationLine: 'underline',
+  1036	  },
+  1037	  modalActions: {
+  1038	    flexDirection: 'row',
+  1039	    justifyContent: 'flex-end',
+  1040	    gap: spacing.sm,
+  1041	  },
+  1042	  modalButton: {
+  1043	    minHeight: 44,
+  1044	    minWidth: 96,
+  1045	    paddingHorizontal: spacing.lg,
+   623	  rsvpQuiet: {
+   624	    flex: 1,
+   625	    flexDirection: 'row',
+   626	    alignItems: 'center',
+   627	    justifyContent: 'center',
+   628	    gap: spacing.xs,
+   629	    minHeight: 44,
+   630	    paddingHorizontal: spacing.sm,
+   668	  retry: {
+   669	    minHeight: 44,
+   670	    minWidth: 120,
+   671	    paddingHorizontal: spacing.xl,

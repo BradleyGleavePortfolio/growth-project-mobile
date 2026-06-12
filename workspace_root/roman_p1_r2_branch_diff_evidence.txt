@@ -1,0 +1,46 @@
+HEAD
+5ded65c194a1e97c10bad27583f164418cc7f7b5 feat(roman): P1 mobile chat — sessions, streaming replies, typed states (EXPO_PUBLIC_FF_ROMAN_CHAT off)
+origin/main
+79c0a9be7f9657c8c7a0d4fa336c2fa6ba359136
+merge-base
+79c0a9be7f9657c8c7a0d4fa336c2fa6ba359136
+changed files
+M	.env.example
+A	src/api/__tests__/romanApi.test.ts
+A	src/api/romanApi.ts
+A	src/components/roman/RomanComposer.tsx
+A	src/components/roman/RomanGreeting.tsx
+A	src/components/roman/RomanMessageBubble.tsx
+A	src/components/roman/RomanState.tsx
+A	src/components/roman/RomanTypingIndicator.tsx
+A	src/components/roman/__tests__/romanVoice.test.ts
+A	src/components/roman/romanVoice.ts
+M	src/config/featureFlags.ts
+M	src/navigation/ClientNavigator.tsx
+M	src/navigation/CoachNavigator.tsx
+A	src/navigation/__tests__/romanFlagOff.test.ts
+M	src/screens/client/MoreScreen.tsx
+M	src/screens/coach/SettingsScreen.tsx
+A	src/screens/roman/RomanChatScreen.tsx
+A	src/screens/roman/useRomanChat.ts
+stat
+ .env.example                                      |   4 +
+ src/api/__tests__/romanApi.test.ts                | 308 ++++++++++++++
+ src/api/romanApi.ts                               | 476 ++++++++++++++++++++++
+ src/components/roman/RomanComposer.tsx            | 173 ++++++++
+ src/components/roman/RomanGreeting.tsx            |  75 ++++
+ src/components/roman/RomanMessageBubble.tsx       | 115 ++++++
+ src/components/roman/RomanState.tsx               | 116 ++++++
+ src/components/roman/RomanTypingIndicator.tsx     | 120 ++++++
+ src/components/roman/__tests__/romanVoice.test.ts | 166 ++++++++
+ src/components/roman/romanVoice.ts                | 171 ++++++++
+ src/config/featureFlags.ts                        |   4 +
+ src/navigation/ClientNavigator.tsx                |  12 +
+ src/navigation/CoachNavigator.tsx                 |  11 +
+ src/navigation/__tests__/romanFlagOff.test.ts     |  90 ++++
+ src/screens/client/MoreScreen.tsx                 |  25 +-
+ src/screens/coach/SettingsScreen.tsx              |  29 ++
+ src/screens/roman/RomanChatScreen.tsx             | 340 ++++++++++++++++
+ src/screens/roman/useRomanChat.ts                 | 262 ++++++++++++
+ 18 files changed, 2496 insertions(+), 1 deletion(-)
+prisma diff

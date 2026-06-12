@@ -1,0 +1,289 @@
+--- catch/promise
+src/screens/community/CommunityChallengesScreen.tsx:116:            onPress={() => void challenges.refetch()}
+src/config/featureFlags.ts:54:   *  even in dev until the upload pipeline ships, to avoid suggesting the
+src/components/community/__tests__/ChallengeProgressSheet.reducedMotion.test.tsx:102:      await Promise.resolve();
+src/components/community/__tests__/ChallengeProgressSheet.reducedMotion.test.tsx:129:      await Promise.resolve();
+src/components/community/__tests__/ChallengeProgressSheet.reducedMotion.test.tsx:134:      await Promise.resolve();
+src/api/communityChallengesApi.ts:163:  fn: () => Promise<{ data: unknown }>,
+src/api/communityChallengesApi.ts:164:): Promise<T> {
+src/api/communityChallengesApi.ts:168:  } catch (err) {
+src/api/communityChallengesApi.ts:187:  } catch (err) {
+src/api/communityChallengesApi.ts:211:  ): Promise<CommunityChallenge[]> {
+src/api/communityChallengesApi.ts:223:  getChallenge(challengeId: string): Promise<CommunityChallengeDetail> {
+src/api/communityChallengesApi.ts:230:  join(challengeId: string): Promise<CommunityChallengeParticipation> {
+src/api/communityChallengesApi.ts:244:  ): Promise<CommunityChallengeParticipation> {
+src/api/communityChallengesApi.ts:258:  ): Promise<CommunityChallengeParticipation> {
+src/api/communityChallengesApi.ts:269:  getLeaderboard(challengeId: string): Promise<CommunityChallengeLeaderboard> {
+src/api/communityChallengesApi.ts:276:  listComments(challengeId: string): Promise<CommunityChallengeComment[]> {
+src/api/communityChallengesApi.ts:286:  ): Promise<CommunityChallengeComment> {
+src/api/communityChallengesApi.ts:302:  ): Promise<void> {
+src/api/__tests__/communityChallengesApi.drift.test.ts:186:    const e = await communityChallengesApi.listChallenges(WS).catch((x) => x);
+src/components/community/ChallengeProgressSheet.tsx:52:  onSubmit: (progressValue: number) => Promise<{ completed: boolean }>;
+src/components/community/ChallengeProgressSheet.tsx:100:    void AccessibilityInfo.isReduceMotionEnabled().then((on) => {
+src/components/community/ChallengeProgressSheet.tsx:161:    void Haptics.notificationAsync(
+src/components/community/ChallengeProgressSheet.tsx:163:    ).catch(() => {
+src/components/community/ChallengeProgressSheet.tsx:179:    } catch {
+src/api/communityApi.ts:332:  fn: () => Promise<{ data: unknown }>,
+src/api/communityApi.ts:333:): Promise<T> {
+src/api/communityApi.ts:337:  } catch (err) {
+src/api/communityApi.ts:351:  } catch (err) {
+src/api/communityApi.ts:373:  getMe(): Promise<CommunityMeResponse> {
+src/api/communityApi.ts:380:  getToday(): Promise<CommunityTodayResponse> {
+src/api/communityApi.ts:387:  getCohorts(): Promise<CommunityCohortListResponse> {
+src/api/communityApi.ts:400:  ): Promise<CommunityPostListResponse> {
+src/api/communityApi.ts:410:  listComments(postId: string): Promise<CommunityComment[]> {
+src/api/communityApi.ts:417:  getPost(postId: string): Promise<CommunityPost> {
+src/api/communityApi.ts:430:  ): Promise<CommunityPost> {
+src/api/communityApi.ts:441:  addComment(postId: string, body: string): Promise<CommunityComment> {
+src/api/communityApi.ts:456:  reactToPost(postId: string, emoji: CommunityReactionEmoji): Promise<void> {
+src/api/communityApi.ts:463:  unreactToPost(postId: string, emoji: CommunityReactionEmoji): Promise<void> {
+src/api/communityApi.ts:472:  listDmThreads(workspaceId: string): Promise<CommunityDmThread[]> {
+src/api/communityApi.ts:486:  ): Promise<CommunityDmMessage[]> {
+src/api/communityApi.ts:506:  ): Promise<CommunityDmMessage> {
+src/api/communityApi.ts:520:  ): Promise<CommunityDmThread> {
+src/screens/community/CommunityChallengeDetailScreen.tsx:140:    void queryClient.invalidateQueries({
+src/screens/community/CommunityChallengeDetailScreen.tsx:146:    void queryClient.invalidateQueries({
+src/screens/community/CommunityChallengeDetailScreen.tsx:176:      // let mutateAsync reject into the sheet's calm catch.
+src/screens/community/CommunityChallengeDetailScreen.tsx:205:      void queryClient.invalidateQueries({
+src/screens/community/CommunityChallengeDetailScreen.tsx:226:    async (value: number): Promise<{ completed: boolean }> => {
+src/screens/community/CommunityChallengeDetailScreen.tsx:316:            onPress={() => void detail.refetch()}
+src/screens/community/CommunityChallengeDetailScreen.tsx:578:        onPress={() => void comments.refetch()}
+--- any/unknown casts/ignore
+src/components/community/__tests__/ChallengeProgressSheet.reducedMotion.test.tsx:31:  // @ts-expect-error — remove-only stub; cleanup only calls remove()
+--- raw urls/env/localhost/secrets
+.env.example:18:#   eas env:create --environment production --name EXPO_PUBLIC_API_URL \
+.env.example:19:#     --value https://api.trygrowthproject.com/api
+.env.example:20:#   eas env:create --environment preview    --name EXPO_PUBLIC_API_URL \
+.env.example:21:#     --value https://api.trygrowthproject.com/api
+.env.example:22:EXPO_PUBLIC_API_URL=http://localhost:3000/api
+.env.example:27:#   eas env:create --environment production --name EXPO_PUBLIC_SUPABASE_URL \
+.env.example:28:#     --value https://<project>.supabase.co
+.env.example:29:#   eas env:create --environment production --name EXPO_PUBLIC_SUPABASE_ANON_KEY \
+.env.example:31:EXPO_PUBLIC_SUPABASE_URL=your_supabase_project_url_here
+.env.example:32:EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key_here
+.env.example:36:# Help center base URL. Defaults to https://app.trygrowthproject.com/help when
+.env.example:38:# (e.g. https://help.trygrowthproject.com). Trailing slashes are normalised.
+.env.example:39:# EXPO_PUBLIC_HELP_BASE_URL=https://app.trygrowthproject.com/help
+.env.example:45:#   eas env:create --environment production --name EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER --value false
+.env.example:46:#   eas env:create --environment production --name EXPO_PUBLIC_NOTIFICATIONS_MOCK     --value false
+.env.example:47:# EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER=false
+.env.example:48:# EXPO_PUBLIC_NOTIFICATIONS_MOCK=false
+.env.example:51:# an empty key). EXPO_PUBLIC_POSTHOG_API_KEY is the canonical name;
+.env.example:52:# EXPO_PUBLIC_POSTHOG_KEY is accepted as a legacy alias.
+.env.example:53:# EXPO_PUBLIC_POSTHOG_API_KEY=phc_xxx
+.env.example:54:# EXPO_PUBLIC_POSTHOG_HOST=https://app.posthog.com
+.env.example:59:# it). The companion EAS-time secret SENTRY_AUTH_TOKEN (NOT an EXPO_PUBLIC_
+.env.example:62:# EXPO_PUBLIC_SENTRY_DSN=https://<key>@<org>.ingest.sentry.io/<project>
+.env.example:68:#   eas env:create --environment preview    --name EXPO_PUBLIC_ENVIRONMENT --value preview
+.env.example:69:#   eas env:create --environment production --name EXPO_PUBLIC_ENVIRONMENT --value production
+.env.example:70:# EXPO_PUBLIC_ENVIRONMENT=production
+.env.example:76:#   eas env:create --environment production --name EXPO_PUBLIC_CRISP_WEBSITE_ID --value <website-id>
+.env.example:77:# EXPO_PUBLIC_CRISP_WEBSITE_ID=00000000-0000-0000-0000-000000000000
+.env.example:84:#   eas env:create --environment production --name EXPO_PUBLIC_STRIPE_PK \
+.env.example:86:#   eas env:create --environment preview    --name EXPO_PUBLIC_STRIPE_PK \
+.env.example:88:# EXPO_PUBLIC_STRIPE_PK=pk_test_xxx
+.env.example:91:# The Google OAuth client/secret is configured in the Supabase dashboard under
+.env.example:97:EXPO_PUBLIC_FF_COACH_COMMUNITY=false
+.env.example:100:EXPO_PUBLIC_FF_COMMUNITY_ACKS=false
+.env.example:103:EXPO_PUBLIC_FF_COMMUNITY_CHALLENGES=false
+src/screens/community/CommunityTodayScreen.tsx:14:import { spacing, radius } from '../../theme/tokens';
+src/screens/community/CommunityChallengeDetailScreen.tsx:44:import { spacing, radius } from '../../theme/tokens';
+src/navigation/CommunityNavigator.tsx:12:import { colors } from '../theme/tokens';
+src/components/community/__tests__/ChallengeCard.test.tsx:15:  const { lightTokens } = jest.requireActual('../../../theme/tokens');
+src/components/community/ChallengeProgressSheet.tsx:35:import { spacing, radius, motion } from '../../theme/tokens';
+src/components/community/ChallengeProgressSheet.tsx:411:    // Color comes from the semantic `overlay` token (theme-anchored scrim,
+src/components/community/ChallengeCard.tsx:22:import { spacing, radius } from '../../theme/tokens';
+src/components/community/__tests__/ChallengeProgressSheet.reducedMotion.test.tsx:24:  const { lightTokens } = jest.requireActual('../../../theme/tokens');
+src/components/community/ComposerInput.tsx:7: * Standardized on semanticColors / tokens.ts.
+src/components/community/ComposerInput.tsx:19:import { spacing, radius } from '../../theme/tokens';
+src/components/community/ChallengeCommentsEmptyState.tsx:31:import { spacing, radius } from '../../theme/tokens';
+src/screens/community/CommunityChallengesScreen.tsx:29:import { spacing, radius } from '../../theme/tokens';
+src/config/featureFlags.ts:9: *   1. Explicit `EXPO_PUBLIC_*` env var (string "true" or "1" enables).
+src/config/featureFlags.ts:40:   * env: EXPO_PUBLIC_FEATURE_BLOODWORK
+src/config/featureFlags.ts:42:  bloodwork: readFlag('EXPO_PUBLIC_FEATURE_BLOODWORK', false),
+src/config/featureFlags.ts:46:  clientPathCopilot: readFlag('EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT', isDev),
+src/config/featureFlags.ts:48:  coachBrief: readFlag('EXPO_PUBLIC_FF_COACH_BRIEF', isDev),
+src/config/featureFlags.ts:50:  adminControlRoom: readFlag('EXPO_PUBLIC_FF_ADMIN_CONTROL_ROOM', isDev),
+src/config/featureFlags.ts:52:  privateCommunityHub: readFlag('EXPO_PUBLIC_FF_PRIVATE_COMMUNITY_HUB', isDev),
+src/config/featureFlags.ts:56:  communityVoiceNotes: readFlag('EXPO_PUBLIC_FF_COMMUNITY_VOICE_NOTES', false),
+src/config/featureFlags.ts:60:    'EXPO_PUBLIC_FF_VERIFIED_PROGRESS_SIGNOFF',
+src/config/featureFlags.ts:75:   *                            `EXPO_PUBLIC_FF_DELIVERABLES=true` once
+src/config/featureFlags.ts:90:   * env: EXPO_PUBLIC_FF_DELIVERABLES
+src/config/featureFlags.ts:92:  deliverables: readFlag('EXPO_PUBLIC_FF_DELIVERABLES', isDev),
+src/config/featureFlags.ts:104:  communityTab: readFlag('EXPO_PUBLIC_FF_COMMUNITY_TAB', false),
+src/config/featureFlags.ts:106:  communityHall: readFlag('EXPO_PUBLIC_FF_COMMUNITY_HALL', false),
+src/config/featureFlags.ts:108:  communityCohorts: readFlag('EXPO_PUBLIC_FF_COMMUNITY_COHORTS', false),
+src/config/featureFlags.ts:110:  communityDm: readFlag('EXPO_PUBLIC_FF_COMMUNITY_DM', false),
+src/config/featureFlags.ts:125:  // env: EXPO_PUBLIC_FF_COACH_COMMUNITY
+src/config/featureFlags.ts:126:  coachCommunity: readFlag('EXPO_PUBLIC_FF_COACH_COMMUNITY', false),
+src/config/featureFlags.ts:139:  // env: EXPO_PUBLIC_FF_COMMUNITY_ACKS
+src/config/featureFlags.ts:140:  communityAcks: readFlag('EXPO_PUBLIC_FF_COMMUNITY_ACKS', false),
+src/config/featureFlags.ts:149:  // env: EXPO_PUBLIC_FF_COMMUNITY_CHALLENGES
+src/config/featureFlags.ts:150:  communityChallenges: readFlag('EXPO_PUBLIC_FF_COMMUNITY_CHALLENGES', false),
+src/config/featureFlags.ts:163: * at EXPO_PUBLIC_API_URL.
+src/config/featureFlags.ts:169: * env: EXPO_PUBLIC_NOTIFICATIONS_MOCK
+src/config/featureFlags.ts:171:export const NOTIFICATIONS_MOCK_ENABLED = __DEV__ && readFlag('EXPO_PUBLIC_NOTIFICATIONS_MOCK', false);
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:23:// ── Theme: real light tokens, no ThemeProvider ───────────────────────────────
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:25:  const { lightTokens } = jest.requireActual('../../../theme/tokens');
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:262:    // The distinctive Roman threadEmpty phrase (token-free prefix) must be
+src/theme/tokens.ts:4: * Phase 11: Dark mode — semantic token system added on top of existing palette.
+src/theme/tokens.ts:289:// Phase 11: Semantic dark-mode token layer
+src/theme/tokens.ts:295:// These are the ONLY tokens that change between light and dark mode.
+src/theme/tokens.ts:325:   * current plan or mid-request). Use this explicit token instead of
+src/theme/tokens.ts:339:   * Scrim/overlay behind modals and bottom sheets. A theme-anchored token so
+src/theme/tokens.ts:346:/** Light-mode semantic tokens (default — matches existing bone/ink palette). */
+src/theme/tokens.ts:366:/** Dark-mode semantic tokens. */
+src/theme/tokens.ts:373:  // (disabled tokens declared after textOnAccent below)
+src/theme/tokens.ts:389: * Derive an `rgba()` string from a palette hex token at a given opacity.
+src/theme/tokens.ts:390: * Use this for scrims/overlays so they stay anchored to a theme token instead
+src/theme/tokens.ts:412:// ─── Composite token export ────────────────────────────────────────────────────
+src/theme/tokens.ts:413:const tokens = {
+src/theme/tokens.ts:428:export type Tokens = typeof tokens;
+src/theme/tokens.ts:429:export default tokens;
+--- pagination/list/map
+src/theme/tokens.ts:403:      .map((c) => c + c)
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:59:    listComments: jest.fn(),
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:60:    getLeaderboard: jest.fn(),
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:140:  api.listComments.mockResolvedValue([]);
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:141:  api.getLeaderboard.mockResolvedValue({ available: true, opted_in: false, rows: [] });
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:153:    expect(api.getLeaderboard).not.toHaveBeenCalled();
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:198:    expect(api.getLeaderboard).not.toHaveBeenCalled();
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:206:    api.getLeaderboard.mockResolvedValue({
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:213:    await waitFor(() => expect(api.getLeaderboard).toHaveBeenCalledWith('ch-1'));
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:226:    expect(api.getLeaderboard).not.toHaveBeenCalled();
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:252:    api.listComments.mockResolvedValue([]); // server-confirmed zero rows
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:277:    api.listComments.mockRejectedValue(new Error('comments down'));
+src/screens/community/CommunityChallengesScreen.tsx:23:import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
+src/screens/community/CommunityChallengesScreen.tsx:53:    queryKey: ['community', 'challenges', workspaceId ?? '∅'],
+src/screens/community/CommunityChallengesScreen.tsx:54:    queryFn: () => communityChallengesApi.listChallenges(workspaceId as string),
+src/screens/community/CommunityChallengesScreen.tsx:149:      <FlatList
+src/api/communityChallengesApi.ts:208:  listChallenges(
+src/api/communityChallengesApi.ts:269:  getLeaderboard(challengeId: string): Promise<CommunityChallengeLeaderboard> {
+src/api/communityChallengesApi.ts:276:  listComments(challengeId: string): Promise<CommunityChallengeComment[]> {
+src/api/__tests__/communityChallengesApi.drift.test.ts:92:    const res = await communityChallengesApi.listChallenges(WS);
+src/api/__tests__/communityChallengesApi.drift.test.ts:113:    await expect(communityChallengesApi.listChallenges(WS)).rejects.toMatchObject({
+src/api/__tests__/communityChallengesApi.drift.test.ts:122:    await expect(communityChallengesApi.listChallenges(WS)).rejects.toMatchObject({
+src/api/__tests__/communityChallengesApi.drift.test.ts:151:    await expect(communityChallengesApi.getLeaderboard(CID)).rejects.toMatchObject({
+src/api/__tests__/communityChallengesApi.drift.test.ts:178:    await expect(communityChallengesApi.listComments(CID)).rejects.toMatchObject({
+src/api/__tests__/communityChallengesApi.drift.test.ts:186:    const e = await communityChallengesApi.listChallenges(WS).catch((x) => x);
+src/api/communityApi.ts:410:  listComments(postId: string): Promise<CommunityComment[]> {
+src/screens/community/CommunityChallengeDetailScreen.tsx:30:  FlatList,
+src/screens/community/CommunityChallengeDetailScreen.tsx:99:    queryKey: ['community', 'challenge', challengeId],
+src/screens/community/CommunityChallengeDetailScreen.tsx:105:    queryKey: ['community', 'challenge', challengeId, 'comments'],
+src/screens/community/CommunityChallengeDetailScreen.tsx:106:    queryFn: () => communityChallengesApi.listComments(challengeId),
+src/screens/community/CommunityChallengeDetailScreen.tsx:118:    queryKey: ['community', 'challenge', challengeId, 'leaderboard'],
+src/screens/community/CommunityChallengeDetailScreen.tsx:119:    queryFn: () => communityChallengesApi.getLeaderboard(challengeId),
+src/screens/community/CommunityChallengeDetailScreen.tsx:141:      queryKey: ['community', 'challenge', challengeId],
+src/screens/community/CommunityChallengeDetailScreen.tsx:147:      queryKey: ['community', 'challenge', challengeId, 'leaderboard'],
+src/screens/community/CommunityChallengeDetailScreen.tsx:206:        queryKey: ['community', 'challenge', challengeId, 'comments'],
+src/screens/community/CommunityChallengeDetailScreen.tsx:533:              {leaderboard.data.rows.map(renderLeaderboardRow)}
+src/screens/community/CommunityChallengeDetailScreen.tsx:624:      <FlatList
+--- raw colors/emoji/todo
+src/theme/tokens.ts:17: * ink (#1A1A18) on bone (#F5EFE4)               ~16.5:1              PASS     PASS
+src/theme/tokens.ts:18: * ink (#1A1A18) on cream (#F1E8D5)              ~15.2:1              PASS     PASS
+src/theme/tokens.ts:19: * charcoal (#3D3D3A) on bone (#F5EFE4)          ~ 8.0:1              PASS     PASS
+src/theme/tokens.ts:20: * forest (#2C4A36) on bone (#F5EFE4)            ~ 7.4:1              PASS     PASS
+src/theme/tokens.ts:21: * stone (#B1A89F) on bone (#F5EFE4)             ~ 2.3:1              FAIL     PASS (caption/meta only >= 18pt)
+src/theme/tokens.ts:22: * mutedGold (#C5A253) on bone (#F5EFE4)         ~ 2.9:1              FAIL     PASS (badge label >= 14pt bold only)
+src/theme/tokens.ts:25: * textPrimary (#EBE6DE) on bgPrimary (#121110)  ~14.2:1              PASS     PASS
+src/theme/tokens.ts:26: * textMuted (#A09B94) on bgPrimary (#121110)    ~ 5.9:1              PASS     PASS
+src/theme/tokens.ts:32:  bone:        '#F5EFE4',  // primary background
+src/theme/tokens.ts:33:  cream:       '#F1E8D5',  // card surface, warm
+src/theme/tokens.ts:34:  ink:         '#1A1A18',  // primary text, dark sections (NEVER #000)
+src/theme/tokens.ts:35:  charcoal:    '#3D3D3A',  // secondary text on light
+src/theme/tokens.ts:36:  stone:       '#B1A89F',  // tertiary text, hairlines, meta
+src/theme/tokens.ts:39:  forest:      '#2C4A36',  // PRIMARY accent, replaces #2D6A4F
+src/theme/tokens.ts:42:  mutedGold:   '#C5A253',  // ONLY for founding-tier badge typography, never as fill
+src/theme/tokens.ts:43:  camel:       '#B08D57',  // hairline borders only
+src/theme/tokens.ts:46:  success:     '#2C4A36',  // map to forest
+src/theme/tokens.ts:47:  warning:     '#C5A253',  // map to mutedGold
+src/theme/tokens.ts:54:  warningBg:     '#F8F2E5',
+src/theme/tokens.ts:55:  warningBorder: '#C5A253',
+src/theme/tokens.ts:56:  warningInk:    '#8A6A2A',
+src/theme/tokens.ts:57:  // Cross-pillar brand cohesion (Wave 5): oxblood (#4A0404) is reserved
+src/theme/tokens.ts:59:  // uses #B91C1C — a clearer alarm red that pairs with bone, passes WCAG
+src/theme/tokens.ts:61:  error:       '#B91C1C',
+src/theme/tokens.ts:66:  0:    '#FFFFFF',
+src/theme/tokens.ts:67:  100:  '#F7F7F6',
+src/theme/tokens.ts:68:  200:  '#EFEFED',
+src/theme/tokens.ts:69:  300:  '#E4E4E0',
+src/theme/tokens.ts:70:  400:  '#CCCCC6',
+src/theme/tokens.ts:71:  500:  '#AAAAA4',
+src/theme/tokens.ts:72:  600:  '#7A7A75',
+src/theme/tokens.ts:73:  700:  '#5A5A56',
+src/theme/tokens.ts:74:  800:  '#3A3A37',
+src/theme/tokens.ts:75:  900:  '#1E1E1C',
+src/theme/tokens.ts:76:  1000: '#0A0A09',
+src/theme/tokens.ts:81:  50:   '#D6E4DA',   // pale tint
+src/theme/tokens.ts:82:  100:  '#B8CCBF',
+src/theme/tokens.ts:83:  300:  '#6E9479',
+src/theme/tokens.ts:84:  400:  '#4D7059',   // medium
+src/theme/tokens.ts:85:  500:  '#3A5C46',   // accent
+src/theme/tokens.ts:86:  600:  '#2C4A36',   // BASE — forest (primary brand colour)
+src/theme/tokens.ts:87:  800:  '#1C3023',   // dark
+src/theme/tokens.ts:93:    bg:     '#E0EBE4',
+src/theme/tokens.ts:94:    fg:     '#1C3023',
+src/theme/tokens.ts:95:    border: '#6E9479',
+src/theme/tokens.ts:96:    icon:   '#2C4A36',
+src/theme/tokens.ts:99:    bg:     '#F8F2E5',
+src/theme/tokens.ts:100:    fg:     '#8A6A2A',
+src/theme/tokens.ts:101:    border: '#C5A253',
+src/theme/tokens.ts:102:    icon:   '#C5A253',
+src/theme/tokens.ts:105:    bg:     '#F2E0E0',
+src/theme/tokens.ts:106:    fg:     '#4A0404',
+src/theme/tokens.ts:107:    border: '#9A3030',
+src/theme/tokens.ts:108:    icon:   '#4A0404',
+src/theme/tokens.ts:111:    bg:     '#E8F4FD',
+src/theme/tokens.ts:112:    fg:     '#1E4971',
+src/theme/tokens.ts:113:    border: '#93C5DC',
+src/theme/tokens.ts:114:    icon:   '#457B9D',
+src/theme/tokens.ts:120:  50:   '#FEFAF0',
+src/theme/tokens.ts:121:  100:  '#F8F0DC',
+src/theme/tokens.ts:122:  200:  '#EDDD9C',
+src/theme/tokens.ts:123:  300:  '#D4B96B',
+src/theme/tokens.ts:124:  400:  '#C5A253',   // mutedGold — badge typography only
+src/theme/tokens.ts:125:  500:  '#B08D57',   // camel / border use
+src/theme/tokens.ts:126:  700:  '#8A6A2A',   // darker label
+src/theme/tokens.ts:127:  800:  '#6B4F1A',
+src/theme/tokens.ts:246:    shadowColor:   '#1A1A18',
+src/theme/tokens.ts:254:    shadowColor:   '#1A1A18',
+src/theme/tokens.ts:262:    shadowColor:   '#1A1A18',
+src/theme/tokens.ts:313:   * primary CTA). Warm near-white so it never reads as a hard #FFF on the
+src/theme/tokens.ts:316:   *   light: #FBF7F0 on #4A0404 (oxblood)        ~ 15.01:1  PASS (AA body + large)
+src/theme/tokens.ts:317:   *   dark:  #FBF7F0 on #B43C3C (oxblood lifted) ~  5.38:1  PASS (AA body + large)
+src/theme/tokens.ts:330:   *   light: #524E47 on #E0D9CE ~ 5.90:1  PASS
+src/theme/tokens.ts:331:   *   dark:  #9A958C on #2A2723 ~ 4.99:1  PASS
+src/theme/tokens.ts:348:  bgPrimary:   '#F5EFE4',  // bone / cream
+src/theme/tokens.ts:349:  bgSurface:   '#FFFDF8',
+src/theme/tokens.ts:350:  textPrimary: '#1A1A18',  // ink (~15.23:1 on cream)
+src/theme/tokens.ts:351:  // Warm taupe muted. Darkened from #78736E (only 4.10:1 on cream, AA FAIL
+src/theme/tokens.ts:352:  // for body-sized 12-13px meta text) to #6B675F so it clears AA on BOTH
+src/theme/tokens.ts:353:  // light backgrounds: ~4.92:1 on cream #F5EFE4, ~5.54:1 on surface #FFFDF8.
+src/theme/tokens.ts:354:  textMuted:   '#6B675F',
+src/theme/tokens.ts:355:  accent:      '#4A0404',  // oxblood
+src/theme/tokens.ts:356:  textOnAccent:'#FBF7F0',  // warm near-white on oxblood (~15.01:1)
+src/theme/tokens.ts:359:  disabledBg:     '#E0D9CE',
+src/theme/tokens.ts:360:  textOnDisabled: '#524E47',
+src/theme/tokens.ts:361:  border:      '#DCD5CC',
+src/theme/tokens.ts:362:  // Ink (#1A1A18) at 0.40 — a calm dim that keeps the underlying screen legible.
+src/theme/tokens.ts:368:  bgPrimary:   '#121110',
+src/theme/tokens.ts:369:  bgSurface:   '#1C1A18',
+src/theme/tokens.ts:370:  textPrimary: '#EBE6DE',
+src/theme/tokens.ts:371:  textMuted:   '#A09B94',
+src/theme/tokens.ts:372:  accent:      '#B43C3C',  // oxblood lifted for dark contrast
+src/theme/tokens.ts:375:  // dark ink #1A1714 was only ~3.10:1 on #B43C3C (AA FAIL for body text).
+src/theme/tokens.ts:376:  textOnAccent:'#FBF7F0',
+src/theme/tokens.ts:379:  disabledBg:     '#2A2723',
+src/theme/tokens.ts:380:  textOnDisabled: '#9A958C',
+src/theme/tokens.ts:381:  border:      '#2D2A26',
+src/theme/tokens.ts:383:  // already-dark surfaces without washing out (#000 at 0.55).
+src/screens/community/CommunityChallengeDetailScreen.tsx:131:  // backend (PR #390 head) serves NO empty-state payload for this participant
+src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:242:    // F1 correction: the backend (PR #390 head) exposes NO participant-facing
+src/components/community/ChallengeCommentsEmptyState.tsx:12: * binding backend branch (PR #390 head) exposes no challenge `comments/empty-
+src/api/communityApi.ts:70:  '🙌',
+src/api/communityChallengesApi.ts:135:// challenge *comments* surface. The binding backend branch (PR #390 head,
+src/__tests__/quietLuxuryDoctrine.test.ts:85:    const re = /["'`](?:Coming Soon|Coming soon|In Development|in development)["'`]/;
+src/__tests__/quietLuxuryDoctrine.test.ts:93:  it('does not contain TODO / FIXME / XXX comments', () => {
+src/__tests__/quietLuxuryDoctrine.test.ts:95:    const re = /\b(?:TODO|FIXME|XXX)\b/;
+src/api/__tests__/communityChallengesApi.drift.test.ts:9: * (growth-project-backend community-challenges.dto.ts, PR #390); this is the
+src/api/__tests__/communityChallengesApi.drift.test.ts:13: * endpoint here — the backend exposes none (PR #390 head: no

@@ -1,0 +1,54 @@
+## Community v3-1 — Challenges (mobile)
+
+Client surface for v3-1 challenges: a feed card, a progress-logging bottom sheet, and a full-screen detail with a **strictly opt-in** cohort leaderboard and encouragement comments. Consumes the v3-1 backend contract.
+
+### Files (owned)
+- `src/screens/community/CommunityChallengeDetailScreen.tsx` — route param `challengeId`; leads with the caller's **own** progress, primary action Join → Log progress, opt-in leaderboard, encouragement comments (reportable). Real loading / empty / error states (no spinner-only), reduced-motion via the sheet, flag-gated with a defense-in-depth flag-off body.
+- `src/components/community/ChallengeCard.tsx` — own-progress card; one adaptive action (Join / Continue / View); calm "Goal reached" closure with a line check icon (no badge theater).
+- `src/components/community/ChallengeProgressSheet.tsx` — monotonic progress input, animated fill, **reduced-motion aware**, positive completion preview.
+- `src/api/communityChallengesApi.ts` — typed Zod-validated client mirroring `communityApi.ts` (idempotency keys on mutations; a drifted response throws a typed `contract` error).
+
+### Shared-append (one-line, distinct anchors)
+- `src/config/featureFlags.ts` — `communityChallenges` (env `EXPO_PUBLIC_FF_COMMUNITY_CHALLENGES`, **defaults OFF unconditionally**).
+- `.env.example` — `EXPO_PUBLIC_FF_COMMUNITY_CHALLENGES=false`.
+- `src/navigation/CommunityNavigator.tsx` — `CommunityChallengeDetail` route registered **only** behind the flag (dead code at build time when OFF).
+- `src/screens/community/communityNavTypes.ts` — `CommunityChallengeDetail: { challengeId: string }`.
+
+### Behavioral design (DESIGN_INTELLIGENCE Part III)
+Personal progress first, never a ranking by default; the leaderboard is requested **only** once the coach enabled it and the caller opted in, with a calm opt-in/opt-out affordance and zero shame/public-failure framing (§3.2, §3.4, §3.7). Tokens only (no raw hex), line Ionicons only (no emoji), ≥48dp targets.
+
+### Tests
+- `CommunityChallengeDetailScreen.test.tsx` — flag-off inertia (renders not-available, **never calls the API**), personal-progress-first, Join vs Log primary action, leaderboard **not requested until opt-in**, hidden entirely when the coach hasn't enabled it, recoverable error state.
+- `ChallengeCard.test.tsx` — Join/Continue/View states, own-progress label, completed closure icon, onPress.
+- `ChallengeProgressSheet.reducedMotion.test.tsx` — animates via `Animated.timing` when reduce motion is OFF, sets instantly when ON; monotonic clamp (a lower log can't reduce the total).
+
+`tsc --noEmit` clean; eslint clean on the slice; `jest --testPathPattern Challenge` → 3 suites, 15 tests pass.
+
+Flag-off CI-green: the route never registers and the screen is unreachable until `EXPO_PUBLIC_FF_COMMUNITY_CHALLENGES=true`.
+
+
+---
+
+## R1 fixes (Fixer — Dynasia G)
+
+Combined remediation of the two independent R1 audits (1×P0 + 8×unique P1 + 4×P2), deduped to F1–F13. Backend contract re-verified against `growth-project-backend` PR #390 head `c005b2ee`.
+
+- **F1 (P0)** — Comments empty state no longer renders local Roman `romanVoice.ts` copy. **Deviation (verified):** the brief's prescribed remedy was a backend empty-state payload (`{text, avatar_crop, surface_key, voice_variant}`), but the binding backend branch (PR #390 head) exposes **no** `comments/empty-state` route and the Roman voice-policy has **no** `challenge_comments_empty` surface key (it covers only the ten P2 notification surfaces + five coach-community keys, none participant-facing). A prior revision had **fabricated** a `getCommentsEmptyState()` method + `challenge_comments_empty` enum + `/comments/empty-state` schema; that invented a contract the backend does not serve and was removed. Per the brief ("missing payload ⇒ honest state, never local fallback" + "mirror the dto AS IT STANDS") the honest resolution is a **NEUTRAL, non-Roman** true-empty state — `src/components/community/ChallengeCommentsEmptyState.tsx:39,47-79`, copy const `src/screens/community/CommunityChallengeDetailScreen.tsx:355` (no local Roman copy, no invented endpoint). Regression: `src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:241-270` asserts the Roman `threadEmpty` prefix is ABSENT and the focus CTA is present.
+- **F2 (P1)** — `communityChallengesApi.ts` schemas mirror the backend DTO field-by-field, all `.strict()`, `z.string().uuid()` ids, `z.string().datetime()` timestamps, `z.number().int().positive()` rank — `src/api/communityChallengesApi.ts:37-132,95`. Drift tests (reject extra fields / bad timestamps / non-uuid / non-positive rank): `src/api/__tests__/communityChallengesApi.drift.test.ts:111-192`.
+- **F3 (P1)** — HTTP 409 classified as `conflict` (`src/api/communityChallengesApi.ts:154`); conflict triggers detail refetch and a calm inline sheet error — test `src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:290-326` + `src/api/__tests__/communityChallengesApi.drift.test.ts:194-212`.
+- **F4 (P1)** — Navigator-level flag-off test: both `CommunityChallenges` and `CommunityChallengeDetail` registered only behind the `featureFlags.communityChallenges` gate — `src/navigation/__tests__/communityChallengesFlagOff.test.ts:26-72`. Screen-level inertia kept as defense-in-depth (`CommunityChallengeDetailScreen.test.tsx:144-155`).
+- **F5 (P1)** — Report-comment control ≥48dp — `src/screens/community/CommunityChallengeDetailScreen.tsx:762-763`.
+- **F6 (P1)** — Discovery path: `CommunityTodayScreen.tsx:61` navigates directly to `CommunityChallengeDetail`; `ChallengeCard` exported from the barrel `src/components/community/index.ts:42-43`.
+- **F7 (P1)** — Neutral leaderboard opt-in: `Keep private` (first) + `Share progress` — `src/screens/community/CommunityChallengeDetailScreen.tsx:498,514`; no standings fetch until opted in.
+- **F8 (P1)** — Comments true-empty vs load-error split: empty → focus-composer CTA; error → calm retry, composer stays available — `src/screens/community/CommunityChallengeDetailScreen.tsx:566-598`. Test `CommunityChallengeDetailScreen.test.tsx:272-287`.
+- **F9 (P1)** — Completion peak: fill animates to 100% respecting reduce-motion, success haptic, `Goal reached — progress saved.` + single `Done` — `src/components/community/ChallengeProgressSheet.tsx:100-166,296,306-311`. Test `ChallengeProgressSheet.reducedMotion.test.tsx`.
+- **F10 (P2)** — Removed the double type-cast in the test; typed mock via `jest.mocked()` — `src/screens/community/__tests__/CommunityChallengeDetailScreen.test.tsx:83`.
+- **F11 (P2)** — Monotonic clamp explained: `Enter your total so far. Totals only move up.` + calm `Keeping your saved total at X` — `src/components/community/ChallengeProgressSheet.tsx:346,354`.
+- **F12 (P2)** — Backdrop uses the semantic `overlay` token (added to both themes) — `src/components/community/ChallengeProgressSheet.tsx:209`; `src/theme/tokens.ts:343,363,384`.
+- **F13 (P2)** — `ChallengeCard` footer collapsed to ONE affordance (`Join` / `Continue · X of Y` / `Goal reached`) — `src/components/community/ChallengeCard.tsx:57,131-132`.
+
+### R1 gates
+- `tsc --noEmit`: exit 0, zero errors.
+- Targeted jest (run via the shared-deps `node_modules` symlink — not blocked): community challenge suites — `communityChallengesApi.drift.test.ts`, `communityChallengesFlagOff.test.ts`, `CommunityChallengeDetailScreen.test.tsx`, `ChallengeProgressSheet.reducedMotion.test.tsx`, `ChallengeCard.test.tsx` → all pass (37 tests).
+- R0 greps on added lines (including comments): zero `as unknown as`, `as any`, TODO/placeholder, empty catch, silent-swallow.
+
