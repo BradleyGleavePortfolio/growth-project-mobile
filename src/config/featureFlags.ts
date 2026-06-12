@@ -154,6 +154,25 @@ export const featureFlags = {
   //
   // env: EXPO_PUBLIC_FF_COMMUNITY_AI_TRIAGE
   communityAiTriage: readFlag('EXPO_PUBLIC_FF_COMMUNITY_AI_TRIAGE', false),
+
+  // ─── Community v2-3 — event objects (client RSVP + coach lifecycle) ───────
+  // The v2-3 backend (community/events controller — create / list / detail /
+  // edit / transition / rsvp / replay / reflect) is behind FEATURE_COMMUNITY_
+  // EVENTS. This flag gates the matching mobile surface: the client event
+  // detail (RSVP + external link) and the coach event list + lifecycle screen.
+  //
+  // Defaults OFF UNCONDITIONALLY (not `isDev`). When false, the
+  // CommunityEventDetail / CoachCommunityEvents routes are NOT registered on
+  // the (already flag-gated) community stacks at all — the route screens are
+  // wrapped in a `featureFlags.communityEvents && ...` guard in both navigators
+  // — so there is zero event UI, no navigator target, and no reachable event
+  // surface. Consuming surfaces also read this flag before exposing entry
+  // points (discovery cards), giving belt-and-braces containment.
+  // There is NO native live room — events carry an external, host-allowlisted
+  // link only (Step 0).
+  //
+  // env: EXPO_PUBLIC_FF_COMMUNITY_EVENTS
+  communityEvents: readFlag('EXPO_PUBLIC_FF_COMMUNITY_EVENTS', false),
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;

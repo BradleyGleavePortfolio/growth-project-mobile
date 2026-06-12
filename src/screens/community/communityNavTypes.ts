@@ -19,6 +19,8 @@ export type CommunityStackParamList = {
   CommunitySpace: { space: 'hall' | 'cohort'; cohortId?: string };
   /** Single thread / post detail. */
   CommunityThread: { postId: string };
+  /** Single community event detail (v2-3). */
+  CommunityEventDetail: { eventId: string };
   /** DM inbox. */
   CommunityDmList: undefined;
   /** Single DM conversation. */

@@ -8,16 +8,23 @@
  * OFF the Community tab is not rendered and this stack never enters the tree,
  * so none of these routes are reachable (the flag-OFF deep-link test asserts
  * exactly this). See CoachNavigator.tsx.
+ *
+ * v2-3 EVENTS containment: the CoachCommunityEvents route is registered ONLY
+ * when `featureFlags.communityEvents` is true. With that flag OFF the route
+ * never registers, so there is zero event UI and no reachable event surface —
+ * even though the coach Community tab itself may be on.
  */
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Colors } from '../theme';
+import { featureFlags } from '../config/featureFlags';
 import CoachCommunityHomeScreen from '../screens/community/CoachCommunityHomeScreen';
 import CoachCommunityInboxScreen from '../screens/community/CoachCommunityInboxScreen';
 import CoachCommunityCohortsScreen from '../screens/community/CoachCommunityCohortsScreen';
 import CoachCommunityCohortDetailScreen from '../screens/community/CoachCommunityCohortDetailScreen';
 import CoachCommunityPostDetailScreen from '../screens/community/CoachCommunityPostDetailScreen';
 import CoachCommunityModerationScreen from '../screens/community/CoachCommunityModerationScreen';
+import CoachCommunityEventsScreen from '../screens/community/CoachCommunityEventsScreen';
 import type { CoachCommunityStackParamList } from '../screens/community/coachCommunityNavTypes';
 
 const CoachCommunityStack =
@@ -63,6 +70,13 @@ export default function CoachCommunityNavigator(): React.ReactElement {
         component={CoachCommunityModerationScreen}
         options={{ title: 'Moderation' }}
       />
+      {featureFlags.communityEvents && (
+        <CoachCommunityStack.Screen
+          name="CoachCommunityEvents"
+          component={CoachCommunityEventsScreen}
+          options={{ title: 'Events' }}
+        />
+      )}
     </CoachCommunityStack.Navigator>
   );
 }

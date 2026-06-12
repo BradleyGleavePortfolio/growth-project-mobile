@@ -52,6 +52,16 @@ export default function CommunityTodayScreen({
       goToMessages();
     }
   };
+  // F9 (discovery): behind the events flag, the Today event card opens the
+  // event's own detail screen. When the flag is off we fall back to the Hall so
+  // the card never strands the member (and registers no event route — F1).
+  const goToEvent = (eventId: string) => {
+    if (featureFlags.communityEvents) {
+      navigation.navigate('CommunityEventDetail', { eventId });
+    } else {
+      goToHall();
+    }
+  };
 
   // Empty state: friendly Roman copy + a primary action (never a bare spinner).
   if (isEmpty || today.isError) {
@@ -130,7 +140,7 @@ export default function CommunityTodayScreen({
         <Card
           color={semanticColors.bgSurface}
           border={semanticColors.border}
-          onPress={goToHall}
+          onPress={() => goToEvent(data.event!.id)}
           testID="community-today-event"
         >
           <CardLabel color={semanticColors.textMuted}>Upcoming event</CardLabel>

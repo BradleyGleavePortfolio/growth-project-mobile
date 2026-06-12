@@ -23,6 +23,8 @@ export type CoachCommunityStackParamList = {
   CoachCommunityPostDetail: { postId: string; flagged?: boolean };
   /** Flagged-content moderation queue (hide, confirmed). */
   CoachCommunityModeration: undefined;
+  /** Coach event list + lifecycle management (v2-3). */
+  CoachCommunityEvents: undefined;
 };
 
 /** Loosely-typed nav prop used by the screens (matches the codebase pattern). */

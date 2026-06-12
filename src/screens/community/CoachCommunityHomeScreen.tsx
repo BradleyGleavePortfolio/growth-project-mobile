@@ -25,7 +25,9 @@ import { View, Text, StyleSheet, ScrollView, ActivityIndicator } from 'react-nat
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/useTheme';
 import { spacing, radius, withAlpha } from '../../theme/tokens';
+import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../../components/HapticPressable';
+import { featureFlags } from '../../config/featureFlags';
 import { CoachRomanEmptyState, CoachErrorState } from '../../components/community/coach';
 import {
   useCoachDashboard,
@@ -163,6 +165,46 @@ export default function CoachCommunityHomeScreen(): React.ReactElement {
           testID={card.testID}
         />
       ))}
+
+      {/* F9 (discovery): a visible entry point into the events surface, gated on
+          the events flag so nothing about events appears when it is off (F1).
+          Events have no dashboard count, so this is a navigation card rather
+          than a StatCard. */}
+      {featureFlags.communityEvents ? (
+        <HapticPressable
+          intent="light"
+          onPress={() => navigation.navigate('CoachCommunityEvents')}
+          accessibilityRole="button"
+          accessibilityLabel="Events: schedule and manage live sessions"
+          testID="coach-community-home-events-card"
+          style={[
+            styles.navCard,
+            {
+              backgroundColor: semanticColors.bgSurface,
+              borderColor: semanticColors.border,
+            },
+          ]}
+        >
+          <Ionicons
+            name="calendar-outline"
+            size={24}
+            color={semanticColors.accent}
+          />
+          <View style={styles.navCardText}>
+            <Text style={[styles.navCardTitle, { color: semanticColors.textPrimary }]}>
+              Events
+            </Text>
+            <Text style={[styles.navCardSub, { color: semanticColors.textMuted }]}>
+              Schedule and manage live sessions
+            </Text>
+          </View>
+          <Ionicons
+            name="chevron-forward"
+            size={20}
+            color={semanticColors.textMuted}
+          />
+        </HapticPressable>
+      ) : null}
     </ScrollView>
   );
 }
@@ -286,5 +328,25 @@ const styles = StyleSheet.create({
   },
   cardLabel: {
     fontSize: 14,
+  },
+  navCard: {
+    minHeight: 64,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  navCardText: {
+    flex: 1,
+    gap: 2,
+  },
+  navCardTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  navCardSub: {
+    fontSize: 13,
   },
 });
