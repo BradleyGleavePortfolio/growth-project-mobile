@@ -26,7 +26,6 @@ import CommunityDmThreadScreen from '../screens/community/CommunityDmThreadScree
 import CommunityComposerScreen from '../screens/community/CommunityComposerScreen';
 import CommunityChallengeDetailScreen from '../screens/community/CommunityChallengeDetailScreen';
 import CommunityChallengesScreen from '../screens/community/CommunityChallengesScreen';
-import { featureFlags } from '../config/featureFlags';
 import type { CommunityStackParamList } from '../screens/community/communityNavTypes';
 
 const CommunityStack = createNativeStackNavigator<CommunityStackParamList>();
