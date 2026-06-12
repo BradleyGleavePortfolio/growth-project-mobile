@@ -18,6 +18,7 @@ import { AccessibilityInfo, Animated, StyleSheet, Text, View } from 'react-nativ
 import RomanAvatar from './RomanAvatar';
 import { ROMAN_TYPING_A11Y_LABEL, ROMAN_TYPING_LABEL } from './romanVoice';
 import { colors, radius, spacing, typography } from '../../theme/tokens';
+import { logger } from '../../utils/logger';
 
 export interface RomanTypingIndicatorProps {
   testID?: string;
@@ -39,9 +40,11 @@ export default function RomanTypingIndicator({
       .then((enabled) => {
         if (mounted) setReduceMotion(enabled);
       })
-      .catch(() => {
+      .catch((err) => {
         // Default to motion-on when the query fails; the animation is purely
-        // decorative so a failed probe never blocks the indicator.
+        // decorative so a failed probe never blocks the indicator. Log the
+        // failed platform probe so the swallowed signal is still observable.
+        logger.warn('RomanTypingIndicator.reduceMotionQuery', err);
       });
     return () => {
       mounted = false;
