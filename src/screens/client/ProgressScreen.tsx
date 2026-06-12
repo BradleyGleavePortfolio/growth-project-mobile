@@ -39,6 +39,12 @@ import FadeInView from '../../components/FadeInView';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
 import { TgpLineChart } from '../../ui/charts';
+import { featureFlags } from '../../config/featureFlags';
+// §2.7 Streak milestone — Roman marks 3 / 7 / 30-day logging streaks in his
+// voice, beside his face (RomanStreakCard co-locates <RomanAvatar />). Gated
+// behind featureFlags.romanChat (default OFF), the dedicated Roman flag.
+import RomanStreakCard from '../../components/roman/RomanStreakCard';
+import type { RomanStreakTier } from '../../lib/roman/copy';
 
 type Period = '7D' | '30D' | '90D' | 'All';
 
@@ -318,6 +324,14 @@ export default function ProgressScreen() {
 
   const periods: Period[] = ['7D', '30D', '90D', 'All'];
 
+  // §2.7 Streak milestone tier from the real loggingStreak. The 30/7/3-day
+  // thresholds map to the spec tiers; below 3 days Roman stays silent. The
+  // 7/30-day tiers are celebrations (slight smile); the 3-day tier is the
+  // measured default line.
+  const streakTier: RomanStreakTier | null =
+    loggingStreak >= 30 ? 30 : loggingStreak >= 7 ? 7 : loggingStreak >= 3 ? 3 : null;
+  const streakFirstName = (currentUser?.firstName ?? '').trim() || 'there';
+
   return (
     <View style={styles.container}>
       <ScrollView
@@ -370,6 +384,21 @@ export default function ProgressScreen() {
             </TouchableOpacity>
           </View>
         </View>
+
+        {/* §2.7 Roman streak milestone — voiced beside his face. Only when the
+            Roman flag is on AND a 3/7/30-day milestone tier has been reached. */}
+        {featureFlags.romanChat && streakTier !== null && (
+          <FadeInView>
+            <View style={styles.romanStreakWrap}>
+              <RomanStreakCard
+                tier={streakTier}
+                firstName={streakFirstName}
+                mode={streakTier === 3 ? 'default' : 'celebration'}
+                testID="roman-streak-card"
+              />
+            </View>
+          </FadeInView>
+        )}
 
         {/* Calorie Ring + Macros */}
         <FadeInView>
@@ -656,6 +685,10 @@ const makeStyles = (colors: ThemeColors) =>
     width: 18,
     height: 1,
     backgroundColor: colors.border,
+  },
+  romanStreakWrap: {
+    marginHorizontal: 24,
+    marginBottom: 16,
   },
   ringCard: {
     flexDirection: 'row',

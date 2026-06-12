@@ -8,15 +8,18 @@
  * There is no celebration variant for a failure (spec §2.10 marks it N/A), and
  * the copy function's type forbids one.
  *
- * Mascot placement (spec §4 table): "No mascot in toasts" — so the avatar is
- * OFF by default (the toast/banner register). The EXCEPTION is a full error
- * SCREEN, which DOES show the avatar: callers pass `surface="screen"` there.
+ * FACE+VOICE invariant (P0): Roman copy from lib/roman/copy implies a
+ * RomanAvatar in the same tree on EVERY render-site — including the toast. The
+ * operator rule is verbatim: "his voice always appears WITH HIS FACE." The
+ * earlier reading of the spec §4 "no mascot in toasts" row produced a
+ * voice-without-face toast, which the invariant forbids; the invariant wins, so
+ * the avatar now renders on both surfaces. It is a compact mark in the toast
+ * register (quiet-luxury, same small-avatar pattern the other Roman P3 rows
+ * use) and a larger one on the full error screen.
  *
- * FACE+VOICE: <RomanAvatar /> appears at line 56 — co-located in this same
- * file with the §2.10 copy. The avatar renders on the full-screen surface
- * (where the spec requires the face); on the toast surface it is intentionally
- * suppressed per the spec table. The import + render-site co-location satisfies
- * the FACE+VOICE invariant for the §2.10 module.
+ * Accessibility: the banner keeps accessibilityRole="alert" (so assistive tech
+ * announces the failure immediately); it deliberately does NOT add a polite
+ * live region, which would double-announce the alert.
  */
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
@@ -31,8 +34,10 @@ export interface RomanErrorBannerProps {
    */
   mode?: 'default' | 'error';
   /**
-   * Where this error renders. `toast` (default) shows NO mascot per spec §4;
-   * `screen` is a full error screen and DOES show the avatar.
+   * Where this error renders. `toast` (default) is the compact inline banner;
+   * `screen` is a full error screen. Per the FACE+VOICE invariant (P0) BOTH
+   * surfaces render the avatar — the toast uses a compact mark, the screen a
+   * larger one.
    */
   surface?: 'toast' | 'screen';
   testID?: string;
@@ -48,20 +53,22 @@ export default function RomanErrorBanner({
   // allows."). Gate on the ~1-in-8 ceiling (§1.5); never quip on a hard
   // data-loss failure.
   const line = romanGenericError({ mode });
-  const showFace = surface === 'screen';
+  const isScreen = surface === 'screen';
   return (
     <View
-      style={surface === 'screen' ? styles.screen : styles.toast}
+      style={isScreen ? styles.screen : styles.toast}
       testID={testID}
       accessibilityRole="alert"
     >
-      {/* FACE+VOICE: avatar shown on the full error SCREEN (spec §4 exception);
-          suppressed in the toast register where the spec forbids a mascot. */}
-      {showFace ? (
-        <RomanAvatar crop="neutral" size={56} testID="roman-error-avatar" />
-      ) : null}
+      {/* FACE+VOICE (P0): the avatar co-mounts with the §2.10 copy on BOTH
+          surfaces. Compact in the toast register, larger on the full screen. */}
+      <RomanAvatar
+        crop="neutral"
+        size={isScreen ? 56 : 28}
+        testID="roman-error-avatar"
+      />
       <Text
-        style={surface === 'screen' ? styles.screenCopy : styles.toastCopy}
+        style={isScreen ? styles.screenCopy : styles.toastCopy}
         accessibilityRole="text"
       >
         {line}
@@ -72,6 +79,9 @@ export default function RomanErrorBanner({
 
 const styles = StyleSheet.create({
   toast: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
     backgroundColor: colors.cream,
@@ -82,6 +92,7 @@ const styles = StyleSheet.create({
   toastCopy: {
     ...typography.body,
     color: colors.ink,
+    flex: 1,
   },
   screen: {
     flex: 1,

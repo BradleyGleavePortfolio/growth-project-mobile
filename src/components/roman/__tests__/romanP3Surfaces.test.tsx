@@ -46,7 +46,7 @@ describe('RomanBriefCard (§2.3)', () => {
     );
     expect(getByTestId('roman-brief-avatar').props.accessibilityLabel).toBe(PLEASED);
     expect(
-      getByText('Good morning, Marcus. Every client is on track this morning. I cannot recall a tidier brief!'),
+      getByText('Good morning, Marcus. Every client is on track this morning. I cannot recall a tidier brief.'),
     ).toBeTruthy();
   });
   it('error — neutral face + error copy', () => {
@@ -74,7 +74,7 @@ describe('RomanCheckInNotice (§2.4)', () => {
       <RomanCheckInNotice clientName="Dana" mode="celebration" />,
     );
     expect(getByTestId('roman-checkin-avatar').props.accessibilityLabel).toBe(PLEASED);
-    expect(getByText('Dana has submitted their first check-in. A good beginning — I would not keep them waiting!')).toBeTruthy();
+    expect(getByText('Dana has submitted their first check-in. A good beginning — I would not keep them waiting.')).toBeTruthy();
   });
   it('error — neutral + attachment-failure copy', () => {
     const { getByTestId, getByText } = render(
@@ -99,7 +99,7 @@ describe('RomanNewClientNotice (§2.5)', () => {
       <RomanNewClientNotice clientName="Dana" clientCount={10} mode="celebration" />,
     );
     expect(getByTestId('roman-newclient-avatar').props.accessibilityLabel).toBe(PLEASED);
-    expect(getByText('Dana has joined your roster — your 10th client. The practice is growing handsomely!')).toBeTruthy();
+    expect(getByText('Dana has joined your roster — your 10th client. The practice is growing handsomely.')).toBeTruthy();
   });
 });
 
@@ -140,7 +140,7 @@ describe('RomanWorkoutCompleteCard (§2.8)', () => {
       <RomanWorkoutCompleteCard mode="celebration" liftName="deadlift" />,
     );
     expect(getByTestId('roman-workout-avatar').props.accessibilityLabel).toBe(PLEASED);
-    expect(getByText('Workout complete — and a personal best on deadlift, no less. Noted with admiration!')).toBeTruthy();
+    expect(getByText('Workout complete — and a personal best on deadlift, no less. Noted with admiration.')).toBeTruthy();
   });
   it('error — neutral + save-failure copy', () => {
     const { getByTestId, getByText } = render(<RomanWorkoutCompleteCard mode="error" />);
@@ -152,7 +152,7 @@ describe('RomanWorkoutCompleteCard (§2.8)', () => {
       <RomanWorkoutCompleteCard mode="celebration" liftName="Squat" />,
     );
     expect(getByTestId('roman-workout-avatar').props.accessibilityLabel).toBe(PLEASED);
-    expect(getByText('Workout complete — and a personal best on Squat, no less. Noted with admiration!')).toBeTruthy();
+    expect(getByText('Workout complete — and a personal best on Squat, no less. Noted with admiration.')).toBeTruthy();
   });
   it('celebration with a blank lift name — NEUTRAL + default copy (no mismatch)', () => {
     const { getByTestId, getByText } = render(
@@ -250,7 +250,7 @@ describe('RomanVoiceLogReadback (§2.9)', () => {
       <RomanVoiceLogReadback weight={315} reps={5} mode="celebration" />,
     );
     expect(getByTestId('roman-voicelog-avatar').props.accessibilityLabel).toBe(PLEASED);
-    expect(getByText('315 pounds, 5 reps. Recorded — and a new best. Noted!')).toBeTruthy();
+    expect(getByText('315 pounds, 5 reps. Recorded — and a new best. Noted.')).toBeTruthy();
   });
   it('error — neutral + parse-failure copy', () => {
     const { getByTestId, getByText } = render(
@@ -263,15 +263,16 @@ describe('RomanVoiceLogReadback (§2.9)', () => {
 
 // ── §2.10 Generic error (both apps) ───────────────────────────────────────────
 describe('RomanErrorBanner (§2.10)', () => {
-  it('toast (default) — NO mascot per spec §4 table, transient copy', () => {
-    const { queryByTestId, getByText } = render(<RomanErrorBanner mode="default" />);
-    // Spec §4: "No mascot in toasts" — avatar must be absent in this register.
-    expect(queryByTestId('roman-error-avatar')).toBeNull();
+  it('toast (default) — FACE+VOICE: mascot present (P0 invariant), transient copy', () => {
+    const { getByTestId, getByText } = render(<RomanErrorBanner mode="default" />);
+    // P0 invariant: Roman copy implies RomanAvatar in the same tree — including
+    // the default toast register. The avatar is neutral on a failure.
+    expect(getByTestId('roman-error-avatar').props.accessibilityLabel).toBe(NEUTRAL);
     expect(getByText('That request did not complete. I will try again.')).toBeTruthy();
   });
-  it('toast (error) — NO mascot, hard-failure copy', () => {
-    const { queryByTestId, getByText } = render(<RomanErrorBanner mode="error" />);
-    expect(queryByTestId('roman-error-avatar')).toBeNull();
+  it('toast (error) — FACE+VOICE: mascot present, hard-failure copy', () => {
+    const { getByTestId, getByText } = render(<RomanErrorBanner mode="error" />);
+    expect(getByTestId('roman-error-avatar').props.accessibilityLabel).toBe(NEUTRAL);
     expect(
       getByText('That request did not complete, and my attempts to retry have not succeeded either. I have logged the matter. Please try again in a few minutes.'),
     ).toBeTruthy();
@@ -304,7 +305,7 @@ describe('RomanPayoutNotice (§2.12)', () => {
     );
     expect(getByTestId('roman-payout-avatar').props.accessibilityLabel).toBe(PLEASED);
     expect(
-      getByText("Your payout of $1,200.00 is on its way to the account ending 4242 — your largest yet. A fine month's work!"),
+      getByText("Your payout of $1,200.00 is on its way to the account ending 4242 — your largest yet. A fine month's work."),
     ).toBeTruthy();
   });
   it('error — neutral + decline copy', () => {

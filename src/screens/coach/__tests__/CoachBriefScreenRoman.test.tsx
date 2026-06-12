@@ -6,16 +6,18 @@
  * payload:
  *   - default when there are clients needing attention,
  *   - celebration (record morning) when the roster is clear and not stale,
- *   - error when fetchCoachBrief rejects (Bradley Law #36 — surfaced, logged).
+ *   - error when fetchCoachBrief rejects (Bradley Law #36 — surfaced, logged
+ *     via logger.warn, not a swallowed catch and not a raw console call).
  */
 import React from 'react';
 import { render, waitFor } from '@testing-library/react-native';
+import { logger } from '../../../utils/logger';
 
 import type { CoachBriefPayload, CoachBriefClientCard } from '../../../types/wave11';
 
 // Feature flag ON so the screen renders its content (not the preview lock).
 jest.mock('../../../config/featureFlags', () => ({
-  featureFlags: { coachBrief: true },
+  featureFlags: { coachBrief: true, romanChat: true },
 }));
 
 // Deterministic coach name for the §2.3 token.
@@ -70,20 +72,21 @@ describe('CoachBriefScreen — §2.3 Roman brief card', () => {
     await waitFor(() => expect(getByTestId('roman-brief-card')).toBeTruthy());
     expect(getByTestId('roman-brief-avatar').props.accessibilityLabel).toBe('Roman, pleased');
     expect(
-      getByText('Good morning, Marcus. Every client is on track this morning. I cannot recall a tidier brief!'),
+      getByText('Good morning, Marcus. Every client is on track this morning. I cannot recall a tidier brief.'),
     ).toBeTruthy();
   });
 
   it('selects the §2.3 error line when the brief fails to assemble (no swallowed catch)', async () => {
-    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = jest.spyOn(logger, 'warn').mockImplementation(() => {});
     mockFetchCoachBrief.mockRejectedValue(new Error('source slow'));
     const { getByTestId, getByText } = render(<CoachBriefScreen />);
     await waitFor(() => expect(getByTestId('roman-brief-card')).toBeTruthy());
     expect(
       getByText('Good morning, Marcus. The brief is not yet complete — one of my sources is slow to respond. I will have it shortly.'),
     ).toBeTruthy();
-    // Bradley Law #36: the failure was logged, not swallowed.
-    expect(warn).toHaveBeenCalled();
+    // Bradley Law #36: the failure was logged via the structured logger, not
+    // swallowed and not a raw console call.
+    expect(warn).toHaveBeenCalledWith('CoachBriefScreen', 'failed to load brief', expect.any(Error));
     warn.mockRestore();
   });
 });

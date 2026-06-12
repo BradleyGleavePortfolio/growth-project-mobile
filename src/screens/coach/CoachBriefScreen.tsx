@@ -31,7 +31,13 @@ import { featureFlags } from '../../config/featureFlags';
 // face. FACE+VOICE: RomanBriefCard co-locates <RomanAvatar /> with the §2.3
 // copy module (src/lib/roman/copy.ts) in one tree.
 import RomanBriefCard from '../../components/roman/RomanBriefCard';
+// §2.4 check-in received + §2.5 new client onboarded — both Roman coach
+// surfaces (each co-locates <RomanAvatar /> for FACE+VOICE). Gated behind
+// featureFlags.romanChat (default OFF), the dedicated Roman flag.
+import RomanCheckInNotice from '../../components/roman/RomanCheckInNotice';
+import RomanNewClientNotice from '../../components/roman/RomanNewClientNotice';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { logger } from '../../utils/logger';
 
 export default function CoachBriefScreen() {
   const currentUser = useCurrentUser();
@@ -53,7 +59,7 @@ export default function CoachBriefScreen() {
       // Bradley Law #36: surface the failure (Roman's §2.3 error variant
       // renders below) rather than swallowing it. Logged for diagnostics.
       setBriefError(true);
-      console.warn('CoachBriefScreen: failed to load brief', err);
+      logger.warn('CoachBriefScreen', 'failed to load brief', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -63,6 +69,27 @@ export default function CoachBriefScreen() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // §2.4 Check-in received — derived from a REAL client card carrying a
+  // `check_in_overdue` todo (the closest production signal in the brief payload
+  // that a check-in needs the coach's attention). First such client only, to
+  // keep one Roman line in the brief.
+  const checkInClient = payload?.clients.find((c) =>
+    c.todos.some((t) => t.kind === 'check_in_overdue'),
+  );
+  // §2.5 New client onboarded — the CoachBriefPayload does not carry a
+  // first-party "new client" event/flag, so this uses a conservative heuristic
+  // over REAL data: a single-client roster with no outstanding todos and no AI
+  // flags reads as a freshly added client. No data is fabricated; the roster
+  // size and display name are both real. The absence of a dedicated new-client
+  // signal is documented in FIXER_241_R3_REPORT.md.
+  const clientList = payload?.clients ?? [];
+  const newClient =
+    clientList.length === 1 &&
+    clientList[0].todos.length === 0 &&
+    clientList[0].aiFlags.length === 0
+      ? clientList[0]
+      : undefined;
 
   if (!featureFlags.coachBrief) {
     return (
@@ -177,6 +204,29 @@ export default function CoachBriefScreen() {
           />
         )}
       </View>
+
+      {/* §2.4 Roman check-in notice — voiced beside his face when a real client
+          card flags a check-in needing attention. Only when the Roman flag is
+          on. */}
+      {featureFlags.romanChat && checkInClient ? (
+        <RomanCheckInNotice
+          clientName={checkInClient.clientDisplayName}
+          mode="default"
+          testID="roman-checkin-card"
+        />
+      ) : null}
+
+      {/* §2.5 Roman new-client notice — voiced beside his face when the roster
+          reads as a freshly added single client. Only when the Roman flag is
+          on. clientCount and clientName are both real. */}
+      {featureFlags.romanChat && newClient ? (
+        <RomanNewClientNotice
+          clientName={newClient.clientDisplayName}
+          clientCount={clientList.length}
+          mode="default"
+          testID="roman-newclient-card"
+        />
+      ) : null}
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle} accessibilityRole="header">Clients</Text>

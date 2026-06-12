@@ -66,6 +66,14 @@ import type {
 } from './active-workout/types';
 import { ExerciseImage, MUSCLES, lookupMuscleColor, makeMuscleColors } from './active-workout/ExerciseImage';
 import { ExerciseCard } from './active-workout/ExerciseCard';
+import { featureFlags } from '../../config/featureFlags';
+// §2.9 Voice-log confirmation — Roman reads back the most recently completed
+// set in his voice, beside his face (RomanVoiceLogReadback co-locates
+// <RomanAvatar />). No dedicated voice-capture screen exists in the app yet;
+// per the builder brief this wires to the closest real surface — the live
+// set-logging flow on ActiveWorkoutScreen (documented in the report). Gated
+// behind featureFlags.romanChat (default OFF).
+import RomanVoiceLogReadback from '../../components/roman/RomanVoiceLogReadback';
 
 // Debounce window for persistence writes. Mutations happen rapidly while
 // the user is logging sets; coalescing them into a single AsyncStorage
@@ -808,6 +816,20 @@ export default function ActiveWorkoutScreen() {
   const totalSets = sessionExercises.reduce((sum, ex) => sum + ex.sets.length, 0);
   const completedSets = sessionExercises.reduce((sum, ex) => sum + ex.sets.filter((s) => s.completed).length, 0);
 
+  // §2.9 most recently completed set (last completed set, scanning exercises in
+  // order). Drives Roman's readback with the real logged weight/reps. A set
+  // with a zero weight (e.g. bodyweight) is still a valid readback, so the only
+  // gate is `completed`.
+  const lastCompletedSet: SessionSet | null = (() => {
+    let found: SessionSet | null = null;
+    for (const ex of sessionExercises) {
+      for (const s of ex.sets) {
+        if (s.completed) found = s;
+      }
+    }
+    return found;
+  })();
+
   return (
     <View style={styles.container}>
       {/* Top Bar */}
@@ -830,6 +852,20 @@ export default function ActiveWorkoutScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* §2.9 Roman voice-log readback — voiced beside his face, reading back
+            the most recently completed set. Only when the Roman flag is on AND
+            at least one set has been completed. Default mode: a per-set PR
+            signal is not tracked in the live session, so no celebration is
+            fabricated (documented in the report). */}
+        {featureFlags.romanChat && lastCompletedSet ? (
+          <RomanVoiceLogReadback
+            weight={lastCompletedSet.weight}
+            reps={lastCompletedSet.reps}
+            mode="default"
+            testID="roman-voicelog-card"
+          />
+        ) : null}
+
         {sessionExercises.map((exercise, exIdx) => (
           <ExerciseCard
             key={`${exercise.exerciseId}-${exIdx}`}

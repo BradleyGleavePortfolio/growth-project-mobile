@@ -24,6 +24,23 @@ import { errorMessage, errorStatus } from '../../../types/common';
 import { useTheme, ThemeColors } from '../../../theme/ThemeProvider';
 import { formatCurrencyCents } from '../../../utils/currency';
 import { track } from '../../../lib/analytics';
+import { featureFlags } from '../../../config/featureFlags';
+// §2.12 Coach payout — Roman confirms the last payout in his voice, beside his
+// face (RomanPayoutNotice co-locates <RomanAvatar />). Gated behind
+// featureFlags.romanChat (default OFF), the dedicated Roman flag.
+import RomanPayoutNotice from '../../../components/roman/RomanPayoutNotice';
+
+// §2.12 settlement window. The screen's own fineprint already states Stripe's
+// standard "typically every 2 business days" schedule; Roman's line reuses that
+// same real figure rather than inventing a different one.
+const PAYOUT_SETTLE_DAYS = 2;
+// The normalised CoachEarningsSummary deliberately does NOT carry the
+// destination bank's last-four (payouts are Stripe-managed and the digits are
+// not exposed to the mobile contract — see api/packagesApi.ts
+// CoachEarningsSummary). Rather than invent digits (which would be demo data),
+// the §2.12 token renders a masked, explicitly-unknown account marker until a
+// real field lands. Documented in FIXER_241_R3_REPORT.md.
+const PAYOUT_BANK_LAST4_UNKNOWN = '\u2014\u2014\u2014\u2014';
 
 interface Props {
   navigation: NavigationProp<ParamListBase>;
@@ -160,6 +177,24 @@ export default function CoachEarningsScreen({ navigation }: Props) {
                   {formatDate(data.lastPayoutAt)}
                 </Text>
               </View>
+            ) : null}
+
+            {/* §2.12 Roman payout notice — voiced beside his face. Only when the
+                Roman flag is on AND a real last payout exists (amount + date).
+                All tokens are real: amount from data.lastPayoutAmountCents,
+                settle days from the platform's standard schedule. The bank
+                last-four is not in the summary contract, so a masked unknown is
+                rendered rather than invented digits. */}
+            {featureFlags.romanChat &&
+            data.lastPayoutAt &&
+            data.lastPayoutAmountCents != null ? (
+              <RomanPayoutNotice
+                amount={formatCurrencyCents(data.lastPayoutAmountCents, data.currency)}
+                bankLast4={PAYOUT_BANK_LAST4_UNKNOWN}
+                settleDays={PAYOUT_SETTLE_DAYS}
+                mode="default"
+                testID="roman-payout-card"
+              />
             ) : null}
 
             <Text style={styles.sectionTitle}>By package</Text>

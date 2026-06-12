@@ -10,11 +10,17 @@
  * generic error, §2.12 coach payout) all consume their prose from here so the
  * voice has exactly one home.
  *
- * Voice-contract compliance (spec §1.1-§1.6): no emoji ever, no exclamation
- * point EXCEPT the single rationed milestone instrument (it lives only on the
- * §2.3 record-morning, §2.5 roster-milestone, §2.7 30-day, §2.8 PR, §2.9 voice
- * PR, and §2.12 record-payout celebration lines per the spec's own sample
- * copy), no contractions in the default tone, no hype words, no slang.
+ * Voice-contract compliance (spec §1.1-§1.6): no emoji ever, no contractions in
+ * the default tone, no hype words, no slang.
+ *
+ * Exclamation rationing (spec §1.4 / §4: "one exclamation point per session",
+ * reserved for a genuine milestone): within the P3 scope the ONLY permitted
+ * home for that single exclamation is the §2.7 30-day streak
+ * milestone-celebration line. EVERY other P3 string — including the other
+ * celebration variants (§2.3 record morning, §2.4 first check-in, §2.5 roster
+ * milestone, §2.8 personal best, §2.9 voice PR, §2.12 record payout) — carries
+ * ZERO exclamation points. Those celebration lines are written in Roman's
+ * composed butler register: warm, measured, never effusive.
  *
  * FACE+VOICE invariant: every render-site that imports a function from this
  * module MUST also mount <RomanAvatar /> in the same component tree. The P3
@@ -51,8 +57,10 @@ export interface RomanCoachBriefArgs {
 export function romanCoachBrief(args: RomanCoachBriefArgs): string {
   const { coachName, clientCount, mode } = args;
   if (mode === 'celebration') {
-    // spec §2.3 milestone-celebration (record morning) — one exclamation.
-    return `Good morning, ${coachName}. Every client is on track this morning. I cannot recall a tidier brief!`;
+    // §2.3 milestone-celebration (record morning). Exclamation rationing: the
+    // session's one exclamation is reserved for the §2.7 30-day line, so this
+    // celebration ends on a measured full stop.
+    return `Good morning, ${coachName}. Every client is on track this morning. I cannot recall a tidier brief.`;
   }
   if (mode === 'error') {
     // spec §2.3 error (brief could not be assembled).
@@ -83,8 +91,9 @@ export interface RomanCheckInReceivedArgs {
 export function romanCheckInReceived(args: RomanCheckInReceivedArgs): string {
   const { clientName, mode } = args;
   if (mode === 'celebration') {
-    // spec §2.4 milestone-celebration (first-ever check-in) — one exclamation.
-    return `${clientName} has submitted their first check-in. A good beginning — I would not keep them waiting!`;
+    // §2.4 milestone-celebration (first-ever check-in). No exclamation — the
+    // session's one is reserved for the §2.7 30-day line.
+    return `${clientName} has submitted their first check-in. A good beginning — I would not keep them waiting.`;
   }
   if (mode === 'error') {
     // spec §2.4 error (attachments failed to load).
@@ -117,8 +126,9 @@ export interface RomanNewClientArgs {
 export function romanNewClient(args: RomanNewClientArgs): string {
   const { clientName, clientCount, mode } = args;
   if (mode === 'celebration') {
-    // spec §2.5 milestone-celebration (roster milestone) — one exclamation.
-    return `${clientName} has joined your roster — your ${clientCount}th client. The practice is growing handsomely!`;
+    // §2.5 milestone-celebration (roster milestone). No exclamation — the
+    // session's one is reserved for the §2.7 30-day line.
+    return `${clientName} has joined your roster — your ${clientCount}th client. The practice is growing handsomely.`;
   }
   if (mode === 'error') {
     // spec §2.5 error (onboarding partially failed).
@@ -195,13 +205,14 @@ export interface RomanWorkoutCompleteArgs {
 export function romanWorkoutComplete(args: RomanWorkoutCompleteArgs): string {
   const { mode, liftName } = args;
   if (mode === 'celebration') {
-    // spec §2.8 milestone-celebration (personal best) — one exclamation.
+    // §2.8 milestone-celebration (personal best). No exclamation — the
+    // session's one is reserved for the §2.7 30-day line.
     // A PR celebration requires the lift name; fall back to the default line
     // rather than render a hollow "personal best on ." if it is missing.
     if (liftName == null || liftName.trim() === '') {
       return 'Workout complete. Recorded. That is one more behind you.';
     }
-    return `Workout complete — and a personal best on ${liftName}, no less. Noted with admiration!`;
+    return `Workout complete — and a personal best on ${liftName}, no less. Noted with admiration.`;
   }
   if (mode === 'error') {
     // spec §2.8 error (finished but save failed).
@@ -239,8 +250,9 @@ export function romanVoiceLog(args: RomanVoiceLogArgs): string {
     return 'I did not catch that cleanly. Tell me the weight and the reps once more, and I will record it.';
   }
   if (mode === 'celebration') {
-    // spec §2.9 milestone-celebration (a logged PR via voice) — one exclamation.
-    return `${weight} pounds, ${reps} reps. Recorded — and a new best. Noted!`;
+    // §2.9 milestone-celebration (a logged PR via voice). No exclamation — the
+    // session's one is reserved for the §2.7 30-day line.
+    return `${weight} pounds, ${reps} reps. Recorded — and a new best. Noted.`;
   }
   // spec §2.9 default — e.g. "315 pounds, 5 reps. Recorded."
   return `${weight} pounds, ${reps} reps. Recorded.`;
@@ -303,8 +315,9 @@ export interface RomanPayoutArgs {
 export function romanPayout(args: RomanPayoutArgs): string {
   const { amount, bankLast4, settleDays, mode } = args;
   if (mode === 'celebration') {
-    // spec §2.12 milestone-celebration (record payout) — one exclamation.
-    return `Your payout of ${amount} is on its way to the account ending ${bankLast4} — your largest yet. A fine month's work!`;
+    // §2.12 milestone-celebration (record payout). No exclamation — the
+    // session's one is reserved for the §2.7 30-day line.
+    return `Your payout of ${amount} is on its way to the account ending ${bankLast4} — your largest yet. A fine month's work.`;
   }
   if (mode === 'error') {
     // spec §2.12 error (payout initiation failed; bank declined).

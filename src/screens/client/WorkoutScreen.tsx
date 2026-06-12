@@ -25,6 +25,12 @@ import { EmptyStateNoWorkouts, EmptyStateNoData } from '../../ui/empty-states';
 // registered in MoreStack for a while but no UI surfaced a navigate call,
 // so this build hid them from the user entirely.
 import { useMyWorkoutAssignments } from '../../hooks/useWorkoutBuilder';
+import { featureFlags } from '../../config/featureFlags';
+// §2.8 Workout complete + §2.10 generic error — Roman speaks beside his face
+// (both components co-locate <RomanAvatar />). Gated behind
+// featureFlags.romanChat (default OFF), the dedicated Roman flag.
+import RomanWorkoutCompleteCard from '../../components/roman/RomanWorkoutCompleteCard';
+import RomanErrorBanner from '../../components/roman/RomanErrorBanner';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CHART_WIDTH = SCREEN_WIDTH - 48;
@@ -271,6 +277,9 @@ export default function WorkoutScreen() {
 
   const totalVolumeThisWeek = weeklyVolume[weeklyVolume.length - 1]?.volume || 0;
 
+  // §2.8 most-recent completed session drives Roman's workout-complete line.
+  const mostRecentCompleted = recentSessions.find((s) => s.completed) ?? null;
+
   // W-3: surface coach-assigned workouts. Falls back to silent when the
   // assignment list is empty / the hook is still loading. Tapping routes
   // through the tab navigator into MoreTab's ClientWorkoutViewer because
@@ -320,9 +329,16 @@ export default function WorkoutScreen() {
   if (loadError) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
-        <Text style={{ fontSize: 16, color: colors.textPrimary, marginBottom: 16, textAlign: 'center' }}>
-          Could not load workout data.
-        </Text>
+        {/* §2.10 Roman generic-error — voiced beside his face on the full error
+            screen. Only when the Roman flag is on; otherwise the plain copy
+            below carries the message (the failure is never swallowed). */}
+        {featureFlags.romanChat ? (
+          <RomanErrorBanner mode="error" surface="screen" testID="roman-workout-error" />
+        ) : (
+          <Text style={{ fontSize: 16, color: colors.textPrimary, marginBottom: 16, textAlign: 'center' }}>
+            Could not load workout data.
+          </Text>
+        )}
         <TouchableOpacity
           style={{ backgroundColor: colors.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 }}
           onPress={() => { setLoadError(false); setIsLoading(true); loadData(); }}
@@ -369,6 +385,19 @@ export default function WorkoutScreen() {
             </View>
             <Ionicons name="chevron-forward" size={22} color={colors.primary} />
           </HapticPressable>
+        ) : null}
+
+        {/* §2.8 Roman workout-complete — voiced beside his face when the most
+            recent session is completed. Only when the Roman flag is on. The
+            default line is used: a per-session personal-best signal is not yet
+            carried on the ApiSession shape, so no celebration is fabricated
+            (documented in the report). */}
+        {featureFlags.romanChat && mostRecentCompleted ? (
+          <FadeInView>
+            <View style={styles.romanWorkoutWrap}>
+              <RomanWorkoutCompleteCard mode="default" testID="roman-workout-card" />
+            </View>
+          </FadeInView>
         ) : null}
 
         {/* Weekly Stats */}
@@ -618,6 +647,10 @@ const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   content: { paddingBottom: 100 },
+  romanWorkoutWrap: {
+    marginHorizontal: 24,
+    marginBottom: 16,
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
