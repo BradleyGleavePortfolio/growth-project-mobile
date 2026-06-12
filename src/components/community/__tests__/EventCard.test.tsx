@@ -21,7 +21,11 @@ jest.mock('../../../theme/useTheme', () => {
   };
 });
 
-import EventCard, { formatEventStart, rsvpSummary } from '../EventCard';
+import EventCard, {
+  formatEventStart,
+  rsvpSummary,
+  stateMeta,
+} from '../EventCard';
 import type { CommunityEvent } from '../../../api/communityEventsApi';
 
 function makeEvent(overrides: Partial<CommunityEvent> = {}): CommunityEvent {
@@ -102,6 +106,38 @@ describe('EventCard', () => {
       />,
     );
     expect(getByText('No RSVPs yet')).toBeTruthy();
+  });
+});
+
+describe('stateMeta (F5 unknown-state safety + F13 lifecycle labels)', () => {
+  it('maps each known lifecycle state to its status-honest label', () => {
+    const table: Array<[string, string]> = [
+      ['scheduled', 'Scheduled'],
+      ['tomorrow', 'Tomorrow'],
+      ['live', 'Live now'],
+      ['replay', 'Replay available'],
+      ['reflected', 'Recap posted'],
+    ];
+    table.forEach(([state, label]) => {
+      expect(stateMeta(state).label).toBe(label);
+      // Every entry resolves a real glyph (never undefined).
+      expect(stateMeta(state).icon).toBeTruthy();
+    });
+  });
+
+  it('degrades a hostile / unknown state to a neutral fallback (no crash)', () => {
+    expect(stateMeta('definitely-not-a-state').label).toBe('Event');
+    expect(stateMeta('definitely-not-a-state').icon).toBe('calendar-outline');
+    // An empty string and an upstream typo also degrade calmly.
+    expect(stateMeta('').label).toBe('Event');
+    expect(stateMeta('LIVE').label).toBe('Event');
+  });
+
+  it('renders the fallback label on a card given an out-of-contract state', () => {
+    // Cast through the public string overload using a plain typed assertion.
+    const hostile = makeEvent({ state: 'archived' as CommunityEvent['state'] });
+    const { getByText } = render(<EventCard event={hostile} onPress={jest.fn()} />);
+    expect(getByText('Event')).toBeTruthy();
   });
 });
 

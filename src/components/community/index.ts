@@ -17,8 +17,8 @@ export type {
 } from './SpaceTabBar';
 export { default as PostCard } from './PostCard';
 export type { PostCardProps } from './PostCard';
-export { default as EventCard } from './EventCard';
-export type { EventCardProps } from './EventCard';
+export { default as EventCard, stateMeta, formatEventStart, rsvpSummary } from './EventCard';
+export type { EventCardProps, EventStateMeta } from './EventCard';
 export { default as ThreadHeader } from './ThreadHeader';
 export type { ThreadHeaderProps } from './ThreadHeader';
 export { default as ReactionBar } from './ReactionBar';

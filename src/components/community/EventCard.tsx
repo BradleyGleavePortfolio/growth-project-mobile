@@ -30,17 +30,41 @@ export interface EventCardProps {
   testID?: string;
 }
 
-/** Short, human label + line icon for each lifecycle state. */
-const STATE_META: Record<
-  CommunityEventState,
-  { label: string; icon: keyof typeof Ionicons.glyphMap }
-> = {
+/** Line-icon glyph + human, status-honest label for each lifecycle state. */
+export interface EventStateMeta {
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+}
+
+/**
+ * Lifecycle copy is STATUS-HONEST (UX): "Live now" / "Replay available" /
+ * "Recap posted" tell the member what they can actually do right now, not a
+ * bare noun. These labels are shared across the card badge, the client detail
+ * badge, and the coach manage surface so the vocabulary never diverges.
+ */
+const STATE_META: Record<CommunityEventState, EventStateMeta> = {
   scheduled: { label: 'Scheduled', icon: 'calendar-outline' },
   tomorrow: { label: 'Tomorrow', icon: 'time-outline' },
-  live: { label: 'Live', icon: 'radio-outline' },
-  replay: { label: 'Replay', icon: 'play-circle-outline' },
-  reflected: { label: 'Recap', icon: 'document-text-outline' },
+  live: { label: 'Live now', icon: 'radio-outline' },
+  replay: { label: 'Replay available', icon: 'play-circle-outline' },
+  reflected: { label: 'Recap posted', icon: 'document-text-outline' },
 };
+
+/**
+ * Resolve the badge label + icon for an event state, with a CALM fallback for
+ * any value not in the known set. A backend that adds a sixth state, or a
+ * malformed/hostile payload that slips a bogus state past the type system,
+ * must never crash a `meta.label` / `meta.icon` dereference — it degrades to a
+ * neutral "Event" + calendar glyph. (F5: unknown-state safety.)
+ */
+export function stateMeta(state: CommunityEventState | string): EventStateMeta {
+  return (
+    STATE_META[state as CommunityEventState] ?? {
+      label: 'Event',
+      icon: 'calendar-outline',
+    }
+  );
+}
 
 /**
  * Format an ISO start time as a compact, locale-aware "Mon 14 · 6:00 PM" label.
@@ -82,7 +106,7 @@ export default function EventCard({
 }: EventCardProps): React.ReactElement {
   const { semanticColors } = useTheme();
   const saving = isOptimisticEventId(event.id);
-  const meta = STATE_META[event.state];
+  const meta = stateMeta(event.state);
   const start = formatEventStart(event.starts_at);
   const summary = rsvpSummary(event);
   const accessibilityLabel = `Open event ${event.title}, ${meta.label}, starts ${start}`;
