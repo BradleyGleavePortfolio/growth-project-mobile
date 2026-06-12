@@ -117,6 +117,40 @@ const EXISTING_PLAN = {
     },
   ],
 };
+
+// The refreshed server truth delivered by the post-replay reconciliation
+// refetch: the rescued edit landed, so the server now holds the `deadlift` row
+// (and the stale `squat` row a naive racing Save would have re-pushed is gone).
+// A distinct object + distinct rows from EXISTING_PLAN so the regression below
+// proves the screen ADOPTED refreshed truth rather than echoing the mock.
+const RESCUED_PLAN = {
+  ...EXISTING_PLAN,
+  name: 'Rescued name A',
+  exercises: [
+    {
+      id: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+      workout_plan_id: 'plan-1',
+      exercise_external_id: 'deadlift',
+      order: 1,
+      sets: 5,
+      reps_or_duration_seconds: 5,
+      weight_lbs: null,
+      rest_seconds: 120,
+      superset_group_id: null,
+      notes: null,
+    },
+  ],
+};
+
+// Mutable holder the mocked `useWorkoutPlan` reads each render. Defaults to the
+// canonical EXISTING_PLAN; the P2 kill/replay regression starts it at
+// `undefined` (the invalidate-driven reconciliation refetch is in flight, so the
+// cache has no settled data to adopt yet — keeping the adoption effect from
+// recording `initialLoadDoneRef` or consuming the replay's refetchSeq bump
+// mid-flight), then swaps it to RESCUED_PLAN once the replay retry is terminal so
+// the refreshed server truth is folded in by a clean full replace. Reset in
+// beforeEach.
+let mockCurrentPlan: typeof EXISTING_PLAN | undefined = EXISTING_PLAN;
 // Named mutation spies so the kill/replay regression test can assert the exact
 // full-replace payload an explicit Save sends AFTER a replay (it must carry the
 // post-replay/refreshed rows, never an empty/reverted set).
@@ -125,7 +159,7 @@ const mockCreateMutateAsync = jest.fn().mockResolvedValue({ id: 'plan-1' });
 const mockSetExercisesMutateAsync = jest.fn().mockResolvedValue(undefined);
 jest.mock('../hooks/useWorkoutBuilder', () => ({
   __esModule: true,
-  useWorkoutPlan: () => ({ data: EXISTING_PLAN, refetch: mockRefetch }),
+  useWorkoutPlan: () => ({ data: mockCurrentPlan, refetch: mockRefetch }),
   useCreateWorkoutPlan: () => ({ mutateAsync: mockCreateMutateAsync, isPending: false }),
   useUpdateWorkoutPlan: () => ({ mutateAsync: mockUpdateMutateAsync, isPending: false }),
   useSetWorkoutExercises: () => ({
@@ -217,6 +251,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   // `clearAllMocks` wipes implementations too, so re-establish the defaults the
   // boundary mocks need between tests.
+  mockCurrentPlan = EXISTING_PLAN;
   mockReadMirror.mockResolvedValue(null);
   mockClearMirrorIfKey.mockResolvedValue(undefined);
   mockInvalidateQueries.mockResolvedValue(undefined);
@@ -342,6 +377,31 @@ describe('CoachWorkoutBuilderScreen — kill/replay cache reconcile (P1)', () =>
     };
   }
 
+  /** A 409 `autosave_conflict_retry` — a GENUINE external-edit conflict (the
+   *  plan moved ahead on the server while the replay was in flight, e.g. the
+   *  rescued edit landed via another path). Unlike the silent bootstrap
+   *  stale-lock, this fires `onConflict` so the screen invalidates + refetches
+   *  (bumping refetchSeq) and rebases + REQUEUES the still-unsaved ops as the
+   *  held retry below — exactly the replay-descendant path the R8 gate must hold
+   *  across until the retry is terminal AND the refreshed truth is adopted. */
+  function replayConflict() {
+    const { WorkoutAutosaveApiError } = jest.requireMock(
+      '../api/workoutAutosaveApi',
+    ) as {
+      WorkoutAutosaveApiError: new (
+        kind: string,
+        status: number,
+        message: string,
+        conflict?: unknown,
+      ) => Error;
+    };
+    return new WorkoutAutosaveApiError('conflict', 409, 'external edit conflict', {
+      error: 'autosave_conflict_retry',
+      head_revision_index: 7,
+      lock_token: 'abcdefabcdefabcd',
+    });
+  }
+
   it('force-invalidates + refetches the plan cache and replays with the same key', async () => {
     setFlag(true);
     mockReadMirror.mockResolvedValueOnce(mirroredRename());
@@ -409,41 +469,148 @@ describe('CoachWorkoutBuilderScreen — kill/replay cache reconcile (P1)', () =>
     );
   });
 
-  it('explicit Save after replay sends post-replay rows and does NOT revert', async () => {
+  it('holds Save disabled through a 409-rebased replay retry, then adopts refreshed truth before Save uses the rescued row', async () => {
     setFlag(true);
-    mockReadMirror.mockResolvedValueOnce(mirroredRename());
-    const Screen = loadScreen();
-    const { getByLabelText } = render(<Screen />);
+    jest.useFakeTimers();
 
-    // Replay settles (default mockAutosaveCall resolves 200) and the gate clears.
-    await waitFor(() => expect(mockAutosaveCall).toHaveBeenCalled());
+    // Cold relaunch: the mirror replay force-invalidates the plan cache and
+    // drives a refetch, so during the entire replay+retry window the cache has
+    // NO settled server data to adopt yet (`undefined`). This is the crux of the
+    // race: while the cache is empty the adoption effect early-returns on
+    // `!existingPlan`, so it NEVER records `initialLoadDoneRef` and NEVER
+    // consumes the replay/conflict-driven refetchSeq bumps. The screen still
+    // carries the coach's in-progress LOCAL working copy (the rename below) — the
+    // state a naive full-replace Save would push to the server if it raced the
+    // retry, clobbering the rescued edit.
+    mockCurrentPlan = undefined;
+    mockReadMirror.mockResolvedValueOnce(mirroredRename());
+
+    // The replay's FIRST send is HELD open so we can make the working copy
+    // diverge (a coach edit) BEFORE the 409 is processed: that way the post-409
+    // rebase produces a non-empty retry batch (otherwise the diff is empty and
+    // the replay settles immediately with no retry to gate against). The 409 is
+    // an autosave_lock_stale, which fast-forwards the lock and rebases+requeues
+    // the still-unsaved ops; the SECOND send (the rebased retry) is also held
+    // open so we can observe that Save stays disabled across the retry window.
+    let rejectReplay: (e: unknown) => void = () => {};
+    const replayPending = new Promise((_resolve, reject) => {
+      rejectReplay = reject;
+    });
+    let resolveRetry: (v: unknown) => void = () => {};
+    const retryPending = new Promise((resolve) => {
+      resolveRetry = resolve;
+    });
+    mockAutosaveCall
+      .mockReturnValueOnce(replayPending)
+      .mockReturnValueOnce(retryPending);
+
+    const Screen = loadScreen();
+    const { getByLabelText, rerender } = render(<Screen />);
+
+    // The replay's first send is now in flight (held) and the cache is empty, so
+    // the adoption effect has early-returned on every render so far
+    // (`initialLoadDoneRef` still false).
+    await waitFor(() => expect(mockAutosaveCall.mock.calls.length).toBe(1));
+
+    // Diverge the working copy while the replay is held: the coach renames the
+    // plan. This is the SOLE local divergence, so once the retry's terminal 200
+    // lands the working copy matches its saved snapshot and `hasPending` settles
+    // back to false (no perpetually-dirty id-less row to keep it pending).
+    await act(async () => {
+      fireEvent.changeText(getByLabelText('Plan name'), 'Rescued name A');
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(900);
+      await Promise.resolve();
+    });
+
+    // Reject the held replay send with a 409: the hook rebases the (now
+    // divergent) ops and re-sends the retry, which lands on the held promise.
+    await act(async () => {
+      rejectReplay(replayConflict());
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // The replay 409'd and the rebased retry is now in flight (held pending).
+    await waitFor(() =>
+      expect(mockAutosaveCall.mock.calls.length).toBeGreaterThanOrEqual(2),
+    );
+
+    // R8 GATE-HOLD: a replayed 409 is NOT terminal — the retry is still in
+    // flight, so Save MUST remain disabled. (The R7 code cleared the gate on
+    // the 409 here, which would re-enable Save and let a stale full-replace
+    // race the retry and erase the rescue.)
+    expect(
+      getByLabelText('Save changes').props.accessibilityState?.disabled,
+    ).toBe(true);
+
+    // Now let the held replay retry land its terminal 200 while the cache is
+    // STILL empty. The terminal 200 clears the replay gate and settles
+    // `hasPending` back to false WITHOUT adopting anything yet: with no settled
+    // server data the adoption effect early-returns on `!existingPlan`, so
+    // `initialLoadDoneRef` is STILL false (and every refetchSeq bump remains
+    // UNADOPTED). This is what lets the refreshed truth be folded in by a clean
+    // FULL REPLACE next — not a MERGE during the still-pending retry window.
+    await act(async () => {
+      resolveRetry({
+        head_revision_index: 8,
+        lock_token: 'feedfacefeedface',
+        saved_at: '2026-01-01T00:00:00.000Z',
+      });
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      jest.advanceTimersByTime(0);
+      await Promise.resolve();
+    });
+
+    // The reconciliation refetch the replay drove now delivers DIFFERENT
+    // refreshed server truth: the rescued `deadlift` row landed and the stale
+    // `squat` row is gone. Point the mocked query hook at it and rerender. With
+    // `hasPending` now false AND `initialLoadDoneRef` still false (the empty-
+    // cache window never set it), this first RESCUED render takes the
+    // FULL-REPLACE branch and adopts the rescued `deadlift` row.
+    mockCurrentPlan = RESCUED_PLAN;
+    await act(async () => {
+      rerender(<Screen />);
+      await Promise.resolve();
+    });
+
+    // Save re-enables only after the retry settled AND refreshed truth adopted.
     await waitFor(() =>
       expect(
         getByLabelText('Save changes').props.accessibilityState?.disabled,
       ).toBe(false),
     );
-    // The replay refetched + adopted the refreshed plan, so the form carries the
-    // server's bench row, not an emptied/reverted set.
+
+    // The reconciliation invalidated + refetched the plan cache.
     expect(mockInvalidateQueries).toHaveBeenCalledWith({
       queryKey: ['workout-plans', 'plan-1'],
     });
     expect(mockRefetch).toHaveBeenCalled();
 
-    // Fire explicit Save now that the replay has settled.
+    // Fire explicit Save now that the gate has released and refreshed truth is
+    // adopted.
     await act(async () => {
       fireEvent.press(getByLabelText('Save changes'));
       await Promise.resolve();
     });
 
-    // The full-replace setExercises payload carries the refreshed bench row
-    // (post-replay truth) — it is NOT empty, so the rescued edit is preserved.
+    // The full-replace setExercises payload carries the RESCUED `deadlift` row
+    // (refreshed server truth that the gate-held replay reconciliation adopted),
+    // and the STALE `squat` row — which the pre-kill cache held and a naive Save
+    // racing the retry would have re-pushed — is absent. This proves the screen
+    // adopted post-replay truth rather than overwriting it with stale rows.
     await waitFor(() => expect(mockSetExercisesMutateAsync).toHaveBeenCalled());
     const setArgs = mockSetExercisesMutateAsync.mock.calls[0]?.[0] as {
       planId: string;
       rows: Array<{ exercise_external_id: string }>;
     };
     expect(setArgs.planId).toBe('plan-1');
-    expect(setArgs.rows.length).toBe(1);
-    expect(setArgs.rows[0]?.exercise_external_id).toBe('bench');
+    const externalIds = setArgs.rows.map((r) => r.exercise_external_id);
+    expect(externalIds).toContain('deadlift');
+    expect(externalIds).not.toContain('squat');
   });
 });

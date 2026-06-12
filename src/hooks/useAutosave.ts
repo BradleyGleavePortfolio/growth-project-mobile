@@ -210,10 +210,14 @@ export interface UseAutosaveResult<TWorkingCopy = unknown> {
   rebaseline: () => void;
   /**
    * True from the moment a mirrored batch is found on mount until that replayed
-   * batch reaches a terminal server outcome (200 / 409 / hard reject). The
-   * screen blocks (disables) explicit Save while this is true so a full-replace
-   * Save cannot race the in-flight replay + cache refetch and erase the rescued
-   * edit (MWB-4 #237 R6 P1).
+   * batch — and every descendant rebased+requeued from a replay 409 — reaches a
+   * TRULY terminal outcome AND the reconciliation refetch/adoption has folded
+   * the rescued ops into the baseline. A replay 409 that rebases+requeues keeps
+   * this raised (the 409 is not terminal); it clears only on the descendant's
+   * terminal 200 / hard reject, or on a 409 whose rebase finds nothing left to
+   * send (adopted). The screen blocks (disables) explicit Save while this is
+   * true so a full-replace Save cannot race the in-flight replay retry + cache
+   * refetch and erase the rescued edit (MWB-4 #237 R6/R8 P1).
    */
   replayInFlight: boolean;
   /**
@@ -250,11 +254,16 @@ interface PendingBatch<TWorkingCopy> {
    */
   snapshot: TWorkingCopy;
   /**
-   * True only for the batch rehydrated from the offline mirror on mount (the
-   * kill/replay path). Its terminal server outcome (200 / 409 / hard reject)
-   * clears `replayInFlight` so the screen can re-enable explicit Save once the
-   * rescued edit has reached the server and the cache refetch is in motion
-   * (MWB-4 #237 R6 P1). A normal debounced/queued batch is never a replay.
+   * True for the batch rehydrated from the offline mirror on mount (the
+   * kill/replay path) AND for any descendant rebased+requeued from that batch's
+   * 409 (the tag is carried forward by {@link rebaseBatch}). The gate clears
+   * only on a TRULY terminal replay outcome: a 200, a hard reject, or a 409
+   * whose rebase finds no remaining work (the reconciliation refetch already
+   * absorbed the rescued ops). A 409 that rebases+requeues is NOT terminal —
+   * the descendant carries this tag and clears the gate on its own terminal
+   * outcome, so an explicit full-replace Save can never race the in-flight
+   * replay retry and erase the rescued edit (MWB-4 #237 R8 P1). A normal
+   * debounced/queued batch is never a replay.
    */
   isReplay?: boolean;
 }
@@ -386,10 +395,13 @@ export function useAutosave<TWorkingCopy>(
     }
   }, []);
 
-  // Clear the replay-in-flight gate once the replayed batch has reached a
-  // terminal server outcome (200 / 409 / hard reject). Keeps the ref and the
-  // state in lockstep so the screen's Save-blocked gate (which reads the state)
-  // and any internal check (the ref) never disagree (MWB-4 #237 R6 P1).
+  // Clear the replay-in-flight gate once the replayed batch (or a descendant
+  // rebased+requeued from a replay 409) has reached a TRULY terminal outcome:
+  // a 200, a hard reject, or a 409 whose rebase leaves nothing to re-send (the
+  // reconciliation refetch already absorbed the rescued ops). It is NOT cleared
+  // on a 409 that rebases+requeues — that retry is still in flight (MWB-4 #237
+  // R8 P1). Keeps the ref and the state in lockstep so the screen's Save-blocked
+  // gate (which reads the state) and any internal check (the ref) never disagree.
   const clearReplayInFlight = useCallback(() => {
     if (!replayInFlightRef.current) return;
     replayInFlightRef.current = false;
@@ -461,6 +473,13 @@ export function useAutosave<TWorkingCopy>(
         cause: batch.cause,
         idempotencyKey: batch.idempotencyKey,
         snapshot,
+        // Carry the replay tag forward onto the requeued retry. A replayed 409
+        // is NOT terminal for the rescued edit: the batch is rebased onto the
+        // fresh head and re-sent. The descendant retry must stay tagged so the
+        // Save-blocked gate is released only when THAT retry reaches a truly
+        // terminal outcome (200 / hard reject), never on the intermediate 409
+        // that merely requeues it (MWB-4 #237 R8 P1).
+        isReplay: batch.isReplay,
       };
     },
     [],
@@ -526,9 +545,11 @@ export function useAutosave<TWorkingCopy>(
         // A real save landed: any later 409 is now a genuine external-edit
         // conflict, not the silent bootstrap stale-lock recovery.
         hasSavedRef.current = true;
-        // The replayed batch reached the server successfully — the rescued edit
-        // is now durable on the server. Release the Save-blocked gate; the
-        // screen's onSaved already forced the cache refetch (MWB-4 #237 R6 P1).
+        // The replayed batch (or its rebased+requeued descendant) reached the
+        // server successfully — the rescued edit is now durable on the server
+        // and this is the replay's terminal 200. Release the Save-blocked gate;
+        // the screen's onReplay/onSaved already forced the cache refetch that
+        // rebaselines the form (MWB-4 #237 R6/R8 P1).
         if (batch.isReplay) clearReplayInFlight();
         clearBackoffTimer();
         indexRef.current = res.head_revision_index;
@@ -589,13 +610,18 @@ export function useAutosave<TWorkingCopy>(
           //     fire onConflict so the caller refetches and the coach is told.
           const isBootstrapStaleLock =
             err.conflict?.error === 'autosave_lock_stale' && !hasSavedRef.current;
-          // A replayed batch that 409s has still reached the server (its ops
-          // were either already applied via the idempotency key on the kill, or
-          // the lock fast-forwards and they re-send on the fresh head). Either
-          // way the rescued edit is server-side, so release the Save-blocked
-          // gate; the screen's onConflict/onReplay forced the cache refetch
-          // that rebaselines the form (MWB-4 #237 R6 P1).
-          if (batch.isReplay) clearReplayInFlight();
+          // A replayed batch that 409s is NOT yet terminal for the rescued edit
+          // (MWB-4 #237 R8 P1). This branch fast-forwards the lock/index, then
+          // rebases + REQUEUES the still-unsaved ops and pumps them again — so
+          // the rescued edit has NOT necessarily landed and the retry is still
+          // in flight. Clearing the Save-blocked gate here (the R7 bug) let an
+          // explicit full-replace Save race that retry and erase the rescue.
+          // We therefore HOLD the gate across the 409 and release it only on a
+          // truly terminal replay outcome: below, the gate clears iff the
+          // rebase finds NO remaining work (the caller's reconciliation refetch
+          // already absorbed the rescued ops — terminal + adopted), and the
+          // requeued retry (which carries `isReplay` via rebaseBatch) clears it
+          // on its own terminal 200 / hard reject.
           if (err.conflict) {
             indexRef.current = err.conflict.head_revision_index;
             tokenRef.current = err.conflict.lock_token;
@@ -626,6 +652,12 @@ export function useAutosave<TWorkingCopy>(
             // The refetch absorbed the local ops (diff empty), so the working
             // copy now matches the adopted baseline: no longer dirty.
             setDirty(false);
+            // Replay terminal + reconciled: this was a replayed batch and the
+            // caller's refetch/adoption has folded the rescued ops into the
+            // baseline (the diff is now empty), so there is no remaining replay
+            // work and the refreshed truth is adopted. Release the Save-blocked
+            // gate (MWB-4 #237 R8 P1).
+            if (batch.isReplay) clearReplayInFlight();
             safeSet(setHasPending, computeHasPending());
             return;
           }
@@ -660,10 +692,11 @@ export function useAutosave<TWorkingCopy>(
         const kind =
           err instanceof WorkoutAutosaveApiError ? err.kind : 'unknown';
         pendingNextRef.current = batch;
-        // A replayed batch hit a hard reject: the rescued edit will not apply
-        // as-is, but the replay attempt is terminal here. Release the gate so
-        // the coach is not locked out of explicit Save indefinitely; the
-        // screen's onReplay already forced a cache refetch (MWB-4 #237 R6 P1).
+        // A replayed batch (or its requeued descendant) hit a hard reject: the
+        // rescued edit will not apply as-is, but this IS terminal for the replay
+        // attempt. Release the gate so the coach is not locked out of explicit
+        // Save indefinitely; the screen's onReplay already forced a cache
+        // refetch (MWB-4 #237 R6/R8 P1).
         if (batch.isReplay) clearReplayInFlight();
         safeSet(setStatus, 'offline');
         safeSet(setHasPending, true);
@@ -960,12 +993,14 @@ export function useAutosave<TWorkingCopy>(
 
   // ─── Navigation beforeRemove: owned by the screen, not this hook ────────────
   // The Navigation `beforeRemove` listener is NOT registered here — it lives in
-  // CoachWorkoutBuilderScreen.tsx:426-432, where the screen awaits a mirror-
-  // first flush before letting the route tear down. This hook stays navigation-
-  // agnostic: its own durable-capture guarantee comes from the stable flush
-  // (reads latestValueRef) firing from BOTH the AppState listener and the
-  // unmount cleanup below, so the last edit is always mirrored regardless of
-  // how teardown is triggered.
+  // the screen, where it fires a FIRE-AND-FORGET mirror-first flush (`void
+  // autosaveFlush()`) without `preventDefault` or awaiting the promise, so the
+  // route tears down instantly while the batch is captured to the offline
+  // mirror (the durability line) and replays on the next mount. This hook stays
+  // navigation-agnostic: its own durable-capture guarantee comes from the
+  // stable flush (reads latestValueRef) firing from BOTH the AppState listener
+  // and the unmount cleanup below, so the last edit is always mirrored
+  // regardless of how teardown is triggered.
 
   // ─── Lifecycle: durable capture + abort obsolete request on teardown ────────
   useEffect(() => {
