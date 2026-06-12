@@ -16,7 +16,11 @@
  */
 import React from 'react';
 import { renderHook, waitFor, act } from '@testing-library/react-native';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import {
+  QueryClient,
+  QueryClientProvider,
+  type InfiniteData,
+} from '@tanstack/react-query';
 
 jest.mock('../../api/communityEventsApi', () => ({
   communityEventsApi: {
@@ -39,6 +43,7 @@ import {
   communityEventsKeys,
   useRsvpEvent,
   useCreateEvent,
+  useCommunityEventsInfiniteList,
   isOptimisticEventId,
 } from '../useCommunityEvents';
 
@@ -50,6 +55,7 @@ const mockApi = {
   getOne: jest.mocked(communityEventsApi.getOne),
   rsvp: jest.mocked(communityEventsApi.rsvp),
   create: jest.mocked(communityEventsApi.create),
+  list: jest.mocked(communityEventsApi.list),
 };
 
 function baseEvent(overrides: Partial<CommunityEvent> = {}): CommunityEvent {
@@ -93,6 +99,71 @@ beforeEach(() => {
   mockApi.getOne.mockReset();
   mockApi.rsvp.mockReset();
   mockApi.create.mockReset();
+  mockApi.list.mockReset();
+});
+
+describe('useCommunityEventsInfiniteList — keyset (before) pagination', () => {
+  it('omits the cursor on page 1 and threads next_before into page 2', async () => {
+    const { Wrapper } = makeWrapper();
+    const page1: CommunityEventListResponse = {
+      events: [baseEvent({ id: 'newest' })],
+      next_before: '2026-06-01T00:00:00.000Z',
+    };
+    const page2: CommunityEventListResponse = {
+      events: [baseEvent({ id: 'older' })],
+      next_before: null,
+    };
+    mockApi.list
+      .mockResolvedValueOnce(page1)
+      .mockResolvedValueOnce(page2);
+
+    const { result } = renderHook(
+      () => useCommunityEventsInfiniteList(WS),
+      { wrapper: Wrapper },
+    );
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    // Page 1 fetched WITHOUT a cursor.
+    expect(mockApi.list).toHaveBeenLastCalledWith(WS, {});
+    expect(result.current.hasNextPage).toBe(true);
+
+    await act(async () => {
+      await result.current.fetchNextPage();
+    });
+
+    await waitFor(() =>
+      expect(result.current.data?.pages).toHaveLength(2),
+    );
+    // Page 2 fetched WITH the server-issued cursor.
+    expect(mockApi.list).toHaveBeenLastCalledWith(WS, {
+      before: '2026-06-01T00:00:00.000Z',
+    });
+    expect(result.current.hasNextPage).toBe(false);
+  });
+
+  it('is disabled (no fetch) until a workspace id is known', () => {
+    const { Wrapper } = makeWrapper();
+    renderHook(() => useCommunityEventsInfiniteList(undefined), {
+      wrapper: Wrapper,
+    });
+    expect(mockApi.list).not.toHaveBeenCalled();
+  });
+});
+
+describe('communityEventsKeys.list — request-shaping options', () => {
+  it('includes limit so different page sizes do not share a cache entry', () => {
+    const a = communityEventsKeys.list(WS, { limit: 20 });
+    const b = communityEventsKeys.list(WS, { limit: 50 });
+    expect(a).not.toEqual(b);
+  });
+
+  it('separates state and cohort filters in the key', () => {
+    const a = communityEventsKeys.list(WS, { state: 'live' });
+    const b = communityEventsKeys.list(WS, { state: 'replay' });
+    const c = communityEventsKeys.list(WS, { cohort_id: 'c-1' });
+    expect(a).not.toEqual(b);
+    expect(a).not.toEqual(c);
+  });
 });
 
 describe('isOptimisticEventId', () => {
@@ -154,8 +225,11 @@ describe('useRsvpEvent — optimistic detail update + rollback', () => {
       wrapper: Wrapper,
     });
 
+    // Assert the rejection explicitly (R65 / Failure #36: never swallow a
+    // rejected promise with a no-op catch — that hides the thrown error
+    // class/message). The mutation must reject with the server error.
     await act(async () => {
-      await result.current.mutateAsync('maybe').catch(() => undefined);
+      await expect(result.current.mutateAsync('maybe')).rejects.toThrow('boom');
     });
 
     await waitFor(() => {
@@ -167,22 +241,20 @@ describe('useRsvpEvent — optimistic detail update + rollback', () => {
 });
 
 describe('useCreateEvent — optimistic insert + rollback', () => {
-  it('inserts a provisional event at the top while in flight', async () => {
+  it('inserts a provisional event at the top of the first page while in flight', async () => {
     const { qc, Wrapper } = makeWrapper();
     const listKey = communityEventsKeys.list(WS);
-    const server: CommunityEventListResponse = {
-      events: [baseEvent({ id: 'server-new' })],
-      next_before: null,
-    };
-    qc.setQueryDefaults(listKey, { queryFn: async () => server });
-    qc.setQueryData<CommunityEventListResponse>(listKey, {
-      events: [],
-      next_before: null,
+    // The list surfaces read through useInfiniteQuery, so the cached shape is
+    // InfiniteData<CommunityEventListResponse>.
+    qc.setQueryData<InfiniteData<CommunityEventListResponse>>(listKey, {
+      pages: [{ events: [], next_before: null }],
+      pageParams: [undefined],
     });
 
-    let inflight: CommunityEventListResponse | undefined;
+    let inflight: InfiniteData<CommunityEventListResponse> | undefined;
     mockApi.create.mockImplementation(async () => {
-      inflight = qc.getQueryData<CommunityEventListResponse>(listKey);
+      inflight =
+        qc.getQueryData<InfiniteData<CommunityEventListResponse>>(listKey);
       return baseEvent({ id: 'server-new' });
     });
 
@@ -197,8 +269,9 @@ describe('useCreateEvent — optimistic insert + rollback', () => {
       });
     });
 
-    expect(inflight?.events[0].title).toBe('Workshop');
-    expect(isOptimisticEventId(inflight?.events[0].id ?? '')).toBe(true);
+    const firstEvent = inflight?.pages[0].events[0];
+    expect(firstEvent?.title).toBe('Workshop');
+    expect(isOptimisticEventId(firstEvent?.id ?? '')).toBe(true);
     expect(mockApi.create).toHaveBeenCalledWith(
       WS,
       expect.objectContaining({ title: 'Workshop' }),
@@ -208,24 +281,31 @@ describe('useCreateEvent — optimistic insert + rollback', () => {
   it('rolls back to the prior (empty) list when the server rejects', async () => {
     const { qc, Wrapper } = makeWrapper();
     const listKey = communityEventsKeys.list(WS);
-    const empty: CommunityEventListResponse = { events: [], next_before: null };
-    qc.setQueryDefaults(listKey, { queryFn: async () => empty });
-    qc.setQueryData<CommunityEventListResponse>(listKey, empty);
+    const empty: InfiniteData<CommunityEventListResponse> = {
+      pages: [{ events: [], next_before: null }],
+      pageParams: [undefined],
+    };
+    qc.setQueryData<InfiniteData<CommunityEventListResponse>>(listKey, empty);
     mockApi.create.mockRejectedValueOnce(new Error('nope'));
 
     const { result } = renderHook(() => useCreateEvent(WS, UID), {
       wrapper: Wrapper,
     });
 
+    // Assert the rejection explicitly rather than swallowing it (R65 / #36).
     await act(async () => {
-      await result.current
-        .mutateAsync({ title: 'X', starts_at: '2026-08-01T18:00:00.000Z' })
-        .catch(() => undefined);
+      await expect(
+        result.current.mutateAsync({
+          title: 'X',
+          starts_at: '2026-08-01T18:00:00.000Z',
+        }),
+      ).rejects.toThrow('nope');
     });
 
     await waitFor(() => {
-      const cached = qc.getQueryData<CommunityEventListResponse>(listKey);
-      expect(cached?.events).toHaveLength(0);
+      const cached =
+        qc.getQueryData<InfiniteData<CommunityEventListResponse>>(listKey);
+      expect(cached?.pages.flatMap((p) => p.events)).toHaveLength(0);
     });
   });
 });

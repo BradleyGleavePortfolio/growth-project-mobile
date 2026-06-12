@@ -274,6 +274,11 @@ export interface ListEventsOptions {
   state?: CommunityEventState;
   cohort_id?: string;
   limit?: number;
+  /**
+   * Keyset cursor — the server returns `next_before` for the following page;
+   * passing it back here fetches OLDER events. Omitted on the first page.
+   */
+  before?: string;
 }
 
 // ─── Endpoint object ─────────────────────────────────────────────────────────
@@ -281,7 +286,9 @@ export interface ListEventsOptions {
 export const communityEventsApi = {
   /**
    * GET /community/workspaces/:workspaceId/events — list events for a
-   * workspace, optionally filtered by lifecycle `state` and/or `cohort_id`.
+   * workspace, optionally filtered by lifecycle `state` and/or `cohort_id`,
+   * and paginated via the keyset `before` cursor (the server returns
+   * `next_before` to fetch the following, older page).
    */
   list(
     workspaceId: string,
@@ -291,6 +298,7 @@ export const communityEventsApi = {
     if (opts.state) params.state = opts.state;
     if (opts.cohort_id) params.cohort_id = opts.cohort_id;
     if (opts.limit != null) params.limit = String(opts.limit);
+    if (opts.before) params.before = opts.before;
     return call(CommunityEventListResponseSchema, () =>
       api.get<unknown>(`/community/workspaces/${workspaceId}/events`, {
         params,

@@ -61,6 +61,17 @@ describe('EventCard', () => {
     expect(getByText('12 going · 3 maybe')).toBeTruthy();
   });
 
+  it('wraps the card in a listitem while keeping the press target a button', () => {
+    const { getByTestId, UNSAFE_getByProps } = render(
+      <EventCard event={makeEvent()} onPress={jest.fn()} testID="card" />,
+    );
+    // The inner press target keeps button semantics.
+    expect(getByTestId('card').props.accessibilityRole).toBe('button');
+    // An outer wrapper supplies listitem semantics for assistive tech (RN
+    // types list/listitem via the W3C `role` prop).
+    expect(UNSAFE_getByProps({ role: 'listitem' })).toBeTruthy();
+  });
+
   it('fires onPress with the event when tapped', () => {
     const onPress = jest.fn();
     const event = makeEvent();

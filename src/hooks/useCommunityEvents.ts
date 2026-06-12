@@ -16,9 +16,12 @@
  */
 import {
   useQuery,
+  useInfiniteQuery,
   useMutation,
   useQueryClient,
   type UseQueryResult,
+  type UseInfiniteQueryResult,
+  type InfiniteData,
   type UseMutationResult,
 } from '@tanstack/react-query';
 import {
@@ -37,6 +40,14 @@ import {
 
 export const communityEventsKeys = {
   all: ['communityEvents'] as const,
+  /**
+   * The list key includes EVERY request-shaping option (state, cohort, limit)
+   * so two callers with different page sizes or filters never collide on one
+   * cache entry. The keyset cursor (`before`) is intentionally NOT part of the
+   * key: the infinite query keeps every page under a single key and threads the
+   * cursor through `pageParam` instead, so each page does not fragment the
+   * cache.
+   */
   list: (workspaceId: string, opts: ListEventsOptions = {}) =>
     [
       ...communityEventsKeys.all,
@@ -44,6 +55,7 @@ export const communityEventsKeys = {
       workspaceId,
       opts.state ?? '∅',
       opts.cohort_id ?? '∅',
+      opts.limit ?? '∅',
     ] as const,
   detail: (eventId: string) =>
     [...communityEventsKeys.all, 'detail', eventId] as const,
@@ -73,6 +85,35 @@ export function useCommunityEventsList(
   return useQuery({
     queryKey: communityEventsKeys.list(workspaceId ?? '∅', opts),
     queryFn: () => communityEventsApi.list(workspaceId as string, opts),
+    enabled: !!workspaceId,
+    staleTime: 30_000,
+  });
+}
+
+/**
+ * List events for a workspace with keyset (`before`) pagination. The mobile
+ * list surfaces (coach + client) use THIS so older events stay reachable once
+ * the backend returns a page with `next_before`: `getNextPageParam` reads that
+ * cursor and `fetchNextPage` requests the following, older page.
+ *
+ * The `limit` is part of the query key (so a different page size is a distinct
+ * cache entry), while the cursor is threaded through `pageParam` (so every
+ * page lives under one key). `enabled` mirrors the single query — it never
+ * fires with an empty workspace path segment.
+ */
+export function useCommunityEventsInfiniteList(
+  workspaceId: string | undefined,
+  opts: Omit<ListEventsOptions, 'before'> = {},
+): UseInfiniteQueryResult<InfiniteData<CommunityEventListResponse>> {
+  return useInfiniteQuery({
+    queryKey: communityEventsKeys.list(workspaceId ?? '∅', opts),
+    queryFn: ({ pageParam }) =>
+      communityEventsApi.list(workspaceId as string, {
+        ...opts,
+        ...(pageParam ? { before: pageParam } : {}),
+      }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.next_before ?? undefined,
     enabled: !!workspaceId,
     staleTime: 30_000,
   });
@@ -166,7 +207,11 @@ export function useCreateEvent(
     onMutate: async (input) => {
       const key = communityEventsKeys.list(workspaceId);
       await qc.cancelQueries({ queryKey: key });
-      const prev = qc.getQueryData<CommunityEventListResponse>(key);
+      // The list surfaces read through useInfiniteQuery, so the cached shape is
+      // InfiniteData<CommunityEventListResponse>. Insert the provisional event
+      // at the top of the FIRST page (newest), mirroring the server ordering.
+      const prev =
+        qc.getQueryData<InfiniteData<CommunityEventListResponse>>(key);
       const now = new Date().toISOString();
       const optimistic: CommunityEvent = {
         id: tempEventId(),
@@ -192,14 +237,24 @@ export function useCreateEvent(
         created_at: now,
         updated_at: now,
       };
-      qc.setQueryData<CommunityEventListResponse>(key, {
-        events: [optimistic, ...(prev?.events ?? [])],
-        next_before: prev?.next_before ?? null,
-      });
+      const firstPage: CommunityEventListResponse = prev?.pages[0] ?? {
+        events: [],
+        next_before: null,
+      };
+      const nextFirstPage: CommunityEventListResponse = {
+        events: [optimistic, ...firstPage.events],
+        next_before: firstPage.next_before,
+      };
+      const next: InfiniteData<CommunityEventListResponse> = prev
+        ? { ...prev, pages: [nextFirstPage, ...prev.pages.slice(1)] }
+        : { pages: [nextFirstPage], pageParams: [undefined] };
+      qc.setQueryData<InfiniteData<CommunityEventListResponse>>(key, next);
       return { prev };
     },
     onError: (_err, _input, ctx) => {
-      const c = ctx as { prev?: CommunityEventListResponse } | undefined;
+      const c = ctx as
+        | { prev?: InfiniteData<CommunityEventListResponse> }
+        | undefined;
       if (c?.prev) {
         qc.setQueryData(communityEventsKeys.list(workspaceId), c.prev);
       }

@@ -62,7 +62,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCommunityMe } from '../../hooks/useCommunity';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import {
-  useCommunityEventsList,
+  useCommunityEventsInfiniteList,
   useCreateEvent,
   useTransitionEvent,
   useAttachReplay,
@@ -131,7 +131,7 @@ export default function CoachCommunityEventsScreen(): React.ReactElement {
   const me = useCommunityMe();
   const workspaceId = me.data?.workspace_id ?? undefined;
 
-  const events = useCommunityEventsList(workspaceId);
+  const events = useCommunityEventsInfiniteList(workspaceId);
   const createEvent = useCreateEvent(workspaceId ?? '', coach?.id ?? '');
   const completion = useCompletionToast();
   const reduceMotion = useReducedMotion();
@@ -198,9 +198,20 @@ export default function CoachCommunityEventsScreen(): React.ReactElement {
   // ── Manage modal (per-event lifecycle) ───────────────────────────────────────
   const [managed, setManaged] = useState<CommunityEvent | null>(null);
 
-  const data = useMemo(() => events.data?.events ?? [], [events.data]);
+  // Flatten every loaded page into one ordered list (newest first). The keyset
+  // cursor lives in pageParam, so older pages append as the coach scrolls.
+  const data = useMemo(
+    () => events.data?.pages.flatMap((p) => p.events) ?? [],
+    [events.data],
+  );
   const isEmpty =
     !events.isLoading && !events.isError && data.length === 0;
+
+  const onEndReached = useCallback(() => {
+    if (events.hasNextPage && !events.isFetchingNextPage) {
+      void events.fetchNextPage();
+    }
+  }, [events]);
 
   const renderItem = useCallback(
     ({ item }: { item: CommunityEvent }) => (
@@ -219,10 +230,14 @@ export default function CoachCommunityEventsScreen(): React.ReactElement {
         style={[styles.center, { backgroundColor: semanticColors.bgPrimary }]}
         testID="coach-community-events-screen"
       >
-        <ActivityIndicator
-          color={semanticColors.accent}
+        <View
+          accessibilityRole="progressbar"
+          accessibilityLabel="Loading events"
+          accessibilityState={{ busy: true }}
           testID="coach-community-events-loading"
-        />
+        >
+          <ActivityIndicator color={semanticColors.accent} />
+        </View>
       </View>
     );
   }
@@ -234,7 +249,7 @@ export default function CoachCommunityEventsScreen(): React.ReactElement {
     >
       {events.isError ? (
         <CoachErrorState
-          message="Could not load your events. Pull to retry."
+          message="Could not load your events. Tap to retry."
           onRetry={() => events.refetch()}
           retrying={events.isRefetching}
           testID="coach-community-events-error"
@@ -269,19 +284,40 @@ export default function CoachCommunityEventsScreen(): React.ReactElement {
           </HapticPressable>
         </View>
       ) : (
-        <FlatList
-          data={data}
-          keyExtractor={(e) => e.id}
-          renderItem={renderItem}
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl
-              refreshing={events.isRefetching}
-              onRefresh={() => events.refetch()}
-              tintColor={semanticColors.accent}
-            />
-          }
-        />
+        <View
+          style={styles.flex}
+          accessibilityRole="list"
+          testID="coach-community-events-list"
+        >
+          <FlatList
+            data={data}
+            keyExtractor={(e) => e.id}
+            renderItem={renderItem}
+            contentContainerStyle={styles.listContent}
+            onEndReached={onEndReached}
+            onEndReachedThreshold={0.4}
+            ListFooterComponent={
+              events.isFetchingNextPage ? (
+                <View
+                  style={styles.loadMore}
+                  accessibilityRole="progressbar"
+                  accessibilityLabel="Loading more events"
+                  accessibilityState={{ busy: true }}
+                  testID="coach-community-events-load-more"
+                >
+                  <ActivityIndicator color={semanticColors.accent} />
+                </View>
+              ) : null
+            }
+            refreshControl={
+              <RefreshControl
+                refreshing={events.isRefetching}
+                onRefresh={() => events.refetch()}
+                tintColor={semanticColors.accent}
+              />
+            }
+          />
+        </View>
       )}
 
       {!isEmpty ? (
@@ -912,6 +948,11 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     paddingBottom: 96,
   },
+  loadMore: {
+    paddingVertical: spacing.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   emptyWrap: {
     flex: 1,
     alignItems: 'center',
@@ -1024,7 +1065,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   reflectTrigger: {
-    minHeight: 44,
+    minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
@@ -1040,7 +1081,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   modalButton: {
-    minHeight: 44,
+    minHeight: 48,
     minWidth: 96,
     paddingHorizontal: spacing.lg,
     justifyContent: 'center',

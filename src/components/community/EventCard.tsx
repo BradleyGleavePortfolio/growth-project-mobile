@@ -112,6 +112,10 @@ export default function EventCard({
   const accessibilityLabel = `Open event ${event.title}, ${meta.label}, starts ${start}`;
 
   return (
+    // The outer wrapper carries `listitem` semantics so assistive tech receives
+    // the list structure, while the inner press target keeps `button`. RN types
+    // the W3C `role` prop (not `accessibilityRole`) for list/listitem.
+    <View role="listitem">
     <HapticPressable
       intent="light"
       onPress={() => onPress(event)}
@@ -168,6 +172,7 @@ export default function EventCard({
             : 'No RSVPs yet'}
       </Text>
     </HapticPressable>
+    </View>
   );
 }
 

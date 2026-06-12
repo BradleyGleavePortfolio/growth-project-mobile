@@ -113,10 +113,14 @@ export default function CommunityEventDetailScreen(): React.ReactElement {
         testID="community-event-detail-screen"
       >
         <View style={styles.center}>
-          <ActivityIndicator
-            color={semanticColors.accent}
+          <View
+            accessibilityRole="progressbar"
+            accessibilityLabel="Loading event"
+            accessibilityState={{ busy: true }}
             testID="community-event-detail-loading"
-          />
+          >
+            <ActivityIndicator color={semanticColors.accent} />
+          </View>
         </View>
       </SafeAreaView>
     );
@@ -293,12 +297,14 @@ export default function CommunityEventDetailScreen(): React.ReactElement {
               </Text>
             </HapticPressable>
             {linkError ? (
-              <Text
-                style={[styles.inlineError, { color: semantic.danger.fg }]}
-                testID="community-event-detail-link-error"
-              >
-                {linkError}
-              </Text>
+              <View accessibilityLiveRegion="polite">
+                <Text
+                  style={[styles.inlineError, { color: semantic.danger.fg }]}
+                  testID="community-event-detail-link-error"
+                >
+                  {linkError}
+                </Text>
+              </View>
             ) : null}
           </>
         ) : null}
@@ -312,12 +318,14 @@ export default function CommunityEventDetailScreen(): React.ReactElement {
               colors={semanticColors}
             />
             {rsvpError ? (
-              <Text
-                style={[styles.inlineError, { color: semantic.danger.fg }]}
-                testID="community-event-rsvp-error"
-              >
-                {rsvpError}
-              </Text>
+              <View accessibilityLiveRegion="polite">
+                <Text
+                  style={[styles.inlineError, { color: semantic.danger.fg }]}
+                  testID="community-event-rsvp-error"
+                >
+                  {rsvpError}
+                </Text>
+              </View>
             ) : null}
           </View>
         ) : null}
@@ -626,7 +634,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
-    minHeight: 44,
+    minHeight: 48,
     paddingHorizontal: spacing.sm,
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
@@ -666,7 +674,7 @@ const styles = StyleSheet.create({
     maxWidth: 320,
   },
   retry: {
-    minHeight: 44,
+    minHeight: 48,
     minWidth: 120,
     paddingHorizontal: spacing.xl,
     justifyContent: 'center',

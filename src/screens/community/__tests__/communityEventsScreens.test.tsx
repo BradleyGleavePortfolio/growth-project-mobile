@@ -76,14 +76,27 @@ const mockMutate = {
   reflect: jest.fn(),
 };
 
+// The list surface reads through useInfiniteQuery, so its data is paged
+// (`pages: CommunityEventListResponse[]`) and it exposes the cursor controls
+// (`fetchNextPage` / `hasNextPage` / `isFetchingNextPage`).
+const mockFetchNextPage = jest.fn();
 const mockEventHooks = {
   detail: { data: undefined, isLoading: false, isError: false, isRefetching: false, refetch: jest.fn() } as Record<string, unknown>,
-  list: { data: { events: [], next_before: null }, isLoading: false, isError: false, isRefetching: false, refetch: jest.fn() } as Record<string, unknown>,
+  list: {
+    data: { pages: [{ events: [], next_before: null }], pageParams: [undefined] },
+    isLoading: false,
+    isError: false,
+    isRefetching: false,
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    fetchNextPage: mockFetchNextPage,
+    refetch: jest.fn(),
+  } as Record<string, unknown>,
 };
 
 jest.mock('../../../hooks/useCommunityEvents', () => ({
   useCommunityEvent: () => mockEventHooks.detail,
-  useCommunityEventsList: () => mockEventHooks.list,
+  useCommunityEventsInfiniteList: () => mockEventHooks.list,
   useRsvpEvent: () => ({ mutate: mockMutate.rsvp, isPending: false }),
   useCreateEvent: () => ({ mutate: mockMutate.create, isPending: false }),
   useTransitionEvent: () => ({ mutate: mockMutate.transition, isPending: false }),
@@ -130,11 +143,15 @@ beforeEach(() => {
     isRefetching: false,
     refetch: jest.fn(),
   };
+  mockFetchNextPage.mockReset();
   mockEventHooks.list = {
-    data: { events: [], next_before: null },
+    data: { pages: [{ events: [], next_before: null }], pageParams: [undefined] },
     isLoading: false,
     isError: false,
     isRefetching: false,
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    fetchNextPage: mockFetchNextPage,
     refetch: jest.fn(),
   };
 });
@@ -255,7 +272,7 @@ describe('CoachCommunityEventsScreen', () => {
   });
 
   it('renders an honest empty state with a create action', () => {
-    mockEventHooks.list = { ...mockEventHooks.list, data: { events: [], next_before: null } };
+    mockEventHooks.list = { ...mockEventHooks.list, data: { pages: [{ events: [], next_before: null }], pageParams: [undefined] } };
     const { getByTestId } = render(<CoachCommunityEventsScreen />);
     expect(getByTestId('coach-community-events-empty')).toBeTruthy();
     fireEvent.press(getByTestId('coach-community-events-empty-action'));
@@ -265,7 +282,7 @@ describe('CoachCommunityEventsScreen', () => {
   it('F12: creates an event using the date/time pickers (ISO serialized)', () => {
     mockEventHooks.list = {
       ...mockEventHooks.list,
-      data: { events: [makeEvent()], next_before: null },
+      data: { pages: [{ events: [makeEvent()], next_before: null }], pageParams: [undefined] },
     };
     const { getByTestId, getByText } = render(<CoachCommunityEventsScreen />);
     fireEvent.press(getByTestId('coach-community-events-fab'));
@@ -295,7 +312,7 @@ describe('CoachCommunityEventsScreen', () => {
   it('F12: the raw ISO start-time text input is gone', () => {
     mockEventHooks.list = {
       ...mockEventHooks.list,
-      data: { events: [makeEvent()], next_before: null },
+      data: { pages: [{ events: [makeEvent()], next_before: null }], pageParams: [undefined] },
     };
     const { getByTestId, queryByTestId } = render(<CoachCommunityEventsScreen />);
     fireEvent.press(getByTestId('coach-community-events-fab'));
@@ -305,7 +322,7 @@ describe('CoachCommunityEventsScreen', () => {
   it('advances lifecycle state from the manage modal', () => {
     mockEventHooks.list = {
       ...mockEventHooks.list,
-      data: { events: [makeEvent({ id: 'ev-9', state: 'scheduled' })], next_before: null },
+      data: { pages: [{ events: [makeEvent({ id: 'ev-9', state: 'scheduled' })], next_before: null }], pageParams: [undefined] },
     };
     const { getByTestId } = render(<CoachCommunityEventsScreen />);
     fireEvent.press(getByTestId('coach-community-event-row-ev-9'));
@@ -317,7 +334,7 @@ describe('CoachCommunityEventsScreen', () => {
   it('attaches an EXTERNAL replay link from the manage modal', () => {
     mockEventHooks.list = {
       ...mockEventHooks.list,
-      data: { events: [makeEvent({ id: 'ev-7', state: 'live' })], next_before: null },
+      data: { pages: [{ events: [makeEvent({ id: 'ev-7', state: 'live' })], next_before: null }], pageParams: [undefined] },
     };
     const { getByTestId } = render(<CoachCommunityEventsScreen />);
     fireEvent.press(getByTestId('coach-community-event-row-ev-7'));
@@ -335,7 +352,7 @@ describe('CoachCommunityEventsScreen', () => {
   it('F14: reflect (close) is gated behind a calm confirm sheet', () => {
     mockEventHooks.list = {
       ...mockEventHooks.list,
-      data: { events: [makeEvent({ id: 'ev-5', state: 'replay' })], next_before: null },
+      data: { pages: [{ events: [makeEvent({ id: 'ev-5', state: 'replay' })], next_before: null }], pageParams: [undefined] },
     };
     const { getByTestId } = render(<CoachCommunityEventsScreen />);
     fireEvent.press(getByTestId('coach-community-event-row-ev-5'));
@@ -351,11 +368,95 @@ describe('CoachCommunityEventsScreen', () => {
   it('F13: the manage modal shows status-honest lifecycle labels', () => {
     mockEventHooks.list = {
       ...mockEventHooks.list,
-      data: { events: [makeEvent({ id: 'ev-3', state: 'live' })], next_before: null },
+      data: { pages: [{ events: [makeEvent({ id: 'ev-3', state: 'live' })], next_before: null }], pageParams: [undefined] },
     };
     const { getByTestId, getAllByText } = render(<CoachCommunityEventsScreen />);
     fireEvent.press(getByTestId('coach-community-event-row-ev-3'));
     // 'Live now' appears for the live state (label is shared via stateMeta).
     expect(getAllByText(/Live now/i).length).toBeGreaterThan(0);
+  });
+
+  it('declares list semantics on the event list container', () => {
+    mockEventHooks.list = {
+      ...mockEventHooks.list,
+      data: {
+        pages: [{ events: [makeEvent({ id: 'ev-2' })], next_before: null }],
+        pageParams: [undefined],
+      },
+    };
+    const { getByTestId } = render(<CoachCommunityEventsScreen />);
+    const list = getByTestId('coach-community-events-list');
+    expect(list.props.accessibilityRole).toBe('list');
+  });
+
+  it('exposes a busy progressbar label on the loading branch', () => {
+    mockEventHooks.list = { ...mockEventHooks.list, isLoading: true };
+    const { getByTestId } = render(<CoachCommunityEventsScreen />);
+    const loading = getByTestId('coach-community-events-loading');
+    expect(loading.props.accessibilityRole).toBe('progressbar');
+    expect(loading.props.accessibilityLabel).toBe('Loading events');
+    expect(loading.props.accessibilityState).toMatchObject({ busy: true });
+  });
+
+  it('error copy points at the available tap-to-retry control (not pull)', () => {
+    mockEventHooks.list = { ...mockEventHooks.list, isError: true };
+    const { getByText, queryByText } = render(<CoachCommunityEventsScreen />);
+    expect(getByText(/Tap to retry/i)).toBeTruthy();
+    expect(queryByText(/Pull to retry/i)).toBeNull();
+  });
+
+  it('cursor pagination: onEndReached fetches the next page when one exists', () => {
+    mockEventHooks.list = {
+      ...mockEventHooks.list,
+      data: {
+        pages: [
+          { events: [makeEvent({ id: 'ev-a' })], next_before: '2026-06-01' },
+        ],
+        pageParams: [undefined],
+      },
+      hasNextPage: true,
+      isFetchingNextPage: false,
+    };
+    const { getByTestId } = render(<CoachCommunityEventsScreen />);
+    const list = getByTestId('coach-community-events-list');
+    // The FlatList is the single child of the list wrapper; drive its
+    // onEndReached the way scrolling to the end would.
+    const flatList = list.props.children;
+    flatList.props.onEndReached();
+    expect(mockFetchNextPage).toHaveBeenCalledTimes(1);
+  });
+
+  it('cursor pagination: onEndReached is a no-op when there is no next page', () => {
+    mockEventHooks.list = {
+      ...mockEventHooks.list,
+      data: {
+        pages: [{ events: [makeEvent({ id: 'ev-b' })], next_before: null }],
+        pageParams: [undefined],
+      },
+      hasNextPage: false,
+      isFetchingNextPage: false,
+    };
+    const { getByTestId } = render(<CoachCommunityEventsScreen />);
+    const flatList = getByTestId('coach-community-events-list').props.children;
+    flatList.props.onEndReached();
+    expect(mockFetchNextPage).not.toHaveBeenCalled();
+  });
+
+  it('cursor pagination: a calm load-more footer announces while fetching the next page', () => {
+    mockEventHooks.list = {
+      ...mockEventHooks.list,
+      data: {
+        pages: [
+          { events: [makeEvent({ id: 'ev-c' })], next_before: '2026-06-01' },
+        ],
+        pageParams: [undefined],
+      },
+      hasNextPage: true,
+      isFetchingNextPage: true,
+    };
+    const { getByTestId } = render(<CoachCommunityEventsScreen />);
+    const footer = getByTestId('coach-community-events-load-more');
+    expect(footer.props.accessibilityRole).toBe('progressbar');
+    expect(footer.props.accessibilityLabel).toBe('Loading more events');
   });
 });
