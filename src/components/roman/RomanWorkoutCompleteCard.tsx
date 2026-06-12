@@ -31,16 +31,26 @@ export default function RomanWorkoutCompleteCard({
   liftName,
   testID,
 }: RomanWorkoutCompleteCardProps): React.ReactElement {
-  // §3.8 / §4: slight smile only on the PR celebration.
-  const crop = mode === 'celebration' ? 'smile' : 'neutral';
+  // §3.8 / §4: slight smile only on a genuine PR celebration. A celebration
+  // needs a lift name; without one the copy falls back to the default line, so
+  // derive the effective state once and drive BOTH the face and the copy from
+  // it. This keeps the smile from appearing over the default line.
+  const isCelebration = mode === 'celebration' && Boolean(liftName?.trim());
+  const crop = isCelebration ? 'smile' : 'neutral';
   // Deferred (roman-quip-budget): §2.8 permits a situation-aimed quip
   // ("The weights have no comment."). Gate on the ~1-in-8 ceiling (§1.5).
-  const line = romanWorkoutComplete({ mode, liftName });
+  const line = isCelebration
+    ? romanWorkoutComplete({ mode: 'celebration', liftName })
+    : romanWorkoutComplete({ mode: mode === 'celebration' ? 'default' : mode });
   return (
     <View style={styles.card} testID={testID} accessibilityRole="summary">
       {/* FACE+VOICE: avatar co-located with the §2.8 workout-complete copy. */}
       <RomanAvatar crop={crop} size={48} testID="roman-workout-avatar" />
-      <Text style={styles.copy} accessibilityRole="text">
+      <Text
+        style={styles.copy}
+        accessibilityRole="text"
+        accessibilityLiveRegion="polite"
+      >
         {line}
       </Text>
     </View>

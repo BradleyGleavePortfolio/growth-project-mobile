@@ -33,7 +33,11 @@ export default function RomanCheckInNotice({
     <View style={styles.row} testID={testID} accessibilityRole="summary">
       {/* FACE+VOICE: avatar co-located with the §2.4 check-in copy. */}
       <RomanAvatar crop={crop} size={32} testID="roman-checkin-avatar" />
-      <Text style={styles.copy} accessibilityRole="text">
+      <Text
+        style={styles.copy}
+        accessibilityRole="text"
+        accessibilityLiveRegion="polite"
+      >
         {line}
       </Text>
     </View>
