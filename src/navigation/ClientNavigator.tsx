@@ -176,7 +176,14 @@ export type ClientTabParamList = {
 };
 
 export type WorkoutStackParamList = {
-  WorkoutMain: undefined;
+  /**
+   * `justCompleted` is a one-shot signal set ONLY when ActiveWorkoutScreen
+   * returns here after a real finish-workout save succeeds. WorkoutScreen reads
+   * it once to render Roman's §2.8 "Workout complete" line, then clears it so a
+   * mere historical completed session never re-triggers the event on a plain
+   * visit or pull-to-refresh.
+   */
+  WorkoutMain: { justCompleted?: boolean } | undefined;
   ActiveWorkout: { routineId?: string; routineName: string; exercises: string };
   RoutineBuilder: { routineId?: string } | undefined;
   CoachGuidelines: undefined;

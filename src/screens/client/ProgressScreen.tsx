@@ -48,6 +48,23 @@ import type { RomanStreakTier } from '../../lib/roman/copy';
 
 type Period = '7D' | '30D' | '90D' | 'All';
 
+/**
+ * §2.7 streak-milestone tier selector. The spec surface is a 3/7/30-day
+ * MILESTONE, not a permanent threshold bucket: Roman speaks ONLY on the exact
+ * milestone day. Day 8 through 29 returns null (never claims "Seven days"), and
+ * day 31+ returns null (never claims "Thirty days") — the 30-day celebration
+ * (the session's sole exclamation) fires on day 30 only. Every non-milestone
+ * day renders nothing rather than invent a celebratory line. Exported so the
+ * behaviour is unit-tested directly (host-wiring test) without rendering the
+ * full chart-heavy screen.
+ */
+export function streakMilestoneTier(loggingStreak: number): RomanStreakTier | null {
+  if (loggingStreak === 30) return 30;
+  if (loggingStreak === 7) return 7;
+  if (loggingStreak === 3) return 3;
+  return null;
+}
+
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
 function CalorieRing({
@@ -324,12 +341,9 @@ export default function ProgressScreen() {
 
   const periods: Period[] = ['7D', '30D', '90D', 'All'];
 
-  // §2.7 Streak milestone tier from the real loggingStreak. The 30/7/3-day
-  // thresholds map to the spec tiers; below 3 days Roman stays silent. The
-  // 7/30-day tiers are celebrations (slight smile); the 3-day tier is the
-  // measured default line.
-  const streakTier: RomanStreakTier | null =
-    loggingStreak >= 30 ? 30 : loggingStreak >= 7 ? 7 : loggingStreak >= 3 ? 3 : null;
+  // §2.7 Streak milestone tier from the real loggingStreak. See
+  // streakMilestoneTier below: Roman speaks ONLY on the exact milestone day.
+  const streakTier: RomanStreakTier | null = streakMilestoneTier(loggingStreak);
   const streakFirstName = (currentUser?.firstName ?? '').trim() || 'there';
 
   return (

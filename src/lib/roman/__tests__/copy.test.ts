@@ -182,6 +182,37 @@ describe('romanPayout (§2.12)', () => {
       'I was unable to send your payout of $240.00 just now — the bank declined the transfer instruction. Nothing is lost; I will retry and confirm once it is moving.',
     );
   });
+
+  // P2-UX-04 (R5): the CoachEarningsSummary contract does not carry the
+  // destination bank's last-four. When omitted, the copy must DROP the
+  // "account ending …" clause rather than ship a placeholder token. The amount
+  // and settlement window are sufficient and true.
+  it('default — OMITS the destination-account clause when bankLast4 is absent', () => {
+    const line = romanPayout({ amount: '$240.00', settleDays: 2, mode: 'default' });
+    expect(line).toBe('Your payout of $240.00 is on its way. Funds typically settle within 2 business days.');
+    expect(line).not.toContain('account ending');
+  });
+  it('default — also omits the clause for an empty/whitespace bankLast4', () => {
+    expect(romanPayout({ amount: '$240.00', bankLast4: '', settleDays: 2, mode: 'default' })).toBe(
+      'Your payout of $240.00 is on its way. Funds typically settle within 2 business days.',
+    );
+    expect(romanPayout({ amount: '$240.00', bankLast4: '   ', settleDays: 2, mode: 'default' })).not.toContain(
+      'account ending',
+    );
+  });
+  it('celebration — omits the destination-account clause when bankLast4 is absent, still no exclamation', () => {
+    const line = romanPayout({ amount: '$1,200.00', settleDays: 2, mode: 'celebration' });
+    expect(line).toBe("Your payout of $1,200.00 is on its way — your largest yet. A fine month's work.");
+    expect(line).not.toContain('account ending');
+    expect(line).not.toContain('!');
+  });
+  it('never renders a literal em-dash placeholder token (P2-UX-04 / #49)', () => {
+    for (const mode of ['default', 'celebration'] as const) {
+      const line = romanPayout({ amount: '$240.00', settleDays: 2, mode });
+      expect(line).not.toContain('\u2014\u2014\u2014\u2014');
+      expect(line).not.toContain('ending undefined');
+    }
+  });
 });
 
 // ── §1.4 forbidden-move sweep over every produced string ──────────────────────

@@ -37,10 +37,10 @@ const PAYOUT_SETTLE_DAYS = 2;
 // The normalised CoachEarningsSummary deliberately does NOT carry the
 // destination bank's last-four (payouts are Stripe-managed and the digits are
 // not exposed to the mobile contract — see api/packagesApi.ts
-// CoachEarningsSummary). Rather than invent digits (which would be demo data),
-// the §2.12 token renders a masked, explicitly-unknown account marker until a
-// real field lands. Documented in FIXER_241_R3_REPORT.md.
-const PAYOUT_BANK_LAST4_UNKNOWN = '\u2014\u2014\u2014\u2014';
+// CoachEarningsSummary). Rather than invent or mask digits, the §2.12 notice
+// omits the bankLast4 prop entirely; romanPayout then drops the "account
+// ending …" clause and states only the real amount + settlement window.
+// Documented in FIXER_241_R5_REPORT.md.
 
 interface Props {
   navigation: NavigationProp<ParamListBase>;
@@ -183,14 +183,14 @@ export default function CoachEarningsScreen({ navigation }: Props) {
                 Roman flag is on AND a real last payout exists (amount + date).
                 All tokens are real: amount from data.lastPayoutAmountCents,
                 settle days from the platform's standard schedule. The bank
-                last-four is not in the summary contract, so a masked unknown is
-                rendered rather than invented digits. */}
+                last-four is NOT in the summary contract, so it is omitted —
+                romanPayout drops the destination-account clause rather than
+                ship a placeholder token. */}
             {featureFlags.romanChat &&
             data.lastPayoutAt &&
             data.lastPayoutAmountCents != null ? (
               <RomanPayoutNotice
                 amount={formatCurrencyCents(data.lastPayoutAmountCents, data.currency)}
-                bankLast4={PAYOUT_BANK_LAST4_UNKNOWN}
                 settleDays={PAYOUT_SETTLE_DAYS}
                 mode="default"
                 testID="roman-payout-card"

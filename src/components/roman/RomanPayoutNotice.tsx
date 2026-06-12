@@ -19,8 +19,12 @@ import { colors, spacing, typography } from '../../theme/tokens';
 export interface RomanPayoutNoticeProps {
   /** Pre-formatted currency string, e.g. "$240.00". */
   amount: string;
-  /** Last four digits of the destination bank account. */
-  bankLast4: string;
+  /**
+   * Last four digits of the destination bank account. OPTIONAL — when omitted,
+   * the copy drops the "account ending …" clause rather than ship a placeholder
+   * token (see lib/roman/copy.ts romanPayout).
+   */
+  bankLast4?: string;
   /** Typical settlement window in business days. */
   settleDays: number;
   /** default | celebration (record payout) | error (bank declined). */

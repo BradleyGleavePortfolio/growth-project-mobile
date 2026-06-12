@@ -741,7 +741,14 @@ export default function ActiveWorkoutScreen() {
                   });
                 }
 
-                navigation.goBack();
+                // §2.8 one-shot completion signal: returning to WorkoutMain with
+                // `justCompleted` set tells WorkoutScreen this is a REAL
+                // just-finished workout (not a historical session) so Roman's
+                // "Workout complete. Recorded." line renders exactly once. The
+                // target is the same screen goBack() would land on (WorkoutMain
+                // is directly beneath ActiveWorkout in WorkoutStack), so this
+                // preserves the existing back behaviour while carrying the flag.
+                navigation.navigate('WorkoutMain', { justCompleted: true });
               },
               onError: (err) => {
                 // Phase 11 / Track 3: error haptic on failed API action

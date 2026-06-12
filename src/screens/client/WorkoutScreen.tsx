@@ -11,7 +11,14 @@ import {
 } from 'react-native';
 import HapticPressable from '../../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
+import {
+  useNavigation,
+  useRoute,
+  useFocusEffect,
+  NavigationProp,
+  RouteProp,
+} from '@react-navigation/native';
+import type { WorkoutStackParamList } from '../../navigation/ClientNavigator';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 import { workoutApi } from '../../services/api';
@@ -150,9 +157,16 @@ export default function WorkoutScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();
-  const navigation = useNavigation<NavigationProp<ParamListBase>>();
+  const navigation = useNavigation<NavigationProp<WorkoutStackParamList>>();
+  const route = useRoute<RouteProp<WorkoutStackParamList, 'WorkoutMain'>>();
   const [routines, setRoutines] = useState<ApiRoutine[]>([]);
   const [recentSessions, setRecentSessions] = useState<ApiSession[]>([]);
+  // §2.8 one-shot "just completed" flag. Set ONLY when ActiveWorkoutScreen
+  // returns here with route param `justCompleted` after a real finish-workout
+  // save. It drives Roman's §2.8 completion line for this visit only and is
+  // cleared immediately so a plain visit / pull-to-refresh never re-triggers
+  // the event from a historical session.
+  const [justCompleted, setJustCompleted] = useState(false);
   const [weeklyVolume, setWeeklyVolume] = useState<WeeklyVolume[]>([]);
   const [muscleVolume, setMuscleVolume] = useState<MuscleVolume[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -239,6 +253,20 @@ export default function WorkoutScreen() {
     loadData();
   }, [loadData]);
 
+  // §2.8 Consume the one-shot `justCompleted` navigation param exactly once.
+  // ActiveWorkoutScreen sets it only after a real finish-workout save. We read
+  // it on focus, flip the local flag, then immediately clear the param via
+  // setParams so a subsequent refocus or pull-to-refresh cannot re-fire Roman's
+  // completion line from a stale param or a historical session.
+  useFocusEffect(
+    useCallback(() => {
+      if (route.params?.justCompleted) {
+        setJustCompleted(true);
+        navigation.setParams({ justCompleted: undefined });
+      }
+    }, [route.params?.justCompleted, navigation]),
+  );
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await loadData();
@@ -277,8 +305,12 @@ export default function WorkoutScreen() {
 
   const totalVolumeThisWeek = weeklyVolume[weeklyVolume.length - 1]?.volume || 0;
 
-  // §2.8 most-recent completed session drives Roman's workout-complete line.
-  const mostRecentCompleted = recentSessions.find((s) => s.completed) ?? null;
+  // §2.8 Roman's workout-complete line is driven by a REAL just-completed
+  // event — the `justCompleted` one-shot signal from the finish-workout path —
+  // NOT by the mere presence of a historical completed session. (The R4 audit
+  // flagged the previous "any recent completed session" wiring as a false
+  // just-completed event that fired on every visit.)
+  const showWorkoutComplete = justCompleted;
 
   // W-3: surface coach-assigned workouts. Falls back to silent when the
   // assignment list is empty / the hook is still loading. Tapping routes
@@ -387,12 +419,14 @@ export default function WorkoutScreen() {
           </HapticPressable>
         ) : null}
 
-        {/* §2.8 Roman workout-complete — voiced beside his face when the most
-            recent session is completed. Only when the Roman flag is on. The
-            default line is used: a per-session personal-best signal is not yet
-            carried on the ApiSession shape, so no celebration is fabricated
-            (documented in the report). */}
-        {featureFlags.romanChat && mostRecentCompleted ? (
+        {/* §2.8 Roman workout-complete — voiced beside his face ONLY after a
+            real just-finished workout (the one-shot `justCompleted` signal from
+            the finish-workout path), not on every visit with a historical
+            completed session. Only when the Roman flag is on. The default line
+            is used: a per-session personal-best signal is not yet carried on
+            the ApiSession shape, so no celebration is fabricated (documented in
+            the report). */}
+        {featureFlags.romanChat && showWorkoutComplete ? (
           <FadeInView>
             <View style={styles.romanWorkoutWrap}>
               <RomanWorkoutCompleteCard mode="default" testID="roman-workout-card" />

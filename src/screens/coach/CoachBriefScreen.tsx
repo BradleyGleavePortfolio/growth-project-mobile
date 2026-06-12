@@ -39,6 +39,45 @@ import RomanNewClientNotice from '../../components/roman/RomanNewClientNotice';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { logger } from '../../utils/logger';
 
+/**
+ * §2.4 submitted-check-in selector. Returns the first client whose latest
+ * verified-progress item is a check-in submission (`kind ===
+ * 'check_in_consistency'`) still in the `pending` signoff state — which the
+ * SignoffStatus enum defines as "submitted, awaiting coach review" (see
+ * types/wave11.ts). That is a REAL submitted check-in, exactly what the §2.4
+ * default line states. A `check_in_overdue` todo does NOT qualify (an overdue
+ * check-in is a missing one, not a submitted one). Exported for direct
+ * true/false behaviour testing.
+ */
+export function selectCheckInClient(
+  clients: CoachBriefClientCard[] | undefined,
+): CoachBriefClientCard | undefined {
+  return clients?.find(
+    (c) =>
+      c.latestVerifiedProgress != null &&
+      c.latestVerifiedProgress.kind === 'check_in_consistency' &&
+      c.latestVerifiedProgress.signoffStatus === 'pending',
+  );
+}
+
+/**
+ * §2.5 newly-onboarded-client selector. The CoachBriefPayload carries NO
+ * first-party "new client" event/flag and NO join/created timestamp on the
+ * client card, so there is no truthful onboarding signal to render. This
+ * selector therefore returns undefined for every roster: the §2.5 surface is
+ * gated OFF rather than inventing an onboarding event (the R4-flagged
+ * heuristic). It is kept as a typed seam so the host wiring stays compiled and
+ * flag-gated, and so it can be replaced the moment the payload carries a real
+ * joined-timestamp/onboarding event — at which point it returns the joined
+ * client and the existing render path re-activates with no further wiring.
+ */
+export function selectNewlyOnboardedClient(
+  _clients: CoachBriefClientCard[] | undefined,
+): CoachBriefClientCard | undefined {
+  // No truthful signal exists in the contract today. Always undefined.
+  return undefined;
+}
+
 export default function CoachBriefScreen() {
   const currentUser = useCurrentUser();
   const [payload, setPayload] = useState<CoachBriefPayload | null>(null);
@@ -70,26 +109,27 @@ export default function CoachBriefScreen() {
     load();
   }, [load]);
 
-  // §2.4 Check-in received — derived from a REAL client card carrying a
-  // `check_in_overdue` todo (the closest production signal in the brief payload
-  // that a check-in needs the coach's attention). First such client only, to
-  // keep one Roman line in the brief.
-  const checkInClient = payload?.clients.find((c) =>
-    c.todos.some((t) => t.kind === 'check_in_overdue'),
-  );
-  // §2.5 New client onboarded — the CoachBriefPayload does not carry a
-  // first-party "new client" event/flag, so this uses a conservative heuristic
-  // over REAL data: a single-client roster with no outstanding todos and no AI
-  // flags reads as a freshly added client. No data is fabricated; the roster
-  // size and display name are both real. The absence of a dedicated new-client
-  // signal is documented in FIXER_241_R3_REPORT.md.
+  // §2.4 Check-in received — derived from a REAL submitted-check-in signal in
+  // the brief payload: a client whose latest verified-progress item is a
+  // check-in submission (`kind === 'check_in_consistency'`) that is still
+  // `pending` (the SignoffStatus enum defines `pending` as "submitted, awaiting
+  // coach review"; see types/wave11.ts). That proves the client SUBMITTED a
+  // check-in and it is queued for the coach — exactly what the §2.4 default
+  // line states. First such client only, to keep one Roman line in the brief.
+  const checkInClient = selectCheckInClient(payload?.clients);
+  // §2.5 New client onboarded — the CoachBriefPayload carries NO first-party
+  // "new client" event/flag and NO join/created timestamp on the client card
+  // (the only `createdAt` in this domain is on CopilotSuggestion, not on the
+  // roster — see types/wave11.ts CoachBriefClientCard). The prior R3 build
+  // invented an onboarding event from a roster shape (single quiet client),
+  // which the R4 audit correctly flagged as event-theater. With no truthful
+  // signal available, the §2.5 surface is gated OFF rather than asserting an
+  // onboarding that the data cannot prove. The component + host wiring remain
+  // compiled and flag-gated so they re-activate the moment the payload carries
+  // a real joined-timestamp/onboarding event. Documented in
+  // FIXER_241_R5_REPORT.md (Roman must only assert what the data proves).
   const clientList = payload?.clients ?? [];
-  const newClient =
-    clientList.length === 1 &&
-    clientList[0].todos.length === 0 &&
-    clientList[0].aiFlags.length === 0
-      ? clientList[0]
-      : undefined;
+  const newClient = selectNewlyOnboardedClient(clientList);
 
   if (!featureFlags.coachBrief) {
     return (

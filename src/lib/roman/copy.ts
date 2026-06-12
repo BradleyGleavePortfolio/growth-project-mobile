@@ -295,8 +295,17 @@ export function romanGenericError(args: RomanGenericErrorArgs): string {
 export interface RomanPayoutArgs {
   /** Pre-formatted currency string, e.g. "$240.00". */
   amount: string;
-  /** Last four digits of the destination bank account. */
-  bankLast4: string;
+  /**
+   * Last four digits of the destination bank account. OPTIONAL: the mobile
+   * `CoachEarningsSummary` contract does not carry the destination digits
+   * (payouts are Stripe-managed and the last-four is not exposed to mobile —
+   * see api/packagesApi.ts), and inventing them would be placeholder financial
+   * data. When omitted (undefined/empty), Roman drops the "account ending …"
+   * clause and states only the amount, date framing, and settlement window —
+   * all of which ARE true of the available data. Pass a real value only when a
+   * genuine last-four is available.
+   */
+  bankLast4?: string;
   /** Typical settlement window in business days (default line). */
   settleDays: number;
   /**
@@ -314,15 +323,30 @@ export interface RomanPayoutArgs {
  */
 export function romanPayout(args: RomanPayoutArgs): string {
   const { amount, bankLast4, settleDays, mode } = args;
+  // The destination account is only named when a real last-four is available.
+  // When it is absent, the "account ending …" clause is dropped entirely so the
+  // line never ships a placeholder token in user-facing financial copy.
+  const hasBankLast4 = bankLast4 != null && bankLast4.trim() !== '';
+  if (mode === 'error') {
+    // spec §2.12 error (payout initiation failed; bank declined). No account
+    // token in this variant, so it is unaffected by the last-four availability.
+    return `I was unable to send your payout of ${amount} just now — the bank declined the transfer instruction. Nothing is lost; I will retry and confirm once it is moving.`;
+  }
   if (mode === 'celebration') {
     // §2.12 milestone-celebration (record payout). No exclamation — the
     // session's one is reserved for the §2.7 30-day line.
-    return `Your payout of ${amount} is on its way to the account ending ${bankLast4} — your largest yet. A fine month's work.`;
-  }
-  if (mode === 'error') {
-    // spec §2.12 error (payout initiation failed; bank declined).
-    return `I was unable to send your payout of ${amount} just now — the bank declined the transfer instruction. Nothing is lost; I will retry and confirm once it is moving.`;
+    if (hasBankLast4) {
+      return `Your payout of ${amount} is on its way to the account ending ${bankLast4} — your largest yet. A fine month's work.`;
+    }
+    // Destination-account omitted variant: amount + the "largest yet" framing
+    // are both true of the available data; no account token is asserted.
+    return `Your payout of ${amount} is on its way — your largest yet. A fine month's work.`;
   }
   // spec §2.12 default.
-  return `Your payout of ${amount} is on its way to the account ending ${bankLast4}. Funds typically settle within ${settleDays} business days.`;
+  if (hasBankLast4) {
+    return `Your payout of ${amount} is on its way to the account ending ${bankLast4}. Funds typically settle within ${settleDays} business days.`;
+  }
+  // Destination-account omitted variant: states the amount and the real
+  // settlement window, which are sufficient and true (spec §2.12 tokens).
+  return `Your payout of ${amount} is on its way. Funds typically settle within ${settleDays} business days.`;
 }
