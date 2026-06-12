@@ -237,6 +237,16 @@ export function useAutosave<TWorkingCopy>(
   const [status, setStatus] = useState<AutosaveStatus>('idle');
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [hasPending, setHasPending] = useState(false);
+  // D-042: a dirty-since-last-save signal that flips true the MOMENT the
+  // working copy diverges from the saved baseline (the value-change effect),
+  // BEFORE the 800ms debounce flush builds a batch. Without it `hasPending`
+  // stayed false in the gap between an edit and its flush, so the screen's
+  // post-insert adoption effect — gated on `!hasPending` — could clobber a
+  // coach's just-typed change with refetched server data. The mirror ref lets
+  // the stable `computeHasPending` read it without a re-subscribe; the state
+  // drives the re-render so consumers observe the flip synchronously.
+  const [_dirtyState, setDirtyState] = useState(false);
+  const dirtyStateRef = useRef(false);
 
   // Optimistic-concurrency state lives in refs (advances on each save without
   // forcing the caller to re-thread props synchronously) but is also surfaced.
@@ -326,9 +336,27 @@ export function useAutosave<TWorkingCopy>(
     }
   }, []);
 
-  // True when there is still buffered work in either queue slot.
+  // Set the dirty-since-last-save signal, keeping the ref mirror and the state
+  // in lockstep so `computeHasPending` (which reads the ref) and any re-render
+  // (driven by the state) never disagree. Mount-guarded via safeSet.
+  const setDirty = useCallback(
+    (next: boolean) => {
+      dirtyStateRef.current = next;
+      safeSet(setDirtyState, next);
+    },
+    [safeSet],
+  );
+
+  // True when there is still buffered work in either queue slot OR the working
+  // copy is dirty since the last confirmed save (a debounce is armed but has
+  // not yet built a batch). The dirty term is the D-042 fix: `hasPending` must
+  // reflect "I have an unsaved local change" the instant the coach types, not
+  // only once `flush()` constructs a batch.
   const computeHasPending = useCallback(
-    () => currentInFlightRef.current !== null || pendingNextRef.current !== null,
+    () =>
+      currentInFlightRef.current !== null ||
+      pendingNextRef.current !== null ||
+      dirtyStateRef.current,
     [],
   );
 
@@ -447,6 +475,13 @@ export function useAutosave<TWorkingCopy>(
         // produced a pendingNext batch; its own diff will now re-derive only the
         // delta from this snapshot onward, so no edit is lost or double-sent.
         lastSavedValueRef.current = batch.snapshot;
+        // Recompute the dirty signal against the freshly-advanced baseline. If
+        // an edit landed WHILE this request was in flight (so latestValueRef
+        // already diverges from batch.snapshot) we stay dirty and the queued
+        // batch carries it; otherwise we are clean until the next keystroke.
+        // This keeps `hasPending` honest right after a 200 so the screen's
+        // adoption effect only runs once there is genuinely nothing unsaved.
+        setDirty(diffRef.current(lastSavedValueRef.current, latestValueRef.current).length > 0);
         const savedMs = Date.parse(res.saved_at);
         safeSet(setVersion, res.head_revision_index);
         safeSet(setTokenState, res.lock_token);
@@ -517,6 +552,9 @@ export function useAutosave<TWorkingCopy>(
           if (rebased === null) {
             await clearAutosaveMirrorIfKey(planId, batch.idempotencyKey);
             pendingNextRef.current = null;
+            // The refetch absorbed the local ops (diff empty), so the working
+            // copy now matches the adopted baseline: no longer dirty.
+            setDirty(false);
             safeSet(setHasPending, computeHasPending());
             return;
           }
@@ -559,7 +597,7 @@ export function useAutosave<TWorkingCopy>(
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [planId, safeSet, clearBackoffTimer, computeHasPending, rebaseBatch],
+    [planId, safeSet, clearBackoffTimer, computeHasPending, rebaseBatch, setDirty],
   );
 
   /** Write one batch to the offline mirror (mirror-first durability line). */
@@ -700,13 +738,35 @@ export function useAutosave<TWorkingCopy>(
       return;
     }
     lastSavedValueRef.current = latestValueRef.current;
-  }, []);
+    // The adopted server copy is now the saved baseline, so there is nothing
+    // unsaved: clear the dirty signal and recompute `hasPending` so a stale
+    // dirty flag from the just-adopted edit does not linger.
+    setDirty(false);
+    safeSet(setHasPending, computeHasPending());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setDirty, safeSet, computeHasPending]);
 
   // ─── Debounced arm on value change ──────────────────────────────────────────
   useEffect(() => {
     if (!enabled) return;
     const ops = diffRef.current(lastSavedValueRef.current, value);
-    if (ops.length === 0) return;
+    if (ops.length === 0) {
+      // The working copy matches the saved baseline again (e.g. an edit was
+      // reverted before the debounce fired). Clear the dirty signal so a stale
+      // `hasPending` does not block the screen's adoption effect forever.
+      if (dirtyStateRef.current && currentInFlightRef.current === null && pendingNextRef.current === null) {
+        setDirty(false);
+        safeSet(setHasPending, computeHasPending());
+      }
+      return;
+    }
+
+    // D-042: mark dirty the instant the working copy diverges from the saved
+    // baseline — BEFORE the debounce flush builds a batch — so `hasPending`
+    // reflects the unsaved local edit immediately and the screen's adoption
+    // effect cannot clobber it during the post-insert refetch window.
+    setDirty(true);
+    safeSet(setHasPending, computeHasPending());
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
@@ -718,7 +778,8 @@ export function useAutosave<TWorkingCopy>(
         debounceRef.current = null;
       }
     };
-  }, [value, enabled, debounceMs, flush]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, enabled, debounceMs, flush, setDirty, safeSet, computeHasPending]);
 
   // ─── AppState background force-flush (the kill-the-app case) ────────────────
   useEffect(() => {

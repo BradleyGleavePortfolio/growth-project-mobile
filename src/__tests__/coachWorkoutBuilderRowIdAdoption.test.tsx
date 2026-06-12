@@ -136,7 +136,19 @@ function freshServerPlan() {
 // Force-update registry: the screen subscribes (via the mocked hook) and the
 // refetch bumps the counter to re-render with the latest mockServerPlan.
 let forceUpdate: (() => void) | null = null;
+// When `deferRefetch` is true a refetch does NOT immediately fold the server
+// rows in (it does not bump `forceUpdate`); instead it stashes the settle into
+// `settleRefetch` so a test can drive the RACE: edit the just-inserted row
+// AFTER the autosave 200 (which dispatched the refetch) but BEFORE the refetch
+// resolves, then settle it. This reproduces the D-042 adoption-clobber window.
+let deferRefetch = false;
+let settleRefetch: (() => void) | null = null;
 const mockRefetch = jest.fn(async () => {
+  if (deferRefetch) {
+    // Hold the adoption until the test explicitly settles it.
+    settleRefetch = () => forceUpdate?.();
+    return { data: mockServerPlan };
+  }
   // The server has now assigned an id to the row that was inserted id-less.
   forceUpdate?.();
   return { data: mockServerPlan };
@@ -226,6 +238,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockServerPlan = freshServerPlan();
   forceUpdate = null;
+  deferRefetch = false;
+  settleRefetch = null;
   process.env.EXPO_PUBLIC_FF_MWB_AUTOSAVE = 'true';
   mockAutosaveCall.mockResolvedValue({
     head_revision_index: 1,
@@ -386,5 +400,175 @@ describe('CoachWorkoutBuilderScreen — P1 row-ID adoption on autosave insert', 
       jest.advanceTimersByTime(50);
     });
     expect(mockRefetch).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * D-042 race coverage. The four tests above settle the post-insert refetch
+ * BEFORE the coach touches the row again (via `addAndAdopt`). The blocking R4
+ * audit gap is the OPPOSITE order: the coach edits/deletes/reorders the
+ * just-inserted row in the window AFTER the insert autosave 200 (which
+ * dispatched the refetch) but BEFORE that refetch resolves. Before D-042 the
+ * hook's `hasPending` stayed false in that window, so the screen's adoption
+ * effect ran on the resolving refetch and CLOBBERED the coach's in-flight edit
+ * with refetched server data. These tests assert the edit/delete/reorder is
+ * PRESERVED and the subsequent autosave names the adopted server row id.
+ */
+describe('CoachWorkoutBuilderScreen — P1 row-ID adoption RACE (edit before refetch resolves)', () => {
+  /**
+   * Add a row, then drive its insert autosave 200 with the post-save refetch
+   * DEFERRED (not yet resolved). Returns the testing-library queries with the
+   * screen parked in the exact race window: server has assigned the id, the
+   * refetch is dispatched, but the rows have NOT yet been adopted. The caller
+   * mutates the row, THEN calls `settleRefetch()` to resolve the adoption.
+   */
+  async function addThenDeferRefetch() {
+    jest.useFakeTimers();
+    deferRefetch = true;
+    const Screen = loadScreen();
+    const utils = render(<Screen />);
+    const { getByLabelText } = utils;
+
+    await act(async () => {
+      fireEvent.changeText(getByLabelText('Search exercise catalog'), 'squat');
+    });
+    await act(async () => {
+      fireEvent.press(utils.getByText('Squat'));
+    });
+
+    // The server gains the new row WITH an id (what the refetch WILL read once
+    // it settles). We stage it now but do NOT bump forceUpdate, so the screen
+    // does not see it until `settleRefetch()` resolves the adoption.
+    mockServerPlan = {
+      ...mockServerPlan,
+      exercises: [
+        ...mockServerPlan.exercises,
+        {
+          id: NEW_SERVER_ROW_ID,
+          workout_plan_id: 'plan-1',
+          exercise_external_id: 'squat',
+          order: 2,
+          sets: 3,
+          reps_or_duration_seconds: 10,
+          weight_lbs: null,
+          rest_seconds: 60,
+          superset_group_id: null,
+          notes: null,
+        },
+      ],
+    };
+
+    // Debounce -> insert autosave 200 -> onSaved dispatches the (deferred)
+    // refetch. Adoption is HELD pending settleRefetch().
+    await act(async () => {
+      jest.advanceTimersByTime(900);
+    });
+    await waitFor(() => expect(mockAutosaveCall).toHaveBeenCalled());
+    const firstOps = (mockAutosaveCall.mock.calls[0][0] as {
+      body: { ops: { op: string; row_id?: string }[] };
+    }).body.ops;
+    const firstUpsert = firstOps.find((o) => o.op === 'upsert_exercise');
+    expect(firstUpsert).toBeDefined();
+    expect(firstUpsert?.row_id).toBeUndefined();
+    // The refetch was dispatched but is parked (deferred): no adoption yet.
+    await waitFor(() => expect(mockRefetch).toHaveBeenCalled());
+    expect(settleRefetch).not.toBeNull();
+
+    return utils;
+  }
+
+  it('edit before refetch resolves: the edit is preserved AND the next autosave names the adopted id (no clobber)', async () => {
+    const utils = await addThenDeferRefetch();
+    const { getAllByLabelText } = utils;
+
+    // Coach edits the just-inserted row's Sets to 7 WHILE the refetch is parked.
+    const setsInputs = getAllByLabelText('Sets');
+    await act(async () => {
+      fireEvent.changeText(setsInputs[setsInputs.length - 1], '7');
+    });
+
+    // NOW settle the refetch — adoption runs while the local edit is unsaved.
+    await act(async () => {
+      settleRefetch?.();
+    });
+    mockAutosaveCall.mockClear();
+    await act(async () => {
+      jest.advanceTimersByTime(900);
+    });
+    await waitFor(() => expect(mockAutosaveCall).toHaveBeenCalled());
+
+    // The local edit survived: the value 7 is still on the row.
+    const setsAfter = getAllByLabelText('Sets');
+    expect(setsAfter[setsAfter.length - 1].props.value).toBe('7');
+    // The subsequent autosave is a SINGLE upsert that NAMES the adopted server
+    // id and carries the edited value — not a duplicate id-less insert.
+    const ops = lastOpsBody();
+    const upserts = ops.filter((o) => o.op === 'upsert_exercise') as {
+      op: string;
+      row_id?: string;
+      payload?: { sets?: number };
+    }[];
+    expect(upserts).toHaveLength(1);
+    expect(upserts[0].row_id).toBe(NEW_SERVER_ROW_ID);
+    // The edited value is carried in the upsert payload (not clobbered to 3).
+    expect(upserts[0].payload?.sets).toBe(7);
+  });
+
+  it('delete before refetch resolves: the delete is preserved AND emits remove_exercise for the adopted id', async () => {
+    const utils = await addThenDeferRefetch();
+    const { getAllByLabelText, queryAllByLabelText } = utils;
+
+    // Coach removes the just-inserted row WHILE the refetch is parked.
+    const removeButtons = getAllByLabelText('Remove exercise');
+    await act(async () => {
+      fireEvent.press(removeButtons[removeButtons.length - 1]);
+    });
+
+    // NOW settle the refetch — adoption must not resurrect the deleted row.
+    await act(async () => {
+      settleRefetch?.();
+    });
+    mockAutosaveCall.mockClear();
+    await act(async () => {
+      jest.advanceTimersByTime(900);
+    });
+    await waitFor(() => expect(mockAutosaveCall).toHaveBeenCalled());
+
+    // The delete survived: only the original (bench) row remains.
+    expect(queryAllByLabelText('Remove exercise')).toHaveLength(1);
+    // The subsequent autosave names the adopted id in a remove_exercise.
+    const ops = lastOpsBody();
+    expect(ops).toContainEqual({ op: 'remove_exercise', row_id: NEW_SERVER_ROW_ID });
+  });
+
+  it('reorder before refetch resolves: the reorder is preserved AND names the adopted id', async () => {
+    const utils = await addThenDeferRefetch();
+    const { getAllByLabelText } = utils;
+
+    // Coach moves the just-inserted row up WHILE the refetch is parked.
+    const upButtons = getAllByLabelText('Move exercise up');
+    await act(async () => {
+      fireEvent.press(upButtons[upButtons.length - 1]);
+    });
+
+    // NOW settle the refetch.
+    await act(async () => {
+      settleRefetch?.();
+    });
+    mockAutosaveCall.mockClear();
+    await act(async () => {
+      jest.advanceTimersByTime(900);
+    });
+    await waitFor(() => expect(mockAutosaveCall).toHaveBeenCalled());
+
+    // The subsequent autosave names the adopted id in the reorder (it could not
+    // be referenced before adoption), and the original row id is present too.
+    const ops = lastOpsBody();
+    const reorder = ops.find((o) => o.op === 'reorder') as
+      | { op: 'reorder'; row_ids: string[] }
+      | undefined;
+    expect(reorder).toBeDefined();
+    expect(reorder?.row_ids).toContain(NEW_SERVER_ROW_ID);
+    expect(reorder?.row_ids).toContain(SERVER_ROW_ID);
   });
 });

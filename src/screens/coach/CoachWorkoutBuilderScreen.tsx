@@ -249,9 +249,28 @@ export default function CoachWorkoutBuilderScreen() {
   // names the real id instead of re-inserting it. We only refetch when an
   // id-less row was actually in play — a pure metadata/known-row save needs no
   // id adoption, so we avoid a needless network round-trip.
+  // Bumped each time we ASK for a post-save/post-conflict refetch to fold
+  // server-assigned row ids back in. It is a STATE (not a ref) on purpose: the
+  // id-only merge adoption below lists it as a dependency, so the merge effect
+  // re-runs the moment a refetch is requested even when `existingPlan`'s
+  // reference is otherwise stable. The bump also gates the merge so it only
+  // ever runs in response to a genuine refetch we triggered — never an
+  // incidental `existingPlan` churn — matching production, where `existingPlan`
+  // changes only when a refetch resolves.
+  const [refetchSeq, setRefetchSeq] = useState(0);
+  const refetchSeqRef = useRef(0);
+  const adoptedRefetchSeqRef = useRef(0);
+  // True once the screen has folded server data into local rows at least once.
+  // The very first arrival of `existingPlan` is a legitimate full adopt even
+  // though no refetch was requested; after that, only a fresh refetch we
+  // triggered re-runs the adoption so incidental renders never clobber.
+  const initialLoadDoneRef = useRef(false);
+
   const onAutosaveSaved = useCallback(() => {
     if (!autosaveEnabled) return;
     if (!hasIdlessRowsRef.current) return;
+    refetchSeqRef.current += 1;
+    setRefetchSeq(refetchSeqRef.current);
     void refetchPlan();
   }, [autosaveEnabled, refetchPlan]);
 
@@ -270,6 +289,8 @@ export default function CoachWorkoutBuilderScreen() {
   // external-edit conflict routes here.)
   const onAutosaveConflict = useCallback(() => {
     if (!autosaveEnabled) return;
+    refetchSeqRef.current += 1;
+    setRefetchSeq(refetchSeqRef.current);
     void refetchPlan();
   }, [autosaveEnabled, refetchPlan]);
 
@@ -318,37 +339,109 @@ export default function CoachWorkoutBuilderScreen() {
   const pendingRebaselineSigRef = useRef<string | null>(null);
   const autosaveRebaseline = autosave.rebaseline;
 
-  // Re-baseline the local rows when a refetch (post-409, post-insert id
-  // adoption, or initial load) brings in fresh server rows WITH their ids — but
-  // only while autosave is on and only when the user has no in-flight pending
-  // edit, so we never clobber a coach mid-type. This adopts server-assigned
-  // row_ids for rows that were inserted on-device (which arrived id-less) so
-  // subsequent edit/reorder/remove ops can name them. `autosave.hasPending` is
-  // in the dependency array (not just read once) so that data which arrived
-  // WHILE a batch was pending is correctly applied the moment that batch
-  // clears — the P1 gap where a refetch landed during a pending insert and was
-  // then never adopted.
+  // Adopt server rows when a refetch (post-409, post-insert id adoption, or
+  // initial load) brings in fresh server rows WITH their ids.
+  //
+  // Two modes, chosen by `autosave.hasPending`:
+  //   - NOT pending (no unsaved coach edit): a full replace from server truth.
+  //     The server copy IS the truth, so we mirror it verbatim and record the
+  //     adopted signature for the rebaseline below.
+  //   - PENDING (the D-042 race: the coach edited the just-inserted row before
+  //     this refetch resolved): a full replace would CLOBBER the coach's edit.
+  //     Instead we MERGE only the server-assigned row_ids into the matching
+  //     id-less local rows — preserving every locally-edited field and the
+  //     local order. That way the coach's edit survives AND the next autosave
+  //     names the adopted server row id (a single upsert WITH the id, never a
+  //     duplicate id-less insert). We do NOT record a rebaseline signature in
+  //     this mode: the pending batch still owns the delta, and the rebaseline
+  //     effect's own guard would refuse mid-flight anyway.
+  // `autosave.hasPending` stays in the dependency array so a refetch that
+  // landed while a batch was pending is adopted the moment that batch clears.
   useEffect(() => {
     if (!autosaveEnabled) return;
-    if (autosave.hasPending) return;
     if (!existingPlan) return;
-    setRows(
-      existingPlan.exercises.map((e) => ({
-        row_id: e.id,
-        exercise_external_id: e.exercise_external_id,
-        display_name: e.exercise_external_id,
-        sets: e.sets,
-        reps_or_duration_seconds: e.reps_or_duration_seconds,
-        rest_seconds: e.rest_seconds,
-        weight_lbs: e.weight_lbs,
-        superset_group_id: e.superset_group_id,
-        notes: e.notes,
-      })),
-    );
-    // Mark the adopted server signature so the follow-up effect re-anchors the
-    // autosave baseline to this copy once `workingCopy` reflects it.
+    const serverExercises = existingPlan.exercises;
+    // Only adopt when there is a FRESH reason to: the very first time server
+    // data arrives (initial load) OR a refetch WE triggered has advanced the
+    // sequence. Re-running on every incidental render would let a stale
+    // `existingPlan` clobber locally-saved-but-not-yet-refetched edits — the
+    // exact regression the D-042 race exposes once an edit settles and the
+    // post-flush render fires this effect again with `hasPending` back to
+    // false.
+    const hasFreshRefetch = refetchSeq !== adoptedRefetchSeqRef.current;
+    if (initialLoadDoneRef.current && !hasFreshRefetch) return;
+
+    if (!autosave.hasPending) {
+      setRows(
+        serverExercises.map((e) => ({
+          row_id: e.id,
+          exercise_external_id: e.exercise_external_id,
+          display_name: e.exercise_external_id,
+          sets: e.sets,
+          reps_or_duration_seconds: e.reps_or_duration_seconds,
+          rest_seconds: e.rest_seconds,
+          weight_lbs: e.weight_lbs,
+          superset_group_id: e.superset_group_id,
+          notes: e.notes,
+        })),
+      );
+      // Mark the adopted server signature so the follow-up effect re-anchors
+      // the autosave baseline to this copy once `workingCopy` reflects it.
+      pendingRebaselineSigRef.current = serverRowSignature;
+      // A full replace fully reconciles to server truth, so any outstanding
+      // merge request is satisfied; record the load + adopted sequence.
+      initialLoadDoneRef.current = true;
+      adoptedRefetchSeqRef.current = refetchSeqRef.current;
+      return;
+    }
+    // Pending AND a fresh refetch we triggered is outstanding: this is the
+    // D-042 race — the coach edited the just-inserted row before the post-save
+    // refetch resolved. We must NOT clobber that edit, so we MERGE only the
+    // server-assigned row ids (preserving every edited field and local order).
+    // Build a FIFO pool of server row ids per external id, then consume
+    // already-adopted ids first so we never assign one twice, and hand the
+    // remaining ids to id-less local rows that match by external id. Order and
+    // all edited fields are taken from the LOCAL row.
+    setRows((cur) => {
+      const idsByExternal = new Map<string, string[]>();
+      for (const e of serverExercises) {
+        const list = idsByExternal.get(e.exercise_external_id) ?? [];
+        list.push(e.id);
+        idsByExternal.set(e.exercise_external_id, list);
+      }
+      // Reserve ids already held by local rows so they are not re-handed out.
+      for (const r of cur) {
+        if (r.row_id === undefined) continue;
+        const list = idsByExternal.get(r.exercise_external_id);
+        if (!list) continue;
+        const at = list.indexOf(r.row_id);
+        if (at !== -1) list.splice(at, 1);
+      }
+      let mutated = false;
+      const merged = cur.map((r) => {
+        if (r.row_id !== undefined) return r;
+        const list = idsByExternal.get(r.exercise_external_id);
+        if (!list || list.length === 0) return r;
+        const adoptedId = list.shift() as string;
+        mutated = true;
+        return { ...r, row_id: adoptedId };
+      });
+      // Return the SAME reference when nothing changed so we never spin an
+      // extra render / re-arm the debounce on a no-op adoption.
+      if (!mutated) return cur;
+      return merged;
+    });
+    // Record the adopted server signature so the rebaseline effect re-anchors
+    // the autosave diff baseline to the merged copy once the coach's pending
+    // batch clears. Without this the baseline stays at the id-LESS insert
+    // snapshot, so a follow-up delete of the merged row has no row_id to name
+    // (silent skip) and a follow-up reorder cannot reference it.
     pendingRebaselineSigRef.current = serverRowSignature;
-  }, [autosaveEnabled, autosave.hasPending, existingPlan, serverRowSignature]);
+    // The outstanding refetch has now been folded in; record it so a later
+    // incidental render does not re-merge.
+    initialLoadDoneRef.current = true;
+    adoptedRefetchSeqRef.current = refetchSeq;
+  }, [autosaveEnabled, autosave.hasPending, existingPlan, serverRowSignature, refetchSeq]);
 
   // The current local row-id signature, derived from the working copy the hook
   // diffs over. Equals `serverRowSignature` only once the `setRows` adoption
@@ -366,9 +459,20 @@ export default function CoachWorkoutBuilderScreen() {
   // remove_exercise, and a reorder names the adopted id. The hook's own guard
   // also refuses to re-anchor mid-flight, so a coach editing during adoption
   // keeps their pending ops.
+  //
+  // NOTE on the gate: phase-1 above only ran because `hasPending` was false, so
+  // the rows we adopted were NOT racing a coach edit. Folding those server rows
+  // into the working copy is itself a diff (id-less row -> row-with-id), which
+  // now (D-042) flips the hook's dirty signal and therefore `hasPending` true.
+  // We must NOT block on `hasPending` here or the baseline could never advance
+  // and the row id would never be adopted. Instead we rely on (a) the adopted
+  // signature being in place (`pendingRebaselineSigRef === localRowSignature`)
+  // and (b) `autosave.rebaseline()`'s OWN internal guard, which refuses to run
+  // while a real batch is in flight or queued. That keeps a genuine coach edit
+  // made during the refetch window safe (it lands in the queue, rebaseline
+  // no-ops) while still letting the pure-adoption case re-anchor.
   useEffect(() => {
     if (!autosaveEnabled) return;
-    if (autosave.hasPending) return;
     if (pendingRebaselineSigRef.current === null) return;
     if (pendingRebaselineSigRef.current !== localRowSignature) return;
     pendingRebaselineSigRef.current = null;
