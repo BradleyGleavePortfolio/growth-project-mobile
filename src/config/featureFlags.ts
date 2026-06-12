@@ -162,9 +162,12 @@ export const featureFlags = {
   // detail (RSVP + external link) and the coach event list + lifecycle screen.
   //
   // Defaults OFF UNCONDITIONALLY (not `isDev`). When false, the
-  // CommunityEventDetail / CoachCommunityEvents routes still register on the
-  // (already flag-gated) community stacks but are unreachable in product
-  // surfaces; consuming surfaces read this flag before exposing entry points.
+  // CommunityEventDetail / CoachCommunityEvents routes are NOT registered on
+  // the (already flag-gated) community stacks at all — the route screens are
+  // wrapped in a `featureFlags.communityEvents && ...` guard in both navigators
+  // — so there is zero event UI, no navigator target, and no reachable event
+  // surface. Consuming surfaces also read this flag before exposing entry
+  // points (discovery cards), giving belt-and-braces containment.
   // There is NO native live room — events carry an external, host-allowlisted
   // link only (Step 0).
   //

@@ -25,6 +25,46 @@ const FLAGS = fs.readFileSync(
   path.join(ROOT, 'config', 'featureFlags.ts'),
   'utf8',
 );
+const COACH_COMMUNITY_NAV = fs.readFileSync(
+  path.join(ROOT, 'navigation', 'CoachCommunityNavigator.tsx'),
+  'utf8',
+);
+const COACH_HOME = fs.readFileSync(
+  path.join(ROOT, 'screens', 'community', 'CoachCommunityHomeScreen.tsx'),
+  'utf8',
+);
+
+describe('Coach Community EVENTS route — flag-gated registration (F1)', () => {
+  it('registers the CoachCommunityEvents <Stack.Screen> only behind featureFlags.communityEvents', () => {
+    expect(COACH_COMMUNITY_NAV).toMatch(
+      /\{featureFlags\.communityEvents\s*&&/,
+    );
+    const guardIdx = COACH_COMMUNITY_NAV.search(
+      /\{featureFlags\.communityEvents\s*&&/,
+    );
+    const screenIdx = COACH_COMMUNITY_NAV.search(
+      /name=["']CoachCommunityEvents["']/,
+    );
+    expect(guardIdx).toBeGreaterThan(-1);
+    expect(screenIdx).toBeGreaterThan(guardIdx);
+  });
+
+  it('does not register the coach events route unconditionally', () => {
+    const occurrences =
+      COACH_COMMUNITY_NAV.match(/name=["']CoachCommunityEvents["']/g) ?? [];
+    expect(occurrences).toHaveLength(1);
+  });
+
+  it('gates the coach Home events discovery card behind featureFlags.communityEvents', () => {
+    // The visible Events entry point on coach Home is flag-gated, so the card
+    // and its navigation never appear in a flag-off build (F1 + F9).
+    expect(COACH_HOME).toMatch(/featureFlags\.communityEvents/);
+    const guardIdx = COACH_HOME.search(/featureFlags\.communityEvents\s*\?/);
+    const navIdx = COACH_HOME.search(/navigate\(['"]CoachCommunityEvents['"]/);
+    expect(guardIdx).toBeGreaterThan(-1);
+    expect(navIdx).toBeGreaterThan(guardIdx);
+  });
+});
 
 describe('Coach Community tab — flag-gated mount (default OFF)', () => {
   it('renders the CommunityStack <Tab.Screen> only behind featureFlags.coachCommunity', () => {

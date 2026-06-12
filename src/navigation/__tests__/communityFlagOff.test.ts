@@ -27,6 +27,14 @@ const FLAGS = fs.readFileSync(
   path.join(ROOT, 'config', 'featureFlags.ts'),
   'utf8',
 );
+const COMMUNITY_NAV = fs.readFileSync(
+  path.join(ROOT, 'navigation', 'CommunityNavigator.tsx'),
+  'utf8',
+);
+const TODAY_SCREEN = fs.readFileSync(
+  path.join(ROOT, 'screens', 'community', 'CommunityTodayScreen.tsx'),
+  'utf8',
+);
 
 describe('Community tab — flag-gated mount (default OFF)', () => {
   it('renders the CommunityTab <Tab.Screen> only behind featureFlags.communityTab', () => {
@@ -68,6 +76,43 @@ describe('Community tab — flag-gated mount (default OFF)', () => {
     // There must be no `path: 'community'` entry outside the flag-gated spread.
     const occurrences = ROOT_NAV.match(/path:\s*['"]community['"]/g) ?? [];
     expect(occurrences).toHaveLength(1);
+  });
+});
+
+describe('Community EVENTS route — flag-gated registration (F1)', () => {
+  it('registers the CommunityEventDetail <Stack.Screen> only behind featureFlags.communityEvents', () => {
+    // The event detail screen registration must be wrapped in a
+    // `{featureFlags.communityEvents && (...)}` guard — when OFF, no event
+    // route, UI, or data path exists in the member stack.
+    expect(COMMUNITY_NAV).toMatch(
+      /\{featureFlags\.communityEvents\s*&&/,
+    );
+    const guardIdx = COMMUNITY_NAV.search(
+      /\{featureFlags\.communityEvents\s*&&/,
+    );
+    const screenIdx = COMMUNITY_NAV.search(
+      /name=["']CommunityEventDetail["']/,
+    );
+    expect(guardIdx).toBeGreaterThan(-1);
+    expect(screenIdx).toBeGreaterThan(guardIdx);
+  });
+
+  it('does not register the event detail route unconditionally', () => {
+    // There must be exactly one CommunityEventDetail registration, and it lives
+    // inside the flag guard (asserted above).
+    const occurrences =
+      COMMUNITY_NAV.match(/name=["']CommunityEventDetail["']/g) ?? [];
+    expect(occurrences).toHaveLength(1);
+  });
+
+  it('gates the Today event card navigation behind featureFlags.communityEvents', () => {
+    // The discovery hop into the event detail must itself be flag-gated so a
+    // flag-off build never navigates to an unregistered route (F1 + F9).
+    expect(TODAY_SCREEN).toMatch(/featureFlags\.communityEvents/);
+    const guardIdx = TODAY_SCREEN.search(/if\s*\(featureFlags\.communityEvents\)/);
+    const navIdx = TODAY_SCREEN.search(/navigate\(['"]CommunityEventDetail['"]/);
+    expect(guardIdx).toBeGreaterThan(-1);
+    expect(navIdx).toBeGreaterThan(guardIdx);
   });
 });
 
