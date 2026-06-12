@@ -68,6 +68,16 @@ export interface ProgressChartCardProps {
   readonly testID?: string;
   /** Test-only override for the reduce-motion probe (keeps the draw-in off). */
   readonly reduceMotionOverride?: boolean;
+  /**
+   * Whether to run personal-record detection and render the PR flag + Roman
+   * commentary. Defaults to OFF (audit R3 P2): PR detection only makes sense
+   * for a lift/performance series where a higher value is unambiguously
+   * better. The bodyweight trend chart passes this false — a rising bodyweight
+   * is not a "personal best" (and is actively wrong for weight-loss clients).
+   * The detection + rendering path is kept intact behind this gate so a future
+   * real lift series can opt in with a true `liftName`.
+   */
+  readonly enablePRDetection?: boolean;
 }
 
 const PAD_X = 16;
@@ -91,6 +101,7 @@ export default function ProgressChartCard({
   height = 220,
   testID,
   reduceMotionOverride,
+  enablePRDetection = false,
 }: ProgressChartCardProps): React.ReactElement {
   const probedReduceMotion = useReduceMotion();
   const reduceMotion = reduceMotionOverride ?? probedReduceMotion;
@@ -103,7 +114,13 @@ export default function ProgressChartCard({
     setWidth(e.nativeEvent.layout.width);
   }, []);
 
-  const pr = useMemo(() => detectPersonalRecord(data), [data]);
+  // PR detection is gated (audit R3 P2): only run it when the consumer opts in
+  // (a true lift/performance series). When off, `pr` stays null so neither the
+  // PR flag nor the Roman PR commentary renders — the chart itself is intact.
+  const pr = useMemo(
+    () => (enablePRDetection ? detectPersonalRecord(data) : null),
+    [data, enablePRDetection],
+  );
 
   // Geometry in measured pixel space (recomputed only when data/size change).
   const geom = useMemo(() => {

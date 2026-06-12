@@ -23,8 +23,14 @@ jest.mock('../../../client/wearables/components/useReduceMotion', () => ({
   useReduceMotion: () => true,
 }));
 
+// Mutable current-coach identity so a test can simulate switching coaches
+// within one app session (audit R3 P2 — per-coach dismissal latch).
+let mockCurrentUser: { id: string; firstName: string } = {
+  id: 'coach-xyz',
+  firstName: 'Marcus',
+};
 jest.mock('../../../../hooks/useCurrentUser', () => ({
-  useCurrentUser: () => ({ id: 'coach-xyz', firstName: 'Marcus' }),
+  useCurrentUser: () => mockCurrentUser,
 }));
 
 jest.mock('../../../../config/featureFlags', () => ({
@@ -57,6 +63,7 @@ import FirstPaymentWowHost from '../FirstPaymentWowHost';
 
 beforeEach(() => {
   capturedOnFirstPayment = undefined;
+  mockCurrentUser = { id: 'coach-xyz', firstName: 'Marcus' };
   mockMarkFirstPaymentSeen.mockReset();
   mockMarkFirstPaymentSeen.mockReturnValue(Promise.resolve(undefined));
 });
@@ -157,5 +164,42 @@ describe('FirstPaymentWowHost — ED.3 (P1-3 dismiss ordering)', () => {
     // ...and the celebration must STILL be absent (no re-show this session).
     expect(queryByTestId('first-payment-wow')).toBeNull();
     warnSpy.mockRestore();
+  });
+
+  it('does NOT suppress a DIFFERENT coach after the first coach dismisses (per-coach latch)', async () => {
+    // Audit R3 P2: the dismissal latch must be keyed by coach. After coach A
+    // dismisses, coach B's legitimate first-payment celebration in the SAME
+    // app session must still show; a re-fire for coach A stays blocked.
+    const { getByTestId, queryByTestId, rerender } = render(
+      <FirstPaymentWowHost>{null}</FirstPaymentWowHost>,
+    );
+
+    // Coach A celebrates, then dismisses.
+    act(() => {
+      capturedOnFirstPayment?.({ amount: '$240.00', clientName: 'Dana' });
+    });
+    expect(getByTestId('first-payment-wow')).toBeTruthy();
+    await act(async () => {
+      fireEvent.press(getByTestId('first-payment-dismiss'));
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(queryByTestId('first-payment-wow')).toBeNull());
+
+    // A re-fire for coach A stays blocked (same-coach latch holds).
+    act(() => {
+      capturedOnFirstPayment?.({ amount: '$260.00', clientName: 'Dana' });
+    });
+    expect(queryByTestId('first-payment-wow')).toBeNull();
+
+    // Switch to coach B in the same session and re-render the host.
+    mockCurrentUser = { id: 'coach-bbb', firstName: 'Nadia' };
+    rerender(<FirstPaymentWowHost>{null}</FirstPaymentWowHost>);
+
+    // Coach B's first payment MUST celebrate — coach A's dismissal does not
+    // suppress it.
+    act(() => {
+      capturedOnFirstPayment?.({ amount: '$300.00', clientName: 'Riley' });
+    });
+    expect(getByTestId('first-payment-wow')).toBeTruthy();
   });
 });

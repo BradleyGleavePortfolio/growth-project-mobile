@@ -9,6 +9,8 @@
  *      crossover (driven via the captured pan handler), and only once per
  *      column (no per-frame spam).
  *   4. No PR → no flag, no commentary.
+ *   5. PR detection is GATED (audit R3 P2): it is OFF by default, so a rising
+ *      series renders no flag / no commentary unless enablePRDetection is set.
  *
  * Reduce-motion is forced ON (via the prop override) so the draw-in does not
  * depend on async timing; the line + flag + commentary still render.
@@ -75,7 +77,12 @@ beforeEach(() => {
 describe('ProgressChartCard — ED.4', () => {
   it('renders the PR flag + glow and the Roman commentary (FACE+VOICE)', () => {
     const node = render(
-      <ProgressChartCard data={PR_SERIES} liftName="Back Squat" reduceMotionOverride />,
+      <ProgressChartCard
+        data={PR_SERIES}
+        liftName="Back Squat"
+        reduceMotionOverride
+        enablePRDetection
+      />,
     );
     layout(node);
 
@@ -99,7 +106,12 @@ describe('ProgressChartCard — ED.4', () => {
 
   it('fires a selection haptic on a data-point crossover, once per column', () => {
     const node = render(
-      <ProgressChartCard data={PR_SERIES} liftName="Back Squat" reduceMotionOverride />,
+      <ProgressChartCard
+        data={PR_SERIES}
+        liftName="Back Squat"
+        reduceMotionOverride
+        enablePRDetection
+      />,
     );
     layout(node);
 
@@ -132,7 +144,12 @@ describe('ProgressChartCard — ED.4', () => {
     const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
     const node = render(
-      <ProgressChartCard data={PR_SERIES} liftName="Back Squat" reduceMotionOverride />,
+      <ProgressChartCard
+        data={PR_SERIES}
+        liftName="Back Squat"
+        reduceMotionOverride
+        enablePRDetection
+      />,
     );
     layout(node);
 
@@ -159,10 +176,28 @@ describe('ProgressChartCard — ED.4', () => {
       { x: 3, y: 180 },
     ];
     const node = render(
-      <ProgressChartCard data={flat} liftName="Back Squat" reduceMotionOverride />,
+      <ProgressChartCard
+        data={flat}
+        liftName="Back Squat"
+        reduceMotionOverride
+        enablePRDetection
+      />,
     );
     layout(node);
     expect(node.queryByTestId('progress-pr-flag')).toBeNull();
     expect(node.queryByTestId('progress-pr-commentary')).toBeNull();
+  });
+
+  it('does NOT detect a PR by default, even on a rising series (gated OFF)', () => {
+    // Audit R3 P2: PR detection is off unless the consumer opts in. A rising
+    // bodyweight series must therefore render no PR flag and no Roman PR
+    // commentary — a weight gain is not a "personal best".
+    const node = render(
+      <ProgressChartCard data={PR_SERIES} liftName="Weight" reduceMotionOverride />,
+    );
+    layout(node);
+    expect(node.queryByTestId('progress-pr-flag')).toBeNull();
+    expect(node.queryByTestId('progress-pr-commentary')).toBeNull();
+    expect(node.queryByTestId('progress-pr-text')).toBeNull();
   });
 });

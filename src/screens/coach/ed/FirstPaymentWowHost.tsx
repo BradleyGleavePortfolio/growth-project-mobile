@@ -43,23 +43,31 @@ export default function FirstPaymentWowHost({
 
   const [event, setEvent] = useState<FirstPaymentEvent | null>(null);
 
-  // Session-local dismissed/seen latch (audit R2 P1). The persisted gate alone
-  // is not enough: if markFirstPaymentSeen rejects (storage outage), the gate
-  // stays unseen and a later INSERT could re-fire onFirstPayment after the
-  // coach has already dismissed the celebration this session. This in-memory
-  // ref blocks any re-show for the lifetime of the host, INDEPENDENT of
-  // whether persistence succeeded — it is set BEFORE the overlay clears.
-  const dismissedThisSession = useRef(false);
+  // Session-local dismissed/seen latch (audit R2 P1), keyed BY COACH (audit R3
+  // P2). The persisted gate alone is not enough: if markFirstPaymentSeen
+  // rejects (storage outage), the gate stays unseen and a later INSERT could
+  // re-fire onFirstPayment after the coach has already dismissed the
+  // celebration this session. This in-memory set records WHICH coaches have
+  // dismissed this session, INDEPENDENT of whether persistence succeeded — the
+  // dismissed coach is added BEFORE the overlay clears. Keying by coach (rather
+  // than a single host-lifetime boolean) means coach A dismissing never
+  // suppresses coach B's legitimate first-payment celebration in the same
+  // session; re-firing for coach A is still blocked.
+  const dismissedCoachIdsRef = useRef<Set<string>>(new Set<string>());
 
-  const handleFirstPayment = useCallback((next: FirstPaymentEvent) => {
-    // Once dismissed this session, never re-show — even if the persisted gate
-    // failed to write (the hook re-checks only the persisted gate, so this
-    // latch is the fail-closed backstop against a re-fire).
-    if (dismissedThisSession.current) return;
-    // Only the first event wins; later INSERTs while the overlay is up are
-    // ignored (the gate is written on dismiss).
-    setEvent((current) => current ?? next);
-  }, []);
+  const handleFirstPayment = useCallback(
+    (next: FirstPaymentEvent) => {
+      // Once THIS coach dismissed this session, never re-show for them — even
+      // if the persisted gate failed to write (the hook re-checks only the
+      // persisted gate, so this latch is the fail-closed backstop against a
+      // re-fire). A different coach is unaffected.
+      if (coachId && dismissedCoachIdsRef.current.has(coachId)) return;
+      // Only the first event wins; later INSERTs while the overlay is up are
+      // ignored (the gate is written on dismiss).
+      setEvent((current) => current ?? next);
+    },
+    [coachId],
+  );
 
   const { error: realtimeError } = useFirstPaymentRealtime({
     coachId,
@@ -80,9 +88,10 @@ export default function FirstPaymentWowHost({
   }, [realtimeError]);
 
   const handleDismiss = useCallback(async () => {
-    // Set the session latch FIRST so the celebration can never re-show this
-    // session regardless of whether the persisted gate write below succeeds.
-    dismissedThisSession.current = true;
+    // Set the session latch FIRST (for THIS coach) so the celebration can never
+    // re-show this session for them regardless of whether the persisted gate
+    // write below succeeds. Other coaches remain eligible to celebrate.
+    if (coachId) dismissedCoachIdsRef.current.add(coachId);
     // Close the persisted gate (await it) so a future session also stays
     // closed, THEN clear the overlay (return to coach home). On a write
     // failure we log via the shared logger — never swallow (Bradley Law #36)

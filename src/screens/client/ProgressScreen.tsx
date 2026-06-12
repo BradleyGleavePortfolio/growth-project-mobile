@@ -145,6 +145,11 @@ export default function ProgressScreen() {
   const [todayMacros, setTodayMacros] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0 });
   const [loggingStreak, setLoggingStreak] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  // ED.4 (audit R3 P3): the chart-error retry calls loadData directly, but
+  // `refreshing` only reflects pull-to-refresh — so the retry button stayed
+  // enabled and could be spammed. Track the direct retry separately and disable
+  // the button while it is in flight.
+  const [chartRetrying, setChartRetrying] = useState(false);
   // ED.4 (audit R2 P2): a weight-history fetch failure used to fall through to
   // the benign "log your weight" empty copy, hiding the error from the client.
   // Track it so the chart slot can render an honest Roman-tone retry state.
@@ -236,6 +241,20 @@ export default function ProgressScreen() {
     setRefreshing(true);
     await loadData();
     setRefreshing(false);
+  }, [loadData]);
+
+  // Chart-error retry: mark the retry in flight BEFORE the call so the button
+  // disables, and clear it once the call settles (success or failure) so a
+  // genuine re-retry stays possible. loadData never rejects (it handles its own
+  // errors and sets weightHistoryError), but the finally keeps the latch honest
+  // even if that changes.
+  const onChartRetry = useCallback(async () => {
+    setChartRetrying(true);
+    try {
+      await loadData();
+    } finally {
+      setChartRetrying(false);
+    }
   }, [loadData]);
 
   const handleLogWeight = async () => {
@@ -495,8 +514,8 @@ export default function ProgressScreen() {
             <Text style={styles.chartTitle}>Weight Trend</Text>
             <CoachErrorState
               message="That chart did not load. I will try again."
-              onRetry={loadData}
-              retrying={refreshing}
+              onRetry={onChartRetry}
+              retrying={chartRetrying}
               testID="progress-weight-chart-error"
             />
           </View>
@@ -509,6 +528,11 @@ export default function ProgressScreen() {
                 liftName="Weight"
                 height={180}
                 testID="progress-weight-chart"
+                // Bodyweight is a trend, not a performance record — a rising
+                // weight is not a "personal best" (audit R3 P2). PR detection /
+                // commentary stays OFF here; the path is intact for a future
+                // real lift series.
+                enablePRDetection={false}
               />
             </View>
           </View>

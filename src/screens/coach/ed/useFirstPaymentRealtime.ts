@@ -20,16 +20,35 @@
  * without the celebration), but it is never silently dropped — the catch
  * records the reason so a missing celebration can be diagnosed.
  *
- * Server-authoritative FIRST-payment proof (audit R2 P1): the local once-only
- * gate alone cannot prove a payment is the coach's FIRST — a coach with prior
- * payments but no local gate (new device, storage reset, rollout after
- * history) would otherwise see a false "first payment" celebration. Before
- * celebrating, we verify against the server: a COUNT(*) over `payments` for
- * this `coach_id` via the same authenticated Supabase client (no schema change,
- * R69). We celebrate ONLY when the server proves this is payment #1 (count
- * === 1). We FAIL CLOSED — any verification error suppresses the celebration
- * and is logged. When the count proves prior payments already exist (> 1) we
- * close the local gate so the subscription stops re-arming on future opens.
+ * Server-authoritative FIRST-SUCCESSFUL-payment proof (audit R3 P1): the local
+ * once-only gate alone cannot prove a payment is the coach's FIRST, and a bare
+ * COUNT(*) cannot prove it is the first SUCCESSFUL one. The two guards here are:
+ *
+ *   (a) INSERTED-ROW SUCCESS — the celebration only arms when the inserted
+ *       payment row is itself a successful/settled payment. A failed / pending
+ *       / refunded INSERT is ignored and does NOT mark the gate seen, so a
+ *       later genuine paid row can still verify. Success is read from the
+ *       row's status field against the repo's documented success set —
+ *       `paid` / `active` (`ClientPurchase.status`, schema.prisma:3214, used as
+ *       the success predicate `status IN ('paid','active')` in
+ *       src/api/clientPaymentsApi.ts:566,624-626 / checkout.service.ts:723-727),
+ *       plus the Stripe-level `succeeded`/`settled` synonyms — read defensively
+ *       across `status` | `state` | `payment_status` (no schema change, R69).
+ *
+ *   (b) PROVABLY FIRST — we query for ANY successful payment for this coach
+ *       strictly EARLIER than the event row (by `created_at`, tie-break by id),
+ *       scoped to `coach_id` + the success status set. ZERO earlier successful
+ *       rows ⇒ this is the first successful payment ⇒ celebrate. This kills the
+ *       old `count <= 1` ambiguity (lagged/undercount false-fire) AND the
+ *       second-payment race (a later row cannot change whether EARLIER
+ *       successful rows already exist).
+ *
+ * FAIL CLOSED: verification error / unknown status / ambiguous result ⇒ no
+ * celebration, logged via the shared logger, and the gate is NOT marked seen
+ * (a later legitimate event may still verify). When an earlier successful
+ * payment is found, we mark seen + close the gate (stop subscribing), no
+ * celebration. All on the same authenticated Supabase client — no schema
+ * change (R69), no backend change; this is a mobile-only PR.
  */
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -111,34 +130,96 @@ function readClientName(row: Record<string, unknown>): string {
 }
 
 /**
- * Server-authoritative verdict on whether the INSERT we just received is the
- * coach's FIRST payment. Counts the coach's `payments` rows via the same
- * authenticated client (no schema change — R69). The realtime INSERT has
- * already committed by the time this fires, so the COUNT includes it:
- *   count === 1 → 'first'       (this is the only payment → celebrate)
- *   count  > 1 → 'established'  (prior payments exist → never celebrate)
- *   otherwise  → 'unknown'      (count missing / query error → FAIL CLOSED)
+ * The success/settled status values a payment row may carry. Sourced from the
+ * repo's documented success predicate `status IN ('paid','active')`
+ * (ClientPurchase.status, schema.prisma:3214; src/api/clientPaymentsApi.ts:566,
+ * 624-626; checkout.service.ts:723-727) plus the Stripe-level synonyms
+ * `succeeded` / `settled` / `completed`. The realtime `payments` table is
+ * Supabase-native and not modelled in the backend Prisma schema, so the column
+ * name is read defensively (status | state | payment_status) — no schema
+ * change (R69).
  */
-async function verifyFirstPayment(
+const SUCCESS_STATUSES: readonly string[] = [
+  'paid',
+  'active',
+  'succeeded',
+  'settled',
+  'completed',
+];
+
+/**
+ * Read the success disposition of a payment row.
+ *   true     → the row carries a recognised success/settled status
+ *   false    → the row carries a status, but it is NOT a success status
+ *   'absent' → no status-like field present → ambiguous → FAIL CLOSED
+ */
+function rowSuccessStatus(
+  row: Record<string, unknown>,
+): boolean | 'absent' {
+  const raw = row.status ?? row.state ?? row.payment_status;
+  if (typeof raw !== 'string' || raw.trim().length === 0) return 'absent';
+  return SUCCESS_STATUSES.includes(raw.trim().toLowerCase());
+}
+
+/**
+ * Server-authoritative verdict on whether the SUCCESSFUL INSERT we received is
+ * the coach's FIRST successful payment. Queries the same authenticated client
+ * (no schema change — R69) for successful `payments` rows scoped to this coach,
+ * ordered by `created_at` then `id`, and asks whether ANY successful row exists
+ * strictly EARLIER than the event row. This is race-proof: a later payment
+ * cannot change whether earlier successful rows already exist.
+ *   'first'       → zero earlier successful rows → celebrate
+ *   'established' → an earlier successful row exists → never celebrate
+ *   'unknown'     → query error / missing ordering key → FAIL CLOSED
+ */
+async function verifyFirstSuccessfulPayment(
   client: SupabaseClient,
   coachId: string,
+  eventRow: Record<string, unknown>,
 ): Promise<'first' | 'established' | 'unknown'> {
-  // `head: true` makes this a COUNT-only request (no rows transferred); the
-  // exact count is server-computed. This reads the same `payments` table the
-  // subscription already watches — no new endpoint, no new schema.
-  const { count, error: queryError } = await client
+  const createdAt = eventRow.created_at;
+  const eventId = eventRow.id;
+  // Without a usable ordering key on the event row we cannot prove ordering —
+  // FAIL CLOSED rather than guess (Law #36; the caller logs and does not mark
+  // seen, so a later well-formed event can still verify).
+  if (typeof createdAt !== 'string' || createdAt.length === 0) {
+    logger.warn('ed3', 'first-payment event row missing created_at', {});
+    return 'unknown';
+  }
+  // Fetch successful rows for this coach at or before the event's timestamp,
+  // earliest first. `limit(2)` is enough: we only need to know whether any row
+  // OTHER than the event itself precedes it.
+  const { data, error: queryError } = await client
     .from('payments')
-    .select('id', { count: 'exact', head: true })
-    .eq('coach_id', coachId);
+    .select('id, created_at, status')
+    .eq('coach_id', coachId)
+    .in('status', SUCCESS_STATUSES as string[])
+    .lte('created_at', createdAt)
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true })
+    .limit(2);
   if (queryError) {
     // Do not throw — the caller fails closed on 'unknown' and logs the reason.
-    logger.warn('ed3', 'first-payment count query returned error', {
+    logger.warn('ed3', 'first-payment verification query returned error', {
       reason: queryError.message,
     });
     return 'unknown';
   }
-  if (typeof count !== 'number') return 'unknown';
-  return count <= 1 ? 'first' : 'established';
+  if (!Array.isArray(data)) return 'unknown';
+  // Is there a successful row that is strictly earlier than the event row?
+  const hasEarlier = data.some((r) => {
+    const rId = (r as Record<string, unknown>).id;
+    const rCreated = (r as Record<string, unknown>).created_at;
+    if (rId === eventId) return false; // the event row itself is not 'earlier'
+    if (typeof rCreated !== 'string') return false;
+    if (rCreated < createdAt) return true;
+    // Same timestamp → tie-break by id (stable, deterministic ordering).
+    if (rCreated === createdAt) {
+      return String(rId) < String(eventId);
+    }
+    return false;
+  });
+  return hasEarlier ? 'established' : 'first';
 }
 
 export function useFirstPaymentRealtime({
@@ -205,22 +286,39 @@ export function useFirstPaymentRealtime({
             },
             (payload) => {
               // Re-check the gate at fire time, THEN prove server-side that
-              // this is genuinely the coach's FIRST payment before celebrating.
-              // Both guards fail closed (Law #36): a payment after the gate is
-              // closed, OR for an established coach, OR when verification
-              // errors, must NOT spend the one sanctioned exclamation.
+              // this is genuinely the coach's FIRST SUCCESSFUL payment before
+              // celebrating. Every guard fails closed (Law #36): a payment
+              // after the gate is closed, a non-success INSERT, an established
+              // coach, or a verification error must NOT spend the one
+              // sanctioned exclamation.
               hasSeenFirstPayment(coachId as string)
                 .then(async (already) => {
                   if (already || cancelled || !client) return;
-                  const verdict = await verifyFirstPayment(
+                  const row = (payload.new ?? {}) as Record<string, unknown>;
+                  // Guard (a): the inserted row must itself be a successful /
+                  // settled payment. A failed / pending / refunded INSERT (or a
+                  // row with no status field) is ignored and does NOT mark the
+                  // gate seen — a later genuine paid row can still verify.
+                  const success = rowSuccessStatus(row);
+                  if (success !== true) {
+                    logger.log(
+                      'ed3',
+                      'non-success payment insert ignored; gate left unseen',
+                      { disposition: String(success) },
+                    );
+                    return;
+                  }
+                  // Guard (b): prove this is the FIRST successful payment.
+                  const verdict = await verifyFirstSuccessfulPayment(
                     client,
                     coachId as string,
+                    row,
                   );
                   if (cancelled) return;
                   if (verdict === 'established') {
-                    // Prior payments exist — this coach is past their first.
-                    // Close the local gate so we stop re-arming on future
-                    // opens, and never celebrate.
+                    // An earlier successful payment exists — this coach is past
+                    // their first. Close the local gate so we stop re-arming on
+                    // future opens, and never celebrate.
                     logger.log(
                       'ed3',
                       'established coach payment; suppressing celebration and closing gate',
@@ -229,11 +327,11 @@ export function useFirstPaymentRealtime({
                     return;
                   }
                   if (verdict !== 'first') {
-                    // 'unknown' — verification could not prove payment #1.
-                    // FAIL CLOSED: do not celebrate. Already logged in helper.
+                    // 'unknown' — verification could not prove the first success.
+                    // FAIL CLOSED: do not celebrate, do not mark seen. Already
+                    // logged in helper.
                     return;
                   }
-                  const row = (payload.new ?? {}) as Record<string, unknown>;
                   cbRef.current({
                     amount: formatAmount(row),
                     clientName: readClientName(row),
