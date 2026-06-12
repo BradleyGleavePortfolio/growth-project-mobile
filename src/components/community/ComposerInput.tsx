@@ -24,13 +24,17 @@ export interface ComposerInputProps {
   maxLength: number;
   /** Disabled while a send is in flight. */
   sending?: boolean;
-  onSubmit: (value: string) => void;
+  /**
+   * Submit handler. May be async: when it returns a promise the draft is
+   * cleared only after it resolves, and is preserved if it rejects, so a
+   * failed send never silently loses what the user typed.
+   */
+  onSubmit: (value: string) => void | Promise<void>;
   testID?: string;
 }
 
 /**
- * Imperative handle so a caller (e.g. the comments empty-state CTA) can focus
- * the composer as a REAL action rather than a dead no-op (UX finding 3).
+ * Imperative handle so a caller can focus the composer programmatically.
  */
 export interface ComposerInputHandle {
   focus: () => void;
@@ -52,8 +56,17 @@ const ComposerInput = forwardRef<ComposerInputHandle, ComposerInputProps>(
 
   const submit = () => {
     if (!canSend) return;
-    onSubmit(trimmed);
-    setValue('');
+    // Clear optimistically, but if onSubmit is async and rejects, restore the
+    // draft so the user does not lose their text on a failed send. The sync
+    // path keeps the existing immediate-clear behaviour.
+    const draft = trimmed;
+    const result = onSubmit(draft);
+    if (result && typeof result.then === 'function') {
+      setValue('');
+      result.catch(() => setValue(draft));
+    } else {
+      setValue('');
+    }
   };
 
   return (

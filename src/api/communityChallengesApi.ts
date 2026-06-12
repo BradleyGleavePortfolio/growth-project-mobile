@@ -2,7 +2,7 @@
  * communityChallengesApi — typed client for the v3-1 Community Challenges
  * backend.
  *
- * Backend contract source of truth (binding — do NOT drift):
+ * Backend contract source of truth (do not drift):
  *   growth-project-backend/src/community/challenges/community-challenges.controller.ts
  *   growth-project-backend/src/community/challenges/community-challenges.dto.ts
  *
@@ -10,10 +10,13 @@
  *   - Every response is validated with Zod at the boundary so a drifted shape
  *     THROWS here (wrapped as a `contract` error) instead of feeding malformed
  *     data into React state.
- *   - Mutations send an Idempotency-Key (R19) so a double-tap deduplicates.
- *   - Behavioral framing (design Part III): the leaderboard is OFF unless the
- *     coach enabled it AND the caller opted in; the API never returns a
- *     non-consenting participant's row and never a "you are losing" signal.
+ *   - Mutations send an Idempotency-Key so a double-tap deduplicates.
+ *   - The leaderboard is OFF unless the coach enabled it AND the caller opted
+ *     in; the API never returns a non-consenting participant's row.
+ *   - List, comments, and leaderboard reads are cursor-paginated: the response
+ *     carries `next_cursor` (the id to pass back as `cursor` for the next
+ *     page; null on the last page), so the screens page with useInfiniteQuery
+ *     and never request an unbounded result set.
  */
 import { z } from 'zod';
 import axios from 'axios';
@@ -82,8 +85,14 @@ const ChallengeResponseSchema = z
 export type CommunityChallengeDetail = z.infer<typeof ChallengeResponseSchema>;
 
 const ChallengeListResponseSchema = z
-  .object({ challenges: z.array(ChallengeSchema) })
+  .object({
+    challenges: z.array(ChallengeSchema),
+    next_cursor: z.string().uuid().nullable(),
+  })
   .strict();
+export type CommunityChallengeListPage = z.infer<
+  typeof ChallengeListResponseSchema
+>;
 
 const ParticipationResponseSchema = z
   .object({ participation: ParticipationSchema })
@@ -106,6 +115,7 @@ const LeaderboardResponseSchema = z
     available: z.boolean(),
     opted_in: z.boolean(),
     rows: z.array(LeaderboardRowSchema),
+    next_cursor: z.string().uuid().nullable(),
   })
   .strict();
 export type CommunityChallengeLeaderboard = z.infer<
@@ -124,27 +134,21 @@ export const ChallengeCommentSchema = z
 export type CommunityChallengeComment = z.infer<typeof ChallengeCommentSchema>;
 
 const ChallengeCommentListResponseSchema = z
-  .object({ comments: z.array(ChallengeCommentSchema) })
+  .object({
+    comments: z.array(ChallengeCommentSchema),
+    next_cursor: z.string().uuid().nullable(),
+  })
   .strict();
+export type CommunityChallengeCommentPage = z.infer<
+  typeof ChallengeCommentListResponseSchema
+>;
 
 const ChallengeCommentResponseSchema = z
   .object({ comment: ChallengeCommentSchema })
   .strict();
 
-// NOTE (F1 correction): there is NO backend empty-state payload endpoint for the
-// challenge *comments* surface. The binding backend branch (PR #390 head,
-// community-challenges.controller.ts) exposes no `comments/empty-state` route,
-// and no `challenge_comments_empty` surface key exists anywhere in the Roman
-// voice-policy (voice-policy.constants.ts) — that policy only covers the ten P2
-// notification surfaces and the five COACH_COMMUNITY_SURFACE_KEYS, none of which
-// is participant-facing challenge comments. A prior revision invented a
-// `getCommentsEmptyState` method + `challenge_comments_empty` enum + a
-// `/comments/empty-state` route; that fabricated a contract the backend does not
-// serve and is removed here (brief: "mirror the dto AS IT STANDS"). The honest
-// true-empty surface is therefore a NEUTRAL, non-Roman-voiced state derived from
-// the comments query itself (no local `romanVoice.ts` Roman copy — that local
-// Roman copy was the original P0 — and no invented backend payload). See
-// CommunityChallengeDetailScreen's commentsFooter.
+// The comments surface has no backend empty-state payload: its true-empty
+// state is a neutral message derived from the comments query itself.
 
 // ─── Transport helper (mirrors communityApi.call) ─────────────────────────────
 
@@ -201,17 +205,12 @@ function idempotentHeaders(): { headers: Record<string, string> } {
   return { headers: { 'Idempotency-Key': generateIdempotencyKey() } };
 }
 
-// ─── Pagination defaults (Category 3 — no unbounded fetches) ─────────────────
+// ─── Pagination (bounded, cursor-paged reads) ────────────────────────────────
 //
-// The list / leaderboard / comments surfaces send a bounded `limit` (and an
-// optional opaque `cursor` for the next page) on the request so the client
-// never asks the server for an unbounded result set. These are REQUEST-only
-// parameters: the backend contract (PR #390 community-challenges.dto.ts) does
-// not yet expose a cursor envelope, so the RESPONSE schemas are deliberately
-// left unchanged (still `.strict()` arrays). Inventing a `next_cursor` response
-// field here would drift from the binding backend and trip the F2 drift suite,
-// so we cap the request and let React Query key on the page parameters without
-// asserting a response envelope the backend does not serve.
+// The list / leaderboard / comments reads send a bounded `limit` and an
+// optional `cursor` (the previous page's `next_cursor`) and parse the cursor
+// envelope the backend returns, so the client never requests an unbounded
+// result set and older rows stay reachable via fetchNextPage.
 export const CHALLENGES_PAGE_LIMIT = 20;
 export const CHALLENGE_COMMENTS_PAGE_LIMIT = 20;
 export const CHALLENGE_LEADERBOARD_PAGE_LIMIT = 20;
@@ -244,7 +243,7 @@ export const communityChallengesApi = {
       cohortId?: string;
       status?: CommunityChallengeStatus;
     } & PageParams = {},
-  ): Promise<CommunityChallenge[]> {
+  ): Promise<CommunityChallengeListPage> {
     const params: Record<string, string> = pageParams(
       CHALLENGES_PAGE_LIMIT,
       opts,
@@ -255,7 +254,7 @@ export const communityChallengesApi = {
       api.get<unknown>(`/community/workspaces/${workspaceId}/challenges`, {
         params,
       }),
-    ).then((r) => r.challenges);
+    );
   },
 
   /** GET /community/challenges/:challengeId — definition + caller's own row. */
@@ -321,13 +320,13 @@ export const communityChallengesApi = {
   listComments(
     challengeId: string,
     opts: PageParams = {},
-  ): Promise<CommunityChallengeComment[]> {
+  ): Promise<CommunityChallengeCommentPage> {
     const params = pageParams(CHALLENGE_COMMENTS_PAGE_LIMIT, opts);
     return call(ChallengeCommentListResponseSchema, () =>
       api.get<unknown>(`/community/challenges/${challengeId}/comments`, {
         params,
       }),
-    ).then((r) => r.comments);
+    );
   },
 
   /** POST /community/challenges/:challengeId/comments — encouragement. */
@@ -344,39 +343,31 @@ export const communityChallengesApi = {
     ).then((r) => r.comment);
   },
 
-  // ── Challenge LEAVE / WITHDRAW ──────────────────────────────────────────────
-  //
-  // OPERATOR DECISION (R2): NO challenge-leave method is added.
-  //
-  // The binding backend (PR #390 head, community-challenges.controller.ts)
-  // exposes exactly twelve routes: create, patch, archive, list, getOne,
-  // leaderboard, comments(list), join, progress, leaderboard-opt-in,
-  // comments(post), and report. There is NO `DELETE join`, no `/leave`, and no
-  // `/withdraw` route, and `community-challenges.dto.ts` defines no leave DTO.
-  // Adding a client `leaveChallenge` method here would FABRICATE a contract the
-  // backend does not serve — the exact failure this client already corrected
-  // once (the invented `getCommentsEmptyState` endpoint, see the F1 note above)
-  // — and would violate the zero-drift posture (R69 / the F2 drift suite owns
-  // the contract).
-  //
-  // What the participant CAN reversibly undo on this surface is their
-  // leaderboard participation: `setLeaderboardOptIn(challengeId, false)` (the
-  // "Stop sharing my progress" affordance in the detail screen) withdraws them
-  // from the cohort leaderboard. Full challenge withdrawal requires a backend
-  // route first; that is flagged for operator/product capture in the R2 report.
+  // There is no challenge-leave route on the backend; the only reversible
+  // participation toggle is leaderboard opt-out via setLeaderboardOptIn(false).
 
-  /** POST /community/challenges/:challengeId/comments/:commentId/report */
+  /**
+   * POST /community/challenges/:challengeId/comments/:commentId/report
+   *
+   * `idempotencyKey` lets the caller pass ONE stable key per report intent so a
+   * double-tap / retry of the same report deduplicates server-side. When
+   * omitted a fresh key is generated.
+   */
   reportComment(
     challengeId: string,
     commentId: string,
     reason: string,
     notes?: string,
+    idempotencyKey?: string,
   ): Promise<void> {
+    const headers = idempotencyKey
+      ? { headers: { 'Idempotency-Key': idempotencyKey } }
+      : idempotentHeaders();
     return call(z.unknown(), () =>
       api.post<unknown>(
         `/community/challenges/${challengeId}/comments/${commentId}/report`,
         { target_type: 'comment', target_id: commentId, reason, notes },
-        idempotentHeaders(),
+        headers,
       ),
     ).then(() => undefined);
   },

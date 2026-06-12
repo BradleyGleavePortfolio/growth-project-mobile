@@ -5,7 +5,7 @@
  *   - Participation-focused: the card foregrounds the caller's OWN progress
  *     (a compact bar + "X of Y") — a competence signal (§3.7), never a ranking
  *     and never a "behind" framing (§3.4, no public failure).
- *   - ONE clear affordance per card (Hick's Law, UX finding 13): a single chip
+ *   - ONE clear affordance per card (Hick's Law): a single chip
  *     that both states where you are AND what tapping does — "Join" when not
  *     joined, "Continue" when in progress, and a calm "Goal reached" closure when
  *     complete. There is no separate status label competing with the action.
@@ -53,7 +53,7 @@ export default function ChallengeCard({
   const unit = challenge.unit ?? '';
   const fraction = fractionFor(value, target);
 
-  // A SINGLE affordance that encodes both status and the tap outcome (F13).
+  // A single affordance that encodes both status and the tap outcome.
   const actionLabel = completed ? 'Goal reached' : joined ? 'Continue' : 'Join';
 
   const progressLabel =
@@ -115,7 +115,7 @@ export default function ChallengeCard({
         </View>
       ) : null}
 
-      {/* F13: a single chip is the only footer affordance. */}
+      {/* A single chip is the only footer affordance. */}
       <View style={styles.footerRow}>
         <View
           style={[styles.actionChip, { borderColor: semanticColors.accent }]}

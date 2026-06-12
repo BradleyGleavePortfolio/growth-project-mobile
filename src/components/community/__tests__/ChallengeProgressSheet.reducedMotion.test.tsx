@@ -106,6 +106,58 @@ describe('ChallengeProgressSheet — reduced motion', () => {
     await waitFor(() => expect(timingSpy).toHaveBeenCalled());
   });
 
+  it('presents the modal with the slide animation when reduce motion is OFF', async () => {
+    isReduceMotionSpy = jest
+      .spyOn(AccessibilityInfo, 'isReduceMotionEnabled')
+      .mockResolvedValue(false);
+
+    render(
+      <ChallengeProgressSheet
+        visible
+        challenge={challenge}
+        participation={participation}
+        onSubmit={jest.fn().mockResolvedValue({ completed: false })}
+        onClose={jest.fn()}
+        testID="sheet"
+      />,
+    );
+
+    await waitFor(() => expect(isReduceMotionSpy).toHaveBeenCalled());
+    await act(async () => {
+      await Promise.resolve();
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('sheet').props.animationType).toBe('slide'),
+    );
+  });
+
+  it('presents the modal with NO animation when reduce motion is ON', async () => {
+    isReduceMotionSpy = jest
+      .spyOn(AccessibilityInfo, 'isReduceMotionEnabled')
+      .mockResolvedValue(true);
+
+    render(
+      <ChallengeProgressSheet
+        visible
+        challenge={challenge}
+        participation={participation}
+        onSubmit={jest.fn().mockResolvedValue({ completed: false })}
+        onClose={jest.fn()}
+        testID="sheet"
+      />,
+    );
+
+    await waitFor(() => expect(isReduceMotionSpy).toHaveBeenCalled());
+    await act(async () => {
+      await Promise.resolve();
+    });
+    // Under reduce motion the modal must not fade or slide — animationType is
+    // 'none' so the present/dismiss is instant (a fade still animates opacity).
+    await waitFor(() =>
+      expect(screen.getByTestId('sheet').props.animationType).toBe('none'),
+    );
+  });
+
   it('sets the fill instantly (no Animated.timing) when reduce motion is ON', async () => {
     isReduceMotionSpy = jest
       .spyOn(AccessibilityInfo, 'isReduceMotionEnabled')

@@ -57,10 +57,9 @@ export default function CommunityTabScreen(): React.ReactElement {
       });
     }
     // Challenges discovery is a first-class Space sub-tab when the v3-1 flag is
-    // on. This is the entry that makes the challenge list REACHABLE from the
-    // visible client UI (it previously had no tab/card, leaving the route
-    // functionally dead) — P1. No unread badge: challenges are not a messaging
-    // surface, so there is no unread count to carry.
+    // on. This is the entry that makes the challenge list reachable from the
+    // client UI. No unread badge: challenges are not a messaging surface, so
+    // there is no unread count to carry.
     if (featureFlags.communityChallenges) {
       list.push({ key: 'challenges', label: 'Challenges' });
     }
@@ -97,8 +96,9 @@ export default function CommunityTabScreen(): React.ReactElement {
           />
         ) : active === 'challenges' ? (
           // Embedded discovery list. We pass the resolved workspaceId from the
-          // same `useCommunityMe` source the other Spaces use, so the list can
-          // actually fetch (P1 — the route is no longer empty for want of an id).
+          // same `useCommunityMe` source the other Spaces use; a still-loading
+          // or errored prerequisite resolves to null, which the screen treats
+          // as not-yet-resolved rather than an empty workspace.
           <CommunityChallengesScreen embedded workspaceId={workspaceId} />
         ) : (
           <CommunityDmListScreen embedded workspaceId={workspaceId} />

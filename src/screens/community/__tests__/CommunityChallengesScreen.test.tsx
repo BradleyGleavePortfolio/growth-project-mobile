@@ -1,23 +1,25 @@
 /**
- * CommunityChallengesScreen — reachability + bounded-fetch regression tests
- * (v3-1, P1).
+ * CommunityChallengesScreen — reachability, prerequisite-state, and bounded
+ * cursor-fetch regression tests (v3-1).
  *
- * The discovery surface is what makes the detail screen findable. The P1
- * finding was that the route could be reached with no workspace id threaded in
- * (deep link) and therefore fetch nothing — a functionally empty route. The fix
- * resolves the workspace id INTERNALLY from `useCommunityMe` when no prop is
- * supplied, mirroring CommunityTabScreen. These tests pin:
+ * The discovery surface is what makes the detail screen findable. The screen
+ * resolves the workspace id internally from `useCommunityMe` when no prop is
+ * supplied (mirroring CommunityTabScreen) and pages the list with a cursor
+ * envelope. These tests pin:
  *
  *   1. With NO workspaceId prop, the screen resolves the id from useCommunityMe
  *      and fires listChallenges(wsId, { limit }) — the route is not empty for
  *      want of an injected prop.
- *   2. The list fetch is BOUNDED — listChallenges is always called with the
- *      page limit (Category 3 — no unbounded fetches), never bare.
+ *   2. The list fetch is bounded — listChallenges always carries the page
+ *      limit, never bare.
  *   3. An explicit workspaceId prop wins (embedded callers avoid a second
  *      fetch) and still passes the bounded page limit.
+ *   4. The workspace prerequisite resolves BEFORE the challenge empty state: a
+ *      still-loading prerequisite shows a loading state (never "no challenges"),
+ *      and an errored prerequisite shows a retry (never "no challenges").
  *
  * The data layer is mocked and a real QueryClient is provided so the screen's
- * own useQuery branching runs deterministically.
+ * own query branching runs deterministically.
  */
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react-native';
@@ -49,11 +51,20 @@ jest.mock('react-native-safe-area-context', () => ({
 }));
 
 // ── useCommunityMe — the internal workspace-id source (mutable holder) ────────
-const meHolder: { data: { workspace_id: string } | undefined } = {
+type MeState = {
+  data: { workspace_id: string } | undefined;
+  isLoading: boolean;
+  isError: boolean;
+  refetch: jest.Mock;
+};
+const mockMeHolder: MeState = {
   data: { workspace_id: 'ws-resolved' },
+  isLoading: false,
+  isError: false,
+  refetch: jest.fn(),
 };
 jest.mock('../../../hooks/useCommunity', () => ({
-  useCommunityMe: () => meHolder,
+  useCommunityMe: () => mockMeHolder,
 }));
 
 // ── API client mock ──────────────────────────────────────────────────────────
@@ -66,7 +77,10 @@ jest.mock('../../../api/communityChallengesApi', () => ({
 
 import { AccessibilityInfo } from 'react-native';
 import { communityChallengesApi } from '../../../api/communityChallengesApi';
-import type { CommunityChallenge } from '../../../api/communityChallengesApi';
+import type {
+  CommunityChallenge,
+  CommunityChallengeListPage,
+} from '../../../api/communityChallengesApi';
 import CommunityChallengesScreen from '../CommunityChallengesScreen';
 
 const api = jest.mocked(communityChallengesApi);
@@ -95,6 +109,13 @@ function challenge(
   };
 }
 
+function page(
+  challenges: CommunityChallenge[],
+  next_cursor: string | null = null,
+): CommunityChallengeListPage {
+  return { challenges, next_cursor };
+}
+
 function renderScreen(props: { workspaceId?: string | null } = {}) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -108,12 +129,15 @@ function renderScreen(props: { workspaceId?: string | null } = {}) {
 
 beforeEach(() => {
   flags.communityChallenges = true;
-  meHolder.data = { workspace_id: 'ws-resolved' };
+  mockMeHolder.data = { workspace_id: 'ws-resolved' };
+  mockMeHolder.isLoading = false;
+  mockMeHolder.isError = false;
+  mockMeHolder.refetch = jest.fn();
   (api.listChallenges as jest.Mock).mockReset();
-  api.listChallenges.mockResolvedValue([]);
+  api.listChallenges.mockResolvedValue(page([]));
 });
 
-describe('CommunityChallengesScreen — reachable discovery surface (P1)', () => {
+describe('CommunityChallengesScreen — reachable discovery surface', () => {
   it('resolves the workspace id from useCommunityMe when no prop is supplied and fires a bounded list fetch', async () => {
     renderScreen(); // NO workspaceId prop — must self-resolve
 
@@ -126,8 +150,8 @@ describe('CommunityChallengesScreen — reachable discovery surface (P1)', () =>
     expect(api.listChallenges).not.toHaveBeenCalledWith('ws-resolved');
   });
 
-  it('does NOT fetch when no workspace id can be resolved (no prop, no me)', async () => {
-    meHolder.data = undefined;
+  it('does NOT fetch when no workspace id can be resolved (no prop, me settled with no workspace)', async () => {
+    mockMeHolder.data = undefined;
     renderScreen();
 
     // The query is disabled without a workspace id — the route shows its empty
@@ -138,14 +162,11 @@ describe('CommunityChallengesScreen — reachable discovery surface (P1)', () =>
     expect(api.listChallenges).not.toHaveBeenCalled();
   });
 
-  it('wraps each challenge row in a `role="listitem"` container for assistive tech (P1 — list/listitem semantics)', async () => {
-    api.listChallenges.mockResolvedValue([challenge()]);
+  it('wraps each challenge row in a `role="listitem"` container for assistive tech', async () => {
+    api.listChallenges.mockResolvedValue(page([challenge()]));
     renderScreen();
 
     const row = await screen.findByTestId('community-challenge-listitem-ch-1');
-    // The outer wrapper must carry the W3C `role="listitem"` so the parent
-    // FlatList's `accessibilityRole="list"` announces collection membership;
-    // this mirrors the EventCard precedent.
     expect(row.props.role).toBe('listitem');
   });
 
@@ -157,19 +178,69 @@ describe('CommunityChallengesScreen — reachable discovery surface (P1)', () =>
         limit: 20,
       }),
     );
-    // The internally-resolved id is NOT used when the prop is present.
     expect(api.listChallenges).not.toHaveBeenCalledWith('ws-resolved', {
       limit: 20,
     });
   });
 });
 
-describe('CommunityChallengesScreen — list named + live-announced (P2-2)', () => {
+describe('CommunityChallengesScreen — workspace prerequisite resolves before empty', () => {
+  it('shows the prerequisite loading state (never "no challenges") while me is loading', async () => {
+    mockMeHolder.data = undefined;
+    mockMeHolder.isLoading = true;
+    renderScreen(); // self-resolving; me still loading
+
+    await waitFor(() =>
+      expect(
+        screen.getByTestId('community-challenges-prereq-loading'),
+      ).toBeTruthy(),
+    );
+    // The benign empty copy must NOT be shown while the prerequisite loads.
+    expect(screen.queryByTestId('community-challenges-empty')).toBeNull();
+    expect(api.listChallenges).not.toHaveBeenCalled();
+  });
+
+  it('shows a retryable error (never "no challenges") when me errors', async () => {
+    mockMeHolder.data = undefined;
+    mockMeHolder.isError = true;
+    renderScreen();
+
+    await waitFor(() =>
+      expect(
+        screen.getByTestId('community-challenges-prereq-error'),
+      ).toBeTruthy(),
+    );
+    expect(screen.getByTestId('community-challenges-prereq-retry')).toBeTruthy();
+    expect(screen.queryByTestId('community-challenges-empty')).toBeNull();
+  });
+
+  it('treats an explicit null workspaceId prop as a still-pending prerequisite, not an empty workspace', async () => {
+    renderScreen({ workspaceId: null });
+
+    await waitFor(() =>
+      expect(
+        screen.getByTestId('community-challenges-prereq-loading'),
+      ).toBeTruthy(),
+    );
+    expect(screen.queryByTestId('community-challenges-empty')).toBeNull();
+    expect(api.listChallenges).not.toHaveBeenCalled();
+  });
+
+  it('reaches the true-empty state only once the prerequisite AND the list succeed', async () => {
+    api.listChallenges.mockResolvedValue(page([]));
+    renderScreen();
+
+    await waitFor(() =>
+      expect(screen.getByTestId('community-challenges-empty')).toBeTruthy(),
+    );
+  });
+});
+
+describe('CommunityChallengesScreen — list named + live-announced', () => {
   it('names the list with its loaded count and marks it a polite live region', async () => {
-    api.listChallenges.mockResolvedValue([
-      challenge({ id: 'ch-1' }),
-      challenge({ id: 'ch-2' }),
-    ]);
+    api.listChallenges.mockResolvedValue(
+      page([challenge({ id: 'ch-1' }), challenge({ id: 'ch-2' })]),
+    );
     renderScreen();
 
     const list = await screen.findByTestId('community-challenges-list');
@@ -180,12 +251,9 @@ describe('CommunityChallengesScreen — list named + live-announced (P2-2)', () 
   });
 
   it('names an empty list "Challenges, empty"', async () => {
-    api.listChallenges.mockResolvedValue([]);
+    api.listChallenges.mockResolvedValue(page([]));
     renderScreen();
 
-    // With zero rows the screen renders its empty surface, not the FlatList; the
-    // announcement path (below) is what informs assistive tech of the resolved
-    // empty state.
     await waitFor(() =>
       expect(screen.getByTestId('community-challenges-empty')).toBeTruthy(),
     );
@@ -195,11 +263,13 @@ describe('CommunityChallengesScreen — list named + live-announced (P2-2)', () 
     const announce = jest
       .spyOn(AccessibilityInfo, 'announceForAccessibility')
       .mockImplementation(() => undefined);
-    api.listChallenges.mockResolvedValue([
-      challenge({ id: 'ch-1' }),
-      challenge({ id: 'ch-2' }),
-      challenge({ id: 'ch-3' }),
-    ]);
+    api.listChallenges.mockResolvedValue(
+      page([
+        challenge({ id: 'ch-1' }),
+        challenge({ id: 'ch-2' }),
+        challenge({ id: 'ch-3' }),
+      ]),
+    );
     renderScreen();
 
     await waitFor(() =>

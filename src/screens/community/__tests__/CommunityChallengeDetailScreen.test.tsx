@@ -144,8 +144,15 @@ function renderScreen() {
 beforeEach(() => {
   flags.communityChallenges = true;
   Object.values(api).forEach((fn) => (fn as jest.Mock).mockReset());
-  api.listComments.mockResolvedValue([]);
-  api.getLeaderboard.mockResolvedValue({ available: true, opted_in: false, rows: [] });
+  // Cursor envelopes per backend #392: comments/leaderboard return a paged
+  // envelope (`next_cursor`), never a bare array.
+  api.listComments.mockResolvedValue({ comments: [], next_cursor: null });
+  api.getLeaderboard.mockResolvedValue({
+    available: true,
+    opted_in: false,
+    rows: [],
+    next_cursor: null,
+  });
 });
 
 describe('CommunityChallengeDetailScreen — flag off', () => {
@@ -214,6 +221,7 @@ describe('CommunityChallengeDetailScreen — leaderboard opt-in posture', () => 
       available: true,
       opted_in: true,
       rows: [{ user_id: 'me-1', rank: 1, progress_value: 25000, is_self: true }],
+      next_cursor: null,
     });
     renderScreen();
 
@@ -263,7 +271,7 @@ describe('CommunityChallengeDetailScreen — comments empty vs load error (F1/F8
       challenge: challenge(),
       participation: participation(),
     });
-    api.listComments.mockResolvedValue([]); // server-confirmed zero rows
+    api.listComments.mockResolvedValue({ comments: [], next_cursor: null }); // server-confirmed zero rows
     renderScreen();
 
     expect(
@@ -426,7 +434,7 @@ describe('CommunityChallengeDetailScreen — list/listitem semantics (P1)', () =
       challenge: challenge(),
       participation: participation(),
     });
-    api.listComments.mockResolvedValue([comment()]);
+    api.listComments.mockResolvedValue({ comments: [comment()], next_cursor: null });
     renderScreen();
 
     const row = await screen.findByTestId('community-challenge-comment-cm-1');
@@ -456,10 +464,10 @@ describe('CommunityChallengeDetailScreen — lists named + live-announced (P2-2)
       challenge: challenge(),
       participation: participation(),
     });
-    api.listComments.mockResolvedValue([
-      comment({ id: 'cm-1' }),
-      comment({ id: 'cm-2' }),
-    ]);
+    api.listComments.mockResolvedValue({
+      comments: [comment({ id: 'cm-1' }), comment({ id: 'cm-2' })],
+      next_cursor: null,
+    });
     renderScreen();
 
     const list = await screen.findByTestId('community-challenge-comments');
@@ -477,7 +485,10 @@ describe('CommunityChallengeDetailScreen — lists named + live-announced (P2-2)
       challenge: challenge(),
       participation: participation(),
     });
-    api.listComments.mockResolvedValue([comment({ id: 'cm-1' })]);
+    api.listComments.mockResolvedValue({
+      comments: [comment({ id: 'cm-1' })],
+      next_cursor: null,
+    });
     renderScreen();
 
     await waitFor(() =>
@@ -501,6 +512,7 @@ describe('CommunityChallengeDetailScreen — lists named + live-announced (P2-2)
         { user_id: 'me-1', rank: 1, progress_value: 25000, is_self: true },
         { user_id: 'u-2', rank: 2, progress_value: 20000, is_self: false },
       ],
+      next_cursor: null,
     });
     renderScreen();
 
@@ -513,5 +525,110 @@ describe('CommunityChallengeDetailScreen — lists named + live-announced (P2-2)
       expect(announce).toHaveBeenCalledWith('Leaderboard loaded, 2 rows'),
     );
     announce.mockRestore();
+  });
+});
+
+describe('CommunityChallengeDetailScreen — comment draft retention (P2-C3)', () => {
+  it('keeps the typed draft and surfaces an error when the send rejects', async () => {
+    api.getChallenge.mockResolvedValue({
+      challenge: challenge(),
+      participation: participation(),
+    });
+    // The comment send round-trip fails; the draft must survive the failure so
+    // the user does not lose what they typed (a swallowed loss would be #36).
+    api.addComment.mockRejectedValue(new Error('comment send down'));
+    renderScreen();
+
+    const field = await screen.findByTestId(
+      'community-challenge-composer-field',
+    );
+    fireEvent.changeText(field, 'You are doing great, keep at it.');
+    fireEvent.press(screen.getByTestId('community-challenge-composer-send'));
+
+    // A calm error banner is shown (the failure is surfaced, not swallowed)...
+    await waitFor(() =>
+      expect(
+        screen.getByTestId('community-challenge-action-error'),
+      ).toBeTruthy(),
+    );
+    // ...and the draft is restored into the field so the user can retry.
+    await waitFor(() =>
+      expect(
+        screen.getByTestId('community-challenge-composer-field').props.value,
+      ).toBe('You are doing great, keep at it.'),
+    );
+  });
+
+  it('clears the draft only after a successful send', async () => {
+    api.getChallenge.mockResolvedValue({
+      challenge: challenge(),
+      participation: participation(),
+    });
+    api.addComment.mockResolvedValue(undefined as never);
+    renderScreen();
+
+    const field = await screen.findByTestId(
+      'community-challenge-composer-field',
+    );
+    fireEvent.changeText(field, 'Proud of you.');
+    fireEvent.press(screen.getByTestId('community-challenge-composer-send'));
+
+    await waitFor(() => expect(api.addComment).toHaveBeenCalledWith('ch-1', 'Proud of you.'));
+    await waitFor(() =>
+      expect(
+        screen.getByTestId('community-challenge-composer-field').props.value,
+      ).toBe(''),
+    );
+  });
+});
+
+describe('CommunityChallengeDetailScreen — report double-submit guard (P2-C4)', () => {
+  function comment(
+    overrides: Partial<CommunityChallengeComment> = {},
+  ): CommunityChallengeComment {
+    return {
+      id: 'cm-1',
+      challenge_id: 'ch-1',
+      author_user_id: 'other-1',
+      body: 'Keep going, you have got this.',
+      created_at: '2026-03-05T00:00:00Z',
+      ...overrides,
+    };
+  }
+
+  it('fires exactly one report request on a rapid double-tap and reuses one key', async () => {
+    api.getChallenge.mockResolvedValue({
+      challenge: challenge(),
+      participation: participation(),
+    });
+    api.listComments.mockResolvedValue({
+      comments: [comment()],
+      next_cursor: null,
+    });
+    // The report stays pending so the second tap lands while the first is in
+    // flight — the guard must drop it.
+    let resolveReport: (() => void) | undefined;
+    api.reportComment.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveReport = resolve;
+        }),
+    );
+    renderScreen();
+
+    const reportBtn = await screen.findByTestId(
+      'community-challenge-comment-cm-1-report',
+    );
+    fireEvent.press(reportBtn);
+    fireEvent.press(reportBtn);
+
+    await waitFor(() => expect(api.reportComment).toHaveBeenCalledTimes(1));
+    // The single call carries a stable idempotency key (5th argument).
+    const key = api.reportComment.mock.calls[0][4];
+    expect(typeof key).toBe('string');
+    expect((key as string).length).toBeGreaterThan(0);
+
+    resolveReport?.();
+    await waitFor(() => expect(api.reportComment).toHaveBeenCalledTimes(1));
   });
 });

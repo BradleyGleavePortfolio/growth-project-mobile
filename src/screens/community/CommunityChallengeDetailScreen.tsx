@@ -36,6 +36,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute } from '@react-navigation/native';
 import {
+  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
@@ -60,6 +61,7 @@ import {
   type CommunityChallengeParticipation,
 } from '../../api/communityChallengesApi';
 import { CommunityApiError } from '../../api/communityApi';
+import { generateIdempotencyKey } from '../../utils/idempotency';
 import type { CommunityRoute } from './communityNavTypes';
 
 const COMMENT_MAX = 2000; // mirror backend CreateChallengeCommentDto
@@ -94,9 +96,16 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
 
   const [sheetOpen, setSheetOpen] = useState(false);
   // A calm, surfaced banner for a failed write action (join / opt-in / report /
-  // comment). No silent swallow (FIFTY_FAILURES #36): every mutation has an
-  // onError that sets this, and the banner is dismissible.
+  // comment). Every mutation has an onError that sets this, and the banner is
+  // dismissible, so a failure is never silently swallowed.
   const [actionError, setActionError] = useState<string | null>(null);
+  // The comment id whose report is currently in flight, so its report control
+  // can be disabled to block a double-submit while the request is pending.
+  const [reportingId, setReportingId] = useState<string | null>(null);
+  // One stable Idempotency-Key per comment-report intent, so a double-tap or
+  // retry of the same report deduplicates server-side rather than minting a
+  // fresh key each tap. Keyed by comment id; persists across renders.
+  const reportKeys = useRef<Map<string, string>>(new Map());
   // Imperative handle to the composer so the empty-state CTA can focus it.
   const composerRef = useRef<ComposerInputHandle>(null);
 
@@ -106,9 +115,10 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
     enabled: !!challengeId && featureFlags.communityChallenges,
   });
 
-  const comments = useQuery({
-    // The page limit is part of the key so a bounded page is cached distinctly
-    // (Category 3 — no unbounded comment fetches).
+  // Comments are cursor-paginated: the page limit is part of the key (a
+  // distinct page size is a distinct cache entry) and the cursor is threaded
+  // through pageParam, so older notes stay reachable via fetchNextPage.
+  const comments = useInfiniteQuery({
     queryKey: [
       'community',
       'challenge',
@@ -116,12 +126,20 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
       'comments',
       CHALLENGE_COMMENTS_PAGE_LIMIT,
     ],
-    queryFn: () =>
+    queryFn: ({ pageParam }) =>
       communityChallengesApi.listComments(challengeId, {
         limit: CHALLENGE_COMMENTS_PAGE_LIMIT,
+        ...(pageParam ? { cursor: pageParam } : {}),
       }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.next_cursor ?? undefined,
     enabled: !!challengeId && featureFlags.communityChallenges,
   });
+
+  const commentData = useMemo(
+    () => comments.data?.pages.flatMap((p) => p.comments) ?? [],
+    [comments.data],
+  );
 
   const participation = detail.data?.participation ?? null;
   const joined = participation !== null;
@@ -130,7 +148,9 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
 
   // Leaderboard is fetched ONLY once the caller has opted in (and the coach
   // enabled it). Off by default — we never request standings without consent.
-  const leaderboard = useQuery({
+  // Cursor-paginated so a long cohort board pages in rather than fetching
+  // unbounded; the first page carries `available`/`opted_in`.
+  const leaderboard = useInfiniteQuery({
     queryKey: [
       'community',
       'challenge',
@@ -138,10 +158,13 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
       'leaderboard',
       CHALLENGE_LEADERBOARD_PAGE_LIMIT,
     ],
-    queryFn: () =>
+    queryFn: ({ pageParam }) =>
       communityChallengesApi.getLeaderboard(challengeId, {
         limit: CHALLENGE_LEADERBOARD_PAGE_LIMIT,
+        ...(pageParam ? { cursor: pageParam } : {}),
       }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.next_cursor ?? undefined,
     enabled:
       !!challengeId &&
       featureFlags.communityChallenges &&
@@ -149,26 +172,25 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
       optedIn,
   });
 
-  // A failed optimistic write rolls the UI back AND must be ANNOUNCED to
-  // assistive tech, not just shown (P1 — the rollback banner had no live
-  // region). We announce the rollback copy whenever `actionError` transitions
-  // to a non-null value; the banner itself also carries
-  // `accessibilityLiveRegion="polite"` so a screen reader already focused near
-  // it re-reads on mount. The two together cover both focus positions.
+  const leaderboardRows = useMemo(
+    () => leaderboard.data?.pages.flatMap((p) => p.rows) ?? [],
+    [leaderboard.data],
+  );
+
+  // A failed optimistic write rolls the UI back and is also announced to
+  // assistive tech, not just shown, so a swallowed failure can never go
+  // unnoticed. The banner itself also carries a polite live region.
   useEffect(() => {
     if (actionError) {
       AccessibilityInfo.announceForAccessibility(actionError);
     }
   }, [actionError]);
 
-  // P2-2 (a11y): the comments and leaderboard lists are `accessibilityRole=
-  // "list"` with named `accessibilityLabel`s, but assistive tech also needs a
-  // spoken signal the moment the async data lands. Announce the loaded count on
-  // each settled, successful arrival (tracking the last announced count in a ref
-  // so unrelated re-renders never re-announce). The lists ALSO carry
-  // `accessibilityLiveRegion="polite"`, so the two paths cover both focus
-  // positions (reader on the list vs. elsewhere on the screen).
-  const commentsCount = comments.data?.length ?? 0;
+  // The comments and leaderboard lists carry a list role + label, and also
+  // announce their loaded count once the async data settles so a screen reader
+  // hears the surface populate. A ref tracks the last announced count so an
+  // unrelated re-render never re-announces.
+  const commentsCount = commentData.length;
   const lastCommentsAnnounced = useRef<number | null>(null);
   useEffect(() => {
     if (!comments.isSuccess) return;
@@ -183,7 +205,7 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
     );
   }, [comments.isSuccess, commentsCount]);
 
-  const leaderboardCount = leaderboard.data?.rows.length ?? 0;
+  const leaderboardCount = leaderboardRows.length;
   const lastLeaderboardAnnounced = useRef<number | null>(null);
   useEffect(() => {
     if (!leaderboard.isSuccess) return;
@@ -198,17 +220,10 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
     );
   }, [leaderboard.isSuccess, leaderboardCount]);
 
-  // The TRUE-EMPTY surface is only shown once the comments query has actually
-  // resolved to zero rows, so a load error never masquerades as "empty" (F8).
-  // The original P0 was that this surface rendered LOCAL Roman copy from
-  // `romanVoice.ts`; the brief's remedy is a backend payload, but the binding
-  // backend (PR #390 head) serves NO empty-state payload for this participant
-  // surface and the Roman voice-policy has no `challenge_comments_empty` key.
-  // Per the brief ("missing payload => honest state, never local fallback") the
-  // honest resolution is a NEUTRAL, non-Roman-voiced empty state derived from
-  // this query result -- no local Roman copy, no invented backend endpoint.
-  const commentsResolvedEmpty =
-    comments.isSuccess && (comments.data?.length ?? 0) === 0;
+  // The true-empty surface is only shown once the comments query has actually
+  // resolved to zero rows, so a load error never masquerades as "empty". The
+  // copy is a neutral UI string, not a localized voice payload.
+  const commentsResolvedEmpty = comments.isSuccess && commentData.length === 0;
 
   const detailKey = useMemo(
     () => ['community', 'challenge', challengeId] as const,
@@ -231,13 +246,11 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
     participation: CommunityChallengeParticipation | null;
   };
 
-  // ── Optimistic JOIN (P1) ────────────────────────────────────────────────
-  // Joining writes a provisional participation row into the detail cache
-  // immediately so the primary action and progress affordance flip without
-  // waiting for the round-trip. onError restores the exact previous cache
-  // (rollback) AND surfaces+announces the failure; onSettled reconciles with
-  // the server's monotonic truth. A 409 (already joined) is treated as success
-  // for UX purposes — we simply reconcile.
+  // Optimistic join: write a provisional participation row into the detail
+  // cache immediately so the primary action and progress affordance flip
+  // without waiting for the round-trip. onError restores the exact previous
+  // cache and surfaces + announces the failure; onSettled reconciles with the
+  // server's monotonic truth. A 409 (already joined) simply reconciles.
   const joinMutation = useMutation({
     mutationFn: () => communityChallengesApi.join(challengeId),
     onMutate: async (): Promise<{ previous: DetailCache | undefined }> => {
@@ -264,8 +277,8 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
       return { previous };
     },
     onError: (err: unknown, _vars, context) => {
-      // Roll the cache back to the pre-mutation snapshot (never leave optimistic
-      // state dangling — #30), then surface + announce the failure (#36).
+      // Roll the cache back to the pre-mutation snapshot, then surface and
+      // announce the failure so it is never silently swallowed.
       if (context?.previous !== undefined) {
         queryClient.setQueryData<DetailCache>(detailKey, context.previous);
       }
@@ -284,8 +297,7 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
     },
     onError: (err: unknown) => {
       // On a 409 the server's monotonic total moved under us -- re-fetch detail
-      // + leaderboard so the next attempt starts from the true value
-      // (FIFTY_FAILURES #30: never leave optimistic state dangling). The sheet
+      // + leaderboard so the next attempt starts from the true value. The sheet
       // owns the inline error surface, so we do NOT raise the banner here; we
       // let mutateAsync reject into the sheet's calm catch.
       if (err instanceof CommunityApiError && err.kind === 'conflict') {
@@ -295,7 +307,7 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
     },
   });
 
-  // ── Optimistic leaderboard OPT-IN / OPT-OUT (P1) ───────────────────────────
+  // ── Optimistic leaderboard opt-in / opt-out ──────────────────────────────
   // Flipping the opt-in toggle updates the cached participation immediately so
   // the leaderboard block reveals/hides without a round-trip. onError restores
   // the snapshot (rollback) and surfaces+announces the failure; onSettled
@@ -345,24 +357,44 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
   });
 
   const reportMutation = useMutation({
-    mutationFn: (commentId: string) =>
-      communityChallengesApi.reportComment(
+    mutationFn: (commentId: string) => {
+      let key = reportKeys.current.get(commentId);
+      if (!key) {
+        key = generateIdempotencyKey();
+        reportKeys.current.set(commentId, key);
+      }
+      return communityChallengesApi.reportComment(
         challengeId,
         commentId,
         'inappropriate',
-      ),
-    onMutate: () => setActionError(null),
+        undefined,
+        key,
+      );
+    },
+    onMutate: (commentId: string) => {
+      setActionError(null);
+      setReportingId(commentId);
+    },
     onSuccess: () =>
       setActionError('Thanks -- our team will take a look at this.'),
     onError: (err: unknown) => setActionError(describeError(err)),
+    onSettled: () => setReportingId(null),
   });
+
+  const onReport = useCallback(
+    (commentId: string) => {
+      // Guard the double-submit: ignore taps while any report is in flight.
+      if (reportMutation.isPending) return;
+      reportMutation.mutate(commentId);
+    },
+    [reportMutation],
+  );
 
   const handleSubmitProgress = useCallback(
     async (value: number): Promise<{ completed: boolean }> => {
       // Rejects on failure so the sheet keeps the draft + shows its calm inline
       // error; resolves with the server-confirmed completion so the sheet can
-      // stage the completion peak (UX finding 4). The sheet, not the screen,
-      // owns dismissal now.
+      // stage the completion peak. The sheet, not the screen, owns dismissal.
       const result = await progressMutation.mutateAsync(value);
       return { completed: result.completed };
     },
@@ -372,6 +404,18 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
   const focusComposer = useCallback(() => {
     composerRef.current?.focus();
   }, []);
+
+  const onCommentsEndReached = useCallback(() => {
+    if (comments.hasNextPage && !comments.isFetchingNextPage) {
+      void comments.fetchNextPage();
+    }
+  }, [comments]);
+
+  const onLeaderboardEndReached = useCallback(() => {
+    if (leaderboard.hasNextPage && !leaderboard.isFetchingNextPage) {
+      void leaderboard.fetchNextPage();
+    }
+  }, [leaderboard]);
 
   const handlePrimaryAction = useCallback(() => {
     if (!joined) {
@@ -484,30 +528,28 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
       ? `${value}${unit ? ` ${unit}` : ''} logged`
       : `${value} of ${target}${unit ? ` ${unit}` : ''}`;
 
-  const commentData = comments.data ?? [];
-  // F8: a LOAD ERROR and a TRUE EMPTY are different states and must never be
-  // conflated. A load error gets a calm retry (the composer stays available);
-  // a true empty (server confirmed zero rows) gets a NEUTRAL, non-Roman empty
-  // state with a real CTA (no local Roman copy, no invented backend payload).
+  // A load error and a true-empty are distinct states and must never be
+  // conflated: a load error gets a calm retry (the composer stays available); a
+  // true empty (server-confirmed zero rows) gets a neutral empty state + CTA.
   const commentsLoadError = comments.isError;
   const commentsTrueEmpty = commentsResolvedEmpty;
   const hasComments = commentData.length > 0;
 
-  // Neutral, non-Roman UI copy for the true-empty surface. This is a plain UI
-  // affordance string, NOT Roman voice and NOT sourced from `romanVoice.ts`.
   const EMPTY_COMMENTS_MESSAGE =
     'No encouragement notes yet. Be the first to leave one.';
 
   const renderComment = ({ item }: { item: CommunityChallengeComment }) => {
     const mine = item.author_user_id === client?.id;
+    // Disable this row's report control while any report is in flight; the
+    // tapped row also shows a busy state so a double-tap cannot fire twice.
+    const reporting = reportMutation.isPending;
+    const reportingThis = reportingId === item.id;
     return (
       <View
-        // The outer wrapper carries `listitem` semantics so assistive tech
-        // receives the list structure (the parent comments FlatList carries
-        // `accessibilityRole="list"`), while the inner report control keeps
-        // `button`. RN types the W3C `role` prop (not `accessibilityRole`) for
-        // list/listitem; this matches the EventCard precedent. (P1 —
-        // list/listitem.)
+        // The wrapper carries `listitem` semantics so assistive tech receives
+        // the list structure (the parent FlatList carries the `list` role),
+        // while the inner report control keeps `button`. RN types the W3C
+        // `role` prop (not `accessibilityRole`) for list/listitem.
         role="listitem"
         style={[styles.comment, { borderColor: semanticColors.border }]}
         testID={`community-challenge-comment-${item.id}`}
@@ -518,9 +560,11 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
         {!mine ? (
           <HapticPressable
             intent="light"
-            onPress={() => reportMutation.mutate(item.id)}
+            onPress={() => onReport(item.id)}
+            disabled={reporting}
             accessibilityRole="button"
             accessibilityLabel="Report this comment"
+            accessibilityState={{ disabled: reporting, busy: reportingThis }}
             testID={`community-challenge-comment-${item.id}-report`}
             style={styles.reportButton}
           >
@@ -542,7 +586,7 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
       // receives the list structure (the parent leaderboard FlatList carries
       // `accessibilityRole="list"`). RN types the W3C `role` prop (not
       // `accessibilityRole`) for list/listitem; this matches the EventCard
-      // precedent (see the comment row note). (P1 — list/listitem.)
+      // precedent (see the comment row note).
       role="listitem"
       style={[
         styles.lbRow,
@@ -627,7 +671,7 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
               Join the challenge to take part in the leaderboard.
             </Text>
           ) : !optedIn ? (
-            // F7: a NEUTRAL, equal-weight choice -- not a single nudge toward
+            // A neutral, equal-weight choice -- not a single nudge toward
             // sharing. Privacy is the stated default and is offered FIRST; both
             // options are the same visual weight (no primary/secondary framing)
             // so opting out is as easy as opting in (§3.4, no pressure).
@@ -684,31 +728,29 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
                 accessibilityLabel="Loading the leaderboard"
               />
             </View>
-          ) : leaderboard.isError || !leaderboard.data ? (
+          ) : leaderboard.isError ? (
             <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
               We could not load the leaderboard right now.
             </Text>
-          ) : leaderboard.data.rows.length === 0 ? (
+          ) : leaderboardRows.length === 0 ? (
             <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
               No one has shared progress yet. You are first — nicely done.
             </Text>
           ) : (
             <View>
-              {/* Virtualized leaderboard list (was an in-memory .map — Category
-                  3 / N+1 render gate). The rows are bounded by the page limit
-                  the query requests, and FlatList virtualizes them. It lives
-                  inside the comments list's header, so vertical scroll is
-                  delegated to the parent (scrollEnabled=false) to avoid nested
-                  scroll conflicts while keeping windowed rendering. The
-                  container carries the `list` role; each row is an addressable
-                  item within it. */}
+              {/* The leaderboard FlatList virtualizes the rows but delegates
+                  vertical scroll to the parent comments list
+                  (scrollEnabled=false) to avoid nested-scroll conflicts; the
+                  cursor-paginated "Show more" control below loads further
+                  pages since onEndReached cannot fire inside a non-scrolling
+                  nested list. */}
               <FlatList
-                data={leaderboard.data.rows}
+                data={leaderboardRows}
                 accessibilityRole="list"
                 accessibilityLabel={
-                  leaderboard.data.rows.length > 0
-                    ? `Leaderboard, ${leaderboard.data.rows.length} ${
-                        leaderboard.data.rows.length === 1 ? 'row' : 'rows'
+                  leaderboardRows.length > 0
+                    ? `Leaderboard, ${leaderboardRows.length} ${
+                        leaderboardRows.length === 1 ? 'row' : 'rows'
                       }`
                     : 'Leaderboard, empty'
                 }
@@ -719,6 +761,22 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
                 keyExtractor={(row) => row.user_id}
                 testID="community-challenge-leaderboard-list"
               />
+              {leaderboard.hasNextPage ? (
+                <HapticPressable
+                  intent="light"
+                  onPress={onLeaderboardEndReached}
+                  disabled={leaderboard.isFetchingNextPage}
+                  accessibilityRole="button"
+                  accessibilityLabel="Show more leaderboard rows"
+                  accessibilityState={{ busy: leaderboard.isFetchingNextPage }}
+                  testID="community-challenge-leaderboard-load-more"
+                  style={styles.optOutButton}
+                >
+                  <Text style={[styles.optOutLabel, { color: semanticColors.accentText }]}>
+                    {leaderboard.isFetchingNextPage ? 'Loading…' : 'Show more'}
+                  </Text>
+                </HapticPressable>
+              ) : null}
               <HapticPressable
                 intent="light"
                 onPress={() => optInMutation.mutate(false)}
@@ -745,12 +803,9 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
     </View>
   );
 
-  // F1/F8: the footer below the comments list. Three honest, distinct states:
-  //   1. comments LOAD ERROR  -> calm retry; the composer below stays usable.
-  //   2. comments TRUE EMPTY  -> a NEUTRAL (non-Roman) empty state with a REAL
-  //      focus CTA. No local Roman copy (the P0) and no invented backend
-  //      payload (there is none on the binding backend branch).
-  //   3. has comments         -> no footer.
+  // The footer below the comments list has four states: load error (calm
+  // retry, composer stays usable), true-empty (neutral empty state + focus
+  // CTA), a load-more spinner while paging, or nothing.
   const commentsFooter = commentsLoadError ? (
     <View style={styles.emptyComments} testID="community-challenge-comments-load-error">
       <Ionicons
@@ -783,6 +838,14 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
         testID="community-challenge-comments-empty"
       />
     </View>
+  ) : comments.isFetchingNextPage ? (
+    <View style={styles.emptyComments} testID="community-challenge-comments-load-more">
+      <ActivityIndicator
+        color={semanticColors.accent}
+        accessibilityRole="progressbar"
+        accessibilityLabel="Loading more notes"
+      />
+    </View>
   ) : null;
 
   return (
@@ -799,10 +862,9 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
           onPress={() => setActionError(null)}
           accessibilityRole="button"
           accessibilityLabel="Dismiss this message"
-          // P1: the rollback / failure banner is announced to assistive tech.
-          // `polite` re-reads the contents to a screen reader on mount; the
-          // imperative announceForAccessibility in the effect above covers the
-          // case where focus is elsewhere on the screen.
+          // The failure banner is announced to assistive tech: `polite`
+          // re-reads it on mount, and the effect's announceForAccessibility
+          // covers focus that is elsewhere on the screen.
           accessibilityLiveRegion="polite"
           testID="community-challenge-action-error"
           style={[styles.banner, { backgroundColor: semanticColors.bgSurface, borderColor: semanticColors.border }]}
@@ -830,12 +892,16 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
         ListFooterComponent={commentsFooter}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
+        onEndReached={onCommentsEndReached}
+        onEndReachedThreshold={0.4}
         testID="community-challenge-comments"
       />
 
       <ComposerInput
         ref={composerRef}
-        onSubmit={(body) => commentMutation.mutate(body)}
+        onSubmit={async (body) => {
+          await commentMutation.mutateAsync(body);
+        }}
         maxLength={COMMENT_MAX}
         sending={commentMutation.isPending}
         placeholder="Send a word of encouragement…"
@@ -959,8 +1025,8 @@ const styles = StyleSheet.create({
   },
   commentBody: { flex: 1, fontSize: 14, lineHeight: 20 },
   reportButton: {
-    // >=48dp touch target (F5 / WCAG 2.5.5, design checklist §6.2). The icon is
-    // visually small but the hit area is a full 48dp square.
+    // >=48dp touch target (WCAG 2.5.5). The icon is visually small but the hit
+    // area is a full 48dp square.
     minWidth: 48,
     minHeight: 48,
     alignItems: 'center',

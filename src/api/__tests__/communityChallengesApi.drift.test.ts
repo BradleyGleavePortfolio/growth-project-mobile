@@ -1,19 +1,13 @@
 /**
- * F2 — contract-drift tests for communityChallengesApi.
+ * Contract-drift tests for communityChallengesApi.
  *
- * These pin that the response schemas MIRROR the backend DTO field-by-field and
- * are STRICT: an extra/unknown field, a non-uuid id, a non-datetime timestamp,
+ * These pin that the response schemas mirror the backend DTO field-by-field and
+ * are strict: an extra/unknown field, a non-uuid id, a non-datetime timestamp,
  * or a non-positive rank all fail validation and surface as a `contract` error
  * (CommunityApiError kind 'contract'), never silently passing malformed data
- * into React state. The wire contract is owned by the backend
- * (growth-project-backend community-challenges.dto.ts, PR #390); this is the
- * mobile mirror, so a future drift on either side trips this suite (R26 + R29).
- *
- * Note: there is intentionally NO test for a challenge comments empty-state
- * endpoint here — the backend exposes none (PR #390 head: no
- * `comments/empty-state` route and no `challenge_comments_empty` surface key),
- * so the client must not own a schema for a contract the backend does not
- * serve.
+ * into React state. The list, comments, and leaderboard reads carry a cursor
+ * envelope (`next_cursor: uuid | null`); a missing cursor field is itself a
+ * drift on these strict schemas.
  */
 import axios from 'axios';
 import { communityChallengesApi } from '../communityChallengesApi';
@@ -87,20 +81,32 @@ beforeEach(() => {
 afterEach(() => jest.restoreAllMocks());
 
 describe('communityChallengesApi — happy-path parse', () => {
-  it('parses a well-formed challenge list', async () => {
-    api.get.mockResolvedValueOnce({ data: { challenges: [validChallenge()] } });
+  it('parses a well-formed challenge list page (challenges + next_cursor)', async () => {
+    api.get.mockResolvedValueOnce({
+      data: { challenges: [validChallenge()], next_cursor: null },
+    });
     const res = await communityChallengesApi.listChallenges(WS);
-    // The default call now sends a bounded page limit (Category 3 — no
-    // unbounded fetches); no cursor on the first page.
+    // The default call sends a bounded page limit; no cursor on the first page.
     expect(api.get).toHaveBeenCalledWith(
       `/community/workspaces/${WS}/challenges`,
       { params: { limit: '20' } },
     );
-    expect(res[0].id).toBe(CID);
+    expect(res.challenges[0].id).toBe(CID);
+    expect(res.next_cursor).toBeNull();
+  });
+
+  it('accepts a uuid next_cursor signalling a further page', async () => {
+    api.get.mockResolvedValueOnce({
+      data: { challenges: [validChallenge()], next_cursor: WS },
+    });
+    const res = await communityChallengesApi.listChallenges(WS);
+    expect(res.next_cursor).toBe(WS);
   });
 
   it('sends an explicit limit + cursor when paging forward', async () => {
-    api.get.mockResolvedValueOnce({ data: { challenges: [validChallenge()] } });
+    api.get.mockResolvedValueOnce({
+      data: { challenges: [validChallenge()], next_cursor: null },
+    });
     await communityChallengesApi.listChallenges(WS, {
       limit: 5,
       cursor: 'next-page-token',
@@ -113,14 +119,14 @@ describe('communityChallengesApi — happy-path parse', () => {
 
   it('sends a bounded limit on leaderboard + comments fetches', async () => {
     api.get.mockResolvedValueOnce({
-      data: { available: true, opted_in: true, rows: [] },
+      data: { available: true, opted_in: true, rows: [], next_cursor: null },
     });
     await communityChallengesApi.getLeaderboard(CID);
     expect(api.get).toHaveBeenLastCalledWith(
       `/community/challenges/${CID}/leaderboard`,
       { params: { limit: '20' } },
     );
-    api.get.mockResolvedValueOnce({ data: { comments: [] } });
+    api.get.mockResolvedValueOnce({ data: { comments: [], next_cursor: null } });
     await communityChallengesApi.listComments(CID);
     expect(api.get).toHaveBeenLastCalledWith(
       `/community/challenges/${CID}/comments`,
@@ -128,11 +134,18 @@ describe('communityChallengesApi — happy-path parse', () => {
     );
   });
 
-  it('does NOT add a cursor RESPONSE field to the strict list schema (zero drift)', async () => {
-    // The response contract is owned by the backend (no cursor envelope yet);
-    // a server that returns one would be a contract drift, not a silent pass.
+  it('rejects a list envelope MISSING the next_cursor field (strict)', async () => {
     api.get.mockResolvedValueOnce({
-      data: { challenges: [validChallenge()], next_cursor: 'x' },
+      data: { challenges: [validChallenge()] },
+    });
+    await expect(communityChallengesApi.listChallenges(WS)).rejects.toMatchObject(
+      { kind: 'contract' },
+    );
+  });
+
+  it('rejects a NON-uuid next_cursor on the list envelope', async () => {
+    api.get.mockResolvedValueOnce({
+      data: { challenges: [validChallenge()], next_cursor: 'not-a-uuid' },
     });
     await expect(communityChallengesApi.listChallenges(WS)).rejects.toMatchObject(
       { kind: 'contract' },
@@ -148,7 +161,7 @@ describe('communityChallengesApi — happy-path parse', () => {
   });
 });
 
-describe('communityChallengesApi — strict drift rejection (F2)', () => {
+describe('communityChallengesApi — strict drift rejection', () => {
   it('rejects an UNKNOWN extra field on a challenge (.strict, not .passthrough)', async () => {
     const drifted = { ...validChallenge(), surprise_field: 'nope' };
     api.get.mockResolvedValueOnce({ data: { challenges: [drifted] } });
@@ -159,7 +172,7 @@ describe('communityChallengesApi — strict drift rejection (F2)', () => {
 
   it('rejects an UNKNOWN extra field on the list envelope', async () => {
     api.get.mockResolvedValueOnce({
-      data: { challenges: [validChallenge()], next_page: 'x' },
+      data: { challenges: [validChallenge()], next_cursor: null, next_page: 'x' },
     });
     await expect(communityChallengesApi.listChallenges(WS)).rejects.toMatchObject({
       kind: 'contract',
@@ -188,6 +201,7 @@ describe('communityChallengesApi — strict drift rejection (F2)', () => {
         available: true,
         opted_in: true,
         rows: [{ user_id: UID, rank: 0, progress_value: 10, is_self: true }],
+        next_cursor: null,
       },
     });
     await expect(communityChallengesApi.getLeaderboard(CID)).rejects.toMatchObject({
@@ -215,6 +229,7 @@ describe('communityChallengesApi — strict drift rejection (F2)', () => {
             created_at: '01-03-2026',
           },
         ],
+        next_cursor: null,
       },
     });
     await expect(communityChallengesApi.listComments(CID)).rejects.toMatchObject({
@@ -231,7 +246,7 @@ describe('communityChallengesApi — strict drift rejection (F2)', () => {
   });
 });
 
-describe('communityChallengesApi — 409 classified as conflict (F3)', () => {
+describe('communityChallengesApi — 409 classified as conflict', () => {
   it('maps an HTTP 409 on progress to kind "conflict"', async () => {
     jest
       .spyOn(axios, 'isAxiosError')

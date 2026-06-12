@@ -49,7 +49,7 @@ export interface ChallengeProgressSheetProps {
    * Persist a new cumulative progress value. Resolves with the server-confirmed
    * outcome (whether the goal is now complete) so the sheet can stage the
    * completion peak; REJECTS when the write fails so the sheet surfaces a calm
-   * error and keeps the user's draft (no silent swallow, FIFTY_FAILURES #36).
+   * error and keeps the user's draft rather than silently swallowing it.
    */
   onSubmit: (progressValue: number) => Promise<{ completed: boolean }>;
   onClose: () => void;
@@ -118,7 +118,7 @@ export default function ChallengeProgressSheet({
   const nextValue = draftValid ? Math.max(draftValue, current) : current;
   // When the typed number is BELOW the saved total we silently keep the higher
   // saved value (monotonic). We explain that inline as reassurance, NOT as an
-  // error (no red, no shame) — UX finding 11 / §3.4.
+  // error (no red, no shame) — §3.4.
   const isClampedDown = draftValid && current > 0 && draftValue < current;
   const nextFraction = fractionFor(nextValue, target);
   const willComplete =
@@ -144,7 +144,7 @@ export default function ChallengeProgressSheet({
     return () => anim.stop();
   }, [nextFraction, reduceMotion, fill, celebrating]);
 
-  // Completion PEAK (UX finding 4 / §5.1 Step 6): once the server confirms the
+  // Completion PEAK (§5.1 Step 6): once the server confirms the
   // goal is reached we keep the sheet open and drive the fill to a full 100%.
   // Reduced motion collapses the animation to an instant set; either way a
   // single success haptic fires — calm, deliberate closure, no confetti.
@@ -162,8 +162,8 @@ export default function ChallengeProgressSheet({
     }
     // The completion haptic is a best-effort flourish: the visual closure (the
     // bar at 100% + the copy) is the real signal. But "best effort" is NOT a
-    // licence to swallow failures (Bradley Law #36 / R65). We branch on the two
-    // honestly-different outcomes:
+    // licence to swallow failures. We branch on the two honestly-different
+    // outcomes:
     //   1. EXPECTED-unsupported (web, where expo-haptics is a no-op platform):
     //      skip the call entirely — there is nothing to fail and nothing to log.
     //   2. A native call that REJECTS unexpectedly on a haptics-capable
@@ -197,7 +197,7 @@ export default function ChallengeProgressSheet({
       }
     } catch {
       // Surface a calm, non-shaming error and KEEP the draft so the user can
-      // retry (no silent swallow, no optimistic state left dangling — #30/#36).
+      // retry, never silently swallowing the failure or leaving state dangling.
       setSubmitError(
         'We could not save your progress just now. Please try again.',
       );
@@ -220,7 +220,7 @@ export default function ChallengeProgressSheet({
   return (
     <Modal
       visible={visible}
-      animationType={reduceMotion ? 'fade' : 'slide'}
+      animationType={reduceMotion ? 'none' : 'slide'}
       transparent
       onRequestClose={onClose}
       testID={testID}
@@ -357,7 +357,7 @@ export default function ChallengeProgressSheet({
           />
 
           {/* Monotonic explanation (always present, calm) + inline note when the
-              typed value is below the saved total — UX finding 11. */}
+              typed value is below the saved total. */}
           <Text
             style={[styles.helperText, { color: semanticColors.textMuted }]}
             testID={`${testID ?? 'challenge-progress'}-monotonic-help`}

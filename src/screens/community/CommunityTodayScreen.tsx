@@ -52,9 +52,9 @@ export default function CommunityTodayScreen({
       goToMessages();
     }
   };
-  // F9 (discovery): behind the events flag, the Today event card opens the
-  // event's own detail screen. When the flag is off we fall back to the Hall so
-  // the card never strands the member (and registers no event route — F1).
+  // Behind the events flag the Today event card opens the event's own detail
+  // screen; when the flag is off we fall back to the Hall so the card never
+  // strands the member (the event route is not registered then).
   const goToEvent = (eventId: string) => {
     if (featureFlags.communityEvents) {
       navigation.navigate('CommunityEventDetail', { eventId });
@@ -62,7 +62,7 @@ export default function CommunityTodayScreen({
       goToHall();
     }
   };
-  // F6 (discovery): the Today challenge card opens the challenge detail when the
+  // The Today challenge card opens the challenge detail when the
   // challenges feature is on. With the flag OFF the detail route is not even
   // registered, so we fall back to the Hall rather than navigate to a missing
   // route (the card is never a dead end).
