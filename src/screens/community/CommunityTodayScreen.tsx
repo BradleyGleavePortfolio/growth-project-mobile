@@ -8,7 +8,7 @@
  * (no spinner-only states, UX HARD gate). Standardized on semanticColors.
  */
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { Text, StyleSheet, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/useTheme';
 import { spacing, radius } from '../../theme/tokens';
@@ -24,9 +24,7 @@ interface Props {
   embedded?: boolean;
 }
 
-export default function CommunityTodayScreen({
-  embedded,
-}: Props): React.ReactElement {
+export default function CommunityTodayScreen(_props: Props): React.ReactElement {
   const { semanticColors } = useTheme();
   const navigation = useNavigation<CommunityNav>();
   const client = useCurrentUser();

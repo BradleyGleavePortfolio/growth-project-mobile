@@ -62,6 +62,7 @@ import {
 } from '../../api/communityChallengesApi';
 import { CommunityApiError } from '../../api/communityApi';
 import { generateIdempotencyKey } from '../../utils/idempotency';
+import { dedupeById } from '../../utils/dedupeById';
 import type { CommunityRoute } from './communityNavTypes';
 
 const COMMENT_MAX = 2000; // mirror backend CreateChallengeCommentDto
@@ -137,7 +138,9 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
   });
 
   const commentData = useMemo(
-    () => comments.data?.pages.flatMap((p) => p.comments) ?? [],
+    // Dedupe across pages: an overlapping/replayed cursor page must not feed a
+    // duplicate comment id to the FlatList (duplicate keys). First occurrence wins.
+    () => dedupeById(comments.data?.pages.flatMap((p) => p.comments) ?? []),
     [comments.data],
   );
 
@@ -173,7 +176,14 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
   });
 
   const leaderboardRows = useMemo(
-    () => leaderboard.data?.pages.flatMap((p) => p.rows) ?? [],
+    // Dedupe across pages on user_id (the row's stable key): an overlapping or
+    // replayed cursor page must not feed a duplicate row to the FlatList. First
+    // occurrence wins, preserving the server's rank order.
+    () =>
+      dedupeById(
+        leaderboard.data?.pages.flatMap((p) => p.rows) ?? [],
+        (row) => row.user_id,
+      ),
     [leaderboard.data],
   );
 

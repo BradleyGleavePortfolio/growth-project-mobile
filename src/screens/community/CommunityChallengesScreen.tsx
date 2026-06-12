@@ -31,6 +31,7 @@ import { useTheme } from '../../theme/useTheme';
 import { spacing, radius } from '../../theme/tokens';
 import { featureFlags } from '../../config/featureFlags';
 import { useCommunityMe } from '../../hooks/useCommunity';
+import { dedupeById } from '../../utils/dedupeById';
 import { ThreadHeader, ChallengeCard } from '../../components/community';
 import HapticPressable from '../../components/HapticPressable';
 import {
@@ -53,11 +54,26 @@ interface Props {
    * not-yet-resolved, never as a real empty workspace.
    */
   workspaceId?: string | null;
+  /**
+   * The embedded prerequisite (`useCommunityMe`) truth, threaded from the
+   * parent tab so a real `/community/me` error renders the SAME calm, retryable
+   * error state the self-owned route renders — instead of collapsing a load
+   * error into a null id that shows loading forever. When this screen owns the
+   * `me` query (route path, no `workspaceId` prop) these are absent and the
+   * screen reads its own `me` state directly.
+   */
+  prerequisiteLoading?: boolean;
+  prerequisiteError?: boolean;
+  /** Refetches `/community/me`; wired to the error-state retry button. */
+  onRetryPrerequisite?: () => void;
 }
 
 export default function CommunityChallengesScreen({
   embedded,
   workspaceId: workspaceIdProp,
+  prerequisiteLoading: prerequisiteLoadingProp,
+  prerequisiteError: prerequisiteErrorProp,
+  onRetryPrerequisite,
 }: Props): React.ReactElement {
   const { semanticColors } = useTheme();
   const navigation = useNavigation<CommunityNav>();
@@ -72,13 +88,22 @@ export default function CommunityChallengesScreen({
     : workspaceIdProp;
 
   // The workspace prerequisite must SUCCEED before we can decide "no challenges".
-  // When this screen owns the `me` query it reads its state directly; when the
-  // parent owns it, an explicit `null` prop means the parent's prerequisite has
-  // not resolved yet, so a null id is treated as still-pending (never a real
-  // empty workspace). The challenge empty state is reached only once a non-null
-  // workspace id exists.
-  const prerequisiteLoading = usingOwnMe ? me.isLoading : workspaceIdProp === null;
-  const prerequisiteError = usingOwnMe ? me.isError : false;
+  // When this screen owns the `me` query (route path) it reads its own state
+  // directly. When the parent owns it (embedded tab), the parent threads the
+  // real `me.isLoading`/`me.isError` truth through props so a `/community/me`
+  // error renders the calm retryable error here instead of an indefinite
+  // loading state (the null-id fallback covers a parent that has not yet wired
+  // the props). The challenge empty state is reached only once the prerequisite
+  // has actually SUCCEEDED and a non-null workspace id exists.
+  const prerequisiteLoading = usingOwnMe
+    ? me.isLoading
+    : (prerequisiteLoadingProp ?? workspaceIdProp === null);
+  const prerequisiteError = usingOwnMe
+    ? me.isError
+    : (prerequisiteErrorProp ?? false);
+  const retryPrerequisite = usingOwnMe
+    ? () => void me.refetch()
+    : (onRetryPrerequisite ?? (() => {}));
 
   const challenges = useInfiniteQuery({
     // The page limit is part of the key so a different page size is a distinct
@@ -99,7 +124,9 @@ export default function CommunityChallengesScreen({
   });
 
   const data = useMemo(
-    () => challenges.data?.pages.flatMap((p) => p.challenges) ?? [],
+    // Dedupe across pages: an overlapping/replayed cursor page must not put a
+    // duplicate id into the FlatList (duplicate keys). First occurrence wins.
+    () => dedupeById(challenges.data?.pages.flatMap((p) => p.challenges) ?? []),
     [challenges.data],
   );
 
@@ -195,7 +222,7 @@ export default function CommunityChallengesScreen({
           </Text>
           <HapticPressable
             intent="light"
-            onPress={() => void me.refetch()}
+            onPress={retryPrerequisite}
             accessibilityRole="button"
             accessibilityLabel="Try again"
             testID="community-challenges-prereq-retry"

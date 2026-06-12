@@ -22,7 +22,7 @@
  * own query branching runs deterministically.
  */
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react-native';
+import { render, screen, waitFor, act, fireEvent } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // ── Theme: real light tokens, no ThemeProvider ───────────────────────────────
@@ -116,15 +116,33 @@ function page(
   return { challenges, next_cursor };
 }
 
-function renderScreen(props: { workspaceId?: string | null } = {}) {
+type ScreenProps = {
+  workspaceId?: string | null;
+  prerequisiteLoading?: boolean;
+  prerequisiteError?: boolean;
+  onRetryPrerequisite?: () => void;
+};
+
+// A stable single QueryClient wrapper so `rerender` keeps the same cache
+// (needed to assert a post-retry success transition within one mount).
+function ChallengesWithClient(props: ScreenProps): React.ReactElement {
+  return <CommunityChallengesScreen {...props} />;
+}
+
+function renderScreen(props: ScreenProps = {}) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  return render(
+  const utils = render(
     <QueryClientProvider client={client}>
-      <CommunityChallengesScreen {...props} />
+      <ChallengesWithClient {...props} />
     </QueryClientProvider>,
   );
+  const rerender = (next: React.ReactElement) =>
+    utils.rerender(
+      <QueryClientProvider client={client}>{next}</QueryClientProvider>,
+    );
+  return { ...utils, rerender };
 }
 
 beforeEach(() => {
@@ -214,6 +232,45 @@ describe('CommunityChallengesScreen — workspace prerequisite resolves before e
     expect(screen.queryByTestId('community-challenges-empty')).toBeNull();
   });
 
+  it('embedded tab: a /community/me error renders the retryable error (NOT loading), retry refetches, success renders challenges (P1)', async () => {
+    // The embedded tab threads the real `me` truth through props. A rejected
+    // `/community/me` arrives as workspaceId=null + prerequisiteError=true; the
+    // screen must render the SAME calm retryable error the route renders — never
+    // an indefinite loading state (50-failures #36, swallowed error).
+    const onRetryPrerequisite = jest.fn();
+    const { rerender } = renderScreen({
+      workspaceId: null,
+      prerequisiteLoading: false,
+      prerequisiteError: true,
+      onRetryPrerequisite,
+    });
+
+    // Retryable error rendered, NOT the loading state, NOT the empty state.
+    await waitFor(() =>
+      expect(screen.getByTestId('community-challenges-prereq-error')).toBeTruthy(),
+    );
+    expect(screen.queryByTestId('community-challenges-prereq-loading')).toBeNull();
+    expect(screen.queryByTestId('community-challenges-empty')).toBeNull();
+    expect(api.listChallenges).not.toHaveBeenCalled();
+
+    // Retry actually refetches /community/me (the parent's me.refetch).
+    fireEvent.press(screen.getByTestId('community-challenges-prereq-retry'));
+    expect(onRetryPrerequisite).toHaveBeenCalledTimes(1);
+
+    // After a successful refetch the parent rethreads a resolved id + cleared
+    // prerequisite flags, and the challenges list renders.
+    api.listChallenges.mockResolvedValue(page([challenge({ id: 'ch-1' })]));
+    rerender(
+      <ChallengesWithClient
+        workspaceId="ws-resolved"
+        prerequisiteLoading={false}
+        prerequisiteError={false}
+        onRetryPrerequisite={onRetryPrerequisite}
+      />,
+    );
+    expect(await screen.findByTestId('community-challenge-card-ch-1')).toBeTruthy();
+  });
+
   it('treats an explicit null workspaceId prop as a still-pending prerequisite, not an empty workspace', async () => {
     renderScreen({ workspaceId: null });
 
@@ -233,6 +290,82 @@ describe('CommunityChallengesScreen — workspace prerequisite resolves before e
     await waitFor(() =>
       expect(screen.getByTestId('community-challenges-empty')).toBeTruthy(),
     );
+  });
+});
+
+describe('CommunityChallengesScreen — real cursor page transitions (P2-C4)', () => {
+  // A bare UUID the first page hands back as `next_cursor`; the second fetch
+  // must send it verbatim as the `cursor` param (backend #392 bare-UUID
+  // contract), and a `next_cursor: null` second page must stop further fetches.
+  const CURSOR_UUID = '11111111-1111-4111-8111-111111111111';
+
+  it('sends the first page next_cursor as the bare cursor param, then stops on null', async () => {
+    api.listChallenges
+      .mockResolvedValueOnce(page([challenge({ id: 'ch-1' })], CURSOR_UUID))
+      .mockResolvedValueOnce(page([challenge({ id: 'ch-2' })], null));
+    renderScreen();
+
+    // First page lands (bounded, no cursor).
+    await waitFor(() =>
+      expect(api.listChallenges).toHaveBeenNthCalledWith(1, 'ws-resolved', {
+        limit: 20,
+      }),
+    );
+    await screen.findByTestId('community-challenge-card-ch-1');
+
+    // Trigger the real onEndReached page transition.
+    const list = screen.getByTestId('community-challenges-list');
+    await act(async () => {
+      list.props.onEndReached();
+    });
+
+    // The second call sends the first page's next_cursor verbatim as the bare
+    // cursor value (not wrapped, not a synthetic page number).
+    await waitFor(() =>
+      expect(api.listChallenges).toHaveBeenNthCalledWith(2, 'ws-resolved', {
+        limit: 20,
+        cursor: CURSOR_UUID,
+      }),
+    );
+    await screen.findByTestId('community-challenge-card-ch-2');
+
+    // The second page terminated the cursor (null) -> a further onEndReached is
+    // a no-op (hasNextPage is false), so no third request fires. Re-query the
+    // list node first: the prior render swapped the FlatList instance, so the
+    // earlier handle is stale.
+    const listAfter = screen.getByTestId('community-challenges-list');
+    await act(async () => {
+      listAfter.props.onEndReached();
+    });
+    await waitFor(() =>
+      expect(api.listChallenges).toHaveBeenCalledTimes(2),
+    );
+  });
+
+  it('renders each id once when an overlapping page replays a duplicate (dedupe, P2-C3)', async () => {
+    // The second page replays ch-1 (overlapping cursor window) alongside a new
+    // ch-2; the merged list must render ch-1 once, first-occurrence order kept.
+    api.listChallenges
+      .mockResolvedValueOnce(page([challenge({ id: 'ch-1' })], CURSOR_UUID))
+      .mockResolvedValueOnce(
+        page([challenge({ id: 'ch-1' }), challenge({ id: 'ch-2' })], null),
+      );
+    renderScreen();
+
+    await screen.findByTestId('community-challenge-card-ch-1');
+    const list = screen.getByTestId('community-challenges-list');
+    await act(async () => {
+      list.props.onEndReached();
+    });
+    await screen.findByTestId('community-challenge-card-ch-2');
+
+    // ch-1 appears exactly once despite being present in both pages.
+    await waitFor(() =>
+      expect(screen.getAllByTestId('community-challenge-listitem-ch-1')).toHaveLength(1),
+    );
+    expect(
+      screen.getAllByTestId('community-challenge-listitem-ch-2'),
+    ).toHaveLength(1);
   });
 });
 

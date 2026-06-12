@@ -25,9 +25,11 @@ export interface ComposerInputProps {
   /** Disabled while a send is in flight. */
   sending?: boolean;
   /**
-   * Submit handler. May be async: when it returns a promise the draft is
-   * cleared only after it resolves, and is preserved if it rejects, so a
-   * failed send never silently loses what the user typed.
+   * Submit handler. May be async: the field is cleared optimistically and, if
+   * the promise rejects, the captured draft is restored ONLY when the field is
+   * still empty (the user has not typed something new while the send was in
+   * flight) — so a failed send never silently loses what the user typed, and
+   * never clobbers a newer draft typed meanwhile.
    */
   onSubmit: (value: string) => void | Promise<void>;
   testID?: string;
@@ -51,21 +53,35 @@ const ComposerInput = forwardRef<ComposerInputHandle, ComposerInputProps>(
     focus: () => inputRef.current?.focus(),
   }));
   const [value, setValue] = useState('');
+  // Tracks the current field text without forcing the catch handler to re-run
+  // when `value` changes (avoids a stale closure restoring over a newer draft).
+  const valueRef = useRef('');
+  valueRef.current = value;
   const trimmed = value.trim();
   const canSend = trimmed.length > 0 && !sending;
+
+  const setField = (next: string) => {
+    valueRef.current = next;
+    setValue(next);
+  };
 
   const submit = () => {
     if (!canSend) return;
     // Clear optimistically, but if onSubmit is async and rejects, restore the
-    // draft so the user does not lose their text on a failed send. The sync
+    // draft so the user does not lose their text on a failed send. The field
+    // stays editable during `sending` (slow-network UX), so on rejection only
+    // restore the captured draft when the field is STILL empty — if the user
+    // typed something new meanwhile, keep theirs and never clobber it. The sync
     // path keeps the existing immediate-clear behaviour.
     const draft = trimmed;
     const result = onSubmit(draft);
     if (result && typeof result.then === 'function') {
-      setValue('');
-      result.catch(() => setValue(draft));
+      setField('');
+      result.catch(() => {
+        if (valueRef.current === '') setField(draft);
+      });
     } else {
-      setValue('');
+      setField('');
     }
   };
 
@@ -83,7 +99,7 @@ const ComposerInput = forwardRef<ComposerInputHandle, ComposerInputProps>(
       <TextInput
         ref={inputRef}
         value={value}
-        onChangeText={setValue}
+        onChangeText={setField}
         placeholder={placeholder}
         placeholderTextColor={semanticColors.textMuted}
         maxLength={maxLength}

@@ -18,7 +18,7 @@
  */
 import React from 'react';
 import { AccessibilityInfo } from 'react-native';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react-native';
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 // ── Theme: real light tokens, no ThemeProvider ───────────────────────────────
@@ -578,6 +578,151 @@ describe('CommunityChallengeDetailScreen — comment draft retention (P2-C3)', (
       expect(
         screen.getByTestId('community-challenge-composer-field').props.value,
       ).toBe(''),
+    );
+  });
+});
+
+describe('CommunityChallengeDetailScreen — real cursor page transitions (P2-C4)', () => {
+  const CURSOR_UUID = '22222222-2222-4222-8222-222222222222';
+
+  function comment(
+    overrides: Partial<CommunityChallengeComment> = {},
+  ): CommunityChallengeComment {
+    return {
+      id: 'cm-1',
+      challenge_id: 'ch-1',
+      author_user_id: 'other-1',
+      body: 'Keep going, you have got this.',
+      created_at: '2026-03-05T00:00:00Z',
+      ...overrides,
+    };
+  }
+
+  it('comments: onEndReached sends the first page next_cursor as the bare cursor, stops on null, dedupes', async () => {
+    api.getChallenge.mockResolvedValue({
+      challenge: challenge(),
+      participation: participation(),
+    });
+    api.listComments
+      .mockResolvedValueOnce({ comments: [comment({ id: 'cm-1' })], next_cursor: CURSOR_UUID })
+      .mockResolvedValueOnce({
+        comments: [comment({ id: 'cm-1' }), comment({ id: 'cm-2' })],
+        next_cursor: null,
+      });
+    renderScreen();
+
+    await screen.findByTestId('community-challenge-comment-cm-1');
+    await waitFor(() =>
+      expect(api.listComments).toHaveBeenNthCalledWith(1, 'ch-1', { limit: 20 }),
+    );
+
+    const list = screen.getByTestId('community-challenge-comments');
+    await act(async () => {
+      list.props.onEndReached();
+    });
+
+    await waitFor(() =>
+      expect(api.listComments).toHaveBeenNthCalledWith(2, 'ch-1', {
+        limit: 20,
+        cursor: CURSOR_UUID,
+      }),
+    );
+    await screen.findByTestId('community-challenge-comment-cm-2');
+
+    await waitFor(() =>
+      expect(
+        screen.getAllByTestId('community-challenge-comment-cm-1'),
+      ).toHaveLength(1),
+    );
+
+    await act(async () => {
+      list.props.onEndReached();
+    });
+    await waitFor(() => expect(api.listComments).toHaveBeenCalledTimes(2));
+  });
+
+  it('leaderboard: "Show more" sends the first page next_cursor as the bare cursor, stops on null, dedupes', async () => {
+    api.getChallenge.mockResolvedValue({
+      challenge: challenge({ leaderboard_enabled: true }),
+      participation: participation({ leaderboard_opted_in: true }),
+    });
+    api.getLeaderboard
+      .mockResolvedValueOnce({
+        available: true,
+        opted_in: true,
+        rows: [{ user_id: 'me-1', rank: 1, progress_value: 25000, is_self: true }],
+        next_cursor: CURSOR_UUID,
+      })
+      .mockResolvedValueOnce({
+        available: true,
+        opted_in: true,
+        rows: [
+          { user_id: 'me-1', rank: 1, progress_value: 25000, is_self: true },
+          { user_id: 'u-2', rank: 2, progress_value: 20000, is_self: false },
+        ],
+        next_cursor: null,
+      });
+    renderScreen();
+
+    await waitFor(() =>
+      expect(api.getLeaderboard).toHaveBeenNthCalledWith(1, 'ch-1', { limit: 20 }),
+    );
+    const showMore = await screen.findByTestId(
+      'community-challenge-leaderboard-load-more',
+    );
+    fireEvent.press(showMore);
+
+    await waitFor(() =>
+      expect(api.getLeaderboard).toHaveBeenNthCalledWith(2, 'ch-1', {
+        limit: 20,
+        cursor: CURSOR_UUID,
+      }),
+    );
+    await screen.findByTestId('community-challenge-lb-u-2');
+
+    await waitFor(() =>
+      expect(screen.getAllByTestId('community-challenge-lb-me-1')).toHaveLength(1),
+    );
+
+    await waitFor(() =>
+      expect(
+        screen.queryByTestId('community-challenge-leaderboard-load-more'),
+      ).toBeNull(),
+    );
+    expect(api.getLeaderboard).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('CommunityChallengeDetailScreen — composer keeps a newer draft on failed send (P2-C2)', () => {
+  it('does NOT restore the failed draft over text typed while the send was pending', async () => {
+    api.getChallenge.mockResolvedValue({
+      challenge: challenge(),
+      participation: participation(),
+    });
+    let rejectSend: ((err: Error) => void) | undefined;
+    api.addComment.mockImplementation(
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectSend = reject;
+        }) as never,
+    );
+    renderScreen();
+
+    const field = await screen.findByTestId('community-challenge-composer-field');
+    fireEvent.changeText(field, 'Draft A');
+    fireEvent.press(screen.getByTestId('community-challenge-composer-send'));
+
+    await waitFor(() => expect(field.props.value).toBe(''));
+    fireEvent.changeText(field, 'Draft B');
+
+    await act(async () => {
+      rejectSend?.(new Error('send failed'));
+    });
+
+    await waitFor(() =>
+      expect(
+        screen.getByTestId('community-challenge-composer-field').props.value,
+      ).toBe('Draft B'),
     );
   });
 });

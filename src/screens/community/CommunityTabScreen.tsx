@@ -17,7 +17,6 @@
 import React, { useMemo, useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/useTheme';
 import { featureFlags } from '../../config/featureFlags';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
@@ -33,11 +32,9 @@ import CommunityTodayScreen from './CommunityTodayScreen';
 import CommunitySpaceScreen from './CommunitySpaceScreen';
 import CommunityDmListScreen from './CommunityDmListScreen';
 import CommunityChallengesScreen from './CommunityChallengesScreen';
-import type { CommunityNav } from './communityNavTypes';
 
 export default function CommunityTabScreen(): React.ReactElement {
   const { semanticColors } = useTheme();
-  const navigation = useNavigation<CommunityNav>();
   const client = useCurrentUser();
   const badge = useCommunityBadge(client?.id);
   const me = useCommunityMe();
@@ -96,10 +93,17 @@ export default function CommunityTabScreen(): React.ReactElement {
           />
         ) : active === 'challenges' ? (
           // Embedded discovery list. We pass the resolved workspaceId from the
-          // same `useCommunityMe` source the other Spaces use; a still-loading
-          // or errored prerequisite resolves to null, which the screen treats
-          // as not-yet-resolved rather than an empty workspace.
-          <CommunityChallengesScreen embedded workspaceId={workspaceId} />
+          // same `useCommunityMe` source the other Spaces use AND thread the
+          // prerequisite truth (loading / error / retry) so a real
+          // `/community/me` failure renders the calm retryable error instead of
+          // an indefinite loading state — the embedded path must not swallow it.
+          <CommunityChallengesScreen
+            embedded
+            workspaceId={workspaceId}
+            prerequisiteLoading={me.isLoading}
+            prerequisiteError={me.isError}
+            onRetryPrerequisite={() => void me.refetch()}
+          />
         ) : (
           <CommunityDmListScreen embedded workspaceId={workspaceId} />
         )}
