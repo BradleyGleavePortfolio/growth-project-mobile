@@ -236,6 +236,11 @@ export type AutosaveConflict = z.infer<typeof AutosaveConflictSchema>;
  *   - `server`       — 5xx.
  *   - `network`      — no response (offline / timeout) — the offline-mirror /
  *                      replay path keys off this.
+ *   - `aborted`      — the caller cancelled the request via its AbortSignal
+ *                      (e.g. the screen unmounted mid-flush). This is NOT a
+ *                      failure: the batch stays in the offline mirror to replay
+ *                      on the next mount, so the hook must NOT surface it as an
+ *                      error or advance any baseline.
  *   - `contract`     — a request OR response shape drifted from the backend.
  *   - `unknown`      — anything else.
  */
@@ -248,6 +253,7 @@ export class WorkoutAutosaveApiError extends Error {
       | 'unauthorized'
       | 'server'
       | 'network'
+      | 'aborted'
       | 'contract'
       | 'unknown',
     public readonly status: number,
@@ -264,6 +270,11 @@ export class WorkoutAutosaveApiError extends Error {
   /** True when the failure was the device being offline / unreachable. */
   get isNetwork(): boolean {
     return this.kind === 'network';
+  }
+
+  /** True when the caller cancelled the request (unmount / supersede). */
+  get isAborted(): boolean {
+    return this.kind === 'aborted';
   }
 }
 
@@ -284,7 +295,28 @@ function classify(status: number): WorkoutAutosaveApiError['kind'] {
  * `conflict` payload — never a silent crash on a drifted error shape.
  */
 function fromAxios(err: unknown): WorkoutAutosaveApiError {
+  // A signal-triggered cancel surfaces as an axios CanceledError (code
+  // 'ERR_CANCELED'). Classify it distinctly so the hook keeps the mirror for
+  // replay instead of treating a deliberate unmount-abort as a transport error.
+  if (axios.isCancel(err)) {
+    return new WorkoutAutosaveApiError(
+      'aborted',
+      0,
+      'autosave request aborted by the caller',
+      undefined,
+      err,
+    );
+  }
   if (axios.isAxiosError(err)) {
+    if (err.code === 'ERR_CANCELED') {
+      return new WorkoutAutosaveApiError(
+        'aborted',
+        0,
+        'autosave request aborted by the caller',
+        undefined,
+        err,
+      );
+    }
     const status = err.response?.status ?? 0;
     const kind = classify(status);
     if (kind === 'conflict') {
@@ -388,6 +420,13 @@ export interface AutosaveCallArgs {
    * kill in the offline mirror.
    */
   idempotencyKey: string;
+  /**
+   * Optional AbortSignal so the caller can cancel an in-flight autosave (e.g.
+   * the editor unmounts, or a newer batch supersedes this one). A cancel
+   * surfaces as a WorkoutAutosaveApiError with kind 'aborted' — never a silent
+   * resolve — so the hook keeps the batch in the offline mirror to replay.
+   */
+  signal?: AbortSignal;
 }
 
 export const workoutAutosaveApi = {
@@ -403,7 +442,10 @@ export const workoutAutosaveApi = {
       const res = await api.patch<unknown>(
         `/workout-plans/${args.planId}/autosave`,
         args.body,
-        { headers: { 'Idempotency-Key': args.idempotencyKey } },
+        {
+          headers: { 'Idempotency-Key': args.idempotencyKey },
+          signal: args.signal,
+        },
       );
       data = res.data;
     } catch (err) {

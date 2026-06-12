@@ -228,11 +228,16 @@ export default function CoachWorkoutBuilderScreen() {
     [name, type, rows],
   );
 
-  // On a 409 the plan moved ahead (a replay of an already-applied batch, or an
-  // edit from another device). The hook has already fast-forwarded its lock
-  // token + index from the conflict body; we additionally refetch the plan so
-  // the local rows re-baseline against the server head. Single-editor model:
-  // the conflict body carries NO serverOps, so a refetch is the rebase.
+  // On a 409 the plan moved ahead (the first-autosave bootstrap, a replay of an
+  // already-applied batch, or an edit from another device). The hook has
+  // already fast-forwarded its lock token + index from the conflict body AND
+  // kept the user's local ops pending; it will RE-DIFF them against the server
+  // head and re-submit on the fresh baseline. Our job here is to bring the
+  // server head in (refetch) so that re-baseline is honest. We deliberately do
+  // NOT clear the local rows: the post-refetch re-baseline effect below is
+  // gated on `!autosave.hasPending`, so it never clobbers the coach's in-flight
+  // edit — the hook's rebase carries those ops to the server, and the refetch
+  // only folds in server-assigned row ids once the pending batch settles.
   const onAutosaveConflict = useCallback(() => {
     if (!autosaveEnabled) return;
     void refetchPlan();
@@ -247,6 +252,23 @@ export default function CoachWorkoutBuilderScreen() {
     enabled: autosaveEnabled,
     onConflict: onAutosaveConflict,
   });
+
+  // Force a final mirror-first flush before the screen is removed from the
+  // stack (back gesture / header back / programmatic goBack). This closes the
+  // dirty-guard gap (#12): a coach who edits and immediately navigates away has
+  // their last keystroke captured to the offline mirror (and sent if online)
+  // before teardown. The hook's `flush` is stable and reads the latest working
+  // copy from a ref, so this never fires a stale closure. We do not block the
+  // transition (no preventDefault): the mirror write is the durability line, so
+  // navigation stays instant while the batch survives.
+  const autosaveFlush = autosave.flush;
+  useEffect(() => {
+    if (!autosaveEnabled) return undefined;
+    const unsubscribe = navigation.addListener('beforeRemove', () => {
+      void autosaveFlush();
+    });
+    return unsubscribe;
+  }, [autosaveEnabled, navigation, autosaveFlush]);
 
   // Re-baseline the local rows when a refetch (post-409, or initial load)
   // brings in fresh server rows WITH their ids — but only while autosave is on

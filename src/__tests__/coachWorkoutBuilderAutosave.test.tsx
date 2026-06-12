@@ -79,12 +79,16 @@ jest.mock('../screens/client/wearables/components/useReduceMotion', () => ({
   useReduceMotion: () => false,
 }));
 
-// Navigation: a minimal route (planId) + a no-op navigation object.
+// Navigation: a minimal route (planId) + a no-op navigation object. The screen
+// registers a `beforeRemove` listener to mirror-first flush on back-navigation
+// (the stable-flush teardown path), so the stub must expose `addListener`
+// returning an unsubscribe; without it the screen's effect throws on mount.
 const mockGoBack = jest.fn();
+const mockAddListener = jest.fn(() => jest.fn());
 jest.mock('@react-navigation/native', () => ({
   __esModule: true,
   useRoute: () => ({ params: { planId: 'plan-1' } }),
-  useNavigation: () => ({ goBack: mockGoBack }),
+  useNavigation: () => ({ goBack: mockGoBack, addListener: mockAddListener }),
 }));
 
 // The workout-builder query/mutation hooks — deterministic stand-ins.

@@ -69,9 +69,20 @@ function validBatch(overrides: Partial<AutosaveBatch> = {}): AutosaveBatch {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  // axios.isAxiosError is used by the error normaliser.
-  (axios as unknown as { isAxiosError: jest.Mock }).isAxiosError = jest.fn(
-    (e: unknown) => Boolean((e as { isAxiosError?: boolean })?.isAxiosError),
+  // The error normaliser calls axios.isCancel + axios.isAxiosError. With the
+  // module auto-mocked, install typed jest mocks via `jest.mocked` (no
+  // double-cast — R0 grep clean). isCancel treats an `ERR_CANCELED`/cancel flag
+  // as a cancel; isAxiosError keys off the conventional `isAxiosError` flag.
+  jest.mocked(axios.isCancel).mockImplementation(
+    (e: unknown): e is import('axios').Cancel =>
+      Boolean(
+        (e as { __CANCEL__?: boolean; code?: string })?.__CANCEL__ ||
+          (e as { code?: string })?.code === 'ERR_CANCELED',
+      ),
+  );
+  jest.mocked(axios.isAxiosError).mockImplementation(
+    (e: unknown): e is import('axios').AxiosError =>
+      Boolean((e as { isAxiosError?: boolean })?.isAxiosError),
   );
 });
 
@@ -312,6 +323,62 @@ describe('autosave() error classification', () => {
         body: validBatch(),
       }),
     ).rejects.toMatchObject({ kind: 'server' });
+  });
+
+  it('classifies a CanceledError (signal abort) as aborted, not a transport error', async () => {
+    // An axios cancel surfaces via isCancel; the normaliser must map it to the
+    // distinct `aborted` kind so the hook keeps the batch for replay rather
+    // than treating a deliberate unmount-abort as an offline/server failure.
+    api.patch.mockRejectedValueOnce({ __CANCEL__: true, message: 'canceled' });
+    await expect(
+      workoutAutosaveApi.autosave({
+        planId: 'p1',
+        idempotencyKey: 'k',
+        body: validBatch(),
+      }),
+    ).rejects.toMatchObject({ kind: 'aborted', isAborted: true });
+  });
+
+  it('classifies an ERR_CANCELED axios error as aborted', async () => {
+    api.patch.mockRejectedValueOnce({
+      isAxiosError: true,
+      code: 'ERR_CANCELED',
+      message: 'canceled',
+    });
+    await expect(
+      workoutAutosaveApi.autosave({
+        planId: 'p1',
+        idempotencyKey: 'k',
+        body: validBatch(),
+      }),
+    ).rejects.toMatchObject({ kind: 'aborted' });
+  });
+});
+
+describe('autosave() threads the AbortSignal', () => {
+  it('passes the caller signal through to the axios request config', async () => {
+    api.patch.mockResolvedValueOnce({
+      data: {
+        head_revision_index: 2,
+        lock_token: VALID_TOKEN,
+        saved_at: '2026-01-01T00:00:00.000Z',
+      },
+    });
+    const controller = new AbortController();
+    await workoutAutosaveApi.autosave({
+      planId: 'p1',
+      idempotencyKey: 'idem-sig',
+      body: validBatch(),
+      signal: controller.signal,
+    });
+    expect(api.patch).toHaveBeenCalledWith(
+      '/workout-plans/p1/autosave',
+      expect.any(Object),
+      {
+        headers: { 'Idempotency-Key': 'idem-sig' },
+        signal: controller.signal,
+      },
+    );
   });
 });
 

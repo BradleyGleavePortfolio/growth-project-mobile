@@ -136,3 +136,47 @@ export async function clearAutosaveMirror(planId: string): Promise<void> {
     logger.warn('[autosaveMirror] clear failed', err);
   }
 }
+
+/**
+ * Clear the mirror for `planId` ONLY IF the on-disk entry still belongs to the
+ * batch identified by `idempotencyKey`. This is the per-batch-keyed clear the
+ * autosave queue relies on: when an in-flight batch's 200 returns, a NEWER
+ * batch may have already overwritten the mirror under its own key while the
+ * request was in flight. A blanket clear would delete that newer, still-unsent
+ * batch (the dropped-edit P0). By matching the key first we only remove the
+ * entry we actually confirmed, leaving any superseding batch intact to send.
+ *
+ * Returns true when an entry was cleared, false when it was left in place
+ * (because a different/newer batch owns the mirror now). A read or remove fault
+ * is logged, never swallowed silently, and treated as "left in place" so the
+ * caller does not assume a clear that did not happen.
+ */
+export async function clearAutosaveMirrorIfKey(
+  planId: string,
+  idempotencyKey: string,
+): Promise<boolean> {
+  let raw: string | null;
+  try {
+    raw = await AsyncStorage.getItem(autosaveMirrorKey(planId));
+  } catch (err) {
+    logger.warn('[autosaveMirror] keyed-clear read failed', err);
+    return false;
+  }
+  if (raw == null) return false;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    // Corrupt entry: discard it outright (it cannot be a valid newer batch).
+    logger.warn('[autosaveMirror] keyed-clear corrupt JSON discarded', err);
+    await clearAutosaveMirror(planId);
+    return true;
+  }
+  if (!isMirroredAutosave(parsed) || parsed.idempotencyKey !== idempotencyKey) {
+    // A different (newer) batch owns the mirror now — leave it for its own send.
+    return false;
+  }
+  await clearAutosaveMirror(planId);
+  return true;
+}
