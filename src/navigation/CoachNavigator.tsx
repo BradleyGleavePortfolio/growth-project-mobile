@@ -77,6 +77,10 @@ import ClientInsightScreen from '../screens/coach/ClientInsightScreen';
 import DeleteAccountScreen from '../screens/settings/DeleteAccountScreen';
 // Stream 1 — AI credit-pack checkout (Stripe webview B2B carve-out).
 import CreditPackCheckoutScreen from '../screens/coach/CreditPackCheckoutScreen';
+// Roman P4 / ED.3 — First Payment Wow overlay host. Wraps the whole coach tab
+// shell so the §2.6 celebration can overlay any tab when the coach's first
+// payment INSERT lands (flag-gated; MMKV once-only).
+import FirstPaymentWowHost from '../screens/coach/ed/FirstPaymentWowHost';
 // Stream 2 — Coach AI execution drafts inbox (draft.client_message,
 // draft.assign_workout, draft.assign_meal_plan, draft.send_notification).
 import PendingAiDraftsScreen from '../screens/coach/PendingAiDraftsScreen';
@@ -522,6 +526,7 @@ export default function CoachNavigator() {
   // screenshots) keep the CommandCenter landing surface.
   const initialTab = __USING_MOCK_DATA ? 'CommandCenter' : 'ClientsStack';
   return (
+    <FirstPaymentWowHost>
     <Tab.Navigator
       initialRouteName={initialTab}
       screenOptions={{
@@ -625,6 +630,7 @@ export default function CoachNavigator() {
         }}
       />
     </Tab.Navigator>
+    </FirstPaymentWowHost>
   );
 }
 

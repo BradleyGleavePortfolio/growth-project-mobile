@@ -174,6 +174,16 @@ export const featureFlags = {
   // env: EXPO_PUBLIC_FF_COMMUNITY_EVENTS
   communityEvents: readFlag('EXPO_PUBLIC_FF_COMMUNITY_EVENTS', false),
   romanChat: readFlag('EXPO_PUBLIC_FF_ROMAN_CHAT', false),
+  /**
+   * Roman P4 / ED.3 — First Payment Wow Screen (coach app). When ON, the
+   * coach shell opens a Supabase realtime subscription on the coach's first
+   * payment and overlays the celebration screen once (MMKV once-only gate).
+   * Default OFF (production-safe scaffolding); flip on per build once the
+   * payments realtime channel is live.
+   *
+   * env: EXPO_PUBLIC_FF_ROMAN_FIRST_PAYMENT_WOW
+   */
+  romanFirstPaymentWow: readFlag('EXPO_PUBLIC_FF_ROMAN_FIRST_PAYMENT_WOW', false),
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;
