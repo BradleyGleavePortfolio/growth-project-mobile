@@ -59,17 +59,11 @@ jest.mock('@expo/vector-icons', () => {
 });
 
 jest.mock('../theme/ThemeProvider', () => {
-  const semanticColors = {
-    bgPrimary: '#fff',
-    bgSurface: '#eee',
-    textPrimary: '#000',
-    textMuted: '#555',
-    accent: '#2C4A36',
-    textOnAccent: '#fff',
-    disabledBg: '#ddd',
-    textOnDisabled: '#999',
-    border: '#ccc',
-  };
+  // Source the mock theme from the real semantic tokens (the single source of
+  // truth) rather than raw hex literals — keeps the test honest about the
+  // palette and satisfies the "no raw hex outside tokens.ts" invariant.
+  const { lightTokens } = jest.requireActual('../theme/tokens');
+  const semanticColors = lightTokens;
   const Pass = ({ children }: { children: React.ReactNode }) => children;
   return {
     __esModule: true,

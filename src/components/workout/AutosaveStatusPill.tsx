@@ -5,8 +5,8 @@
  * States (the exact vocabulary from the spec):
  *   - 'saved'    -> "Saved · Xs ago"            (settled, reassuring)
  *   - 'saving'   -> "Saving…"                   (in-flight)
- *   - 'offline'  -> "Offline — will sync"       (queued; CALM, never alarm red)
- *   - 'conflict' -> "Edited elsewhere — refreshing"
+ *   - 'offline'  -> "Offline — saved on device, will sync"  (queued; CALM, never alarm red)
+ *   - 'conflict' -> "Edited elsewhere — tap to refresh"
  *   - 'idle'     -> nothing rendered yet (no edits, no residue)
  *
  * Design doctrine applied:
@@ -46,7 +46,6 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { spacing, typography, radius, semantic } from '../../theme/tokens';
-import { Colors } from '../../constants/colors';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useReduceMotion } from '../../screens/client/wearables/components/useReduceMotion';
 import type { AutosaveStatus } from '../../hooks/useAutosave';
@@ -84,6 +83,12 @@ interface PillVisual {
   border: string;
   /** Whether this state invites a tap (and thus needs a 48dp target). */
   interactive: boolean;
+  /**
+   * State-specific a11y hint for the interactive (tappable) states. Conflict
+   * resolution reloads the latest version; offline retries the queued sync.
+   * Omitted for non-interactive states.
+   */
+  hint?: string;
 }
 
 export default function AutosaveStatusPill(props: AutosaveStatusPillProps) {
@@ -148,23 +153,30 @@ export default function AutosaveStatusPill(props: AutosaveStatusPillProps) {
           interactive: false,
         };
       case 'offline':
-        // CALM: warm gold-brown (the OfflineBanner hue), never danger red.
+        // CALM: warm gold-brown (the OfflineBanner hue), never danger red. The
+        // copy explicitly reassures that the edit is preserved on-device and
+        // will sync — the core reassurance job of this anxiety moment.
         return {
-          label: 'Offline — will sync',
+          label: 'Offline — saved on device, will sync',
           icon: 'cloud-offline-outline',
-          fg: Colors.offlineBanner,
+          fg: semantic.warning.fg,
           bg: semantic.warning.bg,
           border: semantic.warning.border,
           interactive: true,
+          hint: 'Tap to retry syncing now',
         };
       case 'conflict':
+        // CALM, action-oriented: "tap to refresh" describes the next action
+        // without implying data loss, and stays accurate after a refetch (the
+        // earlier "refreshing" went stale once the refetch completed/failed).
         return {
-          label: 'Edited elsewhere — refreshing',
+          label: 'Edited elsewhere — tap to refresh',
           icon: 'refresh-outline',
           fg: semantic.warning.fg,
           bg: semantic.warning.bg,
           border: semantic.warning.border,
           interactive: true,
+          hint: 'Tap to reload the latest version',
         };
       default:
         return null;
@@ -198,13 +210,18 @@ export default function AutosaveStatusPill(props: AutosaveStatusPillProps) {
     </View>
   );
 
+  // `saving` is the only busy state; settled/recoverable states are not busy.
+  const accessibilityState = { busy: status === 'saving' };
+
   if (visual.interactive && onPress) {
     return (
       <Pressable
         testID={testID}
         accessibilityRole="button"
         accessibilityLabel={a11yLabel}
-        accessibilityHint="Tap to retry syncing now"
+        accessibilityHint={visual.hint}
+        accessibilityState={accessibilityState}
+        accessibilityLiveRegion="polite"
         onPress={onPress}
         style={styles.tapTarget as ViewStyle}
         hitSlop={8}
@@ -219,6 +236,7 @@ export default function AutosaveStatusPill(props: AutosaveStatusPillProps) {
       testID={testID}
       accessibilityRole="text"
       accessibilityLabel={a11yLabel}
+      accessibilityState={accessibilityState}
       accessibilityLiveRegion="polite"
     >
       {body}

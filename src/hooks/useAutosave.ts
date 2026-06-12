@@ -65,6 +65,13 @@ export type AutosaveStatus =
 /** Default typing debounce — longer than the 500ms session one (spec §6.3). */
 export const AUTOSAVE_DEBOUNCE_MS = 800;
 
+/**
+ * How long the `saved` confirmation lingers before the state settles back to
+ * `idle` (the pill then hides — zero residue on a quiet-luxury surface, spec
+ * §6.5). Brief and reassuring, never persistent chrome.
+ */
+export const AUTOSAVE_SAVED_SETTLE_MS = 2500;
+
 export interface UseAutosaveArgs<TWorkingCopy> {
   /** The plan being edited. */
   planId: string;
@@ -176,6 +183,11 @@ export function useAutosave<TWorkingCopy>(
   const lastSavedValueRef = useRef<TWorkingCopy>(value);
   const pendingRef = useRef<PendingBatch | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const savedSettleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Mirrors `status` for reads inside the settle timer without re-arming it on
+  // every status change (the timer only fires the idle transition if we are
+  // STILL in `saved` when it elapses).
+  const statusRef = useRef<AutosaveStatus>('idle');
   const inFlightRef = useRef(false);
   const mountedRef = useRef(true);
   const diffRef = useRef(diff);
@@ -198,6 +210,37 @@ export function useAutosave<TWorkingCopy>(
     },
     [],
   );
+
+  // Keep the status mirror current for the settle timer's IFF-still-saved check.
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+
+  // ─── Settle: a brief `saved` confirmation transitions back to `idle` ────────
+  // The pill shows "Saved · just now" briefly, then hides. We clear any prior
+  // timer first and re-arm whenever we (re-)enter `saved`; any other state
+  // (saving/offline/conflict) cancels the pending settle so it never clobbers
+  // an active state. The IFF-still-saved guard guards against a race where the
+  // status moved on between fire and the guarded setState.
+  useEffect(() => {
+    if (savedSettleRef.current) {
+      clearTimeout(savedSettleRef.current);
+      savedSettleRef.current = null;
+    }
+    if (status !== 'saved') return;
+    savedSettleRef.current = setTimeout(() => {
+      savedSettleRef.current = null;
+      if (statusRef.current === 'saved') {
+        safeSet(setStatus, 'idle');
+      }
+    }, AUTOSAVE_SAVED_SETTLE_MS);
+    return () => {
+      if (savedSettleRef.current) {
+        clearTimeout(savedSettleRef.current);
+        savedSettleRef.current = null;
+      }
+    };
+  }, [status, safeSet]);
 
   /**
    * Perform one network flush of `batch`. The mirror write has ALREADY happened

@@ -92,7 +92,11 @@ import {
   readAutosaveMirror,
   clearAutosaveMirror,
 } from '../../storage/autosaveMirror';
-import { useAutosave, AUTOSAVE_DEBOUNCE_MS } from '../useAutosave';
+import {
+  useAutosave,
+  AUTOSAVE_DEBOUNCE_MS,
+  AUTOSAVE_SAVED_SETTLE_MS,
+} from '../useAutosave';
 
 const mockAutosave = workoutAutosaveApi.autosave as jest.Mock;
 const mockWrite = writeAutosaveMirror as jest.Mock;
@@ -185,6 +189,42 @@ describe('useAutosave — debounce + happy path', () => {
     expect(mockClear).toHaveBeenCalledWith('p1');
     expect(result.current.version).toBe(4);
     expect(result.current.lockToken).toBe(TOKEN_B);
+    expect(result.current.lastSavedAt).not.toBeNull();
+  });
+
+  it('settles the saved confirmation back to idle after the settle delay (pill hides)', async () => {
+    mockAutosave.mockResolvedValueOnce(okResponse({ head: 1, token: TOKEN_B }));
+
+    const { result, rerender } = renderHook(
+      ({ value }: { value: Copy }) =>
+        useAutosave<Copy>({
+          planId: 'p1',
+          value,
+          diff,
+          baseRevisionIndex: 0,
+          lockToken: TOKEN_A,
+        }),
+      { initialProps: { value: { n: 0 } } },
+    );
+
+    rerender({ value: { n: 1 } });
+    await act(async () => {
+      jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
+    });
+    await waitFor(() => expect(result.current.status).toBe('saved'));
+
+    // Just before the settle delay elapses the confirmation is still showing.
+    await act(async () => {
+      jest.advanceTimersByTime(AUTOSAVE_SAVED_SETTLE_MS - 100);
+    });
+    expect(result.current.status).toBe('saved');
+
+    // Once the settle delay elapses the status returns to idle (pill hides).
+    await act(async () => {
+      jest.advanceTimersByTime(200);
+    });
+    await waitFor(() => expect(result.current.status).toBe('idle'));
+    // The last-saved timestamp is preserved — only the visible state settled.
     expect(result.current.lastSavedAt).not.toBeNull();
   });
 });
