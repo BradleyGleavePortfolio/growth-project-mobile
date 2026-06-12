@@ -377,6 +377,48 @@ export default function CoachWorkoutBuilderScreen() {
   // triggered re-runs the adoption so incidental renders never clobber.
   const initialLoadDoneRef = useRef(false);
 
+  // MWB-4 #237 R9 (P1): adoption gate for the terminal-200 replay window.
+  //
+  // LIFECYCLE — `replayAdoptionPending` spans the WHOLE replay reconciliation,
+  // not just the in-flight network leg:
+  //   RAISE  : `onAutosaveReplay` fires (a mirrored batch was found on mount and
+  //            is being replayed). We record the refetchSeq that the replay's
+  //            forced refetch bumped (`replayRefetchSeqRef`) and raise the flag.
+  //   HOLD   : through the terminal outcome of the replay (200 / 409 / reject)
+  //            AND through the post-replay refetch DELIVERING AND the adoption
+  //            effect folding refreshed server truth into `rows` AND the
+  //            autosave baseline reanchoring to that adopted copy. `canSave`
+  //            includes `!replayAdoptionPending`, so an explicit full-replace
+  //            Save cannot fire from stale pre-refetch rows in this window (the
+  //            terminal-200 race the R8 audit flagged: `replayInFlight` alone
+  //            clears on the replay 200, BEFORE adoption completes).
+  //   CLEAR  : (1) adoption success — the replay-driven refetch's seq has been
+  //            adopted into rows AND the baseline reanchored AND the replay is
+  //            no longer in flight (cleared in the rebaseline effect for the
+  //            clean path, inline after `rebaselineTo` for the D-045 drop path);
+  //            (2) refetch HARD-FAILURE — the forced refetch rejects or resolves
+  //            with an error, so refreshed truth will never arrive; we DEGRADE
+  //            rather than lock Save forever, clearing the flag and leaving the
+  //            existing conflict/offline refresh UX to recover;
+  //            (3) unmount/remount — the flag is component state, so a remount
+  //            starts clear and the mount-mirror replay re-raises it.
+  const [replayAdoptionPending, setReplayAdoptionPending] = useState(false);
+  const replayAdoptionPendingRef = useRef(false);
+  // The refetchSeq the replay's forced refetch bumped to. Adoption only clears
+  // the gate once the adopted sequence has caught up to (>=) this value, so an
+  // earlier incidental adoption can never clear a later replay's gate.
+  const replayRefetchSeqRef = useRef(0);
+  // Set true once the replay-driven refetch has been adopted into `rows` AND the
+  // autosave baseline has reanchored to it. A dedicated effect then releases
+  // `replayAdoptionPending` once the replay is also no longer in flight. Reset
+  // to false whenever the gate is (re)raised so a later replay starts fresh.
+  const replayAdoptionAdoptedRef = useRef(false);
+  const setReplayAdoptionPendingFlag = useCallback((next: boolean) => {
+    if (replayAdoptionPendingRef.current === next) return;
+    replayAdoptionPendingRef.current = next;
+    setReplayAdoptionPending(next);
+  }, []);
+
   const onAutosaveSaved = useCallback(() => {
     if (!autosaveEnabled) return;
     if (!hasIdlessRowsRef.current) return;
@@ -419,6 +461,16 @@ export default function CoachWorkoutBuilderScreen() {
   // cached plan survives and the subsequent explicit-Save full-replace would
   // erase the rescued edit. The hook holds `replayInFlight` true until the
   // replay settles, which blocks explicit Save so it cannot race this refetch.
+  //
+  // R9 P1: `replayInFlight` alone clears the moment the replay lands a 200, but
+  // the adoption effect only folds the refreshed truth into `rows` on a LATER
+  // render — leaving a window where Save re-enables over stale rows. We close it
+  // by ALSO raising `replayAdoptionPending` here (recording the refetchSeq this
+  // refetch bumps), which `canSave` honours until the refetch has delivered and
+  // been adopted and the baseline reanchored. If the forced refetch HARD-FAILS
+  // (rejects or resolves with an error) refreshed truth can never arrive, so we
+  // DEGRADE: clear the gate and let the existing offline/conflict refresh UX
+  // recover, rather than locking Save forever (fifty-failures #28/#36).
   const onAutosaveReplay = useCallback(() => {
     if (!autosaveEnabled) return;
     if (planId) {
@@ -427,8 +479,26 @@ export default function CoachWorkoutBuilderScreen() {
     void qc.invalidateQueries({ queryKey: ['workout-plans'] });
     refetchSeqRef.current += 1;
     setRefetchSeq(refetchSeqRef.current);
-    void refetchPlan();
-  }, [autosaveEnabled, planId, qc, refetchPlan]);
+    // Record the seq this replay refetch targets and raise the adoption gate
+    // BEFORE awaiting the refetch, so Save is held from the first render after
+    // replay detection (not only once the network resolves).
+    replayRefetchSeqRef.current = refetchSeqRef.current;
+    replayAdoptionAdoptedRef.current = false;
+    setReplayAdoptionPendingFlag(true);
+    void refetchPlan()
+      .then((result) => {
+        // React Query's refetch resolves with a QueryObserverResult even on a
+        // failed fetch; treat an error result as a hard failure (degrade).
+        if (result?.isError) {
+          setReplayAdoptionPendingFlag(false);
+        }
+      })
+      .catch(() => {
+        // The refetch rejected outright — refreshed truth will not arrive.
+        // Degrade rather than lock Save: clear the gate.
+        setReplayAdoptionPendingFlag(false);
+      });
+  }, [autosaveEnabled, planId, qc, refetchPlan, setReplayAdoptionPendingFlag]);
 
   const autosave = useAutosave<WorkoutBuilderWorkingCopy>({
     planId: planId ?? '',
@@ -612,6 +682,14 @@ export default function CoachWorkoutBuilderScreen() {
         // re-anchor to the (filtered) local copy and erase the pending delete.
         autosaveRebaselineTo(buildServerWorkingCopy(serverExercises));
         pendingRebaselineSigRef.current = null;
+        // R9 P1: this drop path reanchors the baseline INLINE (no follow-up
+        // rebaseline effect, since the signature is cleared). Mark the replay's
+        // refetch as adopted-and-reanchored if this adoption covers it; the
+        // dedicated clearing effect below releases the gate once the replay is
+        // also no longer in flight.
+        if (refetchSeqRef.current >= replayRefetchSeqRef.current) {
+          replayAdoptionAdoptedRef.current = true;
+        }
       } else {
         // Clean full replace (no outstanding delete): re-anchor to the adopted
         // copy once `workingCopy` reflects it, exactly as before.
@@ -718,19 +796,54 @@ export default function CoachWorkoutBuilderScreen() {
     if (pendingRebaselineSigRef.current !== localRowSignature) return;
     pendingRebaselineSigRef.current = null;
     autosaveRebaseline();
+    // R9 P1: the baseline has now reanchored to the adopted server truth. If
+    // this adoption covers the replay's refetch seq, mark it adopted-and-
+    // reanchored; the clearing effect below releases the replay gate once the
+    // replay is also no longer in flight.
+    if (refetchSeqRef.current >= replayRefetchSeqRef.current) {
+      replayAdoptionAdoptedRef.current = true;
+    }
   }, [autosaveEnabled, autosave.hasPending, localRowSignature, autosaveRebaseline]);
 
+  // R9 P1: release the replay adoption gate once BOTH (a) the replay-driven
+  // refetch has been adopted into `rows` and the baseline reanchored
+  // (`replayAdoptionAdoptedRef`, set by whichever adoption path ran) AND (b) the
+  // replay is no longer in flight (the hook clears `replayInFlight` at the
+  // terminal 200/409/reject). Splitting the clear into this effect decouples it
+  // from the ordering of adoption vs. the replay settling: whichever lands last
+  // triggers this re-run and the gate drops exactly once both hold. The
+  // hard-failure degrade path (refetch reject/error) clears the gate directly in
+  // `onAutosaveReplay`, so it never depends on an adoption that will not arrive.
+  useEffect(() => {
+    if (!replayAdoptionPending) return;
+    if (!replayAdoptionAdoptedRef.current) return;
+    if (autosave.replayInFlight) return;
+    setReplayAdoptionPendingFlag(false);
+  }, [replayAdoptionPending, autosave.replayInFlight, localRowSignature, setReplayAdoptionPendingFlag]);
+
   // Block explicit Save while a mirrored batch is being replayed on mount
-  // (MWB-4 #237 R6 P1). Explicit Save sends a full-replace built from the
-  // current `rows`; if it fired before the replay settled and the cache
-  // refetch rebaselined the form, it would replace the just-rescued server
-  // edit with the stale pre-refetch rows and silently revert the rescue. The
-  // gate releases the moment the replay reaches a terminal outcome (200 / 409
-  // / hard reject), by which point `onAutosaveReplay` has already driven the
-  // refetch that adopts refreshed server truth.
+  // (MWB-4 #237 R6 P1) AND through the adoption of the refreshed server truth
+  // that the replay drives (R9 P1). Explicit Save sends a full-replace built
+  // from the current `rows`; if it fired before the replay settled OR before the
+  // forced refetch was folded into `rows` and the autosave baseline reanchored,
+  // it would replace the just-rescued server edit with the stale pre-refetch
+  // rows and silently revert the rescue.
+  //
+  // GATE LIFECYCLE (post-R9):
+  //   - `replayInFlight` holds from replay start to the terminal network outcome
+  //     (200 / 409 / hard reject) — the in-flight leg.
+  //   - `replayAdoptionPending` extends the hold PAST that terminal outcome:
+  //     raised in `onAutosaveReplay`, it stays set until the post-replay refetch
+  //     has DELIVERED, been adopted into `rows`, and the baseline has reanchored
+  //     (cleared in the effect above) — or, on a refetch hard-failure, it is
+  //     cleared to DEGRADE (the existing offline/conflict refresh UX recovers)
+  //     rather than lock Save forever. A remount re-raises it from the mirror.
+  // Together they span: replay detection -> terminal outcome -> adoption ->
+  // baseline reanchor, exactly the window in which a full-replace Save is unsafe.
   const canSave =
     name.trim().length > 0 &&
     !autosave.replayInFlight &&
+    !replayAdoptionPending &&
     !createMut.isPending &&
     !updateMut.isPending &&
     !setExercisesMut.isPending;
@@ -819,6 +932,7 @@ export default function CoachWorkoutBuilderScreen() {
               testID="mwb-autosave-pill"
               status={autosave.status}
               lastSavedAt={autosave.lastSavedAt}
+              mirrorDegraded={autosave.mirrorDegraded}
               onPress={() => {
                 void autosave.flush();
               }}

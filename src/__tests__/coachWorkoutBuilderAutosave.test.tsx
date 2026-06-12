@@ -566,6 +566,18 @@ describe('CoachWorkoutBuilderScreen — kill/replay cache reconcile (P1)', () =>
       await Promise.resolve();
     });
 
+    // R9 GATE-HOLD (terminal-200-to-adoption window — Fix #1): the retry's 200
+    // is terminal so `replayInFlight` is now clear, BUT the forced refetch has
+    // not delivered refreshed truth yet (the cache is still empty / not adopted
+    // into `rows`, baseline not reanchored). Save MUST still be DISABLED here —
+    // this is exactly the gap a naive full-replace Save would exploit to push
+    // the stale pre-refetch rows and erase the rescue. `replayAdoptionPending`
+    // holds the gate across this window; this assertion FAILS if Fix #1 is
+    // reverted (the gate would drop the instant the replay 200 landed).
+    expect(
+      getByLabelText('Save changes').props.accessibilityState?.disabled,
+    ).toBe(true);
+
     // The reconciliation refetch the replay drove now delivers DIFFERENT
     // refreshed server truth: the rescued `deadlift` row landed and the stale
     // `squat` row is gone. Point the mocked query hook at it and rerender. With
@@ -612,5 +624,156 @@ describe('CoachWorkoutBuilderScreen — kill/replay cache reconcile (P1)', () =>
     const externalIds = setArgs.rows.map((r) => r.exercise_external_id);
     expect(externalIds).toContain('deadlift');
     expect(externalIds).not.toContain('squat');
+  });
+
+  // R9 DEGRADE PATH (Fix #1): if the replay-driven forced refetch HARD-FAILS
+  // (rejects / resolves with an error) the refreshed server truth can never be
+  // adopted. The adoption gate must NOT lock Save forever — it must DEGRADE:
+  // clear `replayAdoptionPending` and fall back to the existing offline/conflict
+  // refresh UX. Without the degrade branch Save would stay disabled permanently.
+  it('degrades (does not lock Save) when the post-replay forced refetch hard-fails', async () => {
+    setFlag(true);
+    mockReadMirror.mockResolvedValueOnce(mirroredRename());
+    // The forced reconciliation refetch hard-fails (the network read errored).
+    mockRefetch.mockResolvedValueOnce({ isError: true });
+
+    // Let the replay settle with a normal terminal 200 so `replayInFlight`
+    // clears; the only thing keeping Save disabled would be the adoption gate.
+    mockAutosaveCall.mockResolvedValueOnce({
+      head_revision_index: 1,
+      lock_token: 'feedfacefeedface',
+      saved_at: '2026-01-01T00:00:00.000Z',
+    });
+
+    const Screen = loadScreen();
+    const { getByLabelText } = render(<Screen />);
+
+    // Replay fired (and so did the forced refetch that hard-failed).
+    await waitFor(() => expect(mockAutosaveCall).toHaveBeenCalled());
+    await waitFor(() => expect(mockRefetch).toHaveBeenCalled());
+
+    // The replay reached a terminal 200 AND the refetch hard-failed, so the gate
+    // degrades: Save becomes available again rather than staying locked. (If the
+    // degrade branch were missing, `replayAdoptionPending` would never clear and
+    // this assertion would time out.)
+    await waitFor(() =>
+      expect(
+        getByLabelText('Save changes').props.accessibilityState?.disabled,
+      ).toBe(false),
+    );
+  });
+});
+
+// ─── Mirror-degraded durability (MWB-4 #237 R9 Fix #2, fifty-failures #36) ───
+//
+// The offline mirror is the on-device durability line. When `writeAutosaveMirror`
+// FAILS (AsyncStorage full / unavailable) the failure must NOT be swallowed and
+// the offline pill must NOT keep claiming "saved on device": the batch lives only
+// in the in-memory queue, so the truthful copy asks the coach to keep the app
+// open until the in-flight network send syncs. The send is still attempted (it is
+// the best recovery), and the degraded flag clears once a later mirror write
+// succeeds.
+describe('CoachWorkoutBuilderScreen — mirror-degraded durability (P1, #36)', () => {
+  function getWriteMirrorMock() {
+    return (
+      jest.requireMock('../storage/autosaveMirror') as {
+        writeAutosaveMirror: jest.Mock;
+      }
+    ).writeAutosaveMirror;
+  }
+
+  it('shows truthful degraded copy (never "saved on device") and still attempts the send when the mirror write fails', async () => {
+    setFlag(true);
+    jest.useFakeTimers();
+    // The on-device mirror write fails for this edit's flush.
+    const writeMirror = getWriteMirrorMock();
+    writeMirror.mockRejectedValueOnce(new Error('AsyncStorage quota exceeded'));
+    // The network send hits a network error so the pill settles on 'offline'
+    // (where the durability copy lives) rather than 'saved' — this is the exact
+    // moment the offline copy would have falsely claimed on-device durability.
+    const { WorkoutAutosaveApiError } = jest.requireMock(
+      '../api/workoutAutosaveApi',
+    ) as {
+      WorkoutAutosaveApiError: new (
+        kind: string,
+        status: number,
+        message: string,
+      ) => Error;
+    };
+    mockAutosaveCall.mockRejectedValueOnce(
+      new WorkoutAutosaveApiError('network', 0, 'offline'),
+    );
+
+    const Screen = loadScreen();
+    const { getByLabelText, getByTestId } = render(<Screen />);
+
+    // Edit + debounce: this flush writes the mirror (which rejects) then sends.
+    await act(async () => {
+      fireEvent.changeText(getByLabelText('Plan name'), 'Push day B');
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(900);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // The mirror write was attempted and the network send still fired (the send
+    // is the best recovery when the device cannot persist).
+    await waitFor(() => expect(writeMirror).toHaveBeenCalled());
+    await waitFor(() => expect(mockAutosaveCall).toHaveBeenCalled());
+
+    // The pill is now offline AND degraded: it must show the TRUTHFUL copy and
+    // NEVER claim the edit is saved on device. We assert on the pill's
+    // accessibility label which carries the status copy verbatim.
+    await waitFor(() => {
+      const label = String(
+        getByTestId('mwb-autosave-pill').props.accessibilityLabel ?? '',
+      );
+      expect(label).toContain('Unable to save on this device');
+    });
+    const finalLabel = String(
+      getByTestId('mwb-autosave-pill').props.accessibilityLabel ?? '',
+    );
+    expect(finalLabel).not.toContain('saved on device');
+  });
+
+  it('clears the degraded state once a later mirror write succeeds', async () => {
+    setFlag(true);
+    jest.useFakeTimers();
+    const writeMirror = getWriteMirrorMock();
+    // First flush's mirror write fails, the next one succeeds.
+    writeMirror
+      .mockRejectedValueOnce(new Error('AsyncStorage quota exceeded'))
+      .mockResolvedValue(undefined);
+
+    const Screen = loadScreen();
+    const { getByLabelText } = render(<Screen />);
+
+    // First edit: mirror write fails (degraded raised).
+    await act(async () => {
+      fireEvent.changeText(getByLabelText('Plan name'), 'Push day B');
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(900);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(writeMirror).toHaveBeenCalledTimes(1));
+
+    // Second edit: mirror write succeeds (degraded clears). The send proceeds
+    // and the 200 also drains the queue. We assert the retry mirror write fired,
+    // proving the hook retries the mirror on the next flush rather than latching
+    // the degraded state permanently.
+    await act(async () => {
+      fireEvent.changeText(getByLabelText('Plan name'), 'Push day C');
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(900);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await waitFor(() =>
+      expect(writeMirror.mock.calls.length).toBeGreaterThanOrEqual(2),
+    );
   });
 });

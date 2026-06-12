@@ -197,6 +197,17 @@ export interface UseAutosaveResult<TWorkingCopy = unknown> {
   /** True when there are buffered, not-yet-confirmed ops. */
   hasPending: boolean;
   /**
+   * True when the most recent offline-mirror write FAILED (AsyncStorage full /
+   * unavailable) and has not yet recovered. While true the on-device durability
+   * line is NOT holding: the batch lives only in the in-memory queue, so a
+   * process kill before the network send confirms would lose the edit. The
+   * screen passes this to the pill so its offline copy NEVER claims "saved on
+   * device" while degraded (truthful copy instead). It clears the moment a
+   * subsequent mirror write succeeds (retried on the next flush) or the batch
+   * lands a 200 and clears the queue (MWB-4 #237 R9 P1, fifty-failures #36/#50).
+   */
+  mirrorDegraded: boolean;
+  /**
    * Re-anchor the diff baseline (`lastSavedValueRef`) to the CURRENT working
    * copy without sending anything. The caller invokes this AFTER it has adopted
    * fresh server truth into its working copy (e.g. it refetched the plan and
@@ -304,6 +315,21 @@ export function useAutosave<TWorkingCopy>(
   // the replay + cache refetch and erase the rescued edit.
   const [replayInFlight, setReplayInFlight] = useState(false);
   const replayInFlightRef = useRef(false);
+  // MWB-4 #237 R9 (P1, fifty-failures #36): true when the last offline-mirror
+  // write failed and has not since recovered. The mirror is the on-device
+  // durability line; when it fails we MUST NOT pretend the batch is durable —
+  // we keep the batch in the in-memory queue, continue the network send (the
+  // best recovery), and raise this so the pill shows truthful copy instead of
+  // "saved on device". Cleared on the next successful mirror write or once the
+  // batch lands a 200 and the queue drains.
+  const [mirrorDegraded, setMirrorDegraded] = useState(false);
+  const mirrorDegradedRef = useRef(false);
+  // Whether the LATEST flush's mirror write actually held on disk. The teardown
+  // (background/kill) path reads it: when false the batch is NOT durable on
+  // device, so it must NOT abort the in-flight network send (which would lose
+  // the edit) — it lets the send complete as the only recovery. Defaults true
+  // (assume durable until a write proves otherwise).
+  const mirrorHeldRef = useRef(true);
 
   // Optimistic-concurrency state lives in refs (advances on each save without
   // forcing the caller to re-thread props synchronously) but is also surfaced.
@@ -408,6 +434,18 @@ export function useAutosave<TWorkingCopy>(
     safeSet(setReplayInFlight, false);
   }, [safeSet]);
 
+  // Set the mirror-degraded signal, keeping the ref mirror and the state in
+  // lockstep so an internal check (the ref) and the re-render the pill consumes
+  // (the state) never disagree. Mount-guarded via safeSet.
+  const setMirrorDegradedFlag = useCallback(
+    (next: boolean) => {
+      if (mirrorDegradedRef.current === next) return;
+      mirrorDegradedRef.current = next;
+      safeSet(setMirrorDegraded, next);
+    },
+    [safeSet],
+  );
+
   // Set the dirty-since-last-save signal, keeping the ref mirror and the state
   // in lockstep so `computeHasPending` (which reads the ref) and any re-render
   // (driven by the state) never disagree. Mount-guarded via safeSet.
@@ -489,8 +527,8 @@ export function useAutosave<TWorkingCopy>(
   // the mirror writer, and the backoff scheduler (all defined below) without a
   // circular useCallback dependency or a temporal-dead-zone hazard.
   const pumpRef = useRef<() => void>(() => undefined);
-  const writeMirrorRef = useRef<(batch: PendingBatch<TWorkingCopy>) => Promise<void>>(
-    async () => undefined,
+  const writeMirrorRef = useRef<(batch: PendingBatch<TWorkingCopy>) => Promise<boolean>>(
+    async () => false,
   );
   const scheduleBackoffRef = useRef<() => void>(() => undefined);
 
@@ -542,6 +580,13 @@ export function useAutosave<TWorkingCopy>(
         await clearAutosaveMirrorIfKey(planId, batch.idempotencyKey);
         currentInFlightRef.current = null;
         retryAttemptRef.current = 0;
+        // The batch landed on the server (durable server-side). If nothing else
+        // is queued, the on-device durability gap is closed — clear the degraded
+        // flag. A still-queued pendingNext keeps it until that batch's own
+        // mirror write succeeds (fifty-failures #36/#50).
+        if (pendingNextRef.current === null) {
+          setMirrorDegradedFlag(false);
+        }
         // A real save landed: any later 409 is now a genuine external-edit
         // conflict, not the silent bootstrap stale-lock recovery.
         hasSavedRef.current = true;
@@ -706,12 +751,24 @@ export function useAutosave<TWorkingCopy>(
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [planId, safeSet, clearBackoffTimer, clearReplayInFlight, computeHasPending, rebaseBatch, setDirty],
+    [planId, safeSet, clearBackoffTimer, clearReplayInFlight, computeHasPending, rebaseBatch, setDirty, setMirrorDegradedFlag],
   );
 
-  /** Write one batch to the offline mirror (mirror-first durability line). */
+  /**
+   * Write one batch to the offline mirror (mirror-first durability line).
+   * Returns true when the on-device write actually held, false when it failed.
+   *
+   * A write failure is NOT swallowed (fifty-failures #36): we log it AND raise
+   * `mirrorDegraded` so the pill stops claiming on-device durability, then keep
+   * the batch alive in the in-memory queue and let the caller continue the
+   * network send (the best recovery while the device cannot persist). A
+   * subsequent successful write clears the degraded flag. The caller MUST treat
+   * a `false` return as "not durable on device" — in particular the
+   * background/kill teardown must not abort the in-flight send as though the
+   * mirror would replay it (MWB-4 #237 R9 P1).
+   */
   const writeMirror = useCallback(
-    async (batch: PendingBatch<TWorkingCopy>): Promise<void> => {
+    async (batch: PendingBatch<TWorkingCopy>): Promise<boolean> => {
       const mirror: MirroredAutosave = {
         version: 1,
         planId: planIdRef.current,
@@ -726,16 +783,22 @@ export function useAutosave<TWorkingCopy>(
       };
       try {
         await writeAutosaveMirror(mirror);
+        // The on-device durability line held — clear any prior degradation.
+        setMirrorDegradedFlag(false);
+        return true;
       } catch (err) {
         // Surface the durability degradation — do not pretend the mirror held.
-        // The in-memory queue still keeps the batch alive for this session.
-        logger.error('[useAutosave] mirror write failed', {
+        // The in-memory queue still keeps the batch alive for this session and
+        // the network send proceeds as the recovery path.
+        setMirrorDegradedFlag(true);
+        logger.error('[useAutosave] mirror write failed (durability degraded)', {
           planId: planIdRef.current,
           err,
         });
+        return false;
       }
     },
-    [],
+    [setMirrorDegradedFlag],
   );
   writeMirrorRef.current = writeMirror;
 
@@ -824,8 +887,14 @@ export function useAutosave<TWorkingCopy>(
       snapshot: latestValueRef.current,
     };
 
-    // MIRROR FIRST — the kill-the-app guarantee.
-    await writeMirror(batch);
+    // MIRROR FIRST — the kill-the-app guarantee. If the write fails it is NOT
+    // swallowed: writeMirror raises `mirrorDegraded` (so the pill stops claiming
+    // on-device durability) and we record it so the teardown path knows the
+    // batch is NOT durable on disk and must not abort the in-flight send. We
+    // still proceed to send: the network write is the best recovery when the
+    // device cannot persist (fifty-failures #36/#50).
+    const mirrored = await writeMirror(batch);
+    mirrorHeldRef.current = mirrored;
     safeSet(setHasPending, true);
     await sendBatch(batch);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1015,11 +1084,14 @@ export function useAutosave<TWorkingCopy>(
       if (enabledRef.current) {
         // Mirror-first durable capture of the latest edit (stable flush reads
         // latestValueRef, so it never misses the last keystroke), THEN abort the
-        // obsolete network request: the batch is already on disk to replay, so a
-        // cancelled request is safe and we don't leave a write racing after the
-        // editor is gone.
+        // obsolete network request — BUT ONLY IF the mirror write held. When the
+        // mirror write held, the batch is on disk to replay, so a cancelled
+        // request is safe and we don't leave a write racing after the editor is
+        // gone. When it did NOT hold (mirrorDegraded), the in-flight send is the
+        // ONLY surviving copy, so we must let it complete rather than abort it
+        // (aborting would silently lose the edit — fifty-failures #36/#50).
         void flush().finally(() => {
-          if (abortRef.current) {
+          if (mirrorHeldRef.current && abortRef.current) {
             abortRef.current.abort();
             abortRef.current = null;
           }
@@ -1036,10 +1108,11 @@ export function useAutosave<TWorkingCopy>(
       lockToken: tokenState,
       flush,
       hasPending,
+      mirrorDegraded,
       rebaseline,
       replayInFlight,
       rebaselineTo,
     }),
-    [status, lastSavedAt, version, tokenState, flush, hasPending, rebaseline, replayInFlight, rebaselineTo],
+    [status, lastSavedAt, version, tokenState, flush, hasPending, mirrorDegraded, rebaseline, replayInFlight, rebaselineTo],
   );
 }

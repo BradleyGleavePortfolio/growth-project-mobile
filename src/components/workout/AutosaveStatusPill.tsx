@@ -9,6 +9,10 @@
  *                                                recovery; neutral, NON-actionable
  *                                                — NOT a user-facing conflict)
  *   - 'offline'  -> "Offline — saved on device, will sync"  (queued; CALM, never alarm red)
+ *   - 'offline' + mirrorDegraded -> "Unable to save on this device — keep the
+ *                                    app open until synced" (the on-device mirror
+ *                                    write failed, so we must NOT claim on-device
+ *                                    durability; truthful CALM copy instead)
  *   - 'conflict' -> "Edited elsewhere — tap to refresh"
  *   - 'idle'     -> nothing rendered yet (no edits, no residue)
  *
@@ -64,6 +68,13 @@ export interface AutosaveStatusPillProps {
   /** Wallclock ms of the last confirmed save (drives "Xs ago"). */
   lastSavedAt: number | null;
   /**
+   * True when the on-device offline mirror write FAILED (MWB-4 #237 R9 P1). The
+   * offline pill then must NOT claim the edit is "saved on device" — it shows
+   * truthful copy asking the coach to keep the app open until the in-flight
+   * network send syncs. Ignored outside the 'offline' state.
+   */
+  mirrorDegraded?: boolean;
+  /**
    * Optional tap handler for the recoverable states (offline/conflict) — e.g.
    * "retry now" / "refresh". When omitted the pill is non-interactive.
    */
@@ -101,7 +112,7 @@ interface PillVisual {
 }
 
 export default function AutosaveStatusPill(props: AutosaveStatusPillProps) {
-  const { status, lastSavedAt, onPress, testID } = props;
+  const { status, lastSavedAt, mirrorDegraded = false, onPress, testID } = props;
   const { semanticColors: sc } = useTheme();
   const reduceMotion = useReduceMotion();
 
@@ -176,11 +187,16 @@ export default function AutosaveStatusPill(props: AutosaveStatusPillProps) {
           interactive: false,
         };
       case 'offline':
-        // CALM: warm gold-brown (the OfflineBanner hue), never danger red. The
-        // copy explicitly reassures that the edit is preserved on-device and
-        // will sync — the core reassurance job of this anxiety moment.
+        // CALM: warm gold-brown (the OfflineBanner hue), never danger red. When
+        // the on-device mirror write held, the copy reassures that the edit is
+        // preserved on-device and will sync. When the mirror write FAILED
+        // (mirrorDegraded) we must NOT claim on-device durability — the in-flight
+        // network send is the only surviving copy — so the copy truthfully asks
+        // the coach to keep the app open until it syncs (MWB-4 #237 R9 P1).
         return {
-          label: 'Offline — saved on device, will sync',
+          label: mirrorDegraded
+            ? 'Unable to save on this device — keep the app open until synced'
+            : 'Offline — saved on device, will sync',
           icon: 'cloud-offline-outline',
           fg: semantic.warning.fg,
           bg: semantic.warning.bg,
@@ -204,7 +220,7 @@ export default function AutosaveStatusPill(props: AutosaveStatusPillProps) {
       default:
         return null;
     }
-  }, [status, lastSavedAt, now, sc]);
+  }, [status, lastSavedAt, mirrorDegraded, now, sc]);
 
   if (!visual) return null;
 
