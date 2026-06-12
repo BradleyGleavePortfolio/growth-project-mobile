@@ -47,6 +47,7 @@ import {
 import type { Exercise } from '../../api/exerciseLibraryApi';
 import type {
   UpsertExerciseRowInput,
+  WorkoutPlanExercise,
   WorkoutType,
 } from '../../api/workoutBuilderApi';
 import {
@@ -61,6 +62,7 @@ import type { SemanticTokens } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import { featureFlags } from '../../config/featureFlags';
 import { useAutosave } from '../../hooks/useAutosave';
+import { generateClientId } from '../../utils/clientId';
 import AutosaveStatusPill from '../../components/workout/AutosaveStatusPill';
 import {
   diffWorkingCopy,
@@ -89,6 +91,17 @@ const WORKOUT_TYPES: WorkoutType[] = ['strength', 'cardio', 'mobility'];
 
 interface DraftExerciseRow {
   /**
+   * Stable per-row CLIENT identifier, generated once when the row first exists
+   * on this device (a server-loaded row gets one on adoption; a brand-new row
+   * gets one in `addExercise`). It persists with the row for its whole life and
+   * is NEVER sent to the server — the autosave working copy (and the legacy PUT
+   * payload) carry only server-facing fields, so the wire contract / DB schema
+   * are unchanged (R69). MWB-4 #237 (D-045) uses it to track a row deleted in
+   * the autosave insert/adoption window (when it has no `row_id` yet) so the
+   * post-insert refetch does not resurrect it.
+   */
+  clientId: string;
+  /**
    * Server-assigned row uuid for a row the backend already persisted; undefined
    * for a row added on-device this session. Used by the autosave diff to emit
    * remove_exercise / reorder ops (which require a uuid) and to upsert with the
@@ -103,6 +116,47 @@ interface DraftExerciseRow {
   weight_lbs: number | null;
   superset_group_id: string | null;
   notes: string | null;
+}
+
+/**
+ * The server-facing fields that identify a row's CONTENT (everything the
+ * backend persists EXCEPT identity + order). Shared by the local DraftExerciseRow
+ * and a server WorkoutPlanExercise so a row deleted before its row_id existed
+ * can be matched back to the server row the post-insert refetch resurrects
+ * (D-045). Order is intentionally excluded — the resurrected row may land at a
+ * different index than where it was added/deleted.
+ */
+function rowCompositeSignature(row: {
+  exercise_external_id: string;
+  sets: number;
+  reps_or_duration_seconds: number;
+  rest_seconds: number | null;
+  weight_lbs: number | null;
+  superset_group_id: string | null;
+  notes: string | null;
+}): string {
+  return JSON.stringify([
+    row.exercise_external_id,
+    row.sets,
+    row.reps_or_duration_seconds,
+    row.rest_seconds,
+    row.weight_lbs,
+    row.superset_group_id,
+    row.notes,
+  ]);
+}
+
+/** Composite signature for a server exercise row (same field order as above). */
+function serverRowCompositeSignature(e: WorkoutPlanExercise): string {
+  return rowCompositeSignature({
+    exercise_external_id: e.exercise_external_id,
+    sets: e.sets,
+    reps_or_duration_seconds: e.reps_or_duration_seconds,
+    rest_seconds: e.rest_seconds,
+    weight_lbs: e.weight_lbs,
+    superset_group_id: e.superset_group_id,
+    notes: e.notes,
+  });
 }
 
 export default function CoachWorkoutBuilderScreen() {
@@ -128,8 +182,22 @@ export default function CoachWorkoutBuilderScreen() {
       ? String(existingPlan.duration_estimate_minutes)
       : '',
   );
-  const [rows, setRows] = useState<DraftExerciseRow[]>(
+  // Map a server exercise row into a local DraftExerciseRow, reusing the stable
+  // clientId we already minted for that server row_id when one exists so the
+  // identity survives a refetch/adoption (and the deletedKeysRef bookkeeping
+  // below can match it). A row_id we have never seen gets a fresh clientId.
+  const rowIdToClientIdRef = useRef<Map<string, string>>(new Map());
+  const clientIdForServerRow = useCallback((serverRowId: string): string => {
+    const existing = rowIdToClientIdRef.current.get(serverRowId);
+    if (existing) return existing;
+    const minted = generateClientId();
+    rowIdToClientIdRef.current.set(serverRowId, minted);
+    return minted;
+  }, []);
+
+  const [rows, setRows] = useState<DraftExerciseRow[]>(() =>
     (existingPlan?.exercises ?? []).map((e) => ({
+      clientId: clientIdForServerRow(e.id),
       row_id: e.id,
       exercise_external_id: e.exercise_external_id,
       display_name: e.exercise_external_id,
@@ -141,6 +209,16 @@ export default function CoachWorkoutBuilderScreen() {
       notes: e.notes,
     })),
   );
+
+  // MWB-4 #237 (D-045): clientIds of rows the coach has removed. A row deleted
+  // BEFORE its server row_id was adopted produces NO remove_exercise op (the
+  // diff needs a row_id), so the dirty signal can stay false and the
+  // post-insert refetch's full-replace adoption would otherwise RESURRECT it.
+  // We record the stable clientId on removal (regardless of row_id presence)
+  // and the adoption effect filters server rows through this set so the delete
+  // is preserved — then re-issued as a remove_exercise once the server row_id
+  // is known. Entries are pruned once the server confirms the row is gone.
+  const deletedKeysRef = useRef<Set<string>>(new Set());
 
   // Search box state — local-only.
   const [search, setSearch] = useState<string>('');
@@ -154,6 +232,10 @@ export default function CoachWorkoutBuilderScreen() {
     setRows((cur) => [
       ...cur,
       {
+        // Stable client identity for this on-device row, minted once at
+        // creation. Tracks the row across the id-less insert / adoption window
+        // (D-045) and is never serialized to the server.
+        clientId: generateClientId(),
         // No row_id: a brand-new on-device row. The autosave diff emits an
         // upsert_exercise WITHOUT a row_id (the server assigns one on insert,
         // which the next refetch folds back in).
@@ -182,8 +264,35 @@ export default function CoachWorkoutBuilderScreen() {
     });
   }, []);
 
+  // Composite signature of a deleted id-less row -> the clientIds removed with
+  // that signature. A row deleted before adoption has no row_id, so the only
+  // way to recognise the server row that the post-insert refetch resurrects is
+  // to match its server-facing fields (D-045). Stored as a FIFO list per
+  // signature so two identical rows added-then-one-deleted are matched one for
+  // one rather than both being dropped.
+  const deletedSignaturesRef = useRef<Map<string, string[]>>(new Map());
+
   const removeRow = useCallback((idx: number) => {
-    setRows((cur) => cur.filter((_, i) => i !== idx));
+    setRows((cur) => {
+      const target = cur[idx];
+      // Record the stable clientId of the removed row REGARDLESS of whether it
+      // has a server row_id yet (D-045). If it was deleted in the id-less
+      // insert/adoption window the diff cannot emit a remove_exercise, so this
+      // is the only durable record of the coach's intent; the adoption effect
+      // reads it to keep the row deleted (and re-issue the server-side remove
+      // once the row_id is known) instead of letting the refetch resurrect it.
+      if (target) {
+        deletedKeysRef.current.add(target.clientId);
+        // Index by composite signature too, so a resurrected server row with a
+        // brand-new row_id (the id-less insert the coach then deleted) can be
+        // matched back to this clientId and dropped.
+        const sig = rowCompositeSignature(target);
+        const list = deletedSignaturesRef.current.get(sig) ?? [];
+        list.push(target.clientId);
+        deletedSignaturesRef.current.set(sig, list);
+      }
+      return cur.filter((_, i) => i !== idx);
+    });
   }, []);
 
   const updateRow = useCallback(
@@ -338,6 +447,30 @@ export default function CoachWorkoutBuilderScreen() {
   // the working copy actually reflects it.
   const pendingRebaselineSigRef = useRef<string | null>(null);
   const autosaveRebaseline = autosave.rebaseline;
+  const autosaveRebaselineTo = autosave.rebaselineTo;
+
+  // Build the FULL server working copy (every server row, with its real
+  // row_id). Used as the explicit diff baseline when the non-pending adoption
+  // DROPS a resurrected-then-deleted row from the local rows (D-045): anchoring
+  // the baseline to the full server truth makes the very next diff emit a
+  // remove_exercise for the dropped row's now-known row_id, re-deleting it on
+  // the server instead of letting the refetch resurrect it.
+  const buildServerWorkingCopy = useCallback(
+    (exercises: WorkoutPlanExercise[]): WorkoutBuilderWorkingCopy => ({
+      meta: { name, type },
+      rows: exercises.map((e) => ({
+        rowId: e.id,
+        exerciseExternalId: e.exercise_external_id,
+        sets: e.sets,
+        repsOrDurationSeconds: e.reps_or_duration_seconds,
+        restSeconds: e.rest_seconds,
+        weightLbs: e.weight_lbs,
+        supersetGroupId: e.superset_group_id,
+        notes: e.notes,
+      })),
+    }),
+    [name, type],
+  );
 
   // Adopt server rows when a refetch (post-409, post-insert id adoption, or
   // initial load) brings in fresh server rows WITH their ids.
@@ -372,8 +505,50 @@ export default function CoachWorkoutBuilderScreen() {
     if (initialLoadDoneRef.current && !hasFreshRefetch) return;
 
     if (!autosave.hasPending) {
+      // D-045 — delete-before-adoption guard. A server row is DROPPED from the
+      // adopted local rows when it is the resurrection of a row the coach
+      // deleted in the id-less insert/adoption window. We recognise it two
+      // ways: (1) a server row_id we already mapped to a clientId now in
+      // `deletedKeysRef`, or (2) a server row_id we have never seen whose
+      // composite signature matches a row removed while still id-less
+      // (`deletedSignaturesRef`). Matching consumes one entry per signature so
+      // identical rows are dropped one-for-one. Kept rows are mapped verbatim
+      // from server truth (the FULL replace); dropped rows are re-deleted by
+      // the rebaselineTo below.
+      const sigPool = new Map<string, string[]>();
+      for (const [sig, list] of deletedSignaturesRef.current) {
+        sigPool.set(sig, list.slice());
+      }
+      const keptExercises: WorkoutPlanExercise[] = [];
+      const droppedRowIds: string[] = [];
+      for (const e of serverExercises) {
+        // (1) Known server row_id whose clientId was deleted.
+        const mappedClientId = rowIdToClientIdRef.current.get(e.id);
+        if (mappedClientId && deletedKeysRef.current.has(mappedClientId)) {
+          droppedRowIds.push(e.id);
+          continue;
+        }
+        // (2) Unseen server row_id matching a deleted id-less row by signature.
+        if (!mappedClientId) {
+          const sig = serverRowCompositeSignature(e);
+          const pending = sigPool.get(sig);
+          if (pending && pending.length > 0) {
+            const clientId = pending.shift() as string;
+            // Bind this server row_id to the deleted clientId so a later
+            // refetch (before the remove lands) keeps recognising + dropping
+            // it, and so the cleanup below can prune it once the server row
+            // is gone.
+            rowIdToClientIdRef.current.set(e.id, clientId);
+            droppedRowIds.push(e.id);
+            continue;
+          }
+        }
+        keptExercises.push(e);
+      }
+
       setRows(
-        serverExercises.map((e) => ({
+        keptExercises.map((e) => ({
+          clientId: clientIdForServerRow(e.id),
           row_id: e.id,
           exercise_external_id: e.exercise_external_id,
           display_name: e.exercise_external_id,
@@ -385,9 +560,35 @@ export default function CoachWorkoutBuilderScreen() {
           notes: e.notes,
         })),
       );
-      // Mark the adopted server signature so the follow-up effect re-anchors
-      // the autosave baseline to this copy once `workingCopy` reflects it.
-      pendingRebaselineSigRef.current = serverRowSignature;
+
+      // Cleanup (D-045 step 6): prune any tracked-deleted clientId whose mapped
+      // server row_id is no longer in server truth — the remove_exercise has
+      // landed, so the intent is fulfilled and we must stop filtering (else a
+      // later re-add of the same exercise could be wrongly dropped).
+      const liveServerRowIds = new Set(serverExercises.map((e) => e.id));
+      for (const [rowId, clientId] of rowIdToClientIdRef.current) {
+        if (
+          deletedKeysRef.current.has(clientId) &&
+          !liveServerRowIds.has(rowId)
+        ) {
+          deletedKeysRef.current.delete(clientId);
+          rowIdToClientIdRef.current.delete(rowId);
+        }
+      }
+
+      if (droppedRowIds.length > 0) {
+        // We dropped a resurrected-then-deleted row. Anchor the diff baseline to
+        // the FULL server copy (which still holds those rows) so the next diff
+        // emits a remove_exercise for each dropped row_id and re-deletes it on
+        // the server. Do NOT set pendingRebaselineSigRef here: that path would
+        // re-anchor to the (filtered) local copy and erase the pending delete.
+        autosaveRebaselineTo(buildServerWorkingCopy(serverExercises));
+        pendingRebaselineSigRef.current = null;
+      } else {
+        // Clean full replace (no outstanding delete): re-anchor to the adopted
+        // copy once `workingCopy` reflects it, exactly as before.
+        pendingRebaselineSigRef.current = serverRowSignature;
+      }
       // A full replace fully reconciles to server truth, so any outstanding
       // merge request is satisfied; record the load + adopted sequence.
       initialLoadDoneRef.current = true;
@@ -424,6 +625,9 @@ export default function CoachWorkoutBuilderScreen() {
         if (!list || list.length === 0) return r;
         const adoptedId = list.shift() as string;
         mutated = true;
+        // Bind the adopted server row_id to this row's stable clientId so the
+        // D-045 delete-tracking + cleanup can recognise it on a later refetch.
+        rowIdToClientIdRef.current.set(adoptedId, r.clientId);
         return { ...r, row_id: adoptedId };
       });
       // Return the SAME reference when nothing changed so we never spin an
@@ -441,7 +645,16 @@ export default function CoachWorkoutBuilderScreen() {
     // incidental render does not re-merge.
     initialLoadDoneRef.current = true;
     adoptedRefetchSeqRef.current = refetchSeq;
-  }, [autosaveEnabled, autosave.hasPending, existingPlan, serverRowSignature, refetchSeq]);
+  }, [
+    autosaveEnabled,
+    autosave.hasPending,
+    existingPlan,
+    serverRowSignature,
+    refetchSeq,
+    clientIdForServerRow,
+    autosaveRebaselineTo,
+    buildServerWorkingCopy,
+  ]);
 
   // The current local row-id signature, derived from the working copy the hook
   // diffs over. Equals `serverRowSignature` only once the `setRows` adoption

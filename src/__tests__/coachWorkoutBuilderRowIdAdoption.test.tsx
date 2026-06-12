@@ -572,3 +572,199 @@ describe('CoachWorkoutBuilderScreen — P1 row-ID adoption RACE (edit before ref
     expect(reorder?.row_ids).toContain(SERVER_ROW_ID);
   });
 });
+
+/**
+ * D-045 — delete-BEFORE-adoption resurrection (MWB-4 #237 R5 P1).
+ *
+ * The blocking gap the prior race tests miss: the coach deletes a row that was
+ * inserted id-less and whose insert autosave has ALREADY 200'd, but BEFORE the
+ * post-insert refetch resolves. Deleting an id-less row produces NO
+ * remove_exercise op (the diff needs a row_id), so the hook's dirty signal
+ * stays FALSE — `hasPending` is false in this window. When the deferred refetch
+ * then resolves, the adoption effect takes the NON-pending full-replace path
+ * and, before D-045, RESURRECTED the deleted row from server truth.
+ *
+ * With D-045 the screen tracks the deleted row's stable clientId, the adoption
+ * filters the resurrected server row out by composite signature, anchors the
+ * diff baseline to the FULL server copy, and the next autosave emits a
+ * remove_exercise for the now-known server row_id — re-deleting it server-side.
+ */
+describe('CoachWorkoutBuilderScreen — D-045 delete-before-adoption (op-empty window)', () => {
+  /**
+   * Add a new row, drive its insert autosave 200, with the post-insert refetch
+   * DEFERRED (parked, not yet resolved). The server has staged the new row WITH
+   * an id (`NEW_SERVER_ROW_ID`) that the refetch WILL read once settled, but the
+   * screen has NOT adopted it. Returns the testing-library queries parked in the
+   * exact op-empty window; the caller deletes the id-less row, then settles.
+   */
+  async function addThenInsert200DeferRefetch() {
+    jest.useFakeTimers();
+    deferRefetch = true;
+    const Screen = loadScreen();
+    const utils = render(<Screen />);
+    const { getByLabelText } = utils;
+
+    await act(async () => {
+      fireEvent.changeText(getByLabelText('Search exercise catalog'), 'squat');
+    });
+    await act(async () => {
+      fireEvent.press(utils.getByText('Squat'));
+    });
+
+    // Stage the server-side row WITH its id (what the refetch reads on settle).
+    mockServerPlan = {
+      ...mockServerPlan,
+      exercises: [
+        ...mockServerPlan.exercises,
+        {
+          id: NEW_SERVER_ROW_ID,
+          workout_plan_id: 'plan-1',
+          exercise_external_id: 'squat',
+          order: 2,
+          sets: 3,
+          reps_or_duration_seconds: 10,
+          weight_lbs: null,
+          rest_seconds: 60,
+          superset_group_id: null,
+          notes: null,
+        },
+      ],
+    };
+
+    // Debounce -> insert autosave 200 -> onSaved dispatches the deferred refetch.
+    await act(async () => {
+      jest.advanceTimersByTime(900);
+    });
+    await waitFor(() => expect(mockAutosaveCall).toHaveBeenCalled());
+    const firstOps = (mockAutosaveCall.mock.calls[0][0] as {
+      body: { ops: { op: string; row_id?: string }[] };
+    }).body.ops;
+    const firstUpsert = firstOps.find((o) => o.op === 'upsert_exercise');
+    expect(firstUpsert).toBeDefined();
+    // It was an id-less insert: the server assigned the id we have NOT adopted.
+    expect(firstUpsert?.row_id).toBeUndefined();
+    await waitFor(() => expect(mockRefetch).toHaveBeenCalled());
+    expect(settleRefetch).not.toBeNull();
+    return utils;
+  }
+
+  it('add -> insert 200 -> delete id-less row -> settle refetch: row stays deleted AND next autosave emits remove_exercise for the server id', async () => {
+    const utils = await addThenInsert200DeferRefetch();
+    const { getAllByLabelText, queryAllByLabelText } = utils;
+
+    // Two rows present (bench + the just-inserted squat), insert already 200'd.
+    expect(getAllByLabelText('Remove exercise')).toHaveLength(2);
+
+    // Delete the id-less squat row WHILE the refetch is parked. This produces
+    // NO remove_exercise op (no row_id), so the autosave dirty signal stays
+    // false — the exact op-empty window the audit flagged.
+    const removeButtons = getAllByLabelText('Remove exercise');
+    await act(async () => {
+      fireEvent.press(removeButtons[removeButtons.length - 1]);
+    });
+    // Only the original bench row remains locally.
+    expect(queryAllByLabelText('Remove exercise')).toHaveLength(1);
+
+    // NOW settle the refetch: the full-replace adoption MUST NOT resurrect the
+    // deleted row.
+    mockAutosaveCall.mockClear();
+    await act(async () => {
+      settleRefetch?.();
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(50);
+    });
+
+    // The delete survived adoption: still only the bench row in the UI.
+    expect(queryAllByLabelText('Remove exercise')).toHaveLength(1);
+
+    // The post-adoption diff (baseline = full server incl the resurrected row,
+    // working copy = bench only) emits a remove_exercise naming the server id.
+    await act(async () => {
+      jest.advanceTimersByTime(900);
+    });
+    await waitFor(() => expect(mockAutosaveCall).toHaveBeenCalled());
+    const ops = lastOpsBody();
+    expect(ops).toContainEqual({ op: 'remove_exercise', row_id: NEW_SERVER_ROW_ID });
+  });
+
+  it('double-delete: deleting the id-less row TWICE across two refetch settles stays deleted (no resurrection, idempotent remove)', async () => {
+    const utils = await addThenInsert200DeferRefetch();
+    const { getAllByLabelText, queryAllByLabelText } = utils;
+
+    // First delete in the op-empty window.
+    await act(async () => {
+      const buttons = getAllByLabelText('Remove exercise');
+      fireEvent.press(buttons[buttons.length - 1]);
+    });
+    expect(queryAllByLabelText('Remove exercise')).toHaveLength(1);
+
+    // Settle the FIRST refetch — must not resurrect.
+    await act(async () => {
+      settleRefetch?.();
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(50);
+    });
+    expect(queryAllByLabelText('Remove exercise')).toHaveLength(1);
+
+    // A SECOND refetch resolves while the remove has not yet been confirmed on
+    // the server (mockServerPlan still holds the row). The row must STILL be
+    // dropped — the clientId stays tracked until the server confirms removal.
+    settleRefetch = () => forceUpdate?.();
+    mockAutosaveCall.mockClear();
+    await act(async () => {
+      settleRefetch?.();
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(50);
+    });
+    expect(queryAllByLabelText('Remove exercise')).toHaveLength(1);
+
+    // The diff continues to express the remove for the server id (re-issued, not
+    // resurrected).
+    await act(async () => {
+      jest.advanceTimersByTime(900);
+    });
+    await waitFor(() => expect(mockAutosaveCall).toHaveBeenCalled());
+    const ops = lastOpsBody();
+    expect(ops).toContainEqual({ op: 'remove_exercise', row_id: NEW_SERVER_ROW_ID });
+  });
+
+  it('add-delete-add interleaving: re-adding the SAME exercise after a delete-before-adoption keeps the new row (only the deleted one is dropped)', async () => {
+    const utils = await addThenInsert200DeferRefetch();
+    const { getAllByLabelText, queryAllByLabelText, getByLabelText } = utils;
+
+    // Delete the id-less squat row in the op-empty window.
+    await act(async () => {
+      const buttons = getAllByLabelText('Remove exercise');
+      fireEvent.press(buttons[buttons.length - 1]);
+    });
+    expect(queryAllByLabelText('Remove exercise')).toHaveLength(1);
+
+    // Re-add a NEW squat row (a distinct clientId) BEFORE the refetch settles.
+    await act(async () => {
+      fireEvent.changeText(getByLabelText('Search exercise catalog'), 'squat');
+    });
+    await act(async () => {
+      fireEvent.press(utils.getByText('Squat'));
+    });
+    // Bench + the freshly re-added squat = two rows locally.
+    expect(queryAllByLabelText('Remove exercise')).toHaveLength(2);
+
+    // Settle the refetch: the server still has only the ORIGINAL resurrected
+    // squat (NEW_SERVER_ROW_ID). The deleted clientId must drop THAT row by
+    // signature, NOT the freshly re-added local row.
+    mockAutosaveCall.mockClear();
+    await act(async () => {
+      settleRefetch?.();
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(50);
+    });
+
+    // Two rows still present: bench + the new squat (the resurrected one stayed
+    // dropped). The new row is NOT erroneously dropped by the signature match.
+    expect(queryAllByLabelText('Remove exercise')).toHaveLength(2);
+  });
+});

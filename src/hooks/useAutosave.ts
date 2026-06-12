@@ -171,7 +171,7 @@ export interface UseAutosaveArgs<TWorkingCopy> {
   onConflict?: (conflict: AutosaveConflict) => void;
 }
 
-export interface UseAutosaveResult {
+export interface UseAutosaveResult<TWorkingCopy = unknown> {
   status: AutosaveStatus;
   /** Wallclock ms of the last confirmed save, or null if none yet. */
   lastSavedAt: number | null;
@@ -195,6 +195,18 @@ export interface UseAutosaveResult {
    * "last saved" truth so subsequent diffs are honest. Idempotent and stable.
    */
   rebaseline: () => void;
+  /**
+   * Re-anchor the diff baseline to an EXPLICIT server copy rather than the
+   * current working copy. Used by the delete-before-adoption fix (MWB-4 #237
+   * D-045): when a refetch resurrects a row the coach deleted in the adoption
+   * window, the screen adopts the FILTERED rows (without the deleted one) into
+   * its local state but anchors the baseline to the FULL server truth (which
+   * still holds that row). The very next diff then emits a `remove_exercise`
+   * for the now-known server row_id — preserving the delete on the server —
+   * instead of the full-replace path resurrecting it. Like {@link rebaseline}
+   * it refuses to run mid-flight so a genuine pending batch is never discarded.
+   */
+  rebaselineTo: (serverCopy: TWorkingCopy) => void;
 }
 
 /**
@@ -220,7 +232,7 @@ interface PendingBatch<TWorkingCopy> {
 
 export function useAutosave<TWorkingCopy>(
   args: UseAutosaveArgs<TWorkingCopy>,
-): UseAutosaveResult {
+): UseAutosaveResult<TWorkingCopy> {
   const {
     planId,
     value,
@@ -746,6 +758,34 @@ export function useAutosave<TWorkingCopy>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setDirty, safeSet, computeHasPending]);
 
+  /**
+   * Re-anchor the diff baseline to an EXPLICIT server copy (D-045). Unlike
+   * {@link rebaseline} this does NOT clear the dirty signal: the whole point is
+   * that the explicit server copy may DIFFER from the current working copy (it
+   * still holds a row the coach deleted in the adoption window), so the next
+   * diff SHOULD see a delta (a `remove_exercise`) and re-flush. We recompute
+   * the dirty signal honestly against the new baseline so `hasPending` reflects
+   * that outstanding delete. Like the other re-anchors it refuses to run while
+   * a real batch is in flight or queued so a genuine pending edit is preserved.
+   */
+  const rebaselineTo = useCallback(
+    (serverCopy: TWorkingCopy): void => {
+      if (!enabledRef.current) return;
+      if (currentInFlightRef.current !== null || pendingNextRef.current !== null) {
+        return;
+      }
+      lastSavedValueRef.current = serverCopy;
+      // Recompute dirty against the explicit baseline: if the current working
+      // copy diverges (the deleted row is absent here but present in the server
+      // copy) we stay dirty so the next debounce flush emits the remove op.
+      setDirty(
+        diffRef.current(lastSavedValueRef.current, latestValueRef.current).length > 0,
+      );
+      safeSet(setHasPending, computeHasPending());
+    },
+    [setDirty, safeSet, computeHasPending],
+  );
+
   // ─── Debounced arm on value change ──────────────────────────────────────────
   useEffect(() => {
     if (!enabled) return;
@@ -884,7 +924,8 @@ export function useAutosave<TWorkingCopy>(
       flush,
       hasPending,
       rebaseline,
+      rebaselineTo,
     }),
-    [status, lastSavedAt, version, tokenState, flush, hasPending, rebaseline],
+    [status, lastSavedAt, version, tokenState, flush, hasPending, rebaseline, rebaselineTo],
   );
 }
