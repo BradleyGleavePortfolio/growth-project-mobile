@@ -125,10 +125,10 @@ export default function ChallengeCard({
             <Ionicons
               name="checkmark-circle-outline"
               size={15}
-              color={semanticColors.accent}
+              color={semanticColors.accentText}
             />
           ) : null}
-          <Text style={[styles.actionLabel, { color: semanticColors.accent }]}>
+          <Text style={[styles.actionLabel, { color: semanticColors.accentText }]}>
             {actionLabel}
           </Text>
         </View>

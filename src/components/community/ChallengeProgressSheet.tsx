@@ -289,9 +289,9 @@ export default function ChallengeProgressSheet({
               <Ionicons
                 name="checkmark-circle-outline"
                 size={18}
-                color={semanticColors.accent}
+                color={semanticColors.accentText}
               />
-              <Text style={[styles.completeText, { color: semanticColors.accent }]}>
+              <Text style={[styles.completeText, { color: semanticColors.accentText }]}>
                 You will reach your goal — nice work.
               </Text>
             </View>

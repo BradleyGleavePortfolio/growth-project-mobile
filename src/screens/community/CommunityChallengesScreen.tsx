@@ -19,8 +19,15 @@
  *
  * Tokens only (no raw hex); line Ionicons only (no emoji).
  */
-import React from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import {
+  AccessibilityInfo,
+  ActivityIndicator,
+  FlatList,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useQuery } from '@tanstack/react-query';
@@ -87,6 +94,27 @@ export default function CommunityChallengesScreen({
 
   const open = (challenge: CommunityChallenge) =>
     navigation.navigate('CommunityChallengeDetail', { challengeId: challenge.id });
+
+  // P2-2 (a11y): the list is `accessibilityRole="list"` but assistive tech got
+  // no signal when the async data finally landed. Announce the loaded count on
+  // each settled, successful arrival (and on a true-empty resolution) so a
+  // screen-reader user knows the surface populated. We track the last announced
+  // count in a ref and only speak on an actual transition to avoid re-announcing
+  // on unrelated re-renders. The FlatList ALSO carries an explicit
+  // `accessibilityLabel` + `accessibilityLiveRegion="polite"` below so a reader
+  // focused near the list re-reads the named count without an imperative call.
+  const challengeCount = challenges.data?.length ?? 0;
+  const lastAnnouncedCount = useRef<number | null>(null);
+  useEffect(() => {
+    if (!challenges.isSuccess) return;
+    if (lastAnnouncedCount.current === challengeCount) return;
+    lastAnnouncedCount.current = challengeCount;
+    AccessibilityInfo.announceForAccessibility(
+      challengeCount > 0
+        ? `Challenges loaded, ${challengeCount} ${challengeCount === 1 ? 'item' : 'items'}`
+        : 'Challenges loaded, none yet',
+    );
+  }, [challenges.isSuccess, challengeCount]);
 
   const Container: React.ComponentType<{ children: React.ReactNode }> = embedded
     ? ({ children }) => <View style={styles.flex}>{children}</View>
@@ -157,7 +185,7 @@ export default function CommunityChallengesScreen({
             testID="community-challenges-retry"
             style={[styles.retry, { borderColor: semanticColors.accent }]}
           >
-            <Text style={[styles.retryLabel, { color: semanticColors.accent }]}>
+            <Text style={[styles.retryLabel, { color: semanticColors.accentText }]}>
               Try again
             </Text>
           </HapticPressable>
@@ -187,6 +215,12 @@ export default function CommunityChallengesScreen({
       <FlatList
         data={data}
         accessibilityRole="list"
+        accessibilityLabel={
+          data.length > 0
+            ? `Challenges, ${data.length} ${data.length === 1 ? 'item' : 'items'}`
+            : 'Challenges, empty'
+        }
+        accessibilityLiveRegion="polite"
         renderItem={({ item }) => (
           // The outer wrapper carries `listitem` semantics so assistive tech
           // receives the list structure, while the inner ChallengeCard keeps

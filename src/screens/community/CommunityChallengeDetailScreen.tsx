@@ -161,6 +161,43 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
     }
   }, [actionError]);
 
+  // P2-2 (a11y): the comments and leaderboard lists are `accessibilityRole=
+  // "list"` with named `accessibilityLabel`s, but assistive tech also needs a
+  // spoken signal the moment the async data lands. Announce the loaded count on
+  // each settled, successful arrival (tracking the last announced count in a ref
+  // so unrelated re-renders never re-announce). The lists ALSO carry
+  // `accessibilityLiveRegion="polite"`, so the two paths cover both focus
+  // positions (reader on the list vs. elsewhere on the screen).
+  const commentsCount = comments.data?.length ?? 0;
+  const lastCommentsAnnounced = useRef<number | null>(null);
+  useEffect(() => {
+    if (!comments.isSuccess) return;
+    if (lastCommentsAnnounced.current === commentsCount) return;
+    lastCommentsAnnounced.current = commentsCount;
+    AccessibilityInfo.announceForAccessibility(
+      commentsCount > 0
+        ? `Encouragement notes loaded, ${commentsCount} ${
+            commentsCount === 1 ? 'item' : 'items'
+          }`
+        : 'Encouragement notes loaded, none yet',
+    );
+  }, [comments.isSuccess, commentsCount]);
+
+  const leaderboardCount = leaderboard.data?.rows.length ?? 0;
+  const lastLeaderboardAnnounced = useRef<number | null>(null);
+  useEffect(() => {
+    if (!leaderboard.isSuccess) return;
+    if (lastLeaderboardAnnounced.current === leaderboardCount) return;
+    lastLeaderboardAnnounced.current = leaderboardCount;
+    AccessibilityInfo.announceForAccessibility(
+      leaderboardCount > 0
+        ? `Leaderboard loaded, ${leaderboardCount} ${
+            leaderboardCount === 1 ? 'row' : 'rows'
+          }`
+        : 'Leaderboard loaded, no rows yet',
+    );
+  }, [leaderboard.isSuccess, leaderboardCount]);
+
   // The TRUE-EMPTY surface is only shown once the comments query has actually
   // resolved to zero rows, so a load error never masquerades as "empty" (F8).
   // The original P0 was that this surface rendered LOCAL Roman copy from
@@ -425,7 +462,7 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
             testID="community-challenge-retry"
             style={[styles.retry, { borderColor: semanticColors.accent }]}
           >
-            <Text style={[styles.retryLabel, { color: semanticColors.accent }]}>
+            <Text style={[styles.retryLabel, { color: semanticColors.accentText }]}>
               Try again
             </Text>
           </HapticPressable>
@@ -629,7 +666,7 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
                     { borderColor: semanticColors.accent },
                   ]}
                 >
-                  <Text style={[styles.optInLabel, { color: semanticColors.accent }]}>
+                  <Text style={[styles.optInLabel, { color: semanticColors.accentText }]}>
                     {optInMutation.isPending ? 'Updating…' : 'Share progress'}
                   </Text>
                 </HapticPressable>
@@ -668,6 +705,14 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
               <FlatList
                 data={leaderboard.data.rows}
                 accessibilityRole="list"
+                accessibilityLabel={
+                  leaderboard.data.rows.length > 0
+                    ? `Leaderboard, ${leaderboard.data.rows.length} ${
+                        leaderboard.data.rows.length === 1 ? 'row' : 'rows'
+                      }`
+                    : 'Leaderboard, empty'
+                }
+                accessibilityLiveRegion="polite"
                 scrollEnabled={false}
                 removeClippedSubviews
                 renderItem={({ item }) => renderLeaderboardRow(item)}
@@ -724,7 +769,7 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
         testID="community-challenge-comments-retry"
         style={[styles.retry, { borderColor: semanticColors.accent }]}
       >
-        <Text style={[styles.retryLabel, { color: semanticColors.accent }]}>
+        <Text style={[styles.retryLabel, { color: semanticColors.accentText }]}>
           Try again
         </Text>
       </HapticPressable>
@@ -772,6 +817,14 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
       <FlatList
         data={hasComments ? commentData : []}
         accessibilityRole="list"
+        accessibilityLabel={
+          commentData.length > 0
+            ? `Encouragement notes, ${commentData.length} ${
+                commentData.length === 1 ? 'item' : 'items'
+              }`
+            : 'Encouragement notes, empty'
+        }
+        accessibilityLiveRegion="polite"
         renderItem={renderComment}
         ListHeaderComponent={Header}
         ListFooterComponent={commentsFooter}

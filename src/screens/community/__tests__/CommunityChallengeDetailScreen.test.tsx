@@ -17,6 +17,7 @@
  * deterministically.
  */
 import React from 'react';
+import { AccessibilityInfo } from 'react-native';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
@@ -433,5 +434,84 @@ describe('CommunityChallengeDetailScreen — list/listitem semantics (P1)', () =
     // comments list's `accessibilityRole="list"` announces collection
     // membership; this mirrors the EventCard precedent.
     expect(row.props.role).toBe('listitem');
+  });
+});
+
+describe('CommunityChallengeDetailScreen — lists named + live-announced (P2-2)', () => {
+  function comment(
+    overrides: Partial<CommunityChallengeComment> = {},
+  ): CommunityChallengeComment {
+    return {
+      id: 'cm-1',
+      challenge_id: 'ch-1',
+      author_user_id: 'other-1',
+      body: 'Keep going, you have got this.',
+      created_at: '2026-03-05T00:00:00Z',
+      ...overrides,
+    };
+  }
+
+  it('names the comments list with its count and marks it a polite live region', async () => {
+    api.getChallenge.mockResolvedValue({
+      challenge: challenge(),
+      participation: participation(),
+    });
+    api.listComments.mockResolvedValue([
+      comment({ id: 'cm-1' }),
+      comment({ id: 'cm-2' }),
+    ]);
+    renderScreen();
+
+    const list = await screen.findByTestId('community-challenge-comments');
+    await waitFor(() =>
+      expect(list.props.accessibilityLabel).toBe('Encouragement notes, 2 items'),
+    );
+    expect(list.props.accessibilityLiveRegion).toBe('polite');
+  });
+
+  it('announces the loaded comment count to assistive tech on data arrival', async () => {
+    const announce = jest
+      .spyOn(AccessibilityInfo, 'announceForAccessibility')
+      .mockImplementation(() => undefined);
+    api.getChallenge.mockResolvedValue({
+      challenge: challenge(),
+      participation: participation(),
+    });
+    api.listComments.mockResolvedValue([comment({ id: 'cm-1' })]);
+    renderScreen();
+
+    await waitFor(() =>
+      expect(announce).toHaveBeenCalledWith('Encouragement notes loaded, 1 item'),
+    );
+    announce.mockRestore();
+  });
+
+  it('names the leaderboard list with its row count and announces it once opted in', async () => {
+    const announce = jest
+      .spyOn(AccessibilityInfo, 'announceForAccessibility')
+      .mockImplementation(() => undefined);
+    api.getChallenge.mockResolvedValue({
+      challenge: challenge({ leaderboard_enabled: true }),
+      participation: participation({ leaderboard_opted_in: true }),
+    });
+    api.getLeaderboard.mockResolvedValue({
+      available: true,
+      opted_in: true,
+      rows: [
+        { user_id: 'me-1', rank: 1, progress_value: 25000, is_self: true },
+        { user_id: 'u-2', rank: 2, progress_value: 20000, is_self: false },
+      ],
+    });
+    renderScreen();
+
+    const list = await screen.findByTestId('community-challenge-leaderboard-list');
+    await waitFor(() =>
+      expect(list.props.accessibilityLabel).toBe('Leaderboard, 2 rows'),
+    );
+    expect(list.props.accessibilityLiveRegion).toBe('polite');
+    await waitFor(() =>
+      expect(announce).toHaveBeenCalledWith('Leaderboard loaded, 2 rows'),
+    );
+    announce.mockRestore();
   });
 });

@@ -64,6 +64,7 @@ jest.mock('../../../api/communityChallengesApi', () => ({
   CHALLENGES_PAGE_LIMIT: 20,
 }));
 
+import { AccessibilityInfo } from 'react-native';
 import { communityChallengesApi } from '../../../api/communityChallengesApi';
 import type { CommunityChallenge } from '../../../api/communityChallengesApi';
 import CommunityChallengesScreen from '../CommunityChallengesScreen';
@@ -160,5 +161,50 @@ describe('CommunityChallengesScreen — reachable discovery surface (P1)', () =>
     expect(api.listChallenges).not.toHaveBeenCalledWith('ws-resolved', {
       limit: 20,
     });
+  });
+});
+
+describe('CommunityChallengesScreen — list named + live-announced (P2-2)', () => {
+  it('names the list with its loaded count and marks it a polite live region', async () => {
+    api.listChallenges.mockResolvedValue([
+      challenge({ id: 'ch-1' }),
+      challenge({ id: 'ch-2' }),
+    ]);
+    renderScreen();
+
+    const list = await screen.findByTestId('community-challenges-list');
+    await waitFor(() =>
+      expect(list.props.accessibilityLabel).toBe('Challenges, 2 items'),
+    );
+    expect(list.props.accessibilityLiveRegion).toBe('polite');
+  });
+
+  it('names an empty list "Challenges, empty"', async () => {
+    api.listChallenges.mockResolvedValue([]);
+    renderScreen();
+
+    // With zero rows the screen renders its empty surface, not the FlatList; the
+    // announcement path (below) is what informs assistive tech of the resolved
+    // empty state.
+    await waitFor(() =>
+      expect(screen.getByTestId('community-challenges-empty')).toBeTruthy(),
+    );
+  });
+
+  it('announces the loaded count to assistive tech on data arrival', async () => {
+    const announce = jest
+      .spyOn(AccessibilityInfo, 'announceForAccessibility')
+      .mockImplementation(() => undefined);
+    api.listChallenges.mockResolvedValue([
+      challenge({ id: 'ch-1' }),
+      challenge({ id: 'ch-2' }),
+      challenge({ id: 'ch-3' }),
+    ]);
+    renderScreen();
+
+    await waitFor(() =>
+      expect(announce).toHaveBeenCalledWith('Challenges loaded, 3 items'),
+    );
+    announce.mockRestore();
   });
 });
