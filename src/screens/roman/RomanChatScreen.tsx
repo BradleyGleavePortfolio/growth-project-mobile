@@ -43,12 +43,14 @@ import RomanState from '../../components/roman/RomanState';
 import { Skeleton } from '../../ui/skeletons/Skeleton';
 import {
   romanRateLimited,
+  ROMAN_LOADING_A11Y_LABEL,
   ROMAN_LOADING_OLDER,
   ROMAN_REPLY_ANNOUNCE_PREFIX,
   ROMAN_SEND_FAILED,
 } from '../../components/roman/romanVoice';
 import { useRomanChat } from './useRomanChat';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { logger } from '../../utils/logger';
 import type { RomanMessage, RomanSurface } from '../../api/romanApi';
 import { colors, radius, spacing, typography, withAlpha } from '../../theme/tokens';
 
@@ -58,8 +60,19 @@ export interface RomanChatScreenProps {
 }
 
 function LoadingSkeleton(): React.ReactElement {
+  // The skeleton blocks themselves are hidden from assistive tech (Skeleton.tsx
+  // sets accessibilityElementsHidden), so the LOADING STATE must be exposed on
+  // the wrapper instead: a busy progressbar with a Roman-voiced label so a
+  // screen-reader user is told the surface is loading rather than meeting
+  // silence (R3 P1-1).
   return (
-    <View style={styles.skeletonWrap} testID="roman-loading-skeleton">
+    <View
+      style={styles.skeletonWrap}
+      testID="roman-loading-skeleton"
+      accessibilityRole="progressbar"
+      accessibilityLabel={ROMAN_LOADING_A11Y_LABEL}
+      accessibilityState={{ busy: true }}
+    >
       <Skeleton width="70%" height={18} testID="roman-skeleton-line-1" />
       <Skeleton width="55%" height={18} />
       <Skeleton width="80%" height={18} />
@@ -85,17 +98,50 @@ export default function RomanChatScreen({
     clearSendError,
   } = useRomanChat(surface);
   const [draft, setDraft] = useState('');
+  // OS "Reduce Motion" preference. When ON, the auto-scroll to the newest turn
+  // is instant rather than animated, matching the reduced-motion parity the
+  // typing indicator already honours (R3 P2-1). Defaults to motion-on so a
+  // failed probe never strands the latest message off-screen.
+  const [reduceMotion, setReduceMotion] = useState(false);
 
   const listRef = useRef<FlatList<RomanMessage>>(null);
   // Last assistant message id we announced to assistive tech, so a re-render
   // does not re-announce the same reply (U4).
   const lastAnnouncedId = useRef<string | null>(null);
+  // Last send-error message we announced, so a re-render does not re-announce
+  // the same failure (R3 P1-2).
+  const lastAnnouncedError = useRef<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((enabled) => {
+        if (mounted) setReduceMotion(enabled);
+      })
+      .catch((err) => {
+        // Default to motion-on when the probe fails; the auto-scroll is purely
+        // a comfort animation so a failed query never blocks reaching the
+        // newest turn. Log the failed platform probe so it stays observable
+        // (Bradley #36 — no silently swallowed catch).
+        logger.warn('RomanChatScreen.reduceMotionQuery', err);
+      });
+    const sub = AccessibilityInfo.addEventListener(
+      'reduceMotionChanged',
+      (enabled) => {
+        if (mounted) setReduceMotion(enabled);
+      },
+    );
+    return () => {
+      mounted = false;
+      sub.remove();
+    };
+  }, []);
 
   const scrollToLatest = useCallback(() => {
     // Guard: scrollToEnd is a no-op (and warns) on an empty list.
     if (messages.length === 0) return;
-    listRef.current?.scrollToEnd({ animated: true });
-  }, [messages.length]);
+    listRef.current?.scrollToEnd({ animated: !reduceMotion });
+  }, [messages.length, reduceMotion]);
 
   // Scroll to the newest turn whenever the thread grows (send + receive), and
   // when the keyboard opens, so the latest message is never stranded (U3).
@@ -123,6 +169,31 @@ export default function RomanChatScreen({
       break;
     }
   }, [messages]);
+
+  const isEmpty = messages.length === 0;
+  const sendErrorCopy =
+    sendError == null
+      ? null
+      : sendError.kind === 'rateLimited'
+        ? romanRateLimited(sendError.retryAfterSeconds)
+        : ROMAN_SEND_FAILED;
+
+  // Announce a send failure (and its remedy) to assistive tech the moment it
+  // appears. The optimistic user turn was rolled back in useRomanChat, so the
+  // visible thread silently loses the message — the inline error row also
+  // carries accessibilityLiveRegion="assertive", and this explicit announce is
+  // the belt-and-braces guarantee on platforms that under-announce live
+  // regions. Deduped by copy so a re-render does not repeat it (R3 P1-2).
+  useEffect(() => {
+    if (sendErrorCopy == null) {
+      lastAnnouncedError.current = null;
+      return;
+    }
+    if (sendErrorCopy !== lastAnnouncedError.current) {
+      lastAnnouncedError.current = sendErrorCopy;
+      AccessibilityInfo.announceForAccessibility(sendErrorCopy);
+    }
+  }, [sendErrorCopy]);
 
   const onSend = useCallback(async () => {
     const text = draft;
@@ -185,14 +256,6 @@ export default function RomanChatScreen({
     );
   }
 
-  const isEmpty = messages.length === 0;
-  const sendErrorCopy =
-    sendError == null
-      ? null
-      : sendError.kind === 'rateLimited'
-        ? romanRateLimited(sendError.retryAfterSeconds)
-        : ROMAN_SEND_FAILED;
-
   return (
     <SafeAreaView style={styles.safe} edges={['top']} testID="roman-chat-screen">
       {header}
@@ -220,9 +283,22 @@ export default function RomanChatScreen({
             onEndReachedThreshold={0.4}
             onEndReached={nextCursor != null ? loadOlder : undefined}
             onContentSizeChange={scrollToLatest}
+            // Expose the thread as a list so assistive tech communicates the
+            // navigational structure; each row carries role="listitem" in
+            // RomanMessageBubble (R3 P1-3). The ARIA `role` prop is used (not
+            // accessibilityRole) because RN's AccessibilityRole union omits
+            // "listitem" while the `role` union types both list + listitem.
+            role="list"
             ListFooterComponent={
               loadingOlder ? (
-                <View style={styles.olderNote} testID="roman-loading-older">
+                <View
+                  style={styles.olderNote}
+                  testID="roman-loading-older"
+                  accessibilityRole="progressbar"
+                  accessibilityLabel={ROMAN_LOADING_OLDER}
+                  accessibilityLiveRegion="polite"
+                  accessibilityState={{ busy: true }}
+                >
                   <RomanAvatar crop="neutral" size={24} />
                   <Text style={styles.olderNoteText} accessibilityRole="text">
                     {ROMAN_LOADING_OLDER}
@@ -237,7 +313,12 @@ export default function RomanChatScreen({
         {sending ? <RomanTypingIndicator testID="roman-typing" /> : null}
 
         {sendErrorCopy != null ? (
-          <View style={styles.sendError} testID="roman-send-error">
+          <View
+            style={styles.sendError}
+            testID="roman-send-error"
+            accessibilityRole="alert"
+            accessibilityLiveRegion="assertive"
+          >
             <RomanAvatar crop="neutral" size={28} />
             <Text style={styles.sendErrorText} accessibilityRole="text">
               {sendErrorCopy}

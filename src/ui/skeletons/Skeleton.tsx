@@ -20,8 +20,8 @@
  *   <SkeletonScreen />        — full-screen centered list placeholder
  */
 
-import React, { useEffect } from 'react';
-import { DimensionValue, StyleSheet, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { AccessibilityInfo, DimensionValue, StyleSheet, View } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -30,6 +30,7 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { useTheme } from '../../theme/ThemeProvider';
+import { logger } from '../../utils/logger';
 
 export interface SkeletonProps {
   width: DimensionValue;
@@ -44,12 +45,46 @@ export interface SkeletonProps {
 export function Skeleton({ width, height, borderRadius = 2, testID }: SkeletonProps) {
   const { tokens } = useTheme();
 
+  // OS "Reduce Motion" preference. When ON, the placeholder holds a static
+  // mid-opacity instead of an infinite pulse, so reduced-motion users get a
+  // calm placeholder rather than a perpetual ping-pong (R3 P2-1). Defaults to
+  // motion-on so a failed probe never disables the pulse for everyone.
+  const [reduceMotion, setReduceMotion] = useState(false);
+
   // bone = Colors.background — lighter shimmer stays close to bone, darker shimmer
   // steps slightly toward cream (#F1E8D5). We express this purely via opacity
   // over a cream-tinted background so we never hardcode hex values.
   const opacity = useSharedValue(0.4);
 
   useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled()
+      .then((enabled) => {
+        if (mounted) setReduceMotion(enabled);
+      })
+      .catch((err) => {
+        // Decorative pulse only: a failed probe must never block rendering, so
+        // we default to motion-on and log the swallowed signal (Bradley #36).
+        logger.warn('Skeleton.reduceMotionQuery', err);
+      });
+    const sub = AccessibilityInfo.addEventListener(
+      'reduceMotionChanged',
+      (enabled) => {
+        if (mounted) setReduceMotion(enabled);
+      },
+    );
+    return () => {
+      mounted = false;
+      sub.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (reduceMotion) {
+      // Hold a steady, legible opacity — no looping animation under Reduce Motion.
+      opacity.value = 0.7;
+      return;
+    }
     opacity.value = withRepeat(
       withTiming(1.0, {
         duration: 1500,
@@ -58,7 +93,7 @@ export function Skeleton({ width, height, borderRadius = 2, testID }: SkeletonPr
       -1,   // infinite
       true, // reverse (ping-pong)
     );
-  }, [opacity]);
+  }, [opacity, reduceMotion]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,

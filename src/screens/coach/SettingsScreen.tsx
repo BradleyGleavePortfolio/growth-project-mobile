@@ -552,23 +552,29 @@ export default function SettingsScreen() {
       {featureFlags.romanChat ? (
         <>
           <Text style={styles.sectionHeader}>Concierge</Text>
-          <View style={styles.section}>
-            <TouchableOpacity
-              style={styles.row}
-              onPress={() => navigation.navigate('RomanChat')}
-              accessibilityRole="button"
-              accessibilityLabel="Open a conversation with Roman"
-              accessibilityHint="Ask for a brief, a client read, or the next step"
-            >
-              <RomanAvatar crop="neutral" size={28} testID="coach-roman-entry-avatar" />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.rowLabel}>Roman</Text>
-                {/* Coach register: operational, not the generic "ask anything"
-                    client copy (R1 UX finding P2). */}
-                <Text style={styles.rowSubLabel}>Ask for a brief, a client read, or the next step.</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-            </TouchableOpacity>
+          <View style={styles.section} role="list">
+            {/* listitem wrapper exposes list structure to assistive tech while
+                the inner pressable keeps its button role + action (R3 P1-3).
+                ARIA `role` is used because RN's AccessibilityRole union omits
+                "listitem". */}
+            <View role="listitem">
+              <TouchableOpacity
+                style={styles.row}
+                onPress={() => navigation.navigate('RomanChat')}
+                accessibilityRole="button"
+                accessibilityLabel="Open a conversation with Roman"
+                accessibilityHint="Ask for a brief, a client read, or the next step"
+              >
+                <RomanAvatar crop="neutral" size={28} testID="coach-roman-entry-avatar" />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.rowLabel}>Roman</Text>
+                  {/* Coach register: operational, not the generic "ask anything"
+                      client copy (R1 UX finding P2). */}
+                  <Text style={styles.rowSubLabel}>Ask for a brief, a client read, or the next step.</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
           </View>
         </>
       ) : null}

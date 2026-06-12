@@ -134,6 +134,13 @@ export function romanRateLimited(seconds?: number): string {
   return 'A moment, if you would. Send your next message again shortly.';
 }
 
+/**
+ * Accessibility label for the initial-load progressbar (R3 P1-1). The visible
+ * skeleton blocks are hidden from assistive tech, so the busy state is exposed
+ * here in Roman's readback register (§2.9) rather than as a silent placeholder.
+ */
+export const ROMAN_LOADING_A11Y_LABEL = 'Roman is getting ready';
+
 /** Accessibility label announced while Roman's reply is being prepared (§2.9 readback register). */
 export const ROMAN_TYPING_A11Y_LABEL = 'Roman is typing';
 /** Visible "preparing a reply" line — plain, composed (§1.1). */

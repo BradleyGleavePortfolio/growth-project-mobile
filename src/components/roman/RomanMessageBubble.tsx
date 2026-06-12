@@ -31,7 +31,7 @@ function RomanMessageBubbleComponent({
 
   if (isAssistant) {
     return (
-      <View style={styles.assistantRow} testID={testID}>
+      <View style={styles.assistantRow} testID={testID} role="listitem">
         <RomanAvatar crop="neutral" size={32} testID="roman-bubble-avatar" />
         <View style={styles.assistantBubble}>
           <Text
@@ -51,7 +51,7 @@ function RomanMessageBubbleComponent({
   }
 
   return (
-    <View style={styles.userRow} testID={testID}>
+    <View style={styles.userRow} testID={testID} role="listitem">
       <View style={styles.userBubble}>
         <Text style={styles.userText} accessibilityLabel={`You said: ${message.content}`}>
           {message.content}

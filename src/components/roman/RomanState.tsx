@@ -12,8 +12,14 @@
  * for the user to retry until ops enables the feature, so an error-toast loop
  * (brief §3) is structurally impossible here.
  */
-import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect } from 'react';
+import {
+  AccessibilityInfo,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import RomanAvatar from './RomanAvatar';
 import {
   ROMAN_ERROR_TRANSIENT,
@@ -55,8 +61,25 @@ export default function RomanState({
   // the backend gate flips, so we suppress the affordance to avoid a loop.
   const showRetry = kind !== 'unavailable' && typeof onRetry === 'function';
 
+  // A full-surface failure replaces the whole screen, so assistive tech must be
+  // told what changed. `offline`/`error` are recoverable and assertive (the
+  // user can act now); `unavailable` is a calm, non-actionable state announced
+  // politely. The container also carries the matching live-region semantics so
+  // platforms that read live regions on focus still announce it (R3 P1-2).
+  const isAssertive = kind === 'offline' || kind === 'error';
+  const liveRegion = isAssertive ? 'assertive' : 'polite';
+  useEffect(() => {
+    const announcement = body !== '' ? `${title} ${body}` : title;
+    AccessibilityInfo.announceForAccessibility(announcement);
+  }, [title, body]);
+
   return (
-    <View style={styles.container} testID={testID}>
+    <View
+      style={styles.container}
+      testID={testID}
+      accessibilityRole="alert"
+      accessibilityLiveRegion={liveRegion}
+    >
       <RomanAvatar crop="neutral" size={64} testID="roman-state-avatar" />
       <Text style={styles.title} accessibilityRole="header">
         {title}

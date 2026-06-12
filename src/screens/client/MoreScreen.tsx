@@ -169,31 +169,37 @@ export default function MoreScreen() {
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        role="list"
       >
         {items.map((item) => (
-          <HapticPressable
-            key={item.label}
-            intent="light"
-            style={styles.item}
-            onPress={() => handlePress(item)}
-            accessible
-            accessibilityRole="button"
-            accessibilityLabel={item.label}
-            accessibilityHint={item.a11yHint}
-          >
-            <View style={styles.iconWrap}>
-              {item.isRoman ? (
-                <RomanAvatar crop="neutral" size={28} testID="client-roman-entry-avatar" />
-              ) : (
-                <Ionicons name={item.icon} size={22} color={colors.primary} />
-              )}
-            </View>
-            <View style={styles.textWrap}>
-              <Text style={styles.itemLabel}>{item.label}</Text>
-              <Text style={styles.itemDescription}>{item.description}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-          </HapticPressable>
+          // listitem wrapper exposes the collection structure to assistive tech
+          // while the inner pressable keeps its button role + action (R3 P1-3).
+          // ARIA `role` is used because RN's AccessibilityRole union omits
+          // "listitem".
+          <View key={item.label} role="listitem">
+            <HapticPressable
+              intent="light"
+              style={styles.item}
+              onPress={() => handlePress(item)}
+              accessible
+              accessibilityRole="button"
+              accessibilityLabel={item.label}
+              accessibilityHint={item.a11yHint}
+            >
+              <View style={styles.iconWrap}>
+                {item.isRoman ? (
+                  <RomanAvatar crop="neutral" size={28} testID="client-roman-entry-avatar" />
+                ) : (
+                  <Ionicons name={item.icon} size={22} color={colors.primary} />
+                )}
+              </View>
+              <View style={styles.textWrap}>
+                <Text style={styles.itemLabel}>{item.label}</Text>
+                <Text style={styles.itemDescription}>{item.description}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+            </HapticPressable>
+          </View>
         ))}
       </ScrollView>
     </SafeAreaView>
