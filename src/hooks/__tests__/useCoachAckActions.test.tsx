@@ -43,8 +43,9 @@ import { coachCommunityKeys } from '../useCoachCommunity';
 const MSG = '11111111-1111-1111-1111-111111111111';
 
 // Typed access to the jest-mocked client — `jest.mocked` infers the mock-fn
-// types from the real module surface, so we never need an `as unknown as`
-// double-cast (the mock factory above only stubs the three ack transitions).
+// types from the real module surface, so we never need a double assertion
+// through `unknown` (the mock factory above only stubs the three ack
+// transitions).
 const mockApi = jest.mocked(coachCommunityApi);
 
 function sla() {

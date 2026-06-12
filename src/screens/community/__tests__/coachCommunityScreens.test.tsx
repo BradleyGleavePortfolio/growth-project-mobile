@@ -33,9 +33,11 @@
  */
 import React from 'react';
 import { render, fireEvent, configure } from '@testing-library/react-native';
-import type {
-  CoachEmptyStateSurfaceKey,
-  RomanCopyPayload,
+import {
+  CoachCommunityApiError,
+  ACK_ILLEGAL_TRANSITION_CODE,
+  type CoachEmptyStateSurfaceKey,
+  type RomanCopyPayload,
 } from '../../../api/coachCommunityApi';
 
 // ── Theme: real tokens, no ThemeProvider ─────────────────────────────────────
@@ -189,15 +191,27 @@ jest.mock('../../../hooks/useCoachCommunity', () => {
 
 // v2-2: ack-action hook. markAcked.mutate is the spy the Mark-acked
 // quick-action fires; the other two are inert for these screen tests.
+//
+// The 409-conflict surface (F3) is driven by two mutable holders so a test can
+// flip the row into its conflict branch: `mockMarkAckedError` becomes the
+// CoachCommunityApiError the row reads, and `mockIsIllegalAckTransition` is the
+// predicate the screen calls on that error. Both reset to the no-conflict
+// default (null error, predicate false) in beforeEach.
+const mockMarkAckedError: { current: unknown } = { current: null };
+const mockIsIllegalAckTransition = jest.fn((_err: unknown) => false);
 jest.mock('../../../hooks/useCoachAckActions', () => ({
   useCoachAckActions: () => ({
     markSeen: { mutate: jest.fn(), isPending: false, error: null },
-    markAcked: { mutate: mockMarkAckedMutate, isPending: false, error: null },
+    markAcked: {
+      mutate: mockMarkAckedMutate,
+      isPending: false,
+      error: mockMarkAckedError.current,
+    },
     markReplied: { mutate: jest.fn(), isPending: false, error: null },
   }),
   // The screen also imports the conflict predicate to decide whether to surface
   // the inline "message state changed" notice; default to false (no conflict).
-  isIllegalAckTransition: () => false,
+  isIllegalAckTransition: (err: unknown) => mockIsIllegalAckTransition(err),
 }));
 
 // v2-2: force the kill-switch flag ON so the inbox renders the ack badge +
@@ -314,6 +328,9 @@ beforeEach(() => {
   mockRemoveMutate.mockReset();
   mockHideMutate.mockReset();
   mockMarkAckedMutate.mockReset();
+  mockMarkAckedError.current = null;
+  mockIsIllegalAckTransition.mockReset();
+  mockIsIllegalAckTransition.mockReturnValue(false);
   mockAckStateByMessage.current = {};
   // Reset to default quiet/empty state per suite.
   mockState.dashboard = { data: undefined, isLoading: false, isError: false };
@@ -1098,5 +1115,47 @@ describe('v2-2 inbox ack integration — badge + Mark-acked quick-action', () =>
     expect(
       getByTestId('coach-community-inbox-completion-toast'),
     ).toBeTruthy();
+  });
+
+  it('surfaces an accessible 409 conflict notice when the ack transition is illegal (Code F3)', () => {
+    // The mutation failed with the backend 409 `illegal_transition` code: the
+    // message state changed underneath the coach. The hook has already
+    // refetched the authoritative ack state (covered by the hook suite); here
+    // we assert the SCREEN renders the calm inline notice with its testID and
+    // the alert/live-region accessibility props a screen reader announces.
+    seedInbox();
+    mockAckStateByMessage.current[MID] = ackEnvelope('seen', 'within');
+    // A real conflict error (kind: 'conflict', the bounded backend code) drives
+    // the predicate so we exercise the genuine classification, not a bare stub.
+    mockMarkAckedError.current = new CoachCommunityApiError(
+      'conflict',
+      409,
+      'ack transition rejected',
+      undefined,
+      ACK_ILLEGAL_TRANSITION_CODE,
+    );
+    mockIsIllegalAckTransition.mockReturnValue(true);
+
+    const { getByTestId } = render(<CoachCommunityInboxScreen />);
+    const notice = getByTestId(`coach-community-inbox-ack-conflict-${MID}`);
+    expect(notice).toBeTruthy();
+    expect(notice).toHaveTextContent('Message state changed — refreshed');
+    // The predicate was asked about the conflict error the hook surfaced.
+    expect(mockIsIllegalAckTransition).toHaveBeenCalledWith(
+      mockMarkAckedError.current,
+    );
+    // Accessibility: announced as an alert in a polite live region.
+    expect(notice.props.accessibilityRole).toBe('alert');
+    expect(notice.props.accessibilityLiveRegion).toBe('polite');
+  });
+
+  it('renders NO conflict notice when there is no illegal-transition error', () => {
+    // Default path: predicate false, no error -> the inline notice is absent.
+    seedInbox();
+    mockAckStateByMessage.current[MID] = ackEnvelope('seen', 'within');
+    const { queryByTestId } = render(<CoachCommunityInboxScreen />);
+    expect(
+      queryByTestId(`coach-community-inbox-ack-conflict-${MID}`),
+    ).toBeNull();
   });
 });
