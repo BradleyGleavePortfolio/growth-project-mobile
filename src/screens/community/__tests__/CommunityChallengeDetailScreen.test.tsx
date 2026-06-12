@@ -64,6 +64,11 @@ jest.mock('../../../api/communityChallengesApi', () => ({
     addComment: jest.fn(),
     reportComment: jest.fn(),
   },
+  // The screen imports the bounded page-limit constants from this module; the
+  // mock must re-export them or they resolve to `undefined` and the bounded
+  // fetch assertions (limit: 20) would see `{ limit: undefined }`.
+  CHALLENGE_COMMENTS_PAGE_LIMIT: 20,
+  CHALLENGE_LEADERBOARD_PAGE_LIMIT: 20,
 }));
 
 import { communityChallengesApi } from '../../../api/communityChallengesApi';
@@ -210,7 +215,9 @@ describe('CommunityChallengeDetailScreen — leaderboard opt-in posture', () => 
     });
     renderScreen();
 
-    await waitFor(() => expect(api.getLeaderboard).toHaveBeenCalledWith('ch-1'));
+    await waitFor(() =>
+      expect(api.getLeaderboard).toHaveBeenCalledWith('ch-1', { limit: 20 }),
+    );
     expect(await screen.findByTestId('community-challenge-lb-me-1')).toBeTruthy();
   });
 
@@ -284,6 +291,74 @@ describe('CommunityChallengeDetailScreen — comments empty vs load error (F1/F8
     ).toBeTruthy();
     expect(screen.getByTestId('community-challenge-comments-retry')).toBeTruthy();
     expect(screen.queryByTestId('community-challenge-comments-empty')).toBeNull();
+  });
+});
+
+describe('CommunityChallengeDetailScreen — optimistic join (P1)', () => {
+  it('flips to the joined affordance immediately, then rolls back + announces on error', async () => {
+    // Not joined to start.
+    api.getChallenge.mockResolvedValue({
+      challenge: challenge(),
+      participation: null,
+    });
+    // The join round-trip fails so we can observe the rollback.
+    api.join.mockRejectedValue(new Error('join failed'));
+
+    renderScreen();
+
+    // Pre-mutation the primary action is Join.
+    const cta = await screen.findByTestId('community-challenge-primary-action');
+    expect(screen.getByText('Join this challenge')).toBeTruthy();
+
+    fireEvent.press(cta);
+
+    // Optimistic write flips the cached participation -> the Join prompt is gone
+    // and the calm error banner is surfaced after the round-trip rejects.
+    await waitFor(() => expect(api.join).toHaveBeenCalledWith('ch-1'));
+    await waitFor(() =>
+      expect(
+        screen.getByTestId('community-challenge-action-error'),
+      ).toBeTruthy(),
+    );
+
+    // Rollback: onSettled invalidates and the (still-null) server truth is
+    // refetched, so the Join prompt returns — the optimistic state never dangles.
+    await waitFor(() =>
+      expect(screen.getByText('Join this challenge')).toBeTruthy(),
+    );
+  });
+});
+
+describe('CommunityChallengeDetailScreen — optimistic leaderboard opt-in (P1)', () => {
+  it('reveals standings optimistically on opt-in, then rolls back + announces on error', async () => {
+    // Joined, coach-enabled leaderboard, NOT yet opted in.
+    api.getChallenge.mockResolvedValue({
+      challenge: challenge({ leaderboard_enabled: true }),
+      participation: participation({ leaderboard_opted_in: false }),
+    });
+    // The opt-in write fails so we observe rollback to opted-out.
+    api.setLeaderboardOptIn.mockRejectedValue(new Error('opt-in failed'));
+
+    renderScreen();
+
+    const optin = await screen.findByTestId('community-challenge-optin');
+    fireEvent.press(optin);
+
+    // The write was attempted with the optimistic next value (true).
+    await waitFor(() =>
+      expect(api.setLeaderboardOptIn).toHaveBeenCalledWith('ch-1', true),
+    );
+    // On error the banner is surfaced (and announced via the live-region effect).
+    await waitFor(() =>
+      expect(
+        screen.getByTestId('community-challenge-action-error'),
+      ).toBeTruthy(),
+    );
+    // Rollback: the opt-in affordance is shown again (opted_in reverted to false)
+    // and standings were never persisted.
+    await waitFor(() =>
+      expect(screen.getByTestId('community-challenge-optin')).toBeTruthy(),
+    );
   });
 });
 

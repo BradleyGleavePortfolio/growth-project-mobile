@@ -28,30 +28,60 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
 import { spacing, radius } from '../../theme/tokens';
 import { featureFlags } from '../../config/featureFlags';
+import { useCommunityMe } from '../../hooks/useCommunity';
 import { ThreadHeader, ChallengeCard } from '../../components/community';
 import HapticPressable from '../../components/HapticPressable';
 import {
   communityChallengesApi,
+  CHALLENGES_PAGE_LIMIT,
   type CommunityChallenge,
 } from '../../api/communityChallengesApi';
 import type { CommunityNav } from './communityNavTypes';
 
 interface Props {
   embedded?: boolean;
-  /** Workspace id — challenges are workspace-scoped on the backend. */
+  /**
+   * Workspace id — challenges are workspace-scoped on the backend. When the
+   * Community tab embeds this surface it already has the id and passes it; when
+   * the route is reached on its own (e.g. a deep link) the prop is absent and
+   * the screen resolves the id ITSELF from the same `useCommunityMe` source the
+   * tab uses, so the route is never functionally empty for want of an injected
+   * prop (P1 — reachable discovery surface).
+   */
   workspaceId?: string | null;
 }
 
 export default function CommunityChallengesScreen({
   embedded,
-  workspaceId,
+  workspaceId: workspaceIdProp,
 }: Props): React.ReactElement {
   const { semanticColors } = useTheme();
   const navigation = useNavigation<CommunityNav>();
 
+  // Resolve the workspace id internally when it was not threaded through props,
+  // mirroring CommunityTabScreen. The hook is always called (Rules of Hooks);
+  // an explicit prop, when present, wins so embedded callers avoid a second
+  // fetch. Only fetch `me` when we actually need to fall back to it and the
+  // feature is on.
+  const me = useCommunityMe();
+  const workspaceId =
+    workspaceIdProp !== undefined
+      ? workspaceIdProp
+      : (me.data?.workspace_id ?? null);
+
   const challenges = useQuery({
-    queryKey: ['community', 'challenges', workspaceId ?? '∅'],
-    queryFn: () => communityChallengesApi.listChallenges(workspaceId as string),
+    // The page limit is part of the key so a future cursor page is cached
+    // distinctly and a limit change refetches (Category 3 — bounded fetches).
+    queryKey: ['community', 'challenges', workspaceId ?? '∅', CHALLENGES_PAGE_LIMIT],
+    queryFn: () => {
+      // The query is `enabled` only when workspaceId is non-null, so this guard
+      // is unreachable at runtime; it narrows `string | null` -> `string`
+      // WITHOUT an unsafe cast (R0 forbids casts), keeping the call type-clean.
+      if (!workspaceId) throw new Error('workspaceId is required');
+      return communityChallengesApi.listChallenges(workspaceId, {
+        limit: CHALLENGES_PAGE_LIMIT,
+      });
+    },
     enabled: !!workspaceId && featureFlags.communityChallenges,
   });
 
@@ -88,8 +118,16 @@ export default function CommunityChallengesScreen({
     return (
       <Container>
         <ThreadHeader title="Challenges" testID="community-challenges-header" />
-        <View style={styles.center} testID="community-challenges-loading">
-          <ActivityIndicator color={semanticColors.accent} />
+        <View
+          style={styles.center}
+          accessibilityState={{ busy: true }}
+          testID="community-challenges-loading"
+        >
+          <ActivityIndicator
+            color={semanticColors.accent}
+            accessibilityRole="progressbar"
+            accessibilityLabel="Loading challenges"
+          />
           <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
             Loading challenges…
           </Text>
@@ -148,13 +186,25 @@ export default function CommunityChallengesScreen({
       <ThreadHeader title="Challenges" testID="community-challenges-header" />
       <FlatList
         data={data}
+        accessibilityRole="list"
         renderItem={({ item }) => (
-          <ChallengeCard
-            challenge={item}
-            participation={null}
-            onPress={open}
-            testID={`community-challenge-card-${item.id}`}
-          />
+          // Each row is wrapped in a list-item View so assistive tech announces
+          // list membership; the ChallengeCard inside stays a `button` (the tap
+          // target) without role collision (P1 — list/listitem semantics).
+          // React Native's typed `AccessibilityRole` union omits 'listitem'
+          // (only the container 'list' role exists), so we cannot set it as a
+          // role without an unsafe cast (R0 forbids casts). The supported,
+          // type-clean signal is the parent FlatList's `accessibilityRole="list"`
+          // plus an addressable wrapper per row — this is the RN-idiomatic way to
+          // expose collection membership.
+          <View testID={`community-challenge-listitem-${item.id}`}>
+            <ChallengeCard
+              challenge={item}
+              participation={null}
+              onPress={open}
+              testID={`community-challenge-card-${item.id}`}
+            />
+          </View>
         )}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}

@@ -23,6 +23,7 @@ import {
   AccessibilityInfo,
   Animated,
   Modal,
+  Platform,
   StyleSheet,
   Text,
   TextInput,
@@ -33,6 +34,7 @@ import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../HapticPressable';
 import { useTheme } from '../../theme/useTheme';
 import { spacing, radius, motion } from '../../theme/tokens';
+import { logger } from '../../utils/logger';
 import type {
   CommunityChallenge,
   CommunityChallengeParticipation,
@@ -158,10 +160,27 @@ export default function ChallengeProgressSheet({
       });
       anim.start();
     }
+    // The completion haptic is a best-effort flourish: the visual closure (the
+    // bar at 100% + the copy) is the real signal. But "best effort" is NOT a
+    // licence to swallow failures (Bradley Law #36 / R65). We branch on the two
+    // honestly-different outcomes:
+    //   1. EXPECTED-unsupported (web, where expo-haptics is a no-op platform):
+    //      skip the call entirely — there is nothing to fail and nothing to log.
+    //   2. A native call that REJECTS unexpectedly on a haptics-capable
+    //      platform: record a structured, non-PII breadcrumb via the project
+    //      logger so the failure leaves a diagnostic trail (and a future Sentry
+    //      breadcrumb path picks it up) instead of vanishing.
+    if (Platform.OS === 'web') {
+      return;
+    }
     void Haptics.notificationAsync(
       Haptics.NotificationFeedbackType.Success,
-    ).catch(() => {
-      // Web / unsupported hardware — the visual closure still stands.
+    ).catch((err: unknown) => {
+      logger.warn('ChallengeProgressSheet.completionHaptic', {
+        platform: Platform.OS,
+        // Non-PII: only the error's class/message, never user or challenge data.
+        reason: err instanceof Error ? err.message : 'unknown',
+      });
     });
   }, [celebrating, reduceMotion, fill]);
 

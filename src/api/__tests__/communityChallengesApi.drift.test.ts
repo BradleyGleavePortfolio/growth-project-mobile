@@ -90,11 +90,53 @@ describe('communityChallengesApi — happy-path parse', () => {
   it('parses a well-formed challenge list', async () => {
     api.get.mockResolvedValueOnce({ data: { challenges: [validChallenge()] } });
     const res = await communityChallengesApi.listChallenges(WS);
+    // The default call now sends a bounded page limit (Category 3 — no
+    // unbounded fetches); no cursor on the first page.
     expect(api.get).toHaveBeenCalledWith(
       `/community/workspaces/${WS}/challenges`,
-      { params: {} },
+      { params: { limit: '20' } },
     );
     expect(res[0].id).toBe(CID);
+  });
+
+  it('sends an explicit limit + cursor when paging forward', async () => {
+    api.get.mockResolvedValueOnce({ data: { challenges: [validChallenge()] } });
+    await communityChallengesApi.listChallenges(WS, {
+      limit: 5,
+      cursor: 'next-page-token',
+    });
+    expect(api.get).toHaveBeenCalledWith(
+      `/community/workspaces/${WS}/challenges`,
+      { params: { limit: '5', cursor: 'next-page-token' } },
+    );
+  });
+
+  it('sends a bounded limit on leaderboard + comments fetches', async () => {
+    api.get.mockResolvedValueOnce({
+      data: { available: true, opted_in: true, rows: [] },
+    });
+    await communityChallengesApi.getLeaderboard(CID);
+    expect(api.get).toHaveBeenLastCalledWith(
+      `/community/challenges/${CID}/leaderboard`,
+      { params: { limit: '20' } },
+    );
+    api.get.mockResolvedValueOnce({ data: { comments: [] } });
+    await communityChallengesApi.listComments(CID);
+    expect(api.get).toHaveBeenLastCalledWith(
+      `/community/challenges/${CID}/comments`,
+      { params: { limit: '20' } },
+    );
+  });
+
+  it('does NOT add a cursor RESPONSE field to the strict list schema (zero drift)', async () => {
+    // The response contract is owned by the backend (no cursor envelope yet);
+    // a server that returns one would be a contract drift, not a silent pass.
+    api.get.mockResolvedValueOnce({
+      data: { challenges: [validChallenge()], next_cursor: 'x' },
+    });
+    await expect(communityChallengesApi.listChallenges(WS)).rejects.toMatchObject(
+      { kind: 'contract' },
+    );
   });
 
   it('parses a well-formed challenge detail (challenge + participation)', async () => {

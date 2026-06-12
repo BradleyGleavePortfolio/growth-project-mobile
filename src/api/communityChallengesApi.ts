@@ -201,15 +201,54 @@ function idempotentHeaders(): { headers: Record<string, string> } {
   return { headers: { 'Idempotency-Key': generateIdempotencyKey() } };
 }
 
+// ─── Pagination defaults (Category 3 — no unbounded fetches) ─────────────────
+//
+// The list / leaderboard / comments surfaces send a bounded `limit` (and an
+// optional opaque `cursor` for the next page) on the request so the client
+// never asks the server for an unbounded result set. These are REQUEST-only
+// parameters: the backend contract (PR #390 community-challenges.dto.ts) does
+// not yet expose a cursor envelope, so the RESPONSE schemas are deliberately
+// left unchanged (still `.strict()` arrays). Inventing a `next_cursor` response
+// field here would drift from the binding backend and trip the F2 drift suite,
+// so we cap the request and let React Query key on the page parameters without
+// asserting a response envelope the backend does not serve.
+export const CHALLENGES_PAGE_LIMIT = 20;
+export const CHALLENGE_COMMENTS_PAGE_LIMIT = 20;
+export const CHALLENGE_LEADERBOARD_PAGE_LIMIT = 20;
+
+export interface PageParams {
+  /** Maximum rows to request for this page. */
+  limit?: number;
+  /** Opaque forward cursor for the next page (omitted on the first page). */
+  cursor?: string;
+}
+
+function pageParams(
+  defaultLimit: number,
+  opts: PageParams,
+): Record<string, string> {
+  const params: Record<string, string> = {};
+  const limit = opts.limit ?? defaultLimit;
+  if (Number.isFinite(limit) && limit > 0) params.limit = String(limit);
+  if (opts.cursor) params.cursor = opts.cursor;
+  return params;
+}
+
 // ─── Endpoints ─────────────────────────────────────────────────────────────────
 
 export const communityChallengesApi = {
   /** GET /community/workspaces/:workspaceId/challenges */
   listChallenges(
     workspaceId: string,
-    opts: { cohortId?: string; status?: CommunityChallengeStatus } = {},
+    opts: {
+      cohortId?: string;
+      status?: CommunityChallengeStatus;
+    } & PageParams = {},
   ): Promise<CommunityChallenge[]> {
-    const params: Record<string, string> = {};
+    const params: Record<string, string> = pageParams(
+      CHALLENGES_PAGE_LIMIT,
+      opts,
+    );
     if (opts.cohortId) params.cohort_id = opts.cohortId;
     if (opts.status) params.status = opts.status;
     return call(ChallengeListResponseSchema, () =>
@@ -266,16 +305,28 @@ export const communityChallengesApi = {
   },
 
   /** GET /community/challenges/:challengeId/leaderboard — opt-in gated. */
-  getLeaderboard(challengeId: string): Promise<CommunityChallengeLeaderboard> {
+  getLeaderboard(
+    challengeId: string,
+    opts: PageParams = {},
+  ): Promise<CommunityChallengeLeaderboard> {
+    const params = pageParams(CHALLENGE_LEADERBOARD_PAGE_LIMIT, opts);
     return call(LeaderboardResponseSchema, () =>
-      api.get<unknown>(`/community/challenges/${challengeId}/leaderboard`),
+      api.get<unknown>(`/community/challenges/${challengeId}/leaderboard`, {
+        params,
+      }),
     );
   },
 
   /** GET /community/challenges/:challengeId/comments */
-  listComments(challengeId: string): Promise<CommunityChallengeComment[]> {
+  listComments(
+    challengeId: string,
+    opts: PageParams = {},
+  ): Promise<CommunityChallengeComment[]> {
+    const params = pageParams(CHALLENGE_COMMENTS_PAGE_LIMIT, opts);
     return call(ChallengeCommentListResponseSchema, () =>
-      api.get<unknown>(`/community/challenges/${challengeId}/comments`),
+      api.get<unknown>(`/community/challenges/${challengeId}/comments`, {
+        params,
+      }),
     ).then((r) => r.comments);
   },
 
@@ -292,6 +343,27 @@ export const communityChallengesApi = {
       ),
     ).then((r) => r.comment);
   },
+
+  // ── Challenge LEAVE / WITHDRAW ──────────────────────────────────────────────
+  //
+  // OPERATOR DECISION (R2): NO challenge-leave method is added.
+  //
+  // The binding backend (PR #390 head, community-challenges.controller.ts)
+  // exposes exactly twelve routes: create, patch, archive, list, getOne,
+  // leaderboard, comments(list), join, progress, leaderboard-opt-in,
+  // comments(post), and report. There is NO `DELETE join`, no `/leave`, and no
+  // `/withdraw` route, and `community-challenges.dto.ts` defines no leave DTO.
+  // Adding a client `leaveChallenge` method here would FABRICATE a contract the
+  // backend does not serve — the exact failure this client already corrected
+  // once (the invented `getCommentsEmptyState` endpoint, see the F1 note above)
+  // — and would violate the zero-drift posture (R69 / the F2 drift suite owns
+  // the contract).
+  //
+  // What the participant CAN reversibly undo on this surface is their
+  // leaderboard participation: `setLeaderboardOptIn(challengeId, false)` (the
+  // "Stop sharing my progress" affordance in the detail screen) withdraws them
+  // from the cohort leaderboard. Full challenge withdrawal requires a backend
+  // route first; that is flagged for operator/product capture in the R2 report.
 
   /** POST /community/challenges/:challengeId/comments/:commentId/report */
   reportComment(
