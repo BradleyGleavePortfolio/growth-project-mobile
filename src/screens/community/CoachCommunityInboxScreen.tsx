@@ -20,7 +20,7 @@
  * copy + crop come from the backend voice policy (face + voice contract).
  * Touch targets are >= 44pt.
  */
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -38,26 +38,121 @@ import {
   MonogramBadge,
   relativeAge,
 } from '../../components/community/coach';
+import CoachAckBadge, {
+  resolveAckBadgeVisibility,
+} from '../../components/community/CoachAckBadge';
+import CompletionToast, {
+  useCompletionToast,
+} from '../../components/community/CompletionToast';
 import {
   useCoachInbox,
   useAckInboxItem,
+  useCoachAckState,
   useCoachEmptyStatePayload,
+  coachCommunityKeys,
 } from '../../hooks/useCoachCommunity';
-import type { CoachInboxItem } from '../../api/coachCommunityApi';
+import {
+  useCoachAckActions,
+  isIllegalAckTransition,
+} from '../../hooks/useCoachAckActions';
+import { featureFlags } from '../../config/featureFlags';
+import { useQueryClient } from '@tanstack/react-query';
+import { AckStateSchema } from '../../api/coachCommunityApi';
+import type {
+  CoachInboxItem,
+  AckStateDto,
+} from '../../api/coachCommunityApi';
+
+// v2-2 kill switch: when OFF the inbox renders exactly as the v1-6 surface
+// (no ack badge, no "Mark acked" quick-action). Read once at module scope —
+// the flag is build-time and never flips mid-session.
+const ACKS_ENABLED = featureFlags.communityAcks;
+
+/**
+ * Build the inbox row's accessibility label. When the ack flag is on we append
+ * the ack/SLA state to the base triage summary, `Overdue` FIRST after the
+ * client name so a screen-reader coach hears the urgent status before the
+ * routine snippet (UX F4). The visibility rules mirror `CoachAckBadge` exactly
+ * (single source of truth via `resolveAckBadgeVisibility`), so the label never
+ * announces a default/untouched (`none` + `within`) signal the badge hides.
+ */
+function buildRowAccessibilityLabel(
+  item: CoachInboxItem,
+  ack: AckStateDto | undefined,
+): string {
+  const base = `${item.client_name} in ${item.cohort_name}: ${item.snippet}`;
+  if (!ACKS_ENABLED || ack == null) return base;
+  const { showStatePill, slaState, breached } = resolveAckBadgeVisibility(ack);
+  const SLA_PHRASE: Record<'warning' | 'breached', string> = {
+    warning: 'Due soon',
+    breached: 'Overdue',
+  };
+  const STATE_PHRASE: Record<string, string> = {
+    seen: 'Seen',
+    acked: 'Acknowledged',
+    replied: 'Replied',
+  };
+  const slaPhrase =
+    slaState === 'warning' || slaState === 'breached'
+      ? SLA_PHRASE[slaState]
+      : null;
+  const statePhrase = showStatePill ? STATE_PHRASE[ack.state] ?? null : null;
+
+  // Overdue-first: when breached, the SLA phrase leads the whole label (right
+  // after the client name); otherwise the ack/SLA phrases trail the snippet.
+  if (breached && slaPhrase != null) {
+    const trailing = statePhrase != null ? ` ${statePhrase}.` : '';
+    return `${item.client_name}. ${slaPhrase}. ${base}.${trailing}`;
+  }
+  const parts = [slaPhrase, statePhrase].filter((p): p is string => p != null);
+  return parts.length > 0
+    ? `${base}. ${parts.map((p) => `${p}.`).join(' ')}`
+    : base;
+}
 
 export default function CoachCommunityInboxScreen(): React.ReactElement {
   const { semanticColors } = useTheme();
   const inbox = useCoachInbox();
   const ack = useAckInboxItem();
   const emptyState = useCoachEmptyStatePayload('coach_community_inbox_empty');
+  const qc = useQueryClient();
 
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // UX F6: a subtle, proportionate closure moment on a successful acknowledge,
+  // reusing the established CompletionToast pattern (no new infrastructure).
+  const { toast, show: showToast } = useCompletionToast();
+  const onAcknowledged = useCallback(() => {
+    showToast('Acknowledged.');
+  }, [showToast]);
 
   // Memoise the row list so its identity is stable across renders — otherwise
   // the `?? []` fallback allocates a fresh array each render and churns the
   // useCallback deps below (and the FlatList data prop).
   const items = useMemo(() => inbox.data?.items ?? [], [inbox.data?.items]);
+
+  // v2-2: seed the per-message ack cache from any ack envelope the backend
+  // attached to an inbox row (additive `ack` field, present only when
+  // FEATURE_COMMUNITY_ACKS is on server-side). The inbox payload is the source
+  // of truth; this only PRIMES the cache so the badge has a value before any
+  // optimistic action. Validated at the boundary so a drifted shape is dropped
+  // rather than fed into the badge. No-op when the flag is off or no ack is
+  // present. We never overwrite a value already in the cache (an in-flight
+  // optimistic state must win until it reconciles).
+  useEffect(() => {
+    if (!ACKS_ENABLED) return;
+    for (const item of items) {
+      const raw = (item as { ack?: unknown }).ack;
+      if (raw == null) continue;
+      const key = coachCommunityKeys.ackState(item.id);
+      if (qc.getQueryData<AckStateDto>(key) != null) continue;
+      const parsed = AckStateSchema.safeParse(raw);
+      if (parsed.success) {
+        qc.setQueryData<AckStateDto>(key, parsed.data);
+      }
+    }
+  }, [items, qc]);
   const isEmpty = !inbox.isLoading && !inbox.isError && items.length === 0;
 
   const onAck = useCallback(
@@ -114,6 +209,7 @@ export default function CoachCommunityInboxScreen(): React.ReactElement {
         onAck={onAck}
         onMarkThreadRead={onMarkThreadRead}
         onToggleSelected={toggleRowSelected}
+        onAcknowledged={onAcknowledged}
       />
     ),
     [
@@ -123,6 +219,7 @@ export default function CoachCommunityInboxScreen(): React.ReactElement {
       onAck,
       onMarkThreadRead,
       toggleRowSelected,
+      onAcknowledged,
     ],
   );
 
@@ -251,6 +348,13 @@ export default function CoachCommunityInboxScreen(): React.ReactElement {
           </HapticPressable>
         </View>
       ) : null}
+
+      {ACKS_ENABLED ? (
+        <CompletionToast
+          state={toast}
+          testID="coach-community-inbox-completion-toast"
+        />
+      ) : null}
     </View>
   );
 }
@@ -268,6 +372,7 @@ function InboxRow({
   onAck,
   onMarkThreadRead,
   onToggleSelected,
+  onAcknowledged,
 }: {
   item: CoachInboxItem;
   selecting: boolean;
@@ -281,14 +386,24 @@ function InboxRow({
   onAck: (id: string) => void;
   onMarkThreadRead: (item: CoachInboxItem) => void;
   onToggleSelected: (id: string) => void;
+  onAcknowledged: () => void;
 }): React.ReactElement {
+  // ACKS_ENABLED is a build-time constant, so the number/order of hooks is
+  // stable for the entire lifetime of a build — a hook guarded by it never
+  // changes its called/not-called status at runtime, which keeps the
+  // flag-off path (and its invariance test) from touching any ack hook. When
+  // the flag is on we read the per-message ack cache here so the row's
+  // accessibility label can fold in the ack/SLA routine (UX F4). When off,
+  // the label short-circuits to the base.
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const ackState = ACKS_ENABLED ? useCoachAckState(item.id) : undefined;
   return (
     <HapticPressable
       intent="light"
       onPress={selecting ? () => onToggleSelected(item.id) : undefined}
       onLongPress={selecting ? undefined : () => onMarkThreadRead(item)}
       accessibilityRole={selecting ? 'checkbox' : 'button'}
-      accessibilityLabel={`${item.client_name} in ${item.cohort_name}: ${item.snippet}`}
+      accessibilityLabel={buildRowAccessibilityLabel(item, ackState)}
       accessibilityHint={
         selecting
           ? 'Tap to select this item'
@@ -344,8 +459,24 @@ function InboxRow({
         >
           {item.snippet}
         </Text>
+        {ACKS_ENABLED && !selecting ? (
+          <CoachAckRow
+            item={item}
+            ackState={ackState}
+            onAcknowledged={onAcknowledged}
+          />
+        ) : null}
       </View>
-      {selecting ? null : (
+      {/*
+        UX F1 — ONE visible ack action per row. The legacy `Ack` button POSTs
+        `/community/coach/inbox/:id/ack`, which DISMISSES the row. The v2-2
+        `Acknowledge` action (in CoachAckRow) stamps the ack signal without
+        removing the row — genuinely different verbs. When the v2-2 flag is ON
+        we keep a single visible primary (Acknowledge) and demote dismissal to
+        the existing long-press (which already marks the cohort thread read).
+        When the flag is OFF the row is unchanged from v1-6.
+      */}
+      {!ACKS_ENABLED && !selecting ? (
         <HapticPressable
           intent="success"
           onPress={() => onAck(item.id)}
@@ -356,8 +487,89 @@ function InboxRow({
         >
           <Text style={[styles.ackLabel, { color: onAccent }]}>Ack</Text>
         </HapticPressable>
-      )}
+      ) : null}
     </HapticPressable>
+  );
+}
+
+/**
+ * v2-2 ack signals for a single inbox row: the CoachAckBadge (current state +
+ * SLA chip, read from the per-message ack cache) and a "Mark acked"
+ * quick-action that fires the optimistic `markAcked` mutation. Rendered only
+ * when EXPO_PUBLIC_FF_COMMUNITY_ACKS is on (the parent gates this with
+ * ACKS_ENABLED), so the v1-6 inbox is untouched when the flag is off.
+ *
+ * Extracted into its own component because it owns hooks (`useCoachAckState`,
+ * `useCoachAckActions`) that must not be conditionally called inside the parent
+ * row's render — here they live behind the flag gate at the row level, which is
+ * stable for the lifetime of the build.
+ */
+function CoachAckRow({
+  item,
+  ackState,
+  onAcknowledged,
+}: {
+  item: CoachInboxItem;
+  ackState: AckStateDto | undefined;
+  onAcknowledged: () => void;
+}): React.ReactElement {
+  const { semanticColors } = useTheme();
+  const actions = useCoachAckActions(item.id);
+  const pending = actions.markAcked.isPending;
+  const alreadyAcked =
+    ackState?.state === 'acked' || ackState?.state === 'replied';
+
+  // UX F4: the badge is folded into the row's accessibility label, so hide it
+  // from the a11y tree here (`labelledByRow`) to avoid a duplicate, decoupled
+  // announcement.
+  // Code F3 / UX: surface a 409 illegal_transition as an inline, accessible
+  // status line. The mutation has already invalidated + refetched the ack
+  // state (see useCoachAckActions.onError), so this is a calm "we caught up"
+  // message rather than an actionable error.
+  const conflict = isIllegalAckTransition(actions.markAcked.error);
+
+  return (
+    <View style={styles.ackRow}>
+      <CoachAckBadge
+        ack={ackState}
+        labelledByRow
+        testID={`coach-community-inbox-ack-badge-${item.id}`}
+      />
+      <HapticPressable
+        intent="light"
+        onPress={() =>
+          actions.markAcked.mutate(undefined, { onSuccess: onAcknowledged })
+        }
+        disabled={pending || alreadyAcked}
+        accessibilityRole="button"
+        accessibilityLabel={`Acknowledge message from ${item.client_name}`}
+        accessibilityState={{ disabled: pending || alreadyAcked }}
+        testID={`coach-community-inbox-mark-acked-${item.id}`}
+        style={[
+          styles.markAckedButton,
+          {
+            borderColor: semanticColors.accent,
+            opacity: pending || alreadyAcked ? 0.5 : 1,
+          },
+        ]}
+      >
+        <Text
+          style={[styles.markAckedLabel, { color: semanticColors.accent }]}
+        >
+          {alreadyAcked ? 'Acknowledged' : 'Acknowledge'}
+        </Text>
+      </HapticPressable>
+      {conflict ? (
+        <Text
+          accessibilityRole="alert"
+          accessibilityLiveRegion="polite"
+          style={[styles.ackConflict, { color: semanticColors.textMuted }]}
+          testID={`coach-community-inbox-ack-conflict-${item.id}`}
+        >
+          Message state changed — refreshed
+        </Text>
+      ) : null}
+    </View>
   );
 }
 
@@ -448,6 +660,31 @@ const styles = StyleSheet.create({
   ackLabel: {
     fontSize: 14,
     fontWeight: '600',
+  },
+  ackRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  markAckedButton: {
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+  },
+  markAckedLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  ackConflict: {
+    flexBasis: '100%',
+    fontSize: 12,
+    lineHeight: 16,
   },
   footer: {
     padding: spacing.lg,

@@ -124,6 +124,20 @@ export const featureFlags = {
   //
   // env: EXPO_PUBLIC_FF_COACH_COMMUNITY
   coachCommunity: readFlag('EXPO_PUBLIC_FF_COACH_COMMUNITY', false),
+
+  // ─── Community v2-2 — coach ack signals + inbox SLA ──────────────────────
+  // The v2-2 backend (FEATURE_COMMUNITY_ACKS) adds explicit coach ack-signal
+  // transitions (seen -> acked -> replied) plus a read-time SLA snapshot per
+  // message. This mobile flag gates the coach-side surface that consumes them:
+  // the CoachAckBadge on each inbox row and the per-row "Mark acked"
+  // quick-action. Defaults OFF UNCONDITIONALLY (not `isDev`). When false the
+  // inbox renders exactly as the v1-6 surface does today (no badge, no
+  // quick-action) so the kill switch hides the new UI without breaking the
+  // existing inbox. The backend gate is also OFF in prod, so a dev build that
+  // flips this on still degrades gracefully.
+  //
+  // env: EXPO_PUBLIC_FF_COMMUNITY_ACKS
+  communityAcks: readFlag('EXPO_PUBLIC_FF_COMMUNITY_ACKS', false),
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;

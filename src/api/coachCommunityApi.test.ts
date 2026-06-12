@@ -17,6 +17,9 @@ import {
   CoachEmptyStatesResponseSchema,
   RomanCopyPayloadSchema,
   COACH_EMPTY_STATE_SURFACE_KEYS,
+  AckStateSchema,
+  CoachSlaSnapshotSchema,
+  AckTransitionResponseSchema,
   type CoachDashboard,
   type CoachEmptyStatesResponse,
 } from './coachCommunityApi';
@@ -393,5 +396,130 @@ describe('coachCommunityApi — error + contract mapping', () => {
     const err = await coachCommunityApi.getDashboard().catch((e) => e);
     expect(err).toBeInstanceOf(CoachCommunityApiError);
     expect(err.kind).toBe('contract');
+  });
+});
+
+// ─── v2-2 ack DTO strict drift contract (mirrors backend ack.dto.ts) ─────────
+//
+// These prove the mobile ack schemas mirror the backend Zod DTOs on
+// `feat/community-v2-2-ack-backend` (saved copy: v2_2_backend_r2_ack.dto.ts)
+// EXACTLY, including `.strict()` on every object level, the UUID `message_id`,
+// and the `z.string().datetime().nullable()` timestamps. The backend fields
+// mirrored here are:
+//   - SlaSnapshotSchema (ack.dto.ts:45-52): `sla_state` (within|warning|
+//     breached), `elapsed_ms`, `soft_target_ms`, `hard_target_ms`, `.strict()`.
+//   - AckStateSchema (ack.dto.ts:62-70): `state` (none|seen|acked|replied),
+//     `seen_at`/`acked_at`/`replied_at` (datetime string | null), nested `sla`,
+//     `.strict()`.
+//   - AckTransitionResponseSchema (ack.dto.ts:75-80): `message_id` (UUID),
+//     `ack` (AckStateSchema), `.strict()`.
+// No fields are invented beyond those declared in the backend DTO.
+describe('coachCommunityApi — v2-2 ack DTO strict drift contract', () => {
+  const MSG_ID = '11111111-1111-1111-1111-111111111111';
+
+  /** A well-formed SLA snapshot mirroring backend SlaSnapshotSchema. */
+  const validSla = () => ({
+    sla_state: 'within' as const,
+    elapsed_ms: 1_000,
+    soft_target_ms: 24 * 60 * 60 * 1000,
+    hard_target_ms: 48 * 60 * 60 * 1000,
+  });
+
+  /** A well-formed ack envelope mirroring backend AckStateSchema. */
+  const validAck = () => ({
+    state: 'acked' as const,
+    seen_at: '2026-06-09T12:00:00.000Z',
+    acked_at: '2026-06-09T12:05:00.000Z',
+    replied_at: null,
+    sla: validSla(),
+  });
+
+  /** A well-formed transition envelope mirroring AckTransitionResponseSchema. */
+  const validTransition = () => ({
+    message_id: MSG_ID,
+    ack: validAck(),
+  });
+
+  it('parses a valid transition envelope into the typed shape', () => {
+    const parsed = AckTransitionResponseSchema.parse(validTransition());
+    expect(parsed.message_id).toBe(MSG_ID);
+    expect(parsed.ack.state).toBe('acked');
+    expect(parsed.ack.seen_at).toBe('2026-06-09T12:00:00.000Z');
+    expect(parsed.ack.replied_at).toBeNull();
+    expect(parsed.ack.sla.sla_state).toBe('within');
+  });
+
+  it('parses an envelope with all-null timestamps (untouched message)', () => {
+    const parsed = AckStateSchema.parse({
+      state: 'none',
+      seen_at: null,
+      acked_at: null,
+      replied_at: null,
+      sla: validSla(),
+    });
+    expect(parsed.state).toBe('none');
+    expect(parsed.seen_at).toBeNull();
+  });
+
+  it('rejects an extra field at the transition-response level (.strict())', () => {
+    expect(() =>
+      AckTransitionResponseSchema.parse({
+        ...validTransition(),
+        // Backend AckTransitionResponseSchema is `.strict()`; an undeclared
+        // field must fail rather than silently pass through.
+        unexpected: 'drift',
+      }),
+    ).toThrow();
+  });
+
+  it('rejects an extra field at the ack-state level (.strict())', () => {
+    expect(() =>
+      AckStateSchema.parse({
+        ...validAck(),
+        // Not a declared AckStateSchema field.
+        coach_id: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+      }),
+    ).toThrow();
+  });
+
+  it('rejects an extra field at the SLA-snapshot level (.strict())', () => {
+    expect(() =>
+      CoachSlaSnapshotSchema.parse({
+        ...validSla(),
+        // Not a declared SlaSnapshotSchema field.
+        warning_target_ms: 12 * 60 * 60 * 1000,
+      }),
+    ).toThrow();
+  });
+
+  it('rejects a malformed seen_at datetime string', () => {
+    expect(() =>
+      AckStateSchema.parse({ ...validAck(), seen_at: 'not-a-datetime' }),
+    ).toThrow();
+  });
+
+  it('rejects a malformed acked_at datetime string', () => {
+    expect(() =>
+      AckStateSchema.parse({ ...validAck(), acked_at: '2026-06-09 12:05:00' }),
+    ).toThrow();
+  });
+
+  it('rejects a malformed replied_at datetime string', () => {
+    expect(() =>
+      AckStateSchema.parse({
+        ...validAck(),
+        state: 'replied',
+        replied_at: '06/09/2026',
+      }),
+    ).toThrow();
+  });
+
+  it('rejects a non-UUID message_id at the transition-response level', () => {
+    expect(() =>
+      AckTransitionResponseSchema.parse({
+        ...validTransition(),
+        message_id: 'not-a-uuid',
+      }),
+    ).toThrow();
   });
 });
