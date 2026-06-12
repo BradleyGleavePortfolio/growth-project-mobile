@@ -46,7 +46,7 @@ describe('useReducedMotion', () => {
       .mockImplementation(((event: string, cb: (e: boolean) => void) => {
         if (event === 'reduceMotionChanged') handler = cb;
         return { remove: jest.fn() };
-      }) as typeof AccessibilityInfo.addEventListener);
+      }) as unknown as typeof AccessibilityInfo.addEventListener);
     const { getByTestId } = render(<Probe />);
     await waitFor(() => expect(getByTestId('probe')).toHaveTextContent('full'));
     act(() => handler?.(true));
