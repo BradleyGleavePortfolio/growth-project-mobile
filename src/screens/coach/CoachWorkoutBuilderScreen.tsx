@@ -32,6 +32,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import {
   Alert,
@@ -168,6 +169,7 @@ export default function CoachWorkoutBuilderScreen() {
   const { semanticColors: sc } = useTheme();
   const styles = useMemo(() => makeStyles(sc), [sc]);
 
+  const qc = useQueryClient();
   const { data: existingPlan, refetch: refetchPlan } = useWorkoutPlan(planId);
   const createMut = useCreateWorkoutPlan();
   const updateMut = useUpdateWorkoutPlan();
@@ -403,6 +405,31 @@ export default function CoachWorkoutBuilderScreen() {
     void refetchPlan();
   }, [autosaveEnabled, refetchPlan]);
 
+  // A mirrored batch was found on mount and is being replayed after a force-
+  // quit/relaunch (MWB-4 #237 R6 P1). The replay can land the rescued edit on
+  // the server, but this freshly-mounted builder may be showing a STALE plan:
+  // `useWorkoutPlan` has a 5-minute staleTime and React Query persists the
+  // cache for cold-start hydration, so the cached copy can predate the rescued
+  // edit. We therefore force-INVALIDATE the single-plan key (and the list) so
+  // their staleTime can no longer suppress a network read, then drive an
+  // unconditional refetch + bump `refetchSeq` so the adoption effect re-runs
+  // and rebaselines the form from refreshed server truth. This is NOT gated on
+  // `hasIdlessRows` (unlike `onAutosaveSaved`): on replay we must reconcile the
+  // cache even when every local row already has an id, otherwise the stale
+  // cached plan survives and the subsequent explicit-Save full-replace would
+  // erase the rescued edit. The hook holds `replayInFlight` true until the
+  // replay settles, which blocks explicit Save so it cannot race this refetch.
+  const onAutosaveReplay = useCallback(() => {
+    if (!autosaveEnabled) return;
+    if (planId) {
+      void qc.invalidateQueries({ queryKey: ['workout-plans', planId] });
+    }
+    void qc.invalidateQueries({ queryKey: ['workout-plans'] });
+    refetchSeqRef.current += 1;
+    setRefetchSeq(refetchSeqRef.current);
+    void refetchPlan();
+  }, [autosaveEnabled, planId, qc, refetchPlan]);
+
   const autosave = useAutosave<WorkoutBuilderWorkingCopy>({
     planId: planId ?? '',
     value: workingCopy,
@@ -412,6 +439,7 @@ export default function CoachWorkoutBuilderScreen() {
     enabled: autosaveEnabled,
     onSaved: onAutosaveSaved,
     onConflict: onAutosaveConflict,
+    onReplay: onAutosaveReplay,
   });
 
   // Force a final mirror-first flush before the screen is removed from the
@@ -692,8 +720,17 @@ export default function CoachWorkoutBuilderScreen() {
     autosaveRebaseline();
   }, [autosaveEnabled, autosave.hasPending, localRowSignature, autosaveRebaseline]);
 
+  // Block explicit Save while a mirrored batch is being replayed on mount
+  // (MWB-4 #237 R6 P1). Explicit Save sends a full-replace built from the
+  // current `rows`; if it fired before the replay settled and the cache
+  // refetch rebaselined the form, it would replace the just-rescued server
+  // edit with the stale pre-refetch rows and silently revert the rescue. The
+  // gate releases the moment the replay reaches a terminal outcome (200 / 409
+  // / hard reject), by which point `onAutosaveReplay` has already driven the
+  // refetch that adopts refreshed server truth.
   const canSave =
     name.trim().length > 0 &&
+    !autosave.replayInFlight &&
     !createMut.isPending &&
     !updateMut.isPending &&
     !setExercisesMut.isPending;

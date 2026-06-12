@@ -169,6 +169,19 @@ export interface UseAutosaveArgs<TWorkingCopy> {
    * batch against the refetched value and re-sends it.
    */
   onConflict?: (conflict: AutosaveConflict) => void;
+  /**
+   * Called the moment a mirrored batch is found and a kill/replay is attempted
+   * on mount (MWB-4 #237 R6). The caller MUST treat its cached plan as stale
+   * here: a force-quit/relaunch replay can land the rescued edit on the server
+   * while the reopened builder still shows a stale React Query cache (staleTime
+   * 5min + persisted cold-start hydration), after which the legacy explicit
+   * Save full-replace would erase the rescue. The screen force-invalidates AND
+   * refetches `['workout-plans', planId]` (and the list) so the refreshed
+   * server truth rebaselines the form BEFORE the builder is savable. Paired
+   * with {@link UseAutosaveResult.replayInFlight}, which blocks explicit Save
+   * until the replay settles so Save cannot race the refetch.
+   */
+  onReplay?: () => void;
 }
 
 export interface UseAutosaveResult<TWorkingCopy = unknown> {
@@ -195,6 +208,14 @@ export interface UseAutosaveResult<TWorkingCopy = unknown> {
    * "last saved" truth so subsequent diffs are honest. Idempotent and stable.
    */
   rebaseline: () => void;
+  /**
+   * True from the moment a mirrored batch is found on mount until that replayed
+   * batch reaches a terminal server outcome (200 / 409 / hard reject). The
+   * screen blocks (disables) explicit Save while this is true so a full-replace
+   * Save cannot race the in-flight replay + cache refetch and erase the rescued
+   * edit (MWB-4 #237 R6 P1).
+   */
+  replayInFlight: boolean;
   /**
    * Re-anchor the diff baseline to an EXPLICIT server copy rather than the
    * current working copy. Used by the delete-before-adoption fix (MWB-4 #237
@@ -228,6 +249,14 @@ interface PendingBatch<TWorkingCopy> {
    * batch re-derive only the delta the server has not yet seen.
    */
   snapshot: TWorkingCopy;
+  /**
+   * True only for the batch rehydrated from the offline mirror on mount (the
+   * kill/replay path). Its terminal server outcome (200 / 409 / hard reject)
+   * clears `replayInFlight` so the screen can re-enable explicit Save once the
+   * rescued edit has reached the server and the cache refetch is in motion
+   * (MWB-4 #237 R6 P1). A normal debounced/queued batch is never a replay.
+   */
+  isReplay?: boolean;
 }
 
 export function useAutosave<TWorkingCopy>(
@@ -244,6 +273,7 @@ export function useAutosave<TWorkingCopy>(
     enabled = true,
     onSaved,
     onConflict,
+    onReplay,
   } = args;
 
   const [status, setStatus] = useState<AutosaveStatus>('idle');
@@ -259,6 +289,12 @@ export function useAutosave<TWorkingCopy>(
   // drives the re-render so consumers observe the flip synchronously.
   const [_dirtyState, setDirtyState] = useState(false);
   const dirtyStateRef = useRef(false);
+  // MWB-4 #237 R6 (P1): true from the instant a mirrored batch is found on
+  // mount until that replayed batch reaches a terminal server outcome. Drives
+  // the screen's Save-blocked gate so an explicit full-replace Save cannot race
+  // the replay + cache refetch and erase the rescued edit.
+  const [replayInFlight, setReplayInFlight] = useState(false);
+  const replayInFlightRef = useRef(false);
 
   // Optimistic-concurrency state lives in refs (advances on each save without
   // forcing the caller to re-thread props synchronously) but is also surfaced.
@@ -314,6 +350,7 @@ export function useAutosave<TWorkingCopy>(
   const diffRef = useRef(diff);
   const onSavedRef = useRef(onSaved);
   const onConflictRef = useRef(onConflict);
+  const onReplayRef = useRef(onReplay);
   const causeRef = useRef<AutosaveCause>(cause);
   const enabledRef = useRef(enabled);
   const planIdRef = useRef(planId);
@@ -324,10 +361,11 @@ export function useAutosave<TWorkingCopy>(
     diffRef.current = diff;
     onSavedRef.current = onSaved;
     onConflictRef.current = onConflict;
+    onReplayRef.current = onReplay;
     causeRef.current = cause;
     enabledRef.current = enabled;
     planIdRef.current = planId;
-  }, [diff, onSaved, onConflict, cause, enabled, planId]);
+  }, [diff, onSaved, onConflict, onReplay, cause, enabled, planId]);
 
   const safeSet = useCallback(
     <T,>(setter: (v: T) => void, v: T) => {
@@ -347,6 +385,16 @@ export function useAutosave<TWorkingCopy>(
       backoffTimerRef.current = null;
     }
   }, []);
+
+  // Clear the replay-in-flight gate once the replayed batch has reached a
+  // terminal server outcome (200 / 409 / hard reject). Keeps the ref and the
+  // state in lockstep so the screen's Save-blocked gate (which reads the state)
+  // and any internal check (the ref) never disagree (MWB-4 #237 R6 P1).
+  const clearReplayInFlight = useCallback(() => {
+    if (!replayInFlightRef.current) return;
+    replayInFlightRef.current = false;
+    safeSet(setReplayInFlight, false);
+  }, [safeSet]);
 
   // Set the dirty-since-last-save signal, keeping the ref mirror and the state
   // in lockstep so `computeHasPending` (which reads the ref) and any re-render
@@ -478,6 +526,10 @@ export function useAutosave<TWorkingCopy>(
         // A real save landed: any later 409 is now a genuine external-edit
         // conflict, not the silent bootstrap stale-lock recovery.
         hasSavedRef.current = true;
+        // The replayed batch reached the server successfully — the rescued edit
+        // is now durable on the server. Release the Save-blocked gate; the
+        // screen's onSaved already forced the cache refetch (MWB-4 #237 R6 P1).
+        if (batch.isReplay) clearReplayInFlight();
         clearBackoffTimer();
         indexRef.current = res.head_revision_index;
         tokenRef.current = res.lock_token;
@@ -537,6 +589,13 @@ export function useAutosave<TWorkingCopy>(
           //     fire onConflict so the caller refetches and the coach is told.
           const isBootstrapStaleLock =
             err.conflict?.error === 'autosave_lock_stale' && !hasSavedRef.current;
+          // A replayed batch that 409s has still reached the server (its ops
+          // were either already applied via the idempotency key on the kill, or
+          // the lock fast-forwards and they re-send on the fresh head). Either
+          // way the rescued edit is server-side, so release the Save-blocked
+          // gate; the screen's onConflict/onReplay forced the cache refetch
+          // that rebaselines the form (MWB-4 #237 R6 P1).
+          if (batch.isReplay) clearReplayInFlight();
           if (err.conflict) {
             indexRef.current = err.conflict.head_revision_index;
             tokenRef.current = err.conflict.lock_token;
@@ -601,6 +660,11 @@ export function useAutosave<TWorkingCopy>(
         const kind =
           err instanceof WorkoutAutosaveApiError ? err.kind : 'unknown';
         pendingNextRef.current = batch;
+        // A replayed batch hit a hard reject: the rescued edit will not apply
+        // as-is, but the replay attempt is terminal here. Release the gate so
+        // the coach is not locked out of explicit Save indefinitely; the
+        // screen's onReplay already forced a cache refetch (MWB-4 #237 R6 P1).
+        if (batch.isReplay) clearReplayInFlight();
         safeSet(setStatus, 'offline');
         safeSet(setHasPending, true);
         logger.error('[useAutosave] flush rejected', { planId, kind });
@@ -609,7 +673,7 @@ export function useAutosave<TWorkingCopy>(
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [planId, safeSet, clearBackoffTimer, computeHasPending, rebaseBatch, setDirty],
+    [planId, safeSet, clearBackoffTimer, clearReplayInFlight, computeHasPending, rebaseBatch, setDirty],
   );
 
   /** Write one batch to the offline mirror (mirror-first durability line). */
@@ -858,6 +922,16 @@ export function useAutosave<TWorkingCopy>(
     void (async () => {
       const mirrored = await readAutosaveMirror(planId);
       if (cancelled || !mirrored) return;
+      // A mirrored batch exists: a previous session was force-quit before the
+      // edit was confirmed server-side. Raise the replay-in-flight gate BEFORE
+      // the network attempt and notify the screen so it force-invalidates and
+      // refetches its (possibly stale, persisted-hydrated) cache. The gate
+      // blocks explicit Save until the replay reaches a terminal outcome so a
+      // full-replace Save cannot race the refetch and erase the rescued edit
+      // (MWB-4 #237 R6 P1).
+      replayInFlightRef.current = true;
+      safeSet(setReplayInFlight, true);
+      onReplayRef.current?.();
       // Rehydrate the pending batch and replay it with the SAME key + lock pair.
       const replay: PendingBatch<TWorkingCopy> = {
         ops: mirrored.batch.ops,
@@ -865,6 +939,9 @@ export function useAutosave<TWorkingCopy>(
         lockToken: mirrored.batch.lock_token,
         cause: mirrored.batch.cause,
         idempotencyKey: mirrored.idempotencyKey,
+        // Mark this batch as the replay so its terminal server outcome (200 /
+        // 409 / hard reject) clears the replay-in-flight gate.
+        isReplay: true,
         // A replayed batch's ops were diffed before the kill; we have no working
         // copy to baseline to (the screen re-baselines from the server on its
         // own refetch), so anchor the snapshot to the current value. The replay
@@ -881,13 +958,14 @@ export function useAutosave<TWorkingCopy>(
     };
   }, [planId, enabled, sendBatch, safeSet]);
 
-  // ─── Navigation beforeRemove: await a mirror-first flush before teardown ────
-  // The screen passes navigation via the AppState/unmount paths; here we attach
-  // to the global navigation event if a navigation object is reachable. The
-  // hook stays navigation-agnostic by relying on the unmount cleanup below to
-  // do the durable capture; the explicit beforeRemove gap is closed by the
-  // stable flush (reads latestValueRef) firing from BOTH the AppState listener
-  // and the unmount cleanup, so the last edit is always mirrored.
+  // ─── Navigation beforeRemove: owned by the screen, not this hook ────────────
+  // The Navigation `beforeRemove` listener is NOT registered here — it lives in
+  // CoachWorkoutBuilderScreen.tsx:426-432, where the screen awaits a mirror-
+  // first flush before letting the route tear down. This hook stays navigation-
+  // agnostic: its own durable-capture guarantee comes from the stable flush
+  // (reads latestValueRef) firing from BOTH the AppState listener and the
+  // unmount cleanup below, so the last edit is always mirrored regardless of
+  // how teardown is triggered.
 
   // ─── Lifecycle: durable capture + abort obsolete request on teardown ────────
   useEffect(() => {
@@ -924,8 +1002,9 @@ export function useAutosave<TWorkingCopy>(
       flush,
       hasPending,
       rebaseline,
+      replayInFlight,
       rebaselineTo,
     }),
-    [status, lastSavedAt, version, tokenState, flush, hasPending, rebaseline, rebaselineTo],
+    [status, lastSavedAt, version, tokenState, flush, hasPending, rebaseline, replayInFlight, rebaselineTo],
   );
 }

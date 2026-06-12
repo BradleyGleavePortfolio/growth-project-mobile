@@ -117,12 +117,21 @@ const EXISTING_PLAN = {
     },
   ],
 };
+// Named mutation spies so the kill/replay regression test can assert the exact
+// full-replace payload an explicit Save sends AFTER a replay (it must carry the
+// post-replay/refreshed rows, never an empty/reverted set).
+const mockUpdateMutateAsync = jest.fn().mockResolvedValue({ id: 'plan-1' });
+const mockCreateMutateAsync = jest.fn().mockResolvedValue({ id: 'plan-1' });
+const mockSetExercisesMutateAsync = jest.fn().mockResolvedValue(undefined);
 jest.mock('../hooks/useWorkoutBuilder', () => ({
   __esModule: true,
   useWorkoutPlan: () => ({ data: EXISTING_PLAN, refetch: mockRefetch }),
-  useCreateWorkoutPlan: () => ({ mutateAsync: jest.fn(), isPending: false }),
-  useUpdateWorkoutPlan: () => ({ mutateAsync: jest.fn(), isPending: false }),
-  useSetWorkoutExercises: () => ({ mutateAsync: jest.fn(), isPending: false }),
+  useCreateWorkoutPlan: () => ({ mutateAsync: mockCreateMutateAsync, isPending: false }),
+  useUpdateWorkoutPlan: () => ({ mutateAsync: mockUpdateMutateAsync, isPending: false }),
+  useSetWorkoutExercises: () => ({
+    mutateAsync: mockSetExercisesMutateAsync,
+    isPending: false,
+  }),
 }));
 
 jest.mock('../hooks/useExerciseLibrary', () => ({
@@ -159,12 +168,34 @@ jest.mock('../api/workoutAutosaveApi', () => {
 });
 
 // Mock the mirror so no AsyncStorage write fires during the test.
+// `readAutosaveMirror` defaults to null (no mirror); the kill/replay regression
+// test below overrides it per-test with `mockResolvedValueOnce(...)` so only
+// that test exercises the on-mount replay path.
+const mockReadMirror = jest.fn().mockResolvedValue(null);
+const mockClearMirrorIfKey = jest.fn().mockResolvedValue(undefined);
 jest.mock('../storage/autosaveMirror', () => ({
   __esModule: true,
   writeAutosaveMirror: jest.fn().mockResolvedValue(undefined),
-  readAutosaveMirror: jest.fn().mockResolvedValue(null),
+  readAutosaveMirror: (...args: unknown[]) => mockReadMirror(...args),
   clearAutosaveMirror: jest.fn().mockResolvedValue(undefined),
+  clearAutosaveMirrorIfKey: (...args: unknown[]) => mockClearMirrorIfKey(...args),
 }));
+
+// The screen now reads `useQueryClient()` directly (MWB-4 #237 R6 P1) to force-
+// invalidate the plan cache on replay. `useWorkoutBuilder` is fully mocked so
+// the real query client is never otherwise touched — we mock React Query's
+// `useQueryClient` to a spy-able stub and assert the exact invalidation keys
+// the replay handler fires. (`requireActual` keeps every other RQ export real
+// so the screen's other imports are untouched.)
+const mockInvalidateQueries = jest.fn().mockResolvedValue(undefined);
+jest.mock('@tanstack/react-query', () => {
+  const actual = jest.requireActual('@tanstack/react-query');
+  return {
+    ...actual,
+    __esModule: true,
+    useQueryClient: () => ({ invalidateQueries: mockInvalidateQueries }),
+  };
+});
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -184,6 +215,15 @@ function loadScreen(): React.ComponentType {
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // `clearAllMocks` wipes implementations too, so re-establish the defaults the
+  // boundary mocks need between tests.
+  mockReadMirror.mockResolvedValue(null);
+  mockClearMirrorIfKey.mockResolvedValue(undefined);
+  mockInvalidateQueries.mockResolvedValue(undefined);
+  mockRefetch.mockResolvedValue({});
+  mockUpdateMutateAsync.mockResolvedValue({ id: 'plan-1' });
+  mockCreateMutateAsync.mockResolvedValue({ id: 'plan-1' });
+  mockSetExercisesMutateAsync.mockResolvedValue(undefined);
   mockAutosaveCall.mockResolvedValue({
     head_revision_index: 1,
     lock_token: 'feedfacefeedface',
@@ -257,5 +297,153 @@ describe('CoachWorkoutBuilderScreen — flag ON wiring', () => {
       jest.advanceTimersByTime(900);
     });
     await waitFor(() => expect(mockAutosaveCall).toHaveBeenCalled());
+  });
+});
+
+// ─── Kill/replay cache-reconcile (MWB-4 #237 R6 P1, MANDATORY regression) ─────
+//
+// Scenario the audit flagged: a previous session was force-quit mid-edit, so a
+// mirrored batch (here a plan_meta rename) survives on disk. On relaunch the
+// builder mounts on a STALE React Query cache (5-min staleTime + persisted
+// cold-start hydration) that predates the rescued edit, and the hook replays
+// the mirrored batch to the server. The bug was: the screen did not reconcile
+// its cache on replay, and the legacy explicit-Save full-replace (built from
+// the stale rows) then ERASED the just-rescued server edit.
+//
+// The fix has three observable obligations this test pins down with real
+// assertions (no mock-echo):
+//   1. On replay the screen force-INVALIDATES both the single-plan key
+//      (['workout-plans', planId]) and the list key (['workout-plans']) so the
+//      stale staleTime can no longer suppress a read, AND drives a refetch —
+//      UNCONDITIONALLY (not gated on hasIdlessRows).
+//   2. The mirrored batch is replayed to the server with its SAME idempotency
+//      key (exactly-once kill/replay, not a fresh send).
+//   3. Explicit Save is BLOCKED while the replay is in flight (so it cannot
+//      race the refetch and revert the rescue), then re-enabled once the replay
+//      settles — and a Save fired after the replay sends the post-replay rows
+//      from refreshed truth (the bench row), never an empty/reverted payload.
+describe('CoachWorkoutBuilderScreen — kill/replay cache reconcile (P1)', () => {
+  const REPLAY_KEY = 'idem-replay-237-r6';
+  const TOKEN_BOOTSTRAP = '0000000000000000';
+
+  /** A mirrored plan_meta rename, exactly as the offline mirror would store it. */
+  function mirroredRename() {
+    return {
+      version: 1,
+      planId: 'plan-1',
+      idempotencyKey: REPLAY_KEY,
+      queuedAtMs: 1_700_000_000_000,
+      batch: {
+        base_revision_index: 0,
+        lock_token: TOKEN_BOOTSTRAP,
+        ops: [{ op: 'plan_meta', meta: { name: 'Rescued name A' } }],
+        cause: 'manual_edit' as const,
+      },
+    };
+  }
+
+  it('force-invalidates + refetches the plan cache and replays with the same key', async () => {
+    setFlag(true);
+    mockReadMirror.mockResolvedValueOnce(mirroredRename());
+    const Screen = loadScreen();
+    render(<Screen />);
+
+    // 1. Both query keys are force-invalidated so staleTime cannot suppress the
+    //    read; the single-plan key carries the concrete planId.
+    await waitFor(() => {
+      expect(mockInvalidateQueries).toHaveBeenCalledWith({
+        queryKey: ['workout-plans', 'plan-1'],
+      });
+    });
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['workout-plans'],
+    });
+
+    // ...and the refetch is driven (rebaselines the form from refreshed truth).
+    await waitFor(() => expect(mockRefetch).toHaveBeenCalled());
+
+    // 2. The mirrored batch is replayed to the server with its SAME idempotency
+    //    key (exactly-once kill/replay).
+    await waitFor(() => expect(mockAutosaveCall).toHaveBeenCalled());
+    const replayArgs = mockAutosaveCall.mock.calls[0]?.[0] as {
+      idempotencyKey?: string;
+      body?: { ops?: Array<{ op: string }> };
+    };
+    expect(replayArgs.idempotencyKey).toBe(REPLAY_KEY);
+    expect(replayArgs.body?.ops?.[0]?.op).toBe('plan_meta');
+  });
+
+  it('blocks explicit Save while the replay is in flight, then re-enables it', async () => {
+    setFlag(true);
+    mockReadMirror.mockResolvedValueOnce(mirroredRename());
+
+    // Hold the replay's server call open so we can observe the in-flight gate.
+    let resolveReplay: (v: unknown) => void = () => {};
+    const replayPending = new Promise((resolve) => {
+      resolveReplay = resolve;
+    });
+    mockAutosaveCall.mockReturnValueOnce(replayPending);
+
+    const Screen = loadScreen();
+    const { getByLabelText } = render(<Screen />);
+
+    // While the replay is in flight the Save button is disabled (replayInFlight
+    // true) so a full-replace Save cannot race the refetch and revert the rescue.
+    await waitFor(() => expect(mockAutosaveCall).toHaveBeenCalled());
+    const saveButton = getByLabelText('Save changes');
+    expect(saveButton.props.accessibilityState?.disabled).toBe(true);
+
+    // Settle the replay (200): the gate releases and Save becomes available.
+    await act(async () => {
+      resolveReplay({
+        head_revision_index: 1,
+        lock_token: 'feedfacefeedface',
+        saved_at: '2026-01-01T00:00:00.000Z',
+      });
+      await Promise.resolve();
+    });
+    await waitFor(() =>
+      expect(
+        getByLabelText('Save changes').props.accessibilityState?.disabled,
+      ).toBe(false),
+    );
+  });
+
+  it('explicit Save after replay sends post-replay rows and does NOT revert', async () => {
+    setFlag(true);
+    mockReadMirror.mockResolvedValueOnce(mirroredRename());
+    const Screen = loadScreen();
+    const { getByLabelText } = render(<Screen />);
+
+    // Replay settles (default mockAutosaveCall resolves 200) and the gate clears.
+    await waitFor(() => expect(mockAutosaveCall).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(
+        getByLabelText('Save changes').props.accessibilityState?.disabled,
+      ).toBe(false),
+    );
+    // The replay refetched + adopted the refreshed plan, so the form carries the
+    // server's bench row, not an emptied/reverted set.
+    expect(mockInvalidateQueries).toHaveBeenCalledWith({
+      queryKey: ['workout-plans', 'plan-1'],
+    });
+    expect(mockRefetch).toHaveBeenCalled();
+
+    // Fire explicit Save now that the replay has settled.
+    await act(async () => {
+      fireEvent.press(getByLabelText('Save changes'));
+      await Promise.resolve();
+    });
+
+    // The full-replace setExercises payload carries the refreshed bench row
+    // (post-replay truth) — it is NOT empty, so the rescued edit is preserved.
+    await waitFor(() => expect(mockSetExercisesMutateAsync).toHaveBeenCalled());
+    const setArgs = mockSetExercisesMutateAsync.mock.calls[0]?.[0] as {
+      planId: string;
+      rows: Array<{ exercise_external_id: string }>;
+    };
+    expect(setArgs.planId).toBe('plan-1');
+    expect(setArgs.rows.length).toBe(1);
+    expect(setArgs.rows[0]?.exercise_external_id).toBe('bench');
   });
 });

@@ -218,6 +218,22 @@ jest.mock('../storage/autosaveMirror', () => ({
   clearAutosaveMirrorIfKey: jest.fn().mockResolvedValue(true),
 }));
 
+// The screen reads `useQueryClient()` directly (MWB-4 #237 R6 P1) to force-
+// invalidate the plan cache on a kill/replay. `useWorkoutBuilder` is fully
+// mocked here so the real query client is never otherwise touched and there is
+// no QueryClientProvider in the tree; stub `useQueryClient` to a no-op client
+// so the mount does not throw "No QueryClient set". These row-id-adoption tests
+// never trigger a replay (readAutosaveMirror returns null), so the stub is
+// never exercised — it only keeps the hook call from throwing.
+jest.mock('@tanstack/react-query', () => {
+  const actual = jest.requireActual('@tanstack/react-query');
+  return {
+    ...actual,
+    __esModule: true,
+    useQueryClient: () => ({ invalidateQueries: jest.fn().mockResolvedValue(undefined) }),
+  };
+});
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const ORIGINAL_FLAG = process.env.EXPO_PUBLIC_FF_MWB_AUTOSAVE;
