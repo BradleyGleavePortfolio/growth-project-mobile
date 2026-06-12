@@ -13,7 +13,7 @@
  */
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import RomanAvatar from '../community/RomanAvatar';
+import RomanAvatar from './RomanAvatar';
 import {
   romanGreeting,
   ROMAN_GREETING_SUBTITLE,

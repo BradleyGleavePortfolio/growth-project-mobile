@@ -34,7 +34,7 @@ import {
   type ListRenderItemInfo,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import RomanAvatar from '../../components/community/RomanAvatar';
+import RomanAvatar from '../../components/roman/RomanAvatar';
 import RomanGreeting from '../../components/roman/RomanGreeting';
 import RomanMessageBubble from '../../components/roman/RomanMessageBubble';
 import RomanTypingIndicator from '../../components/roman/RomanTypingIndicator';

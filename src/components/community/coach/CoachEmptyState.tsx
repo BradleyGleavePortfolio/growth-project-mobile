@@ -28,7 +28,7 @@
  */
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import RomanAvatar from '../RomanAvatar';
+import RomanAvatar from '../../roman/RomanAvatar';
 import { useTheme } from '../../../theme/useTheme';
 import { spacing } from '../../../theme/tokens';
 import type { RomanCopyPayload } from '../../../api/coachCommunityApi';

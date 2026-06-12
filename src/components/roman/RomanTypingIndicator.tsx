@@ -15,7 +15,7 @@
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Animated, StyleSheet, Text, View } from 'react-native';
-import RomanAvatar from '../community/RomanAvatar';
+import RomanAvatar from './RomanAvatar';
 import { ROMAN_TYPING_A11Y_LABEL, ROMAN_TYPING_LABEL } from './romanVoice';
 import { colors, radius, spacing, typography } from '../../theme/tokens';
 

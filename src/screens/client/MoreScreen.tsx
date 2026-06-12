@@ -16,6 +16,10 @@ import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/
 import { Spacing, Radius } from '../../theme/index';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { featureFlags } from '../../config/featureFlags';
+// FACE+VOICE contract (D-012): the Roman entry row is a Roman-branded surface,
+// so it carries Roman's actual face rather than a disembodied sparkles glyph.
+// Canonical avatar lives in the roman/ lane (D-013).
+import RomanAvatar from '../../components/roman/RomanAvatar';
 type MoreItem = {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
@@ -23,6 +27,9 @@ type MoreItem = {
   // Either a sibling tab (via getParent) or a nested screen inside the More stack.
   target: { type: 'tab'; tab: string } | { type: 'stack'; screen: string; parentScreen?: string };
   a11yHint: string;
+  // When true, the row renders Roman's face (RomanAvatar) in place of the
+  // Ionicons glyph — the face+voice rule for the Roman-branded row.
+  isRoman?: boolean;
 };
 
 const MORE_ITEMS: MoreItem[] = [
@@ -135,6 +142,7 @@ const ROMAN_MORE_ITEM: MoreItem = {
   description: 'Open a conversation with Roman',
   target: { type: 'stack', screen: 'RomanChat' },
   a11yHint: 'Opens a conversation with Roman',
+  isRoman: true,
 };
 
 export default function MoreScreen() {
@@ -174,7 +182,11 @@ export default function MoreScreen() {
             accessibilityHint={item.a11yHint}
           >
             <View style={styles.iconWrap}>
-              <Ionicons name={item.icon} size={22} color={colors.primary} />
+              {item.isRoman ? (
+                <RomanAvatar crop="neutral" size={28} testID="client-roman-entry-avatar" />
+              ) : (
+                <Ionicons name={item.icon} size={22} color={colors.primary} />
+              )}
             </View>
             <View style={styles.textWrap}>
               <Text style={styles.itemLabel}>{item.label}</Text>

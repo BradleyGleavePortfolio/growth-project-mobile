@@ -14,7 +14,7 @@
  */
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import RomanAvatar from '../community/RomanAvatar';
+import RomanAvatar from './RomanAvatar';
 import {
   ROMAN_ERROR_TRANSIENT,
   ROMAN_OFFLINE_BODY,

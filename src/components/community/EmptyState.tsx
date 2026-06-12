@@ -14,7 +14,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import HapticPressable from '../HapticPressable';
 import { useTheme } from '../../theme/useTheme';
 import { spacing, radius } from '../../theme/tokens';
-import RomanAvatar from './RomanAvatar';
+import RomanAvatar from '../roman/RomanAvatar';
 import {
   romanCopy,
   type RomanCommunityStem,

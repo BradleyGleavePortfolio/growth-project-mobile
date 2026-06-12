@@ -7,8 +7,11 @@ export { default as CommunityEmptyState } from './EmptyState';
 export type { CommunityEmptyStateProps } from './EmptyState';
 export { default as UnreadBadge } from './UnreadBadge';
 export type { UnreadBadgeProps } from './UnreadBadge';
-export { default as RomanAvatar } from './RomanAvatar';
-export type { RomanAvatarProps, RomanCrop } from './RomanAvatar';
+// RomanAvatar is the canonical Roman brand-character avatar; it now lives in
+// the roman/ lane (D-013, Path A). Community surfaces still consume it through
+// this barrel, so the re-export is preserved but points at the roman/ source.
+export { default as RomanAvatar } from '../roman/RomanAvatar';
+export type { RomanAvatarProps, RomanCrop } from '../roman/RomanAvatar';
 export { default as SpaceTabBar } from './SpaceTabBar';
 export type {
   SpaceTabBarProps,

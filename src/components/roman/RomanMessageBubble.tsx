@@ -13,7 +13,7 @@
  */
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import RomanAvatar from '../community/RomanAvatar';
+import RomanAvatar from './RomanAvatar';
 import { ROMAN_INTERRUPTED_NOTE } from './romanVoice';
 import type { RomanMessage } from '../../api/romanApi';
 import { colors, radius, spacing, typography, withAlpha } from '../../theme/tokens';

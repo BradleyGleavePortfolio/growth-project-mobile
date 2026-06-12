@@ -27,6 +27,10 @@ import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/
 import { useTheme } from '../../theme/ThemeProvider';
 import { errorMessage, errorStatus } from '../../types/common';
 import BiometricUnlockSetting from '../../components/BiometricUnlockSetting';
+// FACE+VOICE contract: the Roman concierge entry row is a Roman-voiced coach
+// surface, so it must carry Roman's actual face — never a disembodied sparkles
+// glyph. Canonical avatar lives in the roman/ lane (D-013).
+import RomanAvatar from '../../components/roman/RomanAvatar';
 
 import { makeStyles } from './settings/styles';
 import { COACH_SETTINGS_KEY, DEFAULT_SETTINGS, type CoachSettings } from './settings/types';
@@ -556,7 +560,7 @@ export default function SettingsScreen() {
               accessibilityLabel="Open a conversation with Roman"
               accessibilityHint="Ask for a brief, a client read, or the next step"
             >
-              <Ionicons name="sparkles-outline" size={20} color={colors.textSecondary} />
+              <RomanAvatar crop="neutral" size={28} testID="coach-roman-entry-avatar" />
               <View style={{ flex: 1 }}>
                 <Text style={styles.rowLabel}>Roman</Text>
                 {/* Coach register: operational, not the generic "ask anything"
