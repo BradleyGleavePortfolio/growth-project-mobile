@@ -740,7 +740,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  lbRank: { fontSize: 14, fontWeight: '700', minWidth: 24 },
+  lbRank: { fontSize: 14, fontWeight: '600', minWidth: 24 },
   lbName: { flex: 1, fontSize: 14 },
   lbValue: { fontSize: 14, fontWeight: '600' },
   optOutButton: { paddingVertical: spacing.md, minHeight: 48, justifyContent: 'center' },

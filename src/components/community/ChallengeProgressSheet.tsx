@@ -454,7 +454,7 @@ const styles = StyleSheet.create({
   },
   completeText: { fontSize: 14, fontWeight: '600' },
   celebrateBlock: { gap: spacing.sm, marginTop: spacing.md },
-  celebrateTitle: { flex: 1, fontSize: 17, fontWeight: '700' },
+  celebrateTitle: { flex: 1, fontSize: 17, fontWeight: '600' },
   celebrateBody: { fontSize: 14 },
   helperText: { fontSize: 13, marginTop: spacing.xs },
   errorText: { fontSize: 14, fontWeight: '600', marginTop: spacing.xs },
