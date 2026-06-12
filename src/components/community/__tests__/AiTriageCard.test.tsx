@@ -88,6 +88,7 @@ describe('AiTriageCard — loading', () => {
       <AiTriageCard status="loading" testID={TID} />,
     );
     const loading = getByTestId(`${TID}-loading`);
+    expect(loading.props.accessibilityRole).toBe('progressbar');
     expect(loading.props.accessibilityLabel).toBe(
       'AI triage is preparing your inbox summary.',
     );
@@ -136,6 +137,19 @@ describe('AiTriageCard — error', () => {
 });
 
 describe('AiTriageCard — empty', () => {
+  it('renders the honest empty state when the typed empty status is passed', () => {
+    const { getByTestId, queryByTestId } = render(
+      <AiTriageCard status="empty" testID={TID} />,
+    );
+    const empty = getByTestId(`${TID}-empty`);
+    expect(empty.props.accessibilityLabel).toBe(
+      'AI triage: no unanswered items to summarise right now.',
+    );
+    // The typed empty path needs no payload and renders no header/breakdown.
+    expect(queryByTestId(`${TID}-header`)).toBeNull();
+    expect(queryByTestId(`${TID}-breakdown`)).toBeNull();
+  });
+
   it('renders the honest empty state when is_empty is true', () => {
     const { getByTestId, queryByTestId } = render(
       <AiTriageCard status="ready" triage={emptyTriage()} testID={TID} />,

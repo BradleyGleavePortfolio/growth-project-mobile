@@ -87,11 +87,17 @@ const TRIAGE_ENABLED = featureFlags.communityAiTriage;
  */
 function InboxTriageBanner(): React.ReactElement {
   const triage = useInboxTriage();
+  // Typed state machine: loading | error | empty | ready. `empty` is derived
+  // explicitly here from the server's `is_empty` flag so the card never has to
+  // infer "nothing to triage" from a populated `ready` payload (the card keeps
+  // an all-zero guard only as defensive validation).
   const status = triage.isLoading
     ? 'loading'
     : triage.isError
       ? 'error'
-      : 'ready';
+      : triage.data?.is_empty === true
+        ? 'empty'
+        : 'ready';
   return (
     <AiTriageCard
       status={status}

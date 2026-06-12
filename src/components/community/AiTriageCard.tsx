@@ -24,7 +24,7 @@
 import React, { useCallback, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useTheme } from '../../theme/useTheme';
-import { spacing, radius } from '../../theme/tokens';
+import { spacing, radius, typography } from '../../theme/tokens';
 import HapticPressable from '../HapticPressable';
 import type { TriageCategory, TriageResponse } from '../../api/communityAiTriageApi';
 import { TRIAGE_CATEGORIES } from '../../api/communityAiTriageApi';
@@ -39,7 +39,7 @@ const CATEGORY_LABEL: Record<TriageCategory, string> = {
   no_action_needed: 'No action needed',
 };
 
-type Status = 'loading' | 'error' | 'ready';
+type Status = 'loading' | 'error' | 'empty' | 'ready';
 
 interface Counts {
   category: TriageCategory;
@@ -97,7 +97,7 @@ export default function AiTriageCard({
     return (
       <View
         testID={`${testID}-loading`}
-        accessibilityRole="summary"
+        accessibilityRole="progressbar"
         accessibilityLabel="AI triage is preparing your inbox summary."
         style={[
           styles.card,
@@ -153,7 +153,11 @@ export default function AiTriageCard({
   // ── Ready ───────────────────────────────────────────────────────────────
   const counts = triage ? countByCategory(triage) : [];
   const total = counts.reduce((sum, c) => sum + c.count, 0);
-  const isEmpty = !triage || triage.is_empty || total === 0;
+  // `empty` is now a first-class typed status passed by the caller. The all-zero
+  // / missing-data check is kept here purely as a DEFENSIVE guard so a `ready`
+  // status with nothing to show can never render a fabricated summary — it is
+  // not the primary state path.
+  const isEmpty = status === 'empty' || !triage || triage.is_empty || total === 0;
 
   // Typed empty state: an honest "nothing to triage", never a fabricated read.
   if (isEmpty) {
@@ -242,21 +246,23 @@ export default function AiTriageCard({
   );
 }
 
+// The left accent rule is the AI marker — an OUTLINE, not a fill. Tokenized as
+// a named hairline-scale constant so the rule width stays on the design grid
+// rather than a magic number.
+const ACCENT_RULE_WIDTH = spacing.xs - 1;
+
 const styles = StyleSheet.create({
   card: {
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
     // The left rule is the AI marker — an accent OUTLINE, not a fill, so the
     // card stays calm and never competes with a human row's solid surface.
-    borderLeftWidth: 3,
+    borderLeftWidth: ACCENT_RULE_WIDTH,
     padding: spacing.md,
     gap: spacing.xs,
   },
   eyebrow: {
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
+    ...typography.eyebrow,
   },
   header: {
     flexDirection: 'row',
@@ -266,20 +272,18 @@ const styles = StyleSheet.create({
   },
   headerText: {
     flex: 1,
-    gap: 2,
+    gap: spacing.xs / 2,
   },
   title: {
-    fontSize: 16,
-    fontWeight: '600',
+    ...typography.bodyMd,
   },
   chevron: {
-    fontSize: 13,
+    ...typography.bodySmall,
     fontWeight: '600',
     marginLeft: spacing.sm,
   },
   bodyText: {
-    fontSize: 14,
-    lineHeight: 19,
+    ...typography.bodySmall,
   },
   retry: {
     alignSelf: 'flex-start',
@@ -291,7 +295,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   retryLabel: {
-    fontSize: 14,
+    ...typography.bodySmall,
     fontWeight: '600',
   },
   breakdown: {
@@ -305,12 +309,12 @@ const styles = StyleSheet.create({
     minHeight: 32,
   },
   categoryLabel: {
-    fontSize: 14,
+    ...typography.bodySmall,
     flex: 1,
     marginRight: spacing.sm,
   },
   categoryCount: {
-    fontSize: 14,
+    ...typography.bodySmall,
     fontWeight: '600',
   },
 });
