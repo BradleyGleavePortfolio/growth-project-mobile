@@ -10,7 +10,7 @@
  * renders; everything else the screen reaches on mount is mocked to inert.
  */
 import React from 'react';
-import { render, waitFor } from '@testing-library/react-native';
+import { render, waitFor, act, fireEvent } from '@testing-library/react-native';
 import { colors } from '../../../theme/tokens';
 
 // ── Sentinel for the ED.4 card — capture the props it is wired with. ────────
@@ -58,9 +58,19 @@ jest.mock('../../../hooks/useCurrentUser', () => ({
   useCurrentUser: () => ({ id: 'user-1' }),
 }));
 
-jest.mock('../../../theme/ThemeProvider', () => ({
-  useTheme: () => ({ colors: require('../../../theme/tokens').colors }),
-}));
+jest.mock('../../../theme/ThemeProvider', () => {
+  const tokens = require('../../../theme/tokens');
+  // The error branch (audit R2 P2) mounts CoachErrorState, which reads
+  // `semanticColors` from the same useTheme (re-exported from ThemeProvider),
+  // so the mock must surface both the legacy `colors` and `semanticColors`.
+  return {
+    useTheme: () => ({
+      colorScheme: 'light',
+      colors: tokens.colors,
+      semanticColors: tokens.lightTokens,
+    }),
+  };
+});
 
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: jest.fn() }),
@@ -95,5 +105,48 @@ describe('ProgressScreen — ED.4 wiring (P1-1)', () => {
   // Guard against regression: tokens import is real so makeStyles(colors) works.
   it('uses real theme tokens (sanity)', () => {
     expect(colors).toBeDefined();
+  });
+});
+
+describe('ProgressScreen — ED.4 chart load error (audit R2 P2)', () => {
+  it('renders an honest retry state (not the empty copy) when the history load fails', async () => {
+    // The history fetch rejects: the screen must surface an honest Roman-tone
+    // error+retry state, NOT the benign "log your weight" empty copy.
+    mockGetHistory.mockRejectedValueOnce(new Error('network down'));
+    const { getByTestId, queryByText } = render(<ProgressScreen />);
+
+    await waitFor(() => expect(mockGetHistory).toHaveBeenCalled());
+    // The error surface (CoachErrorState) is mounted with its retry action...
+    await waitFor(() =>
+      expect(getByTestId('progress-weight-chart-error')).toBeTruthy(),
+    );
+    expect(getByTestId('progress-weight-chart-error-retry')).toBeTruthy();
+    // Roman's neutral face is co-mounted on the error surface (FACE+VOICE).
+    expect(getByTestId('progress-weight-chart-error-avatar')).toBeTruthy();
+    // ...and the false-empty copy is absent.
+    expect(queryByText('Log your weight to see your chart')).toBeNull();
+    expect(queryByText('Need at least 2 entries for a chart')).toBeNull();
+  });
+
+  it('clears the error and renders the chart when a retry succeeds', async () => {
+    // First load fails → error state; retry resolves with a 2-point series →
+    // the chart renders and the error state is gone.
+    mockGetHistory.mockRejectedValueOnce(new Error('network down'));
+    const { getByTestId, queryByTestId } = render(<ProgressScreen />);
+
+    await waitFor(() =>
+      expect(getByTestId('progress-weight-chart-error')).toBeTruthy(),
+    );
+
+    // The default mock implementation now resolves with two rows again.
+    await act(async () => {
+      fireEvent.press(getByTestId('progress-weight-chart-error-retry'));
+      await Promise.resolve();
+    });
+
+    await waitFor(() =>
+      expect(getByTestId('mock-progress-chart-card')).toBeTruthy(),
+    );
+    expect(queryByTestId('progress-weight-chart-error')).toBeNull();
   });
 });

@@ -122,6 +122,36 @@ describe('ProgressChartCard — ED.4', () => {
     expect(Haptics.selectionAsync).toHaveBeenCalledTimes(2);
   });
 
+  it('logs (never swallows) when the selection haptic rejects', async () => {
+    // The haptic motor can reject (e.g. web / unsupported device). The scrubber
+    // must keep working AND the rejection must be recorded via the shared
+    // logger — not silently swallowed (Bradley Law #36). The logger forwards to
+    // the native warn channel with a bracketed context under __DEV__.
+    const rejection = new Error('no haptic motor');
+    (Haptics.selectionAsync as jest.Mock).mockRejectedValueOnce(rejection);
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const node = render(
+      <ProgressChartCard data={PR_SERIES} liftName="Back Squat" reduceMotionOverride />,
+    );
+    layout(node);
+
+    await act(async () => {
+      // Drive a column crossover so selectionHaptic() runs and its promise
+      // rejects; flush the microtask so the .catch() handler executes.
+      panCb.begin?.({ x: 20, y: 100 });
+      await Promise.resolve();
+    });
+
+    expect(Haptics.selectionAsync).toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[ProgressChartCard]',
+      'haptic failed',
+      rejection,
+    );
+    warnSpy.mockRestore();
+  });
+
   it('renders no flag and no commentary when there is no PR', () => {
     const flat = [
       { x: 1, y: 200 },

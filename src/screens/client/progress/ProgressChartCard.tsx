@@ -54,6 +54,7 @@ import {
   type ProgressPoint,
 } from './detectPersonalRecord';
 import { colors, spacing, typography, withAlpha } from '../../../theme/tokens';
+import { logger } from '../../../utils/logger';
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 
@@ -80,7 +81,7 @@ function selectionHaptic(): void {
   // the rejection (Bradley Law #36) — we record WHY the haptic degraded so an
   // unexpected failure on a supported device is diagnosable.
   Haptics.selectionAsync().catch((err) => {
-    console.warn('[ProgressChartCard] haptic failed', err);
+    logger.warn('ProgressChartCard', 'haptic failed', err);
   });
 }
 

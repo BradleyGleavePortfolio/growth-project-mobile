@@ -19,6 +19,17 @@
  * subscription failure is non-fatal to the coach shell (the app keeps working
  * without the celebration), but it is never silently dropped — the catch
  * records the reason so a missing celebration can be diagnosed.
+ *
+ * Server-authoritative FIRST-payment proof (audit R2 P1): the local once-only
+ * gate alone cannot prove a payment is the coach's FIRST — a coach with prior
+ * payments but no local gate (new device, storage reset, rollout after
+ * history) would otherwise see a false "first payment" celebration. Before
+ * celebrating, we verify against the server: a COUNT(*) over `payments` for
+ * this `coach_id` via the same authenticated Supabase client (no schema change,
+ * R69). We celebrate ONLY when the server proves this is payment #1 (count
+ * === 1). We FAIL CLOSED — any verification error suppresses the celebration
+ * and is logged. When the count proves prior payments already exist (> 1) we
+ * close the local gate so the subscription stops re-arming on future opens.
  */
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -30,7 +41,7 @@ import { env } from '../../../config/env';
 import { secureStorage } from '../../../services/secureStorage';
 import { errorMessage } from '../../../types/common';
 import { logger } from '../../../utils/logger';
-import { hasSeenFirstPayment } from './firstPaymentGate';
+import { hasSeenFirstPayment, markFirstPaymentSeen } from './firstPaymentGate';
 
 /** The shape of a payment row we care about (subset). */
 export interface FirstPaymentEvent {
@@ -99,6 +110,37 @@ function readClientName(row: Record<string, unknown>): string {
   return 'your client';
 }
 
+/**
+ * Server-authoritative verdict on whether the INSERT we just received is the
+ * coach's FIRST payment. Counts the coach's `payments` rows via the same
+ * authenticated client (no schema change — R69). The realtime INSERT has
+ * already committed by the time this fires, so the COUNT includes it:
+ *   count === 1 → 'first'       (this is the only payment → celebrate)
+ *   count  > 1 → 'established'  (prior payments exist → never celebrate)
+ *   otherwise  → 'unknown'      (count missing / query error → FAIL CLOSED)
+ */
+async function verifyFirstPayment(
+  client: SupabaseClient,
+  coachId: string,
+): Promise<'first' | 'established' | 'unknown'> {
+  // `head: true` makes this a COUNT-only request (no rows transferred); the
+  // exact count is server-computed. This reads the same `payments` table the
+  // subscription already watches — no new endpoint, no new schema.
+  const { count, error: queryError } = await client
+    .from('payments')
+    .select('id', { count: 'exact', head: true })
+    .eq('coach_id', coachId);
+  if (queryError) {
+    // Do not throw — the caller fails closed on 'unknown' and logs the reason.
+    logger.warn('ed3', 'first-payment count query returned error', {
+      reason: queryError.message,
+    });
+    return 'unknown';
+  }
+  if (typeof count !== 'number') return 'unknown';
+  return count <= 1 ? 'first' : 'established';
+}
+
 export function useFirstPaymentRealtime({
   coachId,
   enabled,
@@ -162,11 +204,35 @@ export function useFirstPaymentRealtime({
               filter: `coach_id=eq.${coachId}`,
             },
             (payload) => {
-              // Re-check the gate at fire time: a payment that lands AFTER the
-              // coach already saw their first celebration must not re-trigger.
+              // Re-check the gate at fire time, THEN prove server-side that
+              // this is genuinely the coach's FIRST payment before celebrating.
+              // Both guards fail closed (Law #36): a payment after the gate is
+              // closed, OR for an established coach, OR when verification
+              // errors, must NOT spend the one sanctioned exclamation.
               hasSeenFirstPayment(coachId as string)
-                .then((already) => {
-                  if (already || cancelled) return;
+                .then(async (already) => {
+                  if (already || cancelled || !client) return;
+                  const verdict = await verifyFirstPayment(
+                    client,
+                    coachId as string,
+                  );
+                  if (cancelled) return;
+                  if (verdict === 'established') {
+                    // Prior payments exist — this coach is past their first.
+                    // Close the local gate so we stop re-arming on future
+                    // opens, and never celebrate.
+                    logger.log(
+                      'ed3',
+                      'established coach payment; suppressing celebration and closing gate',
+                    );
+                    await markFirstPaymentSeen(coachId as string);
+                    return;
+                  }
+                  if (verdict !== 'first') {
+                    // 'unknown' — verification could not prove payment #1.
+                    // FAIL CLOSED: do not celebrate. Already logged in helper.
+                    return;
+                  }
                   const row = (payload.new ?? {}) as Record<string, unknown>;
                   cbRef.current({
                     amount: formatAmount(row),
@@ -174,11 +240,11 @@ export function useFirstPaymentRealtime({
                   });
                 })
                 .catch((err) => {
-                  // Gate re-check failed — do not swallow (Law #36). We skip
-                  // firing (fail-closed) and record why the celebration was
-                  // suppressed on this INSERT.
-                  logger.warn('ed3', 'hasSeenFirstPayment re-check failed', {
-                    reason: errorMessage(err, 'gate re-check failed'),
+                  // Gate re-check / verification failed — do not swallow
+                  // (Law #36). We skip firing (fail-closed) and record why the
+                  // celebration was suppressed on this INSERT.
+                  logger.warn('ed3', 'first-payment verification failed', {
+                    reason: errorMessage(err, 'verification failed'),
                   });
                 });
             },

@@ -16,10 +16,11 @@
  * while an event is pending — so when the flag is OFF or the gate is closed it
  * is a transparent pass-through with zero behavioural change to the shell.
  */
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { featureFlags } from '../../../config/featureFlags';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
+import { logger } from '../../../utils/logger';
 import FirstPaymentWowScreen from './FirstPaymentWowScreen';
 import {
   useFirstPaymentRealtime,
@@ -42,31 +43,56 @@ export default function FirstPaymentWowHost({
 
   const [event, setEvent] = useState<FirstPaymentEvent | null>(null);
 
+  // Session-local dismissed/seen latch (audit R2 P1). The persisted gate alone
+  // is not enough: if markFirstPaymentSeen rejects (storage outage), the gate
+  // stays unseen and a later INSERT could re-fire onFirstPayment after the
+  // coach has already dismissed the celebration this session. This in-memory
+  // ref blocks any re-show for the lifetime of the host, INDEPENDENT of
+  // whether persistence succeeded — it is set BEFORE the overlay clears.
+  const dismissedThisSession = useRef(false);
+
   const handleFirstPayment = useCallback((next: FirstPaymentEvent) => {
+    // Once dismissed this session, never re-show — even if the persisted gate
+    // failed to write (the hook re-checks only the persisted gate, so this
+    // latch is the fail-closed backstop against a re-fire).
+    if (dismissedThisSession.current) return;
     // Only the first event wins; later INSERTs while the overlay is up are
     // ignored (the gate is written on dismiss).
     setEvent((current) => current ?? next);
   }, []);
 
-  useFirstPaymentRealtime({
+  const { error: realtimeError } = useFirstPaymentRealtime({
     coachId,
     enabled: featureFlags.romanFirstPaymentWow && Boolean(coachId),
     onFirstPayment: handleFirstPayment,
   });
 
+  // Consume the hook's error state at the overlay owner (audit R2 P2). This is
+  // a background showpiece, so we do NOT add user-facing noise — but we never
+  // swallow it (Law #36): a subscription failure means the celebration may be
+  // silently absent, so we route it to the shared logger for diagnosis.
+  useEffect(() => {
+    if (realtimeError) {
+      logger.warn('ed3', 'first-payment realtime error surfaced at host', {
+        reason: realtimeError,
+      });
+    }
+  }, [realtimeError]);
+
   const handleDismiss = useCallback(async () => {
-    // Close the gate (await its persistence) FIRST so the celebration can never
-    // re-arm, THEN clear the overlay (return to coach home). On a write failure
-    // we log via console.warn — never swallow (Bradley Law #36) — but STILL
-    // clear the UI so the coach is never trapped behind the overlay.
+    // Set the session latch FIRST so the celebration can never re-show this
+    // session regardless of whether the persisted gate write below succeeds.
+    dismissedThisSession.current = true;
+    // Close the persisted gate (await it) so a future session also stays
+    // closed, THEN clear the overlay (return to coach home). On a write
+    // failure we log via the shared logger — never swallow (Bradley Law #36)
+    // — but STILL clear the UI so the coach is never trapped behind the
+    // overlay; the session latch already blocks any re-show.
     if (coachId) {
       try {
         await markFirstPaymentSeen(coachId);
       } catch (err) {
-        console.warn(
-          '[FirstPaymentWowHost] markFirstPaymentSeen failed',
-          err,
-        );
+        logger.warn('ed3', 'markFirstPaymentSeen failed', { error: err });
       }
     }
     setEvent(null);

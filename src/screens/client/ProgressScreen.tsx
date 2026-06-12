@@ -21,7 +21,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Svg, { Circle, G, Polyline, Line as SvgLine, Text as SvgText } from 'react-native-svg';
+import Svg, { Circle, G } from 'react-native-svg';
 import { weightApi, logApi } from '../../services/api';
 import { useMacroTargets } from '../../hooks/useMacroTargets';
 import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
@@ -37,6 +37,8 @@ import { getTodayString, bucketDateLocal } from '../../utils/date';
 import FadeInView from '../../components/FadeInView';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
+import { logger } from '../../utils/logger';
+import CoachErrorState from '../../components/community/coach/CoachErrorState';
 import ProgressChartCard from './progress/ProgressChartCard';
 
 type Period = '7D' | '30D' | '90D' | 'All';
@@ -143,6 +145,10 @@ export default function ProgressScreen() {
   const [todayMacros, setTodayMacros] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0 });
   const [loggingStreak, setLoggingStreak] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  // ED.4 (audit R2 P2): a weight-history fetch failure used to fall through to
+  // the benign "log your weight" empty copy, hiding the error from the client.
+  // Track it so the chart slot can render an honest Roman-tone retry state.
+  const [weightHistoryError, setWeightHistoryError] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!userId) return;
@@ -152,6 +158,9 @@ export default function ProgressScreen() {
 
     try {
       const res = await weightApi.getHistory(days);
+      // The fetch succeeded — clear any prior error so the chart (or honest
+      // empty copy) renders instead of the retry state.
+      setWeightHistoryError(false);
       type WeightRow = { id: string; user_id?: string; date?: string; created_at?: string; weight_lbs?: number; weight?: number; notes?: string };
       const logs = (((res.data as WeightRow[] | undefined) || []).map((w) => {
         // Server may send either a bare `YYYY-MM-DD` (already a calendar day)
@@ -193,9 +202,13 @@ export default function ProgressScreen() {
       }
       setLoggingStreak(streak);
     } catch (err) {
-      // Best-effort streak compute; if it fails the streak stays at its last
-      // good value (or zero on first load) — no user action is useful.
-      console.error('ProgressScreen: streak calc failed', err);
+      // The weight-history load failed. Record it so the chart slot renders an
+      // honest retry state instead of the benign "log your weight" empty copy
+      // (audit R2 P2). Never swallow — log via the shared logger (Law #36).
+      setWeightHistoryError(true);
+      logger.error('progress', 'weight history load failed', {
+        reason: errorMessage(err, 'weight history load failed'),
+      });
     }
 
     // Load today's macros from API
@@ -473,7 +486,21 @@ export default function ProgressScreen() {
             scrubber, auto-PR flag + Roman commentary). chartData is already the
             {x: epoch ms, y: weight} shape ProgressChartCard expects, so it maps
             through without an adapter. */}
-        {chartData.length >= 2 ? (
+        {weightHistoryError ? (
+          // Honest load-failure state (audit R2 P2): a fetch error must NOT be
+          // dressed up as the benign "log your weight" empty copy. CoachErrorState
+          // co-mounts Roman's neutral face, an honest one-sentence line in his
+          // register (no contractions, no exclamation), and a retry action.
+          <View style={styles.chartContainer}>
+            <Text style={styles.chartTitle}>Weight Trend</Text>
+            <CoachErrorState
+              message="That chart did not load. I will try again."
+              onRetry={loadData}
+              retrying={refreshing}
+              testID="progress-weight-chart-error"
+            />
+          </View>
+        ) : chartData.length >= 2 ? (
           <View style={styles.chartContainer}>
             <Text style={styles.chartTitle}>Weight Trend</Text>
             <View style={styles.chartInner}>

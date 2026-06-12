@@ -8,8 +8,8 @@
  *      write must persist BEFORE the UI returns to coach home, so a re-render
  *      can never re-arm the celebration (P1-3). We hold the gate promise open
  *      and assert the overlay is still mounted until it resolves.
- *   3. A gate-write REJECTION is logged via console.warn (never swallowed —
- *      Bradley Law #36) AND the overlay still clears, so the coach is never
+ *   3. A gate-write REJECTION is logged via the shared logger (never swallowed
+ *      — Bradley Law #36) AND the overlay still clears, so the coach is never
  *      trapped behind the modal.
  *
  * The realtime hook is mocked to capture its onFirstPayment callback, exactly
@@ -40,6 +40,9 @@ jest.mock('../useFirstPaymentRealtime', () => ({
     onFirstPayment: (e: { amount: string; clientName: string }) => void;
   }) => {
     capturedOnFirstPayment = args.onFirstPayment;
+    // The host now consumes the returned error state (audit R2 P2), so the
+    // mock must return the documented shape.
+    return { error: null };
   },
 }));
 
@@ -116,15 +119,43 @@ describe('FirstPaymentWowHost — ED.3 (P1-3 dismiss ordering)', () => {
       await Promise.resolve();
     });
 
-    // Never swallowed — the failure is recorded (Bradley Law #36)...
+    // Never swallowed — the failure is recorded via the shared logger, which
+    // forwards to the native warn channel under __DEV__ (Bradley Law #36)...
     expect(warnSpy).toHaveBeenCalledWith(
-      '[FirstPaymentWowHost] markFirstPaymentSeen failed',
-      expect.any(Error),
+      '[ed3]',
+      'markFirstPaymentSeen failed',
+      { error: expect.any(Error) },
     );
     // ...and the coach is never trapped: the overlay still clears.
     await waitFor(() =>
       expect(queryByTestId('first-payment-wow')).toBeNull(),
     );
+    warnSpy.mockRestore();
+  });
+
+  it('does NOT re-show after dismiss when the gate write failed (session latch)', async () => {
+    // Audit R2 P1: even when markFirstPaymentSeen rejects (so the persisted
+    // gate stays unseen), a SECOND first-payment event in the same session
+    // must not re-arm the celebration — the in-memory session latch blocks it.
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    mockMarkFirstPaymentSeen.mockRejectedValue(new Error('storage offline'));
+
+    const { getByTestId, queryByTestId } = renderHostWithEvent();
+
+    // Dismiss — the persisted gate write rejects, but the latch is set.
+    await act(async () => {
+      fireEvent.press(getByTestId('first-payment-dismiss'));
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(queryByTestId('first-payment-wow')).toBeNull());
+
+    // A later INSERT fires the captured callback again...
+    act(() => {
+      capturedOnFirstPayment?.({ amount: '$300.00', clientName: 'Riley' });
+    });
+
+    // ...and the celebration must STILL be absent (no re-show this session).
+    expect(queryByTestId('first-payment-wow')).toBeNull();
     warnSpy.mockRestore();
   });
 });
