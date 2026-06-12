@@ -188,16 +188,12 @@ export default function CommunityChallengesScreen({
         data={data}
         accessibilityRole="list"
         renderItem={({ item }) => (
-          // Each row is wrapped in a list-item View so assistive tech announces
-          // list membership; the ChallengeCard inside stays a `button` (the tap
-          // target) without role collision (P1 — list/listitem semantics).
-          // React Native's typed `AccessibilityRole` union omits 'listitem'
-          // (only the container 'list' role exists), so we cannot set it as a
-          // role without an unsafe cast (R0 forbids casts). The supported,
-          // type-clean signal is the parent FlatList's `accessibilityRole="list"`
-          // plus an addressable wrapper per row — this is the RN-idiomatic way to
-          // expose collection membership.
-          <View testID={`community-challenge-listitem-${item.id}`}>
+          // The outer wrapper carries `listitem` semantics so assistive tech
+          // receives the list structure, while the inner ChallengeCard keeps
+          // `button` (the tap target) without role collision. RN types the W3C
+          // `role` prop (not `accessibilityRole`) for list/listitem; this
+          // matches the EventCard precedent (P1 — list/listitem semantics).
+          <View role="listitem" testID={`community-challenge-listitem-${item.id}`}>
             <ChallengeCard
               challenge={item}
               participation={null}

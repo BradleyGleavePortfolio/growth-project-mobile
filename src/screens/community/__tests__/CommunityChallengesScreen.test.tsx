@@ -65,9 +65,34 @@ jest.mock('../../../api/communityChallengesApi', () => ({
 }));
 
 import { communityChallengesApi } from '../../../api/communityChallengesApi';
+import type { CommunityChallenge } from '../../../api/communityChallengesApi';
 import CommunityChallengesScreen from '../CommunityChallengesScreen';
 
 const api = jest.mocked(communityChallengesApi);
+
+function challenge(
+  overrides: Partial<CommunityChallenge> = {},
+): CommunityChallenge {
+  return {
+    id: 'ch-1',
+    workspace_id: 'ws-resolved',
+    cohort_id: 'co-1',
+    created_by_user_id: 'coach-1',
+    title: 'March step challenge',
+    description: 'Walk 100k steps this month.',
+    status: 'active',
+    starts_at: null,
+    ends_at: null,
+    metric_key: 'steps',
+    target_value: 100000,
+    unit: 'steps',
+    leaderboard_enabled: false,
+    created_at: '2026-03-01T00:00:00Z',
+    updated_at: '2026-03-01T00:00:00Z',
+    archived: false,
+    ...overrides,
+  };
+}
 
 function renderScreen(props: { workspaceId?: string | null } = {}) {
   const client = new QueryClient({
@@ -110,6 +135,17 @@ describe('CommunityChallengesScreen — reachable discovery surface (P1)', () =>
       expect(screen.getByTestId('community-challenges-header')).toBeTruthy(),
     );
     expect(api.listChallenges).not.toHaveBeenCalled();
+  });
+
+  it('wraps each challenge row in a `role="listitem"` container for assistive tech (P1 — list/listitem semantics)', async () => {
+    api.listChallenges.mockResolvedValue([challenge()]);
+    renderScreen();
+
+    const row = await screen.findByTestId('community-challenge-listitem-ch-1');
+    // The outer wrapper must carry the W3C `role="listitem"` so the parent
+    // FlatList's `accessibilityRole="list"` announces collection membership;
+    // this mirrors the EventCard precedent.
+    expect(row.props.role).toBe('listitem');
   });
 
   it('prefers an explicit workspaceId prop (embedded caller) and still bounds the fetch', async () => {

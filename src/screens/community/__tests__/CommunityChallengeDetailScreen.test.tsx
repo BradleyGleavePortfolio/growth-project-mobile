@@ -74,6 +74,7 @@ jest.mock('../../../api/communityChallengesApi', () => ({
 import { communityChallengesApi } from '../../../api/communityChallengesApi';
 import type {
   CommunityChallenge,
+  CommunityChallengeComment,
   CommunityChallengeParticipation,
 } from '../../../api/communityChallengesApi';
 // The local Roman empty-state copy that this surface must NEVER render (the
@@ -218,7 +219,12 @@ describe('CommunityChallengeDetailScreen — leaderboard opt-in posture', () => 
     await waitFor(() =>
       expect(api.getLeaderboard).toHaveBeenCalledWith('ch-1', { limit: 20 }),
     );
-    expect(await screen.findByTestId('community-challenge-lb-me-1')).toBeTruthy();
+    const lbRow = await screen.findByTestId('community-challenge-lb-me-1');
+    expect(lbRow).toBeTruthy();
+    // The leaderboard row wrapper carries the W3C `role="listitem"` so the
+    // parent list's `accessibilityRole="list"` announces collection
+    // membership; this mirrors the EventCard precedent (P1 — list/listitem).
+    expect(lbRow.props.role).toBe('listitem');
   });
 
   it('hides the leaderboard entirely when the coach has not enabled it', async () => {
@@ -397,5 +403,35 @@ describe('CommunityChallengeDetailScreen — progress conflict (F3)', () => {
     expect(
       await screen.findByTestId('community-challenge-progress-sheet-error'),
     ).toBeTruthy();
+  });
+});
+
+describe('CommunityChallengeDetailScreen — list/listitem semantics (P1)', () => {
+  function comment(
+    overrides: Partial<CommunityChallengeComment> = {},
+  ): CommunityChallengeComment {
+    return {
+      id: 'cm-1',
+      challenge_id: 'ch-1',
+      author_user_id: 'other-1',
+      body: 'Keep going, you have got this.',
+      created_at: '2026-03-05T00:00:00Z',
+      ...overrides,
+    };
+  }
+
+  it('wraps each comment row in a `role="listitem"` container for assistive tech', async () => {
+    api.getChallenge.mockResolvedValue({
+      challenge: challenge(),
+      participation: participation(),
+    });
+    api.listComments.mockResolvedValue([comment()]);
+    renderScreen();
+
+    const row = await screen.findByTestId('community-challenge-comment-cm-1');
+    // The comment row wrapper carries the W3C `role="listitem"` so the parent
+    // comments list's `accessibilityRole="list"` announces collection
+    // membership; this mirrors the EventCard precedent.
+    expect(row.props.role).toBe('listitem');
   });
 });

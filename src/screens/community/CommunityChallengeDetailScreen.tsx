@@ -465,11 +465,13 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
     const mine = item.author_user_id === client?.id;
     return (
       <View
-        // List-item membership: the parent comments FlatList carries
-        // `accessibilityRole="list"`. RN's typed AccessibilityRole union has no
-        // 'listitem' (only the 'list' container role), so we keep each row an
-        // addressable accessible View inside the list rather than forcing an
-        // unsupported role via an unsafe cast (R0). (P1 — list/listitem.)
+        // The outer wrapper carries `listitem` semantics so assistive tech
+        // receives the list structure (the parent comments FlatList carries
+        // `accessibilityRole="list"`), while the inner report control keeps
+        // `button`. RN types the W3C `role` prop (not `accessibilityRole`) for
+        // list/listitem; this matches the EventCard precedent. (P1 —
+        // list/listitem.)
+        role="listitem"
         style={[styles.comment, { borderColor: semanticColors.border }]}
         testID={`community-challenge-comment-${item.id}`}
       >
@@ -499,9 +501,12 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
   const renderLeaderboardRow = (row: CommunityChallengeLeaderboardRow) => (
     <View
       key={row.user_id}
-      // List-item membership via the parent leaderboard FlatList's
-      // `accessibilityRole="list"` (RN has no typed 'listitem' role; see the
-      // comment row note). (P1 — list/listitem.)
+      // The outer wrapper carries `listitem` semantics so assistive tech
+      // receives the list structure (the parent leaderboard FlatList carries
+      // `accessibilityRole="list"`). RN types the W3C `role` prop (not
+      // `accessibilityRole`) for list/listitem; this matches the EventCard
+      // precedent (see the comment row note). (P1 — list/listitem.)
+      role="listitem"
       style={[
         styles.lbRow,
         { borderColor: semanticColors.border },
