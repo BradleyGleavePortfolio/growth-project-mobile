@@ -2,30 +2,42 @@
  * ChallengeCommentsEmptyState — the TRUE-EMPTY state for the challenge comments
  * surface (v3-1).
  *
- * FACE+VOICE CONTRACT (gate 9 / DESIGN_INTELLIGENCE Part III): the copy here is
- * rendered from the OPERATOR-LOCKED Roman payload the BACKEND composes
- * (`{ text, avatar_crop, surface_key, voice_variant }`), NOT from a local
- * `romanVoice.ts` constant. A local copy fallback on this surface is a P0; when
- * the payload is missing or drifted the caller renders an honest loading/error
- * state instead of this component (see CommunityChallengeDetailScreen).
+ * FACE+VOICE CONTRACT (gate 9 / DESIGN_INTELLIGENCE Part III): the original P0
+ * was that this surface rendered LOCAL Roman-voiced copy from `romanVoice.ts`
+ * (`threadEmpty`). The face+voice rule is that Roman's *voice* may only be
+ * emitted alongside a backend-composed `{ text, avatar_crop, surface_key,
+ * voice_variant }` payload — never from a local constant.
  *
- * The CTA is a REAL action (no dead no-op, UX finding 3): pressing it focuses
- * the composer below so the member can leave the first note immediately.
+ * There is NO backend payload source for this participant-facing surface: the
+ * binding backend branch (PR #390 head) exposes no challenge `comments/empty-
+ * state` route, and the Roman voice-policy has no `challenge_comments_empty`
+ * surface key (it covers only the ten P2 notification surfaces and the five
+ * coach-community surfaces). Per the brief ("missing payload ⇒ honest state,
+ * never local fallback") the honest resolution is to render a NEUTRAL,
+ * non-Roman-voiced encouragement line here: plain UI copy, no RomanAvatar, no
+ * Roman voice. This satisfies the P0 (no local Roman copy) without inventing a
+ * backend contract.
  *
- * Tokens only (no raw hex). Line/face Roman avatar only. >=48dp touch target.
+ * The CTA is a REAL action (no dead no-op, UX finding 3 / F8): pressing it
+ * focuses the composer below so the member can leave the first note immediately.
+ *
+ * Tokens only (no raw hex). >=48dp touch target.
  */
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import HapticPressable from '../HapticPressable';
 import { useTheme } from '../../theme/useTheme';
 import { spacing, radius } from '../../theme/tokens';
-import RomanAvatar from './RomanAvatar';
-import type { ChallengeEmptyStatePayload } from '../../api/communityChallengesApi';
 
 export interface ChallengeCommentsEmptyStateProps {
-  /** Operator-locked Roman copy payload, validated at the API boundary. */
-  payload: ChallengeEmptyStatePayload;
-  /** Primary action label (kept local — a UI affordance label, not Roman copy). */
+  /**
+   * Neutral, non-Roman UI copy for the true-empty surface. Supplied by the
+   * caller as a plain string (a UI label, not Roman voice) so the component
+   * never reaches for a local Roman constant.
+   */
+  message: string;
+  /** Primary action label (a UI affordance label, not Roman copy). */
   actionLabel: string;
   /** REAL action — focuses/scrolls the composer into view (no dead no-op). */
   onAction: () => void;
@@ -33,7 +45,7 @@ export interface ChallengeCommentsEmptyStateProps {
 }
 
 export default function ChallengeCommentsEmptyState({
-  payload,
+  message,
   actionLabel,
   onAction,
   testID,
@@ -42,16 +54,16 @@ export default function ChallengeCommentsEmptyState({
 
   return (
     <View style={styles.container} testID={testID}>
-      <RomanAvatar
-        crop={payload.avatar_crop}
-        size={48}
-        testID="community-challenge-comments-empty-roman"
+      <Ionicons
+        name="chatbubble-ellipses-outline"
+        size={28}
+        color={semanticColors.textMuted}
       />
       <Text
         style={[styles.body, { color: semanticColors.textMuted }]}
         testID="community-challenge-comments-empty-text"
       >
-        {payload.text}
+        {message}
       </Text>
       <HapticPressable
         intent="medium"

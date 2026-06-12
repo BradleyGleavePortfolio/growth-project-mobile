@@ -67,14 +67,24 @@ jest.mock('../../../api/communityChallengesApi', () => ({
 }));
 
 import { communityChallengesApi } from '../../../api/communityChallengesApi';
+import type {
+  CommunityChallenge,
+  CommunityChallengeParticipation,
+} from '../../../api/communityChallengesApi';
+// The local Roman empty-state copy that this surface must NEVER render (the
+// original F1 P0 was rendering this local constant). Imported so the regression
+// can assert its distinctive phrase is ABSENT from the rendered true-empty tree.
+import { ROMAN_COMMUNITY_LINES } from '../../../components/community/romanVoice';
 import CommunityChallengeDetailScreen from '../CommunityChallengeDetailScreen';
 
-const api = communityChallengesApi as unknown as Record<
-  string,
-  jest.Mock
->;
+// F10: a properly typed mock surface via jest.mocked() rather than a double
+// type-cast through the unknown type. Each method is already a jest.fn() from
+// the module factory above, so jest.mocked() infers the mock types directly.
+const api = jest.mocked(communityChallengesApi);
 
-function challenge(overrides: Record<string, unknown> = {}) {
+function challenge(
+  overrides: Partial<CommunityChallenge> = {},
+): CommunityChallenge {
   return {
     id: 'ch-1',
     workspace_id: 'ws-1',
@@ -96,7 +106,9 @@ function challenge(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function participation(overrides: Record<string, unknown> = {}) {
+function participation(
+  overrides: Partial<CommunityChallengeParticipation> = {},
+): CommunityChallengeParticipation {
   return {
     challenge_id: 'ch-1',
     user_id: 'me-1',
@@ -124,7 +136,7 @@ function renderScreen() {
 
 beforeEach(() => {
   flags.communityChallenges = true;
-  Object.values(api).forEach((fn) => fn.mockReset());
+  Object.values(api).forEach((fn) => (fn as jest.Mock).mockReset());
   api.listComments.mockResolvedValue([]);
   api.getLeaderboard.mockResolvedValue({ available: true, opted_in: false, rows: [] });
 });
@@ -194,9 +206,7 @@ describe('CommunityChallengeDetailScreen — leaderboard opt-in posture', () => 
     api.getLeaderboard.mockResolvedValue({
       available: true,
       opted_in: true,
-      rows: [
-        { user_id: 'me-1', rank: 1, progress_value: 25000, is_self: true },
-      ],
+      rows: [{ user_id: 'me-1', rank: 1, progress_value: 25000, is_self: true }],
     });
     renderScreen();
 
@@ -224,5 +234,93 @@ describe('CommunityChallengeDetailScreen — error', () => {
 
     expect(await screen.findByTestId('community-challenge-error')).toBeTruthy();
     expect(screen.getByTestId('community-challenge-retry')).toBeTruthy();
+  });
+});
+
+describe('CommunityChallengeDetailScreen — comments empty vs load error (F1/F8)', () => {
+  it('renders a NEUTRAL true-empty state and NEVER the local Roman threadEmpty copy (F1 P0)', async () => {
+    // F1 correction: the backend (PR #390 head) exposes NO participant-facing
+    // empty-state payload endpoint and NO challenge-comments surface key in the
+    // Roman voice-policy. Per the brief ("missing payload => honest state, never
+    // local fallback") the only honest option is a NEUTRAL, non-Roman empty
+    // state. This pins that the local Roman threadEmpty line is ABSENT (the
+    // original P0) and that the real focus CTA is present (F8).
+    api.getChallenge.mockResolvedValue({
+      challenge: challenge(),
+      participation: participation(),
+    });
+    api.listComments.mockResolvedValue([]); // server-confirmed zero rows
+    renderScreen();
+
+    expect(
+      await screen.findByTestId('community-challenge-comments-empty'),
+    ).toBeTruthy();
+    expect(
+      screen.getByTestId('community-challenge-comments-empty-action'),
+    ).toBeTruthy();
+
+    // The distinctive Roman threadEmpty phrase (token-free prefix) must be
+    // absent so {firstName} interpolation cannot make the assertion pass.
+    const romanPrefix = ROMAN_COMMUNITY_LINES.threadEmpty.straight.split(
+      '{firstName}',
+    )[0];
+    expect(romanPrefix.length).toBeGreaterThan(0);
+    const escaped = romanPrefix.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    expect(screen.queryByText(new RegExp(escaped))).toBeNull();
+  });
+
+  it('renders a calm load-error (NOT the empty state) when comments fail to load', async () => {
+    api.getChallenge.mockResolvedValue({
+      challenge: challenge(),
+      participation: participation(),
+    });
+    api.listComments.mockRejectedValue(new Error('comments down'));
+    renderScreen();
+
+    // A load error is its own surface with a retry; the empty state is NOT shown
+    // (a load error must never masquerade as "empty").
+    expect(
+      await screen.findByTestId('community-challenge-comments-load-error'),
+    ).toBeTruthy();
+    expect(screen.getByTestId('community-challenge-comments-retry')).toBeTruthy();
+    expect(screen.queryByTestId('community-challenge-comments-empty')).toBeNull();
+  });
+});
+
+describe('CommunityChallengeDetailScreen — progress conflict (F3)', () => {
+  it('refetches the detail after a 409 conflict on a progress write', async () => {
+    const { CommunityApiError } = jest.requireActual(
+      '../../../api/communityApi',
+    );
+    api.getChallenge.mockResolvedValue({
+      challenge: challenge(),
+      participation: participation(),
+    });
+    api.updateProgress.mockRejectedValue(
+      new CommunityApiError('conflict', 409, 'conflict'),
+    );
+    renderScreen();
+
+    // Open the sheet and submit a higher value; the write 409s.
+    fireEvent.press(
+      await screen.findByTestId('community-challenge-primary-action'),
+    );
+    fireEvent.changeText(
+      await screen.findByTestId('community-challenge-progress-sheet-input'),
+      '99999',
+    );
+    fireEvent.press(
+      screen.getByTestId('community-challenge-progress-sheet-submit'),
+    );
+
+    // The conflict triggers a re-fetch of the detail (true value): getChallenge
+    // is called again beyond the initial load.
+    await waitFor(() =>
+      expect(api.getChallenge.mock.calls.length).toBeGreaterThan(1),
+    );
+    // The sheet surfaces its own calm inline error and stays open.
+    expect(
+      await screen.findByTestId('community-challenge-progress-sheet-error'),
+    ).toBeTruthy();
   });
 });

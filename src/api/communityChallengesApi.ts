@@ -131,47 +131,20 @@ const ChallengeCommentResponseSchema = z
   .object({ comment: ChallengeCommentSchema })
   .strict();
 
-// ─── Roman empty-state payload (operator-locked face+voice contract) ──────────
-//
-// The challenge comments empty surface renders OPERATOR-LOCKED Roman copy that
-// is composed on the BACKEND (the VoicePolicy maps) and delivered as a payload —
-// it is NOT sourced from a local `romanVoice.ts` constant on the client (gate 9
-// / FACE+VOICE: local empty-state copy is a P0). The four contract fields mirror
-// the backend RomanCopyPayload exactly (see
-// growth-project-backend coach-empty-states.dto.ts: `text`, `avatar_crop`,
-// `surface_key`, `voice_variant`). The `surface_key` for this surface is
-// `challenge_comments_empty`. The payload is validated strictly at the boundary;
-// a missing/drifted payload throws a `contract` error so the screen can fall to
-// an HONEST loading/error state rather than a local copy fallback.
-
-export const ChallengeAvatarCropSchema = z.enum(['monogram', 'smile', 'neutral']);
-export type ChallengeAvatarCrop = z.infer<typeof ChallengeAvatarCropSchema>;
-
-export const ChallengeVoiceVariantSchema = z.enum(['legacy', 'roman_v2']);
-export type ChallengeVoiceVariant = z.infer<typeof ChallengeVoiceVariantSchema>;
-
-export const ChallengeEmptyStateSurfaceKeySchema = z.enum([
-  'challenge_comments_empty',
-]);
-export type ChallengeEmptyStateSurfaceKey = z.infer<
-  typeof ChallengeEmptyStateSurfaceKeySchema
->;
-
-export const ChallengeEmptyStatePayloadSchema = z
-  .object({
-    text: z.string().min(1),
-    avatar_crop: ChallengeAvatarCropSchema,
-    surface_key: ChallengeEmptyStateSurfaceKeySchema,
-    voice_variant: ChallengeVoiceVariantSchema,
-  })
-  .strict();
-export type ChallengeEmptyStatePayload = z.infer<
-  typeof ChallengeEmptyStatePayloadSchema
->;
-
-const ChallengeCommentsEmptyStateResponseSchema = z
-  .object({ empty_state: ChallengeEmptyStatePayloadSchema })
-  .strict();
+// NOTE (F1 correction): there is NO backend empty-state payload endpoint for the
+// challenge *comments* surface. The binding backend branch (PR #390 head,
+// community-challenges.controller.ts) exposes no `comments/empty-state` route,
+// and no `challenge_comments_empty` surface key exists anywhere in the Roman
+// voice-policy (voice-policy.constants.ts) — that policy only covers the ten P2
+// notification surfaces and the five COACH_COMMUNITY_SURFACE_KEYS, none of which
+// is participant-facing challenge comments. A prior revision invented a
+// `getCommentsEmptyState` method + `challenge_comments_empty` enum + a
+// `/comments/empty-state` route; that fabricated a contract the backend does not
+// serve and is removed here (brief: "mirror the dto AS IT STANDS"). The honest
+// true-empty surface is therefore a NEUTRAL, non-Roman-voiced state derived from
+// the comments query itself (no local `romanVoice.ts` Roman copy — that local
+// Roman copy was the original P0 — and no invented backend payload). See
+// CommunityChallengeDetailScreen's commentsFooter.
 
 // ─── Transport helper (mirrors communityApi.call) ─────────────────────────────
 
@@ -304,22 +277,6 @@ export const communityChallengesApi = {
     return call(ChallengeCommentListResponseSchema, () =>
       api.get<unknown>(`/community/challenges/${challengeId}/comments`),
     ).then((r) => r.comments);
-  },
-
-  /**
-   * GET /community/challenges/:challengeId/comments/empty-state — the
-   * operator-locked Roman copy payload for the challenge comments empty surface.
-   * Strictly validated; a drifted/absent payload throws `contract` so the screen
-   * renders an honest error state and NEVER falls back to local copy.
-   */
-  getCommentsEmptyState(
-    challengeId: string,
-  ): Promise<ChallengeEmptyStatePayload> {
-    return call(ChallengeCommentsEmptyStateResponseSchema, () =>
-      api.get<unknown>(
-        `/community/challenges/${challengeId}/comments/empty-state`,
-      ),
-    ).then((r) => r.empty_state);
   },
 
   /** POST /community/challenges/:challengeId/comments — encouragement. */

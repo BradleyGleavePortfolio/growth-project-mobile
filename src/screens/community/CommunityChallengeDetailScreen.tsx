@@ -124,20 +124,17 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
       optedIn,
   });
 
-  // The TRUE-EMPTY copy for the comments surface is sourced from the BACKEND
-  // (operator-locked Roman payload), NOT a local constant -- a local fallback on
-  // this surface is the P0 (gate 9). It is fetched only when the comments query
-  // has actually resolved to zero rows, so a load error never masquerades as
-  // "empty". If THIS payload is missing/drifted we degrade to a calm load-error
-  // state for the empty surface rather than inventing copy.
+  // The TRUE-EMPTY surface is only shown once the comments query has actually
+  // resolved to zero rows, so a load error never masquerades as "empty" (F8).
+  // The original P0 was that this surface rendered LOCAL Roman copy from
+  // `romanVoice.ts`; the brief's remedy is a backend payload, but the binding
+  // backend (PR #390 head) serves NO empty-state payload for this participant
+  // surface and the Roman voice-policy has no `challenge_comments_empty` key.
+  // Per the brief ("missing payload => honest state, never local fallback") the
+  // honest resolution is a NEUTRAL, non-Roman-voiced empty state derived from
+  // this query result -- no local Roman copy, no invented backend endpoint.
   const commentsResolvedEmpty =
     comments.isSuccess && (comments.data?.length ?? 0) === 0;
-  const emptyState = useQuery({
-    queryKey: ['community', 'challenge', challengeId, 'comments', 'empty-state'],
-    queryFn: () => communityChallengesApi.getCommentsEmptyState(challengeId),
-    enabled:
-      !!challengeId && featureFlags.communityChallenges && commentsResolvedEmpty,
-  });
 
   const invalidateDetail = useCallback(() => {
     void queryClient.invalidateQueries({
@@ -347,13 +344,16 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
   const commentData = comments.data ?? [];
   // F8: a LOAD ERROR and a TRUE EMPTY are different states and must never be
   // conflated. A load error gets a calm retry (the composer stays available);
-  // a true empty (server confirmed zero rows) gets the backend-sourced Roman
-  // empty-state with a real CTA. The empty-state payload fetch can itself fail
-  // -- then we show the calm load-error treatment for the empty surface rather
-  // than inventing local copy (gate 9).
+  // a true empty (server confirmed zero rows) gets a NEUTRAL, non-Roman empty
+  // state with a real CTA (no local Roman copy, no invented backend payload).
   const commentsLoadError = comments.isError;
   const commentsTrueEmpty = commentsResolvedEmpty;
   const hasComments = commentData.length > 0;
+
+  // Neutral, non-Roman UI copy for the true-empty surface. This is a plain UI
+  // affordance string, NOT Roman voice and NOT sourced from `romanVoice.ts`.
+  const EMPTY_COMMENTS_MESSAGE =
+    'No encouragement notes yet. Be the first to leave one.';
 
   const renderComment = ({ item }: { item: CommunityChallengeComment }) => {
     const mine = item.author_user_id === client?.id;
@@ -559,8 +559,9 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
 
   // F1/F8: the footer below the comments list. Three honest, distinct states:
   //   1. comments LOAD ERROR  -> calm retry; the composer below stays usable.
-  //   2. comments TRUE EMPTY  -> backend Roman empty-state (real focus CTA),
-  //      OR its own load-error/loading treatment if the payload isn't ready.
+  //   2. comments TRUE EMPTY  -> a NEUTRAL (non-Roman) empty state with a REAL
+  //      focus CTA. No local Roman copy (the P0) and no invented backend
+  //      payload (there is none on the binding backend branch).
   //   3. has comments         -> no footer.
   const commentsFooter = commentsLoadError ? (
     <View style={styles.emptyComments} testID="community-challenge-comments-load-error">
@@ -586,40 +587,14 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
       </HapticPressable>
     </View>
   ) : commentsTrueEmpty ? (
-    emptyState.isLoading ? (
-      <View style={styles.emptyComments} testID="community-challenge-comments-empty-loading">
-        <ActivityIndicator color={semanticColors.accent} />
-      </View>
-    ) : emptyState.isError || !emptyState.data ? (
-      // The empty-state payload is missing/drifted: degrade to a calm load
-      // error rather than invent local Roman copy (gate 9 / F1 P0).
-      <View style={styles.emptyComments} testID="community-challenge-comments-empty-error">
-        <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
-          Be the first to leave a note of encouragement.
-        </Text>
-        <HapticPressable
-          intent="medium"
-          onPress={focusComposer}
-          accessibilityRole="button"
-          accessibilityLabel="Leave the first note"
-          testID="community-challenge-comments-empty-fallback-action"
-          style={[styles.retry, { borderColor: semanticColors.accent }]}
-        >
-          <Text style={[styles.retryLabel, { color: semanticColors.accent }]}>
-            Leave the first note
-          </Text>
-        </HapticPressable>
-      </View>
-    ) : (
-      <View style={styles.emptyComments}>
-        <ChallengeCommentsEmptyState
-          payload={emptyState.data}
-          actionLabel="Leave the first note"
-          onAction={focusComposer}
-          testID="community-challenge-comments-empty"
-        />
-      </View>
-    )
+    <View style={styles.emptyComments}>
+      <ChallengeCommentsEmptyState
+        message={EMPTY_COMMENTS_MESSAGE}
+        actionLabel="Leave the first note"
+        onAction={focusComposer}
+        testID="community-challenge-comments-empty"
+      />
+    </View>
   ) : null;
 
   return (
