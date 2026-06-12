@@ -46,10 +46,10 @@ const WS = '11111111-1111-4111-8111-111111111111';
 const UID = '22222222-2222-4222-8222-222222222222';
 const EV = '33333333-3333-4333-8333-333333333333';
 
-const mockApi = communityEventsApi as unknown as {
-  getOne: jest.Mock;
-  rsvp: jest.Mock;
-  create: jest.Mock;
+const mockApi = {
+  getOne: jest.mocked(communityEventsApi.getOne),
+  rsvp: jest.mocked(communityEventsApi.rsvp),
+  create: jest.mocked(communityEventsApi.create),
 };
 
 function baseEvent(overrides: Partial<CommunityEvent> = {}): CommunityEvent {

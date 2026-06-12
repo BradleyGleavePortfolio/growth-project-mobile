@@ -297,6 +297,7 @@ export class CommunityApiError extends Error {
       | 'unauthorized'
       | 'forbidden'
       | 'gone'
+      | 'conflict'
       | 'server'
       | 'network'
       | 'contract'
@@ -314,6 +315,7 @@ export class CommunityApiError extends Error {
 function classify(status: number): CommunityApiError['kind'] {
   if (status === 401) return 'unauthorized';
   if (status === 403) return 'forbidden';
+  if (status === 409) return 'conflict';
   if (status === 410) return 'gone';
   if (status >= 500) return 'server';
   if (status === 0) return 'network';

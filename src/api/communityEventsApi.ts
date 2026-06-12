@@ -139,6 +139,11 @@ const CommunityRsvpResponseSchema = z
 function classify(status: number): CommunityApiError['kind'] {
   if (status === 401) return 'unauthorized';
   if (status === 403) return 'forbidden';
+  // 409 = the event moved underneath the caller (a coach advanced the
+  // lifecycle, or the RSVP raced a concurrent change). The screen reconciles
+  // by refetching and shows a calm "this event just changed" message rather
+  // than a hard error. (F4: classify conflict instead of falling to unknown.)
+  if (status === 409) return 'conflict';
   if (status === 410) return 'gone';
   if (status >= 500) return 'server';
   if (status === 0) return 'network';
@@ -187,6 +192,56 @@ async function call<T>(
     }
     throw err;
   }
+}
+
+/**
+ * Map a mutation failure to a CALM, user-facing message plus a `conflict` flag
+ * the screen uses to decide whether to refetch/reconcile (F4). Mutation call
+ * sites pass their caught error here so EVERY failed RSVP / create / transition
+ * / replay / reflect surfaces something honest to the user instead of silently
+ * doing nothing. A 409 (`conflict`) means the event moved underneath the
+ * caller, so the screen also refetches to show the now-current state.
+ */
+export interface MutationErrorInfo {
+  message: string;
+  conflict: boolean;
+}
+
+export function describeMutationError(err: unknown): MutationErrorInfo {
+  if (err instanceof CommunityApiError) {
+    switch (err.kind) {
+      case 'conflict':
+        return {
+          message: 'This event just changed. We refreshed it for you.',
+          conflict: true,
+        };
+      case 'unauthorized':
+        return {
+          message: 'Your session expired. Sign in and try again.',
+          conflict: false,
+        };
+      case 'forbidden':
+        return {
+          message: 'You do not have permission to do that.',
+          conflict: false,
+        };
+      case 'gone':
+        return { message: 'This event is no longer available.', conflict: false };
+      case 'network':
+        return {
+          message: 'Check your connection and try again.',
+          conflict: false,
+        };
+      case 'server':
+        return {
+          message: 'Something went wrong on our end. Please try again.',
+          conflict: false,
+        };
+      default:
+        return { message: 'That didn\u2019t go through. Please try again.', conflict: false };
+    }
+  }
+  return { message: 'That didn\u2019t go through. Please try again.', conflict: false };
 }
 
 function idempotentHeaders(): { headers: Record<string, string> } {
