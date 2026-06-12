@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { Spacing, Radius } from '../../theme/index';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { featureFlags } from '../../config/featureFlags';
 type MoreItem = {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
@@ -118,10 +119,32 @@ const MORE_ITEMS: MoreItem[] = [
   },
 ];
 
+/**
+ * Roman P1 chat entry row (client surface). Only present when
+ * featureFlags.romanChat is true (default OFF) — when the flag is OFF the row is
+ * not in the list, so there is no dead-end into an unregistered route. Routes to
+ * the MoreStack 'RomanChat' screen, which itself is registered only behind the
+ * same flag (ClientNavigator).
+ */
+const ROMAN_MORE_ITEM: MoreItem = {
+  icon: 'sparkles-outline',
+  label: 'Roman',
+  // Roman is not "your AI" — he is Roman, shared across surfaces (identity
+  // spec). Client row keeps the plain open-a-conversation register
+  // (R1 UX finding P2).
+  description: 'Open a conversation with Roman',
+  target: { type: 'stack', screen: 'RomanChat' },
+  a11yHint: 'Opens a conversation with Roman',
+};
+
 export default function MoreScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
+  const items = useMemo<MoreItem[]>(
+    () => (featureFlags.romanChat ? [ROMAN_MORE_ITEM, ...MORE_ITEMS] : MORE_ITEMS),
+    [],
+  );
 
   const handlePress = (item: MoreItem) => {
     if (item.target.type === 'stack') {
@@ -139,7 +162,7 @@ export default function MoreScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {MORE_ITEMS.map((item) => (
+        {items.map((item) => (
           <HapticPressable
             key={item.label}
             intent="light"

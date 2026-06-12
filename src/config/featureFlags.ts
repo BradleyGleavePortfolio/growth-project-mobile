@@ -173,6 +173,10 @@ export const featureFlags = {
   //
   // env: EXPO_PUBLIC_FF_COMMUNITY_EVENTS
   communityEvents: readFlag('EXPO_PUBLIC_FF_COMMUNITY_EVENTS', false),
+
+  // ─── Roman P1 — mobile chat (client + coach surfaces) ────────────────────
+  /** Roman P1 mobile chat surface. OFF until ops flips it alongside the backend FEATURE_ROMAN_CHAT_ENABLED gate. env: EXPO_PUBLIC_FF_ROMAN_CHAT */
+  romanChat: readFlag('EXPO_PUBLIC_FF_ROMAN_CHAT', false),
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;

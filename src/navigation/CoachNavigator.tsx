@@ -11,6 +11,7 @@ import ClientsListScreen from '../screens/coach/ClientsListScreen';
 import CoachHomeScreen from '../screens/coach/CoachHomeScreen';
 import MessagesScreen from '../screens/coach/MessagesScreen';
 import SettingsScreen from '../screens/coach/SettingsScreen';
+import RomanChatScreen from '../screens/roman/RomanChatScreen';
 import ClientDetailScreen from '../screens/coach/ClientDetailScreen';
 import ProgramTemplatesScreen from '../screens/coach/ProgramTemplatesScreen';
 import InviteCodesScreen from '../screens/coach/InviteCodesScreen';
@@ -190,6 +191,8 @@ export type SettingsStackParamList = {
   AdminControlRoom: undefined;
   // Phase 11 Track 9 — Crisp support inbox.
   SupportInbox: undefined;
+  /** Roman P1 chat — coach surface. Registered ONLY behind featureFlags.romanChat (default OFF). */
+  RomanChat: undefined;
   // Stage 3 — cross-pillar coach view. Now hosts the full nested navigator.
   BothPillars: undefined;
   // Phase 10 — GDPR right to erasure.
@@ -390,6 +393,14 @@ function SettingsStackNavigator() {
       )}
       {featureFlags.adminControlRoom && (
         <SettingsStack.Screen name="AdminControlRoom" component={AdminControlRoomScreen} />
+      )}
+      {/* Roman P1 chat (coach surface). Only registered when featureFlags.romanChat
+          is explicitly true (default OFF). surface='coach' is fixed here so the
+          backend @IsIn(ROMAN_SURFACES) value is never guessed client-side. */}
+      {featureFlags.romanChat && (
+        <SettingsStack.Screen name="RomanChat">
+          {() => <RomanChatScreen surface="coach" />}
+        </SettingsStack.Screen>
       )}
       {/* Phase 11 Track 9 — Support Inbox */}
       <SettingsStack.Screen name="SupportInbox" component={SupportInboxScreen} />

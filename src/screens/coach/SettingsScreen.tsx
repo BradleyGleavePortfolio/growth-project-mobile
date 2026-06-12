@@ -19,6 +19,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { signOut } from '../../services/authActions';
 import { coachApi, profileApi, notificationsApi, usersApi, AccountStatus } from '../../services/api';
 import { helpUrl } from '../../config/env';
+import { featureFlags } from '../../config/featureFlags';
 
 import { mediumTap, warningTap, successTap } from '../../utils/haptics';
 import { updateSupabasePassword } from '../../utils/supabaseAuth';
@@ -539,6 +540,34 @@ export default function SettingsScreen() {
       <View style={styles.section}>
         <BiometricUnlockSetting />
       </View>
+
+      {/* Roman P1 chat (coach surface). Entry row present ONLY when
+          featureFlags.romanChat is true (default OFF) — when OFF there is no row
+          and no dead-end, since the 'RomanChat' route is itself registered only
+          behind the same flag (CoachNavigator). Routes into the coach surface. */}
+      {featureFlags.romanChat ? (
+        <>
+          <Text style={styles.sectionHeader}>Concierge</Text>
+          <View style={styles.section}>
+            <TouchableOpacity
+              style={styles.row}
+              onPress={() => navigation.navigate('RomanChat')}
+              accessibilityRole="button"
+              accessibilityLabel="Open a conversation with Roman"
+              accessibilityHint="Ask for a brief, a client read, or the next step"
+            >
+              <Ionicons name="sparkles-outline" size={20} color={colors.textSecondary} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.rowLabel}>Roman</Text>
+                {/* Coach register: operational, not the generic "ask anything"
+                    client copy (R1 UX finding P2). */}
+                <Text style={styles.rowSubLabel}>Ask for a brief, a client read, or the next step.</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+        </>
+      ) : null}
 
       {/* iMessage-grade DM — Apple App Review 1.2 compliance. The coach must
           be able to view and undo their blocks from Settings. */}
