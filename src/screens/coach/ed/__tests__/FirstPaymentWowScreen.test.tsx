@@ -40,10 +40,10 @@ describe('FirstPaymentWowScreen — ED.3', () => {
       'Marcus — your first payment has arrived. $240.00, from Dana. I have seen a great many first payments, and they never stop meaning something. Congratulations!',
     );
 
-    // FACE — the smile crop avatar is present in the same tree, announced
-    // as the pleased (milestone) register.
+    // FACE — the milestone avatar is present in the same tree, announced in
+    // the §3.8 'knowing slight smile' register via the expression prop.
     const avatar = getByTestId('first-payment-avatar');
-    expect(avatar.props.accessibilityLabel).toBe('Roman, pleased');
+    expect(avatar.props.accessibilityLabel).toBe('Roman, slight smile');
   });
 
   it('fires onDismiss exactly once when the Roman-tone button is pressed', () => {

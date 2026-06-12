@@ -147,4 +147,20 @@ describe('useFirstPaymentRealtime — ED.3', () => {
     expect(mockClient.channel).not.toHaveBeenCalled();
     expect(onEvent).not.toHaveBeenCalled();
   });
+
+  it('tears down the subscription on unmount (unsubscribe + removeAllChannels)', async () => {
+    // P1-4 cleanup: both the channel unsubscribe and the client teardown must
+    // run on unmount, and neither rejection is swallowed (Bradley Law #36).
+    const onEvent = jest.fn();
+    const { unmount } = render(<Harness enabled onEvent={onEvent} />);
+    await waitFor(() => expect(captured.subscribed).toBe(true));
+
+    await act(async () => {
+      unmount();
+      await Promise.resolve();
+    });
+
+    expect(mockChannel.unsubscribe).toHaveBeenCalledTimes(1);
+    expect(mockClient.removeAllChannels).toHaveBeenCalledTimes(1);
+  });
 });

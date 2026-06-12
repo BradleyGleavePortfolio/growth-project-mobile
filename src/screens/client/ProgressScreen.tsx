@@ -2,10 +2,9 @@
  * ProgressScreen — Client progress dashboard.
  *
  * Displays weight trend, macros for today, body stats, and recent log entries.
- * The weight line chart is rendered via TgpLineChart from src/ui/charts, which
- * provides the unified Victory Native XL / SVG charting API for this app.
- *
- * Phase 11 / Track 5: migrated WeightLineChart to TgpLineChart wrapper.
+ * The weight trend is rendered via ProgressChartCard (ED.4) — the SVG +
+ * Reanimated card with a draw-in line, haptic scrubber, and auto-PR flag plus
+ * inline Roman commentary on the same data.
  */
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
@@ -38,7 +37,7 @@ import { getTodayString, bucketDateLocal } from '../../utils/date';
 import FadeInView from '../../components/FadeInView';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
-import { TgpLineChart } from '../../ui/charts';
+import ProgressChartCard from './progress/ProgressChartCard';
 
 type Period = '7D' | '30D' | '90D' | 'All';
 
@@ -292,9 +291,9 @@ export default function ProgressScreen() {
     },
   ];
 
-  // Chart data for TgpLineChart — x is the *epoch milliseconds* of the log
-  // day (parsed as midnight local) so the x-axis can render real, locale-
-  // formatted dates instead of meaningless integer indices. See audit P0-6.
+  // Chart data for ProgressChartCard — x is the *epoch milliseconds* of the log
+  // day (parsed as midnight local); the card derives its own ordering and
+  // axis from this {x, y} series. See audit P0-6.
   const chartData = useMemo(
     () =>
       weightLogs.map((log) => ({
@@ -302,18 +301,6 @@ export default function ProgressScreen() {
         y: log.weight,
       })),
     [weightLogs],
-  );
-
-  // Compact, locale-aware date formatter for the chart axis + tooltip.
-  // Memoised so we don't allocate a new Intl object on every render — Intl
-  // formatter construction is one of the more expensive things in JS.
-  const chartDateFormatter = useMemo(
-    () => new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }),
-    [],
-  );
-  const formatChartX = useCallback(
-    (ms: number) => chartDateFormatter.format(new Date(ms)),
-    [chartDateFormatter],
   );
 
   const periods: Period[] = ['7D', '30D', '90D', 'All'];
@@ -482,16 +469,19 @@ export default function ProgressScreen() {
           </FadeInView>
         )}
 
-        {/* Weight Chart — Phase 11 Track 5: TgpLineChart replaces inline WeightLineChart */}
+        {/* Weight Chart — ED.4: ProgressChartCard (draw-in animation, haptic
+            scrubber, auto-PR flag + Roman commentary). chartData is already the
+            {x: epoch ms, y: weight} shape ProgressChartCard expects, so it maps
+            through without an adapter. */}
         {chartData.length >= 2 ? (
           <View style={styles.chartContainer}>
             <Text style={styles.chartTitle}>Weight Trend</Text>
             <View style={styles.chartInner}>
-              <TgpLineChart
+              <ProgressChartCard
                 data={chartData}
+                liftName="Weight"
                 height={180}
-                accessibilityLabel="Weight trend line chart"
-                xFormatter={formatChartX}
+                testID="progress-weight-chart"
               />
             </View>
           </View>

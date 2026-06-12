@@ -54,11 +54,21 @@ export default function FirstPaymentWowHost({
     onFirstPayment: handleFirstPayment,
   });
 
-  const handleDismiss = useCallback(() => {
-    // Close the gate FIRST so the celebration can never re-arm, THEN clear the
-    // overlay (return to coach home). The gate write is fire-and-forget but
-    // ordered before the state clear.
-    if (coachId) void markFirstPaymentSeen(coachId);
+  const handleDismiss = useCallback(async () => {
+    // Close the gate (await its persistence) FIRST so the celebration can never
+    // re-arm, THEN clear the overlay (return to coach home). On a write failure
+    // we log via console.warn — never swallow (Bradley Law #36) — but STILL
+    // clear the UI so the coach is never trapped behind the overlay.
+    if (coachId) {
+      try {
+        await markFirstPaymentSeen(coachId);
+      } catch (err) {
+        console.warn(
+          '[FirstPaymentWowHost] markFirstPaymentSeen failed',
+          err,
+        );
+      }
+    }
     setEvent(null);
   }, [coachId]);
 

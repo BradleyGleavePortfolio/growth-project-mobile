@@ -98,8 +98,13 @@ export default function FirstPaymentWowScreen({
 
       <View style={styles.content}>
         <Animated.View style={mascotStyle}>
-          {/* FACE+VOICE: the "knowing slight smile" mascot beside the voice. */}
-          <RomanAvatar crop="smile" size={132} testID="first-payment-avatar" />
+          {/* FACE+VOICE: the "knowing slight smile" mascot beside the voice.
+              §3.8 milestone register expressed via the expression prop. */}
+          <RomanAvatar
+            expression="slight_smile"
+            size={132}
+            testID="first-payment-avatar"
+          />
         </Animated.View>
 
         <Text
@@ -152,6 +157,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     borderRadius: radius.sm,
     alignItems: 'center',
+    // WCAG 2.5.5 / a11y minimum touch target (44×44 logical px).
+    minHeight: 44,
+    minWidth: 44,
+    justifyContent: 'center',
   },
   buttonLabel: {
     color: colors.bone,

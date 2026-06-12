@@ -84,12 +84,17 @@ describe('ProgressChartCard — ED.4', () => {
     expect(node.getByTestId('progress-pr-glow')).toBeTruthy();
 
     // VOICE — the exact romanPRDetected line.
-    expect(node.getByTestId('progress-pr-text').props.children).toBe(
+    const prText = node.getByTestId('progress-pr-text');
+    expect(prText.props.children).toBe(
       'A personal best on Back Squat — 225 pounds. Noted with admiration.',
     );
-    // FACE — RomanAvatar present in the same commentary row.
+    // P2-1: the commentary is a polite live region so it is announced when the
+    // PR appears (the row only mounts when a PR is detected).
+    expect(prText.props.accessibilityLiveRegion).toBe('polite');
+    // FACE — RomanAvatar present in the same commentary row, in the §3.8
+    // milestone register ('slight smile'), not the legacy crop label.
     const avatar = node.getByTestId('progress-pr-avatar');
-    expect(avatar.props.accessibilityLabel).toBe('Roman, pleased');
+    expect(avatar.props.accessibilityLabel).toBe('Roman, slight smile');
   });
 
   it('fires a selection haptic on a data-point crossover, once per column', () => {
