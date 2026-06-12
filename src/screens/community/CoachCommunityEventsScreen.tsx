@@ -44,18 +44,23 @@ import {
   RefreshControl,
   Modal,
   TextInput,
+  Platform,
 } from 'react-native';
+import DateTimePicker, {
+  type DateTimePickerEvent,
+} from '@react-native-community/datetimepicker';
 import { useTheme } from '../../theme/useTheme';
-import { spacing, radius, withAlpha } from '../../theme/tokens';
+import { spacing, radius, withAlpha, semantic } from '../../theme/tokens';
 import HapticPressable from '../../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
 import { CoachErrorState } from '../../components/community/coach';
 import CompletionToast, {
   useCompletionToast,
 } from '../../components/community/CompletionToast';
-import EventCard from '../../components/community/EventCard';
+import EventCard, { stateMeta } from '../../components/community/EventCard';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { useCommunityMe } from '../../hooks/useCommunity';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 import {
   useCommunityEventsList,
   useCreateEvent,
@@ -63,6 +68,7 @@ import {
   useAttachReplay,
   useReflectEvent,
 } from '../../hooks/useCommunityEvents';
+import { describeMutationError } from '../../api/communityEventsApi';
 import type {
   CommunityEvent,
   CommunityEventState,
@@ -82,19 +88,41 @@ const STATE_ORDER: CommunityEventState[] = [
   'reflected',
 ];
 
-const STATE_LABEL: Record<CommunityEventState, string> = {
-  scheduled: 'Scheduled',
-  tomorrow: 'Tomorrow',
-  live: 'Live',
-  replay: 'Replay',
-  reflected: 'Recap',
-};
+/** Status-honest lifecycle label, shared with the card/detail via stateMeta. */
+function stateLabel(state: CommunityEventState | string): string {
+  return stateMeta(state).label;
+}
 
 /** The immediate next lifecycle state, or null when already terminal. */
 function nextState(state: CommunityEventState): CommunityEventState | null {
   const i = STATE_ORDER.indexOf(state);
   if (i < 0 || i >= STATE_ORDER.length - 1) return null;
   return STATE_ORDER[i + 1];
+}
+
+/**
+ * Local-timezone hint for the create form so a coach knows the time they pick
+ * is interpreted in THEIR timezone (serialized to UTC ISO behind the scenes).
+ */
+function localTimezoneHint(): string {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return tz ? `Times are in your local timezone (${tz}).` : 'Times are in your local timezone.';
+  } catch {
+    return 'Times are in your local timezone.';
+  }
+}
+
+/** Human-readable local rendering of a chosen start Date. */
+function formatLocalDateTime(d: Date | null): string {
+  if (!d) return 'Pick a date and time';
+  return d.toLocaleString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
 }
 
 export default function CoachCommunityEventsScreen(): React.ReactElement {
@@ -106,35 +134,42 @@ export default function CoachCommunityEventsScreen(): React.ReactElement {
   const events = useCommunityEventsList(workspaceId);
   const createEvent = useCreateEvent(workspaceId ?? '', coach?.id ?? '');
   const completion = useCompletionToast();
+  const reduceMotion = useReducedMotion();
 
   // ── Create modal ───────────────────────────────────────────────────────────
   const [createOpen, setCreateOpen] = useState(false);
   const [title, setTitle] = useState('');
-  const [startsAt, setStartsAt] = useState('');
+  // F12: the coach picks a date/time via native pickers; we hold a Date and
+  // serialize to a UTC ISO string only at submit time.
+  const [startsAt, setStartsAt] = useState<Date | null>(null);
   const [liveUrl, setLiveUrl] = useState('');
+  const [createError, setCreateError] = useState<string | null>(null);
 
   const trimmedTitle = title.trim();
-  const trimmedStarts = startsAt.trim();
   const trimmedLive = liveUrl.trim();
   const canCreate =
     trimmedTitle.length > 0 &&
-    trimmedStarts.length > 0 &&
+    startsAt != null &&
     !!workspaceId &&
     !createEvent.isPending;
 
   const resetCreate = useCallback(() => {
     setTitle('');
-    setStartsAt('');
+    setStartsAt(null);
     setLiveUrl('');
+    setCreateError(null);
     setCreateOpen(false);
   }, []);
 
   const onCreate = useCallback(() => {
-    if (!canCreate) return;
+    if (!canCreate || startsAt == null) return;
+    setCreateError(null);
     createEvent.mutate(
       {
         title: trimmedTitle,
-        starts_at: trimmedStarts,
+        // Serialize the picked local time to a UTC ISO-8601 string behind the
+        // scenes (the backend DTO validates IsISO8601 strict).
+        starts_at: startsAt.toISOString(),
         ...(trimmedLive.length > 0 ? { live_url: trimmedLive } : {}),
       },
       {
@@ -142,16 +177,22 @@ export default function CoachCommunityEventsScreen(): React.ReactElement {
           resetCreate();
           completion.show('Event created.');
         },
+        onError: (err) => {
+          const info = describeMutationError(err);
+          setCreateError(info.message);
+          if (info.conflict) void events.refetch();
+        },
       },
     );
   }, [
     canCreate,
+    startsAt,
     createEvent,
     trimmedTitle,
-    trimmedStarts,
     trimmedLive,
     resetCreate,
     completion,
+    events,
   ]);
 
   // ── Manage modal (per-event lifecycle) ───────────────────────────────────────
@@ -260,10 +301,12 @@ export default function CoachCommunityEventsScreen(): React.ReactElement {
 
       <CreateEventModal
         visible={createOpen}
+        reduceMotion={reduceMotion}
         title={title}
         startsAt={startsAt}
         liveUrl={liveUrl}
         canSubmit={canCreate}
+        errorMessage={createError}
         onChangeTitle={setTitle}
         onChangeStartsAt={setStartsAt}
         onChangeLiveUrl={setLiveUrl}
@@ -274,6 +317,7 @@ export default function CoachCommunityEventsScreen(): React.ReactElement {
       <ManageEventModal
         event={managed}
         workspaceId={workspaceId}
+        reduceMotion={reduceMotion}
         onClose={() => setManaged(null)}
         onConfirm={(message) => {
           setManaged(null);
@@ -290,12 +334,14 @@ export default function CoachCommunityEventsScreen(): React.ReactElement {
 
 interface CreateEventModalProps {
   visible: boolean;
+  reduceMotion: boolean;
   title: string;
-  startsAt: string;
+  startsAt: Date | null;
   liveUrl: string;
   canSubmit: boolean;
+  errorMessage: string | null;
   onChangeTitle: (v: string) => void;
-  onChangeStartsAt: (v: string) => void;
+  onChangeStartsAt: (v: Date) => void;
   onChangeLiveUrl: (v: string) => void;
   onCancel: () => void;
   onSubmit: () => void;
@@ -303,10 +349,12 @@ interface CreateEventModalProps {
 
 function CreateEventModal({
   visible,
+  reduceMotion,
   title,
   startsAt,
   liveUrl,
   canSubmit,
+  errorMessage,
   onChangeTitle,
   onChangeStartsAt,
   onChangeLiveUrl,
@@ -314,11 +362,42 @@ function CreateEventModal({
   onSubmit,
 }: CreateEventModalProps): React.ReactElement {
   const { semanticColors } = useTheme();
+  // F12: native date + time pickers replace the raw ISO text field. We keep a
+  // single Date in the parent; the two pickers edit the date and the time of
+  // that same instant. Android shows pickers as transient dialogs (open on
+  // demand); iOS renders them inline when open.
+  const [showDate, setShowDate] = useState(false);
+  const [showTime, setShowTime] = useState(false);
+
+  const onPickDate = useCallback(
+    (_e: DateTimePickerEvent, picked?: Date) => {
+      setShowDate(Platform.OS === 'ios');
+      if (!picked) return;
+      const base = startsAt ?? new Date();
+      const next = new Date(base);
+      next.setFullYear(picked.getFullYear(), picked.getMonth(), picked.getDate());
+      onChangeStartsAt(next);
+    },
+    [startsAt, onChangeStartsAt],
+  );
+
+  const onPickTime = useCallback(
+    (_e: DateTimePickerEvent, picked?: Date) => {
+      setShowTime(Platform.OS === 'ios');
+      if (!picked) return;
+      const base = startsAt ?? new Date();
+      const next = new Date(base);
+      next.setHours(picked.getHours(), picked.getMinutes(), 0, 0);
+      onChangeStartsAt(next);
+    },
+    [startsAt, onChangeStartsAt],
+  );
+
   return (
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
+      animationType={reduceMotion ? 'none' : 'fade'}
       onRequestClose={onCancel}
       testID="coach-community-events-create-modal"
     >
@@ -350,16 +429,77 @@ function CreateEventModal({
             testID="coach-community-events-title-input"
             style={inputStyle(semanticColors)}
           />
-          <TextInput
-            value={startsAt}
-            onChangeText={onChangeStartsAt}
-            placeholder="Starts at (e.g. 2026-07-01T18:00:00Z)"
-            placeholderTextColor={semanticColors.textMuted}
-            autoCapitalize="none"
-            accessibilityLabel="Event start time, ISO-8601"
-            testID="coach-community-events-starts-input"
-            style={inputStyle(semanticColors)}
-          />
+          <Text style={[styles.fieldLabel, { color: semanticColors.textMuted }]}>
+            Starts at
+          </Text>
+          <View style={styles.pickerRow}>
+            <HapticPressable
+              intent="light"
+              onPress={() => setShowDate(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Pick start date and time"
+              testID="coach-community-events-date-trigger"
+              style={[
+                styles.pickerField,
+                {
+                  backgroundColor: semanticColors.bgPrimary,
+                  borderColor: semanticColors.border,
+                },
+              ]}
+            >
+              <Ionicons
+                name="calendar-outline"
+                size={16}
+                color={semanticColors.textMuted}
+              />
+              <Text
+                style={[styles.pickerText, { color: semanticColors.textPrimary }]}
+                numberOfLines={1}
+              >
+                {formatLocalDateTime(startsAt)}
+              </Text>
+            </HapticPressable>
+            <HapticPressable
+              intent="light"
+              onPress={() => setShowTime(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Pick start time"
+              testID="coach-community-events-time-trigger"
+              style={[
+                styles.pickerTime,
+                {
+                  backgroundColor: semanticColors.bgPrimary,
+                  borderColor: semanticColors.border,
+                },
+              ]}
+            >
+              <Ionicons
+                name="time-outline"
+                size={16}
+                color={semanticColors.textMuted}
+              />
+            </HapticPressable>
+          </View>
+          {showDate ? (
+            <DateTimePicker
+              value={startsAt ?? new Date()}
+              mode="date"
+              onChange={onPickDate}
+              testID="coach-community-events-date-picker"
+            />
+          ) : null}
+          {showTime ? (
+            <DateTimePicker
+              value={startsAt ?? new Date()}
+              mode="time"
+              onChange={onPickTime}
+              testID="coach-community-events-time-picker"
+            />
+          ) : null}
+          <Text style={[styles.tzHint, { color: semanticColors.textMuted }]}>
+            {localTimezoneHint()}
+          </Text>
+
           <TextInput
             value={liveUrl}
             onChangeText={onChangeLiveUrl}
@@ -371,6 +511,15 @@ function CreateEventModal({
             testID="coach-community-events-link-input"
             style={inputStyle(semanticColors)}
           />
+          {errorMessage ? (
+            <Text
+              style={[styles.modalError, { color: semantic.danger.fg }]}
+              accessibilityLiveRegion="polite"
+              testID="coach-community-events-create-error"
+            >
+              {errorMessage}
+            </Text>
+          ) : null}
           <View style={styles.modalActions}>
             <HapticPressable
               intent="light"
@@ -432,6 +581,7 @@ function CreateEventModal({
 interface ManageEventModalProps {
   event: CommunityEvent | null;
   workspaceId: string | undefined;
+  reduceMotion: boolean;
   onClose: () => void;
   onConfirm: (message: string) => void;
 }
@@ -439,6 +589,7 @@ interface ManageEventModalProps {
 function ManageEventModal({
   event,
   workspaceId,
+  reduceMotion,
   onClose,
   onConfirm,
 }: ManageEventModalProps): React.ReactElement | null {
@@ -450,6 +601,12 @@ function ManageEventModal({
 
   const [replayUrl, setReplayUrl] = useState('');
   const trimmedReplay = replayUrl.trim();
+  // F4: surface every mutation failure (not just the create path). 409s are
+  // classified as conflicts (stale state) and prompt a calm reconcile message.
+  const [manageError, setManageError] = useState<string | null>(null);
+  // F14: the destructive Reflect (close) action sits behind a calm confirm
+  // sheet whose default focus is Cancel — never fired on a single stray tap.
+  const [confirmReflect, setConfirmReflect] = useState(false);
 
   const busy =
     transition.isPending || attachReplay.isPending || reflect.isPending;
@@ -458,25 +615,37 @@ function ManageEventModal({
 
   const onAdvance = useCallback(() => {
     if (!advanceTo || busy) return;
+    setManageError(null);
     transition.mutate(advanceTo, {
-      onSuccess: () => onConfirm(`Moved to ${STATE_LABEL[advanceTo]}.`),
+      onSuccess: () => onConfirm(`Moved to ${stateLabel(advanceTo)}.`),
+      onError: (err) => setManageError(describeMutationError(err).message),
     });
   }, [advanceTo, busy, transition, onConfirm]);
 
   const onAttachReplay = useCallback(() => {
     if (trimmedReplay.length === 0 || busy) return;
+    setManageError(null);
     attachReplay.mutate(trimmedReplay, {
       onSuccess: () => {
         setReplayUrl('');
         onConfirm('Replay attached.');
       },
+      onError: (err) => setManageError(describeMutationError(err).message),
     });
   }, [trimmedReplay, busy, attachReplay, onConfirm]);
 
   const onReflect = useCallback(() => {
     if (busy) return;
+    setManageError(null);
     reflect.mutate(undefined, {
-      onSuccess: () => onConfirm('Event reflected.'),
+      onSuccess: () => {
+        setConfirmReflect(false);
+        onConfirm('Recap posted.');
+      },
+      onError: (err) => {
+        setConfirmReflect(false);
+        setManageError(describeMutationError(err).message);
+      },
     });
   }, [busy, reflect, onConfirm]);
 
@@ -488,7 +657,7 @@ function ManageEventModal({
     <Modal
       visible={event != null}
       transparent
-      animationType="fade"
+      animationType={reduceMotion ? 'none' : 'fade'}
       onRequestClose={onClose}
       testID="coach-community-events-manage-modal"
     >
@@ -514,7 +683,7 @@ function ManageEventModal({
             {event.title}
           </Text>
           <Text style={[styles.manageState, { color: semanticColors.textMuted }]}>
-            {event.canceled ? 'Canceled' : STATE_LABEL[event.state]}
+            {event.canceled ? 'Canceled' : stateLabel(event.state)}
           </Text>
 
           {advanceTo ? (
@@ -523,7 +692,7 @@ function ManageEventModal({
               onPress={onAdvance}
               disabled={busy}
               accessibilityRole="button"
-              accessibilityLabel={`Advance to ${STATE_LABEL[advanceTo]}`}
+              accessibilityLabel={`Advance to ${stateLabel(advanceTo)}`}
               accessibilityState={{ disabled: busy }}
               testID="coach-community-events-advance"
               style={[
@@ -545,7 +714,7 @@ function ManageEventModal({
                   },
                 ]}
               >
-                Move to {STATE_LABEL[advanceTo]}
+                Move to {stateLabel(advanceTo)}
               </Text>
             </HapticPressable>
           ) : null}
@@ -587,21 +756,18 @@ function ManageEventModal({
               </HapticPressable>
 
               <HapticPressable
-                intent="success"
-                onPress={onReflect}
+                intent="light"
+                onPress={() => setConfirmReflect(true)}
                 disabled={busy}
                 accessibilityRole="button"
                 accessibilityLabel="Reflect and close the event"
+                accessibilityHint="Posts the recap and closes the event"
                 accessibilityState={{ disabled: busy }}
                 testID="coach-community-events-reflect"
-                style={[
-                  styles.manageButton,
-                  styles.manageSecondary,
-                  { borderColor: semanticColors.border },
-                ]}
+                style={styles.reflectTrigger}
               >
                 <Text
-                  style={[styles.manageSecondaryLabel, { color: semanticColors.textPrimary }]}
+                  style={[styles.reflectTriggerLabel, { color: semanticColors.textMuted }]}
                 >
                   Reflect (close)
                 </Text>
@@ -612,6 +778,16 @@ function ManageEventModal({
               This event is reflected and closed.
             </Text>
           )}
+
+          {manageError ? (
+            <Text
+              style={[styles.modalError, { color: semantic.danger.fg }]}
+              accessibilityLiveRegion="polite"
+              testID="coach-community-events-manage-error"
+            >
+              {manageError}
+            </Text>
+          ) : null}
 
           <HapticPressable
             intent="light"
@@ -632,6 +808,80 @@ function ManageEventModal({
           </HapticPressable>
         </View>
       </View>
+
+      {/* F14: calm confirm sheet for the irreversible Reflect (close). Cancel is
+          the default, prominent affordance; confirm is the secondary one. */}
+      <Modal
+        visible={confirmReflect}
+        transparent
+        animationType={reduceMotion ? 'none' : 'fade'}
+        onRequestClose={() => setConfirmReflect(false)}
+        testID="coach-community-events-reflect-confirm"
+      >
+        <View
+          style={[
+            styles.scrim,
+            { backgroundColor: withAlpha(semanticColors.textPrimary, 0.45) },
+          ]}
+        >
+          <View
+            style={[
+              styles.modalCard,
+              {
+                backgroundColor: semanticColors.bgSurface,
+                borderColor: semanticColors.border,
+              },
+            ]}
+          >
+            <Text style={[styles.modalTitle, { color: semanticColors.textPrimary }]}>
+              Reflect and close this event?
+            </Text>
+            <Text style={[styles.manageDone, { color: semanticColors.textMuted }]}>
+              This posts the recap and closes the event. You can’t reopen it
+              afterward.
+            </Text>
+            <View style={styles.modalActions}>
+              <HapticPressable
+                intent="medium"
+                onPress={() => setConfirmReflect(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Keep the event open"
+                testID="coach-community-events-reflect-cancel"
+                style={[
+                  styles.modalButton,
+                  { backgroundColor: semanticColors.accent },
+                ]}
+              >
+                <Text
+                  style={[styles.modalSubmitLabel, { color: semanticColors.textOnAccent }]}
+                >
+                  Keep open
+                </Text>
+              </HapticPressable>
+              <HapticPressable
+                intent="light"
+                onPress={onReflect}
+                disabled={busy}
+                accessibilityRole="button"
+                accessibilityLabel="Reflect and close"
+                accessibilityState={{ disabled: busy }}
+                testID="coach-community-events-reflect-confirm-action"
+                style={[
+                  styles.modalButton,
+                  styles.modalCancel,
+                  { borderColor: semanticColors.border },
+                ]}
+              >
+                <Text
+                  style={[styles.modalCancelLabel, { color: semanticColors.textMuted }]}
+                >
+                  Reflect (close)
+                </Text>
+              </HapticPressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </Modal>
   );
 }
@@ -730,6 +980,59 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: spacing.md,
     fontSize: 16,
+  },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: -spacing.xs,
+  },
+  pickerRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  pickerField: {
+    flex: 1,
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: spacing.md,
+  },
+  pickerTime: {
+    minHeight: 48,
+    minWidth: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: spacing.md,
+  },
+  pickerText: {
+    flex: 1,
+    fontSize: 15,
+  },
+  tzHint: {
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: -spacing.xs,
+  },
+  modalError: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '600',
+  },
+  reflectTrigger: {
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+  },
+  reflectTriggerLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    textDecorationLine: 'underline',
   },
   modalActions: {
     flexDirection: 'row',

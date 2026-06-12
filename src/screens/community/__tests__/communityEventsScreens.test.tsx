@@ -23,6 +23,23 @@ jest.mock('../../../theme/useTheme', () => {
   };
 });
 
+// ── DateTimePicker: a headless stub that fires onChange with a fixed instant
+//    when pressed, so the create-flow test can drive the F12 pickers ──────────
+jest.mock('@react-native-community/datetimepicker', () => {
+  const React = require('react');
+  const { Pressable } = require('react-native');
+  // A fixed local instant used by both the date and time picker stubs.
+  const FIXED = new Date('2026-08-01T18:00:00.000Z');
+  return {
+    __esModule: true,
+    default: ({ onChange, testID }: { onChange: (e: unknown, d: Date) => void; testID?: string }) =>
+      React.createElement(Pressable, {
+        testID,
+        onPress: () => onChange({ type: 'set' }, FIXED),
+      }),
+  };
+});
+
 // ── Safe-area: provide stub insets so SafeAreaView renders headlessly ─────────
 jest.mock('react-native-safe-area-context', () => {
   const actual = jest.requireActual('react-native-safe-area-context');
@@ -152,13 +169,21 @@ describe('CommunityEventDetailScreen', () => {
     expect(getByText('Live Q&A')).toBeTruthy();
     expect(getByText('Bring your questions.')).toBeTruthy();
     fireEvent.press(getByTestId('community-event-rsvp-going'));
-    expect(mockMutate.rsvp).toHaveBeenCalledWith('going');
+    // F4/F10: mutate now carries success/error callbacks for confirmation +
+    // surfaced failure, so the second arg is the mutation options object.
+    expect(mockMutate.rsvp).toHaveBeenCalledWith('going', expect.any(Object));
   });
 
-  it('opens an EXTERNAL link in the system browser (never a native room)', () => {
-    const canOpen = jest
-      .spyOn(Linking, 'canOpenURL')
-      .mockResolvedValue(true);
+  it('does NOT render a mascot-voiced empty state on the event surface (F2)', () => {
+    mockEventHooks.detail = { ...mockEventHooks.detail, data: undefined };
+    const { queryByTestId } = render(<CommunityEventDetailScreen />);
+    // The neutral event empty state must not borrow the mascot-voiced surface.
+    expect(queryByTestId('community-empty-roman')).toBeNull();
+    expect(queryByTestId('community-event-detail-empty')).toBeTruthy();
+  });
+
+  it('opens an EXTERNAL https link in the system browser (never a native room)', () => {
+    const openUrl = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
     mockEventHooks.detail = {
       ...mockEventHooks.detail,
       data: makeEvent({ state: 'live', external_url: 'https://example.com/live' }),
@@ -167,8 +192,39 @@ describe('CommunityEventDetailScreen', () => {
     // Copy never promises a native room.
     expect(queryByText(/join native room/i)).toBeNull();
     fireEvent.press(getByTestId('community-event-detail-link'));
-    expect(canOpen).toHaveBeenCalledWith('https://example.com/live');
-    canOpen.mockRestore();
+    expect(openUrl).toHaveBeenCalledWith('https://example.com/live');
+    openUrl.mockRestore();
+  });
+
+  it('F11: external-link copy says it opens in the browser', () => {
+    mockEventHooks.detail = {
+      ...mockEventHooks.detail,
+      data: makeEvent({ state: 'replay', external_url: 'https://example.com/replay' }),
+    };
+    const { getByText } = render(<CommunityEventDetailScreen />);
+    expect(getByText(/in browser/i)).toBeTruthy();
+  });
+
+  it('F3: refuses a non-https external link with a calm inline error', () => {
+    const openUrl = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+    mockEventHooks.detail = {
+      ...mockEventHooks.detail,
+      data: makeEvent({ state: 'live', external_url: 'javascript:alert(1)' }),
+    };
+    const { getByTestId } = render(<CommunityEventDetailScreen />);
+    fireEvent.press(getByTestId('community-event-detail-link'));
+    expect(openUrl).not.toHaveBeenCalled();
+    expect(getByTestId('community-event-detail-link-error')).toBeTruthy();
+    openUrl.mockRestore();
+  });
+
+  it('F13: shows the status-honest live lifecycle label', () => {
+    mockEventHooks.detail = {
+      ...mockEventHooks.detail,
+      data: makeEvent({ state: 'live', external_url: 'https://example.com/live' }),
+    };
+    const { getByText } = render(<CommunityEventDetailScreen />);
+    expect(getByText('Live now')).toBeTruthy();
   });
 
   it('hides RSVP actions once the event is reflected', () => {
@@ -206,23 +262,44 @@ describe('CoachCommunityEventsScreen', () => {
     expect(getByTestId('coach-community-events-create-modal')).toBeTruthy();
   });
 
-  it('creates an event from the FAB modal with title + start time', () => {
+  it('F12: creates an event using the date/time pickers (ISO serialized)', () => {
     mockEventHooks.list = {
       ...mockEventHooks.list,
       data: { events: [makeEvent()], next_before: null },
     };
-    const { getByTestId } = render(<CoachCommunityEventsScreen />);
+    const { getByTestId, getByText } = render(<CoachCommunityEventsScreen />);
     fireEvent.press(getByTestId('coach-community-events-fab'));
     fireEvent.changeText(getByTestId('coach-community-events-title-input'), 'Workshop');
-    fireEvent.changeText(
-      getByTestId('coach-community-events-starts-input'),
-      '2026-08-01T18:00:00Z',
-    );
+    // A visible local-timezone hint accompanies the pickers (no raw ISO input).
+    expect(getByText(/local timezone/i)).toBeTruthy();
+    // Open each picker; the stubbed pickers fire onChange with the fixed
+    // instant, setting the date and time of the held Date respectively.
+    fireEvent.press(getByTestId('coach-community-events-date-trigger'));
+    fireEvent.press(getByTestId('coach-community-events-date-picker'));
+    fireEvent.press(getByTestId('coach-community-events-time-trigger'));
+    fireEvent.press(getByTestId('coach-community-events-time-picker'));
     fireEvent.press(getByTestId('coach-community-events-create-submit'));
+    // The picked local time serializes to a UTC ISO-8601 string behind the
+    // scenes. We assert the date + minute precision is preserved end-to-end by
+    // checking it parses back to the same instant the picker emitted.
+    const call = mockMutate.create.mock.calls[0][0] as { starts_at: string };
+    expect(new Date(call.starts_at).getTime()).toBe(
+      new Date('2026-08-01T18:00:00.000Z').getTime(),
+    );
     expect(mockMutate.create).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'Workshop', starts_at: '2026-08-01T18:00:00Z' }),
+      expect.objectContaining({ title: 'Workshop' }),
       expect.any(Object),
     );
+  });
+
+  it('F12: the raw ISO start-time text input is gone', () => {
+    mockEventHooks.list = {
+      ...mockEventHooks.list,
+      data: { events: [makeEvent()], next_before: null },
+    };
+    const { getByTestId, queryByTestId } = render(<CoachCommunityEventsScreen />);
+    fireEvent.press(getByTestId('coach-community-events-fab'));
+    expect(queryByTestId('coach-community-events-starts-input')).toBeNull();
   });
 
   it('advances lifecycle state from the manage modal', () => {
@@ -255,14 +332,30 @@ describe('CoachCommunityEventsScreen', () => {
     );
   });
 
-  it('reflects (closes) an event from the manage modal', () => {
+  it('F14: reflect (close) is gated behind a calm confirm sheet', () => {
     mockEventHooks.list = {
       ...mockEventHooks.list,
       data: { events: [makeEvent({ id: 'ev-5', state: 'replay' })], next_before: null },
     };
     const { getByTestId } = render(<CoachCommunityEventsScreen />);
     fireEvent.press(getByTestId('coach-community-event-row-ev-5'));
+    // Tapping reflect opens the confirm sheet — it does NOT fire the mutation.
     fireEvent.press(getByTestId('coach-community-events-reflect'));
+    expect(mockMutate.reflect).not.toHaveBeenCalled();
+    expect(getByTestId('coach-community-events-reflect-confirm')).toBeTruthy();
+    // Confirming in the sheet fires the close.
+    fireEvent.press(getByTestId('coach-community-events-reflect-confirm-action'));
     expect(mockMutate.reflect).toHaveBeenCalledWith(undefined, expect.any(Object));
+  });
+
+  it('F13: the manage modal shows status-honest lifecycle labels', () => {
+    mockEventHooks.list = {
+      ...mockEventHooks.list,
+      data: { events: [makeEvent({ id: 'ev-3', state: 'live' })], next_before: null },
+    };
+    const { getByTestId, getAllByText } = render(<CoachCommunityEventsScreen />);
+    fireEvent.press(getByTestId('coach-community-event-row-ev-3'));
+    // 'Live now' appears for the live state (label is shared via stateMeta).
+    expect(getAllByText(/Live now/i).length).toBeGreaterThan(0);
   });
 });
