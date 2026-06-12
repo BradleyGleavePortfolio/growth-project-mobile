@@ -64,8 +64,17 @@ jest.mock('../../utils/idempotency', () => ({
 }));
 
 // AppState listener capture so we can simulate a background transition.
+// We also expose a minimal `Platform` so that expo-modules-core's eager
+// `ReactNativePlatform.select` read (Platform.ts) resolves during the
+// jest-expo preset setup — without it the whole `react-native` mock leaves
+// `Platform` undefined and the suite fails to run.
 let mockAppStateHandler: ((s: string) => void) | null = null;
 jest.mock('react-native', () => ({
+  Platform: {
+    OS: 'ios',
+    select: (obj: Record<string, unknown>) =>
+      'ios' in obj ? obj.ios : obj.default,
+  },
   AppState: {
     addEventListener: jest.fn((_evt: string, cb: (s: string) => void) => {
       mockAppStateHandler = cb;
