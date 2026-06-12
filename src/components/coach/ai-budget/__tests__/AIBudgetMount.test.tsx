@@ -36,6 +36,20 @@ import { render } from '@testing-library/react-native';
 const mockUseIsFocused = jest.fn<boolean, []>();
 const mockNavigate = jest.fn();
 
+// @sentry/react-native starts a module-load setInterval (its AsyncExpiringMap
+// cleanup loop, pulled in transitively via ErrorBoundary -> services/sentry).
+// That interval is the open handle behind the "Jest did not exit" warning for
+// this suite -- it is unrelated to anything under test here. Stub the module to
+// a set of inert no-ops so no background timer is ever scheduled.
+jest.mock('@sentry/react-native', () => ({
+  init: jest.fn(),
+  wrap: <T,>(c: T): T => c,
+  withScope: (fn: (scope: { setExtra: jest.Mock }) => void) =>
+    fn({ setExtra: jest.fn() }),
+  captureException: jest.fn(),
+  setUser: jest.fn(),
+}));
+
 jest.mock('@react-navigation/native', () => ({
   useIsFocused: () => mockUseIsFocused(),
   useNavigation: () => ({ navigate: mockNavigate, goBack: jest.fn() }),
