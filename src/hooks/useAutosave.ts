@@ -74,10 +74,23 @@ import {
 import { generateIdempotencyKey } from '../utils/idempotency';
 import { logger } from '../utils/logger';
 
-/** The save-state the pill renders (spec §6.5). */
+/**
+ * The save-state the pill renders (spec §6.5).
+ *
+ * `syncing` is the QUIET recovery state for the by-design first-autosave
+ * bootstrap 409 (`autosave_lock_stale` with no prior successful save): the
+ * client booted with a placeholder lock token, the server hands back the real
+ * token/index, and the hook fast-forwards + retries silently. It is NOT a
+ * user-facing conflict — the coach made no concurrent edit elsewhere — so the
+ * pill maps it to neutral "Syncing latest version…" progress copy, never the
+ * actionable "Edited elsewhere" conflict copy. A 409 AFTER a successful save
+ * (or an explicit `autosave_conflict_retry`) is a real external-edit conflict
+ * and still surfaces as `conflict`.
+ */
 export type AutosaveStatus =
   | 'idle'
   | 'saving'
+  | 'syncing'
   | 'saved'
   | 'offline'
   | 'conflict';
@@ -170,6 +183,18 @@ export interface UseAutosaveResult {
   flush: () => Promise<void>;
   /** True when there are buffered, not-yet-confirmed ops. */
   hasPending: boolean;
+  /**
+   * Re-anchor the diff baseline (`lastSavedValueRef`) to the CURRENT working
+   * copy without sending anything. The caller invokes this AFTER it has adopted
+   * fresh server truth into its working copy (e.g. it refetched the plan and
+   * folded server-assigned row ids back into the rows that were inserted
+   * id-less). Without this, an id-less insert that the server accepted leaves
+   * the baseline pointing at the id-less snapshot, so the next edit/delete/
+   * reorder of that row diffs as brand-new again — a duplicate insert or a
+   * silently-dropped delete. Re-anchoring makes the adopted server copy the new
+   * "last saved" truth so subsequent diffs are honest. Idempotent and stable.
+   */
+  rebaseline: () => void;
 }
 
 /**
@@ -259,6 +284,11 @@ export function useAutosave<TWorkingCopy>(
   const statusRef = useRef<AutosaveStatus>('idle');
   const mountedRef = useRef(true);
   const isOnlineRef = useRef(true);
+  // True once ANY batch has confirmed (200) this session. Distinguishes the
+  // by-design first-autosave bootstrap 409 (stale placeholder lock token, quiet
+  // `syncing` recovery, no user-facing conflict) from a 409 that arrives AFTER
+  // a real save (a genuine external-edit conflict the coach must resolve).
+  const hasSavedRef = useRef(false);
   const diffRef = useRef(diff);
   const onSavedRef = useRef(onSaved);
   const onConflictRef = useRef(onConflict);
@@ -405,6 +435,9 @@ export function useAutosave<TWorkingCopy>(
         await clearAutosaveMirrorIfKey(planId, batch.idempotencyKey);
         currentInFlightRef.current = null;
         retryAttemptRef.current = 0;
+        // A real save landed: any later 409 is now a genuine external-edit
+        // conflict, not the silent bootstrap stale-lock recovery.
+        hasSavedRef.current = true;
         clearBackoffTimer();
         indexRef.current = res.head_revision_index;
         tokenRef.current = res.lock_token;
@@ -445,18 +478,38 @@ export function useAutosave<TWorkingCopy>(
           // token/index, let the caller rebase (refetch), then RE-DIFF the
           // local ops onto the new head and keep the batch pending to re-send.
           // We do NOT advance lastSavedValueRef (the ops were NOT applied).
+          //
+          // Distinguish the QUIET bootstrap stale-lock from a REAL conflict:
+          //   - `autosave_lock_stale` BEFORE any successful save is the
+          //     by-design first-autosave bootstrap (the client booted with a
+          //     placeholder lock token). The coach made no concurrent edit, so
+          //     this resolves silently: status='syncing' (neutral progress
+          //     copy) and we SKIP onConflict (no user-facing refetch/banner).
+          //   - `autosave_conflict_retry`, OR any 409 AFTER a successful save,
+          //     is a genuine external-edit conflict: status='conflict' and we
+          //     fire onConflict so the caller refetches and the coach is told.
+          const isBootstrapStaleLock =
+            err.conflict?.error === 'autosave_lock_stale' && !hasSavedRef.current;
           if (err.conflict) {
             indexRef.current = err.conflict.head_revision_index;
             tokenRef.current = err.conflict.lock_token;
             safeSet(setVersion, err.conflict.head_revision_index);
             safeSet(setTokenState, err.conflict.lock_token);
-            onConflictRef.current?.(err.conflict);
+            if (!isBootstrapStaleLock) {
+              onConflictRef.current?.(err.conflict);
+            }
           }
-          safeSet(setStatus, 'conflict');
-          logger.warn('[useAutosave] conflict — rebasing local ops', {
-            planId,
-            head: err.conflict?.head_revision_index,
-          });
+          safeSet(setStatus, isBootstrapStaleLock ? 'syncing' : 'conflict');
+          logger.warn(
+            isBootstrapStaleLock
+              ? '[useAutosave] bootstrap stale-lock — syncing + rebasing local ops'
+              : '[useAutosave] conflict — rebasing local ops',
+            {
+              planId,
+              head: err.conflict?.head_revision_index,
+              error: err.conflict?.error,
+            },
+          );
           // Rebase the still-unsaved ops onto the fresh head. If the caller's
           // refetch already absorbed them (diff now empty) we drop the batch
           // cleanly; otherwise we re-mirror + re-queue it for the next pump.
@@ -631,6 +684,24 @@ export function useAutosave<TWorkingCopy>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [safeSet, sendBatch, writeMirror]);
 
+  /**
+   * Re-anchor the diff baseline to the current working copy. Used by the screen
+   * after it adopts refetched server truth (server-assigned row ids folded into
+   * the previously id-less rows) so the next diff is honest. We only re-anchor
+   * when NOTHING is pending: a re-anchor mid-flight would discard the delta the
+   * in-flight/queued batch still needs to express, so a coach editing while the
+   * refetch lands keeps their pending ops intact (those ops carry to the server
+   * via the normal queue, and the screen's gate defers adoption until pending
+   * clears).
+   */
+  const rebaseline = useCallback((): void => {
+    if (!enabledRef.current) return;
+    if (currentInFlightRef.current !== null || pendingNextRef.current !== null) {
+      return;
+    }
+    lastSavedValueRef.current = latestValueRef.current;
+  }, []);
+
   // ─── Debounced arm on value change ──────────────────────────────────────────
   useEffect(() => {
     if (!enabled) return;
@@ -751,7 +822,8 @@ export function useAutosave<TWorkingCopy>(
       lockToken: tokenState,
       flush,
       hasPending,
+      rebaseline,
     }),
-    [status, lastSavedAt, version, tokenState, flush, hasPending],
+    [status, lastSavedAt, version, tokenState, flush, hasPending, rebaseline],
   );
 }

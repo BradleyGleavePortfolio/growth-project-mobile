@@ -5,9 +5,18 @@
  * States (the exact vocabulary from the spec):
  *   - 'saved'    -> "Saved · Xs ago"            (settled, reassuring)
  *   - 'saving'   -> "Saving…"                   (in-flight)
+ *   - 'syncing'  -> "Syncing latest version…"   (QUIET bootstrap stale-lock
+ *                                                recovery; neutral, NON-actionable
+ *                                                — NOT a user-facing conflict)
  *   - 'offline'  -> "Offline — saved on device, will sync"  (queued; CALM, never alarm red)
  *   - 'conflict' -> "Edited elsewhere — tap to refresh"
  *   - 'idle'     -> nothing rendered yet (no edits, no residue)
+ *
+ * `syncing` vs `conflict` is the P2 distinction: the first-autosave bootstrap
+ * 409 (`autosave_lock_stale`, no prior save) is a normal, no-user-action
+ * recovery the hook resolves itself, so it reads as quiet neutral progress
+ * (`semantic.info`), NOT the actionable "Edited elsewhere" conflict copy that
+ * would falsely imply another editor touched the plan.
  *
  * Design doctrine applied:
  *   - CALM treatment for the anxiety moment (§4.7 / design §5.5): offline is the
@@ -143,6 +152,20 @@ export default function AutosaveStatusPill(props: AutosaveStatusPillProps) {
           border: sc.border,
           interactive: false,
         };
+      case 'syncing':
+        // QUIET bootstrap recovery: neutral progress copy, NON-interactive, no
+        // alarm. The coach made no concurrent edit — the placeholder lock token
+        // is just being fast-forwarded to the server's real one. Distinct from
+        // 'conflict' so a routine first save never falsely announces an external
+        // edit. Uses the calm info triad, not the warning hue.
+        return {
+          label: 'Syncing latest version…',
+          icon: 'sync-outline',
+          fg: semantic.info.fg,
+          bg: semantic.info.bg,
+          border: semantic.info.border,
+          interactive: false,
+        };
       case 'saved':
         return {
           label: relativeSavedLabel(lastSavedAt, now),
@@ -210,8 +233,10 @@ export default function AutosaveStatusPill(props: AutosaveStatusPillProps) {
     </View>
   );
 
-  // `saving` is the only busy state; settled/recoverable states are not busy.
-  const accessibilityState = { busy: status === 'saving' };
+  // `saving` and the quiet `syncing` bootstrap recovery are the in-progress
+  // (busy) states; settled/recoverable states are not busy. Both are announced
+  // via the polite live region below as neutral progress, never as an error.
+  const accessibilityState = { busy: status === 'saving' || status === 'syncing' };
 
   if (visual.interactive && onPress) {
     return (

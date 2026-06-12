@@ -31,7 +31,7 @@
  * explicit Save button stays in BOTH modes as the big-save fallback.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import {
   Alert,
@@ -228,6 +228,33 @@ export default function CoachWorkoutBuilderScreen() {
     [name, type, rows],
   );
 
+  // True when the current working copy still holds at least one row that was
+  // added on-device and has NOT yet adopted a server id (rowId undefined). Such
+  // a row autosaves as an id-less `upsert_exercise` ("insert"); after that
+  // insert lands the server has assigned it a real id we do not yet hold, so we
+  // MUST refetch to adopt it before the next edit/delete/reorder of that row —
+  // otherwise the diff treats it as brand-new again (duplicate insert) or skips
+  // its delete (no row_id to remove). This is the P1 data-integrity trigger.
+  const hasIdlessRows = useMemo(
+    () => workingCopy.rows.some((r) => r.rowId === undefined),
+    [workingCopy.rows],
+  );
+  const hasIdlessRowsRef = useRef(hasIdlessRows);
+  hasIdlessRowsRef.current = hasIdlessRows;
+
+  // After a successful autosave that included an id-less insert, refetch the
+  // plan so the server-assigned row ids flow back in. The re-baseline effect
+  // below then folds them into `rows` (once pending clears) and re-anchors the
+  // autosave diff baseline, so a follow-up edit/delete/reorder of that row
+  // names the real id instead of re-inserting it. We only refetch when an
+  // id-less row was actually in play — a pure metadata/known-row save needs no
+  // id adoption, so we avoid a needless network round-trip.
+  const onAutosaveSaved = useCallback(() => {
+    if (!autosaveEnabled) return;
+    if (!hasIdlessRowsRef.current) return;
+    void refetchPlan();
+  }, [autosaveEnabled, refetchPlan]);
+
   // On a 409 the plan moved ahead (the first-autosave bootstrap, a replay of an
   // already-applied batch, or an edit from another device). The hook has
   // already fast-forwarded its lock token + index from the conflict body AND
@@ -238,6 +265,9 @@ export default function CoachWorkoutBuilderScreen() {
   // gated on `!autosave.hasPending`, so it never clobbers the coach's in-flight
   // edit — the hook's rebase carries those ops to the server, and the refetch
   // only folds in server-assigned row ids once the pending batch settles.
+  // (Note: the by-design first-autosave bootstrap stale-lock recovery is silent
+  // and does NOT call this — the hook handles it internally; only a real
+  // external-edit conflict routes here.)
   const onAutosaveConflict = useCallback(() => {
     if (!autosaveEnabled) return;
     void refetchPlan();
@@ -250,6 +280,7 @@ export default function CoachWorkoutBuilderScreen() {
     baseRevisionIndex: AUTOSAVE_BOOTSTRAP_BASE_INDEX,
     lockToken: AUTOSAVE_BOOTSTRAP_LOCK_TOKEN,
     enabled: autosaveEnabled,
+    onSaved: onAutosaveSaved,
     onConflict: onAutosaveConflict,
   });
 
@@ -270,12 +301,33 @@ export default function CoachWorkoutBuilderScreen() {
     return unsubscribe;
   }, [autosaveEnabled, navigation, autosaveFlush]);
 
-  // Re-baseline the local rows when a refetch (post-409, or initial load)
-  // brings in fresh server rows WITH their ids — but only while autosave is on
-  // and only when the user has no in-flight pending edit, so we never clobber a
-  // coach mid-type. This adopts server-assigned row_ids for rows that were
-  // inserted on-device (which arrived id-less) so subsequent reorder/remove ops
-  // can name them.
+  // Server exercise-set identity: the joined row-id list. When this changes a
+  // refetch (post-409, post-insert id adoption, or initial load) has brought in
+  // a different set of persisted rows, so the local rows must re-baseline to it.
+  const serverRowSignature = useMemo(
+    () => (existingPlan?.exercises ?? []).map((e) => e.id).join(','),
+    [existingPlan?.exercises],
+  );
+
+  // After we adopt server rows into local state we must ALSO re-anchor the
+  // autosave hook's diff baseline to that adopted copy (otherwise the next diff
+  // runs id-less-saved-baseline vs has-ids and re-inserts the row). The adopt
+  // is a `setRows` (async state update), so we record the signature we are
+  // adopting here and let a follow-up effect call `autosave.rebaseline()` once
+  // the working copy actually reflects it.
+  const pendingRebaselineSigRef = useRef<string | null>(null);
+  const autosaveRebaseline = autosave.rebaseline;
+
+  // Re-baseline the local rows when a refetch (post-409, post-insert id
+  // adoption, or initial load) brings in fresh server rows WITH their ids — but
+  // only while autosave is on and only when the user has no in-flight pending
+  // edit, so we never clobber a coach mid-type. This adopts server-assigned
+  // row_ids for rows that were inserted on-device (which arrived id-less) so
+  // subsequent edit/reorder/remove ops can name them. `autosave.hasPending` is
+  // in the dependency array (not just read once) so that data which arrived
+  // WHILE a batch was pending is correctly applied the moment that batch
+  // clears — the P1 gap where a refetch landed during a pending insert and was
+  // then never adopted.
   useEffect(() => {
     if (!autosaveEnabled) return;
     if (autosave.hasPending) return;
@@ -293,13 +345,35 @@ export default function CoachWorkoutBuilderScreen() {
         notes: e.notes,
       })),
     );
-    // Re-baseline only when the server's exercise set identity changes, not on
-    // every render — keyed on the joined row-id list + count.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    autosaveEnabled,
-    existingPlan?.exercises.map((e) => e.id).join(','),
-  ]);
+    // Mark the adopted server signature so the follow-up effect re-anchors the
+    // autosave baseline to this copy once `workingCopy` reflects it.
+    pendingRebaselineSigRef.current = serverRowSignature;
+  }, [autosaveEnabled, autosave.hasPending, existingPlan, serverRowSignature]);
+
+  // The current local row-id signature, derived from the working copy the hook
+  // diffs over. Equals `serverRowSignature` only once the `setRows` adoption
+  // above has flushed into state.
+  const localRowSignature = useMemo(
+    () => workingCopy.rows.map((r) => r.rowId ?? '').join(','),
+    [workingCopy.rows],
+  );
+
+  // Once the adopted server rows are actually in the working copy AND nothing
+  // is pending, re-anchor the autosave diff baseline to that copy. This is the
+  // P1 fix: it makes the server's truth (with real row ids) the new "last
+  // saved" baseline, so a follow-up edit of a just-inserted row emits a single
+  // upsert WITH its row_id (not a duplicate insert), a delete emits
+  // remove_exercise, and a reorder names the adopted id. The hook's own guard
+  // also refuses to re-anchor mid-flight, so a coach editing during adoption
+  // keeps their pending ops.
+  useEffect(() => {
+    if (!autosaveEnabled) return;
+    if (autosave.hasPending) return;
+    if (pendingRebaselineSigRef.current === null) return;
+    if (pendingRebaselineSigRef.current !== localRowSignature) return;
+    pendingRebaselineSigRef.current = null;
+    autosaveRebaseline();
+  }, [autosaveEnabled, autosave.hasPending, localRowSignature, autosaveRebaseline]);
 
   const canSave =
     name.trim().length > 0 &&

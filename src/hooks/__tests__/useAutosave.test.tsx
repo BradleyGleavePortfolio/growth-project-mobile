@@ -299,14 +299,14 @@ describe('useAutosave — debounce + happy path', () => {
 });
 
 describe('useAutosave — 409 rebase (P0: first-409 must not drop edits)', () => {
-  it('adopts the conflict token + index, calls onConflict, then rebases + re-sends the local ops on the fresh head', async () => {
+  it('adopts the conflict token + index, fires onConflict on a REAL conflict, then rebases + re-sends the local ops on the fresh head', async () => {
     const conflict = {
-      error: 'autosave_lock_stale' as const,
+      // A genuine external-edit conflict (NOT the silent bootstrap stale-lock).
+      error: 'autosave_conflict_retry' as const,
       head_revision_index: 9,
       lock_token: TOKEN_B,
     };
-    // First send 409s (the by-design first-autosave bootstrap conflict); the
-    // rebased re-send then lands a 200 on the fresh head.
+    // First send 409s; the rebased re-send then lands a 200 on the fresh head.
     mockAutosave
       .mockRejectedValueOnce(
         new WorkoutAutosaveApiError('conflict', 409, 'conflict', conflict),
@@ -332,7 +332,7 @@ describe('useAutosave — 409 rebase (P0: first-409 must not drop edits)', () =>
       jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
     });
 
-    // The conflict body is adopted and surfaced to the caller for its refetch.
+    // A real conflict is adopted AND surfaced to the caller for its refetch.
     await waitFor(() => expect(onConflict).toHaveBeenCalledWith(conflict));
 
     // The local ops are NOT dropped — the hook re-diffs them onto the fresh head
@@ -357,6 +357,114 @@ describe('useAutosave — 409 rebase (P0: first-409 must not drop edits)', () =>
     // batch). The mirror is cleared for the confirmed batch's key after the 200.
     expect(mockClear).not.toHaveBeenCalled();
     expect(mockClearIfKey).toHaveBeenCalledWith('p1', firstCall.idempotencyKey);
+  });
+
+  it('P2: a bootstrap autosave_lock_stale 409 (no prior save) NEVER surfaces a user-facing conflict — it syncs silently to saved without firing onConflict', async () => {
+    const conflict = {
+      // The by-design first-autosave bootstrap: the screen booted with a
+      // placeholder lock token, so the very first attempt 409s with a stale
+      // lock. The coach made no concurrent edit — this must resolve quietly.
+      error: 'autosave_lock_stale' as const,
+      head_revision_index: 9,
+      lock_token: TOKEN_B,
+    };
+    mockAutosave
+      .mockRejectedValueOnce(
+        new WorkoutAutosaveApiError('conflict', 409, 'stale', conflict),
+      )
+      .mockResolvedValueOnce(okResponse({ head: 10, token: TOKEN_A }));
+    const onConflict = jest.fn();
+    const statuses: string[] = [];
+
+    const { result, rerender } = renderHook(
+      ({ value }: { value: Copy }) => {
+        const r = useAutosave<Copy>({
+          planId: 'p1',
+          value,
+          diff,
+          baseRevisionIndex: 0,
+          lockToken: TOKEN_A,
+          onConflict,
+        });
+        statuses.push(r.status);
+        return r;
+      },
+      { initialProps: { value: { n: 0 } } },
+    );
+
+    rerender({ value: { n: 1 } });
+    await act(async () => {
+      jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
+    });
+
+    // The bootstrap recovery is SILENT: onConflict is never called (no
+    // user-facing refetch/banner), and the status NEVER becomes the actionable
+    // user-facing 'conflict' — it recovers cleanly to saving/saved. (The brief
+    // recovery touches the quiet 'syncing' progress state internally before the
+    // immediate rebase re-send moves it to 'saving'; React batches those two
+    // synchronous transitions, so we assert on the invariant that matters: the
+    // user-facing 'conflict' state is never entered.)
+    await waitFor(() => expect(result.current.status).toBe('saved'));
+    expect(onConflict).not.toHaveBeenCalled();
+    expect(statuses).not.toContain('conflict');
+
+    // The ops are still NOT dropped — the rebased re-send lands the edit.
+    await waitFor(() => expect(mockAutosave).toHaveBeenCalledTimes(2));
+    const firstCall = mockAutosave.mock.calls[0][0];
+    const rebaseCall = mockAutosave.mock.calls[1][0];
+    expect(rebaseCall.body.base_revision_index).toBe(9);
+    expect(rebaseCall.body.lock_token).toBe(TOKEN_B);
+    expect(rebaseCall.body.ops).toEqual([
+      { op: 'plan_meta', meta: { name: 'v1' } },
+    ]);
+    expect(result.current.version).toBe(10);
+  });
+
+  it('P2: an autosave_lock_stale 409 AFTER a successful save is treated as a REAL conflict (onConflict fires, status=conflict)', async () => {
+    const conflict = {
+      error: 'autosave_lock_stale' as const,
+      head_revision_index: 9,
+      lock_token: TOKEN_B,
+    };
+    // First edit saves cleanly (200). A later edit then 409s with stale-lock —
+    // but because a real save already landed, this is a genuine conflict.
+    mockAutosave
+      .mockResolvedValueOnce(okResponse({ head: 1, token: TOKEN_B }))
+      .mockRejectedValueOnce(
+        new WorkoutAutosaveApiError('conflict', 409, 'stale', conflict),
+      )
+      .mockResolvedValueOnce(okResponse({ head: 10, token: TOKEN_A }));
+    const onConflict = jest.fn();
+
+    const { result, rerender } = renderHook(
+      ({ value }: { value: Copy }) =>
+        useAutosave<Copy>({
+          planId: 'p1',
+          value,
+          diff,
+          baseRevisionIndex: 0,
+          lockToken: TOKEN_A,
+          onConflict,
+        }),
+      { initialProps: { value: { n: 0 } } },
+    );
+
+    // First edit → clean 200.
+    rerender({ value: { n: 1 } });
+    await act(async () => {
+      jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
+    });
+    await waitFor(() => expect(result.current.status).toBe('saved'));
+
+    // Second edit → 409 stale-lock, now a REAL conflict (a save already landed).
+    rerender({ value: { n: 2 } });
+    await act(async () => {
+      jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
+    });
+
+    await waitFor(() => expect(onConflict).toHaveBeenCalledWith(conflict));
+    await waitFor(() => expect(result.current.status).toBe('saved'));
+    expect(result.current.version).toBe(10);
   });
 
   it('does NOT advance the diff baseline across repeated 409s (only a 200 advances it)', async () => {
