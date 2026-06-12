@@ -17,7 +17,12 @@
  */
 
 import React from 'react';
-import { act, renderHook, waitFor } from '@testing-library/react-native';
+import {
+  act,
+  cleanup,
+  renderHook,
+  waitFor,
+} from '@testing-library/react-native';
 
 // ─── Mocks ───────────────────────────────────────────────────────────────────
 
@@ -123,6 +128,24 @@ import {
   computeBackoffDelayMs,
 } from '../useAutosave';
 
+// jest-expo installs `global.fetch` as a LAZY getter that requires
+// `ExpoFetchModule` on first access. This suite replaces `react-native` with a
+// minimal stub (above), which leaves expo-modules-core unable to satisfy that
+// require — so when the fetch getter is touched at/after teardown it logs an
+// async warning that lands after the suite finishes ("Cannot log after tests
+// are done"), tripping Jest to exit 1 in CI. The hook never makes real network
+// calls here (the API is fully mocked), so eagerly pin `global.fetch` to an
+// inert stub before any test runs, preventing the lazy expo require entirely.
+beforeAll(() => {
+  Object.defineProperty(global, 'fetch', {
+    configurable: true,
+    writable: true,
+    value: jest.fn(() =>
+      Promise.reject(new Error('fetch is not available in useAutosave tests')),
+    ),
+  });
+});
+
 const mockAutosave = workoutAutosaveApi.autosave as jest.Mock;
 const mockWrite = writeAutosaveMirror as jest.Mock;
 const mockRead = readAutosaveMirror as jest.Mock;
@@ -162,7 +185,21 @@ beforeEach(() => {
   mockClearIfKey.mockResolvedValue(true);
 });
 
-afterEach(() => {
+afterEach(async () => {
+  // Unmount any still-mounted hook WHILE the fake clock is active. RTL's own
+  // auto-cleanup otherwise runs after we restore real timers, so the
+  // unmount-triggered stable flush would fire async on the real clock and
+  // resolve after the test ("Cannot log after tests are done"), keeping a
+  // handle open and making Jest exit 1.
+  await act(async () => {
+    cleanup();
+    // Let the unmount flush + any armed debounce/backoff/saved-settle timers
+    // run and settle their promise chains on the fake clock.
+    jest.runOnlyPendingTimers();
+    await Promise.resolve();
+  });
+  // Drop anything still scheduled, then restore the real clock.
+  jest.clearAllTimers();
   jest.useRealTimers();
 });
 

@@ -193,6 +193,10 @@ beforeEach(() => {
 
 afterEach(() => {
   // RTL's auto-cleanup unmounts the tree (single React, default behaviour).
+  // Clear any timers the screen's autosave hook left armed before restoring the
+  // real clock so no debounced flush resolves after the test ("Cannot log after
+  // tests are done") and keeps a handle open that makes Jest exit 1.
+  jest.clearAllTimers();
   jest.useRealTimers();
   if (ORIGINAL_FLAG === undefined) delete process.env.EXPO_PUBLIC_FF_MWB_AUTOSAVE;
   else process.env.EXPO_PUBLIC_FF_MWB_AUTOSAVE = ORIGINAL_FLAG;
