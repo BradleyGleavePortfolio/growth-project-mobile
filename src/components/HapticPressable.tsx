@@ -23,6 +23,7 @@ import {
   GestureResponderEvent,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { useReduceMotion } from '../screens/client/wearables/components/useReduceMotion';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -85,11 +86,20 @@ export default function HapticPressable({
   disableAnimation = false,
   ...rest
 }: HapticPressableProps) {
+  // GLOBAL reduce-motion gate (R4 P2): every HapticPressable — the client Roman
+  // entry row included — reads the OS "Reduce Motion" preference from the shared
+  // useReduceMotion() hook and suppresses the press scale/opacity animation when
+  // it is on. Haptics, the button role, and all forwarded props are untouched;
+  // only the decorative scale/opacity motion is gated. The explicit
+  // `disableAnimation` prop continues to force-off animation regardless.
+  const reduceMotion = useReduceMotion();
+  const animationDisabled = disableAnimation || reduceMotion;
+
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const opacityAnim = useRef(new Animated.Value(1)).current;
 
   const animateIn = useCallback(() => {
-    if (disableAnimation) return;
+    if (animationDisabled) return;
     Animated.parallel([
       Animated.spring(scaleAnim, {
         toValue: pressScale,
@@ -103,10 +113,10 @@ export default function HapticPressable({
         useNativeDriver: true,
       }),
     ]).start();
-  }, [disableAnimation, pressScale, pressOpacity, scaleAnim, opacityAnim]);
+  }, [animationDisabled, pressScale, pressOpacity, scaleAnim, opacityAnim]);
 
   const animateOut = useCallback(() => {
-    if (disableAnimation) return;
+    if (animationDisabled) return;
     Animated.parallel([
       Animated.spring(scaleAnim, {
         toValue: 1,
@@ -120,7 +130,7 @@ export default function HapticPressable({
         useNativeDriver: true,
       }),
     ]).start();
-  }, [disableAnimation, scaleAnim, opacityAnim]);
+  }, [animationDisabled, scaleAnim, opacityAnim]);
 
   const handlePressIn = useCallback(
     (e: GestureResponderEvent) => {

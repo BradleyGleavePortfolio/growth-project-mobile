@@ -34,7 +34,7 @@ jest.mock('../../../../theme/useTheme', () => {
   };
 });
 
-import RomanAvatar from '../../RomanAvatar';
+import RomanAvatar from '../../../roman/RomanAvatar';
 import ConfirmModal from '../ConfirmModal';
 
 /** Flatten a possibly-array RN style into a single object. */

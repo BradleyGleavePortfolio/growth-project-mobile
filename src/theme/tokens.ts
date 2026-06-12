@@ -59,6 +59,16 @@ export const colors = {
   // uses #B91C1C — a clearer alarm red that pairs with bone, passes WCAG
   // AA on bone background, and reads as "warning" rather than "blood".
   error:       '#B91C1C',
+
+  // Roman (AI persona) brand-character avatar tokens. The Roman mascot uses a
+  // deep-gold accent that is intentionally distinct from `mutedGold`
+  // (#C5A253, founding-tier badge typography) — it is the avatar ring + the
+  // monogram-tile fill, never general UI chrome. `romanInk` is the dark glyph
+  // color on that gold tile (shares ink's value but is named for the Roman lane
+  // so the avatar's palette stays self-documenting and tokenized). Previously
+  // hardcoded as raw hex inside RomanAvatar.tsx (#C9A961 / #1A1A18).
+  romanAccent: '#C9A961',
+  romanInk:    '#1A1A18',
 } as const;
 
 // ─── Neutrals 0–1000 (10 stops) ───────────────────────────────────────────────

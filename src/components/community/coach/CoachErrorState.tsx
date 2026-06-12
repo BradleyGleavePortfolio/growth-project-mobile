@@ -17,7 +17,7 @@
  */
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import RomanAvatar from '../RomanAvatar';
+import RomanAvatar from '../../roman/RomanAvatar';
 import HapticPressable from '../../HapticPressable';
 import { useTheme } from '../../../theme/useTheme';
 import { spacing, radius, semantic } from '../../../theme/tokens';

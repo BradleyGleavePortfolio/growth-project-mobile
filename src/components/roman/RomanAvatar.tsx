@@ -34,6 +34,7 @@ import {
   StyleSheet,
   type ImageSourcePropType,
 } from 'react-native';
+import { colors } from '../../theme/tokens';
 import { romanFaceAsset } from './romanAvatarAssets';
 
 /** Approved crops used on Community surfaces (subset of the §4 matrix). */
@@ -56,9 +57,10 @@ export interface RomanAvatarProps {
   testID?: string;
 }
 
-// Deep-gold accent from the Roman avatar run summary (ROMAN_VOICE_POLICY §8).
-const ROMAN_ACCENT = '#C9A961';
-const ROMAN_INK = '#1A1A18';
+// Deep-gold accent + dark glyph ink for the Roman avatar, sourced from design
+// tokens (ROMAN_VOICE_POLICY §8). Tokenized in the roman/ lane — no raw hex.
+const ROMAN_ACCENT = colors.romanAccent;
+const ROMAN_INK = colors.romanInk;
 
 /** Normalize the `source` prop / bundled asset into an Image `source` value. */
 function resolveSource(

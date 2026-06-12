@@ -15,6 +15,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { Spacing, Radius } from '../../theme/index';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import { featureFlags } from '../../config/featureFlags';
+// FACE+VOICE contract (D-012): the Roman entry row is a Roman-branded surface,
+// so it carries Roman's actual face rather than a disembodied sparkles glyph.
+// Canonical avatar lives in the roman/ lane (D-013).
+import RomanAvatar from '../../components/roman/RomanAvatar';
 type MoreItem = {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
@@ -22,6 +27,9 @@ type MoreItem = {
   // Either a sibling tab (via getParent) or a nested screen inside the More stack.
   target: { type: 'tab'; tab: string } | { type: 'stack'; screen: string; parentScreen?: string };
   a11yHint: string;
+  // When true, the row renders Roman's face (RomanAvatar) in place of the
+  // Ionicons glyph — the face+voice rule for the Roman-branded row.
+  isRoman?: boolean;
 };
 
 const MORE_ITEMS: MoreItem[] = [
@@ -118,10 +126,33 @@ const MORE_ITEMS: MoreItem[] = [
   },
 ];
 
+/**
+ * Roman P1 chat entry row (client surface). Only present when
+ * featureFlags.romanChat is true (default OFF) — when the flag is OFF the row is
+ * not in the list, so there is no dead-end into an unregistered route. Routes to
+ * the MoreStack 'RomanChat' screen, which itself is registered only behind the
+ * same flag (ClientNavigator).
+ */
+const ROMAN_MORE_ITEM: MoreItem = {
+  icon: 'sparkles-outline',
+  label: 'Roman',
+  // Roman is not "your AI" — he is Roman, shared across surfaces (identity
+  // spec). Client row keeps the plain open-a-conversation register
+  // (R1 UX finding P2).
+  description: 'Open a conversation with Roman',
+  target: { type: 'stack', screen: 'RomanChat' },
+  a11yHint: 'Opens a conversation with Roman',
+  isRoman: true,
+};
+
 export default function MoreScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
+  const items = useMemo<MoreItem[]>(
+    () => (featureFlags.romanChat ? [ROMAN_MORE_ITEM, ...MORE_ITEMS] : MORE_ITEMS),
+    [],
+  );
 
   const handlePress = (item: MoreItem) => {
     if (item.target.type === 'stack') {
@@ -138,27 +169,37 @@ export default function MoreScreen() {
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        role="list"
       >
-        {MORE_ITEMS.map((item) => (
-          <HapticPressable
-            key={item.label}
-            intent="light"
-            style={styles.item}
-            onPress={() => handlePress(item)}
-            accessible
-            accessibilityRole="button"
-            accessibilityLabel={item.label}
-            accessibilityHint={item.a11yHint}
-          >
-            <View style={styles.iconWrap}>
-              <Ionicons name={item.icon} size={22} color={colors.primary} />
-            </View>
-            <View style={styles.textWrap}>
-              <Text style={styles.itemLabel}>{item.label}</Text>
-              <Text style={styles.itemDescription}>{item.description}</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
-          </HapticPressable>
+        {items.map((item) => (
+          // listitem wrapper exposes the collection structure to assistive tech
+          // while the inner pressable keeps its button role + action (R3 P1-3).
+          // ARIA `role` is used because RN's AccessibilityRole union omits
+          // "listitem".
+          <View key={item.label} role="listitem">
+            <HapticPressable
+              intent="light"
+              style={styles.item}
+              onPress={() => handlePress(item)}
+              accessible
+              accessibilityRole="button"
+              accessibilityLabel={item.label}
+              accessibilityHint={item.a11yHint}
+            >
+              <View style={styles.iconWrap}>
+                {item.isRoman ? (
+                  <RomanAvatar crop="neutral" size={28} testID="client-roman-entry-avatar" />
+                ) : (
+                  <Ionicons name={item.icon} size={22} color={colors.primary} />
+                )}
+              </View>
+              <View style={styles.textWrap}>
+                <Text style={styles.itemLabel}>{item.label}</Text>
+                <Text style={styles.itemDescription}>{item.description}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
+            </HapticPressable>
+          </View>
         ))}
       </ScrollView>
     </SafeAreaView>

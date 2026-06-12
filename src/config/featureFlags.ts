@@ -173,6 +173,7 @@ export const featureFlags = {
   //
   // env: EXPO_PUBLIC_FF_COMMUNITY_EVENTS
   communityEvents: readFlag('EXPO_PUBLIC_FF_COMMUNITY_EVENTS', false),
+  romanChat: readFlag('EXPO_PUBLIC_FF_ROMAN_CHAT', false),
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;

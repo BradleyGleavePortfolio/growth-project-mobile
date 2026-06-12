@@ -19,6 +19,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { signOut } from '../../services/authActions';
 import { coachApi, profileApi, notificationsApi, usersApi, AccountStatus } from '../../services/api';
 import { helpUrl } from '../../config/env';
+import { featureFlags } from '../../config/featureFlags';
 
 import { mediumTap, warningTap, successTap } from '../../utils/haptics';
 import { updateSupabasePassword } from '../../utils/supabaseAuth';
@@ -26,6 +27,10 @@ import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/
 import { useTheme } from '../../theme/ThemeProvider';
 import { errorMessage, errorStatus } from '../../types/common';
 import BiometricUnlockSetting from '../../components/BiometricUnlockSetting';
+// FACE+VOICE contract: the Roman concierge entry row is a Roman-voiced coach
+// surface, so it must carry Roman's actual face — never a disembodied sparkles
+// glyph. Canonical avatar lives in the roman/ lane (D-013).
+import RomanAvatar from '../../components/roman/RomanAvatar';
 
 import { makeStyles } from './settings/styles';
 import { COACH_SETTINGS_KEY, DEFAULT_SETTINGS, type CoachSettings } from './settings/types';
@@ -539,6 +544,40 @@ export default function SettingsScreen() {
       <View style={styles.section}>
         <BiometricUnlockSetting />
       </View>
+
+      {/* Roman P1 chat (coach surface). Entry row present ONLY when
+          featureFlags.romanChat is true (default OFF) — when OFF there is no row
+          and no dead-end, since the 'RomanChat' route is itself registered only
+          behind the same flag (CoachNavigator). Routes into the coach surface. */}
+      {featureFlags.romanChat ? (
+        <>
+          <Text style={styles.sectionHeader}>Concierge</Text>
+          <View style={styles.section} role="list">
+            {/* listitem wrapper exposes list structure to assistive tech while
+                the inner pressable keeps its button role + action (R3 P1-3).
+                ARIA `role` is used because RN's AccessibilityRole union omits
+                "listitem". */}
+            <View role="listitem">
+              <TouchableOpacity
+                style={styles.row}
+                onPress={() => navigation.navigate('RomanChat')}
+                accessibilityRole="button"
+                accessibilityLabel="Open a conversation with Roman"
+                accessibilityHint="Ask for a brief, a client read, or the next step"
+              >
+                <RomanAvatar crop="neutral" size={28} testID="coach-roman-entry-avatar" />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.rowLabel}>Roman</Text>
+                  {/* Coach register: operational, not the generic "ask anything"
+                      client copy (R1 UX finding P2). */}
+                  <Text style={styles.rowSubLabel}>Ask for a brief, a client read, or the next step.</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+          </View>
+        </>
+      ) : null}
 
       {/* iMessage-grade DM — Apple App Review 1.2 compliance. The coach must
           be able to view and undo their blocks from Settings. */}

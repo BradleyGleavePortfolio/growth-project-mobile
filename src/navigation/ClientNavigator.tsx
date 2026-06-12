@@ -71,6 +71,7 @@ import BloodworkEntryScreen from '../screens/client/BloodworkEntryScreen';
 // "Coming soon" surfaces never reach production).
 import ClientPathCopilotScreen from '../screens/client/ClientPathCopilotScreen';
 import PrivateCommunityHubScreen from '../screens/client/PrivateCommunityHubScreen';
+import RomanChatScreen from '../screens/roman/RomanChatScreen';
 import { featureFlags } from '../config/featureFlags';
 import { HapticService } from '../ui/haptics/haptics.service';
 // Phase 11 — Share Card
@@ -226,6 +227,8 @@ export type MoreStackParamList = {
   /** Wave 11 — gated routes; screens render a preview-only empty state when flag is OFF. */
   Copilot:           undefined;
   PrivateCommunityHub: undefined;
+  /** Roman P1 chat — client surface. Registered ONLY behind featureFlags.romanChat (default OFF). */
+  RomanChat:         undefined;
   /** Phase 11 — Share Card. Entry point: milestone/streak detection adds a Share button. */
   ShareCard: { milestone: ShareCardMilestone };
   /** Phase 11 — Notification category preferences. Entry: Settings > Notifications > Categories. */
@@ -462,6 +465,15 @@ function MoreStackNavigator() {
       )}
       {featureFlags.privateCommunityHub && (
         <MoreStackNav.Screen name="PrivateCommunityHub" component={PrivateCommunityHubScreen} />
+      )}
+      {/* Roman P1 chat (client surface). Only registered when featureFlags.romanChat
+          is explicitly true (default OFF), mirroring the Wave 11 gated-route pattern.
+          The screen receives surface='client' so the backend @IsIn(ROMAN_SURFACES)
+          value is fixed at the navigator, never guessed client-side. */}
+      {featureFlags.romanChat && (
+        <MoreStackNav.Screen name="RomanChat">
+          {() => <RomanChatScreen surface="client" />}
+        </MoreStackNav.Screen>
       )}
       {/* Phase 11 — Share Card. Rendered off-screen; captureRef then opens native share sheet. */}
       <MoreStackNav.Screen name="ShareCard" component={ShareCardScreen} />

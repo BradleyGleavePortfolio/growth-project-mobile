@@ -12,7 +12,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import HapticPressable from '../HapticPressable';
 import { useTheme } from '../../theme/useTheme';
 import { spacing } from '../../theme/tokens';
-import RomanAvatar from './RomanAvatar';
+import RomanAvatar from '../roman/RomanAvatar';
 import UnreadBadge from './UnreadBadge';
 import type { CommunityDmThread } from '../../api/communityApi';
 
