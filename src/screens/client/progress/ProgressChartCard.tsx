@@ -75,13 +75,12 @@ const FLAG_SIZE = 12;
 
 /** Fire selection haptic, gated so it never throws on web/unsupported. */
 function selectionHaptic(): void {
-  // expo-haptics' selectionAsync rejects (not throws) on web. We attach a
-  // no-op rejection handler so an unsupported platform degrades silently to
-  // "no haptic" WITHOUT an unhandled rejection. This is the ONE place a caught
-  // error is intentionally a no-op — a missing haptic motor is not a
-  // user-facing failure (documented; mirrors RevolutGlowChart).
-  Haptics.selectionAsync().catch(() => {
-    /* haptics unavailable on this platform — non-fatal, intentionally ignored */
+  // expo-haptics' selectionAsync rejects (not throws) on web. A missing haptic
+  // motor is non-fatal (the chart still scrubs), but we never silently swallow
+  // the rejection (Bradley Law #36) — we record WHY the haptic degraded so an
+  // unexpected failure on a supported device is diagnosable.
+  Haptics.selectionAsync().catch((err) => {
+    console.warn('[ProgressChartCard] haptic failed', err);
   });
 }
 
@@ -309,8 +308,16 @@ export default function ProgressChartCard({
       {/* Roman commentary on PR detection — FACE + VOICE in the same tree. */}
       {pr && (
         <View style={styles.romanRow} testID="progress-pr-commentary">
-          <RomanAvatar crop="smile" size={28} testID="progress-pr-avatar" />
-          <Text style={styles.romanText} testID="progress-pr-text">
+          <RomanAvatar
+            expression="slight_smile"
+            size={28}
+            testID="progress-pr-avatar"
+          />
+          <Text
+            style={styles.romanText}
+            testID="progress-pr-text"
+            accessibilityLiveRegion="polite"
+          >
             {romanPRDetected({ liftName, weight: pr.point.y })}
           </Text>
         </View>

@@ -164,14 +164,23 @@ export function useFirstPaymentRealtime({
             (payload) => {
               // Re-check the gate at fire time: a payment that lands AFTER the
               // coach already saw their first celebration must not re-trigger.
-              void hasSeenFirstPayment(coachId as string).then((already) => {
-                if (already || cancelled) return;
-                const row = (payload.new ?? {}) as Record<string, unknown>;
-                cbRef.current({
-                  amount: formatAmount(row),
-                  clientName: readClientName(row),
+              hasSeenFirstPayment(coachId as string)
+                .then((already) => {
+                  if (already || cancelled) return;
+                  const row = (payload.new ?? {}) as Record<string, unknown>;
+                  cbRef.current({
+                    amount: formatAmount(row),
+                    clientName: readClientName(row),
+                  });
+                })
+                .catch((err) => {
+                  // Gate re-check failed — do not swallow (Law #36). We skip
+                  // firing (fail-closed) and record why the celebration was
+                  // suppressed on this INSERT.
+                  logger.warn('ed3', 'hasSeenFirstPayment re-check failed', {
+                    reason: errorMessage(err, 'gate re-check failed'),
+                  });
                 });
-              });
             },
           )
           .subscribe((status) => {
@@ -197,7 +206,16 @@ export function useFirstPaymentRealtime({
       cancelled = true;
       try {
         if (channel) channel.unsubscribe();
-        if (client) void client.removeAllChannels();
+        if (client) {
+          // removeAllChannels() returns a promise; a cleanup cannot be async,
+          // so we capture the promise and attach a rejection handler rather
+          // than swallow it (Law #36).
+          Promise.resolve(client.removeAllChannels()).catch((err) => {
+            logger.warn('ed3', 'removeAllChannels failed', {
+              reason: errorMessage(err, 'removeAllChannels failed'),
+            });
+          });
+        }
       } catch (err) {
         // Teardown failure is non-fatal but must be recorded (Law #36).
         logger.warn('ed3', 'realtime teardown failed', {

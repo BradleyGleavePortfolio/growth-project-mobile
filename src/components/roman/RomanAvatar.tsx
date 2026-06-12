@@ -40,9 +40,26 @@ import { romanFaceAsset } from './romanAvatarAssets';
 /** Approved crops used on Community surfaces (subset of the §4 matrix). */
 export type RomanCrop = 'monogram' | 'smile' | 'neutral';
 
+/**
+ * Spec §3.8 expression invariant. Named after the SPEC register rather than the
+ * underlying crop asset so call sites read against the spec ("slight_smile" is
+ * the §3.8 milestone register). `slight_smile` maps to the celebratory smile
+ * crop asset (the repo's bundled milestone face); `neutral` maps to the neutral
+ * crop. When `expression` is supplied it takes precedence over `crop`.
+ */
+export type RomanExpression = 'neutral' | 'slight_smile';
+
 export interface RomanAvatarProps {
   /** Which approved crop to show. Defaults to the compact monogram. */
   crop?: RomanCrop;
+  /**
+   * Optional §3.8 expression register. When set it selects the crop asset for
+   * that expression (`slight_smile` → the milestone smile face, `neutral` →
+   * the neutral face) and the matching accessibility label, taking precedence
+   * over `crop`. This exposes the spec API name at call sites without changing
+   * the underlying bundled assets.
+   */
+  expression?: RomanExpression;
   /**
    * Optional face image OVERRIDE. Accepts either a CDN/remote URL string (e.g.
    * a future backend `avatar_url`) or a resolved React Native image source
@@ -76,24 +93,38 @@ function resolveSource(
   return romanFaceAsset(crop);
 }
 
+/** Map a §3.8 expression register onto the underlying crop asset. */
+function cropForExpression(expression: RomanExpression): RomanCrop {
+  return expression === 'slight_smile' ? 'smile' : 'neutral';
+}
+
 export default function RomanAvatar({
   crop = 'monogram',
+  expression,
   source,
   size = 28,
   testID,
 }: RomanAvatarProps): React.ReactElement {
-  const a11y = crop === 'smile' ? 'Roman, pleased' : 'Roman';
+  // `expression` (the §3.8 spec register) wins over `crop` when supplied.
+  const effectiveCrop: RomanCrop =
+    expression != null ? cropForExpression(expression) : crop;
+  const a11y =
+    expression === 'slight_smile'
+      ? 'Roman, slight smile'
+      : effectiveCrop === 'smile'
+        ? 'Roman, pleased'
+        : 'Roman';
   // The celebratory ring distinguishes the smile crop from neutral (carried on
   // both the face image and the monogram fallback).
-  const showRing = crop === 'smile';
+  const showRing = effectiveCrop === 'smile';
 
   // Track an image-load failure so we can fall back to the accessible monogram
   // tile WITHOUT silently showing a broken image. This is the ONLY path to the
   // monogram for a neutral/smile crop.
   const [failed, setFailed] = React.useState(false);
   // Reset the failure flag if the resolved image identity changes.
-  const resolved = resolveSource(source, crop);
-  const resolvedKey = typeof source === 'string' ? source : crop;
+  const resolved = resolveSource(source, effectiveCrop);
+  const resolvedKey = typeof source === 'string' ? source : effectiveCrop;
   React.useEffect(() => {
     setFailed(false);
   }, [resolvedKey]);
