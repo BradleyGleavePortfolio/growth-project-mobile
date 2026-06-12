@@ -54,7 +54,11 @@ export default function RomanStreakCard({
     <View style={styles.card} testID={testID} accessibilityRole="summary">
       {/* FACE+VOICE: avatar co-located with the §2.7 streak copy. */}
       <RomanAvatar crop={crop} size={48} testID="roman-streak-avatar" />
-      <Text style={styles.copy} accessibilityRole="text">
+      <Text
+        style={styles.copy}
+        accessibilityRole="text"
+        accessibilityLiveRegion="polite"
+      >
         {line}
       </Text>
     </View>

@@ -40,7 +40,11 @@ export default function RomanVoiceLogReadback({
     <View style={styles.row} testID={testID} accessibilityRole="summary">
       {/* FACE+VOICE: small avatar co-located with the §2.9 readback copy. */}
       <RomanAvatar crop={crop} size={24} testID="roman-voicelog-avatar" />
-      <Text style={styles.copy} accessibilityRole="text">
+      <Text
+        style={styles.copy}
+        accessibilityRole="text"
+        accessibilityLiveRegion="polite"
+      >
         {line}
       </Text>
     </View>

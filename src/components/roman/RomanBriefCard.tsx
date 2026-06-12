@@ -41,7 +41,11 @@ export default function RomanBriefCard({
     <View style={styles.card} testID={testID} accessibilityRole="summary">
       {/* FACE+VOICE: avatar co-located with the §2.3 brief copy. */}
       <RomanAvatar crop={crop} size={40} testID="roman-brief-avatar" />
-      <Text style={styles.copy} accessibilityRole="text">
+      <Text
+        style={styles.copy}
+        accessibilityRole="text"
+        accessibilityLiveRegion="polite"
+      >
         {line}
       </Text>
     </View>

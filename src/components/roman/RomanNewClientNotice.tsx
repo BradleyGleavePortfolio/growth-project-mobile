@@ -36,7 +36,11 @@ export default function RomanNewClientNotice({
     <View style={styles.row} testID={testID} accessibilityRole="summary">
       {/* FACE+VOICE: avatar co-located with the §2.5 onboarded copy. */}
       <RomanAvatar crop={crop} size={32} testID="roman-newclient-avatar" />
-      <Text style={styles.copy} accessibilityRole="text">
+      <Text
+        style={styles.copy}
+        accessibilityRole="text"
+        accessibilityLiveRegion="polite"
+      >
         {line}
       </Text>
     </View>

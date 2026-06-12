@@ -41,7 +41,11 @@ export default function RomanPayoutNotice({
     <View style={styles.row} testID={testID} accessibilityRole="summary">
       {/* FACE+VOICE: avatar co-located with the §2.12 payout copy. */}
       <RomanAvatar crop={crop} size={32} testID="roman-payout-avatar" />
-      <Text style={styles.copy} accessibilityRole="text">
+      <Text
+        style={styles.copy}
+        accessibilityRole="text"
+        accessibilityLiveRegion="polite"
+      >
         {line}
       </Text>
     </View>
