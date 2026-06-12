@@ -27,9 +27,18 @@ import AINote from '../../components/trust/AINote';
 import VerifiedProgressRow from '../../components/trust/VerifiedProgressRow';
 import EmptyState from '../../components/EmptyState';
 import { featureFlags } from '../../config/featureFlags';
+// §2.3 Coach Brief — Roman delivers the morning brief in his voice, beside his
+// face. FACE+VOICE: RomanBriefCard co-locates <RomanAvatar /> with the §2.3
+// copy module (src/lib/roman/copy.ts) in one tree.
+import RomanBriefCard from '../../components/roman/RomanBriefCard';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 export default function CoachBriefScreen() {
+  const currentUser = useCurrentUser();
   const [payload, setPayload] = useState<CoachBriefPayload | null>(null);
+  // True when the brief payload could not be assembled (a source was slow) —
+  // selects Roman's §2.3 error variant.
+  const [briefError, setBriefError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [draftApproved, setDraftApproved] = useState(false);
@@ -39,6 +48,12 @@ export default function CoachBriefScreen() {
       const next = await fetchCoachBrief();
       setPayload(next);
       setDraftApproved(next.morningSummary.approvedByCoach);
+      setBriefError(false);
+    } catch (err) {
+      // Bradley Law #36: surface the failure (Roman's §2.3 error variant
+      // renders below) rather than swallowing it. Logged for diagnostics.
+      setBriefError(true);
+      console.warn('CoachBriefScreen: failed to load brief', err);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -99,6 +114,22 @@ export default function CoachBriefScreen() {
       <Text style={styles.subtitle}>
         AI drafts the summary. You approve before anything is sent.
       </Text>
+
+      {/* §2.3 Coach Brief — Roman's voiced delivery + face. Celebration on a
+          record morning (all clients on track, none needing attention);
+          error if the brief could not be assembled; otherwise default. */}
+      <RomanBriefCard
+        coachName={(currentUser?.firstName ?? '').trim() || 'Coach'}
+        clientCount={payload?.clients.length ?? 0}
+        mode={
+          briefError
+            ? 'error'
+            : payload != null && payload.clients.length === 0 && !payload.isStale
+              ? 'celebration'
+              : 'default'
+        }
+        testID="roman-brief-card"
+      />
 
       {payload?.isStale ? (
         <View
