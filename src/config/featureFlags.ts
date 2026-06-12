@@ -138,6 +138,22 @@ export const featureFlags = {
   //
   // env: EXPO_PUBLIC_FF_COMMUNITY_ACKS
   communityAcks: readFlag('EXPO_PUBLIC_FF_COMMUNITY_ACKS', false),
+
+  // ─── Community v2-4 — AI inbox triage ──────────────────────────
+  // The v2-4 backend (FEATURE_COMMUNITY_AI_TRIAGE) adds a read-only AI
+  // inbox-triage endpoint (GET /community/ai-triage) that sorts a coach's
+  // unanswered community inbox into five fixed categories. This mobile flag
+  // gates the coach-side surface that consumes it: a single AiTriageCard
+  // banner above the inbox list, visually distinct from human rows and clearly
+  // labelled AI-generated. Defaults OFF UNCONDITIONALLY (not `isDev`). When
+  // false the inbox renders exactly as it does today (no triage card, no
+  // triage fetch) so the kill switch hides the new UI without disturbing the
+  // v1-6 inbox or the v2-2 ack surface. The backend gate is also OFF in prod
+  // and answers a byte-identical 404 when off, so a dev build that flips this
+  // on still degrades gracefully to a calm, typed state.
+  //
+  // env: EXPO_PUBLIC_FF_COMMUNITY_AI_TRIAGE
+  communityAiTriage: readFlag('EXPO_PUBLIC_FF_COMMUNITY_AI_TRIAGE', false),
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;

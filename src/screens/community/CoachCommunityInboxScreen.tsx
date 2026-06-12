@@ -56,6 +56,8 @@ import {
   isIllegalAckTransition,
 } from '../../hooks/useCoachAckActions';
 import { featureFlags } from '../../config/featureFlags';
+import AiTriageCard from '../../components/community/AiTriageCard';
+import { useInboxTriage } from '../../hooks/useInboxTriage';
 import { useQueryClient } from '@tanstack/react-query';
 import { AckStateSchema } from '../../api/coachCommunityApi';
 import type {
@@ -67,6 +69,39 @@ import type {
 // (no ack badge, no "Mark acked" quick-action). Read once at module scope —
 // the flag is build-time and never flips mid-session.
 const ACKS_ENABLED = featureFlags.communityAcks;
+
+// v2-4 kill switch: when OFF the inbox renders with NO triage card and never
+// fetches /community/ai-triage. Read once at module scope — the flag is
+// build-time and never flips mid-session, so the number/order of hooks is
+// stable for the lifetime of the build (the triage hook lives behind this gate
+// at the component level, never conditionally inside a render).
+const TRIAGE_ENABLED = featureFlags.communityAiTriage;
+
+/**
+ * AI triage summary banner, pinned above the inbox list. Owns the
+ * `useInboxTriage` read so the hook is gated behind TRIAGE_ENABLED at the
+ * component boundary (the parent only mounts this when the flag is on). The
+ * card is a READ surface — it never sends or replies. A 404 (server flag off),
+ * any HTTP failure, or a Zod drift surfaces as the card's calm, typed error
+ * state; the human inbox below is always unaffected.
+ */
+function InboxTriageBanner(): React.ReactElement {
+  const triage = useInboxTriage();
+  const status = triage.isLoading
+    ? 'loading'
+    : triage.isError
+      ? 'error'
+      : 'ready';
+  return (
+    <AiTriageCard
+      status={status}
+      triage={triage.data}
+      onRetry={() => triage.refetch()}
+      retrying={triage.isRefetching}
+      testID="coach-community-inbox-ai-triage"
+    />
+  );
+}
 
 /**
  * Build the inbox row's accessibility label. When the ack flag is on we append
@@ -259,6 +294,11 @@ export default function CoachCommunityInboxScreen(): React.ReactElement {
         style={[styles.flex, { backgroundColor: semanticColors.bgPrimary }]}
         testID="coach-community-inbox-screen"
       >
+        {TRIAGE_ENABLED ? (
+          <View style={styles.triageHeader}>
+            <InboxTriageBanner />
+          </View>
+        ) : null}
         <CoachRomanEmptyState
           result={emptyState}
           testID="coach-community-inbox-empty"
@@ -294,6 +334,7 @@ export default function CoachCommunityInboxScreen(): React.ReactElement {
         data={items}
         keyExtractor={(i) => i.id}
         renderItem={renderItem}
+        ListHeaderComponent={TRIAGE_ENABLED ? <InboxTriageBanner /> : null}
         contentContainerStyle={styles.listContent}
         refreshControl={
           <RefreshControl
@@ -575,6 +616,10 @@ function CoachAckRow({
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
+  triageHeader: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+  },
   center: {
     flex: 1,
     justifyContent: 'center',
