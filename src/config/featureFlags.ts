@@ -184,6 +184,38 @@ export const featureFlags = {
    * env: EXPO_PUBLIC_FF_ROMAN_FIRST_PAYMENT_WOW
    */
   romanFirstPaymentWow: readFlag('EXPO_PUBLIC_FF_ROMAN_FIRST_PAYMENT_WOW', false),
+  /**
+   * Roman P4 / ED.4 — Bodyweight progress chart polish (client app). When ON,
+   * the client ProgressScreen mounts the ED.4 `ProgressChartCard` (the SVG +
+   * Reanimated draw-in chart with the haptic scrubber) for the weight trend.
+   * When OFF, the screen renders the legacy chart/empty state and never mounts
+   * the ED.4 animated surface (audit R5 P2 — ED.4 must be flag-gated, with the
+   * legacy behaviour preserved off). Default OFF (production-safe scaffolding);
+   * flip on per build once the ED.4 polish is signed off.
+   *
+   * env: EXPO_PUBLIC_FF_ROMAN_BODYWEIGHT_POLISH
+   */
+  romanFirstPaymentBodyweightPolish: readFlag(
+    'EXPO_PUBLIC_FF_ROMAN_BODYWEIGHT_POLISH',
+    false,
+  ),
+  /**
+   * Roman P4 / ED.3 — stricter first-payment proof via a backend row-history
+   * source (audit R5 P1, same-row prior-success replay). Default OFF. The hook
+   * already fails closed on a same-row re-activation by inspecting the OLD
+   * status (a row can only reach past_due / canceled / expired AFTER it was
+   * successful). This flag is a forward hook: when a backend success-history /
+   * ledger endpoint lands, the hook can additionally require an authoritative
+   * "this row never previously succeeded" proof before celebrating. See
+   * AI_BUTLER_ROMAN_IDENTITY_SPEC.md (ED.3) and the TODO in
+   * useFirstPaymentRealtime.ts.
+   *
+   * env: EXPO_PUBLIC_FF_ROMAN_REQUIRE_BACKEND_HISTORY
+   */
+  romanFirstPaymentRequireBackendHistory: readFlag(
+    'EXPO_PUBLIC_FF_ROMAN_REQUIRE_BACKEND_HISTORY',
+    false,
+  ),
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;

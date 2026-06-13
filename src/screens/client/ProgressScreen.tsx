@@ -4,7 +4,10 @@
  * Displays weight trend, macros for today, body stats, and recent log entries.
  * The weight trend is rendered via ProgressChartCard (ED.4) — the SVG +
  * Reanimated card with a draw-in line, haptic scrubber, and auto-PR flag plus
- * inline Roman commentary on the same data.
+ * inline Roman commentary on the same data — but ONLY when the
+ * romanFirstPaymentBodyweightPolish flag is ON (audit R5 P2). When the flag is
+ * OFF the screen falls back to LegacyWeightChart, a calm static SVG line that
+ * never mounts the ED.4 card.
  */
 
 import React, {
@@ -27,7 +30,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Svg, { Circle, G } from 'react-native-svg';
+import Svg, { Circle, G, Path as SvgPath } from 'react-native-svg';
 import { weightApi, logApi } from '../../services/api';
 import { useMacroTargets } from '../../hooks/useMacroTargets';
 import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
@@ -46,6 +49,7 @@ import { errorMessage } from '../../types/common';
 import { logger } from '../../utils/logger';
 import CoachErrorState from '../../components/community/coach/CoachErrorState';
 import ProgressChartCard from './progress/ProgressChartCard';
+import { featureFlags } from '../../config/featureFlags';
 
 type Period = '7D' | '30D' | '90D' | 'All';
 
@@ -131,6 +135,81 @@ function CalorieRing({
         </Text>
       </View>
     </View>
+  );
+}
+
+// Legacy static weight chart (audit R5 P2): the flag-OFF surface. A calm,
+// non-animated SVG line — no draw-in, no haptic scrubber, no auto-PR, and
+// crucially NO ED.4 ProgressChartCard mount. It plots the same {x: epoch ms,
+// y: weight} series the card would, scaled into the given height and the
+// available screen width, so the flag-OFF path stays a faithful but quiet
+// rendering of the trend.
+function LegacyWeightChart({
+  data,
+  height,
+  lineColor,
+  testID,
+}: {
+  data: { x: number; y: number }[];
+  height: number;
+  lineColor: string;
+  testID?: string;
+}) {
+  // chartContainer has 16px horizontal padding each side inside a 24px screen
+  // margin each side, so the inner drawable width is the screen minus those.
+  const width = SCREEN_WIDTH - 24 * 2 - 16 * 2;
+  const PAD = 8;
+
+  const { path, points } = useMemo(() => {
+    if (data.length < 2) {
+      return { path: '', points: [] as { cx: number; cy: number }[] };
+    }
+    const xs = data.map((d) => d.x);
+    const ys = data.map((d) => d.y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    const spanX = maxX - minX || 1;
+    const spanY = maxY - minY || 1;
+    const innerW = width - PAD * 2;
+    const innerH = height - PAD * 2;
+
+    const scaled = data.map((d) => {
+      const cx = PAD + ((d.x - minX) / spanX) * innerW;
+      // Invert Y so a higher weight sits nearer the top of the canvas.
+      const cy = PAD + (1 - (d.y - minY) / spanY) * innerH;
+      return { cx, cy };
+    });
+
+    const d = scaled
+      .map((p, i) => `${i === 0 ? 'M' : 'L'}${p.cx.toFixed(2)},${p.cy.toFixed(2)}`)
+      .join(' ');
+    return { path: d, points: scaled };
+  }, [data, height, width]);
+
+  if (!path) return null;
+
+  return (
+    <Svg
+      width={width}
+      height={height}
+      testID={testID}
+      accessibilityRole="image"
+      accessibilityLabel="Weight trend line chart"
+    >
+      <SvgPath
+        d={path}
+        stroke={lineColor}
+        strokeWidth={2}
+        fill="none"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+      {points.map((p, i) => (
+        <Circle key={i} cx={p.cx} cy={p.cy} r={2.5} fill={lineColor} />
+      ))}
+    </Svg>
   );
 }
 
@@ -352,6 +431,11 @@ export default function ProgressScreen() {
 
   const periods: Period[] = ['7D', '30D', '90D', 'All'];
 
+  // ED.4 flag gate (audit R5 P2): the ProgressChartCard animated surface only
+  // mounts when romanFirstPaymentBodyweightPolish is ON. When OFF the screen
+  // keeps the legacy static chart/empty state and never mounts the ED.4 card.
+  const ed4ChartEnabled = featureFlags.romanFirstPaymentBodyweightPolish;
+
   return (
     <View style={styles.container}>
       <ScrollView
@@ -538,17 +622,29 @@ export default function ProgressScreen() {
           <View style={styles.chartContainer}>
             <Text style={styles.chartTitle}>Weight Trend</Text>
             <View style={styles.chartInner}>
-              <ProgressChartCard
-                data={chartData}
-                liftName="Weight"
-                height={180}
-                testID="progress-weight-chart"
-                // Bodyweight is a trend, not a performance record — a rising
-                // weight is not a "personal best" (audit R3 P2). PR detection /
-                // commentary stays OFF here; the path is intact for a future
-                // real lift series.
-                enablePRDetection={false}
-              />
+              {ed4ChartEnabled ? (
+                // ED.4 surface (flag ON): the animated ProgressChartCard.
+                <ProgressChartCard
+                  data={chartData}
+                  liftName="Weight"
+                  height={180}
+                  testID="progress-weight-chart"
+                  // Bodyweight is a trend, not a performance record — a rising
+                  // weight is not a "personal best" (audit R3 P2). PR detection
+                  // / commentary stays OFF here; the path is intact for a
+                  // future real lift series.
+                  enablePRDetection={false}
+                />
+              ) : (
+                // Legacy surface (flag OFF, audit R5 P2): a calm static line,
+                // no draw-in animation, no haptic scrubber, no ED.4 card mount.
+                <LegacyWeightChart
+                  data={chartData}
+                  height={180}
+                  lineColor={colors.primary}
+                  testID="progress-weight-chart-legacy"
+                />
+              )}
             </View>
           </View>
         ) : (

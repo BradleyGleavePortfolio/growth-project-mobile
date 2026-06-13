@@ -85,10 +85,29 @@ jest.mock('@react-navigation/native', () => ({
 
 jest.mock('../../../lib/analytics', () => ({ track: jest.fn() }));
 
+// ── Feature-flag mock (audit R5 P2). ────────────────────────────────────────
+// The ED.4 ProgressChartCard surface is now gated behind
+// romanFirstPaymentBodyweightPolish, which ships default-OFF. A mutable mock
+// lets the wiring tests run with the flag ON (the launch-on state) while a
+// dedicated test below flips it OFF to prove the card never mounts.
+const mockFlags = {
+  romanFirstPaymentBodyweightPolish: true,
+  romanFirstPaymentRequireBackendHistory: false,
+};
+jest.mock('../../../config/featureFlags', () => ({
+  __esModule: true,
+  get featureFlags() {
+    return mockFlags;
+  },
+}));
+
 import ProgressScreen from '../ProgressScreen';
 
 beforeEach(() => {
   chartProps = {};
+  // Default the wiring tests to the flag-ON surface; the flag-off test sets
+  // it false explicitly.
+  mockFlags.romanFirstPaymentBodyweightPolish = true;
 });
 
 describe('ProgressScreen — ED.4 wiring (P1-1)', () => {
@@ -122,6 +141,24 @@ describe('ProgressScreen — ED.4 wiring (P1-1)', () => {
   // Guard against regression: tokens import is real so makeStyles(colors) works.
   it('uses real theme tokens (sanity)', () => {
     expect(colors).toBeDefined();
+  });
+});
+
+describe('ProgressScreen — ED.4 flag gate OFF (audit R5 P2)', () => {
+  it('does NOT mount the ED.4 ProgressChartCard when the flag is OFF', async () => {
+    // With romanFirstPaymentBodyweightPolish OFF the screen must render the
+    // legacy static line, never the animated ED.4 card. This proves the gate
+    // actually prevents the card mount rather than merely hiding it.
+    mockFlags.romanFirstPaymentBodyweightPolish = false;
+    const { queryByTestId, getByTestId } = render(<ProgressScreen />);
+
+    await waitFor(() => expect(mockGetHistory).toHaveBeenCalled());
+    // The legacy static chart renders (≥2 points) ...
+    await waitFor(() =>
+      expect(getByTestId('progress-weight-chart-legacy')).toBeTruthy(),
+    );
+    // ... and the ED.4 card sentinel is never mounted.
+    expect(queryByTestId('mock-progress-chart-card')).toBeNull();
   });
 });
 
