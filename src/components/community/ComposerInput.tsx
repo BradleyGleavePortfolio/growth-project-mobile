@@ -57,6 +57,13 @@ const ComposerInput = forwardRef<ComposerInputHandle, ComposerInputProps>(
   // when `value` changes (avoids a stale closure restoring over a newer draft).
   const valueRef = useRef('');
   valueRef.current = value;
+  // Synchronous in-flight guard. The parent `sending` prop only disables the
+  // button on the NEXT render, so a rapid double-tap can invoke this render's
+  // `submit` closure twice before `sending` lands. This ref is set BEFORE
+  // `onSubmit` and checked at the top of `submit`, so the second tap returns
+  // early and exactly one `onSubmit` fires per submit intent. It is cleared
+  // only after the promise settles (success AND failure) so a later send works.
+  const submittingRef = useRef(false);
   const trimmed = value.trim();
   const canSend = trimmed.length > 0 && !sending;
 
@@ -67,6 +74,10 @@ const ComposerInput = forwardRef<ComposerInputHandle, ComposerInputProps>(
 
   const submit = () => {
     if (!canSend) return;
+    // Reject a rapid second tap before the parent `sending` prop catches up:
+    // exactly one onSubmit per submit intent.
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     // Clear optimistically, but if onSubmit is async and rejects, restore the
     // draft so the user does not lose their text on a failed send. The field
     // stays editable during `sending` (slow-network UX), so on rejection only
@@ -77,11 +88,19 @@ const ComposerInput = forwardRef<ComposerInputHandle, ComposerInputProps>(
     const result = onSubmit(draft);
     if (result && typeof result.then === 'function') {
       setField('');
-      result.catch(() => {
-        if (valueRef.current === '') setField(draft);
-      });
+      result
+        .catch(() => {
+          if (valueRef.current === '') setField(draft);
+        })
+        .finally(() => {
+          // Cleared only after the promise settles so the guard spans the whole
+          // in-flight window; a later send works once this resolves.
+          submittingRef.current = false;
+        });
     } else {
       setField('');
+      // Synchronous path: the call is already complete, so release immediately.
+      submittingRef.current = false;
     }
   };
 

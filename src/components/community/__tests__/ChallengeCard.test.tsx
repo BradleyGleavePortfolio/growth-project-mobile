@@ -3,7 +3,7 @@
  *
  * Pins the card's design contract (DESIGN_INTELLIGENCE Part III):
  *   - Foregrounds the caller's OWN progress ("X of Y"), never a ranking.
- *   - ONE affordance that adapts to state: Join → Continue → Goal reached
+ *   - ONE affordance that adapts to state: Join -> Continue -> Goal reached
  *     (UX finding 13 — a single chip, no separate status label).
  *   - Completed renders a calm closure ("Goal reached") with a LINE check icon,
  *     not a trophy/badge (no badge theater §3.7) and no comparison.
@@ -16,7 +16,7 @@ jest.mock('../../../theme/useTheme', () => {
   return { useTheme: () => ({ colorScheme: 'light', semanticColors: lightTokens }) };
 });
 
-// Ionicons → a Text node that forwards name/testID so the completed-state line
+// Ionicons -> a Text node that forwards name/testID so the completed-state line
 // icon is observable without loading font assets (repo pattern).
 jest.mock('@expo/vector-icons', () => {
   const React = require('react');

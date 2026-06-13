@@ -84,12 +84,26 @@ export default function CommunityTabScreen(): React.ReactElement {
         {active === 'today' ? (
           <CommunityTodayScreen embedded />
         ) : active === 'hall' ? (
-          <CommunitySpaceScreen embedded space="hall" workspaceId={workspaceId} />
+          // Embedded post feed. As with Challenges, thread the prerequisite
+          // truth (loading / error / retry) so a real `/community/me` failure
+          // renders the calm retryable error instead of an inert empty feed —
+          // the embedded path must not swallow it.
+          <CommunitySpaceScreen
+            embedded
+            space="hall"
+            workspaceId={workspaceId}
+            prerequisiteLoading={me.isLoading}
+            prerequisiteError={me.isError}
+            onRetryPrerequisite={() => void me.refetch()}
+          />
         ) : active === 'cohorts' ? (
           <CommunitySpaceScreen
             embedded
             space="cohort"
             workspaceId={workspaceId}
+            prerequisiteLoading={me.isLoading}
+            prerequisiteError={me.isError}
+            onRetryPrerequisite={() => void me.refetch()}
           />
         ) : active === 'challenges' ? (
           // Embedded discovery list. We pass the resolved workspaceId from the
@@ -105,7 +119,16 @@ export default function CommunityTabScreen(): React.ReactElement {
             onRetryPrerequisite={() => void me.refetch()}
           />
         ) : (
-          <CommunityDmListScreen embedded workspaceId={workspaceId} />
+          // Embedded DM inbox. Thread the prerequisite truth so a real
+          // `/community/me` failure renders the calm retryable error instead of
+          // an inert empty inbox — the embedded path must not swallow it.
+          <CommunityDmListScreen
+            embedded
+            workspaceId={workspaceId}
+            prerequisiteLoading={me.isLoading}
+            prerequisiteError={me.isError}
+            onRetryPrerequisite={() => void me.refetch()}
+          />
         )}
       </View>
     </SafeAreaView>

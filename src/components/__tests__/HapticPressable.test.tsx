@@ -9,8 +9,8 @@
  * to `reduceMotionChanged`, suppressing the scale/opacity animation when ON —
  * but KEEPS firing haptics. These tests pin both halves of that contract:
  *
- *   1. Reduce motion OFF  → press runs Animated.spring/timing AND fires haptic.
- *   2. Reduce motion ON   → press fires haptic but runs NO Animated.spring/timing.
+ *   1. Reduce motion OFF  -> press runs Animated.spring/timing AND fires haptic.
+ *   2. Reduce motion ON   -> press fires haptic but runs NO Animated.spring/timing.
  *   3. Explicit `disableAnimation` still suppresses animation (haptic fires).
  *
  * This file only adds tests; it modifies no production file.

@@ -73,21 +73,14 @@ describe('v3-1 #235 R4 P2-1 — accentText AA contrast gate', () => {
     ).toBeGreaterThanOrEqual(AA_NORMAL);
   });
 
-  it('logs measured accentText ratios for the manual contrast gate', () => {
+  it('measures accentText ratios against both backgrounds in both schemes', () => {
     const dp = contrastRatio(darkTokens.accentText, darkTokens.bgPrimary);
     const ds = contrastRatio(darkTokens.accentText, darkTokens.bgSurface);
     const lp = contrastRatio(lightTokens.accentText, lightTokens.bgPrimary);
     const ls = contrastRatio(lightTokens.accentText, lightTokens.bgSurface);
-    // eslint-disable-next-line no-console
-    console.log(
-      `[contrastTokens] dark accentText ${darkTokens.accentText}: ` +
-        `vs bgPrimary ${darkTokens.bgPrimary} = ${dp.toFixed(2)}:1 | ` +
-        `vs bgSurface ${darkTokens.bgSurface} = ${ds.toFixed(2)}:1 ; ` +
-        `light accentText ${lightTokens.accentText}: ` +
-        `vs bgPrimary ${lightTokens.bgPrimary} = ${lp.toFixed(2)}:1 | ` +
-        `vs bgSurface ${lightTokens.bgSurface} = ${ls.toFixed(2)}:1`,
-    );
     expect(dp).toBeGreaterThanOrEqual(AA_NORMAL);
     expect(ds).toBeGreaterThanOrEqual(AA_NORMAL);
+    expect(lp).toBeGreaterThanOrEqual(AA_NORMAL);
+    expect(ls).toBeGreaterThanOrEqual(AA_NORMAL);
   });
 });

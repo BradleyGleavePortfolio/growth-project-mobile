@@ -58,7 +58,7 @@ export interface ChallengeProgressSheetProps {
   testID?: string;
 }
 
-/** Clamp a fraction into [0, 1]; null target → null (no bar, only a raw value). */
+/** Clamp a fraction into [0, 1]; null target -> null (no bar, only a raw value). */
 function fractionFor(value: number, target: number | null): number | null {
   if (target === null || target <= 0) return null;
   return Math.min(Math.max(value / target, 0), 1);
