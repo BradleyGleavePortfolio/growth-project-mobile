@@ -1,17 +1,26 @@
 /**
- * Explicit-Save payload field-parity tests (MWB-4 #237 R11 P1).
+ * Explicit-Save payload field-parity tests (MWB-4 #237 R11 P1 + R14 D-001).
  *
  * The backend `setExercises` endpoint is a FULL REPLACE: every persisted field
  * omitted from a row is reset to null. `weight_lbs` and `superset_group_id` are
  * carried in local state and preserved by the autosave diff + replay/adoption
- * path, so omitting them from the explicit-Save payload silently erased
+ * path, so omitting them from the FLAG-ON explicit-Save payload silently erased
  * server-preserved weights and supersets the coach never re-entered.
  *
- * `buildSetExercisesPayload` is the pure transform the screen's Save button
- * runs over its draft rows. These tests lock the field parity directly (no
- * brittle full-screen render) and assert every produced row matches the
- * UpsertExerciseRowInput contract (no null leaks for optional fields) so the
- * payload can never be a shape the backend would reject.
+ * R14 D-001: those two fields are now gated on the autosave feature flag.
+ * `buildSetExercisesPayload(rows, autosaveEnabled)` is the pure transform the
+ * screen's Save button runs over its draft rows:
+ *   - FLAG OFF -> the body MUST be BYTE-IDENTICAL to the legacy base-branch
+ *     shape: exactly `exercise_external_id`, `order`, `sets`,
+ *     `reps_or_duration_seconds`, `rest_seconds`, `notes`, in that key order,
+ *     and NEITHER `weight_lbs` NOR `superset_group_id`.
+ *   - FLAG ON  -> the fuller payload that round-trips weight_lbs +
+ *     superset_group_id at parity with autosave.
+ *
+ * These tests lock both branches directly (no brittle full-screen render) and
+ * assert every produced row matches the UpsertExerciseRowInput contract (no
+ * null leaks for optional fields) so the payload can never be a shape the
+ * backend would reject.
  */
 
 import {
@@ -35,7 +44,125 @@ function draftRow(over: Partial<DraftExerciseRow> = {}): DraftExerciseRow {
   };
 }
 
-describe('buildSetExercisesPayload — explicit Save field parity (MWB-4 #237 R11 P1)', () => {
+describe('buildSetExercisesPayload — flag-OFF legacy byte-identical payload (MWB-4 #237 R14 D-001)', () => {
+  /**
+   * The exact legacy payload the base branch produced for a single row, as a
+   * literal in legacy key order. The flag-off builder output MUST be deeply
+   * equal to this AND serialize byte-for-byte the same.
+   */
+  function legacyRow(
+    over: Partial<{
+      exercise_external_id: string;
+      order: number;
+      sets: number;
+      reps_or_duration_seconds: number;
+      rest_seconds: number | undefined;
+      notes: string | undefined;
+    }> = {},
+  ): Record<string, unknown> {
+    return {
+      exercise_external_id: 'ex-bench',
+      order: 1,
+      sets: 4,
+      reps_or_duration_seconds: 8,
+      rest_seconds: 90,
+      notes: undefined,
+      ...over,
+    };
+  }
+
+  it('emits exactly the legacy keys (no weight_lbs, no superset_group_id) even when those local values are set', () => {
+    // A row whose weight and superset WERE populated locally. With the flag off
+    // the legacy Save MUST NOT carry them — byte-identical to the base branch.
+    const rows: DraftExerciseRow[] = [
+      draftRow({ weight_lbs: 185, superset_group_id: 'G1', rest_seconds: 90 }),
+    ];
+
+    const payload = buildSetExercisesPayload(rows, false);
+
+    expect(payload).toHaveLength(1);
+    expect(payload[0]).toEqual(legacyRow());
+    // Explicit key-set guard: only the six legacy keys, in legacy order.
+    expect(Object.keys(payload[0])).toEqual([
+      'exercise_external_id',
+      'order',
+      'sets',
+      'reps_or_duration_seconds',
+      'rest_seconds',
+      'notes',
+    ]);
+    expect('weight_lbs' in payload[0]).toBe(false);
+    expect('superset_group_id' in payload[0]).toBe(false);
+  });
+
+  it('is BYTE-IDENTICAL to the legacy base-branch JSON body across multiple rows', () => {
+    const rows: DraftExerciseRow[] = [
+      draftRow({
+        exercise_external_id: 'ex-a',
+        sets: 3,
+        reps_or_duration_seconds: 10,
+        rest_seconds: 60,
+        notes: 'tempo',
+        weight_lbs: 135,
+        superset_group_id: 'G1',
+      }),
+      draftRow({
+        exercise_external_id: 'ex-b',
+        sets: 5,
+        reps_or_duration_seconds: 5,
+        rest_seconds: null,
+        notes: null,
+        weight_lbs: 225,
+        superset_group_id: 'G1',
+      }),
+    ];
+
+    const payload = buildSetExercisesPayload(rows, false);
+
+    // The exact body the legacy base-branch mapping would have produced:
+    //   exercise_external_id, order, sets, reps_or_duration_seconds,
+    //   rest_seconds (?? undefined), notes (?? undefined) — and nothing else.
+    const legacyExpected = [
+      legacyRow({
+        exercise_external_id: 'ex-a',
+        order: 1,
+        sets: 3,
+        reps_or_duration_seconds: 10,
+        rest_seconds: 60,
+        notes: 'tempo',
+      }),
+      legacyRow({
+        exercise_external_id: 'ex-b',
+        order: 2,
+        sets: 5,
+        reps_or_duration_seconds: 5,
+        rest_seconds: undefined,
+        notes: undefined,
+      }),
+    ];
+
+    expect(payload).toEqual(legacyExpected);
+    // Byte-for-byte JSON parity: JSON.stringify drops `undefined` values, so the
+    // serialized PUT body matches the legacy wire shape exactly.
+    expect(JSON.stringify(payload)).toBe(JSON.stringify(legacyExpected));
+  });
+
+  it('never includes weight_lbs / superset_group_id keys in any flag-off row', () => {
+    const rows: DraftExerciseRow[] = [
+      draftRow({ exercise_external_id: 'ex-a', weight_lbs: 135, superset_group_id: 'G1' }),
+      draftRow({ exercise_external_id: 'ex-b', weight_lbs: null, superset_group_id: null }),
+    ];
+
+    const payload = buildSetExercisesPayload(rows, false);
+
+    for (const row of payload) {
+      expect('weight_lbs' in row).toBe(false);
+      expect('superset_group_id' in row).toBe(false);
+    }
+  });
+});
+
+describe('buildSetExercisesPayload — flag-ON explicit Save field parity (MWB-4 #237 R11 P1)', () => {
   it('retains weight_lbs and superset_group_id that replay/adoption populated, so an explicit Save does NOT erase them', () => {
     // A row whose weight (185 lbs) and superset group ('G1') were populated by
     // the server (folded in via replay/adoption) — the coach never re-typed
@@ -44,7 +171,7 @@ describe('buildSetExercisesPayload — explicit Save field parity (MWB-4 #237 R1
       draftRow({ weight_lbs: 185, superset_group_id: 'G1' }),
     ];
 
-    const payload = buildSetExercisesPayload(rows);
+    const payload = buildSetExercisesPayload(rows, true);
 
     expect(payload).toHaveLength(1);
     expect(payload[0].weight_lbs).toBe(185);
@@ -73,7 +200,7 @@ describe('buildSetExercisesPayload — explicit Save field parity (MWB-4 #237 R1
       }),
     ];
 
-    const payload = buildSetExercisesPayload(rows);
+    const payload = buildSetExercisesPayload(rows, true);
 
     expect(payload[0].weight_lbs).toBeUndefined();
     expect(payload[0].superset_group_id).toBeUndefined();
@@ -88,7 +215,7 @@ describe('buildSetExercisesPayload — explicit Save field parity (MWB-4 #237 R1
       draftRow({ exercise_external_id: 'ex-c', weight_lbs: null, superset_group_id: null }),
     ];
 
-    const payload = buildSetExercisesPayload(rows);
+    const payload = buildSetExercisesPayload(rows, true);
 
     expect(payload.map((p) => p.order)).toEqual([1, 2, 3]);
     expect(payload.map((p) => p.weight_lbs)).toEqual([135, 225, undefined]);
@@ -101,7 +228,7 @@ describe('buildSetExercisesPayload — explicit Save field parity (MWB-4 #237 R1
       draftRow({ exercise_external_id: 'ex-2', weight_lbs: null, superset_group_id: null }),
     ];
 
-    const payload = buildSetExercisesPayload(rows);
+    const payload = buildSetExercisesPayload(rows, true);
 
     for (const rowInput of payload) {
       // Required fields are always present and correctly typed.

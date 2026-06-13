@@ -121,20 +121,47 @@ export interface DraftExerciseRow {
 
 /**
  * Build the explicit-Save (PUT replace-all) exercise payload from the local
- * draft rows. MWB-4 #237 R11 (P1): the backend `setExercises` endpoint is a
- * FULL REPLACE - every persisted field that is omitted from a row is reset to
- * null. `weight_lbs` and `superset_group_id` are carried in local state and are
- * preserved by the autosave diff + replay/adoption path, so omitting them here
- * silently erased server-preserved weights and supersets the coach never
- * re-entered. This maps EVERY persisted field (a `null` local value is sent as
- * `undefined` so the row input stays schema-clean) so an explicit Save
- * round-trips weight_lbs and superset_group_id at parity with autosave.
- * Exported as a pure function so the field parity is unit-testable without a
+ * draft rows.
+ *
+ * MWB-4 #237 R14 (D-001): the new `weight_lbs` + `superset_group_id` fields are
+ * gated on the autosave feature flag. When `autosaveEnabled` is FALSE the
+ * builder MUST emit the BYTE-IDENTICAL legacy payload the base branch sent —
+ * exactly `exercise_external_id`, `order`, `sets`, `reps_or_duration_seconds`,
+ * `rest_seconds`, `notes`, in that key order, and NEITHER `weight_lbs` NOR
+ * `superset_group_id`. This preserves the hard invariant that with the flag off
+ * the CoachWorkoutBuilderScreen behaves identically to its legacy explicit-Save
+ * (PUT replace-all) form, including the exact PUT body shape.
+ *
+ * MWB-4 #237 R11 (P1): when `autosaveEnabled` is TRUE the backend `setExercises`
+ * endpoint is a FULL REPLACE - every persisted field omitted from a row is
+ * reset to null. `weight_lbs` and `superset_group_id` are carried in local
+ * state and are preserved by the autosave diff + replay/adoption path, so
+ * omitting them in the flag-on path silently erased server-preserved weights
+ * and supersets the coach never re-entered. The flag-on branch therefore maps
+ * EVERY persisted field (a `null` local value is sent as `undefined` so the row
+ * input stays schema-clean) so an explicit Save round-trips weight_lbs and
+ * superset_group_id at parity with autosave.
+ *
+ * Exported as a pure function so both flag branches are unit-testable without a
  * full screen render.
  */
 export function buildSetExercisesPayload(
   rows: DraftExerciseRow[],
+  autosaveEnabled: boolean,
 ): UpsertExerciseRowInput[] {
+  if (!autosaveEnabled) {
+    // Legacy byte-identical payload: same keys, same order, no weight_lbs /
+    // superset_group_id. Do not add fields here without re-checking the
+    // flag-off byte-identity test.
+    return rows.map((r, idx) => ({
+      exercise_external_id: r.exercise_external_id,
+      order: idx + 1,
+      sets: r.sets,
+      reps_or_duration_seconds: r.reps_or_duration_seconds,
+      rest_seconds: r.rest_seconds ?? undefined,
+      notes: r.notes ?? undefined,
+    }));
+  }
   return rows.map((r, idx) => ({
     exercise_external_id: r.exercise_external_id,
     order: idx + 1,
@@ -1066,10 +1093,18 @@ export default function CoachWorkoutBuilderScreen() {
       }
 
       if (resolvedPlanId) {
-        // MWB-4 #237 R11 (P1): build the full-field payload (incl. weight_lbs +
-        // superset_group_id) so an explicit Save does not erase server-preserved
-        // values the coach never re-entered. See buildSetExercisesPayload.
-        const payload: UpsertExerciseRowInput[] = buildSetExercisesPayload(rows);
+        // MWB-4 #237 R14 (D-001): the fuller payload (incl. weight_lbs +
+        // superset_group_id) is gated on `featureFlags.mwbAutosave`. With the
+        // flag ON it round-trips those fields so an explicit Save does not erase
+        // server-preserved values the coach never re-entered (R11 P1). With the
+        // flag OFF the body is byte-identical to the legacy base-branch shape.
+        // We pass the raw flag (not the composite `autosaveEnabled`, which also
+        // requires isEditing + planId) so a freshly created plan saved under the
+        // flag still gets the fuller, parity-correct payload.
+        const payload: UpsertExerciseRowInput[] = buildSetExercisesPayload(
+          rows,
+          featureFlags.mwbAutosave,
+        );
         await setExercisesMut.mutateAsync({
           planId: resolvedPlanId,
           rows: payload,
