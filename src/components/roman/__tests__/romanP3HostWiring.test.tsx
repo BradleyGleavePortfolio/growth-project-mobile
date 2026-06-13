@@ -83,8 +83,15 @@ describe('orphan guard — every P3 surface stays imported into its host, flag-g
   it('§2.7 RomanStreakCard → ProgressScreen', () => {
     expect(PROGRESS).toContain("import RomanStreakCard from '../../components/roman/RomanStreakCard'");
     expect(PROGRESS).toContain("import type { RomanStreakTier }");
-    expect(PROGRESS).toMatch(/featureFlags\.romanChat && streakTier !== null/);
+    // P1-B-02: the §2.7 card is now additionally gated behind the
+    // backend-authority flag romanStreakBackendLive (the streak tier is a
+    // client-side recompute, not an authoritative backend milestone), so the
+    // card stays hidden until the backend exposes a real milestone event.
+    expect(PROGRESS).toMatch(
+      /featureFlags\.romanChat && featureFlags\.romanStreakBackendLive && streakTier !== null/,
+    );
     expect(PROGRESS).toContain('testID="roman-streak-card"');
+    expect(PROGRESS).toContain('TODO(roman-streak-backend)');
   });
 
   it('§2.8 RomanWorkoutCompleteCard → WorkoutScreen', () => {
@@ -114,13 +121,25 @@ describe('orphan guard — every P3 surface stays imported into its host, flag-g
   it('§2.4 RomanCheckInNotice + §2.5 RomanNewClientNotice → CoachBriefScreen', () => {
     expect(BRIEF).toContain("import RomanCheckInNotice from '../../components/roman/RomanCheckInNotice'");
     expect(BRIEF).toContain("import RomanNewClientNotice from '../../components/roman/RomanNewClientNotice'");
-    expect(BRIEF).toMatch(/featureFlags\.romanChat && checkInClient/);
+    // P1-BF-01: the §2.4 check-in notice is now additionally gated behind the
+    // backend-authority flag romanCheckInBackendLive (the host derives the
+    // notice from a mobile-only Wave 11 scaffold that backend `main` does not
+    // return), so the surface stays hidden until the authoritative field ships.
+    expect(BRIEF).toMatch(
+      /featureFlags\.romanChat && featureFlags\.romanCheckInBackendLive && checkInClient/,
+    );
     expect(BRIEF).toMatch(/featureFlags\.romanChat && newClient/);
   });
 
-  it('§2.3 RomanBriefCard stays wired', () => {
+  it('§2.3 RomanBriefCard stays wired, behind romanChat with a non-Roman fallback', () => {
     expect(BRIEF).toContain("import RomanBriefCard from '../../components/roman/RomanBriefCard'");
     expect(BRIEF).toContain('testID="roman-brief-card"');
+    // P1-G-01: the brief card is gated behind featureFlags.romanChat with a
+    // non-Roman fallback header rendered when the flag is OFF, so a build with
+    // coachBrief=true and romanChat=false never mounts Roman.
+    expect(BRIEF).toMatch(/featureFlags\.romanChat \?/);
+    expect(BRIEF).toContain('CoachBriefHeaderFallback');
+    expect(BRIEF).toContain('testID="coach-brief-header-fallback"');
   });
 });
 
@@ -243,22 +262,48 @@ describe('§2.7 streakMilestoneTier — milestone copy on exact days only', () =
 
 // Harness that exercises the REAL useJustCompletedOneShot hook through a
 // focus/blur lifecycle via the controllable useFocusEffect mock above.
-function renderOneShotHarness({ justCompletedParam }: { justCompletedParam: boolean | undefined }) {
+//
+// P1-C-01: the hook now takes a durable completion id + a user key and latches
+// consumed ids in AsyncStorage, so its focus path is ASYNC (it reads the latch
+// before deciding to show the card). The harness focus() is therefore async
+// and flushes the AsyncStorage microtasks before the assertion reads the flag.
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+async function flush() {
+  // Let the AsyncStorage get/set promise chain settle and the resulting state
+  // update commit.
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
+function renderOneShotHarness({
+  justCompletedId,
+  userKey = 'user-1',
+}: {
+  justCompletedId: string | undefined;
+  userKey?: string | undefined;
+}) {
   const clearParam = jest.fn();
-  let param = justCompletedParam;
+  let id = justCompletedId;
+  let key = userKey;
   focusController.effect = null;
   focusController.cleanup = null;
-  const rendered = renderHook(() => useJustCompletedOneShot(param, clearParam));
+  const rendered = renderHook(() => useJustCompletedOneShot(id, key, clearParam));
   return {
     clearParam,
-    setParam(next: boolean | undefined) {
-      param = next;
+    setParam(nextId: string | undefined, nextKey: string | undefined = key) {
+      id = nextId;
+      key = nextKey;
       act(() => rendered.rerender(undefined));
     },
-    focus() {
+    async focus() {
       // react-navigation runs the focus effect on focus and stores its cleanup.
       const cleanup = focusController.effect ? focusController.effect() : undefined;
       focusController.cleanup = typeof cleanup === 'function' ? cleanup : null;
+      // Flush the async latch read/write so the flag reflects the decision.
+      await flush();
     },
     blur() {
       // On blur react-navigation invokes the cleanup returned by the effect.
@@ -273,6 +318,13 @@ function renderOneShotHarness({ justCompletedParam }: { justCompletedParam: bool
 
 // ── §2.8 workout-complete: one-shot just-completed signal, not historical ─────
 describe('§2.8 workout-complete renders from a real just-completed event only', () => {
+  beforeEach(async () => {
+    // P1-C-01: the one-shot now latches consumed completion ids in
+    // AsyncStorage. Clear it between tests so a latch written by one test does
+    // not suppress the card in the next.
+    await AsyncStorage.clear();
+  });
+
   it('the host derives visibility from the one-shot justCompleted signal, NOT a historical session', () => {
     // TRUE-condition wiring: render gated on showWorkoutComplete (= justCompleted).
     expect(WORKOUT).toContain('const showWorkoutComplete = justCompleted;');
@@ -282,38 +334,69 @@ describe('§2.8 workout-complete renders from a real just-completed event only',
     expect(WORKOUT).not.toMatch(/featureFlags\.romanChat && mostRecentCompleted/);
   });
 
-  it('BEHAVIOUR: the card shows for exactly one focus session and not on a later refocus', () => {
+  it('BEHAVIOUR: the card shows for exactly one focus session and not on a later refocus', async () => {
     // Drive the REAL extracted one-shot hook (useJustCompletedOneShot) through
     // a focus/blur lifecycle. useFocusEffect is mocked to a controllable focus
     // manager so we can simulate: completion-focus -> blur -> refocus (no new
-    // completion). This test FAILS if Fix #4's blur cleanup is reverted (the
+    // completion id). This test FAILS if the blur cleanup is reverted (the
     // flag would stay true and the card would re-render on refocus).
-    const harness = renderOneShotHarness({ justCompletedParam: true });
+    const harness = renderOneShotHarness({ justCompletedId: 'workout-101' });
     // First focus after a genuine completion: card shows.
-    act(() => harness.focus());
+    await harness.focus();
     expect(harness.lastShow()).toBe(true);
     // The param was consumed (cleared) on focus so it cannot re-fire.
     expect(harness.clearParam).toHaveBeenCalledTimes(1);
-    // Blur, then refocus WITHOUT a new completion param: card must NOT show.
+    // Blur, then refocus WITHOUT a new completion id: card must NOT show.
     act(() => harness.blur());
     harness.setParam(undefined);
-    act(() => harness.focus());
+    await harness.focus();
     expect(harness.lastShow()).toBe(false);
   });
 
-  it('BEHAVIOUR: a genuine new completion on a later focus shows the card again', () => {
-    const harness = renderOneShotHarness({ justCompletedParam: true });
-    act(() => harness.focus());
+  it('BEHAVIOUR: a genuine new completion (new id) on a later focus shows the card again', async () => {
+    const harness = renderOneShotHarness({ justCompletedId: 'workout-101' });
+    await harness.focus();
     expect(harness.lastShow()).toBe(true);
     act(() => harness.blur());
-    // A NEW finish-workout save sets the param again before refocus.
-    harness.setParam(true);
-    act(() => harness.focus());
+    // A NEW finish-workout save sets a DIFFERENT id before refocus.
+    harness.setParam('workout-202');
+    await harness.focus();
     expect(harness.lastShow()).toBe(true);
   });
 
-  it('the finish-workout path sets the signal on a successful save', () => {
-    expect(ACTIVE).toContain("navigation.navigate('WorkoutMain', { justCompleted: true })");
+  it('BEHAVIOUR: re-delivering the SAME id (e.g. a remount) does NOT re-fire the card (P1-C-01)', async () => {
+    // The durable AsyncStorage latch is the point of P1-C-01: once an id has
+    // been acknowledged, the same id arriving again — a remount, a
+    // back-then-forward, or a param surviving a process reload — must not show
+    // the card a second time.
+    const first = renderOneShotHarness({ justCompletedId: 'workout-101' });
+    await first.focus();
+    expect(first.lastShow()).toBe(true);
+    act(() => first.blur());
+    // A fresh mount (new hook instance) is handed the SAME id again.
+    const second = renderOneShotHarness({ justCompletedId: 'workout-101' });
+    await second.focus();
+    expect(second.lastShow()).toBe(false);
+  });
+
+  it('BEHAVIOUR: a latch for one user does not suppress the SAME id for another user', async () => {
+    const userA = renderOneShotHarness({ justCompletedId: 'workout-101', userKey: 'user-A' });
+    await userA.focus();
+    expect(userA.lastShow()).toBe(true);
+    act(() => userA.blur());
+    // A different account on the same device with the same workout id: the
+    // latch is scoped per user, so this still fires.
+    const userB = renderOneShotHarness({ justCompletedId: 'workout-101', userKey: 'user-B' });
+    await userB.focus();
+    expect(userB.lastShow()).toBe(true);
+  });
+
+  it('the finish-workout path sets the durable completion id on a successful save', () => {
+    // ActiveWorkoutScreen navigates with the durable server id (P1-C-01), not a
+    // transient boolean; when no usable id exists it navigates without the
+    // signal rather than fabricate one.
+    expect(ACTIVE).toMatch(/justCompletedId: serverId/);
+    expect(ACTIVE).not.toContain('{ justCompleted: true }');
   });
 
   it('the §2.8 default line renders without fabricating a PR celebration', () => {

@@ -19,6 +19,7 @@ import {
   RouteProp,
 } from '@react-navigation/native';
 import type { WorkoutStackParamList } from '../../navigation/ClientNavigator';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 import { workoutApi } from '../../services/api';
@@ -154,38 +155,93 @@ interface ApiSession {
 }
 
 /**
- * §2.8 one-shot consumption of the `justCompleted` navigation param.
+ * Prefix for the durable "this completion has been acknowledged" latch keys in
+ * AsyncStorage. The full key is
+ * `roman.p3.completion-consumed:${coachUserId||userId}:${justCompletedId}` —
+ * scoped by the acting user so two accounts on one device never share latches,
+ * and by the concrete workout id so each distinct completion is judged on its
+ * own (P1-C-01).
+ */
+export const ROMAN_COMPLETION_CONSUMED_PREFIX = 'roman.p3.completion-consumed:';
+
+/** Build the durable latch key for a given user + completion id. */
+export function romanCompletionConsumedKey(
+  userKey: string,
+  justCompletedId: string,
+): string {
+  return `${ROMAN_COMPLETION_CONSUMED_PREFIX}${userKey}:${justCompletedId}`;
+}
+
+/**
+ * §2.8 one-shot consumption of the `justCompletedId` navigation param.
  *
  * Returns whether Roman's §2.8 "Workout complete" card should show for the
- * CURRENT focus session. ActiveWorkoutScreen sets `route.params.justCompleted`
- * only after a real finish-workout save. On focus we read it, flip a local
- * flag, and clear the param via setParams so a stale param can never re-fire.
- * The focus-effect CLEANUP (runs on blur) then clears the local flag, so a
- * later refocus of this still-mounted screen WITHOUT a new completion leaves
- * the flag false — the card shows exactly once after a genuine completion and
- * never again on refocus or pull-to-refresh.
+ * CURRENT focus session. ActiveWorkoutScreen sets `route.params.justCompletedId`
+ * to the DURABLE server id of the workout just saved, only after a real
+ * finish-workout save.
+ *
+ * The one-shot is keyed on that concrete id and latched in AsyncStorage rather
+ * than on a transient boolean (P1-C-01). On focus, if an id is present AND it
+ * has not already been recorded under
+ * `roman.p3.completion-consumed:${userKey}:${id}`, we flip the local flag,
+ * persist the latch, and clear the param. If the id is already latched — e.g.
+ * the same param is re-delivered after a remount, a back-then-forward, or a
+ * param that survived a process reload — the card does NOT show again. The
+ * focus-effect cleanup (on blur) clears the local flag so a refocus without a
+ * NEW id leaves the card hidden; a genuinely new completion (a new id) is
+ * always honoured.
+ *
+ * `userKey` is `coachUserId || userId` — the acting user, used to scope latches
+ * per account on a shared device. When it is missing (user not yet loaded) the
+ * hook holds off rather than write an unscoped latch.
  *
  * Extracted and exported so the one-shot behaviour is the single source of
  * truth, exercised directly by romanP3HostWiring.test.tsx without mounting the
  * full chart/sqlite-heavy screen.
  */
 export function useJustCompletedOneShot(
-  justCompletedParam: boolean | undefined,
+  justCompletedId: string | undefined,
+  userKey: string | undefined,
   clearParam: () => void,
 ): boolean {
   const [justCompleted, setJustCompleted] = useState(false);
   useFocusEffect(
     useCallback(() => {
-      if (justCompletedParam) {
-        setJustCompleted(true);
+      let cancelled = false;
+      if (justCompletedId && userKey) {
+        const key = romanCompletionConsumedKey(userKey, justCompletedId);
+        // Read the durable latch first: only fire the card if THIS id has not
+        // been acknowledged before. Clearing the nav param happens regardless,
+        // so a stale/duplicate param cannot linger and re-fire later.
+        AsyncStorage.getItem(key)
+          .then((seen) => {
+            if (cancelled) return;
+            if (seen == null) {
+              setJustCompleted(true);
+              // Persist the latch so this exact completion is never celebrated
+              // twice, even across a remount or process reload. Best-effort:
+              // if the write fails the card still shows this once; surfaced for
+              // diagnosis rather than swallowed.
+              AsyncStorage.setItem(key, new Date().toISOString()).catch((error: unknown) => {
+                logger.warn('mwb.completion.latch-write', { error });
+              });
+            }
+          })
+          .catch((error: unknown) => {
+            // If the latch READ fails we cannot prove the id is unseen, so we
+            // deliberately do NOT show the card — favouring "never double-fire"
+            // over "never miss one". Surfaced for diagnosis.
+            logger.warn('mwb.completion.latch-read', { error });
+          });
         clearParam();
       }
       return () => {
+        cancelled = true;
         // Blur: end the one-shot. A subsequent refocus with no new completion
-        // param leaves justCompleted false, so the §2.8 card stays hidden.
+        // id leaves justCompleted false, so the §2.8 card stays hidden.
         setJustCompleted(false);
       };
-    }, [justCompletedParam, clearParam]),
+    }, [justCompletedId, userKey, clearParam]),
   );
   return justCompleted;
 }
@@ -285,16 +341,20 @@ export default function WorkoutScreen() {
   }, [loadData]);
 
   // §2.8 one-shot "just completed" signal. Set ONLY when ActiveWorkoutScreen
-  // returns here with route param `justCompleted` after a real finish-workout
-  // save. Consumed for exactly one focus session by useJustCompletedOneShot,
-  // which clears the param on focus (so a stale param never re-fires) and
-  // clears its local flag on blur (so a later refocus / pull-to-refresh of
-  // this still-mounted screen never re-triggers the card from a past session).
+  // returns here with route param `justCompletedId` (the durable server id of
+  // the workout just saved) after a real finish-workout save. Consumed for
+  // exactly one focus session by useJustCompletedOneShot, which latches the id
+  // durably in AsyncStorage (so a re-delivered param can never re-fire the
+  // card), clears the param on focus, and clears its local flag on blur.
   const clearJustCompletedParam = useCallback(() => {
-    navigation.setParams({ justCompleted: undefined });
+    navigation.setParams({ justCompletedId: undefined });
   }, [navigation]);
+  // Scope the latch to the acting user (coach id when present, else own id) so
+  // two accounts on one device never share a completion latch.
+  const completionUserKey = currentUser?.coach_id || currentUser?.id;
   const justCompleted = useJustCompletedOneShot(
-    route.params?.justCompleted,
+    route.params?.justCompletedId,
+    completionUserKey,
     clearJustCompletedParam,
   );
 

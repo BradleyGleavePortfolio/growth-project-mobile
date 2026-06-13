@@ -177,13 +177,19 @@ export type ClientTabParamList = {
 
 export type WorkoutStackParamList = {
   /**
-   * `justCompleted` is a one-shot signal set ONLY when ActiveWorkoutScreen
-   * returns here after a real finish-workout save succeeds. WorkoutScreen reads
-   * it once to render Roman's §2.8 "Workout complete" line, then clears it so a
-   * mere historical completed session never re-triggers the event on a plain
-   * visit or pull-to-refresh.
+   * `justCompletedId` is a one-shot signal set ONLY when ActiveWorkoutScreen
+   * returns here after a real finish-workout save succeeds. It is the DURABLE
+   * server id of the workout that was just saved (the same id used to sync the
+   * session), NOT a transient boolean. WorkoutScreen reads it once to render
+   * Roman's §2.8 "Workout complete" line, records that this specific id has been
+   * consumed in AsyncStorage, then clears the param. Keying the one-shot on the
+   * concrete workout id (rather than a boolean) means a re-delivered or
+   * duplicated navigation — e.g. a remount, a back-then-forward, or a param that
+   * survives a fast refresh — cannot re-trigger the celebration for a workout
+   * that was already acknowledged, and a genuinely new workout (a new id) is
+   * always honoured (P1-C-01).
    */
-  WorkoutMain: { justCompleted?: boolean } | undefined;
+  WorkoutMain: { justCompletedId?: string } | undefined;
   ActiveWorkout: { routineId?: string; routineName: string; exercises: string };
   RoutineBuilder: { routineId?: string } | undefined;
   CoachGuidelines: undefined;
