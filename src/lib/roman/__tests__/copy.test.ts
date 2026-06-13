@@ -24,6 +24,7 @@ import {
   romanVoiceLog,
   romanGenericError,
   romanPayout,
+  formatOrdinal,
 } from '../copy';
 import { getRomanSessionBudget } from '../sessionBudget';
 
@@ -93,10 +94,62 @@ describe('romanNewClient (§2.5)', () => {
       'Dana has joined your roster — your 10th client. The practice is growing handsomely.',
     );
   });
+  it('celebration — grammatical ordinals across milestone boundaries (R11 D-005)', () => {
+    // The bug: a hard-coded "th" produced "1th"/"2th"/"21th". Each milestone
+    // count must now read with its correct English ordinal.
+    expect(romanNewClient({ clientName: 'Dana', clientCount: 1, mode: 'celebration' })).toBe(
+      'Dana has joined your roster — your 1st client. The practice is growing handsomely.',
+    );
+    expect(romanNewClient({ clientName: 'Dana', clientCount: 2, mode: 'celebration' })).toBe(
+      'Dana has joined your roster — your 2nd client. The practice is growing handsomely.',
+    );
+    expect(romanNewClient({ clientName: 'Dana', clientCount: 3, mode: 'celebration' })).toBe(
+      'Dana has joined your roster — your 3rd client. The practice is growing handsomely.',
+    );
+    expect(romanNewClient({ clientName: 'Dana', clientCount: 21, mode: 'celebration' })).toBe(
+      'Dana has joined your roster — your 21st client. The practice is growing handsomely.',
+    );
+    expect(romanNewClient({ clientName: 'Dana', clientCount: 11, mode: 'celebration' })).toBe(
+      'Dana has joined your roster — your 11th client. The practice is growing handsomely.',
+    );
+  });
   it('error — intake did not transfer cleanly', () => {
     expect(romanNewClient({ clientName: 'Dana', clientCount: 4, mode: 'error' })).toBe(
       'Dana has joined, but their intake details did not transfer cleanly. I will reconcile it and confirm.',
     );
+  });
+});
+
+// ── formatOrdinal helper (R11 D-005) ──────────────────────────────────────────
+describe('formatOrdinal', () => {
+  it('ones place: 1st / 2nd / 3rd, else th', () => {
+    expect(formatOrdinal(1)).toBe('1st');
+    expect(formatOrdinal(2)).toBe('2nd');
+    expect(formatOrdinal(3)).toBe('3rd');
+    expect(formatOrdinal(4)).toBe('4th');
+    expect(formatOrdinal(5)).toBe('5th');
+  });
+  it('teens 11/12/13 are always th', () => {
+    expect(formatOrdinal(11)).toBe('11th');
+    expect(formatOrdinal(12)).toBe('12th');
+    expect(formatOrdinal(13)).toBe('13th');
+  });
+  it('twenties follow the ones place again', () => {
+    expect(formatOrdinal(20)).toBe('20th');
+    expect(formatOrdinal(21)).toBe('21st');
+    expect(formatOrdinal(22)).toBe('22nd');
+    expect(formatOrdinal(23)).toBe('23rd');
+    expect(formatOrdinal(24)).toBe('24th');
+  });
+  it('larger teens-within-hundreds (111/112/113) are th', () => {
+    expect(formatOrdinal(111)).toBe('111th');
+    expect(formatOrdinal(112)).toBe('112th');
+    expect(formatOrdinal(113)).toBe('113th');
+    expect(formatOrdinal(101)).toBe('101st');
+  });
+  it('zero and round hundreds are th', () => {
+    expect(formatOrdinal(0)).toBe('0th');
+    expect(formatOrdinal(100)).toBe('100th');
   });
 });
 

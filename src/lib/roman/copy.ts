@@ -148,6 +148,30 @@ export interface RomanNewClientArgs {
 }
 
 /**
+ * Format an integer as an English ordinal (1 → "1st", 2 → "2nd", 3 → "3rd",
+ * 21 → "21st", 22 → "22nd", 23 → "23rd"). The teens 11/12/13 are the classic
+ * exception and always take "th" ("11th"/"12th"/"13th"), as does everything
+ * else. Negative numbers are normalized via their absolute value for suffix
+ * selection while preserving the original number in the rendered string.
+ *
+ * R11 D-005: the §2.5 roster-milestone celebration line previously interpolated
+ * a hard-coded "th", producing "1th"/"2th"/"21th". Quiet-luxury copy must use
+ * grammatical ordinals, so the milestone line now formats through this helper.
+ */
+export function formatOrdinal(n: number): string {
+  const abs = Math.abs(Math.trunc(n));
+  const lastTwo = abs % 100;
+  const lastOne = abs % 10;
+  let suffix = 'th';
+  if (lastTwo < 11 || lastTwo > 13) {
+    if (lastOne === 1) suffix = 'st';
+    else if (lastOne === 2) suffix = 'nd';
+    else if (lastOne === 3) suffix = 'rd';
+  }
+  return `${n}${suffix}`;
+}
+
+/**
  * §2.5 New client onboarded. spec-derived default/celebration/error,
  * adjusted for available authoritative signals.
  *
@@ -159,7 +183,7 @@ export function romanNewClient(args: RomanNewClientArgs): string {
   if (mode === 'celebration') {
     // §2.5 milestone-celebration (roster milestone). No exclamation — the
     // session's one is reserved for the §2.7 30-day line.
-    return `${clientName} has joined your roster — your ${clientCount}th client. The practice is growing handsomely.`;
+    return `${clientName} has joined your roster — your ${formatOrdinal(clientCount)} client. The practice is growing handsomely.`;
   }
   if (mode === 'error') {
     // spec §2.5 error (onboarding partially failed).
