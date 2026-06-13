@@ -224,7 +224,7 @@ describe('Roman P3 dynamic-copy live regions (P1-UX-01)', () => {
   });
   it('RomanVoiceLogReadback copy is a polite live region (highest priority)', () => {
     const { getByText } = render(<RomanVoiceLogReadback weight={315} reps={5} mode="default" />);
-    expect(getByText('315 pounds, 5 reps. Recorded.').props.accessibilityLiveRegion).toBe('polite');
+    expect(getByText('315 pounds, 5 reps.').props.accessibilityLiveRegion).toBe('polite');
   });
   it('RomanWorkoutCompleteCard copy is a polite live region', () => {
     const { getByText } = render(<RomanWorkoutCompleteCard mode="default" />);
@@ -243,14 +243,18 @@ describe('RomanVoiceLogReadback (§2.9)', () => {
     );
     const avatar = getByTestId('roman-voicelog-avatar');
     expect(avatar.props.accessibilityLabel).toBe(NEUTRAL);
-    expect(getByText('315 pounds, 5 reps. Recorded.')).toBeTruthy();
+    expect(getByText('315 pounds, 5 reps.')).toBeTruthy();
+    expect(getByText('315 pounds, 5 reps.').props.children).not.toMatch(/recorded|saved|logged|stored/i);
   });
   it('celebration — slight smile on a voice PR', () => {
     const { getByTestId, getByText } = render(
       <RomanVoiceLogReadback weight={315} reps={5} mode="celebration" />,
     );
     expect(getByTestId('roman-voicelog-avatar').props.accessibilityLabel).toBe(PLEASED);
-    expect(getByText('315 pounds, 5 reps. Recorded — and a new best. Noted.')).toBeTruthy();
+    expect(getByText('315 pounds, 5 reps — and a new best. Noted.')).toBeTruthy();
+    expect(
+      getByText('315 pounds, 5 reps — and a new best. Noted.').props.children,
+    ).not.toMatch(/recorded|saved|logged|stored/i);
   });
   it('error — neutral + parse-failure copy', () => {
     const { getByTestId, getByText } = render(

@@ -1,14 +1,19 @@
 /**
- * roman/copy — spec-exact assertion suite for the eight P3 surfaces.
+ * roman/copy — spec-derived assertion suite for the eight P3 surfaces.
  *
- * Every assertion pins the EXACT string from the locked identity spec
- * (AI_BUTLER_ROMAN_IDENTITY_SPEC.md §2.3-§2.12), deviating only for token
- * substitution. A second sweep runs the §1.4 forbidden-move battery over every
- * produced string (no emoji; no banned hype / corporate / slang words) and
- * enforces the P3 exclamation ration: the session's single exclamation is
- * reserved for the §2.7 30-day streak line, so it is the ONLY P3 string that
- * may carry one "!" — every other string, including the other celebration
- * variants, must carry ZERO.
+ * Every assertion pins the string produced from the locked identity spec
+ * (AI_BUTLER_ROMAN_IDENTITY_SPEC.md §2.3-§2.12), adjusted for the available
+ * authoritative signals and token substitution. A second sweep runs the §1.4
+ * forbidden-move battery over every produced string (no emoji; no banned hype /
+ * corporate / slang words) and enforces the P3 exclamation ration: the
+ * session's single exclamation is reserved for the §2.7 30-day streak line, so
+ * it is the ONLY P3 string that may carry one "!" — every other string,
+ * including the other celebration variants, must carry ZERO.
+ *
+ * The §2.7 30-day line draws its "!" from the session-wide exclamation budget
+ * (src/lib/roman/sessionBudget.ts) at call time (P2-D-01), so each test that
+ * exercises it resets the budget first via `beforeEach` to isolate the
+ * session.
  */
 import {
   romanCoachBrief,
@@ -20,6 +25,14 @@ import {
   romanGenericError,
   romanPayout,
 } from '../copy';
+import { getRomanSessionBudget } from '../sessionBudget';
+
+// The §2.7 30-day line consumes the session's single exclamation from the
+// shared budget singleton. Reset before every test so each assertion runs in a
+// fresh session and the 30-day line can claim its "!".
+beforeEach(() => {
+  getRomanSessionBudget().reset();
+});
 
 // ── §2.3 Coach Brief ────────────────────────────────────────────────────────
 describe('romanCoachBrief (§2.3)', () => {
@@ -109,6 +122,26 @@ describe('romanStreak (§2.7)', () => {
       'Your streak is intact, Sam — I am simply slow to tally it this morning. The number will be along shortly.',
     );
   });
+
+  // P2-D-01: the 30-day line's "!" is drawn from the session-wide budget. If
+  // another Roman surface spent the session's one exclamation first, the
+  // 30-day line must render the same words with a period — never a second "!".
+  it('30-day celebration — falls back to a period once the session exclamation is spent (P2-D-01)', () => {
+    // Simulate another surface spending the session's exclamation first.
+    expect(getRomanSessionBudget().requestExclamation()).toBe(true);
+    const line = romanStreak({ tier: 30, firstName: 'Sam', mode: 'celebration' });
+    expect(line).toBe(
+      'Thirty days, Sam. A month without a missed day. This is the kind of record I am glad to keep.',
+    );
+    expect(line).not.toContain('!');
+  });
+  it('30-day celebration — only the FIRST caller in a session gets the exclamation (P2-D-01)', () => {
+    const first = romanStreak({ tier: 30, firstName: 'Sam', mode: 'celebration' });
+    const second = romanStreak({ tier: 30, firstName: 'Sam', mode: 'celebration' });
+    expect(first).toContain('!');
+    expect(second).not.toContain('!');
+    expect((first.match(/!/g) ?? []).length).toBe(1);
+  });
 });
 
 // ── §2.8 Workout completed ────────────────────────────────────────────────────
@@ -137,15 +170,17 @@ describe('romanWorkoutComplete (§2.8)', () => {
 
 // ── §2.9 Voice-log confirmation ───────────────────────────────────────────────
 describe('romanVoiceLog (§2.9)', () => {
-  it('default — spec-exact readback (e.g. "315 for 5")', () => {
-    expect(romanVoiceLog({ weight: 315, reps: 5, mode: 'default' })).toBe(
-      '315 pounds, 5 reps. Recorded.',
-    );
+  it('default — readback of the parsed set, no durable-save claim (P1-B-03)', () => {
+    const line = romanVoiceLog({ weight: 315, reps: 5, mode: 'default' });
+    expect(line).toBe('315 pounds, 5 reps.');
+    // P1-B-03: the readback fires on parse, so it must NOT claim persistence.
+    expect(line).not.toMatch(/recorded|saved|logged|stored/i);
   });
-  it('celebration — voice PR, no exclamation (rationed to §2.7 30-day)', () => {
-    expect(romanVoiceLog({ weight: 315, reps: 5, mode: 'celebration' })).toBe(
-      '315 pounds, 5 reps. Recorded — and a new best. Noted.',
-    );
+  it('celebration — voice PR, no exclamation, no durable-save claim (P1-B-03)', () => {
+    const line = romanVoiceLog({ weight: 315, reps: 5, mode: 'celebration' });
+    expect(line).toBe('315 pounds, 5 reps — and a new best. Noted.');
+    expect(line).not.toMatch(/recorded|saved|logged|stored/i);
+    expect(line).not.toContain('!');
   });
   it('error — could not parse the utterance', () => {
     expect(romanVoiceLog({ weight: 0, reps: 0, mode: 'error' })).toBe(

@@ -1,10 +1,13 @@
 /**
  * roman/copy — single source of truth for the P3 voice-expansion surfaces.
  *
- * Every string returned below is taken VERBATIM from the locked Roman identity
+ * Every string returned below is spec-derived from the locked Roman identity
  * spec (BradleyGleavePortfolio/tgp-agent-context
- * strategy/AI_BUTLER_ROMAN_IDENTITY_SPEC.md), §2.3-§2.12, deviating ONLY for
- * `{token}` substitution. Copy must never be inlined in a screen file — the
+ * strategy/AI_BUTLER_ROMAN_IDENTITY_SPEC.md), §2.3-§2.12, and is adjusted for
+ * the available authoritative signals (the live mobile contracts do not always
+ * carry the exact field the spec illustration assumed, so a line may be
+ * shortened or made past-tense to stay truthful) and for `{token}`
+ * substitution. Copy must never be inlined in a screen file — the
  * eight P3 surfaces (§2.3 Coach Brief, §2.4 check-in received, §2.5 new client
  * onboarded, §2.7 streak, §2.8 workout complete, §2.9 voice-log confirm, §2.10
  * generic error, §2.12 coach payout) all consume their prose from here so the
@@ -14,13 +17,21 @@
  * the default tone, no hype words, no slang.
  *
  * Exclamation rationing (spec §1.4 / §4: "one exclamation point per session",
- * reserved for a genuine milestone): within the P3 scope the ONLY permitted
- * home for that single exclamation is the §2.7 30-day streak
+ * reserved for a genuine milestone): within the P3 scope the ONLY copy line
+ * that may EVER carry that single exclamation is the §2.7 30-day streak
  * milestone-celebration line. EVERY other P3 string — including the other
  * celebration variants (§2.3 record morning, §2.4 first check-in, §2.5 roster
  * milestone, §2.8 personal best, §2.9 voice PR, §2.12 record payout) — carries
  * ZERO exclamation points. Those celebration lines are written in Roman's
  * composed butler register: warm, measured, never effusive.
+ *
+ * The ration is enforced at RUNTIME, not just by copy authoring: the §2.7
+ * 30-day line asks the session budget (`getRomanSessionBudget`,
+ * src/lib/roman/sessionBudget.ts) for the session's one exclamation at render
+ * time (P2-D-01). If another Roman surface anywhere in the session already
+ * spent it, the 30-day line renders its own no-exclamation fallback instead of
+ * a second "!". The exclamation is therefore at most one per session across
+ * ALL surfaces, not merely one per copy module.
  *
  * FACE+VOICE invariant: every render-site that imports a function from this
  * module MUST also mount <RomanAvatar /> in the same component tree. The P3
@@ -29,6 +40,8 @@
  * NOTE: §2.6 (first-payment, ED.3) is intentionally ABSENT here — the Roman P4
  * builder adds `romanFirstPayment` in parallel. Do not add §2.6 in P3.
  */
+
+import { getRomanSessionBudget } from './sessionBudget';
 
 /** The three voice modes every surface selects from (spec §4 column c). */
 export type RomanVoiceMode = 'default' | 'celebration' | 'error';
@@ -49,7 +62,8 @@ export interface RomanCoachBriefArgs {
 }
 
 /**
- * §2.3 Coach Brief. default/celebration/error variants, spec-exact.
+ * §2.3 Coach Brief. default/celebration/error variants, spec-derived and
+ * adjusted for available authoritative signals.
  *
  * Trigger: `celebration` when every client is on track this morning;
  * `error` when the brief payload failed to assemble; otherwise `default`.
@@ -134,7 +148,8 @@ export interface RomanNewClientArgs {
 }
 
 /**
- * §2.5 New client onboarded. spec-exact default/celebration/error.
+ * §2.5 New client onboarded. spec-derived default/celebration/error,
+ * adjusted for available authoritative signals.
  *
  * Trigger: `celebration` on a roster milestone (host decides which counts are
  * milestones); `error` when intake did not transfer cleanly; else `default`.
@@ -173,7 +188,8 @@ export interface RomanStreakArgs {
 }
 
 /**
- * §2.7 Streak milestone. spec-exact across the three tiers + error.
+ * §2.7 Streak milestone. spec-derived across the three tiers + error,
+ * adjusted for available authoritative signals.
  *
  * Trigger: 3-day uses `default` (measured); 7-day and 30-day use
  * `celebration` (the mascot wears the knowing slight smile on 7/30 per §3.8);
@@ -188,8 +204,16 @@ export function romanStreak(args: RomanStreakArgs): string {
     return `Your streak is intact, ${firstName} — I am simply slow to tally it this morning. The number will be along shortly.`;
   }
   if (tier === 30) {
-    // spec §2.7 milestone-celebration, 30-day — one exclamation.
-    return `Thirty days, ${firstName}. A month without a missed day. This is the kind of record I am glad to keep!`;
+    // spec §2.7 milestone-celebration, 30-day — the session's ONE exclamation
+    // (P2-D-01). Ask the session-wide budget for it at render time: the first
+    // celebratory Roman surface in the session keeps the "!", and any later
+    // caller (including this one, if another surface spent it first) renders
+    // the no-exclamation fallback so the session never shows two.
+    if (getRomanSessionBudget().requestExclamation()) {
+      return `Thirty days, ${firstName}. A month without a missed day. This is the kind of record I am glad to keep!`;
+    }
+    // Budget already spent elsewhere this session — same line, composed period.
+    return `Thirty days, ${firstName}. A month without a missed day. This is the kind of record I am glad to keep.`;
   }
   if (tier === 7) {
     // spec §2.7 milestone-celebration, 7-day.
@@ -212,7 +236,8 @@ export interface RomanWorkoutCompleteArgs {
 }
 
 /**
- * §2.8 Workout completed. spec-exact default/celebration/error.
+ * §2.8 Workout completed. spec-derived default/celebration/error,
+ * adjusted for available authoritative signals.
  *
  * Trigger: `celebration` on a personal best (the mascot wears the slight
  * smile, §3.8); `error` when the session finished but could not be saved;
@@ -253,8 +278,12 @@ export interface RomanVoiceLogArgs {
 }
 
 /**
- * §2.9 Voice-log confirmation. spec-exact readback. Kept short and literal so
- * the number is never in doubt (no quip on the default per spec §2.9).
+ * §2.9 Voice-log confirmation. spec-derived readback, adjusted for available
+ * authoritative signals. Kept short and literal so the number is never in
+ * doubt (no quip on the default per spec §2.9). It reads back ONLY what was
+ * parsed (weight and reps) and makes NO durable-save claim — the readback fires
+ * on parse, before any persistence is confirmed, so a "Recorded." assertion
+ * here would not be truthful (P1-B-03).
  *
  * Trigger: `celebration` when the logged set is a new best; `error` when the
  * spoken set could not be parsed; otherwise `default`.
@@ -267,11 +296,16 @@ export function romanVoiceLog(args: RomanVoiceLogArgs): string {
   }
   if (mode === 'celebration') {
     // §2.9 milestone-celebration (a logged PR via voice). No exclamation — the
-    // session's one is reserved for the §2.7 30-day line.
-    return `${weight} pounds, ${reps} reps. Recorded — and a new best. Noted.`;
+    // session's one is reserved for the §2.7 30-day line. No durable-save claim
+    // (P1-B-03): the readback fires on parse, so it states the new-best fact
+    // about the parsed set, not that it has been persisted.
+    return `${weight} pounds, ${reps} reps — and a new best. Noted.`;
   }
-  // spec §2.9 default — e.g. "315 pounds, 5 reps. Recorded."
-  return `${weight} pounds, ${reps} reps. Recorded.`;
+  // spec §2.9 default — pure readback of the parsed set, e.g.
+  // "315 pounds, 5 reps." No "Recorded." claim (P1-B-03): the confirmation
+  // fires the moment the utterance is parsed, before persistence is verified,
+  // so asserting it has been recorded here would be untrue.
+  return `${weight} pounds, ${reps} reps.`;
 }
 
 // ── §2.10 Generic error / system failure (BOTH apps) ────────────────────────
@@ -286,7 +320,8 @@ export interface RomanGenericErrorArgs {
 }
 
 /**
- * §2.10 Generic error. spec-exact default (transient) / error (hard failure).
+ * §2.10 Generic error. spec-derived default (transient) / error (hard
+ * failure), adjusted for available authoritative signals.
  *
  * Trigger: `default` while a retry is still available; `error` once retries
  * are exhausted. Per the spec §2.10 schema note there is deliberately NO
@@ -317,9 +352,10 @@ export interface RomanPayoutArgs {
    * (payouts are Stripe-managed and the last-four is not exposed to mobile —
    * see api/packagesApi.ts), and inventing them would be placeholder financial
    * data. When omitted (undefined/empty), Roman drops the "account ending …"
-   * clause and states only the amount, date framing, and settlement window —
-   * all of which ARE true of the available data. Pass a real value only when a
-   * genuine last-four is available.
+   * clause and states only the amount and the past-tense send date — both of
+   * which ARE true of the available data (the mobile contract carries no
+   * settlement-window or in-transit signal, so the copy never speaks of one).
+   * Pass a real value only when a genuine last-four is available.
    */
   bankLast4?: string;
   /**
