@@ -387,6 +387,9 @@ describe('byteLengthUtf8', () => {
     expect(__byteLengthUtf8ForTest('abc')).toBe(3);
     expect(__byteLengthUtf8ForTest('é')).toBe(2); // U+00E9
     expect(__byteLengthUtf8ForTest('€')).toBe(3); // U+20AC
-    expect(__byteLengthUtf8ForTest('😀')).toBe(4); // surrogate pair
+    // U+1F600 GRINNING FACE, written as its escaped UTF-16 surrogate pair so
+    // no raw emoji literal lives in the source (MWB-4 #237 R13 D-003). The
+    // UTF-8 byte-length contract is unchanged: a U+1F600 code point is 4 bytes.
+    expect(__byteLengthUtf8ForTest('\uD83D\uDE00')).toBe(4); // surrogate pair
   });
 });
