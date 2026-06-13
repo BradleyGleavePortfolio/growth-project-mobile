@@ -184,8 +184,18 @@ export default function ChallengeProgressSheet({
     });
   }, [celebrating, reduceMotion, fill]);
 
+  // A SYNCHRONOUS in-flight guard. The `submitting` prop only re-disables the
+  // button after `progressMutation.isPending` re-renders, which is a frame
+  // later than a rapid second press fires. Two taps on the same render would
+  // otherwise both pass the `submitting` check and call `onSubmit(nextValue)`
+  // twice, minting two different idempotency keys for one logical write. The
+  // ref flips before `onSubmit` and clears in `finally`, so the second press
+  // is rejected on the same synchronous tick.
+  const submittingRef = useRef(false);
+
   const handleSubmit = useCallback(async () => {
-    if (!draftValid || submitting) return;
+    if (!draftValid || submitting || submittingRef.current) return;
+    submittingRef.current = true;
     setSubmitError(null);
     try {
       const result = await onSubmit(nextValue);
@@ -201,6 +211,8 @@ export default function ChallengeProgressSheet({
       setSubmitError(
         'We could not save your progress just now. Please try again.',
       );
+    } finally {
+      submittingRef.current = false;
     }
   }, [draftValid, submitting, onSubmit, nextValue, onClose]);
 

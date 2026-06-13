@@ -317,6 +317,56 @@ describe('ChallengeProgressSheet — completion peak (F9)', () => {
   });
 });
 
+describe('ChallengeProgressSheet — rapid double-submit guard (R8-P2-1)', () => {
+  beforeEach(() => {
+    jest
+      .spyOn(AccessibilityInfo, 'isReduceMotionEnabled')
+      .mockResolvedValue(true);
+  });
+
+  it('fires onSubmit only once when the submit button is pressed twice in the same render frame', async () => {
+    // Two rapid presses on the SAME render must not both reach onSubmit. The
+    // parent `submitting` prop only re-disables the button a frame after
+    // `progressMutation.isPending`, so without a synchronous in-flight ref both
+    // presses would mint two different idempotency keys for one logical write.
+    // We hold the first submit in-flight (deferred promise) and press again on
+    // the same tick: the synchronous submittingRef must reject the second press.
+    let resolveSubmit: (v: { completed: boolean }) => void = () => {};
+    const onSubmit = jest.fn(
+      () =>
+        new Promise<{ completed: boolean }>((resolve) => {
+          resolveSubmit = resolve;
+        }),
+    );
+    const onClose = jest.fn();
+    render(
+      <ChallengeProgressSheet
+        visible
+        challenge={challenge}
+        participation={participation}
+        onSubmit={onSubmit}
+        onClose={onClose}
+        testID="sheet"
+      />,
+    );
+
+    fireEvent.changeText(screen.getByTestId('sheet-input'), '20');
+    const submit = screen.getByTestId('sheet-submit');
+    // Two synchronous presses before the first onSubmit promise settles.
+    fireEvent.press(submit);
+    fireEvent.press(submit);
+
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+
+    // Settle the in-flight write so the finally clause clears the ref.
+    await act(async () => {
+      resolveSubmit({ completed: false });
+      await Promise.resolve();
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('ChallengeProgressSheet — rejected submit (F3)', () => {
   beforeEach(() => {
     jest
