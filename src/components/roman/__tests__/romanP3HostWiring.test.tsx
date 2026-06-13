@@ -285,11 +285,35 @@ function renderOneShotHarness({
   justCompletedId: string | undefined;
   userKey?: string | undefined;
 }) {
-  const clearParam = jest.fn();
   let id = justCompletedId;
   let key = userKey;
+  let clearPending = false;
   focusController.effect = null;
   focusController.cleanup = null;
+
+  // Faithfully model the real WorkoutScreen wiring: clearParam() calls
+  // navigation.setParams({ justCompletedId: undefined }), which flips the
+  // hook's justCompletedId arg to undefined. Because that arg is a dependency
+  // of the focus effect, react-navigation tears the current effect down and
+  // re-runs it immediately WHILE STILL FOCUSED. clearParam therefore tears the
+  // current run down (runs its cleanup) and schedules the id-less re-render; the
+  // re-run of the rebuilt (id-less) effect is performed by focus() once the
+  // batched re-render has committed (a synchronous re-run here would still see
+  // the pre-render effect and loop). This exercises the real self-re-render the
+  // hook must survive, rather than treating clearParam as an inert no-op, so it
+  // would catch a regression of P1-CODE-01 (the card self-cancelling before
+  // render).
+  const clearParam = jest.fn(() => {
+    // Tear the current run down (it consumed the id) and flip the param to
+    // undefined, mirroring navigation.setParams. The id-less effect re-run is
+    // deferred to focus() after the re-render commits.
+    const prevCleanup = focusController.cleanup;
+    focusController.cleanup = null;
+    if (prevCleanup) prevCleanup();
+    id = undefined;
+    clearPending = true;
+    rendered.rerender(undefined);
+  });
   const rendered = renderHook(() => useJustCompletedOneShot(id, key, clearParam));
   return {
     clearParam,
@@ -304,6 +328,15 @@ function renderOneShotHarness({
       focusController.cleanup = typeof cleanup === 'function' ? cleanup : null;
       // Flush the async latch read/write so the flag reflects the decision.
       await flush();
+      // If the latch read cleared the param, the re-render that flipped the
+      // dep to undefined has now committed; re-run the rebuilt (id-less) focus
+      // effect while still focused, exactly as react-navigation would, and keep
+      // its cleanup so a later blur resets cleanly.
+      if (clearPending) {
+        clearPending = false;
+        const cleanup2 = focusController.effect ? focusController.effect() : undefined;
+        focusController.cleanup = typeof cleanup2 === 'function' ? cleanup2 : null;
+      }
     },
     blur() {
       // On blur react-navigation invokes the cleanup returned by the effect.
@@ -389,6 +422,84 @@ describe('§2.8 workout-complete renders from a real just-completed event only',
     const userB = renderOneShotHarness({ justCompletedId: 'workout-101', userKey: 'user-B' });
     await userB.focus();
     expect(userB.lastShow()).toBe(true);
+  });
+
+  it('REGRESSION (P1-CODE-01): a re-render/dep change WHILE FOCUSED before the latch read resolves does NOT cancel the in-flight card', async () => {
+    // The original bug: useJustCompletedOneShot cleared the nav param
+    // SYNCHRONOUSLY, before the AsyncStorage latch read resolved. Clearing the
+    // param flips the justCompletedId dependency to undefined, so
+    // react-navigation tore the focus effect down (cancelled = true) and
+    // re-ran it WHILE STILL FOCUSED, before the read resolved. The pending read
+    // then early-returned at `if (cancelled) return;` and the §2.8 completion
+    // card never appeared for a REAL completion.
+    //
+    // This test reproduces that exact ordering with a latch read we resolve
+    // manually: we run the focus effect, force a dep-change re-render+effect
+    // re-run (the param-clear teardown) while the read is STILL PENDING, and
+    // only THEN resolve the read. The card must still show for the in-flight
+    // id. A regression of P1-CODE-01 makes lastShow() false and fails here.
+    // Control the latch read with a manually-resolved promise so the teardown
+    // can be injected while the read is STILL PENDING. mockImplementationOnce
+    // applies only to the single read this test triggers.
+    let resolveRead: (value: string | null) => void = () => undefined;
+    const getItemSpy = jest
+      .spyOn(AsyncStorage, 'getItem')
+      .mockImplementationOnce(
+        () =>
+          new Promise<string | null>((resolve) => {
+            resolveRead = resolve;
+          }),
+      );
+    try {
+      let id: string | undefined = 'workout-303';
+      const key = 'user-1';
+      const clearParam = jest.fn();
+      focusController.effect = null;
+      focusController.cleanup = null;
+      const rendered = renderHook(() => useJustCompletedOneShot(id, key, clearParam));
+
+      // Focus: the effect starts the (still-pending) latch read and stores its
+      // cleanup. No flush yet — the read has NOT resolved.
+      act(() => {
+        const cleanup = focusController.effect ? focusController.effect() : undefined;
+        focusController.cleanup = typeof cleanup === 'function' ? cleanup : null;
+      });
+      // The pending read was initiated for the in-flight completion id.
+      expect(resolveRead).not.toBe(undefined);
+
+      // Inject the param-clear teardown BEFORE the read resolves: the
+      // justCompletedId dep flips to undefined, the current effect is torn down
+      // (its cleanup runs while still focused), then the effect re-runs with the
+      // id-less deps. This is precisely the self-triggered re-render that used
+      // to set cancelled = true and kill the pending decision.
+      act(() => {
+        const prevCleanup = focusController.cleanup;
+        focusController.cleanup = null;
+        if (prevCleanup) prevCleanup();
+        id = undefined;
+        rendered.rerender(undefined);
+      });
+      act(() => {
+        const next = focusController.effect ? focusController.effect() : undefined;
+        focusController.cleanup = typeof next === 'function' ? next : null;
+      });
+      // Mid-flight the card has not committed yet, but the in-flight decision
+      // must NOT have been cancelled by the teardown above.
+      expect(rendered.result.current).toBe(false);
+
+      // Now resolve the original latch read (id unseen) and flush.
+      await act(async () => {
+        resolveRead(null);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      // The completion card appears for the in-flight id despite the
+      // intervening teardown — the P1-CODE-01 race is closed.
+      expect(rendered.result.current).toBe(true);
+    } finally {
+      getItemSpy.mockRestore();
+    }
   });
 
   it('the finish-workout path sets the durable completion id on a successful save', () => {

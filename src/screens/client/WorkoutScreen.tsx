@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -205,17 +205,35 @@ export function useJustCompletedOneShot(
   clearParam: () => void,
 ): boolean {
   const [justCompleted, setJustCompleted] = useState(false);
+  // The completion id currently being decided/celebrated for this focus
+  // session. Clearing the nav param re-renders the host and flips the
+  // `justCompletedId` arg to undefined, which is a dep of this effect and so
+  // re-runs it WHILE STILL FOCUSED (the react-navigation contract: a dep change
+  // tears the effect down and immediately re-runs it). That self-triggered
+  // teardown — and any other re-render that lands before the latch read
+  // resolves — must NOT invalidate the in-flight decision. The previous
+  // implementation cleared the param synchronously and gated the resolved read
+  // on a run-local `cancelled` boolean, so the teardown set `cancelled = true`
+  // before the read resolved and the card never appeared for a real completion
+  // (the P1-CODE-01 race). Keying the resolved read on this ref instead lets the
+  // decision commit as long as the same id is still the one in flight.
+  const consumedIdRef = useRef<string | undefined>(undefined);
   useFocusEffect(
     useCallback(() => {
-      let cancelled = false;
       if (justCompletedId && userKey) {
+        // Record the id being processed BEFORE any async work so a re-render —
+        // including the one clearParam() will cause below — cannot orphan this
+        // decision.
+        consumedIdRef.current = justCompletedId;
         const key = romanCompletionConsumedKey(userKey, justCompletedId);
         // Read the durable latch first: only fire the card if THIS id has not
-        // been acknowledged before. Clearing the nav param happens regardless,
-        // so a stale/duplicate param cannot linger and re-fire later.
+        // been acknowledged before.
         AsyncStorage.getItem(key)
           .then((seen) => {
-            if (cancelled) return;
+            // Commit only while this id is still the active completion. A
+            // genuine blur or a newer completion replaces consumedIdRef; the
+            // param-clear re-render does not, so a real completion survives.
+            if (consumedIdRef.current !== justCompletedId) return;
             if (seen == null) {
               setJustCompleted(true);
               // Persist the latch so this exact completion is never celebrated
@@ -226,20 +244,34 @@ export function useJustCompletedOneShot(
                 logger.warn('mwb.completion.latch-write', { error });
               });
             }
+            // Clear the nav param only AFTER the latch read resolved and the
+            // state transition committed (P1-CODE-01). A stale/duplicate param
+            // can no longer linger and re-fire, and the re-render this triggers
+            // can no longer race ahead of — and kill — the decision.
+            clearParam();
           })
           .catch((error: unknown) => {
             // If the latch READ fails we cannot prove the id is unseen, so we
             // deliberately do NOT show the card — favouring "never double-fire"
-            // over "never miss one". Surfaced for diagnosis.
+            // over "never miss one". Surfaced for diagnosis. Still clear the
+            // param so an unreadable latch does not leave a sticky signal.
             logger.warn('mwb.completion.latch-read', { error });
+            if (consumedIdRef.current === justCompletedId) clearParam();
           });
-        clearParam();
       }
       return () => {
-        cancelled = true;
-        // Blur: end the one-shot. A subsequent refocus with no new completion
-        // id leaves justCompleted false, so the §2.8 card stays hidden.
-        setJustCompleted(false);
+        // This cleanup runs on a genuine blur AND on the param-clear re-render
+        // this effect triggers while focused. Only end the one-shot for a run
+        // that had nothing in flight — i.e. a focus run with no completion id
+        // (the param already cleared, or a true blur landing on the idle run).
+        // The run that actually consumed an id leaves the card committed so the
+        // param-clear teardown cannot undo it; a later blur lands on the idle
+        // (id-less) run and resets cleanly, keeping the §2.8 card hidden on a
+        // refocus with no new completion.
+        if (!justCompletedId || !userKey) {
+          consumedIdRef.current = undefined;
+          setJustCompleted(false);
+        }
       };
     }, [justCompletedId, userKey, clearParam]),
   );
