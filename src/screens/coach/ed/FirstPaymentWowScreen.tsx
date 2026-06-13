@@ -3,7 +3,8 @@
  *
  * The single most important emotional beat in the coach app: the first time
  * money lands. A full-screen overlay that fires ONCE per coach (MMKV gate,
- * firstPaymentGate) when a first-payment INSERT arrives over Supabase realtime
+ * firstPaymentGate) when an authoritative pending/non-success → paid/active
+ * ClientPurchase status transition arrives over Supabase realtime
  * (useFirstPaymentRealtime). It carries:
  *
  *   - a one-shot particle burst (ParticleBurst — pure Reanimated; Skia is not
@@ -66,8 +67,9 @@ export default function FirstPaymentWowScreen({
 }: FirstPaymentWowScreenProps): React.ReactElement {
   const reduceMotion = useReduceMotion();
 
-  // Mascot scale-in: 1.0 → 1.05 → 1.0 over ~1.2s (brief). Instant when
-  // reduce-motion is on (the moment still lands through copy + face).
+  // Mascot scale-in: 0.92 → 1.05 → 1.0 over ~0.5s total (audit R5: calm,
+  // ≤500ms). Instant when reduce-motion is on (the moment still lands through
+  // copy + face).
   const scale = useSharedValue(reduceMotion ? 1 : 0.92);
   React.useEffect(() => {
     if (reduceMotion) {
@@ -75,8 +77,8 @@ export default function FirstPaymentWowScreen({
       return;
     }
     scale.value = withSequence(
-      withTiming(1.05, { duration: 700, easing: Easing.out(Easing.cubic) }),
-      withTiming(1.0, { duration: 500, easing: Easing.inOut(Easing.quad) }),
+      withTiming(1.05, { duration: 300, easing: Easing.out(Easing.cubic) }),
+      withTiming(1.0, { duration: 200, easing: Easing.inOut(Easing.quad) }),
     );
   }, [reduceMotion, scale]);
 

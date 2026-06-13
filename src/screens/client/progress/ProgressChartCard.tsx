@@ -170,8 +170,10 @@ export default function ProgressChartCard({
       return;
     }
     drawProgress.value = 0;
+    // Calm decacorn-grade motion (audit R5): the draw-in stays under the ATC
+    // ≤300ms ceiling with a gentle ease so the line settles rather than races.
     drawProgress.value = withTiming(1, {
-      duration: 1500,
+      duration: 280,
       easing: Easing.inOut(Easing.cubic),
     });
   }, [reduceMotion, drawProgress, pathLength]);

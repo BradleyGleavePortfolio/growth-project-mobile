@@ -53,7 +53,9 @@ interface ParticleSpec {
 }
 
 const DEFAULT_COUNT = 28;
-const DEFAULT_DURATION = 1400;
+// Calm celebration motion (audit R5): the burst resolves quickly (≤500ms) so it
+// reads as a restrained flourish rather than a lingering animation.
+const DEFAULT_DURATION = 500;
 
 /** Deep-gold celebration palette, drawn from design tokens (no raw hex). */
 const PARTICLE_COLORS = [colors.romanAccent, colors.mutedGold, colors.forest];
