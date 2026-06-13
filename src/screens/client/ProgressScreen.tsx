@@ -408,7 +408,7 @@ export default function ProgressScreen() {
             therefore additionally gated behind featureFlags.romanStreakBackendLive
             (default OFF) and stays hidden until the backend exposes an
             authoritative streak-milestone event.
-            TODO(roman-streak-backend): when the backend exposes an
+            Follow-up (roman-streak-backend): when the backend exposes an
             authoritative milestone event (event id, date, tier) per
             AI_BUTLER_ROMAN_IDENTITY_SPEC §2.7, drive `streakTier` from that
             event instead of the local count and flip

@@ -91,7 +91,7 @@ describe('orphan guard — every P3 surface stays imported into its host, flag-g
       /featureFlags\.romanChat && featureFlags\.romanStreakBackendLive && streakTier !== null/,
     );
     expect(PROGRESS).toContain('testID="roman-streak-card"');
-    expect(PROGRESS).toContain('TODO(roman-streak-backend)');
+    expect(PROGRESS).toContain('Follow-up (roman-streak-backend)');
   });
 
   it('§2.8 RomanWorkoutCompleteCard → WorkoutScreen', () => {
