@@ -745,15 +745,21 @@ export function useAutosave<TWorkingCopy>(
             );
             return;
           }
-          // Distinguish the QUIET bootstrap stale-lock from a REAL conflict:
+          // Distinguish the QUIET bootstrap stale-lock from a REAL conflict.
+          // Both branches take the SAME server-truth path below: they adopt the
+          // fresh head/token, await onConflict (refetch + rebaseline), then
+          // rebase the local ops and re-send. Only the UX differs:
           //   - `autosave_lock_stale` BEFORE any successful save is the
           //     by-design first-autosave bootstrap (the client booted with a
-          //     placeholder lock token). The coach made no concurrent edit, so
-          //     this resolves silently: status='syncing' (neutral progress
-          //     copy) and we SKIP onConflict (no user-facing refetch/banner).
+          //     placeholder lock token). It ALSO awaits onConflict and runs the
+          //     refetch/rebaseline path, but resolves quietly: status='syncing'
+          //     (neutral progress copy), is EXEMPT from the conflict
+          //     budget/backoff, and re-sends immediately once server truth
+          //     lands (no user-facing conflict banner).
           //   - `autosave_conflict_retry`, OR any 409 AFTER a successful save,
-          //     is a genuine external-edit conflict: status='conflict' and we
-          //     fire onConflict so the caller refetches and the coach is told.
+          //     is a genuine external-edit conflict: status='conflict', counts
+          //     against the conflict budget/backoff, and surfaces onConflict so
+          //     the coach is told before the rebased ops re-send.
           const isBootstrapStaleLock =
             err.conflict.error === 'autosave_lock_stale' && !hasSavedRef.current;
           // Adopt the fresh head/token up front so even a budget-exhausted stop
