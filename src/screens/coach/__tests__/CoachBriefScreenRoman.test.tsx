@@ -5,7 +5,9 @@
  * <RomanAvatar />) and selects the right §2.3 voice mode from the brief
  * payload:
  *   - default when there are clients needing attention,
- *   - celebration (record morning) when the roster is clear and not stale,
+ *   - the neutral default line when the surfaced-client list is empty (an empty
+ *     surfaced-attention list is not proof the full roster is on track, so it is
+ *     NOT treated as a record-morning celebration — P2-B-04),
  *   - error when fetchCoachBrief rejects (Bradley Law #36 — surfaced, logged
  *     via logger.warn, not a swallowed catch and not a raw console call).
  */

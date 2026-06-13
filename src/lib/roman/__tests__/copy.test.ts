@@ -27,7 +27,7 @@ describe('romanCoachBrief (§2.3)', () => {
       'Good morning, Marcus. Your brief is ready. 6 clients need attention today.',
     );
   });
-  it('celebration — record morning, no exclamation (rationed to §2.7 30-day)', () => {
+  it('celebration — record morning, no exclamation', () => {
     expect(romanCoachBrief({ coachName: 'Marcus', clientCount: 0, mode: 'celebration' })).toBe(
       'Good morning, Marcus. Every client is on track this morning. I cannot recall a tidier brief.',
     );
@@ -51,7 +51,7 @@ describe('romanCheckInClaim (§2.4)', () => {
       'Dana has a check-in consistency claim awaiting your sign-off.',
     );
   });
-  it('celebration — first such claim, no exclamation (rationed to §2.7 30-day)', () => {
+  it('celebration — first such claim, no exclamation', () => {
     expect(romanCheckInClaim({ clientName: 'Dana', mode: 'celebration' })).toBe(
       'Dana has a first check-in consistency claim awaiting your sign-off. A good beginning.',
     );
@@ -74,7 +74,7 @@ describe('romanNewClient (§2.5)', () => {
       'Dana has joined your roster. Their file is prepared and waiting for you.',
     );
   });
-  it('celebration — roster milestone, no exclamation (rationed to §2.7 30-day)', () => {
+  it('celebration — roster milestone, no exclamation', () => {
     expect(romanNewClient({ clientName: 'Dana', clientCount: 10, mode: 'celebration' })).toBe(
       'Dana has joined your roster — your 10th client. The practice is growing handsomely.',
     );
@@ -180,7 +180,7 @@ describe('romanWorkoutComplete (§2.8)', () => {
       'Workout complete. Recorded. That is one more behind you.',
     );
   });
-  it('celebration — personal best with lift name, no exclamation (rationed to §2.7 30-day)', () => {
+  it('celebration — personal best with lift name, no exclamation', () => {
     expect(romanWorkoutComplete({ mode: 'celebration', liftName: 'deadlift' })).toBe(
       'Workout complete — and a personal best on deadlift, no less. Noted with admiration.',
     );
@@ -245,7 +245,7 @@ describe('romanPayout (§2.12)', () => {
       'Your last payout of $240.00 was sent on June 9 to the account ending 4242.',
     );
   });
-  it('celebration — record payout, no exclamation (rationed to §2.7 30-day)', () => {
+  it('celebration — record payout, no exclamation', () => {
     expect(
       romanPayout({ amount: '$1,200.00', bankLast4: '4242', sentOn: 'June 9', mode: 'celebration' }),
     ).toBe(

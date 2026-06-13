@@ -1,8 +1,8 @@
 /**
  * RomanWorkoutCompleteCard — §2.8 Workout completed (client app).
  *
- * FACE+VOICE: <RomanAvatar /> appears at line 48 — co-located with the §2.8
- * copy from src/lib/roman/copy.ts.
+ * FACE+VOICE: <RomanAvatar /> is rendered in this card — co-located with the
+ * §2.8 copy from src/lib/roman/copy.ts.
  *
  * Mascot expression (spec §4 table): neutral default; the knowing slight smile
  * on a personal best (celebration). On a save error the mascot stays neutral.
