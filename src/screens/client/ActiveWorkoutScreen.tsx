@@ -67,6 +67,7 @@ import type {
 import { ExerciseImage, MUSCLES, lookupMuscleColor, makeMuscleColors } from './active-workout/ExerciseImage';
 import { ExerciseCard } from './active-workout/ExerciseCard';
 import { featureFlags } from '../../config/featureFlags';
+import { logger } from '../../utils/logger';
 // §2.9 Voice-log confirmation — Roman reads back the most recently completed
 // set in his voice, beside his face (RomanVoiceLogReadback co-locates
 // <RomanAvatar />). No dedicated voice-capture screen exists in the app yet;
@@ -685,8 +686,12 @@ export default function ActiveWorkoutScreen() {
                 // mutation just succeeded — it's now durable on the
                 // server, so clear the recovery session here.
                 if (!localWriteSucceeded && userId) {
-                  clearActiveWorkoutSession(userId).catch(() => {
-                    /* best-effort */
+                  clearActiveWorkoutSession(userId).catch((error: unknown) => {
+                    // Best-effort: the server save already succeeded, so the
+                    // workout is durable; failing to clear the local recovery
+                    // session is non-fatal (it reconciles on next pull). Still
+                    // surfaced for diagnosis rather than swallowed silently.
+                    logger.warn('mwb.completion.clear-recovery-session', { error });
                   });
                 }
                 // Phase 11 / Track 3: heavy haptic on workout completion
@@ -706,14 +711,21 @@ export default function ActiveWorkoutScreen() {
                 const d = (data ?? {}) as { id?: string; workout?: { id?: string } };
                 const serverId = String(d?.id ?? d?.workout?.id ?? '');
                 if (serverId && routineName) {
-                  markSessionSyncedBySessionName(routineName, serverId).catch(() => {
-                    /* best-effort; pending rows will reconcile on next pull */
+                  markSessionSyncedBySessionName(routineName, serverId).catch((error: unknown) => {
+                    // Best-effort; pending rows will reconcile on the next pull.
+                    // Surfaced (not swallowed) so a persistent mismatch is
+                    // diagnosable rather than silent.
+                    logger.warn('mwb.completion.mark-session-synced', { error });
                   });
                 }
                 // Trigger sync so the newly created server record is
                 // pulled back. Pending rows have been marked above so this
                 // is now a one-way pull.
-                triggerSync().catch(() => {/* non-fatal */});
+                triggerSync().catch((error: unknown) => {
+                  // Non-fatal: the server record exists; the next sync cycle
+                  // will pull it. Surfaced for diagnosis.
+                  logger.warn('mwb.completion.trigger-sync', { error });
+                });
 
                 // If this workout is linked to a coach assignment, call the
                 // assignment completion endpoint with the full exercise/set
@@ -735,20 +747,29 @@ export default function ActiveWorkoutScreen() {
                     completion_payload: completionPayload,
                     idempotency_key: idempotencyKeyRef.current,
                     started_at: sessionStartTimeRef.current.toISOString(),
-                  }).catch((e: unknown) => {
+                  }).catch((error: unknown) => {
                     // Non-fatal: generic workout already saved above.
-                    console.warn('[ActiveWorkout] Assignment completion sync failed', e);
+                    logger.warn('mwb.completion.assignment-sync', { error });
                   });
                 }
 
                 // §2.8 one-shot completion signal: returning to WorkoutMain with
-                // `justCompleted` set tells WorkoutScreen this is a REAL
-                // just-finished workout (not a historical session) so Roman's
-                // "Workout complete. Recorded." line renders exactly once. The
-                // target is the same screen goBack() would land on (WorkoutMain
-                // is directly beneath ActiveWorkout in WorkoutStack), so this
-                // preserves the existing back behaviour while carrying the flag.
-                navigation.navigate('WorkoutMain', { justCompleted: true });
+                // `justCompletedId` set to the DURABLE server id of the workout
+                // just saved tells WorkoutScreen this is a REAL just-finished
+                // workout (not a historical session) so Roman's "Workout
+                // complete." line renders exactly once. The target is the same
+                // screen goBack() would land on (WorkoutMain is directly beneath
+                // ActiveWorkout in WorkoutStack), so this preserves the existing
+                // back behaviour while carrying the id. Keying on the concrete
+                // id (not a boolean) lets WorkoutScreen latch "already seen this
+                // workout" durably, so a re-delivered param cannot re-fire the
+                // celebration (P1-C-01). When the server did not return a usable
+                // id we navigate WITHOUT the signal rather than fabricate one —
+                // an un-keyable completion is not eligible for the one-shot.
+                navigation.navigate(
+                  'WorkoutMain',
+                  serverId ? { justCompletedId: serverId } : undefined,
+                );
               },
               onError: (err) => {
                 // Phase 11 / Track 3: error haptic on failed API action
@@ -769,8 +790,10 @@ export default function ActiveWorkoutScreen() {
                     assignmentId,
                     idempotencyKey: idempotencyKeyRef.current,
                     sessionExercises,
-                  }).catch(() => {
-                    /* best-effort re-save */
+                  }).catch((error: unknown) => {
+                    // Best-effort re-save so the session stays recoverable after
+                    // a failed server save. Surfaced for diagnosis.
+                    logger.warn('mwb.completion.resave-on-error', { error });
                   });
                 }
                 // API failed (offline). Records are already in WDB as 'pending'.
