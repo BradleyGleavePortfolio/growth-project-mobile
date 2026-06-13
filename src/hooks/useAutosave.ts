@@ -807,38 +807,51 @@ export function useAutosave<TWorkingCopy>(
               attempt: conflictAttemptRef.current,
             },
           );
-          // MWB-4 #237 R11 (P1) AWAIT server-truth adoption. The caller's
-          // onConflict refetches the plan AND re-anchors the diff baseline
-          // (lastSavedValueRef) to that authoritative server copy. We MUST wait
-          // for that before rebasing: rebaseBatch diffs lastSavedValueRef vs
-          // latestValueRef, so resending before adoption would diff a STALE
-          // local baseline and emit full-row upserts that erase a concurrent
-          // server edit. A void-returning caller resolves immediately (legacy
-          // behaviour). The bootstrap stale-lock has no concurrent server edit
-          // to protect, so it skips the caller round-trip entirely.
-          if (!isBootstrapStaleLock) {
-            try {
-              await onConflictRef.current?.(err.conflict);
-            } catch (adoptErr) {
-              // The caller's refetch/adoption failed. Do NOT blindly resend over
-              // a possibly-stale baseline (that is the lost-update bug). Surface
-              // manual recovery and keep the batch queued for a manual re-drive.
-              pendingNextRef.current = batch;
-              safeSet(setStatus, 'conflict');
-              safeSet(setHasPending, true);
-              if (batch.isReplay) clearReplayInFlight();
-              logger.error(
-                '[useAutosave] server-truth adoption failed on conflict - manual recovery',
-                { planId, err: adoptErr },
-              );
-              return;
-            }
-            // The hook may have unmounted while awaiting adoption; if so the
-            // teardown already captured the mirror, so stop here.
-            if (!mountedRef.current) {
-              pendingNextRef.current = batch;
-              return;
-            }
+          // MWB-4 #237 R11 (P1) / R13 (D-001) AWAIT server-truth adoption. The
+          // caller's onConflict refetches the plan AND re-anchors the diff
+          // baseline (lastSavedValueRef) to that authoritative server copy via
+          // rebaselineToConflict. We MUST wait for that before rebasing:
+          // rebaseBatch diffs lastSavedValueRef vs latestValueRef, so resending
+          // before adoption would diff a STALE local baseline and emit full-row
+          // upserts that erase a concurrent server edit (e.g. another field
+          // reset to null). A void-returning caller resolves immediately
+          // (legacy behaviour).
+          //
+          // MWB-4 #237 R13 (D-001): the FIRST-EVER autosave 409 (the bootstrap
+          // stale-lock handshake) MUST adopt server truth too. The old code
+          // skipped this round-trip for the bootstrap case on the theory that a
+          // first save has "no concurrent server edit to protect". That theory
+          // was wrong: another editor (or a server-side process) can have
+          // changed a field on the row between the screen loading and the
+          // coach's first keystroke landing, and skipping adoption rebased from
+          // the stale `lastSavedValueRef` and resent a full-row upsert that
+          // erased that concurrent edit (notes / weight_lbs / superset_group_id
+          // all clobbered). We therefore await adoption for the bootstrap 409
+          // as well; it differs from a genuine conflict ONLY in the quiet
+          // `syncing` UX and in being exempt from the conflict budget +
+          // backoff (it re-sends immediately below). The adoption itself is the
+          // same authoritative-server-truth path.
+          try {
+            await onConflictRef.current?.(err.conflict);
+          } catch (adoptErr) {
+            // The caller's refetch/adoption failed. Do NOT blindly resend over
+            // a possibly-stale baseline (that is the lost-update bug). Surface
+            // manual recovery and keep the batch queued for a manual re-drive.
+            pendingNextRef.current = batch;
+            safeSet(setStatus, 'conflict');
+            safeSet(setHasPending, true);
+            if (batch.isReplay) clearReplayInFlight();
+            logger.error(
+              '[useAutosave] server-truth adoption failed on conflict - manual recovery',
+              { planId, err: adoptErr },
+            );
+            return;
+          }
+          // The hook may have unmounted while awaiting adoption; if so the
+          // teardown already captured the mirror, so stop here.
+          if (!mountedRef.current) {
+            pendingNextRef.current = batch;
+            return;
           }
           // Rebase the still-unsaved ops onto the NOW-ADOPTED server baseline.
           // If the adoption absorbed them (diff now empty) we drop the batch

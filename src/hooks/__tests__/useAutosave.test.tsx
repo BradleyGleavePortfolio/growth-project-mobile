@@ -377,11 +377,16 @@ describe('useAutosave — 409 rebase (P0: first-409 must not drop edits)', () =>
     expect(mockClearIfKey).toHaveBeenCalledWith('p1', firstCall.idempotencyKey);
   });
 
-  it('P2: a bootstrap autosave_lock_stale 409 (no prior save) NEVER surfaces a user-facing conflict — it syncs silently to saved without firing onConflict', async () => {
+  it('D-001: a bootstrap autosave_lock_stale 409 (no prior save) AWAITS server-truth adoption (onConflict) BEFORE rebasing + resending, while keeping the quiet non-conflict UX', async () => {
+    // MWB-4 #237 R13 (D-001). The prior behaviour (asserted by the test this
+    // replaces) treated the first-ever 409 as a "bootstrap" that SKIPPED
+    // onConflict entirely and rebased from the stale local baseline. That was
+    // the data-loss bug: a concurrent server edit on the row was erased by the
+    // full-row upsert resend. The bootstrap 409 must now adopt server truth on
+    // the same path as a genuine conflict; it differs ONLY in the quiet UX
+    // (it never enters the user-facing 'conflict' state) and in re-sending
+    // immediately (exempt from the conflict backoff/budget).
     const conflict = {
-      // The by-design first-autosave bootstrap: the screen booted with a
-      // placeholder lock token, so the very first attempt 409s with a stale
-      // lock. The coach made no concurrent edit — this must resolve quietly.
       error: 'autosave_lock_stale' as const,
       head_revision_index: 9,
       lock_token: TOKEN_B,
@@ -391,7 +396,13 @@ describe('useAutosave — 409 rebase (P0: first-409 must not drop edits)', () =>
         new WorkoutAutosaveApiError('conflict', 409, 'stale', conflict),
       )
       .mockResolvedValueOnce(okResponse({ head: 10, token: TOKEN_A }));
-    const onConflict = jest.fn();
+    const adoptionOrder: string[] = [];
+    // The screen's conflict handler refetches + re-anchors; model the await so
+    // we can assert adoption ran BEFORE the rebased resend went out.
+    const onConflict = jest.fn(async () => {
+      await Promise.resolve();
+      adoptionOrder.push('adopted-server-truth');
+    });
     const statuses: string[] = [];
 
     const { result, rerender } = renderHook(
@@ -415,20 +426,20 @@ describe('useAutosave — 409 rebase (P0: first-409 must not drop edits)', () =>
       jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
     });
 
-    // The bootstrap recovery is SILENT: onConflict is never called (no
-    // user-facing refetch/banner), and the status NEVER becomes the actionable
-    // user-facing 'conflict' — it recovers cleanly to saving/saved. (The brief
-    // recovery touches the quiet 'syncing' progress state internally before the
-    // immediate rebase re-send moves it to 'saving'; React batches those two
-    // synchronous transitions, so we assert on the invariant that matters: the
-    // user-facing 'conflict' state is never entered.)
+    // D-001 core: the bootstrap 409 now AWAITS server-truth adoption — the same
+    // authoritative path a genuine conflict uses — so onConflict IS called with
+    // the conflict body.
+    await waitFor(() => expect(onConflict).toHaveBeenCalledWith(conflict));
     await waitFor(() => expect(result.current.status).toBe('saved'));
-    expect(onConflict).not.toHaveBeenCalled();
+    // The quiet-UX invariant is preserved: a bootstrap 409 never enters the
+    // actionable user-facing 'conflict' state (it recovers via 'syncing').
     expect(statuses).not.toContain('conflict');
 
-    // The ops are still NOT dropped — the rebased re-send lands the edit.
+    // The ops are still NOT dropped, AND the adoption ran BEFORE the rebased
+    // re-send (so the resend diffs the adopted server baseline, not the stale
+    // one) — the order assertion is the regression guard for D-001.
     await waitFor(() => expect(mockAutosave).toHaveBeenCalledTimes(2));
-    const firstCall = mockAutosave.mock.calls[0][0];
+    expect(adoptionOrder).toEqual(['adopted-server-truth']);
     const rebaseCall = mockAutosave.mock.calls[1][0];
     expect(rebaseCall.body.base_revision_index).toBe(9);
     expect(rebaseCall.body.lock_token).toBe(TOKEN_B);
