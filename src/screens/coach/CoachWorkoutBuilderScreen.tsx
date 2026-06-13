@@ -522,9 +522,16 @@ export default function CoachWorkoutBuilderScreen() {
   // gated on `!autosave.hasPending`, so it never clobbers the coach's in-flight
   // edit — the hook's rebase carries those ops to the server, and the refetch
   // only folds in server-assigned row ids once the pending batch settles.
-  // (Note: the by-design first-autosave bootstrap stale-lock recovery is silent
-  // and does NOT call this — the hook handles it internally; only a real
-  // external-edit conflict routes here.)
+  // (Note: as of #237 R13 the first-autosave bootstrap stale-lock 409 ALSO
+  // calls and AWAITS this handler — it must adopt server truth before rebasing,
+  // because a concurrent edit can land between screen load and the coach's
+  // first keystroke (see useAutosave.ts bootstrap-409 path). What differs is
+  // only the UX/backoff/budget treatment, NOT whether adoption runs: a bootstrap
+  // 409 stays in the quiet 'syncing' state, is EXEMPT from the conflict budget
+  // and backoff, and re-sends immediately after adoption; a real external-edit
+  // conflict surfaces the visible 'conflict' state and is subject to the budget
+  // and backoff. The refetch + re-baseline work this handler does is identical
+  // for both paths.)
   //
   // MWB-4 #237 R11 (P1): this handler returns a Promise the hook AWAITS before
   // it rebases + re-sends the pending batch. We refetch the plan, and once the
