@@ -647,11 +647,15 @@ export default function ActiveWorkoutScreen() {
             // completed, it's safe to clear the recovery session.
             if (userId) await clearActiveWorkoutSession(userId);
           } catch (localErr) {
-            if (__DEV__) console.warn('[ActiveWorkout] local write failed', localErr);
             // Non-fatal: still attempt the server call below. Recovery
             // session is intentionally NOT cleared here — it will be
             // cleared on server onSuccess as a fallback durable
-            // checkpoint, or preserved on onError for retry.
+            // checkpoint, or preserved on onError for retry. Surfaced through
+            // the shared structured logger (not a raw dev-only console call)
+            // so a persistently failing local durable write is diagnosable
+            // rather than swallowed, matching the surrounding completion-path
+            // catches.
+            logger.warn('mwb.completion.local-write', { error: localErr });
           }
 
           // Analytics — unchanged from before.
