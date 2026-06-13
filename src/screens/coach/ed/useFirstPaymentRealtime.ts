@@ -36,16 +36,36 @@
  *
  * Server-authoritative FIRST-SUCCESSFUL-payment proof. The local once-only gate
  * alone cannot prove a payment is the coach's FIRST, and a bare COUNT(*) cannot
- * prove it is the first SUCCESSFUL one. The three guards here are:
+ * prove it is the first SUCCESSFUL one. The guards here are:
  *
- *   (a) SUCCESS TRANSITION — the candidate is the NEW record reaching a
- *       recognised success status. For an UPDATE we additionally require that
- *       the OLD record, when present, was NOT already a success — that is, the
- *       pending-to-paid transition, not a paid-to-paid no-op. For an INSERT we
- *       accept a row inserted already-successful (a direct success insert). The
- *       single AUTHORITATIVE success column is status (the ClientPurchase
+ *   (a) SUCCESS TRANSITION (fail-closed) — the celebration fires ONLY on an
+ *       authoritative pending/non-success -> paid/active UPDATE of the
+ *       ClientPurchase row. The NEW record must reach a recognised success
+ *       status AND the OLD record must carry an authoritative NON-success
+ *       status. This is intentionally strict:
+ *         - If the OLD status is ABSENT (the realtime payload did not include
+ *           the prior status value, e.g. primary-key-only replica identity),
+ *           we CANNOT prove a transition occurred, so we FAIL CLOSED and do not
+ *           fire. Absence of evidence is treated as uncertainty, not licence.
+ *         - If the OLD status is already a SUCCESS (paid/active), this is a
+ *           no-op or a re-activation of an already-successful row (e.g. a
+ *           refund/cancel then re-purchase on the SAME row), NOT a first
+ *           success — do not fire.
+ *         - If the OLD status is AMBIGUOUS/CONFLICTING, fail closed.
+ *       Requiring the immediately-preceding old status to be a non-success
+ *       state also closes the same-row prior-success replay: a row that was
+ *       paid -> canceled -> paid presents an old status of `canceled` on the
+ *       final transition, but the firstness query (guard b) still sees the
+ *       row's earlier successful incarnation is not separable; the strict
+ *       old-status requirement plus that query keep the replay from firing.
+ *       The single AUTHORITATIVE success column is status (the ClientPurchase
  *       column). A row that carries success only in an alternate field, or
  *       whose status fields conflict, is AMBIGUOUS, so no fire plus log (#36).
+ *       INSERT events are NOT a celebration path: the backend always creates
+ *       ClientPurchase rows as `pending` and the webhook UPDATEs them to paid,
+ *       so a first success is ALWAYS observed as a transition UPDATE. The
+ *       INSERT subscription is retained for diagnostic logging only and never
+ *       calls onFirstPayment.
  *
  *   (b) PROVABLY FIRST — we query for ANY successful purchase for this coach
  *       strictly EARLIER than the event row (by created_at, tie-break by id),
@@ -54,12 +74,21 @@
  *       celebrate. Querying for EARLIER rows is race-proof: a later payment
  *       cannot change whether earlier successful rows already exist.
  *
- * FAIL CLOSED: verification error, unknown status, or ambiguous result means no
- * celebration, logged via the shared logger, and the gate is NOT marked seen
- * (a later legitimate event may still verify). When an earlier successful
- * payment is found, we mark seen and close the gate (stop subscribing), no
- * celebration. All on the same authenticated Supabase client — no schema change
- * (R69), no backend change; this is a mobile-only PR.
+ *   (c) EXACTLY-ONCE (synchronous) — a per-coach `firedLatchRef` is set
+ *       SYNCHRONOUSLY immediately before the callback dispatch. Every payload
+ *       short-circuits if the latch is already set for this coach, so duplicate
+ *       realtime events delivered in the same tick (before the async firstness
+ *       verification of the first one resolves, and before the persisted
+ *       dismissal gate closes) can never double-call onFirstPayment. The
+ *       persisted gate remains the durable cross-session check; the ref guards
+ *       within-session duplicates.
+ *
+ * FAIL CLOSED: verification error, unknown status, ambiguous result, or an
+ * unprovable transition means no celebration, logged via the shared logger,
+ * and the gate is NOT marked seen (a later legitimate event may still verify).
+ * When an earlier successful payment is found, we mark seen and close the gate
+ * (stop subscribing), no celebration. All on the same authenticated Supabase
+ * client — no schema change (R69), no backend change; this is a mobile-only PR.
  */
 import { useEffect, useRef, useState } from 'react';
 import {
@@ -177,6 +206,35 @@ function isSuccessStatus(value: string): boolean {
 }
 
 /**
+ * Non-success statuses that a row can ONLY reach AFTER it has previously been
+ * successful (audit R5 P1, same-row prior-success replay). On the backend
+ * lifecycle (schema.prisma:3473-3474: pending, paid, active, past_due,
+ * canceled, payment_failed, expired) a brand-new purchase progresses
+ * pending -> paid/active (one-time) or pending -> active (subscription); a
+ * `payment_failed` is a pending charge that did not clear. By contrast a
+ * subscription only becomes `past_due` after it was `active`, only `canceled`
+ * after it was active/paid, and only `expired` after it was active. So an
+ * UPDATE whose OLD status is one of these, transitioning back to paid/active,
+ * is a re-activation / re-purchase on the SAME row — NOT the coach's first
+ * success — and must not celebrate. Only an OLD status of `pending` (or the
+ * never-succeeded `payment_failed`) proves a genuinely-first success path.
+ */
+const POST_SUCCESS_NONSUCCESS_STATUSES: readonly string[] = [
+  'past_due',
+  'canceled',
+  'cancelled',
+  'expired',
+];
+
+/**
+ * True when a non-success status implies the row had PREVIOUSLY been successful
+ * (so a transition from it back into success is a re-activation, not a first).
+ */
+function impliesPriorSuccess(value: string): boolean {
+  return POST_SUCCESS_NONSUCCESS_STATUSES.includes(value.trim().toLowerCase());
+}
+
+/**
  * Success disposition of a record, read from the SINGLE authoritative status
  * column only (the ClientPurchase status column). Alternate fields (state /
  * payment_status) are NOT accepted as success and, when they disagree with
@@ -288,6 +346,13 @@ export function useFirstPaymentRealtime({
   // Keep the latest callback without re-subscribing on every render.
   const cbRef = useRef(onFirstPayment);
   cbRef.current = onFirstPayment;
+  // Synchronous exactly-once latch, keyed by coachId. Set immediately BEFORE
+  // the callback dispatch so duplicate realtime events for the same first
+  // success (delivered in the same tick, before the async verification of the
+  // first resolves and before the persisted dismissal gate closes) can never
+  // double-call onFirstPayment. The persisted gate is the durable cross-session
+  // check; this ref guards within-session duplicates (audit R5 P1).
+  const firedLatchRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!enabled || !coachId) return undefined;
@@ -297,22 +362,29 @@ export function useFirstPaymentRealtime({
     let channel: RealtimeChannel | null = null;
 
     /**
-     * Evaluate a realtime payload (INSERT or UPDATE) for the coach's first
-     * successful payment, applying every fail-closed guard. Shared by both
-     * event handlers so the INSERT-as-paid and pending-to-paid UPDATE paths run
-     * identical proof logic.
+     * Evaluate a realtime UPDATE payload for the coach's first successful
+     * payment, applying every fail-closed guard. The first success is ALWAYS a
+     * pending/non-success to paid/active transition on the SAME row, so only
+     * UPDATEs reach this; INSERTs are diagnostic-only and never celebrate.
      */
     function evaluatePayload(
-      eventType: 'INSERT' | 'UPDATE',
       newRow: Record<string, unknown>,
       oldRow: Record<string, unknown> | null,
     ): void {
-      // Re-check the gate at fire time, THEN prove server-side that this is
-      // genuinely the coach's FIRST SUCCESSFUL payment before celebrating.
-      // Every guard fails closed (Law #36).
+      // Synchronous exactly-once guard (audit R5 P1, guard c): if we already
+      // dispatched the celebration for this coach in this session, short-circuit
+      // BEFORE any async work so a duplicate same-tick event cannot re-fire.
+      if (firedLatchRef.current === coachId) return;
+
+      // Re-check the persisted gate at fire time, THEN prove server-side that
+      // this is genuinely the coach's FIRST SUCCESSFUL payment before
+      // celebrating. Every guard fails closed (Law #36).
       hasSeenFirstPayment(coachId as string)
         .then(async (already) => {
           if (already || cancelled || !client) return;
+          // Re-check the synchronous latch after the await: a duplicate event
+          // may have fired the callback while this promise was pending.
+          if (firedLatchRef.current === coachId) return;
 
           // Guard (a): the NEW record must itself be a recognised success on the
           // authoritative status column. Ambiguous (alternate-only / absent /
@@ -322,26 +394,62 @@ export function useFirstPaymentRealtime({
             logger.log(
               'ed3',
               'payment event is not an authoritative success; gate left unseen',
-              { event: eventType, disposition },
+              { event: 'UPDATE', disposition },
             );
             return;
           }
 
-          // Guard (a, transition): for an UPDATE, require the OLD record (when
-          // present) to NOT already be a success, so we celebrate the
-          // pending-to-paid transition and never a paid-to-paid no-op update.
-          // INSERTs are accepted as a direct success insert (no prior state).
-          if (eventType === 'UPDATE' && oldRow) {
-            const oldDisposition = rowSuccessDisposition(oldRow);
-            if (oldDisposition === 'success') {
-              logger.log(
-                'ed3',
-                'update did not transition into success; ignoring no-op',
-                { event: eventType },
-              );
-              return;
-            }
+          // Guard (a, transition) FAIL CLOSED (audit R5 P1). To prove a genuine
+          // pending/non-success to paid transition we require the OLD record to
+          // carry an AUTHORITATIVE NON-success status. Anything else is
+          // unprovable and must not fire:
+          //   'success'  -> no-op or same-row re-activation (refund/cancel then
+          //                 re-purchase on the same row), NOT a first success.
+          //   'absent'   -> the realtime payload did not include the prior
+          //                 status (e.g. primary-key-only replica identity), so
+          //                 we cannot prove a transition occurred.
+          //   'conflict' -> ambiguous old state.
+          // Only 'nonsuccess' (pending / payment_failed / expired / canceled /
+          // past_due) proves the row was not already successful immediately
+          // before this UPDATE.
+          const oldDisposition = oldRow
+            ? rowSuccessDisposition(oldRow)
+            : 'absent';
+          if (oldDisposition !== 'nonsuccess') {
+            logger.warn(
+              'ed3',
+              'update does not prove a non-success to success transition; failing closed',
+              { event: 'UPDATE', oldDisposition },
+            );
+            return;
           }
+
+          // Guard (a, same-row prior-success replay) FAIL CLOSED (audit R5 P1).
+          // The firstness query (guard b) excludes the event row itself by id,
+          // so it cannot see THIS row's own earlier successful incarnation. If
+          // the OLD status is one that a row can only reach AFTER having been
+          // successful (past_due / canceled / expired), this paid/active UPDATE
+          // is a re-activation / re-purchase on the SAME row, not a first
+          // success. Refuse to celebrate.
+          const rawOldStatus = oldRow ? oldRow[STATUS_COLUMN] : undefined;
+          if (
+            typeof rawOldStatus === 'string' &&
+            impliesPriorSuccess(rawOldStatus)
+          ) {
+            logger.warn(
+              'ed3',
+              'old status implies the row was previously successful; same-row re-activation is not a first payment',
+              { event: 'UPDATE', oldStatus: rawOldStatus.trim().toLowerCase() },
+            );
+            return;
+          }
+          // TODO(roman-ed3): when a backend success-history / ledger endpoint
+          // lands, gate an additional authoritative "this row has never
+          // previously succeeded" proof behind
+          // featureFlags.romanFirstPaymentRequireBackendHistory before firing.
+          // Until then the OLD-status replay guard above is the proof the
+          // mobile client can make without backend support (see
+          // AI_BUTLER_ROMAN_IDENTITY_SPEC.md, ED.3).
 
           // Guard (b): prove this is the FIRST successful payment.
           const verdict = await verifyFirstSuccessfulPayment(
@@ -366,6 +474,10 @@ export function useFirstPaymentRealtime({
             // CLOSED: do not celebrate, do not mark seen. Already logged.
             return;
           }
+          // Final synchronous re-check, then set the latch BEFORE dispatch so a
+          // duplicate event that resolved concurrently cannot also fire.
+          if (firedLatchRef.current === coachId) return;
+          firedLatchRef.current = coachId as string;
           cbRef.current({
             amount: formatAmount(newRow),
             clientName: readClientName(newRow),
@@ -422,10 +534,10 @@ export function useFirstPaymentRealtime({
           .on(
             'postgres_changes',
             {
-              // The normal first-success path is the webhook's pending-to-paid
+              // The ONLY first-success path is the webhook's pending-to-paid
               // UPDATE (checkout-webhook-handler.service.ts:850-865), so the
-              // transition is observed here. evaluatePayload requires the OLD
-              // record to NOT already be a success.
+              // transition is observed here. evaluatePayload fails closed unless
+              // the OLD record carries an authoritative non-success status.
               event: 'UPDATE',
               schema: 'public',
               table: PURCHASES_TABLE,
@@ -438,15 +550,19 @@ export function useFirstPaymentRealtime({
                 rawOld && typeof rawOld === 'object'
                   ? (rawOld as Record<string, unknown>)
                   : null;
-              evaluatePayload('UPDATE', newRow, oldRow);
+              evaluatePayload(newRow, oldRow);
             },
           )
           .on(
             'postgres_changes',
             {
-              // Keep INSERT handling for any flow that inserts a row already in
-              // a success status (a direct success insert). evaluatePayload
-              // still fails closed and still runs the firstness proof.
+              // INSERT is a DIAGNOSTIC-ONLY subscription (audit R5 P1). The
+              // backend always creates ClientPurchase rows as `pending`
+              // (checkout.service.ts:353-366, 551-563) and the webhook UPDATEs
+              // them to paid, so a first success is ALWAYS a transition UPDATE,
+              // never a direct success INSERT. We retain the subscription only
+              // to log unexpected already-successful inserts for diagnosis; it
+              // NEVER calls onFirstPayment.
               event: 'INSERT',
               schema: 'public',
               table: PURCHASES_TABLE,
@@ -454,7 +570,15 @@ export function useFirstPaymentRealtime({
             },
             (payload) => {
               const newRow = (payload.new ?? {}) as Record<string, unknown>;
-              evaluatePayload('INSERT', newRow, null);
+              const disposition = rowSuccessDisposition(newRow);
+              if (disposition === 'success') {
+                // Unexpected per the backend contract — record it (no fire).
+                logger.log(
+                  'ed3',
+                  'observed already-successful ClientPurchase INSERT; not a celebration path',
+                  { disposition },
+                );
+              }
             },
           )
           .subscribe((status) => {

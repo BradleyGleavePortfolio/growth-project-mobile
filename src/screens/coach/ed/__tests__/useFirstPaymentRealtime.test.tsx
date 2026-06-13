@@ -5,16 +5,17 @@
  * postgres_changes handlers on the ClientPurchase table (the real backend model,
  * schema.prisma:3449-3532, no @@map so the physical table name is the model
  * name): an UPDATE handler for the webhook's pending-to-paid transition
- * (checkout-webhook-handler.service.ts:850-865) and an INSERT handler for a row
- * inserted already-successful. The mock captures both handlers by event type so
- * a test can drive either synchronously. We assert:
+ * (checkout-webhook-handler.service.ts:850-865) and a DIAGNOSTIC-ONLY INSERT
+ * handler that never celebrates (audit R5 P1). The mock captures both handlers
+ * by event type so a test can drive either synchronously. We assert:
  *   1. A pending-to-paid UPDATE, gate UNSEEN and no earlier successful row,
- *      fires onFirstPayment with a formatted amount + client name (the real
- *      first-success path).
+ *      fires onFirstPayment EXACTLY ONCE with a formatted amount + client name
+ *      (the real first-success path).
  *   2. A pending-to-paid UPDATE for an ESTABLISHED coach (an earlier successful
  *      row exists) does NOT celebrate, and closes the local gate.
  *   3. A paid-to-paid no-op UPDATE (OLD already successful) does NOT celebrate.
- *   4. An INSERT of an already-paid row, first and gate unseen, DOES celebrate.
+ *   4. An INSERT of an already-paid row does NOT celebrate (INSERT is a
+ *      diagnostic-only path; the first success is always a transition UPDATE).
  *   5. A success carried ONLY in an alternate column (payment_status, no status)
  *      does NOT celebrate and does NOT mark the gate seen (ambiguous).
  *   6. Conflicting status fields (status pending + payment_status paid) do NOT
@@ -24,6 +25,13 @@
  *   8. A verification query ERROR fails closed — no celebration, gate untouched.
  *   9. When the gate is already SEEN, the channel is never opened (no-op).
  *  10. The hook subscribes with the correct table + tenant filter (coach_user_id).
+ *  11. An UPDATE with the OLD status ABSENT (payload omitted prior status) fails
+ *      closed — the transition is unprovable, so no celebration.
+ *  12. A canceled-to-paid UPDATE on the SAME row does NOT celebrate (same-row
+ *      re-activation, not a first success).
+ *  13. A payment_failed-to-paid UPDATE DOES celebrate (first success ever).
+ *  14. Two pending-to-paid payloads for the same row in the same tick fire
+ *      onFirstPayment EXACTLY ONCE (synchronous fired latch).
  *
  * No mock-echo (#17): the hook is driven through a mocked supabase channel/client
  * and we assert specific behaviours (fires / does not, gate marked / not), never
@@ -175,7 +183,7 @@ beforeEach(() => {
 });
 
 describe('useFirstPaymentRealtime — ED.3', () => {
-  it('fires onFirstPayment on a pending-to-paid UPDATE when first and gate unseen', async () => {
+  it('fires onFirstPayment EXACTLY ONCE on a pending-to-paid UPDATE when first and gate unseen', async () => {
     const onEvent = jest.fn();
     // Only the event row itself comes back as a successful row at-or-before it.
     mockRows = [
@@ -210,6 +218,7 @@ describe('useFirstPaymentRealtime — ED.3', () => {
         clientName: 'Dana',
       }),
     );
+    expect(onEvent).toHaveBeenCalledTimes(1);
   });
 
   it('does NOT celebrate a pending-to-paid UPDATE for an established coach, and closes the gate', async () => {
@@ -254,7 +263,11 @@ describe('useFirstPaymentRealtime — ED.3', () => {
     expect(markFirstPaymentSeen).not.toHaveBeenCalled();
   });
 
-  it('fires on an INSERT of an already-paid row when first and gate unseen', async () => {
+  it('does NOT celebrate an INSERT of an already-paid row (INSERT is diagnostic-only)', async () => {
+    // Audit R5 P1: the first success is ALWAYS a pending-to-paid transition
+    // UPDATE on the same row. The INSERT subscription never calls
+    // onFirstPayment, so a direct already-successful INSERT must not fire and
+    // must not run the firstness query or mark the gate.
     const onEvent = jest.fn();
     mockRows = [
       { id: 'pay-2', created_at: paidRow.created_at, status: 'paid' },
@@ -267,12 +280,9 @@ describe('useFirstPaymentRealtime — ED.3', () => {
       await flush();
     });
 
-    await waitFor(() =>
-      expect(onEvent).toHaveBeenCalledWith({
-        amount: '$240.00',
-        clientName: 'Dana',
-      }),
-    );
+    expect(onEvent).not.toHaveBeenCalled();
+    expect(mockClient.from).not.toHaveBeenCalled();
+    expect(markFirstPaymentSeen).not.toHaveBeenCalled();
   });
 
   it('does NOT celebrate when success is carried ONLY in an alternate column', async () => {
@@ -339,6 +349,105 @@ describe('useFirstPaymentRealtime — ED.3', () => {
     expect(onEvent).not.toHaveBeenCalled();
     expect(mockClient.from).not.toHaveBeenCalled();
     expect(markFirstPaymentSeen).not.toHaveBeenCalled();
+  });
+
+  it('fails closed on an UPDATE whose OLD status is ABSENT (transition unprovable)', async () => {
+    // Supabase UPDATE payloads may omit prior column values (primary-key-only
+    // replica identity). Without an authoritative OLD status we cannot prove a
+    // pending-to-paid transition, so we must FAIL CLOSED and not celebrate, nor
+    // run the firstness query, nor mark the gate.
+    const onEvent = jest.fn();
+    mockRows = [
+      { id: 'pay-2', created_at: paidRow.created_at, status: 'paid' },
+    ];
+    render(<Harness enabled onEvent={onEvent} />);
+    await waitFor(() => expect(captured.subscribed).toBe(true));
+
+    await act(async () => {
+      // `old` carries the id only — no status field.
+      captured.updateHandler?.({ new: { ...paidRow }, old: { id: 'pay-2' } });
+      await flush();
+    });
+
+    expect(onEvent).not.toHaveBeenCalled();
+    expect(mockClient.from).not.toHaveBeenCalled();
+    expect(markFirstPaymentSeen).not.toHaveBeenCalled();
+  });
+
+  it('does NOT celebrate a canceled-to-paid UPDATE on the SAME row (re-activation)', async () => {
+    // A row can only reach `canceled` after it was previously successful, so a
+    // canceled-to-paid transition on the same row is a re-purchase / re-activation,
+    // NOT the coach's first payment. The firstness query excludes the event row
+    // itself, so the OLD-status replay guard is what blocks this.
+    const onEvent = jest.fn();
+    mockRows = [
+      { id: 'pay-2', created_at: paidRow.created_at, status: 'paid' },
+    ];
+    render(<Harness enabled onEvent={onEvent} />);
+    await waitFor(() => expect(captured.subscribed).toBe(true));
+
+    await act(async () => {
+      captured.updateHandler?.({
+        new: { ...paidRow },
+        old: { ...paidRow, status: 'canceled' },
+      });
+      await flush();
+    });
+
+    expect(onEvent).not.toHaveBeenCalled();
+    expect(mockClient.from).not.toHaveBeenCalled();
+    expect(markFirstPaymentSeen).not.toHaveBeenCalled();
+  });
+
+  it('fires on a payment_failed-to-paid UPDATE (first success ever)', async () => {
+    // `payment_failed` is a charge that never cleared — it does NOT imply a
+    // prior success, so a payment_failed-to-paid transition IS a genuine first
+    // success and must celebrate (exactly once).
+    const onEvent = jest.fn();
+    mockRows = [
+      { id: 'pay-2', created_at: paidRow.created_at, status: 'paid' },
+    ];
+    render(<Harness enabled onEvent={onEvent} />);
+    await waitFor(() => expect(captured.subscribed).toBe(true));
+
+    await act(async () => {
+      captured.updateHandler?.({
+        new: { ...paidRow },
+        old: { ...paidRow, status: 'payment_failed' },
+      });
+      await flush();
+    });
+
+    await waitFor(() =>
+      expect(onEvent).toHaveBeenCalledWith({
+        amount: '$240.00',
+        clientName: 'Dana',
+      }),
+    );
+    expect(onEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it('fires EXACTLY ONCE for two same-tick pending-to-paid payloads on the same row', async () => {
+    // Duplicate realtime delivery for the same first success (same tick, before
+    // the async verification of the first resolves and before the dismissal
+    // gate closes) must NOT double-call onFirstPayment — the synchronous
+    // firedLatchRef collapses the duplicate.
+    const onEvent = jest.fn();
+    mockRows = [
+      { id: 'pay-2', created_at: paidRow.created_at, status: 'paid' },
+    ];
+    render(<Harness enabled onEvent={onEvent} />);
+    await waitFor(() => expect(captured.subscribed).toBe(true));
+
+    await act(async () => {
+      // Two deliveries in the SAME synchronous tick before any await resolves.
+      captured.updateHandler?.({ new: { ...paidRow }, old: { ...pendingOld } });
+      captured.updateHandler?.({ new: { ...paidRow }, old: { ...pendingOld } });
+      await flush();
+    });
+
+    await waitFor(() => expect(onEvent).toHaveBeenCalled());
+    expect(onEvent).toHaveBeenCalledTimes(1);
   });
 
   it('fails closed on a verification query error (no celebration, gate untouched)', async () => {
