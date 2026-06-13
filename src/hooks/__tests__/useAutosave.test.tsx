@@ -805,6 +805,89 @@ describe('useAutosave — P1: aborts the obsolete request on unmount, retains th
   });
 });
 
+describe('useAutosave — P1 (R10 Fix #3): a 409-rebase re-mirror rejection must not let unmount abort the non-durable rebased send', () => {
+  it('does NOT abort the in-flight rebased retry on unmount when the 409-rebase re-mirror write failed (mirrorHeldRef is false, so the network send is the only surviving copy)', async () => {
+    // A genuine external-edit conflict so the hook rebases + re-mirrors + re-
+    // sends the still-unsaved ops (the path that re-mirrors at useAutosave.ts
+    // :716). The first send 409s; the rebased retry is HELD open so it is still
+    // in flight at unmount.
+    const conflict = {
+      error: 'autosave_conflict_retry' as const,
+      head_revision_index: 9,
+      lock_token: TOKEN_B,
+    };
+    const retryOpen = defer<ReturnType<typeof okResponse>>();
+    const retrySignals: Array<AbortSignal | undefined> = [];
+    let sendCount = 0;
+    mockAutosave.mockImplementation(async (arg: { signal?: AbortSignal }) => {
+      sendCount += 1;
+      if (sendCount === 1) {
+        // The original send 409s, triggering the rebase + re-mirror + retry.
+        throw new WorkoutAutosaveApiError('conflict', 409, 'conflict', conflict);
+      }
+      // The rebased retry: capture its abort signal and stay in flight (held).
+      retrySignals.push(arg.signal);
+      return retryOpen.promise;
+    });
+
+    // Mirror writes: the INITIAL flush write HELD (so a reverted Fix #3 would
+    // leave mirrorHeldRef stale-TRUE from this success), but EVERY later write
+    // FAILS — critically the 409-rebase re-mirror at :716. Under Fix #3 that
+    // rejection drives mirrorHeldRef to FALSE; under the reverted code its
+    // result is ignored and the ref stays true.
+    let writeCount = 0;
+    mockWrite.mockImplementation(async () => {
+      writeCount += 1;
+      if (writeCount === 1) return undefined; // initial flush mirror: holds
+      throw new Error('mirror write failed (storage unavailable)');
+    });
+
+    const { rerender, unmount } = renderHook(
+      ({ value }: { value: Copy }) =>
+        useAutosave<Copy>({
+          planId: 'p1',
+          value,
+          diff,
+          baseRevisionIndex: 0,
+          lockToken: TOKEN_A,
+        }),
+      { initialProps: { value: { n: 0 } } },
+    );
+
+    // Edit → debounce → first send (idem-1) 409s → rebase + re-mirror (fails) →
+    // rebased retry sent and held in flight.
+    rerender({ value: { n: 1 } });
+    await act(async () => {
+      jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(sendCount).toBeGreaterThanOrEqual(2));
+    const retrySignal = retrySignals[retrySignals.length - 1];
+    expect(retrySignal).toBeDefined();
+    expect(retrySignal?.aborted).toBe(false);
+    // The re-mirror at :716 was attempted and rejected.
+    expect(writeCount).toBeGreaterThanOrEqual(2);
+
+    // Revert the working copy back to its last-saved baseline (n:0) so the
+    // unmount cleanup's stable flush diffs to an EMPTY op set and no-ops — it
+    // therefore does NOT write a fresh mirror and cannot overwrite the
+    // mirrorHeldRef the failed re-mirror just set. (We never advance the
+    // debounce, so no new send is armed; the unmount clears the timer.)
+    rerender({ value: { n: 0 } });
+
+    // Unmount mid-retry. With mirrorHeldRef FALSE (Fix #3), the teardown must
+    // NOT abort the in-flight rebased send — it is the ONLY surviving copy of
+    // the rescued edit, so aborting it would silently lose the edit. This
+    // assertion FAILS if Fix #3 is reverted: the ignored re-mirror result leaves
+    // mirrorHeldRef stale-true, so the teardown aborts the non-durable send.
+    await act(async () => {
+      unmount();
+      await Promise.resolve();
+    });
+    expect(retrySignal?.aborted).toBe(false);
+  });
+});
+
 describe('useAutosave — P1: bounded backoff + NetInfo reconnect replay', () => {
   it('exposes a capped, jittered backoff schedule', () => {
     // Deterministic (no jitter) center values: 1s,2s,4s,8s,16s, capped at 16s.

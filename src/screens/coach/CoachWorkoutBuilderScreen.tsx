@@ -419,6 +419,25 @@ export default function CoachWorkoutBuilderScreen() {
     setReplayAdoptionPending(next);
   }, []);
 
+  // MWB-4 #237 R10 (P1): the replay's forced refetch HARD-FAILED (rejected or
+  // resolved with an error), so refreshed server truth never arrived. We must
+  // NOT silently clear the adoption gate into a normal enabled Save — that would
+  // reopen the stale full-replace window the gate exists to close (a Save built
+  // from pre-refetch rows would erase the rescued edit). Instead we surface a
+  // RECOVERABLE refresh state: `canSave` stays false, the status pill shows the
+  // calm "Edited elsewhere — tap to refresh" conflict affordance, and tapping it
+  // RE-RUNS the refetch. A later refetch success clears this and runs the normal
+  // adoption + rebaseline, releasing the gate. The Refresh affordance is the
+  // user-visible path out, so Save is never locked forever (fifty-failures
+  // #28/#36).
+  const [replayRefetchFailed, setReplayRefetchFailed] = useState(false);
+  const replayRefetchFailedRef = useRef(false);
+  const setReplayRefetchFailedFlag = useCallback((next: boolean) => {
+    if (replayRefetchFailedRef.current === next) return;
+    replayRefetchFailedRef.current = next;
+    setReplayRefetchFailed(next);
+  }, []);
+
   const onAutosaveSaved = useCallback(() => {
     if (!autosaveEnabled) return;
     if (!hasIdlessRowsRef.current) return;
@@ -467,11 +486,19 @@ export default function CoachWorkoutBuilderScreen() {
   // render — leaving a window where Save re-enables over stale rows. We close it
   // by ALSO raising `replayAdoptionPending` here (recording the refetchSeq this
   // refetch bumps), which `canSave` honours until the refetch has delivered and
-  // been adopted and the baseline reanchored. If the forced refetch HARD-FAILS
-  // (rejects or resolves with an error) refreshed truth can never arrive, so we
-  // DEGRADE: clear the gate and let the existing offline/conflict refresh UX
-  // recover, rather than locking Save forever (fifty-failures #28/#36).
-  const onAutosaveReplay = useCallback(() => {
+  // been adopted and the baseline reanchored.
+  //
+  // R10 P1: if the forced refetch HARD-FAILS (rejects or resolves with an
+  // error) refreshed server truth never arrives. We must NOT silently clear the
+  // gate into a normal enabled Save — that reopens the stale full-replace window
+  // the gate exists to close. Instead we KEEP the gate raised and set
+  // `replayRefetchFailed`, which surfaces a recoverable refresh affordance on
+  // the status pill ("Edited elsewhere — tap to refresh"). Tapping it re-runs
+  // this same refetch; a later success clears the failed flag and runs the
+  // normal adoption + rebaseline, which releases the gate. The Refresh
+  // affordance is the user-visible path out, so Save is never locked forever
+  // (fifty-failures #28/#36).
+  const runReplayRefetch = useCallback(() => {
     if (!autosaveEnabled) return;
     if (planId) {
       void qc.invalidateQueries({ queryKey: ['workout-plans', planId] });
@@ -481,24 +508,40 @@ export default function CoachWorkoutBuilderScreen() {
     setRefetchSeq(refetchSeqRef.current);
     // Record the seq this replay refetch targets and raise the adoption gate
     // BEFORE awaiting the refetch, so Save is held from the first render after
-    // replay detection (not only once the network resolves).
+    // replay detection (not only once the network resolves). A retry after a
+    // prior hard-failure clears the failed flag for the duration of the attempt
+    // so the pill reads as in-progress rather than still-failed.
     replayRefetchSeqRef.current = refetchSeqRef.current;
     replayAdoptionAdoptedRef.current = false;
     setReplayAdoptionPendingFlag(true);
+    setReplayRefetchFailedFlag(false);
     void refetchPlan()
       .then((result) => {
         // React Query's refetch resolves with a QueryObserverResult even on a
-        // failed fetch; treat an error result as a hard failure (degrade).
+        // failed fetch; treat an error result as a hard failure.
         if (result?.isError) {
-          setReplayAdoptionPendingFlag(false);
+          // Keep the gate raised (Save stays blocked) and surface the
+          // recoverable refresh state instead of reopening a stale Save.
+          setReplayRefetchFailedFlag(true);
         }
       })
       .catch(() => {
-        // The refetch rejected outright — refreshed truth will not arrive.
-        // Degrade rather than lock Save: clear the gate.
-        setReplayAdoptionPendingFlag(false);
+        // The refetch rejected outright — refreshed truth will not arrive on
+        // this attempt. Keep Save blocked and surface the refresh affordance.
+        setReplayRefetchFailedFlag(true);
       });
-  }, [autosaveEnabled, planId, qc, refetchPlan, setReplayAdoptionPendingFlag]);
+  }, [
+    autosaveEnabled,
+    planId,
+    qc,
+    refetchPlan,
+    setReplayAdoptionPendingFlag,
+    setReplayRefetchFailedFlag,
+  ]);
+
+  const onAutosaveReplay = useCallback(() => {
+    runReplayRefetch();
+  }, [runReplayRefetch]);
 
   const autosave = useAutosave<WorkoutBuilderWorkingCopy>({
     planId: planId ?? '',
@@ -554,8 +597,17 @@ export default function CoachWorkoutBuilderScreen() {
   // remove_exercise for the dropped row's now-known row_id, re-deleting it on
   // the server instead of letting the refetch resurrect it.
   const buildServerWorkingCopy = useCallback(
-    (exercises: WorkoutPlanExercise[]): WorkoutBuilderWorkingCopy => ({
-      meta: { name, type },
+    (
+      exercises: WorkoutPlanExercise[],
+      // MWB-4 #237 R10 (P1): the diff baseline's meta. Defaults to the LOCAL
+      // `name`/`type` (the D-045 non-replay drop path preserves the coach's
+      // local meta edits), but the replay-adoption drop path passes the
+      // refreshed SERVER meta so the inline rebaseline anchors to the same
+      // server truth we fold into local state — otherwise a follow-up edit would
+      // diff against stale baseline meta and emit a spurious plan_meta op.
+      metaOverride?: WorkoutBuilderWorkingCopy['meta'],
+    ): WorkoutBuilderWorkingCopy => ({
+      meta: metaOverride ?? { name, type },
       rows: exercises.map((e) => ({
         rowId: e.id,
         exerciseExternalId: e.exercise_external_id,
@@ -603,6 +655,27 @@ export default function CoachWorkoutBuilderScreen() {
     if (initialLoadDoneRef.current && !hasFreshRefetch) return;
 
     if (!autosave.hasPending) {
+      // MWB-4 #237 R10 (P1): on the REPLAY-adoption path, adopt the full server
+      // truth — plan metadata as well as rows. A replayed `plan_meta` rename
+      // lands on the server during the replay, but `name`/`type` were
+      // initialised once from the pre-replay `existingPlan` (:178-181) and the
+      // row-only adoption below never refreshes them, so the rebaseline anchors
+      // to stale meta and the next explicit full-replace Save reverts the
+      // rescued rename. We therefore fold the refreshed server `name`/`type`
+      // into local state here so they ride into the working copy the rebaseline
+      // re-anchors to. Scope: ONLY when this clean adoption is satisfying an
+      // active replay gate whose forced refetch seq this render covers — a
+      // normal (non-replay) refetch must NOT clobber unsaved local meta edits
+      // the coach made after it was requested. (duration stays on the
+      // explicit-Save path per the autosave-meta note at :319-324, so it is not
+      // part of the streamed truth and is left untouched here.)
+      const isReplayAdoption =
+        replayAdoptionPendingRef.current &&
+        refetchSeqRef.current >= replayRefetchSeqRef.current;
+      if (isReplayAdoption) {
+        setName(existingPlan.name ?? '');
+        setType(existingPlan.type ?? 'strength');
+      }
       // D-045 — delete-before-adoption guard. A server row is DROPPED from the
       // adopted local rows when it is the resurrection of a row the coach
       // deleted in the id-less insert/adoption window. We recognise it two
@@ -680,7 +753,21 @@ export default function CoachWorkoutBuilderScreen() {
         // emits a remove_exercise for each dropped row_id and re-deletes it on
         // the server. Do NOT set pendingRebaselineSigRef here: that path would
         // re-anchor to the (filtered) local copy and erase the pending delete.
-        autosaveRebaselineTo(buildServerWorkingCopy(serverExercises));
+        // MWB-4 #237 R10 (P1): on the replay-adoption path we just folded the
+        // refreshed server `name`/`type` into local state, so anchor the inline
+        // baseline to the SAME server meta (not the stale local closure values,
+        // which setState has not yet updated this render).
+        autosaveRebaselineTo(
+          buildServerWorkingCopy(
+            serverExercises,
+            isReplayAdoption
+              ? {
+                  name: existingPlan.name ?? '',
+                  type: existingPlan.type ?? 'strength',
+                }
+              : undefined,
+          ),
+        );
         pendingRebaselineSigRef.current = null;
         // R9 P1: this drop path reanchors the baseline INLINE (no follow-up
         // rebaseline effect, since the signature is cleared). Mark the replay's
@@ -811,9 +898,14 @@ export default function CoachWorkoutBuilderScreen() {
   // replay is no longer in flight (the hook clears `replayInFlight` at the
   // terminal 200/409/reject). Splitting the clear into this effect decouples it
   // from the ordering of adoption vs. the replay settling: whichever lands last
-  // triggers this re-run and the gate drops exactly once both hold. The
-  // hard-failure degrade path (refetch reject/error) clears the gate directly in
-  // `onAutosaveReplay`, so it never depends on an adoption that will not arrive.
+  // triggers this re-run and the gate drops exactly once both hold.
+  //
+  // R10 P1: a refetch HARD-FAILURE no longer clears the gate — it keeps the gate
+  // raised and sets `replayRefetchFailed` so the pill surfaces a recoverable
+  // refresh affordance (Save stays blocked, never reopening a stale full-replace
+  // window). A successful retry runs the adoption that sets
+  // `replayAdoptionAdoptedRef`, so the gate releases here exactly as on a
+  // first-try success.
   useEffect(() => {
     if (!replayAdoptionPending) return;
     if (!replayAdoptionAdoptedRef.current) return;
@@ -835,15 +927,20 @@ export default function CoachWorkoutBuilderScreen() {
   //   - `replayAdoptionPending` extends the hold PAST that terminal outcome:
   //     raised in `onAutosaveReplay`, it stays set until the post-replay refetch
   //     has DELIVERED, been adopted into `rows`, and the baseline has reanchored
-  //     (cleared in the effect above) — or, on a refetch hard-failure, it is
-  //     cleared to DEGRADE (the existing offline/conflict refresh UX recovers)
-  //     rather than lock Save forever. A remount re-raises it from the mirror.
+  //     (cleared in the effect above).
+  //   - `replayRefetchFailed` (R10 P1) holds the gate when the forced refetch
+  //     hard-fails: rather than clearing into a stale full-replace Save, Save
+  //     stays blocked and the pill surfaces a recoverable "tap to refresh"
+  //     affordance whose tap re-runs the refetch. A later success adopts truth
+  //     and releases the gate. A remount re-raises the pending gate from the
+  //     mirror. The Refresh affordance guarantees Save is never locked forever.
   // Together they span: replay detection -> terminal outcome -> adoption ->
   // baseline reanchor, exactly the window in which a full-replace Save is unsafe.
   const canSave =
     name.trim().length > 0 &&
     !autosave.replayInFlight &&
     !replayAdoptionPending &&
+    !replayRefetchFailed &&
     !createMut.isPending &&
     !updateMut.isPending &&
     !setExercisesMut.isPending;
@@ -914,6 +1011,23 @@ export default function CoachWorkoutBuilderScreen() {
     updateMut,
   ]);
 
+  // MWB-4 #237 R10 (P1): the status pill renders the hook's own `autosave.status`
+  // EXCEPT when the replay's forced refetch has hard-failed — then we render the
+  // recoverable 'conflict' state ("Edited elsewhere — tap to refresh") so the
+  // coach has a visible, calm path out while Save stays blocked. The hook's
+  // status does not model a refetch failure (it tracks the send lifecycle), so
+  // the screen owns this overlay. When the failed state is active the pill's tap
+  // re-runs the refetch (`runReplayRefetch`); otherwise it retries the flush as
+  // before.
+  const pillStatus = replayRefetchFailed ? 'conflict' : autosave.status;
+  const onPillPress = useCallback(() => {
+    if (replayRefetchFailedRef.current) {
+      runReplayRefetch();
+      return;
+    }
+    void autosave.flush();
+  }, [runReplayRefetch, autosave]);
+
   return (
     <KeyboardAvoidingView
       style={styles.screen}
@@ -930,12 +1044,10 @@ export default function CoachWorkoutBuilderScreen() {
           {autosaveEnabled ? (
             <AutosaveStatusPill
               testID="mwb-autosave-pill"
-              status={autosave.status}
+              status={pillStatus}
               lastSavedAt={autosave.lastSavedAt}
               mirrorDegraded={autosave.mirrorDegraded}
-              onPress={() => {
-                void autosave.flush();
-              }}
+              onPress={onPillPress}
             />
           ) : null}
         </View>

@@ -453,7 +453,15 @@ describe('CoachWorkoutBuilderScreen — kill/replay cache reconcile (P1)', () =>
     const saveButton = getByLabelText('Save changes');
     expect(saveButton.props.accessibilityState?.disabled).toBe(true);
 
-    // Settle the replay (200): the gate releases and Save becomes available.
+    // Settle the replay (200). This is the TERMINAL network outcome, which
+    // clears `replayInFlight` — but Save does not re-enable on that alone. Per
+    // the post-R9 gate lifecycle, `replayAdoptionPending` extends the hold past
+    // the terminal outcome until the post-replay forced refetch has DELIVERED,
+    // been adopted into `rows`, and the autosave baseline has reanchored. Here
+    // the default mocks resolve that refetch successfully against the settled
+    // EXISTING_PLAN cache, so adoption + rebaseline complete and the gate then
+    // drops — Save becomes available only once BOTH the terminal outcome AND the
+    // adoption gate have cleared.
     await act(async () => {
       resolveReplay({
         head_revision_index: 1,
@@ -626,19 +634,35 @@ describe('CoachWorkoutBuilderScreen — kill/replay cache reconcile (P1)', () =>
     expect(externalIds).not.toContain('squat');
   });
 
-  // R9 DEGRADE PATH (Fix #1): if the replay-driven forced refetch HARD-FAILS
-  // (rejects / resolves with an error) the refreshed server truth can never be
-  // adopted. The adoption gate must NOT lock Save forever — it must DEGRADE:
-  // clear `replayAdoptionPending` and fall back to the existing offline/conflict
-  // refresh UX. Without the degrade branch Save would stay disabled permanently.
-  it('degrades (does not lock Save) when the post-replay forced refetch hard-fails', async () => {
+  // R10 METADATA-RESCUE PATH (Fix #2): a replayed `plan_meta` rename lands on
+  // the server during the replay. Before Fix #2 the screen adopted only server
+  // ROWS on the post-replay refetch and left `name`/`type` at their pre-replay
+  // values, so the rebaseline anchored to STALE meta and the next explicit
+  // full-replace Save reverted the rescued rename. Fix #2 adopts FULL server
+  // truth — metadata as well as rows — on the replay-adoption path, so an
+  // explicit Save after the gate releases sends the RESCUED name/type. This
+  // test FAILS if Fix #2 is reverted: the PUT/updateMut payload would carry the
+  // stale pre-replay 'Push day A'/'strength' instead of the rescued values.
+  it('preserves the rescued plan_meta name and type on the explicit Save after a replay + refetch + gate release', async () => {
     setFlag(true);
-    mockReadMirror.mockResolvedValueOnce(mirroredRename());
-    // The forced reconciliation refetch hard-fails (the network read errored).
-    mockRefetch.mockResolvedValueOnce({ isError: true });
 
-    // Let the replay settle with a normal terminal 200 so `replayInFlight`
-    // clears; the only thing keeping Save disabled would be the adoption gate.
+    // Refreshed server truth the post-replay reconciliation delivers: the
+    // rescued rename landed AND the type advanced. Distinct from EXISTING_PLAN
+    // so the assertion proves the screen adopted server meta, not the mock
+    // default. (A different `type` makes the type adoption observable too.)
+    const RESCUED_META_PLAN: typeof EXISTING_PLAN = {
+      ...RESCUED_PLAN,
+      name: 'Rescued name A',
+      type: 'cardio' as typeof EXISTING_PLAN['type'],
+    };
+
+    // Cold relaunch: cache is empty during the replay (mirrors the 472 test) so
+    // the refreshed truth is folded in by a clean FULL REPLACE once settled.
+    mockCurrentPlan = undefined;
+    mockReadMirror.mockResolvedValueOnce(mirroredRename());
+
+    // Let the replay land a normal terminal 200 so `replayInFlight` clears; the
+    // adoption gate then holds Save until the forced refetch delivers + adopts.
     mockAutosaveCall.mockResolvedValueOnce({
       head_revision_index: 1,
       lock_token: 'feedfacefeedface',
@@ -646,16 +670,130 @@ describe('CoachWorkoutBuilderScreen — kill/replay cache reconcile (P1)', () =>
     });
 
     const Screen = loadScreen();
-    const { getByLabelText } = render(<Screen />);
+    const { getByLabelText, rerender } = render(<Screen />);
+
+    // Replay fired and the forced reconciliation refetch was driven.
+    await waitFor(() => expect(mockAutosaveCall).toHaveBeenCalled());
+    await waitFor(() => expect(mockRefetch).toHaveBeenCalled());
+
+    // The reconciliation refetch now delivers the refreshed server truth (the
+    // rescued rename + advanced type). Point the mocked query hook at it and
+    // rerender so the clean full-replace adoption folds it in.
+    mockCurrentPlan = RESCUED_META_PLAN;
+    await act(async () => {
+      rerender(<Screen />);
+      await Promise.resolve();
+    });
+
+    // Save re-enables only after the gate releases (terminal outcome + adoption).
+    await waitFor(() =>
+      expect(
+        getByLabelText('Save changes').props.accessibilityState?.disabled,
+      ).toBe(false),
+    );
+
+    // Fire explicit Save.
+    await act(async () => {
+      fireEvent.press(getByLabelText('Save changes'));
+      await Promise.resolve();
+    });
+
+    // The PUT/updateMut payload carries the RESCUED metadata adopted from server
+    // truth — not the stale pre-replay 'Push day A'/'strength'.
+    await waitFor(() => expect(mockUpdateMutateAsync).toHaveBeenCalled());
+    const updateArgs = mockUpdateMutateAsync.mock.calls[0]?.[0] as {
+      planId: string;
+      input: { name: string; type: string };
+    };
+    expect(updateArgs.planId).toBe('plan-1');
+    expect(updateArgs.input.name).toBe('Rescued name A');
+    expect(updateArgs.input.type).toBe('cardio');
+  });
+
+  // R10 RECOVERABLE-REFRESH PATH (Fix #1): if the replay-driven forced refetch
+  // HARD-FAILS (rejects / resolves with an error) the refreshed server truth
+  // never arrives on that attempt. The gate must NOT silently clear into a
+  // normal enabled Save — that reopens the stale full-replace window the gate
+  // exists to close (a Save built from the pre-refetch rows would erase the
+  // rescued edit). Instead Save STAYS BLOCKED and the status pill surfaces a
+  // recoverable "Edited elsewhere — tap to refresh" affordance; tapping it
+  // re-runs the refetch, which on success adopts the refreshed truth and
+  // releases the gate. This is the user-visible path out, so Save is never
+  // locked forever.
+  //
+  // This test REPLACES the R9 "degrades (re-enables Save) on hard-fail" test,
+  // which embodied the OLD behavior Fix #1 corrects. It FAILS if Fix #1 is
+  // reverted: the reverted code clears `replayAdoptionPending` on hard-fail, so
+  // Save would be ENABLED at the first assertion below.
+  it('keeps Save blocked and surfaces a recoverable refresh state when the post-replay forced refetch hard-fails, then recovers on a successful Refresh', async () => {
+    setFlag(true);
+    mockReadMirror.mockResolvedValueOnce(mirroredRename());
+    // Start on the canonical plan so `name` is non-empty: the ONLY thing that
+    // can keep Save disabled here is the adoption gate, which is what proves the
+    // fix (a reverted Fix #1 would clear the gate on hard-fail and ENABLE Save).
+    mockCurrentPlan = EXISTING_PLAN;
+    // The forced reconciliation refetch hard-fails on its FIRST attempt (the
+    // network read errored). The default `mockRefetch` resolves `{}` (success)
+    // on every later call, so the Refresh re-run below succeeds.
+    mockRefetch.mockResolvedValueOnce({ isError: true });
+
+    // Let the replay settle with a normal terminal 200 so `replayInFlight`
+    // clears; the only thing keeping Save disabled is then the adoption gate.
+    mockAutosaveCall.mockResolvedValueOnce({
+      head_revision_index: 1,
+      lock_token: 'feedfacefeedface',
+      saved_at: '2026-01-01T00:00:00.000Z',
+    });
+
+    const Screen = loadScreen();
+    const { getByLabelText, getByTestId, rerender } = render(<Screen />);
 
     // Replay fired (and so did the forced refetch that hard-failed).
     await waitFor(() => expect(mockAutosaveCall).toHaveBeenCalled());
     await waitFor(() => expect(mockRefetch).toHaveBeenCalled());
 
-    // The replay reached a terminal 200 AND the refetch hard-failed, so the gate
-    // degrades: Save becomes available again rather than staying locked. (If the
-    // degrade branch were missing, `replayAdoptionPending` would never clear and
-    // this assertion would time out.)
+    // The replay reached a terminal 200 AND the refetch hard-failed. Save MUST
+    // stay DISABLED (the gate did not silently clear into a stale full-replace).
+    await waitFor(() =>
+      expect(
+        getByLabelText('Save changes').props.accessibilityState?.disabled,
+      ).toBe(true),
+    );
+
+    // The status pill surfaces the recoverable refresh affordance — the calm,
+    // truthful "tap to refresh" conflict copy — which is the user-visible path
+    // out. (If Fix #1 were reverted the pill would not enter this state.)
+    const pill = getByTestId('mwb-autosave-pill');
+    expect(pill.props.accessibilityLabel).toBe(
+      'Edited elsewhere — tap to refresh',
+    );
+
+    const refetchCallsBefore = mockRefetch.mock.calls.length;
+
+    // The Refresh re-run succeeds and the reconciliation refetch now delivers
+    // the refreshed server truth (the rescued rename + the deadlift row). Point
+    // the mocked query hook at it and rerender so the clean full-replace
+    // adoption folds it in, advancing the local row signature, reanchoring the
+    // baseline, and releasing the gate.
+    mockCurrentPlan = RESCUED_PLAN;
+
+    // Tap the pill to RE-RUN the refetch. This attempt succeeds (default mock),
+    // so the refreshed server truth is adopted, the baseline reanchors, and the
+    // gate releases.
+    await act(async () => {
+      fireEvent.press(pill);
+      await Promise.resolve();
+      rerender(<Screen />);
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    // The Refresh re-ran the reconciliation refetch.
+    expect(mockRefetch.mock.calls.length).toBeGreaterThan(refetchCallsBefore);
+
+    // Save re-enables only after the successful Refresh adopts truth + releases
+    // the gate.
     await waitFor(() =>
       expect(
         getByLabelText('Save changes').props.accessibilityState?.disabled,

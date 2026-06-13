@@ -707,7 +707,13 @@ export function useAutosave<TWorkingCopy>(
             return;
           }
           pendingNextRef.current = rebased;
-          await writeMirrorRef.current(rebased);
+          // MWB-4 #237 R10 (P1): the rebased batch is the new durable truth, so
+          // its mirror-write result MUST drive `mirrorHeldRef` — exactly as the
+          // primary flush path does (:896-897). Ignoring it could leave the ref
+          // stale-true from an earlier success, letting the unmount teardown
+          // (:1094) abort an in-flight rebased send that the mirror does NOT
+          // hold and silently lose the edits rescued into the rebase.
+          mirrorHeldRef.current = await writeMirrorRef.current(rebased);
           safeSet(setHasPending, true);
           // Re-send on the fresh baseline immediately (a new request, gated by
           // the now-cleared currentInFlight).
