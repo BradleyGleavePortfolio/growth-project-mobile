@@ -5,7 +5,8 @@
  *   1. Reads the signed-in coach id (useCurrentUser).
  *   2. Opens the Supabase realtime subscription (useFirstPaymentRealtime),
  *      gated behind featureFlags.romanFirstPaymentWow.
- *   3. On the coach's FIRST (gate-unseen) payment INSERT, stores the event and
+ *   3. On the coach's FIRST (gate-unseen) authoritative pending/non-success →
+ *      paid/active ClientPurchase status transition, stores the event and
  *      overlays FirstPaymentWowScreen across the whole shell.
  *   4. On dismiss, writes the MMKV gate (markFirstPaymentSeen) BEFORE clearing
  *      the overlay, so a re-render / re-subscribe can never re-trigger it

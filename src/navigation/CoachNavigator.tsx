@@ -7,6 +7,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import type { NavigatorScreenParams } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { coachApi } from '../services/api';
+import { logger } from '../utils/logger';
 import ClientsListScreen from '../screens/coach/ClientsListScreen';
 import CoachHomeScreen from '../screens/coach/CoachHomeScreen';
 import MessagesScreen from '../screens/coach/MessagesScreen';
@@ -245,8 +246,10 @@ function useCoachNotificationUnreadCount(): number {
       try {
         const n = await fetchUnreadCount();
         if (mounted) setCount(n);
-      } catch {
-        // Silent — badge shows stale count on error.
+      } catch (err) {
+        // Non-fatal: the badge keeps its prior count until the next poll. Never
+        // swallow silently (Law #36) — log so the failure is observable.
+        logger.warn('coach.notifications.unread_count_refresh', { err });
       }
     };
     refresh();
@@ -492,8 +495,10 @@ function useCoachUnreadPolling(): number {
         const res = await coachApi.getUnreadCounts();
         if (!mounted) return;
         setTotal(Number(res.data?.total ?? 0));
-      } catch {
-        // Silent — retry on next tick.
+      } catch (err) {
+        // Non-fatal: the unread total holds and the next 30s tick retries.
+        // Never swallow silently (Law #36) — log so the failure is observable.
+        logger.warn('coach.notifications.unread_polling_refresh', { err });
       }
     };
     refresh();
