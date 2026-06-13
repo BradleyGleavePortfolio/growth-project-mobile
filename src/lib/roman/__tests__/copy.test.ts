@@ -5,15 +5,8 @@
  * (AI_BUTLER_ROMAN_IDENTITY_SPEC.md §2.3-§2.12), adjusted for the available
  * authoritative signals and token substitution. A second sweep runs the §1.4
  * forbidden-move battery over every produced string (no emoji; no banned hype /
- * corporate / slang words) and enforces the P3 exclamation ration: the
- * session's single exclamation is reserved for the §2.7 30-day streak line, so
- * it is the ONLY P3 string that may carry one "!" — every other string,
- * including the other celebration variants, must carry ZERO.
- *
- * The §2.7 30-day line draws its "!" from the session-wide exclamation budget
- * (src/lib/roman/sessionBudget.ts) at call time (P2-D-01), so each test that
- * exercises it resets the budget first via `beforeEach` to isolate the
- * session.
+ * corporate / slang words) and enforces the no-exclamation rule for P3 UX copy:
+ * every P3 string — including all celebration variants — must carry ZERO "!".
  */
 import {
   romanCoachBrief,
@@ -26,14 +19,6 @@ import {
   romanPayout,
   formatOrdinal,
 } from '../copy';
-import { getRomanSessionBudget } from '../sessionBudget';
-
-// The §2.7 30-day line consumes the session's single exclamation from the
-// shared budget singleton. Reset before every test so each assertion runs in a
-// fresh session and the 30-day line can claim its "!".
-beforeEach(() => {
-  getRomanSessionBudget().reset();
-});
 
 // ── §2.3 Coach Brief ────────────────────────────────────────────────────────
 describe('romanCoachBrief (§2.3)', () => {
@@ -165,9 +150,9 @@ describe('romanStreak (§2.7)', () => {
       'Seven days unbroken, Sam. A full week is no small thing. Onward.',
     );
   });
-  it('30-day celebration — carries the session\u2019s ONE permitted exclamation', () => {
+  it('30-day celebration — composed period, no exclamation in P3 UX copy', () => {
     expect(romanStreak({ tier: 30, firstName: 'Sam', mode: 'celebration' })).toBe(
-      'Thirty days, Sam. A month without a missed day. This is the kind of record I am glad to keep!',
+      'Thirty days, Sam. A month without a missed day. This is the kind of record I am glad to keep.',
     );
   });
   it('error — count failed to compute', () => {
@@ -176,24 +161,15 @@ describe('romanStreak (§2.7)', () => {
     );
   });
 
-  // P2-D-01: the 30-day line's "!" is drawn from the session-wide budget. If
-  // another Roman surface spent the session's one exclamation first, the
-  // 30-day line must render the same words with a period — never a second "!".
-  it('30-day celebration — falls back to a period once the session exclamation is spent (P2-D-01)', () => {
-    // Simulate another surface spending the session's exclamation first.
-    expect(getRomanSessionBudget().requestExclamation()).toBe(true);
-    const line = romanStreak({ tier: 30, firstName: 'Sam', mode: 'celebration' });
-    expect(line).toBe(
-      'Thirty days, Sam. A month without a missed day. This is the kind of record I am glad to keep.',
-    );
-    expect(line).not.toContain('!');
-  });
-  it('30-day celebration — only the FIRST caller in a session gets the exclamation (P2-D-01)', () => {
+  // The 30-day line is the strongest celebration in P3, yet it still carries no
+  // exclamation: the line is stable across repeated calls and never renders a
+  // "!", regardless of how many times it is requested in a session.
+  it('30-day celebration — stable and exclamation-free on repeated calls', () => {
     const first = romanStreak({ tier: 30, firstName: 'Sam', mode: 'celebration' });
     const second = romanStreak({ tier: 30, firstName: 'Sam', mode: 'celebration' });
-    expect(first).toContain('!');
+    expect(first).toBe(second);
+    expect(first).not.toContain('!');
     expect(second).not.toContain('!');
-    expect((first.match(/!/g) ?? []).length).toBe(1);
   });
 });
 
@@ -322,35 +298,34 @@ describe('romanPayout (§2.12)', () => {
 });
 
 // ── §1.4 forbidden-move sweep over every produced string ──────────────────────
-// `allowsExclamation` is TRUE for exactly ONE string: the §2.7 30-day streak
-// milestone-celebration line, which holds the session's single permitted "!".
-// EVERY other string — including the other celebration variants — must carry
-// ZERO exclamations.
-const ALL_STRINGS: Array<{ label: string; value: string; allowsExclamation: boolean }> = [
-  { label: '§2.3 default', value: romanCoachBrief({ coachName: 'M', clientCount: 6, mode: 'default' }), allowsExclamation: false },
-  { label: '§2.3 celebration', value: romanCoachBrief({ coachName: 'M', clientCount: 0, mode: 'celebration' }), allowsExclamation: false },
-  { label: '§2.3 error', value: romanCoachBrief({ coachName: 'M', clientCount: 6, mode: 'error' }), allowsExclamation: false },
-  { label: '§2.4 default', value: romanCheckInClaim({ clientName: 'D', mode: 'default' }), allowsExclamation: false },
-  { label: '§2.4 celebration', value: romanCheckInClaim({ clientName: 'D', mode: 'celebration' }), allowsExclamation: false },
-  { label: '§2.4 error', value: romanCheckInClaim({ clientName: 'D', mode: 'error' }), allowsExclamation: false },
-  { label: '§2.5 default', value: romanNewClient({ clientName: 'D', clientCount: 4, mode: 'default' }), allowsExclamation: false },
-  { label: '§2.5 celebration', value: romanNewClient({ clientName: 'D', clientCount: 10, mode: 'celebration' }), allowsExclamation: false },
-  { label: '§2.5 error', value: romanNewClient({ clientName: 'D', clientCount: 4, mode: 'error' }), allowsExclamation: false },
-  { label: '§2.7 3-day', value: romanStreak({ tier: 3, firstName: 'S', mode: 'default' }), allowsExclamation: false },
-  { label: '§2.7 7-day', value: romanStreak({ tier: 7, firstName: 'S', mode: 'celebration' }), allowsExclamation: false },
-  { label: '§2.7 30-day', value: romanStreak({ tier: 30, firstName: 'S', mode: 'celebration' }), allowsExclamation: true },
-  { label: '§2.7 error', value: romanStreak({ tier: 7, firstName: 'S', mode: 'error' }), allowsExclamation: false },
-  { label: '§2.8 default', value: romanWorkoutComplete({ mode: 'default' }), allowsExclamation: false },
-  { label: '§2.8 celebration', value: romanWorkoutComplete({ mode: 'celebration', liftName: 'squat' }), allowsExclamation: false },
-  { label: '§2.8 error', value: romanWorkoutComplete({ mode: 'error' }), allowsExclamation: false },
-  { label: '§2.9 default', value: romanVoiceLog({ weight: 315, reps: 5, mode: 'default' }), allowsExclamation: false },
-  { label: '§2.9 celebration', value: romanVoiceLog({ weight: 315, reps: 5, mode: 'celebration' }), allowsExclamation: false },
-  { label: '§2.9 error', value: romanVoiceLog({ weight: 0, reps: 0, mode: 'error' }), allowsExclamation: false },
-  { label: '§2.10 default', value: romanGenericError({ mode: 'default' }), allowsExclamation: false },
-  { label: '§2.10 error', value: romanGenericError({ mode: 'error' }), allowsExclamation: false },
-  { label: '§2.12 default', value: romanPayout({ amount: '$240.00', bankLast4: '4242', sentOn: 'June 9', mode: 'default' }), allowsExclamation: false },
-  { label: '§2.12 celebration', value: romanPayout({ amount: '$240.00', bankLast4: '4242', sentOn: 'June 9', mode: 'celebration' }), allowsExclamation: false },
-  { label: '§2.12 error', value: romanPayout({ amount: '$240.00', bankLast4: '4242', sentOn: 'June 9', mode: 'error' }), allowsExclamation: false },
+// No P3 UX copy string may carry an exclamation. EVERY string — including all
+// celebration variants (the §2.7 30-day streak line included) — must carry ZERO
+// exclamations.
+const ALL_STRINGS: Array<{ label: string; value: string }> = [
+  { label: '§2.3 default', value: romanCoachBrief({ coachName: 'M', clientCount: 6, mode: 'default' }) },
+  { label: '§2.3 celebration', value: romanCoachBrief({ coachName: 'M', clientCount: 0, mode: 'celebration' }) },
+  { label: '§2.3 error', value: romanCoachBrief({ coachName: 'M', clientCount: 6, mode: 'error' }) },
+  { label: '§2.4 default', value: romanCheckInClaim({ clientName: 'D', mode: 'default' }) },
+  { label: '§2.4 celebration', value: romanCheckInClaim({ clientName: 'D', mode: 'celebration' }) },
+  { label: '§2.4 error', value: romanCheckInClaim({ clientName: 'D', mode: 'error' }) },
+  { label: '§2.5 default', value: romanNewClient({ clientName: 'D', clientCount: 4, mode: 'default' }) },
+  { label: '§2.5 celebration', value: romanNewClient({ clientName: 'D', clientCount: 10, mode: 'celebration' }) },
+  { label: '§2.5 error', value: romanNewClient({ clientName: 'D', clientCount: 4, mode: 'error' }) },
+  { label: '§2.7 3-day', value: romanStreak({ tier: 3, firstName: 'S', mode: 'default' }) },
+  { label: '§2.7 7-day', value: romanStreak({ tier: 7, firstName: 'S', mode: 'celebration' }) },
+  { label: '§2.7 30-day', value: romanStreak({ tier: 30, firstName: 'S', mode: 'celebration' }) },
+  { label: '§2.7 error', value: romanStreak({ tier: 7, firstName: 'S', mode: 'error' }) },
+  { label: '§2.8 default', value: romanWorkoutComplete({ mode: 'default' }) },
+  { label: '§2.8 celebration', value: romanWorkoutComplete({ mode: 'celebration', liftName: 'squat' }) },
+  { label: '§2.8 error', value: romanWorkoutComplete({ mode: 'error' }) },
+  { label: '§2.9 default', value: romanVoiceLog({ weight: 315, reps: 5, mode: 'default' }) },
+  { label: '§2.9 celebration', value: romanVoiceLog({ weight: 315, reps: 5, mode: 'celebration' }) },
+  { label: '§2.9 error', value: romanVoiceLog({ weight: 0, reps: 0, mode: 'error' }) },
+  { label: '§2.10 default', value: romanGenericError({ mode: 'default' }) },
+  { label: '§2.10 error', value: romanGenericError({ mode: 'error' }) },
+  { label: '§2.12 default', value: romanPayout({ amount: '$240.00', bankLast4: '4242', sentOn: 'June 9', mode: 'default' }) },
+  { label: '§2.12 celebration', value: romanPayout({ amount: '$240.00', bankLast4: '4242', sentOn: 'June 9', mode: 'celebration' }) },
+  { label: '§2.12 error', value: romanPayout({ amount: '$240.00', bankLast4: '4242', sentOn: 'June 9', mode: 'error' }) },
 ];
 
 const EMOJI_RE = new RegExp(
@@ -379,22 +354,15 @@ describe('roman/copy — §1.4 forbidden-move sweep', () => {
     expect(EMOJI_RE.test(value)).toBe(false);
   });
 
-  it.each(ALL_STRINGS)('"$label" obeys the exclamation ration', ({ value, allowsExclamation }) => {
+  it.each(ALL_STRINGS)('"$label" carries zero exclamation marks', ({ value }) => {
     const count = (value.match(/!/g) ?? []).length;
-    if (allowsExclamation) {
-      // The §2.7 30-day line carries the session's single permitted exclamation.
-      expect(count).toBe(1);
-    } else {
-      // Every other P3 string — including other celebrations — carries zero.
-      expect(count).toBe(0);
-    }
+    // No exclamation anywhere in P3 UX copy — including every celebration.
+    expect(count).toBe(0);
   });
 
-  it('exactly one P3 string carries an exclamation, and it is the §2.7 30-day line', () => {
+  it('no P3 string carries an exclamation', () => {
     const withBang = ALL_STRINGS.filter(({ value }) => value.includes('!'));
-    expect(withBang).toHaveLength(1);
-    expect(withBang[0].label).toBe('§2.7 30-day');
-    expect(ALL_STRINGS.filter(({ allowsExclamation }) => allowsExclamation)).toHaveLength(1);
+    expect(withBang).toHaveLength(0);
   });
 
   it.each(ALL_STRINGS)('"$label" contains no banned hype / slang / corporate word', ({ value }) => {

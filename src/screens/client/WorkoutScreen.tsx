@@ -25,6 +25,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { workoutApi } from '../../services/api';
 import { routineExerciseId } from '../../utils/workout/exerciseId';
 import { logger } from '../../utils/logger';
+import { buildCompletionLogBase, normalizeError } from './_completionLogging';
 import FadeInView from '../../components/FadeInView';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { EmptyStateNoWorkouts, EmptyStateNoData } from '../../ui/empty-states';
@@ -205,12 +206,21 @@ export function romanCompletionConsumedKey(
  * Extracted and exported so the one-shot behaviour is the single source of
  * truth, exercised directly by romanP3HostWiring.test.tsx without mounting the
  * full chart/sqlite-heavy screen.
+ *
+ * `logContext` carries the acting-user diagnostics (role, assignment if any)
+ * for the completion-path warn sites. The hook composes it with the shared
+ * `buildCompletionLogBase` so the consumer latch-write / latch-read warnings
+ * log the SAME structured base (route, userRole, userKey, assignmentId,
+ * justCompletedId) as the ActiveWorkout producer, plus a per-call `checkpoint`
+ * and a normalised `error`. Without it a latch failure cannot be segmented by
+ * route/user the way the producer failures can.
  */
 export function useJustCompletedOneShot(
   justCompletedId: string | undefined,
   userKey: string | undefined,
   clearParam: () => void,
   enabled: boolean,
+  logContext?: { userRole?: string; assignmentId?: string },
 ): boolean {
   const [justCompleted, setJustCompleted] = useState(false);
   // The completion id currently being decided/celebrated for this focus
@@ -254,7 +264,17 @@ export function useJustCompletedOneShot(
               // if the write fails the card still shows this once; surfaced for
               // diagnosis rather than swallowed.
               AsyncStorage.setItem(key, new Date().toISOString()).catch((error: unknown) => {
-                logger.warn('mwb.completion.latch-write', { error });
+                logger.warn('mwb.completion.latch-write', {
+                  ...buildCompletionLogBase({
+                    route: 'Workout',
+                    userRole: logContext?.userRole,
+                    userKey,
+                    assignmentId: logContext?.assignmentId,
+                    justCompletedId,
+                  }),
+                  checkpoint: 'completion-latch-write',
+                  error: normalizeError(error),
+                });
               });
             }
             // Clear the nav param only AFTER the latch read resolved and the
@@ -268,7 +288,17 @@ export function useJustCompletedOneShot(
             // deliberately do NOT show the card — favouring "never double-fire"
             // over "never miss one". Surfaced for diagnosis. Still clear the
             // param so an unreadable latch does not leave a sticky signal.
-            logger.warn('mwb.completion.latch-read', { error });
+            logger.warn('mwb.completion.latch-read', {
+              ...buildCompletionLogBase({
+                route: 'Workout',
+                userRole: logContext?.userRole,
+                userKey,
+                assignmentId: logContext?.assignmentId,
+                justCompletedId,
+              }),
+              checkpoint: 'completion-latch-read',
+              error: normalizeError(error),
+            });
             if (consumedIdRef.current === justCompletedId) clearParam();
           });
       }
@@ -286,7 +316,7 @@ export function useJustCompletedOneShot(
           setJustCompleted(false);
         }
       };
-    }, [enabled, justCompletedId, userKey, clearParam]),
+    }, [enabled, justCompletedId, userKey, clearParam, logContext?.userRole, logContext?.assignmentId]),
   );
   return justCompleted;
 }
@@ -397,11 +427,19 @@ export default function WorkoutScreen() {
   // Scope the latch to the acting user (coach id when present, else own id) so
   // two accounts on one device never share a completion latch.
   const completionUserKey = currentUser?.coach_id || currentUser?.id;
+  // Mirror the producer's diagnostic context so the consumer latch warnings log
+  // the same structured base. The consumer has no assignment in scope, so
+  // assignmentId is omitted (it resolves to undefined in the base builder).
+  const completionLogContext = useMemo(
+    () => ({ userRole: currentUser?.role }),
+    [currentUser?.role],
+  );
   const justCompleted = useJustCompletedOneShot(
     route.params?.justCompletedId,
     completionUserKey,
     clearJustCompletedParam,
     featureFlags.romanChat,
+    completionLogContext,
   );
 
   const onRefresh = useCallback(async () => {

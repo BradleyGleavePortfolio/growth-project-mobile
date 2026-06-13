@@ -53,7 +53,7 @@ type Period = '7D' | '30D' | '90D' | 'All';
  * MILESTONE, not a permanent threshold bucket: Roman speaks ONLY on the exact
  * milestone day. Day 8 through 29 returns null (never claims "Seven days"), and
  * day 31+ returns null (never claims "Thirty days") — the 30-day celebration
- * (the session's sole exclamation) fires on day 30 only. Every non-milestone
+ * (composed, no exclamation) fires on day 30 only. Every non-milestone
  * day renders nothing rather than invent a celebratory line. Exported so the
  * behaviour is unit-tested directly (host-wiring test) without rendering the
  * full chart-heavy screen.

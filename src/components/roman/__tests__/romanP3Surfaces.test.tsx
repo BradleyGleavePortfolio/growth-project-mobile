@@ -119,12 +119,12 @@ describe('RomanStreakCard (§2.7)', () => {
     expect(getByTestId('roman-streak-avatar').props.accessibilityLabel).toBe(PLEASED);
     expect(getByText('Seven days unbroken, Sam. A full week is no small thing. Onward.')).toBeTruthy();
   });
-  it('30-day celebration — SLIGHT SMILE + the one exclamation', () => {
+  it('30-day celebration — SLIGHT SMILE face, composed period (no exclamation)', () => {
     const { getByTestId, getByText } = render(
       <RomanStreakCard tier={30} firstName="Sam" mode="celebration" />,
     );
     expect(getByTestId('roman-streak-avatar').props.accessibilityLabel).toBe(PLEASED);
-    expect(getByText('Thirty days, Sam. A month without a missed day. This is the kind of record I am glad to keep!')).toBeTruthy();
+    expect(getByText('Thirty days, Sam. A month without a missed day. This is the kind of record I am glad to keep.')).toBeTruthy();
   });
 });
 

@@ -68,6 +68,7 @@ import { ExerciseImage, MUSCLES, lookupMuscleColor, makeMuscleColors } from './a
 import { ExerciseCard } from './active-workout/ExerciseCard';
 import { featureFlags } from '../../config/featureFlags';
 import { logger } from '../../utils/logger';
+import { normalizeError } from './_completionLogging';
 // §2.9 Voice-log confirmation — Roman reads back the most recently completed
 // set in his voice, beside his face (RomanVoiceLogReadback co-locates
 // <RomanAvatar />). No dedicated voice-capture screen exists in the app yet;
@@ -82,23 +83,10 @@ import RomanVoiceLogReadback from '../../components/roman/RomanVoiceLogReadback'
 // ~500ms of state if the process is killed mid-set.
 const PERSIST_DEBOUNCE_MS = 500;
 
-// R11 D-002: normalize an unknown thrown value into the structured fields the
-// completion-path logger requires for production diagnosis. Standardizing here
-// keeps every completion-path catch consistent (name/message/stack) regardless
-// of whether an Error, a string, or an arbitrary object was thrown.
-function normalizeError(error: unknown): { name: string; message: string; stack?: string } {
-  if (error instanceof Error) {
-    return { name: error.name, message: error.message, stack: error.stack };
-  }
-  if (typeof error === 'string') {
-    return { name: 'NonError', message: error };
-  }
-  try {
-    return { name: 'NonError', message: JSON.stringify(error) };
-  } catch {
-    return { name: 'NonError', message: String(error) };
-  }
-}
+// R11 D-002: the completion-path logger requires a structured error
+// (name/message/stack). `normalizeError` now lives in ./_completionLogging so
+// the producer and the WorkoutScreen consumer share one normaliser and log an
+// identically-shaped `error` field.
 
 export default function ActiveWorkoutScreen() {
   const { colors } = useTheme();
@@ -872,8 +860,10 @@ export default function ActiveWorkoutScreen() {
                     });
                   });
                 }
-                // API failed (offline). Records are already in WDB as 'pending'.
-                // Navigate back — the sync badge will show on the history list.
+                // API failed (offline). Records are already persisted locally as
+                // 'pending' and will sync on reconnect. Stay on this screen and
+                // surface a 'Save failed' alert so the user can retry the finish;
+                // we do NOT navigate away here.
                 Alert.alert(
                   'Save failed',
                   errorMessage(err) || 'Please try again.',

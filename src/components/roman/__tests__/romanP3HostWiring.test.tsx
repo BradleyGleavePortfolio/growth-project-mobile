@@ -60,6 +60,7 @@ import RomanPayoutNotice from '../RomanPayoutNotice';
 import { streakMilestoneTier } from '../../../screens/client/ProgressScreen';
 import { selectPendingCheckInClaim, selectNewlyOnboardedClient } from '../../../screens/coach/CoachBriefScreen';
 import { useJustCompletedOneShot } from '../../../screens/client/WorkoutScreen';
+import { logger } from '../../../utils/logger';
 import { romanCheckInClaim, romanStreak, romanPayout } from '../../../lib/roman/copy';
 import type { CoachBriefClientCard, VerifiedProgressItem } from '../../../types/wave11';
 
@@ -247,11 +248,11 @@ describe('§2.7 streakMilestoneTier — milestone copy on exact days only', () =
     expect(romanStreak({ tier: 7, firstName: 'Sam', mode: 'celebration' })).toContain('Seven days unbroken');
   });
 
-  it('day 31 does NOT render the "Thirty days" line; the one exclamation stays on day 30', () => {
+  it('day 31 does NOT render the "Thirty days" line; the day-30 line carries no exclamation', () => {
     expect(streakMilestoneTier(31)).toBeNull();
     const thirty = romanStreak({ tier: 30, firstName: 'Sam', mode: 'celebration' });
     expect(thirty).toContain('Thirty days');
-    expect((thirty.match(/!/g) ?? []).length).toBe(1);
+    expect((thirty.match(/!/g) ?? []).length).toBe(0);
   });
 
   it('the exact-day tiers render the spec lines', () => {
@@ -514,6 +515,96 @@ describe('§2.8 workout-complete renders from a real just-completed event only',
   it('the §2.8 default line renders without fabricating a PR celebration', () => {
     const { getByText } = render(<RomanWorkoutCompleteCard mode="default" />);
     expect(getByText('Workout complete. Recorded. That is one more behind you.')).toBeTruthy();
+  });
+
+  // R12-F2 / R65 §34: the consumer latch warnings must carry the SAME
+  // structured completion context as the ActiveWorkout producer — route, the
+  // acting user key, and a per-call checkpoint — so a latch failure is
+  // segmentable in production rather than an opaque `{ error }`.
+  it('STRUCTURED LOG: the latch-WRITE failure warn carries route, userKey and checkpoint', async () => {
+    const warnSpy = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    // Read resolves "unseen" (null) so the card fires and the hook attempts the
+    // durable latch WRITE; force that write to reject.
+    const getItemSpy = jest.spyOn(AsyncStorage, 'getItem').mockResolvedValueOnce(null);
+    const setItemSpy = jest
+      .spyOn(AsyncStorage, 'setItem')
+      .mockRejectedValueOnce(new Error('quota exceeded'));
+    try {
+      const id = 'workout-write-fail';
+      const key = 'user-77';
+      const clearParam = jest.fn();
+      focusController.effect = null;
+      focusController.cleanup = null;
+      renderHook(() =>
+        useJustCompletedOneShot(id, key, clearParam, true, { userRole: 'client' }),
+      );
+      await act(async () => {
+        const cleanup = focusController.effect ? focusController.effect() : undefined;
+        focusController.cleanup = typeof cleanup === 'function' ? cleanup : null;
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      const writeCall = warnSpy.mock.calls.find(
+        ([ctx]) => ctx === 'mwb.completion.latch-write',
+      );
+      expect(writeCall).toBeDefined();
+      const payload = writeCall?.[1] as Record<string, unknown>;
+      expect(payload).toMatchObject({
+        route: 'Workout',
+        userKey: 'user-77',
+        userRole: 'client',
+        justCompletedId: 'workout-write-fail',
+        checkpoint: 'completion-latch-write',
+      });
+      // The error field is the shared normalised shape, never a bare value.
+      expect(payload.error).toMatchObject({ name: 'Error', message: 'quota exceeded' });
+    } finally {
+      warnSpy.mockRestore();
+      getItemSpy.mockRestore();
+      setItemSpy.mockRestore();
+    }
+  });
+
+  it('STRUCTURED LOG: the latch-READ failure warn carries route, userKey and checkpoint', async () => {
+    const warnSpy = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    // Force the durable latch READ to reject so the read-failure branch warns.
+    const getItemSpy = jest
+      .spyOn(AsyncStorage, 'getItem')
+      .mockRejectedValueOnce(new Error('read failed'));
+    try {
+      const id = 'workout-read-fail';
+      const key = 'user-88';
+      const clearParam = jest.fn();
+      focusController.effect = null;
+      focusController.cleanup = null;
+      renderHook(() =>
+        useJustCompletedOneShot(id, key, clearParam, true, { userRole: 'coach' }),
+      );
+      await act(async () => {
+        const cleanup = focusController.effect ? focusController.effect() : undefined;
+        focusController.cleanup = typeof cleanup === 'function' ? cleanup : null;
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      const readCall = warnSpy.mock.calls.find(
+        ([ctx]) => ctx === 'mwb.completion.latch-read',
+      );
+      expect(readCall).toBeDefined();
+      const payload = readCall?.[1] as Record<string, unknown>;
+      expect(payload).toMatchObject({
+        route: 'Workout',
+        userKey: 'user-88',
+        userRole: 'coach',
+        justCompletedId: 'workout-read-fail',
+        checkpoint: 'completion-latch-read',
+      });
+      expect(payload.error).toMatchObject({ name: 'Error', message: 'read failed' });
+    } finally {
+      warnSpy.mockRestore();
+      getItemSpy.mockRestore();
+    }
   });
 });
 

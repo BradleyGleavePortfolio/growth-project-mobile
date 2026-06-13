@@ -9,10 +9,10 @@
  * `celebration` mode). On an error (count failed to tally) the mascot stays
  * neutral.
  *
- * The 30-day celebration line carries the session's one permitted exclamation
- * (spec §1.4 / §2.7). P3 ships the spec variants; the dry-quip option on the
- * lower tiers is deferred to the quip-budget pass (see the deferred note
- * below).
+ * The 30-day celebration line is composed in Roman's measured register and
+ * closes on a period — no exclamation in P3 UX copy (spec §1.4 / §2.7). P3
+ * ships the spec variants; the dry-quip option on the lower tiers is deferred
+ * to the quip-budget pass (see the deferred note below).
  */
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';

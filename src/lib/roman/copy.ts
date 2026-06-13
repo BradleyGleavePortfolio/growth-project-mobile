@@ -16,22 +16,13 @@
  * Voice-contract compliance (spec §1.1-§1.6): no emoji ever, no contractions in
  * the default tone, no hype words, no slang.
  *
- * Exclamation rationing (spec §1.4 / §4: "one exclamation point per session",
- * reserved for a genuine milestone): within the P3 scope the ONLY copy line
- * that may EVER carry that single exclamation is the §2.7 30-day streak
- * milestone-celebration line. EVERY other P3 string — including the other
- * celebration variants (§2.3 record morning, §2.4 first check-in, §2.5 roster
- * milestone, §2.8 personal best, §2.9 voice PR, §2.12 record payout) — carries
- * ZERO exclamation points. Those celebration lines are written in Roman's
- * composed butler register: warm, measured, never effusive.
- *
- * The ration is enforced at RUNTIME, not just by copy authoring: the §2.7
- * 30-day line asks the session budget (`getRomanSessionBudget`,
- * src/lib/roman/sessionBudget.ts) for the session's one exclamation at render
- * time (P2-D-01). If another Roman surface anywhere in the session already
- * spent it, the 30-day line renders its own no-exclamation fallback instead of
- * a second "!". The exclamation is therefore at most one per session across
- * ALL surfaces, not merely one per copy module.
+ * No exclamation in P3 UX copy: every P3 string — including all celebration
+ * variants (§2.3 record morning, §2.4 first check-in, §2.5 roster milestone,
+ * §2.7 30-day streak, §2.8 personal best, §2.9 voice PR, §2.12 record payout) —
+ * carries ZERO exclamation points. Those celebration lines are written in
+ * Roman's composed butler register: warm, measured, never effusive. The
+ * forbidden-move sweep in copy.test.ts asserts zero exclamation marks across
+ * every produced string.
  *
  * FACE+VOICE invariant: every render-site that imports a function from this
  * module MUST also mount <RomanAvatar /> in the same component tree. The P3
@@ -41,7 +32,6 @@
  * builder adds `romanFirstPayment` in parallel. Do not add §2.6 in P3.
  */
 
-import { getRomanSessionBudget } from './sessionBudget';
 
 /** The three voice modes every surface selects from (spec §4 column c). */
 export type RomanVoiceMode = 'default' | 'celebration' | 'error';
@@ -205,8 +195,8 @@ export interface RomanStreakArgs {
   firstName: string;
   /**
    * default — the 3-day line (measured); celebration — the 7-day and 30-day
-   * lines (30-day spends the session's one exclamation); error — the streak
-   * count failed to compute.
+   * lines (composed, no exclamation); error — the streak count failed to
+   * compute.
    */
   mode: RomanVoiceMode;
 }
@@ -219,7 +209,8 @@ export interface RomanStreakArgs {
  * `celebration` (the mascot wears the knowing slight smile on 7/30 per §3.8);
  * `error` when the count could not be tallied.
  *
- * The 30-day celebration carries the session's one permitted exclamation.
+ * The 30-day celebration is the strongest milestone in P3 yet still closes on a
+ * period — no exclamation in Roman P3 UX copy.
  */
 export function romanStreak(args: RomanStreakArgs): string {
   const { tier, firstName, mode } = args;
@@ -228,15 +219,8 @@ export function romanStreak(args: RomanStreakArgs): string {
     return `Your streak is intact, ${firstName} — I am simply slow to tally it this morning. The number will be along shortly.`;
   }
   if (tier === 30) {
-    // spec §2.7 milestone-celebration, 30-day — the session's ONE exclamation
-    // (P2-D-01). Ask the session-wide budget for it at render time: the first
-    // celebratory Roman surface in the session keeps the "!", and any later
-    // caller (including this one, if another surface spent it first) renders
-    // the no-exclamation fallback so the session never shows two.
-    if (getRomanSessionBudget().requestExclamation()) {
-      return `Thirty days, ${firstName}. A month without a missed day. This is the kind of record I am glad to keep!`;
-    }
-    // Budget already spent elsewhere this session — same line, composed period.
+    // spec §2.7 milestone-celebration, 30-day. Composed butler register: warm
+    // and measured, closed with a period — no exclamation in P3 UX copy.
     return `Thirty days, ${firstName}. A month without a missed day. This is the kind of record I am glad to keep.`;
   }
   if (tier === 7) {
