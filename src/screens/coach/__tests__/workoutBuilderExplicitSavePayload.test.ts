@@ -23,6 +23,7 @@
  * backend would reject.
  */
 
+import type { UpsertExerciseRowInput } from '../../../api/workoutBuilderApi';
 import {
   buildSetExercisesPayload,
   type DraftExerciseRow,
@@ -238,13 +239,14 @@ describe('buildSetExercisesPayload — flag-ON explicit Save field parity (MWB-4
       expect(typeof rowInput.reps_or_duration_seconds).toBe('number');
       // Optional fields are either their value type or undefined - NEVER null
       // (a null would be rejected by the backend's optional-field contract).
-      for (const key of [
+      const optionalKeys = [
         'weight_lbs',
         'rest_seconds',
         'superset_group_id',
         'notes',
-      ] as const) {
-        const v = (rowInput as unknown as Record<string, unknown>)[key];
+      ] as const satisfies readonly (keyof UpsertExerciseRowInput)[];
+      for (const key of optionalKeys) {
+        const v = rowInput[key];
         expect(v === undefined || v !== null).toBe(true);
       }
       expect(
