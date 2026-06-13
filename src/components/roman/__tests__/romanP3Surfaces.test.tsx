@@ -267,16 +267,17 @@ describe('RomanVoiceLogReadback (§2.9)', () => {
 
 // ── §2.10 Generic error (both apps) ───────────────────────────────────────────
 describe('RomanErrorBanner (§2.10)', () => {
-  it('toast (default) — FACE+VOICE: mascot present (P0 invariant), transient copy', () => {
-    const { getByTestId, getByText } = render(<RomanErrorBanner mode="default" />);
-    // P0 invariant: Roman copy implies RomanAvatar in the same tree — including
-    // the default toast register. The avatar is neutral on a failure.
-    expect(getByTestId('roman-error-avatar').props.accessibilityLabel).toBe(NEUTRAL);
+  it('toast (default) — NO mascot in toasts (spec §4), transient copy present', () => {
+    const { queryByTestId, getByText } = render(<RomanErrorBanner mode="default" />);
+    // Identity spec §4 "Error toast / banner": Roman speaks, but no mascot in
+    // toasts. The avatar must be absent on the default (toast) surface; only
+    // the voice copy renders.
+    expect(queryByTestId('roman-error-avatar')).toBeNull();
     expect(getByText('That request did not complete. I will try again.')).toBeTruthy();
   });
-  it('toast (error) — FACE+VOICE: mascot present, hard-failure copy', () => {
-    const { getByTestId, getByText } = render(<RomanErrorBanner mode="error" />);
-    expect(getByTestId('roman-error-avatar').props.accessibilityLabel).toBe(NEUTRAL);
+  it('toast (error) — NO mascot in toasts (spec §4), hard-failure copy present', () => {
+    const { queryByTestId, getByText } = render(<RomanErrorBanner mode="error" />);
+    expect(queryByTestId('roman-error-avatar')).toBeNull();
     expect(
       getByText('That request did not complete, and my attempts to retry have not succeeded either. I have logged the matter. Please try again in a few minutes.'),
     ).toBeTruthy();

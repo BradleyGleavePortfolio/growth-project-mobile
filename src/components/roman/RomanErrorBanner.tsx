@@ -8,14 +8,11 @@
  * There is no celebration variant for a failure (spec §2.10 marks it N/A), and
  * the copy function's type forbids one.
  *
- * FACE+VOICE invariant (P0): Roman copy from lib/roman/copy implies a
- * RomanAvatar in the same tree on EVERY render-site — including the toast. The
- * operator rule is verbatim: "his voice always appears WITH HIS FACE." The
- * earlier reading of the spec §4 "no mascot in toasts" row produced a
- * voice-without-face toast, which the invariant forbids; the invariant wins, so
- * the avatar now renders on both surfaces. It is a compact mark in the toast
- * register (quiet-luxury, same small-avatar pattern the other Roman P3 rows
- * use) and a larger one on the full error screen.
+ * Mascot per surface (AI_BUTLER_ROMAN_IDENTITY_SPEC.md §4, "Error toast /
+ * banner" row): Roman speaks on every error surface, but the mascot does NOT
+ * appear in toasts. The identity spec is the source of truth, so the avatar is
+ * suppressed for `surface='toast'` and rendered only on the full error
+ * `screen`. Roman's voice copy is unchanged on both surfaces.
  *
  * Accessibility: the banner keeps accessibilityRole="alert" (so assistive tech
  * announces the failure immediately); it deliberately does NOT add a polite
@@ -35,9 +32,8 @@ export interface RomanErrorBannerProps {
   mode?: 'default' | 'error';
   /**
    * Where this error renders. `toast` (default) is the compact inline banner;
-   * `screen` is a full error screen. Per the FACE+VOICE invariant (P0) BOTH
-   * surfaces render the avatar — the toast uses a compact mark, the screen a
-   * larger one.
+   * `screen` is a full error screen. Per the identity spec §4, the mascot is
+   * suppressed in toasts and shown only on the full error screen.
    */
   surface?: 'toast' | 'screen';
   testID?: string;
@@ -60,13 +56,16 @@ export default function RomanErrorBanner({
       testID={testID}
       accessibilityRole="alert"
     >
-      {/* FACE+VOICE (P0): the avatar co-mounts with the §2.10 copy on BOTH
-          surfaces. Compact in the toast register, larger on the full screen. */}
-      <RomanAvatar
-        crop="neutral"
-        size={isScreen ? 56 : 28}
-        testID="roman-error-avatar"
-      />
+      {/* Identity spec §4 ("Error toast / banner"): no mascot in toasts. The
+          avatar appears only on the full error screen; the toast carries
+          Roman's voice copy without his face. */}
+      {isScreen ? (
+        <RomanAvatar
+          crop="neutral"
+          size={56}
+          testID="roman-error-avatar"
+        />
+      ) : null}
       <Text
         style={isScreen ? styles.screenCopy : styles.toastCopy}
         accessibilityRole="text"
