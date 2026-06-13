@@ -366,7 +366,7 @@ describe('DeliverablesScreen — RTL mount', () => {
   it('renders a loading skeleton on first mount', async () => {
     // Never-resolving promise so the component stays in the loading branch.
     mockGetPurchaseDrops.mockReturnValue(new Promise(() => {}));
-    const { getByTestId } = render(<DeliverablesScreen />);
+    const { getByTestId } = await render(<DeliverablesScreen />);
     expect(getByTestId('deliverables-skeleton')).toBeTruthy();
   });
 
@@ -415,7 +415,7 @@ describe('DeliverablesScreen — RTL mount', () => {
         },
       ],
     });
-    const { getByTestId, queryByText, getByText } = render(<DeliverablesScreen />);
+    const { getByTestId, queryByText, getByText } = await render(<DeliverablesScreen />);
     await waitFor(() => expect(getByTestId('deliverables-list')).toBeTruthy());
     expect(getByText('Delivered')).toBeTruthy();
     expect(getByText('Upcoming')).toBeTruthy();
@@ -425,7 +425,7 @@ describe('DeliverablesScreen — RTL mount', () => {
 
   it('renders the empty state when there are no buyer-visible drops', async () => {
     mockGetPurchaseDrops.mockResolvedValue({ ok: true, data: [] });
-    const { getByTestId, getByText } = render(<DeliverablesScreen />);
+    const { getByTestId, getByText } = await render(<DeliverablesScreen />);
     await waitFor(() => expect(getByTestId('deliverables-empty')).toBeTruthy());
     expect(getByText('No deliverables yet')).toBeTruthy();
   });
@@ -441,7 +441,7 @@ describe('DeliverablesScreen — RTL mount', () => {
       reason: 'error',
       message: 'Request failed with status code 502',
     });
-    const { getByTestId, getByText, queryByText } = render(<DeliverablesScreen />);
+    const { getByTestId, getByText, queryByText } = await render(<DeliverablesScreen />);
     await waitFor(() => expect(getByTestId('deliverables-error')).toBeTruthy());
     // The raw axios message must NOT appear anywhere on screen.
     expect(queryByText('Request failed with status code 502')).toBeNull();
@@ -452,7 +452,7 @@ describe('DeliverablesScreen — RTL mount', () => {
 
   it('renders the empty (not error) state when the endpoint is not configured (501)', async () => {
     mockGetPurchaseDrops.mockResolvedValue({ ok: false, reason: 'not_configured' });
-    const { getByTestId, queryByTestId } = render(<DeliverablesScreen />);
+    const { getByTestId, queryByTestId } = await render(<DeliverablesScreen />);
     await waitFor(() => expect(getByTestId('deliverables-empty')).toBeTruthy());
     // PR-15B audit P2-1: 501 is the ONLY path to the calm empty state
     // for this envelope — the companion 404 test below asserts the
@@ -471,7 +471,7 @@ describe('DeliverablesScreen — RTL mount', () => {
       reason: 'error',
       message: 'Request failed with status code 404',
     });
-    const { getByTestId, queryByTestId } = render(<DeliverablesScreen />);
+    const { getByTestId, queryByTestId } = await render(<DeliverablesScreen />);
     await waitFor(() => expect(getByTestId('deliverables-error')).toBeTruthy());
     expect(getByTestId('deliverables-retry')).toBeTruthy();
     expect(queryByTestId('deliverables-empty')).toBeNull();
@@ -496,9 +496,9 @@ describe('DeliverablesScreen — RTL mount', () => {
         },
       ],
     });
-    const { getByTestId } = render(<DeliverablesScreen />);
+    const { getByTestId } = await render(<DeliverablesScreen />);
     await waitFor(() => expect(getByTestId('drop-row-d1')).toBeTruthy());
-    fireEvent.press(getByTestId('drop-row-d1'));
+    await fireEvent.press(getByTestId('drop-row-d1'));
     expect(mockNavigate).toHaveBeenCalledWith('WorkoutAssignmentDetail', {
       assignmentId: 'assignment_1',
     });
@@ -528,9 +528,9 @@ describe('DeliverablesScreen — RTL mount', () => {
         },
       ],
     });
-    const { getByTestId } = render(<DeliverablesScreen />);
+    const { getByTestId } = await render(<DeliverablesScreen />);
     await waitFor(() => expect(getByTestId('drop-row-d2')).toBeTruthy());
-    fireEvent.press(getByTestId('drop-row-d2'));
+    await fireEvent.press(getByTestId('drop-row-d2'));
     expect(mockNavigate).toHaveBeenCalledWith('ClientDailyMealPlan', {
       date: '2026-05-01',
     });
@@ -561,9 +561,9 @@ describe('DeliverablesScreen — RTL mount', () => {
         },
       ],
     });
-    const { getByTestId } = render(<DeliverablesScreen />);
+    const { getByTestId } = await render(<DeliverablesScreen />);
     await waitFor(() => expect(getByTestId('drop-row-d3')).toBeTruthy());
-    fireEvent.press(getByTestId('drop-row-d3'));
+    await fireEvent.press(getByTestId('drop-row-d3'));
     expect(mockParentNavigate).toHaveBeenCalledWith('Home', { screen: 'Messages' });
   });
 
@@ -590,7 +590,7 @@ describe('DeliverablesScreen — RTL mount', () => {
         },
       ],
     });
-    const { getByTestId, getByText } = render(<DeliverablesScreen />);
+    const { getByTestId, getByText } = await render(<DeliverablesScreen />);
     await waitFor(() => expect(getByTestId('drop-row-d4')).toBeTruthy());
     expect(getByText('Orphan workout')).toBeTruthy();
     // The row should have no `onPress` prop because the React tree
@@ -618,7 +618,7 @@ describe('DeliverablesScreen — RTL mount', () => {
 
   it('pull-to-refresh refetches getPurchaseDrops', async () => {
     mockGetPurchaseDrops.mockResolvedValue({ ok: true, data: [] });
-    const { getByTestId } = render(<DeliverablesScreen />);
+    const { getByTestId } = await render(<DeliverablesScreen />);
     await waitFor(() => expect(getByTestId('deliverables-empty')).toBeTruthy());
     expect(mockGetPurchaseDrops).toHaveBeenCalledTimes(1);
     const sv = getByTestId('deliverables-empty');

@@ -124,13 +124,13 @@ function responseMissing(
   return out;
 }
 
-function renderWithRealQuery(ui: React.ReactElement) {
+async function renderWithRealQuery(ui: React.ReactElement) {
   // retry:false so a thrown contract error settles to `isError` immediately,
   // exactly like the real screen would after the policy fetch fails.
   const qc = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0, staleTime: 0 } },
   });
-  const utils = render(
+  const utils = await render(
     <QueryClientProvider client={qc}>{ui}</QueryClientProvider>,
   );
   return { qc, ...utils };
@@ -153,7 +153,7 @@ describe('coach screen empty-state CONTRACT path (real hook, mocked API only)', 
       responseMissing('coach_community_cohorts_empty'),
     );
 
-    const { getByTestId, queryByTestId, queryByText } = renderWithRealQuery(
+    const { getByTestId, queryByTestId, queryByText } = await renderWithRealQuery(
       <CoachCommunityCohortsScreen />,
     );
 
@@ -187,7 +187,7 @@ describe('coach screen empty-state CONTRACT path (real hook, mocked API only)', 
       responseMissing('coach_community_cohorts_empty'),
     );
 
-    const { getByTestId } = renderWithRealQuery(<CoachCommunityCohortsScreen />);
+    const { getByTestId } = await renderWithRealQuery(<CoachCommunityCohortsScreen />);
 
     await waitFor(() =>
       expect(
@@ -196,7 +196,7 @@ describe('coach screen empty-state CONTRACT path (real hook, mocked API only)', 
     );
     const callsBefore = mockGetEmptyStates.mock.calls.length;
 
-    fireEvent.press(
+    await fireEvent.press(
       getByTestId('coach-community-cohorts-empty-payload-error-retry'),
     );
 
@@ -211,7 +211,7 @@ describe('coach screen empty-state CONTRACT path (real hook, mocked API only)', 
       responseMissing('coach_community_inbox_empty'),
     );
 
-    const { getByTestId, queryByTestId, queryByText } = renderWithRealQuery(
+    const { getByTestId, queryByTestId, queryByText } = await renderWithRealQuery(
       <CoachCommunityInboxScreen />,
     );
 
@@ -241,7 +241,7 @@ describe('coach screen empty-state CONTRACT path (real hook, mocked API only)', 
     mockGetCohorts.mockResolvedValue([]);
     mockGetEmptyStates.mockReturnValue(new Promise<never>(() => {}));
 
-    const { getByTestId, queryByTestId, queryByText } = renderWithRealQuery(
+    const { getByTestId, queryByTestId, queryByText } = await renderWithRealQuery(
       <CoachCommunityCohortsScreen />,
     );
 

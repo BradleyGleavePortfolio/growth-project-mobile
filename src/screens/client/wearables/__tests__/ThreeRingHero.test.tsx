@@ -17,8 +17,8 @@ const RINGS: readonly [RingDatum, RingDatum, RingDatum] = [
 ];
 
 describe('ThreeRingHero', () => {
-  it('renders the headline value and ring labels when populated', () => {
-    const { getByText } = render(
+  it('renders the headline value and ring labels when populated', async () => {
+    const { getByText } = await render(
       <ThreeRingHero
         rings={RINGS}
         centerValue="430 kcal"
@@ -35,8 +35,8 @@ describe('ThreeRingHero', () => {
     expect(getByText('Stand')).toBeTruthy();
   });
 
-  it('shows a value-first connect prompt when empty — never a placeholder gate', () => {
-    const { getByText, queryByText } = render(
+  it('shows a value-first connect prompt when empty — never a placeholder gate', async () => {
+    const { getByText, queryByText } = await render(
       <ThreeRingHero
         rings={[
           { progress: 0, color: '#B08D57', label: 'Move' },

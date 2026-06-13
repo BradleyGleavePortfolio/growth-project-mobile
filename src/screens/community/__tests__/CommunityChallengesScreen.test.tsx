@@ -129,11 +129,11 @@ function ChallengesWithClient(props: ScreenProps): React.ReactElement {
   return <CommunityChallengesScreen {...props} />;
 }
 
-function renderScreen(props: ScreenProps = {}) {
+async function renderScreen(props: ScreenProps = {}) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  const utils = render(
+  const utils = await render(
     <QueryClientProvider client={client}>
       <ChallengesWithClient {...props} />
     </QueryClientProvider>,
@@ -157,7 +157,7 @@ beforeEach(() => {
 
 describe('CommunityChallengesScreen — reachable discovery surface', () => {
   it('resolves the workspace id from useCommunityMe when no prop is supplied and fires a bounded list fetch', async () => {
-    renderScreen(); // NO workspaceId prop — must self-resolve
+    await renderScreen(); // NO workspaceId prop — must self-resolve
 
     await waitFor(() =>
       expect(api.listChallenges).toHaveBeenCalledWith('ws-resolved', {
@@ -170,7 +170,7 @@ describe('CommunityChallengesScreen — reachable discovery surface', () => {
 
   it('does NOT fetch when no workspace id can be resolved (no prop, me settled with no workspace)', async () => {
     mockMeHolder.data = undefined;
-    renderScreen();
+    await renderScreen();
 
     // The query is disabled without a workspace id — the route shows its empty
     // state rather than firing an unscoped fetch.
@@ -182,14 +182,14 @@ describe('CommunityChallengesScreen — reachable discovery surface', () => {
 
   it('wraps each challenge row in a `role="listitem"` container for assistive tech', async () => {
     api.listChallenges.mockResolvedValue(page([challenge()]));
-    renderScreen();
+    await renderScreen();
 
     const row = await screen.findByTestId('community-challenge-listitem-ch-1');
     expect(row.props.role).toBe('listitem');
   });
 
   it('prefers an explicit workspaceId prop (embedded caller) and still bounds the fetch', async () => {
-    renderScreen({ workspaceId: 'ws-embedded' });
+    await renderScreen({ workspaceId: 'ws-embedded' });
 
     await waitFor(() =>
       expect(api.listChallenges).toHaveBeenCalledWith('ws-embedded', {
@@ -206,7 +206,7 @@ describe('CommunityChallengesScreen — workspace prerequisite resolves before e
   it('shows the prerequisite loading state (never "no challenges") while me is loading', async () => {
     mockMeHolder.data = undefined;
     mockMeHolder.isLoading = true;
-    renderScreen(); // self-resolving; me still loading
+    await renderScreen(); // self-resolving; me still loading
 
     await waitFor(() =>
       expect(
@@ -221,7 +221,7 @@ describe('CommunityChallengesScreen — workspace prerequisite resolves before e
   it('shows a retryable error (never "no challenges") when me errors', async () => {
     mockMeHolder.data = undefined;
     mockMeHolder.isError = true;
-    renderScreen();
+    await renderScreen();
 
     await waitFor(() =>
       expect(
@@ -238,7 +238,7 @@ describe('CommunityChallengesScreen — workspace prerequisite resolves before e
     // screen must render the SAME calm retryable error the route renders — never
     // an indefinite loading state (50-failures #36, swallowed error).
     const onRetryPrerequisite = jest.fn();
-    const { rerender } = renderScreen({
+    const { rerender } = await renderScreen({
       workspaceId: null,
       prerequisiteLoading: false,
       prerequisiteError: true,
@@ -254,7 +254,7 @@ describe('CommunityChallengesScreen — workspace prerequisite resolves before e
     expect(api.listChallenges).not.toHaveBeenCalled();
 
     // Retry actually refetches /community/me (the parent's me.refetch).
-    fireEvent.press(screen.getByTestId('community-challenges-prereq-retry'));
+    await fireEvent.press(screen.getByTestId('community-challenges-prereq-retry'));
     expect(onRetryPrerequisite).toHaveBeenCalledTimes(1);
 
     // After a successful refetch the parent rethreads a resolved id + cleared
@@ -272,7 +272,7 @@ describe('CommunityChallengesScreen — workspace prerequisite resolves before e
   });
 
   it('treats an explicit null workspaceId prop as a still-pending prerequisite, not an empty workspace', async () => {
-    renderScreen({ workspaceId: null });
+    await renderScreen({ workspaceId: null });
 
     await waitFor(() =>
       expect(
@@ -285,7 +285,7 @@ describe('CommunityChallengesScreen — workspace prerequisite resolves before e
 
   it('reaches the true-empty state only once the prerequisite AND the list succeed', async () => {
     api.listChallenges.mockResolvedValue(page([]));
-    renderScreen();
+    await renderScreen();
 
     await waitFor(() =>
       expect(screen.getByTestId('community-challenges-empty')).toBeTruthy(),
@@ -303,7 +303,7 @@ describe('CommunityChallengesScreen — real cursor page transitions (P2-C4)', (
     api.listChallenges
       .mockResolvedValueOnce(page([challenge({ id: 'ch-1' })], CURSOR_UUID))
       .mockResolvedValueOnce(page([challenge({ id: 'ch-2' })], null));
-    renderScreen();
+    await renderScreen();
 
     // First page lands (bounded, no cursor).
     await waitFor(() =>
@@ -350,7 +350,7 @@ describe('CommunityChallengesScreen — real cursor page transitions (P2-C4)', (
       .mockResolvedValueOnce(
         page([challenge({ id: 'ch-1' }), challenge({ id: 'ch-2' })], null),
       );
-    renderScreen();
+    await renderScreen();
 
     await screen.findByTestId('community-challenge-card-ch-1');
     const list = screen.getByTestId('community-challenges-list');
@@ -374,7 +374,7 @@ describe('CommunityChallengesScreen — list named + live-announced', () => {
     api.listChallenges.mockResolvedValue(
       page([challenge({ id: 'ch-1' }), challenge({ id: 'ch-2' })]),
     );
-    renderScreen();
+    await renderScreen();
 
     const list = await screen.findByTestId('community-challenges-list');
     await waitFor(() =>
@@ -385,7 +385,7 @@ describe('CommunityChallengesScreen — list named + live-announced', () => {
 
   it('names an empty list "Challenges, empty"', async () => {
     api.listChallenges.mockResolvedValue(page([]));
-    renderScreen();
+    await renderScreen();
 
     await waitFor(() =>
       expect(screen.getByTestId('community-challenges-empty')).toBeTruthy(),
@@ -403,7 +403,7 @@ describe('CommunityChallengesScreen — list named + live-announced', () => {
         challenge({ id: 'ch-3' }),
       ]),
     );
-    renderScreen();
+    await renderScreen();
 
     await waitFor(() =>
       expect(announce).toHaveBeenCalledWith('Challenges loaded, 3 items'),

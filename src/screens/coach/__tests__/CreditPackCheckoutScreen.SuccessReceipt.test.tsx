@@ -270,7 +270,7 @@ describe('CreditPackCheckoutScreen — SuccessReceipt (R3 doctrine fix)', () => 
       },
     });
 
-    render(<CreditPackCheckoutScreen />);
+    await render(<CreditPackCheckoutScreen />);
     await driveToSuccessPhase();
 
     expect(screen.getByText('Credits added')).toBeTruthy();
@@ -311,7 +311,7 @@ describe('CreditPackCheckoutScreen — SuccessReceipt (R3 doctrine fix)', () => 
       },
     });
 
-    render(<CreditPackCheckoutScreen />);
+    await render(<CreditPackCheckoutScreen />);
     await driveToSuccessPhase();
 
     // Sanity: success wrapper present (drove into the right phase).
@@ -396,7 +396,7 @@ describe('CreditPackCheckoutScreen — SuccessReceipt (R3 doctrine fix)', () => 
       });
 
     try {
-      render(<CreditPackCheckoutScreen />);
+      await render(<CreditPackCheckoutScreen />);
       await driveToSuccessPhase();
 
       expect(screen.getByTestId('credit-pack-success')).toBeTruthy();
@@ -408,7 +408,7 @@ describe('CreditPackCheckoutScreen — SuccessReceipt (R3 doctrine fix)', () => 
 
       // Invoke the trapped callback directly — same semantics as the
       // real timer firing, no wall-clock wait.
-      act(() => {
+      await act(() => {
         dismiss!.cb();
       });
       expect(mockGoBack).toHaveBeenCalledTimes(1);
@@ -441,7 +441,7 @@ describe('CreditPackCheckoutScreen — SuccessReceipt (R3 doctrine fix)', () => 
       });
 
     try {
-      render(<CreditPackCheckoutScreen />);
+      await render(<CreditPackCheckoutScreen />);
       await driveToSuccessPhase();
 
       expect(screen.getByText('New balance')).toBeTruthy();

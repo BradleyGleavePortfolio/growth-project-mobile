@@ -34,21 +34,21 @@ const budget95: CoachAIBudgetResponse = {
 };
 
 describe('AIBudgetBanner', () => {
-  it('renders the spec copy and CTA', () => {
+  it('renders the spec copy and CTA', async () => {
     const onBuyCredits = jest.fn();
-    const { getByText, getByTestId } = render(
+    const { getByText, getByTestId } = await render(
       <AIBudgetBanner budget={budget95} onBuyCredits={onBuyCredits} />,
     );
     expect(getByText(/Last 5% of AI allowance remaining/i)).toBeTruthy();
     expect(getByTestId('ai-budget-banner-cta')).toBeTruthy();
   });
 
-  it('fires onBuyCredits exactly once per CTA press', () => {
+  it('fires onBuyCredits exactly once per CTA press', async () => {
     const onBuyCredits = jest.fn();
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <AIBudgetBanner budget={budget95} onBuyCredits={onBuyCredits} />,
     );
-    fireEvent.press(getByTestId('ai-budget-banner-cta'));
+    await fireEvent.press(getByTestId('ai-budget-banner-cta'));
     expect(onBuyCredits).toHaveBeenCalledTimes(1);
   });
 });

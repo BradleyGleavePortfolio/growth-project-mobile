@@ -113,8 +113,8 @@ beforeEach(async () => {
 // ─── Welcome ─────────────────────────────────────────────────────────────────
 
 describe('WelcomeScreen', () => {
-  it('greets the user by first name once the profile cache resolves', () => {
-    const { getByText } = render(
+  it('greets the user by first name once the profile cache resolves', async () => {
+    const { getByText } = await render(
       <WelcomeScreen navigation={makeNav() as never} />,
     );
     expect(getByText('Welcome, Jane')).toBeTruthy();
@@ -122,11 +122,11 @@ describe('WelcomeScreen', () => {
 
   it('navigates to CoachPairing on CTA press and writes the resume checkpoint', async () => {
     const nav = makeNav();
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <WelcomeScreen navigation={nav as never} />,
     );
     await act(async () => {
-      fireEvent.press(getByTestId('day-one-welcome-cta'));
+      await fireEvent.press(getByTestId('day-one-welcome-cta'));
     });
     expect(nav.navigate).toHaveBeenCalledWith('CoachPairing');
     await waitFor(async () => {
@@ -135,8 +135,8 @@ describe('WelcomeScreen', () => {
     });
   });
 
-  it('renders 1/6 step text', () => {
-    const { getByTestId } = render(
+  it('renders 1/6 step text', async () => {
+    const { getByTestId } = await render(
       <WelcomeScreen navigation={makeNav() as never} />,
     );
     expect(getByTestId('day-one-step-text').props.children).toBe('1/6');
@@ -146,9 +146,9 @@ describe('WelcomeScreen', () => {
 // ─── Coach pairing ───────────────────────────────────────────────────────────
 
 describe('CoachPairingScreen', () => {
-  function renderPairing(prefillCode?: string) {
+  async function renderPairing(prefillCode?: string) {
     const nav = makeNav();
-    const utils = render(
+    const utils = await render(
       <CoachPairingScreen
         navigation={nav as never}
         route={{ key: 'k', name: 'CoachPairing', params: prefillCode ? { prefillCode } : undefined } as never}
@@ -157,13 +157,13 @@ describe('CoachPairingScreen', () => {
     return { nav, ...utils };
   }
 
-  it('renders 2/6 step text', () => {
-    const { getByTestId } = renderPairing();
+  it('renders 2/6 step text', async () => {
+    const { getByTestId } = await renderPairing();
     expect(getByTestId('day-one-step-text').props.children).toBe('2/6');
   });
 
-  it('prefills the input from route.params.prefillCode and hides the skip button', () => {
-    const { getByTestId, queryByTestId } = renderPairing('TGP-ABCD');
+  it('prefills the input from route.params.prefillCode and hides the skip button', async () => {
+    const { getByTestId, queryByTestId } = await renderPairing('TGP-ABCD');
     const input = getByTestId('day-one-invite-input');
     expect(input.props.value).toBe('TGP-ABCD');
     expect(queryByTestId('day-one-invite-skip')).toBeNull();
@@ -171,10 +171,10 @@ describe('CoachPairingScreen', () => {
 
   it('submits to pairWithCoach and navigates to Goals on success', async () => {
     mockedPair.mockResolvedValue({ ok: true });
-    const { nav, getByTestId } = renderPairing();
-    fireEvent.changeText(getByTestId('day-one-invite-input'), 'XYZ9');
+    const { nav, getByTestId } = await renderPairing();
+    await fireEvent.changeText(getByTestId('day-one-invite-input'), 'XYZ9');
     await act(async () => {
-      fireEvent.press(getByTestId('day-one-invite-submit'));
+      await fireEvent.press(getByTestId('day-one-invite-submit'));
     });
     expect(mockedPair).toHaveBeenCalledWith('XYZ9');
     await waitFor(() => expect(nav.navigate).toHaveBeenCalledWith('Goals'));
@@ -182,18 +182,18 @@ describe('CoachPairingScreen', () => {
 
   it('shows structured copy when the backend returns an invite_expired error', async () => {
     mockedPair.mockResolvedValue({ ok: false, error: { kind: 'invite_expired' } });
-    const { getByTestId, findByText } = renderPairing();
-    fireEvent.changeText(getByTestId('day-one-invite-input'), 'BAD9');
+    const { getByTestId, findByText } = await renderPairing();
+    await fireEvent.changeText(getByTestId('day-one-invite-input'), 'BAD9');
     await act(async () => {
-      fireEvent.press(getByTestId('day-one-invite-submit'));
+      await fireEvent.press(getByTestId('day-one-invite-submit'));
     });
     expect(await findByText(/expired/)).toBeTruthy();
   });
 
   it('skip path advances without calling the backend', async () => {
-    const { nav, getByTestId } = renderPairing();
+    const { nav, getByTestId } = await renderPairing();
     await act(async () => {
-      fireEvent.press(getByTestId('day-one-invite-skip'));
+      await fireEvent.press(getByTestId('day-one-invite-skip'));
     });
     expect(mockedPair).not.toHaveBeenCalled();
     expect(nav.navigate).toHaveBeenCalledWith('Goals');
@@ -203,8 +203,8 @@ describe('CoachPairingScreen', () => {
 // ─── Goals ───────────────────────────────────────────────────────────────────
 
 describe('GoalsScreen', () => {
-  it('renders 3/6 step text', () => {
-    const { getByTestId } = render(
+  it('renders 3/6 step text', async () => {
+    const { getByTestId } = await render(
       <GoalsScreen navigation={makeNav() as never} />,
     );
     expect(getByTestId('day-one-step-text').props.children).toBe('3/6');
@@ -213,12 +213,12 @@ describe('GoalsScreen', () => {
   it('selecting a goal then continuing saves and advances', async () => {
     mockedSaveGoals.mockResolvedValue(undefined);
     const nav = makeNav();
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <GoalsScreen navigation={nav as never} />,
     );
-    fireEvent.press(getByTestId('day-one-goal-fitness'));
+    await fireEvent.press(getByTestId('day-one-goal-fitness'));
     await act(async () => {
-      fireEvent.press(getByTestId('day-one-goals-continue'));
+      await fireEvent.press(getByTestId('day-one-goals-continue'));
     });
     expect(mockedSaveGoals).toHaveBeenCalledWith(['fitness']);
     await waitFor(() => expect(nav.navigate).toHaveBeenCalledWith('Notifications'));
@@ -226,12 +226,12 @@ describe('GoalsScreen', () => {
 
   it('shows the retry banner + offline CTA when save fails', async () => {
     mockedSaveGoals.mockRejectedValue(new Error('network'));
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <GoalsScreen navigation={makeNav() as never} />,
     );
-    fireEvent.press(getByTestId('day-one-goal-fitness'));
+    await fireEvent.press(getByTestId('day-one-goal-fitness'));
     await act(async () => {
-      fireEvent.press(getByTestId('day-one-goals-continue'));
+      await fireEvent.press(getByTestId('day-one-goals-continue'));
     });
     await waitFor(() => {
       expect(getByTestId('day-one-goals-error')).toBeTruthy();
@@ -243,15 +243,15 @@ describe('GoalsScreen', () => {
   it('Continue offline persists selection + enqueues sync + advances', async () => {
     mockedSaveGoals.mockRejectedValue(new Error('network'));
     const nav = makeNav();
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <GoalsScreen navigation={nav as never} />,
     );
-    fireEvent.press(getByTestId('day-one-goal-business'));
+    await fireEvent.press(getByTestId('day-one-goal-business'));
     await act(async () => {
-      fireEvent.press(getByTestId('day-one-goals-continue'));
+      await fireEvent.press(getByTestId('day-one-goals-continue'));
     });
     await act(async () => {
-      fireEvent.press(getByTestId('day-one-goals-offline'));
+      await fireEvent.press(getByTestId('day-one-goals-offline'));
     });
     await waitFor(async () => {
       const state = await readResumeState();
@@ -264,7 +264,7 @@ describe('GoalsScreen', () => {
 
   it('rehydrates the prior selection from the resume checkpoint', async () => {
     await writeResumeState({ draft: { goals: ['mental_health'] } });
-    const { findByTestId } = render(
+    const { findByTestId } = await render(
       <GoalsScreen navigation={makeNav() as never} />,
     );
     const row = await findByTestId('day-one-goal-mental_health');
@@ -277,8 +277,8 @@ describe('GoalsScreen', () => {
 // ─── Notifications ───────────────────────────────────────────────────────────
 
 describe('NotificationsScreen', () => {
-  it('renders 4/6 step text', () => {
-    const { getByTestId } = render(
+  it('renders 4/6 step text', async () => {
+    const { getByTestId } = await render(
       <NotificationsScreen navigation={makeNav() as never} />,
     );
     expect(getByTestId('day-one-step-text').props.children).toBe('4/6');
@@ -287,11 +287,11 @@ describe('NotificationsScreen', () => {
   it('navigates to CheckInTime after permission grant', async () => {
     mockedRegister.mockResolvedValue({ granted: true });
     const nav = makeNav();
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <NotificationsScreen navigation={nav as never} />,
     );
     await act(async () => {
-      fireEvent.press(getByTestId('day-one-notifications-enable'));
+      await fireEvent.press(getByTestId('day-one-notifications-enable'));
     });
     await waitFor(() => expect(nav.navigate).toHaveBeenCalledWith('CheckInTime'));
   });
@@ -299,15 +299,15 @@ describe('NotificationsScreen', () => {
   it('does NOT block onboarding when permission is denied', async () => {
     mockedRegister.mockResolvedValue({ granted: false });
     const nav = makeNav();
-    const { getByTestId, findByTestId } = render(
+    const { getByTestId, findByTestId } = await render(
       <NotificationsScreen navigation={nav as never} />,
     );
     await act(async () => {
-      fireEvent.press(getByTestId('day-one-notifications-enable'));
+      await fireEvent.press(getByTestId('day-one-notifications-enable'));
     });
     expect(await findByTestId('day-one-notifications-deny-notice')).toBeTruthy();
     await act(async () => {
-      fireEvent.press(getByTestId('day-one-notifications-continue'));
+      await fireEvent.press(getByTestId('day-one-notifications-continue'));
     });
     expect(nav.navigate).toHaveBeenCalledWith('CheckInTime');
   });
@@ -316,8 +316,8 @@ describe('NotificationsScreen', () => {
 // ─── CheckInTime ─────────────────────────────────────────────────────────────
 
 describe('CheckInTimeScreen', () => {
-  it('renders 5/6 step text', () => {
-    const { getByTestId } = render(
+  it('renders 5/6 step text', async () => {
+    const { getByTestId } = await render(
       <CheckInTimeScreen navigation={makeNav() as never} />,
     );
     expect(getByTestId('day-one-step-text').props.children).toBe('5/6');
@@ -326,11 +326,11 @@ describe('CheckInTimeScreen', () => {
   it('save includes the IANA timezone in the payload', async () => {
     mockedSaveCheckIn.mockResolvedValue(undefined);
     const nav = makeNav();
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <CheckInTimeScreen navigation={nav as never} />,
     );
     await act(async () => {
-      fireEvent.press(getByTestId('day-one-checkin-continue'));
+      await fireEvent.press(getByTestId('day-one-checkin-continue'));
     });
     await waitFor(() => {
       expect(mockedSaveCheckIn).toHaveBeenCalledWith(
@@ -343,15 +343,15 @@ describe('CheckInTimeScreen', () => {
 
   it('offline path enqueues a checkin sync item with the timezone', async () => {
     mockedSaveCheckIn.mockRejectedValue(new Error('network'));
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <CheckInTimeScreen navigation={makeNav() as never} />,
     );
     await act(async () => {
-      fireEvent.press(getByTestId('day-one-checkin-continue'));
+      await fireEvent.press(getByTestId('day-one-checkin-continue'));
     });
     await waitFor(() => expect(getByTestId('day-one-checkin-error')).toBeTruthy());
     await act(async () => {
-      fireEvent.press(getByTestId('day-one-checkin-offline'));
+      await fireEvent.press(getByTestId('day-one-checkin-offline'));
     });
     await waitFor(async () => {
       const state = await readResumeState();
@@ -370,7 +370,7 @@ describe('CheckInTimeScreen', () => {
         checkInTimezone: 'UTC',
       },
     });
-    const { findByTestId } = render(
+    const { findByTestId } = await render(
       <CheckInTimeScreen navigation={makeNav() as never} />,
     );
     const hour = await findByTestId('day-one-checkin-hour-value');
@@ -385,8 +385,8 @@ describe('CheckInTimeScreen', () => {
 // ─── Ready ───────────────────────────────────────────────────────────────────
 
 describe('ReadyScreen', () => {
-  it('renders 6/6 step text', () => {
-    const { getByTestId } = render(
+  it('renders 6/6 step text', async () => {
+    const { getByTestId } = await render(
       <ReadyScreen navigation={makeNav() as never} />,
     );
     expect(getByTestId('day-one-step-text').props.children).toBe('6/6');
@@ -395,11 +395,11 @@ describe('ReadyScreen', () => {
   it('happy path: completes, clears the resume checkpoint, and emits auth', async () => {
     mockedComplete.mockResolvedValue(undefined);
     await writeResumeState({ step: 'Ready', draft: { goals: ['fitness'] } });
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <ReadyScreen navigation={makeNav() as never} />,
     );
     await act(async () => {
-      fireEvent.press(getByTestId('day-one-ready-cta'));
+      await fireEvent.press(getByTestId('day-one-ready-cta'));
     });
     await waitFor(() => expect(mockedComplete).toHaveBeenCalledTimes(1));
     await waitFor(async () => {
@@ -411,11 +411,11 @@ describe('ReadyScreen', () => {
 
   it('failure surfaces the retry banner with the Continue offline CTA', async () => {
     mockedComplete.mockRejectedValue(new Error('network'));
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <ReadyScreen navigation={makeNav() as never} />,
     );
     await act(async () => {
-      fireEvent.press(getByTestId('day-one-ready-cta'));
+      await fireEvent.press(getByTestId('day-one-ready-cta'));
     });
     await waitFor(() => {
       expect(getByTestId('day-one-ready-error')).toBeTruthy();
@@ -425,15 +425,15 @@ describe('ReadyScreen', () => {
 
   it('Continue offline enqueues a complete sync item and emits auth', async () => {
     mockedComplete.mockRejectedValue(new Error('network'));
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <ReadyScreen navigation={makeNav() as never} />,
     );
     await act(async () => {
-      fireEvent.press(getByTestId('day-one-ready-cta'));
+      await fireEvent.press(getByTestId('day-one-ready-cta'));
     });
     await waitFor(() => expect(getByTestId('day-one-ready-offline')).toBeTruthy());
     await act(async () => {
-      fireEvent.press(getByTestId('day-one-ready-offline'));
+      await fireEvent.press(getByTestId('day-one-ready-offline'));
     });
     await waitFor(async () => {
       const state = await readResumeState();

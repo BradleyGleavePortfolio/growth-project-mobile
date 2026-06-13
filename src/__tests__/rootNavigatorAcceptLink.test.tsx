@@ -187,7 +187,7 @@ describe('RootNavigator — accept-invite replay guard', () => {
   });
 
   it('signed-in accept link: signs out once and navigates AcceptInvite exactly once even when the URL fires twice', async () => {
-    render(<RootNavigator />);
+    await render(<RootNavigator />);
 
     // Resolve the cold-start lookup with no URL — the test will deliver
     // the URL via the foreground listener instead.
@@ -236,7 +236,7 @@ describe('RootNavigator — accept-invite replay guard', () => {
     // sign-out has cleared it) but BEFORE the replay effect has run.
     // The fix uses a `pendingAcceptTokenRef` so the unauthenticated
     // duplicate branch does NOT mark the in-flight token consumed.
-    render(<RootNavigator />);
+    await render(<RootNavigator />);
     await act(async () => {
       mockGetInitialUrlResolver?.(null);
     });
@@ -275,7 +275,7 @@ describe('RootNavigator — accept-invite replay guard', () => {
   it('cold-start unauthenticated link: does NOT stash a pending URL (React Navigation handles it natively)', async () => {
     // Start signed-out so the cold-start branch takes the unauthenticated path.
     mockSecureGet.mockImplementation(async () => null);
-    render(<RootNavigator />);
+    await render(<RootNavigator />);
     await act(async () => {
       mockGetInitialUrlResolver?.(ACCEPT_URL);
     });

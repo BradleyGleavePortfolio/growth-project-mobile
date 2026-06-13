@@ -90,13 +90,13 @@ beforeEach(() => {
 describe.each(['hall', 'cohort'] as const)(
   'CommunitySpaceScreen embedded prerequisite (space=%s)',
   (space) => {
-    it('a /community/me error renders the retryable error (NOT empty, NOT loading), retry refetches, success renders the feed', () => {
+    it('a /community/me error renders the retryable error (NOT empty, NOT loading), retry refetches, success renders the feed', async () => {
       // The embedded tab threads the real `me` truth. A rejected `/community/me`
       // arrives as workspaceId=null + prerequisiteError=true; the screen must
       // render the SAME calm retryable error the route renders — never an inert
       // empty feed (50-failures #36, swallowed error).
       const onRetryPrerequisite = jest.fn();
-      const { rerender } = render(
+      const { rerender } = await render(
         <CommunitySpaceScreen
           embedded
           space={space}
@@ -114,13 +114,13 @@ describe.each(['hall', 'cohort'] as const)(
       expect(mockUsePostsSpy).toHaveBeenCalledWith(null);
 
       // Retry invokes the parent's me.refetch through onRetryPrerequisite.
-      fireEvent.press(screen.getByTestId('community-space-prereq-retry'));
+      await fireEvent.press(screen.getByTestId('community-space-prereq-retry'));
       expect(onRetryPrerequisite).toHaveBeenCalledTimes(1);
 
       // After a successful refetch the parent rethreads a resolved id + cleared
       // flags, and the feed renders.
       mockPosts.data = [{ id: 'p-1' }];
-      rerender(
+      await rerender(
         <CommunitySpaceScreen
           embedded
           space={space}
@@ -134,8 +134,8 @@ describe.each(['hall', 'cohort'] as const)(
       expect(screen.queryByTestId('community-space-prereq-error')).toBeNull();
     });
 
-    it('a still-loading prerequisite renders the loading state, not the empty state, and does not fetch posts', () => {
-      render(
+    it('a still-loading prerequisite renders the loading state, not the empty state, and does not fetch posts', async () => {
+      await render(
         <CommunitySpaceScreen
           embedded
           space={space}
@@ -149,7 +149,7 @@ describe.each(['hall', 'cohort'] as const)(
       expect(mockUsePostsSpy).toHaveBeenCalledWith(null);
     });
 
-    it('a post-feed query FAILURE renders the retryable posts error (NOT the empty state), and retry refetches the feed', () => {
+    it('a post-feed query FAILURE renders the retryable posts error (NOT the empty state), and retry refetches the feed', async () => {
       // A resolved workspace whose post query REJECTS must show a calm retryable
       // posts error, never the "the Hall is quiet" / "no cohort posts" empty
       // state — collapsing a load failure into empty silently hides it
@@ -157,7 +157,7 @@ describe.each(['hall', 'cohort'] as const)(
       mockPosts.data = undefined;
       mockPosts.isLoading = false;
       mockPosts.isError = true;
-      render(
+      await render(
         <CommunitySpaceScreen
           embedded
           space={space}
@@ -171,14 +171,14 @@ describe.each(['hall', 'cohort'] as const)(
       expect(screen.queryByTestId('community-space-prereq-error')).toBeNull();
 
       // Retry refetches the post feed directly (posts.refetch), not the prereq.
-      fireEvent.press(screen.getByTestId('community-space-posts-retry'));
+      await fireEvent.press(screen.getByTestId('community-space-posts-retry'));
       expect(mockPosts.refetch).toHaveBeenCalledTimes(1);
     });
 
-    it('a genuine workspace_id=null SUCCESS renders the empty/onboarding state, NOT the error state', () => {
+    it('a genuine workspace_id=null SUCCESS renders the empty/onboarding state, NOT the error state', async () => {
       // The prerequisite SUCCEEDED with no membership: not loading, not errored.
       // This must be the calm empty state, never the retryable error.
-      render(
+      await render(
         <CommunitySpaceScreen
           embedded
           space={space}

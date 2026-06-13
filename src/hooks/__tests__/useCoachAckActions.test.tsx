@@ -105,11 +105,11 @@ describe('useCoachAckActions — happy path (optimistic then reconcile)', () => 
       }),
     );
 
-    const { result } = renderHook(() => useCoachAckActions(MSG), {
+    const { result } = await renderHook(() => useCoachAckActions(MSG), {
       wrapper: Wrapper,
     });
 
-    act(() => {
+    await act(() => {
       result.current.markAcked.mutate();
     });
 
@@ -146,7 +146,7 @@ describe('useCoachAckActions — error rollback', () => {
 
     mockApi.markCoachAckAcked.mockRejectedValue(new Error('boom'));
 
-    const { result } = renderHook(() => useCoachAckActions(MSG), {
+    const { result } = await renderHook(() => useCoachAckActions(MSG), {
       wrapper: Wrapper,
     });
 
@@ -166,7 +166,7 @@ describe('useCoachAckActions — error rollback', () => {
 
     mockApi.markCoachAckSeen.mockRejectedValue(new Error('boom'));
 
-    const { result } = renderHook(() => useCoachAckActions(MSG), {
+    const { result } = await renderHook(() => useCoachAckActions(MSG), {
       wrapper: Wrapper,
     });
 
@@ -205,7 +205,7 @@ describe('useCoachAckActions — 409 illegal_transition reconcile', () => {
       ),
     );
 
-    const { result } = renderHook(() => useCoachAckActions(MSG), {
+    const { result } = await renderHook(() => useCoachAckActions(MSG), {
       wrapper: Wrapper,
     });
 
@@ -255,7 +255,7 @@ describe('useCoachAckActions — monotonic / idempotent', () => {
     // Server is idempotent: returns the existing replied envelope unchanged.
     mockApi.markCoachAckSeen.mockResolvedValue(response(replied));
 
-    const { result } = renderHook(() => useCoachAckActions(MSG), {
+    const { result } = await renderHook(() => useCoachAckActions(MSG), {
       wrapper: Wrapper,
     });
 
@@ -283,7 +283,7 @@ describe('useCoachAckActions — monotonic / idempotent', () => {
     });
     mockApi.markCoachAckAcked.mockResolvedValue(response(acked));
 
-    const { result } = renderHook(() => useCoachAckActions(MSG), {
+    const { result } = await renderHook(() => useCoachAckActions(MSG), {
       wrapper: Wrapper,
     });
 

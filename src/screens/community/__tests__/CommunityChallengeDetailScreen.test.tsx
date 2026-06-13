@@ -130,11 +130,11 @@ function participation(
   };
 }
 
-function renderScreen() {
+async function renderScreen() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
-  return render(
+  return await render(
     <QueryClientProvider client={client}>
       <CommunityChallengeDetailScreen />
     </QueryClientProvider>,
@@ -158,7 +158,7 @@ beforeEach(() => {
 describe('CommunityChallengeDetailScreen — flag off', () => {
   it('renders a neutral not-available state and never touches the API', async () => {
     flags.communityChallenges = false;
-    renderScreen();
+    await renderScreen();
 
     expect(
       await screen.findByText('Challenges are not available right now.'),
@@ -174,7 +174,7 @@ describe('CommunityChallengeDetailScreen — joined caller', () => {
       challenge: challenge(),
       participation: participation(),
     });
-    renderScreen();
+    await renderScreen();
 
     expect(await screen.findByText('25000 of 100000 steps')).toBeTruthy();
     const cta = await screen.findByTestId('community-challenge-primary-action');
@@ -189,7 +189,7 @@ describe('CommunityChallengeDetailScreen — not joined', () => {
       challenge: challenge(),
       participation: null,
     });
-    renderScreen();
+    await renderScreen();
 
     expect(await screen.findByText('Join this challenge')).toBeTruthy();
     expect(
@@ -204,7 +204,7 @@ describe('CommunityChallengeDetailScreen — leaderboard opt-in posture', () => 
       challenge: challenge({ leaderboard_enabled: true }),
       participation: participation({ leaderboard_opted_in: false }),
     });
-    renderScreen();
+    await renderScreen();
 
     // Opt-in affordance shown, no standings requested.
     expect(await screen.findByTestId('community-challenge-optin')).toBeTruthy();
@@ -223,7 +223,7 @@ describe('CommunityChallengeDetailScreen — leaderboard opt-in posture', () => 
       rows: [{ user_id: 'me-1', rank: 1, progress_value: 25000, is_self: true }],
       next_cursor: null,
     });
-    renderScreen();
+    await renderScreen();
 
     await waitFor(() =>
       expect(api.getLeaderboard).toHaveBeenCalledWith('ch-1', { limit: 20 }),
@@ -241,7 +241,7 @@ describe('CommunityChallengeDetailScreen — leaderboard opt-in posture', () => 
       challenge: challenge({ leaderboard_enabled: false }),
       participation: participation({ leaderboard_opted_in: false }),
     });
-    renderScreen();
+    await renderScreen();
 
     await screen.findByTestId('community-challenge-primary-action');
     expect(screen.queryByTestId('community-challenge-leaderboard')).toBeNull();
@@ -252,7 +252,7 @@ describe('CommunityChallengeDetailScreen — leaderboard opt-in posture', () => 
 describe('CommunityChallengeDetailScreen — error', () => {
   it('renders a recoverable error state with a retry, not a bare spinner', async () => {
     api.getChallenge.mockRejectedValue(new Error('boom'));
-    renderScreen();
+    await renderScreen();
 
     expect(await screen.findByTestId('community-challenge-error')).toBeTruthy();
     expect(screen.getByTestId('community-challenge-retry')).toBeTruthy();
@@ -272,7 +272,7 @@ describe('CommunityChallengeDetailScreen — comments empty vs load error (F1/F8
       participation: participation(),
     });
     api.listComments.mockResolvedValue({ comments: [], next_cursor: null }); // server-confirmed zero rows
-    renderScreen();
+    await renderScreen();
 
     expect(
       await screen.findByTestId('community-challenge-comments-empty'),
@@ -297,7 +297,7 @@ describe('CommunityChallengeDetailScreen — comments empty vs load error (F1/F8
       participation: participation(),
     });
     api.listComments.mockRejectedValue(new Error('comments down'));
-    renderScreen();
+    await renderScreen();
 
     // A load error is its own surface with a retry; the empty state is NOT shown
     // (a load error must never masquerade as "empty").
@@ -319,13 +319,13 @@ describe('CommunityChallengeDetailScreen — optimistic join (P1)', () => {
     // The join round-trip fails so we can observe the rollback.
     api.join.mockRejectedValue(new Error('join failed'));
 
-    renderScreen();
+    await renderScreen();
 
     // Pre-mutation the primary action is Join.
     const cta = await screen.findByTestId('community-challenge-primary-action');
     expect(screen.getByText('Join this challenge')).toBeTruthy();
 
-    fireEvent.press(cta);
+    await fireEvent.press(cta);
 
     // Optimistic write flips the cached participation -> the Join prompt is gone
     // and the calm error banner is surfaced after the round-trip rejects.
@@ -354,10 +354,10 @@ describe('CommunityChallengeDetailScreen — optimistic leaderboard opt-in (P1)'
     // The opt-in write fails so we observe rollback to opted-out.
     api.setLeaderboardOptIn.mockRejectedValue(new Error('opt-in failed'));
 
-    renderScreen();
+    await renderScreen();
 
     const optin = await screen.findByTestId('community-challenge-optin');
-    fireEvent.press(optin);
+    await fireEvent.press(optin);
 
     // The write was attempted with the optimistic next value (true).
     await waitFor(() =>
@@ -389,17 +389,17 @@ describe('CommunityChallengeDetailScreen — progress conflict (F3)', () => {
     api.updateProgress.mockRejectedValue(
       new CommunityApiError('conflict', 409, 'conflict'),
     );
-    renderScreen();
+    await renderScreen();
 
     // Open the sheet and submit a higher value; the write 409s.
-    fireEvent.press(
+    await fireEvent.press(
       await screen.findByTestId('community-challenge-primary-action'),
     );
-    fireEvent.changeText(
+    await fireEvent.changeText(
       await screen.findByTestId('community-challenge-progress-sheet-input'),
       '99999',
     );
-    fireEvent.press(
+    await fireEvent.press(
       screen.getByTestId('community-challenge-progress-sheet-submit'),
     );
 
@@ -435,7 +435,7 @@ describe('CommunityChallengeDetailScreen — list/listitem semantics (P1)', () =
       participation: participation(),
     });
     api.listComments.mockResolvedValue({ comments: [comment()], next_cursor: null });
-    renderScreen();
+    await renderScreen();
 
     const row = await screen.findByTestId('community-challenge-comment-cm-1');
     // The comment row wrapper carries the W3C `role="listitem"` so the parent
@@ -468,7 +468,7 @@ describe('CommunityChallengeDetailScreen — lists named + live-announced (P2-2)
       comments: [comment({ id: 'cm-1' }), comment({ id: 'cm-2' })],
       next_cursor: null,
     });
-    renderScreen();
+    await renderScreen();
 
     const list = await screen.findByTestId('community-challenge-comments');
     await waitFor(() =>
@@ -489,7 +489,7 @@ describe('CommunityChallengeDetailScreen — lists named + live-announced (P2-2)
       comments: [comment({ id: 'cm-1' })],
       next_cursor: null,
     });
-    renderScreen();
+    await renderScreen();
 
     await waitFor(() =>
       expect(announce).toHaveBeenCalledWith('Encouragement notes loaded, 1 item'),
@@ -514,7 +514,7 @@ describe('CommunityChallengeDetailScreen — lists named + live-announced (P2-2)
       ],
       next_cursor: null,
     });
-    renderScreen();
+    await renderScreen();
 
     const list = await screen.findByTestId('community-challenge-leaderboard-list');
     await waitFor(() =>
@@ -537,13 +537,13 @@ describe('CommunityChallengeDetailScreen — comment draft retention (P2-C3)', (
     // The comment send round-trip fails; the draft must survive the failure so
     // the user does not lose what they typed (a swallowed loss would be #36).
     api.addComment.mockRejectedValue(new Error('comment send down'));
-    renderScreen();
+    await renderScreen();
 
     const field = await screen.findByTestId(
       'community-challenge-composer-field',
     );
-    fireEvent.changeText(field, 'You are doing great, keep at it.');
-    fireEvent.press(screen.getByTestId('community-challenge-composer-send'));
+    await fireEvent.changeText(field, 'You are doing great, keep at it.');
+    await fireEvent.press(screen.getByTestId('community-challenge-composer-send'));
 
     // A calm error banner is shown (the failure is surfaced, not swallowed)...
     await waitFor(() =>
@@ -565,13 +565,13 @@ describe('CommunityChallengeDetailScreen — comment draft retention (P2-C3)', (
       participation: participation(),
     });
     api.addComment.mockResolvedValue(undefined as never);
-    renderScreen();
+    await renderScreen();
 
     const field = await screen.findByTestId(
       'community-challenge-composer-field',
     );
-    fireEvent.changeText(field, 'Proud of you.');
-    fireEvent.press(screen.getByTestId('community-challenge-composer-send'));
+    await fireEvent.changeText(field, 'Proud of you.');
+    await fireEvent.press(screen.getByTestId('community-challenge-composer-send'));
 
     await waitFor(() => expect(api.addComment).toHaveBeenCalledWith('ch-1', 'Proud of you.'));
     await waitFor(() =>
@@ -609,7 +609,7 @@ describe('CommunityChallengeDetailScreen — real cursor page transitions (P2-C4
         comments: [comment({ id: 'cm-1' }), comment({ id: 'cm-2' })],
         next_cursor: null,
       });
-    renderScreen();
+    await renderScreen();
 
     await screen.findByTestId('community-challenge-comment-cm-1');
     await waitFor(() =>
@@ -662,7 +662,7 @@ describe('CommunityChallengeDetailScreen — real cursor page transitions (P2-C4
         ],
         next_cursor: null,
       });
-    renderScreen();
+    await renderScreen();
 
     await waitFor(() =>
       expect(api.getLeaderboard).toHaveBeenNthCalledWith(1, 'ch-1', { limit: 20 }),
@@ -670,7 +670,7 @@ describe('CommunityChallengeDetailScreen — real cursor page transitions (P2-C4
     const showMore = await screen.findByTestId(
       'community-challenge-leaderboard-load-more',
     );
-    fireEvent.press(showMore);
+    await fireEvent.press(showMore);
 
     await waitFor(() =>
       expect(api.getLeaderboard).toHaveBeenNthCalledWith(2, 'ch-1', {
@@ -706,14 +706,14 @@ describe('CommunityChallengeDetailScreen — composer keeps a newer draft on fai
           rejectSend = reject;
         }) as never,
     );
-    renderScreen();
+    await renderScreen();
 
     const field = await screen.findByTestId('community-challenge-composer-field');
-    fireEvent.changeText(field, 'Draft A');
-    fireEvent.press(screen.getByTestId('community-challenge-composer-send'));
+    await fireEvent.changeText(field, 'Draft A');
+    await fireEvent.press(screen.getByTestId('community-challenge-composer-send'));
 
     await waitFor(() => expect(field.props.value).toBe(''));
-    fireEvent.changeText(field, 'Draft B');
+    await fireEvent.changeText(field, 'Draft B');
 
     await act(async () => {
       rejectSend?.(new Error('send failed'));
@@ -759,13 +759,13 @@ describe('CommunityChallengeDetailScreen — report double-submit guard (P2-C4)'
           resolveReport = resolve;
         }),
     );
-    renderScreen();
+    await renderScreen();
 
     const reportBtn = await screen.findByTestId(
       'community-challenge-comment-cm-1-report',
     );
-    fireEvent.press(reportBtn);
-    fireEvent.press(reportBtn);
+    await fireEvent.press(reportBtn);
+    await fireEvent.press(reportBtn);
 
     await waitFor(() => expect(api.reportComment).toHaveBeenCalledTimes(1));
     // The single call carries a stable idempotency key (5th argument).

@@ -159,97 +159,97 @@ beforeEach(() => {
 // ─── CommunityEventDetailScreen (client) ─────────────────────────────────────
 
 describe('CommunityEventDetailScreen', () => {
-  it('renders a loading branch', () => {
+  it('renders a loading branch', async () => {
     mockEventHooks.detail = { ...mockEventHooks.detail, isLoading: true };
-    const { getByTestId } = render(<CommunityEventDetailScreen />);
+    const { getByTestId } = await render(<CommunityEventDetailScreen />);
     expect(getByTestId('community-event-detail-loading')).toBeTruthy();
   });
 
-  it('renders an honest error branch with retry (not an empty masquerade)', () => {
+  it('renders an honest error branch with retry (not an empty masquerade)', async () => {
     const refetch = jest.fn();
     mockEventHooks.detail = { ...mockEventHooks.detail, isError: true, refetch };
-    const { getByTestId } = render(<CommunityEventDetailScreen />);
-    fireEvent.press(getByTestId('community-event-detail-retry'));
+    const { getByTestId } = await render(<CommunityEventDetailScreen />);
+    await fireEvent.press(getByTestId('community-event-detail-retry'));
     expect(refetch).toHaveBeenCalled();
   });
 
-  it('renders an empty state with a back action when the event is missing', () => {
+  it('renders an empty state with a back action when the event is missing', async () => {
     mockEventHooks.detail = { ...mockEventHooks.detail, data: undefined };
-    const { getByTestId } = render(<CommunityEventDetailScreen />);
-    fireEvent.press(getByTestId('community-event-detail-empty-action'));
+    const { getByTestId } = await render(<CommunityEventDetailScreen />);
+    await fireEvent.press(getByTestId('community-event-detail-empty-action'));
     expect(mockGoBack).toHaveBeenCalled();
   });
 
-  it('renders event detail and fires RSVP with the client status', () => {
+  it('renders event detail and fires RSVP with the client status', async () => {
     mockEventHooks.detail = { ...mockEventHooks.detail, data: makeEvent() };
-    const { getByText, getByTestId } = render(<CommunityEventDetailScreen />);
+    const { getByText, getByTestId } = await render(<CommunityEventDetailScreen />);
     expect(getByText('Live Q&A')).toBeTruthy();
     expect(getByText('Bring your questions.')).toBeTruthy();
-    fireEvent.press(getByTestId('community-event-rsvp-going'));
+    await fireEvent.press(getByTestId('community-event-rsvp-going'));
     // F4/F10: mutate now carries success/error callbacks for confirmation +
     // surfaced failure, so the second arg is the mutation options object.
     expect(mockMutate.rsvp).toHaveBeenCalledWith('going', expect.any(Object));
   });
 
-  it('does NOT render a mascot-voiced empty state on the event surface (F2)', () => {
+  it('does NOT render a mascot-voiced empty state on the event surface (F2)', async () => {
     mockEventHooks.detail = { ...mockEventHooks.detail, data: undefined };
-    const { queryByTestId } = render(<CommunityEventDetailScreen />);
+    const { queryByTestId } = await render(<CommunityEventDetailScreen />);
     // The neutral event empty state must not borrow the mascot-voiced surface.
     expect(queryByTestId('community-empty-roman')).toBeNull();
     expect(queryByTestId('community-event-detail-empty')).toBeTruthy();
   });
 
-  it('opens an EXTERNAL https link in the system browser (never a native room)', () => {
+  it('opens an EXTERNAL https link in the system browser (never a native room)', async () => {
     const openUrl = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
     mockEventHooks.detail = {
       ...mockEventHooks.detail,
       data: makeEvent({ state: 'live', external_url: 'https://example.com/live' }),
     };
-    const { getByTestId, queryByText } = render(<CommunityEventDetailScreen />);
+    const { getByTestId, queryByText } = await render(<CommunityEventDetailScreen />);
     // Copy never promises a native room.
     expect(queryByText(/join native room/i)).toBeNull();
-    fireEvent.press(getByTestId('community-event-detail-link'));
+    await fireEvent.press(getByTestId('community-event-detail-link'));
     expect(openUrl).toHaveBeenCalledWith('https://example.com/live');
     openUrl.mockRestore();
   });
 
-  it('F11: external-link copy says it opens in the browser', () => {
+  it('F11: external-link copy says it opens in the browser', async () => {
     mockEventHooks.detail = {
       ...mockEventHooks.detail,
       data: makeEvent({ state: 'replay', external_url: 'https://example.com/replay' }),
     };
-    const { getByText } = render(<CommunityEventDetailScreen />);
+    const { getByText } = await render(<CommunityEventDetailScreen />);
     expect(getByText(/in browser/i)).toBeTruthy();
   });
 
-  it('F3: refuses a non-https external link with a calm inline error', () => {
+  it('F3: refuses a non-https external link with a calm inline error', async () => {
     const openUrl = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
     mockEventHooks.detail = {
       ...mockEventHooks.detail,
       data: makeEvent({ state: 'live', external_url: 'javascript:alert(1)' }),
     };
-    const { getByTestId } = render(<CommunityEventDetailScreen />);
-    fireEvent.press(getByTestId('community-event-detail-link'));
+    const { getByTestId } = await render(<CommunityEventDetailScreen />);
+    await fireEvent.press(getByTestId('community-event-detail-link'));
     expect(openUrl).not.toHaveBeenCalled();
     expect(getByTestId('community-event-detail-link-error')).toBeTruthy();
     openUrl.mockRestore();
   });
 
-  it('F13: shows the status-honest live lifecycle label', () => {
+  it('F13: shows the status-honest live lifecycle label', async () => {
     mockEventHooks.detail = {
       ...mockEventHooks.detail,
       data: makeEvent({ state: 'live', external_url: 'https://example.com/live' }),
     };
-    const { getByText } = render(<CommunityEventDetailScreen />);
+    const { getByText } = await render(<CommunityEventDetailScreen />);
     expect(getByText('Live now')).toBeTruthy();
   });
 
-  it('hides RSVP actions once the event is reflected', () => {
+  it('hides RSVP actions once the event is reflected', async () => {
     mockEventHooks.detail = {
       ...mockEventHooks.detail,
       data: makeEvent({ state: 'reflected', reflected_at: '2026-07-02T00:00:00.000Z' }),
     };
-    const { queryByTestId } = render(<CommunityEventDetailScreen />);
+    const { queryByTestId } = await render(<CommunityEventDetailScreen />);
     expect(queryByTestId('community-event-rsvp-going')).toBeNull();
   });
 });
@@ -257,45 +257,45 @@ describe('CommunityEventDetailScreen', () => {
 // ─── CoachCommunityEventsScreen (coach) ──────────────────────────────────────
 
 describe('CoachCommunityEventsScreen', () => {
-  it('renders a loading branch', () => {
+  it('renders a loading branch', async () => {
     mockEventHooks.list = { ...mockEventHooks.list, isLoading: true };
-    const { getByTestId } = render(<CoachCommunityEventsScreen />);
+    const { getByTestId } = await render(<CoachCommunityEventsScreen />);
     expect(getByTestId('coach-community-events-loading')).toBeTruthy();
   });
 
-  it('renders an honest error branch with retry', () => {
+  it('renders an honest error branch with retry', async () => {
     const refetch = jest.fn();
     mockEventHooks.list = { ...mockEventHooks.list, isError: true, refetch };
-    const { getByTestId } = render(<CoachCommunityEventsScreen />);
-    fireEvent.press(getByTestId('coach-community-events-error-retry'));
+    const { getByTestId } = await render(<CoachCommunityEventsScreen />);
+    await fireEvent.press(getByTestId('coach-community-events-error-retry'));
     expect(refetch).toHaveBeenCalled();
   });
 
-  it('renders an honest empty state with a create action', () => {
+  it('renders an honest empty state with a create action', async () => {
     mockEventHooks.list = { ...mockEventHooks.list, data: { pages: [{ events: [], next_before: null }], pageParams: [undefined] } };
-    const { getByTestId } = render(<CoachCommunityEventsScreen />);
+    const { getByTestId } = await render(<CoachCommunityEventsScreen />);
     expect(getByTestId('coach-community-events-empty')).toBeTruthy();
-    fireEvent.press(getByTestId('coach-community-events-empty-action'));
+    await fireEvent.press(getByTestId('coach-community-events-empty-action'));
     expect(getByTestId('coach-community-events-create-modal')).toBeTruthy();
   });
 
-  it('F12: creates an event using the date/time pickers (ISO serialized)', () => {
+  it('F12: creates an event using the date/time pickers (ISO serialized)', async () => {
     mockEventHooks.list = {
       ...mockEventHooks.list,
       data: { pages: [{ events: [makeEvent()], next_before: null }], pageParams: [undefined] },
     };
-    const { getByTestId, getByText } = render(<CoachCommunityEventsScreen />);
-    fireEvent.press(getByTestId('coach-community-events-fab'));
-    fireEvent.changeText(getByTestId('coach-community-events-title-input'), 'Workshop');
+    const { getByTestId, getByText } = await render(<CoachCommunityEventsScreen />);
+    await fireEvent.press(getByTestId('coach-community-events-fab'));
+    await fireEvent.changeText(getByTestId('coach-community-events-title-input'), 'Workshop');
     // A visible local-timezone hint accompanies the pickers (no raw ISO input).
     expect(getByText(/local timezone/i)).toBeTruthy();
     // Open each picker; the stubbed pickers fire onChange with the fixed
     // instant, setting the date and time of the held Date respectively.
-    fireEvent.press(getByTestId('coach-community-events-date-trigger'));
-    fireEvent.press(getByTestId('coach-community-events-date-picker'));
-    fireEvent.press(getByTestId('coach-community-events-time-trigger'));
-    fireEvent.press(getByTestId('coach-community-events-time-picker'));
-    fireEvent.press(getByTestId('coach-community-events-create-submit'));
+    await fireEvent.press(getByTestId('coach-community-events-date-trigger'));
+    await fireEvent.press(getByTestId('coach-community-events-date-picker'));
+    await fireEvent.press(getByTestId('coach-community-events-time-trigger'));
+    await fireEvent.press(getByTestId('coach-community-events-time-picker'));
+    await fireEvent.press(getByTestId('coach-community-events-create-submit'));
     // The picked local time serializes to a UTC ISO-8601 string behind the
     // scenes. We assert the date + minute precision is preserved end-to-end by
     // checking it parses back to the same instant the picker emitted.
@@ -309,74 +309,74 @@ describe('CoachCommunityEventsScreen', () => {
     );
   });
 
-  it('F12: the raw ISO start-time text input is gone', () => {
+  it('F12: the raw ISO start-time text input is gone', async () => {
     mockEventHooks.list = {
       ...mockEventHooks.list,
       data: { pages: [{ events: [makeEvent()], next_before: null }], pageParams: [undefined] },
     };
-    const { getByTestId, queryByTestId } = render(<CoachCommunityEventsScreen />);
-    fireEvent.press(getByTestId('coach-community-events-fab'));
+    const { getByTestId, queryByTestId } = await render(<CoachCommunityEventsScreen />);
+    await fireEvent.press(getByTestId('coach-community-events-fab'));
     expect(queryByTestId('coach-community-events-starts-input')).toBeNull();
   });
 
-  it('advances lifecycle state from the manage modal', () => {
+  it('advances lifecycle state from the manage modal', async () => {
     mockEventHooks.list = {
       ...mockEventHooks.list,
       data: { pages: [{ events: [makeEvent({ id: 'ev-9', state: 'scheduled' })], next_before: null }], pageParams: [undefined] },
     };
-    const { getByTestId } = render(<CoachCommunityEventsScreen />);
-    fireEvent.press(getByTestId('coach-community-event-row-ev-9'));
-    fireEvent.press(getByTestId('coach-community-events-advance'));
+    const { getByTestId } = await render(<CoachCommunityEventsScreen />);
+    await fireEvent.press(getByTestId('coach-community-event-row-ev-9'));
+    await fireEvent.press(getByTestId('coach-community-events-advance'));
     // scheduled → tomorrow is the immediate next state.
     expect(mockMutate.transition).toHaveBeenCalledWith('tomorrow', expect.any(Object));
   });
 
-  it('attaches an EXTERNAL replay link from the manage modal', () => {
+  it('attaches an EXTERNAL replay link from the manage modal', async () => {
     mockEventHooks.list = {
       ...mockEventHooks.list,
       data: { pages: [{ events: [makeEvent({ id: 'ev-7', state: 'live' })], next_before: null }], pageParams: [undefined] },
     };
-    const { getByTestId } = render(<CoachCommunityEventsScreen />);
-    fireEvent.press(getByTestId('coach-community-event-row-ev-7'));
-    fireEvent.changeText(
+    const { getByTestId } = await render(<CoachCommunityEventsScreen />);
+    await fireEvent.press(getByTestId('coach-community-event-row-ev-7'));
+    await fireEvent.changeText(
       getByTestId('coach-community-events-replay-input'),
       'https://example.com/replay',
     );
-    fireEvent.press(getByTestId('coach-community-events-attach-replay'));
+    await fireEvent.press(getByTestId('coach-community-events-attach-replay'));
     expect(mockMutate.attachReplay).toHaveBeenCalledWith(
       'https://example.com/replay',
       expect.any(Object),
     );
   });
 
-  it('F14: reflect (close) is gated behind a calm confirm sheet', () => {
+  it('F14: reflect (close) is gated behind a calm confirm sheet', async () => {
     mockEventHooks.list = {
       ...mockEventHooks.list,
       data: { pages: [{ events: [makeEvent({ id: 'ev-5', state: 'replay' })], next_before: null }], pageParams: [undefined] },
     };
-    const { getByTestId } = render(<CoachCommunityEventsScreen />);
-    fireEvent.press(getByTestId('coach-community-event-row-ev-5'));
+    const { getByTestId } = await render(<CoachCommunityEventsScreen />);
+    await fireEvent.press(getByTestId('coach-community-event-row-ev-5'));
     // Tapping reflect opens the confirm sheet — it does NOT fire the mutation.
-    fireEvent.press(getByTestId('coach-community-events-reflect'));
+    await fireEvent.press(getByTestId('coach-community-events-reflect'));
     expect(mockMutate.reflect).not.toHaveBeenCalled();
     expect(getByTestId('coach-community-events-reflect-confirm')).toBeTruthy();
     // Confirming in the sheet fires the close.
-    fireEvent.press(getByTestId('coach-community-events-reflect-confirm-action'));
+    await fireEvent.press(getByTestId('coach-community-events-reflect-confirm-action'));
     expect(mockMutate.reflect).toHaveBeenCalledWith(undefined, expect.any(Object));
   });
 
-  it('F13: the manage modal shows status-honest lifecycle labels', () => {
+  it('F13: the manage modal shows status-honest lifecycle labels', async () => {
     mockEventHooks.list = {
       ...mockEventHooks.list,
       data: { pages: [{ events: [makeEvent({ id: 'ev-3', state: 'live' })], next_before: null }], pageParams: [undefined] },
     };
-    const { getByTestId, getAllByText } = render(<CoachCommunityEventsScreen />);
-    fireEvent.press(getByTestId('coach-community-event-row-ev-3'));
+    const { getByTestId, getAllByText } = await render(<CoachCommunityEventsScreen />);
+    await fireEvent.press(getByTestId('coach-community-event-row-ev-3'));
     // 'Live now' appears for the live state (label is shared via stateMeta).
     expect(getAllByText(/Live now/i).length).toBeGreaterThan(0);
   });
 
-  it('declares list semantics on the event list container', () => {
+  it('declares list semantics on the event list container', async () => {
     mockEventHooks.list = {
       ...mockEventHooks.list,
       data: {
@@ -384,28 +384,28 @@ describe('CoachCommunityEventsScreen', () => {
         pageParams: [undefined],
       },
     };
-    const { getByTestId } = render(<CoachCommunityEventsScreen />);
+    const { getByTestId } = await render(<CoachCommunityEventsScreen />);
     const list = getByTestId('coach-community-events-list');
     expect(list.props.accessibilityRole).toBe('list');
   });
 
-  it('exposes a busy progressbar label on the loading branch', () => {
+  it('exposes a busy progressbar label on the loading branch', async () => {
     mockEventHooks.list = { ...mockEventHooks.list, isLoading: true };
-    const { getByTestId } = render(<CoachCommunityEventsScreen />);
+    const { getByTestId } = await render(<CoachCommunityEventsScreen />);
     const loading = getByTestId('coach-community-events-loading');
     expect(loading.props.accessibilityRole).toBe('progressbar');
     expect(loading.props.accessibilityLabel).toBe('Loading events');
     expect(loading.props.accessibilityState).toMatchObject({ busy: true });
   });
 
-  it('error copy points at the available tap-to-retry control (not pull)', () => {
+  it('error copy points at the available tap-to-retry control (not pull)', async () => {
     mockEventHooks.list = { ...mockEventHooks.list, isError: true };
-    const { getByText, queryByText } = render(<CoachCommunityEventsScreen />);
+    const { getByText, queryByText } = await render(<CoachCommunityEventsScreen />);
     expect(getByText(/Tap to retry/i)).toBeTruthy();
     expect(queryByText(/Pull to retry/i)).toBeNull();
   });
 
-  it('cursor pagination: onEndReached fetches the next page when one exists', () => {
+  it('cursor pagination: onEndReached fetches the next page when one exists', async () => {
     mockEventHooks.list = {
       ...mockEventHooks.list,
       data: {
@@ -417,7 +417,7 @@ describe('CoachCommunityEventsScreen', () => {
       hasNextPage: true,
       isFetchingNextPage: false,
     };
-    const { getByTestId } = render(<CoachCommunityEventsScreen />);
+    const { getByTestId } = await render(<CoachCommunityEventsScreen />);
     const list = getByTestId('coach-community-events-list');
     // The FlatList is the single child of the list wrapper; drive its
     // onEndReached the way scrolling to the end would.
@@ -426,7 +426,7 @@ describe('CoachCommunityEventsScreen', () => {
     expect(mockFetchNextPage).toHaveBeenCalledTimes(1);
   });
 
-  it('cursor pagination: onEndReached is a no-op when there is no next page', () => {
+  it('cursor pagination: onEndReached is a no-op when there is no next page', async () => {
     mockEventHooks.list = {
       ...mockEventHooks.list,
       data: {
@@ -436,13 +436,13 @@ describe('CoachCommunityEventsScreen', () => {
       hasNextPage: false,
       isFetchingNextPage: false,
     };
-    const { getByTestId } = render(<CoachCommunityEventsScreen />);
+    const { getByTestId } = await render(<CoachCommunityEventsScreen />);
     const flatList = getByTestId('coach-community-events-list').props.children;
     flatList.props.onEndReached();
     expect(mockFetchNextPage).not.toHaveBeenCalled();
   });
 
-  it('cursor pagination: a calm load-more footer announces while fetching the next page', () => {
+  it('cursor pagination: a calm load-more footer announces while fetching the next page', async () => {
     mockEventHooks.list = {
       ...mockEventHooks.list,
       data: {
@@ -454,7 +454,7 @@ describe('CoachCommunityEventsScreen', () => {
       hasNextPage: true,
       isFetchingNextPage: true,
     };
-    const { getByTestId } = render(<CoachCommunityEventsScreen />);
+    const { getByTestId } = await render(<CoachCommunityEventsScreen />);
     const footer = getByTestId('coach-community-events-load-more');
     expect(footer.props.accessibilityRole).toBe('progressbar');
     expect(footer.props.accessibilityLabel).toBe('Loading more events');

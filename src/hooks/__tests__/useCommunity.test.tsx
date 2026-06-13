@@ -97,11 +97,11 @@ describe('useCreatePost — optimistic insert + rollback', () => {
 
     mockApi.createPost.mockRejectedValueOnce(new Error('server said no'));
 
-    const { result } = renderHook(() => useCreatePost(WS, UID), {
+    const { result } = await renderHook(() => useCreatePost(WS, UID), {
       wrapper: Wrapper,
     });
 
-    act(() => {
+    await act(() => {
       result.current.mutate({ title: 'Hi', body: 'there' });
     });
 
@@ -132,10 +132,10 @@ describe('useAddComment — optimistic append + rollback', () => {
 
     mockApi.addComment.mockRejectedValueOnce(new Error('nope'));
 
-    const { result } = renderHook(() => useAddComment(POST, UID), {
+    const { result } = await renderHook(() => useAddComment(POST, UID), {
       wrapper: Wrapper,
     });
-    act(() => {
+    await act(() => {
       result.current.mutate('first reply');
     });
     await waitFor(() => expect(result.current.isError).toBe(true));
@@ -164,10 +164,10 @@ describe('useSendDm — optimistic append + rollback', () => {
 
     mockApi.sendDm.mockRejectedValueOnce(new Error('dm gate closed'));
 
-    const { result } = renderHook(() => useSendDm(WS, RECIP, UID), {
+    const { result } = await renderHook(() => useSendDm(WS, RECIP, UID), {
       wrapper: Wrapper,
     });
-    act(() => {
+    await act(() => {
       result.current.mutate('hello coach');
     });
     await waitFor(() => expect(result.current.isError).toBe(true));
@@ -206,10 +206,10 @@ describe('useSendDm — optimistic append + rollback', () => {
       if (len > peakLen) peakLen = len;
     });
 
-    const { result } = renderHook(() => useSendDm(WS, RECIP, UID), {
+    const { result } = await renderHook(() => useSendDm(WS, RECIP, UID), {
       wrapper: Wrapper,
     });
-    act(() => {
+    await act(() => {
       result.current.mutate('hello coach');
     });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -248,7 +248,7 @@ describe('useCommunityBadge — live unread via Realtime ping (no polling)', () 
     const { Wrapper } = makeWrapper();
     mockApi.getMe.mockResolvedValue(meWith(1, 2, 0));
 
-    const { result } = renderHook(() => useCommunityBadge(UID), {
+    const { result } = await renderHook(() => useCommunityBadge(UID), {
       wrapper: Wrapper,
     });
 
@@ -272,7 +272,7 @@ describe('useCommunityBadge — live unread via Realtime ping (no polling)', () 
       .mockResolvedValueOnce(meWith(1, 0, 0))
       .mockResolvedValue(meWith(3, 1, 0));
 
-    const { result } = renderHook(() => useCommunityBadge(UID), {
+    const { result } = await renderHook(() => useCommunityBadge(UID), {
       wrapper: Wrapper,
     });
     await waitFor(() => expect(result.current.total).toBe(1));
@@ -280,7 +280,7 @@ describe('useCommunityBadge — live unread via Realtime ping (no polling)', () 
     // Simulate a Realtime broadcast ping (e.g. a new DM). The hook should
     // invalidate /community/me and refetch authoritative counts over REST.
     const callsBefore = mockApi.getMe.mock.calls.length;
-    act(() => {
+    await act(() => {
       pingHandler?.();
     });
 
@@ -289,10 +289,10 @@ describe('useCommunityBadge — live unread via Realtime ping (no polling)', () 
     expect(mockApi.getMe.mock.calls.length).toBeGreaterThan(callsBefore);
   });
 
-  it('does not subscribe when there is no user id', () => {
+  it('does not subscribe when there is no user id', async () => {
     const { Wrapper } = makeWrapper();
     mockApi.getMe.mockResolvedValue(meWith(0, 0, 0));
-    renderHook(() => useCommunityBadge(null), { wrapper: Wrapper });
+    await renderHook(() => useCommunityBadge(null), { wrapper: Wrapper });
     expect(mockSubscribe).not.toHaveBeenCalled();
   });
 });

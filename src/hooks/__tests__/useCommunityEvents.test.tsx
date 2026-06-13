@@ -117,7 +117,7 @@ describe('useCommunityEventsInfiniteList — keyset (before) pagination', () => 
       .mockResolvedValueOnce(page1)
       .mockResolvedValueOnce(page2);
 
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () => useCommunityEventsInfiniteList(WS),
       { wrapper: Wrapper },
     );
@@ -141,9 +141,9 @@ describe('useCommunityEventsInfiniteList — keyset (before) pagination', () => 
     expect(result.current.hasNextPage).toBe(false);
   });
 
-  it('is disabled (no fetch) until a workspace id is known', () => {
+  it('is disabled (no fetch) until a workspace id is known', async () => {
     const { Wrapper } = makeWrapper();
-    renderHook(() => useCommunityEventsInfiniteList(undefined), {
+    await renderHook(() => useCommunityEventsInfiniteList(undefined), {
       wrapper: Wrapper,
     });
     expect(mockApi.list).not.toHaveBeenCalled();
@@ -198,7 +198,7 @@ describe('useRsvpEvent — optimistic detail update + rollback', () => {
       };
     });
 
-    const { result } = renderHook(() => useRsvpEvent(EV, WS), {
+    const { result } = await renderHook(() => useRsvpEvent(EV, WS), {
       wrapper: Wrapper,
     });
 
@@ -221,7 +221,7 @@ describe('useRsvpEvent — optimistic detail update + rollback', () => {
     qc.setQueryData<CommunityEvent>(detailKey, prior);
     mockApi.rsvp.mockRejectedValueOnce(new Error('boom'));
 
-    const { result } = renderHook(() => useRsvpEvent(EV, WS), {
+    const { result } = await renderHook(() => useRsvpEvent(EV, WS), {
       wrapper: Wrapper,
     });
 
@@ -258,7 +258,7 @@ describe('useCreateEvent — optimistic insert + rollback', () => {
       return baseEvent({ id: 'server-new' });
     });
 
-    const { result } = renderHook(() => useCreateEvent(WS, UID), {
+    const { result } = await renderHook(() => useCreateEvent(WS, UID), {
       wrapper: Wrapper,
     });
 
@@ -288,7 +288,7 @@ describe('useCreateEvent — optimistic insert + rollback', () => {
     qc.setQueryData<InfiniteData<CommunityEventListResponse>>(listKey, empty);
     mockApi.create.mockRejectedValueOnce(new Error('nope'));
 
-    const { result } = renderHook(() => useCreateEvent(WS, UID), {
+    const { result } = await renderHook(() => useCreateEvent(WS, UID), {
       wrapper: Wrapper,
     });
 

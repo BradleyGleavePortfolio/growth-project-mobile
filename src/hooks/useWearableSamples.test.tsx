@@ -74,7 +74,7 @@ describe('useWearableSamples', () => {
     mockedGet.mockResolvedValueOnce(okResponse);
     const { Wrapper } = makeWrapper();
 
-    const { result } = renderHook(() => useWearableSamples(baseParams), {
+    const { result } = await renderHook(() => useWearableSamples(baseParams), {
       wrapper: Wrapper,
     });
 
@@ -87,7 +87,7 @@ describe('useWearableSamples', () => {
     mockedGet.mockRejectedValueOnce(new Error('503 degraded'));
     const { Wrapper } = makeWrapper();
 
-    const { result } = renderHook(() => useWearableSamples(baseParams), {
+    const { result } = await renderHook(() => useWearableSamples(baseParams), {
       wrapper: Wrapper,
     });
 
@@ -98,7 +98,7 @@ describe('useWearableSamples', () => {
   it('does not fire the request when enabled:false', async () => {
     const { Wrapper } = makeWrapper();
 
-    renderHook(() => useWearableSamples(baseParams, { enabled: false }), {
+    await renderHook(() => useWearableSamples(baseParams, { enabled: false }), {
       wrapper: Wrapper,
     });
 
@@ -111,7 +111,7 @@ describe('useWearableSamples', () => {
     mockedGet.mockResolvedValueOnce(okResponse);
     const { Wrapper } = makeWrapper();
 
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () =>
         useWearableSamples({
           bucket: 'HEALTH_FITNESS',

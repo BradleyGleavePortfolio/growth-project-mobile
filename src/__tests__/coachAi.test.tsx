@@ -203,8 +203,8 @@ describe('isAiDisabledError', () => {
 import CoachAiSection from '../components/coach/CoachAiSection';
 import { ThemeProvider } from '../theme/ThemeProvider';
 
-function renderWithNav(node: React.ReactNode) {
-  return render(
+async function renderWithNav(node: React.ReactNode) {
+  return await render(
     <ThemeProvider>
       <NavigationContainer>{node}</NavigationContainer>
     </ThemeProvider>,
@@ -214,7 +214,7 @@ function renderWithNav(node: React.ReactNode) {
 describe('CoachAiSection', () => {
   it('renders disabled CTAs and shows offline caption when status returns ready=false', async () => {
     mockedGet.mockResolvedValueOnce(ok({ ready: false, reason: 'no_api_key' }));
-    const { findByTestId, getByText } = renderWithNav(
+    const { findByTestId, getByText } = await renderWithNav(
       <CoachAiSection clientId="c1" clientName="Jane Doe" />,
     );
     await waitFor(() => getByText('AI offline — owner action required'));
@@ -226,7 +226,7 @@ describe('CoachAiSection', () => {
 
   it('renders enabled CTAs when status returns ready=true', async () => {
     mockedGet.mockResolvedValueOnce(ok({ ready: true, modelUsed: 'claude-opus-4-7' }));
-    const { findByTestId } = renderWithNav(
+    const { findByTestId } = await renderWithNav(
       <CoachAiSection clientId="c1" clientName="Jane Doe" />,
     );
     const cta = await findByTestId('coach-ai-cta-meal');
@@ -242,8 +242,8 @@ import AIWorkoutDraftScreen from '../screens/coach/AIWorkoutDraftScreen';
 
 const Stack = createNativeStackNavigator();
 
-function renderWorkoutScreen() {
-  return render(
+async function renderWorkoutScreen() {
+  return await render(
     <ThemeProvider>
       <NavigationContainer>
         <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -292,7 +292,7 @@ describe('AIWorkoutDraftScreen', () => {
     mockedGet.mockResolvedValueOnce(ok(draft));
     mockedPost.mockResolvedValueOnce(ok({ ...draft }));
 
-    const { findByTestId, getByText, getByLabelText } = renderWorkoutScreen();
+    const { findByTestId, getByText, getByLabelText } = await renderWorkoutScreen();
 
     // Wait for the draft to load.
     await waitFor(() => expect(mockedGet).toHaveBeenCalledWith('/coach/ai/drafts/d1'));
@@ -300,13 +300,13 @@ describe('AIWorkoutDraftScreen', () => {
     // Mutate the sets field for the first exercise.
     const setsInput = await findByTestId('workout-sets-0-0-0');
     await act(async () => {
-      fireEvent.changeText(setsInput, '5');
+      await fireEvent.changeText(setsInput, '5');
     });
 
     // Save button enables after a dirty edit.
     const save = getByLabelText('Save edits');
     await act(async () => {
-      fireEvent.press(save);
+      await fireEvent.press(save);
     });
 
     expect(mockedPost).toHaveBeenCalledWith(

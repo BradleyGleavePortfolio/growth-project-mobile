@@ -85,13 +85,13 @@ beforeEach(() => {
 
 describe('CheckoutReturnScreen — paid success peak moment (P0)', () => {
   it('fires a success haptic exactly once when the paid state lands', async () => {
-    render(<CheckoutReturnScreen />);
+    await render(<CheckoutReturnScreen />);
     await waitFor(() => expect(mockNotification).toHaveBeenCalledTimes(1));
     expect(mockNotification).toHaveBeenCalledWith('success');
   });
 
   it('shows package-specific confirmation copy (not a generic empty line)', async () => {
-    const { getByText } = render(<CheckoutReturnScreen />);
+    const { getByText } = await render(<CheckoutReturnScreen />);
     await waitFor(() => getByText('Welcome to Strength Builder'));
     // The eyebrow + next-step framing make this a closure moment, not a dead end.
     getByText("You're in");
@@ -99,7 +99,7 @@ describe('CheckoutReturnScreen — paid success peak moment (P0)', () => {
   });
 
   it('presents exactly one primary CTA when there is nothing to unpack (flag off)', async () => {
-    const { getByText, queryByText } = render(<CheckoutReturnScreen />);
+    const { getByText, queryByText } = await render(<CheckoutReturnScreen />);
     await waitFor(() => getByText('Welcome to Strength Builder'));
     // Flag off → single "Go to home" primary, no competing secondary link.
     getByText('Go to home');
@@ -111,7 +111,7 @@ describe('CheckoutReturnScreen — paid success peak moment (P0)', () => {
       ok: true,
       data: { ...PAID_STATUS, package_name: null },
     });
-    const { getByText } = render(<CheckoutReturnScreen />);
+    const { getByText } = await render(<CheckoutReturnScreen />);
     await waitFor(() => getByText("You're subscribed"));
   });
 });

@@ -75,9 +75,9 @@ beforeEach(() => {
 });
 
 describe('CommunityDmListScreen embedded prerequisite', () => {
-  it('a /community/me error renders the retryable error (NOT empty, NOT loading), retry refetches, success renders the inbox', () => {
+  it('a /community/me error renders the retryable error (NOT empty, NOT loading), retry refetches, success renders the inbox', async () => {
     const onRetryPrerequisite = jest.fn();
-    const { rerender } = render(
+    const { rerender } = await render(
       <CommunityDmListScreen
         embedded
         workspaceId={null}
@@ -92,11 +92,11 @@ describe('CommunityDmListScreen embedded prerequisite', () => {
     expect(screen.queryByTestId('community-dmlist-empty')).toBeNull();
     expect(mockUseDmThreadsSpy).toHaveBeenCalledWith(null);
 
-    fireEvent.press(screen.getByTestId('community-dmlist-prereq-retry'));
+    await fireEvent.press(screen.getByTestId('community-dmlist-prereq-retry'));
     expect(onRetryPrerequisite).toHaveBeenCalledTimes(1);
 
     mockThreads.data = [{ thread_id: 't-1', other_user_id: 'coach-1' }];
-    rerender(
+    await rerender(
       <CommunityDmListScreen
         embedded
         workspaceId="ws-resolved"
@@ -109,8 +109,8 @@ describe('CommunityDmListScreen embedded prerequisite', () => {
     expect(screen.queryByTestId('community-dmlist-prereq-error')).toBeNull();
   });
 
-  it('a still-loading prerequisite renders the loading state, not the empty inbox, and does not fetch threads', () => {
-    render(
+  it('a still-loading prerequisite renders the loading state, not the empty inbox, and does not fetch threads', async () => {
+    await render(
       <CommunityDmListScreen
         embedded
         workspaceId={null}
@@ -123,14 +123,14 @@ describe('CommunityDmListScreen embedded prerequisite', () => {
     expect(mockUseDmThreadsSpy).toHaveBeenCalledWith(null);
   });
 
-  it('a DM thread-list query FAILURE renders the retryable threads error (NOT the empty inbox), and retry refetches the inbox', () => {
+  it('a DM thread-list query FAILURE renders the retryable threads error (NOT the empty inbox), and retry refetches the inbox', async () => {
     // A resolved workspace whose thread query REJECTS must show a calm retryable
     // threads error, never the "no conversations yet" empty inbox — collapsing a
     // load failure into empty silently hides it (R65 #36/#44).
     mockThreads.data = undefined;
     mockThreads.isLoading = false;
     mockThreads.isError = true;
-    render(
+    await render(
       <CommunityDmListScreen
         embedded
         workspaceId="ws-resolved"
@@ -143,12 +143,12 @@ describe('CommunityDmListScreen embedded prerequisite', () => {
     expect(screen.queryByTestId('community-dmlist-prereq-error')).toBeNull();
 
     // Retry refetches the thread list directly (threads.refetch), not the prereq.
-    fireEvent.press(screen.getByTestId('community-dmlist-threads-retry'));
+    await fireEvent.press(screen.getByTestId('community-dmlist-threads-retry'));
     expect(mockThreads.refetch).toHaveBeenCalledTimes(1);
   });
 
-  it('a genuine workspace_id=null SUCCESS renders the empty/onboarding inbox, NOT the error state', () => {
-    render(
+  it('a genuine workspace_id=null SUCCESS renders the empty/onboarding inbox, NOT the error state', async () => {
+    await render(
       <CommunityDmListScreen
         embedded
         workspaceId={null}

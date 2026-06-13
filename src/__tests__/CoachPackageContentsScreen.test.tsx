@@ -258,7 +258,7 @@ describe('CoachPackageContentsScreen — RTL mount', () => {
 
   it('renders content rows from the list endpoint', async () => {
     mockList.mockResolvedValueOnce({ data: { contents: [makeContent()] } });
-    const { getByTestId, getByText } = render(
+    const { getByTestId, getByText } = await render(
       <CoachPackageContentsScreen navigation={navigation} route={route} />,
     );
     // Explicit waitFor budget so the initial async list load is never raced
@@ -274,7 +274,7 @@ describe('CoachPackageContentsScreen — RTL mount', () => {
 
   it('renders the warm empty state when there is no content', async () => {
     mockList.mockResolvedValueOnce({ data: { contents: [] } });
-    const { getByTestId, getByText } = render(
+    const { getByTestId, getByText } = await render(
       <CoachPackageContentsScreen navigation={navigation} route={route} />,
     );
     await waitFor(() => {
@@ -285,12 +285,12 @@ describe('CoachPackageContentsScreen — RTL mount', () => {
 
   it('"Add content" opens the attach form', async () => {
     mockList.mockResolvedValueOnce({ data: { contents: [] } });
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <CoachPackageContentsScreen navigation={navigation} route={route} />,
     );
     await waitFor(() => expect(getByTestId('content-empty')).toBeTruthy());
 
-    fireEvent.press(getByTestId('content-add-button'));
+    await fireEvent.press(getByTestId('content-add-button'));
     await waitFor(() => {
       expect(getByTestId('content-attach-form')).toBeTruthy();
     });
@@ -299,7 +299,7 @@ describe('CoachPackageContentsScreen — RTL mount', () => {
   it('submitting the attach form calls attach with an Idempotency-Key', async () => {
     mockList.mockResolvedValue({ data: { contents: [] } });
     mockAttach.mockResolvedValueOnce({ data: makeContent() });
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <CoachPackageContentsScreen navigation={navigation} route={route} />,
     );
     await waitFor(
@@ -307,14 +307,14 @@ describe('CoachPackageContentsScreen — RTL mount', () => {
       { timeout: 10000 },
     );
 
-    fireEvent.press(getByTestId('content-add-button'));
+    await fireEvent.press(getByTestId('content-add-button'));
     await waitFor(
       () => expect(getByTestId('content-attach-form')).toBeTruthy(),
       { timeout: 10000 },
     );
 
-    fireEvent.changeText(getByTestId('content-attach-asset-id'), 'asset-xyz');
-    fireEvent.press(getByTestId('content-attach-submit'));
+    await fireEvent.changeText(getByTestId('content-attach-asset-id'), 'asset-xyz');
+    await fireEvent.press(getByTestId('content-attach-submit'));
 
     await waitFor(
       () => {
@@ -342,16 +342,27 @@ describe('CoachPackageContentsScreen — per-card push flow (M5)', () => {
 
   async function mountWithRow() {
     mockList.mockResolvedValue({ data: { contents: [makeContent()] } });
-    const utils = render(
+    const utils = await render(
       <CoachPackageContentsScreen navigation={navigation} route={route} />,
     );
     await waitFor(() => expect(utils.getByTestId('content-row-c1')).toBeTruthy());
     return utils;
   }
 
+  // v14: `fireEvent.press` is async and wraps the dispatch in its own act();
+  // when a press handler kicks off a deliberately never-resolving promise
+  // (an in-flight preview or push), awaiting the press promise itself would
+  // hang forever. Instead we capture the press promise and let its internal
+  // act() settle its committed state update via a couple of microtask turns,
+  // without opening a nested act() (which v14 rejects as overlapping).
+  const settleAct = async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  };
+
   it('tapping the row push icon opens the prompt sheet with the right contentTitle', async () => {
     const { getByTestId } = await mountWithRow();
-    fireEvent.press(getByTestId('content-row-push-c1'));
+    await fireEvent.press(getByTestId('content-row-push-c1'));
     await waitFor(() => expect(getByTestId('mock-prompt-sheet')).toBeTruthy());
     expect(getByTestId('mock-prompt-title').props.children).toBe('Week 1 Program');
     // The per-card affordance is the fresh-push entry (mode='new_content').
@@ -360,9 +371,9 @@ describe('CoachPackageContentsScreen — per-card push flow (M5)', () => {
 
   it('"Future only" closes the sheet with NO preview/push call', async () => {
     const { getByTestId, queryByTestId } = await mountWithRow();
-    fireEvent.press(getByTestId('content-row-push-c1'));
+    await fireEvent.press(getByTestId('content-row-push-c1'));
     await waitFor(() => expect(getByTestId('mock-prompt-sheet')).toBeTruthy());
-    fireEvent.press(getByTestId('mock-prompt-future'));
+    await fireEvent.press(getByTestId('mock-prompt-future'));
     await waitFor(() => expect(queryByTestId('mock-prompt-sheet')).toBeNull());
     expect(mockPushPreview).not.toHaveBeenCalled();
     expect(mockPush).not.toHaveBeenCalled();
@@ -371,9 +382,9 @@ describe('CoachPackageContentsScreen — per-card push flow (M5)', () => {
 
   it('dismiss closes the sheet with NO preview/push call', async () => {
     const { getByTestId, queryByTestId } = await mountWithRow();
-    fireEvent.press(getByTestId('content-row-push-c1'));
+    await fireEvent.press(getByTestId('content-row-push-c1'));
     await waitFor(() => expect(getByTestId('mock-prompt-sheet')).toBeTruthy());
-    fireEvent.press(getByTestId('mock-prompt-dismiss'));
+    await fireEvent.press(getByTestId('mock-prompt-dismiss'));
     await waitFor(() => expect(queryByTestId('mock-prompt-sheet')).toBeNull());
     expect(mockPushPreview).not.toHaveBeenCalled();
     expect(mockPush).not.toHaveBeenCalled();
@@ -384,9 +395,9 @@ describe('CoachPackageContentsScreen — per-card push flow (M5)', () => {
       data: { count: 7, audience: 'active', already_delivered: 0 },
     });
     const { getByTestId, queryByTestId } = await mountWithRow();
-    fireEvent.press(getByTestId('content-row-push-c1'));
+    await fireEvent.press(getByTestId('content-row-push-c1'));
     await waitFor(() => expect(getByTestId('mock-prompt-sheet')).toBeTruthy());
-    fireEvent.press(getByTestId('mock-prompt-existing'));
+    await fireEvent.press(getByTestId('mock-prompt-existing'));
 
     await waitFor(() => expect(mockPushPreview).toHaveBeenCalledTimes(1));
     // pushPreview(packageId, contentId, { audience:'active', mode:'push_existing' })
@@ -410,9 +421,9 @@ describe('CoachPackageContentsScreen — per-card push flow (M5)', () => {
       .mockImplementation(() => {});
     mockPushPreview.mockRejectedValueOnce(new Error('network down'));
     const { getByTestId, queryByTestId } = await mountWithRow();
-    fireEvent.press(getByTestId('content-row-push-c1'));
+    await fireEvent.press(getByTestId('content-row-push-c1'));
     await waitFor(() => expect(getByTestId('mock-prompt-sheet')).toBeTruthy());
-    fireEvent.press(getByTestId('mock-prompt-existing'));
+    await fireEvent.press(getByTestId('mock-prompt-existing'));
 
     await waitFor(() => expect(mockPushPreview).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(alertSpy).toHaveBeenCalled());
@@ -439,14 +450,14 @@ describe('CoachPackageContentsScreen — per-card push flow (M5)', () => {
       },
     });
     const { getByTestId, queryByTestId } = await mountWithRow();
-    fireEvent.press(getByTestId('content-row-push-c1'));
+    await fireEvent.press(getByTestId('content-row-push-c1'));
     await waitFor(() => expect(getByTestId('mock-prompt-sheet')).toBeTruthy());
-    fireEvent.press(getByTestId('mock-prompt-existing'));
+    await fireEvent.press(getByTestId('mock-prompt-existing'));
     await waitFor(() => expect(getByTestId('mock-confirm-modal')).toBeTruthy());
 
     // Pick a future date, then confirm.
-    fireEvent.press(getByTestId('mock-confirm-pick-date'));
-    fireEvent.press(getByTestId('mock-confirm-submit'));
+    await fireEvent.press(getByTestId('mock-confirm-pick-date'));
+    await fireEvent.press(getByTestId('mock-confirm-submit'));
 
     await waitFor(() => expect(mockPush).toHaveBeenCalledTimes(1));
     const args = mockPush.mock.calls[0];
@@ -477,19 +488,26 @@ describe('CoachPackageContentsScreen — per-card push flow (M5)', () => {
     // Never resolve, so submitting stays true across the second tap.
     mockPush.mockReturnValueOnce(new Promise(() => {}));
     const { getByTestId } = await mountWithRow();
-    fireEvent.press(getByTestId('content-row-push-c1'));
+    await fireEvent.press(getByTestId('content-row-push-c1'));
     await waitFor(() => expect(getByTestId('mock-prompt-sheet')).toBeTruthy());
-    fireEvent.press(getByTestId('mock-prompt-existing'));
+    await fireEvent.press(getByTestId('mock-prompt-existing'));
     await waitFor(() => expect(getByTestId('mock-confirm-modal')).toBeTruthy());
 
-    fireEvent.press(getByTestId('mock-confirm-pick-date'));
-    fireEvent.press(getByTestId('mock-confirm-submit'));
+    await fireEvent.press(getByTestId('mock-confirm-pick-date'));
+    // The submit handler awaits the never-resolving push, so do NOT await this
+    // press; let its internal act() commit submitting=true via microtasks.
+    const firstSubmit = fireEvent.press(getByTestId('mock-confirm-submit'));
+    await settleAct();
+    void firstSubmit;
     await waitFor(() =>
       expect(getByTestId('mock-confirm-submitting').props.children).toBe('true'),
     );
-    // Second tap while in flight must be ignored.
-    fireEvent.press(getByTestId('mock-confirm-submit'));
-    fireEvent.press(getByTestId('mock-confirm-submit'));
+    // Second tap while in flight must be ignored (guarded → settles on its own).
+    const secondSubmit = fireEvent.press(getByTestId('mock-confirm-submit'));
+    await settleAct();
+    const thirdSubmit = fireEvent.press(getByTestId('mock-confirm-submit'));
+    await settleAct();
+    await Promise.all([secondSubmit, thirdSubmit]);
 
     expect(mockPush).toHaveBeenCalledTimes(1);
   });
@@ -504,17 +522,27 @@ describe('CoachPackageContentsScreen — per-card push flow (M5)', () => {
     // the second tap. If the code relied on state alone, push would fire twice.
     mockPush.mockReturnValueOnce(new Promise(() => {}));
     const { getByTestId } = await mountWithRow();
-    fireEvent.press(getByTestId('content-row-push-c1'));
+    await fireEvent.press(getByTestId('content-row-push-c1'));
     await waitFor(() => expect(getByTestId('mock-prompt-sheet')).toBeTruthy());
-    fireEvent.press(getByTestId('mock-prompt-existing'));
+    await fireEvent.press(getByTestId('mock-prompt-existing'));
     await waitFor(() => expect(getByTestId('mock-confirm-modal')).toBeTruthy());
-    fireEvent.press(getByTestId('mock-confirm-pick-date'));
+    await fireEvent.press(getByTestId('mock-confirm-pick-date'));
 
     // Two back-to-back taps in the SAME tick — no waitFor in between, so no
     // re-render lands between them. The synchronous submitInFlightRef must
-    // swallow the second tap.
-    fireEvent.press(getByTestId('mock-confirm-submit'));
-    fireEvent.press(getByTestId('mock-confirm-submit'));
+    // swallow the second tap. The FIRST handler awaits the never-resolving
+    // push, so its internal act() stays pending forever; we must NOT await the
+    // first press promise (that hangs the test). Capture it, let its internal
+    // act() commit submitting=true via microtasks, then fire the guarded second
+    // tap — which short-circuits on submitInFlightRef and resolves on its own.
+    const firstSubmit = fireEvent.press(getByTestId('mock-confirm-submit'));
+    await settleAct();
+    const secondSubmit = fireEvent.press(getByTestId('mock-confirm-submit'));
+    await settleAct();
+    // Only the guarded (immediately-returning) second press is awaitable; the
+    // first press is intentionally left pending.
+    await secondSubmit;
+    void firstSubmit;
 
     // push called EXACTLY ONCE despite two synchronous taps.
     expect(mockPush).toHaveBeenCalledTimes(1);
@@ -526,15 +554,23 @@ describe('CoachPackageContentsScreen — per-card push flow (M5)', () => {
     });
     mockPush.mockReturnValueOnce(new Promise(() => {}));
     const { getByTestId } = await mountWithRow();
-    fireEvent.press(getByTestId('content-row-push-c1'));
+    await fireEvent.press(getByTestId('content-row-push-c1'));
     await waitFor(() => expect(getByTestId('mock-prompt-sheet')).toBeTruthy());
-    fireEvent.press(getByTestId('mock-prompt-existing'));
+    await fireEvent.press(getByTestId('mock-prompt-existing'));
     await waitFor(() => expect(getByTestId('mock-confirm-modal')).toBeTruthy());
-    fireEvent.press(getByTestId('mock-confirm-pick-date'));
+    await fireEvent.press(getByTestId('mock-confirm-pick-date'));
 
-    fireEvent.press(getByTestId('mock-confirm-submit'));
-    fireEvent.press(getByTestId('mock-confirm-submit'));
+    // The first submit handler awaits the never-resolving push, so capture
+    // (do NOT await) the presses and settle via microtasks; the guarded second
+    // press short-circuits synchronously.
+    const firstSubmit = fireEvent.press(getByTestId('mock-confirm-submit'));
+    await settleAct();
+    const secondSubmit = fireEvent.press(getByTestId('mock-confirm-submit'));
+    await settleAct();
+    await secondSubmit;
+    void firstSubmit;
 
+    await waitFor(() => expect(mockPush).toHaveBeenCalledTimes(1));
     expect(mockPush).toHaveBeenCalledTimes(1);
     // The single push uses the ONE stable key (minted once, the mocked value).
     expect(mockPush.mock.calls[0][3]).toBe('test-idem-key-0001');
@@ -560,21 +596,21 @@ describe('CoachPackageContentsScreen — per-card push flow (M5)', () => {
         },
       });
     const { getByTestId } = await mountWithRow();
-    fireEvent.press(getByTestId('content-row-push-c1'));
+    await fireEvent.press(getByTestId('content-row-push-c1'));
     await waitFor(() => expect(getByTestId('mock-prompt-sheet')).toBeTruthy());
-    fireEvent.press(getByTestId('mock-prompt-existing'));
+    await fireEvent.press(getByTestId('mock-prompt-existing'));
     await waitFor(() => expect(getByTestId('mock-confirm-modal')).toBeTruthy());
-    fireEvent.press(getByTestId('mock-confirm-pick-date'));
+    await fireEvent.press(getByTestId('mock-confirm-pick-date'));
 
     // First attempt fails — modal stays open, submitting resets to false.
-    fireEvent.press(getByTestId('mock-confirm-submit'));
+    await fireEvent.press(getByTestId('mock-confirm-submit'));
     await waitFor(() => expect(mockPush).toHaveBeenCalledTimes(1));
     await waitFor(() =>
       expect(getByTestId('mock-confirm-submitting').props.children).toBe('false'),
     );
 
     // Deliberate RETRY of the SAME intent.
-    fireEvent.press(getByTestId('mock-confirm-submit'));
+    await fireEvent.press(getByTestId('mock-confirm-submit'));
     await waitFor(() => expect(mockPush).toHaveBeenCalledTimes(2));
 
     // Both calls used the SAME idempotency key (one key per intent).
@@ -594,9 +630,12 @@ describe('CoachPackageContentsScreen — per-card push flow (M5)', () => {
       }),
     );
     const { getByTestId, queryByTestId } = await mountWithRow();
-    fireEvent.press(getByTestId('content-row-push-c1'));
+    await fireEvent.press(getByTestId('content-row-push-c1'));
     await waitFor(() => expect(getByTestId('mock-prompt-sheet')).toBeTruthy());
-    fireEvent.press(getByTestId('mock-prompt-existing'));
+    // The handler awaits the in-flight (never-resolving) preview, so do NOT
+    // await this press; let its internal act() commit the loading state.
+    const existingPress = fireEvent.press(getByTestId('mock-prompt-existing'));
+    await settleAct();
 
     // While preview is in flight: calm loading visible, confirm modal NOT yet.
     await waitFor(() => expect(getByTestId('push-preview-loading')).toBeTruthy());
@@ -604,6 +643,7 @@ describe('CoachPackageContentsScreen — per-card push flow (M5)', () => {
 
     // Once preview resolves, the loading clears and the confirm modal opens.
     resolvePreview({ data: { count: 3, audience: 'active', already_delivered: 0 } });
+    await existingPress;
     await waitFor(() => expect(getByTestId('mock-confirm-modal')).toBeTruthy());
     expect(queryByTestId('push-preview-loading')).toBeNull();
   });
@@ -616,15 +656,15 @@ describe('CoachPackageContentsScreen — per-card push flow (M5)', () => {
       data: { count: 9, audience: 'active', already_delivered: 0 },
     });
     const { getByTestId } = await mountWithRow();
-    fireEvent.press(getByTestId('content-row-push-c1'));
+    await fireEvent.press(getByTestId('content-row-push-c1'));
     await waitFor(() => expect(getByTestId('mock-prompt-sheet')).toBeTruthy());
 
     // Back-to-back taps in the SAME tick on the SAME node reference — no
     // waitFor between them, so no re-render (and no unmount) lands. Only a
     // synchronous ref guard can block the second tap.
     const existingBtn = getByTestId('mock-prompt-existing');
-    fireEvent.press(existingBtn);
-    fireEvent.press(existingBtn);
+    await fireEvent.press(existingBtn);
+    await fireEvent.press(existingBtn);
 
     await waitFor(() => expect(getByTestId('mock-confirm-modal')).toBeTruthy());
     // pushPreview fired EXACTLY ONCE despite two synchronous taps.
@@ -657,21 +697,29 @@ describe('CoachPackageContentsScreen — per-card push flow (M5)', () => {
     mockPush.mockReturnValueOnce(new Promise(() => {}));
 
     const { getByTestId } = await mountWithRow();
-    fireEvent.press(getByTestId('content-row-push-c1'));
+    await fireEvent.press(getByTestId('content-row-push-c1'));
     await waitFor(() => expect(getByTestId('mock-prompt-sheet')).toBeTruthy());
 
-    // Tap "Send to existing" — preview A starts (in flight).
-    fireEvent.press(getByTestId('mock-prompt-existing'));
+    // Tap "Send to existing" — preview A starts (in flight). The handler awaits
+    // the never-resolving preview, so do NOT await this press; let its internal
+    // act() commit the loading state, then await the press only after resolveA.
+    const existingPress = fireEvent.press(getByTestId('mock-prompt-existing'));
+    await settleAct();
     await waitFor(() => expect(getByTestId('push-preview-loading')).toBeTruthy());
     expect(mockPushPreview).toHaveBeenCalledTimes(1);
 
     // Preview A resolves → confirm opens.
     resolveA({ data: { count: 5, audience: 'active', already_delivered: 0 } });
+    await existingPress;
     await waitFor(() => expect(getByTestId('mock-confirm-modal')).toBeTruthy());
 
-    // Confirm → first push fires and is in flight.
-    fireEvent.press(getByTestId('mock-confirm-pick-date'));
-    fireEvent.press(getByTestId('mock-confirm-submit'));
+    // Confirm → first push fires and is in flight. The submit handler awaits
+    // the never-resolving push, so do NOT await this press; let its internal
+    // act() commit submitting=true via microtasks.
+    await fireEvent.press(getByTestId('mock-confirm-pick-date'));
+    const firstSubmit = fireEvent.press(getByTestId('mock-confirm-submit'));
+    await settleAct();
+    void firstSubmit;
     await waitFor(() => expect(mockPush).toHaveBeenCalledTimes(1));
     await waitFor(() =>
       expect(getByTestId('mock-confirm-submitting').props.children).toBe('true'),
@@ -679,9 +727,13 @@ describe('CoachPackageContentsScreen — per-card push flow (M5)', () => {
     const keyAfterFirstPush = mockPush.mock.calls[0][3];
 
     // A second confirm tap WHILE the push is in flight must be swallowed by the
-    // submit lock (which a stale preview must never have reset).
-    fireEvent.press(getByTestId('mock-confirm-submit'));
-    fireEvent.press(getByTestId('mock-confirm-submit'));
+    // submit lock (which a stale preview must never have reset). These are
+    // short-circuited by the committed lock, so they settle on their own.
+    const secondSubmit = fireEvent.press(getByTestId('mock-confirm-submit'));
+    await settleAct();
+    const thirdSubmit = fireEvent.press(getByTestId('mock-confirm-submit'));
+    await settleAct();
+    await Promise.all([secondSubmit, thirdSubmit]);
 
     // EXACTLY ONCE, same stable key — the lock was never reset.
     expect(mockPush).toHaveBeenCalledTimes(1);
@@ -697,23 +749,30 @@ describe('CoachPackageContentsScreen — per-card push flow (M5)', () => {
     });
     mockPush.mockReturnValueOnce(new Promise(() => {}));
     const { getByTestId } = await mountWithRow();
-    fireEvent.press(getByTestId('content-row-push-c1'));
+    await fireEvent.press(getByTestId('content-row-push-c1'));
     await waitFor(() => expect(getByTestId('mock-prompt-sheet')).toBeTruthy());
 
     // Double-tap the prompt on the SAME node — second is guarded out.
     const existingBtn = getByTestId('mock-prompt-existing');
-    fireEvent.press(existingBtn);
-    fireEvent.press(existingBtn);
+    await fireEvent.press(existingBtn);
+    await fireEvent.press(existingBtn);
     await waitFor(() => expect(getByTestId('mock-confirm-modal')).toBeTruthy());
     expect(mockPushPreview).toHaveBeenCalledTimes(1);
 
-    // Confirm twice synchronously — push fires exactly once.
-    fireEvent.press(getByTestId('mock-confirm-pick-date'));
-    fireEvent.press(getByTestId('mock-confirm-submit'));
-    fireEvent.press(getByTestId('mock-confirm-submit'));
+    // Confirm twice synchronously — push fires exactly once. The first submit's
+    // handler awaits the never-resolving push, so do NOT await it; the guarded
+    // second submit short-circuits. Capture and settle via microtasks.
+    await fireEvent.press(getByTestId('mock-confirm-pick-date'));
+    const firstSubmit = fireEvent.press(getByTestId('mock-confirm-submit'));
+    await settleAct();
+    const secondSubmit = fireEvent.press(getByTestId('mock-confirm-submit'));
+    await settleAct();
+    await secondSubmit;
+    await waitFor(() => expect(mockPush).toHaveBeenCalledTimes(1));
 
     expect(mockPush).toHaveBeenCalledTimes(1);
     expect(mockPush.mock.calls[0][3]).toBe('test-idem-key-0001');
+    void firstSubmit;
   });
 
   it('push FAILURE keeps the modal open and surfaces a warm error', async () => {
@@ -725,13 +784,13 @@ describe('CoachPackageContentsScreen — per-card push flow (M5)', () => {
     });
     mockPush.mockRejectedValueOnce(new Error('server 500'));
     const { getByTestId } = await mountWithRow();
-    fireEvent.press(getByTestId('content-row-push-c1'));
+    await fireEvent.press(getByTestId('content-row-push-c1'));
     await waitFor(() => expect(getByTestId('mock-prompt-sheet')).toBeTruthy());
-    fireEvent.press(getByTestId('mock-prompt-existing'));
+    await fireEvent.press(getByTestId('mock-prompt-existing'));
     await waitFor(() => expect(getByTestId('mock-confirm-modal')).toBeTruthy());
 
-    fireEvent.press(getByTestId('mock-confirm-pick-date'));
-    fireEvent.press(getByTestId('mock-confirm-submit'));
+    await fireEvent.press(getByTestId('mock-confirm-pick-date'));
+    await fireEvent.press(getByTestId('mock-confirm-submit'));
 
     await waitFor(() => expect(mockPush).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(alertSpy).toHaveBeenCalled());

@@ -24,7 +24,7 @@ describe('useReducedMotion', () => {
     jest
       .spyOn(AccessibilityInfo, 'isReduceMotionEnabled')
       .mockResolvedValue(true);
-    const { getByTestId } = render(<Probe />);
+    const { getByTestId } = await render(<Probe />);
     await waitFor(() => expect(getByTestId('probe')).toHaveTextContent('reduced'));
   });
 
@@ -32,7 +32,7 @@ describe('useReducedMotion', () => {
     jest
       .spyOn(AccessibilityInfo, 'isReduceMotionEnabled')
       .mockResolvedValue(false);
-    const { getByTestId } = render(<Probe />);
+    const { getByTestId } = await render(<Probe />);
     await waitFor(() => expect(getByTestId('probe')).toHaveTextContent('full'));
   });
 
@@ -47,9 +47,9 @@ describe('useReducedMotion', () => {
         if (event === 'reduceMotionChanged') handler = cb;
         return { remove: jest.fn() };
       }) as unknown as typeof AccessibilityInfo.addEventListener);
-    const { getByTestId } = render(<Probe />);
+    const { getByTestId } = await render(<Probe />);
     await waitFor(() => expect(getByTestId('probe')).toHaveTextContent('full'));
-    act(() => handler?.(true));
+    await act(() => handler?.(true));
     await waitFor(() => expect(getByTestId('probe')).toHaveTextContent('reduced'));
   });
 });

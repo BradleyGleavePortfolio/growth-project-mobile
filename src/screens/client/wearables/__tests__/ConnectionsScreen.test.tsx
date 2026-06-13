@@ -100,9 +100,9 @@ beforeEach(() => {
 });
 
 describe('ConnectionsScreen — list + badges', () => {
-  it('renders a row for every provider in the catalog', () => {
+  it('renders a row for every provider in the catalog', async () => {
     mockUseWearableConnections.mockReturnValue(queryResult({ data: [] }));
-    render(<ConnectionsScreen />);
+    await render(<ConnectionsScreen />);
     // Every provider's display name appears (Apple Health, Oura, WHOOP, …).
     expect(screen.getByText('Apple Health')).toBeTruthy();
     expect(screen.getByText('Oura')).toBeTruthy();
@@ -114,81 +114,81 @@ describe('ConnectionsScreen — list + badges', () => {
     expect(actions.length).toBeGreaterThanOrEqual(WEARABLE_PROVIDERS.length);
   });
 
-  it('shows the Connected badge + relative sync time for a connected provider', () => {
+  it('shows the Connected badge + relative sync time for a connected provider', async () => {
     const tenMinAgo = new Date(Date.now() - 10 * 60 * 1000).toISOString();
     mockUseWearableConnections.mockReturnValue(
       queryResult({ data: [connection('OURA', 'connected', tenMinAgo)] }),
     );
-    render(<ConnectionsScreen />);
+    await render(<ConnectionsScreen />);
     expect(screen.getByText('Connected')).toBeTruthy();
     expect(screen.getByText('10m ago')).toBeTruthy();
     // A connected provider's primary action is Disconnect.
     expect(screen.getByLabelText('Disconnect Oura')).toBeTruthy();
   });
 
-  it('shows the Expired badge + Reconnect action for an expired provider', () => {
+  it('shows the Expired badge + Reconnect action for an expired provider', async () => {
     mockUseWearableConnections.mockReturnValue(
       queryResult({ data: [connection('WHOOP', 'expired')] }),
     );
-    render(<ConnectionsScreen />);
+    await render(<ConnectionsScreen />);
     expect(screen.getByText('Expired')).toBeTruthy();
     expect(screen.getByLabelText('Reconnect WHOOP')).toBeTruthy();
   });
 
-  it('shows the Error badge + Reconnect action for an errored provider', () => {
+  it('shows the Error badge + Reconnect action for an errored provider', async () => {
     mockUseWearableConnections.mockReturnValue(
       queryResult({ data: [connection('GARMIN', 'error')] }),
     );
-    render(<ConnectionsScreen />);
+    await render(<ConnectionsScreen />);
     expect(screen.getByText('Error')).toBeTruthy();
     expect(screen.getByLabelText('Reconnect Garmin')).toBeTruthy();
   });
 
-  it('shows the Not connected badge + Connect action for an unconnected provider', () => {
+  it('shows the Not connected badge + Connect action for an unconnected provider', async () => {
     mockUseWearableConnections.mockReturnValue(queryResult({ data: [] }));
-    render(<ConnectionsScreen />);
+    await render(<ConnectionsScreen />);
     // Strava is not connected → "Connect Strava".
     expect(screen.getByLabelText('Connect Strava')).toBeTruthy();
   });
 });
 
 describe('ConnectionsScreen — interactions', () => {
-  it('opens the connect sheet with the tapped provider on Connect', () => {
+  it('opens the connect sheet with the tapped provider on Connect', async () => {
     mockUseWearableConnections.mockReturnValue(queryResult({ data: [] }));
-    render(<ConnectionsScreen />);
-    fireEvent.press(screen.getByLabelText('Connect Strava'));
+    await render(<ConnectionsScreen />);
+    await fireEvent.press(screen.getByLabelText('Connect Strava'));
     expect(sheetProps.visible).toBe(true);
     expect(sheetProps.provider).toBe('STRAVA');
   });
 
-  it('calls the disconnect mutation when Disconnect is tapped', () => {
+  it('calls the disconnect mutation when Disconnect is tapped', async () => {
     mockUseWearableConnections.mockReturnValue(
       queryResult({ data: [connection('OURA', 'connected')] }),
     );
-    render(<ConnectionsScreen />);
-    fireEvent.press(screen.getByLabelText('Disconnect Oura'));
+    await render(<ConnectionsScreen />);
+    await fireEvent.press(screen.getByLabelText('Disconnect Oura'));
     expect(mockDisconnectMutate).toHaveBeenCalledWith('OURA');
   });
 });
 
 describe('ConnectionsScreen — loading + error states', () => {
-  it('renders a loading indicator while fetching', () => {
+  it('renders a loading indicator while fetching', async () => {
     mockUseWearableConnections.mockReturnValue(
       queryResult({ isLoading: true }),
     );
-    render(<ConnectionsScreen />);
+    await render(<ConnectionsScreen />);
     expect(screen.getByLabelText('Loading your connections')).toBeTruthy();
   });
 
-  it('renders an error state with a retry button', () => {
+  it('renders an error state with a retry button', async () => {
     const refetch = jest.fn();
     mockUseWearableConnections.mockReturnValue(
       queryResult({ isError: true, refetch }),
     );
-    render(<ConnectionsScreen />);
+    await render(<ConnectionsScreen />);
     const retry = screen.getByLabelText('Retry loading connections');
     expect(retry).toBeTruthy();
-    fireEvent.press(retry);
+    await fireEvent.press(retry);
     expect(refetch).toHaveBeenCalledTimes(1);
   });
 });

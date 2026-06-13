@@ -102,7 +102,7 @@ describe('§2.3 CoachBriefScreen with romanChat OFF mounts the non-Roman fallbac
     mockFetchCoachBrief.mockResolvedValue(
       payload({ clients: [card({ clientDisplayName: 'A' }), card({ clientDisplayName: 'B' })] }),
     );
-    const { getByTestId, queryByTestId } = render(<CoachBriefScreen />);
+    const { getByTestId, queryByTestId } = await render(<CoachBriefScreen />);
     await waitFor(() => expect(getByTestId('coach-brief-header-fallback')).toBeTruthy());
     // The Roman voiced+face delivery must NOT be mounted with the flag off.
     expect(queryByTestId('roman-brief-card')).toBeNull();
@@ -115,7 +115,7 @@ describe('§2.3 CoachBriefScreen with romanChat OFF mounts the non-Roman fallbac
     mockFetchCoachBrief.mockResolvedValue(
       payload({ clients: [card({ latestVerifiedProgress: vp({ signoffStatus: 'pending' }) })] }),
     );
-    const { getByTestId, queryByTestId } = render(<CoachBriefScreen />);
+    const { getByTestId, queryByTestId } = await render(<CoachBriefScreen />);
     await waitFor(() => expect(getByTestId('coach-brief-header-fallback')).toBeTruthy());
     expect(queryByTestId('roman-checkin-card')).toBeNull();
     expect(queryByTestId('roman-newclient-card')).toBeNull();

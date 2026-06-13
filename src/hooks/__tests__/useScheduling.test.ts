@@ -83,7 +83,7 @@ describe('useScheduling', () => {
   it('useMyUpcomingSessions returns the list from listMySessions', async () => {
     mockApi.listMySessions.mockResolvedValueOnce([FAKE_SESSION]);
     const { wrapper } = makeWrapper();
-    const { result } = renderHook(() => useMyUpcomingSessions(10), { wrapper });
+    const { result } = await renderHook(() => useMyUpcomingSessions(10), { wrapper });
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(mockApi.listMySessions).toHaveBeenCalledWith(10);
@@ -96,7 +96,7 @@ describe('useScheduling', () => {
       status: 'requested',
     });
     const { wrapper } = makeWrapper();
-    const { result } = renderHook(() => useRequestSession(), { wrapper });
+    const { result } = await renderHook(() => useRequestSession(), { wrapper });
 
     await act(async () => {
       await result.current.mutateAsync({
@@ -122,7 +122,7 @@ describe('useScheduling', () => {
     qc.setQueryData(['scheduling', 'sessions', 'me', { limit: 25 }], []);
     qc.setQueryData(['scheduling', 'sessions', FAKE_SESSION.id], FAKE_SESSION);
 
-    const { result } = renderHook(() => useApproveSession(), { wrapper });
+    const { result } = await renderHook(() => useApproveSession(), { wrapper });
 
     await act(async () => {
       await result.current.mutateAsync({ id: FAKE_SESSION.id });

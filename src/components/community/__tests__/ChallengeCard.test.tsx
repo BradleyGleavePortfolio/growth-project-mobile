@@ -67,8 +67,8 @@ function participation(overrides: Record<string, unknown> = {}) {
 }
 
 describe('ChallengeCard', () => {
-  it('shows a single Join affordance and description when not joined', () => {
-    render(
+  it('shows a single Join affordance and description when not joined', async () => {
+    await render(
       <ChallengeCard
         challenge={challenge()}
         participation={null}
@@ -84,8 +84,8 @@ describe('ChallengeCard', () => {
     expect(screen.queryByText('Open to join')).toBeNull();
   });
 
-  it('shows own progress and a single Continue affordance when joined', () => {
-    render(
+  it('shows own progress and a single Continue affordance when joined', async () => {
+    await render(
       <ChallengeCard
         challenge={challenge()}
         participation={participation()}
@@ -100,8 +100,8 @@ describe('ChallengeCard', () => {
     expect(screen.queryByText('In progress')).toBeNull();
   });
 
-  it('renders a calm completed closure as the single affordance with a line check icon', () => {
-    render(
+  it('renders a calm completed closure as the single affordance with a line check icon', async () => {
+    await render(
       <ChallengeCard
         challenge={challenge()}
         participation={participation({ completed: true, progress_value: 30 })}
@@ -116,9 +116,9 @@ describe('ChallengeCard', () => {
     expect(screen.getByTestId('card-complete-icon')).toBeTruthy();
   });
 
-  it('fires onPress with the challenge', () => {
+  it('fires onPress with the challenge', async () => {
     const onPress = jest.fn();
-    render(
+    await render(
       <ChallengeCard
         challenge={challenge()}
         participation={null}
@@ -126,7 +126,7 @@ describe('ChallengeCard', () => {
         testID="card"
       />,
     );
-    fireEvent.press(screen.getByTestId('card'));
+    await fireEvent.press(screen.getByTestId('card'));
     expect(onPress).toHaveBeenCalledWith(expect.objectContaining({ id: 'ch-1' }));
   });
 });

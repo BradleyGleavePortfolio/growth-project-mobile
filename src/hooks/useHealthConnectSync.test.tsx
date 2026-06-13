@@ -73,20 +73,20 @@ beforeEach(() => {
 });
 
 describe('useHealthConnectSync', () => {
-  it('reports supported=true on android', () => {
-    const { result } = renderHook(() => useHealthConnectSync(), { wrapper });
+  it('reports supported=true on android', async () => {
+    const { result } = await renderHook(() => useHealthConnectSync(), { wrapper });
     expect(result.current.supported).toBe(true);
   });
 
-  it('reports supported=false on ios', () => {
+  it('reports supported=false on ios', async () => {
     setPlatform('ios');
-    const { result } = renderHook(() => useHealthConnectSync(), { wrapper });
+    const { result } = await renderHook(() => useHealthConnectSync(), { wrapper });
     expect(result.current.supported).toBe(false);
   });
 
   it('runs a sync and surfaces the result', async () => {
     const d = deps();
-    const { result } = renderHook(() => useHealthConnectSync({ deps: d }), { wrapper });
+    const { result } = await renderHook(() => useHealthConnectSync({ deps: d }), { wrapper });
 
     let res: { normalizedCount: number; inserted: number } | undefined;
     await act(async () => {
@@ -104,7 +104,7 @@ describe('useHealthConnectSync', () => {
   it('rejects with HealthConnectUnsupportedError on ios', async () => {
     setPlatform('ios');
     const d = deps();
-    const { result } = renderHook(() => useHealthConnectSync({ deps: d }), { wrapper });
+    const { result } = await renderHook(() => useHealthConnectSync({ deps: d }), { wrapper });
     await act(async () => {
       await expect(
         result.current.sync({ userId: 'u1', connectionId: 'c1' }),

@@ -343,18 +343,18 @@ beforeEach(() => {
 });
 
 describe('Coach Community screens — render with flag ON, mocked API', () => {
-  it('Home renders', () => {
+  it('Home renders', async () => {
     mockState.dashboard = {
       data: { unread_inbox_count: 2, active_cohort_count: 1, flagged_today_count: 0 },
       isLoading: false,
       isError: false,
     };
-    const { getByTestId } = render(<CoachCommunityHomeScreen />);
+    const { getByTestId } = await render(<CoachCommunityHomeScreen />);
     expect(getByTestId('coach-community-home-screen')).toBeTruthy();
     expect(getByTestId('coach-community-home-inbox-card')).toBeTruthy();
   });
 
-  it('Inbox renders with aggregated rows across cohorts', () => {
+  it('Inbox renders with aggregated rows across cohorts', async () => {
     mockState.inbox = {
       data: {
         items: [
@@ -373,14 +373,14 @@ describe('Coach Community screens — render with flag ON, mocked API', () => {
       isRefetching: false,
       refetch: jest.fn(),
     };
-    const { getByTestId, getByText } = render(<CoachCommunityInboxScreen />);
+    const { getByTestId, getByText } = await render(<CoachCommunityInboxScreen />);
     expect(getByTestId('coach-community-inbox-screen')).toBeTruthy();
     // Mixed cohorts present.
     expect(getByText('Spring block')).toBeTruthy();
     expect(getByText('Autumn block')).toBeTruthy();
   });
 
-  it('Cohorts renders with a row', () => {
+  it('Cohorts renders with a row', async () => {
     mockState.cohorts = {
       data: [cohort()],
       isLoading: false,
@@ -388,28 +388,28 @@ describe('Coach Community screens — render with flag ON, mocked API', () => {
       isRefetching: false,
       refetch: jest.fn(),
     };
-    const { getByTestId } = render(<CoachCommunityCohortsScreen />);
+    const { getByTestId } = await render(<CoachCommunityCohortsScreen />);
     expect(getByTestId('coach-community-cohorts-screen')).toBeTruthy();
     expect(
       getByTestId('coach-community-cohort-row-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
     ).toBeTruthy();
   });
 
-  it('Cohort detail renders with a member', () => {
+  it('Cohort detail renders with a member', async () => {
     mockRouteParams.current = { cohortId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', cohortName: 'Spring block' };
     mockState.cohortDetail = {
       data: { cohort: cohort(), members: [member()] },
       isLoading: false,
       isError: false,
     };
-    const { getByTestId } = render(<CoachCommunityCohortDetailScreen />);
+    const { getByTestId } = await render(<CoachCommunityCohortDetailScreen />);
     expect(getByTestId('coach-community-cohort-detail-screen')).toBeTruthy();
     expect(
       getByTestId('coach-community-member-row-bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'),
     ).toBeTruthy();
   });
 
-  it('Moderation renders with a flagged row', () => {
+  it('Moderation renders with a flagged row', async () => {
     mockState.flagged = {
       data: [flaggedItem()],
       isLoading: false,
@@ -417,21 +417,21 @@ describe('Coach Community screens — render with flag ON, mocked API', () => {
       isRefetching: false,
       refetch: jest.fn(),
     };
-    const { getByTestId } = render(<CoachCommunityModerationScreen />);
+    const { getByTestId } = await render(<CoachCommunityModerationScreen />);
     expect(getByTestId('coach-community-moderation-screen')).toBeTruthy();
     expect(
       getByTestId('coach-community-flagged-row-cccccccc-cccc-cccc-cccc-cccccccccccc'),
     ).toBeTruthy();
   });
 
-  it('Post detail renders the post, author label, and reply thread', () => {
+  it('Post detail renders the post, author label, and reply thread', async () => {
     mockRouteParams.current = { postId: 'dddddddd-dddd-dddd-dddd-dddddddddddd' };
     mockState.postDetail = {
       data: { post: post(), comments: [comment()] },
       isLoading: false,
       isError: false,
     };
-    const { getByTestId, getByText } = render(<CoachCommunityPostDetailScreen />);
+    const { getByTestId, getByText } = await render(<CoachCommunityPostDetailScreen />);
     expect(getByTestId('coach-community-post-detail-screen')).toBeTruthy();
     expect(getByText('Form check thread')).toBeTruthy();
     expect(getByText('Filming my squat today.')).toBeTruthy();
@@ -442,7 +442,7 @@ describe('Coach Community screens — render with flag ON, mocked API', () => {
     expect(getByText('1 reply')).toBeTruthy();
   });
 
-  it('Post detail shows the flagged badge when opened from moderation', () => {
+  it('Post detail shows the flagged badge when opened from moderation', async () => {
     mockRouteParams.current = {
       postId: 'dddddddd-dddd-dddd-dddd-dddddddddddd',
       flagged: true,
@@ -452,20 +452,20 @@ describe('Coach Community screens — render with flag ON, mocked API', () => {
       isLoading: false,
       isError: false,
     };
-    const { getByTestId, getByText } = render(<CoachCommunityPostDetailScreen />);
+    const { getByTestId, getByText } = await render(<CoachCommunityPostDetailScreen />);
     expect(getByTestId('coach-community-post-detail-flagged-badge')).toBeTruthy();
     expect(getByText('No replies yet')).toBeTruthy();
   });
 });
 
 describe('FACE + VOICE contract — RomanAvatar + BACKEND-PAYLOAD copy on every empty state', () => {
-  it('Home empty: neutral avatar + payload copy, avatar above text', () => {
+  it('Home empty: neutral avatar + payload copy, avatar above text', async () => {
     mockState.dashboard = {
       data: { unread_inbox_count: 0, active_cohort_count: 0, flagged_today_count: 0 },
       isLoading: false,
       isError: false,
     };
-    const { getByTestId, getByText, toJSON } = render(<CoachCommunityHomeScreen />);
+    const { getByTestId, getByText, toJSON } = await render(<CoachCommunityHomeScreen />);
     expect(getByTestId('coach-community-home-empty')).toBeTruthy();
     expect(getByTestId('coach-community-home-empty-avatar')).toBeTruthy();
     // The screen renders the BACKEND payload text, never a local constant.
@@ -483,32 +483,32 @@ describe('FACE + VOICE contract — RomanAvatar + BACKEND-PAYLOAD copy on every 
     expect(avatarIdx).toBeLessThan(copyIdx);
   });
 
-  it('Inbox empty: neutral avatar + payload copy', () => {
-    const { getByTestId, getByText } = render(<CoachCommunityInboxScreen />);
+  it('Inbox empty: neutral avatar + payload copy', async () => {
+    const { getByTestId, getByText } = await render(<CoachCommunityInboxScreen />);
     expect(getByTestId('coach-community-inbox-empty-avatar')).toBeTruthy();
     expect(getByText('TEST_EMPTY_INBOX_COPY')).toBeTruthy();
   });
 
-  it('Cohorts empty: neutral avatar + payload copy', () => {
-    const { getByTestId, getByText } = render(<CoachCommunityCohortsScreen />);
+  it('Cohorts empty: neutral avatar + payload copy', async () => {
+    const { getByTestId, getByText } = await render(<CoachCommunityCohortsScreen />);
     expect(getByTestId('coach-community-cohorts-empty-avatar')).toBeTruthy();
     expect(getByText('TEST_EMPTY_COHORTS_COPY')).toBeTruthy();
   });
 
-  it('Cohort detail empty members: neutral avatar + payload copy', () => {
+  it('Cohort detail empty members: neutral avatar + payload copy', async () => {
     mockRouteParams.current = { cohortId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' };
     mockState.cohortDetail = {
       data: { cohort: cohort({ member_count: 0 }), members: [] },
       isLoading: false,
       isError: false,
     };
-    const { getByTestId, getByText } = render(<CoachCommunityCohortDetailScreen />);
+    const { getByTestId, getByText } = await render(<CoachCommunityCohortDetailScreen />);
     expect(getByTestId('coach-community-cohort-detail-empty-avatar')).toBeTruthy();
     expect(getByText('TEST_EMPTY_MEMBERS_COPY')).toBeTruthy();
   });
 
-  it('Moderation empty (celebratory): smile avatar + payload copy', () => {
-    const { getByTestId, getByText } = render(<CoachCommunityModerationScreen />);
+  it('Moderation empty (celebratory): smile avatar + payload copy', async () => {
+    const { getByTestId, getByText } = await render(<CoachCommunityModerationScreen />);
     const avatar = getByTestId('coach-community-moderation-empty-avatar');
     expect(avatar).toBeTruthy();
     // The smile crop (from the payload) announces the celebratory variant.
@@ -518,7 +518,7 @@ describe('FACE + VOICE contract — RomanAvatar + BACKEND-PAYLOAD copy on every 
 });
 
 describe('Empty-state PAYLOAD is stateful — loading + error branches (BLOCKER 1/2)', () => {
-  it('Home: payload still loading on a quiet dashboard renders a spinner, NOT Roman copy', () => {
+  it('Home: payload still loading on a quiet dashboard renders a spinner, NOT Roman copy', async () => {
     // Primary data is a genuinely-empty success, but the voice-policy payload
     // is still in flight. The screen must show the non-Roman loading branch,
     // never the calm empty copy.
@@ -530,7 +530,7 @@ describe('Empty-state PAYLOAD is stateful — loading + error branches (BLOCKER 
     mockEmptyResultOverride.current = {
       coach_community_home_empty: { status: 'loading' },
     };
-    const { getByTestId, queryByText, queryByTestId } = render(
+    const { getByTestId, queryByText, queryByTestId } = await render(
       <CoachCommunityHomeScreen />,
     );
     expect(getByTestId('coach-community-home-empty-loading')).toBeTruthy();
@@ -539,152 +539,152 @@ describe('Empty-state PAYLOAD is stateful — loading + error branches (BLOCKER 
     expect(queryByText('TEST_EMPTY_HOME_COPY')).toBeNull();
   });
 
-  it('Cohorts: a CONTRACT failure (200 missing surface) renders CoachErrorState, NOT Roman copy', () => {
+  it('Cohorts: a CONTRACT failure (200 missing surface) renders CoachErrorState, NOT Roman copy', async () => {
     const retry = jest.fn();
     mockState.cohorts = { data: [], isLoading: false, isError: false, isRefetching: false, refetch: jest.fn() };
     mockEmptyResultOverride.current = {
       coach_community_cohorts_empty: { status: 'error', kind: 'contract', retry },
     };
-    const { getByTestId, queryByText } = render(<CoachCommunityCohortsScreen />);
+    const { getByTestId, queryByText } = await render(<CoachCommunityCohortsScreen />);
     // The payload-error branch renders an honest error, never the empty copy.
     expect(getByTestId('coach-community-cohorts-empty-payload-error')).toBeTruthy();
     expect(queryByText('TEST_EMPTY_COHORTS_COPY')).toBeNull();
     // Retrying re-runs the policy fetch.
-    fireEvent.press(getByTestId('coach-community-cohorts-empty-payload-error-retry'));
+    await fireEvent.press(getByTestId('coach-community-cohorts-empty-payload-error-retry'));
     expect(retry).toHaveBeenCalledTimes(1);
   });
 
-  it('Moderation: a NETWORK payload failure renders CoachErrorState, NOT the celebratory empty copy', () => {
+  it('Moderation: a NETWORK payload failure renders CoachErrorState, NOT the celebratory empty copy', async () => {
     const retry = jest.fn();
     mockState.flagged = { data: [], isLoading: false, isError: false, isRefetching: false, refetch: jest.fn() };
     mockEmptyResultOverride.current = {
       coach_community_moderation_empty: { status: 'error', kind: 'network', retry },
     };
-    const { getByTestId, queryByText } = render(<CoachCommunityModerationScreen />);
+    const { getByTestId, queryByText } = await render(<CoachCommunityModerationScreen />);
     expect(getByTestId('coach-community-moderation-empty-payload-error')).toBeTruthy();
     expect(queryByText('TEST_EMPTY_MODERATION_COPY')).toBeNull();
   });
 });
 
 describe('UX P0.2 — error branch is distinct from the empty state (no masquerade)', () => {
-  it('Home load error renders CoachErrorState, NOT the empty copy', () => {
+  it('Home load error renders CoachErrorState, NOT the empty copy', async () => {
     mockState.dashboard = { data: undefined, isLoading: false, isError: true, isRefetching: false, refetch: jest.fn() };
-    const { getByTestId, queryByText } = render(<CoachCommunityHomeScreen />);
+    const { getByTestId, queryByText } = await render(<CoachCommunityHomeScreen />);
     expect(getByTestId('coach-community-home-error')).toBeTruthy();
     expect(getByTestId('coach-community-home-error-retry')).toBeTruthy();
     // The calm empty copy must NOT appear on an error.
     expect(queryByText('TEST_EMPTY_HOME_COPY')).toBeNull();
   });
 
-  it('Inbox load error renders CoachErrorState, NOT the empty copy', () => {
+  it('Inbox load error renders CoachErrorState, NOT the empty copy', async () => {
     mockState.inbox = { data: undefined, isLoading: false, isError: true, isRefetching: false, refetch: jest.fn() };
-    const { getByTestId, queryByText, queryByTestId } = render(<CoachCommunityInboxScreen />);
+    const { getByTestId, queryByText, queryByTestId } = await render(<CoachCommunityInboxScreen />);
     expect(getByTestId('coach-community-inbox-error')).toBeTruthy();
     expect(queryByTestId('coach-community-inbox-empty')).toBeNull();
     expect(queryByText('TEST_EMPTY_INBOX_COPY')).toBeNull();
   });
 
-  it('Cohorts load error renders CoachErrorState, NOT the empty copy', () => {
+  it('Cohorts load error renders CoachErrorState, NOT the empty copy', async () => {
     mockState.cohorts = { data: undefined, isLoading: false, isError: true, isRefetching: false, refetch: jest.fn() };
-    const { getByTestId, queryByText, queryByTestId } = render(<CoachCommunityCohortsScreen />);
+    const { getByTestId, queryByText, queryByTestId } = await render(<CoachCommunityCohortsScreen />);
     expect(getByTestId('coach-community-cohorts-error')).toBeTruthy();
     expect(queryByTestId('coach-community-cohorts-empty')).toBeNull();
     expect(queryByText('TEST_EMPTY_COHORTS_COPY')).toBeNull();
   });
 
-  it('Cohort detail load error renders CoachErrorState, NOT the empty copy', () => {
+  it('Cohort detail load error renders CoachErrorState, NOT the empty copy', async () => {
     mockRouteParams.current = { cohortId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' };
     mockState.cohortDetail = { data: undefined, isLoading: false, isError: true, isRefetching: false, refetch: jest.fn() };
-    const { getByTestId, queryByText, queryByTestId } = render(<CoachCommunityCohortDetailScreen />);
+    const { getByTestId, queryByText, queryByTestId } = await render(<CoachCommunityCohortDetailScreen />);
     expect(getByTestId('coach-community-cohort-detail-error')).toBeTruthy();
     expect(queryByTestId('coach-community-cohort-detail-empty')).toBeNull();
     expect(queryByText('TEST_EMPTY_MEMBERS_COPY')).toBeNull();
   });
 
-  it('Moderation load error renders CoachErrorState, NOT the celebratory empty copy', () => {
+  it('Moderation load error renders CoachErrorState, NOT the celebratory empty copy', async () => {
     mockState.flagged = { data: undefined, isLoading: false, isError: true, isRefetching: false, refetch: jest.fn() };
-    const { getByTestId, queryByText, queryByTestId } = render(<CoachCommunityModerationScreen />);
+    const { getByTestId, queryByText, queryByTestId } = await render(<CoachCommunityModerationScreen />);
     expect(getByTestId('coach-community-moderation-error')).toBeTruthy();
     expect(queryByTestId('coach-community-moderation-empty')).toBeNull();
     expect(queryByText('TEST_EMPTY_MODERATION_COPY')).toBeNull();
   });
 
-  it('the error retry button re-runs the failed query', () => {
+  it('the error retry button re-runs the failed query', async () => {
     const refetch = jest.fn();
     mockState.inbox = { data: undefined, isLoading: false, isError: true, isRefetching: false, refetch };
-    const { getByTestId } = render(<CoachCommunityInboxScreen />);
-    fireEvent.press(getByTestId('coach-community-inbox-error-retry'));
+    const { getByTestId } = await render(<CoachCommunityInboxScreen />);
+    await fireEvent.press(getByTestId('coach-community-inbox-error-retry'));
     expect(refetch).toHaveBeenCalledTimes(1);
   });
 });
 
 describe('Coach mutations — create / invite / remove / ack / hide', () => {
-  it('creates a cohort with the typed name', () => {
-    const { getByTestId } = render(<CoachCommunityCohortsScreen />);
-    fireEvent.press(getByTestId('coach-community-cohorts-fab'));
-    fireEvent.changeText(
+  it('creates a cohort with the typed name', async () => {
+    const { getByTestId } = await render(<CoachCommunityCohortsScreen />);
+    await fireEvent.press(getByTestId('coach-community-cohorts-fab'));
+    await fireEvent.changeText(
       getByTestId('coach-community-cohorts-name-input'),
       'Winter cut',
     );
-    fireEvent.press(getByTestId('coach-community-cohorts-modal-submit'));
+    await fireEvent.press(getByTestId('coach-community-cohorts-modal-submit'));
     expect(mockCreateMutate).toHaveBeenCalledWith(
       { name: 'Winter cut' },
       expect.objectContaining({ onSuccess: expect.any(Function) }),
     );
   });
 
-  it('does not create a cohort with an empty name', () => {
-    const { getByTestId } = render(<CoachCommunityCohortsScreen />);
-    fireEvent.press(getByTestId('coach-community-cohorts-fab'));
-    fireEvent.press(getByTestId('coach-community-cohorts-modal-submit'));
+  it('does not create a cohort with an empty name', async () => {
+    const { getByTestId } = await render(<CoachCommunityCohortsScreen />);
+    await fireEvent.press(getByTestId('coach-community-cohorts-fab'));
+    await fireEvent.press(getByTestId('coach-community-cohorts-modal-submit'));
     expect(mockCreateMutate).not.toHaveBeenCalled();
   });
 
-  it('invites a client by email', () => {
+  it('invites a client by email', async () => {
     mockRouteParams.current = { cohortId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' };
     mockState.cohortDetail = {
       data: { cohort: cohort(), members: [member()] },
       isLoading: false,
       isError: false,
     };
-    const { getByTestId } = render(<CoachCommunityCohortDetailScreen />);
-    fireEvent.press(getByTestId('coach-community-cohort-detail-invite'));
-    fireEvent.changeText(
+    const { getByTestId } = await render(<CoachCommunityCohortDetailScreen />);
+    await fireEvent.press(getByTestId('coach-community-cohort-detail-invite'));
+    await fireEvent.changeText(
       getByTestId('coach-community-cohort-detail-email-input'),
       'new@example.com',
     );
-    fireEvent.press(getByTestId('coach-community-cohort-detail-invite-submit'));
+    await fireEvent.press(getByTestId('coach-community-cohort-detail-invite-submit'));
     expect(mockInviteMutate).toHaveBeenCalledWith(
       { email: 'new@example.com' },
       expect.objectContaining({ onSuccess: expect.any(Function) }),
     );
   });
 
-  it('does not invite with an invalid email', () => {
+  it('does not invite with an invalid email', async () => {
     mockRouteParams.current = { cohortId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' };
     mockState.cohortDetail = {
       data: { cohort: cohort(), members: [member()] },
       isLoading: false,
       isError: false,
     };
-    const { getByTestId } = render(<CoachCommunityCohortDetailScreen />);
-    fireEvent.press(getByTestId('coach-community-cohort-detail-invite'));
-    fireEvent.changeText(
+    const { getByTestId } = await render(<CoachCommunityCohortDetailScreen />);
+    await fireEvent.press(getByTestId('coach-community-cohort-detail-invite'));
+    await fireEvent.changeText(
       getByTestId('coach-community-cohort-detail-email-input'),
       'not-an-email',
     );
-    fireEvent.press(getByTestId('coach-community-cohort-detail-invite-submit'));
+    await fireEvent.press(getByTestId('coach-community-cohort-detail-invite-submit'));
     expect(mockInviteMutate).not.toHaveBeenCalled();
   });
 
-  it('removes a client only after the kebab overflow AND confirmation (UX P1.1)', () => {
+  it('removes a client only after the kebab overflow AND confirmation (UX P1.1)', async () => {
     mockRouteParams.current = { cohortId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' };
     mockState.cohortDetail = {
       data: { cohort: cohort(), members: [member()] },
       isLoading: false,
       isError: false,
     };
-    const { getByTestId, queryByTestId } = render(<CoachCommunityCohortDetailScreen />);
+    const { getByTestId, queryByTestId } = await render(<CoachCommunityCohortDetailScreen />);
     // Remove is NOT a visible button on the row — only the kebab overflow is.
     expect(
       queryByTestId('coach-community-member-remove-bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'),
@@ -693,17 +693,17 @@ describe('Coach mutations — create / invite / remove / ack / hide', () => {
       getByTestId('coach-community-member-menu-bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'),
     ).toBeTruthy();
     // Open the overflow sheet, then choose Remove from cohort.
-    fireEvent.press(
+    await fireEvent.press(
       getByTestId('coach-community-member-menu-bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'),
     );
-    fireEvent.press(getByTestId('coach-community-member-menu-remove'));
+    await fireEvent.press(getByTestId('coach-community-member-menu-remove'));
     // Confirmation modal is now shown; mutation has NOT fired yet.
     expect(
       queryByTestId('coach-community-cohort-detail-remove-confirm-confirm'),
     ).toBeTruthy();
     expect(mockRemoveMutate).not.toHaveBeenCalled();
     // Confirm fires the DELETE.
-    fireEvent.press(
+    await fireEvent.press(
       getByTestId('coach-community-cohort-detail-remove-confirm-confirm'),
     );
     expect(mockRemoveMutate).toHaveBeenCalledWith(
@@ -712,23 +712,23 @@ describe('Coach mutations — create / invite / remove / ack / hide', () => {
     );
   });
 
-  it('cancelling the remove confirmation fires no DELETE', () => {
+  it('cancelling the remove confirmation fires no DELETE', async () => {
     mockRouteParams.current = { cohortId: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' };
     mockState.cohortDetail = {
       data: { cohort: cohort(), members: [member()] },
       isLoading: false,
       isError: false,
     };
-    const { getByTestId } = render(<CoachCommunityCohortDetailScreen />);
-    fireEvent.press(
+    const { getByTestId } = await render(<CoachCommunityCohortDetailScreen />);
+    await fireEvent.press(
       getByTestId('coach-community-member-menu-bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb'),
     );
-    fireEvent.press(getByTestId('coach-community-member-menu-remove'));
-    fireEvent.press(getByTestId('coach-community-cohort-detail-remove-confirm-cancel'));
+    await fireEvent.press(getByTestId('coach-community-member-menu-remove'));
+    await fireEvent.press(getByTestId('coach-community-cohort-detail-remove-confirm-cancel'));
     expect(mockRemoveMutate).not.toHaveBeenCalled();
   });
 
-  it('dismisses an inbox item via long-press when the v2-2 flag is ON (no legacy Ack button)', () => {
+  it('dismisses an inbox item via long-press when the v2-2 flag is ON (no legacy Ack button)', async () => {
     // UX F1: with the v2-2 flag ON there is exactly ONE visible ack action per
     // row — the v2-2 "Acknowledge" quick-action (which STAMPS the signal,
     // `mockMarkAckedMutate`). The legacy visible "Ack" button (which DISMISSES
@@ -741,20 +741,20 @@ describe('Coach mutations — create / invite / remove / ack / hide', () => {
       isRefetching: false,
       refetch: jest.fn(),
     };
-    const { queryByTestId, getByTestId } = render(<CoachCommunityInboxScreen />);
+    const { queryByTestId, getByTestId } = await render(<CoachCommunityInboxScreen />);
     // The legacy visible dismissal button is gone under the flag.
     expect(
       queryByTestId('coach-community-inbox-ack-11111111-1111-1111-1111-111111111111'),
     ).toBeNull();
     // Long-press still dismisses (marks the cohort thread read).
-    fireEvent(
+    await fireEvent(
       getByTestId('coach-community-inbox-row-11111111-1111-1111-1111-111111111111'),
       'longPress',
     );
     expect(mockAckMutate).toHaveBeenCalledWith('11111111-1111-1111-1111-111111111111');
   });
 
-  it('hides a flagged post only after confirmation', () => {
+  it('hides a flagged post only after confirmation', async () => {
     mockState.flagged = {
       data: [flaggedItem()],
       isLoading: false,
@@ -762,15 +762,15 @@ describe('Coach mutations — create / invite / remove / ack / hide', () => {
       isRefetching: false,
       refetch: jest.fn(),
     };
-    const { getByTestId, queryByTestId } = render(<CoachCommunityModerationScreen />);
-    fireEvent.press(
+    const { getByTestId, queryByTestId } = await render(<CoachCommunityModerationScreen />);
+    await fireEvent.press(
       getByTestId('coach-community-flagged-hide-cccccccc-cccc-cccc-cccc-cccccccccccc'),
     );
     expect(
       queryByTestId('coach-community-moderation-hide-confirm-confirm'),
     ).toBeTruthy();
     expect(mockHideMutate).not.toHaveBeenCalled();
-    fireEvent.press(getByTestId('coach-community-moderation-hide-confirm-confirm'));
+    await fireEvent.press(getByTestId('coach-community-moderation-hide-confirm-confirm'));
     expect(mockHideMutate).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'cccccccc-cccc-cccc-cccc-cccccccccccc', target_type: 'post' }),
       expect.objectContaining({
@@ -780,7 +780,7 @@ describe('Coach mutations — create / invite / remove / ack / hide', () => {
     );
   });
 
-  it('cancelling the hide confirmation fires no mutation', () => {
+  it('cancelling the hide confirmation fires no mutation', async () => {
     mockState.flagged = {
       data: [flaggedItem()],
       isLoading: false,
@@ -788,15 +788,15 @@ describe('Coach mutations — create / invite / remove / ack / hide', () => {
       isRefetching: false,
       refetch: jest.fn(),
     };
-    const { getByTestId } = render(<CoachCommunityModerationScreen />);
-    fireEvent.press(
+    const { getByTestId } = await render(<CoachCommunityModerationScreen />);
+    await fireEvent.press(
       getByTestId('coach-community-flagged-hide-cccccccc-cccc-cccc-cccc-cccccccccccc'),
     );
-    fireEvent.press(getByTestId('coach-community-moderation-hide-confirm-cancel'));
+    await fireEvent.press(getByTestId('coach-community-moderation-hide-confirm-cancel'));
     expect(mockHideMutate).not.toHaveBeenCalled();
   });
 
-  it('exposes no Approve action (the no-network stub was removed — G10.2 Option A)', () => {
+  it('exposes no Approve action (the no-network stub was removed — G10.2 Option A)', async () => {
     mockState.flagged = {
       data: [flaggedItem()],
       isLoading: false,
@@ -804,13 +804,13 @@ describe('Coach mutations — create / invite / remove / ack / hide', () => {
       isRefetching: false,
       refetch: jest.fn(),
     };
-    const { queryByTestId } = render(<CoachCommunityModerationScreen />);
+    const { queryByTestId } = await render(<CoachCommunityModerationScreen />);
     expect(
       queryByTestId('coach-community-flagged-approve-cccccccc-cccc-cccc-cccc-cccccccccccc'),
     ).toBeNull();
   });
 
-  it('a flagged post row taps through to the post-detail surface', () => {
+  it('a flagged post row taps through to the post-detail surface', async () => {
     mockState.flagged = {
       data: [flaggedItem()],
       isLoading: false,
@@ -818,8 +818,8 @@ describe('Coach mutations — create / invite / remove / ack / hide', () => {
       isRefetching: false,
       refetch: jest.fn(),
     };
-    const { getByTestId } = render(<CoachCommunityModerationScreen />);
-    fireEvent.press(
+    const { getByTestId } = await render(<CoachCommunityModerationScreen />);
+    await fireEvent.press(
       getByTestId('coach-community-flagged-content-cccccccc-cccc-cccc-cccc-cccccccccccc'),
     );
     expect(mockNavigate).toHaveBeenCalledWith('CoachCommunityPostDetail', {
@@ -838,33 +838,33 @@ describe('Home stat cards route into the matching surfaces', () => {
     };
   });
 
-  it('inbox card -> Inbox', () => {
-    const { getByTestId } = render(<CoachCommunityHomeScreen />);
-    fireEvent.press(getByTestId('coach-community-home-inbox-card'));
+  it('inbox card -> Inbox', async () => {
+    const { getByTestId } = await render(<CoachCommunityHomeScreen />);
+    await fireEvent.press(getByTestId('coach-community-home-inbox-card'));
     expect(mockNavigate).toHaveBeenCalledWith('CoachCommunityInbox');
   });
 
-  it('cohorts card -> Cohorts', () => {
-    const { getByTestId } = render(<CoachCommunityHomeScreen />);
-    fireEvent.press(getByTestId('coach-community-home-cohorts-card'));
+  it('cohorts card -> Cohorts', async () => {
+    const { getByTestId } = await render(<CoachCommunityHomeScreen />);
+    await fireEvent.press(getByTestId('coach-community-home-cohorts-card'));
     expect(mockNavigate).toHaveBeenCalledWith('CoachCommunityCohorts');
   });
 
-  it('moderation card -> Moderation', () => {
-    const { getByTestId } = render(<CoachCommunityHomeScreen />);
-    fireEvent.press(getByTestId('coach-community-home-moderation-card'));
+  it('moderation card -> Moderation', async () => {
+    const { getByTestId } = await render(<CoachCommunityHomeScreen />);
+    await fireEvent.press(getByTestId('coach-community-home-moderation-card'));
     expect(mockNavigate).toHaveBeenCalledWith('CoachCommunityModeration');
   });
 });
 
 describe('List states + interactions — loading, refresh, navigation, batch select', () => {
-  it('Inbox shows a loading indicator while fetching', () => {
+  it('Inbox shows a loading indicator while fetching', async () => {
     mockState.inbox = { data: undefined, isLoading: true, isError: false };
-    const { getByTestId } = render(<CoachCommunityInboxScreen />);
+    const { getByTestId } = await render(<CoachCommunityInboxScreen />);
     expect(getByTestId('coach-community-inbox-loading')).toBeTruthy();
   });
 
-  it('Inbox Select mode reveals checkboxes and marks selected rows as read (UX P1.3)', () => {
+  it('Inbox Select mode reveals checkboxes and marks selected rows as read (UX P1.3)', async () => {
     mockState.inbox = {
       data: {
         items: [
@@ -878,25 +878,25 @@ describe('List states + interactions — loading, refresh, navigation, batch sel
       isRefetching: false,
       refetch: jest.fn(),
     };
-    const { getByTestId, queryByTestId } = render(<CoachCommunityInboxScreen />);
+    const { getByTestId, queryByTestId } = await render(<CoachCommunityInboxScreen />);
     // The visible Select toggle is the discoverable, sighted-user batch entry.
-    fireEvent.press(getByTestId('coach-community-inbox-select-toggle'));
+    await fireEvent.press(getByTestId('coach-community-inbox-select-toggle'));
     // Rows now expose checkboxes.
     expect(
       getByTestId('coach-community-inbox-check-11111111-1111-1111-1111-111111111111'),
     ).toBeTruthy();
     // Select one row, then mark the selection as read.
-    fireEvent.press(
+    await fireEvent.press(
       getByTestId('coach-community-inbox-row-11111111-1111-1111-1111-111111111111'),
     );
-    fireEvent.press(getByTestId('coach-community-inbox-mark-selected'));
+    await fireEvent.press(getByTestId('coach-community-inbox-mark-selected'));
     expect(mockAckMutate).toHaveBeenCalledWith('11111111-1111-1111-1111-111111111111');
     expect(mockAckMutate).not.toHaveBeenCalledWith('99999999-9999-9999-9999-999999999999');
     // Select mode exits after the batch action.
     expect(queryByTestId('coach-community-inbox-mark-selected')).toBeNull();
   });
 
-  it('Inbox long-press marks every item in the same cohort thread as read', () => {
+  it('Inbox long-press marks every item in the same cohort thread as read', async () => {
     mockState.inbox = {
       data: {
         items: [
@@ -915,8 +915,8 @@ describe('List states + interactions — loading, refresh, navigation, batch sel
       isRefetching: false,
       refetch: jest.fn(),
     };
-    const { getByTestId } = render(<CoachCommunityInboxScreen />);
-    fireEvent(
+    const { getByTestId } = await render(<CoachCommunityInboxScreen />);
+    await fireEvent(
       getByTestId('coach-community-inbox-row-11111111-1111-1111-1111-111111111111'),
       'longPress',
     );
@@ -926,13 +926,13 @@ describe('List states + interactions — loading, refresh, navigation, batch sel
     expect(mockAckMutate).not.toHaveBeenCalledWith('22222222-2222-2222-2222-222222222222');
   });
 
-  it('Cohorts shows a loading indicator while fetching', () => {
+  it('Cohorts shows a loading indicator while fetching', async () => {
     mockState.cohorts = { data: undefined, isLoading: true, isError: false };
-    const { getByTestId } = render(<CoachCommunityCohortsScreen />);
+    const { getByTestId } = await render(<CoachCommunityCohortsScreen />);
     expect(getByTestId('coach-community-cohorts-loading')).toBeTruthy();
   });
 
-  it('Cohorts row tap navigates to the cohort detail with its id and name', () => {
+  it('Cohorts row tap navigates to the cohort detail with its id and name', async () => {
     mockState.cohorts = {
       data: [cohort()],
       isLoading: false,
@@ -940,8 +940,8 @@ describe('List states + interactions — loading, refresh, navigation, batch sel
       isRefetching: false,
       refetch: jest.fn(),
     };
-    const { getByTestId } = render(<CoachCommunityCohortsScreen />);
-    fireEvent.press(
+    const { getByTestId } = await render(<CoachCommunityCohortsScreen />);
+    await fireEvent.press(
       getByTestId('coach-community-cohort-row-aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'),
     );
     expect(mockNavigate).toHaveBeenCalledWith('CoachCommunityCohortDetail', {
@@ -950,11 +950,11 @@ describe('List states + interactions — loading, refresh, navigation, batch sel
     });
   });
 
-  it('Cohorts cancel closes the create modal without a mutation', () => {
-    const { getByTestId, queryByTestId } = render(<CoachCommunityCohortsScreen />);
-    fireEvent.press(getByTestId('coach-community-cohorts-fab'));
+  it('Cohorts cancel closes the create modal without a mutation', async () => {
+    const { getByTestId, queryByTestId } = await render(<CoachCommunityCohortsScreen />);
+    await fireEvent.press(getByTestId('coach-community-cohorts-fab'));
     expect(getByTestId('coach-community-cohorts-modal')).toBeTruthy();
-    fireEvent.press(getByTestId('coach-community-cohorts-modal-cancel'));
+    await fireEvent.press(getByTestId('coach-community-cohorts-modal-cancel'));
     expect(mockCreateMutate).not.toHaveBeenCalled();
     expect(queryByTestId('coach-community-cohorts-name-input')).toBeNull();
   });
@@ -1000,10 +1000,10 @@ describe('v2-2 inbox ack integration — badge + Mark-acked quick-action', () =>
     };
   };
 
-  it('renders the ack badge per row reflecting the state from the API', () => {
+  it('renders the ack badge per row reflecting the state from the API', async () => {
     seedInbox();
     mockAckStateByMessage.current[MID] = ackEnvelope('acked', 'within');
-    const { getByTestId } = render(<CoachCommunityInboxScreen />);
+    const { getByTestId } = await render(<CoachCommunityInboxScreen />);
     expect(getByTestId(`coach-community-inbox-ack-badge-${MID}`)).toBeTruthy();
     // The derived state pill is keyed by the API state.
     expect(
@@ -1011,18 +1011,18 @@ describe('v2-2 inbox ack integration — badge + Mark-acked quick-action', () =>
     ).toBeTruthy();
   });
 
-  it('tapping Mark acked fires the ack-action hook for that message', () => {
+  it('tapping Mark acked fires the ack-action hook for that message', async () => {
     seedInbox();
     mockAckStateByMessage.current[MID] = ackEnvelope('seen', 'within');
-    const { getByTestId } = render(<CoachCommunityInboxScreen />);
-    fireEvent.press(getByTestId(`coach-community-inbox-mark-acked-${MID}`));
+    const { getByTestId } = await render(<CoachCommunityInboxScreen />);
+    await fireEvent.press(getByTestId(`coach-community-inbox-mark-acked-${MID}`));
     expect(mockMarkAckedMutate).toHaveBeenCalledTimes(1);
   });
 
-  it('the SLA chip matches the state from the API (breached)', () => {
+  it('the SLA chip matches the state from the API (breached)', async () => {
     seedInbox();
     mockAckStateByMessage.current[MID] = ackEnvelope('seen', 'breached');
-    const { getByTestId, queryByTestId } = render(<CoachCommunityInboxScreen />);
+    const { getByTestId, queryByTestId } = await render(<CoachCommunityInboxScreen />);
     // The breached SLA chip renders; the within/warning chips do not.
     expect(
       getByTestId(`coach-community-inbox-ack-badge-${MID}-sla-breached`),
@@ -1035,12 +1035,12 @@ describe('v2-2 inbox ack integration — badge + Mark-acked quick-action', () =>
     ).toBeNull();
   });
 
-  it('renders NO badge for the default none + within row (kill the badge wall)', () => {
+  it('renders NO badge for the default none + within row (kill the badge wall)', async () => {
     // R1 UX F2: a default/untouched row (state=none + sla=within) carries no
     // redundant chrome — the badge renders null, so its testID is absent.
     seedInbox();
     mockAckStateByMessage.current[MID] = ackEnvelope('none', 'within');
-    const { queryByTestId } = render(<CoachCommunityInboxScreen />);
+    const { queryByTestId } = await render(<CoachCommunityInboxScreen />);
     expect(
       queryByTestId(`coach-community-inbox-ack-badge-${MID}`),
     ).toBeNull();
@@ -1049,12 +1049,12 @@ describe('v2-2 inbox ack integration — badge + Mark-acked quick-action', () =>
     ).toBeNull();
   });
 
-  it('shows ONLY the Overdue chip for an untouched but breached row', () => {
+  it('shows ONLY the Overdue chip for an untouched but breached row', async () => {
     // R1 UX F2/F3: none + breached surfaces the priority Overdue chip without a
     // redundant "Awaiting coach" state pill.
     seedInbox();
     mockAckStateByMessage.current[MID] = ackEnvelope('none', 'breached');
-    const { getByTestId, getByText, queryByTestId } = render(
+    const { getByTestId, getByText, queryByTestId } = await render(
       <CoachCommunityInboxScreen />,
     );
     expect(
@@ -1066,11 +1066,11 @@ describe('v2-2 inbox ack integration — badge + Mark-acked quick-action', () =>
     ).toBeNull();
   });
 
-  it('uses the unified Acknowledge / Acknowledged vocabulary (UX F5)', () => {
+  it('uses the unified Acknowledge / Acknowledged vocabulary (UX F5)', async () => {
     seedInbox();
     // Not-yet-acked: the action button reads "Acknowledge".
     mockAckStateByMessage.current[MID] = ackEnvelope('seen', 'warning');
-    const { getByTestId, queryByText, rerender } = render(
+    const { getByTestId, queryByText, rerender } = await render(
       <CoachCommunityInboxScreen />,
     );
     const button = getByTestId(`coach-community-inbox-mark-acked-${MID}`);
@@ -1081,16 +1081,16 @@ describe('v2-2 inbox ack integration — badge + Mark-acked quick-action', () =>
 
     // Already acked: the action button reads the settled "Acknowledged".
     mockAckStateByMessage.current[MID] = ackEnvelope('acked', 'within');
-    rerender(<CoachCommunityInboxScreen />);
+    await rerender(<CoachCommunityInboxScreen />);
     expect(
       getByTestId(`coach-community-inbox-mark-acked-${MID}`),
     ).toHaveTextContent('Acknowledged');
   });
 
-  it('the row owns the ack accessibility summary, Overdue-first (badge hidden from a11y)', () => {
+  it('the row owns the ack accessibility summary, Overdue-first (badge hidden from a11y)', async () => {
     seedInbox();
     mockAckStateByMessage.current[MID] = ackEnvelope('acked', 'breached');
-    const { getByTestId } = render(<CoachCommunityInboxScreen />);
+    const { getByTestId } = await render(<CoachCommunityInboxScreen />);
     // The row's accessibility label leads with the Overdue cue, then the state.
     const row = getByTestId(`coach-community-inbox-row-${MID}`);
     expect(row.props.accessibilityLabel).toContain('Overdue');
@@ -1100,7 +1100,7 @@ describe('v2-2 inbox ack integration — badge + Mark-acked quick-action', () =>
     expect(badge.props.accessibilityElementsHidden).toBe(true);
   });
 
-  it('shows a subtle closure confirmation toast on a successful acknowledge (UX F6)', () => {
+  it('shows a subtle closure confirmation toast on a successful acknowledge (UX F6)', async () => {
     seedInbox();
     mockAckStateByMessage.current[MID] = ackEnvelope('seen', 'within');
     // Drive the mutate spy to invoke the per-call onSuccess (the screen passes
@@ -1110,14 +1110,14 @@ describe('v2-2 inbox ack integration — badge + Mark-acked quick-action', () =>
         opts?.onSuccess?.();
       },
     );
-    const { getByTestId } = render(<CoachCommunityInboxScreen />);
-    fireEvent.press(getByTestId(`coach-community-inbox-mark-acked-${MID}`));
+    const { getByTestId } = await render(<CoachCommunityInboxScreen />);
+    await fireEvent.press(getByTestId(`coach-community-inbox-mark-acked-${MID}`));
     expect(
       getByTestId('coach-community-inbox-completion-toast'),
     ).toBeTruthy();
   });
 
-  it('surfaces an accessible 409 conflict notice when the ack transition is illegal (Code F3)', () => {
+  it('surfaces an accessible 409 conflict notice when the ack transition is illegal (Code F3)', async () => {
     // The mutation failed with the backend 409 `illegal_transition` code: the
     // message state changed underneath the coach. The hook has already
     // refetched the authoritative ack state (covered by the hook suite); here
@@ -1136,7 +1136,7 @@ describe('v2-2 inbox ack integration — badge + Mark-acked quick-action', () =>
     );
     mockIsIllegalAckTransition.mockReturnValue(true);
 
-    const { getByTestId } = render(<CoachCommunityInboxScreen />);
+    const { getByTestId } = await render(<CoachCommunityInboxScreen />);
     const notice = getByTestId(`coach-community-inbox-ack-conflict-${MID}`);
     expect(notice).toBeTruthy();
     expect(notice).toHaveTextContent('Message state changed — refreshed');
@@ -1149,11 +1149,11 @@ describe('v2-2 inbox ack integration — badge + Mark-acked quick-action', () =>
     expect(notice.props.accessibilityLiveRegion).toBe('polite');
   });
 
-  it('renders NO conflict notice when there is no illegal-transition error', () => {
+  it('renders NO conflict notice when there is no illegal-transition error', async () => {
     // Default path: predicate false, no error -> the inline notice is absent.
     seedInbox();
     mockAckStateByMessage.current[MID] = ackEnvelope('seen', 'within');
-    const { queryByTestId } = render(<CoachCommunityInboxScreen />);
+    const { queryByTestId } = await render(<CoachCommunityInboxScreen />);
     expect(
       queryByTestId(`coach-community-inbox-ack-conflict-${MID}`),
     ).toBeNull();

@@ -180,8 +180,8 @@ describe('exerciseCatalogApi', () => {
 const Stack = createNativeStackNavigator();
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function renderInNav(Screen: any, params?: unknown) {
-  return render(
+async function renderInNav(Screen: any, params?: unknown) {
+  return await render(
     <NavigationContainer>
       <Stack.Navigator>
         <Stack.Screen
@@ -197,7 +197,7 @@ function renderInNav(Screen: any, params?: unknown) {
 describe('ExerciseLibraryScreen', () => {
   test('renders title, chip filter labels, and a row from the list', async () => {
     mockedGet.mockResolvedValue(ok(SAMPLE_LIST));
-    const { findByText, getByText } = renderInNav(ExerciseLibraryScreen);
+    const { findByText, getByText } = await renderInNav(ExerciseLibraryScreen);
     // Title + chip headers exist from the first paint.
     expect(getByText('Exercise Library')).toBeTruthy();
     expect(getByText('Category')).toBeTruthy();
@@ -212,7 +212,7 @@ describe('ExerciseDetailScreen', () => {
   test('shows the "video not yet available" caption when playbackUrl is null', async () => {
     const detail: ExerciseDetail = { ...SAMPLE_EX, playbackUrl: null };
     mockedGet.mockResolvedValueOnce(ok(detail));
-    const { findByText, queryByTestId } = renderInNav(
+    const { findByText, queryByTestId } = await renderInNav(
       ExerciseDetailScreen,
       { idOrSlug: 'ex-1' },
     );
@@ -228,7 +228,7 @@ describe('ExerciseDetailScreen', () => {
       playbackUrl: 'https://stream.mux.com/abc123.m3u8?token=jwt',
     };
     mockedGet.mockResolvedValueOnce(ok(detail));
-    const { findByTestId, queryByTestId } = renderInNav(
+    const { findByTestId, queryByTestId } = await renderInNav(
       ExerciseDetailScreen,
       { idOrSlug: 'ex-1' },
     );

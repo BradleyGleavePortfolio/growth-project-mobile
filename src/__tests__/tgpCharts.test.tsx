@@ -98,12 +98,18 @@ jest.mock('react-native-svg', () => {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const mockReact = require('react');
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { View } = require('react-native');
+  const { View, Text } = require('react-native');
   const MockSvg = ({ children }: { children?: unknown }) =>
     mockReact.createElement(View, { testID: 'svg' }, children);
   const makeMock = (name: string) =>
     ({ children, ...props }: { children?: unknown; [key: string]: unknown }) =>
       mockReact.createElement(View, { testID: name, ...props }, children);
+  // SvgText carries string/number children (e.g. tooltip values). v14's
+  // test-renderer enforces the "text must live inside <Text>" invariant, so
+  // the SvgText mock wraps its children in a real RN <Text> while preserving
+  // the asserted props (fill/stroke/etc.) on the host node via testID.
+  const MockSvgText = ({ children, ...props }: { children?: unknown; [key: string]: unknown }) =>
+    mockReact.createElement(Text, { testID: 'SvgText', ...props }, children);
   return {
     __esModule: true,
     default: MockSvg,
@@ -113,7 +119,7 @@ jest.mock('react-native-svg', () => {
     Line: makeMock('Line'),
     Circle: makeMock('Circle'),
     Rect: makeMock('Rect'),
-    Text: makeMock('SvgText'),
+    Text: MockSvgText,
     G: makeMock('G'),
   };
 });
@@ -163,20 +169,20 @@ const isLineTooltipValueText = (t: Rendered) =>
 // ─── TgpLineChart ─────────────────────────────────────────────────────────────
 
 describe('TgpLineChart — render output', () => {
-  it('renders the Svg primitives expected for a multi-point line', () => {
-    const { getAllByTestId } = render(<TgpLineChart data={SAMPLE} height={200} />);
+  it('renders the Svg primitives expected for a multi-point line', async () => {
+    const { getAllByTestId } = await render(<TgpLineChart data={SAMPLE} height={200} />);
     expect(getAllByTestId('Polyline').length).toBeGreaterThan(0);
     expect(getAllByTestId('Circle').length).toBe(SAMPLE.length);
   });
 
-  it('line stroke resolves to the theme primary color', () => {
-    const { getAllByTestId } = render(<TgpLineChart data={SAMPLE} height={200} />);
+  it('line stroke resolves to the theme primary color', async () => {
+    const { getAllByTestId } = await render(<TgpLineChart data={SAMPLE} height={200} />);
     const polyline = getAllByTestId('Polyline')[0];
     expect(polyline.props.stroke).toBe('#2C4A36');
   });
 
-  it('tooltip renders with Quiet Luxury palette: bone fill, oxblood stroke, ink text', () => {
-    const { getAllByTestId } = render(<TgpLineChart data={SAMPLE} height={200} />);
+  it('tooltip renders with Quiet Luxury palette: bone fill, oxblood stroke, ink text', async () => {
+    const { getAllByTestId } = await render(<TgpLineChart data={SAMPLE} height={200} />);
     // Drive the pan gesture so the chart enters its tooltip-visible state.
     expect(gestureHandlers.panUpdate).toBeDefined();
     act(() => {
@@ -193,40 +199,40 @@ describe('TgpLineChart — render output', () => {
     expect(tooltipText!.props.fill).toBe(INK);
   });
 
-  it('renders an accessible root with role="image"', () => {
-    const { getByLabelText } = render(<TgpLineChart data={SAMPLE} height={200} />);
+  it('renders an accessible root with role="image"', async () => {
+    const { getByLabelText } = await render(<TgpLineChart data={SAMPLE} height={200} />);
     const root = getByLabelText('Line chart');
     expect(root.props.accessibilityRole).toBe('image');
   });
 
-  it('renders empty state when data has fewer than 2 points', () => {
-    const { getByText } = render(<TgpLineChart data={[{ x: 0, y: 100 }]} />);
+  it('renders empty state when data has fewer than 2 points', async () => {
+    const { getByText } = await render(<TgpLineChart data={[{ x: 0, y: 100 }]} />);
     expect(getByText('Not enough data points')).toBeTruthy();
   });
 
   // P0-5 — performance: skip per-point Circle markers once the series is
   // big enough that the dots blur into a stripe and bog down low-end Android.
-  it('renders one Circle per point when data is small (<=30)', () => {
+  it('renders one Circle per point when data is small (<=30)', async () => {
     const small = Array.from({ length: 10 }, (_, i) => ({ x: i, y: 100 + i }));
-    const { getAllByTestId } = render(<TgpLineChart data={small} height={200} />);
+    const { getAllByTestId } = await render(<TgpLineChart data={small} height={200} />);
     expect(getAllByTestId('Circle').length).toBe(small.length);
   });
 
-  it('skips per-point Circle markers when data is large (>30)', () => {
+  it('skips per-point Circle markers when data is large (>30)', async () => {
     const big = Array.from({ length: 100 }, (_, i) => ({ x: i, y: 100 + i }));
-    const { queryAllByTestId } = render(<TgpLineChart data={big} height={200} />);
+    const { queryAllByTestId } = await render(<TgpLineChart data={big} height={200} />);
     // No per-point circles; the line still renders.
     expect(queryAllByTestId('Circle').length).toBe(0);
   });
 
-  it('still skips circles at the 1000-point stress threshold', () => {
+  it('still skips circles at the 1000-point stress threshold', async () => {
     const stress = Array.from({ length: 1000 }, (_, i) => ({ x: i, y: 100 + Math.sin(i) }));
-    const { queryAllByTestId } = render(<TgpLineChart data={stress} height={200} />);
+    const { queryAllByTestId } = await render(<TgpLineChart data={stress} height={200} />);
     expect(queryAllByTestId('Circle').length).toBe(0);
   });
 
   // P0-6 — x-axis & tooltip should use a real date formatter, not raw indices.
-  it('uses xFormatter for axis tick labels when provided', () => {
+  it('uses xFormatter for axis tick labels when provided', async () => {
     // Build 5 points whose x values are epoch ms for sequential days.
     const day0 = new Date('2026-05-01T00:00:00Z').getTime();
     const data = Array.from({ length: 5 }, (_, i) => ({
@@ -234,7 +240,7 @@ describe('TgpLineChart — render output', () => {
       y: 180 + i,
     }));
     const fmt = (ms: number) => new Date(ms).toISOString().slice(5, 10); // "MM-DD"
-    const { getAllByTestId } = render(
+    const { getAllByTestId } = await render(
       <TgpLineChart data={data} height={200} xFormatter={fmt} />,
     );
     const texts = getAllByTestId('SvgText').map((n) => (n as unknown as Rendered).props.children);
@@ -249,24 +255,24 @@ describe('TgpLineChart — render output', () => {
 // ─── TgpBarChart ──────────────────────────────────────────────────────────────
 
 describe('TgpBarChart — render output', () => {
-  it('renders one Rect per bar', () => {
-    const { getAllByTestId } = render(<TgpBarChart data={SAMPLE} height={200} />);
+  it('renders one Rect per bar', async () => {
+    const { getAllByTestId } = await render(<TgpBarChart data={SAMPLE} height={200} />);
     const bars = getAllByTestId('Rect').filter(
       (r) => !isTooltipRect(r as unknown as Rendered),
     );
     expect(bars.length).toBe(SAMPLE.length);
   });
 
-  it('bar fill resolves to the theme primary color', () => {
-    const { getAllByTestId } = render(<TgpBarChart data={SAMPLE} height={200} />);
+  it('bar fill resolves to the theme primary color', async () => {
+    const { getAllByTestId } = await render(<TgpBarChart data={SAMPLE} height={200} />);
     const bars = getAllByTestId('Rect').filter(
       (r) => !isTooltipRect(r as unknown as Rendered),
     );
     bars.forEach((bar) => expect(bar.props.fill).toBe('#2C4A36'));
   });
 
-  it('tooltip renders with Quiet Luxury palette: bone fill, oxblood stroke, ink text', () => {
-    const { getAllByTestId } = render(<TgpBarChart data={SAMPLE} height={200} />);
+  it('tooltip renders with Quiet Luxury palette: bone fill, oxblood stroke, ink text', async () => {
+    const { getAllByTestId } = await render(<TgpBarChart data={SAMPLE} height={200} />);
     expect(gestureHandlers.tapStart).toBeDefined();
     act(() => {
       gestureHandlers.tapStart!({ x: 80, y: 100 });
@@ -282,8 +288,8 @@ describe('TgpBarChart — render output', () => {
     expect(tooltipText!.props.fill).toBe(INK);
   });
 
-  it('renders an accessible root with role="image"', () => {
-    const { getByLabelText } = render(<TgpBarChart data={SAMPLE} height={200} />);
+  it('renders an accessible root with role="image"', async () => {
+    const { getByLabelText } = await render(<TgpBarChart data={SAMPLE} height={200} />);
     const root = getByLabelText('Bar chart');
     expect(root.props.accessibilityRole).toBe('image');
   });
@@ -292,8 +298,8 @@ describe('TgpBarChart — render output', () => {
 // ─── TgpAreaChart ─────────────────────────────────────────────────────────────
 
 describe('TgpAreaChart — render output', () => {
-  it('renders a filled area Path', () => {
-    const { getAllByTestId } = render(<TgpAreaChart data={SAMPLE} height={200} />);
+  it('renders a filled area Path', async () => {
+    const { getAllByTestId } = await render(<TgpAreaChart data={SAMPLE} height={200} />);
     const paths = getAllByTestId('Path');
     expect(paths.length).toBeGreaterThan(0);
     const area = paths[0];
@@ -302,14 +308,14 @@ describe('TgpAreaChart — render output', () => {
     expect(area.props.fill).toBeTruthy();
   });
 
-  it('renders the line Polyline and one Circle per data point', () => {
-    const { getAllByTestId } = render(<TgpAreaChart data={SAMPLE} height={200} />);
+  it('renders the line Polyline and one Circle per data point', async () => {
+    const { getAllByTestId } = await render(<TgpAreaChart data={SAMPLE} height={200} />);
     expect(getAllByTestId('Polyline').length).toBe(1);
     expect(getAllByTestId('Circle').length).toBe(SAMPLE.length);
   });
 
-  it('tooltip renders with Quiet Luxury palette: bone fill, oxblood stroke, ink text', () => {
-    const { getAllByTestId } = render(<TgpAreaChart data={SAMPLE} height={200} />);
+  it('tooltip renders with Quiet Luxury palette: bone fill, oxblood stroke, ink text', async () => {
+    const { getAllByTestId } = await render(<TgpAreaChart data={SAMPLE} height={200} />);
     expect(gestureHandlers.panUpdate).toBeDefined();
     act(() => {
       gestureHandlers.panUpdate!({ x: 100, y: 50 });

@@ -189,23 +189,23 @@ describe('ClientMessagesScreen — full-screen report integration (P1-B)', () =>
     postMock.mockResolvedValue({ data: { ok: true, report_id: 'rep-1' } });
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
 
-    const { findByLabelText, getByLabelText, getByText } = render(<ClientMessagesScreen />);
+    const { findByLabelText, getByLabelText, getByText } = await render(<ClientMessagesScreen />);
 
     // Long-press the bubble — MessageBubble exposes
     // accessibilityLabel="Message: <body>. Long press for actions."
     const bubble = await findByLabelText(/Message: sketchy link here/);
-    fireEvent(bubble, 'longPress');
+    await fireEvent(bubble, 'longPress');
 
     // Action sheet (Android Modal) appears; tap Report Message.
     const reportRow = await waitFor(() => getByLabelText('Report Message'));
-    fireEvent.press(reportRow);
+    await fireEvent.press(reportRow);
 
     // Report sheet appears; pick the Spam reason.
     const spamOption = await waitFor(() => getByLabelText('Spam'));
-    fireEvent.press(spamOption);
+    await fireEvent.press(spamOption);
 
     // Submit.
-    fireEvent.press(getByLabelText('Submit report'));
+    await fireEvent.press(getByLabelText('Submit report'));
 
     // The full chain reached the HTTP layer. This is the assertion the audit
     // demanded: the underlying api.post must have been called with the exact
@@ -248,8 +248,24 @@ describe('ClientMessagesScreen — server block hydration filters the DM list (P
     // Critically, the screen gates the message list on
     // `serverHydrationComplete`, so the blocked body must never appear at
     // ANY observation point — not just "eventually absent".
+    // v14 (react 19 + RNTL 14): `render` is async and flushes the initial
+    // effects + their resolved microtasks before it returns, so an immediately
+    // resolved GET /users/blocks would already have hydrated by the time render
+    // resolves - collapsing the "before hydration" observation window the audit
+    // requires. To keep that window observable we HOLD the blocks response open
+    // on a manual gate: while it is pending the screen sits behind its
+    // `serverHydrationComplete` gate (loading indicator only), so we can assert
+    // NOTHING from the message payload has rendered. We then release the gate
+    // and assert the post-hydration state. This proves the production no-flash
+    // guarantee (the list never renders until block hydration resolves) rather
+    // than merely that the blocked body is eventually absent.
+    let releaseBlocks: () => void = () => {};
+    const blocksGate = new Promise<void>((resolve) => {
+      releaseBlocks = resolve;
+    });
     getMock.mockImplementation(async (url: string) => {
       if (url === '/users/blocks') {
+        await blocksGate;
         return {
           data: {
             blocked: [
@@ -281,16 +297,20 @@ describe('ClientMessagesScreen — server block hydration filters the DM list (P
       },
     ];
 
-    const { queryByText, findByText } = render(<ClientMessagesScreen />);
+    const { queryByText, findByText } = await render(<ClientMessagesScreen />);
 
-    // Before server hydration completes, the screen renders the loading
-    // indicator and NOTHING from the message payload — assert the blocked
-    // body is absent right out of the gate. This is the audit's "never
-    // rendered, not just eventually absent" requirement.
+    // Before server hydration completes (GET /users/blocks still gated), the
+    // screen renders ONLY the loading indicator — assert NOTHING from the
+    // message payload is present, blocked or not. This is the audit's "never
+    // rendered, not just eventually absent" requirement: the list is gated on
+    // `serverHydrationComplete`, so even the unblocked body must be withheld
+    // until the block list resolves (no flash window for a cross-device block).
     expect(queryByText('should-be-filtered')).toBeNull();
     expect(queryByText('should-stay-visible')).toBeNull();
 
-    // After hydration, the unblocked message renders.
+    // Release the blocks response so hydration completes, then the unblocked
+    // message renders.
+    releaseBlocks();
     await findByText('should-stay-visible');
 
     // And the blocked sender's message is still absent.
@@ -321,7 +341,7 @@ describe('ClientMessagesScreen — server block hydration filters the DM list (P
     });
     mockMessagesByClient['client-1'] = [];
 
-    render(<ClientMessagesScreen />);
+    await render(<ClientMessagesScreen />);
 
     await waitFor(() => {
       expect(useBlockedUsersStore.getState().isBlocked('client-1')).toBe(true);

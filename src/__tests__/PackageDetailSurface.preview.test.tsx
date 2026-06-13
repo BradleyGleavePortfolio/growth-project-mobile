@@ -73,8 +73,8 @@ const VM: PackageDetailViewModel = {
 };
 
 describe('PackageDetailSurface — shared presentation (no forked visuals)', () => {
-  it('renders title, price, features, and coach name in BUYER mode', () => {
-    const { getByText, getAllByText } = render(
+  it('renders title, price, features, and coach name in BUYER mode', async () => {
+    const { getByText, getAllByText } = await render(
       <PackageDetailSurface package={VM} mode="buyer" onPay={jest.fn()} />,
     );
     expect(getByText('12-week transformation')).toBeTruthy();
@@ -86,8 +86,8 @@ describe('PackageDetailSurface — shared presentation (no forked visuals)', () 
     expect(getAllByText(/199/).length).toBeGreaterThan(0);
   });
 
-  it('renders the SAME title, price, features, coach name in coachPreview mode', () => {
-    const { getByText, getAllByText } = render(
+  it('renders the SAME title, price, features, coach name in coachPreview mode', async () => {
+    const { getByText, getAllByText } = await render(
       <PackageDetailSurface package={VM} mode="coachPreview" />,
     );
     expect(getByText('12-week transformation')).toBeTruthy();
@@ -98,30 +98,30 @@ describe('PackageDetailSurface — shared presentation (no forked visuals)', () 
 });
 
 describe('PackageDetailSurface — buyer mode CTA', () => {
-  it('calls onPay when the pay CTA is pressed', () => {
+  it('calls onPay when the pay CTA is pressed', async () => {
     const onPay = jest.fn();
-    const { getByLabelText } = render(
+    const { getByLabelText } = await render(
       <PackageDetailSurface package={VM} mode="buyer" onPay={onPay} />,
     );
-    fireEvent.press(getByLabelText('Continue to payment'));
+    await fireEvent.press(getByLabelText('Continue to payment'));
     expect(onPay).toHaveBeenCalledTimes(1);
   });
 
-  it('disables the CTA while paying', () => {
+  it('disables the CTA while paying', async () => {
     const onPay = jest.fn();
-    const { getByLabelText } = render(
+    const { getByLabelText } = await render(
       <PackageDetailSurface package={VM} mode="buyer" onPay={onPay} paying />,
     );
     const cta = getByLabelText('Continue to payment');
     expect(cta.props.accessibilityState.disabled).toBe(true);
-    fireEvent.press(cta);
+    await fireEvent.press(cta);
     expect(onPay).not.toHaveBeenCalled();
   });
 });
 
 describe('PackageDetailSurface — coachPreview mode is checkout-safe', () => {
-  it('shows the disabled-checkout banner', () => {
-    const { getByText } = render(
+  it('shows the disabled-checkout banner', async () => {
+    const { getByText } = await render(
       <PackageDetailSurface package={VM} mode="coachPreview" onPay={jest.fn()} />,
     );
     expect(
@@ -129,19 +129,19 @@ describe('PackageDetailSurface — coachPreview mode is checkout-safe', () => {
     ).toBeTruthy();
   });
 
-  it('renders a DISABLED pay CTA and never calls onPay when pressed', () => {
+  it('renders a DISABLED pay CTA and never calls onPay when pressed', async () => {
     const onPay = jest.fn();
-    const { getByLabelText } = render(
+    const { getByLabelText } = await render(
       <PackageDetailSurface package={VM} mode="coachPreview" onPay={onPay} />,
     );
     const cta = getByLabelText('Checkout disabled in preview');
     expect(cta.props.accessibilityState.disabled).toBe(true);
-    fireEvent.press(cta);
+    await fireEvent.press(cta);
     expect(onPay).not.toHaveBeenCalled();
   });
 
-  it('does not render the buyer Stripe fineprint in preview', () => {
-    const { queryByText } = render(
+  it('does not render the buyer Stripe fineprint in preview', async () => {
+    const { queryByText } = await render(
       <PackageDetailSurface package={VM} mode="coachPreview" />,
     );
     expect(queryByText(/Payment is processed securely by Stripe/)).toBeNull();

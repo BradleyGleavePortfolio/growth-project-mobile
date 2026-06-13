@@ -18,8 +18,8 @@ afterAll(() => {
 });
 
 describe('MessageActionSheet (Android modal)', () => {
-  it('renders nothing when not visible', () => {
-    const { queryByLabelText } = render(
+  it('renders nothing when not visible', async () => {
+    const { queryByLabelText } = await render(
       <MessageActionSheet
         visible={false}
         onReply={jest.fn()}
@@ -31,8 +31,8 @@ describe('MessageActionSheet (Android modal)', () => {
     expect(queryByLabelText('Reply')).toBeNull();
   });
 
-  it('exposes Reply / Copy / Report Message rows when visible', () => {
-    const { getByLabelText } = render(
+  it('exposes Reply / Copy / Report Message rows when visible', async () => {
+    const { getByLabelText } = await render(
       <MessageActionSheet
         visible
         messagePreview="hello"
@@ -47,10 +47,10 @@ describe('MessageActionSheet (Android modal)', () => {
     expect(getByLabelText('Report Message')).toBeTruthy();
   });
 
-  it('invokes onReply + onClose when Reply tapped', () => {
+  it('invokes onReply + onClose when Reply tapped', async () => {
     const onReply = jest.fn();
     const onClose = jest.fn();
-    const { getByLabelText } = render(
+    const { getByLabelText } = await render(
       <MessageActionSheet
         visible
         onReply={onReply}
@@ -59,15 +59,15 @@ describe('MessageActionSheet (Android modal)', () => {
         onClose={onClose}
       />,
     );
-    fireEvent.press(getByLabelText('Reply'));
+    await fireEvent.press(getByLabelText('Reply'));
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(onReply).toHaveBeenCalledTimes(1);
   });
 
-  it('invokes onReport + onClose when Report Message tapped', () => {
+  it('invokes onReport + onClose when Report Message tapped', async () => {
     const onReport = jest.fn();
     const onClose = jest.fn();
-    const { getByLabelText } = render(
+    const { getByLabelText } = await render(
       <MessageActionSheet
         visible
         onReply={jest.fn()}
@@ -76,14 +76,14 @@ describe('MessageActionSheet (Android modal)', () => {
         onClose={onClose}
       />,
     );
-    fireEvent.press(getByLabelText('Report Message'));
+    await fireEvent.press(getByLabelText('Report Message'));
     expect(onClose).toHaveBeenCalledTimes(1);
     expect(onReport).toHaveBeenCalledTimes(1);
   });
 
-  it('invokes onClose alone when Cancel is tapped', () => {
+  it('invokes onClose alone when Cancel is tapped', async () => {
     const onClose = jest.fn();
-    const { getByText } = render(
+    const { getByText } = await render(
       <MessageActionSheet
         visible
         onReply={jest.fn()}
@@ -92,7 +92,7 @@ describe('MessageActionSheet (Android modal)', () => {
         onClose={onClose}
       />,
     );
-    fireEvent.press(getByText('Cancel'));
+    await fireEvent.press(getByText('Cancel'));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 });

@@ -77,7 +77,7 @@ describe('useWearableConnections', () => {
     mockedList.mockResolvedValueOnce([sampleConnection]);
 
     const { Wrapper } = makeWrapper();
-    const { result } = renderHook(() => useWearableConnections(), {
+    const { result } = await renderHook(() => useWearableConnections(), {
       wrapper: Wrapper,
     });
 
@@ -90,7 +90,7 @@ describe('useWearableConnections', () => {
     mockedList.mockRejectedValueOnce(new Error('network down'));
 
     const { Wrapper } = makeWrapper();
-    const { result } = renderHook(() => useWearableConnections(), {
+    const { result } = await renderHook(() => useWearableConnections(), {
       wrapper: Wrapper,
     });
 
@@ -106,7 +106,7 @@ describe('useDisconnectProvider', () => {
     const { qc, Wrapper } = makeWrapper();
     const invalidateSpy = jest.spyOn(qc, 'invalidateQueries');
 
-    const { result } = renderHook(() => useDisconnectProvider(), {
+    const { result } = await renderHook(() => useDisconnectProvider(), {
       wrapper: Wrapper,
     });
 
@@ -124,7 +124,7 @@ describe('useDisconnectProvider', () => {
     const { qc, Wrapper } = makeWrapper();
     const invalidateSpy = jest.spyOn(qc, 'invalidateQueries');
 
-    const { result } = renderHook(() => useDisconnectProvider(), {
+    const { result } = await renderHook(() => useDisconnectProvider(), {
       wrapper: Wrapper,
     });
 

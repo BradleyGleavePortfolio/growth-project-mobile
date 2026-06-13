@@ -130,20 +130,20 @@ beforeEach(() => {
 });
 
 describe('Settings UI — Apple 1.2 discoverable blocked-users entry', () => {
-  it('client SettingsScreen Blocked Users row calls navigation.navigate("BlockedUsers")', () => {
+  it('client SettingsScreen Blocked Users row calls navigation.navigate("BlockedUsers")', async () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const ClientSettings = require('../../screens/client/SettingsScreen').default;
     const navProp = { navigate: mockNavigate, goBack: jest.fn() };
-    const { getByLabelText } = render(<ClientSettings navigation={navProp} />);
-    fireEvent.press(getByLabelText('Blocked Users'));
+    const { getByLabelText } = await render(<ClientSettings navigation={navProp} />);
+    await fireEvent.press(getByLabelText('Blocked Users'));
     expect(mockNavigate).toHaveBeenCalledWith('BlockedUsers');
   });
 
-  it('coach SettingsScreen Blocked Users row calls navigation.navigate("BlockedUsers")', () => {
+  it('coach SettingsScreen Blocked Users row calls navigation.navigate("BlockedUsers")', async () => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const CoachSettings = require('../../screens/coach/SettingsScreen').default;
-    const { getByLabelText } = render(<CoachSettings />);
-    fireEvent.press(getByLabelText('Blocked Users'));
+    const { getByLabelText } = await render(<CoachSettings />);
+    await fireEvent.press(getByLabelText('Blocked Users'));
     expect(mockNavigate).toHaveBeenCalledWith('BlockedUsers');
   });
 });

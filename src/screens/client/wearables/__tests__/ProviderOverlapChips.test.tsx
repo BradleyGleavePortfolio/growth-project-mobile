@@ -27,12 +27,12 @@ function makeWrapper() {
 }
 
 describe('ProviderOverlapChips optimistic preference', () => {
-  it('marks the optimistic provider active (not just the server prop)', () => {
+  it('marks the optimistic provider active (not just the server prop)', async () => {
     const { qc, Wrapper } = makeWrapper();
     // Optimistic cache says GARMIN even though the server prop is still Apple.
     qc.setQueryData(wearablePreferenceQueryKey('STEPS'), 'GARMIN');
 
-    const { getByLabelText } = render(
+    const { getByLabelText } = await render(
       <ProviderOverlapChips
         metric="STEPS"
         providers={['APPLE_HEALTHKIT', 'GARMIN']}
@@ -51,10 +51,10 @@ describe('ProviderOverlapChips optimistic preference', () => {
     ).toBe(false);
   });
 
-  it('falls back to the server activeProvider when no optimistic value exists', () => {
+  it('falls back to the server activeProvider when no optimistic value exists', async () => {
     const { Wrapper } = makeWrapper();
 
-    const { getByLabelText } = render(
+    const { getByLabelText } = await render(
       <ProviderOverlapChips
         metric="STEPS"
         providers={['APPLE_HEALTHKIT', 'GARMIN']}

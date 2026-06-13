@@ -122,8 +122,8 @@ beforeEach(() => {
 });
 
 describe('CoachCommunityInboxScreen — flag OFF invariance (Code F4)', () => {
-  it('renders the v1-6 inbox with NO v2-2 ack surface', () => {
-    const { queryByTestId } = render(<CoachCommunityInboxScreen />);
+  it('renders the v1-6 inbox with NO v2-2 ack surface', async () => {
+    const { queryByTestId } = await render(<CoachCommunityInboxScreen />);
 
     // No v2-2 ack badge and no v2-2 Acknowledge quick-action.
     expect(queryByTestId(`coach-community-inbox-ack-badge-${MID}`)).toBeNull();
@@ -133,20 +133,20 @@ describe('CoachCommunityInboxScreen — flag OFF invariance (Code F4)', () => {
     expect(queryByTestId(`coach-community-inbox-ack-${MID}`)).toBeTruthy();
   });
 
-  it('never calls the ack data/action hooks under the flag-off path', () => {
-    render(<CoachCommunityInboxScreen />);
+  it('never calls the ack data/action hooks under the flag-off path', async () => {
+    await render(<CoachCommunityInboxScreen />);
     expect(mockUseCoachAckState).not.toHaveBeenCalled();
     expect(mockUseCoachAckActions).not.toHaveBeenCalled();
   });
 
-  it('keeps the legacy visible Ack button wired to the v1-6 dismissal mutation', () => {
-    const { getByTestId } = render(<CoachCommunityInboxScreen />);
-    fireEvent.press(getByTestId(`coach-community-inbox-ack-${MID}`));
+  it('keeps the legacy visible Ack button wired to the v1-6 dismissal mutation', async () => {
+    const { getByTestId } = await render(<CoachCommunityInboxScreen />);
+    await fireEvent.press(getByTestId(`coach-community-inbox-ack-${MID}`));
     expect(mockAckMutate).toHaveBeenCalledWith(MID);
   });
 
-  it('the row accessibility label is the plain v1-6 base (no ack/SLA routine)', () => {
-    const { getByTestId } = render(<CoachCommunityInboxScreen />);
+  it('the row accessibility label is the plain v1-6 base (no ack/SLA routine)', async () => {
+    const { getByTestId } = await render(<CoachCommunityInboxScreen />);
     const row = getByTestId(`coach-community-inbox-row-${MID}`);
     expect(row.props.accessibilityLabel).toBe(
       'Dana Cruz in Spring block: Quick question about my plan',

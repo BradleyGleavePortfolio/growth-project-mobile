@@ -59,33 +59,33 @@ describe('ClientDailyMealPlanScreen — route.params.date honor (audit P2-2)', (
     mockRouteParams = undefined;
   });
 
-  it('passes route.params.date through to useMealPlanToday(date)', () => {
+  it('passes route.params.date through to useMealPlanToday(date)', async () => {
     mockRouteParams = { date: '2026-05-01' };
-    render(<ClientDailyMealPlanScreen />);
+    await render(<ClientDailyMealPlanScreen />);
     expect(mockUseMealPlanToday).toHaveBeenCalledWith('2026-05-01');
   });
 
-  it('falls back to undefined (today) when no date param is provided', () => {
+  it('falls back to undefined (today) when no date param is provided', async () => {
     mockRouteParams = undefined;
-    render(<ClientDailyMealPlanScreen />);
+    await render(<ClientDailyMealPlanScreen />);
     expect(mockUseMealPlanToday).toHaveBeenCalledWith(undefined);
   });
 
-  it('normalises a full ISO timestamp to YYYY-MM-DD', () => {
+  it('normalises a full ISO timestamp to YYYY-MM-DD', async () => {
     mockRouteParams = { date: '2026-05-01T08:00:00Z' };
-    render(<ClientDailyMealPlanScreen />);
+    await render(<ClientDailyMealPlanScreen />);
     expect(mockUseMealPlanToday).toHaveBeenCalledWith('2026-05-01');
   });
 
-  it('drops a malformed date param defensively (not propagated to the hook)', () => {
+  it('drops a malformed date param defensively (not propagated to the hook)', async () => {
     mockRouteParams = { date: 'not-a-date' };
-    render(<ClientDailyMealPlanScreen />);
+    await render(<ClientDailyMealPlanScreen />);
     expect(mockUseMealPlanToday).toHaveBeenCalledWith(undefined);
   });
 
-  it('renders the meal-plan header when a date is provided', () => {
+  it('renders the meal-plan header when a date is provided', async () => {
     mockRouteParams = { date: '2026-05-01' };
-    const { getByText } = render(<ClientDailyMealPlanScreen />);
+    const { getByText } = await render(<ClientDailyMealPlanScreen />);
     // No assignments → empty state copy mentions "this day" (not "today").
     expect(getByText('Meal plan')).toBeTruthy();
     expect(getByText('No plan for this day')).toBeTruthy();

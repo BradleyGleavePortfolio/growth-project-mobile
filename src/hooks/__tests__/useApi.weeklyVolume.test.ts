@@ -80,7 +80,7 @@ describe('useWeeklyVolumeBreakdown — bare date string is not shifted west-of-U
     } as never);
 
     const { wrapper } = makeWrapper();
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () => useWeeklyVolumeBreakdown('2026-05-18', '2026-05-24'),
       { wrapper },
     );

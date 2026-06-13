@@ -38,7 +38,7 @@ describe('ReportMessageSheet', () => {
   it('submits the selected reason verbatim to onSubmit', async () => {
     const onSubmit = jest.fn().mockResolvedValue(undefined);
     const onClose = jest.fn();
-    const { getByLabelText } = render(
+    const { getByLabelText } = await render(
       <ReportMessageSheet
         visible
         messagePreview="hi"
@@ -46,8 +46,8 @@ describe('ReportMessageSheet', () => {
         onClose={onClose}
       />,
     );
-    fireEvent.press(getByLabelText('Sexual content'));
-    fireEvent.press(getByLabelText('Submit report'));
+    await fireEvent.press(getByLabelText('Sexual content'));
+    await fireEvent.press(getByLabelText('Submit report'));
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
     expect(onSubmit).toHaveBeenCalledWith({ reason: 'sexual', details: undefined });
   });
@@ -62,7 +62,7 @@ describe('ReportMessageSheet', () => {
     ['Something else', 'other'],
   ])('maps UI label "%s" to backend reason "%s"', async (label, value) => {
     const onSubmit = jest.fn().mockResolvedValue(undefined);
-    const { getByLabelText } = render(
+    const { getByLabelText } = await render(
       <ReportMessageSheet
         visible
         messagePreview=""
@@ -70,15 +70,15 @@ describe('ReportMessageSheet', () => {
         onClose={jest.fn()}
       />,
     );
-    fireEvent.press(getByLabelText(label));
-    fireEvent.press(getByLabelText('Submit report'));
+    await fireEvent.press(getByLabelText(label));
+    await fireEvent.press(getByLabelText('Submit report'));
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
     expect(onSubmit.mock.calls[0][0]).toMatchObject({ reason: value });
   });
 
   it('passes trimmed free-text details to onSubmit when supplied', async () => {
     const onSubmit = jest.fn().mockResolvedValue(undefined);
-    const { getByLabelText } = render(
+    const { getByLabelText } = await render(
       <ReportMessageSheet
         visible
         messagePreview=""
@@ -86,9 +86,9 @@ describe('ReportMessageSheet', () => {
         onClose={jest.fn()}
       />,
     );
-    fireEvent.press(getByLabelText('Spam'));
-    fireEvent.changeText(getByLabelText('Additional details'), '  bad link  ');
-    fireEvent.press(getByLabelText('Submit report'));
+    await fireEvent.press(getByLabelText('Spam'));
+    await fireEvent.changeText(getByLabelText('Additional details'), '  bad link  ');
+    await fireEvent.press(getByLabelText('Submit report'));
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
     expect(onSubmit.mock.calls[0][0]).toEqual({ reason: 'spam', details: 'bad link' });
   });
@@ -100,7 +100,7 @@ describe('ReportMessageSheet', () => {
       }),
     );
     const onClose = jest.fn();
-    const { getByLabelText, findByText, queryByText } = render(
+    const { getByLabelText, findByText, queryByText } = await render(
       <ReportMessageSheet
         visible
         messagePreview=""
@@ -108,9 +108,9 @@ describe('ReportMessageSheet', () => {
         onClose={onClose}
       />,
     );
-    fireEvent.press(getByLabelText('Spam'));
+    await fireEvent.press(getByLabelText('Spam'));
     await act(async () => {
-      fireEvent.press(getByLabelText('Submit report'));
+      await fireEvent.press(getByLabelText('Submit report'));
     });
     expect(await findByText(/couldn't submit that report/i)).toBeTruthy();
     // The raw backend error code must never reach the UI (R9 / R17).
@@ -119,8 +119,8 @@ describe('ReportMessageSheet', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
-  it('caps the details TextInput at DETAILS_MAX (1000)', () => {
-    const { getByLabelText } = render(
+  it('caps the details TextInput at DETAILS_MAX (1000)', async () => {
+    const { getByLabelText } = await render(
       <ReportMessageSheet
         visible
         messagePreview=""

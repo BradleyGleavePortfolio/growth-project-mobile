@@ -85,9 +85,9 @@ describe('AIBudgetMount — focus-gated polling (NEW-P2-1)', () => {
     mockNavigate.mockClear();
   });
 
-  it('passes { enabled: false } to useAIBudget when the screen is NOT focused', () => {
+  it('passes { enabled: false } to useAIBudget when the screen is NOT focused', async () => {
     mockUseIsFocused.mockReturnValue(false);
-    render(<AIBudgetMount enabled />);
+    await render(<AIBudgetMount enabled />);
 
     // The hook must have been called at least once during render.
     expect(mockUseAIBudget).toHaveBeenCalled();
@@ -99,18 +99,18 @@ describe('AIBudgetMount — focus-gated polling (NEW-P2-1)', () => {
     );
   });
 
-  it('passes { enabled: true } to useAIBudget when focused AND enabled prop is true', () => {
+  it('passes { enabled: true } to useAIBudget when focused AND enabled prop is true', async () => {
     mockUseIsFocused.mockReturnValue(true);
-    render(<AIBudgetMount enabled />);
+    await render(<AIBudgetMount enabled />);
 
     expect(mockUseAIBudget).toHaveBeenLastCalledWith(
       expect.objectContaining({ enabled: true }),
     );
   });
 
-  it('passes { enabled: false } when the `enabled` prop is false even if focused', () => {
+  it('passes { enabled: false } when the `enabled` prop is false even if focused', async () => {
     mockUseIsFocused.mockReturnValue(true);
-    render(<AIBudgetMount enabled={false} />);
+    await render(<AIBudgetMount enabled={false} />);
 
     // Defence-in-depth: an unsubscribed/non-coach user must NOT trigger
     // budget polling regardless of focus state. The AND of (enabled,
@@ -120,9 +120,9 @@ describe('AIBudgetMount — focus-gated polling (NEW-P2-1)', () => {
     );
   });
 
-  it('defaults `enabled` prop to true when omitted (focus still gates)', () => {
+  it('defaults `enabled` prop to true when omitted (focus still gates)', async () => {
     mockUseIsFocused.mockReturnValue(false);
-    render(<AIBudgetMount />);
+    await render(<AIBudgetMount />);
 
     // Component default is `enabled = true` (line 57 in source). With
     // `useIsFocused()=false`, the composed value is still false.

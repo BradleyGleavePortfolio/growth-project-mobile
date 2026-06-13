@@ -62,7 +62,7 @@ describe('ConnectProviderSheet — cloud OAuth provider', () => {
     const onClose = jest.fn();
     const onConnected = jest.fn();
 
-    render(
+    await render(
       <ConnectProviderSheet
         provider="OURA"
         visible
@@ -71,7 +71,7 @@ describe('ConnectProviderSheet — cloud OAuth provider', () => {
       />,
     );
 
-    fireEvent.press(screen.getByLabelText('Continue connecting Oura'));
+    await fireEvent.press(screen.getByLabelText('Continue connecting Oura'));
 
     await waitFor(() => expect(mockInvalidate).toHaveBeenCalled());
     expect(mockStartOauthMutateAsync).toHaveBeenCalledWith('OURA');
@@ -87,9 +87,9 @@ describe('ConnectProviderSheet — cloud OAuth provider', () => {
 
   it('shows a user-visible error when starting OAuth fails', async () => {
     mockStartOauthMutateAsync.mockRejectedValue(new Error('network'));
-    render(<ConnectProviderSheet provider="OURA" visible onClose={jest.fn()} />);
+    await render(<ConnectProviderSheet provider="OURA" visible onClose={jest.fn()} />);
 
-    fireEvent.press(screen.getByLabelText('Continue connecting Oura'));
+    await fireEvent.press(screen.getByLabelText('Continue connecting Oura'));
 
     await waitFor(() =>
       expect(
@@ -105,7 +105,7 @@ describe('ConnectProviderSheet — on-device provider', () => {
     const onClose = jest.fn();
     const onConnected = jest.fn();
 
-    render(
+    await render(
       <ConnectProviderSheet
         provider="APPLE_HEALTHKIT"
         visible
@@ -114,7 +114,7 @@ describe('ConnectProviderSheet — on-device provider', () => {
       />,
     );
 
-    fireEvent.press(screen.getByLabelText('Continue connecting Apple Health'));
+    await fireEvent.press(screen.getByLabelText('Continue connecting Apple Health'));
 
     await waitFor(() => expect(mockConnectOnDevice).toHaveBeenCalledWith('APPLE_HEALTHKIT'));
     expect(mockInvalidate).toHaveBeenCalledTimes(1);
@@ -128,7 +128,7 @@ describe('ConnectProviderSheet — on-device provider', () => {
     mockConnectOnDevice.mockResolvedValue('denied');
     const onClose = jest.fn();
 
-    render(
+    await render(
       <ConnectProviderSheet
         provider="APPLE_HEALTHKIT"
         visible
@@ -136,7 +136,7 @@ describe('ConnectProviderSheet — on-device provider', () => {
       />,
     );
 
-    fireEvent.press(screen.getByLabelText('Continue connecting Apple Health'));
+    await fireEvent.press(screen.getByLabelText('Continue connecting Apple Health'));
 
     await waitFor(() =>
       expect(screen.getByText(/access wasn't granted/i)).toBeTruthy(),
@@ -146,7 +146,7 @@ describe('ConnectProviderSheet — on-device provider', () => {
 
   it('explains next steps when the device store is not set up', async () => {
     mockConnectOnDevice.mockResolvedValue('unavailable');
-    render(
+    await render(
       <ConnectProviderSheet
         provider="HEALTH_CONNECT"
         visible
@@ -154,7 +154,7 @@ describe('ConnectProviderSheet — on-device provider', () => {
       />,
     );
 
-    fireEvent.press(screen.getByLabelText('Continue connecting Health Connect'));
+    await fireEvent.press(screen.getByLabelText('Continue connecting Health Connect'));
 
     await waitFor(() =>
       expect(screen.getByText(/isn't set up on this device yet/i)).toBeTruthy(),
@@ -163,7 +163,7 @@ describe('ConnectProviderSheet — on-device provider', () => {
 
   it('states clearly when the provider is unsupported on this device', async () => {
     mockConnectOnDevice.mockResolvedValue('unsupported');
-    render(
+    await render(
       <ConnectProviderSheet
         provider="HEALTH_CONNECT"
         visible
@@ -171,7 +171,7 @@ describe('ConnectProviderSheet — on-device provider', () => {
       />,
     );
 
-    fireEvent.press(screen.getByLabelText('Continue connecting Health Connect'));
+    await fireEvent.press(screen.getByLabelText('Continue connecting Health Connect'));
 
     await waitFor(() =>
       expect(

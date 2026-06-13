@@ -54,20 +54,20 @@ beforeEach(() => {
 });
 
 describe('useHealthKitSync', () => {
-  it('exposes isSupported from the client (iOS)', () => {
-    const { result } = renderHook(() => useHealthKitSync(), { wrapper: makeWrapper() });
+  it('exposes isSupported from the client (iOS)', async () => {
+    const { result } = await renderHook(() => useHealthKitSync(), { wrapper: makeWrapper() });
     expect(result.current.isSupported).toBe(true);
   });
 
-  it('reflects isSupported=false off iOS', () => {
+  it('reflects isSupported=false off iOS', async () => {
     mockIsSupported = false;
-    const { result } = renderHook(() => useHealthKitSync(), { wrapper: makeWrapper() });
+    const { result } = await renderHook(() => useHealthKitSync(), { wrapper: makeWrapper() });
     expect(result.current.isSupported).toBe(false);
   });
 
   it('delegates sync() to the service and resolves with the result', async () => {
     mockSync.mockResolvedValueOnce(RESULT);
-    const { result } = renderHook(() => useHealthKitSync(), { wrapper: makeWrapper() });
+    const { result } = await renderHook(() => useHealthKitSync(), { wrapper: makeWrapper() });
 
     let resolved: unknown;
     await act(async () => {
@@ -81,7 +81,7 @@ describe('useHealthKitSync', () => {
 
   it('surfaces a sync failure on mutation.error', async () => {
     mockSync.mockRejectedValueOnce(new Error('ingest down'));
-    const { result } = renderHook(() => useHealthKitSync(), { wrapper: makeWrapper() });
+    const { result } = await renderHook(() => useHealthKitSync(), { wrapper: makeWrapper() });
 
     await act(async () => {
       await expect(

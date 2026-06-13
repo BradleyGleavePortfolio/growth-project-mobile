@@ -82,7 +82,7 @@ describe('useCoachEmptyStatePayload — stateful, backend-driven result', () => 
   it('Case 1: a full payload resolves to { status: "ready", payload }', async () => {
     mockGet.mockResolvedValue(fullResponse());
     const { Wrapper } = makeWrapper();
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () => useCoachEmptyStatePayload('coach_community_home_empty'),
       { wrapper: Wrapper },
     );
@@ -98,7 +98,7 @@ describe('useCoachEmptyStatePayload — stateful, backend-driven result', () => 
     // A never-resolving promise keeps the query pending.
     mockGet.mockReturnValue(new Promise<never>(() => {}));
     const { Wrapper } = makeWrapper();
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () => useCoachEmptyStatePayload('coach_community_inbox_empty'),
       { wrapper: Wrapper },
     );
@@ -112,7 +112,7 @@ describe('useCoachEmptyStatePayload — stateful, backend-driven result', () => 
       new CoachCommunityApiError('network', 0, 'offline'),
     );
     const { Wrapper } = makeWrapper();
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () => useCoachEmptyStatePayload('coach_community_cohorts_empty'),
       { wrapper: Wrapper },
     );
@@ -127,7 +127,7 @@ describe('useCoachEmptyStatePayload — stateful, backend-driven result', () => 
   it('Case 3b: a generic (non-typed) rejection still classifies as network', async () => {
     mockGet.mockRejectedValue(new Error('boom'));
     const { Wrapper } = makeWrapper();
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () => useCoachEmptyStatePayload('coach_community_cohorts_empty'),
       { wrapper: Wrapper },
     );
@@ -146,7 +146,7 @@ describe('useCoachEmptyStatePayload — stateful, backend-driven result', () => 
     ];
     mockGet.mockResolvedValue(partial);
     const { Wrapper } = makeWrapper();
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () => useCoachEmptyStatePayload('coach_community_moderation_empty'),
       { wrapper: Wrapper },
     );
@@ -160,7 +160,7 @@ describe('useCoachEmptyStatePayload — stateful, backend-driven result', () => 
       new CoachCommunityApiError('network', 0, 'offline'),
     );
     const { Wrapper } = makeWrapper();
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () => useCoachEmptyStatePayload('coach_community_home_empty'),
       { wrapper: Wrapper },
     );
