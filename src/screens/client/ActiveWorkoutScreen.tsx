@@ -68,7 +68,7 @@ import { ExerciseImage, MUSCLES, lookupMuscleColor, makeMuscleColors } from './a
 import { ExerciseCard } from './active-workout/ExerciseCard';
 import { featureFlags } from '../../config/featureFlags';
 import { logger } from '../../utils/logger';
-import { normalizeError } from './_completionLogging';
+import { buildCompletionLogBase, normalizeError } from './_completionLogging';
 // §2.9 Voice-log confirmation — Roman reads back the most recently completed
 // set in his voice, beside his face (RomanVoiceLogReadback co-locates
 // <RomanAvatar />). No dedicated voice-capture screen exists in the app yet;
@@ -151,7 +151,6 @@ export default function ActiveWorkoutScreen() {
   const promptShownRef = useRef(false);
   const [restSeconds, setRestSeconds] = useState(0);
   const [restActive, setRestActive] = useState(false);
-  const [restTotal, setRestTotal] = useState(0);
   const restIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [allExercises, setAllExercises] = useState<Exercise[]>([]);
@@ -266,8 +265,16 @@ export default function ActiveWorkoutScreen() {
               // lands. See audit #6.
               try {
                 await clearActiveWorkoutSession(userId);
-              } catch {
-                /* best-effort */
+              } catch (error) {
+                // Best-effort clear: a fresh session still mounts even if the
+                // stale one couldn't be removed. Surfaced for diagnosis rather
+                // than swallowed (R69) — a persistently failing clear would
+                // otherwise silently re-prompt "Resume?" forever.
+                logger.warn('mwb.activeWorkout.start-fresh-clear', {
+                  route: 'ActiveWorkout',
+                  action: 'start-fresh-clear',
+                  error: normalizeError(error),
+                });
               }
               setSessionExercises(defaultSessionExercises);
               setHydrated(true);
@@ -408,7 +415,6 @@ export default function ActiveWorkoutScreen() {
   const startRest = (seconds: number) => {
     if (seconds <= 0) return;
     if (restIntervalRef.current) clearInterval(restIntervalRef.current);
-    setRestTotal(seconds);
     setRestSeconds(seconds);
     setRestActive(true);
     restIntervalRef.current = setInterval(() => {
@@ -621,19 +627,30 @@ export default function ActiveWorkoutScreen() {
           // the server mutation succeeds.
           let localWriteSucceeded = false;
 
-          // R11 D-002: shared diagnostic context for every completion-path
-          // logger call. In a mixed coach/client app a durability failure is
-          // useless without route + acting role + the keys needed to segment
-          // it. `sessionId` here is the local session_name correlation key
-          // (= routineName); the durable server id is added per-call once the
-          // server mutation resolves. `checkpoint` is set by each call site to
-          // name which durable checkpoint failed.
-          const completionLogBase = {
+          // R11 D-002 / R15 F1: shared diagnostic context for every
+          // completion-path logger call. In a mixed coach/client app a
+          // durability failure is useless without route + acting role + the
+          // keys needed to segment it. The canonical base (route, userRole,
+          // userKey, assignmentId, justCompletedId) is built via the shared
+          // `buildCompletionLogBase` so the producer and the WorkoutScreen
+          // consumer log an identically-shaped payload. `justCompletedId` is
+          // the durable server id of the workout the producer is about to
+          // hand off — it is the same value the §2.8 one-shot latches on, so
+          // it is supplied per-call once the server mutation resolves. Before
+          // that point (e.g. the pre-server local-write failure) it is not yet
+          // knowable and is logged as the string 'unknown' rather than
+          // undefined/null. `extraContext` carries the producer-only diagnostic
+          // fields; `sessionId` is the local session_name correlation key
+          // (= routineName). `checkpoint` is set by each call site to name
+          // which durable checkpoint failed.
+          const completionLogBaseCtx = {
             route: 'ActiveWorkout' as const,
             userRole: currentUser?.role ?? 'unknown',
             userKey: userId || undefined,
-            userId: userId || undefined,
             assignmentId: assignmentId ?? undefined,
+          };
+          const completionLogExtra = {
+            userId: userId || undefined,
             routineName: routineName ?? undefined,
             sessionId: routineName ?? undefined,
             completedSetCount: completedSets,
@@ -680,7 +697,13 @@ export default function ActiveWorkoutScreen() {
             // rather than swallowed, matching the surrounding completion-path
             // catches.
             logger.warn('mwb.completion.local-write', {
-              ...completionLogBase,
+              ...buildCompletionLogBase({
+                ...completionLogBaseCtx,
+                // Pre-server-write failure: the durable server id does not
+                // exist yet, so the latch id is genuinely unknowable here.
+                justCompletedId: 'unknown',
+              }),
+              ...completionLogExtra,
               checkpoint: 'local-sqlite-write',
               error: normalizeError(localErr),
             });
@@ -713,6 +736,17 @@ export default function ActiveWorkoutScreen() {
             {
               onSuccess: (data: unknown) => {
                 if (timerRef.current) clearInterval(timerRef.current);
+                // Resolve the durable server id up-front: it is both the
+                // §2.8 one-shot latch payload and the `justCompletedId` every
+                // post-write completion warn site must carry, so it has to be
+                // in scope before the first warn below. Correlate by
+                // `session_name` (= routineName, which both write paths share).
+                const d = (data ?? {}) as { id?: string; workout?: { id?: string } };
+                const serverId = String(d?.id ?? d?.workout?.id ?? '');
+                // When the server returned no usable id the workout is durable
+                // but un-keyable; log 'unknown' rather than an empty string so
+                // the latch id is never blank.
+                const justCompletedId = serverId || 'unknown';
                 // R18 fallback: if the local SQLite write failed above,
                 // the recovery session was not cleared yet. The server
                 // mutation just succeeded — it's now durable on the
@@ -724,7 +758,8 @@ export default function ActiveWorkoutScreen() {
                     // session is non-fatal (it reconciles on next pull). Still
                     // surfaced for diagnosis rather than swallowed silently.
                     logger.warn('mwb.completion.clear-recovery-session', {
-                      ...completionLogBase,
+                      ...buildCompletionLogBase({ ...completionLogBaseCtx, justCompletedId }),
+                      ...completionLogExtra,
                       checkpoint: 'clear-recovery-session',
                       serverId: serverId || undefined,
                       error: normalizeError(error),
@@ -743,17 +778,15 @@ export default function ActiveWorkoutScreen() {
                 // pending local rows we wrote in the loop above must be
                 // marked synced — otherwise the next `triggerSync()` cycle
                 // re-POSTs each of them as an additional single-exercise
-                // workout on the server. Correlate by `session_name`
-                // (= routineName, which both write paths share).
-                const d = (data ?? {}) as { id?: string; workout?: { id?: string } };
-                const serverId = String(d?.id ?? d?.workout?.id ?? '');
+                // workout on the server.
                 if (serverId && routineName) {
                   markSessionSyncedBySessionName(routineName, serverId).catch((error: unknown) => {
                     // Best-effort; pending rows will reconcile on the next pull.
                     // Surfaced (not swallowed) so a persistent mismatch is
                     // diagnosable rather than silent.
                     logger.warn('mwb.completion.mark-session-synced', {
-                      ...completionLogBase,
+                      ...buildCompletionLogBase({ ...completionLogBaseCtx, justCompletedId }),
+                      ...completionLogExtra,
                       checkpoint: 'mark-session-synced',
                       serverId: serverId || undefined,
                       error: normalizeError(error),
@@ -767,7 +800,8 @@ export default function ActiveWorkoutScreen() {
                   // Non-fatal: the server record exists; the next sync cycle
                   // will pull it. Surfaced for diagnosis.
                   logger.warn('mwb.completion.trigger-sync', {
-                    ...completionLogBase,
+                    ...buildCompletionLogBase({ ...completionLogBaseCtx, justCompletedId }),
+                    ...completionLogExtra,
                     checkpoint: 'trigger-sync',
                     serverId: serverId || undefined,
                     error: normalizeError(error),
@@ -797,7 +831,8 @@ export default function ActiveWorkoutScreen() {
                   }).catch((error: unknown) => {
                     // Non-fatal: generic workout already saved above.
                     logger.warn('mwb.completion.assignment-sync', {
-                      ...completionLogBase,
+                      ...buildCompletionLogBase({ ...completionLogBaseCtx, justCompletedId }),
+                      ...completionLogExtra,
                       checkpoint: 'assignment-sync',
                       serverId: serverId || undefined,
                       error: normalizeError(error),
@@ -854,7 +889,13 @@ export default function ActiveWorkoutScreen() {
                     // Best-effort re-save so the session stays recoverable after
                     // a failed server save. Surfaced for diagnosis.
                     logger.warn('mwb.completion.resave-on-error', {
-                      ...completionLogBase,
+                      ...buildCompletionLogBase({
+                        ...completionLogBaseCtx,
+                        // The server save failed, so no durable id was minted;
+                        // the latch id is unknowable on this path.
+                        justCompletedId: 'unknown',
+                      }),
+                      ...completionLogExtra,
                       checkpoint: 'resave-on-error',
                       error: normalizeError(error),
                     });
@@ -898,9 +939,16 @@ export default function ActiveWorkoutScreen() {
           pendingPersistPayloadRef.current = null;
           try {
             if (userId) await clearActiveWorkoutSession(userId);
-          } catch {
-            // Best-effort — if clearing fails the next mount still has
-            // the "Resume?" prompt to safely back out of.
+          } catch (error) {
+            // Best-effort — if clearing fails the next mount still has the
+            // "Resume?" prompt to safely back out of. Surfaced for diagnosis
+            // rather than swallowed (R69) so a persistent clear failure is
+            // visible instead of silent.
+            logger.warn('mwb.activeWorkout.cancel-clear', {
+              route: 'ActiveWorkout',
+              action: 'cancel-clear',
+              error: normalizeError(error),
+            });
           }
           if (timerRef.current) clearInterval(timerRef.current);
           navigation.goBack();

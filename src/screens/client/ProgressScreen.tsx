@@ -22,7 +22,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Svg, { Circle, G, Polyline, Line as SvgLine, Text as SvgText } from 'react-native-svg';
+import Svg, { Circle, G } from 'react-native-svg';
 import { weightApi, logApi } from '../../services/api';
 import { useMacroTargets } from '../../hooks/useMacroTargets';
 import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
@@ -63,6 +63,45 @@ export function streakMilestoneTier(loggingStreak: number): RomanStreakTier | nu
   if (loggingStreak === 7) return 7;
   if (loggingStreak === 3) return 3;
   return null;
+}
+
+/**
+ * Typed parser for one weight-history row from the API. The server response is
+ * untyped at the boundary and may send either `date` or `created_at`, and
+ * either `weight_lbs` or `weight`. This validates the row shape and normalises
+ * it into a `WeightLog`, returning `null` for any row missing the fields a
+ * `WeightLog` requires (an id and a numeric weight) so callers can drop it
+ * instead of force-casting the untyped result through a double assertion (R69).
+ * The date is bucketed to the user's LOCAL calendar day so the streak compare
+ * is tz-correct on either side of the date line (see audit P0-3).
+ */
+export function parseWeightLogRow(row: unknown, fallbackUserId: string): WeightLog | null {
+  if (typeof row !== 'object' || row === null) return null;
+  const r = row as Record<string, unknown>;
+
+  if (typeof r.id !== 'string' || r.id.length === 0) return null;
+
+  const rawWeight = typeof r.weight_lbs === 'number' ? r.weight_lbs : r.weight;
+  if (typeof rawWeight !== 'number' || Number.isNaN(rawWeight)) return null;
+
+  const rawDateSource = typeof r.date === 'string' ? r.date : r.created_at;
+  const rawDate = typeof rawDateSource === 'string' ? rawDateSource : '';
+  const normDate = /^\d{4}-\d{2}-\d{2}$/.test(rawDate)
+    ? rawDate.slice(0, 10)
+    : bucketDateLocal(new Date(rawDate));
+
+  const createdAt = typeof r.created_at === 'string' ? r.created_at : rawDate;
+
+  return {
+    id: r.id,
+    userId: typeof r.user_id === 'string' && r.user_id.length > 0 ? r.user_id : fallbackUserId,
+    coachId: '',
+    date: normDate,
+    weight: rawWeight,
+    unit: 'lbs',
+    notes: typeof r.notes === 'string' ? r.notes : '',
+    createdAt,
+  };
 }
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -176,26 +215,13 @@ export default function ProgressScreen() {
 
     try {
       const res = await weightApi.getHistory(days);
-      type WeightRow = { id: string; user_id?: string; date?: string; created_at?: string; weight_lbs?: number; weight?: number; notes?: string };
-      const logs = (((res.data as WeightRow[] | undefined) || []).map((w) => {
-        // Server may send either a bare `YYYY-MM-DD` (already a calendar day)
-        // or a full ISO timestamp from `created_at`. We normalise both into
-        // the user's *local* calendar day so the streak compare below is
-        // tz-correct on either side of the date line. See audit P0-3.
-        const rawDate = w.date || w.created_at || '';
-        const normDate = /^\d{4}-\d{2}-\d{2}$/.test(rawDate)
-          ? rawDate.slice(0, 10)
-          : bucketDateLocal(new Date(rawDate));
-        return {
-          id: w.id,
-          userId: w.user_id || userId,
-          coachId: '',
-          date: normDate,
-          weight: w.weight_lbs || w.weight,
-          unit: 'lbs' as const,
-          notes: w.notes || '',
-        };
-      })) as unknown as WeightLog[];
+      // Boundary parse: each untyped server row is validated/normalised into a
+      // WeightLog via parseWeightLogRow; rows missing an id or numeric weight
+      // are dropped rather than force-cast through a double assertion (R69).
+      const rawRows: unknown[] = Array.isArray(res.data) ? res.data : [];
+      const logs: WeightLog[] = rawRows
+        .map((row) => parseWeightLogRow(row, userId))
+        .filter((x): x is WeightLog => x !== null);
       // Sort by date ascending
       logs.sort((a, b) => a.date.localeCompare(b.date));
       setWeightLogs(logs);

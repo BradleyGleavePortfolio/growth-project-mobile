@@ -96,6 +96,8 @@ import NotificationCenterScreen from '../screens/notifications/NotificationCente
 import NotificationPreferencesScreen from '../screens/notifications/NotificationPreferencesScreen';
 import NotificationBadge from '../components/NotificationBadge';
 import { fetchUnreadCount } from '../services/notificationsApi';
+import { logger } from '../utils/logger';
+import { normalizeError } from '../screens/client/_completionLogging';
 // Phase 10 — GDPR Article 20 data portability
 import DataExportScreen from '../screens/settings/DataExportScreen';
 // Payments — client-facing packages + checkout return (backend PR #215).
@@ -321,8 +323,15 @@ function useClientUnreadCount(): number {
       try {
         const n = await fetchUnreadCount();
         if (mounted) setCount(n);
-      } catch {
-        // Silent — badge shows stale count on error.
+      } catch (error) {
+        // Non-fatal: the badge keeps its last-known count on a failed poll.
+        // Surfaced for diagnosis rather than swallowed (R69) so a persistently
+        // failing unread-count fetch is visible instead of silently stale.
+        logger.warn('clientNavigator.unread-count', {
+          route: 'ClientNavigator',
+          action: 'fetch-unread-count',
+          error: normalizeError(error),
+        });
       }
     };
     refresh();

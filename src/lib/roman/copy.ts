@@ -61,9 +61,8 @@ export interface RomanCoachBriefArgs {
 export function romanCoachBrief(args: RomanCoachBriefArgs): string {
   const { coachName, clientCount, mode } = args;
   if (mode === 'celebration') {
-    // §2.3 milestone-celebration (record morning). Exclamation rationing: the
-    // session's one exclamation is reserved for the §2.7 30-day line, so this
-    // celebration ends on a measured full stop.
+    // §2.3 milestone-celebration (record morning).
+    // Roman P3 voice: never use exclamation marks. Period-terminated lines only.
     return `Good morning, ${coachName}. Every client is on track this morning. I cannot recall a tidier brief.`;
   }
   if (mode === 'error') {
@@ -110,8 +109,8 @@ export interface RomanCheckInClaimArgs {
 export function romanCheckInClaim(args: RomanCheckInClaimArgs): string {
   const { clientName, mode } = args;
   if (mode === 'celebration') {
-    // §2.4 milestone-celebration (the client's first check-in-consistency
-    // claim). No exclamation — the session's one is reserved for §2.7 30-day.
+    // §2.4 milestone-celebration (the client's first check-in-consistency claim).
+    // Roman P3 voice: never use exclamation marks. Period-terminated lines only.
     return `${clientName} has a first check-in consistency claim awaiting your sign-off. A good beginning.`;
   }
   if (mode === 'error') {
@@ -171,8 +170,8 @@ export function formatOrdinal(n: number): string {
 export function romanNewClient(args: RomanNewClientArgs): string {
   const { clientName, clientCount, mode } = args;
   if (mode === 'celebration') {
-    // §2.5 milestone-celebration (roster milestone). No exclamation — the
-    // session's one is reserved for the §2.7 30-day line.
+    // §2.5 milestone-celebration (roster milestone).
+    // Roman P3 voice: never use exclamation marks. Period-terminated lines only.
     return `${clientName} has joined your roster — your ${formatOrdinal(clientCount)} client. The practice is growing handsomely.`;
   }
   if (mode === 'error') {
@@ -254,8 +253,8 @@ export interface RomanWorkoutCompleteArgs {
 export function romanWorkoutComplete(args: RomanWorkoutCompleteArgs): string {
   const { mode, liftName } = args;
   if (mode === 'celebration') {
-    // §2.8 milestone-celebration (personal best). No exclamation — the
-    // session's one is reserved for the §2.7 30-day line.
+    // §2.8 milestone-celebration (personal best).
+    // Roman P3 voice: never use exclamation marks. Period-terminated lines only.
     // A PR celebration requires the lift name; fall back to the default line
     // rather than render a hollow "personal best on ." if it is missing.
     if (liftName == null || liftName.trim() === '') {
@@ -303,10 +302,10 @@ export function romanVoiceLog(args: RomanVoiceLogArgs): string {
     return 'I did not catch that cleanly. Tell me the weight and the reps once more, and I will record it.';
   }
   if (mode === 'celebration') {
-    // §2.9 milestone-celebration (a logged PR via voice). No exclamation — the
-    // session's one is reserved for the §2.7 30-day line. No durable-save claim
-    // (P1-B-03): the readback fires on parse, so it states the new-best fact
-    // about the parsed set, not that it has been persisted.
+    // §2.9 milestone-celebration (a logged PR via voice).
+    // Roman P3 voice: never use exclamation marks. Period-terminated lines only.
+    // No durable-save claim (P1-B-03): the readback fires on parse, so it states
+    // the new-best fact about the parsed set, not that it has been persisted.
     return `${weight} pounds, ${reps} reps — and a new best. Noted.`;
   }
   // spec §2.9 default — pure readback of the parsed set, e.g.
@@ -402,9 +401,9 @@ export function romanPayout(args: RomanPayoutArgs): string {
     return `I was unable to send your payout of ${amount} just now — the bank declined the transfer instruction. Nothing is lost; I will retry and confirm once it is moving.`;
   }
   if (mode === 'celebration') {
-    // §2.12 milestone-celebration (record payout). No exclamation — the
-    // session's one is reserved for the §2.7 30-day line. Past tense: the data
-    // proves the payout was sent, not that it is in transit.
+    // §2.12 milestone-celebration (record payout).
+    // Roman P3 voice: never use exclamation marks. Period-terminated lines only.
+    // Past tense: the data proves the payout was sent, not that it is in transit.
     if (hasBankLast4) {
       return `Your last payout of ${amount} was sent on ${sentOn} to the account ending ${bankLast4} — your largest yet. A fine month's work.`;
     }
