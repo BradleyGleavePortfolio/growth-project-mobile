@@ -271,8 +271,14 @@ export default function ActiveWorkoutScreen() {
                 // than swallowed (R69) — a persistently failing clear would
                 // otherwise silently re-prompt "Resume?" forever.
                 logger.warn('mwb.activeWorkout.start-fresh-clear', {
-                  route: 'ActiveWorkout',
-                  action: 'start-fresh-clear',
+                  ...buildCompletionLogBase({
+                    route: 'ActiveWorkout',
+                    userRole: currentUser?.role,
+                    userKey: userId || undefined,
+                    // No completion id exists on a non-completion clear path; use the documented sentinel.
+                    justCompletedId: 'unknown',
+                  }),
+                  checkpoint: 'start-fresh-clear',
                   error: normalizeError(error),
                 });
               }
@@ -945,8 +951,14 @@ export default function ActiveWorkoutScreen() {
             // rather than swallowed (R69) so a persistent clear failure is
             // visible instead of silent.
             logger.warn('mwb.activeWorkout.cancel-clear', {
-              route: 'ActiveWorkout',
-              action: 'cancel-clear',
+              ...buildCompletionLogBase({
+                route: 'ActiveWorkout',
+                userRole: currentUser?.role,
+                userKey: userId || undefined,
+                // No completion id exists on an explicit-cancel clear path; use the documented sentinel.
+                justCompletedId: 'unknown',
+              }),
+              checkpoint: 'cancel-clear',
               error: normalizeError(error),
             });
           }
