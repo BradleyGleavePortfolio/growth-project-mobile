@@ -146,9 +146,9 @@ describe('WelcomeScreen', () => {
 // ─── Coach pairing ───────────────────────────────────────────────────────────
 
 describe('CoachPairingScreen', () => {
-  function renderPairing(prefillCode?: string) {
+  async function renderPairing(prefillCode?: string) {
     const nav = makeNav();
-    const utils = render(
+    const utils = await render(
       <CoachPairingScreen
         navigation={nav as never}
         route={{ key: 'k', name: 'CoachPairing', params: prefillCode ? { prefillCode } : undefined } as never}
@@ -157,13 +157,13 @@ describe('CoachPairingScreen', () => {
     return { nav, ...utils };
   }
 
-  it('renders 2/6 step text', () => {
-    const { getByTestId } = renderPairing();
+  it('renders 2/6 step text', async () => {
+    const { getByTestId } = await renderPairing();
     expect(getByTestId('day-one-step-text').props.children).toBe('2/6');
   });
 
-  it('prefills the input from route.params.prefillCode and hides the skip button', () => {
-    const { getByTestId, queryByTestId } = renderPairing('TGP-ABCD');
+  it('prefills the input from route.params.prefillCode and hides the skip button', async () => {
+    const { getByTestId, queryByTestId } = await renderPairing('TGP-ABCD');
     const input = getByTestId('day-one-invite-input');
     expect(input.props.value).toBe('TGP-ABCD');
     expect(queryByTestId('day-one-invite-skip')).toBeNull();
@@ -171,7 +171,7 @@ describe('CoachPairingScreen', () => {
 
   it('submits to pairWithCoach and navigates to Goals on success', async () => {
     mockedPair.mockResolvedValue({ ok: true });
-    const { nav, getByTestId } = renderPairing();
+    const { nav, getByTestId } = await renderPairing();
     await fireEvent.changeText(getByTestId('day-one-invite-input'), 'XYZ9');
     await act(async () => {
       await fireEvent.press(getByTestId('day-one-invite-submit'));
@@ -182,7 +182,7 @@ describe('CoachPairingScreen', () => {
 
   it('shows structured copy when the backend returns an invite_expired error', async () => {
     mockedPair.mockResolvedValue({ ok: false, error: { kind: 'invite_expired' } });
-    const { getByTestId, findByText } = renderPairing();
+    const { getByTestId, findByText } = await renderPairing();
     await fireEvent.changeText(getByTestId('day-one-invite-input'), 'BAD9');
     await act(async () => {
       await fireEvent.press(getByTestId('day-one-invite-submit'));
@@ -191,7 +191,7 @@ describe('CoachPairingScreen', () => {
   });
 
   it('skip path advances without calling the backend', async () => {
-    const { nav, getByTestId } = renderPairing();
+    const { nav, getByTestId } = await renderPairing();
     await act(async () => {
       await fireEvent.press(getByTestId('day-one-invite-skip'));
     });

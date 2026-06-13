@@ -98,12 +98,18 @@ jest.mock('react-native-svg', () => {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const mockReact = require('react');
   // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { View } = require('react-native');
+  const { View, Text } = require('react-native');
   const MockSvg = ({ children }: { children?: unknown }) =>
     mockReact.createElement(View, { testID: 'svg' }, children);
   const makeMock = (name: string) =>
     ({ children, ...props }: { children?: unknown; [key: string]: unknown }) =>
       mockReact.createElement(View, { testID: name, ...props }, children);
+  // SvgText carries string/number children (e.g. tooltip values). v14's
+  // test-renderer enforces the "text must live inside <Text>" invariant, so
+  // the SvgText mock wraps its children in a real RN <Text> while preserving
+  // the asserted props (fill/stroke/etc.) on the host node via testID.
+  const MockSvgText = ({ children, ...props }: { children?: unknown; [key: string]: unknown }) =>
+    mockReact.createElement(Text, { testID: 'SvgText', ...props }, children);
   return {
     __esModule: true,
     default: MockSvg,
@@ -113,7 +119,7 @@ jest.mock('react-native-svg', () => {
     Line: makeMock('Line'),
     Circle: makeMock('Circle'),
     Rect: makeMock('Rect'),
-    Text: makeMock('SvgText'),
+    Text: MockSvgText,
     G: makeMock('G'),
   };
 });

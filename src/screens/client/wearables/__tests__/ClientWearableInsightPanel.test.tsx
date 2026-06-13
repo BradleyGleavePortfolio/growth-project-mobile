@@ -18,7 +18,7 @@
 import React from 'react';
 import { AccessibilityInfo, Linking, StyleSheet } from 'react-native';
 import { render, fireEvent, act } from '@testing-library/react-native';
-import type { ReactTestInstance } from 'react-test-renderer';
+import type { TestInstance } from 'test-renderer';
 
 // ── Inline WCAG 2.1 contrast helper (P2 dark-mode AA regression) ──────────────
 // Colocated here on purpose: the dark-mode AA assertions must not depend on the
@@ -121,21 +121,26 @@ async function flushPromises(): Promise<void> {
  * overflowed CLAMP_LINES (3) and surfaces the Read more toggle. `lines.length`
  * is all the component reads.
  */
-function overflowLayout(node: ReactTestInstance, lineCount = 5): void {
-  fireEvent(node, 'textLayout', {
-    nativeEvent: {
-      lines: Array.from({ length: lineCount }, () => ({
-        text: '',
-        x: 0,
-        y: 0,
-        width: 0,
-        height: 0,
-        ascender: 0,
-        descender: 0,
-        capHeight: 0,
-        xHeight: 0,
-      })),
-    },
+async function overflowLayout(node: TestInstance, lineCount = 5): Promise<void> {
+  // v14: the onTextLayout handler calls setState, so the event must be fired
+  // inside act(...) for the resulting Read-more toggle state to flush before
+  // the next query. Awaiting keeps the assertion order deterministic.
+  await act(async () => {
+    fireEvent(node, 'textLayout', {
+      nativeEvent: {
+        lines: Array.from({ length: lineCount }, () => ({
+          text: '',
+          x: 0,
+          y: 0,
+          width: 0,
+          height: 0,
+          ascender: 0,
+          descender: 0,
+          capHeight: 0,
+          xHeight: 0,
+        })),
+      },
+    });
   });
 }
 
@@ -177,14 +182,15 @@ const baseProps = { bucket: 'HEALTH_FITNESS' as const };
 describe('loading / empty / error states', () => {
   it('renders a skeleton (not a spinner) while loading', async () => {
     mockUseClientInsight.mockReturnValue(queryState({ isLoading: true }));
-    const { getByTestId, queryByTestId, UNSAFE_queryAllByType } = await render(
+    const { getByTestId, queryByTestId, queryByRole } = await render(
       <ClientWearableInsightPanel {...baseProps} />,
     );
     expect(getByTestId('client-insight-loading')).toBeTruthy();
     expect(queryByTestId('client-insight-panel')).toBeNull();
-    // No spinner anywhere in the tree (R0 / brief test #1).
-    const { ActivityIndicator } = require('react-native');
-    expect(UNSAFE_queryAllByType(ActivityIndicator)).toHaveLength(0);
+    // No spinner anywhere in the tree (R0 / brief test #1). v14 drops
+    // UNSAFE_queryAllByType; ActivityIndicator exposes the 'progressbar'
+    // accessibility role, so its absence is asserted via a user-visible query.
+    expect(queryByRole('progressbar')).toBeNull();
   });
 
   it('renders the literal empty copy + secondary line, NO chip, NO CTA', async () => {
@@ -497,8 +503,8 @@ describe('long-content clamp + Read more toggle (state #5)', () => {
     expect(queryByTestId('client-insight-readmore')).toBeNull();
 
     // Report that both clamped fields overflowed 3 lines.
-    overflowLayout(observation);
-    overflowLayout(norm);
+    await overflowLayout(observation);
+    await overflowLayout(norm);
 
     // Now the single Read more toggle appears.
     const toggle = getByTestId('client-insight-readmore');
@@ -533,8 +539,8 @@ describe('long-content clamp + Read more toggle (state #5)', () => {
       <ClientWearableInsightPanel {...baseProps} />,
     );
     // Report a within-cap layout (2 lines) for both clamped fields.
-    overflowLayout(getByTestId('client-insight-observation'), 2);
-    overflowLayout(getByTestId('client-insight-norm'), 2);
+    await overflowLayout(getByTestId('client-insight-observation'), 2);
+    await overflowLayout(getByTestId('client-insight-norm'), 2);
     expect(queryByTestId('client-insight-readmore')).toBeNull();
   });
 });
@@ -544,7 +550,7 @@ describe('long-content clamp + Read more toggle (state #5)', () => {
  * its style (RN merges arrays + functional styles; the panel applies the ink
  * inline as the last array entry, so the flattened value is the one painted).
  */
-function flatColor(node: ReactTestInstance, key: 'color' | 'borderColor'): string {
+function flatColor(node: TestInstance, key: 'color' | 'borderColor'): string {
   const flat = StyleSheet.flatten(node.props.style) as Record<string, unknown>;
   const value = flat[key];
   expect(typeof value).toBe('string');
@@ -575,12 +581,12 @@ describe('dark-mode on-surface AA (P1 regression guard)', () => {
         <ClientWearableInsightPanel bucket={bucket} />,
       );
       // Surface the toggle so its resolved ink can be measured.
-      overflowLayout(getByTestId('client-insight-observation'));
+      await overflowLayout(getByTestId('client-insight-observation'));
       const toggle = getByTestId('client-insight-readmore');
       // The inner Text carries the inline color; read it off the rendered child.
       const textNode = toggle.children.find(
-        (c): c is ReactTestInstance => typeof c !== 'string',
-      ) as ReactTestInstance;
+        (c): c is TestInstance => typeof c !== 'string',
+      ) as TestInstance;
       const color = flatColor(textNode, 'color');
       expect(contrastRatio(color, DARK_SURFACE)).toBeGreaterThanOrEqual(4.5);
     },
@@ -601,8 +607,8 @@ describe('dark-mode on-surface AA (P1 regression guard)', () => {
       // clear their respective AA thresholds (text 4.5:1, UI border 3:1).
       const borderColor = flatColor(retry, 'borderColor');
       const textNode = retry.children.find(
-        (c): c is ReactTestInstance => typeof c !== 'string',
-      ) as ReactTestInstance;
+        (c): c is TestInstance => typeof c !== 'string',
+      ) as TestInstance;
       const textColor = flatColor(textNode, 'color');
       expect(contrastRatio(borderColor, DARK_SURFACE)).toBeGreaterThanOrEqual(3);
       expect(contrastRatio(textColor, DARK_SURFACE)).toBeGreaterThanOrEqual(4.5);
@@ -624,8 +630,8 @@ describe('Read more stale-state on refetch (#28)', () => {
       <ClientWearableInsightPanel {...baseProps} />,
     );
     // Long content overflows → toggle appears.
-    overflowLayout(getByTestId('client-insight-observation'));
-    overflowLayout(getByTestId('client-insight-norm'));
+    await overflowLayout(getByTestId('client-insight-observation'));
+    await overflowLayout(getByTestId('client-insight-norm'));
     expect(getByTestId('client-insight-readmore')).toBeTruthy();
 
     // Refetch swaps in short content; the keyed effect collapses + clears flags.
@@ -640,8 +646,8 @@ describe('Read more stale-state on refetch (#28)', () => {
     await rerender(<ClientWearableInsightPanel {...baseProps} />);
     // The fresh layout pass reports a within-cap measurement; the always-assign
     // handler flips the flag back to false so the toggle is gone (not stuck on).
-    overflowLayout(getByTestId('client-insight-observation'), 2);
-    overflowLayout(getByTestId('client-insight-norm'), 2);
+    await overflowLayout(getByTestId('client-insight-observation'), 2);
+    await overflowLayout(getByTestId('client-insight-norm'), 2);
     expect(queryByTestId('client-insight-readmore')).toBeNull();
   });
 });

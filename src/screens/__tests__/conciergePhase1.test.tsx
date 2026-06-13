@@ -45,14 +45,14 @@ jest.mock('../../hooks/useCurrentUser', () => ({
   useCurrentUser: () => ({ id: 'client-1', email: 'c@x', coach_id: 'coach-1' }),
 }));
 
-function withQc(node: React.ReactElement) {
+async function withQc(node: React.ReactElement) {
   const qc = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
       mutations: { retry: false },
     },
   });
-  return render(
+  return await render(
     <QueryClientProvider client={qc}>{node}</QueryClientProvider>,
   );
 }
@@ -105,7 +105,7 @@ describe('CoachBookingInboxScreen', () => {
       ...PENDING,
       status: 'scheduled',
     });
-    const { findByLabelText } = withQc(<CoachBookingInboxScreen />);
+    const { findByLabelText } = await withQc(<CoachBookingInboxScreen />);
     const btn = await findByLabelText('Confirm session Intro call');
     await fireEvent.press(btn);
     await waitFor(() =>
@@ -119,7 +119,7 @@ describe('CoachBookingInboxScreen', () => {
       ...PENDING,
       status: 'declined',
     });
-    const { findByLabelText } = withQc(<CoachBookingInboxScreen />);
+    const { findByLabelText } = await withQc(<CoachBookingInboxScreen />);
     const btn = await findByLabelText('Decline session Intro call');
     await fireEvent.press(btn);
     await waitFor(() =>
@@ -138,7 +138,7 @@ describe('ClientBookingRequestScreen', () => {
 
   it('renders empty-state when coach has no availability windows', async () => {
     mockApi.getAvailability.mockResolvedValueOnce([]);
-    const { findByText } = withQc(<ClientBookingRequestScreen />);
+    const { findByText } = await withQc(<ClientBookingRequestScreen />);
     await findByText(
       'Available times will appear once your coach has set availability.',
     );

@@ -153,7 +153,7 @@ describe('TimelineScreen', () => {
     const { getByText } = await renderScreen();
     await waitFor(() => expect(getByText('Retry')).toBeTruthy());
 
-    await act(() => {
+    await act(async () => {
       await fireEvent.press(getByText('Retry'));
     });
 
@@ -167,7 +167,7 @@ describe('TimelineScreen', () => {
     const { getByText } = await renderScreen();
     await waitFor(() => expect(getByText('Body')).toBeTruthy());
 
-    await act(() => {
+    await act(async () => {
       await fireEvent.press(getByText('Body'));
     });
 
@@ -182,7 +182,7 @@ describe('TimelineScreen', () => {
     const { getByText } = await renderScreen();
     await waitFor(() => expect(getByText('All')).toBeTruthy());
 
-    await act(() => {
+    await act(async () => {
       await fireEvent.press(getByText('All'));
     });
 
@@ -201,7 +201,7 @@ describe('TimelineScreen', () => {
     await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(1));
 
     const list = getByLabelText('Transformation timeline');
-    await act(() => {
+    await act(async () => {
       await fireEvent(list, 'refresh');
     });
 
@@ -214,8 +214,25 @@ describe('TimelineScreen', () => {
     mockFetch.mockResolvedValue(FULL_RESPONSE);
     const { toJSON } = await renderScreen();
 
+    // v14: the rendered tree returned by `toJSON()` now carries circular
+    // internal references (e.g. fiber `_owner`), so a plain `JSON.stringify`
+    // throws "Converting circular structure to JSON". Use a circular-safe
+    // replacer that drops only the back-references while preserving every
+    // serializable prop/child string — the contract (no risk_score text leaks
+    // into the tree) is unchanged.
+    const safeStringify = (value: unknown): string => {
+      const seen = new WeakSet<object>();
+      return JSON.stringify(value, (_key, val) => {
+        if (typeof val === 'object' && val !== null) {
+          if (seen.has(val)) return undefined;
+          seen.add(val);
+        }
+        return val;
+      });
+    };
+
     await waitFor(() => {
-      const tree = JSON.stringify(toJSON());
+      const tree = safeStringify(toJSON());
       expect(tree).not.toMatch(/risk_score/i);
       expect(tree).not.toMatch(/riskScore/i);
     });

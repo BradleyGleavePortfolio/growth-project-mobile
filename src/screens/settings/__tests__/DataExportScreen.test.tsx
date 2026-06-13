@@ -88,9 +88,14 @@ describe('DataExportScreen', () => {
   it('renders the heading and included-data list', async () => {
     mockGetStatus.mockResolvedValue(null);
 
-    const { getByText, findByText } = await render(<DataExportScreen />);
+    const { getByText, findByText, getAllByText } = await render(<DataExportScreen />);
 
-    await findByText('Request my data');
+    // "Request my data" appears twice in this state — the screen heading and the
+    // CTA button label. v14 surfaces both host <Text> nodes, so anchor the async
+    // wait on the unique intro paragraph, then assert the heading text exists
+    // (one of the two occurrences) rather than requiring a single match.
+    await findByText(/right to receive a complete copy/);
+    expect(getAllByText('Request my data').length).toBeGreaterThanOrEqual(1);
     expect(getByText(/Weight, food, and water logs/)).toBeTruthy();
     expect(getByText(/Coaching messages you sent/)).toBeTruthy();
     expect(getByText(/Audit log entries about your account/)).toBeTruthy();

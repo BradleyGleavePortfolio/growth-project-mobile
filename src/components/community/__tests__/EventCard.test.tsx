@@ -62,14 +62,28 @@ describe('EventCard', () => {
   });
 
   it('wraps the card in a listitem while keeping the press target a button', async () => {
-    const { getByTestId, UNSAFE_getByProps } = await render(
+    const { getByTestId, root } = await render(
       <EventCard event={makeEvent()} onPress={jest.fn()} testID="card" />,
     );
     // The inner press target keeps button semantics.
     expect(getByTestId('card').props.accessibilityRole).toBe('button');
-    // An outer wrapper supplies listitem semantics for assistive tech (RN
-    // types list/listitem via the W3C `role` prop).
-    expect(UNSAFE_getByProps({ role: 'listitem' })).toBeTruthy();
+    // An outer wrapper supplies listitem semantics for assistive tech: the
+    // component sets the W3C `role="listitem"` (not `accessibilityRole`) on a
+    // non-accessible <View>, so getByRole cannot reach it in v14. Walk the
+    // public render tree from `root` and assert a host node carries that role
+    // — a non-UNSAFE replacement for the removed UNSAFE_getByProps query.
+    expect(root).not.toBeNull();
+    const hasListItemRole = (node: typeof root): boolean => {
+      if (!node) return false;
+      if (node.props?.role === 'listitem') return true;
+      const children = node.children ?? [];
+      return children.some((child) =>
+        typeof child === 'object' && child !== null
+          ? hasListItemRole(child as typeof root)
+          : false,
+      );
+    };
+    expect(hasListItemRole(root)).toBe(true);
   });
 
   it('fires onPress with the event when tapped', async () => {

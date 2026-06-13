@@ -1065,7 +1065,7 @@ describe('useAutosave - MWB-4 #237 R11 (P1): 409 awaits server truth before reba
     // The screen folds the refetched server truth into BOTH the autosave diff
     // baseline (via rebaselineTo) AND its local working copy (via setRows). We
     // model the setRows fold with a deferred rerender driven from onConflict.
-    let rerenderValue: ((next: RowCopy) => void) | null = null;
+    let rerenderValue: ((next: RowCopy) => Promise<void>) | null = null;
     // The server concurrently changed notes to 'tempo'. Server truth therefore
     // has the coach's last-saved sets (3) PLUS the new server notes ('tempo').
     const serverTruth: RowCopy = { sets: 3, notes: 'tempo' };
@@ -1078,7 +1078,12 @@ describe('useAutosave - MWB-4 #237 R11 (P1): 409 awaits server truth before reba
       await Promise.resolve();
       adoptionOrder.push('adopted-server-truth');
       handle?.rebaselineTo(serverTruth);
-      rerenderValue?.({ sets: 4, notes: 'tempo' });
+      // v14: `rerender` is async, so the screen's setRows fold (server truth
+      // into the working copy) only commits once awaited. The hook awaits
+      // onConflict before rebasing, so we await the fold here to guarantee the
+      // working copy carries notes='tempo' BEFORE the rebased resend diffs it
+      // (in v13 rerender was sync, so the fold landed implicitly).
+      await rerenderValue?.({ sets: 4, notes: 'tempo' });
     });
 
     const { result, rerender } = await renderHook(
@@ -1098,7 +1103,7 @@ describe('useAutosave - MWB-4 #237 R11 (P1): 409 awaits server truth before reba
       // never touched notes; the server set it later).
       { initialProps: { value: { sets: 3, notes: null } as RowCopy } },
     );
-    rerenderValue = (next: RowCopy) => await rerender({ value: next });
+    rerenderValue = async (next: RowCopy) => await rerender({ value: next });
 
     // The coach edits sets 3 -> 4 (a sets-only change). The pending batch's
     // full-row upsert therefore carries notes=null off the STALE baseline.
@@ -1323,7 +1328,7 @@ describe('useAutosave - MWB-4 #237 R13 (D-001/D-002): conflict adoption preserve
       .mockResolvedValueOnce(okResponse({ head: 10, token: TOKEN_A }));
 
     let handle: ReturnType<typeof useAutosave<RowCopy>> | null = null;
-    let rerenderValue: ((next: RowCopy) => void) | null = null;
+    let rerenderValue: ((next: RowCopy) => Promise<void>) | null = null;
     // Server truth: the coach's last-saved sets (3) PLUS the concurrent server
     // notes ('tempo'). The coach never touched notes locally.
     const serverTruth: RowCopy = { sets: 3, notes: 'tempo' };
@@ -1332,7 +1337,9 @@ describe('useAutosave - MWB-4 #237 R13 (D-001/D-002): conflict adoption preserve
       // Adopt server truth into the diff baseline AND fold it into the working
       // copy (the coach's sets=4 replayed on top of the server's notes='tempo').
       handle?.rebaselineToConflict(serverTruth);
-      rerenderValue?.({ sets: 4, notes: 'tempo' });
+      // v14: await the async rerender fold so the working copy commits server
+      // truth BEFORE the awaited adoption returns and the rebased resend runs.
+      await rerenderValue?.({ sets: 4, notes: 'tempo' });
     });
 
     const { result, rerender } = await renderHook(
@@ -1350,7 +1357,7 @@ describe('useAutosave - MWB-4 #237 R13 (D-001/D-002): conflict adoption preserve
       },
       { initialProps: { value: { sets: 3, notes: null } as RowCopy } },
     );
-    rerenderValue = (next: RowCopy) => await rerender({ value: next });
+    rerenderValue = async (next: RowCopy) => await rerender({ value: next });
 
     // The coach's first-ever edit: sets 3 -> 4 (notes stays null locally). The
     // pending full-row upsert therefore carries notes=null off the baseline.
@@ -1405,7 +1412,17 @@ describe('useAutosave - MWB-4 #237 R13 (D-001/D-002): conflict adoption preserve
       .mockResolvedValueOnce(okResponse({ head: 10, token: TOKEN_A }));
 
     let handle: ReturnType<typeof useAutosave<TriRowCopy>> | null = null;
-    let rerenderValue: ((next: TriRowCopy) => void) | null = null;
+    // The screen's local working copy is driven by component STATE (setRows),
+    // NOT by a parent prop rerender. v14 (react 19 + test-renderer 1.2): we
+    // model that with a useState inside the hook container and expose its
+    // setter. Folding the working copy via this setState (rather than
+    // renderHook's act-wrapped `rerender`) avoids nesting an act() inside
+    // onConflict's promise - which would overlap the conflict-recovery act the
+    // test is already inside and either error ("overlapping act() calls") or
+    // race the fold against the hook's rebaseBatch. A plain setState just
+    // schedules an update that the surrounding waitFor's managed act() flushes
+    // in order, so latestValueRef holds the folded copy BEFORE rebaseBatch runs.
+    let setWorkingCopy: ((next: TriRowCopy) => void) | null = null;
     // Server truth: last-saved sets/reps (3/10) PLUS the concurrent notes.
     const serverTruth: TriRowCopy = { sets: 3, reps: 10, notes: 'tempo' };
     const onConflict = jest.fn(async () => {
@@ -1413,35 +1430,38 @@ describe('useAutosave - MWB-4 #237 R13 (D-001/D-002): conflict adoption preserve
       // The screen routes adoption through rebaselineToConflict: it adopts the
       // server baseline EVEN THOUGH a queued edit exists, re-deriving that
       // queued delta on top of server truth. Fold server truth + both coach
-      // edits into the working copy (sets=4, reps=12 on top of notes='tempo').
+      // edits into the working copy (sets=4, reps=12 on top of notes='tempo')
+      // via setState, then move the diff baseline. The hook awaits this whole
+      // callback before rebaseBatch, so the folded working copy is live by the
+      // time rebaseBatch re-diffs it against the adopted server baseline,
+      // yielding the combined sets=4/reps=12 delta on top of notes='tempo'.
+      setWorkingCopy?.({ sets: 4, reps: 12, notes: 'tempo' });
       handle?.rebaselineToConflict(serverTruth);
-      rerenderValue?.({ sets: 4, reps: 12, notes: 'tempo' });
     });
-
-    const { result, rerender } = await renderHook(
-      ({ value }: { value: TriRowCopy }) => {
-        const r = useAutosave<TriRowCopy>({
-          planId: 'p1',
-          value,
-          diff: triRowDiff,
-          baseRevisionIndex: 0,
-          lockToken: TOKEN_A,
-          onConflict,
-        });
-        handle = r;
-        return r;
-      },
-      {
-        initialProps: {
-          value: { sets: 3, reps: 10, notes: null } as TriRowCopy,
-        },
-      },
-    );
-    rerenderValue = (next: TriRowCopy) => await rerender({ value: next });
+    const { result } = await renderHook(() => {
+      const [value, setValue] = React.useState<TriRowCopy>({
+        sets: 3,
+        reps: 10,
+        notes: null,
+      });
+      setWorkingCopy = setValue;
+      const r = useAutosave<TriRowCopy>({
+        planId: 'p1',
+        value,
+        diff: triRowDiff,
+        baseRevisionIndex: 0,
+        lockToken: TOKEN_A,
+        onConflict,
+      });
+      handle = r;
+      return r;
+    });
 
     // Edit 1: sets 3 -> 4. Debounce fires -> request A goes in flight (and
     // blocks on aGate).
-    await rerender({ value: { sets: 4, reps: 10, notes: null } });
+    await act(async () => {
+      setWorkingCopy?.({ sets: 4, reps: 10, notes: null });
+    });
     await act(async () => {
       jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
     });
@@ -1449,26 +1469,38 @@ describe('useAutosave - MWB-4 #237 R13 (D-001/D-002): conflict adoption preserve
 
     // Edit 2 (WHILE A in flight): reps 10 -> 12. Its debounced flush builds a
     // batch that lands in pendingNextRef (A still owns the in-flight slot).
-    await rerender({ value: { sets: 4, reps: 12, notes: null } });
+    await act(async () => {
+      setWorkingCopy?.({ sets: 4, reps: 12, notes: null });
+    });
     await act(async () => {
       jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
     });
     expect(result.current.hasPending).toBe(true);
 
-    // Now let request A resolve -> 409. The hook awaits adoption (which moves
-    // the baseline to server truth via rebaselineToConflict EVEN WITH the
-    // queued edit present) then rebases + resends.
+    // Release request A so it rejects with the 409, then drive the conflict
+    // recovery to its committed rest state with the SAME act()+waitFor shape as
+    // the R11-P1 single-edit adoption test above (:1115-1135). v14 (react 19 +
+    // test-renderer 1.2): the 409 catch path is a floating async chain - 409 ->
+    // setStatus('conflict') -> await onConflict (which awaits its working-copy
+    // fold rerender) -> rebaseBatch -> arm the jittered conflict-backoff timer.
+    // Wrap the release in act() and drain microtasks so onConflict's awaited
+    // rerender fold commits and the backoff timer is armed inside an act scope.
     await act(async () => {
       releaseA?.();
       await Promise.resolve();
     });
     await waitFor(() => expect(onConflict).toHaveBeenCalledWith(conflict));
-    // The genuine conflict re-send waits the jittered backoff; advance past it.
+    // Fire the single armed backoff timer inside act() so pump -> sendBatch
+    // dispatches the resend, then let waitFor settle the resend's awaited
+    // 200-success chain (clearMirror -> setState 'saved'/version=10) and flush
+    // the passive effect that refreshes result.current - exactly the R11-P1
+    // ending. We poll the resend head (version=10), set ONLY by the success
+    // path, as the precise signal that the resend's commit has landed.
     await act(async () => {
       jest.advanceTimersByTime(AUTOSAVE_CONFLICT_BACKOFF_MAX_FIRST_MS + 50);
-      await Promise.resolve();
     });
     await waitFor(() => expect(mockAutosave).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(result.current.version).toBe(10));
 
     // THE CORE D-002 ASSERTION: the rebased resend diffed the COMBINED coach
     // edit (sets=4 AND reps=12) against the ADOPTED server truth (notes='tempo'),
@@ -1482,6 +1514,12 @@ describe('useAutosave - MWB-4 #237 R13 (D-001/D-002): conflict adoption preserve
     ]);
     expect(rebaseCall.body.base_revision_index).toBe(9);
     expect(rebaseCall.body.lock_token).toBe(TOKEN_B);
-    await waitFor(() => expect(result.current.status).toBe('saved'));
+    // The resend's 200 success committed inside the advance-timer act() above
+    // (its full chain was drained there): the diff baseline advanced to the
+    // resend head (version=10) and the status pill went to 'saved'. (The
+    // saved-settle pill may later advance 'saved' -> 'idle'; both are clean
+    // rest states meaning the conflict is fully resolved - never 'conflict'.)
+    expect(result.current.version).toBe(10);
+    expect(['saved', 'idle']).toContain(result.current.status);
   });
 });

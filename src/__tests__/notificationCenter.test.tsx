@@ -220,7 +220,7 @@ describe('NotificationCenterScreen', () => {
     expect(getByText(/2 unread notification/)).toBeTruthy();
 
     // Tap the first unread row.
-    await act(() => {
+    await act(async () => {
       await fireEvent.press(getByText('Coach note available'));
     });
 
@@ -264,23 +264,34 @@ describe('NotificationCenterScreen', () => {
 });
 
 describe('NotificationPreferencesScreen', () => {
+  const FULL_PREFS = {
+    muteAll: false,
+    quietHours: { enabled: false, startTime: '22:00', endTime: '07:00' },
+    channels: {
+      coach:      { email: true, push: true, in_app: true },
+      milestone:  { email: true, push: true, in_app: true },
+      check_in:   { email: true, push: true, in_app: true },
+      message:    { email: true, push: true, in_app: true },
+      build_week: { email: true, push: true, in_app: true },
+      system:     { email: true, push: true, in_app: true },
+      reminder:   { email: true, push: true, in_app: true },
+      tip:        { email: true, push: true, in_app: true },
+    },
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
-    (notificationsApi.fetchNotificationPreferences as jest.Mock).mockResolvedValue({
-      muteAll: false,
-      quietHours: { enabled: false, startTime: '22:00', endTime: '07:00' },
-      channels: {
-        coach:      { email: true, push: true, in_app: true },
-        milestone:  { email: true, push: true, in_app: true },
-        check_in:   { email: true, push: true, in_app: true },
-        message:    { email: true, push: true, in_app: true },
-        build_week: { email: true, push: true, in_app: true },
-        system:     { email: true, push: true, in_app: true },
-        reminder:   { email: true, push: true, in_app: true },
-        tip:        { email: true, push: true, in_app: true },
-      },
-    });
-    (notificationsApi.saveNotificationPreferences as jest.Mock).mockResolvedValue({});
+    (notificationsApi.fetchNotificationPreferences as jest.Mock).mockResolvedValue(
+      JSON.parse(JSON.stringify(FULL_PREFS)),
+    );
+    // The real save endpoint returns the persisted, complete preferences object;
+    // the component does setPrefs(saved) with it. v14 flushes that post-save
+    // re-render synchronously, so the mock must echo a COMPLETE prefs object
+    // (merged with the update) rather than `{}` — otherwise prefs.quietHours is
+    // undefined on re-render. This mirrors the API contract.
+    (notificationsApi.saveNotificationPreferences as jest.Mock).mockImplementation(
+      async (updated) => ({ ...JSON.parse(JSON.stringify(FULL_PREFS)), ...updated }),
+    );
   });
 
   it('renders all notification kind sections', async () => {
@@ -317,7 +328,7 @@ describe('NotificationPreferencesScreen', () => {
 
     const switches = getAllByRole('switch');
     // Mute-all is the first switch.
-    await act(() => {
+    await act(async () => {
       await fireEvent(switches[0], 'valueChange', true);
     });
 

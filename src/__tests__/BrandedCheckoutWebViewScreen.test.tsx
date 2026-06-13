@@ -440,7 +440,7 @@ describe('BrandedCheckoutWebViewScreen — structured error states (Rule 9)', ()
     // how the load actually happens — calling `reload()` on a stale ref
     // (the error branch unmounts the WebView) would be a no-op.
     for (const k of Object.keys(capturedWebViewProps)) delete capturedWebViewProps[k];
-    await act(() => {
+    await act(async () => {
       await fireEvent.press(getByTestId('branded-checkout-error-retry'));
     });
     expect(queryByTestId('branded-checkout-error')).toBeNull();

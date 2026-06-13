@@ -279,7 +279,7 @@ async function flush() {
   });
 }
 
-function renderOneShotHarness({
+async function renderOneShotHarness({
   justCompletedId,
   userKey = 'user-1',
 }: {
@@ -313,16 +313,18 @@ function renderOneShotHarness({
     if (prevCleanup) prevCleanup();
     id = undefined;
     clearPending = true;
-    rendered.rerender(undefined);
+    void rendered.rerender(undefined);
   });
   // These harness tests exercise the flag-ON behaviour, so enabled=true.
-  const rendered = renderHook(() => useJustCompletedOneShot(id, key, clearParam, true));
+  const rendered = await renderHook(() => useJustCompletedOneShot(id, key, clearParam, true));
   return {
     clearParam,
-    setParam(nextId: string | undefined, nextKey: string | undefined = key) {
+    async setParam(nextId: string | undefined, nextKey: string | undefined = key) {
       id = nextId;
       key = nextKey;
-      act(() => rendered.rerender(undefined));
+      await act(async () => {
+        await rendered.rerender(undefined);
+      });
     },
     async focus() {
       // react-navigation runs the focus effect on focus and stores its cleanup.
@@ -375,7 +377,7 @@ describe('§2.8 workout-complete renders from a real just-completed event only',
     // manager so we can simulate: completion-focus -> blur -> refocus (no new
     // completion id). This test FAILS if the blur cleanup is reverted (the
     // flag would stay true and the card would re-render on refocus).
-    const harness = renderOneShotHarness({ justCompletedId: 'workout-101' });
+    const harness = await renderOneShotHarness({ justCompletedId: 'workout-101' });
     // First focus after a genuine completion: card shows.
     await harness.focus();
     expect(harness.lastShow()).toBe(true);
@@ -383,18 +385,18 @@ describe('§2.8 workout-complete renders from a real just-completed event only',
     expect(harness.clearParam).toHaveBeenCalledTimes(1);
     // Blur, then refocus WITHOUT a new completion id: card must NOT show.
     await act(() => harness.blur());
-    harness.setParam(undefined);
+    await harness.setParam(undefined);
     await harness.focus();
     expect(harness.lastShow()).toBe(false);
   });
 
   it('BEHAVIOUR: a genuine new completion (new id) on a later focus shows the card again', async () => {
-    const harness = renderOneShotHarness({ justCompletedId: 'workout-101' });
+    const harness = await renderOneShotHarness({ justCompletedId: 'workout-101' });
     await harness.focus();
     expect(harness.lastShow()).toBe(true);
     await act(() => harness.blur());
     // A NEW finish-workout save sets a DIFFERENT id before refocus.
-    harness.setParam('workout-202');
+    await harness.setParam('workout-202');
     await harness.focus();
     expect(harness.lastShow()).toBe(true);
   });
@@ -404,24 +406,24 @@ describe('§2.8 workout-complete renders from a real just-completed event only',
     // been acknowledged, the same id arriving again — a remount, a
     // back-then-forward, or a param surviving a process reload — must not show
     // the card a second time.
-    const first = renderOneShotHarness({ justCompletedId: 'workout-101' });
+    const first = await renderOneShotHarness({ justCompletedId: 'workout-101' });
     await first.focus();
     expect(first.lastShow()).toBe(true);
     await act(() => first.blur());
     // A fresh mount (new hook instance) is handed the SAME id again.
-    const second = renderOneShotHarness({ justCompletedId: 'workout-101' });
+    const second = await renderOneShotHarness({ justCompletedId: 'workout-101' });
     await second.focus();
     expect(second.lastShow()).toBe(false);
   });
 
   it('BEHAVIOUR: a latch for one user does not suppress the SAME id for another user', async () => {
-    const userA = renderOneShotHarness({ justCompletedId: 'workout-101', userKey: 'user-A' });
+    const userA = await renderOneShotHarness({ justCompletedId: 'workout-101', userKey: 'user-A' });
     await userA.focus();
     expect(userA.lastShow()).toBe(true);
     await act(() => userA.blur());
     // A different account on the same device with the same workout id: the
     // latch is scoped per user, so this still fires.
-    const userB = renderOneShotHarness({ justCompletedId: 'workout-101', userKey: 'user-B' });
+    const userB = await renderOneShotHarness({ justCompletedId: 'workout-101', userKey: 'user-B' });
     await userB.focus();
     expect(userB.lastShow()).toBe(true);
   });
@@ -474,7 +476,7 @@ describe('§2.8 workout-complete renders from a real just-completed event only',
       // (its cleanup runs while still focused), then the effect re-runs with the
       // id-less deps. This is precisely the self-triggered re-render that used
       // to set cancelled = true and kill the pending decision.
-      await act(() => {
+      await act(async () => {
         const prevCleanup = focusController.cleanup;
         focusController.cleanup = null;
         if (prevCleanup) prevCleanup();

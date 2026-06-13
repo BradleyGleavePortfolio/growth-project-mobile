@@ -124,15 +124,41 @@ describe('useMacroTargets — per-user cache keying', () => {
 
     await waitFor(() => expect(result.current).toEqual(TARGETS_A));
 
-    // Simulate logout → user B sign-in.
+    // Simulate logout -> user B sign-in. HOLD B's server fetch open on a manual
+    // gate so the post-rerender observation point lands while B's load is still
+    // in flight - i.e. AFTER the hook's synchronous reset but BEFORE B's value
+    // can paint.
+    //
+    // RNTL v14 note: `rerender` is act-wrapped and, unlike v13's synchronous
+    // rerender, drains the microtasks the new effect's load() schedules. With
+    // an immediately-resolved fetch it would drain straight past the
+    // synchronous `setMacroTargets(null)` reset to B's resolved value, so the
+    // transient null frame is no longer observable right after `await rerender`.
+    // The cross-user contract is still enforced in production - the reset is the
+    // first synchronous statement of the effect (useMacroTargets.ts:50), before
+    // any fetch, and the dedicated leak-guard test above proves A's value never
+    // paints for B. What changed is ONLY the flush timing. Gating B's fetch
+    // restores a deterministic in-flight window so we can still assert the
+    // no-flash guarantee without depending on microtask ordering.
+    let releaseB: () => void = () => {};
+    const bGate = new Promise<void>((resolve) => {
+      releaseB = resolve;
+    });
     mockUser = { id: 'user-B' };
-    mockCurrentForSelf.mockResolvedValueOnce({ data: serverShape(TARGETS_B) });
+    mockCurrentForSelf.mockImplementationOnce(async () => {
+      await bGate;
+      return { data: serverShape(TARGETS_B) };
+    });
     await rerender(undefined);
 
-    // The hook must reset state to null immediately on user change so A's
-    // numbers never paint for B — even for a single frame.
-    expect(result.current).toBeNull();
+    // B's fetch is still gated: the effect has run its synchronous
+    // setMacroTargets(null) reset but cannot yet paint B's numbers. The hook
+    // must therefore read null here - A's macros never survive the user change.
+    await waitFor(() => expect(result.current).toBeNull());
+    expect(result.current).not.toEqual(TARGETS_A);
 
+    // Release B's fetch; B's authoritative value now lands.
+    releaseB();
     await waitFor(() => expect(result.current).toEqual(TARGETS_B));
 
     // Each user's cache key is independently populated.

@@ -90,13 +90,13 @@ beforeEach(async () => {
   await useBlockedUsersStore.getState().reset();
 });
 
-function pressDestructive(label: string, action: () => void) {
+async function pressDestructive(label: string, action: () => void | Promise<void>) {
   const spy = jest.spyOn(Alert, 'alert').mockImplementation((_t, _m, buttons) => {
     const list = (buttons ?? []) as Array<{ text?: string; onPress?: () => void }>;
     const btn = list.find((b) => b.text === label);
     btn?.onPress?.();
   });
-  action();
+  await action();
   spy.mockRestore();
 }
 
@@ -108,7 +108,7 @@ describe('ContactView — block flow', () => {
       expect(useBlockedUsersStore.getState().hydrated).toBe(true),
     );
 
-    pressDestructive('Block', () => {
+    await pressDestructive('Block', async () => {
       await fireEvent.press(getByLabelText('Block user'));
     });
 
@@ -125,7 +125,7 @@ describe('ContactView — block flow', () => {
       expect(useBlockedUsersStore.getState().hydrated).toBe(true),
     );
 
-    pressDestructive('Block', () => {
+    await pressDestructive('Block', async () => {
       await fireEvent.press(getByLabelText('Block user'));
     });
 
@@ -146,7 +146,7 @@ describe('ContactView — block flow', () => {
     const { getByLabelText } = await render(<ContactView />);
     await waitFor(() => getByLabelText('Unblock user'));
 
-    pressDestructive('Unblock', () => {
+    await pressDestructive('Unblock', async () => {
       await fireEvent.press(getByLabelText('Unblock user'));
     });
 
@@ -168,7 +168,7 @@ describe('ContactView — block flow', () => {
     const { getByLabelText } = await render(<ContactView />);
     await waitFor(() => getByLabelText('Unblock user'));
 
-    pressDestructive('Unblock', () => {
+    await pressDestructive('Unblock', async () => {
       await fireEvent.press(getByLabelText('Unblock user'));
     });
 

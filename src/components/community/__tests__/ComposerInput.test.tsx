@@ -80,7 +80,7 @@ describe('ComposerInput — synchronous double-submit guard (P2-C2)', () => {
     // cannot dedupe). The single wrapping act() batches both presses so no
     // intervening re-render disables the button between them.
     const send = screen.getByTestId('composer-send');
-    await act(() => {
+    await act(async () => {
       await fireEvent.press(send);
       await fireEvent.press(send);
     });

@@ -54,8 +54,8 @@ function flatten(node: unknown, out: TestNode[] = []): TestNode[] {
   return out;
 }
 
-function renderTree(reduceMotion: boolean): TestNode[] {
-  const r = render(
+async function renderTree(reduceMotion: boolean): Promise<TestNode[]> {
+  const r = await render(
     <RevolutGlowChart data={DATA} tone="warm" reduceMotion={reduceMotion} />,
   );
   const json = r.toJSON();
@@ -66,8 +66,8 @@ function renderTree(reduceMotion: boolean): TestNode[] {
 }
 
 describe('RevolutGlowChart', () => {
-  it('renders a chartFill linear gradient (the Revolut area treatment)', () => {
-    const nodes = renderTree(true);
+  it('renders a chartFill linear gradient (the Revolut area treatment)', async () => {
+    const nodes = await renderTree(true);
     // RN-SVG maps the SVG `id` prop to the native `name` prop on the gradient,
     // and a fill that references it carries `brushRef="chartFill"`. Assert the
     // gradient exists AND is wired to a filled area path.
@@ -91,8 +91,8 @@ describe('RevolutGlowChart', () => {
     expect(filledArea).toBeTruthy();
   });
 
-  it('renders a smooth bezier line path (d starts with M, contains a C)', () => {
-    const nodes = renderTree(true);
+  it('renders a smooth bezier line path (d starts with M, contains a C)', async () => {
+    const nodes = await renderTree(true);
     // Among Path-like nodes, find the line: a `d` with a cubic command.
     const beziers = nodes.filter((n) => {
       const d = stringProp(n, 'd');
@@ -104,9 +104,9 @@ describe('RevolutGlowChart', () => {
     expect(polylines.length).toBe(0);
   });
 
-  it('renders the chart fully under reduce-motion (data never hidden)', () => {
-    const nodes = renderTree(false);
-    const reduced = renderTree(true);
+  it('renders the chart fully under reduce-motion (data never hidden)', async () => {
+    const nodes = await renderTree(false);
+    const reduced = await renderTree(true);
     const hasLine = (ns: TestNode[]) =>
       ns.some((n) => {
         const d = stringProp(n, 'd');

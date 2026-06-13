@@ -269,18 +269,41 @@ describe('P0-2 + P0-3: SubCoachInviteModal dedupe, double-submit guard, seat cla
     const { getByTestId, getByLabelText } = await mountModal();
     await fireEvent.changeText(getByLabelText('Sub-coach email'), 'a@ex.com');
 
-    // First tap — kicks off the request.
-    await act(async () => {
-      await fireEvent.press(getByTestId('sub-coach-invite-submit'));
-    });
-    // Second and third taps before the first resolves.
-    await act(async () => {
-      await fireEvent.press(getByTestId('sub-coach-invite-submit'));
-      await fireEvent.press(getByTestId('sub-coach-invite-submit'));
-    });
+    // v14: `fireEvent.press` returns the press handler's return value (here the
+    // deliberately never-resolving subCoachInvite promise) AFTER its own
+    // internal act() settles. `fireEvent` already wraps each dispatch in act(),
+    // so we must NOT await the returned promise (that would hang) and must NOT
+    // nest these inside another act() (that triggers "overlapping act() calls"
+    // which corrupts the renderer for the rest of the file). Capture each press
+    // promise, let the internal act flush the `submitting=true` commit between
+    // taps via a microtask turn, and settle everything at the end.
+    const submit = getByTestId('sub-coach-invite-submit');
+    // Helper: let a just-dispatched press's internal act() settle its microtask
+    // before the next dispatch, so we never open a second act() while the prior
+    // one is still pending (which v14 rejects as "overlapping act() calls").
+    const settleAct = async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    };
+    // First tap — fires subCoachInvite and commits submitting=true. Do NOT await
+    // the returned (never-resolving) promise; just let its internal act settle.
+    const firstPress = fireEvent.press(submit);
+    await settleAct();
+    // Second and third taps — the committed submitting=true guard short-circuits
+    // these so no additional subCoachInvite call fires.
+    const secondPress = fireEvent.press(submit);
+    await settleAct();
+    const thirdPress = fireEvent.press(submit);
+    await settleAct();
+    // The guarded presses resolve immediately (handler returns early).
+    await Promise.all([secondPress, thirdPress]);
 
     expect(mockSubCoachInvite).toHaveBeenCalledTimes(1);
 
+    // Resolve the in-flight request, then await the first press so its trailing
+    // setResult/setSubmitting updates settle here rather than leaking into the
+    // next test. The resolution work is wrapped in act() (no overlap now: the
+    // press promises above have already settled their internal acts).
     await act(async () => {
       resolveFn?.({
         data: {
@@ -290,6 +313,7 @@ describe('P0-2 + P0-3: SubCoachInviteModal dedupe, double-submit guard, seat cla
           expires_at: '',
         },
       });
+      await firstPress;
     });
   });
 

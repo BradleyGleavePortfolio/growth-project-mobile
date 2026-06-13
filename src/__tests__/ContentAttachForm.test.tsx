@@ -196,8 +196,8 @@ describe('ContentAttachForm — P1 #1 edit-form re-sync', () => {
 
 describe('ContentAttachForm — P1 #2 valid cadence_payload per exposed kind', () => {
   // Helper: open advanced disclosure and pick a cadence option by label.
-  function openCadence(getByTestId: ReturnType<typeof render>['getByTestId']) {
-    fireEvent.press(getByTestId('content-attach-cadence-disclosure'));
+  async function openCadence(getByTestId: Awaited<ReturnType<typeof render>>['getByTestId']) {
+    await fireEvent.press(getByTestId('content-attach-cadence-disclosure'));
   }
 
   it('immediate → {} (no required payload field)', async () => {
@@ -220,7 +220,7 @@ describe('ContentAttachForm — P1 #2 valid cadence_payload per exposed kind', (
       <ContentAttachForm {...baseProps({ onSubmitAttach })} />,
     );
     await fireEvent.changeText(getByTestId('content-attach-asset-id'), 'asset-1');
-    openCadence(getByTestId);
+    await openCadence(getByTestId);
     await fireEvent.press(getByLabelText('After purchase'));
     await fireEvent.changeText(getByTestId('content-attach-relative-days'), '7');
     await fireEvent.press(getByTestId('content-attach-submit'));
@@ -237,7 +237,7 @@ describe('ContentAttachForm — P1 #2 valid cadence_payload per exposed kind', (
       <ContentAttachForm {...baseProps({ onSubmitAttach })} />,
     );
     await fireEvent.changeText(getByTestId('content-attach-asset-id'), 'asset-1');
-    openCadence(getByTestId);
+    await openCadence(getByTestId);
     await fireEvent.press(getByLabelText('On a date'));
 
     // Save blocked while release_at is empty (error-prevention).
@@ -264,7 +264,7 @@ describe('ContentAttachForm — P1 #2 valid cadence_payload per exposed kind', (
       <ContentAttachForm {...baseProps({ onSubmitAttach })} />,
     );
     await fireEvent.changeText(getByTestId('content-attach-asset-id'), 'asset-1');
-    openCadence(getByTestId);
+    await openCadence(getByTestId);
     await fireEvent.press(getByLabelText('On completion'));
     await fireEvent.press(getByTestId('content-attach-submit'));
     await waitFor(() => expect(onSubmitAttach).toHaveBeenCalledTimes(1));
@@ -280,7 +280,7 @@ describe('ContentAttachForm — P1 #2 valid cadence_payload per exposed kind', (
       <ContentAttachForm {...baseProps({ onSubmitAttach })} />,
     );
     await fireEvent.changeText(getByTestId('content-attach-asset-id'), 'asset-1');
-    openCadence(getByTestId);
+    await openCadence(getByTestId);
     await fireEvent.press(getByLabelText('On milestone'));
 
     // Save blocked while milestone_key is empty.

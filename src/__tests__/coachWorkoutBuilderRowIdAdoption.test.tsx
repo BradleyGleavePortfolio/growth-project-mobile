@@ -279,7 +279,7 @@ afterEach(() => {
 async function addAndAdopt() {
   jest.useFakeTimers();
   const Screen = loadScreen();
-  const utils = render(<Screen />);
+  const utils = await render(<Screen />);
   const { getByLabelText } = utils;
 
   // Add the catalog item -> a new id-less row.
@@ -442,7 +442,7 @@ describe('CoachWorkoutBuilderScreen — P1 row-ID adoption RACE (edit before ref
     jest.useFakeTimers();
     deferRefetch = true;
     const Screen = loadScreen();
-    const utils = render(<Screen />);
+    const utils = await render(<Screen />);
     const { getByLabelText } = utils;
 
     await act(async () => {
@@ -617,7 +617,7 @@ describe('CoachWorkoutBuilderScreen — D-045 delete-before-adoption (op-empty w
     jest.useFakeTimers();
     deferRefetch = true;
     const Screen = loadScreen();
-    const utils = render(<Screen />);
+    const utils = await render(<Screen />);
     const { getByLabelText } = utils;
 
     await act(async () => {

@@ -155,9 +155,10 @@ describe('ShareCardScreen', () => {
       value: '7',
       label: 'Day Streak',
     });
-    expect(() => {
-      await fireEvent.press(getByRole('button', { name: 'Share milestone card' }));
-    }).not.toThrow();
+    // v14: fireEvent is async, so a synchronous not.toThrow() wrapper no longer
+    // applies. Awaiting the press directly preserves the contract: any throw
+    // surfaced by pressing fails the test.
+    await fireEvent.press(getByRole('button', { name: 'Share milestone card' }));
   });
 
   it('REFERRAL_SHARE_CARD_SHARED event constant has correct value', () => {
