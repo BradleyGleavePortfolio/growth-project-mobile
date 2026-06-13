@@ -284,6 +284,25 @@ export interface UseAutosaveResult<TWorkingCopy = unknown> {
    * it refuses to run mid-flight so a genuine pending batch is never discarded.
    */
   rebaselineTo: (serverCopy: TWorkingCopy) => void;
+  /**
+   * Conflict-adoption re-anchor (MWB-4 #237 R13 D-002). Unlike {@link rebaselineTo}
+   * — which refuses to run while a batch is in flight or queued so it can never
+   * discard a genuine pending edit — this variant is the ONE path that MAY
+   * replace `lastSavedValueRef` even when a queued edit exists, because it is
+   * called from INSIDE the hook's awaited 409-adoption window (the in-flight
+   * slot is already vacated by the failed send and the failed batch has not yet
+   * been requeued). The queued local delta (`pendingNextRef`) is NOT discarded:
+   * it is RE-DERIVED from the latest working copy diffed against the freshly
+   * adopted server baseline, so the coach's edit-while-in-flight survives and
+   * is replayed ON TOP OF server truth rather than clobbering a concurrent
+   * server field. Without this, an edit made while request A was in flight left
+   * `pendingNextRef !== null`, so {@link rebaselineTo} silently no-op'd and the
+   * subsequent rebase diffed the STALE baseline — re-erasing the concurrent
+   * server edit the await was meant to protect (the D-002 lost-update path).
+   * The hook itself routes its conflict-await adoption through this; the screen
+   * passes the refetched server copy.
+   */
+  rebaselineToConflict: (serverCopy: TWorkingCopy) => void;
 }
 
 /**
@@ -1113,6 +1132,74 @@ export function useAutosave<TWorkingCopy>(
     [setDirty, safeSet, computeHasPending],
   );
 
+  /**
+   * Conflict-adoption re-anchor (MWB-4 #237 R13 D-002). The ONLY re-anchor that
+   * may replace `lastSavedValueRef` while a queued edit exists. It is called
+   * exclusively from inside the hook's awaited 409-adoption window: the failed
+   * send has already vacated `currentInFlightRef`, and the rebased retry is not
+   * requeued until AFTER this await, so the only slot that can be non-null here
+   * is `pendingNextRef` — a local edit the coach made WHILE request A was in
+   * flight (the D-002 case).
+   *
+   * {@link rebaselineTo} refuses to run when `pendingNextRef !== null` (it must
+   * never silently discard a genuine pending edit). That guard, correct for the
+   * screen's id-adoption path, made the 409-adoption a NO-OP whenever the coach
+   * had a queued edit: the baseline stayed stale and the subsequent rebase
+   * re-erased the concurrent server field. This variant instead PRESERVES the
+   * queued local delta by re-deriving it against the freshly adopted server
+   * baseline:
+   *   1. Capture the queued delta's intent (its idempotency key/cause), so the
+   *      requeued retry stays the SAME logical edit for transport dedupe.
+   *   2. Adopt server truth: `lastSavedValueRef = serverCopy`.
+   *   3. Recompute `pendingNextRef` from the LATEST working copy diffed against
+   *      the new baseline — the coach's edit-while-in-flight is replayed ON TOP
+   *      of server truth, never lost and never clobbering a concurrent field.
+   * The failed batch the await is rebasing is recomputed from the same fresh
+   * baseline by {@link rebaseBatch} immediately after this returns; because the
+   * latest working copy already folds in both the failed and the queued edit, a
+   * single diff against `serverCopy` expresses the combined delta on top of
+   * server truth.
+   */
+  const rebaselineToConflict = useCallback(
+    (serverCopy: TWorkingCopy): void => {
+      if (!enabledRef.current) return;
+      // Capture the queued delta's identity BEFORE we move the baseline so the
+      // re-derived batch keeps the same idempotency key/cause (one logical edit
+      // the transport still dedupes), rather than minting a fresh key that the
+      // server would treat as a brand-new request.
+      const queued = pendingNextRef.current;
+      // Adopt authoritative server truth as the diff baseline. This is the
+      // step rebaselineTo refused when a queued edit existed — and the whole
+      // point of the D-002 fix.
+      lastSavedValueRef.current = serverCopy;
+      // Re-derive the queued local delta against the NEW baseline so the coach's
+      // edit-while-in-flight survives, expressed on top of server truth.
+      const ops = diffRef.current(lastSavedValueRef.current, latestValueRef.current);
+      if (queued) {
+        if (ops.length === 0) {
+          // The adopted server truth already subsumes the queued edit (nothing
+          // left to express) — drop the now-empty queued batch cleanly.
+          pendingNextRef.current = null;
+        } else {
+          pendingNextRef.current = {
+            ops,
+            baseRevisionIndex: indexRef.current,
+            lockToken: tokenRef.current,
+            cause: queued.cause,
+            idempotencyKey: queued.idempotencyKey,
+            snapshot: latestValueRef.current,
+            isReplay: queued.isReplay,
+          };
+        }
+      }
+      // Keep the dirty signal honest against the freshly adopted baseline.
+      setDirty(ops.length > 0);
+      safeSet(setHasPending, computeHasPending());
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [setDirty, safeSet, computeHasPending],
+  );
+
   // ─── Debounced arm on value change ──────────────────────────────────────────
   useEffect(() => {
     if (!enabled) return;
@@ -1278,7 +1365,8 @@ export function useAutosave<TWorkingCopy>(
       rebaseline,
       replayInFlight,
       rebaselineTo,
+      rebaselineToConflict,
     }),
-    [status, lastSavedAt, version, tokenState, flush, hasPending, mirrorDegraded, rebaseline, replayInFlight, rebaselineTo],
+    [status, lastSavedAt, version, tokenState, flush, hasPending, mirrorDegraded, rebaseline, replayInFlight, rebaselineTo, rebaselineToConflict],
   );
 }

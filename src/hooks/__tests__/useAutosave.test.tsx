@@ -1268,3 +1268,209 @@ describe('useAutosave - MWB-4 #237 R11 (P1): bounded conflict-retry budget', () 
     expect(mockClear).not.toHaveBeenCalled();
   });
 });
+
+// A working copy carrying THREE persisted fields (sets, reps, notes) with a
+// full-row-upsert diff. Used for the D-002 queued-edit scenario, where the
+// failed batch changed `sets`, a queued edit (made while the request was in
+// flight) changed `reps`, and the server concurrently changed `notes`. A
+// stale-baseline rebase would carry the OLD notes and clobber the server.
+interface TriRowCopy {
+  sets: number;
+  reps: number;
+  notes: string | null;
+}
+
+const triRowDiff = (prev: TriRowCopy, next: TriRowCopy) =>
+  prev.sets === next.sets && prev.reps === next.reps && prev.notes === next.notes
+    ? []
+    : ([
+        {
+          op: 'upsert_exercise',
+          // FULL-ROW upsert: every field present, so a stale-baseline resend
+          // would carry a stale `notes` and reset the server's concurrent edit.
+          row: { sets: next.sets, reps: next.reps, notes: next.notes },
+        },
+      ] as never);
+
+describe('useAutosave - MWB-4 #237 R13 (D-001/D-002): conflict adoption preserves concurrent server fields', () => {
+  it('D-001: a bootstrap stale-lock 409 with a concurrent server edit adopts server truth so the resend does NOT erase it', async () => {
+    // The first-ever autosave 409s with the bootstrap stale-lock. The server
+    // row concurrently carries notes='tempo'; the coach only changed sets 3->4
+    // (notes untouched, still null in the local baseline). With the D-001 fix
+    // the bootstrap awaits server-truth adoption, so the rebased resend diffs
+    // the coach's sets=4 against the ADOPTED server truth (sets=3, notes='tempo')
+    // and carries notes='tempo' - the concurrent server edit survives.
+    const conflict = {
+      error: 'autosave_lock_stale' as const,
+      head_revision_index: 9,
+      lock_token: TOKEN_B,
+    };
+    mockAutosave
+      .mockRejectedValueOnce(
+        new WorkoutAutosaveApiError('conflict', 409, 'stale', conflict),
+      )
+      .mockResolvedValueOnce(okResponse({ head: 10, token: TOKEN_A }));
+
+    let handle: ReturnType<typeof useAutosave<RowCopy>> | null = null;
+    let rerenderValue: ((next: RowCopy) => void) | null = null;
+    // Server truth: the coach's last-saved sets (3) PLUS the concurrent server
+    // notes ('tempo'). The coach never touched notes locally.
+    const serverTruth: RowCopy = { sets: 3, notes: 'tempo' };
+    const onConflict = jest.fn(async () => {
+      await Promise.resolve();
+      // Adopt server truth into the diff baseline AND fold it into the working
+      // copy (the coach's sets=4 replayed on top of the server's notes='tempo').
+      handle?.rebaselineToConflict(serverTruth);
+      rerenderValue?.({ sets: 4, notes: 'tempo' });
+    });
+
+    const { result, rerender } = renderHook(
+      ({ value }: { value: RowCopy }) => {
+        const r = useAutosave<RowCopy>({
+          planId: 'p1',
+          value,
+          diff: rowDiff,
+          baseRevisionIndex: 0,
+          lockToken: TOKEN_A,
+          onConflict,
+        });
+        handle = r;
+        return r;
+      },
+      { initialProps: { value: { sets: 3, notes: null } as RowCopy } },
+    );
+    rerenderValue = (next: RowCopy) => rerender({ value: next });
+
+    // The coach's first-ever edit: sets 3 -> 4 (notes stays null locally). The
+    // pending full-row upsert therefore carries notes=null off the baseline.
+    rerender({ value: { sets: 4, notes: null } });
+    await act(async () => {
+      jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
+    });
+
+    await waitFor(() => expect(onConflict).toHaveBeenCalledWith(conflict));
+    // Bootstrap re-sends immediately (no conflict backoff), but let microtasks
+    // settle so the awaited adoption + rebase complete.
+    await act(async () => {
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(mockAutosave).toHaveBeenCalledTimes(2));
+
+    // THE CORE D-001 ASSERTION: the rebased resend carries the coach's sets=4
+    // AND the server's notes='tempo' - the concurrent server edit is NOT erased
+    // by a stale-baseline full-row upsert (the pre-fix bootstrap data loss).
+    const rebaseCall = mockAutosave.mock.calls[1][0];
+    expect(rebaseCall.body.ops).toEqual([
+      { op: 'upsert_exercise', row: { sets: 4, notes: 'tempo' } },
+    ]);
+    expect(rebaseCall.body.base_revision_index).toBe(9);
+    expect(rebaseCall.body.lock_token).toBe(TOKEN_B);
+    await waitFor(() => expect(result.current.status).toBe('saved'));
+  });
+
+  it('D-002: a queued edit made while the request was in flight survives conflict adoption, AND the concurrent server field is preserved', async () => {
+    // Baseline {sets:3, reps:10, notes:null}. The coach changes sets 3->4 -
+    // request A goes in flight. WHILE A is in flight the coach changes reps
+    // 10->12 (this lands in pendingNextRef). The server concurrently sets
+    // notes='tempo'. Request A 409s. After conflict adoption + resend we assert:
+    //   (a) the server's notes='tempo' is NOT overwritten, AND
+    //   (b) the coach's sets=4 AND reps=12 both persist.
+    const conflict = {
+      error: 'autosave_conflict_retry' as const,
+      head_revision_index: 9,
+      lock_token: TOKEN_B,
+    };
+    // Hold request A open until we have queued the second edit, so the reps=12
+    // edit genuinely lands in pendingNextRef while A is in flight.
+    let releaseA: (() => void) | null = null;
+    const aGate = new Promise<void>((resolve) => {
+      releaseA = resolve;
+    });
+    mockAutosave
+      .mockImplementationOnce(async () => {
+        await aGate;
+        throw new WorkoutAutosaveApiError('conflict', 409, 'conflict', conflict);
+      })
+      .mockResolvedValueOnce(okResponse({ head: 10, token: TOKEN_A }));
+
+    let handle: ReturnType<typeof useAutosave<TriRowCopy>> | null = null;
+    let rerenderValue: ((next: TriRowCopy) => void) | null = null;
+    // Server truth: last-saved sets/reps (3/10) PLUS the concurrent notes.
+    const serverTruth: TriRowCopy = { sets: 3, reps: 10, notes: 'tempo' };
+    const onConflict = jest.fn(async () => {
+      await Promise.resolve();
+      // The screen routes adoption through rebaselineToConflict: it adopts the
+      // server baseline EVEN THOUGH a queued edit exists, re-deriving that
+      // queued delta on top of server truth. Fold server truth + both coach
+      // edits into the working copy (sets=4, reps=12 on top of notes='tempo').
+      handle?.rebaselineToConflict(serverTruth);
+      rerenderValue?.({ sets: 4, reps: 12, notes: 'tempo' });
+    });
+
+    const { result, rerender } = renderHook(
+      ({ value }: { value: TriRowCopy }) => {
+        const r = useAutosave<TriRowCopy>({
+          planId: 'p1',
+          value,
+          diff: triRowDiff,
+          baseRevisionIndex: 0,
+          lockToken: TOKEN_A,
+          onConflict,
+        });
+        handle = r;
+        return r;
+      },
+      {
+        initialProps: {
+          value: { sets: 3, reps: 10, notes: null } as TriRowCopy,
+        },
+      },
+    );
+    rerenderValue = (next: TriRowCopy) => rerender({ value: next });
+
+    // Edit 1: sets 3 -> 4. Debounce fires -> request A goes in flight (and
+    // blocks on aGate).
+    rerender({ value: { sets: 4, reps: 10, notes: null } });
+    await act(async () => {
+      jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
+    });
+    await waitFor(() => expect(mockAutosave).toHaveBeenCalledTimes(1));
+
+    // Edit 2 (WHILE A in flight): reps 10 -> 12. Its debounced flush builds a
+    // batch that lands in pendingNextRef (A still owns the in-flight slot).
+    rerender({ value: { sets: 4, reps: 12, notes: null } });
+    await act(async () => {
+      jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
+    });
+    expect(result.current.hasPending).toBe(true);
+
+    // Now let request A resolve -> 409. The hook awaits adoption (which moves
+    // the baseline to server truth via rebaselineToConflict EVEN WITH the
+    // queued edit present) then rebases + resends.
+    await act(async () => {
+      releaseA?.();
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(onConflict).toHaveBeenCalledWith(conflict));
+    // The genuine conflict re-send waits the jittered backoff; advance past it.
+    await act(async () => {
+      jest.advanceTimersByTime(AUTOSAVE_CONFLICT_BACKOFF_MAX_FIRST_MS + 50);
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(mockAutosave).toHaveBeenCalledTimes(2));
+
+    // THE CORE D-002 ASSERTION: the rebased resend diffed the COMBINED coach
+    // edit (sets=4 AND reps=12) against the ADOPTED server truth (notes='tempo'),
+    // so the upsert carries sets=4, reps=12 AND notes='tempo'. (a) the server's
+    // notes is preserved; (b) both coach edits persist. The pre-fix path would
+    // have no-op'd the adoption (queued edit blocked rebaselineTo) and resent
+    // notes=null, clobbering the server.
+    const rebaseCall = mockAutosave.mock.calls[1][0];
+    expect(rebaseCall.body.ops).toEqual([
+      { op: 'upsert_exercise', row: { sets: 4, reps: 12, notes: 'tempo' } },
+    ]);
+    expect(rebaseCall.body.base_revision_index).toBe(9);
+    expect(rebaseCall.body.lock_token).toBe(TOKEN_B);
+    await waitFor(() => expect(result.current.status).toBe('saved'));
+  });
+});

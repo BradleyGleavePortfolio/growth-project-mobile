@@ -650,6 +650,7 @@ export default function CoachWorkoutBuilderScreen() {
   const pendingRebaselineSigRef = useRef<string | null>(null);
   const autosaveRebaseline = autosave.rebaseline;
   const autosaveRebaselineTo = autosave.rebaselineTo;
+  const autosaveRebaselineToConflict = autosave.rebaselineToConflict;
 
   // Build the FULL server working copy (every server row, with its real
   // row_id). Used as the explicit diff baseline when the non-pending adoption
@@ -689,18 +690,26 @@ export default function CoachWorkoutBuilderScreen() {
   // server copy via `autosave.rebaselineTo`, so the hook's subsequent rebase
   // diffs the coach's pending ops against authoritative server truth (never a
   // stale local baseline that would emit field-erasing full-row upserts). The
-  // rebaseline refuses to run while a batch is in flight/queued; during the
-  // conflict await both queue slots are clear (the failed send already vacated
-  // the in-flight slot and the rebased batch is not requeued until after this
-  // await), so the anchor takes effect before the resend.
+  // rebaseline refuses to run while a batch is in flight/queued.
+  //
+  // MWB-4 #237 R13 (D-002): the conflict-adoption anchor MUST use
+  // `rebaselineToConflict`, NOT `rebaselineTo`. During the conflict await the
+  // in-flight slot is already vacated by the failed send, but the coach may
+  // have made an edit WHILE request A was in flight, leaving `pendingNextRef`
+  // non-null. `rebaselineTo` refuses to run with a queued edit (it must never
+  // discard a genuine pending edit), so it would SILENTLY NO-OP here and the
+  // hook's subsequent rebase would diff the STALE baseline and re-clobber the
+  // concurrent server field. `rebaselineToConflict` instead adopts server truth
+  // AND re-derives the queued local delta on top of it, so the queued edit
+  // survives and the concurrent server field is preserved.
   useEffect(() => {
     rebaselineToServerRef.current = (exercises: WorkoutPlanExercise[]) => {
-      autosaveRebaselineTo(buildServerWorkingCopy(exercises));
+      autosaveRebaselineToConflict(buildServerWorkingCopy(exercises));
     };
     return () => {
       rebaselineToServerRef.current = null;
     };
-  }, [autosaveRebaselineTo, buildServerWorkingCopy]);
+  }, [autosaveRebaselineToConflict, buildServerWorkingCopy]);
 
   // Adopt server rows when a refetch (post-409, post-insert id adoption, or
   // initial load) brings in fresh server rows WITH their ids.
