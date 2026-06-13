@@ -214,4 +214,51 @@ describe('ProgressScreen — ED.4 chart load error (audit R2 P2)', () => {
       expect(getByTestId('mock-progress-chart-card')).toBeTruthy(),
     );
   });
+
+  it('runs only ONE loadData for a same-tick double-tap on retry (audit R4 P3)', async () => {
+    // State updates are async, so without a synchronous latch two taps in the
+    // SAME tick both observe the not-retrying state and each start a loadData().
+    // The chartRetryingRef guard must collapse the second tap to a no-op.
+    mockGetHistory.mockRejectedValueOnce(new Error('network down'));
+    // Hold the RETRY call open so both taps land before the first settles.
+    let resolveRetry: (v: { data: unknown[] }) => void = () => {};
+    mockGetHistory.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveRetry = resolve as (v: { data: unknown[] }) => void;
+        }),
+    );
+
+    const { getByTestId } = render(<ProgressScreen />);
+    await waitFor(() =>
+      expect(getByTestId('progress-weight-chart-error')).toBeTruthy(),
+    );
+
+    // Baseline the call count after mount (mount + period effects may each load).
+    const callsBeforeRetry = mockGetHistory.mock.calls.length;
+
+    const retryBtn = getByTestId('progress-weight-chart-error-retry');
+    // Two synchronous presses in the same tick — only the first must start a load.
+    act(() => {
+      fireEvent.press(retryBtn);
+      fireEvent.press(retryBtn);
+    });
+
+    // Exactly ONE additional load, proving the second same-tick tap was a no-op.
+    expect(mockGetHistory).toHaveBeenCalledTimes(callsBeforeRetry + 1);
+
+    // Settle the held retry so the latch clears and the chart renders.
+    await act(async () => {
+      resolveRetry({
+        data: [
+          { id: '1', date: '2026-06-01', weight_lbs: 185 },
+          { id: '2', date: '2026-06-08', weight_lbs: 183 },
+        ],
+      });
+      await Promise.resolve();
+    });
+    await waitFor(() =>
+      expect(getByTestId('mock-progress-chart-card')).toBeTruthy(),
+    );
+  });
 });

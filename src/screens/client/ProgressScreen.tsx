@@ -7,7 +7,13 @@
  * inline Roman commentary on the same data.
  */
 
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, {
+  useEffect,
+  useState,
+  useCallback,
+  useMemo,
+  useRef,
+} from 'react';
 import {
   View,
   Text,
@@ -150,6 +156,11 @@ export default function ProgressScreen() {
   // enabled and could be spammed. Track the direct retry separately and disable
   // the button while it is in flight.
   const [chartRetrying, setChartRetrying] = useState(false);
+  // Synchronous re-entrancy latch: state updates are async, so two taps in the
+  // SAME tick both observe `chartRetrying === false` and could each start a
+  // loadData(). This ref flips synchronously before the state set, so a
+  // same-tick second tap early-returns and only one loadData() runs.
+  const chartRetryingRef = useRef(false);
   // ED.4 (audit R2 P2): a weight-history fetch failure used to fall through to
   // the benign "log your weight" empty copy, hiding the error from the client.
   // Track it so the chart slot can render an honest Roman-tone retry state.
@@ -249,10 +260,14 @@ export default function ProgressScreen() {
   // errors and sets weightHistoryError), but the finally keeps the latch honest
   // even if that changes.
   const onChartRetry = useCallback(async () => {
+    // Synchronous guard FIRST so a same-tick double-tap cannot start two loads.
+    if (chartRetryingRef.current) return;
+    chartRetryingRef.current = true;
     setChartRetrying(true);
     try {
       await loadData();
     } finally {
+      chartRetryingRef.current = false;
       setChartRetrying(false);
     }
   }, [loadData]);

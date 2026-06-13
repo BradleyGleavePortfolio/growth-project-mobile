@@ -1,25 +1,33 @@
 /**
  * useFirstPaymentRealtime — ED.3 realtime trigger contract.
  *
- * The Supabase client + channel are mocked. We assert (audit R3 P1 — first
- * SUCCESSFUL payment proof):
- *   1. An INSERT of a SUCCESSFUL payment on the coach's channel, while the gate
- *      is UNSEEN and no earlier successful payment exists, fires onFirstPayment
- *      with a formatted amount + client name.
- *   2. A non-success INSERT (failed / pending) does NOT celebrate and does NOT
- *      mark the gate seen — a later genuine paid row can still verify.
- *   3. A successful INSERT with an EARLIER successful payment does NOT
- *      celebrate, and the local gate is closed so the subscription stops
- *      re-arming.
- *   4. A successful INSERT whose only prior rows were FAILED DOES celebrate
- *      (this is the case the old count<=1 logic got wrong).
- *   5. A verification query ERROR fails closed — no celebration, gate untouched.
- *   6. When the gate is already SEEN, the channel is never opened (no-op).
- *   7. The hook subscribes with the correct INSERT filter (coach_id).
+ * The Supabase client + channel are mocked. The hook registers TWO
+ * postgres_changes handlers on the ClientPurchase table (the real backend model,
+ * schema.prisma:3449-3532, no @@map so the physical table name is the model
+ * name): an UPDATE handler for the webhook's pending-to-paid transition
+ * (checkout-webhook-handler.service.ts:850-865) and an INSERT handler for a row
+ * inserted already-successful. The mock captures both handlers by event type so
+ * a test can drive either synchronously. We assert:
+ *   1. A pending-to-paid UPDATE, gate UNSEEN and no earlier successful row,
+ *      fires onFirstPayment with a formatted amount + client name (the real
+ *      first-success path).
+ *   2. A pending-to-paid UPDATE for an ESTABLISHED coach (an earlier successful
+ *      row exists) does NOT celebrate, and closes the local gate.
+ *   3. A paid-to-paid no-op UPDATE (OLD already successful) does NOT celebrate.
+ *   4. An INSERT of an already-paid row, first and gate unseen, DOES celebrate.
+ *   5. A success carried ONLY in an alternate column (payment_status, no status)
+ *      does NOT celebrate and does NOT mark the gate seen (ambiguous).
+ *   6. Conflicting status fields (status pending + payment_status paid) do NOT
+ *      celebrate and do NOT mark the gate seen (ambiguous).
+ *   7. A non-success UPDATE (still pending) does NOT celebrate and does NOT mark
+ *      the gate seen — a later genuine paid transition can still verify.
+ *   8. A verification query ERROR fails closed — no celebration, gate untouched.
+ *   9. When the gate is already SEEN, the channel is never opened (no-op).
+ *  10. The hook subscribes with the correct table + tenant filter (coach_user_id).
  *
- * The mock captures the registered postgres_changes handler so the test can
- * drive an INSERT synchronously, exactly like the tgpCharts gesture-capture
- * pattern already used in this repo.
+ * No mock-echo (#17): the hook is driven through a mocked supabase channel/client
+ * and we assert specific behaviours (fires / does not, gate marked / not), never
+ * that an input equals itself.
  */
 import React from 'react';
 import { render, act, waitFor } from '@testing-library/react-native';
@@ -42,10 +50,16 @@ jest.mock('../../../../services/secureStorage', () => ({
   },
 }));
 
-// ── supabase-js mock — capture the INSERT handler + the channel filter. ─────
+// ── supabase-js mock — capture each handler by event type + the filters. ────
+type RealtimePayload = {
+  new?: Record<string, unknown>;
+  old?: Record<string, unknown>;
+};
 interface Captured {
-  handler?: (payload: { new: Record<string, unknown> }) => void;
-  filterArg?: Record<string, unknown>;
+  updateHandler?: (payload: RealtimePayload) => void;
+  insertHandler?: (payload: RealtimePayload) => void;
+  updateFilter?: Record<string, unknown>;
+  insertFilter?: Record<string, unknown>;
   channelName?: string;
   subscribed: boolean;
 }
@@ -57,11 +71,22 @@ interface MockChannel {
   unsubscribe: jest.Mock;
 }
 const mockChannel: MockChannel = {
-  on: jest.fn((_event: string, filter: Record<string, unknown>, handler: (p: { new: Record<string, unknown> }) => void) => {
-    captured.filterArg = filter;
-    captured.handler = handler;
-    return mockChannel;
-  }),
+  on: jest.fn(
+    (
+      _event: string,
+      filter: Record<string, unknown>,
+      handler: (p: RealtimePayload) => void,
+    ) => {
+      if (filter.event === 'UPDATE') {
+        captured.updateFilter = filter;
+        captured.updateHandler = handler;
+      } else if (filter.event === 'INSERT') {
+        captured.insertFilter = filter;
+        captured.insertHandler = handler;
+      }
+      return mockChannel;
+    },
+  ),
   subscribe: jest.fn((cb?: (status: string) => void) => {
     captured.subscribed = true;
     cb?.('SUBSCRIBED');
@@ -69,9 +94,9 @@ const mockChannel: MockChannel = {
   }),
   unsubscribe: jest.fn(),
 };
-// Verification result, overridable per test. `verifyFirstSuccessfulPayment`
-// issues client.from('payments').select(cols).eq('coach_id').in('status',...)
-// .lte('created_at',...).order().order().limit(2) and reads `{ data, error }`.
+// Verification result, overridable per test. verifyFirstSuccessfulPayment issues
+// client.from('ClientPurchase').select(cols).eq('coach_user_id').in('status',...)
+// .lte('created_at',...).order().order().limit(2) and reads { data, error }.
 // `mockRows` is the set of successful rows at-or-before the event's created_at.
 let mockRows: Array<Record<string, unknown>> = [];
 let mockQueryError: { message: string } | null = null;
@@ -103,7 +128,13 @@ jest.mock('@supabase/supabase-js', () => ({
 import { useFirstPaymentRealtime } from '../useFirstPaymentRealtime';
 import { markFirstPaymentSeen } from '../firstPaymentGate';
 
-function Harness({ enabled, onEvent }: { enabled: boolean; onEvent: (e: unknown) => void }) {
+function Harness({
+  enabled,
+  onEvent,
+}: {
+  enabled: boolean;
+  onEvent: (e: unknown) => void;
+}) {
   useFirstPaymentRealtime({
     coachId: 'coach-xyz',
     enabled,
@@ -112,93 +143,87 @@ function Harness({ enabled, onEvent }: { enabled: boolean; onEvent: (e: unknown)
   return <Text>harness</Text>;
 }
 
-// A well-formed SUCCESSFUL event row (has status + created_at + id for proof).
-const successRow = {
+// A well-formed PAID purchase row (has status + created_at + id for proof).
+const paidRow = {
   id: 'pay-2',
   created_at: '2026-02-01T10:00:00.000Z',
   status: 'paid',
-  amount: 240,
+  amount_cents: 24000,
   currency: 'usd',
   client_name: 'Dana',
 };
+// The OLD record before the webhook transition (pending).
+const pendingOld = { ...paidRow, status: 'pending' };
+
+async function flush() {
+  await Promise.resolve();
+  await Promise.resolve();
+  await Promise.resolve();
+}
 
 beforeEach(() => {
   mockGateSeen = false;
   mockRows = [];
   mockQueryError = null;
-  captured.handler = undefined;
-  captured.filterArg = undefined;
+  captured.updateHandler = undefined;
+  captured.insertHandler = undefined;
+  captured.updateFilter = undefined;
+  captured.insertFilter = undefined;
   captured.channelName = undefined;
   captured.subscribed = false;
   jest.clearAllMocks();
 });
 
 describe('useFirstPaymentRealtime — ED.3', () => {
-  it('fires onFirstPayment on a SUCCESSFUL first INSERT when the gate is unseen', async () => {
+  it('fires onFirstPayment on a pending-to-paid UPDATE when first and gate unseen', async () => {
     const onEvent = jest.fn();
     // Only the event row itself comes back as a successful row at-or-before it.
-    mockRows = [{ id: 'pay-2', created_at: successRow.created_at, status: 'paid' }];
+    mockRows = [
+      { id: 'pay-2', created_at: paidRow.created_at, status: 'paid' },
+    ];
     render(<Harness enabled onEvent={onEvent} />);
 
     await waitFor(() => expect(captured.subscribed).toBe(true));
 
-    // The channel filters INSERTs to this coach's payments.
+    // The channel filters BOTH events to this coach's purchases on the real
+    // table + tenant column.
     expect(captured.channelName).toBe('ed3-first-payment-coach-xyz');
-    expect(captured.filterArg).toMatchObject({
+    expect(captured.updateFilter).toMatchObject({
+      event: 'UPDATE',
+      table: 'ClientPurchase',
+      filter: 'coach_user_id=eq.coach-xyz',
+    });
+    expect(captured.insertFilter).toMatchObject({
       event: 'INSERT',
-      table: 'payments',
-      filter: 'coach_id=eq.coach-xyz',
+      table: 'ClientPurchase',
+      filter: 'coach_user_id=eq.coach-xyz',
     });
 
     await act(async () => {
-      captured.handler?.({ new: { ...successRow } });
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
+      captured.updateHandler?.({ new: { ...paidRow }, old: { ...pendingOld } });
+      await flush();
     });
 
     await waitFor(() =>
-      expect(onEvent).toHaveBeenCalledWith({ amount: '$240.00', clientName: 'Dana' }),
+      expect(onEvent).toHaveBeenCalledWith({
+        amount: '$240.00',
+        clientName: 'Dana',
+      }),
     );
   });
 
-  it('does NOT celebrate for a non-success INSERT and leaves the gate unseen', async () => {
-    // A failed / pending first row must not spend the sanctioned exclamation,
-    // and must NOT mark the gate seen — a later genuine paid row can verify.
-    const onEvent = jest.fn();
-    render(<Harness enabled onEvent={onEvent} />);
-    await waitFor(() => expect(captured.subscribed).toBe(true));
-
-    await act(async () => {
-      captured.handler?.({
-        new: { ...successRow, status: 'payment_failed' },
-      });
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(onEvent).not.toHaveBeenCalled();
-    // The verification query must not even run for a non-success row.
-    expect(mockClient.from).not.toHaveBeenCalled();
-    expect(markFirstPaymentSeen).not.toHaveBeenCalled();
-  });
-
-  it('does NOT celebrate when an EARLIER successful payment exists, and closes the gate', async () => {
-    // Audit R3 P1: a coach with a prior SUCCESSFUL payment is past their first.
+  it('does NOT celebrate a pending-to-paid UPDATE for an established coach, and closes the gate', async () => {
     const onEvent = jest.fn();
     mockRows = [
       { id: 'pay-1', created_at: '2026-01-01T09:00:00.000Z', status: 'paid' },
-      { id: 'pay-2', created_at: successRow.created_at, status: 'paid' },
+      { id: 'pay-2', created_at: paidRow.created_at, status: 'paid' },
     ];
     render(<Harness enabled onEvent={onEvent} />);
     await waitFor(() => expect(captured.subscribed).toBe(true));
 
     await act(async () => {
-      captured.handler?.({ new: { ...successRow } });
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
+      captured.updateHandler?.({ new: { ...paidRow }, old: { ...pendingOld } });
+      await flush();
     });
 
     expect(onEvent).not.toHaveBeenCalled();
@@ -206,39 +231,125 @@ describe('useFirstPaymentRealtime — ED.3', () => {
     expect(markFirstPaymentSeen).toHaveBeenCalledWith('coach-xyz');
   });
 
-  it('DOES celebrate when only prior FAILED rows exist (count<=1 got this wrong)', async () => {
-    // The success-scoped query returns only the event row (failed rows are
-    // excluded by the .in(SUCCESS_STATUSES) filter) → this is the first SUCCESS.
+  it('does NOT celebrate a paid-to-paid no-op UPDATE (OLD already successful)', async () => {
+    // A later non-status field change on an already-paid row must not re-fire.
     const onEvent = jest.fn();
-    mockRows = [{ id: 'pay-2', created_at: successRow.created_at, status: 'paid' }];
+    mockRows = [
+      { id: 'pay-2', created_at: paidRow.created_at, status: 'paid' },
+    ];
     render(<Harness enabled onEvent={onEvent} />);
     await waitFor(() => expect(captured.subscribed).toBe(true));
 
     await act(async () => {
-      captured.handler?.({ new: { ...successRow } });
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
+      captured.updateHandler?.({
+        new: { ...paidRow },
+        old: { ...paidRow, status: 'active' },
+      });
+      await flush();
+    });
+
+    expect(onEvent).not.toHaveBeenCalled();
+    // No transition into success → no firstness query, no gate write.
+    expect(mockClient.from).not.toHaveBeenCalled();
+    expect(markFirstPaymentSeen).not.toHaveBeenCalled();
+  });
+
+  it('fires on an INSERT of an already-paid row when first and gate unseen', async () => {
+    const onEvent = jest.fn();
+    mockRows = [
+      { id: 'pay-2', created_at: paidRow.created_at, status: 'paid' },
+    ];
+    render(<Harness enabled onEvent={onEvent} />);
+    await waitFor(() => expect(captured.subscribed).toBe(true));
+
+    await act(async () => {
+      captured.insertHandler?.({ new: { ...paidRow } });
+      await flush();
     });
 
     await waitFor(() =>
-      expect(onEvent).toHaveBeenCalledWith({ amount: '$240.00', clientName: 'Dana' }),
+      expect(onEvent).toHaveBeenCalledWith({
+        amount: '$240.00',
+        clientName: 'Dana',
+      }),
     );
+  });
+
+  it('does NOT celebrate when success is carried ONLY in an alternate column', async () => {
+    // No authoritative `status`, success only in `payment_status` → ambiguous.
+    const onEvent = jest.fn();
+    render(<Harness enabled onEvent={onEvent} />);
+    await waitFor(() => expect(captured.subscribed).toBe(true));
+
+    await act(async () => {
+      captured.insertHandler?.({
+        new: {
+          id: 'pay-2',
+          created_at: paidRow.created_at,
+          payment_status: 'paid',
+          amount_cents: 24000,
+          currency: 'usd',
+          client_name: 'Dana',
+        },
+      });
+      await flush();
+    });
+
+    expect(onEvent).not.toHaveBeenCalled();
+    expect(mockClient.from).not.toHaveBeenCalled();
+    expect(markFirstPaymentSeen).not.toHaveBeenCalled();
+  });
+
+  it('does NOT celebrate when status fields conflict (status pending + payment_status paid)', async () => {
+    const onEvent = jest.fn();
+    render(<Harness enabled onEvent={onEvent} />);
+    await waitFor(() => expect(captured.subscribed).toBe(true));
+
+    await act(async () => {
+      captured.insertHandler?.({
+        new: {
+          ...paidRow,
+          status: 'pending',
+          payment_status: 'paid',
+        },
+      });
+      await flush();
+    });
+
+    expect(onEvent).not.toHaveBeenCalled();
+    expect(mockClient.from).not.toHaveBeenCalled();
+    expect(markFirstPaymentSeen).not.toHaveBeenCalled();
+  });
+
+  it('does NOT celebrate a still-pending UPDATE and leaves the gate unseen', async () => {
+    // A pending-to-pending (or to a failed) update must not spend the
+    // sanctioned exclamation, and must NOT mark the gate seen.
+    const onEvent = jest.fn();
+    render(<Harness enabled onEvent={onEvent} />);
+    await waitFor(() => expect(captured.subscribed).toBe(true));
+
+    await act(async () => {
+      captured.updateHandler?.({
+        new: { ...paidRow, status: 'payment_failed' },
+        old: { ...pendingOld },
+      });
+      await flush();
+    });
+
+    expect(onEvent).not.toHaveBeenCalled();
+    expect(mockClient.from).not.toHaveBeenCalled();
     expect(markFirstPaymentSeen).not.toHaveBeenCalled();
   });
 
   it('fails closed on a verification query error (no celebration, gate untouched)', async () => {
-    // Audit R3 P1: if verification cannot be obtained, fail closed.
     mockQueryError = { message: 'network down' };
     const onEvent = jest.fn();
     render(<Harness enabled onEvent={onEvent} />);
     await waitFor(() => expect(captured.subscribed).toBe(true));
 
     await act(async () => {
-      captured.handler?.({ new: { ...successRow } });
-      await Promise.resolve();
-      await Promise.resolve();
-      await Promise.resolve();
+      captured.updateHandler?.({ new: { ...paidRow }, old: { ...pendingOld } });
+      await flush();
     });
 
     expect(onEvent).not.toHaveBeenCalled();
@@ -273,8 +384,6 @@ describe('useFirstPaymentRealtime — ED.3', () => {
   });
 
   it('tears down the subscription on unmount (unsubscribe + removeAllChannels)', async () => {
-    // P1-4 cleanup: both the channel unsubscribe and the client teardown must
-    // run on unmount, and neither rejection is swallowed (Bradley Law #36).
     const onEvent = jest.fn();
     const { unmount } = render(<Harness enabled onEvent={onEvent} />);
     await waitFor(() => expect(captured.subscribed).toBe(true));
