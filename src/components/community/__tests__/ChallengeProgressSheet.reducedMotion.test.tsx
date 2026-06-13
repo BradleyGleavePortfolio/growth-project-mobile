@@ -84,7 +84,7 @@ describe('ChallengeProgressSheet — reduced motion', () => {
       .spyOn(AccessibilityInfo, 'isReduceMotionEnabled')
       .mockResolvedValue(false);
 
-    render(
+    await render(
       <ChallengeProgressSheet
         visible
         challenge={challenge}
@@ -102,7 +102,7 @@ describe('ChallengeProgressSheet — reduced motion', () => {
       await Promise.resolve();
     });
     timingSpy.mockClear();
-    fireEvent.changeText(screen.getByTestId('sheet-input'), '20');
+    await fireEvent.changeText(screen.getByTestId('sheet-input'), '20');
     await waitFor(() => expect(timingSpy).toHaveBeenCalled());
   });
 
@@ -111,7 +111,7 @@ describe('ChallengeProgressSheet — reduced motion', () => {
       .spyOn(AccessibilityInfo, 'isReduceMotionEnabled')
       .mockResolvedValue(false);
 
-    render(
+    await render(
       <ChallengeProgressSheet
         visible
         challenge={challenge}
@@ -136,7 +136,7 @@ describe('ChallengeProgressSheet — reduced motion', () => {
       .spyOn(AccessibilityInfo, 'isReduceMotionEnabled')
       .mockResolvedValue(true);
 
-    render(
+    await render(
       <ChallengeProgressSheet
         visible
         challenge={challenge}
@@ -163,7 +163,7 @@ describe('ChallengeProgressSheet — reduced motion', () => {
       .spyOn(AccessibilityInfo, 'isReduceMotionEnabled')
       .mockResolvedValue(true);
 
-    render(
+    await render(
       <ChallengeProgressSheet
         visible
         challenge={challenge}
@@ -181,7 +181,7 @@ describe('ChallengeProgressSheet — reduced motion', () => {
       await Promise.resolve();
     });
     timingSpy.mockClear();
-    fireEvent.changeText(screen.getByTestId('sheet-input'), '20');
+    await fireEvent.changeText(screen.getByTestId('sheet-input'), '20');
     await act(async () => {
       await Promise.resolve();
     });
@@ -198,7 +198,7 @@ describe('ChallengeProgressSheet — monotonic progress', () => {
 
   it('clamps a submitted value below the current total up to the current value', async () => {
     const onSubmit = jest.fn().mockResolvedValue({ completed: false });
-    render(
+    await render(
       <ChallengeProgressSheet
         visible
         challenge={challenge}
@@ -210,8 +210,8 @@ describe('ChallengeProgressSheet — monotonic progress', () => {
     );
 
     // Attempt to lower the total from 12 to 3.
-    fireEvent.changeText(screen.getByTestId('sheet-input'), '3');
-    fireEvent.press(screen.getByTestId('sheet-submit'));
+    await fireEvent.changeText(screen.getByTestId('sheet-input'), '3');
+    await fireEvent.press(screen.getByTestId('sheet-submit'));
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
     // Monotonic: never below the current 12.
@@ -220,7 +220,7 @@ describe('ChallengeProgressSheet — monotonic progress', () => {
 
   it('passes a higher value straight through', async () => {
     const onSubmit = jest.fn().mockResolvedValue({ completed: false });
-    render(
+    await render(
       <ChallengeProgressSheet
         visible
         challenge={challenge}
@@ -231,14 +231,14 @@ describe('ChallengeProgressSheet — monotonic progress', () => {
       />,
     );
 
-    fireEvent.changeText(screen.getByTestId('sheet-input'), '20');
-    fireEvent.press(screen.getByTestId('sheet-submit'));
+    await fireEvent.changeText(screen.getByTestId('sheet-input'), '20');
+    await fireEvent.press(screen.getByTestId('sheet-submit'));
 
     await waitFor(() => expect(onSubmit).toHaveBeenCalledWith(20));
   });
 
-  it('shows the always-on monotonic explanation and an inline clamp note (F11)', () => {
-    render(
+  it('shows the always-on monotonic explanation and an inline clamp note (F11)', async () => {
+    await render(
       <ChallengeProgressSheet
         visible
         challenge={challenge}
@@ -254,7 +254,7 @@ describe('ChallengeProgressSheet — monotonic progress', () => {
     // No clamp note until the typed value is below the saved total.
     expect(screen.queryByTestId('sheet-monotonic-clamp')).toBeNull();
 
-    fireEvent.changeText(screen.getByTestId('sheet-input'), '3');
+    await fireEvent.changeText(screen.getByTestId('sheet-input'), '3');
     const clamp = screen.getByTestId('sheet-monotonic-clamp');
     expect(clamp).toBeTruthy();
     expect(screen.getByText('Keeping your saved total at 12 days.')).toBeTruthy();
@@ -271,7 +271,7 @@ describe('ChallengeProgressSheet — completion peak (F9)', () => {
   it('stays open in a closure state with a Done button when the server confirms completion', async () => {
     const onSubmit = jest.fn().mockResolvedValue({ completed: true });
     const onClose = jest.fn();
-    render(
+    await render(
       <ChallengeProgressSheet
         visible
         challenge={challenge}
@@ -282,8 +282,8 @@ describe('ChallengeProgressSheet — completion peak (F9)', () => {
       />,
     );
 
-    fireEvent.changeText(screen.getByTestId('sheet-input'), '30');
-    fireEvent.press(screen.getByTestId('sheet-submit'));
+    await fireEvent.changeText(screen.getByTestId('sheet-input'), '30');
+    await fireEvent.press(screen.getByTestId('sheet-submit'));
 
     // The sheet does NOT auto-close on completion; it presents the peak + Done.
     await waitFor(() => expect(screen.getByTestId('sheet-celebrate')).toBeTruthy());
@@ -291,14 +291,14 @@ describe('ChallengeProgressSheet — completion peak (F9)', () => {
     expect(screen.getByText('Goal reached — progress saved.')).toBeTruthy();
 
     // The user dismisses with the explicit Done affordance.
-    fireEvent.press(screen.getByTestId('sheet-done'));
+    await fireEvent.press(screen.getByTestId('sheet-done'));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('closes immediately (no peak) when the submit is not a completion', async () => {
     const onSubmit = jest.fn().mockResolvedValue({ completed: false });
     const onClose = jest.fn();
-    render(
+    await render(
       <ChallengeProgressSheet
         visible
         challenge={challenge}
@@ -309,8 +309,8 @@ describe('ChallengeProgressSheet — completion peak (F9)', () => {
       />,
     );
 
-    fireEvent.changeText(screen.getByTestId('sheet-input'), '20');
-    fireEvent.press(screen.getByTestId('sheet-submit'));
+    await fireEvent.changeText(screen.getByTestId('sheet-input'), '20');
+    await fireEvent.press(screen.getByTestId('sheet-submit'));
 
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
     expect(screen.queryByTestId('sheet-celebrate')).toBeNull();
@@ -339,7 +339,7 @@ describe('ChallengeProgressSheet — rapid double-submit guard (R8-P2-1)', () =>
         }),
     );
     const onClose = jest.fn();
-    render(
+    await render(
       <ChallengeProgressSheet
         visible
         challenge={challenge}
@@ -350,11 +350,11 @@ describe('ChallengeProgressSheet — rapid double-submit guard (R8-P2-1)', () =>
       />,
     );
 
-    fireEvent.changeText(screen.getByTestId('sheet-input'), '20');
+    await fireEvent.changeText(screen.getByTestId('sheet-input'), '20');
     const submit = screen.getByTestId('sheet-submit');
     // Two synchronous presses before the first onSubmit promise settles.
-    fireEvent.press(submit);
-    fireEvent.press(submit);
+    await fireEvent.press(submit);
+    await fireEvent.press(submit);
 
     expect(onSubmit).toHaveBeenCalledTimes(1);
 
@@ -377,7 +377,7 @@ describe('ChallengeProgressSheet — rejected submit (F3)', () => {
   it('surfaces a calm error and keeps the sheet open + draft on a rejected write', async () => {
     const onSubmit = jest.fn().mockRejectedValue(new Error('save failed'));
     const onClose = jest.fn();
-    render(
+    await render(
       <ChallengeProgressSheet
         visible
         challenge={challenge}
@@ -388,8 +388,8 @@ describe('ChallengeProgressSheet — rejected submit (F3)', () => {
       />,
     );
 
-    fireEvent.changeText(screen.getByTestId('sheet-input'), '20');
-    fireEvent.press(screen.getByTestId('sheet-submit'));
+    await fireEvent.changeText(screen.getByTestId('sheet-input'), '20');
+    await fireEvent.press(screen.getByTestId('sheet-submit'));
 
     // The failure is SURFACED to the user as an inline error and the sheet stays
     // open with the draft intact so the user can retry.

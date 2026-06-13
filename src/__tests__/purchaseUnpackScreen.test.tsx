@@ -396,17 +396,17 @@ describe('PurchaseUnpackScreen — RTL mount', () => {
     });
   });
 
-  it('renders a loading skeleton on first mount', () => {
+  it('renders a loading skeleton on first mount', async () => {
     mockGetPurchaseDrops.mockReturnValue(new Promise(() => {}));
     mockGetPurchases.mockReturnValue(new Promise(() => {}));
     mockGetPackages.mockReturnValue(new Promise(() => {}));
-    const { getByTestId } = render(<PurchaseUnpackScreen />);
+    const { getByTestId } = await render(<PurchaseUnpackScreen />);
     expect(getByTestId('purchase-unpack-skeleton')).toBeTruthy();
   });
 
   it('splits unlocked-now (fired) vs coming-up (pending) with both sections rendered', async () => {
     mockGetPurchaseDrops.mockResolvedValue({ ok: true, data: sampleDrops() });
-    const { getByTestId, getByText } = render(<PurchaseUnpackScreen />);
+    const { getByTestId, getByText } = await render(<PurchaseUnpackScreen />);
     await waitFor(() => expect(getByTestId('purchase-unpack-list')).toBeTruthy());
     expect(getByText('Unlocked now')).toBeTruthy();
     expect(getByText('Coming up')).toBeTruthy();
@@ -417,7 +417,7 @@ describe('PurchaseUnpackScreen — RTL mount', () => {
 
   it('recurring purchase shows the Next charge line', async () => {
     mockGetPurchaseDrops.mockResolvedValue({ ok: true, data: sampleDrops() });
-    const { getByTestId } = render(<PurchaseUnpackScreen />);
+    const { getByTestId } = await render(<PurchaseUnpackScreen />);
     await waitFor(() =>
       expect(getByTestId('purchase-unpack-next-charge')).toBeTruthy(),
     );
@@ -441,7 +441,7 @@ describe('PurchaseUnpackScreen — RTL mount', () => {
       ],
     });
     mockGetPurchaseDrops.mockResolvedValue({ ok: true, data: sampleDrops() });
-    const { getByTestId, queryByTestId } = render(<PurchaseUnpackScreen />);
+    const { getByTestId, queryByTestId } = await render(<PurchaseUnpackScreen />);
     await waitFor(() => expect(getByTestId('purchase-unpack-list')).toBeTruthy());
     expect(queryByTestId('purchase-unpack-next-charge')).toBeNull();
   });
@@ -451,9 +451,9 @@ describe('PurchaseUnpackScreen — RTL mount', () => {
       ok: true,
       data: sampleDrops({ fired: 1, pending: 0 }),
     });
-    const { getByTestId } = render(<PurchaseUnpackScreen />);
+    const { getByTestId } = await render(<PurchaseUnpackScreen />);
     await waitFor(() => expect(getByTestId('drop-row-f0')).toBeTruthy());
-    fireEvent.press(getByTestId('drop-row-f0'));
+    await fireEvent.press(getByTestId('drop-row-f0'));
     expect(mockNavigate).toHaveBeenCalledWith('WorkoutAssignmentDetail', {
       assignmentId: 'assignment_0',
     });
@@ -478,9 +478,9 @@ describe('PurchaseUnpackScreen — RTL mount', () => {
         },
       ],
     });
-    const { getByTestId } = render(<PurchaseUnpackScreen />);
+    const { getByTestId } = await render(<PurchaseUnpackScreen />);
     await waitFor(() => expect(getByTestId('drop-row-mp_drop')).toBeTruthy());
-    fireEvent.press(getByTestId('drop-row-mp_drop'));
+    await fireEvent.press(getByTestId('drop-row-mp_drop'));
     expect(mockNavigate).toHaveBeenCalledWith('ClientDailyMealPlan', {
       date: '2026-05-01',
     });
@@ -505,9 +505,9 @@ describe('PurchaseUnpackScreen — RTL mount', () => {
         },
       ],
     });
-    const { getByTestId } = render(<PurchaseUnpackScreen />);
+    const { getByTestId } = await render(<PurchaseUnpackScreen />);
     await waitFor(() => expect(getByTestId('drop-row-am')).toBeTruthy());
-    fireEvent.press(getByTestId('drop-row-am'));
+    await fireEvent.press(getByTestId('drop-row-am'));
     expect(mockParentNavigate).toHaveBeenCalledWith('Home', {
       screen: 'Messages',
     });
@@ -532,7 +532,7 @@ describe('PurchaseUnpackScreen — RTL mount', () => {
         },
       ],
     });
-    const { getByTestId } = render(<PurchaseUnpackScreen />);
+    const { getByTestId } = await render(<PurchaseUnpackScreen />);
     await waitFor(() => expect(getByTestId('drop-row-orphan')).toBeTruthy());
     const row = getByTestId('drop-row-orphan');
     // The row renders as a plain <View> when non-tappable — no onPress
@@ -549,7 +549,7 @@ describe('PurchaseUnpackScreen — RTL mount', () => {
     // a 404 produces the retryable error banner — PR-1's rule, restored
     // after PR-15A shipped the real route.
     mockGetPurchaseDrops.mockResolvedValue({ ok: false, reason: 'not_configured' });
-    const { getByTestId, queryByTestId, getByText } = render(<PurchaseUnpackScreen />);
+    const { getByTestId, queryByTestId, getByText } = await render(<PurchaseUnpackScreen />);
     await waitFor(() =>
       expect(getByTestId('purchase-unpack-not-configured')).toBeTruthy(),
     );
@@ -569,7 +569,7 @@ describe('PurchaseUnpackScreen — RTL mount', () => {
       reason: 'error',
       message: 'Request failed with status code 404',
     });
-    const { getByTestId, queryByTestId, queryByText } = render(<PurchaseUnpackScreen />);
+    const { getByTestId, queryByTestId, queryByText } = await render(<PurchaseUnpackScreen />);
     await waitFor(() => expect(getByTestId('purchase-unpack-error')).toBeTruthy());
     expect(getByTestId('purchase-unpack-retry')).toBeTruthy();
     // Never the calm complete state.
@@ -584,7 +584,7 @@ describe('PurchaseUnpackScreen — RTL mount', () => {
       reason: 'error',
       message: 'Request failed with status code 502',
     });
-    const { getByTestId, queryByText } = render(<PurchaseUnpackScreen />);
+    const { getByTestId, queryByText } = await render(<PurchaseUnpackScreen />);
     await waitFor(() => expect(getByTestId('purchase-unpack-error')).toBeTruthy());
     expect(getByTestId('purchase-unpack-retry')).toBeTruthy();
     expect(queryByText('Request failed with status code 502')).toBeNull();
@@ -592,14 +592,14 @@ describe('PurchaseUnpackScreen — RTL mount', () => {
 
   it('renders the "Your coach is setting things up" empty state when both lists are empty', async () => {
     mockGetPurchaseDrops.mockResolvedValue({ ok: true, data: [] });
-    const { getByTestId, getByText } = render(<PurchaseUnpackScreen />);
+    const { getByTestId, getByText } = await render(<PurchaseUnpackScreen />);
     await waitFor(() => expect(getByTestId('purchase-unpack-empty')).toBeTruthy());
     expect(getByText('Your coach is setting things up')).toBeTruthy();
   });
 
   it('pull-to-refresh refetches getPurchaseDrops', async () => {
     mockGetPurchaseDrops.mockResolvedValue({ ok: true, data: [] });
-    const { getByTestId } = render(<PurchaseUnpackScreen />);
+    const { getByTestId } = await render(<PurchaseUnpackScreen />);
     await waitFor(() => expect(getByTestId('purchase-unpack-empty')).toBeTruthy());
     expect(mockGetPurchaseDrops).toHaveBeenCalledTimes(1);
     const sv = getByTestId('purchase-unpack-empty');
@@ -613,11 +613,11 @@ describe('PurchaseUnpackScreen — RTL mount', () => {
 
   it('Go-to-deliverables CTA navigates to Deliverables with the purchase id', async () => {
     mockGetPurchaseDrops.mockResolvedValue({ ok: true, data: sampleDrops() });
-    const { getByTestId } = render(<PurchaseUnpackScreen />);
+    const { getByTestId } = await render(<PurchaseUnpackScreen />);
     await waitFor(() =>
       expect(getByTestId('purchase-unpack-go-to-deliverables')).toBeTruthy(),
     );
-    fireEvent.press(getByTestId('purchase-unpack-go-to-deliverables'));
+    await fireEvent.press(getByTestId('purchase-unpack-go-to-deliverables'));
     expect(mockNavigate).toHaveBeenCalledWith('Deliverables', {
       purchaseId: 'purchase_42',
       packageName: '1:1 Coaching',
@@ -626,9 +626,9 @@ describe('PurchaseUnpackScreen — RTL mount', () => {
 
   it('Done CTA returns the buyer to Home via the parent navigator', async () => {
     mockGetPurchaseDrops.mockResolvedValue({ ok: true, data: sampleDrops() });
-    const { getByTestId } = render(<PurchaseUnpackScreen />);
+    const { getByTestId } = await render(<PurchaseUnpackScreen />);
     await waitFor(() => expect(getByTestId('purchase-unpack-done')).toBeTruthy());
-    fireEvent.press(getByTestId('purchase-unpack-done'));
+    await fireEvent.press(getByTestId('purchase-unpack-done'));
     expect(mockParentNavigate).toHaveBeenCalledWith('Home');
   });
 });

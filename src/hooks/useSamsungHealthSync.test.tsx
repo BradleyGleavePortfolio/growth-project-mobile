@@ -68,7 +68,7 @@ describe('useSamsungHealthSync hooks', () => {
       mockGetLastSyncAt.mockResolvedValueOnce('2026-05-30T12:00:00.000Z');
       const { wrapper } = makeWrapper();
 
-      const { result } = renderHook(() => useSamsungHealthLastSync(), { wrapper });
+      const { result } = await renderHook(() => useSamsungHealthLastSync(), { wrapper });
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
       expect(result.current.data).toBe('2026-05-30T12:00:00.000Z');
@@ -79,7 +79,7 @@ describe('useSamsungHealthSync hooks', () => {
       mockGetLastSyncAt.mockResolvedValueOnce(null);
       const { wrapper } = makeWrapper();
 
-      const { result } = renderHook(() => useSamsungHealthLastSync(), { wrapper });
+      const { result } = await renderHook(() => useSamsungHealthLastSync(), { wrapper });
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
       expect(result.current.data).toBeNull();
@@ -99,7 +99,7 @@ describe('useSamsungHealthSync hooks', () => {
       mockSync.mockResolvedValueOnce(syncResult);
       const { wrapper } = makeWrapper();
 
-      const { result } = renderHook(() => useSamsungHealthSync(), { wrapper });
+      const { result } = await renderHook(() => useSamsungHealthSync(), { wrapper });
 
       result.current.mutate();
 
@@ -120,7 +120,7 @@ describe('useSamsungHealthSync hooks', () => {
       const { qc, wrapper } = makeWrapper();
       const invalidateSpy = jest.spyOn(qc, 'invalidateQueries');
 
-      const { result } = renderHook(() => useSamsungHealthSync(), { wrapper });
+      const { result } = await renderHook(() => useSamsungHealthSync(), { wrapper });
       result.current.mutate();
 
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
@@ -133,7 +133,7 @@ describe('useSamsungHealthSync hooks', () => {
       mockSync.mockRejectedValueOnce(new Error('permission denied'));
       const { wrapper } = makeWrapper();
 
-      const { result } = renderHook(() => useSamsungHealthSync(), { wrapper });
+      const { result } = await renderHook(() => useSamsungHealthSync(), { wrapper });
       result.current.mutate();
 
       await waitFor(() => expect(result.current.isError).toBe(true));

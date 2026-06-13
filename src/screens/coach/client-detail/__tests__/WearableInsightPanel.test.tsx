@@ -89,18 +89,18 @@ const baseProps = {
 };
 
 describe('loading / empty / error states', () => {
-  it('renders a skeleton (not a spinner) while loading', () => {
+  it('renders a skeleton (not a spinner) while loading', async () => {
     mockUseCoachInsight.mockReturnValue(queryState({ isLoading: true }));
-    const { getByTestId, queryByTestId } = render(
+    const { getByTestId, queryByTestId } = await render(
       <WearableInsightPanel {...baseProps} />,
     );
     expect(getByTestId('coach-insight-loading')).toBeTruthy();
     expect(queryByTestId('coach-insight-panel')).toBeNull();
   });
 
-  it('renders the literal empty copy + secondary line and NO confidence chip', () => {
+  it('renders the literal empty copy + secondary line and NO confidence chip', async () => {
     mockUseCoachInsight.mockReturnValue(queryState({ data: emptyInsight() }));
-    const { getByTestId, getByText, queryByTestId } = render(
+    const { getByTestId, getByText, queryByTestId } = await render(
       <WearableInsightPanel {...baseProps} />,
     );
     expect(getByTestId('coach-insight-empty')).toBeTruthy();
@@ -111,22 +111,22 @@ describe('loading / empty / error states', () => {
     expect(queryByTestId('coach-insight-confidence')).toBeNull();
   });
 
-  it('renders sanitized error copy + Retry, and retry refetches', () => {
+  it('renders sanitized error copy + Retry, and retry refetches', async () => {
     const refetch = jest.fn();
     mockUseCoachInsight.mockReturnValue(
       queryState({ isError: true, error: new Error('boom'), refetch }),
     );
-    const { getByTestId } = render(<WearableInsightPanel {...baseProps} />);
+    const { getByTestId } = await render(<WearableInsightPanel {...baseProps} />);
     expect(getByTestId('coach-insight-error')).toBeTruthy();
-    fireEvent.press(getByTestId('coach-insight-retry'));
+    await fireEvent.press(getByTestId('coach-insight-retry'));
     expect(refetch).toHaveBeenCalledTimes(1);
   });
 });
 
 describe('expanded state', () => {
-  it('reveals all four fields and the confidence chip label + percentage', () => {
+  it('reveals all four fields and the confidence chip label + percentage', async () => {
     mockUseCoachInsight.mockReturnValue(queryState({ data: fullInsight() }));
-    const { getByTestId, getByText, queryByTestId } = render(
+    const { getByTestId, getByText, queryByTestId } = await render(
       <WearableInsightPanel {...baseProps} />,
     );
     // Confidence chip is always visible (collapsed).
@@ -134,7 +134,7 @@ describe('expanded state', () => {
     // Collapsed: expanded block absent.
     expect(queryByTestId('coach-insight-expanded')).toBeNull();
 
-    fireEvent.press(getByTestId('coach-insight-panel'));
+    await fireEvent.press(getByTestId('coach-insight-panel'));
 
     expect(getByTestId('coach-insight-expanded')).toBeTruthy();
     expect(getByText('Possibly light exposure or late caffeine')).toBeTruthy();
@@ -152,26 +152,26 @@ describe('review sheet', () => {
     return utils;
   }
 
-  it('opens with the draft prefilled and dismiss calls the mutation with action dismiss', () => {
+  it('opens with the draft prefilled and dismiss calls the mutation with action dismiss', async () => {
     mockUseCoachInsight.mockReturnValue(queryState({ data: fullInsight() }));
     const { getByTestId } = openSheet();
     expect(getByTestId('coach-insight-draft-input').props.value).toContain(
       'noticed your deep sleep dipped',
     );
-    fireEvent.press(getByTestId('coach-insight-dismiss'));
+    await fireEvent.press(getByTestId('coach-insight-dismiss'));
     expect(mockMutate).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'dismiss', draftBody: '' }),
       expect.any(Object),
     );
   });
 
-  it('enables Edit-then-send only after the text is edited', () => {
+  it('enables Edit-then-send only after the text is edited', async () => {
     mockUseCoachInsight.mockReturnValue(queryState({ data: fullInsight() }));
     const { getByTestId } = openSheet();
     const editBtn = getByTestId('coach-insight-edit-send');
     expect(editBtn.props.accessibilityState.disabled).toBe(true);
 
-    fireEvent.changeText(
+    await fireEvent.changeText(
       getByTestId('coach-insight-draft-input'),
       'A clearly different message from the coach',
     );
@@ -180,10 +180,10 @@ describe('review sheet', () => {
     ).toBe(false);
   });
 
-  it('Approve & send sends the ORIGINAL body with action approve', () => {
+  it('Approve & send sends the ORIGINAL body with action approve', async () => {
     mockUseCoachInsight.mockReturnValue(queryState({ data: fullInsight() }));
     const { getByTestId } = openSheet();
-    fireEvent.press(getByTestId('coach-insight-approve'));
+    await fireEvent.press(getByTestId('coach-insight-approve'));
     expect(mockMutate).toHaveBeenCalledWith(
       expect.objectContaining({
         action: 'approve',
@@ -204,7 +204,7 @@ describe('review sheet', () => {
       });
     });
     const { getByTestId, getByText, unmount } = openSheet();
-    fireEvent.press(getByTestId('coach-insight-approve'));
+    await fireEvent.press(getByTestId('coach-insight-approve'));
     await waitFor(() => expect(getByTestId('coach-insight-sent')).toBeTruthy());
     expect(getByText('Sent to your client')).toBeTruthy();
     // Unmount clears the forward-hook timer (no dangling handle, #32).
@@ -224,7 +224,7 @@ describe('review sheet', () => {
       opts.onError(notFound);
     });
     const { getByTestId, getByText, queryByTestId } = openSheet();
-    fireEvent.press(getByTestId('coach-insight-approve'));
+    await fireEvent.press(getByTestId('coach-insight-approve'));
     await waitFor(() =>
       expect(getByTestId('coach-insight-sheet-error')).toBeTruthy(),
     );
@@ -245,7 +245,7 @@ describe('review sheet', () => {
       opts.onError(new Error('network blew up'));
     });
     const { getByTestId } = openSheet();
-    fireEvent.press(getByTestId('coach-insight-approve'));
+    await fireEvent.press(getByTestId('coach-insight-approve'));
     await waitFor(() =>
       expect(getByTestId('coach-insight-sheet-error')).toBeTruthy(),
     );
@@ -271,18 +271,18 @@ describe('Retry semantics (F4 — replay the failed action + its body)', () => {
     const { getByTestId } = openSheetWithFailingFirstAttempt();
     const original = fullInsight().suggested_message_draft;
 
-    fireEvent.press(getByTestId('coach-insight-approve'));
+    await fireEvent.press(getByTestId('coach-insight-approve'));
     await waitFor(() =>
       expect(getByTestId('coach-insight-sheet-error')).toBeTruthy(),
     );
 
     // User edits the draft AFTER the failure — Retry must NOT pick this up.
-    fireEvent.changeText(
+    await fireEvent.changeText(
       getByTestId('coach-insight-draft-input'),
       'A totally different message typed after the failure',
     );
 
-    fireEvent.press(getByTestId('coach-insight-sheet-retry'));
+    await fireEvent.press(getByTestId('coach-insight-sheet-retry'));
 
     expect(mockMutate).toHaveBeenCalledTimes(2);
     const secondCall = mockMutate.mock.calls[1][0];
@@ -293,12 +293,12 @@ describe('Retry semantics (F4 — replay the failed action + its body)', () => {
   it('Dismiss fails → Retry replays dismiss (NOT approve) with an empty body', async () => {
     const { getByTestId } = openSheetWithFailingFirstAttempt();
 
-    fireEvent.press(getByTestId('coach-insight-dismiss'));
+    await fireEvent.press(getByTestId('coach-insight-dismiss'));
     await waitFor(() =>
       expect(getByTestId('coach-insight-sheet-error')).toBeTruthy(),
     );
 
-    fireEvent.press(getByTestId('coach-insight-sheet-retry'));
+    await fireEvent.press(getByTestId('coach-insight-sheet-retry'));
 
     expect(mockMutate).toHaveBeenCalledTimes(2);
     const secondCall = mockMutate.mock.calls[1][0];
@@ -310,22 +310,22 @@ describe('Retry semantics (F4 — replay the failed action + its body)', () => {
     const { getByTestId } = openSheetWithFailingFirstAttempt();
     const bodyAtFailure = 'Edited message at the moment of the failed send';
 
-    fireEvent.changeText(
+    await fireEvent.changeText(
       getByTestId('coach-insight-draft-input'),
       bodyAtFailure,
     );
-    fireEvent.press(getByTestId('coach-insight-edit-send'));
+    await fireEvent.press(getByTestId('coach-insight-edit-send'));
     await waitFor(() =>
       expect(getByTestId('coach-insight-sheet-error')).toBeTruthy(),
     );
 
     // A further edit after the failure must not leak into the replay.
-    fireEvent.changeText(
+    await fireEvent.changeText(
       getByTestId('coach-insight-draft-input'),
       'Yet another edit made after the failure',
     );
 
-    fireEvent.press(getByTestId('coach-insight-sheet-retry'));
+    await fireEvent.press(getByTestId('coach-insight-sheet-retry'));
 
     expect(mockMutate).toHaveBeenCalledTimes(2);
     const secondCall = mockMutate.mock.calls[1][0];

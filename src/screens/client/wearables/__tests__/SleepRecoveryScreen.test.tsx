@@ -67,7 +67,7 @@ beforeEach(() => {
 afterEach(() => jest.restoreAllMocks());
 
 describe('SleepRecoveryScreen', () => {
-  it('renders the empty state (NOT a spinner) when there is no data', () => {
+  it('renders the empty state (NOT a spinner) when there is no data', async () => {
     mockUseWearableSamples.mockReturnValue({
       data: resp([]),
       isLoading: false,
@@ -76,11 +76,11 @@ describe('SleepRecoveryScreen', () => {
       refetch: jest.fn(),
       error: null,
     });
-    const { getByTestId } = render(<SleepRecoveryScreen />);
+    const { getByTestId } = await render(<SleepRecoveryScreen />);
     expect(getByTestId('sleep-recovery-empty')).toBeTruthy();
   });
 
-  it('CTA on the empty state navigates to Connections', () => {
+  it('CTA on the empty state navigates to Connections', async () => {
     mockUseWearableSamples.mockReturnValue({
       data: resp([]),
       isLoading: false,
@@ -89,12 +89,12 @@ describe('SleepRecoveryScreen', () => {
       refetch: jest.fn(),
       error: null,
     });
-    const { getByTestId } = render(<SleepRecoveryScreen />);
-    fireEvent.press(getByTestId('sleep-recovery-empty-cta'));
+    const { getByTestId } = await render(<SleepRecoveryScreen />);
+    await fireEvent.press(getByTestId('sleep-recovery-empty-cta'));
     expect(mockNavigate).toHaveBeenCalledWith('Connections');
   });
 
-  it('renders a typed error state with retry when the query fails and no cache', () => {
+  it('renders a typed error state with retry when the query fails and no cache', async () => {
     // refetch returns a Promise (React Query contract) so the screen's
     // floated-with-logged-rejection retry path can chain `.catch`.
     const refetch = jest.fn().mockResolvedValue(undefined);
@@ -106,12 +106,12 @@ describe('SleepRecoveryScreen', () => {
       refetch,
       error: new Error('network'),
     });
-    const { getByTestId } = render(<SleepRecoveryScreen />);
-    fireEvent.press(getByTestId('sleep-recovery-error-retry'));
+    const { getByTestId } = await render(<SleepRecoveryScreen />);
+    await fireEvent.press(getByTestId('sleep-recovery-error-retry'));
     expect(refetch).toHaveBeenCalled();
   });
 
-  it('shows the reassurance-first deficit banner when sleep is under need', () => {
+  it('shows the reassurance-first deficit banner when sleep is under need', async () => {
     mockUseWearableSamples.mockReturnValue({
       data: resp([
         { metric: 'RECOVERY_SCORE', unit: 'score', provider_used: 'OURA', sample_count: 1, samples: [s(70)] },
@@ -123,14 +123,14 @@ describe('SleepRecoveryScreen', () => {
       refetch: jest.fn(),
       error: null,
     });
-    const { getByTestId } = render(<SleepRecoveryScreen />);
+    const { getByTestId } = await render(<SleepRecoveryScreen />);
     const reassurance = getByTestId('phantom-calm-reassurance').props.children as string;
     const deficit = getByTestId('phantom-calm-deficit').props.children as string;
     expect(reassurance).toMatch(/close/i);
     expect(deficit).toMatch(/under your sleep need/);
   });
 
-  it('renders the recovery hero with the score', () => {
+  it('renders the recovery hero with the score', async () => {
     mockUseWearableSamples.mockReturnValue({
       data: resp([
         { metric: 'RECOVERY_SCORE', unit: 'score', provider_used: 'OURA', sample_count: 1, samples: [s(81)] },
@@ -141,11 +141,11 @@ describe('SleepRecoveryScreen', () => {
       refetch: jest.fn(),
       error: null,
     });
-    const { getByTestId } = render(<SleepRecoveryScreen />);
+    const { getByTestId } = await render(<SleepRecoveryScreen />);
     expect(getByTestId('recovery-state-label').props.children).toBe('Recovered');
   });
 
-  it('tolerates a malformed bucket param (#8 — falls back, no crash)', () => {
+  it('tolerates a malformed bucket param (#8 — falls back, no crash)', async () => {
     mockUseWearableSamples.mockReturnValue({
       data: resp([
         { metric: 'RECOVERY_SCORE', unit: 'score', provider_used: 'OURA', sample_count: 1, samples: [s(50)] },
@@ -156,7 +156,7 @@ describe('SleepRecoveryScreen', () => {
       refetch: jest.fn(),
       error: null,
     });
-    const { getByTestId } = render(<SleepRecoveryScreen bucketParam="__evil__" />);
+    const { getByTestId } = await render(<SleepRecoveryScreen bucketParam="__evil__" />);
     expect(getByTestId('recovery-ring-hero')).toBeTruthy();
     // The hook is always asked for the SLEEP_RECOVERY bucket regardless of param.
     expect(mockUseWearableSamples).toHaveBeenCalledWith(

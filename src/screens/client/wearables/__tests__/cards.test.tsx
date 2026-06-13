@@ -34,14 +34,14 @@ beforeEach(() => {
 afterEach(() => jest.restoreAllMocks());
 
 describe('RecoveryRingHero', () => {
-  it('shows the number AND a plain-language label, never a bare score', () => {
-    const { getByTestId } = render(<RecoveryRingHero score={72} colors={testColors} />);
+  it('shows the number AND a plain-language label, never a bare score', async () => {
+    const { getByTestId } = await render(<RecoveryRingHero score={72} colors={testColors} />);
     expect(getByTestId('recovery-percent').props.children).toEqual(['72', expect.anything()]);
     expect(getByTestId('recovery-state-label').props.children).toBe('Recovered');
   });
 
-  it('renders an em dash and the neutral Recovery label when score is null', () => {
-    const { getByTestId } = render(<RecoveryRingHero score={null} colors={testColors} />);
+  it('renders an em dash and the neutral Recovery label when score is null', async () => {
+    const { getByTestId } = await render(<RecoveryRingHero score={null} colors={testColors} />);
     expect(getByTestId('recovery-percent').props.children).toEqual(['—', null]);
     expect(getByTestId('recovery-state-label').props.children).toBe('Recovery');
   });
@@ -58,49 +58,49 @@ describe('SleepStagesCard — plain language', () => {
     ],
   };
 
-  it('uses only plain-language labels', () => {
-    const { getByText } = render(<SleepStagesCard stages={stages} colors={testColors} />);
+  it('uses only plain-language labels', async () => {
+    const { getByText } = await render(<SleepStagesCard stages={stages} colors={testColors} />);
     expect(getByText('REM')).toBeTruthy();
     expect(getByText('Deep sleep')).toBeTruthy();
     expect(getByText('Light sleep')).toBeTruthy();
     expect(getByText('Awake')).toBeTruthy();
   });
 
-  it('headline reads as reassurance + context (no jargon)', () => {
-    const { getByTestId } = render(<SleepStagesCard stages={stages} colors={testColors} />);
+  it('headline reads as reassurance + context (no jargon)', async () => {
+    const { getByTestId } = await render(<SleepStagesCard stages={stages} colors={testColors} />);
     const headline = getByTestId('sleep-stages-headline').props.children as string;
     expect(headline).toMatch(/restorative night/);
     expect(headline).not.toMatch(CLINICAL_JARGON);
   });
 
-  it('renders an empty bar with a value-first prompt when no stages', () => {
-    const { getByTestId } = render(<SleepStagesCard stages={null} colors={testColors} />);
+  it('renders an empty bar with a value-first prompt when no stages', async () => {
+    const { getByTestId } = await render(<SleepStagesCard stages={null} colors={testColors} />);
     expect(getByTestId('sleep-stages-empty-bar')).toBeTruthy();
   });
 });
 
 describe('HrvTrendCard — never alarm', () => {
-  it('frames a dip as recovering, not "low"', () => {
+  it('frames a dip as recovering, not "low"', async () => {
     const trend = [
       { at: '2026-05-01', value: 60 },
       { at: '2026-05-02', value: 62 },
       { at: '2026-05-03', value: 40 }, // dip
     ];
-    const { getByTestId } = render(<HrvTrendCard trend={trend} latestMs={40} colors={testColors} />);
+    const { getByTestId } = await render(<HrvTrendCard trend={trend} latestMs={40} colors={testColors} />);
     const copy = getByTestId('hrv-copy').props.children as string;
     expect(copy).toMatch(/recovering/i);
     expect(copy).not.toMatch(/\blow\b/i);
   });
 
-  it('shows an empty chart placeholder with no data', () => {
-    const { getByTestId } = render(<HrvTrendCard trend={[]} latestMs={null} colors={testColors} />);
+  it('shows an empty chart placeholder with no data', async () => {
+    const { getByTestId } = await render(<HrvTrendCard trend={[]} latestMs={null} colors={testColors} />);
     expect(getByTestId('hrv-empty-chart')).toBeTruthy();
   });
 });
 
 describe('RespirationCard — soft clinician-referral suffix', () => {
-  it('appends a gentle clinician suggestion when SpO2 is low', () => {
-    const { getByTestId } = render(
+  it('appends a gentle clinician suggestion when SpO2 is low', async () => {
+    const { getByTestId } = await render(
       <RespirationCard
         respiration={{
           respiratoryRate: 14.2,
@@ -119,8 +119,8 @@ describe('RespirationCard — soft clinician-referral suffix', () => {
     expect(getByTestId('respiration-attention')).toBeTruthy();
   });
 
-  it('stays calm when readings are normal', () => {
-    const { getByTestId, queryByTestId } = render(
+  it('stays calm when readings are normal', async () => {
+    const { getByTestId, queryByTestId } = await render(
       <RespirationCard
         respiration={{ respiratoryRate: 13, spo2: 97, spo2NeedsAttention: false, respiratoryTrend: [], spo2Trend: [] }}
         colors={testColors}
@@ -132,8 +132,8 @@ describe('RespirationCard — soft clinician-referral suffix', () => {
 });
 
 describe('SleepConsistencyCard — CALM language', () => {
-  it('never says "inconsistent"', () => {
-    const { getByTestId } = render(
+  it('never says "inconsistent"', async () => {
+    const { getByTestId } = await render(
       <SleepConsistencyCard
         consistency={{ bedtimeSpreadMin: 150, wakeSpreadMin: 120, nights: 7 }}
         colors={testColors}
@@ -144,8 +144,8 @@ describe('SleepConsistencyCard — CALM language', () => {
     expect(copy).toMatch(/rhythm/i);
   });
 
-  it('celebrates a tight schedule', () => {
-    const { getByTestId } = render(
+  it('celebrates a tight schedule', async () => {
+    const { getByTestId } = await render(
       <SleepConsistencyCard
         consistency={{ bedtimeSpreadMin: 30, wakeSpreadMin: 20, nights: 7 }}
         colors={testColors}

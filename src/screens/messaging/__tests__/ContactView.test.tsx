@@ -103,13 +103,13 @@ function pressDestructive(label: string, action: () => void) {
 describe('ContactView — block flow', () => {
   it('calls POST /users/:id/block and updates local state on success', async () => {
     mockBlock.mockResolvedValueOnce({ ok: true });
-    const { getByLabelText } = render(<ContactView />);
+    const { getByLabelText } = await render(<ContactView />);
     await waitFor(() =>
       expect(useBlockedUsersStore.getState().hydrated).toBe(true),
     );
 
     pressDestructive('Block', () => {
-      fireEvent.press(getByLabelText('Block user'));
+      await fireEvent.press(getByLabelText('Block user'));
     });
 
     await waitFor(() => expect(mockBlock).toHaveBeenCalledWith('u1'));
@@ -120,13 +120,13 @@ describe('ContactView — block flow', () => {
 
   it('does NOT update local state when the API throws (no false confirmation)', async () => {
     mockBlock.mockRejectedValueOnce(new Error('500'));
-    const { getByLabelText } = render(<ContactView />);
+    const { getByLabelText } = await render(<ContactView />);
     await waitFor(() =>
       expect(useBlockedUsersStore.getState().hydrated).toBe(true),
     );
 
     pressDestructive('Block', () => {
-      fireEvent.press(getByLabelText('Block user'));
+      await fireEvent.press(getByLabelText('Block user'));
     });
 
     await waitFor(() => expect(mockBlock).toHaveBeenCalled());
@@ -143,11 +143,11 @@ describe('ContactView — block flow', () => {
     expect(useBlockedUsersStore.getState().isBlocked('u1')).toBe(true);
 
     mockUnblock.mockResolvedValueOnce({ ok: true });
-    const { getByLabelText } = render(<ContactView />);
+    const { getByLabelText } = await render(<ContactView />);
     await waitFor(() => getByLabelText('Unblock user'));
 
     pressDestructive('Unblock', () => {
-      fireEvent.press(getByLabelText('Unblock user'));
+      await fireEvent.press(getByLabelText('Unblock user'));
     });
 
     await waitFor(() => expect(mockUnblock).toHaveBeenCalledWith('u1'));
@@ -165,11 +165,11 @@ describe('ContactView — block flow', () => {
     });
 
     mockUnblock.mockRejectedValueOnce(new Error('500'));
-    const { getByLabelText } = render(<ContactView />);
+    const { getByLabelText } = await render(<ContactView />);
     await waitFor(() => getByLabelText('Unblock user'));
 
     pressDestructive('Unblock', () => {
-      fireEvent.press(getByLabelText('Unblock user'));
+      await fireEvent.press(getByLabelText('Unblock user'));
     });
 
     await waitFor(() => expect(mockUnblock).toHaveBeenCalled());

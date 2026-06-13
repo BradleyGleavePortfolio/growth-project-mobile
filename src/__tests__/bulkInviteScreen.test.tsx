@@ -58,8 +58,8 @@ describe('BulkInviteScreen — RTL', () => {
     jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
   });
 
-  it('renders the paste mode by default', () => {
-    const { getByTestId } = render(<BulkInviteScreen />);
+  it('renders the paste mode by default', async () => {
+    const { getByTestId } = await render(<BulkInviteScreen />);
     expect(getByTestId('bulk-mode-paste')).toBeTruthy();
     expect(getByTestId('bulk-paste-input')).toBeTruthy();
   });
@@ -73,12 +73,12 @@ describe('BulkInviteScreen — RTL', () => {
       ],
     });
 
-    const { getByTestId, getAllByTestId } = render(<BulkInviteScreen />);
-    fireEvent.changeText(
+    const { getByTestId, getAllByTestId } = await render(<BulkInviteScreen />);
+    await fireEvent.changeText(
       getByTestId('bulk-paste-input'),
       'a@ex.com\nb@ex.com\nc@ex.com',
     );
-    fireEvent.press(getByTestId('bulk-submit'));
+    await fireEvent.press(getByTestId('bulk-submit'));
 
     await waitFor(() => {
       expect(mockBulkInvite).toHaveBeenCalledTimes(1);
@@ -99,9 +99,9 @@ describe('BulkInviteScreen — RTL', () => {
     expect(getByTestId('bulk-retry-failed')).toBeTruthy();
   });
 
-  it('surfaces a parsed summary with valid + invalid counts', () => {
-    const { getByTestId } = render(<BulkInviteScreen />);
-    fireEvent.changeText(
+  it('surfaces a parsed summary with valid + invalid counts', async () => {
+    const { getByTestId } = await render(<BulkInviteScreen />);
+    await fireEvent.changeText(
       getByTestId('bulk-paste-input'),
       'a@ex.com\nnot-an-email\nb@ex.com',
     );
@@ -110,15 +110,15 @@ describe('BulkInviteScreen — RTL', () => {
 
   it('rejects HTML-flavored "email" candidates as invalid', async () => {
     mockBulkInvite.mockResolvedValueOnce({ results: [] });
-    const { getByTestId } = render(<BulkInviteScreen />);
-    fireEvent.changeText(
+    const { getByTestId } = await render(<BulkInviteScreen />);
+    await fireEvent.changeText(
       getByTestId('bulk-paste-input'),
       'a@ex.com\n"<script>"@ex.com\nattacker<x>@ex.com',
     );
     // Parsed summary surfaces both groups while the paste field still
     // holds the input.
     expect(getByTestId('bulk-parsed-summary')).toBeTruthy();
-    fireEvent.press(getByTestId('bulk-submit'));
+    await fireEvent.press(getByTestId('bulk-submit'));
     await waitFor(() => expect(mockBulkInvite).toHaveBeenCalledTimes(1));
     // Only the clean address survives validation; the HTML-flavored rows
     // are filtered out before the network call.
@@ -130,9 +130,9 @@ describe('BulkInviteScreen — RTL', () => {
     mockBulkInvite.mockRejectedValueOnce(
       new Error('ECONNREFUSED postgres://_TOKEN@host'),
     );
-    const { getByTestId } = render(<BulkInviteScreen />);
-    fireEvent.changeText(getByTestId('bulk-paste-input'), 'a@ex.com');
-    fireEvent.press(getByTestId('bulk-submit'));
+    const { getByTestId } = await render(<BulkInviteScreen />);
+    await fireEvent.changeText(getByTestId('bulk-paste-input'), 'a@ex.com');
+    await fireEvent.press(getByTestId('bulk-submit'));
     await waitFor(() => expect(alertSpy).toHaveBeenCalled());
     const args = alertSpy.mock.calls[alertSpy.mock.calls.length - 1];
     expect(args[0]).toBe('Could not send invites');

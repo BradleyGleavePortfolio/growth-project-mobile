@@ -9,8 +9,8 @@ import { PhantomCalmBanner } from '../components/PhantomCalmBanner';
 import { testColors } from '../recoveryTestColors';
 
 describe('PhantomCalmBanner', () => {
-  it('renders reassurance and deficit copy', () => {
-    const { getByTestId } = render(
+  it('renders reassurance and deficit copy', async () => {
+    const { getByTestId } = await render(
       <PhantomCalmBanner
         colors={testColors}
         reassurance="You're close —"
@@ -21,23 +21,23 @@ describe('PhantomCalmBanner', () => {
     expect(getByTestId('phantom-calm-deficit').props.children).toBe('about 45 min under your sleep need');
   });
 
-  it('orders reassurance BEFORE the deficit in the accessibility label', () => {
-    const { getByTestId } = render(
+  it('orders reassurance BEFORE the deficit in the accessibility label', async () => {
+    const { getByTestId } = await render(
       <PhantomCalmBanner colors={testColors} reassurance="You're close —" deficit="about 45 min under your sleep need" />,
     );
     const label = getByTestId('phantom-calm-banner').props.accessibilityLabel as string;
     expect(label.indexOf("You're close")).toBeLessThan(label.indexOf('45 min'));
   });
 
-  it('uses the soft-amber accent only on attention tone', () => {
-    const { getByTestId, rerender } = render(
+  it('uses the soft-amber accent only on attention tone', async () => {
+    const { getByTestId, rerender } = await render(
       <PhantomCalmBanner colors={testColors} reassurance="r" deficit="d" tone="attention" />,
     );
     // The accent bar is the first child View of the banner.
     const banner = getByTestId('phantom-calm-banner');
     // Smoke: attention tone renders without throwing; calm tone too.
     expect(banner).toBeTruthy();
-    rerender(<PhantomCalmBanner colors={testColors} reassurance="r" deficit="d" tone="calm" />);
+    await rerender(<PhantomCalmBanner colors={testColors} reassurance="r" deficit="d" tone="calm" />);
     expect(getByTestId('phantom-calm-banner')).toBeTruthy();
   });
 });

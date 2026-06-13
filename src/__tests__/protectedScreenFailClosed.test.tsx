@@ -58,9 +58,9 @@ afterEach(() => {
 });
 
 describe('ProtectedScreen fail-closed gate', () => {
-  it('entitlementActive=true → renders children', () => {
+  it('entitlementActive=true → renders children', async () => {
     mockEntitlement({ entitlementActive: true, status: 'active' });
-    const { getByTestId, queryByTestId } = render(
+    const { getByTestId, queryByTestId } = await render(
       <ProtectedScreen>
         <Child />
       </ProtectedScreen>,
@@ -69,9 +69,9 @@ describe('ProtectedScreen fail-closed gate', () => {
     expect(queryByTestId('protected-screen-paywall')).toBeNull();
   });
 
-  it('entitlementActive=false → renders paywall', () => {
+  it('entitlementActive=false → renders paywall', async () => {
     mockEntitlement({ entitlementActive: false, status: 'inactive' });
-    const { getByTestId, queryByTestId } = render(
+    const { getByTestId, queryByTestId } = await render(
       <ProtectedScreen>
         <Child />
       </ProtectedScreen>,
@@ -80,9 +80,9 @@ describe('ProtectedScreen fail-closed gate', () => {
     expect(queryByTestId('paid-content')).toBeNull();
   });
 
-  it('entitlementActive=null after first settle (status=unavailable) → renders paywall (FAIL CLOSED)', () => {
+  it('entitlementActive=null after first settle (status=unavailable) → renders paywall (FAIL CLOSED)', async () => {
     mockEntitlement({ entitlementActive: null, status: 'unavailable' });
-    const { getByTestId, queryByTestId } = render(
+    const { getByTestId, queryByTestId } = await render(
       <ProtectedScreen>
         <Child />
       </ProtectedScreen>,
@@ -91,9 +91,9 @@ describe('ProtectedScreen fail-closed gate', () => {
     expect(queryByTestId('paid-content')).toBeNull();
   });
 
-  it('status=loading on first fetch → renders spinner (no paywall flash)', () => {
+  it('status=loading on first fetch → renders spinner (no paywall flash)', async () => {
     mockEntitlement({ entitlementActive: null, status: 'loading' });
-    const { getByTestId, queryByTestId } = render(
+    const { getByTestId, queryByTestId } = await render(
       <ProtectedScreen>
         <Child />
       </ProtectedScreen>,
@@ -103,9 +103,9 @@ describe('ProtectedScreen fail-closed gate', () => {
     expect(queryByTestId('paid-content')).toBeNull();
   });
 
-  it('status=checking → spinner (not paywall)', () => {
+  it('status=checking → spinner (not paywall)', async () => {
     mockEntitlement({ entitlementActive: null, status: 'checking' });
-    const { getByTestId, queryByTestId } = render(
+    const { getByTestId, queryByTestId } = await render(
       <ProtectedScreen>
         <Child />
       </ProtectedScreen>,
@@ -114,15 +114,15 @@ describe('ProtectedScreen fail-closed gate', () => {
     expect(queryByTestId('protected-screen-paywall')).toBeNull();
   });
 
-  it('"View Plans" CTA calls openPlans', () => {
+  it('"View Plans" CTA calls openPlans', async () => {
     const openPlans = jest.fn();
     mockEntitlement({ entitlementActive: false, status: 'inactive', openPlans });
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <ProtectedScreen>
         <Child />
       </ProtectedScreen>,
     );
-    fireEvent.press(getByTestId('protected-screen-view-plans'));
+    await fireEvent.press(getByTestId('protected-screen-view-plans'));
     expect(openPlans).toHaveBeenCalled();
   });
 });

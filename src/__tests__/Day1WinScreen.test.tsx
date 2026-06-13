@@ -141,9 +141,9 @@ describe('Day1WinScreen — RTL mount', () => {
     jest.clearAllMocks();
   });
 
-  it('renders the selection view with all three win cards', () => {
+  it('renders the selection view with all three win cards', async () => {
     const onComplete = jest.fn();
-    const { getByTestId } = render(<Day1WinScreen onComplete={onComplete} />);
+    const { getByTestId } = await render(<Day1WinScreen onComplete={onComplete} />);
 
     expect(getByTestId('day1win-selection-view')).toBeTruthy();
     expect(getByTestId('day1win-card-logged_first_weight')).toBeTruthy();
@@ -153,9 +153,9 @@ describe('Day1WinScreen — RTL mount', () => {
 
   it('skip button calls onComplete without recording a win', async () => {
     const onComplete = jest.fn();
-    const { getByTestId } = render(<Day1WinScreen onComplete={onComplete} />);
+    const { getByTestId } = await render(<Day1WinScreen onComplete={onComplete} />);
 
-    fireEvent.press(getByTestId('day1win-skip-button'));
+    await fireEvent.press(getByTestId('day1win-skip-button'));
     // The skip path runs maybeShowPackageSheet(undefined) which is async — it
     // reads the 24h-gate from MMKV and probes the packages endpoint. Both can
     // resolve to "no sheet" paths that synchronously call onComplete inside
@@ -176,9 +176,9 @@ describe('Day1WinScreen — RTL mount', () => {
     });
 
     const onComplete = jest.fn();
-    const { getByTestId } = render(<Day1WinScreen onComplete={onComplete} />);
+    const { getByTestId } = await render(<Day1WinScreen onComplete={onComplete} />);
 
-    fireEvent.press(getByTestId('day1win-card-first_checkin'));
+    await fireEvent.press(getByTestId('day1win-card-first_checkin'));
     expect(mockComplete).toHaveBeenCalledWith('first_checkin');
 
     await waitFor(() => {
@@ -195,15 +195,15 @@ describe('Day1WinScreen — RTL mount', () => {
     });
 
     const onComplete = jest.fn();
-    const { getByTestId } = render(<Day1WinScreen onComplete={onComplete} />);
+    const { getByTestId } = await render(<Day1WinScreen onComplete={onComplete} />);
 
-    fireEvent.press(getByTestId('day1win-card-logged_first_weight'));
+    await fireEvent.press(getByTestId('day1win-card-logged_first_weight'));
 
     await waitFor(() => {
       expect(getByTestId('day1win-complete-view')).toBeTruthy();
     });
 
-    fireEvent.press(getByTestId('day1win-continue-button'));
+    await fireEvent.press(getByTestId('day1win-continue-button'));
     // handleContinue → maybeShowPackageSheet is async (MMKV + api.get).
     await waitFor(() => {
       expect(onComplete).toHaveBeenCalledTimes(1);

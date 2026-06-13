@@ -156,7 +156,7 @@ describe('P0-1: TeamStack role gating in CoachNavigator', () => {
       ],
     });
 
-    const { result } = renderHook(() => useCoachRoleType());
+    const { result } = await renderHook(() => useCoachRoleType());
     await waitFor(() => expect(result.current).toBe('head_coach'));
   });
 
@@ -190,7 +190,7 @@ describe('P0-1: TeamStack role gating in CoachNavigator', () => {
       ],
     });
 
-    const { result } = renderHook(() => useCoachRoleType());
+    const { result } = await renderHook(() => useCoachRoleType());
     await waitFor(() => expect(result.current).toBe('sub_coach'));
   });
 
@@ -202,7 +202,7 @@ describe('P0-1: TeamStack role gating in CoachNavigator', () => {
     });
     mockGetMembers.mockResolvedValue({ ok: false, reason: 'not_configured' });
 
-    const { result } = renderHook(() => useCoachRoleType());
+    const { result } = await renderHook(() => useCoachRoleType());
     // Wait one tick to let the effect run, then assert it never escaped 'unknown'.
     await act(async () => {
       await new Promise((r) => setTimeout(r, 10));
@@ -226,13 +226,13 @@ describe('P0-1: TeamStack role gating in CoachNavigator', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('P0-2 + P0-3: SubCoachInviteModal dedupe, double-submit guard, seat clamp', () => {
-  function mountModal(
+  async function mountModal(
     props: {
       existingEmails?: string[];
       remainingSeats?: number;
     } = {},
   ) {
-    return render(
+    return await render(
       <SubCoachInviteModal
         visible
         onDismiss={() => undefined}
@@ -244,12 +244,12 @@ describe('P0-2 + P0-3: SubCoachInviteModal dedupe, double-submit guard, seat cla
   }
 
   it('P0-2: rejects a duplicate email already present on the roster', async () => {
-    const { getByTestId, getByLabelText, queryByText } = mountModal({
+    const { getByTestId, getByLabelText, queryByText } = await mountModal({
       existingEmails: ['Existing@ex.com'],
     });
-    fireEvent.changeText(getByLabelText('Sub-coach email'), 'existing@ex.com');
+    await fireEvent.changeText(getByLabelText('Sub-coach email'), 'existing@ex.com');
     await act(async () => {
-      fireEvent.press(getByTestId('sub-coach-invite-submit'));
+      await fireEvent.press(getByTestId('sub-coach-invite-submit'));
     });
     await waitFor(() =>
       expect(queryByText(/already exists on your team/i)).not.toBeNull(),
@@ -266,17 +266,17 @@ describe('P0-2 + P0-3: SubCoachInviteModal dedupe, double-submit guard, seat cla
         }),
     );
 
-    const { getByTestId, getByLabelText } = mountModal();
-    fireEvent.changeText(getByLabelText('Sub-coach email'), 'a@ex.com');
+    const { getByTestId, getByLabelText } = await mountModal();
+    await fireEvent.changeText(getByLabelText('Sub-coach email'), 'a@ex.com');
 
     // First tap — kicks off the request.
     await act(async () => {
-      fireEvent.press(getByTestId('sub-coach-invite-submit'));
+      await fireEvent.press(getByTestId('sub-coach-invite-submit'));
     });
     // Second and third taps before the first resolves.
     await act(async () => {
-      fireEvent.press(getByTestId('sub-coach-invite-submit'));
-      fireEvent.press(getByTestId('sub-coach-invite-submit'));
+      await fireEvent.press(getByTestId('sub-coach-invite-submit'));
+      await fireEvent.press(getByTestId('sub-coach-invite-submit'));
     });
 
     expect(mockSubCoachInvite).toHaveBeenCalledTimes(1);
@@ -298,31 +298,31 @@ describe('P0-2 + P0-3: SubCoachInviteModal dedupe, double-submit guard, seat cla
       response: { status: 409, data: { message: 'duplicate' } },
     });
 
-    const { getByTestId, getByLabelText, findByText } = mountModal();
-    fireEvent.changeText(getByLabelText('Sub-coach email'), 'a@ex.com');
-    fireEvent.press(getByTestId('sub-coach-invite-submit'));
+    const { getByTestId, getByLabelText, findByText } = await mountModal();
+    await fireEvent.changeText(getByLabelText('Sub-coach email'), 'a@ex.com');
+    await fireEvent.press(getByTestId('sub-coach-invite-submit'));
 
     await findByText(/already has a pending or active sub-coach invite/i);
   });
 
   it('P0-3: refuses maxClients > remainingSeats and names the headroom', async () => {
-    const { getByTestId, getByLabelText, findByText } = mountModal({
+    const { getByTestId, getByLabelText, findByText } = await mountModal({
       remainingSeats: 5,
     });
-    fireEvent.changeText(getByLabelText('Sub-coach email'), 'a@ex.com');
-    fireEvent.changeText(getByLabelText('Max clients'), '99999');
-    fireEvent.press(getByTestId('sub-coach-invite-submit'));
+    await fireEvent.changeText(getByLabelText('Sub-coach email'), 'a@ex.com');
+    await fireEvent.changeText(getByLabelText('Max clients'), '99999');
+    await fireEvent.press(getByTestId('sub-coach-invite-submit'));
     await findByText(/Only 5 seats available on your plan/i);
     expect(mockSubCoachInvite).not.toHaveBeenCalled();
   });
 
   it('P0-3: refuses any positive maxClients when remainingSeats is 0', async () => {
-    const { getByTestId, getByLabelText, findByText } = mountModal({
+    const { getByTestId, getByLabelText, findByText } = await mountModal({
       remainingSeats: 0,
     });
-    fireEvent.changeText(getByLabelText('Sub-coach email'), 'a@ex.com');
-    fireEvent.changeText(getByLabelText('Max clients'), '1');
-    fireEvent.press(getByTestId('sub-coach-invite-submit'));
+    await fireEvent.changeText(getByLabelText('Sub-coach email'), 'a@ex.com');
+    await fireEvent.changeText(getByLabelText('Max clients'), '1');
+    await fireEvent.press(getByTestId('sub-coach-invite-submit'));
     await findByText(/No seats available on your plan/i);
     expect(mockSubCoachInvite).not.toHaveBeenCalled();
   });
@@ -336,10 +336,10 @@ describe('P0-2 + P0-3: SubCoachInviteModal dedupe, double-submit guard, seat cla
         expires_at: '',
       },
     });
-    const { getByTestId, getByLabelText } = mountModal({ remainingSeats: 10 });
-    fireEvent.changeText(getByLabelText('Sub-coach email'), 'a@ex.com');
-    fireEvent.changeText(getByLabelText('Max clients'), '5');
-    fireEvent.press(getByTestId('sub-coach-invite-submit'));
+    const { getByTestId, getByLabelText } = await mountModal({ remainingSeats: 10 });
+    await fireEvent.changeText(getByLabelText('Sub-coach email'), 'a@ex.com');
+    await fireEvent.changeText(getByLabelText('Max clients'), '5');
+    await fireEvent.press(getByTestId('sub-coach-invite-submit'));
     await waitFor(() =>
       expect(mockSubCoachInvite).toHaveBeenCalledWith({
         email: 'a@ex.com',
@@ -358,10 +358,10 @@ describe('P0-2 + P0-3: SubCoachInviteModal dedupe, double-submit guard, seat cla
         expires_at: '',
       },
     });
-    const { getByTestId, getByLabelText } = mountModal();
-    fireEvent.changeText(getByLabelText('Sub-coach email'), 'a@ex.com');
-    fireEvent.changeText(getByLabelText('Max clients'), '99999');
-    fireEvent.press(getByTestId('sub-coach-invite-submit'));
+    const { getByTestId, getByLabelText } = await mountModal();
+    await fireEvent.changeText(getByLabelText('Sub-coach email'), 'a@ex.com');
+    await fireEvent.changeText(getByLabelText('Max clients'), '99999');
+    await fireEvent.press(getByTestId('sub-coach-invite-submit'));
     await waitFor(() => expect(mockSubCoachInvite).toHaveBeenCalled());
   });
 });
@@ -419,7 +419,7 @@ describe('P0-4: revoke 409 handling', () => {
       response: { status: 409, data: { message: 'already accepted' } },
     });
 
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <CoachInvitesScreen
         navigation={{ navigate: jest.fn(), goBack: jest.fn() } as never}
       />,
@@ -429,7 +429,7 @@ describe('P0-4: revoke 409 handling', () => {
     await waitFor(() => expect(getByTestId('invite-revoke-i1')).toBeTruthy());
 
     const alertSpy = Alert.alert as unknown as jest.Mock;
-    fireEvent.press(getByTestId('invite-revoke-i1'));
+    await fireEvent.press(getByTestId('invite-revoke-i1'));
     // 0: title, 1: message, 2: buttons array.
     const buttons = alertSpy.mock.calls.at(-1)?.[2] as Array<{
       text: string;
@@ -456,7 +456,7 @@ describe('P0-5: CoachInvitesScreen load-error surfacing', () => {
       response: { status: 500, data: { message: 'backend exploded' } },
     });
 
-    const { getByTestId, queryByTestId } = render(
+    const { getByTestId, queryByTestId } = await render(
       <CoachInvitesScreen
         navigation={{ navigate: jest.fn(), goBack: jest.fn() } as never}
       />,
@@ -476,7 +476,7 @@ describe('P0-5: CoachInvitesScreen load-error surfacing', () => {
       })
       .mockResolvedValueOnce([]);
 
-    const { getByTestId, queryByTestId } = render(
+    const { getByTestId, queryByTestId } = await render(
       <CoachInvitesScreen
         navigation={{ navigate: jest.fn(), goBack: jest.fn() } as never}
       />,
@@ -486,7 +486,7 @@ describe('P0-5: CoachInvitesScreen load-error surfacing', () => {
       expect(getByTestId('coach-invites-error-state-retry')).toBeTruthy(),
     );
     await act(async () => {
-      fireEvent.press(getByTestId('coach-invites-error-state-retry'));
+      await fireEvent.press(getByTestId('coach-invites-error-state-retry'));
     });
 
     await waitFor(() => expect(mockListInvites).toHaveBeenCalledTimes(2));

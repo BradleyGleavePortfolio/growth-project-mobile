@@ -70,8 +70,8 @@ const mockNavigation = {
   navigate: jest.fn(),
 };
 
-function renderScreen() {
-  return render(
+async function renderScreen() {
+  return await render(
     <DeleteAccountScreen navigation={mockNavigation as never} />,
   );
 }
@@ -93,39 +93,39 @@ describe('DeleteAccountScreen', () => {
   // ── Render ──────────────────────────────────────────────────────────────────
 
   describe('render', () => {
-    it('renders the screen title', () => {
-      const { getByText } = renderScreen();
+    it('renders the screen title', async () => {
+      const { getByText } = await renderScreen();
       expect(getByText('Delete account')).toBeTruthy();
     });
 
-    it('renders the 14-day grace period copy', () => {
-      const { getAllByText } = renderScreen();
+    it('renders the 14-day grace period copy', async () => {
+      const { getAllByText } = await renderScreen();
       expect(getAllByText(/14-day grace period/i).length).toBeGreaterThan(0);
     });
 
-    it('renders the permanently deleted list', () => {
-      const { getByText } = renderScreen();
+    it('renders the permanently deleted list', async () => {
+      const { getByText } = await renderScreen();
       expect(getByText(/Your profile, biometrics/i)).toBeTruthy();
     });
 
-    it('renders the kept-for-legal list', () => {
-      const { getByText } = renderScreen();
+    it('renders the kept-for-legal list', async () => {
+      const { getByText } = await renderScreen();
       expect(getByText(/Billing and invoice records/i)).toBeTruthy();
     });
 
-    it('renders the confirmation input field', () => {
-      const { getByTestId } = renderScreen();
+    it('renders the confirmation input field', async () => {
+      const { getByTestId } = await renderScreen();
       expect(getByTestId('confirm-input')).toBeTruthy();
     });
 
-    it('renders the confirm deletion button as disabled initially', () => {
-      const { getByTestId } = renderScreen();
+    it('renders the confirm deletion button as disabled initially', async () => {
+      const { getByTestId } = await renderScreen();
       const btn = getByTestId('confirm-button');
       expect(btn.props.accessibilityState?.disabled ?? btn.props.disabled).toBe(true);
     });
 
-    it('does not contain forbidden tokens (emoji, income, finance, netWorth)', () => {
-      const { toJSON } = renderScreen();
+    it('does not contain forbidden tokens (emoji, income, finance, netWorth)', async () => {
+      const { toJSON } = await renderScreen();
       const json = JSON.stringify(toJSON());
       const forbiddenTokens = new RegExp(['income', 'finance', 'netWorth', 'conf' + 'etti', '\ud83c'].join('|'));
       expect(json).not.toMatch(forbiddenTokens);
@@ -135,36 +135,36 @@ describe('DeleteAccountScreen', () => {
   // ── Confirmation gate ───────────────────────────────────────────────────────
 
   describe('confirmation gate', () => {
-    it('disables the button when input is empty', () => {
-      const { getByTestId } = renderScreen();
+    it('disables the button when input is empty', async () => {
+      const { getByTestId } = await renderScreen();
       const btn = getByTestId('confirm-button');
       expect(btn.props.accessibilityState?.disabled ?? btn.props.disabled).toBe(true);
     });
 
-    it('disables the button when input is wrong text', () => {
-      const { getByTestId } = renderScreen();
-      fireEvent.changeText(getByTestId('confirm-input'), 'wrong text');
+    it('disables the button when input is wrong text', async () => {
+      const { getByTestId } = await renderScreen();
+      await fireEvent.changeText(getByTestId('confirm-input'), 'wrong text');
       const btn = getByTestId('confirm-button');
       expect(btn.props.accessibilityState?.disabled ?? btn.props.disabled).toBe(true);
     });
 
-    it('enables the button when input is "DELETE" (case-insensitive)', () => {
-      const { getByTestId } = renderScreen();
-      fireEvent.changeText(getByTestId('confirm-input'), 'delete');
+    it('enables the button when input is "DELETE" (case-insensitive)', async () => {
+      const { getByTestId } = await renderScreen();
+      await fireEvent.changeText(getByTestId('confirm-input'), 'delete');
       const btn = getByTestId('confirm-button');
       expect(btn.props.accessibilityState?.disabled ?? btn.props.disabled).toBeFalsy();
     });
 
-    it('enables the button when input matches the user email', () => {
-      const { getByTestId } = renderScreen();
-      fireEvent.changeText(getByTestId('confirm-input'), 'test@example.com');
+    it('enables the button when input matches the user email', async () => {
+      const { getByTestId } = await renderScreen();
+      await fireEvent.changeText(getByTestId('confirm-input'), 'test@example.com');
       const btn = getByTestId('confirm-button');
       expect(btn.props.accessibilityState?.disabled ?? btn.props.disabled).toBeFalsy();
     });
 
-    it('is case-insensitive for the email match', () => {
-      const { getByTestId } = renderScreen();
-      fireEvent.changeText(getByTestId('confirm-input'), 'TEST@EXAMPLE.COM');
+    it('is case-insensitive for the email match', async () => {
+      const { getByTestId } = await renderScreen();
+      await fireEvent.changeText(getByTestId('confirm-input'), 'TEST@EXAMPLE.COM');
       const btn = getByTestId('confirm-button');
       expect(btn.props.accessibilityState?.disabled ?? btn.props.disabled).toBeFalsy();
     });
@@ -178,11 +178,11 @@ describe('DeleteAccountScreen', () => {
         data: { message: 'Email sent', expires_at: '2026-01-01T00:00:00Z' },
       } as never);
 
-      const { getByTestId } = renderScreen();
-      fireEvent.changeText(getByTestId('confirm-input'), 'DELETE');
+      const { getByTestId } = await renderScreen();
+      await fireEvent.changeText(getByTestId('confirm-input'), 'DELETE');
 
       await act(async () => {
-        fireEvent.press(getByTestId('confirm-button'));
+        await fireEvent.press(getByTestId('confirm-button'));
       });
 
       await waitFor(() => {
@@ -195,11 +195,11 @@ describe('DeleteAccountScreen', () => {
         data: { message: 'Email sent', expires_at: '2026-01-01T00:00:00Z' },
       } as never);
 
-      const { getByTestId } = renderScreen();
-      fireEvent.changeText(getByTestId('confirm-input'), 'DELETE');
+      const { getByTestId } = await renderScreen();
+      await fireEvent.changeText(getByTestId('confirm-input'), 'DELETE');
 
       await act(async () => {
-        fireEvent.press(getByTestId('confirm-button'));
+        await fireEvent.press(getByTestId('confirm-button'));
       });
 
       await waitFor(() => {
@@ -225,18 +225,18 @@ describe('DeleteAccountScreen', () => {
         },
       );
 
-      const { getByTestId } = renderScreen();
-      fireEvent.changeText(getByTestId('confirm-input'), 'DELETE');
+      const { getByTestId } = await renderScreen();
+      await fireEvent.changeText(getByTestId('confirm-input'), 'DELETE');
 
       await act(async () => {
-        fireEvent.press(getByTestId('confirm-button'));
+        await fireEvent.press(getByTestId('confirm-button'));
       });
 
       await waitFor(() => {
         expect(alertCallback).toBeDefined();
       });
 
-      act(() => {
+      await act(() => {
         alertCallback?.();
       });
 
@@ -252,11 +252,11 @@ describe('DeleteAccountScreen', () => {
         new Error('Network error'),
       );
 
-      const { getByTestId, findByText } = renderScreen();
-      fireEvent.changeText(getByTestId('confirm-input'), 'DELETE');
+      const { getByTestId, findByText } = await renderScreen();
+      await fireEvent.changeText(getByTestId('confirm-input'), 'DELETE');
 
       await act(async () => {
-        fireEvent.press(getByTestId('confirm-button'));
+        await fireEvent.press(getByTestId('confirm-button'));
       });
 
       const errorText = await findByText(/Network error|Could not request/i);
@@ -266,11 +266,11 @@ describe('DeleteAccountScreen', () => {
     it('does not call signOut when the API fails', async () => {
       mockedDeletionApi.requestDeletion.mockRejectedValue(new Error('Server down'));
 
-      const { getByTestId } = renderScreen();
-      fireEvent.changeText(getByTestId('confirm-input'), 'DELETE');
+      const { getByTestId } = await renderScreen();
+      await fireEvent.changeText(getByTestId('confirm-input'), 'DELETE');
 
       await act(async () => {
-        fireEvent.press(getByTestId('confirm-button'));
+        await fireEvent.press(getByTestId('confirm-button'));
       });
 
       expect(mockedSignOut).not.toHaveBeenCalled();
@@ -279,15 +279,15 @@ describe('DeleteAccountScreen', () => {
     it('clears the error when the user edits the confirmation input', async () => {
       mockedDeletionApi.requestDeletion.mockRejectedValue(new Error('Failed'));
 
-      const { getByTestId, queryByText } = renderScreen();
-      fireEvent.changeText(getByTestId('confirm-input'), 'DELETE');
+      const { getByTestId, queryByText } = await renderScreen();
+      await fireEvent.changeText(getByTestId('confirm-input'), 'DELETE');
 
       await act(async () => {
-        fireEvent.press(getByTestId('confirm-button'));
+        await fireEvent.press(getByTestId('confirm-button'));
       });
 
       // Edit the input — error should clear
-      fireEvent.changeText(getByTestId('confirm-input'), 'DELETE2');
+      await fireEvent.changeText(getByTestId('confirm-input'), 'DELETE2');
       expect(queryByText(/Failed/)).toBeNull();
     });
   });
@@ -295,20 +295,20 @@ describe('DeleteAccountScreen', () => {
   // ── Navigation ──────────────────────────────────────────────────────────────
 
   describe('navigation', () => {
-    it('calls navigation.goBack when the back button is pressed', () => {
-      const { getAllByRole } = renderScreen();
+    it('calls navigation.goBack when the back button is pressed', async () => {
+      const { getAllByRole } = await renderScreen();
       const buttons = getAllByRole('button');
       const backButton = buttons.find(
         (b) => b.props.accessibilityLabel === 'Go back',
       );
       expect(backButton).toBeTruthy();
-      fireEvent.press(backButton!);
+      await fireEvent.press(backButton!);
       expect(mockNavigation.goBack).toHaveBeenCalled();
     });
 
-    it('calls navigation.goBack when "Cancel — keep my account" is pressed', () => {
-      const { getByText } = renderScreen();
-      fireEvent.press(getByText('Cancel — keep my account'));
+    it('calls navigation.goBack when "Cancel — keep my account" is pressed', async () => {
+      const { getByText } = await renderScreen();
+      await fireEvent.press(getByText('Cancel — keep my account'));
       expect(mockNavigation.goBack).toHaveBeenCalled();
     });
   });

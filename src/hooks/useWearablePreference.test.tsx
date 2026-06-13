@@ -99,11 +99,11 @@ describe('useWearablePreference', () => {
     // seed a prior preference
     qc.setQueryData(wearablePreferenceQueryKey('STEPS'), 'OURA');
 
-    const { result } = renderHook(() => useWearablePreference(), {
+    const { result } = await renderHook(() => useWearablePreference(), {
       wrapper: Wrapper,
     });
 
-    act(() => {
+    await act(() => {
       result.current.mutate({ metric: 'STEPS', preferredProvider: 'WHOOP' });
     });
 
@@ -121,11 +121,11 @@ describe('useWearablePreference', () => {
     const { qc, Wrapper } = makeWrapper();
     qc.setQueryData(wearablePreferenceQueryKey('STEPS'), 'OURA');
 
-    const { result } = renderHook(() => useWearablePreference(), {
+    const { result } = await renderHook(() => useWearablePreference(), {
       wrapper: Wrapper,
     });
 
-    act(() => {
+    await act(() => {
       result.current.mutate({ metric: 'STEPS', preferredProvider: 'WHOOP' });
     });
 
@@ -144,11 +144,11 @@ describe('useWearablePreference', () => {
     const { qc, Wrapper } = makeWrapper();
     const invalidateSpy = jest.spyOn(qc, 'invalidateQueries');
 
-    const { result } = renderHook(() => useWearablePreference(), {
+    const { result } = await renderHook(() => useWearablePreference(), {
       wrapper: Wrapper,
     });
 
-    act(() => {
+    await act(() => {
       result.current.mutate({ metric: 'STEPS', preferredProvider: 'WHOOP' });
     });
 
@@ -163,11 +163,11 @@ describe('useWearablePreference', () => {
     const { qc, Wrapper } = makeWrapper();
     // no seed — prior value is undefined
 
-    const { result } = renderHook(() => useWearablePreference(), {
+    const { result } = await renderHook(() => useWearablePreference(), {
       wrapper: Wrapper,
     });
 
-    act(() => {
+    await act(() => {
       result.current.mutate({ metric: 'STEPS', preferredProvider: 'WHOOP' });
     });
 
@@ -185,7 +185,7 @@ describe('useWearablePreference({ metric }) — HK-3b contract overload (R1 P0 #
     });
     const { qc, Wrapper } = makeWrapper();
 
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () => useWearablePreference({ metric: 'STEPS' }),
       { wrapper: Wrapper },
     );
@@ -195,7 +195,7 @@ describe('useWearablePreference({ metric }) — HK-3b contract overload (R1 P0 #
     expect(result.current).toHaveProperty('isPending');
     expect(typeof result.current.mutate).toBe('function');
 
-    act(() => {
+    await act(() => {
       // The metric is bound, so the simpler surface is mutate(preferredProvider).
       result.current.mutate('WHOOP');
     });
@@ -211,7 +211,7 @@ describe('useWearablePreference({ metric }) — HK-3b contract overload (R1 P0 #
     const { qc, Wrapper } = makeWrapper();
     qc.setQueryData(wearablePreferenceQueryKey('STEPS'), 'OURA');
 
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () => useWearablePreference({ metric: 'STEPS' }),
       { wrapper: Wrapper },
     );
@@ -226,12 +226,12 @@ describe('useWearablePreference({ metric }) — HK-3b contract overload (R1 P0 #
     mockedClear.mockResolvedValueOnce();
     const { Wrapper } = makeWrapper();
 
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () => useWearablePreference({ metric: 'STEPS' }),
       { wrapper: Wrapper },
     );
 
-    act(() => {
+    await act(() => {
       result.current.mutate(null);
     });
 
@@ -254,19 +254,19 @@ describe('useWearablePreference({ metric }) — HK-3b contract overload (R1 P0 #
     qc.setQueryData(wearablePreferenceQueryKey('STEPS'), 'OURA');
     const invalidateSpy = jest.spyOn(qc, 'invalidateQueries');
 
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () => useWearablePreference({ metric: 'STEPS' }),
       { wrapper: Wrapper },
     );
 
-    act(() => {
+    await act(() => {
       result.current.mutate(null);
     });
 
     // The clear is a tracked mutation — isPending flips true while in flight.
     await waitFor(() => expect(result.current.isPending).toBe(true));
 
-    act(() => {
+    await act(() => {
       resolveClear();
     });
 
@@ -292,12 +292,12 @@ describe('useWearablePreference({ metric }) — HK-3b contract overload (R1 P0 #
     qc.setQueryData(wearablePreferenceQueryKey('STEPS'), 'OURA');
     const onError = jest.fn();
 
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () => useWearablePreference({ metric: 'STEPS' }),
       { wrapper: Wrapper },
     );
 
-    act(() => {
+    await act(() => {
       result.current.mutate(null, { onError });
     });
 
@@ -317,12 +317,12 @@ describe('useWearablePreference({ metric }) — HK-3b contract overload (R1 P0 #
     qc.setQueryData(wearablePreferenceQueryKey('STEPS'), 'OURA');
     const onError = jest.fn();
 
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () => useWearablePreference({ metric: 'STEPS' }),
       { wrapper: Wrapper },
     );
 
-    act(() => {
+    await act(() => {
       result.current.mutate(null, { onError });
     });
 

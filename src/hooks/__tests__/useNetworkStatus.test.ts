@@ -9,7 +9,7 @@ describe('useNetworkStatus', () => {
 
   it('initial probe populates state from NetInfo.fetch', async () => {
     (NetInfo as any).__setState({ isConnected: true, isInternetReachable: true });
-    const { result } = renderHook(() => useNetworkStatus());
+    const { result } = await renderHook(() => useNetworkStatus());
 
     await waitFor(() => {
       expect(result.current.isOnline).toBe(true);
@@ -18,10 +18,10 @@ describe('useNetworkStatus', () => {
   });
 
   it('updates when NetInfo emits a change', async () => {
-    const { result } = renderHook(() => useNetworkStatus());
+    const { result } = await renderHook(() => useNetworkStatus());
     await waitFor(() => expect(result.current.isOnline).toBe(true));
 
-    act(() => {
+    await act(() => {
       (NetInfo as any).__setState({ isConnected: false, isInternetReachable: false });
     });
 

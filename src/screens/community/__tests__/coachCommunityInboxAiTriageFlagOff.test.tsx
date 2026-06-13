@@ -137,8 +137,8 @@ beforeEach(() => {
 });
 
 describe('CoachCommunityInboxScreen — AI-triage flag OFF invariance', () => {
-  it('renders the inbox with NO triage card (populated branch)', () => {
-    const { queryByTestId } = render(<CoachCommunityInboxScreen />);
+  it('renders the inbox with NO triage card (populated branch)', async () => {
+    const { queryByTestId } = await render(<CoachCommunityInboxScreen />);
 
     // The v2-4 triage card and all of its state variants are absent.
     expect(queryByTestId('coach-community-inbox-ai-triage')).toBeNull();
@@ -150,7 +150,7 @@ describe('CoachCommunityInboxScreen — AI-triage flag OFF invariance', () => {
     expect(queryByTestId(`coach-community-inbox-row-${MID}`)).toBeTruthy();
   });
 
-  it('renders NO triage card in the empty branch either', () => {
+  it('renders NO triage card in the empty branch either', async () => {
     mockInbox = {
       data: { items: [], next_before: null },
       isLoading: false,
@@ -158,15 +158,15 @@ describe('CoachCommunityInboxScreen — AI-triage flag OFF invariance', () => {
       isRefetching: false,
       refetch: jest.fn(),
     };
-    const { queryByTestId } = render(<CoachCommunityInboxScreen />);
+    const { queryByTestId } = await render(<CoachCommunityInboxScreen />);
 
     expect(queryByTestId('coach-community-inbox-ai-triage')).toBeNull();
     // The v1-6 empty state still renders.
     expect(queryByTestId('coach-community-inbox-empty')).toBeTruthy();
   });
 
-  it('never reads triage (no hook, no network) under the flag-off path', () => {
-    render(<CoachCommunityInboxScreen />);
+  it('never reads triage (no hook, no network) under the flag-off path', async () => {
+    await render(<CoachCommunityInboxScreen />);
     expect(mockUseInboxTriage).not.toHaveBeenCalled();
     expect(mockFetchInboxTriage).not.toHaveBeenCalled();
   });

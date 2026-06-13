@@ -31,8 +31,8 @@ describe('StatusBarBand (EW3-001 edge-to-edge bone band)', () => {
     jest.mocked(useSafeAreaInsets).mockReturnValue({ top: 47, bottom: 0, left: 0, right: 0 });
   });
 
-  it('paints the bone band at the safe-area top inset height', () => {
-    const { getByTestId, toJSON } = render(<StatusBarBand />);
+  it('paints the bone band at the safe-area top inset height', async () => {
+    const { getByTestId, toJSON } = await render(<StatusBarBand />);
     const band = getByTestId('status-bar-band');
     const flat = flatten(band.props.style);
 
@@ -43,9 +43,9 @@ describe('StatusBarBand (EW3-001 edge-to-edge bone band)', () => {
     expect(toJSON()).toMatchSnapshot();
   });
 
-  it('renders nothing when the safe-area top inset is 0', () => {
+  it('renders nothing when the safe-area top inset is 0', async () => {
     jest.mocked(useSafeAreaInsets).mockReturnValue({ top: 0, bottom: 0, left: 0, right: 0 });
-    const { toJSON, queryByTestId } = render(<StatusBarBand />);
+    const { toJSON, queryByTestId } = await render(<StatusBarBand />);
 
     expect(queryByTestId('status-bar-band')).toBeNull();
     expect(toJSON()).toBeNull();

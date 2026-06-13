@@ -35,10 +35,10 @@ const paused: CoachAIBudgetResponse = {
 };
 
 describe('AIBudgetHardPauseModal', () => {
-  it('renders "AI paused" + pack options', () => {
+  it('renders "AI paused" + pack options', async () => {
     const onClose = jest.fn();
     const onSelectPack = jest.fn();
-    const { getByText, getByTestId } = render(
+    const { getByText, getByTestId } = await render(
       <AIBudgetHardPauseModal
         visible
         budget={paused}
@@ -52,9 +52,9 @@ describe('AIBudgetHardPauseModal', () => {
     expect(getByTestId('ai-pack-option-9900')).toBeTruthy();
   });
 
-  it('close button fires onClose', () => {
+  it('close button fires onClose', async () => {
     const onClose = jest.fn();
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <AIBudgetHardPauseModal
         visible
         budget={paused}
@@ -62,13 +62,13 @@ describe('AIBudgetHardPauseModal', () => {
         onSelectPack={jest.fn()}
       />,
     );
-    fireEvent.press(getByTestId('ai-hard-pause-close'));
+    await fireEvent.press(getByTestId('ai-hard-pause-close'));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('selecting a pack option fires onSelectPack with the correct cents', () => {
+  it('selecting a pack option fires onSelectPack with the correct cents', async () => {
     const onSelectPack = jest.fn();
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <AIBudgetHardPauseModal
         visible
         budget={paused}
@@ -76,7 +76,7 @@ describe('AIBudgetHardPauseModal', () => {
         onSelectPack={onSelectPack}
       />,
     );
-    fireEvent.press(getByTestId('ai-pack-option-9900'));
+    await fireEvent.press(getByTestId('ai-pack-option-9900'));
     expect(onSelectPack).toHaveBeenCalledWith(9900);
   });
 });

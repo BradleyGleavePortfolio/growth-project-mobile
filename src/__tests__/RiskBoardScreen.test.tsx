@@ -167,8 +167,8 @@ describe('RiskBoardScreen — locked branch', () => {
     });
   });
 
-  it('renders the locked screen for a non-coach, non-owner role', () => {
-    const { getByTestId, getByText } = render(<RiskBoardScreen />);
+  it('renders the locked screen for a non-coach, non-owner role', async () => {
+    const { getByTestId, getByText } = await render(<RiskBoardScreen />);
     expect(getByTestId('risk-board-locked')).toBeTruthy();
     expect(getByText(/coaches and the operator account/i)).toBeTruthy();
     expect(mockGetRiskBoard).not.toHaveBeenCalled();
@@ -190,7 +190,7 @@ describe('RiskBoardScreen — coach branch hits the coach-scoped endpoint', () =
   });
 
   it('calls getMyRiskBoard (coach-scoped) and never the OWNER endpoint', async () => {
-    render(<RiskBoardScreen />);
+    await render(<RiskBoardScreen />);
     // Effect dispatches the initial fetch synchronously after mount;
     // a microtask flush is enough to settle the call.
     await Promise.resolve();
@@ -202,7 +202,7 @@ describe('RiskBoardScreen — coach branch hits the coach-scoped endpoint', () =
     mockGetMyRiskBoard.mockResolvedValueOnce({
       data: { items: [], next_cursor: null },
     });
-    const { findByText } = render(<RiskBoardScreen />);
+    const { findByText } = await render(<RiskBoardScreen />);
     // Empty-state body text references the nightly recompute window.
     expect(await findByText(/04:00 UTC/i)).toBeTruthy();
   });
@@ -226,7 +226,7 @@ describe('RiskBoardScreen — coach branch hits the coach-scoped endpoint', () =
         next_cursor: null,
       },
     });
-    const { findByText, getAllByText } = render(<RiskBoardScreen />);
+    const { findByText, getAllByText } = await render(<RiskBoardScreen />);
     expect(await findByText('Alex Trent')).toBeTruthy();
     expect(await findByText('alex@example.com')).toBeTruthy();
     // Coach sees the uppercased bucket label (not a numeric percentage).
@@ -237,7 +237,7 @@ describe('RiskBoardScreen — coach branch hits the coach-scoped endpoint', () =
 
   it('renders the error state when the API rejects', async () => {
     mockGetMyRiskBoard.mockRejectedValueOnce(new Error('Network timeout'));
-    const { findByText } = render(<RiskBoardScreen />);
+    const { findByText } = await render(<RiskBoardScreen />);
     // Error path sets error in state; ListEmptyComponent shows the error title + message.
     expect(await findByText(/Could not load risk data/i)).toBeTruthy();
     expect(await findByText(/Network timeout/i)).toBeTruthy();
@@ -258,7 +258,7 @@ describe('RiskBoardScreen — owner branch hits the OWNER endpoint', () => {
   });
 
   it('calls getRiskBoard (OWNER) and never the coach endpoint', async () => {
-    render(<RiskBoardScreen />);
+    await render(<RiskBoardScreen />);
     await Promise.resolve();
     expect(mockGetRiskBoard).toHaveBeenCalled();
     expect(mockGetMyRiskBoard).not.toHaveBeenCalled();
@@ -283,7 +283,7 @@ describe('RiskBoardScreen — owner branch hits the OWNER endpoint', () => {
         next_cursor: null,
       },
     });
-    const { findByText } = render(<RiskBoardScreen />);
+    const { findByText } = await render(<RiskBoardScreen />);
     expect(await findByText('Jordan Miles')).toBeTruthy();
     // Owner sees the numeric score: Math.round(0.75 * 100) = 75%.
     expect(await findByText('75%')).toBeTruthy();

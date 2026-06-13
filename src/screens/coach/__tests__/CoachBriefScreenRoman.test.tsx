@@ -66,7 +66,7 @@ describe('CoachBriefScreen — §2.3 Roman brief card', () => {
 
   it('renders RomanBriefCard with the neutral default line when clients need attention', async () => {
     mockFetchCoachBrief.mockResolvedValue(payload({ clients: [clientCard('a'), clientCard('b')] }));
-    const { getByTestId, getByText } = render(<CoachBriefScreen />);
+    const { getByTestId, getByText } = await render(<CoachBriefScreen />);
     await waitFor(() => expect(getByTestId('roman-brief-card')).toBeTruthy());
     // FACE+VOICE: the avatar lives inside the brief card.
     expect(getByTestId('roman-brief-avatar').props.accessibilityLabel).toBe('Roman');
@@ -81,7 +81,7 @@ describe('CoachBriefScreen — §2.3 Roman brief card', () => {
     // list, not the full roster. The celebration mode is therefore removed; an
     // empty, non-stale brief renders the neutral default line with count 0.
     mockFetchCoachBrief.mockResolvedValue(payload({ clients: [], isStale: false }));
-    const { getByTestId, getByText, queryByText } = render(<CoachBriefScreen />);
+    const { getByTestId, getByText, queryByText } = await render(<CoachBriefScreen />);
     await waitFor(() => expect(getByTestId('roman-brief-card')).toBeTruthy());
     expect(
       getByText('Good morning, Marcus. Your brief is ready. 0 clients need attention today.'),
@@ -93,7 +93,7 @@ describe('CoachBriefScreen — §2.3 Roman brief card', () => {
   it('selects the §2.3 error line when the brief fails to assemble (no swallowed catch)', async () => {
     const warn = jest.spyOn(logger, 'warn').mockImplementation(() => {});
     mockFetchCoachBrief.mockRejectedValue(new Error('source slow'));
-    const { getByTestId, getByText } = render(<CoachBriefScreen />);
+    const { getByTestId, getByText } = await render(<CoachBriefScreen />);
     await waitFor(() => expect(getByTestId('roman-brief-card')).toBeTruthy());
     expect(
       getByText('Good morning, Marcus. The brief is not yet complete — one of my sources is slow to respond. I will have it shortly.'),

@@ -196,7 +196,7 @@ describe('coach screen empty-state CONTRACT path (real hook, mocked API only)', 
     );
     const callsBefore = mockGetEmptyStates.mock.calls.length;
 
-    fireEvent.press(
+    await fireEvent.press(
       getByTestId('coach-community-cohorts-empty-payload-error-retry'),
     );
 

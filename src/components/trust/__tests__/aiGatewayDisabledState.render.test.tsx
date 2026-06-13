@@ -59,29 +59,29 @@ const providerError: AIGatewayDraftError = {
 };
 
 describe('AIGatewayDisabledState', () => {
-  it('renders disabled.feature_flag_off with correct title', () => {
-    const { getByText } = render(
+  it('renders disabled.feature_flag_off with correct title', async () => {
+    const { getByText } = await render(
       <AIGatewayDisabledState response={flagOff} />,
     );
     expect(getByText('Not yet available')).toBeTruthy();
   });
 
-  it('renders disabled.kill_switch with correct title', () => {
-    const { getByText } = render(
+  it('renders disabled.kill_switch with correct title', async () => {
+    const { getByText } = await render(
       <AIGatewayDisabledState response={killSwitch} />,
     );
     expect(getByText('AI assist is off')).toBeTruthy();
   });
 
-  it('container testID uses ai-gateway-{status}-{reason} pattern', () => {
-    const { getByTestId } = render(
+  it('container testID uses ai-gateway-{status}-{reason} pattern', async () => {
+    const { getByTestId } = await render(
       <AIGatewayDisabledState response={flagOff} />,
     );
     expect(getByTestId('ai-gateway-disabled-feature_flag_off')).toBeTruthy();
   });
 
-  it('accessibilityLabel on container contains title copy', () => {
-    const { getByLabelText } = render(
+  it('accessibilityLabel on container contains title copy', async () => {
+    const { getByLabelText } = await render(
       <AIGatewayDisabledState response={flagOff} />,
     );
     // The container label is "title. body" — partial match on title is enough
@@ -90,54 +90,54 @@ describe('AIGatewayDisabledState', () => {
     ).toBeTruthy();
   });
 
-  it('renders the retry button for error responses when onRetry is provided', () => {
+  it('renders the retry button for error responses when onRetry is provided', async () => {
     const onRetry = jest.fn();
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <AIGatewayDisabledState response={providerError} onRetry={onRetry} />,
     );
     const retryBtn = getByTestId('ai-gateway-retry');
-    fireEvent.press(retryBtn);
+    await fireEvent.press(retryBtn);
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
 
-  it('does NOT render the retry button when onRetry is absent', () => {
-    const { queryByTestId } = render(
+  it('does NOT render the retry button when onRetry is absent', async () => {
+    const { queryByTestId } = await render(
       <AIGatewayDisabledState response={providerError} />,
     );
     expect(queryByTestId('ai-gateway-retry')).toBeNull();
   });
 
-  it('does NOT render the retry button for disabled responses even with onRetry', () => {
-    const { queryByTestId } = render(
+  it('does NOT render the retry button for disabled responses even with onRetry', async () => {
+    const { queryByTestId } = await render(
       <AIGatewayDisabledState response={flagOff} onRetry={jest.fn()} />,
     );
     expect(queryByTestId('ai-gateway-retry')).toBeNull();
   });
 
-  it('renders the correlation ID when present on error responses', () => {
-    const { getByTestId } = render(
+  it('renders the correlation ID when present on error responses', async () => {
+    const { getByTestId } = await render(
       <AIGatewayDisabledState response={providerError} />,
     );
     const correlationEl = getByTestId('ai-gateway-correlation-id');
     expect(correlationEl).toBeTruthy();
   });
 
-  it('does NOT render the correlation ID when null', () => {
+  it('does NOT render the correlation ID when null', async () => {
     const noCorrelation: AIGatewayDraftError = {
       status: 'error',
       capability: 'coach_brief_draft',
       reason: 'timeout',
       correlationId: null,
     };
-    const { queryByTestId } = render(
+    const { queryByTestId } = await render(
       <AIGatewayDisabledState response={noCorrelation} />,
     );
     expect(queryByTestId('ai-gateway-correlation-id')).toBeNull();
   });
 
-  it('retry button has accessibilityRole button and accessibilityLabel "Try again"', () => {
+  it('retry button has accessibilityRole button and accessibilityLabel "Try again"', async () => {
     const onRetry = jest.fn();
-    const { getByRole } = render(
+    const { getByRole } = await render(
       <AIGatewayDisabledState response={providerError} onRetry={onRetry} />,
     );
     // TouchableOpacity with accessibilityRole="button" — RNTL maps this

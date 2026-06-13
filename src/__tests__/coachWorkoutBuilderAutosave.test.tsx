@@ -284,7 +284,7 @@ describe('CoachWorkoutBuilderScreen — flag OFF invariance', () => {
     setFlag(false);
     jest.useFakeTimers();
     const Screen = loadScreen();
-    const { queryByTestId } = render(<Screen />);
+    const { queryByTestId } = await render(<Screen />);
 
     // No pill in the tree.
     expect(queryByTestId('mwb-autosave-pill')).toBeNull();
@@ -304,13 +304,13 @@ describe('CoachWorkoutBuilderScreen — flag ON wiring', () => {
     setFlag(true);
     jest.useFakeTimers();
     const Screen = loadScreen();
-    const { getByLabelText, getByTestId } = render(<Screen />);
+    const { getByLabelText, getByTestId } = await render(<Screen />);
 
     // The pill is hidden in the 'idle' state (zero residue before any edit;
     // see AutosaveStatusPill: 'idle' -> nothing rendered). An edit moves the
     // autosave status off 'idle' so the save-state pill becomes visible.
     await act(async () => {
-      fireEvent.changeText(getByLabelText('Plan name'), 'Push day B');
+      await fireEvent.changeText(getByLabelText('Plan name'), 'Push day B');
     });
     await act(async () => {
       jest.advanceTimersByTime(900);
@@ -322,11 +322,11 @@ describe('CoachWorkoutBuilderScreen — flag ON wiring', () => {
     setFlag(true);
     jest.useFakeTimers();
     const Screen = loadScreen();
-    const { getByLabelText } = render(<Screen />);
+    const { getByLabelText } = await render(<Screen />);
 
     // Edit the plan name — arms the debounced autosave.
     await act(async () => {
-      fireEvent.changeText(getByLabelText('Plan name'), 'Push day B');
+      await fireEvent.changeText(getByLabelText('Plan name'), 'Push day B');
     });
     await act(async () => {
       jest.advanceTimersByTime(900);
@@ -406,7 +406,7 @@ describe('CoachWorkoutBuilderScreen — kill/replay cache reconcile (P1)', () =>
     setFlag(true);
     mockReadMirror.mockResolvedValueOnce(mirroredRename());
     const Screen = loadScreen();
-    render(<Screen />);
+    await render(<Screen />);
 
     // 1. Both query keys are force-invalidated so staleTime cannot suppress the
     //    read; the single-plan key carries the concrete planId.
@@ -445,7 +445,7 @@ describe('CoachWorkoutBuilderScreen — kill/replay cache reconcile (P1)', () =>
     mockAutosaveCall.mockReturnValueOnce(replayPending);
 
     const Screen = loadScreen();
-    const { getByLabelText } = render(<Screen />);
+    const { getByLabelText } = await render(<Screen />);
 
     // While the replay is in flight the Save button is disabled (replayInFlight
     // true) so a full-replace Save cannot race the refetch and revert the rescue.
@@ -513,7 +513,7 @@ describe('CoachWorkoutBuilderScreen — kill/replay cache reconcile (P1)', () =>
       .mockReturnValueOnce(retryPending);
 
     const Screen = loadScreen();
-    const { getByLabelText, rerender } = render(<Screen />);
+    const { getByLabelText, rerender } = await render(<Screen />);
 
     // The replay's first send is now in flight (held) and the cache is empty, so
     // the adoption effect has early-returned on every render so far
@@ -525,7 +525,7 @@ describe('CoachWorkoutBuilderScreen — kill/replay cache reconcile (P1)', () =>
     // lands the working copy matches its saved snapshot and `hasPending` settles
     // back to false (no perpetually-dirty id-less row to keep it pending).
     await act(async () => {
-      fireEvent.changeText(getByLabelText('Plan name'), 'Rescued name A');
+      await fireEvent.changeText(getByLabelText('Plan name'), 'Rescued name A');
     });
     await act(async () => {
       jest.advanceTimersByTime(900);
@@ -594,7 +594,7 @@ describe('CoachWorkoutBuilderScreen — kill/replay cache reconcile (P1)', () =>
     // FULL-REPLACE branch and adopts the rescued `deadlift` row.
     mockCurrentPlan = RESCUED_PLAN;
     await act(async () => {
-      rerender(<Screen />);
+      await rerender(<Screen />);
       await Promise.resolve();
     });
 
@@ -614,7 +614,7 @@ describe('CoachWorkoutBuilderScreen — kill/replay cache reconcile (P1)', () =>
     // Fire explicit Save now that the gate has released and refreshed truth is
     // adopted.
     await act(async () => {
-      fireEvent.press(getByLabelText('Save changes'));
+      await fireEvent.press(getByLabelText('Save changes'));
       await Promise.resolve();
     });
 
@@ -670,7 +670,7 @@ describe('CoachWorkoutBuilderScreen — kill/replay cache reconcile (P1)', () =>
     });
 
     const Screen = loadScreen();
-    const { getByLabelText, rerender } = render(<Screen />);
+    const { getByLabelText, rerender } = await render(<Screen />);
 
     // Replay fired and the forced reconciliation refetch was driven.
     await waitFor(() => expect(mockAutosaveCall).toHaveBeenCalled());
@@ -681,7 +681,7 @@ describe('CoachWorkoutBuilderScreen — kill/replay cache reconcile (P1)', () =>
     // rerender so the clean full-replace adoption folds it in.
     mockCurrentPlan = RESCUED_META_PLAN;
     await act(async () => {
-      rerender(<Screen />);
+      await rerender(<Screen />);
       await Promise.resolve();
     });
 
@@ -694,7 +694,7 @@ describe('CoachWorkoutBuilderScreen — kill/replay cache reconcile (P1)', () =>
 
     // Fire explicit Save.
     await act(async () => {
-      fireEvent.press(getByLabelText('Save changes'));
+      await fireEvent.press(getByLabelText('Save changes'));
       await Promise.resolve();
     });
 
@@ -746,7 +746,7 @@ describe('CoachWorkoutBuilderScreen — kill/replay cache reconcile (P1)', () =>
     });
 
     const Screen = loadScreen();
-    const { getByLabelText, getByTestId, rerender } = render(<Screen />);
+    const { getByLabelText, getByTestId, rerender } = await render(<Screen />);
 
     // Replay fired (and so did the forced refetch that hard-failed).
     await waitFor(() => expect(mockAutosaveCall).toHaveBeenCalled());
@@ -781,9 +781,9 @@ describe('CoachWorkoutBuilderScreen — kill/replay cache reconcile (P1)', () =>
     // so the refreshed server truth is adopted, the baseline reanchors, and the
     // gate releases.
     await act(async () => {
-      fireEvent.press(pill);
+      await fireEvent.press(pill);
       await Promise.resolve();
-      rerender(<Screen />);
+      await rerender(<Screen />);
       await Promise.resolve();
       await Promise.resolve();
       await Promise.resolve();
@@ -843,11 +843,11 @@ describe('CoachWorkoutBuilderScreen — mirror-degraded durability (P1, #36)', (
     );
 
     const Screen = loadScreen();
-    const { getByLabelText, getByTestId } = render(<Screen />);
+    const { getByLabelText, getByTestId } = await render(<Screen />);
 
     // Edit + debounce: this flush writes the mirror (which rejects) then sends.
     await act(async () => {
-      fireEvent.changeText(getByLabelText('Plan name'), 'Push day B');
+      await fireEvent.changeText(getByLabelText('Plan name'), 'Push day B');
     });
     await act(async () => {
       jest.advanceTimersByTime(900);
@@ -885,11 +885,11 @@ describe('CoachWorkoutBuilderScreen — mirror-degraded durability (P1, #36)', (
       .mockResolvedValue(undefined);
 
     const Screen = loadScreen();
-    const { getByLabelText } = render(<Screen />);
+    const { getByLabelText } = await render(<Screen />);
 
     // First edit: mirror write fails (degraded raised).
     await act(async () => {
-      fireEvent.changeText(getByLabelText('Plan name'), 'Push day B');
+      await fireEvent.changeText(getByLabelText('Plan name'), 'Push day B');
     });
     await act(async () => {
       jest.advanceTimersByTime(900);
@@ -903,7 +903,7 @@ describe('CoachWorkoutBuilderScreen — mirror-degraded durability (P1, #36)', (
     // proving the hook retries the mirror on the next flush rather than latching
     // the degraded state permanently.
     await act(async () => {
-      fireEvent.changeText(getByLabelText('Plan name'), 'Push day C');
+      await fireEvent.changeText(getByLabelText('Plan name'), 'Push day C');
     });
     await act(async () => {
       jest.advanceTimersByTime(900);

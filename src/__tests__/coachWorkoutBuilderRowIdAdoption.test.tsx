@@ -343,7 +343,7 @@ describe('CoachWorkoutBuilderScreen — P1 row-ID adoption on autosave insert', 
     // 2nd in the list; Sets is the first numeric field per row.
     const setsInputs = getAllByLabelText('Sets');
     await act(async () => {
-      fireEvent.changeText(setsInputs[setsInputs.length - 1], '7');
+      await fireEvent.changeText(setsInputs[setsInputs.length - 1], '7');
     });
     await act(async () => {
       jest.advanceTimersByTime(900);
@@ -364,7 +364,7 @@ describe('CoachWorkoutBuilderScreen — P1 row-ID adoption on autosave insert', 
     // Remove the just-inserted (now adopted) row — the 2nd Remove button.
     const removeButtons = getAllByLabelText('Remove exercise');
     await act(async () => {
-      fireEvent.press(removeButtons[removeButtons.length - 1]);
+      await fireEvent.press(removeButtons[removeButtons.length - 1]);
     });
     await act(async () => {
       jest.advanceTimersByTime(900);
@@ -382,7 +382,7 @@ describe('CoachWorkoutBuilderScreen — P1 row-ID adoption on autosave insert', 
     // Move the just-inserted (now adopted) row up — the 2nd "Move up" button.
     const upButtons = getAllByLabelText('Move exercise up');
     await act(async () => {
-      fireEvent.press(upButtons[upButtons.length - 1]);
+      await fireEvent.press(upButtons[upButtons.length - 1]);
     });
     await act(async () => {
       jest.advanceTimersByTime(900);
@@ -402,11 +402,11 @@ describe('CoachWorkoutBuilderScreen — P1 row-ID adoption on autosave insert', 
   it('a metadata-only save does NOT trigger a row-id refetch (no needless round-trip)', async () => {
     jest.useFakeTimers();
     const Screen = loadScreen();
-    const { getByLabelText } = render(<Screen />);
+    const { getByLabelText } = await render(<Screen />);
 
     // Edit only the plan name (no id-less rows present). No refetch should fire.
     await act(async () => {
-      fireEvent.changeText(getByLabelText('Plan name'), 'Push day B');
+      await fireEvent.changeText(getByLabelText('Plan name'), 'Push day B');
     });
     await act(async () => {
       jest.advanceTimersByTime(900);
@@ -500,7 +500,7 @@ describe('CoachWorkoutBuilderScreen — P1 row-ID adoption RACE (edit before ref
     // Coach edits the just-inserted row's Sets to 7 WHILE the refetch is parked.
     const setsInputs = getAllByLabelText('Sets');
     await act(async () => {
-      fireEvent.changeText(setsInputs[setsInputs.length - 1], '7');
+      await fireEvent.changeText(setsInputs[setsInputs.length - 1], '7');
     });
 
     // NOW settle the refetch — adoption runs while the local edit is unsaved.
@@ -537,7 +537,7 @@ describe('CoachWorkoutBuilderScreen — P1 row-ID adoption RACE (edit before ref
     // Coach removes the just-inserted row WHILE the refetch is parked.
     const removeButtons = getAllByLabelText('Remove exercise');
     await act(async () => {
-      fireEvent.press(removeButtons[removeButtons.length - 1]);
+      await fireEvent.press(removeButtons[removeButtons.length - 1]);
     });
 
     // NOW settle the refetch — adoption must not resurrect the deleted row.
@@ -564,7 +564,7 @@ describe('CoachWorkoutBuilderScreen — P1 row-ID adoption RACE (edit before ref
     // Coach moves the just-inserted row up WHILE the refetch is parked.
     const upButtons = getAllByLabelText('Move exercise up');
     await act(async () => {
-      fireEvent.press(upButtons[upButtons.length - 1]);
+      await fireEvent.press(upButtons[upButtons.length - 1]);
     });
 
     // NOW settle the refetch.
@@ -676,7 +676,7 @@ describe('CoachWorkoutBuilderScreen — D-045 delete-before-adoption (op-empty w
     // false — the exact op-empty window the audit flagged.
     const removeButtons = getAllByLabelText('Remove exercise');
     await act(async () => {
-      fireEvent.press(removeButtons[removeButtons.length - 1]);
+      await fireEvent.press(removeButtons[removeButtons.length - 1]);
     });
     // Only the original bench row remains locally.
     expect(queryAllByLabelText('Remove exercise')).toHaveLength(1);
@@ -711,7 +711,7 @@ describe('CoachWorkoutBuilderScreen — D-045 delete-before-adoption (op-empty w
     // First delete in the op-empty window.
     await act(async () => {
       const buttons = getAllByLabelText('Remove exercise');
-      fireEvent.press(buttons[buttons.length - 1]);
+      await fireEvent.press(buttons[buttons.length - 1]);
     });
     expect(queryAllByLabelText('Remove exercise')).toHaveLength(1);
 
@@ -754,16 +754,16 @@ describe('CoachWorkoutBuilderScreen — D-045 delete-before-adoption (op-empty w
     // Delete the id-less squat row in the op-empty window.
     await act(async () => {
       const buttons = getAllByLabelText('Remove exercise');
-      fireEvent.press(buttons[buttons.length - 1]);
+      await fireEvent.press(buttons[buttons.length - 1]);
     });
     expect(queryAllByLabelText('Remove exercise')).toHaveLength(1);
 
     // Re-add a NEW squat row (a distinct clientId) BEFORE the refetch settles.
     await act(async () => {
-      fireEvent.changeText(getByLabelText('Search exercise catalog'), 'squat');
+      await fireEvent.changeText(getByLabelText('Search exercise catalog'), 'squat');
     });
     await act(async () => {
-      fireEvent.press(utils.getByText('Squat'));
+      await fireEvent.press(utils.getByText('Squat'));
     });
     // Bench + the freshly re-added squat = two rows locally.
     expect(queryAllByLabelText('Remove exercise')).toHaveLength(2);

@@ -92,9 +92,9 @@ describe('HapticPressable — reduce motion (P2-3)', () => {
     springSpy.mockClear();
     timingSpy.mockClear();
     const target = screen.getByTestId('hp');
-    fireEvent(target, 'pressIn');
-    fireEvent(target, 'pressOut');
-    fireEvent.press(target);
+    await fireEvent(target, 'pressIn');
+    await fireEvent(target, 'pressOut');
+    await fireEvent.press(target);
 
     expect(springSpy).toHaveBeenCalled();
     expect(timingSpy).toHaveBeenCalled();
@@ -116,9 +116,9 @@ describe('HapticPressable — reduce motion (P2-3)', () => {
     springSpy.mockClear();
     timingSpy.mockClear();
     const target = screen.getByTestId('hp');
-    fireEvent(target, 'pressIn');
-    fireEvent(target, 'pressOut');
-    fireEvent.press(target);
+    await fireEvent(target, 'pressIn');
+    await fireEvent(target, 'pressOut');
+    await fireEvent.press(target);
 
     // Animation suppressed …
     expect(springSpy).not.toHaveBeenCalled();
@@ -141,9 +141,9 @@ describe('HapticPressable — reduce motion (P2-3)', () => {
     springSpy.mockClear();
     timingSpy.mockClear();
     const target = screen.getByTestId('hp');
-    fireEvent(target, 'pressIn');
-    fireEvent(target, 'pressOut');
-    fireEvent.press(target);
+    await fireEvent(target, 'pressIn');
+    await fireEvent(target, 'pressOut');
+    await fireEvent.press(target);
 
     expect(springSpy).not.toHaveBeenCalled();
     expect(timingSpy).not.toHaveBeenCalled();

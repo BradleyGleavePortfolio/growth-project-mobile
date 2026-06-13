@@ -66,7 +66,7 @@ describe('AcceptInviteScreen — RTL', () => {
       coachName: 'Coach K',
       redirectTo: 'app_open',
     });
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <AcceptInviteScreen
         route={makeRoute('tok-valid-abc')}
         navigation={makeNav() as never}
@@ -82,7 +82,7 @@ describe('AcceptInviteScreen — RTL', () => {
       coachName: 'Coach K',
       email: 'alice@ex.com',
     });
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <AcceptInviteScreen
         route={makeRoute('tok-valid-abc')}
         navigation={makeNav() as never}
@@ -93,7 +93,7 @@ describe('AcceptInviteScreen — RTL', () => {
   });
 
   it('malformed token: renders invalid-failure UI WITHOUT calling acceptInvite', async () => {
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <AcceptInviteScreen
         route={makeRoute('bad/token with spaces')}
         navigation={makeNav() as never}
@@ -106,7 +106,7 @@ describe('AcceptInviteScreen — RTL', () => {
   });
 
   it('oversized token: renders invalid-failure UI WITHOUT calling acceptInvite', async () => {
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <AcceptInviteScreen
         route={makeRoute('a'.repeat(500))}
         navigation={makeNav() as never}
@@ -124,7 +124,7 @@ describe('AcceptInviteScreen — RTL', () => {
       reason: 'expired',
       message: 'INVITE_EXPIRED: prisma row gone',
     });
-    const { getByTestId, queryByText } = render(
+    const { getByTestId, queryByText } = await render(
       <AcceptInviteScreen
         route={makeRoute('tok-old-abcd')}
         navigation={makeNav() as never}
@@ -142,7 +142,7 @@ describe('AcceptInviteScreen — RTL', () => {
       accepted: false,
       reason: 'INVITE_ALREADY_ACCEPTED',
     });
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <AcceptInviteScreen
         route={makeRoute('tok-used-abcd')}
         navigation={makeNav() as never}
@@ -158,7 +158,7 @@ describe('AcceptInviteScreen — RTL', () => {
       accepted: false,
       reason: 'SOMETHING_NEW_FROM_BACKEND',
     });
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <AcceptInviteScreen
         route={makeRoute('tok-xxxx')}
         navigation={makeNav() as never}
@@ -173,7 +173,7 @@ describe('AcceptInviteScreen — RTL', () => {
     mockAcceptInvite.mockRejectedValueOnce(
       new Error('ECONNREFUSED: postgres://supabase:_TOKEN@host'),
     );
-    const { getByTestId, queryByText } = render(
+    const { getByTestId, queryByText } = await render(
       <AcceptInviteScreen
         route={makeRoute('tok-xxxx')}
         navigation={makeNav() as never}
@@ -190,7 +190,7 @@ describe('AcceptInviteScreen — RTL', () => {
 
   it('renders the loading state initially', async () => {
     mockAcceptInvite.mockReturnValueOnce(new Promise(() => {})); // never resolves
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <AcceptInviteScreen
         route={makeRoute('tok-valid-abc')}
         navigation={makeNav() as never}

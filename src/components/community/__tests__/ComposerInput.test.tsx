@@ -57,12 +57,12 @@ jest.mock('@expo/vector-icons', () => {
 import ComposerInput from '../ComposerInput';
 
 describe('ComposerInput — synchronous double-submit guard (P2-C2)', () => {
-  it('a rapid double-tap fires onSubmit exactly once', () => {
+  it('a rapid double-tap fires onSubmit exactly once', async () => {
     // A never-settling promise keeps the guard set for the duration of the test,
     // mirroring an in-flight network send where the parent `sending` prop has
     // not yet re-rendered the button to disabled.
     const onSubmit = jest.fn(() => new Promise<void>(() => {}));
-    render(
+    await render(
       <ComposerInput
         placeholder="Message"
         maxLength={4000}
@@ -71,7 +71,7 @@ describe('ComposerInput — synchronous double-submit guard (P2-C2)', () => {
       />,
     );
 
-    fireEvent.changeText(screen.getByTestId('composer-field'), 'hello');
+    await fireEvent.changeText(screen.getByTestId('composer-field'), 'hello');
     // Fire two presses on ONE render's button node WITHIN a single act() —
     // replicating a double-tap that lands on the same render frame, before React
     // re-renders with a cleared field / a disabled button. Without the
@@ -80,9 +80,9 @@ describe('ComposerInput — synchronous double-submit guard (P2-C2)', () => {
     // cannot dedupe). The single wrapping act() batches both presses so no
     // intervening re-render disables the button between them.
     const send = screen.getByTestId('composer-send');
-    act(() => {
-      fireEvent.press(send);
-      fireEvent.press(send);
+    await act(() => {
+      await fireEvent.press(send);
+      await fireEvent.press(send);
     });
 
     expect(onSubmit).toHaveBeenCalledTimes(1);
@@ -97,7 +97,7 @@ describe('ComposerInput — synchronous double-submit guard (P2-C2)', () => {
           resolveSend = resolve;
         }),
     );
-    render(
+    await render(
       <ComposerInput
         placeholder="Message"
         maxLength={4000}
@@ -110,9 +110,9 @@ describe('ComposerInput — synchronous double-submit guard (P2-C2)', () => {
     const send = screen.getByTestId('composer-send');
 
     // First send (in flight) + a blocked double-tap → one call.
-    fireEvent.changeText(field, 'first');
-    fireEvent.press(send);
-    fireEvent.press(send);
+    await fireEvent.changeText(field, 'first');
+    await fireEvent.press(send);
+    await fireEvent.press(send);
     expect(onSubmit).toHaveBeenCalledTimes(1);
 
     // Settle the first send; the field cleared optimistically.
@@ -122,8 +122,8 @@ describe('ComposerInput — synchronous double-submit guard (P2-C2)', () => {
     });
 
     // A deliberate later send now works (guard cleared on settle).
-    fireEvent.changeText(field, 'second');
-    fireEvent.press(send);
+    await fireEvent.changeText(field, 'second');
+    await fireEvent.press(send);
     expect(onSubmit).toHaveBeenCalledTimes(2);
     expect(onSubmit).toHaveBeenNthCalledWith(2, 'second');
   });
@@ -136,7 +136,7 @@ describe('ComposerInput — synchronous double-submit guard (P2-C2)', () => {
           rejectSend = reject;
         }),
     );
-    render(
+    await render(
       <ComposerInput
         placeholder="Message"
         maxLength={4000}
@@ -148,9 +148,9 @@ describe('ComposerInput — synchronous double-submit guard (P2-C2)', () => {
     const field = screen.getByTestId('composer-field');
     const send = screen.getByTestId('composer-send');
 
-    fireEvent.changeText(field, 'draft');
-    fireEvent.press(send);
-    fireEvent.press(send);
+    await fireEvent.changeText(field, 'draft');
+    await fireEvent.press(send);
+    await fireEvent.press(send);
     expect(onSubmit).toHaveBeenCalledTimes(1);
 
     await waitFor(() => expect(field.props.value).toBe(''));
@@ -161,7 +161,7 @@ describe('ComposerInput — synchronous double-submit guard (P2-C2)', () => {
     // Draft-restore semantics intact: field was still empty, so the draft comes
     // back; the guard cleared on the failure path so a retry send works.
     await waitFor(() => expect(field.props.value).toBe('draft'));
-    fireEvent.press(send);
+    await fireEvent.press(send);
     expect(onSubmit).toHaveBeenCalledTimes(2);
     expect(onSubmit).toHaveBeenNthCalledWith(2, 'draft');
   });

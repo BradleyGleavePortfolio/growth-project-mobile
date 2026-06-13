@@ -108,9 +108,9 @@ beforeEach(() => {
 });
 
 describe('CoachPackageEditScreen — lock-pricing UX', () => {
-  it('shows the lock helper copy when the package has subscribers', () => {
+  it('shows the lock helper copy when the package has subscribers', async () => {
     const props = makeProps(pkg({ subscriberCount: 3 }));
-    const { getByText } = render(
+    const { getByText } = await render(
       <CoachPackageEditScreen navigation={props.navigation} route={props.route} />,
     );
     expect(
@@ -118,17 +118,17 @@ describe('CoachPackageEditScreen — lock-pricing UX', () => {
     ).toBeTruthy();
   });
 
-  it('does NOT show the lock helper copy when there are no subscribers', () => {
+  it('does NOT show the lock helper copy when there are no subscribers', async () => {
     const props = makeProps(pkg({ subscriberCount: 0 }));
-    const { queryByText } = render(
+    const { queryByText } = await render(
       <CoachPackageEditScreen navigation={props.navigation} route={props.route} />,
     );
     expect(queryByText(/Pricing is locked after subscribers join/)).toBeNull();
   });
 
-  it('does not over-disable the price field when locked (still editable)', () => {
+  it('does not over-disable the price field when locked (still editable)', async () => {
     const props = makeProps(pkg({ subscriberCount: 3 }));
-    const { getByDisplayValue } = render(
+    const { getByDisplayValue } = await render(
       <CoachPackageEditScreen navigation={props.navigation} route={props.route} />,
     );
     const priceInput = getByDisplayValue('99.00');
@@ -141,10 +141,10 @@ describe('CoachPackageEditScreen — lock-pricing UX', () => {
       response: { data: { error: 'PACKAGE_PRICING_LOCKED' } },
     });
     const props = makeProps(pkg({ subscriberCount: 3 }));
-    const { getByLabelText } = render(
+    const { getByLabelText } = await render(
       <CoachPackageEditScreen navigation={props.navigation} route={props.route} />,
     );
-    fireEvent.press(getByLabelText('Save changes'));
+    await fireEvent.press(getByLabelText('Save changes'));
     await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
     await waitFor(() => {
       const calls = (Alert.alert as jest.Mock).mock.calls;
@@ -158,10 +158,10 @@ describe('CoachPackageEditScreen — lock-pricing UX', () => {
 describe('CoachPackageEditScreen — preview as buyer', () => {
   it('opens the coachPreview surface with the disabled-checkout banner', async () => {
     const props = makeProps(pkg({ subscriberCount: 0 }));
-    const { getByLabelText, getByText } = render(
+    const { getByLabelText, getByText } = await render(
       <CoachPackageEditScreen navigation={props.navigation} route={props.route} />,
     );
-    fireEvent.press(getByLabelText('Preview as buyer'));
+    await fireEvent.press(getByLabelText('Preview as buyer'));
     await waitFor(() =>
       expect(
         getByText('Buyer preview — checkout is disabled for coaches.'),

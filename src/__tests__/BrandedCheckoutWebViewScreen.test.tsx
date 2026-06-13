@@ -163,8 +163,8 @@ beforeEach(() => {
 // ── Rendered output tests ─────────────────────────────────────────────────────
 
 describe('BrandedCheckoutWebViewScreen — header', () => {
-  it('renders TGP brand badge, "Secure Checkout" title, and package subtitle', () => {
-    const { getByTestId, getByText } = render(<BrandedCheckoutWebViewScreen />);
+  it('renders TGP brand badge, "Secure Checkout" title, and package subtitle', async () => {
+    const { getByTestId, getByText } = await render(<BrandedCheckoutWebViewScreen />);
     expect(getByTestId('branded-checkout-header')).toBeTruthy();
     // The branded skeleton also renders a "TGP" logo, so scope the badge
     // assertion to the header testID rather than a global text query.
@@ -173,8 +173,8 @@ describe('BrandedCheckoutWebViewScreen — header', () => {
     expect(getByText('Elite Coaching')).toBeTruthy();
   });
 
-  it('close button has 44pt min tap target and accessibility label', () => {
-    const { getByTestId } = render(<BrandedCheckoutWebViewScreen />);
+  it('close button has 44pt min tap target and accessibility label', async () => {
+    const { getByTestId } = await render(<BrandedCheckoutWebViewScreen />);
     const close = getByTestId('branded-checkout-close');
     const flat = Array.isArray(close.props.style)
       ? Object.assign({}, ...close.props.style)
@@ -185,16 +185,16 @@ describe('BrandedCheckoutWebViewScreen — header', () => {
     expect(close.props.accessibilityRole).toBe('button');
   });
 
-  it('close button cancels checkout via CheckoutReturn navigation', () => {
-    const { getByTestId } = render(<BrandedCheckoutWebViewScreen />);
-    fireEvent.press(getByTestId('branded-checkout-close'));
+  it('close button cancels checkout via CheckoutReturn navigation', async () => {
+    const { getByTestId } = await render(<BrandedCheckoutWebViewScreen />);
+    await fireEvent.press(getByTestId('branded-checkout-close'));
     expect(mockNavigate).toHaveBeenCalledWith('CheckoutReturn', { outcome: 'cancel' });
   });
 });
 
 describe('BrandedCheckoutWebViewScreen — webview lifecycle', () => {
-  it('mounts the WebView at the supplied checkout URL', () => {
-    const { getByTestId } = render(<BrandedCheckoutWebViewScreen />);
+  it('mounts the WebView at the supplied checkout URL', async () => {
+    const { getByTestId } = await render(<BrandedCheckoutWebViewScreen />);
     const webview = getByTestId('branded-checkout-webview');
     expect(webview).toBeTruthy();
     expect(capturedWebViewProps.source).toEqual({
@@ -202,8 +202,8 @@ describe('BrandedCheckoutWebViewScreen — webview lifecycle', () => {
     });
   });
 
-  it('passes sharedCookiesEnabled + thirdPartyCookiesEnabled for Stripe 3DS / SCA', () => {
-    render(<BrandedCheckoutWebViewScreen />);
+  it('passes sharedCookiesEnabled + thirdPartyCookiesEnabled for Stripe 3DS / SCA', async () => {
+    await render(<BrandedCheckoutWebViewScreen />);
     // Both cookie props MUST be true on render — Stripe Elements stores
     // SCA / 3DS / Link session state in cookies and breaks silently
     // without them.
@@ -211,25 +211,25 @@ describe('BrandedCheckoutWebViewScreen — webview lifecycle', () => {
     expect(capturedWebViewProps.thirdPartyCookiesEnabled).toBe(true);
   });
 
-  it('originWhitelist is HTTPS-only — no app-scheme entry', () => {
-    render(<BrandedCheckoutWebViewScreen />);
+  it('originWhitelist is HTTPS-only — no app-scheme entry', async () => {
+    await render(<BrandedCheckoutWebViewScreen />);
     const whitelist = capturedWebViewProps.originWhitelist as readonly string[];
     expect(whitelist).toEqual(['https://*']);
     // Defensive: make sure no entry begins with our custom scheme.
     expect(whitelist.some((p) => p.startsWith('com.growthproject.app'))).toBe(false);
   });
 
-  it('renders the branded loading skeleton until onLoadEnd fires', () => {
-    const { getByTestId, queryByTestId } = render(<BrandedCheckoutWebViewScreen />);
+  it('renders the branded loading skeleton until onLoadEnd fires', async () => {
+    const { getByTestId, queryByTestId } = await render(<BrandedCheckoutWebViewScreen />);
     expect(getByTestId('branded-checkout-skeleton')).toBeTruthy();
     const onLoadEnd = capturedWebViewProps.onLoadEnd as () => void;
     expect(typeof onLoadEnd).toBe('function');
-    act(() => onLoadEnd());
+    await act(() => onLoadEnd());
     expect(queryByTestId('branded-checkout-skeleton')).toBeNull();
   });
 
-  it('loading skeleton is TGP-branded (logo + card preview, not a generic spinner)', () => {
-    const { getByTestId } = render(<BrandedCheckoutWebViewScreen />);
+  it('loading skeleton is TGP-branded (logo + card preview, not a generic spinner)', async () => {
+    const { getByTestId } = await render(<BrandedCheckoutWebViewScreen />);
     // Visible branded logo and a card-shaped layout preview must render
     // — the previous generic ActivityIndicator is gone.
     expect(getByTestId('branded-checkout-skeleton-logo')).toBeTruthy();
@@ -246,7 +246,7 @@ describe('BrandedCheckoutWebViewScreen — webview lifecycle', () => {
     const spy = jest
       .spyOn(AccessibilityInfo, 'isReduceMotionEnabled')
       .mockResolvedValue(true);
-    const { getByTestId } = render(<BrandedCheckoutWebViewScreen />);
+    const { getByTestId } = await render(<BrandedCheckoutWebViewScreen />);
     // After AccessibilityInfo resolves, the logo's opacity must be the
     // static resting value (1), not an Animated interpolation. If the
     // pulse loop were still running, opacity would be an
@@ -263,8 +263,8 @@ describe('BrandedCheckoutWebViewScreen — webview lifecycle', () => {
 });
 
 describe('BrandedCheckoutWebViewScreen — deep link short-circuit', () => {
-  it('routes success deep link to CheckoutReturn with session_id', () => {
-    render(<BrandedCheckoutWebViewScreen />);
+  it('routes success deep link to CheckoutReturn with session_id', async () => {
+    await render(<BrandedCheckoutWebViewScreen />);
     const onNav = capturedWebViewProps.onNavigationStateChange as (n: {
       url: string;
     }) => void;
@@ -277,8 +277,8 @@ describe('BrandedCheckoutWebViewScreen — deep link short-circuit', () => {
     });
   });
 
-  it('routes cancel deep link to CheckoutReturn with outcome=cancel', () => {
-    render(<BrandedCheckoutWebViewScreen />);
+  it('routes cancel deep link to CheckoutReturn with outcome=cancel', async () => {
+    await render(<BrandedCheckoutWebViewScreen />);
     const onNav = capturedWebViewProps.onNavigationStateChange as (n: {
       url: string;
     }) => void;
@@ -286,8 +286,8 @@ describe('BrandedCheckoutWebViewScreen — deep link short-circuit', () => {
     expect(mockNavigate).toHaveBeenCalledWith('CheckoutReturn', { outcome: 'cancel' });
   });
 
-  it('only settles once even if the deep link fires twice', () => {
-    render(<BrandedCheckoutWebViewScreen />);
+  it('only settles once even if the deep link fires twice', async () => {
+    await render(<BrandedCheckoutWebViewScreen />);
     const onNav = capturedWebViewProps.onNavigationStateChange as (n: {
       url: string;
     }) => void;
@@ -296,8 +296,8 @@ describe('BrandedCheckoutWebViewScreen — deep link short-circuit', () => {
     expect(mockNavigate).toHaveBeenCalledTimes(1);
   });
 
-  it('onShouldStartLoadWithRequest returns FALSE for matched deep links (does not load app-scheme)', () => {
-    render(<BrandedCheckoutWebViewScreen />);
+  it('onShouldStartLoadWithRequest returns FALSE for matched deep links (does not load app-scheme)', async () => {
+    await render(<BrandedCheckoutWebViewScreen />);
     const onShouldStart = capturedWebViewProps.onShouldStartLoadWithRequest as (r: {
       url: string;
     }) => boolean;
@@ -309,13 +309,13 @@ describe('BrandedCheckoutWebViewScreen — deep link short-circuit', () => {
     expect(mockNavigate).toHaveBeenCalled();
   });
 
-  it('onShouldStartLoadWithRequest BLOCKS malicious prefix variants and surfaces structured error', () => {
-    const { getByTestId } = render(<BrandedCheckoutWebViewScreen />);
+  it('onShouldStartLoadWithRequest BLOCKS malicious prefix variants and surfaces structured error', async () => {
+    const { getByTestId } = await render(<BrandedCheckoutWebViewScreen />);
     const onShouldStart = capturedWebViewProps.onShouldStartLoadWithRequest as (r: {
       url: string;
     }) => boolean;
     // Phishing attempt — host is a typosquat, not on the allow-list.
-    act(() => {
+    await act(() => {
       expect(onShouldStart({ url: 'https://stripe.evil.example.com/pay' })).toBe(false);
     });
     expect(getByTestId('branded-checkout-error')).toBeTruthy();
@@ -334,12 +334,12 @@ describe('BrandedCheckoutWebViewScreen — dunning update-card via Stripe Billin
   // C12) caught that the allow-list did not include billing.stripe.com,
   // so the webview blocked the navigation and the recovery flow
   // dead-ended.
-  it('onShouldStartLoadWithRequest ALLOWS a billing.stripe.com portal URL (no error rendered)', () => {
-    const { queryByTestId } = render(<BrandedCheckoutWebViewScreen />);
+  it('onShouldStartLoadWithRequest ALLOWS a billing.stripe.com portal URL (no error rendered)', async () => {
+    const { queryByTestId } = await render(<BrandedCheckoutWebViewScreen />);
     const onShouldStart = capturedWebViewProps.onShouldStartLoadWithRequest as (r: {
       url: string;
     }) => boolean;
-    act(() => {
+    await act(() => {
       expect(
         onShouldStart({
           url: 'https://billing.stripe.com/p/session/test_YWNjdF8xRXhhbXBsZQ',
@@ -351,12 +351,12 @@ describe('BrandedCheckoutWebViewScreen — dunning update-card via Stripe Billin
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 
-  it('returns to the app via deep-link after the user saves a new card in the portal', () => {
+  it('returns to the app via deep-link after the user saves a new card in the portal', async () => {
     // Stripe Customer Portal redirects to the configured return URL after
     // a successful card update. In our flow that URL is the same checkout
     // success deep-link, which the screen intercepts and routes through
     // CheckoutReturn so payment-status is re-fetched.
-    render(<BrandedCheckoutWebViewScreen />);
+    await render(<BrandedCheckoutWebViewScreen />);
     const onShouldStart = capturedWebViewProps.onShouldStartLoadWithRequest as (r: {
       url: string;
     }) => boolean;
@@ -382,12 +382,12 @@ describe('BrandedCheckoutWebViewScreen — dunning update-card via Stripe Billin
 });
 
 describe('BrandedCheckoutWebViewScreen — structured error states (Rule 9)', () => {
-  it('renders a 5xx-specific TGPError with Try again + Cancel CTAs', () => {
-    const { getByTestId, queryByTestId, getByText } = render(<BrandedCheckoutWebViewScreen />);
+  it('renders a 5xx-specific TGPError with Try again + Cancel CTAs', async () => {
+    const { getByTestId, queryByTestId, getByText } = await render(<BrandedCheckoutWebViewScreen />);
     const onHttpError = capturedWebViewProps.onHttpError as (e: {
       nativeEvent: { statusCode: number };
     }) => void;
-    act(() => {
+    await act(() => {
       onHttpError({ nativeEvent: { statusCode: 502 } });
     });
     expect(getByTestId('branded-checkout-error')).toBeTruthy();
@@ -400,23 +400,23 @@ describe('BrandedCheckoutWebViewScreen — structured error states (Rule 9)', ()
     expect(queryByTestId('branded-checkout-webview')).toBeNull();
   });
 
-  it('renders distinct 4xx copy (session expired) versus 5xx (unreachable)', () => {
-    const { getByText } = render(<BrandedCheckoutWebViewScreen />);
+  it('renders distinct 4xx copy (session expired) versus 5xx (unreachable)', async () => {
+    const { getByText } = await render(<BrandedCheckoutWebViewScreen />);
     const onHttpError = capturedWebViewProps.onHttpError as (e: {
       nativeEvent: { statusCode: number };
     }) => void;
-    act(() => {
+    await act(() => {
       onHttpError({ nativeEvent: { statusCode: 410 } });
     });
     expect(getByText('Checkout session expired')).toBeTruthy();
   });
 
-  it('renders a network-failure TGPError with Try again', () => {
-    const { getByTestId } = render(<BrandedCheckoutWebViewScreen />);
+  it('renders a network-failure TGPError with Try again', async () => {
+    const { getByTestId } = await render(<BrandedCheckoutWebViewScreen />);
     const onError = capturedWebViewProps.onError as (e: {
       nativeEvent: { code: number };
     }) => void;
-    act(() => {
+    await act(() => {
       onError({ nativeEvent: { code: -1009 } });
     });
     expect(getByTestId('branded-checkout-error-code').props.children).toMatch(
@@ -425,12 +425,12 @@ describe('BrandedCheckoutWebViewScreen — structured error states (Rule 9)', ()
     expect(getByTestId('branded-checkout-error-retry')).toBeTruthy();
   });
 
-  it('tapping Try again clears the error and re-mounts the webview (fresh load)', () => {
-    const { getByTestId, queryByTestId } = render(<BrandedCheckoutWebViewScreen />);
+  it('tapping Try again clears the error and re-mounts the webview (fresh load)', async () => {
+    const { getByTestId, queryByTestId } = await render(<BrandedCheckoutWebViewScreen />);
     const onError = capturedWebViewProps.onError as (e: {
       nativeEvent: { code: number };
     }) => void;
-    act(() => {
+    await act(() => {
       onError({ nativeEvent: { code: -1009 } });
     });
     expect(getByTestId('branded-checkout-error')).toBeTruthy();
@@ -440,8 +440,8 @@ describe('BrandedCheckoutWebViewScreen — structured error states (Rule 9)', ()
     // how the load actually happens — calling `reload()` on a stale ref
     // (the error branch unmounts the WebView) would be a no-op.
     for (const k of Object.keys(capturedWebViewProps)) delete capturedWebViewProps[k];
-    act(() => {
-      fireEvent.press(getByTestId('branded-checkout-error-retry'));
+    await act(() => {
+      await fireEvent.press(getByTestId('branded-checkout-error-retry'));
     });
     expect(queryByTestId('branded-checkout-error')).toBeNull();
     expect(getByTestId('branded-checkout-webview')).toBeTruthy();

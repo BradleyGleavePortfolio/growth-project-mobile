@@ -57,8 +57,8 @@ function makeErrorApiGet() {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function renderDashboard(apiGet = makeApiGet(), inlineMode = true) {
-  return render(
+async function renderDashboard(apiGet = makeApiGet(), inlineMode = true) {
+  return await render(
     <CoachLtvDashboard apiGet={apiGet} inlineMode={inlineMode} />,
   );
 }
@@ -67,10 +67,10 @@ function renderDashboard(apiGet = makeApiGet(), inlineMode = true) {
 
 describe('CoachLtvDashboard', () => {
   describe('skeleton loading state', () => {
-    it('renders the skeleton while data is loading', () => {
+    it('renders the skeleton while data is loading', async () => {
       // apiGet never resolves so we stay in loading state
       const apiGet = jest.fn((): Promise<{ data: unknown }> => new Promise(() => {}));
-      const { getByTestId } = render(
+      const { getByTestId } = await render(
         <CoachLtvDashboard apiGet={apiGet} inlineMode />,
       );
       const dashboard = getByTestId('ltv-dashboard');
@@ -82,7 +82,7 @@ describe('CoachLtvDashboard', () => {
 
   describe('loaded state', () => {
     it('renders RPCM hero number', async () => {
-      renderDashboard();
+      await renderDashboard();
       await waitFor(() => {
         expect(screen.getByTestId('ltv-hero-rpcm')).toBeTruthy();
       });
@@ -90,7 +90,7 @@ describe('CoachLtvDashboard', () => {
     });
 
     it('renders LTV hero number', async () => {
-      renderDashboard();
+      await renderDashboard();
       await waitFor(() => {
         expect(screen.getByTestId('ltv-hero-ltv')).toBeTruthy();
       });
@@ -98,7 +98,7 @@ describe('CoachLtvDashboard', () => {
     });
 
     it('renders zero-churn streak badge when streak > 0', async () => {
-      renderDashboard();
+      await renderDashboard();
       await waitFor(() => {
         expect(screen.getByTestId('ltv-streak-badge')).toBeTruthy();
       });
@@ -106,7 +106,7 @@ describe('CoachLtvDashboard', () => {
 
     it('does not render streak badge when streak is 0', async () => {
       const noStreakData = { ...MOCK_METRICS, zero_churn_streak_months: 0 };
-      renderDashboard(makeApiGet(noStreakData));
+      await renderDashboard(makeApiGet(noStreakData));
       await waitFor(() => {
         expect(screen.getByTestId('ltv-hero-rpcm')).toBeTruthy();
       });
@@ -114,7 +114,7 @@ describe('CoachLtvDashboard', () => {
     });
 
     it('renders stats card with churn rate', async () => {
-      renderDashboard();
+      await renderDashboard();
       await waitFor(() => {
         expect(screen.getByTestId('ltv-stats-card')).toBeTruthy();
       });
@@ -122,7 +122,7 @@ describe('CoachLtvDashboard', () => {
     });
 
     it('renders next milestone card', async () => {
-      renderDashboard();
+      await renderDashboard();
       await waitFor(() => {
         expect(screen.getByTestId('ltv-milestone-card')).toBeTruthy();
       });
@@ -135,7 +135,7 @@ describe('CoachLtvDashboard', () => {
         ...MOCK_METRICS,
         next_milestone: { ...MOCK_METRICS.next_milestone, clients_needed: 0 },
       };
-      renderDashboard(makeApiGet(data));
+      await renderDashboard(makeApiGet(data));
       await waitFor(() => {
         expect(screen.getByTestId('ltv-hero-rpcm')).toBeTruthy();
       });
@@ -144,14 +144,14 @@ describe('CoachLtvDashboard', () => {
 
     it('renders Record badge when is_new_rpcm_record is true', async () => {
       const data = { ...MOCK_METRICS, is_new_rpcm_record: true };
-      renderDashboard(makeApiGet(data));
+      await renderDashboard(makeApiGet(data));
       await waitFor(() => {
         expect(screen.getByText('RECORD')).toBeTruthy();
       });
     });
 
     it('does not render Record badge when not a new record', async () => {
-      renderDashboard(makeApiGet({ ...MOCK_METRICS, is_new_rpcm_record: false }));
+      await renderDashboard(makeApiGet({ ...MOCK_METRICS, is_new_rpcm_record: false }));
       await waitFor(() => {
         expect(screen.getByTestId('ltv-hero-rpcm')).toBeTruthy();
       });
@@ -161,21 +161,21 @@ describe('CoachLtvDashboard', () => {
 
   describe('trend colours', () => {
     it('shows "Growing" label for upward trend', async () => {
-      renderDashboard(makeApiGet({ ...MOCK_METRICS, mrr_trend: 'up' }));
+      await renderDashboard(makeApiGet({ ...MOCK_METRICS, mrr_trend: 'up' }));
       await waitFor(() => {
         expect(screen.getByText(/Growing/)).toBeTruthy();
       });
     });
 
     it('shows "Declining" label for downward trend', async () => {
-      renderDashboard(makeApiGet({ ...MOCK_METRICS, mrr_trend: 'down' }));
+      await renderDashboard(makeApiGet({ ...MOCK_METRICS, mrr_trend: 'down' }));
       await waitFor(() => {
         expect(screen.getByText(/Declining/)).toBeTruthy();
       });
     });
 
     it('shows "Holding" label for flat trend', async () => {
-      renderDashboard(makeApiGet({ ...MOCK_METRICS, mrr_trend: 'flat' }));
+      await renderDashboard(makeApiGet({ ...MOCK_METRICS, mrr_trend: 'flat' }));
       await waitFor(() => {
         expect(screen.getByText(/Holding/)).toBeTruthy();
       });
@@ -184,14 +184,14 @@ describe('CoachLtvDashboard', () => {
 
   describe('error state', () => {
     it('shows error message when API call fails', async () => {
-      renderDashboard(makeErrorApiGet());
+      await renderDashboard(makeErrorApiGet());
       await waitFor(() => {
         expect(screen.getByText(/Unable to load LTV metrics/)).toBeTruthy();
       });
     });
 
     it('shows Retry button on error', async () => {
-      renderDashboard(makeErrorApiGet());
+      await renderDashboard(makeErrorApiGet());
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /Retry/i })).toBeTruthy();
       });
@@ -199,11 +199,11 @@ describe('CoachLtvDashboard', () => {
 
     it('retries when Retry button is pressed', async () => {
       const apiGet = makeErrorApiGet();
-      renderDashboard(apiGet);
+      await renderDashboard(apiGet);
       await waitFor(() => {
         expect(screen.getByRole('button', { name: /Retry/i })).toBeTruthy();
       });
-      fireEvent.press(screen.getByRole('button', { name: /Retry/i }));
+      await fireEvent.press(screen.getByRole('button', { name: /Retry/i }));
       // apiGet should be called a second time
       await waitFor(() => {
         expect(apiGet).toHaveBeenCalledTimes(2);
@@ -213,12 +213,12 @@ describe('CoachLtvDashboard', () => {
 
   describe('accessibility', () => {
     it('has testID for dashboard root', async () => {
-      const { getByTestId } = renderDashboard();
+      const { getByTestId } = await renderDashboard();
       expect(getByTestId('ltv-dashboard')).toBeTruthy();
     });
 
     it('streak badge has accessibility label', async () => {
-      renderDashboard();
+      await renderDashboard();
       await waitFor(() => {
         expect(screen.getByTestId('ltv-streak-badge')).toBeTruthy();
       });
@@ -235,7 +235,7 @@ describe('CoachLtvDashboard', () => {
         ...MOCK_METRICS,
         next_milestone: { ...MOCK_METRICS.next_milestone, clients_needed: 1 },
       };
-      renderDashboard(makeApiGet(data));
+      await renderDashboard(makeApiGet(data));
       await waitFor(() => {
         expect(screen.getByTestId('ltv-milestone-card')).toBeTruthy();
       });
@@ -243,7 +243,7 @@ describe('CoachLtvDashboard', () => {
     });
 
     it('uses plural "clients" when clients_needed > 1', async () => {
-      renderDashboard();
+      await renderDashboard();
       await waitFor(() => {
         expect(screen.getByTestId('ltv-milestone-card')).toBeTruthy();
       });
@@ -269,7 +269,7 @@ describe('CoachLtvDashboard', () => {
         next_milestone: { clients_needed: 0, mrr_target_cents: 10000, mrr_target_label: '$100 / mo' },
         mrr_trend: 'flat',
       };
-      renderDashboard(makeApiGet(zeroData));
+      await renderDashboard(makeApiGet(zeroData));
       await waitFor(() => {
         expect(screen.getByTestId('ltv-hero-rpcm')).toBeTruthy();
       });

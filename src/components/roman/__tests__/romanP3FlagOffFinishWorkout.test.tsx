@@ -185,7 +185,7 @@ describe('§2.8 producer: ActiveWorkoutScreen finish path is pre-P3 when romanCh
     };
 
     try {
-      const { getByText } = render(<ActiveWorkoutScreen />);
+      const { getByText } = await render(<ActiveWorkoutScreen />);
       // Wait until the restored session committed (routine header visible).
       await waitFor(() => expect(getByText('Push Day')).toBeTruthy());
 
@@ -196,7 +196,7 @@ describe('§2.8 producer: ActiveWorkoutScreen finish path is pre-P3 when romanCh
       // HapticPressable wrapping the label, so fire the press event (it bubbles)
       // rather than reading props off the Text node.
       await act(async () => {
-        fireEvent.press(getByText('Finish'));
+        await fireEvent.press(getByText('Finish'));
         await Promise.resolve();
         await Promise.resolve();
         await Promise.resolve();
@@ -204,7 +204,7 @@ describe('§2.8 producer: ActiveWorkoutScreen finish path is pre-P3 when romanCh
 
       // The save handler installed mutate options; run the server-success branch.
       expect(capturedMutateOptions?.onSuccess).toBeTruthy();
-      act(() => capturedMutateOptions!.onSuccess!({ id: 'server-123' }));
+      await act(() => capturedMutateOptions!.onSuccess!({ id: 'server-123' }));
 
       // PRE-P3 behaviour: goBack(), and NO navigate to WorkoutMain with the
       // Roman completion signal.
@@ -233,7 +233,7 @@ describe('§2.8 consumer: useJustCompletedOneShot does nothing when enabled=fals
       const clearParam = jest.fn();
       // enabled=false: the flag-off posture. A real completion id + user key are
       // present, so any side effect would be the bug.
-      renderHook(() =>
+      await renderHook(() =>
         useJustCompletedOneShot('workout-999', 'user-1', clearParam, false),
       );
       await act(async () => {
@@ -261,7 +261,7 @@ describe('§2.8 consumer: useJustCompletedOneShot does nothing when enabled=fals
     const setItemSpy = jest.spyOn(AsyncStorage, 'setItem').mockResolvedValue(undefined);
     try {
       const clearParam = jest.fn();
-      renderHook(() =>
+      await renderHook(() =>
         useJustCompletedOneShot('workout-control', 'user-1', clearParam, true),
       );
       await act(async () => {
@@ -321,7 +321,7 @@ describe('§2.8 containment: the WorkoutScreen consumer is inert with romanChat 
       // A real completion signal is present in the route param — exactly the
       // input the consumer would act on if the flag were on.
       mockRouteParams = { justCompletedId: 'server-555' };
-      const { queryByTestId } = render(<WorkoutCompletionConsumerHost />);
+      const { queryByTestId } = await render(<WorkoutCompletionConsumerHost />);
       await act(async () => {
         await Promise.resolve();
         await Promise.resolve();

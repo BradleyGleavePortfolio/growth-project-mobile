@@ -21,7 +21,7 @@ describe('CalmSlowReveal', () => {
       .spyOn(AccessibilityInfo, 'addEventListener')
       .mockReturnValue(makeAccessibilitySubscription());
 
-    render(
+    await render(
       <CalmSlowReveal testID="reveal">
         <Text>child</Text>
       </CalmSlowReveal>,
@@ -37,7 +37,7 @@ describe('CalmSlowReveal', () => {
       .spyOn(AccessibilityInfo, 'addEventListener')
       .mockReturnValue(makeAccessibilitySubscription());
 
-    const { getByText } = render(
+    const { getByText } = await render(
       <CalmSlowReveal>
         <Text>visible-child</Text>
       </CalmSlowReveal>,
@@ -53,7 +53,7 @@ describe('CalmSlowReveal', () => {
       .spyOn(AccessibilityInfo, 'addEventListener')
       .mockReturnValue(makeAccessibilitySubscription());
 
-    const { getByText } = render(
+    const { getByText } = await render(
       <CalmSlowReveal>
         <Text>still-shown</Text>
       </CalmSlowReveal>,

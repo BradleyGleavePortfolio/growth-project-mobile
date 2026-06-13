@@ -107,7 +107,7 @@ describe('CoachBookingInboxScreen', () => {
     });
     const { findByLabelText } = withQc(<CoachBookingInboxScreen />);
     const btn = await findByLabelText('Confirm session Intro call');
-    fireEvent.press(btn);
+    await fireEvent.press(btn);
     await waitFor(() =>
       expect(mockApi.approveSession).toHaveBeenCalledWith('sess-pending'),
     );
@@ -121,7 +121,7 @@ describe('CoachBookingInboxScreen', () => {
     });
     const { findByLabelText } = withQc(<CoachBookingInboxScreen />);
     const btn = await findByLabelText('Decline session Intro call');
-    fireEvent.press(btn);
+    await fireEvent.press(btn);
     await waitFor(() =>
       expect(mockApi.declineSession).toHaveBeenCalledWith(
         'sess-pending',

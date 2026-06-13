@@ -90,7 +90,7 @@ describe('useCoachInsight', () => {
     mockedFetch.mockResolvedValueOnce(coachInsight());
     const { Wrapper } = makeWrapper();
 
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () => useCoachInsight({ clientId: 'client-1', bucket: 'HEALTH_FITNESS' }),
       { wrapper: Wrapper },
     );
@@ -107,7 +107,7 @@ describe('useCoachInsight', () => {
 
   it('does not fire when clientId is empty', async () => {
     const { Wrapper } = makeWrapper();
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () => useCoachInsight({ clientId: '', bucket: 'HEALTH_FITNESS' }),
       { wrapper: Wrapper },
     );
@@ -128,7 +128,7 @@ describe('useApproveDraft', () => {
     const { qc, Wrapper } = makeWrapper();
     const invalidateSpy = jest.spyOn(qc, 'invalidateQueries');
 
-    const { result } = renderHook(() => useApproveDraft(), { wrapper: Wrapper });
+    const { result } = await renderHook(() => useApproveDraft(), { wrapper: Wrapper });
 
     await result.current.mutateAsync({
       clientId: 'client-7',
@@ -152,7 +152,7 @@ describe('useApproveDraft', () => {
     const invalidateSpy = jest.spyOn(qc, 'invalidateQueries');
     const onError = jest.fn();
 
-    const { result } = renderHook(() => useApproveDraft(), { wrapper: Wrapper });
+    const { result } = await renderHook(() => useApproveDraft(), { wrapper: Wrapper });
 
     await expect(
       result.current.mutateAsync(

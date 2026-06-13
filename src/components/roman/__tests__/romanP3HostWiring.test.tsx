@@ -196,8 +196,8 @@ describe('§2.4 selectPendingCheckInClaim — only a REAL pending claim qualifie
     expect(selectPendingCheckInClaim([otherKind])).toBeUndefined();
   });
 
-  it('the §2.4 default copy renders the pending-claim line for the selected client', () => {
-    const { getByText } = render(<RomanCheckInNotice clientName="Dana" mode="default" />);
+  it('the §2.4 default copy renders the pending-claim line for the selected client', async () => {
+    const { getByText } = await render(<RomanCheckInNotice clientName="Dana" mode="default" />);
     expect(getByText('Dana has a check-in consistency claim awaiting your sign-off.')).toBeTruthy();
     // The copy asserts only a pending claim — never a form arrival, queue
     // reorder, or overdue/missing framing the host signal cannot prove.
@@ -255,8 +255,8 @@ describe('§2.7 streakMilestoneTier — milestone copy on exact days only', () =
     expect((thirty.match(/!/g) ?? []).length).toBe(0);
   });
 
-  it('the exact-day tiers render the spec lines', () => {
-    const { getByText } = render(<RomanStreakCard tier={3} firstName="Sam" mode="default" />);
+  it('the exact-day tiers render the spec lines', async () => {
+    const { getByText } = await render(<RomanStreakCard tier={3} firstName="Sam" mode="default" />);
     expect(getByText('Three days running. A streak is just consistency that has been counting. Keep it.')).toBeTruthy();
   });
 });
@@ -382,7 +382,7 @@ describe('§2.8 workout-complete renders from a real just-completed event only',
     // The param was consumed (cleared) on focus so it cannot re-fire.
     expect(harness.clearParam).toHaveBeenCalledTimes(1);
     // Blur, then refocus WITHOUT a new completion id: card must NOT show.
-    act(() => harness.blur());
+    await act(() => harness.blur());
     harness.setParam(undefined);
     await harness.focus();
     expect(harness.lastShow()).toBe(false);
@@ -392,7 +392,7 @@ describe('§2.8 workout-complete renders from a real just-completed event only',
     const harness = renderOneShotHarness({ justCompletedId: 'workout-101' });
     await harness.focus();
     expect(harness.lastShow()).toBe(true);
-    act(() => harness.blur());
+    await act(() => harness.blur());
     // A NEW finish-workout save sets a DIFFERENT id before refocus.
     harness.setParam('workout-202');
     await harness.focus();
@@ -407,7 +407,7 @@ describe('§2.8 workout-complete renders from a real just-completed event only',
     const first = renderOneShotHarness({ justCompletedId: 'workout-101' });
     await first.focus();
     expect(first.lastShow()).toBe(true);
-    act(() => first.blur());
+    await act(() => first.blur());
     // A fresh mount (new hook instance) is handed the SAME id again.
     const second = renderOneShotHarness({ justCompletedId: 'workout-101' });
     await second.focus();
@@ -418,7 +418,7 @@ describe('§2.8 workout-complete renders from a real just-completed event only',
     const userA = renderOneShotHarness({ justCompletedId: 'workout-101', userKey: 'user-A' });
     await userA.focus();
     expect(userA.lastShow()).toBe(true);
-    act(() => userA.blur());
+    await act(() => userA.blur());
     // A different account on the same device with the same workout id: the
     // latch is scoped per user, so this still fires.
     const userB = renderOneShotHarness({ justCompletedId: 'workout-101', userKey: 'user-B' });
@@ -458,11 +458,11 @@ describe('§2.8 workout-complete renders from a real just-completed event only',
       const clearParam = jest.fn();
       focusController.effect = null;
       focusController.cleanup = null;
-      const rendered = renderHook(() => useJustCompletedOneShot(id, key, clearParam, true));
+      const rendered = await renderHook(() => useJustCompletedOneShot(id, key, clearParam, true));
 
       // Focus: the effect starts the (still-pending) latch read and stores its
       // cleanup. No flush yet — the read has NOT resolved.
-      act(() => {
+      await act(() => {
         const cleanup = focusController.effect ? focusController.effect() : undefined;
         focusController.cleanup = typeof cleanup === 'function' ? cleanup : null;
       });
@@ -474,14 +474,14 @@ describe('§2.8 workout-complete renders from a real just-completed event only',
       // (its cleanup runs while still focused), then the effect re-runs with the
       // id-less deps. This is precisely the self-triggered re-render that used
       // to set cancelled = true and kill the pending decision.
-      act(() => {
+      await act(() => {
         const prevCleanup = focusController.cleanup;
         focusController.cleanup = null;
         if (prevCleanup) prevCleanup();
         id = undefined;
-        rendered.rerender(undefined);
+        await rendered.rerender(undefined);
       });
-      act(() => {
+      await act(() => {
         const next = focusController.effect ? focusController.effect() : undefined;
         focusController.cleanup = typeof next === 'function' ? next : null;
       });
@@ -512,8 +512,8 @@ describe('§2.8 workout-complete renders from a real just-completed event only',
     expect(ACTIVE).not.toContain('{ justCompleted: true }');
   });
 
-  it('the §2.8 default line renders without fabricating a PR celebration', () => {
-    const { getByText } = render(<RomanWorkoutCompleteCard mode="default" />);
+  it('the §2.8 default line renders without fabricating a PR celebration', async () => {
+    const { getByText } = await render(<RomanWorkoutCompleteCard mode="default" />);
     expect(getByText('Workout complete. Recorded. That is one more behind you.')).toBeTruthy();
   });
 
@@ -535,7 +535,7 @@ describe('§2.8 workout-complete renders from a real just-completed event only',
       const clearParam = jest.fn();
       focusController.effect = null;
       focusController.cleanup = null;
-      renderHook(() =>
+      await renderHook(() =>
         useJustCompletedOneShot(id, key, clearParam, true, { userRole: 'client' }),
       );
       await act(async () => {
@@ -578,7 +578,7 @@ describe('§2.8 workout-complete renders from a real just-completed event only',
       const clearParam = jest.fn();
       focusController.effect = null;
       focusController.cleanup = null;
-      renderHook(() =>
+      await renderHook(() =>
         useJustCompletedOneShot(id, key, clearParam, true, { userRole: 'coach' }),
       );
       await act(async () => {
@@ -615,8 +615,8 @@ describe('§2.12 payout omits the destination-account clause when last-four is u
     expect(EARNINGS).not.toContain('bankLast4={');
   });
 
-  it('TRUE: with no bankLast4, the past-tense copy states amount + send date, no account token', () => {
-    const { getByText, queryByText } = render(
+  it('TRUE: with no bankLast4, the past-tense copy states amount + send date, no account token', async () => {
+    const { getByText, queryByText } = await render(
       <RomanPayoutNotice amount="$240.00" sentOn="June 9" mode="default" testID="payout" />,
     );
     expect(

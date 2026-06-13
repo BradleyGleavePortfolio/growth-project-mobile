@@ -123,34 +123,34 @@ beforeEach(() => {
 });
 
 describe('WearablesShell', () => {
-  it('mounts the Fitness overview by default and renders the freshness chip', () => {
-    render(<WearablesShell />);
+  it('mounts the Fitness overview by default and renders the freshness chip', async () => {
+    await render(<WearablesShell />);
     expect(screen.getByText('FITNESS_OVERVIEW')).toBeTruthy();
     expect(screen.getByText('All sources current')).toBeTruthy();
   });
 
-  it('switches to Recovery → mounts the Sleep & Recovery screen, never a placeholder gate', () => {
-    render(<WearablesShell />);
-    fireEvent.press(screen.getByLabelText('Recovery'));
+  it('switches to Recovery → mounts the Sleep & Recovery screen, never a placeholder gate', async () => {
+    await render(<WearablesShell />);
+    await fireEvent.press(screen.getByLabelText('Recovery'));
     expect(screen.getByText('RECOVERY_OVERVIEW')).toBeTruthy();
     expect(screen.queryByText('FITNESS_OVERVIEW')).toBeNull();
     // syncs the route param so deep-links restore the last bucket
     expect(mockSetParams).toHaveBeenCalledWith({ bucket: 'recovery' });
   });
 
-  it('mounts the Sleep & Recovery screen directly when deep-linked to recovery', () => {
+  it('mounts the Sleep & Recovery screen directly when deep-linked to recovery', async () => {
     mockRouteParams = { bucket: 'recovery' };
-    render(<WearablesShell />);
+    await render(<WearablesShell />);
     expect(screen.getByText('RECOVERY_OVERVIEW')).toBeTruthy();
   });
 
-  it('mounts the client AI insight panel into each bucket', () => {
-    render(<WearablesShell />);
+  it('mounts the client AI insight panel into each bucket', async () => {
+    await render(<WearablesShell />);
     // Fitness bucket → the H&F-scoped panel is mounted.
     expect(screen.getByText('AI_PANEL_HEALTH_FITNESS')).toBeTruthy();
 
     // Switch to Recovery → the S&R-scoped panel is mounted.
-    fireEvent.press(screen.getByLabelText('Recovery'));
+    await fireEvent.press(screen.getByLabelText('Recovery'));
     expect(screen.getByText('AI_PANEL_SLEEP_RECOVERY')).toBeTruthy();
     expect(screen.queryByText('AI_PANEL_HEALTH_FITNESS')).toBeNull();
   });

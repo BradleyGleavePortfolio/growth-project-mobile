@@ -43,15 +43,15 @@ const flatten = (style: unknown): Record<string, unknown> => {
 };
 
 describe('ForegroundNotificationBanner safe-area inset', () => {
-  afterEach(() => {
-    act(() => {
+  afterEach(async () => {
+    await act(() => {
       foregroundBannerStore.getState().reset();
     });
     jest.mocked(useSafeAreaInsets).mockReturnValue({ top: 47, bottom: 0, left: 0, right: 0 });
   });
 
-  it('uses the safe-area top inset for paddingTop', () => {
-    act(() => {
+  it('uses the safe-area top inset for paddingTop', async () => {
+    await act(() => {
       foregroundBannerStore.getState().showBanner({
         title: 'New message',
         body: 'You have a new message from your coach',
@@ -59,7 +59,7 @@ describe('ForegroundNotificationBanner safe-area inset', () => {
       });
     });
 
-    const { UNSAFE_root } = render(<ForegroundNotificationBanner />);
+    const { UNSAFE_root } = await render(<ForegroundNotificationBanner />);
 
     // Find the outermost Animated.View by locating any node whose flattened
     // style carries the banner's absolute-position container marker.
@@ -72,10 +72,10 @@ describe('ForegroundNotificationBanner safe-area inset', () => {
     expect(flat.paddingTop).toBe(47);
   });
 
-  it('uses the 12px floor when the safe-area top inset is 0', () => {
+  it('uses the 12px floor when the safe-area top inset is 0', async () => {
     jest.mocked(useSafeAreaInsets).mockReturnValue({ top: 0, bottom: 0, left: 0, right: 0 });
 
-    act(() => {
+    await act(() => {
       foregroundBannerStore.getState().showBanner({
         title: 'New message',
         body: 'You have a new message from your coach',
@@ -83,7 +83,7 @@ describe('ForegroundNotificationBanner safe-area inset', () => {
       });
     });
 
-    const { UNSAFE_root } = render(<ForegroundNotificationBanner />);
+    const { UNSAFE_root } = await render(<ForegroundNotificationBanner />);
 
     const match = UNSAFE_root.findAll((node) => {
       const flat = flatten(node.props?.style);

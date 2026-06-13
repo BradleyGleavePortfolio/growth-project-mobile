@@ -75,7 +75,7 @@ describe('useMacroTargets — per-user cache keying', () => {
     mockUser = { id: 'user-A' };
     mockCurrentForSelf.mockResolvedValue({ data: serverShape(TARGETS_A) });
 
-    const { result } = renderHook(() => useMacroTargets());
+    const { result } = await renderHook(() => useMacroTargets());
 
     await waitFor(() => {
       expect(result.current).toEqual(TARGETS_A);
@@ -100,7 +100,7 @@ describe('useMacroTargets — per-user cache keying', () => {
     // Pretend B has no macros set yet on the server.
     mockCurrentForSelf.mockResolvedValue({ data: null });
 
-    const { result } = renderHook(() => useMacroTargets());
+    const { result } = await renderHook(() => useMacroTargets());
 
     // Allow the effect to run; B has no cache entry of its own and the
     // server returns null, so the resolved value must be null — NEVER A's.
@@ -120,14 +120,14 @@ describe('useMacroTargets — per-user cache keying', () => {
     mockUser = { id: 'user-A' };
     mockCurrentForSelf.mockResolvedValueOnce({ data: serverShape(TARGETS_A) });
 
-    const { result, rerender } = renderHook(() => useMacroTargets());
+    const { result, rerender } = await renderHook(() => useMacroTargets());
 
     await waitFor(() => expect(result.current).toEqual(TARGETS_A));
 
     // Simulate logout → user B sign-in.
     mockUser = { id: 'user-B' };
     mockCurrentForSelf.mockResolvedValueOnce({ data: serverShape(TARGETS_B) });
-    rerender(undefined);
+    await rerender(undefined);
 
     // The hook must reset state to null immediately on user change so A's
     // numbers never paint for B — even for a single frame.
@@ -145,7 +145,7 @@ describe('useMacroTargets — per-user cache keying', () => {
   it('returns null and never calls the server when no user is signed in', async () => {
     mockUser = null;
 
-    const { result } = renderHook(() => useMacroTargets());
+    const { result } = await renderHook(() => useMacroTargets());
 
     await act(async () => {
       await Promise.resolve();

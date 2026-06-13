@@ -72,20 +72,20 @@ beforeEach(() => {
 });
 
 describe('CommunityTodayScreen error state', () => {
-  it('a today query FAILURE renders the retryable today error (NOT the empty state), and retry refetches today', () => {
+  it('a today query FAILURE renders the retryable today error (NOT the empty state), and retry refetches today', async () => {
     mockToday.data = undefined;
     mockToday.isLoading = false;
     mockToday.isError = true;
-    render(<CommunityTodayScreen />);
+    await render(<CommunityTodayScreen />);
 
     expect(screen.getByTestId('community-today-error')).toBeTruthy();
     expect(screen.queryByTestId('community-today-empty')).toBeNull();
 
-    fireEvent.press(screen.getByTestId('community-today-retry'));
+    await fireEvent.press(screen.getByTestId('community-today-retry'));
     expect(mockToday.refetch).toHaveBeenCalledTimes(1);
   });
 
-  it('a genuine empty SUCCESS still renders the empty/onboarding state, NOT the error state', () => {
+  it('a genuine empty SUCCESS still renders the empty/onboarding state, NOT the error state', async () => {
     // Successful today with no cohort/event/post/challenge: the calm empty
     // state, never the retryable error.
     mockToday.data = {
@@ -98,7 +98,7 @@ describe('CommunityTodayScreen error state', () => {
     };
     mockToday.isLoading = false;
     mockToday.isError = false;
-    render(<CommunityTodayScreen />);
+    await render(<CommunityTodayScreen />);
 
     expect(screen.getByTestId('community-today-empty')).toBeTruthy();
     expect(screen.queryByTestId('community-today-error')).toBeNull();

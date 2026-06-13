@@ -175,9 +175,9 @@ beforeEach(() => {
 const baseProps = { bucket: 'HEALTH_FITNESS' as const };
 
 describe('loading / empty / error states', () => {
-  it('renders a skeleton (not a spinner) while loading', () => {
+  it('renders a skeleton (not a spinner) while loading', async () => {
     mockUseClientInsight.mockReturnValue(queryState({ isLoading: true }));
-    const { getByTestId, queryByTestId, UNSAFE_queryAllByType } = render(
+    const { getByTestId, queryByTestId, UNSAFE_queryAllByType } = await render(
       <ClientWearableInsightPanel {...baseProps} />,
     );
     expect(getByTestId('client-insight-loading')).toBeTruthy();
@@ -187,9 +187,9 @@ describe('loading / empty / error states', () => {
     expect(UNSAFE_queryAllByType(ActivityIndicator)).toHaveLength(0);
   });
 
-  it('renders the literal empty copy + secondary line, NO chip, NO CTA', () => {
+  it('renders the literal empty copy + secondary line, NO chip, NO CTA', async () => {
     mockUseClientInsight.mockReturnValue(queryState({ data: emptyInsight() }));
-    const { getByTestId, getByText, queryByTestId } = render(
+    const { getByTestId, getByText, queryByTestId } = await render(
       <ClientWearableInsightPanel {...baseProps} />,
     );
     expect(getByTestId('client-insight-empty')).toBeTruthy();
@@ -201,29 +201,29 @@ describe('loading / empty / error states', () => {
     expect(queryByTestId('client-insight-cta')).toBeNull();
   });
 
-  it('renders sanitized error copy + Retry, and Retry refetches', () => {
+  it('renders sanitized error copy + Retry, and Retry refetches', async () => {
     const refetch = jest.fn();
     mockUseClientInsight.mockReturnValue(
       queryState({ isError: true, error: new Error('internal db path leak'), refetch }),
     );
-    const { getByTestId, getByText, getByLabelText, queryByText } = render(
+    const { getByTestId, getByText, getByLabelText, queryByText } = await render(
       <ClientWearableInsightPanel {...baseProps} />,
     );
     expect(getByTestId('client-insight-error')).toBeTruthy();
     // Raw error text must never reach the surface (#12).
     expect(queryByText('internal db path leak')).toBeNull();
     expect(getByText("We couldn't load this insight.")).toBeTruthy();
-    fireEvent.press(getByLabelText('Retry'));
+    await fireEvent.press(getByLabelText('Retry'));
     expect(refetch).toHaveBeenCalledTimes(1);
   });
 });
 
 describe('loaded state', () => {
-  it('renders observation / norm / intervention but NO CTA when optional_cta is null', () => {
+  it('renders observation / norm / intervention but NO CTA when optional_cta is null', async () => {
     mockUseClientInsight.mockReturnValue(
       queryState({ data: fullInsight({ optional_cta: null }) }),
     );
-    const { getByTestId, getByText, queryByTestId } = render(
+    const { getByTestId, getByText, queryByTestId } = await render(
       <ClientWearableInsightPanel {...baseProps} />,
     );
     expect(getByTestId('client-insight-panel')).toBeTruthy();
@@ -242,7 +242,7 @@ describe('loaded state', () => {
     expect(queryByTestId('client-insight-cta')).toBeNull();
   });
 
-  it('renders a safe CTA and fires onCtaPress with the deep link on press', () => {
+  it('renders a safe CTA and fires onCtaPress with the deep link on press', async () => {
     const onCtaPress = jest.fn();
     mockUseClientInsight.mockReturnValue(
       queryState({
@@ -254,16 +254,16 @@ describe('loaded state', () => {
         }),
       }),
     );
-    const { getByTestId, getByText } = render(
+    const { getByTestId, getByText } = await render(
       <ClientWearableInsightPanel {...baseProps} onCtaPress={onCtaPress} />,
     );
     expect(getByText('Open sleep tips')).toBeTruthy();
-    fireEvent.press(getByTestId('client-insight-cta'));
+    await fireEvent.press(getByTestId('client-insight-cta'));
     expect(onCtaPress).toHaveBeenCalledTimes(1);
     expect(onCtaPress).toHaveBeenCalledWith('tgp://wearables/sleep-tips');
   });
 
-  it('refuses to open an UNSAFE deep link — onCtaPress is NOT called', () => {
+  it('refuses to open an UNSAFE deep link — onCtaPress is NOT called', async () => {
     const onCtaPress = jest.fn();
     // Build a VALID response object first, then mutate the field via
     // Object.assign so we exercise the component's own defence-in-depth guard
@@ -276,18 +276,18 @@ describe('loaded state', () => {
       Object.assign(seeded.optional_cta, { deep_link: 'https://evil.com' });
     }
     mockUseClientInsight.mockReturnValue(queryState({ data: seeded }));
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <ClientWearableInsightPanel {...baseProps} onCtaPress={onCtaPress} />,
     );
-    fireEvent.press(getByTestId('client-insight-cta'));
+    await fireEvent.press(getByTestId('client-insight-cta'));
     expect(onCtaPress).not.toHaveBeenCalled();
   });
 
-  it('renders the confidence chip text for two confidence levels', () => {
+  it('renders the confidence chip text for two confidence levels', async () => {
     mockUseClientInsight.mockReturnValue(
       queryState({ data: fullInsight({ confidence_level: 'confident' }) }),
     );
-    const { getByText, rerender } = render(
+    const { getByText, rerender } = await render(
       <ClientWearableInsightPanel {...baseProps} />,
     );
     // confident → 85%
@@ -296,14 +296,14 @@ describe('loaded state', () => {
     mockUseClientInsight.mockReturnValue(
       queryState({ data: fullInsight({ confidence_level: 'verified' }) }),
     );
-    rerender(<ClientWearableInsightPanel {...baseProps} />);
+    await rerender(<ClientWearableInsightPanel {...baseProps} />);
     // verified → 100%
     expect(getByText('Verified · 100%')).toBeTruthy();
   });
 });
 
 describe('accessibility', () => {
-  it('exposes accessibility labels on the root, chip, CTA and Retry', () => {
+  it('exposes accessibility labels on the root, chip, CTA and Retry', async () => {
     mockUseClientInsight.mockReturnValue(
       queryState({
         data: fullInsight({
@@ -315,7 +315,7 @@ describe('accessibility', () => {
         }),
       }),
     );
-    const { getByLabelText } = render(
+    const { getByLabelText } = await render(
       <ClientWearableInsightPanel {...baseProps} />,
     );
     // Root region carries the human bucket label.
@@ -329,11 +329,11 @@ describe('accessibility', () => {
     expect(getByLabelText('Open recovery plan')).toBeTruthy();
   });
 
-  it('exposes a Retry accessibility label in the error state', () => {
+  it('exposes a Retry accessibility label in the error state', async () => {
     mockUseClientInsight.mockReturnValue(
       queryState({ isError: true, error: new Error('x'), refetch: jest.fn() }),
     );
-    const { getByLabelText } = render(
+    const { getByLabelText } = await render(
       <ClientWearableInsightPanel {...baseProps} />,
     );
     expect(getByLabelText('Retry')).toBeTruthy();
@@ -356,17 +356,17 @@ describe('CTA production navigation (Linking.openURL)', () => {
       }),
     );
     // No onCtaPress prop → the production Linking.openURL branch runs.
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <ClientWearableInsightPanel {...baseProps} />,
     );
-    fireEvent.press(getByTestId('client-insight-cta'));
+    await fireEvent.press(getByTestId('client-insight-cta'));
     await flushPromises();
     expect(openURL).toHaveBeenCalledTimes(1);
     expect(openURL).toHaveBeenCalledWith('tgp://wearables/sleep-tips');
     openURL.mockRestore();
   });
 
-  it('does NOT call Linking.openURL for an unsafe deep link (refusal logged)', () => {
+  it('does NOT call Linking.openURL for an unsafe deep link (refusal logged)', async () => {
     const openURL = jest
       .spyOn(Linking, 'openURL')
       .mockResolvedValue(undefined);
@@ -379,10 +379,10 @@ describe('CTA production navigation (Linking.openURL)', () => {
       Object.assign(seeded.optional_cta, { deep_link: 'javascript:alert(1)' });
     }
     mockUseClientInsight.mockReturnValue(queryState({ data: seeded }));
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <ClientWearableInsightPanel {...baseProps} />,
     );
-    fireEvent.press(getByTestId('client-insight-cta'));
+    await fireEvent.press(getByTestId('client-insight-cta'));
     expect(openURL).not.toHaveBeenCalled();
     openURL.mockRestore();
   });
@@ -401,14 +401,14 @@ describe('CTA production navigation (Linking.openURL)', () => {
         }),
       }),
     );
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <ClientWearableInsightPanel {...baseProps} />,
     );
     // First press opens; the .finally re-enables the CTA so a second press
     // opens again (it is NOT permanently latched disabled after success).
-    fireEvent.press(getByTestId('client-insight-cta'));
+    await fireEvent.press(getByTestId('client-insight-cta'));
     await flushPromises();
-    fireEvent.press(getByTestId('client-insight-cta'));
+    await fireEvent.press(getByTestId('client-insight-cta'));
     await flushPromises();
     expect(openURL).toHaveBeenCalledTimes(2);
     openURL.mockRestore();
@@ -416,7 +416,7 @@ describe('CTA production navigation (Linking.openURL)', () => {
 });
 
 describe('source_metrics provenance', () => {
-  it('renders a labelled provenance row joining the metrics', () => {
+  it('renders a labelled provenance row joining the metrics', async () => {
     mockUseClientInsight.mockReturnValue(
       queryState({
         data: fullInsight({
@@ -424,7 +424,7 @@ describe('source_metrics provenance', () => {
         }),
       }),
     );
-    const { getByTestId, getByText, getByLabelText } = render(
+    const { getByTestId, getByText, getByLabelText } = await render(
       <ClientWearableInsightPanel {...baseProps} />,
     );
     expect(getByTestId('client-insight-source-metrics')).toBeTruthy();
@@ -439,7 +439,7 @@ describe('source_metrics provenance', () => {
     ).toBeTruthy();
   });
 
-  it('shows the first three metrics + a "+N more" suffix when there are extras', () => {
+  it('shows the first three metrics + a "+N more" suffix when there are extras', async () => {
     mockUseClientInsight.mockReturnValue(
       queryState({
         data: fullInsight({
@@ -453,7 +453,7 @@ describe('source_metrics provenance', () => {
         }),
       }),
     );
-    const { getByText } = render(
+    const { getByText } = await render(
       <ClientWearableInsightPanel {...baseProps} />,
     );
     expect(
@@ -463,7 +463,7 @@ describe('source_metrics provenance', () => {
 });
 
 describe('long-content clamp + Read more toggle (state #5)', () => {
-  it('clamps observation + norm to 3 lines, leaves intervention unclamped, and toggles Read more / Show less', () => {
+  it('clamps observation + norm to 3 lines, leaves intervention unclamped, and toggles Read more / Show less', async () => {
     mockUseClientInsight.mockReturnValue(
       queryState({
         data: fullInsight({
@@ -477,7 +477,7 @@ describe('long-content clamp + Read more toggle (state #5)', () => {
         }),
       }),
     );
-    const { getByTestId, queryByTestId, getByText } = render(
+    const { getByTestId, queryByTestId, getByText } = await render(
       <ClientWearableInsightPanel {...baseProps} />,
     );
 
@@ -505,7 +505,7 @@ describe('long-content clamp + Read more toggle (state #5)', () => {
     expect(getByText('Read more')).toBeTruthy();
 
     // Expand: both clamped fields lose their cap; label becomes Show less.
-    fireEvent.press(toggle);
+    await fireEvent.press(toggle);
     expect(
       getByTestId('client-insight-observation').props.numberOfLines,
     ).toBeUndefined();
@@ -515,7 +515,7 @@ describe('long-content clamp + Read more toggle (state #5)', () => {
     expect(getByText('Show less')).toBeTruthy();
 
     // Collapse again: re-clamps and returns to Read more.
-    fireEvent.press(getByTestId('client-insight-readmore'));
+    await fireEvent.press(getByTestId('client-insight-readmore'));
     expect(
       getByTestId('client-insight-observation').props.numberOfLines,
     ).toBe(3);
@@ -525,11 +525,11 @@ describe('long-content clamp + Read more toggle (state #5)', () => {
     expect(getByText('Read more')).toBeTruthy();
   });
 
-  it('does NOT render the toggle when content fits within 3 lines', () => {
+  it('does NOT render the toggle when content fits within 3 lines', async () => {
     mockUseClientInsight.mockReturnValue(
       queryState({ data: fullInsight() }),
     );
-    const { getByTestId, queryByTestId } = render(
+    const { getByTestId, queryByTestId } = await render(
       <ClientWearableInsightPanel {...baseProps} />,
     );
     // Report a within-cap layout (2 lines) for both clamped fields.
@@ -561,7 +561,7 @@ describe('dark-mode on-surface AA (P1 regression guard)', () => {
 
   it.each(buckets)(
     'Read more toggle ink clears 4.5:1 on the dark surface ($name)',
-    ({ bucket }) => {
+    async ({ bucket }) => {
       mockColorScheme.current = 'dark';
       mockUseClientInsight.mockReturnValue(
         queryState({
@@ -571,7 +571,7 @@ describe('dark-mode on-surface AA (P1 regression guard)', () => {
           }),
         }),
       );
-      const { getByTestId } = render(
+      const { getByTestId } = await render(
         <ClientWearableInsightPanel bucket={bucket} />,
       );
       // Surface the toggle so its resolved ink can be measured.
@@ -588,12 +588,12 @@ describe('dark-mode on-surface AA (P1 regression guard)', () => {
 
   it.each(buckets)(
     'Retry text + border ink clears AA on the dark surface ($name)',
-    ({ bucket }) => {
+    async ({ bucket }) => {
       mockColorScheme.current = 'dark';
       mockUseClientInsight.mockReturnValue(
         queryState({ isError: true, error: new Error('x'), refetch: jest.fn() }),
       );
-      const { getByTestId } = render(
+      const { getByTestId } = await render(
         <ClientWearableInsightPanel bucket={bucket} />,
       );
       const retry = getByTestId('client-insight-retry');
@@ -611,7 +611,7 @@ describe('dark-mode on-surface AA (P1 regression guard)', () => {
 });
 
 describe('Read more stale-state on refetch (#28)', () => {
-  it('drops the toggle when long content is replaced by short content', () => {
+  it('drops the toggle when long content is replaced by short content', async () => {
     mockUseClientInsight.mockReturnValue(
       queryState({
         data: fullInsight({
@@ -620,7 +620,7 @@ describe('Read more stale-state on refetch (#28)', () => {
         }),
       }),
     );
-    const { getByTestId, queryByTestId, rerender } = render(
+    const { getByTestId, queryByTestId, rerender } = await render(
       <ClientWearableInsightPanel {...baseProps} />,
     );
     // Long content overflows → toggle appears.
@@ -637,7 +637,7 @@ describe('Read more stale-state on refetch (#28)', () => {
         }),
       }),
     );
-    rerender(<ClientWearableInsightPanel {...baseProps} />);
+    await rerender(<ClientWearableInsightPanel {...baseProps} />);
     // The fresh layout pass reports a within-cap measurement; the always-assign
     // handler flips the flag back to false so the toggle is gone (not stuck on).
     overflowLayout(getByTestId('client-insight-observation'), 2);
@@ -647,17 +647,17 @@ describe('Read more stale-state on refetch (#28)', () => {
 });
 
 describe('edge-case section omission', () => {
-  it('omits the provenance row when source_metrics is empty', () => {
+  it('omits the provenance row when source_metrics is empty', async () => {
     mockUseClientInsight.mockReturnValue(
       queryState({ data: fullInsight({ source_metrics: [] }) }),
     );
-    const { queryByTestId } = render(
+    const { queryByTestId } = await render(
       <ClientWearableInsightPanel {...baseProps} />,
     );
     expect(queryByTestId('client-insight-source-metrics')).toBeNull();
   });
 
-  it('omits blank-after-trim sections but renders the real intervention (no EmptyPanel)', () => {
+  it('omits blank-after-trim sections but renders the real intervention (no EmptyPanel)', async () => {
     mockUseClientInsight.mockReturnValue(
       queryState({
         data: fullInsight({
@@ -667,7 +667,7 @@ describe('edge-case section omission', () => {
         }),
       }),
     );
-    const { getByText, queryByTestId } = render(
+    const { getByText, queryByTestId } = await render(
       <ClientWearableInsightPanel {...baseProps} />,
     );
     // The two blank sections do NOT render…
@@ -680,7 +680,7 @@ describe('edge-case section omission', () => {
     expect(queryByTestId('client-insight-empty')).toBeNull();
   });
 
-  it('falls back to the EmptyPanel when all three text fields are blank', () => {
+  it('falls back to the EmptyPanel when all three text fields are blank', async () => {
     mockUseClientInsight.mockReturnValue(
       queryState({
         data: fullInsight({
@@ -694,7 +694,7 @@ describe('edge-case section omission', () => {
         }),
       }),
     );
-    const { getByTestId, queryByTestId } = render(
+    const { getByTestId, queryByTestId } = await render(
       <ClientWearableInsightPanel {...baseProps} />,
     );
     expect(getByTestId('client-insight-empty')).toBeTruthy();
@@ -706,7 +706,7 @@ describe('edge-case section omission', () => {
 });
 
 describe('unsafe deep-link refusal is logged (P2)', () => {
-  it('warns via logger when refusing a non-tgp deep link', () => {
+  it('warns via logger when refusing a non-tgp deep link', async () => {
     const warn = jest.spyOn(logger, 'warn').mockImplementation(() => {});
     const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
     const seeded: ClientInsightResponse = fullInsight({
@@ -716,10 +716,10 @@ describe('unsafe deep-link refusal is logged (P2)', () => {
       Object.assign(seeded.optional_cta, { deep_link: 'javascript:alert(1)' });
     }
     mockUseClientInsight.mockReturnValue(queryState({ data: seeded }));
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <ClientWearableInsightPanel {...baseProps} />,
     );
-    fireEvent.press(getByTestId('client-insight-cta'));
+    await fireEvent.press(getByTestId('client-insight-cta'));
     expect(openURL).not.toHaveBeenCalled();
     // The refusal must leave a breadcrumb naming the unsafe-link refusal.
     expect(warn).toHaveBeenCalledTimes(1);

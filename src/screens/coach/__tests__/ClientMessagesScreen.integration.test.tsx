@@ -189,23 +189,23 @@ describe('ClientMessagesScreen — full-screen report integration (P1-B)', () =>
     postMock.mockResolvedValue({ data: { ok: true, report_id: 'rep-1' } });
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
 
-    const { findByLabelText, getByLabelText, getByText } = render(<ClientMessagesScreen />);
+    const { findByLabelText, getByLabelText, getByText } = await render(<ClientMessagesScreen />);
 
     // Long-press the bubble — MessageBubble exposes
     // accessibilityLabel="Message: <body>. Long press for actions."
     const bubble = await findByLabelText(/Message: sketchy link here/);
-    fireEvent(bubble, 'longPress');
+    await fireEvent(bubble, 'longPress');
 
     // Action sheet (Android Modal) appears; tap Report Message.
     const reportRow = await waitFor(() => getByLabelText('Report Message'));
-    fireEvent.press(reportRow);
+    await fireEvent.press(reportRow);
 
     // Report sheet appears; pick the Spam reason.
     const spamOption = await waitFor(() => getByLabelText('Spam'));
-    fireEvent.press(spamOption);
+    await fireEvent.press(spamOption);
 
     // Submit.
-    fireEvent.press(getByLabelText('Submit report'));
+    await fireEvent.press(getByLabelText('Submit report'));
 
     // The full chain reached the HTTP layer. This is the assertion the audit
     // demanded: the underlying api.post must have been called with the exact
@@ -281,7 +281,7 @@ describe('ClientMessagesScreen — server block hydration filters the DM list (P
       },
     ];
 
-    const { queryByText, findByText } = render(<ClientMessagesScreen />);
+    const { queryByText, findByText } = await render(<ClientMessagesScreen />);
 
     // Before server hydration completes, the screen renders the loading
     // indicator and NOTHING from the message payload — assert the blocked
@@ -321,7 +321,7 @@ describe('ClientMessagesScreen — server block hydration filters the DM list (P
     });
     mockMessagesByClient['client-1'] = [];
 
-    render(<ClientMessagesScreen />);
+    await render(<ClientMessagesScreen />);
 
     await waitFor(() => {
       expect(useBlockedUsersStore.getState().isBlocked('client-1')).toBe(true);

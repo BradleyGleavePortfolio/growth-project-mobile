@@ -61,10 +61,10 @@ describe('AIBudgetTutorialModal — operator override BLOCKING behavior', () => 
     await AsyncStorage.clear();
   });
 
-  it('renders no dismiss affordance on cards 1–3', () => {
+  it('renders no dismiss affordance on cards 1–3', async () => {
     const onClose = jest.fn();
     const onSelectPack = jest.fn();
-    const { queryByTestId, getByText } = render(
+    const { queryByTestId, getByText } = await render(
       <AIBudgetTutorialModal
         visible
         budget={budget}
@@ -82,7 +82,7 @@ describe('AIBudgetTutorialModal — operator override BLOCKING behavior', () => 
     try {
       const onClose = jest.fn();
       const onSelectPack = jest.fn();
-      const { getByTestId } = render(
+      const { getByTestId } = await render(
         <AIBudgetTutorialModal
           visible
           budget={budget}
@@ -95,8 +95,8 @@ describe('AIBudgetTutorialModal — operator override BLOCKING behavior', () => 
       // total, so 3 advances). The transition uses setTimeout(120) to wait
       // for the fade-out; we flush all timers between presses.
       for (let i = 0; i < 3; i += 1) {
-        fireEvent.press(getByTestId('ai-tutorial-continue'));
-        act(() => {
+        await fireEvent.press(getByTestId('ai-tutorial-continue'));
+        await act(() => {
           jest.advanceTimersByTime(300);
         });
       }
@@ -115,7 +115,7 @@ describe('AIBudgetTutorialModal — operator override BLOCKING behavior', () => 
     try {
       const onClose = jest.fn();
       const onSelectPack = jest.fn();
-      const { getByTestId } = render(
+      const { getByTestId } = await render(
         <AIBudgetTutorialModal
           visible
           budget={budget}
@@ -124,12 +124,12 @@ describe('AIBudgetTutorialModal — operator override BLOCKING behavior', () => 
         />,
       );
       for (let i = 0; i < 3; i += 1) {
-        fireEvent.press(getByTestId('ai-tutorial-continue'));
-        act(() => {
+        await fireEvent.press(getByTestId('ai-tutorial-continue'));
+        await act(() => {
           jest.advanceTimersByTime(300);
         });
       }
-      fireEvent.press(getByTestId('ai-tutorial-later'));
+      await fireEvent.press(getByTestId('ai-tutorial-later'));
 
       // setItem is async; let pending promises settle.
       jest.useRealTimers();
@@ -146,7 +146,7 @@ describe('AIBudgetTutorialModal — operator override BLOCKING behavior', () => 
     try {
       const onClose = jest.fn();
       const onSelectPack = jest.fn();
-      const { getByTestId } = render(
+      const { getByTestId } = await render(
         <AIBudgetTutorialModal
           visible
           budget={budget}
@@ -155,12 +155,12 @@ describe('AIBudgetTutorialModal — operator override BLOCKING behavior', () => 
         />,
       );
       for (let i = 0; i < 3; i += 1) {
-        fireEvent.press(getByTestId('ai-tutorial-continue'));
-        act(() => {
+        await fireEvent.press(getByTestId('ai-tutorial-continue'));
+        await act(() => {
           jest.advanceTimersByTime(300);
         });
       }
-      fireEvent.press(getByTestId('ai-pack-option-2500'));
+      await fireEvent.press(getByTestId('ai-pack-option-2500'));
       jest.useRealTimers();
       await waitFor(() => expect(onSelectPack).toHaveBeenCalledWith(2500));
     } finally {

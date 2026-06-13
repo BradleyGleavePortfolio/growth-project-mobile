@@ -49,8 +49,8 @@ function flatten(style: unknown): Record<string, unknown> {
 }
 
 describe('RomanAvatar — bundled face is the default, monogram only on fallback', () => {
-  it('renders an <Image> (NOT the monogram) for the neutral crop by default', () => {
-    const { getByTestId } = render(
+  it('renders an <Image> (NOT the monogram) for the neutral crop by default', async () => {
+    const { getByTestId } = await render(
       <RomanAvatar crop="neutral" size={64} testID="roman" />,
     );
     const node = getByTestId('roman');
@@ -61,8 +61,8 @@ describe('RomanAvatar — bundled face is the default, monogram only on fallback
     expect(node.props.children).toBeUndefined();
   });
 
-  it('renders an <Image> for the smile crop and announces the pleased register', () => {
-    const { getByTestId } = render(
+  it('renders an <Image> for the smile crop and announces the pleased register', async () => {
+    const { getByTestId } = await render(
       <RomanAvatar crop="smile" size={64} testID="roman" />,
     );
     const node = getByTestId('roman');
@@ -70,8 +70,8 @@ describe('RomanAvatar — bundled face is the default, monogram only on fallback
     expect(node.props.accessibilityLabel).toBe('Roman, pleased');
   });
 
-  it('renders an <Image> with the given uri when a string source override is provided', () => {
-    const { getByTestId } = render(
+  it('renders an <Image> with the given uri when a string source override is provided', async () => {
+    const { getByTestId } = await render(
       <RomanAvatar
         crop="neutral"
         source="https://cdn.example.com/roman/neutral.png"
@@ -86,8 +86,8 @@ describe('RomanAvatar — bundled face is the default, monogram only on fallback
     });
   });
 
-  it('renders the monogram tile (NOT an Image) when the crop is explicitly monogram', () => {
-    const { getByTestId, getByText } = render(
+  it('renders the monogram tile (NOT an Image) when the crop is explicitly monogram', async () => {
+    const { getByTestId, getByText } = await render(
       <RomanAvatar crop="monogram" size={28} testID="roman" />,
     );
     const node = getByTestId('roman');
@@ -96,14 +96,14 @@ describe('RomanAvatar — bundled face is the default, monogram only on fallback
     expect(getByText('R')).toBeTruthy();
   });
 
-  it('falls back to the monogram tile only after the image fails to load (onError)', () => {
-    const { getByTestId, getByText } = render(
+  it('falls back to the monogram tile only after the image fails to load (onError)', async () => {
+    const { getByTestId, getByText } = await render(
       <RomanAvatar crop="neutral" size={64} testID="roman" />,
     );
     const image = getByTestId('roman');
     expect(image.type).toBe('Image');
     // Simulate a load failure: the monogram tile takes over.
-    fireEvent(image, 'error', { nativeEvent: { error: 'load failed' } });
+    await fireEvent(image, 'error', { nativeEvent: { error: 'load failed' } });
     const after = getByTestId('roman');
     expect(after.type).not.toBe('Image');
     expect(getByText('R')).toBeTruthy();
@@ -113,8 +113,8 @@ describe('RomanAvatar — bundled face is the default, monogram only on fallback
 describe('ConfirmModal — destructive variant uses danger tokens (UX-03)', () => {
   const noop = () => {};
 
-  it('the destructive variant (default) paints the confirm with semantic.danger tokens', () => {
-    const { getByTestId, getByText } = render(
+  it('the destructive variant (default) paints the confirm with semantic.danger tokens', async () => {
+    const { getByTestId, getByText } = await render(
       <ConfirmModal
         visible
         title="Remove this client"
@@ -133,8 +133,8 @@ describe('ConfirmModal — destructive variant uses danger tokens (UX-03)', () =
     expect(labelStyle.color).toBe(semantic.danger.fg);
   });
 
-  it('an explicit destructive variant matches the default treatment', () => {
-    const { getByTestId } = render(
+  it('an explicit destructive variant matches the default treatment', async () => {
+    const { getByTestId } = await render(
       <ConfirmModal
         visible
         title="Hide this content"
@@ -150,8 +150,8 @@ describe('ConfirmModal — destructive variant uses danger tokens (UX-03)', () =
     expect(style.borderColor).toBe(semantic.danger.border);
   });
 
-  it('the constructive variant does NOT use the danger fill', () => {
-    const { getByTestId } = render(
+  it('the constructive variant does NOT use the danger fill', async () => {
+    const { getByTestId } = await render(
       <ConfirmModal
         visible
         title="Save changes"
@@ -166,9 +166,9 @@ describe('ConfirmModal — destructive variant uses danger tokens (UX-03)', () =
     expect(style.backgroundColor).not.toBe(semantic.danger.bg);
   });
 
-  it('a busy destructive confirm is disabled and does not fire onConfirm', () => {
+  it('a busy destructive confirm is disabled and does not fire onConfirm', async () => {
     const onConfirm = jest.fn();
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <ConfirmModal
         visible
         title="Remove this client"
@@ -179,7 +179,7 @@ describe('ConfirmModal — destructive variant uses danger tokens (UX-03)', () =
         testID="cm"
       />,
     );
-    fireEvent.press(getByTestId('cm-confirm'));
+    await fireEvent.press(getByTestId('cm-confirm'));
     expect(onConfirm).not.toHaveBeenCalled();
   });
 });

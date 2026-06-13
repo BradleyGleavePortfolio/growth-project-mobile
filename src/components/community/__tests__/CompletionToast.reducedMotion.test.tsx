@@ -126,7 +126,7 @@ describe('CompletionToast — reduced motion', () => {
   it('Case 1 — reduced motion ENABLED: suppresses the translateY slide and registers the reduceMotionChanged subscription', async () => {
     isReduceMotionEnabled.mockResolvedValue(true);
 
-    const { getByTestId, rerender } = render(
+    const { getByTestId, rerender } = await render(
       <CompletionToast state={null} testID={TEST_ID} />,
     );
 
@@ -142,7 +142,7 @@ describe('CompletionToast — reduced motion', () => {
 
     // Fire the toast now that reduce-motion has resolved to `true`.
     await act(async () => {
-      rerender(
+      await rerender(
         <CompletionToast state={toastState('Cohort created.', 1)} testID={TEST_ID} />,
       );
     });
@@ -162,7 +162,7 @@ describe('CompletionToast — reduced motion', () => {
   it('Case 2 — reduced motion DISABLED: animates the translateY slide from +16 to 0', async () => {
     isReduceMotionEnabled.mockResolvedValue(false);
 
-    const { getByTestId, rerender } = render(
+    const { getByTestId, rerender } = await render(
       <CompletionToast state={null} testID={TEST_ID} />,
     );
 
@@ -172,7 +172,7 @@ describe('CompletionToast — reduced motion', () => {
     parallelSpy.mockClear();
 
     await act(async () => {
-      rerender(
+      await rerender(
         <CompletionToast state={toastState('Invite sent.', 1)} testID={TEST_ID} />,
       );
     });
@@ -193,7 +193,7 @@ describe('CompletionToast — reduced motion', () => {
     // Start with reduce-motion OFF; render but do not show a toast yet.
     isReduceMotionEnabled.mockResolvedValue(false);
 
-    const { getByTestId, rerender } = render(
+    const { getByTestId, rerender } = await render(
       <CompletionToast state={null} testID={TEST_ID} />,
     );
 
@@ -210,7 +210,7 @@ describe('CompletionToast — reduced motion', () => {
 
     // Now show the toast: it must honour the runtime flip and NOT slide.
     await act(async () => {
-      rerender(
+      await rerender(
         <CompletionToast state={toastState('Hidden.', 1)} testID={TEST_ID} />,
       );
     });

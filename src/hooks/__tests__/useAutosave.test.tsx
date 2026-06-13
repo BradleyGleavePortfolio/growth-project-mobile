@@ -216,7 +216,7 @@ afterEach(async () => {
 describe('useAutosave — debounce + happy path', () => {
   it('does not fire on an unchanged value', async () => {
     const value = { n: 0 };
-    renderHook(() =>
+    await renderHook(() =>
       useAutosave<Copy>({
         planId: 'p1',
         value,
@@ -242,7 +242,7 @@ describe('useAutosave — debounce + happy path', () => {
       return okResponse({ head: 4, token: TOKEN_B });
     });
 
-    const { result, rerender } = renderHook(
+    const { result, rerender } = await renderHook(
       ({ value }: { value: Copy }) =>
         useAutosave<Copy>({
           planId: 'p1',
@@ -254,7 +254,7 @@ describe('useAutosave — debounce + happy path', () => {
       { initialProps: { value: { n: 0 } } },
     );
 
-    rerender({ value: { n: 1 } });
+    await rerender({ value: { n: 1 } });
     await act(async () => {
       jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
     });
@@ -274,7 +274,7 @@ describe('useAutosave — debounce + happy path', () => {
   it('settles the saved confirmation back to idle after the settle delay (pill hides)', async () => {
     mockAutosave.mockResolvedValueOnce(okResponse({ head: 1, token: TOKEN_B }));
 
-    const { result, rerender } = renderHook(
+    const { result, rerender } = await renderHook(
       ({ value }: { value: Copy }) =>
         useAutosave<Copy>({
           planId: 'p1',
@@ -286,7 +286,7 @@ describe('useAutosave — debounce + happy path', () => {
       { initialProps: { value: { n: 0 } } },
     );
 
-    rerender({ value: { n: 1 } });
+    await rerender({ value: { n: 1 } });
     await act(async () => {
       jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
     });
@@ -324,7 +324,7 @@ describe('useAutosave — 409 rebase (P0: first-409 must not drop edits)', () =>
       .mockResolvedValueOnce(okResponse({ head: 10, token: TOKEN_A }));
     const onConflict = jest.fn();
 
-    const { result, rerender } = renderHook(
+    const { result, rerender } = await renderHook(
       ({ value }: { value: Copy }) =>
         useAutosave<Copy>({
           planId: 'p1',
@@ -337,7 +337,7 @@ describe('useAutosave — 409 rebase (P0: first-409 must not drop edits)', () =>
       { initialProps: { value: { n: 0 } } },
     );
 
-    rerender({ value: { n: 1 } });
+    await rerender({ value: { n: 1 } });
     await act(async () => {
       jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
     });
@@ -405,7 +405,7 @@ describe('useAutosave — 409 rebase (P0: first-409 must not drop edits)', () =>
     });
     const statuses: string[] = [];
 
-    const { result, rerender } = renderHook(
+    const { result, rerender } = await renderHook(
       ({ value }: { value: Copy }) => {
         const r = useAutosave<Copy>({
           planId: 'p1',
@@ -421,7 +421,7 @@ describe('useAutosave — 409 rebase (P0: first-409 must not drop edits)', () =>
       { initialProps: { value: { n: 0 } } },
     );
 
-    rerender({ value: { n: 1 } });
+    await rerender({ value: { n: 1 } });
     await act(async () => {
       jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
     });
@@ -465,7 +465,7 @@ describe('useAutosave — 409 rebase (P0: first-409 must not drop edits)', () =>
       .mockResolvedValueOnce(okResponse({ head: 10, token: TOKEN_A }));
     const onConflict = jest.fn();
 
-    const { result, rerender } = renderHook(
+    const { result, rerender } = await renderHook(
       ({ value }: { value: Copy }) =>
         useAutosave<Copy>({
           planId: 'p1',
@@ -479,14 +479,14 @@ describe('useAutosave — 409 rebase (P0: first-409 must not drop edits)', () =>
     );
 
     // First edit → clean 200.
-    rerender({ value: { n: 1 } });
+    await rerender({ value: { n: 1 } });
     await act(async () => {
       jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
     });
     await waitFor(() => expect(result.current.status).toBe('saved'));
 
     // Second edit → 409 stale-lock, now a REAL conflict (a save already landed).
-    rerender({ value: { n: 2 } });
+    await rerender({ value: { n: 2 } });
     await act(async () => {
       jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
     });
@@ -524,7 +524,7 @@ describe('useAutosave — 409 rebase (P0: first-409 must not drop edits)', () =>
       )
       .mockResolvedValueOnce(okResponse({ head: 7, token: TOKEN_B }));
 
-    const { result, rerender } = renderHook(
+    const { result, rerender } = await renderHook(
       ({ value }: { value: Copy }) =>
         useAutosave<Copy>({
           planId: 'p1',
@@ -536,7 +536,7 @@ describe('useAutosave — 409 rebase (P0: first-409 must not drop edits)', () =>
       { initialProps: { value: { n: 0 } } },
     );
 
-    rerender({ value: { n: 1 } });
+    await rerender({ value: { n: 1 } });
     await act(async () => {
       jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
     });
@@ -564,7 +564,7 @@ describe('useAutosave — offline leaves the batch to replay', () => {
     mockAutosave.mockRejectedValueOnce(
       new WorkoutAutosaveApiError('network', 0, 'offline'),
     );
-    const { result, rerender } = renderHook(
+    const { result, rerender } = await renderHook(
       ({ value }: { value: Copy }) =>
         useAutosave<Copy>({
           planId: 'p1',
@@ -575,7 +575,7 @@ describe('useAutosave — offline leaves the batch to replay', () => {
         }),
       { initialProps: { value: { n: 0 } } },
     );
-    rerender({ value: { n: 1 } });
+    await rerender({ value: { n: 1 } });
     await act(async () => {
       jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
     });
@@ -602,7 +602,7 @@ describe('useAutosave — kill/replay via the mirror', () => {
     });
     mockAutosave.mockResolvedValueOnce(okResponse({ head: 3, token: TOKEN_B }));
 
-    const { result } = renderHook(() =>
+    const { result } = await renderHook(() =>
       useAutosave<Copy>({
         planId: 'p1',
         value: { n: 0 },
@@ -623,7 +623,7 @@ describe('useAutosave — kill/replay via the mirror', () => {
 describe('useAutosave — background force-flush', () => {
   it('flushes immediately when the app backgrounds (no debounce wait)', async () => {
     mockAutosave.mockResolvedValueOnce(okResponse());
-    const { rerender } = renderHook(
+    const { rerender } = await renderHook(
       ({ value }: { value: Copy }) =>
         useAutosave<Copy>({
           planId: 'p1',
@@ -634,7 +634,7 @@ describe('useAutosave — background force-flush', () => {
         }),
       { initialProps: { value: { n: 0 } } },
     );
-    rerender({ value: { n: 1 } });
+    await rerender({ value: { n: 1 } });
     // Background BEFORE the debounce elapses — should still flush.
     await act(async () => {
       mockAppStateHandler?.('background');
@@ -645,7 +645,7 @@ describe('useAutosave — background force-flush', () => {
 
 describe('useAutosave — flag-off invariance', () => {
   it('is fully inert with enabled:false (zero network, zero mirror)', async () => {
-    const { rerender } = renderHook(
+    const { rerender } = await renderHook(
       ({ value }: { value: Copy }) =>
         useAutosave<Copy>({
           planId: 'p1',
@@ -657,7 +657,7 @@ describe('useAutosave — flag-off invariance', () => {
         }),
       { initialProps: { value: { n: 0 } } },
     );
-    rerender({ value: { n: 1 } });
+    await rerender({ value: { n: 1 } });
     await act(async () => {
       jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 100);
       mockAppStateHandler?.('background');
@@ -694,7 +694,7 @@ describe('useAutosave — P0: in-flight coalescing must not drop the latest edit
       key === 'idem-1' ? false : true,
     );
 
-    const { result, rerender } = renderHook(
+    const { result, rerender } = await renderHook(
       ({ value }: { value: Copy }) =>
         useAutosave<Copy>({
           planId: 'p1',
@@ -707,7 +707,7 @@ describe('useAutosave — P0: in-flight coalescing must not drop the latest edit
     );
 
     // First edit → debounce → first request starts (and stays in flight).
-    rerender({ value: { n: 1 } });
+    await rerender({ value: { n: 1 } });
     await act(async () => {
       jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
     });
@@ -719,7 +719,7 @@ describe('useAutosave — P0: in-flight coalescing must not drop the latest edit
 
     // SECOND edit while the first is still in flight → must be queued, NOT merged
     // into the in-flight batch, and must carry its OWN fresh key + mirror entry.
-    rerender({ value: { n: 2 } });
+    await rerender({ value: { n: 2 } });
     await act(async () => {
       jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
     });
@@ -764,7 +764,7 @@ describe('useAutosave — P1: stable flush on unmount captures the latest edit',
     const open = defer<ReturnType<typeof okResponse>>();
     mockAutosave.mockReturnValue(open.promise);
 
-    const { rerender, unmount } = renderHook(
+    const { rerender, unmount } = await renderHook(
       ({ value }: { value: Copy }) =>
         useAutosave<Copy>({
           planId: 'p1',
@@ -779,9 +779,9 @@ describe('useAutosave — P1: stable flush on unmount captures the latest edit',
     // Edit, then unmount IMMEDIATELY — before the debounce elapses. The stable
     // flush in the unmount cleanup must read latestValueRef (n:5), not a stale
     // closure that would see n:0 and compute no diff.
-    rerender({ value: { n: 5 } });
+    await rerender({ value: { n: 5 } });
     await act(async () => {
-      unmount();
+      await unmount();
     });
 
     // The latest edit was mirrored on the way out (the kill-the-app guarantee).
@@ -802,7 +802,7 @@ describe('useAutosave — P1: aborts the obsolete request on unmount, retains th
       return open.promise;
     });
 
-    const { rerender, unmount } = renderHook(
+    const { rerender, unmount } = await renderHook(
       ({ value }: { value: Copy }) =>
         useAutosave<Copy>({
           planId: 'p1',
@@ -815,7 +815,7 @@ describe('useAutosave — P1: aborts the obsolete request on unmount, retains th
     );
 
     // Drive a request into flight.
-    rerender({ value: { n: 1 } });
+    await rerender({ value: { n: 1 } });
     await act(async () => {
       jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
     });
@@ -831,7 +831,7 @@ describe('useAutosave — P1: aborts the obsolete request on unmount, retains th
     // Unmount mid-flight → the obsolete network request is aborted (the batch is
     // already durable on disk), and the mirror is NOT cleared.
     await act(async () => {
-      unmount();
+      await unmount();
     });
     await waitFor(() => expect(capturedSignal?.aborted).toBe(true));
     expect(mockClearIfKey).not.toHaveBeenCalled();
@@ -876,7 +876,7 @@ describe('useAutosave — P1 (R10 Fix #3): a 409-rebase re-mirror rejection must
       throw new Error('mirror write failed (storage unavailable)');
     });
 
-    const { rerender, unmount } = renderHook(
+    const { rerender, unmount } = await renderHook(
       ({ value }: { value: Copy }) =>
         useAutosave<Copy>({
           planId: 'p1',
@@ -890,7 +890,7 @@ describe('useAutosave — P1 (R10 Fix #3): a 409-rebase re-mirror rejection must
 
     // Edit → debounce → first send (idem-1) 409s → rebase + re-mirror (fails) →
     // rebased retry scheduled behind the conflict backoff, then sent + held.
-    rerender({ value: { n: 1 } });
+    await rerender({ value: { n: 1 } });
     await act(async () => {
       jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
       await Promise.resolve();
@@ -913,7 +913,7 @@ describe('useAutosave — P1 (R10 Fix #3): a 409-rebase re-mirror rejection must
     // therefore does NOT write a fresh mirror and cannot overwrite the
     // mirrorHeldRef the failed re-mirror just set. (We never advance the
     // debounce, so no new send is armed; the unmount clears the timer.)
-    rerender({ value: { n: 0 } });
+    await rerender({ value: { n: 0 } });
 
     // Unmount mid-retry. With mirrorHeldRef FALSE (Fix #3), the teardown must
     // NOT abort the in-flight rebased send — it is the ONLY surviving copy of
@@ -921,7 +921,7 @@ describe('useAutosave — P1 (R10 Fix #3): a 409-rebase re-mirror rejection must
     // assertion FAILS if Fix #3 is reverted: the ignored re-mirror result leaves
     // mirrorHeldRef stale-true, so the teardown aborts the non-durable send.
     await act(async () => {
-      unmount();
+      await unmount();
       await Promise.resolve();
     });
     expect(retrySignal?.aborted).toBe(false);
@@ -951,7 +951,7 @@ describe('useAutosave — P1: bounded backoff + NetInfo reconnect replay', () =>
       .mockRejectedValueOnce(new WorkoutAutosaveApiError('network', 0, 'offline'))
       .mockResolvedValueOnce(okResponse({ head: 1, token: TOKEN_B }));
 
-    const { result, rerender } = renderHook(
+    const { result, rerender } = await renderHook(
       ({ value }: { value: Copy }) =>
         useAutosave<Copy>({
           planId: 'p1',
@@ -963,7 +963,7 @@ describe('useAutosave — P1: bounded backoff + NetInfo reconnect replay', () =>
       { initialProps: { value: { n: 0 } } },
     );
 
-    rerender({ value: { n: 1 } });
+    await rerender({ value: { n: 1 } });
     await act(async () => {
       jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
     });
@@ -987,7 +987,7 @@ describe('useAutosave — P1: bounded backoff + NetInfo reconnect replay', () =>
       .mockRejectedValueOnce(new WorkoutAutosaveApiError('network', 0, 'offline'))
       .mockResolvedValueOnce(okResponse({ head: 1, token: TOKEN_B }));
 
-    const { result, rerender } = renderHook(
+    const { result, rerender } = await renderHook(
       ({ value }: { value: Copy }) =>
         useAutosave<Copy>({
           planId: 'p1',
@@ -999,7 +999,7 @@ describe('useAutosave — P1: bounded backoff + NetInfo reconnect replay', () =>
       { initialProps: { value: { n: 0 } } },
     );
 
-    rerender({ value: { n: 1 } });
+    await rerender({ value: { n: 1 } });
     await act(async () => {
       jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
     });
@@ -1081,7 +1081,7 @@ describe('useAutosave - MWB-4 #237 R11 (P1): 409 awaits server truth before reba
       rerenderValue?.({ sets: 4, notes: 'tempo' });
     });
 
-    const { result, rerender } = renderHook(
+    const { result, rerender } = await renderHook(
       ({ value }: { value: RowCopy }) => {
         const r = useAutosave<RowCopy>({
           planId: 'p1',
@@ -1098,11 +1098,11 @@ describe('useAutosave - MWB-4 #237 R11 (P1): 409 awaits server truth before reba
       // never touched notes; the server set it later).
       { initialProps: { value: { sets: 3, notes: null } as RowCopy } },
     );
-    rerenderValue = (next: RowCopy) => rerender({ value: next });
+    rerenderValue = (next: RowCopy) => await rerender({ value: next });
 
     // The coach edits sets 3 -> 4 (a sets-only change). The pending batch's
     // full-row upsert therefore carries notes=null off the STALE baseline.
-    rerender({ value: { sets: 4, notes: null } });
+    await rerender({ value: { sets: 4, notes: null } });
     await act(async () => {
       jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
     });
@@ -1146,7 +1146,7 @@ describe('useAutosave - MWB-4 #237 R11 (P1): 409 awaits server truth before reba
       throw new Error('refetch failed');
     });
 
-    const { result, rerender } = renderHook(
+    const { result, rerender } = await renderHook(
       ({ value }: { value: RowCopy }) =>
         useAutosave<RowCopy>({
           planId: 'p1',
@@ -1159,7 +1159,7 @@ describe('useAutosave - MWB-4 #237 R11 (P1): 409 awaits server truth before reba
       { initialProps: { value: { sets: 3, notes: null } as RowCopy } },
     );
 
-    rerender({ value: { sets: 4, notes: null } });
+    await rerender({ value: { sets: 4, notes: null } });
     await act(async () => {
       jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
     });
@@ -1194,7 +1194,7 @@ describe('useAutosave - MWB-4 #237 R11 (P1): bounded conflict-retry budget', () 
     );
     const onConflict = jest.fn(() => Promise.resolve());
 
-    const { result, rerender } = renderHook(
+    const { result, rerender } = await renderHook(
       ({ value }: { value: Copy }) =>
         useAutosave<Copy>({
           planId: 'p1',
@@ -1207,7 +1207,7 @@ describe('useAutosave - MWB-4 #237 R11 (P1): bounded conflict-retry budget', () 
       { initialProps: { value: { n: 0 } } },
     );
 
-    rerender({ value: { n: 1 } });
+    await rerender({ value: { n: 1 } });
     await act(async () => {
       jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
     });
@@ -1246,7 +1246,7 @@ describe('useAutosave - MWB-4 #237 R11 (P1): bounded conflict-retry budget', () 
     );
     const onConflict = jest.fn(() => Promise.resolve());
 
-    const { result, rerender } = renderHook(
+    const { result, rerender } = await renderHook(
       ({ value }: { value: Copy }) =>
         useAutosave<Copy>({
           planId: 'p1',
@@ -1259,7 +1259,7 @@ describe('useAutosave - MWB-4 #237 R11 (P1): bounded conflict-retry budget', () 
       { initialProps: { value: { n: 0 } } },
     );
 
-    rerender({ value: { n: 1 } });
+    await rerender({ value: { n: 1 } });
     await act(async () => {
       jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
     });
@@ -1335,7 +1335,7 @@ describe('useAutosave - MWB-4 #237 R13 (D-001/D-002): conflict adoption preserve
       rerenderValue?.({ sets: 4, notes: 'tempo' });
     });
 
-    const { result, rerender } = renderHook(
+    const { result, rerender } = await renderHook(
       ({ value }: { value: RowCopy }) => {
         const r = useAutosave<RowCopy>({
           planId: 'p1',
@@ -1350,11 +1350,11 @@ describe('useAutosave - MWB-4 #237 R13 (D-001/D-002): conflict adoption preserve
       },
       { initialProps: { value: { sets: 3, notes: null } as RowCopy } },
     );
-    rerenderValue = (next: RowCopy) => rerender({ value: next });
+    rerenderValue = (next: RowCopy) => await rerender({ value: next });
 
     // The coach's first-ever edit: sets 3 -> 4 (notes stays null locally). The
     // pending full-row upsert therefore carries notes=null off the baseline.
-    rerender({ value: { sets: 4, notes: null } });
+    await rerender({ value: { sets: 4, notes: null } });
     await act(async () => {
       jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
     });
@@ -1418,7 +1418,7 @@ describe('useAutosave - MWB-4 #237 R13 (D-001/D-002): conflict adoption preserve
       rerenderValue?.({ sets: 4, reps: 12, notes: 'tempo' });
     });
 
-    const { result, rerender } = renderHook(
+    const { result, rerender } = await renderHook(
       ({ value }: { value: TriRowCopy }) => {
         const r = useAutosave<TriRowCopy>({
           planId: 'p1',
@@ -1437,11 +1437,11 @@ describe('useAutosave - MWB-4 #237 R13 (D-001/D-002): conflict adoption preserve
         },
       },
     );
-    rerenderValue = (next: TriRowCopy) => rerender({ value: next });
+    rerenderValue = (next: TriRowCopy) => await rerender({ value: next });
 
     // Edit 1: sets 3 -> 4. Debounce fires -> request A goes in flight (and
     // blocks on aGate).
-    rerender({ value: { sets: 4, reps: 10, notes: null } });
+    await rerender({ value: { sets: 4, reps: 10, notes: null } });
     await act(async () => {
       jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
     });
@@ -1449,7 +1449,7 @@ describe('useAutosave - MWB-4 #237 R13 (D-001/D-002): conflict adoption preserve
 
     // Edit 2 (WHILE A in flight): reps 10 -> 12. Its debounced flush builds a
     // batch that lands in pendingNextRef (A still owns the in-flight slot).
-    rerender({ value: { sets: 4, reps: 12, notes: null } });
+    await rerender({ value: { sets: 4, reps: 12, notes: null } });
     await act(async () => {
       jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
     });

@@ -88,7 +88,7 @@ describe('DataExportScreen', () => {
   it('renders the heading and included-data list', async () => {
     mockGetStatus.mockResolvedValue(null);
 
-    const { getByText, findByText } = render(<DataExportScreen />);
+    const { getByText, findByText } = await render(<DataExportScreen />);
 
     await findByText('Request my data');
     expect(getByText(/Weight, food, and water logs/)).toBeTruthy();
@@ -99,7 +99,7 @@ describe('DataExportScreen', () => {
   it('shows the Request button when no export exists (idle state)', async () => {
     mockGetStatus.mockResolvedValue(null);
 
-    const { findByRole } = render(<DataExportScreen />);
+    const { findByRole } = await render(<DataExportScreen />);
 
     const btn = await findByRole('button', { name: /Request my data/i });
     expect(btn).toBeTruthy();
@@ -111,10 +111,10 @@ describe('DataExportScreen', () => {
     mockGetStatus.mockResolvedValue(null);
     mockRequestExport.mockResolvedValue(pendingRecord());
 
-    const { findByRole, findByText } = render(<DataExportScreen />);
+    const { findByRole, findByText } = await render(<DataExportScreen />);
 
     const btn = await findByRole('button', { name: /Request my data/i });
-    fireEvent.press(btn);
+    await fireEvent.press(btn);
 
     await findByText('Export in progress');
   });
@@ -124,10 +124,10 @@ describe('DataExportScreen', () => {
     // Axios throws with a response object — { response: { status: 409 } }
     mockRequestExport.mockRejectedValue({ response: { status: 409 } });
 
-    const { findByRole, findByText } = render(<DataExportScreen />);
+    const { findByRole, findByText } = await render(<DataExportScreen />);
 
     const btn = await findByRole('button', { name: /Request my data/i });
-    fireEvent.press(btn);
+    await fireEvent.press(btn);
 
     await findByText(/An export is already in progress/);
   });
@@ -136,10 +136,10 @@ describe('DataExportScreen', () => {
     mockGetStatus.mockResolvedValue(null);
     mockRequestExport.mockRejectedValue(new Error('Network error'));
 
-    const { findByRole, findByText } = render(<DataExportScreen />);
+    const { findByRole, findByText } = await render(<DataExportScreen />);
 
     const btn = await findByRole('button', { name: /Request my data/i });
-    fireEvent.press(btn);
+    await fireEvent.press(btn);
 
     await findByText(/Could not start export/);
   });
@@ -152,7 +152,7 @@ describe('DataExportScreen', () => {
     // Poll response: READY
     mockGetStatus.mockResolvedValue(readyRecord());
 
-    const { findByText } = render(<DataExportScreen />);
+    const { findByText } = await render(<DataExportScreen />);
 
     // Should start in polling state
     await findByText('Export in progress');
@@ -168,7 +168,7 @@ describe('DataExportScreen', () => {
   it('shows file size and expiry date when ready', async () => {
     mockGetStatus.mockResolvedValue(readyRecord());
 
-    const { findByText } = render(<DataExportScreen />);
+    const { findByText } = await render(<DataExportScreen />);
 
     await findByText('Your file is ready');
     // The status body is a single Text node interpolating
@@ -181,7 +181,7 @@ describe('DataExportScreen', () => {
   it('shows Download button when READY', async () => {
     mockGetStatus.mockResolvedValue(readyRecord());
 
-    const { findByRole } = render(<DataExportScreen />);
+    const { findByRole } = await render(<DataExportScreen />);
 
     const btn = await findByRole('button', { name: /Download your data file/i });
     expect(btn).toBeTruthy();
@@ -194,7 +194,7 @@ describe('DataExportScreen', () => {
       status: 'FAILED',
     });
 
-    const { findByText } = render(<DataExportScreen />);
+    const { findByText } = await render(<DataExportScreen />);
     await findByText('Export in progress');
 
     await act(async () => {
@@ -209,7 +209,7 @@ describe('DataExportScreen', () => {
   it('shows expired state when initial status is EXPIRED', async () => {
     mockGetStatus.mockResolvedValue(expiredRecord());
 
-    const { findByText } = render(<DataExportScreen />);
+    const { findByText } = await render(<DataExportScreen />);
 
     await findByText('Previous export expired');
     await findByText(/last 7 days/i);
@@ -219,11 +219,11 @@ describe('DataExportScreen', () => {
     mockGetStatus.mockResolvedValue(expiredRecord());
     mockRequestExport.mockResolvedValue(pendingRecord());
 
-    const { findByRole, findByText } = render(<DataExportScreen />);
+    const { findByRole, findByText } = await render(<DataExportScreen />);
 
     await findByText('Previous export expired');
     const btn = await findByRole('button', { name: /Request a fresh data export/i });
-    fireEvent.press(btn);
+    await fireEvent.press(btn);
 
     await findByText('Export in progress');
   });
@@ -233,7 +233,7 @@ describe('DataExportScreen', () => {
   it('all interactive elements have accessibilityLabel and accessibilityRole', async () => {
     mockGetStatus.mockResolvedValue(null);
 
-    const { findByRole } = render(<DataExportScreen />);
+    const { findByRole } = await render(<DataExportScreen />);
 
     const btn = await findByRole('button', { name: /Request my data/i });
     expect(btn).toBeTruthy();

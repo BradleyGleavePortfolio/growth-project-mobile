@@ -51,8 +51,8 @@ function makeEvent(overrides: Partial<CommunityEvent> = {}): CommunityEvent {
 }
 
 describe('EventCard', () => {
-  it('renders the title, state badge, and rsvp summary', () => {
-    const { getByText, getByTestId } = render(
+  it('renders the title, state badge, and rsvp summary', async () => {
+    const { getByText, getByTestId } = await render(
       <EventCard event={makeEvent()} onPress={jest.fn()} testID="card" />,
     );
     expect(getByTestId('card')).toBeTruthy();
@@ -61,8 +61,8 @@ describe('EventCard', () => {
     expect(getByText('12 going · 3 maybe')).toBeTruthy();
   });
 
-  it('wraps the card in a listitem while keeping the press target a button', () => {
-    const { getByTestId, UNSAFE_getByProps } = render(
+  it('wraps the card in a listitem while keeping the press target a button', async () => {
+    const { getByTestId, UNSAFE_getByProps } = await render(
       <EventCard event={makeEvent()} onPress={jest.fn()} testID="card" />,
     );
     // The inner press target keeps button semantics.
@@ -72,37 +72,37 @@ describe('EventCard', () => {
     expect(UNSAFE_getByProps({ role: 'listitem' })).toBeTruthy();
   });
 
-  it('fires onPress with the event when tapped', () => {
+  it('fires onPress with the event when tapped', async () => {
     const onPress = jest.fn();
     const event = makeEvent();
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <EventCard event={event} onPress={onPress} testID="card" />,
     );
-    fireEvent.press(getByTestId('card'));
+    await fireEvent.press(getByTestId('card'));
     expect(onPress).toHaveBeenCalledWith(event);
   });
 
-  it('renders a provisional event as saving and disabled', () => {
+  it('renders a provisional event as saving and disabled', async () => {
     const onPress = jest.fn();
     const event = makeEvent({ id: 'optimistic:abc' });
-    const { getByText, getByTestId } = render(
+    const { getByText, getByTestId } = await render(
       <EventCard event={event} onPress={onPress} testID="card" />,
     );
     expect(getByText('Saving…')).toBeTruthy();
-    fireEvent.press(getByTestId('card'));
+    await fireEvent.press(getByTestId('card'));
     expect(onPress).not.toHaveBeenCalled();
   });
 
-  it('shows the canceled label over the lifecycle state when canceled', () => {
-    const { getByText, queryByText } = render(
+  it('shows the canceled label over the lifecycle state when canceled', async () => {
+    const { getByText, queryByText } = await render(
       <EventCard event={makeEvent({ canceled: true })} onPress={jest.fn()} />,
     );
     expect(getByText('Canceled')).toBeTruthy();
     expect(queryByText('Scheduled')).toBeNull();
   });
 
-  it('falls back to "No RSVPs yet" when there are none', () => {
-    const { getByText } = render(
+  it('falls back to "No RSVPs yet" when there are none', async () => {
+    const { getByText } = await render(
       <EventCard
         event={makeEvent({
           rsvp_counts: {
@@ -144,10 +144,10 @@ describe('stateMeta (F5 unknown-state safety + F13 lifecycle labels)', () => {
     expect(stateMeta('LIVE').label).toBe('Event');
   });
 
-  it('renders the fallback label on a card given an out-of-contract state', () => {
+  it('renders the fallback label on a card given an out-of-contract state', async () => {
     // Cast through the public string overload using a plain typed assertion.
     const hostile = makeEvent({ state: 'archived' as CommunityEvent['state'] });
-    const { getByText } = render(<EventCard event={hostile} onPress={jest.fn()} />);
+    const { getByText } = await render(<EventCard event={hostile} onPress={jest.fn()} />);
     expect(getByText('Event')).toBeTruthy();
   });
 });

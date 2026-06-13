@@ -63,7 +63,7 @@ beforeEach(() => {
 afterEach(() => jest.restoreAllMocks());
 
 describe('SleepRecoveryTab — IDOR (#5)', () => {
-  it('renders RecoveryUnavailable on a 403, never throwing', () => {
+  it('renders RecoveryUnavailable on a 403, never throwing', async () => {
     mockUseWearableSamples.mockReturnValue({
       data: undefined,
       isError: true,
@@ -72,14 +72,14 @@ describe('SleepRecoveryTab — IDOR (#5)', () => {
       refetch: jest.fn(),
       error: new WearableSamplesError('forbidden', 403, 'WEARABLE_SAMPLES_FORBIDDEN'),
     });
-    const { getByTestId, getByText } = render(
+    const { getByTestId, getByText } = await render(
       <SleepRecoveryTab clientId="other-coach-client" colors={testColors} styles={styles} />,
     );
     expect(getByTestId('recovery-unavailable')).toBeTruthy();
     expect(getByText(/don't have access/i)).toBeTruthy();
   });
 
-  it('also handles a plain { status: 403 } transport error gracefully', () => {
+  it('also handles a plain { status: 403 } transport error gracefully', async () => {
     mockUseWearableSamples.mockReturnValue({
       data: undefined,
       isError: true,
@@ -88,7 +88,7 @@ describe('SleepRecoveryTab — IDOR (#5)', () => {
       refetch: jest.fn(),
       error: Object.assign(new Error('forbidden'), { status: 403 }),
     });
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <SleepRecoveryTab clientId="c1" colors={testColors} styles={styles} />,
     );
     expect(getByTestId('recovery-unavailable')).toBeTruthy();
@@ -96,7 +96,7 @@ describe('SleepRecoveryTab — IDOR (#5)', () => {
 });
 
 describe('SleepRecoveryTab — other errors (#36)', () => {
-  it('surfaces a retry on a non-403 failure', () => {
+  it('surfaces a retry on a non-403 failure', async () => {
     // refetch returns a Promise (React Query contract) so the tab's
     // floated-with-logged-rejection retry path can chain `.catch`.
     const refetch = jest.fn().mockResolvedValue(undefined);
@@ -108,14 +108,14 @@ describe('SleepRecoveryTab — other errors (#36)', () => {
       refetch,
       error: new WearableSamplesError('degraded', 503, 'WEARABLE_SAMPLES_DEGRADED'),
     });
-    const { getByTestId } = render(<SleepRecoveryTab clientId="c1" colors={testColors} styles={styles} />);
-    fireEvent.press(getByTestId('coach-recovery-retry'));
+    const { getByTestId } = await render(<SleepRecoveryTab clientId="c1" colors={testColors} styles={styles} />);
+    await fireEvent.press(getByTestId('coach-recovery-retry'));
     expect(refetch).toHaveBeenCalled();
   });
 });
 
 describe('SleepRecoveryTab — coach-only overlays', () => {
-  it('renders the anomaly band and cohort comparison when there is HRV data', () => {
+  it('renders the anomaly band and cohort comparison when there is HRV data', async () => {
     mockUseWearableSamples.mockReturnValue({
       data: resp([
         {
@@ -138,7 +138,7 @@ describe('SleepRecoveryTab — coach-only overlays', () => {
       refetch: jest.fn(),
       error: null,
     });
-    const { getByTestId } = render(<SleepRecoveryTab clientId="c1" colors={testColors} styles={styles} />);
+    const { getByTestId } = await render(<SleepRecoveryTab clientId="c1" colors={testColors} styles={styles} />);
     expect(getByTestId('coach-anomaly-band')).toBeTruthy();
     expect(getByTestId('coach-cohort-comparison')).toBeTruthy();
     expect(getByTestId('coach-recovery-tab')).toBeTruthy();

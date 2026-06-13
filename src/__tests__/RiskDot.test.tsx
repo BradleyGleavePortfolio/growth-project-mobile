@@ -18,23 +18,23 @@ jest.mock('../theme/ThemeProvider', () => ({
 }));
 
 describe('RiskDot', () => {
-  it('renders the green bucket', () => {
-    const { toJSON } = render(<RiskDot bucket="green" />);
+  it('renders the green bucket', async () => {
+    const { toJSON } = await render(<RiskDot bucket="green" />);
     expect(toJSON()).toMatchSnapshot();
   });
 
-  it('renders the amber bucket', () => {
-    const { toJSON } = render(<RiskDot bucket="amber" />);
+  it('renders the amber bucket', async () => {
+    const { toJSON } = await render(<RiskDot bucket="amber" />);
     expect(toJSON()).toMatchSnapshot();
   });
 
-  it('renders the red bucket', () => {
-    const { toJSON } = render(<RiskDot bucket="red" />);
+  it('renders the red bucket', async () => {
+    const { toJSON } = await render(<RiskDot bucket="red" />);
     expect(toJSON()).toMatchSnapshot();
   });
 
-  it('honours a custom size', () => {
-    const { toJSON } = render(<RiskDot bucket="red" size={24} />);
+  it('honours a custom size', async () => {
+    const { toJSON } = await render(<RiskDot bucket="red" size={24} />);
     expect(toJSON()).toMatchSnapshot();
   });
 });
