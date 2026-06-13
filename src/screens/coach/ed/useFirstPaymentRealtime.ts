@@ -443,12 +443,12 @@ export function useFirstPaymentRealtime({
             );
             return;
           }
-          // TODO(roman-ed3): when a backend success-history / ledger endpoint
-          // lands, gate an additional authoritative "this row has never
-          // previously succeeded" proof behind
+          // Forward hook (roman-ed3): when a backend success-history / ledger
+          // endpoint lands, an additional authoritative "this row has never
+          // previously succeeded" proof can be gated behind
           // featureFlags.romanFirstPaymentRequireBackendHistory before firing.
-          // Until then the OLD-status replay guard above is the proof the
-          // mobile client can make without backend support (see
+          // Until then the OLD-status replay guard above is the strongest proof
+          // the mobile client can make without backend support (see
           // AI_BUTLER_ROMAN_IDENTITY_SPEC.md, ED.3).
 
           // Guard (b): prove this is the FIRST successful payment.

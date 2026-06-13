@@ -207,7 +207,7 @@ export const featureFlags = {
    * successful). This flag is a forward hook: when a backend success-history /
    * ledger endpoint lands, the hook can additionally require an authoritative
    * "this row never previously succeeded" proof before celebrating. See
-   * AI_BUTLER_ROMAN_IDENTITY_SPEC.md (ED.3) and the TODO in
+   * AI_BUTLER_ROMAN_IDENTITY_SPEC.md (ED.3) and the forward-hook note in
    * useFirstPaymentRealtime.ts.
    *
    * env: EXPO_PUBLIC_FF_ROMAN_REQUIRE_BACKEND_HISTORY
