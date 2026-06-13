@@ -82,6 +82,24 @@ import RomanVoiceLogReadback from '../../components/roman/RomanVoiceLogReadback'
 // ~500ms of state if the process is killed mid-set.
 const PERSIST_DEBOUNCE_MS = 500;
 
+// R11 D-002: normalize an unknown thrown value into the structured fields the
+// completion-path logger requires for production diagnosis. Standardizing here
+// keeps every completion-path catch consistent (name/message/stack) regardless
+// of whether an Error, a string, or an arbitrary object was thrown.
+function normalizeError(error: unknown): { name: string; message: string; stack?: string } {
+  if (error instanceof Error) {
+    return { name: error.name, message: error.message, stack: error.stack };
+  }
+  if (typeof error === 'string') {
+    return { name: 'NonError', message: error };
+  }
+  try {
+    return { name: 'NonError', message: JSON.stringify(error) };
+  } catch {
+    return { name: 'NonError', message: String(error) };
+  }
+}
+
 export default function ActiveWorkoutScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -615,6 +633,24 @@ export default function ActiveWorkoutScreen() {
           // the server mutation succeeds.
           let localWriteSucceeded = false;
 
+          // R11 D-002: shared diagnostic context for every completion-path
+          // logger call. In a mixed coach/client app a durability failure is
+          // useless without route + acting role + the keys needed to segment
+          // it. `sessionId` here is the local session_name correlation key
+          // (= routineName); the durable server id is added per-call once the
+          // server mutation resolves. `checkpoint` is set by each call site to
+          // name which durable checkpoint failed.
+          const completionLogBase = {
+            route: 'ActiveWorkout' as const,
+            userRole: currentUser?.role ?? 'unknown',
+            userKey: userId || undefined,
+            userId: userId || undefined,
+            assignmentId: assignmentId ?? undefined,
+            routineName: routineName ?? undefined,
+            sessionId: routineName ?? undefined,
+            completedSetCount: completedSets,
+          };
+
           // Write each exercise as a separate row in the local
           // expo-sqlite store (one row per exercise group). A
           // workout session that spans multiple exercises produces N
@@ -655,7 +691,11 @@ export default function ActiveWorkoutScreen() {
             // so a persistently failing local durable write is diagnosable
             // rather than swallowed, matching the surrounding completion-path
             // catches.
-            logger.warn('mwb.completion.local-write', { error: localErr });
+            logger.warn('mwb.completion.local-write', {
+              ...completionLogBase,
+              checkpoint: 'local-sqlite-write',
+              error: normalizeError(localErr),
+            });
           }
 
           // Analytics — unchanged from before.
@@ -695,7 +735,12 @@ export default function ActiveWorkoutScreen() {
                     // workout is durable; failing to clear the local recovery
                     // session is non-fatal (it reconciles on next pull). Still
                     // surfaced for diagnosis rather than swallowed silently.
-                    logger.warn('mwb.completion.clear-recovery-session', { error });
+                    logger.warn('mwb.completion.clear-recovery-session', {
+                      ...completionLogBase,
+                      checkpoint: 'clear-recovery-session',
+                      serverId: serverId || undefined,
+                      error: normalizeError(error),
+                    });
                   });
                 }
                 // Phase 11 / Track 3: heavy haptic on workout completion
@@ -719,7 +764,12 @@ export default function ActiveWorkoutScreen() {
                     // Best-effort; pending rows will reconcile on the next pull.
                     // Surfaced (not swallowed) so a persistent mismatch is
                     // diagnosable rather than silent.
-                    logger.warn('mwb.completion.mark-session-synced', { error });
+                    logger.warn('mwb.completion.mark-session-synced', {
+                      ...completionLogBase,
+                      checkpoint: 'mark-session-synced',
+                      serverId: serverId || undefined,
+                      error: normalizeError(error),
+                    });
                   });
                 }
                 // Trigger sync so the newly created server record is
@@ -728,7 +778,12 @@ export default function ActiveWorkoutScreen() {
                 triggerSync().catch((error: unknown) => {
                   // Non-fatal: the server record exists; the next sync cycle
                   // will pull it. Surfaced for diagnosis.
-                  logger.warn('mwb.completion.trigger-sync', { error });
+                  logger.warn('mwb.completion.trigger-sync', {
+                    ...completionLogBase,
+                    checkpoint: 'trigger-sync',
+                    serverId: serverId || undefined,
+                    error: normalizeError(error),
+                  });
                 });
 
                 // If this workout is linked to a coach assignment, call the
@@ -753,7 +808,12 @@ export default function ActiveWorkoutScreen() {
                     started_at: sessionStartTimeRef.current.toISOString(),
                   }).catch((error: unknown) => {
                     // Non-fatal: generic workout already saved above.
-                    logger.warn('mwb.completion.assignment-sync', { error });
+                    logger.warn('mwb.completion.assignment-sync', {
+                      ...completionLogBase,
+                      checkpoint: 'assignment-sync',
+                      serverId: serverId || undefined,
+                      error: normalizeError(error),
+                    });
                   });
                 }
 
@@ -770,10 +830,18 @@ export default function ActiveWorkoutScreen() {
                 // celebration (P1-C-01). When the server did not return a usable
                 // id we navigate WITHOUT the signal rather than fabricate one —
                 // an un-keyable completion is not eligible for the one-shot.
-                navigation.navigate(
-                  'WorkoutMain',
-                  serverId ? { justCompletedId: serverId } : undefined,
-                );
+                //
+                // R11 D-001: this is the PRODUCER half of the P3 completion
+                // signal and must be gated by the same master flag as the
+                // consumer. With `romanChat` off we take the exact pre-P3 path
+                // — `navigation.goBack()` with no `justCompletedId` param — so
+                // no Roman signal is ever emitted, mirrored, latched, or
+                // cleared while the feature is disabled.
+                if (featureFlags.romanChat && serverId) {
+                  navigation.navigate('WorkoutMain', { justCompletedId: serverId });
+                } else {
+                  navigation.goBack();
+                }
               },
               onError: (err) => {
                 // Phase 11 / Track 3: error haptic on failed API action
@@ -797,7 +865,11 @@ export default function ActiveWorkoutScreen() {
                   }).catch((error: unknown) => {
                     // Best-effort re-save so the session stays recoverable after
                     // a failed server save. Surfaced for diagnosis.
-                    logger.warn('mwb.completion.resave-on-error', { error });
+                    logger.warn('mwb.completion.resave-on-error', {
+                      ...completionLogBase,
+                      checkpoint: 'resave-on-error',
+                      error: normalizeError(error),
+                    });
                   });
                 }
                 // API failed (offline). Records are already in WDB as 'pending'.

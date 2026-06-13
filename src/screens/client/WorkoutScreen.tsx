@@ -195,6 +195,13 @@ export function romanCompletionConsumedKey(
  * per account on a shared device. When it is missing (user not yet loaded) the
  * hook holds off rather than write an unscoped latch.
  *
+ * `enabled` gates the ENTIRE one-shot. It is the P3 master flag
+ * (`featureFlags.romanChat`). When it is false the hook is a true no-op: it
+ * never reads AsyncStorage, never writes the `roman.p3.completion-consumed:*`
+ * latch, and never clears the nav param — preserving exact pre-P3 behaviour
+ * (R11 D-001). Gating only the card render is insufficient: the producer and
+ * consumer of the completion signal must both be inert when Roman is off.
+ *
  * Extracted and exported so the one-shot behaviour is the single source of
  * truth, exercised directly by romanP3HostWiring.test.tsx without mounting the
  * full chart/sqlite-heavy screen.
@@ -203,6 +210,7 @@ export function useJustCompletedOneShot(
   justCompletedId: string | undefined,
   userKey: string | undefined,
   clearParam: () => void,
+  enabled: boolean,
 ): boolean {
   const [justCompleted, setJustCompleted] = useState(false);
   // The completion id currently being decided/celebrated for this focus
@@ -220,6 +228,11 @@ export function useJustCompletedOneShot(
   const consumedIdRef = useRef<string | undefined>(undefined);
   useFocusEffect(
     useCallback(() => {
+      // R11 D-001: with the P3 master flag off, the one-shot is fully inert —
+      // no AsyncStorage read, no latch write, no param clear, no state change.
+      // This is the consumer half of the producer/consumer gating that keeps
+      // flag-off behaviour byte-identical to pre-P3.
+      if (!enabled) return undefined;
       if (justCompletedId && userKey) {
         // Record the id being processed BEFORE any async work so a re-render —
         // including the one clearParam() will cause below — cannot orphan this
@@ -273,7 +286,7 @@ export function useJustCompletedOneShot(
           setJustCompleted(false);
         }
       };
-    }, [justCompletedId, userKey, clearParam]),
+    }, [enabled, justCompletedId, userKey, clearParam]),
   );
   return justCompleted;
 }
@@ -388,6 +401,7 @@ export default function WorkoutScreen() {
     route.params?.justCompletedId,
     completionUserKey,
     clearJustCompletedParam,
+    featureFlags.romanChat,
   );
 
   const onRefresh = useCallback(async () => {
