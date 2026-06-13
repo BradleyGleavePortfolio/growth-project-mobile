@@ -24,22 +24,43 @@
  * The chart/sqlite/navigator-heavy screens (ProgressScreen, WorkoutScreen,
  * CoachEarningsScreen) are impractical to fully render in a unit test, so their
  * decision logic is exercised through exported pure selectors
- * (`streakMilestoneTier`, `selectCheckInClient`) and component renders of the
+ * (`streakMilestoneTier`, `selectPendingCheckInClaim`) and component renders of the
  * copy. CoachBriefScreen renders cleanly and has a full render+assertion suite
  * in screens/coach/__tests__/CoachBriefScreenRoman.test.tsx.
  */
 import * as fs from 'fs';
 import * as path from 'path';
 import React from 'react';
-import { render } from '@testing-library/react-native';
+import { render, renderHook, act } from '@testing-library/react-native';
+
+// §2.8 behaviour test (Fix #5): drive the REAL extracted one-shot hook through
+// a focus/blur lifecycle. useFocusEffect is replaced with a controllable focus
+// manager that stores the latest effect and lets the test trigger focus (run
+// the effect, capturing its cleanup) and blur (run the cleanup). This is the
+// genuine react-navigation contract (cleanup runs on blur), so the test fails
+// if Fix #4's blur cleanup is reverted.
+const focusController: {
+  effect: null | (() => undefined | (() => void));
+  cleanup: null | (() => void);
+} = { effect: null, cleanup: null };
+jest.mock('@react-navigation/native', () => {
+  const actual = jest.requireActual('@react-navigation/native');
+  return {
+    ...actual,
+    useFocusEffect: (cb: () => undefined | (() => void)) => {
+      focusController.effect = cb;
+    },
+  };
+});
 
 import RomanCheckInNotice from '../RomanCheckInNotice';
 import RomanStreakCard from '../RomanStreakCard';
 import RomanWorkoutCompleteCard from '../RomanWorkoutCompleteCard';
 import RomanPayoutNotice from '../RomanPayoutNotice';
 import { streakMilestoneTier } from '../../../screens/client/ProgressScreen';
-import { selectCheckInClient, selectNewlyOnboardedClient } from '../../../screens/coach/CoachBriefScreen';
-import { romanCheckInReceived, romanStreak, romanPayout } from '../../../lib/roman/copy';
+import { selectPendingCheckInClaim, selectNewlyOnboardedClient } from '../../../screens/coach/CoachBriefScreen';
+import { useJustCompletedOneShot } from '../../../screens/client/WorkoutScreen';
+import { romanCheckInClaim, romanStreak, romanPayout } from '../../../lib/roman/copy';
 import type { CoachBriefClientCard, VerifiedProgressItem } from '../../../types/wave11';
 
 const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
@@ -86,7 +107,7 @@ describe('orphan guard — every P3 surface stays imported into its host, flag-g
 
   it('§2.12 RomanPayoutNotice → CoachEarningsScreen', () => {
     expect(EARNINGS).toContain("import RomanPayoutNotice from '../../../components/roman/RomanPayoutNotice'");
-    expect(EARNINGS).toMatch(/featureFlags\.romanChat &&\s*data\.lastPayoutAt &&\s*data\.lastPayoutAmountCents != null/);
+    expect(EARNINGS).toMatch(/featureFlags\.romanChat &&\s*data\.lastPayoutAmountCents != null &&\s*formatDate\(data\.lastPayoutAt\)/);
     expect(EARNINGS).toContain('testID="roman-payout-card"');
   });
 
@@ -130,36 +151,37 @@ function card(over: Partial<CoachBriefClientCard>): CoachBriefClientCard {
   };
 }
 
-// ── §2.4 check-in: pending check_in_consistency submission TRUE; overdue FALSE ─
-describe('§2.4 selectCheckInClient — only a REAL submitted check-in qualifies', () => {
-  it('TRUE: a client with a pending check_in_consistency submission is selected', () => {
+// ── §2.4 check-in: pending check_in_consistency claim TRUE; overdue FALSE ────
+describe('§2.4 selectPendingCheckInClaim — only a REAL pending claim qualifies', () => {
+  it('TRUE: a client with a pending check_in_consistency claim is selected', () => {
     const c = card({ clientDisplayName: 'Dana', latestVerifiedProgress: vp({ signoffStatus: 'pending' }) });
-    expect(selectCheckInClient([c])).toBe(c);
+    expect(selectPendingCheckInClaim([c])).toBe(c);
   });
 
-  it('FALSE: a check_in_overdue todo is NOT a submitted check-in (the R4 bug)', () => {
+  it('FALSE: a check_in_overdue todo is NOT a pending claim (the R4 bug)', () => {
     const overdue = card({
       clientDisplayName: 'Overdue Olive',
       todos: [{ id: 't1', kind: 'check_in_overdue', label: 'Check-in overdue' }],
     });
-    expect(selectCheckInClient([overdue])).toBeUndefined();
+    expect(selectPendingCheckInClaim([overdue])).toBeUndefined();
   });
 
-  it('FALSE: an already-approved check-in is no longer "submitted, awaiting review"', () => {
+  it('FALSE: an already-approved claim is no longer "submitted, awaiting review"', () => {
     const approved = card({ latestVerifiedProgress: vp({ signoffStatus: 'coach_approved' }) });
-    expect(selectCheckInClient([approved])).toBeUndefined();
+    expect(selectPendingCheckInClaim([approved])).toBeUndefined();
   });
 
-  it('FALSE: a pending submission of another kind is not a check-in', () => {
+  it('FALSE: a pending claim of another kind is not a check-in-consistency claim', () => {
     const otherKind = card({ latestVerifiedProgress: vp({ kind: 'net_worth_milestone', signoffStatus: 'pending' }) });
-    expect(selectCheckInClient([otherKind])).toBeUndefined();
+    expect(selectPendingCheckInClaim([otherKind])).toBeUndefined();
   });
 
-  it('the §2.4 default copy renders the submitted-check-in line for the selected client', () => {
+  it('the §2.4 default copy renders the pending-claim line for the selected client', () => {
     const { getByText } = render(<RomanCheckInNotice clientName="Dana" mode="default" />);
-    expect(getByText('Dana has submitted a check-in. I have placed it at the top of your queue.')).toBeTruthy();
-    // The copy asserts submission — never an overdue/missing framing.
-    expect(romanCheckInReceived({ clientName: 'Dana', mode: 'default' })).not.toMatch(/overdue|missing|chase/i);
+    expect(getByText('Dana has a check-in consistency claim awaiting your sign-off.')).toBeTruthy();
+    // The copy asserts only a pending claim — never a form arrival, queue
+    // reorder, or overdue/missing framing the host signal cannot prove.
+    expect(romanCheckInClaim({ clientName: 'Dana', mode: 'default' })).not.toMatch(/overdue|missing|chase|queue|placed it/i);
   });
 });
 
@@ -219,6 +241,36 @@ describe('§2.7 streakMilestoneTier — milestone copy on exact days only', () =
   });
 });
 
+// Harness that exercises the REAL useJustCompletedOneShot hook through a
+// focus/blur lifecycle via the controllable useFocusEffect mock above.
+function renderOneShotHarness({ justCompletedParam }: { justCompletedParam: boolean | undefined }) {
+  const clearParam = jest.fn();
+  let param = justCompletedParam;
+  focusController.effect = null;
+  focusController.cleanup = null;
+  const rendered = renderHook(() => useJustCompletedOneShot(param, clearParam));
+  return {
+    clearParam,
+    setParam(next: boolean | undefined) {
+      param = next;
+      act(() => rendered.rerender(undefined));
+    },
+    focus() {
+      // react-navigation runs the focus effect on focus and stores its cleanup.
+      const cleanup = focusController.effect ? focusController.effect() : undefined;
+      focusController.cleanup = typeof cleanup === 'function' ? cleanup : null;
+    },
+    blur() {
+      // On blur react-navigation invokes the cleanup returned by the effect.
+      if (focusController.cleanup) focusController.cleanup();
+      focusController.cleanup = null;
+    },
+    lastShow() {
+      return rendered.result.current;
+    },
+  };
+}
+
 // ── §2.8 workout-complete: one-shot just-completed signal, not historical ─────
 describe('§2.8 workout-complete renders from a real just-completed event only', () => {
   it('the host derives visibility from the one-shot justCompleted signal, NOT a historical session', () => {
@@ -230,10 +282,34 @@ describe('§2.8 workout-complete renders from a real just-completed event only',
     expect(WORKOUT).not.toMatch(/featureFlags\.romanChat && mostRecentCompleted/);
   });
 
-  it('the one-shot param is consumed once then cleared (no re-fire on refocus/refresh)', () => {
-    expect(WORKOUT).toContain('if (route.params?.justCompleted)');
-    expect(WORKOUT).toContain('setJustCompleted(true)');
-    expect(WORKOUT).toContain('navigation.setParams({ justCompleted: undefined })');
+  it('BEHAVIOUR: the card shows for exactly one focus session and not on a later refocus', () => {
+    // Drive the REAL extracted one-shot hook (useJustCompletedOneShot) through
+    // a focus/blur lifecycle. useFocusEffect is mocked to a controllable focus
+    // manager so we can simulate: completion-focus -> blur -> refocus (no new
+    // completion). This test FAILS if Fix #4's blur cleanup is reverted (the
+    // flag would stay true and the card would re-render on refocus).
+    const harness = renderOneShotHarness({ justCompletedParam: true });
+    // First focus after a genuine completion: card shows.
+    act(() => harness.focus());
+    expect(harness.lastShow()).toBe(true);
+    // The param was consumed (cleared) on focus so it cannot re-fire.
+    expect(harness.clearParam).toHaveBeenCalledTimes(1);
+    // Blur, then refocus WITHOUT a new completion param: card must NOT show.
+    act(() => harness.blur());
+    harness.setParam(undefined);
+    act(() => harness.focus());
+    expect(harness.lastShow()).toBe(false);
+  });
+
+  it('BEHAVIOUR: a genuine new completion on a later focus shows the card again', () => {
+    const harness = renderOneShotHarness({ justCompletedParam: true });
+    act(() => harness.focus());
+    expect(harness.lastShow()).toBe(true);
+    act(() => harness.blur());
+    // A NEW finish-workout save sets the param again before refocus.
+    harness.setParam(true);
+    act(() => harness.focus());
+    expect(harness.lastShow()).toBe(true);
   });
 
   it('the finish-workout path sets the signal on a successful save', () => {
@@ -253,24 +329,30 @@ describe('§2.12 payout omits the destination-account clause when last-four is u
     expect(EARNINGS).not.toContain('bankLast4={');
   });
 
-  it('TRUE: with no bankLast4, the copy states amount + settle window, no account token', () => {
+  it('TRUE: with no bankLast4, the past-tense copy states amount + send date, no account token', () => {
     const { getByText, queryByText } = render(
-      <RomanPayoutNotice amount="$240.00" settleDays={2} mode="default" testID="payout" />,
+      <RomanPayoutNotice amount="$240.00" sentOn="June 9" mode="default" testID="payout" />,
     );
     expect(
-      getByText('Your payout of $240.00 is on its way. Funds typically settle within 2 business days.'),
+      getByText('Your last payout of $240.00 was sent on June 9.'),
     ).toBeTruthy();
     expect(queryByText(/account ending/)).toBeNull();
   });
 
   it('FALSE: a placeholder em-dash token never appears in the rendered line', () => {
-    const line = romanPayout({ amount: '$240.00', settleDays: 2, mode: 'default' });
+    const line = romanPayout({ amount: '$240.00', sentOn: 'June 9', mode: 'default' });
     expect(line).not.toContain('\u2014\u2014\u2014\u2014');
     expect(line).not.toContain('ending undefined');
   });
 
+  it('the payout copy is past tense (historical lastPayoutAt), never in-transit', () => {
+    const line = romanPayout({ amount: '$240.00', sentOn: 'June 9', mode: 'default' });
+    expect(line).toContain('was sent on June 9');
+    expect(line).not.toMatch(/on its way|settle within|in transit/i);
+  });
+
   it('when a REAL last-four is supplied, the account clause is restored', () => {
-    expect(romanPayout({ amount: '$240.00', bankLast4: '4242', settleDays: 2, mode: 'default' })).toContain(
+    expect(romanPayout({ amount: '$240.00', bankLast4: '4242', sentOn: 'June 9', mode: 'default' })).toContain(
       'account ending 4242',
     );
   });

@@ -47,8 +47,9 @@ export default function RomanStreakCard({
   // on the error tally state).
   const crop = mode === 'celebration' ? 'smile' : 'neutral';
   // Deferred (roman-quip-budget): §2.7 permits a situation-aimed quip on the
-  // lower tiers (e.g. 3-day "I'm keeping count so you don't have to."). Gate it
-  // on the ~1-in-8 ceiling (§1.5) before shipping a quip variant.
+  // lower tiers (for example a 3-day line offering to keep the count so the
+  // client need not). Gate it on the ~1-in-8 ceiling (§1.5) before shipping a
+  // quip variant.
   const line = romanStreak({ tier, firstName, mode });
   return (
     <View style={styles.card} testID={testID} accessibilityRole="summary">

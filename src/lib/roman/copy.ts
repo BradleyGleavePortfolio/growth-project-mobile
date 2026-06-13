@@ -66,41 +66,57 @@ export function romanCoachBrief(args: RomanCoachBriefArgs): string {
     // spec §2.3 error (brief could not be assembled).
     return `Good morning, ${coachName}. The brief is not yet complete — one of my sources is slow to respond. I will have it shortly.`;
   }
-  // spec §2.3 default.
-  return `Good morning, ${coachName}. Your brief is ready. ${clientCount} clients need attention today, and two check-ins arrived overnight.`;
+  // §2.3 default. The brief payload (CoachBriefPayload, types/wave11.ts) carries
+  // NO overnight-check-in-arrival count, so the line speaks only from the real
+  // inputs it is given — the coach's name and the client-attention count. The
+  // spec sample's "two check-ins arrived overnight" clause was a hardcoded
+  // figure the host cannot prove (R5 truthful-signal rule), so it is dropped.
+  return `Good morning, ${coachName}. Your brief is ready. ${clientCount} clients need attention today.`;
 }
 
-// ── §2.4 Client check-in submitted to coach (coach app) ─────────────────────
+// ── §2.4 Client check-in-consistency claim awaiting sign-off (coach app) ─────
 
-export interface RomanCheckInReceivedArgs {
-  /** Submitting client's display name. */
+export interface RomanCheckInClaimArgs {
+  /** Claiming client's display name. */
   clientName: string;
   /**
-   * default — a check-in arrived; celebration — the client's first-ever
-   * check-in; error — the check-in arrived but its attachments failed to load.
+   * default — a check-in-consistency claim is pending the coach's sign-off;
+   * celebration — the client's first such claim; error — the claim's proof
+   * source could not be retrieved.
    */
   mode: RomanVoiceMode;
 }
 
 /**
- * §2.4 Client check-in received. spec-exact default/celebration/error.
+ * §2.4 Client check-in-consistency claim awaiting sign-off.
  *
- * Trigger: `celebration` on the client's first-ever check-in; `error` when
- * attached photos could not be retrieved; otherwise `default`.
+ * The host signal is a `latestVerifiedProgress` item whose `kind` is
+ * `check_in_consistency` and whose `signoffStatus` is `pending` (see
+ * types/wave11.ts:43-45,68-91,146-147). That field is contractually defined as
+ * the client's last verified-progress submission in the `pending` =
+ * "submitted, awaiting coach review" state. It proves a check-in-consistency
+ * CLAIM is awaiting the coach's sign-off; it does NOT prove a check-in form
+ * arrived, that attachments exist, or that any review queue was reordered. The
+ * copy therefore asserts only the pending-claim fact (R5/R6 truthful-signal
+ * rule). No invented queue manipulation.
+ *
+ * Trigger: `celebration` on the client's first such claim; `error` when the
+ * proof source could not be retrieved; otherwise `default`.
  */
-export function romanCheckInReceived(args: RomanCheckInReceivedArgs): string {
+export function romanCheckInClaim(args: RomanCheckInClaimArgs): string {
   const { clientName, mode } = args;
   if (mode === 'celebration') {
-    // §2.4 milestone-celebration (first-ever check-in). No exclamation — the
-    // session's one is reserved for the §2.7 30-day line.
-    return `${clientName} has submitted their first check-in. A good beginning — I would not keep them waiting.`;
+    // §2.4 milestone-celebration (the client's first check-in-consistency
+    // claim). No exclamation — the session's one is reserved for §2.7 30-day.
+    return `${clientName} has a first check-in consistency claim awaiting your sign-off. A good beginning.`;
   }
   if (mode === 'error') {
-    // spec §2.4 error (attachments failed to load).
-    return `${clientName} has submitted a check-in, but I could not retrieve the attached photos. I am trying again now.`;
+    // §2.4 error (the claim's proof source could not be retrieved).
+    return `${clientName} has a check-in consistency claim awaiting your sign-off, but I could not retrieve its proof. I am trying again now.`;
   }
-  // spec §2.4 default.
-  return `${clientName} has submitted a check-in. I have placed it at the top of your queue.`;
+  // §2.4 default — a pending check-in-consistency claim, the only fact the
+  // host signal proves.
+  return `${clientName} has a check-in consistency claim awaiting your sign-off.`;
 }
 
 // ── §2.5 New client onboarded for a coach (coach app) ───────────────────────
@@ -306,23 +322,32 @@ export interface RomanPayoutArgs {
    * genuine last-four is available.
    */
   bankLast4?: string;
-  /** Typical settlement window in business days (default line). */
-  settleDays: number;
   /**
-   * default — payout on its way; celebration — a record payout / milestone
-   * total; error — the bank declined the transfer instruction.
+   * Pre-formatted date the last payout was sent, e.g. "June 9". Derived from the
+   * real `lastPayoutAt` timestamp on the mobile `CoachEarningsSummary` contract
+   * (api/packagesApi.ts:135-149). That contract carries ONLY historical payout
+   * fields (`lastPayoutAt`, `lastPayoutAmountCents`) and a `nextPayoutEta`; it
+   * exposes NO in-transit / settlement-window signal, so the copy speaks of the
+   * last payout in the past tense — the only thing the data proves (R5/R6
+   * truthful-signal rule).
+   */
+  sentOn: string;
+  /**
+   * default — the last payout, stated in the past tense; celebration — a record
+   * payout / milestone total; error — the bank declined the transfer
+   * instruction.
    */
   mode: RomanVoiceMode;
 }
 
 /**
- * §2.12 Coach payout. spec-exact default/celebration/error.
+ * §2.12 Coach payout. Past-tense from the real historical payout data.
  *
  * Trigger: `celebration` on a record payout (the host decides "largest yet");
  * `error` when the payout initiation failed; otherwise `default`.
  */
 export function romanPayout(args: RomanPayoutArgs): string {
-  const { amount, bankLast4, settleDays, mode } = args;
+  const { amount, bankLast4, sentOn, mode } = args;
   // The destination account is only named when a real last-four is available.
   // When it is absent, the "account ending …" clause is dropped entirely so the
   // line never ships a placeholder token in user-facing financial copy.
@@ -334,19 +359,20 @@ export function romanPayout(args: RomanPayoutArgs): string {
   }
   if (mode === 'celebration') {
     // §2.12 milestone-celebration (record payout). No exclamation — the
-    // session's one is reserved for the §2.7 30-day line.
+    // session's one is reserved for the §2.7 30-day line. Past tense: the data
+    // proves the payout was sent, not that it is in transit.
     if (hasBankLast4) {
-      return `Your payout of ${amount} is on its way to the account ending ${bankLast4} — your largest yet. A fine month's work.`;
+      return `Your last payout of ${amount} was sent on ${sentOn} to the account ending ${bankLast4} — your largest yet. A fine month's work.`;
     }
-    // Destination-account omitted variant: amount + the "largest yet" framing
-    // are both true of the available data; no account token is asserted.
-    return `Your payout of ${amount} is on its way — your largest yet. A fine month's work.`;
+    // Destination-account omitted variant: amount, send date, and the "largest
+    // yet" framing are all true of the available data; no account token.
+    return `Your last payout of ${amount} was sent on ${sentOn} — your largest yet. A fine month's work.`;
   }
-  // spec §2.12 default.
+  // §2.12 default — past-tense statement of the real last payout.
   if (hasBankLast4) {
-    return `Your payout of ${amount} is on its way to the account ending ${bankLast4}. Funds typically settle within ${settleDays} business days.`;
+    return `Your last payout of ${amount} was sent on ${sentOn} to the account ending ${bankLast4}.`;
   }
-  // Destination-account omitted variant: states the amount and the real
-  // settlement window, which are sufficient and true (spec §2.12 tokens).
-  return `Your payout of ${amount} is on its way. Funds typically settle within ${settleDays} business days.`;
+  // Destination-account omitted variant: states the amount and the real send
+  // date, which are sufficient and true of the historical payout data.
+  return `Your last payout of ${amount} was sent on ${sentOn}.`;
 }

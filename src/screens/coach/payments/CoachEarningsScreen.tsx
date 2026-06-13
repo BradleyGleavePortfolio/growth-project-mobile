@@ -30,10 +30,6 @@ import { featureFlags } from '../../../config/featureFlags';
 // featureFlags.romanChat (default OFF), the dedicated Roman flag.
 import RomanPayoutNotice from '../../../components/roman/RomanPayoutNotice';
 
-// §2.12 settlement window. The screen's own fineprint already states Stripe's
-// standard "typically every 2 business days" schedule; Roman's line reuses that
-// same real figure rather than inventing a different one.
-const PAYOUT_SETTLE_DAYS = 2;
 // The normalised CoachEarningsSummary deliberately does NOT carry the
 // destination bank's last-four (payouts are Stripe-managed and the digits are
 // not exposed to the mobile contract — see api/packagesApi.ts
@@ -180,18 +176,21 @@ export default function CoachEarningsScreen({ navigation }: Props) {
             ) : null}
 
             {/* §2.12 Roman payout notice — voiced beside his face. Only when the
-                Roman flag is on AND a real last payout exists (amount + date).
-                All tokens are real: amount from data.lastPayoutAmountCents,
-                settle days from the platform's standard schedule. The bank
-                last-four is NOT in the summary contract, so it is omitted —
-                romanPayout drops the destination-account clause rather than
-                ship a placeholder token. */}
+                Roman flag is on AND a real last payout exists (amount + a
+                formattable send date). All tokens are real: amount from
+                data.lastPayoutAmountCents, sentOn from the actual
+                data.lastPayoutAt timestamp. The copy is past tense because the
+                CoachEarningsSummary contract carries only the historical send
+                time, not an in-transit/settlement signal (api/packagesApi.ts).
+                The bank last-four is NOT in the summary contract, so it is
+                omitted — romanPayout drops the destination-account clause
+                rather than ship a placeholder token. */}
             {featureFlags.romanChat &&
-            data.lastPayoutAt &&
-            data.lastPayoutAmountCents != null ? (
+            data.lastPayoutAmountCents != null &&
+            formatDate(data.lastPayoutAt) ? (
               <RomanPayoutNotice
                 amount={formatCurrencyCents(data.lastPayoutAmountCents, data.currency)}
-                settleDays={PAYOUT_SETTLE_DAYS}
+                sentOn={formatDate(data.lastPayoutAt) as string}
                 mode="default"
                 testID="roman-payout-card"
               />

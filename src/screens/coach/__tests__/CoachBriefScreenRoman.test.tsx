@@ -62,7 +62,7 @@ describe('CoachBriefScreen — §2.3 Roman brief card', () => {
     // FACE+VOICE: the avatar lives inside the brief card.
     expect(getByTestId('roman-brief-avatar').props.accessibilityLabel).toBe('Roman');
     expect(
-      getByText('Good morning, Marcus. Your brief is ready. 2 clients need attention today, and two check-ins arrived overnight.'),
+      getByText('Good morning, Marcus. Your brief is ready. 2 clients need attention today.'),
     ).toBeTruthy();
   });
 

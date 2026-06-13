@@ -12,7 +12,7 @@
  */
 import {
   romanCoachBrief,
-  romanCheckInReceived,
+  romanCheckInClaim,
   romanNewClient,
   romanStreak,
   romanWorkoutComplete,
@@ -25,7 +25,7 @@ import {
 describe('romanCoachBrief (§2.3)', () => {
   it('default — spec-exact with token substitution', () => {
     expect(romanCoachBrief({ coachName: 'Marcus', clientCount: 6, mode: 'default' })).toBe(
-      'Good morning, Marcus. Your brief is ready. 6 clients need attention today, and two check-ins arrived overnight.',
+      'Good morning, Marcus. Your brief is ready. 6 clients need attention today.',
     );
   });
   it('celebration — record morning, no exclamation (rationed to §2.7 30-day)', () => {
@@ -41,21 +41,30 @@ describe('romanCoachBrief (§2.3)', () => {
 });
 
 // ── §2.4 Check-in received ────────────────────────────────────────────────────
-describe('romanCheckInReceived (§2.4)', () => {
-  it('default — spec-exact', () => {
-    expect(romanCheckInReceived({ clientName: 'Dana', mode: 'default' })).toBe(
-      'Dana has submitted a check-in. I have placed it at the top of your queue.',
+// P2-UX-01 (R6): the host signal is a `latestVerifiedProgress` item whose
+// kind is `check_in_consistency` and signoffStatus is `pending` — a pending
+// verified-progress CLAIM awaiting the coach's sign-off (types/wave11.ts:
+// 43-45,68-91,146-147). It does NOT prove a check-in form arrived or that any
+// queue was reordered, so the copy asserts only the pending-claim fact.
+describe('romanCheckInClaim (§2.4)', () => {
+  it('default — truthful pending-claim line', () => {
+    expect(romanCheckInClaim({ clientName: 'Dana', mode: 'default' })).toBe(
+      'Dana has a check-in consistency claim awaiting your sign-off.',
     );
   });
-  it('celebration — first-ever check-in, no exclamation (rationed to §2.7 30-day)', () => {
-    expect(romanCheckInReceived({ clientName: 'Dana', mode: 'celebration' })).toBe(
-      'Dana has submitted their first check-in. A good beginning — I would not keep them waiting.',
+  it('celebration — first such claim, no exclamation (rationed to §2.7 30-day)', () => {
+    expect(romanCheckInClaim({ clientName: 'Dana', mode: 'celebration' })).toBe(
+      'Dana has a first check-in consistency claim awaiting your sign-off. A good beginning.',
     );
   });
-  it('error — attachments failed to load', () => {
-    expect(romanCheckInReceived({ clientName: 'Dana', mode: 'error' })).toBe(
-      'Dana has submitted a check-in, but I could not retrieve the attached photos. I am trying again now.',
+  it('error — claim proof could not be retrieved', () => {
+    expect(romanCheckInClaim({ clientName: 'Dana', mode: 'error' })).toBe(
+      'Dana has a check-in consistency claim awaiting your sign-off, but I could not retrieve its proof. I am trying again now.',
     );
+  });
+  it('default — asserts no queue reorder or form-arrival claim', () => {
+    const line = romanCheckInClaim({ clientName: 'Dana', mode: 'default' });
+    expect(line).not.toMatch(/queue|submitted a check-in|placed it/i);
   });
 });
 
@@ -160,55 +169,64 @@ describe('romanGenericError (§2.10)', () => {
 });
 
 // ── §2.12 Coach payout ────────────────────────────────────────────────────────
+// P2-UX-03 (R6): the mobile CoachEarningsSummary contract carries only the
+// historical send timestamp (`lastPayoutAt`), not an in-transit/settlement
+// signal (api/packagesApi.ts:135-149), so the copy is PAST TENSE — the payout
+// was sent on a real date, not "on its way".
 describe('romanPayout (§2.12)', () => {
-  it('default — spec-exact with all three tokens', () => {
+  it('default — past tense with amount, send date, and account', () => {
     expect(
-      romanPayout({ amount: '$240.00', bankLast4: '4242', settleDays: 2, mode: 'default' }),
+      romanPayout({ amount: '$240.00', bankLast4: '4242', sentOn: 'June 9', mode: 'default' }),
     ).toBe(
-      'Your payout of $240.00 is on its way to the account ending 4242. Funds typically settle within 2 business days.',
+      'Your last payout of $240.00 was sent on June 9 to the account ending 4242.',
     );
   });
   it('celebration — record payout, no exclamation (rationed to §2.7 30-day)', () => {
     expect(
-      romanPayout({ amount: '$1,200.00', bankLast4: '4242', settleDays: 2, mode: 'celebration' }),
+      romanPayout({ amount: '$1,200.00', bankLast4: '4242', sentOn: 'June 9', mode: 'celebration' }),
     ).toBe(
-      "Your payout of $1,200.00 is on its way to the account ending 4242 — your largest yet. A fine month's work.",
+      "Your last payout of $1,200.00 was sent on June 9 to the account ending 4242 — your largest yet. A fine month's work.",
     );
   });
   it('error — bank declined the transfer', () => {
     expect(
-      romanPayout({ amount: '$240.00', bankLast4: '4242', settleDays: 2, mode: 'error' }),
+      romanPayout({ amount: '$240.00', bankLast4: '4242', sentOn: 'June 9', mode: 'error' }),
     ).toBe(
       'I was unable to send your payout of $240.00 just now — the bank declined the transfer instruction. Nothing is lost; I will retry and confirm once it is moving.',
     );
+  });
+  it('default — never claims the payout is in transit', () => {
+    const line = romanPayout({ amount: '$240.00', bankLast4: '4242', sentOn: 'June 9', mode: 'default' });
+    expect(line).not.toMatch(/on its way|settle within|in transit/i);
+    expect(line).toContain('was sent on');
   });
 
   // P2-UX-04 (R5): the CoachEarningsSummary contract does not carry the
   // destination bank's last-four. When omitted, the copy must DROP the
   // "account ending …" clause rather than ship a placeholder token. The amount
-  // and settlement window are sufficient and true.
+  // and send date are sufficient and true.
   it('default — OMITS the destination-account clause when bankLast4 is absent', () => {
-    const line = romanPayout({ amount: '$240.00', settleDays: 2, mode: 'default' });
-    expect(line).toBe('Your payout of $240.00 is on its way. Funds typically settle within 2 business days.');
+    const line = romanPayout({ amount: '$240.00', sentOn: 'June 9', mode: 'default' });
+    expect(line).toBe('Your last payout of $240.00 was sent on June 9.');
     expect(line).not.toContain('account ending');
   });
   it('default — also omits the clause for an empty/whitespace bankLast4', () => {
-    expect(romanPayout({ amount: '$240.00', bankLast4: '', settleDays: 2, mode: 'default' })).toBe(
-      'Your payout of $240.00 is on its way. Funds typically settle within 2 business days.',
+    expect(romanPayout({ amount: '$240.00', bankLast4: '', sentOn: 'June 9', mode: 'default' })).toBe(
+      'Your last payout of $240.00 was sent on June 9.',
     );
-    expect(romanPayout({ amount: '$240.00', bankLast4: '   ', settleDays: 2, mode: 'default' })).not.toContain(
+    expect(romanPayout({ amount: '$240.00', bankLast4: '   ', sentOn: 'June 9', mode: 'default' })).not.toContain(
       'account ending',
     );
   });
   it('celebration — omits the destination-account clause when bankLast4 is absent, still no exclamation', () => {
-    const line = romanPayout({ amount: '$1,200.00', settleDays: 2, mode: 'celebration' });
-    expect(line).toBe("Your payout of $1,200.00 is on its way — your largest yet. A fine month's work.");
+    const line = romanPayout({ amount: '$1,200.00', sentOn: 'June 9', mode: 'celebration' });
+    expect(line).toBe("Your last payout of $1,200.00 was sent on June 9 — your largest yet. A fine month's work.");
     expect(line).not.toContain('account ending');
     expect(line).not.toContain('!');
   });
   it('never renders a literal em-dash placeholder token (P2-UX-04 / #49)', () => {
     for (const mode of ['default', 'celebration'] as const) {
-      const line = romanPayout({ amount: '$240.00', settleDays: 2, mode });
+      const line = romanPayout({ amount: '$240.00', sentOn: 'June 9', mode });
       expect(line).not.toContain('\u2014\u2014\u2014\u2014');
       expect(line).not.toContain('ending undefined');
     }
@@ -224,9 +242,9 @@ const ALL_STRINGS: Array<{ label: string; value: string; allowsExclamation: bool
   { label: '§2.3 default', value: romanCoachBrief({ coachName: 'M', clientCount: 6, mode: 'default' }), allowsExclamation: false },
   { label: '§2.3 celebration', value: romanCoachBrief({ coachName: 'M', clientCount: 0, mode: 'celebration' }), allowsExclamation: false },
   { label: '§2.3 error', value: romanCoachBrief({ coachName: 'M', clientCount: 6, mode: 'error' }), allowsExclamation: false },
-  { label: '§2.4 default', value: romanCheckInReceived({ clientName: 'D', mode: 'default' }), allowsExclamation: false },
-  { label: '§2.4 celebration', value: romanCheckInReceived({ clientName: 'D', mode: 'celebration' }), allowsExclamation: false },
-  { label: '§2.4 error', value: romanCheckInReceived({ clientName: 'D', mode: 'error' }), allowsExclamation: false },
+  { label: '§2.4 default', value: romanCheckInClaim({ clientName: 'D', mode: 'default' }), allowsExclamation: false },
+  { label: '§2.4 celebration', value: romanCheckInClaim({ clientName: 'D', mode: 'celebration' }), allowsExclamation: false },
+  { label: '§2.4 error', value: romanCheckInClaim({ clientName: 'D', mode: 'error' }), allowsExclamation: false },
   { label: '§2.5 default', value: romanNewClient({ clientName: 'D', clientCount: 4, mode: 'default' }), allowsExclamation: false },
   { label: '§2.5 celebration', value: romanNewClient({ clientName: 'D', clientCount: 10, mode: 'celebration' }), allowsExclamation: false },
   { label: '§2.5 error', value: romanNewClient({ clientName: 'D', clientCount: 4, mode: 'error' }), allowsExclamation: false },
@@ -242,9 +260,9 @@ const ALL_STRINGS: Array<{ label: string; value: string; allowsExclamation: bool
   { label: '§2.9 error', value: romanVoiceLog({ weight: 0, reps: 0, mode: 'error' }), allowsExclamation: false },
   { label: '§2.10 default', value: romanGenericError({ mode: 'default' }), allowsExclamation: false },
   { label: '§2.10 error', value: romanGenericError({ mode: 'error' }), allowsExclamation: false },
-  { label: '§2.12 default', value: romanPayout({ amount: '$240.00', bankLast4: '4242', settleDays: 2, mode: 'default' }), allowsExclamation: false },
-  { label: '§2.12 celebration', value: romanPayout({ amount: '$240.00', bankLast4: '4242', settleDays: 2, mode: 'celebration' }), allowsExclamation: false },
-  { label: '§2.12 error', value: romanPayout({ amount: '$240.00', bankLast4: '4242', settleDays: 2, mode: 'error' }), allowsExclamation: false },
+  { label: '§2.12 default', value: romanPayout({ amount: '$240.00', bankLast4: '4242', sentOn: 'June 9', mode: 'default' }), allowsExclamation: false },
+  { label: '§2.12 celebration', value: romanPayout({ amount: '$240.00', bankLast4: '4242', sentOn: 'June 9', mode: 'celebration' }), allowsExclamation: false },
+  { label: '§2.12 error', value: romanPayout({ amount: '$240.00', bankLast4: '4242', sentOn: 'June 9', mode: 'error' }), allowsExclamation: false },
 ];
 
 const EMOJI_RE = new RegExp(

@@ -40,16 +40,18 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { logger } from '../../utils/logger';
 
 /**
- * §2.4 submitted-check-in selector. Returns the first client whose latest
- * verified-progress item is a check-in submission (`kind ===
- * 'check_in_consistency'`) still in the `pending` signoff state — which the
- * SignoffStatus enum defines as "submitted, awaiting coach review" (see
- * types/wave11.ts). That is a REAL submitted check-in, exactly what the §2.4
- * default line states. A `check_in_overdue` todo does NOT qualify (an overdue
- * check-in is a missing one, not a submitted one). Exported for direct
- * true/false behaviour testing.
+ * §2.4 pending check-in-consistency-claim selector. Returns the first client
+ * whose latest verified-progress item has `kind === 'check_in_consistency'`
+ * and is still in the `pending` signoff state — which the SignoffStatus enum
+ * defines as "submitted, awaiting coach review" (see types/wave11.ts:43-45,
+ * 68-91,146-147). That proves a check-in-consistency CLAIM is awaiting the
+ * coach's sign-off; it does NOT prove a check-in form arrived, that
+ * attachments exist, or that any review queue was reordered, so the §2.4 copy
+ * asserts only the pending-claim fact. A `check_in_overdue` todo does NOT
+ * qualify (an overdue check-in is a missing one, not a pending claim).
+ * Exported for direct true/false behaviour testing.
  */
-export function selectCheckInClient(
+export function selectPendingCheckInClaim(
   clients: CoachBriefClientCard[] | undefined,
 ): CoachBriefClientCard | undefined {
   return clients?.find(
@@ -109,14 +111,15 @@ export default function CoachBriefScreen() {
     load();
   }, [load]);
 
-  // §2.4 Check-in received — derived from a REAL submitted-check-in signal in
-  // the brief payload: a client whose latest verified-progress item is a
-  // check-in submission (`kind === 'check_in_consistency'`) that is still
-  // `pending` (the SignoffStatus enum defines `pending` as "submitted, awaiting
-  // coach review"; see types/wave11.ts). That proves the client SUBMITTED a
-  // check-in and it is queued for the coach — exactly what the §2.4 default
-  // line states. First such client only, to keep one Roman line in the brief.
-  const checkInClient = selectCheckInClient(payload?.clients);
+  // §2.4 pending check-in-consistency claim — derived from a REAL verified-
+  // progress signal in the brief payload: a client whose latest verified-
+  // progress item has `kind === 'check_in_consistency'` and is still `pending`
+  // (the SignoffStatus enum defines `pending` as "submitted, awaiting coach
+  // review"; see types/wave11.ts:43-45,68-91,146-147). That proves a check-in-
+  // consistency CLAIM is awaiting the coach's sign-off — exactly and only what
+  // the §2.4 line states; it does not assert a form arrival or queue reorder.
+  // First such client only, to keep one Roman line in the brief.
+  const checkInClient = selectPendingCheckInClaim(payload?.clients);
   // §2.5 New client onboarded — the CoachBriefPayload carries NO first-party
   // "new client" event/flag and NO join/created timestamp on the client card
   // (the only `createdAt` in this domain is on CopilotSuggestion, not on the
@@ -256,9 +259,14 @@ export default function CoachBriefScreen() {
         />
       ) : null}
 
-      {/* §2.5 Roman new-client notice — voiced beside his face when the roster
-          reads as a freshly added single client. Only when the Roman flag is
-          on. clientCount and clientName are both real. */}
+      {/* §2.5 Roman new-client notice — gated OFF. selectNewlyOnboardedClient
+          always returns undefined because the CoachBriefPayload carries no
+          truthful onboarding signal (no first-party new-client event/flag and
+          no join/created timestamp on the client card; see types/wave11.ts
+          CoachBriefClientCard), so this block never renders today. The
+          component and host wiring are kept compiled and flag-gated so the
+          surface re-activates the moment the payload carries a real joined-
+          timestamp/onboarding event. Documented in FIXER_241_R5_REPORT.md. */}
       {featureFlags.romanChat && newClient ? (
         <RomanNewClientNotice
           clientName={newClient.clientDisplayName}

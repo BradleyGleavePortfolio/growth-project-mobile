@@ -25,8 +25,12 @@ export interface RomanPayoutNoticeProps {
    * token (see lib/roman/copy.ts romanPayout).
    */
   bankLast4?: string;
-  /** Typical settlement window in business days. */
-  settleDays: number;
+  /**
+   * Pre-formatted date the last payout was sent, e.g. "June 9". Past-tense
+   * framing: the mobile earnings contract carries only the historical send
+   * timestamp, not an in-transit signal (see lib/roman/copy.ts romanPayout).
+   */
+  sentOn: string;
   /** default | celebration (record payout) | error (bank declined). */
   mode: RomanVoiceMode;
   testID?: string;
@@ -35,12 +39,12 @@ export interface RomanPayoutNoticeProps {
 export default function RomanPayoutNotice({
   amount,
   bankLast4,
-  settleDays,
+  sentOn,
   mode,
   testID,
 }: RomanPayoutNoticeProps): React.ReactElement {
   const crop = mode === 'celebration' ? 'smile' : 'neutral';
-  const line = romanPayout({ amount, bankLast4, settleDays, mode });
+  const line = romanPayout({ amount, bankLast4, sentOn, mode });
   return (
     <View style={styles.row} testID={testID} accessibilityRole="summary">
       {/* FACE+VOICE: avatar co-located with the §2.12 payout copy. */}

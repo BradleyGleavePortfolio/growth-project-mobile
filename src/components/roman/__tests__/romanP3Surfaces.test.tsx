@@ -36,7 +36,7 @@ describe('RomanBriefCard (§2.3)', () => {
     expect(avatar.props.accessibilityLabel).toBe(NEUTRAL);
     expect(
       getByText(
-        'Good morning, Marcus. Your brief is ready. 6 clients need attention today, and two check-ins arrived overnight.',
+        'Good morning, Marcus. Your brief is ready. 6 clients need attention today.',
       ),
     ).toBeTruthy();
   });
@@ -62,26 +62,26 @@ describe('RomanBriefCard (§2.3)', () => {
 
 // ── §2.4 Check-in received ────────────────────────────────────────────────────
 describe('RomanCheckInNotice (§2.4)', () => {
-  it('default — neutral + copy + avatar present (operator rule: avatar INCLUDED)', () => {
+  it('default — neutral + truthful pending-claim copy + avatar present (operator rule: avatar INCLUDED)', () => {
     const { getByTestId, getByText } = render(
       <RomanCheckInNotice clientName="Dana" mode="default" />,
     );
     expect(getByTestId('roman-checkin-avatar').props.accessibilityLabel).toBe(NEUTRAL);
-    expect(getByText('Dana has submitted a check-in. I have placed it at the top of your queue.')).toBeTruthy();
+    expect(getByText('Dana has a check-in consistency claim awaiting your sign-off.')).toBeTruthy();
   });
-  it('celebration — slight smile on the first-ever check-in', () => {
+  it('celebration — slight smile on the first such claim', () => {
     const { getByTestId, getByText } = render(
       <RomanCheckInNotice clientName="Dana" mode="celebration" />,
     );
     expect(getByTestId('roman-checkin-avatar').props.accessibilityLabel).toBe(PLEASED);
-    expect(getByText('Dana has submitted their first check-in. A good beginning — I would not keep them waiting.')).toBeTruthy();
+    expect(getByText('Dana has a first check-in consistency claim awaiting your sign-off. A good beginning.')).toBeTruthy();
   });
-  it('error — neutral + attachment-failure copy', () => {
+  it('error — neutral + claim-proof-failure copy', () => {
     const { getByTestId, getByText } = render(
       <RomanCheckInNotice clientName="Dana" mode="error" />,
     );
     expect(getByTestId('roman-checkin-avatar').props.accessibilityLabel).toBe(NEUTRAL);
-    expect(getByText('Dana has submitted a check-in, but I could not retrieve the attached photos. I am trying again now.')).toBeTruthy();
+    expect(getByText('Dana has a check-in consistency claim awaiting your sign-off, but I could not retrieve its proof. I am trying again now.')).toBeTruthy();
   });
 });
 
@@ -185,14 +185,14 @@ describe('Roman P3 dynamic-copy live regions (P1-UX-01)', () => {
     );
     expect(
       getByText(
-        'Good morning, Marcus. Your brief is ready. 6 clients need attention today, and two check-ins arrived overnight.',
+        'Good morning, Marcus. Your brief is ready. 6 clients need attention today.',
       ).props.accessibilityLiveRegion,
     ).toBe('polite');
   });
   it('RomanCheckInNotice copy is a polite live region', () => {
     const { getByText } = render(<RomanCheckInNotice clientName="Dana" mode="default" />);
     expect(
-      getByText('Dana has submitted a check-in. I have placed it at the top of your queue.').props
+      getByText('Dana has a check-in consistency claim awaiting your sign-off.').props
         .accessibilityLiveRegion,
     ).toBe('polite');
   });
@@ -207,11 +207,11 @@ describe('Roman P3 dynamic-copy live regions (P1-UX-01)', () => {
   });
   it('RomanPayoutNotice copy is a polite live region', () => {
     const { getByText } = render(
-      <RomanPayoutNotice amount="$240.00" bankLast4="4242" settleDays={2} mode="default" />,
+      <RomanPayoutNotice amount="$240.00" bankLast4="4242" sentOn="June 9" mode="default" />,
     );
     expect(
       getByText(
-        'Your payout of $240.00 is on its way to the account ending 4242. Funds typically settle within 2 business days.',
+        'Your last payout of $240.00 was sent on June 9 to the account ending 4242.',
       ).props.accessibilityLiveRegion,
     ).toBe('polite');
   });
@@ -292,25 +292,25 @@ describe('RomanErrorBanner (§2.10)', () => {
 describe('RomanPayoutNotice (§2.12)', () => {
   it('default — neutral + copy + avatar present', () => {
     const { getByTestId, getByText } = render(
-      <RomanPayoutNotice amount="$240.00" bankLast4="4242" settleDays={2} mode="default" />,
+      <RomanPayoutNotice amount="$240.00" bankLast4="4242" sentOn="June 9" mode="default" />,
     );
     expect(getByTestId('roman-payout-avatar').props.accessibilityLabel).toBe(NEUTRAL);
     expect(
-      getByText('Your payout of $240.00 is on its way to the account ending 4242. Funds typically settle within 2 business days.'),
+      getByText('Your last payout of $240.00 was sent on June 9 to the account ending 4242.'),
     ).toBeTruthy();
   });
   it('celebration — slight smile on a record payout', () => {
     const { getByTestId, getByText } = render(
-      <RomanPayoutNotice amount="$1,200.00" bankLast4="4242" settleDays={2} mode="celebration" />,
+      <RomanPayoutNotice amount="$1,200.00" bankLast4="4242" sentOn="June 9" mode="celebration" />,
     );
     expect(getByTestId('roman-payout-avatar').props.accessibilityLabel).toBe(PLEASED);
     expect(
-      getByText("Your payout of $1,200.00 is on its way to the account ending 4242 — your largest yet. A fine month's work."),
+      getByText("Your last payout of $1,200.00 was sent on June 9 to the account ending 4242 — your largest yet. A fine month's work."),
     ).toBeTruthy();
   });
   it('error — neutral + decline copy', () => {
     const { getByTestId, getByText } = render(
-      <RomanPayoutNotice amount="$240.00" bankLast4="4242" settleDays={2} mode="error" />,
+      <RomanPayoutNotice amount="$240.00" bankLast4="4242" sentOn="June 9" mode="error" />,
     );
     expect(getByTestId('roman-payout-avatar').props.accessibilityLabel).toBe(NEUTRAL);
     expect(

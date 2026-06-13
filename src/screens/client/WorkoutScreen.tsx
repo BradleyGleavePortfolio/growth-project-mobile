@@ -153,6 +153,43 @@ interface ApiSession {
   exercises: Array<{ muscle_group: string; exercise_name: string; sets_completed: number; weight_per_set: number[]; reps_per_set: number[] }>;
 }
 
+/**
+ * §2.8 one-shot consumption of the `justCompleted` navigation param.
+ *
+ * Returns whether Roman's §2.8 "Workout complete" card should show for the
+ * CURRENT focus session. ActiveWorkoutScreen sets `route.params.justCompleted`
+ * only after a real finish-workout save. On focus we read it, flip a local
+ * flag, and clear the param via setParams so a stale param can never re-fire.
+ * The focus-effect CLEANUP (runs on blur) then clears the local flag, so a
+ * later refocus of this still-mounted screen WITHOUT a new completion leaves
+ * the flag false — the card shows exactly once after a genuine completion and
+ * never again on refocus or pull-to-refresh.
+ *
+ * Extracted and exported so the one-shot behaviour is the single source of
+ * truth, exercised directly by romanP3HostWiring.test.tsx without mounting the
+ * full chart/sqlite-heavy screen.
+ */
+export function useJustCompletedOneShot(
+  justCompletedParam: boolean | undefined,
+  clearParam: () => void,
+): boolean {
+  const [justCompleted, setJustCompleted] = useState(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (justCompletedParam) {
+        setJustCompleted(true);
+        clearParam();
+      }
+      return () => {
+        // Blur: end the one-shot. A subsequent refocus with no new completion
+        // param leaves justCompleted false, so the §2.8 card stays hidden.
+        setJustCompleted(false);
+      };
+    }, [justCompletedParam, clearParam]),
+  );
+  return justCompleted;
+}
+
 export default function WorkoutScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -161,12 +198,6 @@ export default function WorkoutScreen() {
   const route = useRoute<RouteProp<WorkoutStackParamList, 'WorkoutMain'>>();
   const [routines, setRoutines] = useState<ApiRoutine[]>([]);
   const [recentSessions, setRecentSessions] = useState<ApiSession[]>([]);
-  // §2.8 one-shot "just completed" flag. Set ONLY when ActiveWorkoutScreen
-  // returns here with route param `justCompleted` after a real finish-workout
-  // save. It drives Roman's §2.8 completion line for this visit only and is
-  // cleared immediately so a plain visit / pull-to-refresh never re-triggers
-  // the event from a historical session.
-  const [justCompleted, setJustCompleted] = useState(false);
   const [weeklyVolume, setWeeklyVolume] = useState<WeeklyVolume[]>([]);
   const [muscleVolume, setMuscleVolume] = useState<MuscleVolume[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -253,18 +284,18 @@ export default function WorkoutScreen() {
     loadData();
   }, [loadData]);
 
-  // §2.8 Consume the one-shot `justCompleted` navigation param exactly once.
-  // ActiveWorkoutScreen sets it only after a real finish-workout save. We read
-  // it on focus, flip the local flag, then immediately clear the param via
-  // setParams so a subsequent refocus or pull-to-refresh cannot re-fire Roman's
-  // completion line from a stale param or a historical session.
-  useFocusEffect(
-    useCallback(() => {
-      if (route.params?.justCompleted) {
-        setJustCompleted(true);
-        navigation.setParams({ justCompleted: undefined });
-      }
-    }, [route.params?.justCompleted, navigation]),
+  // §2.8 one-shot "just completed" signal. Set ONLY when ActiveWorkoutScreen
+  // returns here with route param `justCompleted` after a real finish-workout
+  // save. Consumed for exactly one focus session by useJustCompletedOneShot,
+  // which clears the param on focus (so a stale param never re-fires) and
+  // clears its local flag on blur (so a later refocus / pull-to-refresh of
+  // this still-mounted screen never re-triggers the card from a past session).
+  const clearJustCompletedParam = useCallback(() => {
+    navigation.setParams({ justCompleted: undefined });
+  }, [navigation]);
+  const justCompleted = useJustCompletedOneShot(
+    route.params?.justCompleted,
+    clearJustCompletedParam,
   );
 
   const onRefresh = useCallback(async () => {
