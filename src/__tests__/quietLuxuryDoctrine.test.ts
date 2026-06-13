@@ -28,9 +28,15 @@ const ALLOWLIST_HEAVY_WEIGHT: Set<string> = new Set();
 // They are doctrine-compliant (no emoji, no trophy/podium chrome, no raw
 // health or financial data surfaced). The allowlist is scoped to the
 // Leaderboard-reference check only — all other doctrine rules still apply.
+// Phase 7C introduces opt-in leaderboard screens. v3-1 extends the same
+// opt-in cohort-local concept to community challenges (default OFF, opt-in,
+// no trophy/podium chrome, no raw health/financial data). Doctrine-compliant
+// by all other rules.
 const ALLOWLIST_LEADERBOARD_REFERENCE: Set<string> = new Set([
   path.join(ROOT, 'screens', 'client', 'LeaderboardScreen.tsx'),
   path.join(ROOT, 'screens', 'client', 'LeaderboardSettingsScreen.tsx'),
+  path.join(ROOT, 'screens', 'community', 'CommunityChallengeDetailScreen.tsx'),
+  path.join(ROOT, 'screens', 'community', '__tests__', 'CommunityChallengeDetailScreen.test.tsx'),
 ]);
 
 function walk(dir: string): string[] {

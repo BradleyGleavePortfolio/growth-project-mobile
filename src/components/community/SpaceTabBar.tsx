@@ -11,7 +11,12 @@ import { useTheme } from '../../theme/useTheme';
 import { spacing, radius } from '../../theme/tokens';
 import UnreadBadge from './UnreadBadge';
 
-export type CommunitySpaceKey = 'today' | 'hall' | 'cohorts' | 'dms';
+export type CommunitySpaceKey =
+  | 'today'
+  | 'hall'
+  | 'cohorts'
+  | 'challenges'
+  | 'dms';
 
 export interface SpaceTab {
   key: CommunitySpaceKey;

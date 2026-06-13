@@ -17,7 +17,6 @@
 import React, { useMemo, useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/useTheme';
 import { featureFlags } from '../../config/featureFlags';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
@@ -32,11 +31,10 @@ import SpaceTabBar, {
 import CommunityTodayScreen from './CommunityTodayScreen';
 import CommunitySpaceScreen from './CommunitySpaceScreen';
 import CommunityDmListScreen from './CommunityDmListScreen';
-import type { CommunityNav } from './communityNavTypes';
+import CommunityChallengesScreen from './CommunityChallengesScreen';
 
 export default function CommunityTabScreen(): React.ReactElement {
   const { semanticColors } = useTheme();
-  const navigation = useNavigation<CommunityNav>();
   const client = useCurrentUser();
   const badge = useCommunityBadge(client?.id);
   const me = useCommunityMe();
@@ -54,6 +52,13 @@ export default function CommunityTabScreen(): React.ReactElement {
         label: 'Cohorts',
         unread: badge.cohortMessages,
       });
+    }
+    // Challenges discovery is a first-class Space sub-tab when the v3-1 flag is
+    // on. This is the entry that makes the challenge list reachable from the
+    // client UI. No unread badge: challenges are not a messaging surface, so
+    // there is no unread count to carry.
+    if (featureFlags.communityChallenges) {
+      list.push({ key: 'challenges', label: 'Challenges' });
     }
     if (featureFlags.communityDm) {
       list.push({ key: 'dms', label: 'Messages', unread: badge.dmMessages });
@@ -79,15 +84,51 @@ export default function CommunityTabScreen(): React.ReactElement {
         {active === 'today' ? (
           <CommunityTodayScreen embedded />
         ) : active === 'hall' ? (
-          <CommunitySpaceScreen embedded space="hall" workspaceId={workspaceId} />
+          // Embedded post feed. As with Challenges, thread the prerequisite
+          // truth (loading / error / retry) so a real `/community/me` failure
+          // renders the calm retryable error instead of an inert empty feed —
+          // the embedded path must not swallow it.
+          <CommunitySpaceScreen
+            embedded
+            space="hall"
+            workspaceId={workspaceId}
+            prerequisiteLoading={me.isLoading}
+            prerequisiteError={me.isError}
+            onRetryPrerequisite={() => void me.refetch()}
+          />
         ) : active === 'cohorts' ? (
           <CommunitySpaceScreen
             embedded
             space="cohort"
             workspaceId={workspaceId}
+            prerequisiteLoading={me.isLoading}
+            prerequisiteError={me.isError}
+            onRetryPrerequisite={() => void me.refetch()}
+          />
+        ) : active === 'challenges' ? (
+          // Embedded discovery list. We pass the resolved workspaceId from the
+          // same `useCommunityMe` source the other Spaces use AND thread the
+          // prerequisite truth (loading / error / retry) so a real
+          // `/community/me` failure renders the calm retryable error instead of
+          // an indefinite loading state — the embedded path must not swallow it.
+          <CommunityChallengesScreen
+            embedded
+            workspaceId={workspaceId}
+            prerequisiteLoading={me.isLoading}
+            prerequisiteError={me.isError}
+            onRetryPrerequisite={() => void me.refetch()}
           />
         ) : (
-          <CommunityDmListScreen embedded workspaceId={workspaceId} />
+          // Embedded DM inbox. Thread the prerequisite truth so a real
+          // `/community/me` failure renders the calm retryable error instead of
+          // an inert empty inbox — the embedded path must not swallow it.
+          <CommunityDmListScreen
+            embedded
+            workspaceId={workspaceId}
+            prerequisiteLoading={me.isLoading}
+            prerequisiteError={me.isError}
+            onRetryPrerequisite={() => void me.refetch()}
+          />
         )}
       </View>
     </SafeAreaView>

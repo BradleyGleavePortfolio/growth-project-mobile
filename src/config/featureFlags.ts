@@ -174,6 +174,17 @@ export const featureFlags = {
   // env: EXPO_PUBLIC_FF_COMMUNITY_EVENTS
   communityEvents: readFlag('EXPO_PUBLIC_FF_COMMUNITY_EVENTS', false),
   romanChat: readFlag('EXPO_PUBLIC_FF_ROMAN_CHAT', false),
+
+
+  // ─── Community v3-1 — opt-in challenges ──────────────────────────────────
+  // Cohort challenges with personal-progress logging and a STRICTLY OPT-IN,
+  // cohort-local leaderboard. Defaults OFF UNCONDITIONALLY (not `isDev`): when
+  // false the CommunityChallengeDetail route MUST NOT register and the screen
+  // is dead code at build time. The backend gate (FEATURE_COMMUNITY_CHALLENGES)
+  // is also OFF in prod, so a dev build that flips this on degrades gracefully.
+  //
+  // env: EXPO_PUBLIC_FF_COMMUNITY_CHALLENGES
+  communityChallenges: readFlag('EXPO_PUBLIC_FF_COMMUNITY_CHALLENGES', false),
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;

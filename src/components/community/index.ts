@@ -43,3 +43,8 @@ export {
   ROMAN_QUIP_RATE_CLIENT,
 } from './romanVoice';
 export type { RomanCommunityStem, RomanLine } from './romanVoice';
+// ─── Community v3-1 challenges (flag-gated host vocabulary) ───────────────
+export { default as ChallengeCard } from './ChallengeCard';
+export type { ChallengeCardProps } from './ChallengeCard';
+export { default as ChallengeCommentsEmptyState } from './ChallengeCommentsEmptyState';
+export type { ChallengeCommentsEmptyStateProps } from './ChallengeCommentsEmptyState';
