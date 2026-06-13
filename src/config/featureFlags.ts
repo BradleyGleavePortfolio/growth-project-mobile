@@ -202,6 +202,40 @@ export const featureFlags = {
   //
   // env: EXPO_PUBLIC_FF_MWB_AUTOSAVE
   mwbAutosave: readFlag('EXPO_PUBLIC_FF_MWB_AUTOSAVE', false),
+  // ─── Roman P3 — backend-authority gates ──────────────────────────────────
+  // Two P3 Roman surfaces speak from signals the backend `main` does NOT yet
+  // expose authoritatively, so each is held behind its own backend-live gate
+  // (separate from the master `romanChat` flag). Both default OFF
+  // UNCONDITIONALLY so the proxy-signal surfaces stay hidden until the backend
+  // ships the real field — flip the matching env var to `true` only once the
+  // authoritative contract is live.
+
+  /**
+   * §2.4 Coach-brief check-in notice. The host currently derives the notice
+   * from a mobile-only Wave 11 scaffold (`latestVerifiedProgress.kind ===
+   * 'check_in_consistency'`) that backend `main` does not return. Keep the
+   * §2.4 surface hidden until backend `main` exposes an authoritative
+   * `latestVerifiedProgress` check-in claim field. OFF until then.
+   *
+   * env: EXPO_PUBLIC_FF_ROMAN_CHECKIN_BACKEND_LIVE
+   */
+  romanCheckInBackendLive: readFlag(
+    'EXPO_PUBLIC_FF_ROMAN_CHECKIN_BACKEND_LIVE',
+    false,
+  ),
+  /**
+   * §2.7 client streak milestone card. The host currently derives the
+   * milestone tier from a client-side recomputed logging count, which is not
+   * an authoritative backend milestone event. Keep the §2.7 card hidden until
+   * the backend exposes an authoritative streak-milestone event (event id,
+   * date, tier). OFF until then.
+   *
+   * env: EXPO_PUBLIC_FF_ROMAN_STREAK_BACKEND_LIVE
+   */
+  romanStreakBackendLive: readFlag(
+    'EXPO_PUBLIC_FF_ROMAN_STREAK_BACKEND_LIVE',
+    false,
+  ),
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;

@@ -96,6 +96,8 @@ import NotificationCenterScreen from '../screens/notifications/NotificationCente
 import NotificationPreferencesScreen from '../screens/notifications/NotificationPreferencesScreen';
 import NotificationBadge from '../components/NotificationBadge';
 import { fetchUnreadCount } from '../services/notificationsApi';
+import { logger } from '../utils/logger';
+import { normalizeError } from '../screens/client/_completionLogging';
 // Phase 10 — GDPR Article 20 data portability
 import DataExportScreen from '../screens/settings/DataExportScreen';
 // Payments — client-facing packages + checkout return (backend PR #215).
@@ -176,7 +178,20 @@ export type ClientTabParamList = {
 };
 
 export type WorkoutStackParamList = {
-  WorkoutMain: undefined;
+  /**
+   * `justCompletedId` is a one-shot signal set ONLY when ActiveWorkoutScreen
+   * returns here after a real finish-workout save succeeds. It is the DURABLE
+   * server id of the workout that was just saved (the same id used to sync the
+   * session), NOT a transient boolean. WorkoutScreen reads it once to render
+   * Roman's §2.8 "Workout complete" line, records that this specific id has been
+   * consumed in AsyncStorage, then clears the param. Keying the one-shot on the
+   * concrete workout id (rather than a boolean) means a re-delivered or
+   * duplicated navigation — e.g. a remount, a back-then-forward, or a param that
+   * survives a fast refresh — cannot re-trigger the celebration for a workout
+   * that was already acknowledged, and a genuinely new workout (a new id) is
+   * always honoured (P1-C-01).
+   */
+  WorkoutMain: { justCompletedId?: string } | undefined;
   ActiveWorkout: { routineId?: string; routineName: string; exercises: string };
   RoutineBuilder: { routineId?: string } | undefined;
   CoachGuidelines: undefined;
@@ -308,8 +323,15 @@ function useClientUnreadCount(): number {
       try {
         const n = await fetchUnreadCount();
         if (mounted) setCount(n);
-      } catch {
-        // Silent — badge shows stale count on error.
+      } catch (error) {
+        // Non-fatal: the badge keeps its last-known count on a failed poll.
+        // Surfaced for diagnosis rather than swallowed (R69) so a persistently
+        // failing unread-count fetch is visible instead of silently stale.
+        logger.warn('clientNavigator.unread-count', {
+          route: 'ClientNavigator',
+          action: 'fetch-unread-count',
+          error: normalizeError(error),
+        });
       }
     };
     refresh();

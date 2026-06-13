@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,12 +11,21 @@ import {
 } from 'react-native';
 import HapticPressable from '../../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
+import {
+  useNavigation,
+  useRoute,
+  useFocusEffect,
+  NavigationProp,
+  RouteProp,
+} from '@react-navigation/native';
+import type { WorkoutStackParamList } from '../../navigation/ClientNavigator';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 import { workoutApi } from '../../services/api';
 import { routineExerciseId } from '../../utils/workout/exerciseId';
 import { logger } from '../../utils/logger';
+import { buildCompletionLogBase, normalizeError } from './_completionLogging';
 import FadeInView from '../../components/FadeInView';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { EmptyStateNoWorkouts, EmptyStateNoData } from '../../ui/empty-states';
@@ -25,6 +34,12 @@ import { EmptyStateNoWorkouts, EmptyStateNoData } from '../../ui/empty-states';
 // registered in MoreStack for a while but no UI surfaced a navigate call,
 // so this build hid them from the user entirely.
 import { useMyWorkoutAssignments } from '../../hooks/useWorkoutBuilder';
+import { featureFlags } from '../../config/featureFlags';
+// §2.8 Workout complete + §2.10 generic error — Roman speaks beside his face
+// (both components co-locate <RomanAvatar />). Gated behind
+// featureFlags.romanChat (default OFF), the dedicated Roman flag.
+import RomanWorkoutCompleteCard from '../../components/roman/RomanWorkoutCompleteCard';
+import RomanErrorBanner from '../../components/roman/RomanErrorBanner';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CHART_WIDTH = SCREEN_WIDTH - 48;
@@ -140,11 +155,178 @@ interface ApiSession {
   exercises: Array<{ muscle_group: string; exercise_name: string; sets_completed: number; weight_per_set: number[]; reps_per_set: number[] }>;
 }
 
+/**
+ * Prefix for the durable "this completion has been acknowledged" latch keys in
+ * AsyncStorage. The full key is
+ * `roman.p3.completion-consumed:${coachUserId||userId}:${justCompletedId}` —
+ * scoped by the acting user so two accounts on one device never share latches,
+ * and by the concrete workout id so each distinct completion is judged on its
+ * own (P1-C-01).
+ */
+export const ROMAN_COMPLETION_CONSUMED_PREFIX = 'roman.p3.completion-consumed:';
+
+/** Build the durable latch key for a given user + completion id. */
+export function romanCompletionConsumedKey(
+  userKey: string,
+  justCompletedId: string,
+): string {
+  return `${ROMAN_COMPLETION_CONSUMED_PREFIX}${userKey}:${justCompletedId}`;
+}
+
+/**
+ * §2.8 one-shot consumption of the `justCompletedId` navigation param.
+ *
+ * Returns whether Roman's §2.8 "Workout complete" card should show for the
+ * CURRENT focus session. ActiveWorkoutScreen sets `route.params.justCompletedId`
+ * to the DURABLE server id of the workout just saved, only after a real
+ * finish-workout save.
+ *
+ * The one-shot is keyed on that concrete id and latched in AsyncStorage rather
+ * than on a transient boolean (P1-C-01). On focus, if an id is present AND it
+ * has not already been recorded under
+ * `roman.p3.completion-consumed:${userKey}:${id}`, we flip the local flag,
+ * persist the latch, and clear the param. If the id is already latched — e.g.
+ * the same param is re-delivered after a remount, a back-then-forward, or a
+ * param that survived a process reload — the card does NOT show again. The
+ * focus-effect cleanup (on blur) clears the local flag so a refocus without a
+ * NEW id leaves the card hidden; a genuinely new completion (a new id) is
+ * always honoured.
+ *
+ * `userKey` is `coachUserId || userId` — the acting user, used to scope latches
+ * per account on a shared device. When it is missing (user not yet loaded) the
+ * hook holds off rather than write an unscoped latch.
+ *
+ * `enabled` gates the ENTIRE one-shot. It is the P3 master flag
+ * (`featureFlags.romanChat`). When it is false the hook is a true no-op: it
+ * never reads AsyncStorage, never writes the `roman.p3.completion-consumed:*`
+ * latch, and never clears the nav param — preserving exact pre-P3 behaviour
+ * (R11 D-001). Gating only the card render is insufficient: the producer and
+ * consumer of the completion signal must both be inert when Roman is off.
+ *
+ * Extracted and exported so the one-shot behaviour is the single source of
+ * truth, exercised directly by romanP3HostWiring.test.tsx without mounting the
+ * full chart/sqlite-heavy screen.
+ *
+ * `logContext` carries the acting-user diagnostics (role, assignment if any)
+ * for the completion-path warn sites. The hook composes it with the shared
+ * `buildCompletionLogBase` so the consumer latch-write / latch-read warnings
+ * log the SAME structured base (route, userRole, userKey, assignmentId,
+ * justCompletedId) as the ActiveWorkout producer, plus a per-call `checkpoint`
+ * and a normalised `error`. Without it a latch failure cannot be segmented by
+ * route/user the way the producer failures can.
+ */
+export function useJustCompletedOneShot(
+  justCompletedId: string | undefined,
+  userKey: string | undefined,
+  clearParam: () => void,
+  enabled: boolean,
+  logContext?: { userRole?: string; assignmentId?: string },
+): boolean {
+  const [justCompleted, setJustCompleted] = useState(false);
+  // The completion id currently being decided/celebrated for this focus
+  // session. Clearing the nav param re-renders the host and flips the
+  // `justCompletedId` arg to undefined, which is a dep of this effect and so
+  // re-runs it WHILE STILL FOCUSED (the react-navigation contract: a dep change
+  // tears the effect down and immediately re-runs it). That self-triggered
+  // teardown — and any other re-render that lands before the latch read
+  // resolves — must NOT invalidate the in-flight decision. The previous
+  // implementation cleared the param synchronously and gated the resolved read
+  // on a run-local `cancelled` boolean, so the teardown set `cancelled = true`
+  // before the read resolved and the card never appeared for a real completion
+  // (the P1-CODE-01 race). Keying the resolved read on this ref instead lets the
+  // decision commit as long as the same id is still the one in flight.
+  const consumedIdRef = useRef<string | undefined>(undefined);
+  useFocusEffect(
+    useCallback(() => {
+      // R11 D-001: with the P3 master flag off, the one-shot is fully inert —
+      // no AsyncStorage read, no latch write, no param clear, no state change.
+      // This is the consumer half of the producer/consumer gating that keeps
+      // flag-off behaviour byte-identical to pre-P3.
+      if (!enabled) return undefined;
+      if (justCompletedId && userKey) {
+        // Record the id being processed BEFORE any async work so a re-render —
+        // including the one clearParam() will cause below — cannot orphan this
+        // decision.
+        consumedIdRef.current = justCompletedId;
+        const key = romanCompletionConsumedKey(userKey, justCompletedId);
+        // Read the durable latch first: only fire the card if THIS id has not
+        // been acknowledged before.
+        AsyncStorage.getItem(key)
+          .then((seen) => {
+            // Commit only while this id is still the active completion. A
+            // genuine blur or a newer completion replaces consumedIdRef; the
+            // param-clear re-render does not, so a real completion survives.
+            if (consumedIdRef.current !== justCompletedId) return;
+            if (seen == null) {
+              setJustCompleted(true);
+              // Persist the latch so this exact completion is never celebrated
+              // twice, even across a remount or process reload. Best-effort:
+              // if the write fails the card still shows this once; surfaced for
+              // diagnosis rather than swallowed.
+              AsyncStorage.setItem(key, new Date().toISOString()).catch((error: unknown) => {
+                logger.warn('mwb.completion.latch-write', {
+                  ...buildCompletionLogBase({
+                    route: 'Workout',
+                    userRole: logContext?.userRole,
+                    userKey,
+                    assignmentId: logContext?.assignmentId,
+                    justCompletedId,
+                  }),
+                  checkpoint: 'completion-latch-write',
+                  error: normalizeError(error),
+                });
+              });
+            }
+            // Clear the nav param only AFTER the latch read resolved and the
+            // state transition committed (P1-CODE-01). A stale/duplicate param
+            // can no longer linger and re-fire, and the re-render this triggers
+            // can no longer race ahead of — and kill — the decision.
+            clearParam();
+          })
+          .catch((error: unknown) => {
+            // If the latch READ fails we cannot prove the id is unseen, so we
+            // deliberately do NOT show the card — favouring "never double-fire"
+            // over "never miss one". Surfaced for diagnosis. Still clear the
+            // param so an unreadable latch does not leave a sticky signal.
+            logger.warn('mwb.completion.latch-read', {
+              ...buildCompletionLogBase({
+                route: 'Workout',
+                userRole: logContext?.userRole,
+                userKey,
+                assignmentId: logContext?.assignmentId,
+                justCompletedId,
+              }),
+              checkpoint: 'completion-latch-read',
+              error: normalizeError(error),
+            });
+            if (consumedIdRef.current === justCompletedId) clearParam();
+          });
+      }
+      return () => {
+        // This cleanup runs on a genuine blur AND on the param-clear re-render
+        // this effect triggers while focused. Only end the one-shot for a run
+        // that had nothing in flight — i.e. a focus run with no completion id
+        // (the param already cleared, or a true blur landing on the idle run).
+        // The run that actually consumed an id leaves the card committed so the
+        // param-clear teardown cannot undo it; a later blur lands on the idle
+        // (id-less) run and resets cleanly, keeping the §2.8 card hidden on a
+        // refocus with no new completion.
+        if (!justCompletedId || !userKey) {
+          consumedIdRef.current = undefined;
+          setJustCompleted(false);
+        }
+      };
+    }, [enabled, justCompletedId, userKey, clearParam, logContext?.userRole, logContext?.assignmentId]),
+  );
+  return justCompleted;
+}
+
 export default function WorkoutScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const currentUser = useCurrentUser();
-  const navigation = useNavigation<NavigationProp<ParamListBase>>();
+  const navigation = useNavigation<NavigationProp<WorkoutStackParamList>>();
+  const route = useRoute<RouteProp<WorkoutStackParamList, 'WorkoutMain'>>();
   const [routines, setRoutines] = useState<ApiRoutine[]>([]);
   const [recentSessions, setRecentSessions] = useState<ApiSession[]>([]);
   const [weeklyVolume, setWeeklyVolume] = useState<WeeklyVolume[]>([]);
@@ -233,6 +415,33 @@ export default function WorkoutScreen() {
     loadData();
   }, [loadData]);
 
+  // §2.8 one-shot "just completed" signal. Set ONLY when ActiveWorkoutScreen
+  // returns here with route param `justCompletedId` (the durable server id of
+  // the workout just saved) after a real finish-workout save. Consumed for
+  // exactly one focus session by useJustCompletedOneShot, which latches the id
+  // durably in AsyncStorage (so a re-delivered param can never re-fire the
+  // card), clears the param on focus, and clears its local flag on blur.
+  const clearJustCompletedParam = useCallback(() => {
+    navigation.setParams({ justCompletedId: undefined });
+  }, [navigation]);
+  // Scope the latch to the acting user (coach id when present, else own id) so
+  // two accounts on one device never share a completion latch.
+  const completionUserKey = currentUser?.coach_id || currentUser?.id;
+  // Mirror the producer's diagnostic context so the consumer latch warnings log
+  // the same structured base. The consumer has no assignment in scope, so
+  // assignmentId is omitted (it resolves to undefined in the base builder).
+  const completionLogContext = useMemo(
+    () => ({ userRole: currentUser?.role }),
+    [currentUser?.role],
+  );
+  const justCompleted = useJustCompletedOneShot(
+    route.params?.justCompletedId,
+    completionUserKey,
+    clearJustCompletedParam,
+    featureFlags.romanChat,
+    completionLogContext,
+  );
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await loadData();
@@ -270,6 +479,13 @@ export default function WorkoutScreen() {
   };
 
   const totalVolumeThisWeek = weeklyVolume[weeklyVolume.length - 1]?.volume || 0;
+
+  // §2.8 Roman's workout-complete line is driven by a REAL just-completed
+  // event — the `justCompleted` one-shot signal from the finish-workout path —
+  // NOT by the mere presence of a historical completed session. (The R4 audit
+  // flagged the previous "any recent completed session" wiring as a false
+  // just-completed event that fired on every visit.)
+  const showWorkoutComplete = justCompleted;
 
   // W-3: surface coach-assigned workouts. Falls back to silent when the
   // assignment list is empty / the hook is still loading. Tapping routes
@@ -320,9 +536,16 @@ export default function WorkoutScreen() {
   if (loadError) {
     return (
       <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
-        <Text style={{ fontSize: 16, color: colors.textPrimary, marginBottom: 16, textAlign: 'center' }}>
-          Could not load workout data.
-        </Text>
+        {/* §2.10 Roman generic-error — voiced beside his face on the full error
+            screen. Only when the Roman flag is on; otherwise the plain copy
+            below carries the message (the failure is never swallowed). */}
+        {featureFlags.romanChat ? (
+          <RomanErrorBanner mode="error" surface="screen" testID="roman-workout-error" />
+        ) : (
+          <Text style={{ fontSize: 16, color: colors.textPrimary, marginBottom: 16, textAlign: 'center' }}>
+            Could not load workout data.
+          </Text>
+        )}
         <TouchableOpacity
           style={{ backgroundColor: colors.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 }}
           onPress={() => { setLoadError(false); setIsLoading(true); loadData(); }}
@@ -369,6 +592,21 @@ export default function WorkoutScreen() {
             </View>
             <Ionicons name="chevron-forward" size={22} color={colors.primary} />
           </HapticPressable>
+        ) : null}
+
+        {/* §2.8 Roman workout-complete — voiced beside his face ONLY after a
+            real just-finished workout (the one-shot `justCompleted` signal from
+            the finish-workout path), not on every visit with a historical
+            completed session. Only when the Roman flag is on. The default line
+            is used: a per-session personal-best signal is not yet carried on
+            the ApiSession shape, so no celebration is fabricated (documented in
+            the report). */}
+        {featureFlags.romanChat && showWorkoutComplete ? (
+          <FadeInView>
+            <View style={styles.romanWorkoutWrap}>
+              <RomanWorkoutCompleteCard mode="default" testID="roman-workout-card" />
+            </View>
+          </FadeInView>
         ) : null}
 
         {/* Weekly Stats */}
@@ -618,6 +856,10 @@ const makeStyles = (colors: ThemeColors) =>
   StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   content: { paddingBottom: 100 },
+  romanWorkoutWrap: {
+    marginHorizontal: 24,
+    marginBottom: 16,
+  },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',

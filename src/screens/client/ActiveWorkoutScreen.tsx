@@ -66,12 +66,27 @@ import type {
 } from './active-workout/types';
 import { ExerciseImage, MUSCLES, lookupMuscleColor, makeMuscleColors } from './active-workout/ExerciseImage';
 import { ExerciseCard } from './active-workout/ExerciseCard';
+import { featureFlags } from '../../config/featureFlags';
+import { logger } from '../../utils/logger';
+import { buildCompletionLogBase, normalizeError } from './_completionLogging';
+// §2.9 Voice-log confirmation — Roman reads back the most recently completed
+// set in his voice, beside his face (RomanVoiceLogReadback co-locates
+// <RomanAvatar />). No dedicated voice-capture screen exists in the app yet;
+// per the builder brief this wires to the closest real surface — the live
+// set-logging flow on ActiveWorkoutScreen (documented in the report). Gated
+// behind featureFlags.romanChat (default OFF).
+import RomanVoiceLogReadback from '../../components/roman/RomanVoiceLogReadback';
 
 // Debounce window for persistence writes. Mutations happen rapidly while
 // the user is logging sets; coalescing them into a single AsyncStorage
 // write keeps the storage layer cheap while never losing more than
 // ~500ms of state if the process is killed mid-set.
 const PERSIST_DEBOUNCE_MS = 500;
+
+// R11 D-002: the completion-path logger requires a structured error
+// (name/message/stack). `normalizeError` now lives in ./_completionLogging so
+// the producer and the WorkoutScreen consumer share one normaliser and log an
+// identically-shaped `error` field.
 
 export default function ActiveWorkoutScreen() {
   const { colors } = useTheme();
@@ -136,7 +151,6 @@ export default function ActiveWorkoutScreen() {
   const promptShownRef = useRef(false);
   const [restSeconds, setRestSeconds] = useState(0);
   const [restActive, setRestActive] = useState(false);
-  const [restTotal, setRestTotal] = useState(0);
   const restIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [allExercises, setAllExercises] = useState<Exercise[]>([]);
@@ -251,8 +265,22 @@ export default function ActiveWorkoutScreen() {
               // lands. See audit #6.
               try {
                 await clearActiveWorkoutSession(userId);
-              } catch {
-                /* best-effort */
+              } catch (error) {
+                // Best-effort clear: a fresh session still mounts even if the
+                // stale one couldn't be removed. Surfaced for diagnosis rather
+                // than swallowed (R69) — a persistently failing clear would
+                // otherwise silently re-prompt "Resume?" forever.
+                logger.warn('mwb.activeWorkout.start-fresh-clear', {
+                  ...buildCompletionLogBase({
+                    route: 'ActiveWorkout',
+                    userRole: currentUser?.role,
+                    userKey: userId || undefined,
+                    // No completion id exists on a non-completion clear path; use the documented sentinel.
+                    justCompletedId: 'unknown',
+                  }),
+                  checkpoint: 'start-fresh-clear',
+                  error: normalizeError(error),
+                });
               }
               setSessionExercises(defaultSessionExercises);
               setHydrated(true);
@@ -393,7 +421,6 @@ export default function ActiveWorkoutScreen() {
   const startRest = (seconds: number) => {
     if (seconds <= 0) return;
     if (restIntervalRef.current) clearInterval(restIntervalRef.current);
-    setRestTotal(seconds);
     setRestSeconds(seconds);
     setRestActive(true);
     restIntervalRef.current = setInterval(() => {
@@ -606,6 +633,35 @@ export default function ActiveWorkoutScreen() {
           // the server mutation succeeds.
           let localWriteSucceeded = false;
 
+          // R11 D-002 / R15 F1: shared diagnostic context for every
+          // completion-path logger call. In a mixed coach/client app a
+          // durability failure is useless without route + acting role + the
+          // keys needed to segment it. The canonical base (route, userRole,
+          // userKey, assignmentId, justCompletedId) is built via the shared
+          // `buildCompletionLogBase` so the producer and the WorkoutScreen
+          // consumer log an identically-shaped payload. `justCompletedId` is
+          // the durable server id of the workout the producer is about to
+          // hand off — it is the same value the §2.8 one-shot latches on, so
+          // it is supplied per-call once the server mutation resolves. Before
+          // that point (e.g. the pre-server local-write failure) it is not yet
+          // knowable and is logged as the string 'unknown' rather than
+          // undefined/null. `extraContext` carries the producer-only diagnostic
+          // fields; `sessionId` is the local session_name correlation key
+          // (= routineName). `checkpoint` is set by each call site to name
+          // which durable checkpoint failed.
+          const completionLogBaseCtx = {
+            route: 'ActiveWorkout' as const,
+            userRole: currentUser?.role ?? 'unknown',
+            userKey: userId || undefined,
+            assignmentId: assignmentId ?? undefined,
+          };
+          const completionLogExtra = {
+            userId: userId || undefined,
+            routineName: routineName ?? undefined,
+            sessionId: routineName ?? undefined,
+            completedSetCount: completedSets,
+          };
+
           // Write each exercise as a separate row in the local
           // expo-sqlite store (one row per exercise group). A
           // workout session that spans multiple exercises produces N
@@ -638,11 +694,25 @@ export default function ActiveWorkoutScreen() {
             // completed, it's safe to clear the recovery session.
             if (userId) await clearActiveWorkoutSession(userId);
           } catch (localErr) {
-            if (__DEV__) console.warn('[ActiveWorkout] local write failed', localErr);
             // Non-fatal: still attempt the server call below. Recovery
             // session is intentionally NOT cleared here — it will be
             // cleared on server onSuccess as a fallback durable
-            // checkpoint, or preserved on onError for retry.
+            // checkpoint, or preserved on onError for retry. Surfaced through
+            // the shared structured logger (not a raw dev-only console call)
+            // so a persistently failing local durable write is diagnosable
+            // rather than swallowed, matching the surrounding completion-path
+            // catches.
+            logger.warn('mwb.completion.local-write', {
+              ...buildCompletionLogBase({
+                ...completionLogBaseCtx,
+                // Pre-server-write failure: the durable server id does not
+                // exist yet, so the latch id is genuinely unknowable here.
+                justCompletedId: 'unknown',
+              }),
+              ...completionLogExtra,
+              checkpoint: 'local-sqlite-write',
+              error: normalizeError(localErr),
+            });
           }
 
           // Analytics — unchanged from before.
@@ -672,13 +742,34 @@ export default function ActiveWorkoutScreen() {
             {
               onSuccess: (data: unknown) => {
                 if (timerRef.current) clearInterval(timerRef.current);
+                // Resolve the durable server id up-front: it is both the
+                // §2.8 one-shot latch payload and the `justCompletedId` every
+                // post-write completion warn site must carry, so it has to be
+                // in scope before the first warn below. Correlate by
+                // `session_name` (= routineName, which both write paths share).
+                const d = (data ?? {}) as { id?: string; workout?: { id?: string } };
+                const serverId = String(d?.id ?? d?.workout?.id ?? '');
+                // When the server returned no usable id the workout is durable
+                // but un-keyable; log 'unknown' rather than an empty string so
+                // the latch id is never blank.
+                const justCompletedId = serverId || 'unknown';
                 // R18 fallback: if the local SQLite write failed above,
                 // the recovery session was not cleared yet. The server
                 // mutation just succeeded — it's now durable on the
                 // server, so clear the recovery session here.
                 if (!localWriteSucceeded && userId) {
-                  clearActiveWorkoutSession(userId).catch(() => {
-                    /* best-effort */
+                  clearActiveWorkoutSession(userId).catch((error: unknown) => {
+                    // Best-effort: the server save already succeeded, so the
+                    // workout is durable; failing to clear the local recovery
+                    // session is non-fatal (it reconciles on next pull). Still
+                    // surfaced for diagnosis rather than swallowed silently.
+                    logger.warn('mwb.completion.clear-recovery-session', {
+                      ...buildCompletionLogBase({ ...completionLogBaseCtx, justCompletedId }),
+                      ...completionLogExtra,
+                      checkpoint: 'clear-recovery-session',
+                      serverId: serverId || undefined,
+                      error: normalizeError(error),
+                    });
                   });
                 }
                 // Phase 11 / Track 3: heavy haptic on workout completion
@@ -693,19 +784,35 @@ export default function ActiveWorkoutScreen() {
                 // pending local rows we wrote in the loop above must be
                 // marked synced — otherwise the next `triggerSync()` cycle
                 // re-POSTs each of them as an additional single-exercise
-                // workout on the server. Correlate by `session_name`
-                // (= routineName, which both write paths share).
-                const d = (data ?? {}) as { id?: string; workout?: { id?: string } };
-                const serverId = String(d?.id ?? d?.workout?.id ?? '');
+                // workout on the server.
                 if (serverId && routineName) {
-                  markSessionSyncedBySessionName(routineName, serverId).catch(() => {
-                    /* best-effort; pending rows will reconcile on next pull */
+                  markSessionSyncedBySessionName(routineName, serverId).catch((error: unknown) => {
+                    // Best-effort; pending rows will reconcile on the next pull.
+                    // Surfaced (not swallowed) so a persistent mismatch is
+                    // diagnosable rather than silent.
+                    logger.warn('mwb.completion.mark-session-synced', {
+                      ...buildCompletionLogBase({ ...completionLogBaseCtx, justCompletedId }),
+                      ...completionLogExtra,
+                      checkpoint: 'mark-session-synced',
+                      serverId: serverId || undefined,
+                      error: normalizeError(error),
+                    });
                   });
                 }
                 // Trigger sync so the newly created server record is
                 // pulled back. Pending rows have been marked above so this
                 // is now a one-way pull.
-                triggerSync().catch(() => {/* non-fatal */});
+                triggerSync().catch((error: unknown) => {
+                  // Non-fatal: the server record exists; the next sync cycle
+                  // will pull it. Surfaced for diagnosis.
+                  logger.warn('mwb.completion.trigger-sync', {
+                    ...buildCompletionLogBase({ ...completionLogBaseCtx, justCompletedId }),
+                    ...completionLogExtra,
+                    checkpoint: 'trigger-sync',
+                    serverId: serverId || undefined,
+                    error: normalizeError(error),
+                  });
+                });
 
                 // If this workout is linked to a coach assignment, call the
                 // assignment completion endpoint with the full exercise/set
@@ -727,13 +834,43 @@ export default function ActiveWorkoutScreen() {
                     completion_payload: completionPayload,
                     idempotency_key: idempotencyKeyRef.current,
                     started_at: sessionStartTimeRef.current.toISOString(),
-                  }).catch((e: unknown) => {
+                  }).catch((error: unknown) => {
                     // Non-fatal: generic workout already saved above.
-                    console.warn('[ActiveWorkout] Assignment completion sync failed', e);
+                    logger.warn('mwb.completion.assignment-sync', {
+                      ...buildCompletionLogBase({ ...completionLogBaseCtx, justCompletedId }),
+                      ...completionLogExtra,
+                      checkpoint: 'assignment-sync',
+                      serverId: serverId || undefined,
+                      error: normalizeError(error),
+                    });
                   });
                 }
 
-                navigation.goBack();
+                // §2.8 one-shot completion signal: returning to WorkoutMain with
+                // `justCompletedId` set to the DURABLE server id of the workout
+                // just saved tells WorkoutScreen this is a REAL just-finished
+                // workout (not a historical session) so Roman's "Workout
+                // complete." line renders exactly once. The target is the same
+                // screen goBack() would land on (WorkoutMain is directly beneath
+                // ActiveWorkout in WorkoutStack), so this preserves the existing
+                // back behaviour while carrying the id. Keying on the concrete
+                // id (not a boolean) lets WorkoutScreen latch "already seen this
+                // workout" durably, so a re-delivered param cannot re-fire the
+                // celebration (P1-C-01). When the server did not return a usable
+                // id we navigate WITHOUT the signal rather than fabricate one —
+                // an un-keyable completion is not eligible for the one-shot.
+                //
+                // R11 D-001: this is the PRODUCER half of the P3 completion
+                // signal and must be gated by the same master flag as the
+                // consumer. With `romanChat` off we take the exact pre-P3 path
+                // — `navigation.goBack()` with no `justCompletedId` param — so
+                // no Roman signal is ever emitted, mirrored, latched, or
+                // cleared while the feature is disabled.
+                if (featureFlags.romanChat && serverId) {
+                  navigation.navigate('WorkoutMain', { justCompletedId: serverId });
+                } else {
+                  navigation.goBack();
+                }
               },
               onError: (err) => {
                 // Phase 11 / Track 3: error haptic on failed API action
@@ -754,12 +891,26 @@ export default function ActiveWorkoutScreen() {
                     assignmentId,
                     idempotencyKey: idempotencyKeyRef.current,
                     sessionExercises,
-                  }).catch(() => {
-                    /* best-effort re-save */
+                  }).catch((error: unknown) => {
+                    // Best-effort re-save so the session stays recoverable after
+                    // a failed server save. Surfaced for diagnosis.
+                    logger.warn('mwb.completion.resave-on-error', {
+                      ...buildCompletionLogBase({
+                        ...completionLogBaseCtx,
+                        // The server save failed, so no durable id was minted;
+                        // the latch id is unknowable on this path.
+                        justCompletedId: 'unknown',
+                      }),
+                      ...completionLogExtra,
+                      checkpoint: 'resave-on-error',
+                      error: normalizeError(error),
+                    });
                   });
                 }
-                // API failed (offline). Records are already in WDB as 'pending'.
-                // Navigate back — the sync badge will show on the history list.
+                // API failed (offline). Records are already persisted locally as
+                // 'pending' and will sync on reconnect. Stay on this screen and
+                // surface a 'Save failed' alert so the user can retry the finish;
+                // we do NOT navigate away here.
                 Alert.alert(
                   'Save failed',
                   errorMessage(err) || 'Please try again.',
@@ -794,9 +945,22 @@ export default function ActiveWorkoutScreen() {
           pendingPersistPayloadRef.current = null;
           try {
             if (userId) await clearActiveWorkoutSession(userId);
-          } catch {
-            // Best-effort — if clearing fails the next mount still has
-            // the "Resume?" prompt to safely back out of.
+          } catch (error) {
+            // Best-effort — if clearing fails the next mount still has the
+            // "Resume?" prompt to safely back out of. Surfaced for diagnosis
+            // rather than swallowed (R69) so a persistent clear failure is
+            // visible instead of silent.
+            logger.warn('mwb.activeWorkout.cancel-clear', {
+              ...buildCompletionLogBase({
+                route: 'ActiveWorkout',
+                userRole: currentUser?.role,
+                userKey: userId || undefined,
+                // No completion id exists on an explicit-cancel clear path; use the documented sentinel.
+                justCompletedId: 'unknown',
+              }),
+              checkpoint: 'cancel-clear',
+              error: normalizeError(error),
+            });
           }
           if (timerRef.current) clearInterval(timerRef.current);
           navigation.goBack();
@@ -807,6 +971,20 @@ export default function ActiveWorkoutScreen() {
 
   const totalSets = sessionExercises.reduce((sum, ex) => sum + ex.sets.length, 0);
   const completedSets = sessionExercises.reduce((sum, ex) => sum + ex.sets.filter((s) => s.completed).length, 0);
+
+  // §2.9 most recently completed set (last completed set, scanning exercises in
+  // order). Drives Roman's readback with the real logged weight/reps. A set
+  // with a zero weight (e.g. bodyweight) is still a valid readback, so the only
+  // gate is `completed`.
+  const lastCompletedSet: SessionSet | null = (() => {
+    let found: SessionSet | null = null;
+    for (const ex of sessionExercises) {
+      for (const s of ex.sets) {
+        if (s.completed) found = s;
+      }
+    }
+    return found;
+  })();
 
   return (
     <View style={styles.container}>
@@ -830,6 +1008,20 @@ export default function ActiveWorkoutScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        {/* §2.9 Roman voice-log readback — voiced beside his face, reading back
+            the most recently completed set. Only when the Roman flag is on AND
+            at least one set has been completed. Default mode: a per-set PR
+            signal is not tracked in the live session, so no celebration is
+            fabricated (documented in the report). */}
+        {featureFlags.romanChat && lastCompletedSet ? (
+          <RomanVoiceLogReadback
+            weight={lastCompletedSet.weight}
+            reps={lastCompletedSet.reps}
+            mode="default"
+            testID="roman-voicelog-card"
+          />
+        ) : null}
+
         {sessionExercises.map((exercise, exIdx) => (
           <ExerciseCard
             key={`${exercise.exerciseId}-${exIdx}`}
