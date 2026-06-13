@@ -399,9 +399,21 @@ export default function ProgressScreen() {
           </View>
         </View>
 
-        {/* §2.7 Roman streak milestone — voiced beside his face. Only when the
-            Roman flag is on AND a 3/7/30-day milestone tier has been reached. */}
-        {featureFlags.romanChat && streakTier !== null && (
+        {/* §2.7 Roman streak milestone — voiced beside his face. HIDE-UNTIL-LIVE
+            (P1-B-02): `streakTier` is derived from a CLIENT-SIDE recomputed
+            logging count (see the loggingStreak fetch/count above), which is
+            not an authoritative backend milestone event — a bounded history
+            window, local date bucketing, or a stale cache could surface a
+            "Thirty days" line that the server cannot vouch for. The card is
+            therefore additionally gated behind featureFlags.romanStreakBackendLive
+            (default OFF) and stays hidden until the backend exposes an
+            authoritative streak-milestone event.
+            TODO(roman-streak-backend): when the backend exposes an
+            authoritative milestone event (event id, date, tier) per
+            AI_BUTLER_ROMAN_IDENTITY_SPEC §2.7, drive `streakTier` from that
+            event instead of the local count and flip
+            romanStreakBackendLive on. Until then, the card is hidden. */}
+        {featureFlags.romanChat && featureFlags.romanStreakBackendLive && streakTier !== null && (
           <FadeInView>
             <View style={styles.romanStreakWrap}>
               <RomanStreakCard

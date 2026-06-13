@@ -16,8 +16,15 @@ import { logger } from '../../../utils/logger';
 import type { CoachBriefPayload, CoachBriefClientCard } from '../../../types/wave11';
 
 // Feature flag ON so the screen renders its content (not the preview lock).
+// The two backend-authority gates are included (false) so the mock matches the
+// full flag shape; the brief card itself depends only on romanChat (P1-G-01).
 jest.mock('../../../config/featureFlags', () => ({
-  featureFlags: { coachBrief: true, romanChat: true },
+  featureFlags: {
+    coachBrief: true,
+    romanChat: true,
+    romanCheckInBackendLive: false,
+    romanStreakBackendLive: false,
+  },
 }));
 
 // Deterministic coach name for the §2.3 token.
@@ -66,14 +73,19 @@ describe('CoachBriefScreen — §2.3 Roman brief card', () => {
     ).toBeTruthy();
   });
 
-  it('selects the celebration (record-morning) line + slight smile when the roster is clear', async () => {
+  it('renders the NEUTRAL default line for an empty surfaced-client list (P2-B-04, not a celebration)', async () => {
+    // P2-B-04: an empty surfaced-attention list is NOT proof that "every client
+    // is on track" — the CoachBriefClientCard list is a surfaced-attention
+    // list, not the full roster. The celebration mode is therefore removed; an
+    // empty, non-stale brief renders the neutral default line with count 0.
     mockFetchCoachBrief.mockResolvedValue(payload({ clients: [], isStale: false }));
-    const { getByTestId, getByText } = render(<CoachBriefScreen />);
+    const { getByTestId, getByText, queryByText } = render(<CoachBriefScreen />);
     await waitFor(() => expect(getByTestId('roman-brief-card')).toBeTruthy());
-    expect(getByTestId('roman-brief-avatar').props.accessibilityLabel).toBe('Roman, pleased');
     expect(
-      getByText('Good morning, Marcus. Every client is on track this morning. I cannot recall a tidier brief.'),
+      getByText('Good morning, Marcus. Your brief is ready. 0 clients need attention today.'),
     ).toBeTruthy();
+    // The over-claiming celebration line must NOT appear.
+    expect(queryByText(/Every client is on track/)).toBeNull();
   });
 
   it('selects the §2.3 error line when the brief fails to assemble (no swallowed catch)', async () => {

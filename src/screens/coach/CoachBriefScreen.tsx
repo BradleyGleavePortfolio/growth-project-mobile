@@ -185,21 +185,32 @@ export default function CoachBriefScreen() {
         AI drafts the summary. You approve before anything is sent.
       </Text>
 
-      {/* §2.3 Coach Brief — Roman's voiced delivery + face. Celebration on a
-          record morning (all clients on track, none needing attention);
-          error if the brief could not be assembled; otherwise default. */}
-      <RomanBriefCard
-        coachName={(currentUser?.firstName ?? '').trim() || 'Coach'}
-        clientCount={payload?.clients.length ?? 0}
-        mode={
-          briefError
-            ? 'error'
-            : payload != null && payload.clients.length === 0 && !payload.isStale
-              ? 'celebration'
-              : 'default'
-        }
-        testID="roman-brief-card"
-      />
+      {/* §2.3 Coach Brief header. P1-G-01: the Roman voiced+face delivery is
+          gated behind featureFlags.romanChat (the dedicated Roman flag,
+          default OFF). When the flag is off a polished non-Roman fallback
+          header carries the SAME brief status (coach name + attention count,
+          stale/error states) with no avatar and no Roman voice, so a coach
+          with coachBrief=true and romanChat=false never sees Roman in the
+          daily brief. P2-B-04: an empty surfaced-client list is NOT proof
+          that "every client is on track" (the CoachBriefClientCard list is a
+          surfaced-attention list, not the full roster), so the celebration
+          mode is removed — an empty, non-stale brief renders a neutral line
+          via the default mode (clientCount 0). */}
+      {featureFlags.romanChat ? (
+        <RomanBriefCard
+          coachName={(currentUser?.firstName ?? '').trim() || 'Coach'}
+          clientCount={payload?.clients.length ?? 0}
+          mode={briefError ? 'error' : 'default'}
+          testID="roman-brief-card"
+        />
+      ) : (
+        <CoachBriefHeaderFallback
+          coachName={(currentUser?.firstName ?? '').trim() || 'Coach'}
+          clientCount={payload?.clients.length ?? 0}
+          briefError={briefError}
+          testID="coach-brief-header-fallback"
+        />
+      )}
 
       {payload?.isStale ? (
         <View
@@ -249,9 +260,14 @@ export default function CoachBriefScreen() {
       </View>
 
       {/* §2.4 Roman check-in notice — voiced beside his face when a real client
-          card flags a check-in needing attention. Only when the Roman flag is
-          on. */}
-      {featureFlags.romanChat && checkInClient ? (
+          card flags a check-in needing attention. HIDE-UNTIL-LIVE (P1-BF-01):
+          the host signal (latestVerifiedProgress.kind === 'check_in_consistency')
+          is a mobile-only Wave 11 scaffold that backend `main` does NOT expose,
+          so the surface is additionally gated behind
+          featureFlags.romanCheckInBackendLive (default OFF). Until backend
+          `main` ships the authoritative check-in claim field this never
+          renders regardless of the latestVerifiedProgress shape. */}
+      {featureFlags.romanChat && featureFlags.romanCheckInBackendLive && checkInClient ? (
         <RomanCheckInNotice
           clientName={checkInClient.clientDisplayName}
           mode="default"
@@ -289,6 +305,48 @@ export default function CoachBriefScreen() {
         )}
       </View>
     </ScrollView>
+  );
+}
+
+/**
+ * CoachBriefHeaderFallback — the non-Roman brief header shown when
+ * featureFlags.romanChat is OFF (P1-G-01). It carries the SAME brief status as
+ * the Roman card — the coach's name and the count of clients needing attention
+ * — in calm, institutional copy, with NO avatar and NO Roman voice. The empty,
+ * non-stale case states a neutral "nothing needs attention" line; it never
+ * asserts "every client is on track" (P2-B-04: a surfaced-attention list of
+ * length zero is not roster-wide proof).
+ */
+export function CoachBriefHeaderFallback({
+  coachName,
+  clientCount,
+  briefError,
+  testID,
+}: {
+  coachName: string;
+  clientCount: number;
+  briefError: boolean;
+  testID?: string;
+}) {
+  const headline = briefError
+    ? 'Your brief is not yet ready.'
+    : clientCount === 0
+      ? 'No clients need attention right now.'
+      : `${clientCount} ${clientCount === 1 ? 'client needs' : 'clients need'} attention today.`;
+  const detail = briefError
+    ? 'One of the data sources is slow to respond. It will be along shortly.'
+    : 'Reviewed and ready when you are.';
+  return (
+    <View
+      style={styles.fallbackCard}
+      testID={testID}
+      accessibilityRole="summary"
+      accessibilityLabel={`Good morning, ${coachName}. ${headline}`}
+    >
+      <Text style={styles.fallbackGreeting}>Good morning, {coachName}.</Text>
+      <Text style={styles.fallbackHeadline}>{headline}</Text>
+      <Text style={styles.fallbackDetail}>{detail}</Text>
+    </View>
   );
 }
 
@@ -350,6 +408,16 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   staleText: { ...typography.bodySmall, color: tokens.charcoal },
+  fallbackCard: {
+    gap: 4,
+    padding: spacing.lg,
+    backgroundColor: tokens.cream,
+    borderRadius: 4,
+    marginBottom: spacing.lg,
+  },
+  fallbackGreeting: { ...typography.body, color: tokens.charcoal },
+  fallbackHeadline: { ...typography.h4, color: tokens.ink },
+  fallbackDetail: { ...typography.bodySmall, color: tokens.charcoal },
   section: { marginTop: spacing.lg, gap: spacing.md },
   sectionTitle: { ...typography.h3, color: tokens.ink, marginBottom: spacing.xs },
   card: {
