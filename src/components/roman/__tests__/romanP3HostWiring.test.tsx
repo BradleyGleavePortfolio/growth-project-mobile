@@ -314,7 +314,8 @@ function renderOneShotHarness({
     clearPending = true;
     rendered.rerender(undefined);
   });
-  const rendered = renderHook(() => useJustCompletedOneShot(id, key, clearParam));
+  // These harness tests exercise the flag-ON behaviour, so enabled=true.
+  const rendered = renderHook(() => useJustCompletedOneShot(id, key, clearParam, true));
   return {
     clearParam,
     setParam(nextId: string | undefined, nextKey: string | undefined = key) {
@@ -456,7 +457,7 @@ describe('§2.8 workout-complete renders from a real just-completed event only',
       const clearParam = jest.fn();
       focusController.effect = null;
       focusController.cleanup = null;
-      const rendered = renderHook(() => useJustCompletedOneShot(id, key, clearParam));
+      const rendered = renderHook(() => useJustCompletedOneShot(id, key, clearParam, true));
 
       // Focus: the effect starts the (still-pending) latch read and stores its
       // cleanup. No flush yet — the read has NOT resolved.
