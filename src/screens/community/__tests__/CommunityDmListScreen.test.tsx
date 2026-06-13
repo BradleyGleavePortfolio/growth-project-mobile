@@ -47,8 +47,14 @@ type ThreadsState = {
   data: Array<{ thread_id: string; other_user_id: string }> | undefined;
   isLoading: boolean;
   isError: boolean;
+  refetch: jest.Mock;
 };
-const mockThreads: ThreadsState = { data: [], isLoading: false, isError: false };
+const mockThreads: ThreadsState = {
+  data: [],
+  isLoading: false,
+  isError: false,
+  refetch: jest.fn(),
+};
 const mockUseDmThreadsSpy = jest.fn();
 jest.mock('../../../hooks/useCommunity', () => ({
   useDmThreads: (workspaceId: string | null | undefined) => {
@@ -65,6 +71,7 @@ beforeEach(() => {
   mockThreads.data = [];
   mockThreads.isLoading = false;
   mockThreads.isError = false;
+  mockThreads.refetch.mockReset();
 });
 
 describe('CommunityDmListScreen embedded prerequisite', () => {
@@ -114,6 +121,30 @@ describe('CommunityDmListScreen embedded prerequisite', () => {
     expect(screen.getByTestId('community-dmlist-prereq-loading')).toBeTruthy();
     expect(screen.queryByTestId('community-dmlist-empty')).toBeNull();
     expect(mockUseDmThreadsSpy).toHaveBeenCalledWith(null);
+  });
+
+  it('a DM thread-list query FAILURE renders the retryable threads error (NOT the empty inbox), and retry refetches the inbox', () => {
+    // A resolved workspace whose thread query REJECTS must show a calm retryable
+    // threads error, never the "no conversations yet" empty inbox — collapsing a
+    // load failure into empty silently hides it (R65 #36/#44).
+    mockThreads.data = undefined;
+    mockThreads.isLoading = false;
+    mockThreads.isError = true;
+    render(
+      <CommunityDmListScreen
+        embedded
+        workspaceId="ws-resolved"
+        prerequisiteLoading={false}
+        prerequisiteError={false}
+      />,
+    );
+    expect(screen.getByTestId('community-dmlist-threads-error')).toBeTruthy();
+    expect(screen.queryByTestId('community-dmlist-empty')).toBeNull();
+    expect(screen.queryByTestId('community-dmlist-prereq-error')).toBeNull();
+
+    // Retry refetches the thread list directly (threads.refetch), not the prereq.
+    fireEvent.press(screen.getByTestId('community-dmlist-threads-retry'));
+    expect(mockThreads.refetch).toHaveBeenCalledTimes(1);
   });
 
   it('a genuine workspace_id=null SUCCESS renders the empty/onboarding inbox, NOT the error state', () => {

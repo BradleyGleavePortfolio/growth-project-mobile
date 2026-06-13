@@ -88,7 +88,12 @@ export default function CommunitySpaceScreen({
   const compose = () => navigation.navigate('CommunityComposer', { mode: 'post' });
 
   const data = posts.data ?? [];
-  const isEmpty = !posts.isLoading && (posts.isError || data.length === 0);
+  // A post-feed LOAD FAILURE must render a calm retryable error, never the
+  // "the Hall is quiet" / "no cohort posts" empty state — collapsing a failed
+  // `usePosts` into an empty feed silently hides the failure (R65 #36/#44).
+  // True-empty is only a successful query that returned zero posts.
+  const isPostsError = !posts.isLoading && posts.isError;
+  const isEmpty = !posts.isLoading && !posts.isError && data.length === 0;
 
   const Container: React.ComponentType<{ children: React.ReactNode }> = embedded
     ? ({ children }) => <View style={styles.flex}>{children}</View>
@@ -142,6 +147,37 @@ export default function CommunitySpaceScreen({
             accessibilityRole="button"
             accessibilityLabel="Try again"
             testID="community-space-prereq-retry"
+            style={[styles.retry, { borderColor: semanticColors.accent }]}
+          >
+            <Text style={[styles.retryLabel, { color: semanticColors.accentText }]}>
+              Try again
+            </Text>
+          </HapticPressable>
+        </View>
+      </Container>
+    );
+  }
+
+  // A post-feed load failure renders a calm retryable error using
+  // `posts.refetch()` instead of collapsing into the empty state.
+  if (isPostsError) {
+    return (
+      <Container>
+        <View style={styles.center} testID="community-space-posts-error">
+          <Ionicons
+            name="alert-circle-outline"
+            size={28}
+            color={semanticColors.textMuted}
+          />
+          <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
+            We could not load these posts. Please try again.
+          </Text>
+          <HapticPressable
+            intent="light"
+            onPress={() => posts.refetch()}
+            accessibilityRole="button"
+            accessibilityLabel="Try again"
+            testID="community-space-posts-retry"
             style={[styles.retry, { borderColor: semanticColors.accent }]}
           >
             <Text style={[styles.retryLabel, { color: semanticColors.accentText }]}>

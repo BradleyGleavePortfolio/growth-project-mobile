@@ -60,8 +60,14 @@ type PostsState = {
   data: Array<{ id: string }> | undefined;
   isLoading: boolean;
   isError: boolean;
+  refetch: jest.Mock;
 };
-const mockPosts: PostsState = { data: [], isLoading: false, isError: false };
+const mockPosts: PostsState = {
+  data: [],
+  isLoading: false,
+  isError: false,
+  refetch: jest.fn(),
+};
 const mockUsePostsSpy = jest.fn();
 jest.mock('../../../hooks/useCommunity', () => ({
   usePosts: (workspaceId: string | null | undefined) => {
@@ -78,6 +84,7 @@ beforeEach(() => {
   mockPosts.data = [];
   mockPosts.isLoading = false;
   mockPosts.isError = false;
+  mockPosts.refetch.mockReset();
 });
 
 describe.each(['hall', 'cohort'] as const)(
@@ -140,6 +147,32 @@ describe.each(['hall', 'cohort'] as const)(
       expect(screen.getByTestId('community-space-prereq-loading')).toBeTruthy();
       expect(screen.queryByTestId('community-space-empty')).toBeNull();
       expect(mockUsePostsSpy).toHaveBeenCalledWith(null);
+    });
+
+    it('a post-feed query FAILURE renders the retryable posts error (NOT the empty state), and retry refetches the feed', () => {
+      // A resolved workspace whose post query REJECTS must show a calm retryable
+      // posts error, never the "the Hall is quiet" / "no cohort posts" empty
+      // state — collapsing a load failure into empty silently hides it
+      // (R65 #36/#44).
+      mockPosts.data = undefined;
+      mockPosts.isLoading = false;
+      mockPosts.isError = true;
+      render(
+        <CommunitySpaceScreen
+          embedded
+          space={space}
+          workspaceId="ws-resolved"
+          prerequisiteLoading={false}
+          prerequisiteError={false}
+        />,
+      );
+      expect(screen.getByTestId('community-space-posts-error')).toBeTruthy();
+      expect(screen.queryByTestId('community-space-empty')).toBeNull();
+      expect(screen.queryByTestId('community-space-prereq-error')).toBeNull();
+
+      // Retry refetches the post feed directly (posts.refetch), not the prereq.
+      fireEvent.press(screen.getByTestId('community-space-posts-retry'));
+      expect(mockPosts.refetch).toHaveBeenCalledTimes(1);
     });
 
     it('a genuine workspace_id=null SUCCESS renders the empty/onboarding state, NOT the error state', () => {

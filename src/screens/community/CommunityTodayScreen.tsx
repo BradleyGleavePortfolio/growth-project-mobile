@@ -8,8 +8,9 @@
  * (no spinner-only states, UX HARD gate). Standardized on semanticColors.
  */
 import React from 'react';
-import { Text, StyleSheet, ScrollView } from 'react-native';
+import { Text, View, StyleSheet, ScrollView } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
 import { spacing, radius } from '../../theme/tokens';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
@@ -72,8 +73,46 @@ export default function CommunityTodayScreen(_props: Props): React.ReactElement 
     }
   };
 
+  // A `useCommunityToday` LOAD FAILURE must render a calm retryable error,
+  // never the "nothing waiting today" / "visit the Hall" onboarding empty state
+  // — collapsing a failed today query into the empty state silently hides the
+  // failure and sends members to another surface while the root today object is
+  // unavailable (R65 #36/#44). Resolve the error branch BEFORE the empty state.
+  if (!today.isLoading && today.isError) {
+    return (
+      <ScrollView
+        contentContainerStyle={styles.center}
+        style={{ backgroundColor: semanticColors.bgPrimary }}
+        testID="community-today-screen"
+      >
+        <View style={styles.errorBox} testID="community-today-error">
+          <Ionicons
+            name="alert-circle-outline"
+            size={28}
+            color={semanticColors.textMuted}
+          />
+          <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
+            We could not load today. Please try again.
+          </Text>
+          <HapticPressable
+            intent="light"
+            onPress={() => today.refetch()}
+            accessibilityRole="button"
+            accessibilityLabel="Try again"
+            testID="community-today-retry"
+            style={[styles.retry, { borderColor: semanticColors.accent }]}
+          >
+            <Text style={[styles.retryLabel, { color: semanticColors.accentText }]}>
+              Try again
+            </Text>
+          </HapticPressable>
+        </View>
+      </ScrollView>
+    );
+  }
+
   // Empty state: friendly Roman copy + a primary action (never a bare spinner).
-  if (isEmpty || today.isError) {
+  if (isEmpty) {
     const noMembership = data?.empty_reason === 'no_membership';
     return (
       <ScrollView
@@ -241,6 +280,23 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'center',
   },
+  errorBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.xl,
+  },
+  muted: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  retry: {
+    marginTop: spacing.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    minHeight: 48,
+    justifyContent: 'center',
+  },
+  retryLabel: { fontSize: 14, fontWeight: '600' },
   heading: {
     fontSize: 24,
     fontWeight: '600',

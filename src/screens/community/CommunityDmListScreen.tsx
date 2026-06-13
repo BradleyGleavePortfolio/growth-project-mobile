@@ -95,7 +95,12 @@ export default function CommunityDmListScreen({
     });
 
   const data = threads.data ?? [];
-  const isEmpty = !threads.isLoading && (threads.isError || data.length === 0);
+  // A DM thread-list LOAD FAILURE must render a calm retryable error, never the
+  // "no conversations yet" empty inbox — collapsing a failed `useDmThreads`
+  // into an empty inbox silently hides the failure (R65 #36/#44). True-empty is
+  // only a successful query that returned zero threads.
+  const isThreadsError = !threads.isLoading && threads.isError;
+  const isEmpty = !threads.isLoading && !threads.isError && data.length === 0;
 
   const Container: React.ComponentType<{ children: React.ReactNode }> = embedded
     ? ({ children }) => <View style={styles.flex}>{children}</View>
@@ -149,6 +154,37 @@ export default function CommunityDmListScreen({
             accessibilityRole="button"
             accessibilityLabel="Try again"
             testID="community-dmlist-prereq-retry"
+            style={[styles.retry, { borderColor: semanticColors.accent }]}
+          >
+            <Text style={[styles.retryLabel, { color: semanticColors.accentText }]}>
+              Try again
+            </Text>
+          </HapticPressable>
+        </View>
+      </Container>
+    );
+  }
+
+  // A DM thread-list load failure renders a calm retryable error using
+  // `threads.refetch()` instead of collapsing into the empty inbox state.
+  if (isThreadsError) {
+    return (
+      <Container>
+        <View style={styles.center} testID="community-dmlist-threads-error">
+          <Ionicons
+            name="alert-circle-outline"
+            size={28}
+            color={semanticColors.textMuted}
+          />
+          <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
+            We could not load your conversations. Please try again.
+          </Text>
+          <HapticPressable
+            intent="light"
+            onPress={() => threads.refetch()}
+            accessibilityRole="button"
+            accessibilityLabel="Try again"
+            testID="community-dmlist-threads-retry"
             style={[styles.retry, { borderColor: semanticColors.accent }]}
           >
             <Text style={[styles.retryLabel, { color: semanticColors.accentText }]}>
