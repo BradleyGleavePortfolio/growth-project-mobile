@@ -14,6 +14,7 @@ import { logger } from '../utils/logger';
 import { readUserCacheSync } from '../lib/userCache';
 import { clearAllStorage, prefsStorage, cacheStorage } from '../storage/mmkv';
 import { deleteWorkoutLogsForUser } from '../offline/sync/sync-engine';
+import { AUTOSAVE_MIRROR_KEY_PREFIX } from '../storage/autosaveMirror';
 import { useCoachStore } from '../store/coachStore';
 import { useClientStore } from '../store/clientStore';
 import { useFastingStore } from '../store/fastingStore';
@@ -61,6 +62,13 @@ const ASYNC_SIGN_OUT_PREFIXES = [
   // The trailing colon keeps unrelated keys like `pending_invite_codex_*`
   // from being swept.
   'pending_invite_code:',
+  // Per-plan workout-builder autosave offline mirror (MWB-4 #237 R11 P2). The
+  // mirror stores a previous user's unsent plan ops/metadata keyed as
+  // `mwb_autosave_mirror:<planId>`; autosaveMirror.ts documents it as swept on
+  // sign-out, but the prefix was missing here, leaving a foreign user's draft
+  // edits in raw AsyncStorage after sign-out (a local-persistence/privacy
+  // gap). We sweep via the exported constant so the literal lives in one place.
+  AUTOSAVE_MIRROR_KEY_PREFIX,
 ];
 
 // Per-user AsyncStorage key prefixes for nutrition/fasting state. R15 requires
