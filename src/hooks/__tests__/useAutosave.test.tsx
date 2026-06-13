@@ -125,8 +125,18 @@ import {
   AUTOSAVE_DEBOUNCE_MS,
   AUTOSAVE_SAVED_SETTLE_MS,
   AUTOSAVE_BACKOFF_BASE_MS,
+  AUTOSAVE_CONFLICT_BACKOFF_BASE_MS,
+  AUTOSAVE_MAX_CONFLICT_ATTEMPTS,
   computeBackoffDelayMs,
+  computeConflictBackoffDelayMs,
 } from '../useAutosave';
+
+// The longest possible FIRST conflict-retry backoff (attempt 0 center 250ms,
+// jittered +25%). Advancing past this guarantees the scheduled rebased re-pump
+// has fired regardless of the random jitter the hook drew.
+const AUTOSAVE_CONFLICT_BACKOFF_MAX_FIRST_MS = Math.round(
+  AUTOSAVE_CONFLICT_BACKOFF_BASE_MS * 1.25,
+);
 
 // jest-expo installs `global.fetch` as a LAZY getter that requires
 // `ExpoFetchModule` on first access. This suite replaces `react-native` with a
@@ -335,6 +345,14 @@ describe('useAutosave — 409 rebase (P0: first-409 must not drop edits)', () =>
     // A real conflict is adopted AND surfaced to the caller for its refetch.
     await waitFor(() => expect(onConflict).toHaveBeenCalledWith(conflict));
 
+    // MWB-4 #237 R11 (P1): a genuine conflict no longer re-sends immediately —
+    // it waits a minimum jittered backoff (>=250ms) before the rebased re-pump
+    // so a burst of 409s cannot tight-loop. Advance past the first conflict
+    // backoff window (max 250ms * 1.25 = ~313ms) to let the retry fire.
+    await act(async () => {
+      jest.advanceTimersByTime(AUTOSAVE_CONFLICT_BACKOFF_MAX_FIRST_MS + 50);
+    });
+
     // The local ops are NOT dropped — the hook re-diffs them onto the fresh head
     // and re-sends. The rebased re-send carries the adopted token/index and the
     // SAME idempotency key (one logical edit, dedupable transport).
@@ -463,6 +481,11 @@ describe('useAutosave — 409 rebase (P0: first-409 must not drop edits)', () =>
     });
 
     await waitFor(() => expect(onConflict).toHaveBeenCalledWith(conflict));
+    // MWB-4 #237 R11 (P1): the genuine-conflict rebased re-send is scheduled
+    // behind the conflict backoff; advance past it so the 200 lands.
+    await act(async () => {
+      jest.advanceTimersByTime(AUTOSAVE_CONFLICT_BACKOFF_MAX_FIRST_MS + 50);
+    });
     await waitFor(() => expect(result.current.status).toBe('saved'));
     expect(result.current.version).toBe(10);
   });
@@ -855,10 +878,16 @@ describe('useAutosave — P1 (R10 Fix #3): a 409-rebase re-mirror rejection must
     );
 
     // Edit → debounce → first send (idem-1) 409s → rebase + re-mirror (fails) →
-    // rebased retry sent and held in flight.
+    // rebased retry scheduled behind the conflict backoff, then sent + held.
     rerender({ value: { n: 1 } });
     await act(async () => {
       jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
+      await Promise.resolve();
+    });
+    // MWB-4 #237 R11 (P1): the genuine-conflict rebased re-send waits the
+    // conflict backoff; advance past it so the held retry actually goes out.
+    await act(async () => {
+      jest.advanceTimersByTime(AUTOSAVE_CONFLICT_BACKOFF_MAX_FIRST_MS + 50);
       await Promise.resolve();
     });
     await waitFor(() => expect(sendCount).toBeGreaterThanOrEqual(2));
@@ -976,5 +1005,266 @@ describe('useAutosave — P1: bounded backoff + NetInfo reconnect replay', () =>
     });
     await waitFor(() => expect(mockAutosave).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(result.current.status).toBe('saved'));
+  });
+});
+
+
+// --- MWB-4 #237 R11 (P1): server-truth await on 409 ---
+//
+// A richer working copy that carries a per-row `sets` and `notes`, with a diff
+// that emits a FULL-ROW upsert whenever a row differs (mirroring the real
+// workout-builder diff, which sends every persisted field). This is the shape
+// that can erase a concurrent server edit if the 409 rebase runs against a
+// STALE baseline: the full-row upsert would carry the OLD notes and reset the
+// server's concurrently-changed notes to that stale value.
+interface RowCopy {
+  sets: number;
+  notes: string | null;
+}
+
+const rowDiff = (prev: RowCopy, next: RowCopy) =>
+  prev.sets === next.sets && prev.notes === next.notes
+    ? []
+    : ([
+        {
+          op: 'upsert_exercise',
+          // A FULL-ROW upsert: BOTH fields are always present, so a resend on a
+          // stale baseline would carry a stale `notes` and clobber the server.
+          row: { sets: next.sets, notes: next.notes },
+        },
+      ] as never);
+
+describe('useAutosave - MWB-4 #237 R11 (P1): 409 awaits server truth before rebasing', () => {
+  it('AWAITS the onConflict promise (refetch + re-anchor) BEFORE rebasing, so the rebased resend does NOT erase a concurrent server edit', async () => {
+    const conflict = {
+      error: 'autosave_conflict_retry' as const,
+      head_revision_index: 9,
+      lock_token: TOKEN_B,
+    };
+    // First send 409s; the rebased re-send then lands a 200 on the fresh head.
+    mockAutosave
+      .mockRejectedValueOnce(
+        new WorkoutAutosaveApiError('conflict', 409, 'conflict', conflict),
+      )
+      .mockResolvedValueOnce(okResponse({ head: 10, token: TOKEN_A }));
+
+    // The hook handle is captured so onConflict can re-anchor the baseline to
+    // server truth, exactly as the screen does after its refetch resolves.
+    let handle: ReturnType<typeof useAutosave<RowCopy>> | null = null;
+    // The screen folds the refetched server truth into BOTH the autosave diff
+    // baseline (via rebaselineTo) AND its local working copy (via setRows). We
+    // model the setRows fold with a deferred rerender driven from onConflict.
+    let rerenderValue: ((next: RowCopy) => void) | null = null;
+    // The server concurrently changed notes to 'tempo'. Server truth therefore
+    // has the coach's last-saved sets (3) PLUS the new server notes ('tempo').
+    const serverTruth: RowCopy = { sets: 3, notes: 'tempo' };
+    const adoptionOrder: string[] = [];
+    const onConflict = jest.fn(async () => {
+      // Model the screen's async refetch: it resolves on a later microtask,
+      // THEN re-anchors the autosave baseline to the refetched server truth and
+      // folds that server truth into the local working copy (the coach's sets=4
+      // edit replayed ON TOP OF the server's new notes='tempo').
+      await Promise.resolve();
+      adoptionOrder.push('adopted-server-truth');
+      handle?.rebaselineTo(serverTruth);
+      rerenderValue?.({ sets: 4, notes: 'tempo' });
+    });
+
+    const { result, rerender } = renderHook(
+      ({ value }: { value: RowCopy }) => {
+        const r = useAutosave<RowCopy>({
+          planId: 'p1',
+          value,
+          diff: rowDiff,
+          baseRevisionIndex: 0,
+          lockToken: TOKEN_A,
+          onConflict,
+        });
+        handle = r;
+        return r;
+      },
+      // Baseline: the coach's last-saved row is sets=3, notes=null (the coach
+      // never touched notes; the server set it later).
+      { initialProps: { value: { sets: 3, notes: null } as RowCopy } },
+    );
+    rerenderValue = (next: RowCopy) => rerender({ value: next });
+
+    // The coach edits sets 3 -> 4 (a sets-only change). The pending batch's
+    // full-row upsert therefore carries notes=null off the STALE baseline.
+    rerender({ value: { sets: 4, notes: null } });
+    await act(async () => {
+      jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
+    });
+
+    await waitFor(() => expect(onConflict).toHaveBeenCalledWith(conflict));
+    // The conflict re-send waits the jittered backoff; advance past it.
+    await act(async () => {
+      jest.advanceTimersByTime(AUTOSAVE_CONFLICT_BACKOFF_MAX_FIRST_MS + 50);
+    });
+    await waitFor(() => expect(mockAutosave).toHaveBeenCalledTimes(2));
+
+    // The server-truth adoption ran BEFORE the rebased resend went out.
+    expect(adoptionOrder).toEqual(['adopted-server-truth']);
+
+    // THE CORE ASSERTION: the rebased resend diffed the coach's edit against
+    // the ADOPTED server truth (sets=3, notes='tempo'), not the stale local
+    // baseline (notes=null). So the upsert carries the coach's sets=4 AND the
+    // server's notes='tempo' - the concurrent server edit is NOT erased.
+    const rebaseCall = mockAutosave.mock.calls[1][0];
+    expect(rebaseCall.body.ops).toEqual([
+      { op: 'upsert_exercise', row: { sets: 4, notes: 'tempo' } },
+    ]);
+    expect(rebaseCall.body.base_revision_index).toBe(9);
+    expect(rebaseCall.body.lock_token).toBe(TOKEN_B);
+    await waitFor(() => expect(result.current.status).toBe('saved'));
+  });
+
+  it('surfaces manual recovery and does NOT resend when server-truth adoption (onConflict) rejects', async () => {
+    const conflict = {
+      error: 'autosave_conflict_retry' as const,
+      head_revision_index: 9,
+      lock_token: TOKEN_B,
+    };
+    // The first send 409s. The rebased resend must NOT go out because adoption
+    // fails - so we never queue a second resolved response.
+    mockAutosave.mockRejectedValueOnce(
+      new WorkoutAutosaveApiError('conflict', 409, 'conflict', conflict),
+    );
+    const onConflict = jest.fn(async () => {
+      await Promise.resolve();
+      throw new Error('refetch failed');
+    });
+
+    const { result, rerender } = renderHook(
+      ({ value }: { value: RowCopy }) =>
+        useAutosave<RowCopy>({
+          planId: 'p1',
+          value,
+          diff: rowDiff,
+          baseRevisionIndex: 0,
+          lockToken: TOKEN_A,
+          onConflict,
+        }),
+      { initialProps: { value: { sets: 3, notes: null } as RowCopy } },
+    );
+
+    rerender({ value: { sets: 4, notes: null } });
+    await act(async () => {
+      jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
+    });
+
+    await waitFor(() => expect(onConflict).toHaveBeenCalledWith(conflict));
+    // Give any (incorrectly) scheduled resend a chance to fire - it must not.
+    await act(async () => {
+      jest.advanceTimersByTime(AUTOSAVE_CONFLICT_BACKOFF_MAX_FIRST_MS + 50);
+    });
+
+    // No second send: a failed adoption must NOT resend over a possibly-stale
+    // baseline. The hook surfaces manual recovery and keeps the batch queued.
+    expect(mockAutosave).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(result.current.status).toBe('conflict'));
+    expect(result.current.hasPending).toBe(true);
+    // The mirror was NOT cleared (the edit is still pending a manual re-drive).
+    expect(mockClear).not.toHaveBeenCalled();
+  });
+});
+
+describe('useAutosave - MWB-4 #237 R11 (P1): bounded conflict-retry budget', () => {
+  it('stops auto-retrying after AUTOSAVE_MAX_CONFLICT_ATTEMPTS genuine 409s and surfaces manual recovery (no immediate-spin loop)', async () => {
+    const conflict = {
+      error: 'autosave_conflict_retry' as const,
+      head_revision_index: 9,
+      lock_token: TOKEN_B,
+    };
+    // EVERY send 409s - a persistent contended conflict that, without a budget,
+    // would re-pump forever.
+    mockAutosave.mockRejectedValue(
+      new WorkoutAutosaveApiError('conflict', 409, 'conflict', conflict),
+    );
+    const onConflict = jest.fn(() => Promise.resolve());
+
+    const { result, rerender } = renderHook(
+      ({ value }: { value: Copy }) =>
+        useAutosave<Copy>({
+          planId: 'p1',
+          value,
+          diff,
+          baseRevisionIndex: 0,
+          lockToken: TOKEN_A,
+          onConflict,
+        }),
+      { initialProps: { value: { n: 0 } } },
+    );
+
+    rerender({ value: { n: 1 } });
+    await act(async () => {
+      jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
+    });
+    // Drain each scheduled conflict-backoff re-pump in turn. Each genuine 409
+    // schedules the next retry behind a growing jittered backoff; advancing
+    // generously past the cap window per iteration fires them all.
+    for (let i = 0; i < AUTOSAVE_MAX_CONFLICT_ATTEMPTS + 3; i += 1) {
+      await act(async () => {
+        jest.advanceTimersByTime(20000);
+        await Promise.resolve();
+      });
+    }
+
+    // The original send PLUS at most AUTOSAVE_MAX_CONFLICT_ATTEMPTS auto-rebased
+    // re-sends - never an unbounded spin. (1 original + 5 budgeted retries = 6.)
+    await waitFor(() =>
+      expect(mockAutosave.mock.calls.length).toBe(
+        AUTOSAVE_MAX_CONFLICT_ATTEMPTS + 1,
+      ),
+    );
+    // Past the budget the hook stops and surfaces the manual-recovery conflict
+    // state, keeping the batch pending for a manual re-drive.
+    await waitFor(() => expect(result.current.status).toBe('conflict'));
+    expect(result.current.hasPending).toBe(true);
+    // onConflict fired on each genuine conflict (caller refetch) AND once more
+    // when the budget was exhausted to surface manual recovery.
+    expect(onConflict.mock.calls.length).toBeGreaterThanOrEqual(
+      AUTOSAVE_MAX_CONFLICT_ATTEMPTS,
+    );
+  });
+
+  it('treats a MALFORMED conflict body (kind=conflict, conflict=undefined) as non-auto-retriable: notifies the caller with undefined, surfaces conflict, and does NOT resend', async () => {
+    // A 409 the API could not decode: kind='conflict' but conflict is undefined.
+    mockAutosave.mockRejectedValueOnce(
+      new WorkoutAutosaveApiError('conflict', 409, 'undecodable', undefined),
+    );
+    const onConflict = jest.fn(() => Promise.resolve());
+
+    const { result, rerender } = renderHook(
+      ({ value }: { value: Copy }) =>
+        useAutosave<Copy>({
+          planId: 'p1',
+          value,
+          diff,
+          baseRevisionIndex: 0,
+          lockToken: TOKEN_A,
+          onConflict,
+        }),
+      { initialProps: { value: { n: 0 } } },
+    );
+
+    rerender({ value: { n: 1 } });
+    await act(async () => {
+      jest.advanceTimersByTime(AUTOSAVE_DEBOUNCE_MS + 10);
+    });
+    // Generously advance: a doomed malformed-409 resend must NOT be scheduled.
+    await act(async () => {
+      jest.advanceTimersByTime(20000);
+      await Promise.resolve();
+    });
+
+    // The caller is notified with `undefined` (no server head to trust) so it
+    // can surface manual recovery, and there is NO auto-resend of the doomed
+    // stale-token batch (an immediate-spin loop otherwise).
+    expect(onConflict).toHaveBeenCalledWith(undefined);
+    expect(mockAutosave).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(result.current.status).toBe('conflict'));
+    expect(result.current.hasPending).toBe(true);
+    expect(mockClear).not.toHaveBeenCalled();
   });
 });

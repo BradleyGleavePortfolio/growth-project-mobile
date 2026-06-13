@@ -118,6 +118,37 @@ export const AUTOSAVE_BACKOFF_CAP_MS = 16000;
 export const AUTOSAVE_BACKOFF_JITTER = 0.25;
 export const AUTOSAVE_MAX_RETRY_ATTEMPTS = 5;
 
+/**
+ * Bounded budget for the 409 conflict-rebase loop (MWB-4 #237 R11 P1). A stream
+ * of 409s — another active editor, a stale-cache/adoption race, or a malformed
+ * conflict body — used to re-pump the rebased batch IMMEDIATELY with no counter
+ * and no delay, an unbounded immediate-spin loop. We now cap conflict retries at
+ * this many auto-rebases; past it the hook stops auto-retrying and surfaces a
+ * manual-recovery 'conflict' state (the pill's refetch affordance) instead of
+ * hammering the backend. Each conflict retry also waits a minimum jittered
+ * backoff (below) so even within budget it never tight-loops.
+ */
+export const AUTOSAVE_MAX_CONFLICT_ATTEMPTS = 5;
+
+/**
+ * Minimum delay between conflict-rebase retries (MWB-4 #237 R11 P1). Conflict
+ * retries grow 250ms→500ms→1s→2s→4s, each jittered ±25%, so even a rapid burst
+ * of 409s cannot produce a tight immediate-spin loop and a fleet of conflicting
+ * clients does not thundering-herd the autosave endpoint.
+ */
+export const AUTOSAVE_CONFLICT_BACKOFF_BASE_MS = 250;
+
+/** Compute the nth (0-indexed) conflict-retry delay with ±25% jitter, capped. */
+export function computeConflictBackoffDelayMs(
+  attempt: number,
+  random: () => number = Math.random,
+): number {
+  const raw = AUTOSAVE_CONFLICT_BACKOFF_BASE_MS * 2 ** Math.max(0, attempt);
+  const capped = Math.min(raw, AUTOSAVE_BACKOFF_CAP_MS);
+  const jitterFactor = 1 + (random() * 2 - 1) * AUTOSAVE_BACKOFF_JITTER;
+  return Math.round(capped * jitterFactor);
+}
+
 /** Compute the nth (0-indexed) backoff delay with ±25% jitter, capped. */
 export function computeBackoffDelayMs(
   attempt: number,
@@ -167,8 +198,18 @@ export interface UseAutosaveArgs<TWorkingCopy> {
    * backend conflict body carries no serverOps (single-editor model), so the
    * caller typically refetches the plan; the hook then re-diffs the pending
    * batch against the refetched value and re-sends it.
+   *
+   * MWB-4 #237 R11 (P1): the callback MAY return a `Promise<void>`. When it
+   * does, the hook AWAITS it before rebasing + re-sending, so authoritative
+   * server truth is adopted (the screen refetches the plan and re-anchors the
+   * diff baseline to it) FIRST. Without the await the resend went out against a
+   * STALE local baseline and the full-row upsert diff could erase a concurrent
+   * server edit (e.g. another field reset to null). A `void` return preserves
+   * the legacy behaviour (no wait). It is also passed `undefined` when a 409
+   * arrives with a malformed/undecodable body so the caller can surface manual
+   * recovery rather than trust an absent server head.
    */
-  onConflict?: (conflict: AutosaveConflict) => void;
+  onConflict?: (conflict: AutosaveConflict | undefined) => void | Promise<void>;
   /**
    * Called the moment a mirrored batch is found and a kill/replay is attempted
    * on mount (MWB-4 #237 R6). The caller MUST treat its cached plan as stale
@@ -369,6 +410,15 @@ export function useAutosave<TWorkingCopy>(
   const savedSettleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const backoffTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryAttemptRef = useRef(0);
+  // MWB-4 #237 R11 (P1): bounded budget for the 409 conflict-rebase loop. The
+  // transient `retryAttemptRef` covers network/server backoff; this parallel
+  // counter caps the conflict-rebase path so a stream of 409s cannot spin an
+  // unbounded immediate retry loop. Incremented per conflict auto-rebase, reset
+  // to 0 on a terminal 200 (a save cleared the conflict).
+  const conflictAttemptRef = useRef(0);
+  // Holds the conflict-retry backoff timer so teardown can cancel it (mirrors
+  // backoffTimerRef for the transient path).
+  const conflictTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // AbortController for the in-flight request, so unmount/supersede can cancel
   // the network call (the mirror is already durable for replay).
   const abortRef = useRef<AbortController | null>(null);
@@ -418,6 +468,13 @@ export function useAutosave<TWorkingCopy>(
     if (backoffTimerRef.current) {
       clearTimeout(backoffTimerRef.current);
       backoffTimerRef.current = null;
+    }
+  }, []);
+
+  const clearConflictTimer = useCallback(() => {
+    if (conflictTimerRef.current) {
+      clearTimeout(conflictTimerRef.current);
+      conflictTimerRef.current = null;
     }
   }, []);
 
@@ -580,6 +637,11 @@ export function useAutosave<TWorkingCopy>(
         await clearAutosaveMirrorIfKey(planId, batch.idempotencyKey);
         currentInFlightRef.current = null;
         retryAttemptRef.current = 0;
+        // A save landed, so the conflict-rebase loop (if any) is resolved: reset
+        // the conflict budget so a future, unrelated 409 gets its full allowance
+        // (MWB-4 #237 R11 P1).
+        conflictAttemptRef.current = 0;
+        clearConflictTimer();
         // The batch landed on the server (durable server-side). If nothing else
         // is queued, the on-device durability gap is closed — clear the degraded
         // flag. A still-queued pendingNext keeps it until that batch's own
@@ -644,6 +706,26 @@ export function useAutosave<TWorkingCopy>(
           // local ops onto the new head and keep the batch pending to re-send.
           // We do NOT advance lastSavedValueRef (the ops were NOT applied).
           //
+          // MWB-4 #237 R11 (P1) — MALFORMED conflict body. A 409 the API could
+          // not decode (`kind==='conflict'` AND `conflict===undefined`) carries
+          // NO fresh head/token, so rebasing + resending the same stale-token
+          // batch is doomed to 409 again — an immediate-spin loop. Treat it as
+          // NON-auto-retriable: surface a 'conflict' (the pill's manual-refetch
+          // affordance), notify the caller with `undefined` so it can recover,
+          // keep the batch in the mirror/queue for a manual re-drive, and STOP
+          // (no pump). A replayed batch hitting this is terminal for the replay.
+          if (err.conflict === undefined) {
+            pendingNextRef.current = batch;
+            safeSet(setStatus, 'conflict');
+            safeSet(setHasPending, true);
+            if (batch.isReplay) clearReplayInFlight();
+            onConflictRef.current?.(undefined);
+            logger.error(
+              '[useAutosave] malformed conflict body — manual recovery (no auto-retry)',
+              { planId },
+            );
+            return;
+          }
           // Distinguish the QUIET bootstrap stale-lock from a REAL conflict:
           //   - `autosave_lock_stale` BEFORE any successful save is the
           //     by-design first-autosave bootstrap (the client booted with a
@@ -654,7 +736,34 @@ export function useAutosave<TWorkingCopy>(
           //     is a genuine external-edit conflict: status='conflict' and we
           //     fire onConflict so the caller refetches and the coach is told.
           const isBootstrapStaleLock =
-            err.conflict?.error === 'autosave_lock_stale' && !hasSavedRef.current;
+            err.conflict.error === 'autosave_lock_stale' && !hasSavedRef.current;
+          // Adopt the fresh head/token up front so even a budget-exhausted stop
+          // (below) or a manual re-drive starts from the latest server head.
+          indexRef.current = err.conflict.head_revision_index;
+          tokenRef.current = err.conflict.lock_token;
+          safeSet(setVersion, err.conflict.head_revision_index);
+          safeSet(setTokenState, err.conflict.lock_token);
+          // MWB-4 #237 R11 (P1) BOUNDED conflict budget. Past
+          // AUTOSAVE_MAX_CONFLICT_ATTEMPTS auto-rebases (another active editor /
+          // a persistent adoption race) we STOP auto-retrying and surface manual
+          // recovery instead of spinning. We keep the batch queued for a manual
+          // re-drive. A bootstrap stale-lock is exempt: it is the by-design
+          // first-save handshake, not a contended loop.
+          if (
+            !isBootstrapStaleLock &&
+            conflictAttemptRef.current >= AUTOSAVE_MAX_CONFLICT_ATTEMPTS
+          ) {
+            pendingNextRef.current = batch;
+            safeSet(setStatus, 'conflict');
+            safeSet(setHasPending, true);
+            if (batch.isReplay) clearReplayInFlight();
+            onConflictRef.current?.(err.conflict);
+            logger.warn(
+              '[useAutosave] conflict budget exhausted - manual recovery (no auto-retry)',
+              { planId, attempts: conflictAttemptRef.current },
+            );
+            return;
+          }
           // A replayed batch that 409s is NOT yet terminal for the rescued edit
           // (MWB-4 #237 R8 P1). This branch fast-forwards the lock/index, then
           // rebases + REQUEUES the still-unsaved ops and pumps them again — so
@@ -667,35 +776,63 @@ export function useAutosave<TWorkingCopy>(
           // already absorbed the rescued ops — terminal + adopted), and the
           // requeued retry (which carries `isReplay` via rebaseBatch) clears it
           // on its own terminal 200 / hard reject.
-          if (err.conflict) {
-            indexRef.current = err.conflict.head_revision_index;
-            tokenRef.current = err.conflict.lock_token;
-            safeSet(setVersion, err.conflict.head_revision_index);
-            safeSet(setTokenState, err.conflict.lock_token);
-            if (!isBootstrapStaleLock) {
-              onConflictRef.current?.(err.conflict);
-            }
-          }
           safeSet(setStatus, isBootstrapStaleLock ? 'syncing' : 'conflict');
           logger.warn(
             isBootstrapStaleLock
-              ? '[useAutosave] bootstrap stale-lock — syncing + rebasing local ops'
-              : '[useAutosave] conflict — rebasing local ops',
+              ? '[useAutosave] bootstrap stale-lock - syncing + rebasing local ops'
+              : '[useAutosave] conflict - awaiting server truth then rebasing',
             {
               planId,
-              head: err.conflict?.head_revision_index,
-              error: err.conflict?.error,
+              head: err.conflict.head_revision_index,
+              error: err.conflict.error,
+              attempt: conflictAttemptRef.current,
             },
           );
-          // Rebase the still-unsaved ops onto the fresh head. If the caller's
-          // refetch already absorbed them (diff now empty) we drop the batch
+          // MWB-4 #237 R11 (P1) AWAIT server-truth adoption. The caller's
+          // onConflict refetches the plan AND re-anchors the diff baseline
+          // (lastSavedValueRef) to that authoritative server copy. We MUST wait
+          // for that before rebasing: rebaseBatch diffs lastSavedValueRef vs
+          // latestValueRef, so resending before adoption would diff a STALE
+          // local baseline and emit full-row upserts that erase a concurrent
+          // server edit. A void-returning caller resolves immediately (legacy
+          // behaviour). The bootstrap stale-lock has no concurrent server edit
+          // to protect, so it skips the caller round-trip entirely.
+          if (!isBootstrapStaleLock) {
+            try {
+              await onConflictRef.current?.(err.conflict);
+            } catch (adoptErr) {
+              // The caller's refetch/adoption failed. Do NOT blindly resend over
+              // a possibly-stale baseline (that is the lost-update bug). Surface
+              // manual recovery and keep the batch queued for a manual re-drive.
+              pendingNextRef.current = batch;
+              safeSet(setStatus, 'conflict');
+              safeSet(setHasPending, true);
+              if (batch.isReplay) clearReplayInFlight();
+              logger.error(
+                '[useAutosave] server-truth adoption failed on conflict - manual recovery',
+                { planId, err: adoptErr },
+              );
+              return;
+            }
+            // The hook may have unmounted while awaiting adoption; if so the
+            // teardown already captured the mirror, so stop here.
+            if (!mountedRef.current) {
+              pendingNextRef.current = batch;
+              return;
+            }
+          }
+          // Rebase the still-unsaved ops onto the NOW-ADOPTED server baseline.
+          // If the adoption absorbed them (diff now empty) we drop the batch
           // cleanly; otherwise we re-mirror + re-queue it for the next pump.
           const rebased = rebaseBatch(batch);
           if (rebased === null) {
             await clearAutosaveMirrorIfKey(planId, batch.idempotencyKey);
             pendingNextRef.current = null;
             // The refetch absorbed the local ops (diff empty), so the working
-            // copy now matches the adopted baseline: no longer dirty.
+            // copy now matches the adopted baseline: no longer dirty. The
+            // conflict is fully resolved, so reset the conflict budget + timer.
+            conflictAttemptRef.current = 0;
+            clearConflictTimer();
             setDirty(false);
             // Replay terminal + reconciled: this was a replayed batch and the
             // caller's refetch/adoption has folded the rescued ops into the
@@ -715,9 +852,27 @@ export function useAutosave<TWorkingCopy>(
           // hold and silently lose the edits rescued into the rebase.
           mirrorHeldRef.current = await writeMirrorRef.current(rebased);
           safeSet(setHasPending, true);
-          // Re-send on the fresh baseline immediately (a new request, gated by
-          // the now-cleared currentInFlight).
-          pumpRef.current();
+          // MWB-4 #237 R11 (P1): count this auto-rebase against the conflict
+          // budget and re-send after a minimum JITTERED backoff (never an
+          // immediate tight loop). The bootstrap stale-lock handshake is exempt
+          // from the count (it is the expected first-save 409) and re-sends with
+          // no delay so its quiet-recovery latency is unchanged. A genuine
+          // conflict waits computeConflictBackoffDelayMs(attempt) so even a
+          // burst of 409s cannot spin immediately.
+          const conflictAttempt = conflictAttemptRef.current;
+          clearConflictTimer();
+          if (isBootstrapStaleLock) {
+            // Re-send immediately on the fresh baseline (a new request, gated by
+            // the now-cleared currentInFlight).
+            pumpRef.current();
+            return;
+          }
+          conflictAttemptRef.current += 1;
+          const conflictDelay = computeConflictBackoffDelayMs(conflictAttempt);
+          conflictTimerRef.current = setTimeout(() => {
+            conflictTimerRef.current = null;
+            pumpRef.current();
+          }, conflictDelay);
           return;
         }
         if (
@@ -1087,6 +1242,11 @@ export function useAutosave<TWorkingCopy>(
         debounceRef.current = null;
       }
       clearBackoffTimer();
+      // MWB-4 #237 R11 (P1): tear down the conflict-rebase backoff timer too, so
+      // a queued conflict re-pump cannot fire after the editor has unmounted
+      // (the teardown flush below already captures the latest edit to the
+      // mirror, which replays on the next mount).
+      clearConflictTimer();
       if (enabledRef.current) {
         // Mirror-first durable capture of the latest edit (stable flush reads
         // latestValueRef, so it never misses the last keystroke), THEN abort the
@@ -1104,7 +1264,7 @@ export function useAutosave<TWorkingCopy>(
         });
       }
     };
-  }, [planId, enabled, flush, clearBackoffTimer]);
+  }, [planId, enabled, flush, clearBackoffTimer, clearConflictTimer]);
 
   return useMemo(
     () => ({

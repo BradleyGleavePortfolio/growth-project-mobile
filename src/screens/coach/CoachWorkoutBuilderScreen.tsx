@@ -90,7 +90,7 @@ const AUTOSAVE_BOOTSTRAP_BASE_INDEX = 0;
 
 const WORKOUT_TYPES: WorkoutType[] = ['strength', 'cardio', 'mobility'];
 
-interface DraftExerciseRow {
+export interface DraftExerciseRow {
   /**
    * Stable per-row CLIENT identifier, generated once when the row first exists
    * on this device (a server-loaded row gets one on adoption; a brand-new row
@@ -117,6 +117,34 @@ interface DraftExerciseRow {
   weight_lbs: number | null;
   superset_group_id: string | null;
   notes: string | null;
+}
+
+/**
+ * Build the explicit-Save (PUT replace-all) exercise payload from the local
+ * draft rows. MWB-4 #237 R11 (P1): the backend `setExercises` endpoint is a
+ * FULL REPLACE - every persisted field that is omitted from a row is reset to
+ * null. `weight_lbs` and `superset_group_id` are carried in local state and are
+ * preserved by the autosave diff + replay/adoption path, so omitting them here
+ * silently erased server-preserved weights and supersets the coach never
+ * re-entered. This maps EVERY persisted field (a `null` local value is sent as
+ * `undefined` so the row input stays schema-clean) so an explicit Save
+ * round-trips weight_lbs and superset_group_id at parity with autosave.
+ * Exported as a pure function so the field parity is unit-testable without a
+ * full screen render.
+ */
+export function buildSetExercisesPayload(
+  rows: DraftExerciseRow[],
+): UpsertExerciseRowInput[] {
+  return rows.map((r, idx) => ({
+    exercise_external_id: r.exercise_external_id,
+    order: idx + 1,
+    sets: r.sets,
+    reps_or_duration_seconds: r.reps_or_duration_seconds,
+    weight_lbs: r.weight_lbs ?? undefined,
+    rest_seconds: r.rest_seconds ?? undefined,
+    superset_group_id: r.superset_group_id ?? undefined,
+    notes: r.notes ?? undefined,
+  }));
 }
 
 /**
@@ -371,6 +399,17 @@ export default function CoachWorkoutBuilderScreen() {
   const [refetchSeq, setRefetchSeq] = useState(0);
   const refetchSeqRef = useRef(0);
   const adoptedRefetchSeqRef = useRef(0);
+  // MWB-4 #237 R11 (P1): the conflict handler must AWAIT authoritative server
+  // truth (refetch + re-anchor the autosave diff baseline) BEFORE the hook
+  // rebases + re-sends the pending batch, otherwise the resend diffs a stale
+  // local baseline and the full-row upsert can erase a concurrent server edit.
+  // The re-anchor uses `autosave.rebaselineTo` + `buildServerWorkingCopy`, both
+  // declared AFTER the `useAutosave` call that `onAutosaveConflict` is passed
+  // into, so we route the re-anchor through this ref (populated once those are
+  // in scope) to keep the handler defined before the hook without a TDZ cycle.
+  const rebaselineToServerRef = useRef<
+    ((exercises: WorkoutPlanExercise[]) => void) | null
+  >(null);
   // True once the screen has folded server data into local rows at least once.
   // The very first arrival of `existingPlan` is a legitimate full adopt even
   // though no refetch was requested; after that, only a fresh refetch we
@@ -459,11 +498,33 @@ export default function CoachWorkoutBuilderScreen() {
   // (Note: the by-design first-autosave bootstrap stale-lock recovery is silent
   // and does NOT call this — the hook handles it internally; only a real
   // external-edit conflict routes here.)
-  const onAutosaveConflict = useCallback(() => {
+  //
+  // MWB-4 #237 R11 (P1): this handler returns a Promise the hook AWAITS before
+  // it rebases + re-sends the pending batch. We refetch the plan, and once the
+  // authoritative server copy arrives we re-anchor the autosave diff baseline
+  // to it (rebaselineToServerRef -> autosave.rebaselineTo). Only after that
+  // does the hook re-diff the pending ops, so the resend expresses the coach's
+  // delta ON TOP OF server truth rather than a stale full-row upsert that would
+  // erase a concurrent server edit (e.g. another field reset to null). If the
+  // refetch hard-fails (rejects or resolves with an error) we throw so the hook
+  // treats it as a failed adoption and surfaces manual recovery instead of
+  // resending over a possibly-stale baseline. A malformed conflict body arrives
+  // here as `undefined`; we still refetch so the coach sees the latest server
+  // truth, but the hook does not auto-resend that doomed batch.
+  const onAutosaveConflict = useCallback(async (): Promise<void> => {
     if (!autosaveEnabled) return;
     refetchSeqRef.current += 1;
     setRefetchSeq(refetchSeqRef.current);
-    void refetchPlan();
+    const result = await refetchPlan();
+    if (result?.isError) {
+      throw new Error('workout plan refetch failed on autosave conflict');
+    }
+    const serverExercises = result?.data?.exercises;
+    if (serverExercises) {
+      // Anchor lastSavedValueRef to the refetched server truth so the hook's
+      // subsequent rebase diffs against it, not the stale local baseline.
+      rebaselineToServerRef.current?.(serverExercises);
+    }
   }, [autosaveEnabled, refetchPlan]);
 
   // A mirrored batch was found on mount and is being replayed after a force-
@@ -621,6 +682,25 @@ export default function CoachWorkoutBuilderScreen() {
     }),
     [name, type],
   );
+
+  // MWB-4 #237 R11 (P1): publish the server-truth re-anchor through the ref the
+  // (earlier-declared) `onAutosaveConflict` reads. After the conflict refetch
+  // resolves, the handler anchors the autosave diff baseline to the refetched
+  // server copy via `autosave.rebaselineTo`, so the hook's subsequent rebase
+  // diffs the coach's pending ops against authoritative server truth (never a
+  // stale local baseline that would emit field-erasing full-row upserts). The
+  // rebaseline refuses to run while a batch is in flight/queued; during the
+  // conflict await both queue slots are clear (the failed send already vacated
+  // the in-flight slot and the rebased batch is not requeued until after this
+  // await), so the anchor takes effect before the resend.
+  useEffect(() => {
+    rebaselineToServerRef.current = (exercises: WorkoutPlanExercise[]) => {
+      autosaveRebaselineTo(buildServerWorkingCopy(exercises));
+    };
+    return () => {
+      rebaselineToServerRef.current = null;
+    };
+  }, [autosaveRebaselineTo, buildServerWorkingCopy]);
 
   // Adopt server rows when a refetch (post-409, post-insert id adoption, or
   // initial load) brings in fresh server rows WITH their ids.
@@ -977,14 +1057,10 @@ export default function CoachWorkoutBuilderScreen() {
       }
 
       if (resolvedPlanId) {
-        const payload: UpsertExerciseRowInput[] = rows.map((r, idx) => ({
-          exercise_external_id: r.exercise_external_id,
-          order: idx + 1,
-          sets: r.sets,
-          reps_or_duration_seconds: r.reps_or_duration_seconds,
-          rest_seconds: r.rest_seconds ?? undefined,
-          notes: r.notes ?? undefined,
-        }));
+        // MWB-4 #237 R11 (P1): build the full-field payload (incl. weight_lbs +
+        // superset_group_id) so an explicit Save does not erase server-preserved
+        // values the coach never re-entered. See buildSetExercisesPayload.
+        const payload: UpsertExerciseRowInput[] = buildSetExercisesPayload(rows);
         await setExercisesMut.mutateAsync({
           planId: resolvedPlanId,
           rows: payload,
