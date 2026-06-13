@@ -5,9 +5,10 @@
  * unambiguous and instant; the copy stays short and literal (no quip on the
  * default per spec §2.9).
  *
- * FACE+VOICE: <RomanAvatar /> appears at line 47 — co-located with the §2.9
- * copy from src/lib/roman/copy.ts. Per the spec §4 table ("small avatar or
- * none — keep UI minimal") the avatar is rendered at a SMALL size.
+ * Roman P3 surface — co-locates <RomanAvatar /> with the §2.9 Roman copy
+ * rendered below. Per the spec §4 table ("small avatar or none — keep UI
+ * minimal") the avatar is rendered at a SMALL size.
+ * See FACE+VOICE invariant in src/lib/roman/copy.ts.
  *
  * Mascot expression: neutral default; slight smile on a logged PR via voice
  * (celebration). On a parse error the mascot stays neutral.

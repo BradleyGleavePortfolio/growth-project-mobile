@@ -1,9 +1,10 @@
 /**
  * RomanNewClientNotice — §2.5 New client onboarded (coach app).
  *
- * FACE+VOICE: <RomanAvatar /> appears at line 44 — co-located with the §2.5
- * copy from src/lib/roman/copy.ts. Mascot is "optional" per the spec table but
- * INCLUDED per the cross-cutting operator rule.
+ * Roman P3 surface — co-locates <RomanAvatar /> with the §2.5 Roman copy
+ * rendered below. Mascot is "optional" per the spec table but INCLUDED per the
+ * cross-cutting operator rule.
+ * See FACE+VOICE invariant in src/lib/roman/copy.ts.
  *
  * Mascot expression: neutral default; slight smile on a roster milestone
  * (celebration, §3.8). Welcoming a new client is a straight, gracious moment —

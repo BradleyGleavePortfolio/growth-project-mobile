@@ -1,10 +1,10 @@
 /**
  * RomanBriefCard — §2.3 Coach Brief delivery (coach app, morning ritual).
  *
- * FACE+VOICE: <RomanAvatar /> appears at line 50 — co-located with the §2.3
- * copy from src/lib/roman/copy.ts in this same component tree, per the
- * operator rule "his voice always appears WITH HIS FACE" and "wire him up for
- * COACH SCREENS TOO".
+ * Roman P3 surface — co-locates <RomanAvatar /> with the §2.3 Roman copy
+ * rendered below, in this same component tree, per the operator rule "his
+ * voice always appears WITH HIS FACE" and "wire him up for COACH SCREENS TOO".
+ * See FACE+VOICE invariant in src/lib/roman/copy.ts.
  *
  * Mascot expression: neutral by default; the knowing slight smile (§3.8) on a
  * record morning (celebration mode). The brief is a daily surface, so the

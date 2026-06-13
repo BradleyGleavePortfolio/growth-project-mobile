@@ -2,10 +2,11 @@
  * RomanCheckInNotice — §2.4 Client check-in-consistency claim awaiting sign-off
  * (coach app).
  *
- * FACE+VOICE: <RomanAvatar /> appears at line 44 — co-located with the §2.4
- * copy from src/lib/roman/copy.ts. The spec marks the mascot "optional" here,
- * but the cross-cutting operator rule ("wire him up for COACH SCREENS TOO" +
+ * Roman P3 surface — co-locates <RomanAvatar /> with the §2.4 Roman copy
+ * rendered below. The spec marks the mascot "optional" here, but the
+ * cross-cutting operator rule ("wire him up for COACH SCREENS TOO" +
  * face-with-voice) requires the avatar, so it is INCLUDED.
+ * See FACE+VOICE invariant in src/lib/roman/copy.ts.
  *
  * Mascot expression: neutral default; slight smile on the client's first such
  * claim (celebration, §3.8). This is an operational surface — no quip.

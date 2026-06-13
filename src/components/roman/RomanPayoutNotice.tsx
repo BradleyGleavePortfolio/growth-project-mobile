@@ -1,10 +1,10 @@
 /**
  * RomanPayoutNotice — §2.12 Coach payout sent to bank (coach app).
  *
- * FACE+VOICE: <RomanAvatar /> appears at line 46 — co-located with the §2.12
- * copy from src/lib/roman/copy.ts. The mascot is "optional" per the spec table
- * but INCLUDED per the cross-cutting operator rule ("wire him up for COACH
- * SCREENS TOO").
+ * Roman P3 surface — co-locates <RomanAvatar /> with the §2.12 Roman copy
+ * rendered below. The mascot is "optional" per the spec table but INCLUDED per
+ * the cross-cutting operator rule ("wire him up for COACH SCREENS TOO").
+ * See FACE+VOICE invariant in src/lib/roman/copy.ts.
  *
  * Mascot expression: neutral default; slight smile on a record payout
  * (celebration, §3.8). On an initiation failure the mascot stays neutral.

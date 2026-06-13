@@ -129,8 +129,9 @@ export default function CoachBriefScreen() {
   // signal available, the §2.5 surface is gated OFF rather than asserting an
   // onboarding that the data cannot prove. The component + host wiring remain
   // compiled and flag-gated so they re-activate the moment the payload carries
-  // a real joined-timestamp/onboarding event. Documented in
-  // FIXER_241_R5_REPORT.md (Roman must only assert what the data proves).
+  // a real joined-timestamp/onboarding event. Roman must only assert what the
+  // data proves, so absent a truthful onboarding signal the surface stays OFF
+  // rather than fabricating a "new client" event from roster shape.
   const clientList = payload?.clients ?? [];
   const newClient = selectNewlyOnboardedClient(clientList);
 
@@ -282,7 +283,8 @@ export default function CoachBriefScreen() {
           CoachBriefClientCard), so this block never renders today. The
           component and host wiring are kept compiled and flag-gated so the
           surface re-activates the moment the payload carries a real joined-
-          timestamp/onboarding event. Documented in FIXER_241_R5_REPORT.md. */}
+          timestamp/onboarding event. Gated OFF (not faked) so Roman never
+          asserts an onboarding the data cannot prove. */}
       {featureFlags.romanChat && newClient ? (
         <RomanNewClientNotice
           clientName={newClient.clientDisplayName}

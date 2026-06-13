@@ -1,8 +1,8 @@
 /**
  * RomanStreakCard — §2.7 Streak milestone (client app), 3 / 7 / 30 day.
  *
- * FACE+VOICE: <RomanAvatar /> appears at line 52 — co-located with the §2.7
- * copy from src/lib/roman/copy.ts.
+ * Roman P3 surface — co-locates <RomanAvatar /> with the §2.7 Roman copy
+ * rendered below. See FACE+VOICE invariant in src/lib/roman/copy.ts.
  *
  * Mascot expression (spec §3.8 / §4 table): NEUTRAL on the 3-day tier (which
  * is `default` mode), the knowing SLIGHT SMILE on 7-day and 30-day (which are

@@ -24,9 +24,17 @@
  * forbidden-move sweep in copy.test.ts asserts zero exclamation marks across
  * every produced string.
  *
- * FACE+VOICE invariant: every render-site that imports a function from this
- * module MUST also mount <RomanAvatar /> in the same component tree. The P3
- * surface components under src/components/roman/ enforce this co-location.
+ * FACE + VOICE invariant
+ * --------------------------------
+ * Roman has a voice (these copy helpers) AND a face (the RomanAvatar).
+ * Every persistent Roman P3 surface (card, banner, notice, readback)
+ * that renders strings from this module MUST co-locate <RomanAvatar />.
+ *
+ * Sole exception: transient toast surfaces (see RomanErrorBanner's
+ * `surface='toast'` branch) suppress the mascot for layout reasons —
+ * the toast is short-lived and the avatar would clip on small screens.
+ * If you add a new surface, either co-locate the avatar or document
+ * a similarly bounded exception here.
  *
  * NOTE: §2.6 (first-payment, ED.3) is intentionally ABSENT here — the Roman P4
  * builder adds `romanFirstPayment` in parallel. Do not add §2.6 in P3.

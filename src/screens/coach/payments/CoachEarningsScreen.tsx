@@ -37,7 +37,8 @@ import RomanPayoutNotice from '../../../components/roman/RomanPayoutNotice';
 // omits the bankLast4 prop entirely; romanPayout then drops the "account
 // ending …" clause and states only the real amount and the past-tense send
 // date. The mobile contract exposes no settlement-window or in-transit signal,
-// so the copy never speaks of one. Documented in FIXER_241_R5_REPORT.md.
+// so the copy never speaks of one — Roman states only what the normalised
+// CoachEarningsSummary actually carries, never invented or masked detail.
 
 interface Props {
   navigation: NavigationProp<ParamListBase>;
