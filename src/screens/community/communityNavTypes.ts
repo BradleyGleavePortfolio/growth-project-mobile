@@ -34,6 +34,10 @@ export type CommunityStackParamList = {
   CommunityChallengeDetail: { challengeId: string };
   /** Challenge discovery list (v3-1). Registered only behind communityChallenges. */
   CommunityChallenges: undefined;
+  /** Classroom lesson feed (v3-2). Registered only behind communityClassroom. */
+  CommunityClassroom: undefined;
+  /** Single classroom lesson detail (v3-2). Registered only behind communityClassroom. */
+  CommunityLessonDetail: { postId: string };
 };
 
 /** Loosely-typed nav prop used by the screens (matches the codebase pattern). */
