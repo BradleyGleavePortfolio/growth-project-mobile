@@ -315,7 +315,7 @@ const styles = StyleSheet.create({
   },
   retryLabel: { fontSize: 14, fontWeight: '600' },
   content: { padding: spacing.lg, gap: spacing.md },
-  title: { fontSize: 22, fontWeight: '700', lineHeight: 28 },
+  title: { fontSize: 22, fontWeight: '600', lineHeight: 28 },
   body: { fontSize: 15, lineHeight: 22 },
   mediaList: { gap: spacing.sm, marginTop: spacing.sm },
   tile: {
