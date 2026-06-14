@@ -19,27 +19,27 @@ import { render, fireEvent } from '@testing-library/react-native';
 // Capture the most recent style objects each animated face produced so the test
 // can assert the rotateY endpoints. withTiming returns its target; interpolate
 // returns the endpoint of the output range matching the (settled) progress.
-const capturedStyles: Record<string, unknown>[] = [];
-let progressValue = 0;
+const mockCapturedStyles: Record<string, unknown>[] = [];
+let mockProgressValue = 0;
 jest.mock('react-native-reanimated', () => {
   const RN = require('react-native');
   return {
     __esModule: true,
-    default: { View: (props: Record<string, unknown>) => RN.createElement(RN.View, props) },
+    default: { View: RN.View },
     useSharedValue: (initial: number) => {
-      progressValue = initial;
+      mockProgressValue = initial;
       return {
         get value() {
-          return progressValue;
+          return mockProgressValue;
         },
         set value(v: number) {
-          progressValue = v;
+          mockProgressValue = v;
         },
       };
     },
     useAnimatedStyle: (fn: () => Record<string, unknown>) => {
       const s = fn();
-      capturedStyles.push(s);
+      mockCapturedStyles.push(s);
       return s;
     },
     withTiming: (toValue: number) => toValue,
@@ -88,8 +88,8 @@ import StripeConnectCard, {
 } from '../StripeConnectCard';
 
 beforeEach(() => {
-  capturedStyles.length = 0;
-  progressValue = 0;
+  mockCapturedStyles.length = 0;
+  mockProgressValue = 0;
   mockReduceMotion = false;
 });
 
@@ -133,7 +133,7 @@ describe('StripeConnectCard', () => {
     await render(
       <StripeConnectCard connected onConnect={jest.fn()} brand="Visa" last4="4242" enabled testID="stripe-card" />,
     );
-    const rotations = capturedStyles
+    const rotations = mockCapturedStyles
       .map((s) => {
         const transform = s.transform as Array<Record<string, unknown>> | undefined;
         const ry = transform?.find((t) => 'rotateY' in t);

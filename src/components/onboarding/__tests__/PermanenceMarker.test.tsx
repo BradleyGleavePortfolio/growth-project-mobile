@@ -17,10 +17,13 @@ import { render, act } from '@testing-library/react-native';
 
 jest.mock('react-native-reanimated', () => {
   const RN = require('react-native');
+  const ReactLib = require('react');
   return {
     __esModule: true,
-    default: { View: (props: Record<string, unknown>) => RN.createElement(RN.View, props) },
-    useSharedValue: (initial: number) => ({ value: initial }),
+    default: { View: RN.View },
+    // Mirror the real hook: a STABLE shared-value ref across renders. A fresh
+    // object per render would make effect deps churn and re-fire the effect.
+    useSharedValue: (initial: number) => ReactLib.useRef({ value: initial }).current,
     useAnimatedStyle: (fn: () => unknown) => fn(),
     withTiming: (toValue: number) => toValue,
     Easing: { out: () => () => 0, inOut: () => () => 0, cubic: () => 0 },
@@ -76,6 +79,17 @@ describe('PermanenceMarker', () => {
     expect(queryByTestId('pm')).toBeNull();
   });
 
+  it('keeps the checkmark and still shows the line under Reduce Motion', async () => {
+    mockReduceMotion = true;
+    const { getByTestId } = await render(
+      <PermanenceMarker kind="priceSaved" saved enabled testID="pm" />,
+    );
+    expect(getByTestId('pm-check')).toBeTruthy();
+    expect(getByTestId('pm-line').props.children).toBe(romanPermanenceMarker.priceSaved);
+  });
+
+  // Timer-driven assertion last: fake timers can perturb the async render flush
+  // for subsequent cases, so this runs after the plain-render expectations.
   it('shows the Roman line, fades it after 1.6s, and keeps the checkmark mounted', async () => {
     jest.useFakeTimers();
     try {
@@ -87,8 +101,9 @@ describe('PermanenceMarker', () => {
       // …and the persistent checkmark is mounted.
       expect(getByTestId('pm-check')).toBeTruthy();
 
-      // Advance past the dwell + the fade-out unmount.
-      act(() => {
+      // Advance past the dwell + the fade-out unmount window. The unmount is a
+      // React state update fired from a timer, so flush it inside an async act.
+      await act(async () => {
         jest.advanceTimersByTime(PERMANENCE_LINE_VISIBLE_MS + PERMANENCE_LINE_FADE_MS + 10);
       });
 
@@ -97,17 +112,9 @@ describe('PermanenceMarker', () => {
       // …but the permanence marker (checkmark) stays.
       expect(getByTestId('pm-check')).toBeTruthy();
     } finally {
+      jest.clearAllTimers();
       jest.useRealTimers();
     }
-  });
-
-  it('keeps the checkmark and still shows the line under Reduce Motion', async () => {
-    mockReduceMotion = true;
-    const { getByTestId } = await render(
-      <PermanenceMarker kind="priceSaved" saved enabled testID="pm" />,
-    );
-    expect(getByTestId('pm-check')).toBeTruthy();
-    expect(getByTestId('pm-line').props.children).toBe(romanPermanenceMarker.priceSaved);
   });
 
   // ── Roman-voice doctrine over the permanence-marker stems ──────────────────

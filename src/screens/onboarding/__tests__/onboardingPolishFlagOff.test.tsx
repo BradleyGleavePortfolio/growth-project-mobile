@@ -37,16 +37,16 @@ jest.mock('../../../config/featureFlags', () => ({
 // Track whether any Reanimated timing animation is started. With the flag off,
 // the StepTransitionView's animated branch must never run, so withTiming must
 // not be invoked during a flag-off mount.
-const withTimingCalls: number[] = [];
+const mockWithTimingCalls: number[] = [];
 jest.mock('react-native-reanimated', () => {
   const RN = require('react-native');
   return {
     __esModule: true,
-    default: { View: (props: Record<string, unknown>) => RN.createElement(RN.View, props) },
+    default: { View: RN.View },
     useSharedValue: (initial: number) => ({ value: initial }),
     useAnimatedStyle: (fn: () => unknown) => fn(),
     withTiming: (toValue: number) => {
-      withTimingCalls.push(toValue);
+      mockWithTimingCalls.push(toValue);
       return toValue;
     },
     interpolate: (v: number, _inR: number[], outR: number[]) => outR[0] ?? v,
@@ -89,7 +89,7 @@ import PermanenceMarker from '../../../components/onboarding/PermanenceMarker';
 import StripeConnectCard from '../../../components/onboarding/StripeConnectCard';
 
 beforeEach(() => {
-  withTimingCalls.length = 0;
+  mockWithTimingCalls.length = 0;
 });
 
 const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
@@ -108,7 +108,7 @@ describe('ED.5 onboarding polish — flag OFF containment (R79 pin)', () => {
     expect(getByText('step body')).toBeTruthy();
     expect(getByText('Step')).toBeTruthy();
     // …but the flag-off StepTransitionView never starts a timing animation.
-    expect(withTimingCalls).toHaveLength(0);
+    expect(mockWithTimingCalls).toHaveLength(0);
   });
 
   it('PermanenceMarker renders nothing when the flag is OFF', async () => {
@@ -124,7 +124,7 @@ describe('ED.5 onboarding polish — flag OFF containment (R79 pin)', () => {
     );
     // The connected face is shown statically; no flip animation is started.
     expect(getByText('Payouts connected')).toBeTruthy();
-    expect(withTimingCalls).toHaveLength(0);
+    expect(mockWithTimingCalls).toHaveLength(0);
   });
 
   // ── Static guard: every onboarding host gates ED.5 on the flag ────────────

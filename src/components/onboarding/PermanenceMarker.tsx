@@ -99,7 +99,6 @@ export default function PermanenceMarker({
 
   useEffect(() => {
     if (!enabled || !saved) return;
-    let hideTimer: ReturnType<typeof setTimeout> | undefined;
 
     setLineMounted(true);
 
@@ -120,14 +119,20 @@ export default function PermanenceMarker({
       });
     }
 
-    hideTimer = setTimeout(() => {
+    // Begin the fade-out once the dwell elapses.
+    const fadeTimer = setTimeout(() => {
       lineOpacity.value = withTiming(0, { duration: PERMANENCE_LINE_FADE_MS });
-      // Unmount the transient line after the fade completes; the checkmark stays.
-      setTimeout(() => setLineMounted(false), PERMANENCE_LINE_FADE_MS);
     }, PERMANENCE_LINE_VISIBLE_MS);
+    // Unmount the transient line after the fade completes; the checkmark stays.
+    // Scheduled at the top level (not nested) so the unmount is deterministic.
+    const unmountTimer = setTimeout(
+      () => setLineMounted(false),
+      PERMANENCE_LINE_VISIBLE_MS + PERMANENCE_LINE_FADE_MS,
+    );
 
     return () => {
-      if (hideTimer != null) clearTimeout(hideTimer);
+      clearTimeout(fadeTimer);
+      clearTimeout(unmountTimer);
     };
     // Re-run when the saved row changes identity or the flag flips.
   }, [enabled, saved, kind, reduceMotion, lineOpacity, lineTranslateY]);

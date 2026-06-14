@@ -20,7 +20,7 @@ import { render, act } from '@testing-library/react-native';
 // Reanimated mock: withTiming resolves to its target value synchronously, and
 // useAnimatedStyle evaluates its worklet against the current shared values so
 // the test can read the resting state directly. Easing helpers are no-ops.
-const sharedValues: Array<{ value: number }> = [];
+const mockSharedValues: Array<{ value: number }> = [];
 jest.mock('react-native-reanimated', () => {
   const RN = require('react-native');
   return {
@@ -28,7 +28,7 @@ jest.mock('react-native-reanimated', () => {
     default: { View: RN.View },
     useSharedValue: (initial: number) => {
       const sv = { value: initial };
-      sharedValues.push(sv);
+      mockSharedValues.push(sv);
       return sv;
     },
     useAnimatedStyle: (fn: () => unknown) => fn(),
@@ -53,7 +53,7 @@ import StepTransitionView, {
 } from '../StepTransitionView';
 
 beforeEach(() => {
-  sharedValues.length = 0;
+  mockSharedValues.length = 0;
   mockReduceMotion = false;
 });
 
@@ -74,6 +74,36 @@ describe('StepTransitionView', () => {
     expect(STEP_TRANSITION_DURATION_MS).toBeLessThan(250);
   });
 
+  it('renders children at rest with no animated container when disabled', async () => {
+    const { getByText } = await render(
+      <StepTransitionView enabled={false}>
+        <Text>static content</Text>
+      </StepTransitionView>,
+    );
+    // Children still render…
+    expect(getByText('static content')).toBeTruthy();
+    // …and the shared values sit at the resting state (opacity 1, offset 0)
+    // because the flag-off path skips the animation entirely.
+    const [opacity, translateY] = mockSharedValues;
+    expect(opacity.value).toBe(1);
+    expect(translateY.value).toBe(0);
+  });
+
+  it('collapses to the resting state under Reduce Motion even when enabled', async () => {
+    mockReduceMotion = true;
+    const { getByText } = await render(
+      <StepTransitionView enabled>
+        <Text>reduced</Text>
+      </StepTransitionView>,
+    );
+    expect(getByText('reduced')).toBeTruthy();
+    const [opacity, translateY] = mockSharedValues;
+    expect(opacity.value).toBe(1);
+    expect(translateY.value).toBe(0);
+  });
+
+  // Timer-driven assertion last: fake timers can perturb the async render flush
+  // for subsequent cases, so this runs after the plain-render expectations.
   it('drives opacity → 1 and translateY → 0 within the 220ms window when enabled', async () => {
     jest.useFakeTimers();
     try {
@@ -87,39 +117,12 @@ describe('StepTransitionView', () => {
       });
       // useSharedValue order: [opacity, translateY]. With the synchronous
       // withTiming mock, both have settled to their resting targets.
-      const [opacity, translateY] = sharedValues;
+      const [opacity, translateY] = mockSharedValues;
       expect(opacity.value).toBe(1);
       expect(translateY.value).toBe(0);
     } finally {
+      jest.clearAllTimers();
       jest.useRealTimers();
     }
-  });
-
-  it('renders children at rest with no animated container when disabled', async () => {
-    const { getByText } = await render(
-      <StepTransitionView enabled={false}>
-        <Text>static content</Text>
-      </StepTransitionView>,
-    );
-    // Children still render…
-    expect(getByText('static content')).toBeTruthy();
-    // …and the shared values sit at the resting state (opacity 1, offset 0)
-    // because the flag-off path skips the animation entirely.
-    const [opacity, translateY] = sharedValues;
-    expect(opacity.value).toBe(1);
-    expect(translateY.value).toBe(0);
-  });
-
-  it('collapses to the resting state under Reduce Motion even when enabled', async () => {
-    mockReduceMotion = true;
-    const { getByText } = await render(
-      <StepTransitionView enabled>
-        <Text>reduced</Text>
-      </StepTransitionView>,
-    );
-    expect(getByText('reduced')).toBeTruthy();
-    const [opacity, translateY] = sharedValues;
-    expect(opacity.value).toBe(1);
-    expect(translateY.value).toBe(0);
   });
 });
