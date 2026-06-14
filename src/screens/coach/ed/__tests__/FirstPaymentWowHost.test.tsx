@@ -77,8 +77,8 @@ beforeEach(() => {
   mockMarkFirstPaymentSeen.mockReturnValue(Promise.resolve(undefined));
 });
 
-function renderHostWithEvent() {
-  const utils = render(<FirstPaymentWowHost>{null}</FirstPaymentWowHost>);
+async function renderHostWithEvent() {
+  const utils = await render(<FirstPaymentWowHost>{null}</FirstPaymentWowHost>);
   act(() => {
     capturedOnFirstPayment?.({
       amount: 240,
@@ -90,8 +90,8 @@ function renderHostWithEvent() {
 }
 
 describe('FirstPaymentWowHost — ED.3 (P1-3 dismiss ordering)', () => {
-  it('overlays the celebration on a gate-unseen first payment', () => {
-    const { getByTestId } = renderHostWithEvent();
+  it('overlays the celebration on a gate-unseen first payment', async () => {
+    const { getByTestId } = await renderHostWithEvent();
     expect(getByTestId('first-payment-wow')).toBeTruthy();
   });
 
@@ -105,7 +105,7 @@ describe('FirstPaymentWowHost — ED.3 (P1-3 dismiss ordering)', () => {
       }),
     );
 
-    const { getByTestId, queryByTestId } = renderHostWithEvent();
+    const { getByTestId, queryByTestId } = await renderHostWithEvent();
     const button = getByTestId('first-payment-dismiss');
     expect(button.props.accessibilityLabel).toBe(FIRST_PAYMENT_DISMISS_LABEL);
 
@@ -132,7 +132,7 @@ describe('FirstPaymentWowHost — ED.3 (P1-3 dismiss ordering)', () => {
     const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
     mockMarkFirstPaymentSeen.mockRejectedValue(new Error('storage offline'));
 
-    const { getByTestId, queryByTestId } = renderHostWithEvent();
+    const { getByTestId, queryByTestId } = await renderHostWithEvent();
 
     await act(async () => {
       fireEvent.press(getByTestId('first-payment-dismiss'));
@@ -160,7 +160,7 @@ describe('FirstPaymentWowHost — ED.3 (P1-3 dismiss ordering)', () => {
     const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
     mockMarkFirstPaymentSeen.mockRejectedValue(new Error('storage offline'));
 
-    const { getByTestId, queryByTestId } = renderHostWithEvent();
+    const { getByTestId, queryByTestId } = await renderHostWithEvent();
 
     // Dismiss — the persisted gate write rejects, but the latch is set.
     await act(async () => {
@@ -187,7 +187,7 @@ describe('FirstPaymentWowHost — ED.3 (P1-3 dismiss ordering)', () => {
     // Audit R3 P2: the dismissal latch must be keyed by coach. After coach A
     // dismisses, coach B's legitimate first-payment celebration in the SAME
     // app session must still show; a re-fire for coach A stays blocked.
-    const { getByTestId, queryByTestId, rerender } = render(
+    const { getByTestId, queryByTestId, rerender } = await render(
       <FirstPaymentWowHost>{null}</FirstPaymentWowHost>,
     );
 
@@ -218,7 +218,7 @@ describe('FirstPaymentWowHost — ED.3 (P1-3 dismiss ordering)', () => {
 
     // Switch to coach B in the same session and re-render the host.
     mockCurrentUser = { id: 'coach-bbb', firstName: 'Nadia' };
-    rerender(<FirstPaymentWowHost>{null}</FirstPaymentWowHost>);
+    await rerender(<FirstPaymentWowHost>{null}</FirstPaymentWowHost>);
 
     // Coach B's first payment MUST celebrate — coach A's dismissal does not
     // suppress it.

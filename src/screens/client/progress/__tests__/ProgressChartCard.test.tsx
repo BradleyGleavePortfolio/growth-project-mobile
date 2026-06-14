@@ -60,7 +60,7 @@ const PR_SERIES = [
 ];
 
 /** Drive an onLayout so the chart computes pixel geometry (width > 0). */
-function layout(node: ReturnType<typeof render>) {
+function layout(node: Awaited<ReturnType<typeof render>>) {
   const plot = node.getByLabelText(/progress chart/i);
   fireEvent(plot, 'layout', {
     nativeEvent: { layout: { x: 0, y: 0, width: 300, height: 220 } },
@@ -75,8 +75,8 @@ beforeEach(() => {
 });
 
 describe('ProgressChartCard — ED.4', () => {
-  it('renders the PR flag + glow and the Roman commentary (FACE+VOICE)', () => {
-    const node = render(
+  it('renders the PR flag + glow and the Roman commentary (FACE+VOICE)', async () => {
+    const node = await render(
       <ProgressChartCard
         data={PR_SERIES}
         liftName="Back Squat"
@@ -104,8 +104,8 @@ describe('ProgressChartCard — ED.4', () => {
     expect(avatar.props.accessibilityLabel).toBe('Roman, slight smile');
   });
 
-  it('fires a selection haptic on a data-point crossover, once per column', () => {
-    const node = render(
+  it('fires a selection haptic on a data-point crossover, once per column', async () => {
+    const node = await render(
       <ProgressChartCard
         data={PR_SERIES}
         liftName="Back Squat"
@@ -143,7 +143,7 @@ describe('ProgressChartCard — ED.4', () => {
     (Haptics.selectionAsync as jest.Mock).mockRejectedValueOnce(rejection);
     const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
-    const node = render(
+    const node = await render(
       <ProgressChartCard
         data={PR_SERIES}
         liftName="Back Squat"
@@ -169,13 +169,13 @@ describe('ProgressChartCard — ED.4', () => {
     warnSpy.mockRestore();
   });
 
-  it('renders no flag and no commentary when there is no PR', () => {
+  it('renders no flag and no commentary when there is no PR', async () => {
     const flat = [
       { x: 1, y: 200 },
       { x: 2, y: 190 },
       { x: 3, y: 180 },
     ];
-    const node = render(
+    const node = await render(
       <ProgressChartCard
         data={flat}
         liftName="Back Squat"
@@ -188,11 +188,11 @@ describe('ProgressChartCard — ED.4', () => {
     expect(node.queryByTestId('progress-pr-commentary')).toBeNull();
   });
 
-  it('does NOT detect a PR by default, even on a rising series (gated OFF)', () => {
+  it('does NOT detect a PR by default, even on a rising series (gated OFF)', async () => {
     // Audit R3 P2: PR detection is off unless the consumer opts in. A rising
     // bodyweight series must therefore render no PR flag and no Roman PR
     // commentary — a weight gain is not a "personal best".
-    const node = render(
+    const node = await render(
       <ProgressChartCard data={PR_SERIES} liftName="Weight" reduceMotionOverride />,
     );
     layout(node);

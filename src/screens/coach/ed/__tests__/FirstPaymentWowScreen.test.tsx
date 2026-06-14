@@ -30,8 +30,8 @@ const PROPS = {
 };
 
 describe('FirstPaymentWowScreen — ED.3', () => {
-  it('renders the §2.6 celebration copy verbatim (FACE+VOICE: avatar + voice together)', () => {
-    const { getByTestId } = render(
+  it('renders the §2.6 celebration copy verbatim (FACE+VOICE: avatar + voice together)', async () => {
+    const { getByTestId } = await render(
       <FirstPaymentWowScreen {...PROPS} onDismiss={jest.fn()} />,
     );
 
@@ -46,9 +46,9 @@ describe('FirstPaymentWowScreen — ED.3', () => {
     expect(avatar.props.accessibilityLabel).toBe('Roman, slight smile');
   });
 
-  it('fires onDismiss exactly once when the Roman-tone button is pressed', () => {
+  it('fires onDismiss exactly once when the Roman-tone button is pressed', async () => {
     const onDismiss = jest.fn();
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <FirstPaymentWowScreen {...PROPS} onDismiss={onDismiss} />,
     );
     const button = getByTestId('first-payment-dismiss');
@@ -57,8 +57,8 @@ describe('FirstPaymentWowScreen — ED.3', () => {
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 
-  it('renders nothing for the particle layer under reduce-motion (motion suppressed, moment still lands)', () => {
-    const { queryByTestId, getByTestId } = render(
+  it('renders nothing for the particle layer under reduce-motion (motion suppressed, moment still lands)', async () => {
+    const { queryByTestId, getByTestId } = await render(
       <FirstPaymentWowScreen {...PROPS} onDismiss={jest.fn()} />,
     );
     // ParticleBurst returns null under reduce-motion.

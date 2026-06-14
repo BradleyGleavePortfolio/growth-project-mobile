@@ -16,8 +16,8 @@ import { render } from '@testing-library/react-native';
 import RomanAvatar from '../RomanAvatar';
 
 describe('RomanAvatar — §3.8 expression register', () => {
-  it('maps expression="slight_smile" to the §3.8 milestone label', () => {
-    const { getByTestId } = render(
+  it('maps expression="slight_smile" to the §3.8 milestone label', async () => {
+    const { getByTestId } = await render(
       <RomanAvatar expression="slight_smile" testID="avatar" />,
     );
     expect(getByTestId('avatar').props.accessibilityLabel).toBe(
@@ -25,15 +25,15 @@ describe('RomanAvatar — §3.8 expression register', () => {
     );
   });
 
-  it('maps expression="neutral" to the composed label', () => {
-    const { getByTestId } = render(
+  it('maps expression="neutral" to the composed label', async () => {
+    const { getByTestId } = await render(
       <RomanAvatar expression="neutral" testID="avatar" />,
     );
     expect(getByTestId('avatar').props.accessibilityLabel).toBe('Roman');
   });
 
-  it('lets expression win over crop when both are supplied', () => {
-    const { getByTestId } = render(
+  it('lets expression win over crop when both are supplied', async () => {
+    const { getByTestId } = await render(
       <RomanAvatar crop="neutral" expression="slight_smile" testID="avatar" />,
     );
     expect(getByTestId('avatar').props.accessibilityLabel).toBe(

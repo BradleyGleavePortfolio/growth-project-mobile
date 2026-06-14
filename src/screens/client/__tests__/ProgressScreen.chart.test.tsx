@@ -112,7 +112,7 @@ beforeEach(() => {
 
 describe('ProgressScreen — ED.4 wiring (P1-1)', () => {
   it('renders the weight trend via ProgressChartCard with the chart series', async () => {
-    const { getByTestId } = render(<ProgressScreen />);
+    const { getByTestId } = await render(<ProgressScreen />);
 
     // The weight history load fires on mount.
     await waitFor(() => expect(mockGetHistory).toHaveBeenCalled());
@@ -132,7 +132,7 @@ describe('ProgressScreen — ED.4 wiring (P1-1)', () => {
     // The bodyweight trend is not a performance record — a rising weight is not
     // a "personal best". The screen must pass enablePRDetection={false} so no
     // false PR commentary renders for weight-loss clients.
-    render(<ProgressScreen />);
+    await render(<ProgressScreen />);
     await waitFor(() => expect(mockGetHistory).toHaveBeenCalled());
     await waitFor(() => expect(chartProps.data?.length).toBe(2));
     expect(chartProps.enablePRDetection).toBe(false);
@@ -150,7 +150,7 @@ describe('ProgressScreen — ED.4 flag gate OFF (audit R5 P2)', () => {
     // legacy static line, never the animated ED.4 card. This proves the gate
     // actually prevents the card mount rather than merely hiding it.
     mockFlags.romanFirstPaymentBodyweightPolish = false;
-    const { queryByTestId, getByTestId } = render(<ProgressScreen />);
+    const { queryByTestId, getByTestId } = await render(<ProgressScreen />);
 
     await waitFor(() => expect(mockGetHistory).toHaveBeenCalled());
     // The legacy static chart renders (≥2 points) ...
@@ -167,7 +167,7 @@ describe('ProgressScreen — ED.4 chart load error (audit R2 P2)', () => {
     // The history fetch rejects: the screen must surface an honest Roman-tone
     // error+retry state, NOT the benign "log your weight" empty copy.
     mockGetHistory.mockRejectedValueOnce(new Error('network down'));
-    const { getByTestId, queryByText } = render(<ProgressScreen />);
+    const { getByTestId, queryByText } = await render(<ProgressScreen />);
 
     await waitFor(() => expect(mockGetHistory).toHaveBeenCalled());
     // The error surface (CoachErrorState) is mounted with its retry action...
@@ -186,7 +186,7 @@ describe('ProgressScreen — ED.4 chart load error (audit R2 P2)', () => {
     // First load fails → error state; retry resolves with a 2-point series →
     // the chart renders and the error state is gone.
     mockGetHistory.mockRejectedValueOnce(new Error('network down'));
-    const { getByTestId, queryByTestId } = render(<ProgressScreen />);
+    const { getByTestId, queryByTestId } = await render(<ProgressScreen />);
 
     await waitFor(() =>
       expect(getByTestId('progress-weight-chart-error')).toBeTruthy(),
@@ -218,7 +218,7 @@ describe('ProgressScreen — ED.4 chart load error (audit R2 P2)', () => {
         }),
     );
 
-    const { getByTestId } = render(<ProgressScreen />);
+    const { getByTestId } = await render(<ProgressScreen />);
     await waitFor(() =>
       expect(getByTestId('progress-weight-chart-error')).toBeTruthy(),
     );
@@ -266,7 +266,7 @@ describe('ProgressScreen — ED.4 chart load error (audit R2 P2)', () => {
         }),
     );
 
-    const { getByTestId } = render(<ProgressScreen />);
+    const { getByTestId } = await render(<ProgressScreen />);
     await waitFor(() =>
       expect(getByTestId('progress-weight-chart-error')).toBeTruthy(),
     );

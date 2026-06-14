@@ -94,7 +94,7 @@ describe('useFirstPaymentNotification — ED.3 (Option C)', () => {
       }),
     ];
     const onFirstPayment = jest.fn();
-    render(
+    await render(
       <Harness coachId="coach-1" enabled onFirstPayment={onFirstPayment} />,
     );
     await waitFor(() => expect(onFirstPayment).toHaveBeenCalledTimes(1));
@@ -114,7 +114,7 @@ describe('useFirstPaymentNotification — ED.3 (Option C)', () => {
       }),
     ];
     const onFirstPayment = jest.fn();
-    render(
+    await render(
       <Harness coachId="coach-1" enabled onFirstPayment={onFirstPayment} />,
     );
     await waitFor(() => expect(onFirstPayment).toHaveBeenCalledTimes(1));
@@ -131,7 +131,7 @@ describe('useFirstPaymentNotification — ED.3 (Option C)', () => {
       firstPaymentNotification({ amount: '240', currency: 'USD' }),
     ];
     const onFirstPayment = jest.fn();
-    render(
+    await render(
       <Harness coachId="coach-1" enabled onFirstPayment={onFirstPayment} />,
     );
     await act(async () => {
@@ -149,7 +149,7 @@ describe('useFirstPaymentNotification — ED.3 (Option C)', () => {
       }),
     ];
     const onFirstPayment = jest.fn();
-    render(
+    await render(
       <Harness
         coachId="coach-1"
         enabled={false}
@@ -166,7 +166,7 @@ describe('useFirstPaymentNotification — ED.3 (Option C)', () => {
   it('surfaces a stream read error and does not fire (Law #36)', async () => {
     mockFetchNotifications.mockRejectedValueOnce(new Error('stream down'));
     const onFirstPayment = jest.fn();
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <Harness coachId="coach-1" enabled onFirstPayment={onFirstPayment} />,
     );
     await waitFor(() =>
