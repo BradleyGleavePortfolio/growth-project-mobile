@@ -28,6 +28,8 @@ import { authEvents } from '../../utils/authEvents';
 import { calcBMR, calcTDEE, calcMacros, calculateAge } from '../../utils/nutrition';
 import { Colors } from '../../constants/colors';
 import { errorMessage } from '../../types/common';
+import StepTransitionView from '../../components/onboarding/StepTransitionView';
+import { featureFlags } from '../../config/featureFlags';
 
 export default function OnboardingResults() {
   const [macros, setMacros] = useState<{
@@ -162,7 +164,11 @@ export default function OnboardingResults() {
   const fatPct = macros.fat * 9 / macros.calories;
 
   return (
-    <View style={styles.container}>
+    <StepTransitionView
+      enabled={featureFlags.romanOnboardingPolish}
+      style={styles.container}
+      transitionKey="OnboardingResults"
+    >
       <Text style={styles.title}>The numbers.</Text>
       <Text style={styles.subtitle}>
         Calculated from what you shared.
@@ -237,7 +243,7 @@ export default function OnboardingResults() {
           <Text style={styles.startButtonText}>Begin.</Text>
         )}
       </TouchableOpacity>
-    </View>
+    </StepTransitionView>
   );
 }
 

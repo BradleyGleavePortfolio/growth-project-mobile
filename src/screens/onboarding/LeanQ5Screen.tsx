@@ -30,6 +30,8 @@ import { LeanOnboardingParamList } from '../../navigation/LeanOnboardingNavigato
 import { saveOnboardingData } from '../../utils/onboardingStore';
 import { prefsStorage } from '../../storage/mmkv';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import StepTransitionView from '../../components/onboarding/StepTransitionView';
+import { featureFlags } from '../../config/featureFlags';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -300,6 +302,10 @@ export default function LeanQ5Screen({ navigation }: Props) {
           contentContainerStyle={styles.inner}
           keyboardShouldPersistTaps="handled"
         >
+          <StepTransitionView
+            enabled={featureFlags.romanOnboardingPolish}
+            transitionKey="LeanQ5"
+          >
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.stepIndicator}>
@@ -448,6 +454,7 @@ export default function LeanQ5Screen({ navigation }: Props) {
               <Text style={styles.skipText}>Skip — I'll add later</Text>
             </TouchableOpacity>
           </View>
+          </StepTransitionView>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
