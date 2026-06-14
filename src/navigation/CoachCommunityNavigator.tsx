@@ -13,6 +13,12 @@
  * when `featureFlags.communityEvents` is true. With that flag OFF the route
  * never registers, so there is zero event UI and no reachable event surface —
  * even though the coach Community tab itself may be on.
+ *
+ * v3-4 WEARABLE PROMPTS containment: the CoachCommunityWearablePrompts route
+ * (the COACH-ONLY wearable coaching prompts surface) is registered ONLY when
+ * `featureFlags.communityWearablePrompts` is true. With that flag OFF the route
+ * never registers, so the coach-only surface is unreachable by deep link. The
+ * screen self-renders its header, so it is mounted with `headerShown: false`.
  */
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -25,6 +31,7 @@ import CoachCommunityCohortDetailScreen from '../screens/community/CoachCommunit
 import CoachCommunityPostDetailScreen from '../screens/community/CoachCommunityPostDetailScreen';
 import CoachCommunityModerationScreen from '../screens/community/CoachCommunityModerationScreen';
 import CoachCommunityEventsScreen from '../screens/community/CoachCommunityEventsScreen';
+import CommunityWearablePromptsScreen from '../screens/community/CommunityWearablePromptsScreen';
 import type { CoachCommunityStackParamList } from '../screens/community/coachCommunityNavTypes';
 
 const CoachCommunityStack =
@@ -77,6 +84,13 @@ export default function CoachCommunityNavigator(): React.ReactElement {
           options={{ title: 'Events' }}
         />
       )}
+      {featureFlags.communityWearablePrompts ? (
+        <CoachCommunityStack.Screen
+          name="CoachCommunityWearablePrompts"
+          component={CommunityWearablePromptsScreen}
+          options={{ headerShown: false }}
+        />
+      ) : null}
     </CoachCommunityStack.Navigator>
   );
 }
