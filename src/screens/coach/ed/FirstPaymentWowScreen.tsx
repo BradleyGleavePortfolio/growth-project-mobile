@@ -3,9 +3,9 @@
  *
  * The single most important emotional beat in the coach app: the first time
  * money lands. A full-screen overlay that fires ONCE per coach (MMKV gate,
- * firstPaymentGate) when an authoritative pending/non-success → paid/active
- * ClientPurchase status transition arrives over Supabase realtime
- * (useFirstPaymentRealtime). It carries:
+ * firstPaymentGate) when the backend's FIRST_PAYMENT domain notification
+ * arrives (Option C — useFirstPaymentNotification; the mobile client no longer
+ * reads the payment table directly). It carries:
  *
  *   - a one-shot particle burst (ParticleBurst — pure Reanimated; Skia is not
  *     in deps),
