@@ -38,6 +38,23 @@ export type CommunityStackParamList = {
   CommunityClassroom: undefined;
   /** Single classroom lesson detail (v3-2). Registered only behind communityClassroom. */
   CommunityLessonDetail: { postId: string };
+  /**
+   * Record + send a voice note (v3-3). Registered only behind
+   * `communityVoiceNotes`. The target picks the audience the recording is
+   * published to (and is disclosed before send):
+   *   - { target: 'hall' }                       → the whole community
+   *   - { target: 'cohort'; cohortId; cohortName? } → a named cohort
+   *   - { target: 'dm'; conversationId; recipientId?; recipientName? } → a DM
+   */
+  CommunityVoiceComposer:
+    | { target: 'hall' }
+    | { target: 'cohort'; cohortId: string; cohortName?: string }
+    | {
+        target: 'dm';
+        conversationId: string;
+        recipientId?: string;
+        recipientName?: string;
+      };
 };
 
 /** Loosely-typed nav prop used by the screens (matches the codebase pattern). */
