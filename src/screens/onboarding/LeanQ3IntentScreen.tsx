@@ -25,6 +25,8 @@ import { track } from '../../lib/analytics';
 import { authEvents } from '../../utils/authEvents';
 import { finalizeLeanOnboarding } from '../../lib/finalizeLeanOnboarding';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
+import StepTransitionView from '../../components/onboarding/StepTransitionView';
+import { featureFlags } from '../../config/featureFlags';
 
 type Props = {
   navigation: NativeStackNavigationProp<LeanOnboardingParamList, 'LeanQ3'>;
@@ -86,7 +88,11 @@ export default function LeanQ3IntentScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.inner}>
+      <StepTransitionView
+        enabled={featureFlags.romanOnboardingPolish}
+        style={styles.inner}
+        transitionKey="LeanQ3"
+      >
         {/* Header */}
         <View style={styles.header}>
           <View style={styles.stepIndicator}>
@@ -150,7 +156,7 @@ export default function LeanQ3IntentScreen({ navigation }: Props) {
             <Text style={styles.skipText}>Skip — I'll set this later</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </StepTransitionView>
     </SafeAreaView>
   );
 }
