@@ -3,34 +3,79 @@
  *
  * Mounted once near the top of the coach navigator. It:
  *   1. Reads the signed-in coach id (useCurrentUser).
- *   2. Opens the Supabase realtime subscription (useFirstPaymentRealtime),
- *      gated behind featureFlags.romanFirstPaymentWow.
- *   3. On the coach's FIRST (gate-unseen) authoritative pending/non-success →
- *      paid/active ClientPurchase status transition, stores the event and
- *      overlays FirstPaymentWowScreen across the whole shell.
+ *   2. Subscribes to the FIRST_PAYMENT domain notification
+ *      (useFirstPaymentNotification), gated behind
+ *      featureFlags.romanFirstPaymentWow.
+ *   3. On the coach's FIRST (gate-unseen) FIRST_PAYMENT notification, formats the
+ *      payload { amount, currency, clientId } into the celebration's display
+ *      strings and overlays FirstPaymentWowScreen across the whole shell.
  *   4. On dismiss, writes the MMKV gate (markFirstPaymentSeen) BEFORE clearing
  *      the overlay, so a re-render / re-subscribe can never re-trigger it
  *      (once-only contract). "Navigate back to coach home" = unmount the
  *      overlay; the coach is returned to whatever tab they were on.
  *
+ * Why a notification, not a payment-table read (Option C — see
+ * ROMAN_ED3_REWRITE_PLAN.md): the backend owns the "first payment" decision
+ * inside the same DB transaction that confirms the payment, exactly-once via a
+ * UNIQUE(coach_user_id) row, and emits a normal domain notification. The mobile
+ * client never reads ClientPurchase directly — no payment-correctness coupling,
+ * no RLS surface, no client-side count===1 race. This replaced the dangerous
+ * client-side purchase counting that PR #242 originally carried.
+ *
  * The host renders its children unchanged and lays the overlay on top only
  * while an event is pending — so when the flag is OFF or the gate is closed it
  * is a transparent pass-through with zero behavioural change to the shell.
  */
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { featureFlags } from '../../../config/featureFlags';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
+import {
+  useFirstPaymentNotification,
+  type FirstPaymentNotificationPayload,
+} from '../../../hooks/useNotifications';
+import { errorMessage } from '../../../types/common';
 import { logger } from '../../../utils/logger';
 import FirstPaymentWowScreen from './FirstPaymentWowScreen';
-import {
-  useFirstPaymentRealtime,
-  type FirstPaymentEvent,
-} from './useFirstPaymentRealtime';
 import { markFirstPaymentSeen } from './firstPaymentGate';
 
 export interface FirstPaymentWowHostProps {
   readonly children: React.ReactNode;
+}
+
+/** The display-ready celebration event derived from the notification payload. */
+interface FirstPaymentDisplayEvent {
+  /** Pre-formatted, human-facing amount string, e.g. "$240.00". */
+  readonly amount: string;
+  /** Paying client's display name. The payload carries no name, so this is a
+   *  calm generic ("your client") — the celebration reads naturally with it. */
+  readonly clientName: string;
+}
+
+/**
+ * Format the fixed { amount, currency } payload into a human-facing currency
+ * string. Defensive: an unknown currency code on this runtime falls back to a
+ * plain "$X.XX" rather than throwing (the moment still lands through the copy),
+ * and the failure reason is logged (Law #36).
+ */
+export function formatPaymentAmount(amount: number, currency: string): string {
+  const code =
+    typeof currency === 'string' && currency.trim().length === 3
+      ? currency.trim().toUpperCase()
+      : 'USD';
+  if (!Number.isFinite(amount)) return 'your first payment';
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: code,
+    }).format(amount);
+  } catch (err) {
+    logger.warn('ed3', 'amount currency format failed; using plain dollars', {
+      currency: code,
+      reason: errorMessage(err, 'Intl format failed'),
+    });
+    return `$${amount.toFixed(2)}`;
+  }
 }
 
 export default function FirstPaymentWowHost({
@@ -42,12 +87,12 @@ export default function FirstPaymentWowHost({
   // the cached user's first name; the celebration copy reads naturally with it.
   const coachName = (user?.firstName ?? user?.name ?? 'Coach').trim() || 'Coach';
 
-  const [event, setEvent] = useState<FirstPaymentEvent | null>(null);
+  const [event, setEvent] = useState<FirstPaymentDisplayEvent | null>(null);
 
   // Session-local dismissed/seen latch (audit R2 P1), keyed BY COACH (audit R3
   // P2). The persisted gate alone is not enough: if markFirstPaymentSeen
-  // rejects (storage outage), the gate stays unseen and a later INSERT could
-  // re-fire onFirstPayment after the coach has already dismissed the
+  // rejects (storage outage), the gate stays unseen and a later notification
+  // could re-fire onFirstPayment after the coach has already dismissed the
   // celebration this session. This in-memory set records WHICH coaches have
   // dismissed this session, INDEPENDENT of whether persistence succeeded — the
   // dismissed coach is added BEFORE the overlay clears. Keying by coach (rather
@@ -57,22 +102,32 @@ export default function FirstPaymentWowHost({
   const dismissedCoachIdsRef = useRef<Set<string>>(new Set<string>());
 
   const handleFirstPayment = useCallback(
-    (next: FirstPaymentEvent) => {
+    (payload: FirstPaymentNotificationPayload) => {
       // Once THIS coach dismissed this session, never re-show for them — even
-      // if the persisted gate failed to write (the hook re-checks only the
-      // persisted gate, so this latch is the fail-closed backstop against a
-      // re-fire). A different coach is unaffected.
+      // if the persisted gate failed to write. A different coach is unaffected.
       if (coachId && dismissedCoachIdsRef.current.has(coachId)) return;
-      // Only the first event wins; later INSERTs while the overlay is up are
-      // ignored (the gate is written on dismiss).
+      const next: FirstPaymentDisplayEvent = {
+        amount: formatPaymentAmount(payload.amount, payload.currency),
+        // The fixed payload carries clientId only (no name) — the backend does
+        // not leak the client's name into this notification. The celebration
+        // reads naturally with a calm generic.
+        clientName: 'your client',
+      };
+      // Only the first event wins; later notifications while the overlay is up
+      // are ignored (the gate is written on dismiss).
       setEvent((current) => current ?? next);
     },
     [coachId],
   );
 
-  const { error: realtimeError } = useFirstPaymentRealtime({
+  const enabled = useMemo(
+    () => featureFlags.romanFirstPaymentWow && Boolean(coachId),
+    [coachId],
+  );
+
+  const { error: notificationError } = useFirstPaymentNotification({
     coachId,
-    enabled: featureFlags.romanFirstPaymentWow && Boolean(coachId),
+    enabled,
     onFirstPayment: handleFirstPayment,
   });
 
@@ -81,12 +136,12 @@ export default function FirstPaymentWowHost({
   // swallow it (Law #36): a subscription failure means the celebration may be
   // silently absent, so we route it to the shared logger for diagnosis.
   useEffect(() => {
-    if (realtimeError) {
-      logger.warn('ed3', 'first-payment realtime error surfaced at host', {
-        reason: realtimeError,
+    if (notificationError) {
+      logger.warn('ed3', 'first-payment notification error surfaced at host', {
+        reason: notificationError,
       });
     }
-  }, [realtimeError]);
+  }, [notificationError]);
 
   const handleDismiss = useCallback(async () => {
     // Set the session latch FIRST (for THIS coach) so the celebration can never
