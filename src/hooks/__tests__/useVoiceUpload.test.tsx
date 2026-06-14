@@ -107,7 +107,12 @@ describe('useVoiceUpload — three-hop publish', () => {
       bytes: 50_000,
       mime_type: 'audio/mp4',
     });
-    expect(result.current.data?.id).toBe('note-1');
+    // RNTL v14 + TanStack Query v5: post-mutation state lands on the next
+    // microtask flush; wait for it so the assertion is not racing the
+    // mutation's internal setState.
+    await waitFor(() => {
+      expect(result.current.data?.id).toBe('note-1');
+    });
   });
 
   it('threads an optional cohort target into create', async () => {
