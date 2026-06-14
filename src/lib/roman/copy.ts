@@ -619,6 +619,52 @@ export function romanCoachReview(args: RomanCoachReviewArgs): string {
   return `Your coach reviewed ${object} ${relative}.`;
 }
 
+// ── EW2 Workout-builder undo (coach app) ──────────────────────────────
+
+/**
+ * EW2 — the in-screen toast fired when the coach reverts an edit in the workout
+ * builder with the undo button (or the two-finger swipe-down gesture).
+ *
+ * Roman's calm butler register, voice-contract compliant (spec §1.1-§1.6): no
+ * emoji, no contractions, no exclamation, no hype. The `depth` (the stack's
+ * configured capacity, default 20) is spelled out as a word so the line reads as
+ * prose rather than a counter — "Reverted. Twenty steps still in the bank." The
+ * surface is transient (a ~1.4 s toast), so per the FACE+VOICE invariant note at
+ * the top of this module it is exempt from co-locating the avatar.
+ *
+ * The ERROR path (a network failure during undo) does NOT get a bespoke line:
+ * the spec routes it through the existing generic error stem
+ * (`romanGenericError`) so a failed undo speaks the same calm voice used for
+ * every other transient mutation failure, and the command stack is NOT popped so
+ * the coach can retry.
+ */
+export interface RomanBuilderUndoToastArgs {
+  /** The command stack's configured capacity (default 20). Spelled as a word. */
+  depth: number;
+}
+
+/** Small fixed table so the depth reads as prose; falls back to the numeral. */
+const CARDINAL_WORDS: Record<number, string> = {
+  10: 'Ten',
+  15: 'Fifteen',
+  20: 'Twenty',
+  25: 'Twenty-five',
+  30: 'Thirty',
+};
+
+function cardinalWord(n: number): string {
+  return CARDINAL_WORDS[n] ?? String(n);
+}
+
+export const romanBuilderUndoToast = {
+  /**
+   * Success toast for a completed undo. `depth` parameterizes the capacity
+   * phrase (default 20 → "Twenty steps still in the bank.").
+   */
+  success(args: RomanBuilderUndoToastArgs = { depth: 20 }): string {
+    return `Reverted. ${cardinalWord(args.depth)} steps still in the bank.`;
+  },
+} as const;
 /**
  * ED.2 — three-arc router daily-rings line (coach app).
  *
