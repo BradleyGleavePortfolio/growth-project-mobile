@@ -76,7 +76,7 @@ class AsyncStorageShim {
   async clearNamespace(): Promise<void> {
     const allKeys = await AsyncStorage.getAllKeys();
     const ours = allKeys.filter((k) => k.startsWith(`${this.namespace}:`));
-    if (ours.length) await AsyncStorage.multiRemove(ours);
+    if (ours.length) await AsyncStorage.removeMany(ours);
   }
 
   // Returns logical (un-namespaced) keys for this instance. Used by sign-out to

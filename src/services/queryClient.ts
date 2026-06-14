@@ -131,7 +131,7 @@ export async function purgePersistedQueryCacheForAllUsers(): Promise<void> {
     const matching = allKeys.filter(
       (k) => k === QUERY_CACHE_KEY_PREFIX || k.startsWith(`${QUERY_CACHE_KEY_PREFIX}:`),
     );
-    if (matching.length) await AsyncStorage.multiRemove(matching);
+    if (matching.length) await AsyncStorage.removeMany(matching);
   } catch {
     // Non-fatal: the persister will hydrate empty on next sign-in.
   }
