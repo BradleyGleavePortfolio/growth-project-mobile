@@ -29,6 +29,8 @@ import MessageBubble, { BubbleMessage } from '../../components/messaging/Message
 import MessageActionSheet from '../../components/messaging/MessageActionSheet';
 import ReplyComposer, { ReplyTarget } from '../../components/messaging/ReplyComposer';
 import ReportMessageSheet from '../../components/messaging/ReportMessageSheet';
+import CompetencePill from '../../components/roman/CompetencePill';
+import { featureFlags } from '../../config/featureFlags';
 import { track } from '../../lib/analytics';
 
 interface Message {
@@ -69,6 +71,12 @@ export default function MessagesScreen() {
   const [noCoach, setNoCoach] = useState(false);
   const [coachName, setCoachName] = useState('');
   const [coachId, setCoachId] = useState('');
+  // ED.6 — timestamp of the coach's most-recent review of THIS thread, feeding
+  // the CompetencePill at the top of the conversation. Null hides the pill
+  // (no review yet, or the backend FEATURE_ROMAN_COACH_REVIEWED_AT flag is OFF).
+  // Only fetched when the mobile flag is on, so the network call never fires in
+  // the default-OFF state.
+  const [coachReviewedAt, setCoachReviewedAt] = useState<string | null>(null);
   const flatListRef = useRef<FlatList<Message>>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -118,6 +126,19 @@ export default function MessagesScreen() {
     });
   }, []);
 
+  // ED.6 — refresh the thread coach-review timestamp. Gated by the mobile flag
+  // so no request is made while the feature is OFF; fails open (leaves the pill
+  // hidden) so a marker fetch error never degrades the thread.
+  const loadCoachReview = useCallback(async () => {
+    if (!featureFlags.romanCompetencePill) return;
+    try {
+      const res = await messagesApi.coachReview();
+      setCoachReviewedAt(res.data?.coachReviewedAt ?? null);
+    } catch {
+      setCoachReviewedAt(null);
+    }
+  }, []);
+
   const load = useCallback(async () => {
     try {
       const res = await messagesApi.list({ limit: PAGE_LIMIT });
@@ -126,6 +147,7 @@ export default function MessagesScreen() {
       setHasMoreOlder(list.length >= PAGE_LIMIT);
       setError('');
       setNoCoach(false);
+      void loadCoachReview();
       const uid = currentUser?.id;
       if (uid) {
         setMessages((current) => {
@@ -145,7 +167,7 @@ export default function MessagesScreen() {
     } finally {
       setLoading(false);
     }
-  }, [currentUser?.id]);
+  }, [currentUser?.id, loadCoachReview]);
 
   const loadOlder = useCallback(async () => {
     if (loadingOlder || !hasMoreOlder || messages.length === 0) return;
@@ -433,6 +455,19 @@ export default function MessagesScreen() {
         <TouchableOpacity style={styles.errorBanner} onPress={load}>
           <Text style={styles.errorBannerText}>{error}</Text>
         </TouchableOpacity>
+      ) : null}
+
+      {/* ED.6 — coach-is-watching micro-signal at the top of the thread. Gated
+          by the mobile flag; the pill itself renders nothing when
+          coachReviewedAt is null, so it stays hidden until a coach has actually
+          reviewed the thread (and the backend flag has stamped a timestamp). */}
+      {featureFlags.romanCompetencePill && !noCoach ? (
+        <CompetencePill
+          reviewedAt={coachReviewedAt}
+          surface="thread"
+          placement="top"
+          testID="thread-competence-pill"
+        />
       ) : null}
 
       <FlatList

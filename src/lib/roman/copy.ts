@@ -521,3 +521,100 @@ export function romanPRDetected(args: RomanPRDetectedArgs): string {
   // §5 anti-pattern #6 corrected register + §2 `{weight}` pounds token.
   return `A personal best on ${liftName} — ${weightLabel} pounds. Noted with admiration.`;
 }
+
+// ── ED.6 coach-is-watching micro-signal (CompetencePill, client app) ─────────
+
+/**
+ * The surface the pill is rendered on. The only difference is whether the copy
+ * names "this" (a single check-in detail) or "this thread" (a message thread),
+ * per the brief's two phase-1 surfaces (ClientCheckInScreen / ClientMessageScreen).
+ */
+export type CoachReviewSurface = 'checkIn' | 'thread';
+
+export interface RomanCoachReviewArgs {
+  /** ISO-8601 timestamp of the coach's most-recent review. */
+  reviewedAt: string;
+  /** Which surface the pill sits on (controls "this" vs "this thread"). */
+  surface: CoachReviewSurface;
+  /**
+   * Reference "now" for relative-time bucketing. Injectable so the relative
+   * copy is deterministic in tests (defaults to the real wall clock).
+   */
+  now?: Date;
+}
+
+const MS_PER_MINUTE = 60 * 1000;
+const MS_PER_HOUR = 60 * MS_PER_MINUTE;
+
+/** Calendar-day index in LOCAL time (year*372 + month*31 + day), monotonic. */
+function localDayIndex(d: Date): number {
+  return d.getFullYear() * 372 + d.getMonth() * 31 + d.getDate();
+}
+
+const MONTHS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+] as const;
+
+/**
+ * The relative-time phrase the pill renders, WITHOUT the leading subject. Pure
+ * and deterministic given (`reviewedAt`, `now`). Buckets (brief §Relative time):
+ *   - < 1 hour          → "just now"
+ *   - < 24 hours        → "{N} hour" / "{N} hours ago"
+ *   - same calendar day → "earlier today"
+ *   - yesterday         → "yesterday"
+ *   - within 7 days     → "{N} days ago"
+ *   - older             → "on {Month D}"
+ *
+ * Future timestamps (clock skew) collapse to "just now" so the copy never reads
+ * a nonsensical negative interval.
+ */
+export function romanCoachReviewRelative(reviewedAt: string, now: Date = new Date()): string {
+  const then = new Date(reviewedAt);
+  const diffMs = now.getTime() - then.getTime();
+
+  // Future / sub-hour → "just now".
+  if (diffMs < MS_PER_HOUR) return 'just now';
+
+  const dayDiff = localDayIndex(now) - localDayIndex(then);
+
+  // Within the last 24h but on the same calendar day → an hours phrasing reads
+  // more precisely than "earlier today"; only fall to "earlier today" when the
+  // hour count is ambiguous (>= 24h spanning a midnight is handled by dayDiff).
+  if (diffMs < 24 * MS_PER_HOUR && dayDiff === 0) {
+    const hours = Math.floor(diffMs / MS_PER_HOUR);
+    return hours === 1 ? '1 hour ago' : `${hours} hours ago`;
+  }
+
+  if (dayDiff === 0) return 'earlier today';
+  if (dayDiff === 1) return 'yesterday';
+  if (dayDiff <= 7) return `${dayDiff} days ago`;
+
+  return `on ${MONTHS[then.getMonth()]} ${then.getDate()}`;
+}
+
+/**
+ * ED.6 coach-is-watching micro-signal — the full pill sentence.
+ *
+ * Roman's calm butler register: the STRAIGHT voice always (a micro-signal is
+ * never a moment for a quip, brief §Voice rules). No exclamation, no emoji, no
+ * contractions. The subject is always "Your coach" — Roman is the butler, not
+ * the reviewer (brief §Out of scope). Composed from the deterministic relative
+ * phrase so the same buckets drive both the copy and its tests.
+ */
+export function romanCoachReview(args: RomanCoachReviewArgs): string {
+  const { reviewedAt, surface, now } = args;
+  const relative = romanCoachReviewRelative(reviewedAt, now ?? new Date());
+  const object = surface === 'thread' ? 'this thread' : 'this';
+  return `Your coach reviewed ${object} ${relative}.`;
+}

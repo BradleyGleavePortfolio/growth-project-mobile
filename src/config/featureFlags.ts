@@ -308,6 +308,20 @@ export const featureFlags = {
     'EXPO_PUBLIC_FF_ROMAN_STREAK_BACKEND_LIVE',
     false,
   ),
+
+  // ─── Roman ED.6 — coach-is-watching competence pill ──────────────────────
+  /**
+   * ED.6 competence pill ("Your coach reviewed this {relative}."). When OFF the
+   * CompetencePill renders nothing on ClientCheckInScreen / ClientMessageScreen
+   * even if a real coach_reviewed_at timestamp is present. The backend write
+   * path is gated independently by FEATURE_ROMAN_COACH_REVIEWED_AT, so this
+   * flag can ship asymmetrically: mobile ON + backend OFF → field always null →
+   * pill never renders → no behaviour change. Default OFF UNCONDITIONALLY (not
+   * `isDev`) so a dev build never surfaces the pill before the backend lands.
+   *
+   * env: EXPO_PUBLIC_FF_ROMAN_COMPETENCE_PILL
+   */
+  romanCompetencePill: readFlag('EXPO_PUBLIC_FF_ROMAN_COMPETENCE_PILL', false),
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;
