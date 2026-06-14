@@ -626,6 +626,12 @@ export const messagesApi = {
   send: (body: string) => api.post('/messages', { body }),
   markRead: () => api.post('/messages/read'),
   unreadCount: () => api.get('/messages/unread-count'),
+  // ED.6 — coach-review marker for the client's thread. Returns
+  // { coachReviewedAt: ISO | null }; null when no coach review yet or the
+  // backend FEATURE_ROMAN_COACH_REVIEWED_AT flag is OFF. Feeds the
+  // CompetencePill at the top of the thread.
+  coachReview: () =>
+    api.get<{ coachReviewedAt: string | null }>('/messages/coach-review'),
 };
 
 export const nudgesApi = {
