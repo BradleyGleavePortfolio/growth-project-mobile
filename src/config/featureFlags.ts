@@ -220,6 +220,22 @@ export const featureFlags = {
   //
   // env: EXPO_PUBLIC_FF_COMMUNITY_CHALLENGES
   communityChallenges: readFlag('EXPO_PUBLIC_FF_COMMUNITY_CHALLENGES', false),
+
+  // ─── Community v3-2 — classroom posts (media-backed lessons) ─────────────
+  // Coach-authored, media-backed lessons (video/audio/pdf/image) with a
+  // release-time lock and pinned ordering. This mobile flag gates the
+  // READ-ONLY student surface: the CommunityClassroom feed + the
+  // CommunityLessonDetail screen. Defaults OFF UNCONDITIONALLY (not `isDev`):
+  // when false neither route registers and both screens are dead code at build
+  // time. The backend gate (FEATURE_COMMUNITY_CLASSROOM_POSTS) is also OFF in
+  // prod and gates the write routes, so a dev build that flips this on still
+  // degrades gracefully to a calm empty/not-available state.
+  //
+  // env: EXPO_PUBLIC_FF_COMMUNITY_CLASSROOM_POSTS
+  communityClassroom: readFlag(
+    'EXPO_PUBLIC_FF_COMMUNITY_CLASSROOM_POSTS',
+    false,
+  ),
   // ─── MWB-4 — workout-builder autosave (Google-Docs-style save) ───────────
   // The MWB-3 backend (PATCH /workout-plans/:planId/autosave + POST .../undo,
   // FEATURE_MWB_AUTOSAVE_UNDO) is merged; MWB-4 is the mobile half: a reusable

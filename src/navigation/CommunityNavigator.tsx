@@ -11,6 +11,12 @@
  * when `featureFlags.communityEvents` is true. With that flag OFF the route
  * never registers, so there is zero event UI, no event navigator target, and
  * no reachable event surface — even though the Community tab itself may be on.
+ *
+ * v3-2 CLASSROOM containment: the CommunityClassroom (feed) and
+ * CommunityLessonDetail routes are registered ONLY when
+ * `featureFlags.communityClassroom` is true. With that flag OFF (the default)
+ * neither route registers, so the read-only student classroom surface is dead
+ * code at build time and unreachable.
  */
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -26,6 +32,8 @@ import CommunityDmThreadScreen from '../screens/community/CommunityDmThreadScree
 import CommunityComposerScreen from '../screens/community/CommunityComposerScreen';
 import CommunityChallengeDetailScreen from '../screens/community/CommunityChallengeDetailScreen';
 import CommunityChallengesScreen from '../screens/community/CommunityChallengesScreen';
+import CommunityClassroomScreen from '../screens/community/CommunityClassroomScreen';
+import CommunityLessonDetailScreen from '../screens/community/CommunityLessonDetailScreen';
 import type { CommunityStackParamList } from '../screens/community/communityNavTypes';
 
 const CommunityStack = createNativeStackNavigator<CommunityStackParamList>();
@@ -58,6 +66,18 @@ export default function CommunityNavigator(): React.ReactElement {
         <CommunityStack.Screen
           name="CommunityChallengeDetail"
           component={CommunityChallengeDetailScreen}
+        />
+      ) : null}
+      {featureFlags.communityClassroom ? (
+        <CommunityStack.Screen
+          name="CommunityClassroom"
+          component={CommunityClassroomScreen}
+        />
+      ) : null}
+      {featureFlags.communityClassroom ? (
+        <CommunityStack.Screen
+          name="CommunityLessonDetail"
+          component={CommunityLessonDetailScreen}
         />
       ) : null}
     </CommunityStack.Navigator>

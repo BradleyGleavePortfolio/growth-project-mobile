@@ -48,3 +48,10 @@ export { default as ChallengeCard } from './ChallengeCard';
 export type { ChallengeCardProps } from './ChallengeCard';
 export { default as ChallengeCommentsEmptyState } from './ChallengeCommentsEmptyState';
 export type { ChallengeCommentsEmptyStateProps } from './ChallengeCommentsEmptyState';
+// ─── Community v3-2 classroom posts (flag-gated read-only student surface) ─
+export { default as LessonCard, primaryMediaKind, mediaSummary } from './LessonCard';
+export type { LessonCardProps } from './LessonCard';
+export { default as LessonReleaseLockBadge, relativeUnlockHint } from './LessonReleaseLockBadge';
+export type { LessonReleaseLockBadgeProps } from './LessonReleaseLockBadge';
+export { default as ClassroomEmptyState } from './ClassroomEmptyState';
+export type { ClassroomEmptyStateProps } from './ClassroomEmptyState';
