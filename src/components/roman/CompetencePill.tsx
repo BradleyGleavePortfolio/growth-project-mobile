@@ -98,7 +98,7 @@ export default function CompetencePill({
       testID={testID}
       accessibilityRole="text"
       accessibilityLabel={label}
-      style={[styles.row, { backgroundColor: semanticColors.surface }, borderStyle]}
+      style={[styles.row, { backgroundColor: semanticColors.bgSurface }, borderStyle]}
     >
       <View accessibilityElementsHidden importantForAccessibility="no">
         <RomanAvatar crop="monogram" size={MARK_SIZE} />
