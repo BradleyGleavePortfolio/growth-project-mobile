@@ -49,8 +49,8 @@ import { HealthFitnessTab } from '../HealthFitnessTab';
 const styles = { sectionTitle: {} } as never;
 const colors = { surface: '#fff', border: '#eee' } as never;
 
-function renderTab() {
-  return render(
+async function renderTab() {
+  return await render(
     <HealthFitnessTab clientId="client_1" colors={colors} styles={styles} />,
   );
 }
@@ -58,36 +58,36 @@ function renderTab() {
 describe('HealthFitnessTab coach anomaly band', () => {
   beforeEach(() => mockUseWearableSamples.mockReset());
 
-  it('renders NEUTRAL error copy on isError — never the green all-clear', () => {
+  it('renders NEUTRAL error copy on isError — never the green all-clear', async () => {
     mockUseWearableSamples.mockReturnValue({
       data: undefined,
       isError: true,
       isLoading: false,
     });
-    const { getByText, queryByText } = renderTab();
+    const { getByText, queryByText } = await renderTab();
     expect(getByText(/Couldn't load insights/i)).toBeTruthy();
     // The reassurance copy must NOT appear on a failed fetch.
     expect(queryByText(/No notable shifts/i)).toBeNull();
   });
 
-  it('renders a loading skeleton (not the all-clear) while loading', () => {
+  it('renders a loading skeleton (not the all-clear) while loading', async () => {
     mockUseWearableSamples.mockReturnValue({
       data: undefined,
       isError: false,
       isLoading: true,
     });
-    const { getByLabelText, queryByText } = renderTab();
+    const { getByLabelText, queryByText } = await renderTab();
     expect(getByLabelText('Loading coach insights')).toBeTruthy();
     expect(queryByText(/No notable shifts/i)).toBeNull();
   });
 
-  it('renders the genuine no-shifts copy only on a successful empty result', () => {
+  it('renders the genuine no-shifts copy only on a successful empty result', async () => {
     mockUseWearableSamples.mockReturnValue({
       data: { series: [] },
       isError: false,
       isLoading: false,
     });
-    const { getByText } = renderTab();
+    const { getByText } = await renderTab();
     expect(getByText(/No notable shifts/i)).toBeTruthy();
   });
 });

@@ -53,17 +53,17 @@ function baseProps(over: Partial<PushPromptSheetProps> = {}): PushPromptSheetPro
 }
 
 describe('PushPromptSheet — visibility', () => {
-  it('renders the sheet and its choices when visible', () => {
-    const { getByTestId } = render(<PushPromptSheet {...baseProps()} />);
+  it('renders the sheet and its choices when visible', async () => {
+    const { getByTestId } = await render(<PushPromptSheet {...baseProps()} />);
     expect(getByTestId('push-prompt-sheet')).toBeTruthy();
     expect(getByTestId('push-prompt-existing')).toBeTruthy();
     expect(getByTestId('push-prompt-future')).toBeTruthy();
     expect(getByTestId('push-prompt-dismiss')).toBeTruthy();
   });
 
-  it('does not render sheet content when not visible', () => {
+  it('does not render sheet content when not visible', async () => {
     // RN <Modal visible={false}> renders nothing of its children.
-    const { queryByTestId } = render(
+    const { queryByTestId } = await render(
       <PushPromptSheet {...baseProps({ visible: false })} />,
     );
     expect(queryByTestId('push-prompt-existing')).toBeNull();
@@ -72,43 +72,43 @@ describe('PushPromptSheet — visibility', () => {
 });
 
 describe('PushPromptSheet — choice handlers', () => {
-  it('fires onPushExisting when the primary button is pressed', () => {
+  it('fires onPushExisting when the primary button is pressed', async () => {
     const onPushExisting = jest.fn();
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <PushPromptSheet {...baseProps({ onPushExisting })} />,
     );
-    fireEvent.press(getByTestId('push-prompt-existing'));
+    await fireEvent.press(getByTestId('push-prompt-existing'));
     expect(onPushExisting).toHaveBeenCalledTimes(1);
   });
 
-  it('fires onFutureOnly when the secondary button is pressed', () => {
+  it('fires onFutureOnly when the secondary button is pressed', async () => {
     const onFutureOnly = jest.fn();
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <PushPromptSheet {...baseProps({ onFutureOnly })} />,
     );
-    fireEvent.press(getByTestId('push-prompt-future'));
+    await fireEvent.press(getByTestId('push-prompt-future'));
     expect(onFutureOnly).toHaveBeenCalledTimes(1);
   });
 
-  it('fires onDismiss from the close affordance', () => {
+  it('fires onDismiss from the close affordance', async () => {
     const onDismiss = jest.fn();
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <PushPromptSheet {...baseProps({ onDismiss })} />,
     );
-    fireEvent.press(getByTestId('push-prompt-dismiss'));
+    await fireEvent.press(getByTestId('push-prompt-dismiss'));
     expect(onDismiss).toHaveBeenCalledTimes(1);
   });
 
-  it('does not cross-fire handlers (one choice = one callback)', () => {
+  it('does not cross-fire handlers (one choice = one callback)', async () => {
     const onPushExisting = jest.fn();
     const onFutureOnly = jest.fn();
     const onDismiss = jest.fn();
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <PushPromptSheet
         {...baseProps({ onPushExisting, onFutureOnly, onDismiss })}
       />,
     );
-    fireEvent.press(getByTestId('push-prompt-existing'));
+    await fireEvent.press(getByTestId('push-prompt-existing'));
     expect(onPushExisting).toHaveBeenCalledTimes(1);
     expect(onFutureOnly).not.toHaveBeenCalled();
     expect(onDismiss).not.toHaveBeenCalled();
@@ -116,21 +116,21 @@ describe('PushPromptSheet — choice handlers', () => {
 });
 
 describe('PushPromptSheet — copy', () => {
-  it('weaves the contentTitle into the explainer copy', () => {
-    const { getByText } = render(
+  it('weaves the contentTitle into the explainer copy', async () => {
+    const { getByText } = await render(
       <PushPromptSheet {...baseProps({ contentTitle: 'Strength Block' })} />,
     );
     // The title appears (in curly quotes) within the explainer line.
     expect(getByText(/Strength Block/)).toBeTruthy();
   });
 
-  it('renders the fixed warm title', () => {
-    const { getByText } = render(<PushPromptSheet {...baseProps()} />);
+  it('renders the fixed warm title', async () => {
+    const { getByText } = await render(<PushPromptSheet {...baseProps()} />);
     expect(getByText('Share this update?')).toBeTruthy();
   });
 
-  it('falls back to neutral phrasing when contentTitle is blank', () => {
-    const { getByText } = render(
+  it('falls back to neutral phrasing when contentTitle is blank', async () => {
+    const { getByText } = await render(
       <PushPromptSheet {...baseProps({ contentTitle: '   ' })} />,
     );
     // The explainer line (distinct from the fixed title) uses the neutral
@@ -145,8 +145,8 @@ describe('PushPromptSheet — copy', () => {
   ];
 
   modeCases.forEach(({ mode, matcher }) => {
-    it(`renders mode-specific copy for "${mode}"`, () => {
-      const { getByText } = render(
+    it(`renders mode-specific copy for "${mode}"`, async () => {
+      const { getByText } = await render(
         <PushPromptSheet {...baseProps({ mode })} />,
       );
       expect(getByText(matcher)).toBeTruthy();
@@ -155,8 +155,8 @@ describe('PushPromptSheet — copy', () => {
 });
 
 describe('PushPromptSheet — optional audienceHint', () => {
-  it('renders the audienceHint when provided', () => {
-    const { getByTestId } = render(
+  it('renders the audienceHint when provided', async () => {
+    const { getByTestId } = await render(
       <PushPromptSheet
         {...baseProps({ audienceHint: '12 buyers already own this' })}
       />,
@@ -164,8 +164,8 @@ describe('PushPromptSheet — optional audienceHint', () => {
     expect(getByTestId('push-prompt-audience-hint')).toBeTruthy();
   });
 
-  it('omits the audienceHint node when not provided', () => {
-    const { queryByTestId } = render(<PushPromptSheet {...baseProps()} />);
+  it('omits the audienceHint node when not provided', async () => {
+    const { queryByTestId } = await render(<PushPromptSheet {...baseProps()} />);
     expect(queryByTestId('push-prompt-audience-hint')).toBeNull();
   });
 });

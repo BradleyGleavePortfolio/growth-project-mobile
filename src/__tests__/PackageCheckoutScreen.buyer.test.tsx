@@ -89,7 +89,7 @@ describe('PackageCheckoutScreen — buyer flow', () => {
   it('loads the package and renders it via PackageDetailSurface (buyer mode)', async () => {
     mockGetByShareToken.mockResolvedValue({ data: PKG });
     const props = makeProps();
-    const { getByText, getByLabelText } = render(
+    const { getByText, getByLabelText } = await render(
       <PackageCheckoutScreen navigation={props.navigation} route={props.route} />,
     );
     await waitFor(() => expect(getByText('Strength Builder')).toBeTruthy());
@@ -104,12 +104,12 @@ describe('PackageCheckoutScreen — buyer flow', () => {
       data: { url: 'https://checkout.stripe.com/c/pay/cs_test_123' },
     });
     const props = makeProps();
-    const { getByLabelText, getByText } = render(
+    const { getByLabelText, getByText } = await render(
       <PackageCheckoutScreen navigation={props.navigation} route={props.route} />,
     );
     await waitFor(() => expect(getByText('Strength Builder')).toBeTruthy());
 
-    fireEvent.press(getByLabelText('Continue to payment'));
+    await fireEvent.press(getByLabelText('Continue to payment'));
 
     await waitFor(() =>
       expect(mockCreateCheckoutSession).toHaveBeenCalledWith('pkg_uuid_1'),
@@ -127,7 +127,7 @@ describe('PackageCheckoutScreen — buyer flow', () => {
   it('shows an actionable error when the share token is empty (never a silent 404)', async () => {
     const props = makeProps();
     props.route = { params: { shareToken: '' } } as never;
-    const { getByText } = render(
+    const { getByText } = await render(
       <PackageCheckoutScreen navigation={props.navigation} route={props.route} />,
     );
     await waitFor(() => expect(getByText('This link is not yet active')).toBeTruthy());

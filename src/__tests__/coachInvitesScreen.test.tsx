@@ -91,7 +91,7 @@ describe('CoachInvitesScreen — R26 render mapping (client_email + last_email_s
     ];
     mockListInvites.mockResolvedValue(invites);
 
-    const { findByText, getByTestId } = render(
+    const { findByText, getByTestId } = await render(
       <CoachInvitesScreen navigation={makeNavigation()} />,
     );
 
@@ -119,7 +119,7 @@ describe('CoachInvitesScreen — R26 render mapping (client_email + last_email_s
     ];
     mockListInvites.mockResolvedValue(invites);
 
-    const { findByText, getByText } = render(
+    const { findByText, getByText } = await render(
       <CoachInvitesScreen navigation={makeNavigation()} />,
     );
 
@@ -141,7 +141,7 @@ describe('CoachInvitesScreen — R26 render mapping (client_email + last_email_s
     ];
     mockListInvites.mockResolvedValue(invites);
 
-    const { findByText, queryByText, getByTestId } = render(
+    const { findByText, queryByText, getByTestId } = await render(
       <CoachInvitesScreen navigation={makeNavigation()} />,
     );
 

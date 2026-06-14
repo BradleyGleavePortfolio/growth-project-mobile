@@ -179,7 +179,7 @@ describe('NotificationCenterScreen', () => {
   });
 
   it('renders notification rows after loading', async () => {
-    const { getByText, queryByText } = render(<NotificationCenterScreen />);
+    const { getByText, queryByText } = await render(<NotificationCenterScreen />);
 
     // The header title is always present.
     expect(getByText('Notifications')).toBeTruthy();
@@ -195,17 +195,17 @@ describe('NotificationCenterScreen', () => {
   });
 
   it('shows unread count banner when unread > 0', async () => {
-    const { getByText } = render(<NotificationCenterScreen />);
+    const { getByText } = await render(<NotificationCenterScreen />);
     await waitFor(() => {
       expect(getByText(/2 unread notification/)).toBeTruthy();
     });
   });
 
   it('calls markNotificationRead when an unread row is tapped', async () => {
-    const { getByText } = render(<NotificationCenterScreen />);
+    const { getByText } = await render(<NotificationCenterScreen />);
     await waitFor(() => expect(getByText('Coach note available')).toBeTruthy());
 
-    fireEvent.press(getByText('Coach note available'));
+    await fireEvent.press(getByText('Coach note available'));
 
     await waitFor(() => {
       expect(notificationsApi.markNotificationRead).toHaveBeenCalledWith('n_test_001');
@@ -213,15 +213,15 @@ describe('NotificationCenterScreen', () => {
   });
 
   it('badge count decreases after mark-as-read', async () => {
-    const { getByText, queryByText } = render(<NotificationCenterScreen />);
+    const { getByText, queryByText } = await render(<NotificationCenterScreen />);
     await waitFor(() => expect(getByText('Coach note available')).toBeTruthy());
 
     // Initially 2 unread.
     expect(getByText(/2 unread notification/)).toBeTruthy();
 
     // Tap the first unread row.
-    act(() => {
-      fireEvent.press(getByText('Coach note available'));
+    await act(async () => {
+      await fireEvent.press(getByText('Coach note available'));
     });
 
     await waitFor(() => {
@@ -238,10 +238,10 @@ describe('NotificationCenterScreen', () => {
   });
 
   it('calls markAllNotificationsRead when "Mark all read" is tapped', async () => {
-    const { getByText } = render(<NotificationCenterScreen />);
+    const { getByText } = await render(<NotificationCenterScreen />);
     await waitFor(() => expect(getByText('Mark all read')).toBeTruthy());
 
-    fireEvent.press(getByText('Mark all read'));
+    await fireEvent.press(getByText('Mark all read'));
 
     await waitFor(() => {
       expect(notificationsApi.markAllNotificationsRead).toHaveBeenCalledTimes(1);
@@ -255,7 +255,7 @@ describe('NotificationCenterScreen', () => {
     });
     (notificationsApi.fetchUnreadCount as jest.Mock).mockResolvedValue(0);
 
-    const { getByText } = render(<NotificationCenterScreen />);
+    const { getByText } = await render(<NotificationCenterScreen />);
 
     await waitFor(() => {
       expect(getByText("You're all caught up.")).toBeTruthy();
@@ -264,27 +264,38 @@ describe('NotificationCenterScreen', () => {
 });
 
 describe('NotificationPreferencesScreen', () => {
+  const FULL_PREFS = {
+    muteAll: false,
+    quietHours: { enabled: false, startTime: '22:00', endTime: '07:00' },
+    channels: {
+      coach:      { email: true, push: true, in_app: true },
+      milestone:  { email: true, push: true, in_app: true },
+      check_in:   { email: true, push: true, in_app: true },
+      message:    { email: true, push: true, in_app: true },
+      build_week: { email: true, push: true, in_app: true },
+      system:     { email: true, push: true, in_app: true },
+      reminder:   { email: true, push: true, in_app: true },
+      tip:        { email: true, push: true, in_app: true },
+    },
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
-    (notificationsApi.fetchNotificationPreferences as jest.Mock).mockResolvedValue({
-      muteAll: false,
-      quietHours: { enabled: false, startTime: '22:00', endTime: '07:00' },
-      channels: {
-        coach:      { email: true, push: true, in_app: true },
-        milestone:  { email: true, push: true, in_app: true },
-        check_in:   { email: true, push: true, in_app: true },
-        message:    { email: true, push: true, in_app: true },
-        build_week: { email: true, push: true, in_app: true },
-        system:     { email: true, push: true, in_app: true },
-        reminder:   { email: true, push: true, in_app: true },
-        tip:        { email: true, push: true, in_app: true },
-      },
-    });
-    (notificationsApi.saveNotificationPreferences as jest.Mock).mockResolvedValue({});
+    (notificationsApi.fetchNotificationPreferences as jest.Mock).mockResolvedValue(
+      JSON.parse(JSON.stringify(FULL_PREFS)),
+    );
+    // The real save endpoint returns the persisted, complete preferences object;
+    // the component does setPrefs(saved) with it. v14 flushes that post-save
+    // re-render synchronously, so the mock must echo a COMPLETE prefs object
+    // (merged with the update) rather than `{}` — otherwise prefs.quietHours is
+    // undefined on re-render. This mirrors the API contract.
+    (notificationsApi.saveNotificationPreferences as jest.Mock).mockImplementation(
+      async (updated) => ({ ...JSON.parse(JSON.stringify(FULL_PREFS)), ...updated }),
+    );
   });
 
   it('renders all notification kind sections', async () => {
-    const { getByText } = render(<NotificationPreferencesScreen />);
+    const { getByText } = await render(<NotificationPreferencesScreen />);
 
     await waitFor(() => {
       expect(getByText('Coach messages')).toBeTruthy();
@@ -299,7 +310,7 @@ describe('NotificationPreferencesScreen', () => {
   });
 
   it('renders mute-all and quiet hours controls', async () => {
-    const { getByText } = render(<NotificationPreferencesScreen />);
+    const { getByText } = await render(<NotificationPreferencesScreen />);
 
     await waitFor(() => {
       expect(getByText('Mute all notifications')).toBeTruthy();
@@ -308,7 +319,7 @@ describe('NotificationPreferencesScreen', () => {
   });
 
   it('calls saveNotificationPreferences when mute-all is toggled', async () => {
-    const { getAllByRole } = render(<NotificationPreferencesScreen />);
+    const { getAllByRole } = await render(<NotificationPreferencesScreen />);
 
     await waitFor(() => {
       const switches = getAllByRole('switch');
@@ -317,8 +328,8 @@ describe('NotificationPreferencesScreen', () => {
 
     const switches = getAllByRole('switch');
     // Mute-all is the first switch.
-    act(() => {
-      fireEvent(switches[0], 'valueChange', true);
+    await act(async () => {
+      await fireEvent(switches[0], 'valueChange', true);
     });
 
     await waitFor(() => {
@@ -329,7 +340,7 @@ describe('NotificationPreferencesScreen', () => {
   });
 
   it('shows per-kind descriptions for accessibility', async () => {
-    const { getByText } = render(<NotificationPreferencesScreen />);
+    const { getByText } = await render(<NotificationPreferencesScreen />);
 
     await waitFor(() => {
       expect(
@@ -340,28 +351,28 @@ describe('NotificationPreferencesScreen', () => {
 });
 
 describe('NotificationBadge', () => {
-  it('renders "99+" for counts above 99', () => {
-    const { getByText } = render(<NotificationBadge count={150} />);
+  it('renders "99+" for counts above 99', async () => {
+    const { getByText } = await render(<NotificationBadge count={150} />);
     expect(getByText('99+')).toBeTruthy();
   });
 
-  it('renders the exact count for values 1–99', () => {
-    const { getByText } = render(<NotificationBadge count={5} />);
+  it('renders the exact count for values 1–99', async () => {
+    const { getByText } = await render(<NotificationBadge count={5} />);
     expect(getByText('5')).toBeTruthy();
   });
 
-  it('renders nothing when count is 0', () => {
-    const { toJSON } = render(<NotificationBadge count={0} />);
+  it('renders nothing when count is 0', async () => {
+    const { toJSON } = await render(<NotificationBadge count={0} />);
     expect(toJSON()).toBeNull();
   });
 
-  it('renders nothing when count is negative', () => {
-    const { toJSON } = render(<NotificationBadge count={-3} />);
+  it('renders nothing when count is negative', async () => {
+    const { toJSON } = await render(<NotificationBadge count={-3} />);
     expect(toJSON()).toBeNull();
   });
 
-  it('renders "99" (not "99+") for exactly 99', () => {
-    const { getByText } = render(<NotificationBadge count={99} />);
+  it('renders "99" (not "99+") for exactly 99', async () => {
+    const { getByText } = await render(<NotificationBadge count={99} />);
     expect(getByText('99')).toBeTruthy();
   });
 });

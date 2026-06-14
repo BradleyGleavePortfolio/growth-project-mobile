@@ -259,23 +259,23 @@ import CoachBriefScreen from '../screens/coach/CoachBriefScreen';
 import AdminControlRoomScreen from '../screens/coach/AdminControlRoomScreen';
 
 describe('Wave 11 screens — flag-off render (RTL)', () => {
-  it('ClientPathCopilotScreen renders preview-only empty state when flag is OFF', () => {
-    const { getByTestId } = render(<ClientPathCopilotScreen />);
+  it('ClientPathCopilotScreen renders preview-only empty state when flag is OFF', async () => {
+    const { getByTestId } = await render(<ClientPathCopilotScreen />);
     expect(getByTestId('empty-state')).toBeTruthy();
   });
 
-  it('PrivateCommunityHubScreen renders preview-only empty state when flag is OFF', () => {
-    const { getByTestId } = render(<PrivateCommunityHubScreen />);
+  it('PrivateCommunityHubScreen renders preview-only empty state when flag is OFF', async () => {
+    const { getByTestId } = await render(<PrivateCommunityHubScreen />);
     expect(getByTestId('empty-state')).toBeTruthy();
   });
 
-  it('CoachBriefScreen renders preview-only empty state when flag is OFF', () => {
-    const { getByTestId } = render(<CoachBriefScreen />);
+  it('CoachBriefScreen renders preview-only empty state when flag is OFF', async () => {
+    const { getByTestId } = await render(<CoachBriefScreen />);
     expect(getByTestId('empty-state')).toBeTruthy();
   });
 
-  it('AdminControlRoomScreen renders preview-only empty state when flag is OFF', () => {
-    const { getByTestId } = render(<AdminControlRoomScreen />);
+  it('AdminControlRoomScreen renders preview-only empty state when flag is OFF', async () => {
+    const { getByTestId } = await render(<AdminControlRoomScreen />);
     expect(getByTestId('empty-state')).toBeTruthy();
   });
 });

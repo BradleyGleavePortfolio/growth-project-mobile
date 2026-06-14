@@ -43,15 +43,15 @@ const flatten = (style: unknown): Record<string, unknown> => {
 };
 
 describe('ForegroundNotificationBanner safe-area inset', () => {
-  afterEach(() => {
-    act(() => {
+  afterEach(async () => {
+    await act(() => {
       foregroundBannerStore.getState().reset();
     });
     jest.mocked(useSafeAreaInsets).mockReturnValue({ top: 47, bottom: 0, left: 0, right: 0 });
   });
 
-  it('uses the safe-area top inset for paddingTop', () => {
-    act(() => {
+  it('uses the safe-area top inset for paddingTop', async () => {
+    await act(() => {
       foregroundBannerStore.getState().showBanner({
         title: 'New message',
         body: 'You have a new message from your coach',
@@ -59,23 +59,22 @@ describe('ForegroundNotificationBanner safe-area inset', () => {
       });
     });
 
-    const { UNSAFE_root } = render(<ForegroundNotificationBanner />);
+    const { root } = await render(<ForegroundNotificationBanner />);
 
-    // Find the outermost Animated.View by locating any node whose flattened
-    // style carries the banner's absolute-position container marker.
-    const match = UNSAFE_root.findAll((node) => {
-      const flat = flatten(node.props?.style);
-      return flat.position === 'absolute' && flat.zIndex === 999;
-    })[0];
-
-    const flat = flatten(match.props.style);
+    // v14: `root` is the first rendered host element — the banner's outermost
+    // absolute-position container (styles.container has position:'absolute',
+    // zIndex:999). Assert directly on its flattened style.
+    if (!root) throw new Error('expected banner root to be rendered');
+    const flat = flatten(root.props.style);
+    expect(flat.position).toBe('absolute');
+    expect(flat.zIndex).toBe(999);
     expect(flat.paddingTop).toBe(47);
   });
 
-  it('uses the 12px floor when the safe-area top inset is 0', () => {
+  it('uses the 12px floor when the safe-area top inset is 0', async () => {
     jest.mocked(useSafeAreaInsets).mockReturnValue({ top: 0, bottom: 0, left: 0, right: 0 });
 
-    act(() => {
+    await act(() => {
       foregroundBannerStore.getState().showBanner({
         title: 'New message',
         body: 'You have a new message from your coach',
@@ -83,14 +82,12 @@ describe('ForegroundNotificationBanner safe-area inset', () => {
       });
     });
 
-    const { UNSAFE_root } = render(<ForegroundNotificationBanner />);
+    const { root } = await render(<ForegroundNotificationBanner />);
 
-    const match = UNSAFE_root.findAll((node) => {
-      const flat = flatten(node.props?.style);
-      return flat.position === 'absolute' && flat.zIndex === 999;
-    })[0];
-
-    const flat = flatten(match.props.style);
+    if (!root) throw new Error('expected banner root to be rendered');
+    const flat = flatten(root.props.style);
+    expect(flat.position).toBe('absolute');
+    expect(flat.zIndex).toBe(999);
     expect(flat.paddingTop).toBe(12);
   });
 });

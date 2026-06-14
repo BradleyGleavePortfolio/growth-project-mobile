@@ -113,12 +113,12 @@ describe('CoachBillingScreen URL guard (real validator)', () => {
     // branch so the test boundary is deterministic.
     mockOpenAuthSessionAsync.mockResolvedValueOnce({ type: 'locked' } as never);
 
-    const { findByLabelText } = render(
+    const { findByLabelText } = await render(
       <CoachBillingScreen navigation={{ goBack: jest.fn() } as never} />,
     );
 
     const portalBtn = await findByLabelText('Manage billing');
-    fireEvent.press(portalBtn);
+    await fireEvent.press(portalBtn);
 
     await waitFor(() => expect(mockOpenAuthSessionAsync).toHaveBeenCalled());
     expect(mockOpenAuthSessionAsync).toHaveBeenCalledWith(
@@ -131,12 +131,12 @@ describe('CoachBillingScreen URL guard (real validator)', () => {
   it('blocks a non-Stripe portal URL, shows user-visible alert, does NOT open browser', async () => {
     setupHappy('https://invoice.stripe.com/i/x', 'https://evil.example.com/phish');
 
-    const { findByLabelText } = render(
+    const { findByLabelText } = await render(
       <CoachBillingScreen navigation={{ goBack: jest.fn() } as never} />,
     );
     const portalBtn = await findByLabelText('Manage billing');
     await act(async () => {
-      fireEvent.press(portalBtn);
+      await fireEvent.press(portalBtn);
     });
 
     await waitFor(() => expect(mockCreatePortalSession).toHaveBeenCalled());
@@ -154,13 +154,13 @@ describe('CoachBillingScreen URL guard (real validator)', () => {
       'https://billing.stripe.com/p/session_abc',
     );
 
-    const { findByLabelText } = render(
+    const { findByLabelText } = await render(
       <CoachBillingScreen navigation={{ goBack: jest.fn() } as never} />,
     );
 
     const invoiceRow = await findByLabelText(/^Invoice /);
     await act(async () => {
-      fireEvent.press(invoiceRow);
+      await fireEvent.press(invoiceRow);
     });
 
     expect(mockOpenBrowserAsync).toHaveBeenCalledWith(
@@ -176,13 +176,13 @@ describe('CoachBillingScreen URL guard (real validator)', () => {
       'https://billing.stripe.com/p/session_abc',
     );
 
-    const { findByLabelText } = render(
+    const { findByLabelText } = await render(
       <CoachBillingScreen navigation={{ goBack: jest.fn() } as never} />,
     );
 
     const invoiceRow = await findByLabelText(/^Invoice /);
     await act(async () => {
-      fireEvent.press(invoiceRow);
+      await fireEvent.press(invoiceRow);
     });
 
     expect(mockOpenBrowserAsync).toHaveBeenCalledWith(
@@ -195,12 +195,12 @@ describe('CoachBillingScreen URL guard (real validator)', () => {
   it('blocks a non-Stripe invoice URL, shows user-visible alert, does NOT open browser', async () => {
     setupHappy('https://evil.example.com/inv', 'https://billing.stripe.com/p/x');
 
-    const { findByLabelText } = render(
+    const { findByLabelText } = await render(
       <CoachBillingScreen navigation={{ goBack: jest.fn() } as never} />,
     );
     const invoiceRow = await findByLabelText(/^Invoice /);
     await act(async () => {
-      fireEvent.press(invoiceRow);
+      await fireEvent.press(invoiceRow);
     });
 
     expect(mockOpenBrowserAsync).not.toHaveBeenCalled();

@@ -71,7 +71,7 @@ describe('useAIBudget', () => {
     const dto = budgetAt(62.5);
     mockedGetBudget.mockResolvedValueOnce({ data: dto } as never);
     const { Wrapper } = makeWrapper();
-    const { result } = renderHook(() => useAIBudget(), { wrapper: Wrapper });
+    const { result } = await renderHook(() => useAIBudget(), { wrapper: Wrapper });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(result.current.data).toEqual(dto);
     expect(mockedGetBudget).toHaveBeenCalledTimes(1);
@@ -80,7 +80,7 @@ describe('useAIBudget', () => {
   it('does not fetch when enabled=false', async () => {
     mockedGetBudget.mockResolvedValueOnce({ data: budgetAt(50) } as never);
     const { Wrapper } = makeWrapper();
-    renderHook(() => useAIBudget({ enabled: false }), { wrapper: Wrapper });
+    await renderHook(() => useAIBudget({ enabled: false }), { wrapper: Wrapper });
     // Wait a tick to confirm no fetch fires.
     await new Promise((r) => setTimeout(r, 30));
     expect(mockedGetBudget).not.toHaveBeenCalled();
@@ -95,7 +95,7 @@ describe('useAIBudget', () => {
   ])('hook data at pct=%s drives surface %s', async (pct, expected) => {
     mockedGetBudget.mockResolvedValueOnce({ data: budgetAt(pct) } as never);
     const { Wrapper } = makeWrapper();
-    const { result } = renderHook(() => useAIBudget(), { wrapper: Wrapper });
+    const { result } = await renderHook(() => useAIBudget(), { wrapper: Wrapper });
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
     expect(surfaceFor(result.current.data)).toBe(expected);
   });

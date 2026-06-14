@@ -38,17 +38,33 @@ const mockedClearFn = wearablesSamplesApi.clearPreference as jest.MockedFunction
   typeof wearablesSamplesApi.clearPreference
 >;
 
+// D-011 RQ-GC surgical sweep: track the QueryClients minted per test so we can
+// tear them down in afterEach. A finite gcTime (the previous 60_000) leaves a
+// real GC timer pending for a full minute after the suite finishes, which is
+// the open handle behind the "Jest did not exit one second after the test run
+// has completed" warning. gcTime: Infinity is never scheduled as a timer, so
+// the per-metric preference cache entry still survives the synchronous
+// getQueryData reads below (it is only collected on an explicit clear) while
+// nothing remains pending after the run.
+const mintedClients: QueryClient[] = [];
+
 function makeWrapper() {
   const qc = new QueryClient({
     defaultOptions: {
       // gcTime must be non-zero here: we read the per-metric preference cache
       // entry directly via getQueryData and it has no React Query observer, so
       // a gcTime of 0 would garbage-collect it the instant it's written and
-      // the assertions below would race against the sweep.
-      queries: { retry: false, gcTime: 60_000, staleTime: 0 },
-      mutations: { retry: false },
+      // the assertions below would race against the sweep. Infinity keeps the
+      // entry alive for the test AND schedules no GC timer (no leak).
+      queries: { retry: false, gcTime: Infinity, staleTime: 0 },
+      // The mutation cache GC is the real open handle here: every settled
+      // mutation schedules a removal timer (RQ default 5 min) that keeps the
+      // Node event loop alive long after the test finishes — this is what
+      // produced the "Jest did not exit" warning. Infinity is never scheduled.
+      mutations: { retry: false, gcTime: Infinity },
     },
   });
+  mintedClients.push(qc);
   const Wrapper = ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={qc}>{children}</QueryClientProvider>
   );
@@ -58,6 +74,18 @@ function makeWrapper() {
 beforeEach(() => {
   mockedSet.mockReset();
   mockedClearFn.mockReset();
+});
+
+afterEach(() => {
+  // Drop every cache entry and detach the client created during the test, then
+  // forget our references so nothing is retained. unmount() releases the
+  // focus/online subscriptions the provider wired up; clear() empties the
+  // query + mutation caches so no entry can keep a timer alive.
+  while (mintedClients.length > 0) {
+    const qc = mintedClients.pop();
+    qc?.unmount();
+    qc?.clear();
+  }
 });
 
 describe('useWearablePreference', () => {
@@ -71,11 +99,11 @@ describe('useWearablePreference', () => {
     // seed a prior preference
     qc.setQueryData(wearablePreferenceQueryKey('STEPS'), 'OURA');
 
-    const { result } = renderHook(() => useWearablePreference(), {
+    const { result } = await renderHook(() => useWearablePreference(), {
       wrapper: Wrapper,
     });
 
-    act(() => {
+    await act(() => {
       result.current.mutate({ metric: 'STEPS', preferredProvider: 'WHOOP' });
     });
 
@@ -93,11 +121,11 @@ describe('useWearablePreference', () => {
     const { qc, Wrapper } = makeWrapper();
     qc.setQueryData(wearablePreferenceQueryKey('STEPS'), 'OURA');
 
-    const { result } = renderHook(() => useWearablePreference(), {
+    const { result } = await renderHook(() => useWearablePreference(), {
       wrapper: Wrapper,
     });
 
-    act(() => {
+    await act(() => {
       result.current.mutate({ metric: 'STEPS', preferredProvider: 'WHOOP' });
     });
 
@@ -116,11 +144,11 @@ describe('useWearablePreference', () => {
     const { qc, Wrapper } = makeWrapper();
     const invalidateSpy = jest.spyOn(qc, 'invalidateQueries');
 
-    const { result } = renderHook(() => useWearablePreference(), {
+    const { result } = await renderHook(() => useWearablePreference(), {
       wrapper: Wrapper,
     });
 
-    act(() => {
+    await act(() => {
       result.current.mutate({ metric: 'STEPS', preferredProvider: 'WHOOP' });
     });
 
@@ -135,11 +163,11 @@ describe('useWearablePreference', () => {
     const { qc, Wrapper } = makeWrapper();
     // no seed — prior value is undefined
 
-    const { result } = renderHook(() => useWearablePreference(), {
+    const { result } = await renderHook(() => useWearablePreference(), {
       wrapper: Wrapper,
     });
 
-    act(() => {
+    await act(() => {
       result.current.mutate({ metric: 'STEPS', preferredProvider: 'WHOOP' });
     });
 
@@ -157,7 +185,7 @@ describe('useWearablePreference({ metric }) — HK-3b contract overload (R1 P0 #
     });
     const { qc, Wrapper } = makeWrapper();
 
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () => useWearablePreference({ metric: 'STEPS' }),
       { wrapper: Wrapper },
     );
@@ -167,7 +195,7 @@ describe('useWearablePreference({ metric }) — HK-3b contract overload (R1 P0 #
     expect(result.current).toHaveProperty('isPending');
     expect(typeof result.current.mutate).toBe('function');
 
-    act(() => {
+    await act(() => {
       // The metric is bound, so the simpler surface is mutate(preferredProvider).
       result.current.mutate('WHOOP');
     });
@@ -183,7 +211,7 @@ describe('useWearablePreference({ metric }) — HK-3b contract overload (R1 P0 #
     const { qc, Wrapper } = makeWrapper();
     qc.setQueryData(wearablePreferenceQueryKey('STEPS'), 'OURA');
 
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () => useWearablePreference({ metric: 'STEPS' }),
       { wrapper: Wrapper },
     );
@@ -198,12 +226,12 @@ describe('useWearablePreference({ metric }) — HK-3b contract overload (R1 P0 #
     mockedClear.mockResolvedValueOnce();
     const { Wrapper } = makeWrapper();
 
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () => useWearablePreference({ metric: 'STEPS' }),
       { wrapper: Wrapper },
     );
 
-    act(() => {
+    await act(() => {
       result.current.mutate(null);
     });
 
@@ -226,19 +254,19 @@ describe('useWearablePreference({ metric }) — HK-3b contract overload (R1 P0 #
     qc.setQueryData(wearablePreferenceQueryKey('STEPS'), 'OURA');
     const invalidateSpy = jest.spyOn(qc, 'invalidateQueries');
 
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () => useWearablePreference({ metric: 'STEPS' }),
       { wrapper: Wrapper },
     );
 
-    act(() => {
+    await act(() => {
       result.current.mutate(null);
     });
 
     // The clear is a tracked mutation — isPending flips true while in flight.
     await waitFor(() => expect(result.current.isPending).toBe(true));
 
-    act(() => {
+    await act(() => {
       resolveClear();
     });
 
@@ -264,12 +292,12 @@ describe('useWearablePreference({ metric }) — HK-3b contract overload (R1 P0 #
     qc.setQueryData(wearablePreferenceQueryKey('STEPS'), 'OURA');
     const onError = jest.fn();
 
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () => useWearablePreference({ metric: 'STEPS' }),
       { wrapper: Wrapper },
     );
 
-    act(() => {
+    await act(() => {
       result.current.mutate(null, { onError });
     });
 
@@ -289,12 +317,12 @@ describe('useWearablePreference({ metric }) — HK-3b contract overload (R1 P0 #
     qc.setQueryData(wearablePreferenceQueryKey('STEPS'), 'OURA');
     const onError = jest.fn();
 
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () => useWearablePreference({ metric: 'STEPS' }),
       { wrapper: Wrapper },
     );
 
-    act(() => {
+    await act(() => {
       result.current.mutate(null, { onError });
     });
 

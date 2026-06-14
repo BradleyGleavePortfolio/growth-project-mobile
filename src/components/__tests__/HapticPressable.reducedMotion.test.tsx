@@ -73,11 +73,11 @@ describe('HapticPressable — reduced motion', () => {
     mockUseReduceMotion.mockReset();
   });
 
-  it('Reduce Motion ENABLED: press-in/out fire no scale/opacity animation and never shrink scale below 1', () => {
+  it('Reduce Motion ENABLED: press-in/out fire no scale/opacity animation and never shrink scale below 1', async () => {
     mockUseReduceMotion.mockReturnValue(true);
 
     const onPress = jest.fn();
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <HapticPressable testID={TEST_ID} onPress={onPress}>
         <Text>Roman</Text>
       </HapticPressable>,
@@ -90,9 +90,9 @@ describe('HapticPressable — reduced motion', () => {
     timingSpy.mockClear();
     springSpy.mockClear();
 
-    fireEvent(node, 'pressIn');
-    fireEvent(node, 'pressOut');
-    fireEvent.press(node);
+    await fireEvent(node, 'pressIn');
+    await fireEvent(node, 'pressOut');
+    await fireEvent.press(node);
 
     // No press animation ran under Reduce Motion.
     expect(timingSpy).not.toHaveBeenCalled();
@@ -107,10 +107,10 @@ describe('HapticPressable — reduced motion', () => {
     expect(onPress).toHaveBeenCalledTimes(1);
   });
 
-  it('Reduce Motion DISABLED: press-in runs the scale spring (toValue < 1) and opacity timing', () => {
+  it('Reduce Motion DISABLED: press-in runs the scale spring (toValue < 1) and opacity timing', async () => {
     mockUseReduceMotion.mockReturnValue(false);
 
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <HapticPressable testID={TEST_ID} pressScale={0.97}>
         <Text>Roman</Text>
       </HapticPressable>,
@@ -120,7 +120,7 @@ describe('HapticPressable — reduced motion', () => {
     timingSpy.mockClear();
     springSpy.mockClear();
 
-    fireEvent(node, 'pressIn');
+    await fireEvent(node, 'pressIn');
 
     // The scale spring runs and DOES shrink below the resting value of 1.
     expect(springSpy).toHaveBeenCalled();

@@ -66,7 +66,7 @@ describe('PaywallSheet', () => {
         },
       ],
     });
-    const { getByTestId, queryByTestId } = render(
+    const { getByTestId, queryByTestId } = await render(
       <PaywallSheet
         visible
         onClose={jest.fn()}
@@ -80,8 +80,8 @@ describe('PaywallSheet', () => {
     expect(queryByTestId('paywall-loading')).toBeNull();
   });
 
-  it('does not load packages when visible=false', () => {
-    render(
+  it('does not load packages when visible=false', async () => {
+    await render(
       <PaywallSheet
         visible={false}
         onClose={jest.fn()}
@@ -97,20 +97,20 @@ describe('PaywallSheet', () => {
   it('"Maybe later" tap calls onClose', async () => {
     mockedGetPackages.mockResolvedValueOnce({ ok: true, data: [] });
     const onClose = jest.fn();
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <PaywallSheet visible onClose={onClose} onSubscribe={jest.fn()} />,
     );
-    fireEvent.press(getByTestId('paywall-close'));
+    await fireEvent.press(getByTestId('paywall-close'));
     expect(onClose).toHaveBeenCalled();
   });
 
   it('"See all plans" CTA calls onSubscribe', async () => {
     mockedGetPackages.mockResolvedValueOnce({ ok: true, data: [] });
     const onSubscribe = jest.fn();
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <PaywallSheet visible onClose={jest.fn()} onSubscribe={onSubscribe} />,
     );
-    fireEvent.press(getByTestId('paywall-subscribe'));
+    await fireEvent.press(getByTestId('paywall-subscribe'));
     expect(onSubscribe).toHaveBeenCalled();
   });
 
@@ -132,11 +132,11 @@ describe('PaywallSheet', () => {
       ],
     });
     const onSubscribe = jest.fn();
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <PaywallSheet visible onClose={jest.fn()} onSubscribe={onSubscribe} />,
     );
     await waitFor(() => getByTestId('paywall-package-pkg_42'));
-    fireEvent.press(getByTestId('paywall-package-pkg_42'));
+    await fireEvent.press(getByTestId('paywall-package-pkg_42'));
     expect(onSubscribe).toHaveBeenCalledWith('pkg_42');
   });
 
@@ -146,7 +146,7 @@ describe('PaywallSheet', () => {
       reason: 'error',
       message: 'boom',
     });
-    const { findByTestId } = render(
+    const { findByTestId } = await render(
       <PaywallSheet visible onClose={jest.fn()} onSubscribe={jest.fn()} />,
     );
     const node = await findByTestId('paywall-packages-unavailable');

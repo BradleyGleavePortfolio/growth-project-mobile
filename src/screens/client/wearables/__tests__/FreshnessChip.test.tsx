@@ -101,9 +101,9 @@ describe('FreshnessChip render', () => {
     mockUseWearableConnections.mockReturnValue({ data: [] });
   });
 
-  it('renders the derived label and is tappable', () => {
+  it('renders the derived label and is tappable', async () => {
     const onPress = jest.fn();
-    const { getByText } = render(
+    const { getByText } = await render(
       <FreshnessChip
         connections={[conn('APPLE_HEALTHKIT', 'connected')]}
         bucket="HEALTH_FITNESS"
@@ -113,12 +113,12 @@ describe('FreshnessChip render', () => {
     expect(getByText('All sources current')).toBeTruthy();
   });
 
-  it('works WITHOUT a connections prop — reads the internal hook (HK-3b shape)', () => {
+  it('works WITHOUT a connections prop — reads the internal hook (HK-3b shape)', async () => {
     // HK-3b mounts the chip with just { bucket, tone?, onPress? }.
     mockUseWearableConnections.mockReturnValue({
       data: [conn('APPLE_HEALTHKIT', 'connected'), conn('GARMIN', 'connected')],
     });
-    const { getByText } = render(
+    const { getByText } = await render(
       <FreshnessChip bucket="HEALTH_FITNESS" tone="warm" onPress={jest.fn()} />,
     );
     expect(getByText('All sources current')).toBeTruthy();

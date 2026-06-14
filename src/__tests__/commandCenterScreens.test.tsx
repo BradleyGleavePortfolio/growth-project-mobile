@@ -153,23 +153,23 @@ afterEach(() => {
 
 // ─── KpiTile ──────────────────────────────────────────────────────────────────
 describe('KpiTile', () => {
-  it('renders label and value', () => {
-    const { getByText } = render(
+  it('renders label and value', async () => {
+    const { getByText } = await render(
       <KpiTile label="Active today" value={8} testID="kpi-test" />,
     );
     expect(getByText('Active today')).toBeTruthy();
     expect(getByText('8')).toBeTruthy();
   });
 
-  it('renders subtext when provided', () => {
-    const { getByText } = render(
+  it('renders subtext when provided', async () => {
+    const { getByText } = await render(
       <KpiTile label="Active today" value={8} subtext="of 12 clients" />,
     );
     expect(getByText('of 12 clients')).toBeTruthy();
   });
 
-  it('exposes correct accessibilityLabel with subtext', () => {
-    const { getByLabelText } = render(
+  it('exposes correct accessibilityLabel with subtext', async () => {
+    const { getByLabelText } = await render(
       <KpiTile label="Active today" value={8} subtext="of 12 clients" testID="kpi" />,
     );
     expect(getByLabelText('Active today: 8. of 12 clients')).toBeTruthy();
@@ -178,8 +178,8 @@ describe('KpiTile', () => {
 
 // ─── AlertRow ─────────────────────────────────────────────────────────────────
 describe('AlertRow', () => {
-  it('renders client name and message', () => {
-    const { getByText } = render(
+  it('renders client name and message', async () => {
+    const { getByText } = await render(
       <AlertRow
         clientName="James R."
         message="Missed 7 check-ins"
@@ -192,9 +192,9 @@ describe('AlertRow', () => {
     expect(getByText('High risk')).toBeTruthy();
   });
 
-  it('calls onPress when tapped', () => {
+  it('calls onPress when tapped', async () => {
     const onPress = jest.fn();
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <AlertRow
         clientName="James R."
         message="Test"
@@ -202,12 +202,12 @@ describe('AlertRow', () => {
         testID="test-alert-row"
       />,
     );
-    fireEvent.press(getByTestId('test-alert-row'));
+    await fireEvent.press(getByTestId('test-alert-row'));
     expect(onPress).toHaveBeenCalledTimes(1);
   });
 
-  it('renders dismiss button when onDismiss is provided', () => {
-    const { getByText } = render(
+  it('renders dismiss button when onDismiss is provided', async () => {
+    const { getByText } = await render(
       <AlertRow
         clientName="James R."
         message="Test"
@@ -221,8 +221,8 @@ describe('AlertRow', () => {
 
 // ─── MessagePreviewRow ────────────────────────────────────────────────────────
 describe('MessagePreviewRow', () => {
-  it('renders client name, preview, and unread badge', () => {
-    const { getByText } = render(
+  it('renders client name, preview, and unread badge', async () => {
+    const { getByText } = await render(
       <MessagePreviewRow
         clientName="Hannah T."
         preview="Quick question about training."
@@ -237,9 +237,9 @@ describe('MessagePreviewRow', () => {
     expect(getByText('2')).toBeTruthy();
   });
 
-  it('calls onPress when tapped', () => {
+  it('calls onPress when tapped', async () => {
     const onPress = jest.fn();
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <MessagePreviewRow
         clientName="Hannah T."
         preview="Test"
@@ -250,22 +250,22 @@ describe('MessagePreviewRow', () => {
         testID="msg-row-test"
       />,
     );
-    fireEvent.press(getByTestId('msg-row-test'));
+    await fireEvent.press(getByTestId('msg-row-test'));
     expect(onPress).toHaveBeenCalledTimes(1);
   });
 });
 
 // ─── OverviewScreen ───────────────────────────────────────────────────────────
 describe('OverviewScreen', () => {
-  it('renders loading state initially', () => {
+  it('renders loading state initially', async () => {
     (commandCenterApi.getOverview as jest.Mock).mockReturnValue(new Promise(() => {}));
-    const { getByTestId } = render(<OverviewScreen />);
+    const { getByTestId } = await render(<OverviewScreen />);
     expect(getByTestId('command-center-overview')).toBeTruthy();
   });
 
   it('renders KPI tiles after data loads', async () => {
     (commandCenterApi.getOverview as jest.Mock) = mockResolved(mockOverview);
-    const { getByTestId } = render(<OverviewScreen />);
+    const { getByTestId } = await render(<OverviewScreen />);
     await waitFor(() => {
       expect(getByTestId('command-center-kpi-roster-size')).toBeTruthy();
       expect(getByTestId('command-center-kpi-active-today')).toBeTruthy();
@@ -276,7 +276,7 @@ describe('OverviewScreen', () => {
 
   it('renders error state when API rejects', async () => {
     (commandCenterApi.getOverview as jest.Mock) = mockRejected();
-    const { getByText } = render(<OverviewScreen />);
+    const { getByText } = await render(<OverviewScreen />);
     await waitFor(() => {
       expect(getByText(/unable to load/i)).toBeTruthy();
     });
@@ -285,15 +285,15 @@ describe('OverviewScreen', () => {
 
 // ─── AtRiskScreen ─────────────────────────────────────────────────────────────
 describe('AtRiskScreen', () => {
-  it('renders loading state initially', () => {
+  it('renders loading state initially', async () => {
     (commandCenterApi.getAtRisk as jest.Mock).mockReturnValue(new Promise(() => {}));
-    const { getByTestId } = render(<AtRiskScreen />);
+    const { getByTestId } = await render(<AtRiskScreen />);
     expect(getByTestId('command-center-at-risk')).toBeTruthy();
   });
 
   it('renders at-risk rows after data loads', async () => {
     (commandCenterApi.getAtRisk as jest.Mock) = mockResolved(mockAtRisk);
-    const { getAllByTestId } = render(<AtRiskScreen />);
+    const { getAllByTestId } = await render(<AtRiskScreen />);
     await waitFor(() => {
       expect(getAllByTestId('command-center-at-risk-row').length).toBeGreaterThan(0);
     });
@@ -301,7 +301,7 @@ describe('AtRiskScreen', () => {
 
   it('renders empty state when no at-risk clients', async () => {
     (commandCenterApi.getAtRisk as jest.Mock) = mockResolved({ items: [], total_at_risk: 0 });
-    const { getByText } = render(<AtRiskScreen />);
+    const { getByText } = await render(<AtRiskScreen />);
     await waitFor(() => {
       expect(getByText(/no at-risk clients/i)).toBeTruthy();
     });
@@ -309,7 +309,7 @@ describe('AtRiskScreen', () => {
 
   it('renders error state when API rejects', async () => {
     (commandCenterApi.getAtRisk as jest.Mock) = mockRejected();
-    const { getByText } = render(<AtRiskScreen />);
+    const { getByText } = await render(<AtRiskScreen />);
     await waitFor(() => {
       expect(getByText(/unable to load/i)).toBeTruthy();
     });
@@ -318,15 +318,15 @@ describe('AtRiskScreen', () => {
 
 // ─── WinStreaksScreen ─────────────────────────────────────────────────────────
 describe('WinStreaksScreen', () => {
-  it('renders loading state initially', () => {
+  it('renders loading state initially', async () => {
     (commandCenterApi.getWinStreaks as jest.Mock).mockReturnValue(new Promise(() => {}));
-    const { getByTestId } = render(<WinStreaksScreen />);
+    const { getByTestId } = await render(<WinStreaksScreen />);
     expect(getByTestId('command-center-win-streaks')).toBeTruthy();
   });
 
   it('renders streak rows after data loads', async () => {
     (commandCenterApi.getWinStreaks as jest.Mock) = mockResolved(mockWinStreaks);
-    const { getAllByTestId } = render(<WinStreaksScreen />);
+    const { getAllByTestId } = await render(<WinStreaksScreen />);
     await waitFor(() => {
       expect(getAllByTestId('command-center-win-streak-row').length).toBeGreaterThan(0);
     });
@@ -334,7 +334,7 @@ describe('WinStreaksScreen', () => {
 
   it('renders empty state when no streaks', async () => {
     (commandCenterApi.getWinStreaks as jest.Mock) = mockResolved({ items: [], total_active_streaks: 0 });
-    const { getByText } = render(<WinStreaksScreen />);
+    const { getByText } = await render(<WinStreaksScreen />);
     await waitFor(() => {
       expect(getByText(/no active streaks/i)).toBeTruthy();
     });
@@ -342,7 +342,7 @@ describe('WinStreaksScreen', () => {
 
   it('renders error state when API rejects', async () => {
     (commandCenterApi.getWinStreaks as jest.Mock) = mockRejected();
-    const { getByText } = render(<WinStreaksScreen />);
+    const { getByText } = await render(<WinStreaksScreen />);
     await waitFor(() => {
       expect(getByText(/unable to load/i)).toBeTruthy();
     });
@@ -351,15 +351,15 @@ describe('WinStreaksScreen', () => {
 
 // ─── InboxScreen ──────────────────────────────────────────────────────────────
 describe('InboxScreen', () => {
-  it('renders loading state initially', () => {
+  it('renders loading state initially', async () => {
     (commandCenterApi.getInbox as jest.Mock).mockReturnValue(new Promise(() => {}));
-    const { getByTestId } = render(<InboxScreen />);
+    const { getByTestId } = await render(<InboxScreen />);
     expect(getByTestId('command-center-inbox')).toBeTruthy();
   });
 
   it('renders inbox rows after data loads', async () => {
     (commandCenterApi.getInbox as jest.Mock) = mockResolved(mockInbox);
-    const { getAllByTestId } = render(<InboxScreen />);
+    const { getAllByTestId } = await render(<InboxScreen />);
     await waitFor(() => {
       expect(getAllByTestId('command-center-inbox-row').length).toBeGreaterThan(0);
     });
@@ -367,7 +367,7 @@ describe('InboxScreen', () => {
 
   it('renders empty state when no threads', async () => {
     (commandCenterApi.getInbox as jest.Mock) = mockResolved({ threads: [], total_unread: 0 });
-    const { getByText } = render(<InboxScreen />);
+    const { getByText } = await render(<InboxScreen />);
     await waitFor(() => {
       expect(getByText(/no messages/i)).toBeTruthy();
     });
@@ -375,7 +375,7 @@ describe('InboxScreen', () => {
 
   it('renders error state when API rejects', async () => {
     (commandCenterApi.getInbox as jest.Mock) = mockRejected();
-    const { getByText } = render(<InboxScreen />);
+    const { getByText } = await render(<InboxScreen />);
     await waitFor(() => {
       expect(getByText(/unable to load/i)).toBeTruthy();
     });
@@ -384,15 +384,15 @@ describe('InboxScreen', () => {
 
 // ─── ActionQueueScreen ────────────────────────────────────────────────────────
 describe('ActionQueueScreen', () => {
-  it('renders loading state initially', () => {
+  it('renders loading state initially', async () => {
     (commandCenterApi.getActionQueue as jest.Mock).mockReturnValue(new Promise(() => {}));
-    const { getByTestId } = render(<ActionQueueScreen />);
+    const { getByTestId } = await render(<ActionQueueScreen />);
     expect(getByTestId('command-center-action-queue')).toBeTruthy();
   });
 
   it('renders action rows after data loads', async () => {
     (commandCenterApi.getActionQueue as jest.Mock) = mockResolved(mockActionQueue);
-    const { getAllByTestId } = render(<ActionQueueScreen />);
+    const { getAllByTestId } = await render(<ActionQueueScreen />);
     await waitFor(() => {
       expect(getAllByTestId('command-center-action-queue-row').length).toBeGreaterThan(0);
     });
@@ -400,7 +400,7 @@ describe('ActionQueueScreen', () => {
 
   it('renders empty state when no pending actions', async () => {
     (commandCenterApi.getActionQueue as jest.Mock) = mockResolved({ items: [], total_pending: 0 });
-    const { getByText } = render(<ActionQueueScreen />);
+    const { getByText } = await render(<ActionQueueScreen />);
     await waitFor(() => {
       expect(getByText(/no pending actions/i)).toBeTruthy();
     });
@@ -408,7 +408,7 @@ describe('ActionQueueScreen', () => {
 
   it('renders error state when API rejects', async () => {
     (commandCenterApi.getActionQueue as jest.Mock) = mockRejected();
-    const { getByText } = render(<ActionQueueScreen />);
+    const { getByText } = await render(<ActionQueueScreen />);
     await waitFor(() => {
       expect(getByText(/unable to load/i)).toBeTruthy();
     });
@@ -418,14 +418,14 @@ describe('ActionQueueScreen', () => {
     (commandCenterApi.getActionQueue as jest.Mock) = mockResolved(mockActionQueue);
     (commandCenterApi.dismissAlert as jest.Mock) = mockResolved({ ok: true });
 
-    const { getAllByTestId, queryAllByTestId } = render(<ActionQueueScreen />);
+    const { getAllByTestId, queryAllByTestId } = await render(<ActionQueueScreen />);
     await waitFor(() => {
       expect(getAllByTestId('command-center-action-queue-row').length).toBe(1);
     });
 
     const dismissBtn = getAllByTestId('command-center-alert-dismiss')[0];
     await act(async () => {
-      fireEvent.press(dismissBtn);
+      await fireEvent.press(dismissBtn);
     });
 
     await waitFor(() => {

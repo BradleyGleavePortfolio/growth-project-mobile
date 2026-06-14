@@ -319,6 +319,21 @@ export interface SemanticTokens {
   /** Primary brand accent — oxblood lifted in dark for AA contrast */
   accent: string;
   /**
+   * Accent color for ACCENT-TINTED TEXT/ICONS rendered ON a screen/surface
+   * background (outline-chip labels, link/retry/opt-in labels, completion
+   * hints) — i.e. the foreground use of the brand accent, NOT a filled CTA.
+   * Kept SEPARATE from `accent` (the fill) because the dark `accent` oxblood
+   * #B43C3C only reaches ~3.28:1 on bgPrimary #121110 and ~3.02:1 on bgSurface
+   * #1C1A18 (AA FAIL for body-sized text). This lifted rose clears AA on BOTH
+   * dark backgrounds (WCAG 2.1, verified in theme/__tests__/contrastTokens.test):
+   *   dark:  #E07373 on #121110 ~ 6.17:1  PASS  |  on #1C1A18 ~ 5.68:1  PASS
+   * Light mode keeps the oxblood #4A0404, which is already deep enough to clear
+   * AA as text on the bone/cream backgrounds.
+   * Use `accent` for FILLS (CTA backgrounds, progress fills, borders) and
+   * `accentText` for accent-colored FOREGROUND text/icons on a bg/surface.
+   */
+  accentText: string;
+  /**
    * Text/icon color to place ON the `accent` fill (e.g. label inside a
    * primary CTA). Warm near-white so it never reads as a hard #FFF on the
    * old-money palette. Contrast on accent (computed, WCAG 2.1 relative
@@ -345,6 +360,12 @@ export interface SemanticTokens {
   textOnDisabled: string;
   /** Default border / hairline color */
   border: string;
+  /**
+   * Scrim/overlay behind modals and bottom sheets. A theme-anchored token so
+   * the dim is consistent across light/dark instead of a hard-coded raw rgba.
+   * Calm, not opaque — the sheet sits on a dimmed-but-visible context.
+   */
+  overlay: string;
 }
 
 /** Light-mode semantic tokens (default — matches existing bone/ink palette). */
@@ -357,12 +378,18 @@ export const lightTokens: SemanticTokens = {
   // light backgrounds: ~4.92:1 on cream #F5EFE4, ~5.54:1 on surface #FFFDF8.
   textMuted:   '#6B675F',
   accent:      '#4A0404',  // oxblood
+  // Accent-tinted FOREGROUND text/icons on bone/cream backgrounds. Oxblood is
+  // already deep enough to clear AA as text on light: ~14.6:1 on #F5EFE4,
+  // ~15.9:1 on #FFFDF8 (verified in contrastTokens test).
+  accentText:  '#4A0404',
   textOnAccent:'#FBF7F0',  // warm near-white on oxblood (~15.01:1)
   // Disabled CTA: warm taupe fill + dark warm ink. ~5.90:1 (AA PASS) so a
   // disabled/current-plan button label stays legible without parent opacity.
   disabledBg:     '#E0D9CE',
   textOnDisabled: '#524E47',
   border:      '#DCD5CC',
+  // Ink (#1A1A18) at 0.40 — a calm dim that keeps the underlying screen legible.
+  overlay:     'rgba(26, 26, 24, 0.40)',
 };
 
 /** Dark-mode semantic tokens. */
@@ -371,7 +398,11 @@ export const darkTokens: SemanticTokens = {
   bgSurface:   '#1C1A18',
   textPrimary: '#EBE6DE',
   textMuted:   '#A09B94',
-  accent:      '#B43C3C',  // oxblood lifted for dark contrast
+  accent:      '#B43C3C',  // oxblood lifted for dark contrast (FILLS only)
+  // Accent-tinted FOREGROUND text/icons on dark backgrounds. The fill oxblood
+  // #B43C3C fails AA as body text (~3.28:1 on bgPrimary, ~3.02:1 on bgSurface);
+  // this lifted rose clears AA on BOTH: ~6.17:1 on #121110, ~5.68:1 on #1C1A18.
+  accentText:  '#E07373',
   // (disabled tokens declared after textOnAccent below)
   // Warm near-white on the lifted accent (~5.38:1, AA PASS). The previous
   // dark ink #1A1714 was only ~3.10:1 on #B43C3C (AA FAIL for body text).
@@ -381,6 +412,9 @@ export const darkTokens: SemanticTokens = {
   disabledBg:     '#2A2723',
   textOnDisabled: '#9A958C',
   border:      '#2D2A26',
+  // Deeper near-black scrim for dark mode so the dim still reads against the
+  // already-dark surfaces without washing out (#000 at 0.55).
+  overlay:     'rgba(0, 0, 0, 0.55)',
 };
 
 // ─── Color utilities ────────────────────────────────────────────────────────

@@ -140,7 +140,7 @@ describe('useFoodBrowse — date-only string is not shifted west-of-UTC', () => 
   });
 
   it('loadFrequentFoods produces the exact 7-day calendar walk starting at "2026-05-23"', async () => {
-    const { result } = renderHook(() => useFoodBrowse('user-1', '2026-05-23'));
+    const { result } = await renderHook(() => useFoodBrowse('user-1', '2026-05-23'));
 
     await act(async () => {
       await result.current.loadFrequentFoods();
@@ -167,7 +167,7 @@ describe('useFoodBrowse — date-only string is not shifted west-of-UTC', () => 
   });
 
   it('loadRecentFoods passes selectedDate through verbatim', async () => {
-    const { result } = renderHook(() => useFoodBrowse('user-1', '2026-05-23'));
+    const { result } = await renderHook(() => useFoodBrowse('user-1', '2026-05-23'));
 
     await act(async () => {
       await result.current.loadRecentFoods();

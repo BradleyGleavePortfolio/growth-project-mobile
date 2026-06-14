@@ -68,8 +68,8 @@ import { IconChartEmpty } from '../icons';
 // ─── Base EmptyState ───────────────────────────────────────────────────────────
 
 describe('EmptyState — base component', () => {
-  it('renders the headline', () => {
-    const { getByTestId } = render(
+  it('renders the headline', async () => {
+    const { getByTestId } = await render(
       <EmptyState
         icon={<IconChartEmpty />}
         headline="Nothing here yet"
@@ -78,8 +78,8 @@ describe('EmptyState — base component', () => {
     expect(getByTestId('empty-state-headline').props.children).toBe('Nothing here yet');
   });
 
-  it('renders body text when provided', () => {
-    const { getByTestId } = render(
+  it('renders body text when provided', async () => {
+    const { getByTestId } = await render(
       <EmptyState
         icon={<IconChartEmpty />}
         headline="Empty"
@@ -89,16 +89,16 @@ describe('EmptyState — base component', () => {
     expect(getByTestId('empty-state-body').props.children).toBe('Some supporting copy.');
   });
 
-  it('does NOT render body element when body is omitted', () => {
-    const { queryByTestId } = render(
+  it('does NOT render body element when body is omitted', async () => {
+    const { queryByTestId } = await render(
       <EmptyState icon={<IconChartEmpty />} headline="Empty" />,
     );
     expect(queryByTestId('empty-state-body')).toBeNull();
   });
 
-  it('fires onCta when CTA button is pressed', () => {
+  it('fires onCta when CTA button is pressed', async () => {
     const onCta = jest.fn();
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <EmptyState
         icon={<IconChartEmpty />}
         headline="Empty"
@@ -106,19 +106,19 @@ describe('EmptyState — base component', () => {
         onCta={onCta}
       />,
     );
-    fireEvent.press(getByTestId('empty-state-cta'));
+    await fireEvent.press(getByTestId('empty-state-cta'));
     expect(onCta).toHaveBeenCalledTimes(1);
   });
 
-  it('does NOT render a CTA when ctaLabel and onCta are absent', () => {
-    const { queryByTestId } = render(
+  it('does NOT render a CTA when ctaLabel and onCta are absent', async () => {
+    const { queryByTestId } = await render(
       <EmptyState icon={<IconChartEmpty />} headline="Empty" />,
     );
     expect(queryByTestId('empty-state-cta')).toBeNull();
   });
 
-  it('CTA button has accessibilityRole="button"', () => {
-    const { getByTestId } = render(
+  it('CTA button has accessibilityRole="button"', async () => {
+    const { getByTestId } = await render(
       <EmptyState
         icon={<IconChartEmpty />}
         headline="Empty"
@@ -129,8 +129,8 @@ describe('EmptyState — base component', () => {
     expect(getByTestId('empty-state-cta').props.accessibilityRole).toBe('button');
   });
 
-  it('CTA button has accessibilityLabel matching ctaLabel', () => {
-    const { getByTestId } = render(
+  it('CTA button has accessibilityLabel matching ctaLabel', async () => {
+    const { getByTestId } = await render(
       <EmptyState
         icon={<IconChartEmpty />}
         headline="Empty"
@@ -157,13 +157,13 @@ describe('EmptyState — base component', () => {
 // ─── Variant: EmptyStateNoWorkouts ────────────────────────────────────────────
 
 describe('EmptyStateNoWorkouts', () => {
-  it('renders "No workouts yet" headline', () => {
-    const { getByTestId } = render(<EmptyStateNoWorkouts />);
+  it('renders "No workouts yet" headline', async () => {
+    const { getByTestId } = await render(<EmptyStateNoWorkouts />);
     expect(getByTestId('empty-state-headline').props.children).toBe('No workouts yet');
   });
 
-  it('does not render a CTA (client cannot self-assign)', () => {
-    const { queryByTestId } = render(<EmptyStateNoWorkouts />);
+  it('does not render a CTA (client cannot self-assign)', async () => {
+    const { queryByTestId } = await render(<EmptyStateNoWorkouts />);
     expect(queryByTestId('empty-state-cta')).toBeNull();
   });
 });
@@ -171,13 +171,13 @@ describe('EmptyStateNoWorkouts', () => {
 // ─── Variant: EmptyStateNoData ────────────────────────────────────────────────
 
 describe('EmptyStateNoData', () => {
-  it('renders default headline', () => {
-    const { getByTestId } = render(<EmptyStateNoData />);
+  it('renders default headline', async () => {
+    const { getByTestId } = await render(<EmptyStateNoData />);
     expect(getByTestId('empty-state-headline').props.children).toBe('Nothing here yet');
   });
 
-  it('renders custom headline when provided', () => {
-    const { getByTestId } = render(<EmptyStateNoData headline="No progress data" />);
+  it('renders custom headline when provided', async () => {
+    const { getByTestId } = await render(<EmptyStateNoData headline="No progress data" />);
     expect(getByTestId('empty-state-headline').props.children).toBe('No progress data');
   });
 });
@@ -185,23 +185,23 @@ describe('EmptyStateNoData', () => {
 // ─── Variant: EmptyStateNoResults ────────────────────────────────────────────
 
 describe('EmptyStateNoResults', () => {
-  it('renders "No results" headline', () => {
-    const { getByTestId } = render(<EmptyStateNoResults query="bicep" />);
+  it('renders "No results" headline', async () => {
+    const { getByTestId } = await render(<EmptyStateNoResults query="bicep" />);
     expect(getByTestId('empty-state-headline').props.children).toBe('No results');
   });
 
-  it('interpolates the query into body copy', () => {
-    const { getByTestId } = render(<EmptyStateNoResults query="squat" />);
+  it('interpolates the query into body copy', async () => {
+    const { getByTestId } = await render(<EmptyStateNoResults query="squat" />);
     const body = getByTestId('empty-state-body').props.children as string;
     expect(body).toContain('squat');
   });
 
-  it('fires onClearSearch when CTA pressed', () => {
+  it('fires onClearSearch when CTA pressed', async () => {
     const onClear = jest.fn();
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <EmptyStateNoResults query="test" onClearSearch={onClear} />,
     );
-    fireEvent.press(getByTestId('empty-state-cta'));
+    await fireEvent.press(getByTestId('empty-state-cta'));
     expect(onClear).toHaveBeenCalledTimes(1);
   });
 });
@@ -209,20 +209,20 @@ describe('EmptyStateNoResults', () => {
 // ─── Variant: EmptyStateOffline ───────────────────────────────────────────────
 
 describe('EmptyStateOffline', () => {
-  it('renders "You are offline" headline', () => {
-    const { getByTestId } = render(<EmptyStateOffline />);
+  it('renders "You are offline" headline', async () => {
+    const { getByTestId } = await render(<EmptyStateOffline />);
     expect(getByTestId('empty-state-headline').props.children).toBe('You are offline');
   });
 
-  it('renders "Try again" CTA when onRetry provided', () => {
+  it('renders "Try again" CTA when onRetry provided', async () => {
     const onRetry = jest.fn();
-    const { getByTestId } = render(<EmptyStateOffline onRetry={onRetry} />);
-    fireEvent.press(getByTestId('empty-state-cta'));
+    const { getByTestId } = await render(<EmptyStateOffline onRetry={onRetry} />);
+    await fireEvent.press(getByTestId('empty-state-cta'));
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
 
-  it('does not render CTA when onRetry is absent', () => {
-    const { queryByTestId } = render(<EmptyStateOffline />);
+  it('does not render CTA when onRetry is absent', async () => {
+    const { queryByTestId } = await render(<EmptyStateOffline />);
     expect(queryByTestId('empty-state-cta')).toBeNull();
   });
 });

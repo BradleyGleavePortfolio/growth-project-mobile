@@ -59,8 +59,8 @@ describe('RomanState — error/offline/unavailable are live regions (R3 P1-2)', 
     announce.mockRestore();
   });
 
-  it('an error state is an assertive alert and announces its copy', () => {
-    const { getByTestId } = render(<RomanState kind="error" testID="state" />);
+  it('an error state is an assertive alert and announces its copy', async () => {
+    const { getByTestId } = await render(<RomanState kind="error" testID="state" />);
     const node = getByTestId('state');
     expect(node.props.accessibilityRole).toBe('alert');
     expect(node.props.accessibilityLiveRegion).toBe('assertive');
@@ -68,16 +68,16 @@ describe('RomanState — error/offline/unavailable are live regions (R3 P1-2)', 
     expect(announce.mock.calls[0][0]).toContain('That request did not complete');
   });
 
-  it('an offline state is assertive and announces title + body', () => {
-    const { getByTestId } = render(<RomanState kind="offline" testID="state" />);
+  it('an offline state is assertive and announces title + body', async () => {
+    const { getByTestId } = await render(<RomanState kind="offline" testID="state" />);
     const node = getByTestId('state');
     expect(node.props.accessibilityLiveRegion).toBe('assertive');
     expect(announce).toHaveBeenCalledTimes(1);
     expect(announce.mock.calls[0][0]).toContain(ROMAN_OFFLINE_TITLE);
   });
 
-  it('the calm unavailable state announces politely (non-actionable)', () => {
-    const { getByTestId } = render(
+  it('the calm unavailable state announces politely (non-actionable)', async () => {
+    const { getByTestId } = await render(
       <RomanState kind="unavailable" testID="state" />,
     );
     const node = getByTestId('state');
@@ -101,15 +101,15 @@ describe('RomanMessageBubble — rows are list items (R3 P1-3)', () => {
     };
   }
 
-  it('an assistant row exposes role="listitem"', () => {
-    const { getByTestId } = render(
+  it('an assistant row exposes role="listitem"', async () => {
+    const { getByTestId } = await render(
       <RomanMessageBubble message={makeMessage('assistant')} testID="row" />,
     );
     expect(getByTestId('row').props.role).toBe('listitem');
   });
 
-  it('a user row exposes role="listitem"', () => {
-    const { getByTestId } = render(
+  it('a user row exposes role="listitem"', async () => {
+    const { getByTestId } = await render(
       <RomanMessageBubble message={makeMessage('user')} testID="row" />,
     );
     expect(getByTestId('row').props.role).toBe('listitem');

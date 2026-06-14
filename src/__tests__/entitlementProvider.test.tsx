@@ -75,7 +75,7 @@ describe('EntitlementProvider', () => {
   it('402 emission flips paywallVisible=true', async () => {
     mockedGetEntitlement.mockResolvedValue({ ok: true, data: { active: true } });
     let latest: EntitlementContextValue | null = null;
-    render(
+    await render(
       <EntitlementProvider>
         <Probe onCtx={(c) => { latest = c; }} />
       </EntitlementProvider>,
@@ -100,7 +100,7 @@ describe('EntitlementProvider', () => {
       .mockResolvedValueOnce({ ok: true, data: { active: true } });
 
     let latest: EntitlementContextValue | null = null;
-    render(
+    await render(
       <EntitlementProvider>
         <Probe onCtx={(c) => { latest = c; }} />
       </EntitlementProvider>,
@@ -132,7 +132,7 @@ describe('EntitlementProvider', () => {
       message: 'Network down',
     });
     let latest: EntitlementContextValue | null = null;
-    render(
+    await render(
       <EntitlementProvider>
         <Probe onCtx={(c) => { latest = c; }} />
       </EntitlementProvider>,

@@ -88,8 +88,8 @@ const mockNavigation = {
   navigate: jest.fn(),
 };
 
-function renderScreen(milestone: ShareCardMilestone) {
-  return render(
+async function renderScreen(milestone: ShareCardMilestone) {
+  return await render(
     <ShareCardScreen
       route={{ params: { milestone }, key: 'ShareCard', name: 'ShareCard' } as never}
       navigation={mockNavigation as never}
@@ -102,8 +102,8 @@ describe('ShareCardScreen', () => {
     jest.clearAllMocks();
   });
 
-  it('renders the streak variant headline and label', () => {
-    const { getByText } = renderScreen({
+  it('renders the streak variant headline and label', async () => {
+    const { getByText } = await renderScreen({
       variant: 'streak',
       value: '14',
       label: 'Day Streak',
@@ -112,8 +112,8 @@ describe('ShareCardScreen', () => {
     expect(getByText('Day Streak')).toBeTruthy();
   });
 
-  it('renders the PR variant headline', () => {
-    const { getByText } = renderScreen({
+  it('renders the PR variant headline', async () => {
+    const { getByText } = await renderScreen({
       variant: 'pr',
       value: '100kg',
       label: 'Back Squat PR',
@@ -121,8 +121,8 @@ describe('ShareCardScreen', () => {
     expect(getByText('100kg')).toBeTruthy();
   });
 
-  it('renders the transformation variant', () => {
-    const { getByText } = renderScreen({
+  it('renders the transformation variant', async () => {
+    const { getByText } = await renderScreen({
       variant: 'transformation',
       value: '5kg',
       label: 'Body Composition',
@@ -130,8 +130,8 @@ describe('ShareCardScreen', () => {
     expect(getByText('5kg')).toBeTruthy();
   });
 
-  it('renders the Share button with correct accessibility role and label', () => {
-    const { getByRole } = renderScreen({
+  it('renders the Share button with correct accessibility role and label', async () => {
+    const { getByRole } = await renderScreen({
       variant: 'streak',
       value: '7',
       label: 'Day Streak',
@@ -140,8 +140,8 @@ describe('ShareCardScreen', () => {
     expect(shareBtn).toBeTruthy();
   });
 
-  it('renders Share Progress screen title', () => {
-    const { getByText } = renderScreen({
+  it('renders Share Progress screen title', async () => {
+    const { getByText } = await renderScreen({
       variant: 'streak',
       value: '3',
       label: 'Day Streak',
@@ -149,15 +149,16 @@ describe('ShareCardScreen', () => {
     expect(getByText('Share Progress')).toBeTruthy();
   });
 
-  it('Share button press does not crash the component', () => {
-    const { getByRole } = renderScreen({
+  it('Share button press does not crash the component', async () => {
+    const { getByRole } = await renderScreen({
       variant: 'streak',
       value: '7',
       label: 'Day Streak',
     });
-    expect(() => {
-      fireEvent.press(getByRole('button', { name: 'Share milestone card' }));
-    }).not.toThrow();
+    // v14: fireEvent is async, so a synchronous not.toThrow() wrapper no longer
+    // applies. Awaiting the press directly preserves the contract: any throw
+    // surfaced by pressing fails the test.
+    await fireEvent.press(getByRole('button', { name: 'Share milestone card' }));
   });
 
   it('REFERRAL_SHARE_CARD_SHARED event constant has correct value', () => {

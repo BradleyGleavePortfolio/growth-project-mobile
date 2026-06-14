@@ -83,8 +83,8 @@ function emptyTriage(): TriageResponse {
 }
 
 describe('AiTriageCard — loading', () => {
-  it('renders the calm loading state and no breakdown/counts', () => {
-    const { getByTestId, queryByTestId } = render(
+  it('renders the calm loading state and no breakdown/counts', async () => {
+    const { getByTestId, queryByTestId } = await render(
       <AiTriageCard status="loading" testID={TID} />,
     );
     const loading = getByTestId(`${TID}-loading`);
@@ -98,9 +98,9 @@ describe('AiTriageCard — loading', () => {
 });
 
 describe('AiTriageCard — error', () => {
-  it('renders a calm recoverable error and never a fake all-clear', () => {
+  it('renders a calm recoverable error and never a fake all-clear', async () => {
     const onRetry = jest.fn();
-    const { getByTestId, queryByText } = render(
+    const { getByTestId, queryByText } = await render(
       <AiTriageCard status="error" onRetry={onRetry} testID={TID} />,
     );
     const error = getByTestId(`${TID}-error`);
@@ -111,25 +111,25 @@ describe('AiTriageCard — error', () => {
     expect(queryByText('Nothing to triage right now.')).toBeNull();
   });
 
-  it('fires onRetry when the Retry control is pressed', () => {
+  it('fires onRetry when the Retry control is pressed', async () => {
     const onRetry = jest.fn();
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <AiTriageCard status="error" onRetry={onRetry} testID={TID} />,
     );
-    fireEvent.press(getByTestId(`${TID}-retry`));
+    await fireEvent.press(getByTestId(`${TID}-retry`));
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
 
-  it('disables the Retry control and relabels it while retrying', () => {
-    const { getByTestId } = render(
+  it('disables the Retry control and relabels it while retrying', async () => {
+    const { getByTestId } = await render(
       <AiTriageCard status="error" onRetry={jest.fn()} retrying testID={TID} />,
     );
     const retry = getByTestId(`${TID}-retry`);
     expect(retry.props.accessibilityState).toEqual({ disabled: true });
   });
 
-  it('omits the Retry control when no onRetry is supplied', () => {
-    const { queryByTestId } = render(
+  it('omits the Retry control when no onRetry is supplied', async () => {
+    const { queryByTestId } = await render(
       <AiTriageCard status="error" testID={TID} />,
     );
     expect(queryByTestId(`${TID}-retry`)).toBeNull();
@@ -137,8 +137,8 @@ describe('AiTriageCard — error', () => {
 });
 
 describe('AiTriageCard — empty', () => {
-  it('renders the honest empty state when the typed empty status is passed', () => {
-    const { getByTestId, queryByTestId } = render(
+  it('renders the honest empty state when the typed empty status is passed', async () => {
+    const { getByTestId, queryByTestId } = await render(
       <AiTriageCard status="empty" testID={TID} />,
     );
     const empty = getByTestId(`${TID}-empty`);
@@ -150,8 +150,8 @@ describe('AiTriageCard — empty', () => {
     expect(queryByTestId(`${TID}-breakdown`)).toBeNull();
   });
 
-  it('renders the honest empty state when is_empty is true', () => {
-    const { getByTestId, queryByTestId } = render(
+  it('renders the honest empty state when is_empty is true', async () => {
+    const { getByTestId, queryByTestId } = await render(
       <AiTriageCard status="ready" triage={emptyTriage()} testID={TID} />,
     );
     const empty = getByTestId(`${TID}-empty`);
@@ -163,12 +163,12 @@ describe('AiTriageCard — empty', () => {
     expect(queryByTestId(`${TID}-breakdown`)).toBeNull();
   });
 
-  it('treats all-zero counts as empty even when is_empty is false', () => {
+  it('treats all-zero counts as empty even when is_empty is false', async () => {
     const allZero: TriageResponse = {
       ...emptyTriage(),
       is_empty: false,
     };
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <AiTriageCard status="ready" triage={allZero} testID={TID} />,
     );
     expect(getByTestId(`${TID}-empty`)).toBeTruthy();
@@ -176,8 +176,8 @@ describe('AiTriageCard — empty', () => {
 });
 
 describe('AiTriageCard — ready (populated)', () => {
-  it('renders all five categories with their counts', () => {
-    const { getByTestId } = render(
+  it('renders all five categories with their counts', async () => {
+    const { getByTestId } = await render(
       <AiTriageCard status="ready" triage={populatedTriage()} testID={TID} />,
     );
     for (const category of TRIAGE_CATEGORIES) {
@@ -189,16 +189,16 @@ describe('AiTriageCard — ready (populated)', () => {
     expect(getByTestId(`${TID}-count-no_action_needed`).props.children).toBe(0);
   });
 
-  it('uses the professional "Needs you soon" framing for urgent (never panicky)', () => {
-    const { getByTestId } = render(
+  it('uses the professional "Needs you soon" framing for urgent (never panicky)', async () => {
+    const { getByTestId } = await render(
       <AiTriageCard status="ready" triage={populatedTriage()} testID={TID} />,
     );
     const urgent = getByTestId(`${TID}-category-urgent`);
     expect(urgent.props.accessibilityLabel).toBe('1 Needs you soon');
   });
 
-  it('summarises the whole card on the header for a screen reader', () => {
-    const { getByTestId } = render(
+  it('summarises the whole card on the header for a screen reader', async () => {
+    const { getByTestId } = await render(
       <AiTriageCard status="ready" triage={populatedTriage()} testID={TID} />,
     );
     const header = getByTestId(`${TID}-header`);
@@ -207,12 +207,12 @@ describe('AiTriageCard — ready (populated)', () => {
     expect(header.props.accessibilityState).toEqual({ expanded: true });
   });
 
-  it('collapses the breakdown when the header is toggled', () => {
-    const { getByTestId, queryByTestId } = render(
+  it('collapses the breakdown when the header is toggled', async () => {
+    const { getByTestId, queryByTestId } = await render(
       <AiTriageCard status="ready" triage={populatedTriage()} testID={TID} />,
     );
     expect(getByTestId(`${TID}-breakdown`)).toBeTruthy();
-    fireEvent.press(getByTestId(`${TID}-header`));
+    await fireEvent.press(getByTestId(`${TID}-header`));
     expect(queryByTestId(`${TID}-breakdown`)).toBeNull();
   });
 });

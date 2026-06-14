@@ -80,8 +80,8 @@ const EMPTY_RESPONSE: TimelineResponse = {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function renderScreen() {
-  return render(<TimelineScreen />);
+async function renderScreen() {
+  return await render(<TimelineScreen />);
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
@@ -95,7 +95,7 @@ describe('TimelineScreen', () => {
 
   it('renders lane filter chips: All, Body, Wins, Coach, Friction', async () => {
     mockFetch.mockResolvedValue(FULL_RESPONSE);
-    const { getByText } = renderScreen();
+    const { getByText } = await renderScreen();
 
     await waitFor(() => {
       expect(getByText('All')).toBeTruthy();
@@ -108,7 +108,7 @@ describe('TimelineScreen', () => {
 
   it('renders event titles from API response', async () => {
     mockFetch.mockResolvedValue(FULL_RESPONSE);
-    const { getByText } = renderScreen();
+    const { getByText } = await renderScreen();
 
     await waitFor(() => {
       expect(getByText('7-day check-in streak reached')).toBeTruthy();
@@ -122,7 +122,7 @@ describe('TimelineScreen', () => {
 
   it('shows empty state copy when API returns 0 events', async () => {
     mockFetch.mockResolvedValue(EMPTY_RESPONSE);
-    const { getByText } = renderScreen();
+    const { getByText } = await renderScreen();
 
     await waitFor(() => {
       expect(
@@ -137,7 +137,7 @@ describe('TimelineScreen', () => {
 
   it('shows error state and retry button on API failure', async () => {
     mockFetch.mockRejectedValue(new Error('Network request failed'));
-    const { getByText } = renderScreen();
+    const { getByText } = await renderScreen();
 
     await waitFor(() => {
       expect(getByText('Could not load timeline')).toBeTruthy();
@@ -150,11 +150,11 @@ describe('TimelineScreen', () => {
       .mockRejectedValueOnce(new Error('Network error'))
       .mockResolvedValueOnce(EMPTY_RESPONSE);
 
-    const { getByText } = renderScreen();
+    const { getByText } = await renderScreen();
     await waitFor(() => expect(getByText('Retry')).toBeTruthy());
 
-    act(() => {
-      fireEvent.press(getByText('Retry'));
+    await act(async () => {
+      await fireEvent.press(getByText('Retry'));
     });
 
     await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
@@ -164,11 +164,11 @@ describe('TimelineScreen', () => {
 
   it('calls API with the correct lane when a single chip is pressed', async () => {
     mockFetch.mockResolvedValue(FULL_RESPONSE);
-    const { getByText } = renderScreen();
+    const { getByText } = await renderScreen();
     await waitFor(() => expect(getByText('Body')).toBeTruthy());
 
-    act(() => {
-      fireEvent.press(getByText('Body'));
+    await act(async () => {
+      await fireEvent.press(getByText('Body'));
     });
 
     await waitFor(() => {
@@ -179,11 +179,11 @@ describe('TimelineScreen', () => {
 
   it('calls API without lanes parameter when All is selected', async () => {
     mockFetch.mockResolvedValue(FULL_RESPONSE);
-    const { getByText } = renderScreen();
+    const { getByText } = await renderScreen();
     await waitFor(() => expect(getByText('All')).toBeTruthy());
 
-    act(() => {
-      fireEvent.press(getByText('All'));
+    await act(async () => {
+      await fireEvent.press(getByText('All'));
     });
 
     await waitFor(() => {
@@ -196,13 +196,13 @@ describe('TimelineScreen', () => {
 
   it('triggers a fresh API call on pull-to-refresh', async () => {
     mockFetch.mockResolvedValue(FULL_RESPONSE);
-    const { getByLabelText } = renderScreen();
+    const { getByLabelText } = await renderScreen();
 
     await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(1));
 
     const list = getByLabelText('Transformation timeline');
-    act(() => {
-      fireEvent(list, 'refresh');
+    await act(async () => {
+      await fireEvent(list, 'refresh');
     });
 
     await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
@@ -212,10 +212,27 @@ describe('TimelineScreen', () => {
 
   it('renders event cards without exposing any risk_score values', async () => {
     mockFetch.mockResolvedValue(FULL_RESPONSE);
-    const { toJSON } = renderScreen();
+    const { toJSON } = await renderScreen();
+
+    // v14: the rendered tree returned by `toJSON()` now carries circular
+    // internal references (e.g. fiber `_owner`), so a plain `JSON.stringify`
+    // throws "Converting circular structure to JSON". Use a circular-safe
+    // replacer that drops only the back-references while preserving every
+    // serializable prop/child string — the contract (no risk_score text leaks
+    // into the tree) is unchanged.
+    const safeStringify = (value: unknown): string => {
+      const seen = new WeakSet<object>();
+      return JSON.stringify(value, (_key, val) => {
+        if (typeof val === 'object' && val !== null) {
+          if (seen.has(val)) return undefined;
+          seen.add(val);
+        }
+        return val;
+      });
+    };
 
     await waitFor(() => {
-      const tree = JSON.stringify(toJSON());
+      const tree = safeStringify(toJSON());
       expect(tree).not.toMatch(/risk_score/i);
       expect(tree).not.toMatch(/riskScore/i);
     });
@@ -225,7 +242,7 @@ describe('TimelineScreen', () => {
 
   it('renders the screen title "Timeline"', async () => {
     mockFetch.mockResolvedValue(EMPTY_RESPONSE);
-    const { getAllByText } = renderScreen();
+    const { getAllByText } = await renderScreen();
 
     await waitFor(() => {
       const titles = getAllByText('Timeline');

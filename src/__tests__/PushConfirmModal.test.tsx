@@ -95,8 +95,8 @@ beforeEach(() => {
 });
 
 describe('PushConfirmModal — preview copy (decision #10)', () => {
-  it('renders the preview line with N + audienceLabel + formatted date', () => {
-    const { getByTestId } = render(<PushConfirmModal {...baseProps()} />);
+  it('renders the preview line with N + audienceLabel + formatted date', async () => {
+    const { getByTestId } = await render(<PushConfirmModal {...baseProps()} />);
     const text = getByTestId('push-confirm-preview').props.children as string;
     expect(text).toContain('Week 1 Program');
     expect(text).toContain('12');
@@ -105,8 +105,8 @@ describe('PushConfirmModal — preview copy (decision #10)', () => {
     expect(text).toMatch(/September/);
   });
 
-  it('falls back to a default audienceLabel when none is provided', () => {
-    const { getByTestId } = render(
+  it('falls back to a default audienceLabel when none is provided', async () => {
+    const { getByTestId } = await render(
       <PushConfirmModal {...baseProps({ audienceLabel: undefined })} />,
     );
     expect(getByTestId('push-confirm-preview').props.children).toContain('buyers');
@@ -114,8 +114,8 @@ describe('PushConfirmModal — preview copy (decision #10)', () => {
 });
 
 describe('PushConfirmModal — confirm gating (error-prevention)', () => {
-  it('confirm is DISABLED when fireAt is null', () => {
-    const { getByTestId } = render(
+  it('confirm is DISABLED when fireAt is null', async () => {
+    const { getByTestId } = await render(
       <PushConfirmModal {...baseProps({ fireAt: null })} />,
     );
     expect(getByTestId('push-confirm-submit').props.accessibilityState.disabled).toBe(
@@ -123,8 +123,8 @@ describe('PushConfirmModal — confirm gating (error-prevention)', () => {
     );
   });
 
-  it('confirm is DISABLED and empty-state shows when audienceCount === 0', () => {
-    const { getByTestId } = render(
+  it('confirm is DISABLED and empty-state shows when audienceCount === 0', async () => {
+    const { getByTestId } = await render(
       <PushConfirmModal {...baseProps({ audienceCount: 0 })} />,
     );
     expect(getByTestId('push-confirm-submit').props.accessibilityState.disabled).toBe(
@@ -133,15 +133,15 @@ describe('PushConfirmModal — confirm gating (error-prevention)', () => {
     expect(getByTestId('push-confirm-empty')).toBeTruthy();
   });
 
-  it('confirm is ENABLED with an audience and a future fireAt', () => {
-    const { getByTestId } = render(<PushConfirmModal {...baseProps()} />);
+  it('confirm is ENABLED with an audience and a future fireAt', async () => {
+    const { getByTestId } = await render(<PushConfirmModal {...baseProps()} />);
     expect(getByTestId('push-confirm-submit').props.accessibilityState.disabled).toBe(
       false,
     );
   });
 
-  it('submitting disables confirm', () => {
-    const { getByTestId } = render(
+  it('submitting disables confirm', async () => {
+    const { getByTestId } = await render(
       <PushConfirmModal {...baseProps({ submitting: true })} />,
     );
     expect(getByTestId('push-confirm-submit').props.accessibilityState.disabled).toBe(
@@ -152,10 +152,10 @@ describe('PushConfirmModal — confirm gating (error-prevention)', () => {
   // R2 P1 defence-in-depth: a PAST `fireAt` arriving via props (not via the
   // picker) must NOT enable Confirm, using the same start-of-today basis as the
   // picker's minimumDate (`fireAt >= minimumDate` is required).
-  it('confirm is DISABLED when a PAST fireAt is supplied via props', () => {
+  it('confirm is DISABLED when a PAST fireAt is supplied via props', async () => {
     const past = new Date();
     past.setDate(past.getDate() - 1); // yesterday
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <PushConfirmModal {...baseProps({ fireAt: past })} />,
     );
     expect(getByTestId('push-confirm-submit').props.accessibilityState.disabled).toBe(
@@ -163,21 +163,21 @@ describe('PushConfirmModal — confirm gating (error-prevention)', () => {
     );
   });
 
-  it('pressing confirm with a PAST fireAt prop does NOT call onConfirm', () => {
+  it('pressing confirm with a PAST fireAt prop does NOT call onConfirm', async () => {
     const onConfirm = jest.fn();
     const past = new Date();
     past.setDate(past.getDate() - 1); // yesterday
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <PushConfirmModal {...baseProps({ onConfirm, fireAt: past })} />,
     );
-    fireEvent.press(getByTestId('push-confirm-submit'));
+    await fireEvent.press(getByTestId('push-confirm-submit'));
     expect(onConfirm).not.toHaveBeenCalled();
   });
 
-  it('confirm stays ENABLED for a future fireAt prop (no over-correction)', () => {
+  it('confirm stays ENABLED for a future fireAt prop (no over-correction)', async () => {
     const future = new Date();
     future.setDate(future.getDate() + 7); // a week out
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <PushConfirmModal {...baseProps({ fireAt: future })} />,
     );
     expect(getByTestId('push-confirm-submit').props.accessibilityState.disabled).toBe(
@@ -185,10 +185,10 @@ describe('PushConfirmModal — confirm gating (error-prevention)', () => {
     );
   });
 
-  it('confirm is ENABLED when fireAt equals start-of-today (today or later basis)', () => {
+  it('confirm is ENABLED when fireAt equals start-of-today (today or later basis)', async () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <PushConfirmModal {...baseProps({ fireAt: today })} />,
     );
     expect(getByTestId('push-confirm-submit').props.accessibilityState.disabled).toBe(
@@ -212,7 +212,7 @@ describe('PushConfirmModal — confirm gating (error-prevention)', () => {
   // rerendering. Only the call-time re-derivation of start-of-today inside
   // `handleConfirm` can then stop onConfirm; removing it makes onConfirm fire
   // and this assertion fail.
-  it('onConfirm is BLOCKED at call time when now crosses midnight before any rerender (kills no-call-time-guard mutant)', () => {
+  it('onConfirm is BLOCKED at call time when now crosses midnight before any rerender (kills no-call-time-guard mutant)', async () => {
     jest.useFakeTimers();
     try {
       // Mount "now" = mid-day on a fixed day; fireAt is later the SAME day.
@@ -221,7 +221,7 @@ describe('PushConfirmModal — confirm gating (error-prevention)', () => {
       const fireAt = new Date('2025-06-15T18:00:00'); // valid at mount (today)
       const onConfirm = jest.fn();
 
-      const { getByTestId } = render(
+      const { getByTestId } = await render(
         <PushConfirmModal {...baseProps({ fireAt, onConfirm })} />,
       );
       // Valid at mount: start-of-today is 2025-06-15 00:00 <= fireAt, so the
@@ -243,7 +243,7 @@ describe('PushConfirmModal — confirm gating (error-prevention)', () => {
       // onConfirm, because handleConfirm re-derives start-of-today at call time
       // and sees fireAt is now past. (Removing that guard => onConfirm fires =>
       // this fails: the mutant is killed.)
-      fireEvent.press(getByTestId('push-confirm-submit'));
+      await fireEvent.press(getByTestId('push-confirm-submit'));
       expect(onConfirm).not.toHaveBeenCalled();
     } finally {
       jest.useRealTimers();
@@ -254,14 +254,14 @@ describe('PushConfirmModal — confirm gating (error-prevention)', () => {
   // the component rerenders after the clock crosses midnight. A mount-time-
   // memoized minimumDate would (wrongly) keep the button enabled — this proves
   // the gate re-derives start-of-today on each render.
-  it('confirm DISABLES on rerender after now advances past a same-day fireAt across midnight (render gate)', () => {
+  it('confirm DISABLES on rerender after now advances past a same-day fireAt across midnight (render gate)', async () => {
     jest.useFakeTimers();
     try {
       jest.setSystemTime(new Date('2025-06-15T12:00:00'));
       const fireAt = new Date('2025-06-15T18:00:00'); // valid at mount (today)
       const onConfirm = jest.fn();
 
-      const { getByTestId, rerender } = render(
+      const { getByTestId, rerender } = await render(
         <PushConfirmModal {...baseProps({ fireAt, onConfirm })} />,
       );
       expect(
@@ -270,7 +270,7 @@ describe('PushConfirmModal — confirm gating (error-prevention)', () => {
 
       // Past midnight: the 2025-06-15 fireAt is now "yesterday".
       jest.setSystemTime(new Date('2025-06-16T00:30:00'));
-      rerender(<PushConfirmModal {...baseProps({ fireAt, onConfirm })} />);
+      await rerender(<PushConfirmModal {...baseProps({ fireAt, onConfirm })} />);
 
       // Render-time gate must DISABLE Confirm against the FRESH start-of-today.
       expect(
@@ -278,7 +278,7 @@ describe('PushConfirmModal — confirm gating (error-prevention)', () => {
       ).toBe(true);
 
       // And pressing the now-disabled button is a no-op (belt-and-braces).
-      fireEvent.press(getByTestId('push-confirm-submit'));
+      await fireEvent.press(getByTestId('push-confirm-submit'));
       expect(onConfirm).not.toHaveBeenCalled();
     } finally {
       jest.useRealTimers();
@@ -287,17 +287,17 @@ describe('PushConfirmModal — confirm gating (error-prevention)', () => {
 });
 
 describe('PushConfirmModal — date picker minimumDate (decision #6)', () => {
-  it('passes minimumDate = start-of-today to the picker', () => {
-    render(<PushConfirmModal {...baseProps()} />);
+  it('passes minimumDate = start-of-today to the picker', async () => {
+    await render(<PushConfirmModal {...baseProps()} />);
     expect(lastPicker.minimumDate).toBeInstanceOf(Date);
     const expected = new Date();
     expected.setHours(0, 0, 0, 0);
     expect(lastPicker.minimumDate?.getTime()).toBe(expected.getTime());
   });
 
-  it('a past date selection does not propagate via onChangeFireAt', () => {
+  it('a past date selection does not propagate via onChangeFireAt', async () => {
     const onChangeFireAt = jest.fn();
-    render(<PushConfirmModal {...baseProps({ onChangeFireAt })} />);
+    await render(<PushConfirmModal {...baseProps({ onChangeFireAt })} />);
     // Simulate the native picker emitting a past date (defence-in-depth: the
     // real picker physically blocks this via minimumDate, but the component
     // must also refuse to propagate it).
@@ -306,56 +306,56 @@ describe('PushConfirmModal — date picker minimumDate (decision #6)', () => {
     expect(onChangeFireAt).not.toHaveBeenCalled();
   });
 
-  it('a valid future date selection propagates via onChangeFireAt', () => {
+  it('a valid future date selection propagates via onChangeFireAt', async () => {
     const onChangeFireAt = jest.fn();
-    render(<PushConfirmModal {...baseProps({ onChangeFireAt })} />);
+    await render(<PushConfirmModal {...baseProps({ onChangeFireAt })} />);
     const future = new Date('2999-12-25T00:00:00Z');
     lastPicker.onChange?.({ type: 'set' }, future);
     expect(onChangeFireAt).toHaveBeenCalledWith(future);
   });
 
-  it('a dismissed event does not propagate', () => {
+  it('a dismissed event does not propagate', async () => {
     const onChangeFireAt = jest.fn();
-    render(<PushConfirmModal {...baseProps({ onChangeFireAt })} />);
+    await render(<PushConfirmModal {...baseProps({ onChangeFireAt })} />);
     lastPicker.onChange?.({ type: 'dismissed' }, undefined);
     expect(onChangeFireAt).not.toHaveBeenCalled();
   });
 });
 
 describe('PushConfirmModal — notify toggle (decision #9)', () => {
-  it('reflects buyerNotify and fires onChangeBuyerNotify', () => {
+  it('reflects buyerNotify and fires onChangeBuyerNotify', async () => {
     const onChangeBuyerNotify = jest.fn();
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <PushConfirmModal {...baseProps({ buyerNotify: true, onChangeBuyerNotify })} />,
     );
     const sw = getByTestId('push-confirm-notify');
     expect(sw.props.value).toBe(true);
-    fireEvent(sw, 'valueChange', false);
+    await fireEvent(sw, 'valueChange', false);
     expect(onChangeBuyerNotify).toHaveBeenCalledWith(false);
   });
 });
 
 describe('PushConfirmModal — confirm / cancel actions', () => {
-  it('onConfirm fires when confirm is enabled and pressed', () => {
+  it('onConfirm fires when confirm is enabled and pressed', async () => {
     const onConfirm = jest.fn();
-    const { getByTestId } = render(<PushConfirmModal {...baseProps({ onConfirm })} />);
-    fireEvent.press(getByTestId('push-confirm-submit'));
+    const { getByTestId } = await render(<PushConfirmModal {...baseProps({ onConfirm })} />);
+    await fireEvent.press(getByTestId('push-confirm-submit'));
     expect(onConfirm).toHaveBeenCalledTimes(1);
   });
 
-  it('onConfirm does NOT fire when confirm is disabled (fireAt null)', () => {
+  it('onConfirm does NOT fire when confirm is disabled (fireAt null)', async () => {
     const onConfirm = jest.fn();
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <PushConfirmModal {...baseProps({ onConfirm, fireAt: null })} />,
     );
-    fireEvent.press(getByTestId('push-confirm-submit'));
+    await fireEvent.press(getByTestId('push-confirm-submit'));
     expect(onConfirm).not.toHaveBeenCalled();
   });
 
-  it('onCancel fires when cancel is pressed', () => {
+  it('onCancel fires when cancel is pressed', async () => {
     const onCancel = jest.fn();
-    const { getByTestId } = render(<PushConfirmModal {...baseProps({ onCancel })} />);
-    fireEvent.press(getByTestId('push-confirm-cancel'));
+    const { getByTestId } = await render(<PushConfirmModal {...baseProps({ onCancel })} />);
+    await fireEvent.press(getByTestId('push-confirm-cancel'));
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
 });

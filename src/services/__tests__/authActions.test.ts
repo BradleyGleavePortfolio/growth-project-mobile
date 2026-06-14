@@ -2,6 +2,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { signOut, SIGN_OUT_KEYS, clearUserScopedKeys } from '../authActions';
 import { authEvents } from '../../utils/authEvents';
 import { prefsStorage, cacheStorage } from '../../storage/mmkv';
+import {
+  AUTOSAVE_MIRROR_KEY_PREFIX,
+  autosaveMirrorKey,
+} from '../../storage/autosaveMirror';
 
 jest.mock('../api', () => ({
   usersApi: { updatePushToken: jest.fn(async () => ({ data: {} })) },
@@ -132,6 +136,36 @@ describe('signOut', () => {
     expect(
       allKeys.some((k) => k.startsWith('pending_invite_code')),
     ).toBe(false);
+  });
+
+  // MWB-4 #237 R11 (P2) — the workout-builder autosave offline mirror is keyed
+  // as `mwb_autosave_mirror:<planId>` in raw AsyncStorage and holds a coach's
+  // unsent plan ops/metadata. autosaveMirror.ts documents it as swept on
+  // sign-out, but the prefix was missing from ASYNC_SIGN_OUT_PREFIXES, leaving
+  // a previous user's draft edits readable by the next user on the same device.
+  // This guards that the prefix is now swept — without bleeding into a
+  // similarly-named unrelated key.
+  it('sweeps the workout-builder autosave mirror (mwb_autosave_mirror:<planId>) on sign-out', async () => {
+    const seededKey = autosaveMirrorKey('plan-1');
+    // The key the source actually sweeps is built from the exported constant;
+    // assert the seeded key really carries that prefix (parity, not a literal).
+    expect(seededKey.startsWith(AUTOSAVE_MIRROR_KEY_PREFIX)).toBe(true);
+    await AsyncStorage.setItem(seededKey, JSON.stringify({ ops: [] }));
+    await AsyncStorage.setItem(
+      autosaveMirrorKey('plan-2'),
+      JSON.stringify({ ops: [] }),
+    );
+    // Sentinel: a similarly-named but unrelated key must survive the prefix
+    // sweep (the prefix ends in a colon, so this never matches).
+    await AsyncStorage.setItem('mwb_autosave_mirrorx_unrelated', 'keep');
+
+    await signOut();
+
+    expect(await AsyncStorage.getItem(seededKey)).toBeNull();
+    expect(await AsyncStorage.getItem(autosaveMirrorKey('plan-2'))).toBeNull();
+    expect(await AsyncStorage.getItem('mwb_autosave_mirrorx_unrelated')).toBe(
+      'keep',
+    );
   });
 
   // R15 — Audit #2 P1-5 regression coverage. The previous implementation only

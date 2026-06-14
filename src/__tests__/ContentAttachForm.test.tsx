@@ -81,14 +81,14 @@ function baseProps(over: Partial<ContentAttachFormProps> = {}): ContentAttachFor
 }
 
 describe('ContentAttachForm — P1 #1 edit-form re-sync', () => {
-  it('seeds the fields from an existing row opened for edit', () => {
+  it('seeds the fields from an existing row opened for edit', async () => {
     const content = makeContent({
       display_title: 'Strength Block',
       display_caption: 'Phase two',
       cadence_kind: 'relative_to_purchase',
       cadence_payload: { offset_days: 14 },
     });
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <ContentAttachForm {...baseProps({ content })} />,
     );
     expect(getByTestId('content-attach-title').props.value).toBe('Strength Block');
@@ -106,13 +106,13 @@ describe('ContentAttachForm — P1 #1 edit-form re-sync', () => {
       cadence_kind: 'immediate',
       cadence_payload: {},
     });
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <ContentAttachForm {...baseProps({ content, onSubmitPatch })} />,
     );
     // Edit the seeded fields.
-    fireEvent.changeText(getByTestId('content-attach-title'), 'Strength Block v2');
-    fireEvent.changeText(getByTestId('content-attach-caption'), 'Revised note');
-    fireEvent.press(getByTestId('content-attach-submit'));
+    await fireEvent.changeText(getByTestId('content-attach-title'), 'Strength Block v2');
+    await fireEvent.changeText(getByTestId('content-attach-caption'), 'Revised note');
+    await fireEvent.press(getByTestId('content-attach-submit'));
 
     await waitFor(() => expect(onSubmitPatch).toHaveBeenCalledTimes(1));
     expect(onSubmitPatch).toHaveBeenCalledWith({
@@ -129,10 +129,10 @@ describe('ContentAttachForm — P1 #1 edit-form re-sync', () => {
       display_title: 'Keep Me',
       display_caption: 'Keep this caption',
     });
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <ContentAttachForm {...baseProps({ content, onSubmitPatch })} />,
     );
-    fireEvent.press(getByTestId('content-attach-submit'));
+    await fireEvent.press(getByTestId('content-attach-submit'));
     await waitFor(() => expect(onSubmitPatch).toHaveBeenCalledTimes(1));
     expect(onSubmitPatch).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -145,7 +145,7 @@ describe('ContentAttachForm — P1 #1 edit-form re-sync', () => {
   it('add → edit → different-row re-seeds on the same mounted instance', async () => {
     // Add mode first (content null) — fields are at defaults.
     const props = baseProps();
-    const { getByTestId, queryByTestId, rerender } = render(
+    const { getByTestId, queryByTestId, rerender } = await render(
       <ContentAttachForm {...props} />,
     );
     expect(getByTestId('content-attach-title').props.value).toBe('');
@@ -160,7 +160,7 @@ describe('ContentAttachForm — P1 #1 edit-form re-sync', () => {
       cadence_kind: 'immediate',
       cadence_payload: {},
     });
-    rerender(<ContentAttachForm {...props} content={rowA} />);
+    await rerender(<ContentAttachForm {...props} content={rowA} />);
     await waitFor(() =>
       expect(getByTestId('content-attach-title').props.value).toBe('Row A title'),
     );
@@ -176,7 +176,7 @@ describe('ContentAttachForm — P1 #1 edit-form re-sync', () => {
       cadence_kind: 'on_milestone',
       cadence_payload: { milestone_key: 'first_workout_complete' },
     });
-    rerender(<ContentAttachForm {...props} content={rowB} />);
+    await rerender(<ContentAttachForm {...props} content={rowB} />);
     await waitFor(() =>
       expect(getByTestId('content-attach-title').props.value).toBe('Row B title'),
     );
@@ -186,7 +186,7 @@ describe('ContentAttachForm — P1 #1 edit-form re-sync', () => {
     );
 
     // Back to add mode — defaults restored.
-    rerender(<ContentAttachForm {...props} content={null} />);
+    await rerender(<ContentAttachForm {...props} content={null} />);
     await waitFor(() =>
       expect(getByTestId('content-attach-title').props.value).toBe(''),
     );
@@ -196,17 +196,17 @@ describe('ContentAttachForm — P1 #1 edit-form re-sync', () => {
 
 describe('ContentAttachForm — P1 #2 valid cadence_payload per exposed kind', () => {
   // Helper: open advanced disclosure and pick a cadence option by label.
-  function openCadence(getByTestId: ReturnType<typeof render>['getByTestId']) {
-    fireEvent.press(getByTestId('content-attach-cadence-disclosure'));
+  async function openCadence(getByTestId: Awaited<ReturnType<typeof render>>['getByTestId']) {
+    await fireEvent.press(getByTestId('content-attach-cadence-disclosure'));
   }
 
   it('immediate → {} (no required payload field)', async () => {
     const onSubmitAttach = jest.fn();
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       <ContentAttachForm {...baseProps({ onSubmitAttach })} />,
     );
-    fireEvent.changeText(getByTestId('content-attach-asset-id'), 'asset-1');
-    fireEvent.press(getByTestId('content-attach-submit'));
+    await fireEvent.changeText(getByTestId('content-attach-asset-id'), 'asset-1');
+    await fireEvent.press(getByTestId('content-attach-submit'));
     await waitFor(() => expect(onSubmitAttach).toHaveBeenCalledTimes(1));
     expect(onSubmitAttach.mock.calls[0][0]).toMatchObject({
       cadence_kind: 'immediate',
@@ -216,14 +216,14 @@ describe('ContentAttachForm — P1 #2 valid cadence_payload per exposed kind', (
 
   it('relative_to_purchase → { offset_days }', async () => {
     const onSubmitAttach = jest.fn();
-    const { getByTestId, getByLabelText } = render(
+    const { getByTestId, getByLabelText } = await render(
       <ContentAttachForm {...baseProps({ onSubmitAttach })} />,
     );
-    fireEvent.changeText(getByTestId('content-attach-asset-id'), 'asset-1');
-    openCadence(getByTestId);
-    fireEvent.press(getByLabelText('After purchase'));
-    fireEvent.changeText(getByTestId('content-attach-relative-days'), '7');
-    fireEvent.press(getByTestId('content-attach-submit'));
+    await fireEvent.changeText(getByTestId('content-attach-asset-id'), 'asset-1');
+    await openCadence(getByTestId);
+    await fireEvent.press(getByLabelText('After purchase'));
+    await fireEvent.changeText(getByTestId('content-attach-relative-days'), '7');
+    await fireEvent.press(getByTestId('content-attach-submit'));
     await waitFor(() => expect(onSubmitAttach).toHaveBeenCalledTimes(1));
     expect(onSubmitAttach.mock.calls[0][0]).toMatchObject({
       cadence_kind: 'relative_to_purchase',
@@ -233,24 +233,24 @@ describe('ContentAttachForm — P1 #2 valid cadence_payload per exposed kind', (
 
   it('fixed_calendar → { release_at } (valid ISO) and blocks Save when empty', async () => {
     const onSubmitAttach = jest.fn();
-    const { getByTestId, getByLabelText, getByText } = render(
+    const { getByTestId, getByLabelText, getByText } = await render(
       <ContentAttachForm {...baseProps({ onSubmitAttach })} />,
     );
-    fireEvent.changeText(getByTestId('content-attach-asset-id'), 'asset-1');
-    openCadence(getByTestId);
-    fireEvent.press(getByLabelText('On a date'));
+    await fireEvent.changeText(getByTestId('content-attach-asset-id'), 'asset-1');
+    await openCadence(getByTestId);
+    await fireEvent.press(getByLabelText('On a date'));
 
     // Save blocked while release_at is empty (error-prevention).
-    fireEvent.press(getByTestId('content-attach-submit'));
+    await fireEvent.press(getByTestId('content-attach-submit'));
     await waitFor(() => expect(getByText(/release date as an ISO date/i)).toBeTruthy());
     expect(onSubmitAttach).not.toHaveBeenCalled();
 
     // Provide a valid ISO datetime → valid payload submitted.
-    fireEvent.changeText(
+    await fireEvent.changeText(
       getByTestId('content-attach-release-at'),
       '2026-09-01T09:00:00Z',
     );
-    fireEvent.press(getByTestId('content-attach-submit'));
+    await fireEvent.press(getByTestId('content-attach-submit'));
     await waitFor(() => expect(onSubmitAttach).toHaveBeenCalledTimes(1));
     expect(onSubmitAttach.mock.calls[0][0]).toMatchObject({
       cadence_kind: 'fixed_calendar',
@@ -260,13 +260,13 @@ describe('ContentAttachForm — P1 #2 valid cadence_payload per exposed kind', (
 
   it('on_completion → {} (optional payload, no required field)', async () => {
     const onSubmitAttach = jest.fn();
-    const { getByTestId, getByLabelText } = render(
+    const { getByTestId, getByLabelText } = await render(
       <ContentAttachForm {...baseProps({ onSubmitAttach })} />,
     );
-    fireEvent.changeText(getByTestId('content-attach-asset-id'), 'asset-1');
-    openCadence(getByTestId);
-    fireEvent.press(getByLabelText('On completion'));
-    fireEvent.press(getByTestId('content-attach-submit'));
+    await fireEvent.changeText(getByTestId('content-attach-asset-id'), 'asset-1');
+    await openCadence(getByTestId);
+    await fireEvent.press(getByLabelText('On completion'));
+    await fireEvent.press(getByTestId('content-attach-submit'));
     await waitFor(() => expect(onSubmitAttach).toHaveBeenCalledTimes(1));
     expect(onSubmitAttach.mock.calls[0][0]).toMatchObject({
       cadence_kind: 'on_completion',
@@ -276,25 +276,25 @@ describe('ContentAttachForm — P1 #2 valid cadence_payload per exposed kind', (
 
   it('on_milestone → { milestone_key } and blocks Save when empty', async () => {
     const onSubmitAttach = jest.fn();
-    const { getByTestId, getByLabelText, getByText } = render(
+    const { getByTestId, getByLabelText, getByText } = await render(
       <ContentAttachForm {...baseProps({ onSubmitAttach })} />,
     );
-    fireEvent.changeText(getByTestId('content-attach-asset-id'), 'asset-1');
-    openCadence(getByTestId);
-    fireEvent.press(getByLabelText('On milestone'));
+    await fireEvent.changeText(getByTestId('content-attach-asset-id'), 'asset-1');
+    await openCadence(getByTestId);
+    await fireEvent.press(getByLabelText('On milestone'));
 
     // Save blocked while milestone_key is empty.
-    fireEvent.press(getByTestId('content-attach-submit'));
+    await fireEvent.press(getByTestId('content-attach-submit'));
     await waitFor(() =>
       expect(getByText(/Add the milestone key/i)).toBeTruthy(),
     );
     expect(onSubmitAttach).not.toHaveBeenCalled();
 
-    fireEvent.changeText(
+    await fireEvent.changeText(
       getByTestId('content-attach-milestone-key'),
       'first_workout_complete',
     );
-    fireEvent.press(getByTestId('content-attach-submit'));
+    await fireEvent.press(getByTestId('content-attach-submit'));
     await waitFor(() => expect(onSubmitAttach).toHaveBeenCalledTimes(1));
     expect(onSubmitAttach.mock.calls[0][0]).toMatchObject({
       cadence_kind: 'on_milestone',

@@ -24,6 +24,21 @@ import { errorMessage, errorStatus } from '../../../types/common';
 import { useTheme, ThemeColors } from '../../../theme/ThemeProvider';
 import { formatCurrencyCents } from '../../../utils/currency';
 import { track } from '../../../lib/analytics';
+import { featureFlags } from '../../../config/featureFlags';
+// §2.12 Coach payout — Roman confirms the last payout in his voice, beside his
+// face (RomanPayoutNotice co-locates <RomanAvatar />). Gated behind
+// featureFlags.romanChat (default OFF), the dedicated Roman flag.
+import RomanPayoutNotice from '../../../components/roman/RomanPayoutNotice';
+
+// The normalised CoachEarningsSummary deliberately does NOT carry the
+// destination bank's last-four (payouts are Stripe-managed and the digits are
+// not exposed to the mobile contract — see api/packagesApi.ts
+// CoachEarningsSummary). Rather than invent or mask digits, the §2.12 notice
+// omits the bankLast4 prop entirely; romanPayout then drops the "account
+// ending …" clause and states only the real amount and the past-tense send
+// date. The mobile contract exposes no settlement-window or in-transit signal,
+// so the copy never speaks of one — Roman states only what the normalised
+// CoachEarningsSummary actually carries, never invented or masked detail.
 
 interface Props {
   navigation: NavigationProp<ParamListBase>;
@@ -160,6 +175,27 @@ export default function CoachEarningsScreen({ navigation }: Props) {
                   {formatDate(data.lastPayoutAt)}
                 </Text>
               </View>
+            ) : null}
+
+            {/* §2.12 Roman payout notice — voiced beside his face. Only when the
+                Roman flag is on AND a real last payout exists (amount + a
+                formattable send date). All tokens are real: amount from
+                data.lastPayoutAmountCents, sentOn from the actual
+                data.lastPayoutAt timestamp. The copy is past tense because the
+                CoachEarningsSummary contract carries only the historical send
+                time, not an in-transit/settlement signal (api/packagesApi.ts).
+                The bank last-four is NOT in the summary contract, so it is
+                omitted — romanPayout drops the destination-account clause
+                rather than ship a placeholder token. */}
+            {featureFlags.romanChat &&
+            data.lastPayoutAmountCents != null &&
+            formatDate(data.lastPayoutAt) ? (
+              <RomanPayoutNotice
+                amount={formatCurrencyCents(data.lastPayoutAmountCents, data.currency)}
+                sentOn={formatDate(data.lastPayoutAt) as string}
+                mode="default"
+                testID="roman-payout-card"
+              />
             ) : null}
 
             <Text style={styles.sectionTitle}>By package</Text>

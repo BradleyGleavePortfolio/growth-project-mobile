@@ -94,95 +94,95 @@ beforeEach(() => {
 });
 
 describe('Community screens — render', () => {
-  it('CommunityTabScreen renders', () => {
-    const { getByTestId } = render(<CommunityTabScreen />);
+  it('CommunityTabScreen renders', async () => {
+    const { getByTestId } = await render(<CommunityTabScreen />);
     expect(getByTestId('community-tab-screen')).toBeTruthy();
   });
 
-  it('CommunityTodayScreen renders', () => {
-    const { getByTestId } = render(<CommunityTodayScreen />);
+  it('CommunityTodayScreen renders', async () => {
+    const { getByTestId } = await render(<CommunityTodayScreen />);
     expect(getByTestId('community-today-screen')).toBeTruthy();
   });
 
-  it('CommunitySpaceScreen renders', () => {
-    const { getByTestId } = render(
+  it('CommunitySpaceScreen renders', async () => {
+    const { getByTestId } = await render(
       <CommunitySpaceScreen space="hall" workspaceId="ws-1" />,
     );
     expect(getByTestId('community-space-screen')).toBeTruthy();
   });
 
-  it('CommunityThreadScreen renders', () => {
+  it('CommunityThreadScreen renders', async () => {
     mockRouteParams.current = { postId: 'p-1' };
-    const { getByTestId } = render(<CommunityThreadScreen />);
+    const { getByTestId } = await render(<CommunityThreadScreen />);
     expect(getByTestId('community-thread-screen')).toBeTruthy();
   });
 
-  it('CommunityDmListScreen renders', () => {
-    const { getByTestId } = render(<CommunityDmListScreen workspaceId="ws-1" />);
+  it('CommunityDmListScreen renders', async () => {
+    const { getByTestId } = await render(<CommunityDmListScreen workspaceId="ws-1" />);
     expect(getByTestId('community-dmlist-screen')).toBeTruthy();
   });
 
-  it('CommunityDmThreadScreen renders', () => {
+  it('CommunityDmThreadScreen renders', async () => {
     mockRouteParams.current = { recipientId: 'coach-1', participantLabel: 'Coach' };
-    const { getByTestId } = render(<CommunityDmThreadScreen />);
+    const { getByTestId } = await render(<CommunityDmThreadScreen />);
     expect(getByTestId('community-dmthread-screen')).toBeTruthy();
   });
 
-  it('CommunityComposerScreen renders (post mode)', () => {
+  it('CommunityComposerScreen renders (post mode)', async () => {
     mockRouteParams.current = { mode: 'post' };
-    const { getByTestId } = render(<CommunityComposerScreen />);
+    const { getByTestId } = await render(<CommunityComposerScreen />);
     expect(getByTestId('community-composer-screen')).toBeTruthy();
     expect(getByTestId('community-composer-title')).toBeTruthy();
   });
 
-  it('CommunityComposerScreen renders (dm mode — no title field)', () => {
+  it('CommunityComposerScreen renders (dm mode — no title field)', async () => {
     mockRouteParams.current = { mode: 'dm', recipientId: 'coach-1' };
-    const { getByTestId, queryByTestId } = render(<CommunityComposerScreen />);
+    const { getByTestId, queryByTestId } = await render(<CommunityComposerScreen />);
     expect(getByTestId('community-composer-screen')).toBeTruthy();
     expect(queryByTestId('community-composer-title')).toBeNull();
   });
 });
 
 describe('Community empty states — Roman copy + primary action (NOT spinner)', () => {
-  it('Space (Hall) empty renders a CTA that opens the composer', () => {
-    const { getByTestId } = render(
+  it('Space (Hall) empty renders a CTA that opens the composer', async () => {
+    const { getByTestId } = await render(
       <CommunitySpaceScreen space="hall" workspaceId="ws-1" />,
     );
     const empty = getByTestId('community-space-empty');
     expect(empty).toBeTruthy();
     // Primary action present and wired (not a spinner).
-    fireEvent.press(getByTestId('community-space-empty-action'));
+    await fireEvent.press(getByTestId('community-space-empty-action'));
     expect(mockNavigate).toHaveBeenCalledWith('CommunityComposer', { mode: 'post' });
   });
 
-  it('DM inbox empty renders a CTA to message the coach', () => {
-    const { getByTestId } = render(<CommunityDmListScreen workspaceId="ws-1" />);
+  it('DM inbox empty renders a CTA to message the coach', async () => {
+    const { getByTestId } = await render(<CommunityDmListScreen workspaceId="ws-1" />);
     expect(getByTestId('community-dmlist-empty')).toBeTruthy();
-    fireEvent.press(getByTestId('community-dmlist-empty-action'));
+    await fireEvent.press(getByTestId('community-dmlist-empty-action'));
     expect(mockNavigate).toHaveBeenCalledWith('CommunityComposer', {
       mode: 'dm',
       recipientId: '',
     });
   });
 
-  it('Thread empty (no replies) renders an empty state with a primary action', () => {
+  it('Thread empty (no replies) renders an empty state with a primary action', async () => {
     mockRouteParams.current = { postId: 'p-1' };
-    const { getByTestId } = render(<CommunityThreadScreen />);
+    const { getByTestId } = await render(<CommunityThreadScreen />);
     expect(getByTestId('community-thread-empty')).toBeTruthy();
     // CTA exists (action handler is intentionally a focus/no-op; the always-on
     // inline composer is the real reply surface) — it must still be pressable.
     expect(getByTestId('community-thread-empty-action')).toBeTruthy();
   });
 
-  it('DM thread empty renders an empty state with a primary action', () => {
+  it('DM thread empty renders an empty state with a primary action', async () => {
     mockRouteParams.current = { recipientId: 'coach-1' };
-    const { getByTestId } = render(<CommunityDmThreadScreen />);
+    const { getByTestId } = await render(<CommunityDmThreadScreen />);
     expect(getByTestId('community-dmthread-empty')).toBeTruthy();
     expect(getByTestId('community-dmthread-empty-action')).toBeTruthy();
   });
 
-  it('Today empty renders an empty state (not a spinner)', () => {
-    const { getByTestId } = render(<CommunityTodayScreen />);
+  it('Today empty renders an empty state (not a spinner)', async () => {
+    const { getByTestId } = await render(<CommunityTodayScreen />);
     // The Today screen renders its own empty surface; assert a Community empty
     // state mounted rather than an ActivityIndicator.
     expect(getByTestId('community-today-screen')).toBeTruthy();
@@ -190,23 +190,23 @@ describe('Community empty states — Roman copy + primary action (NOT spinner)',
 });
 
 describe('Composer — submit wiring', () => {
-  it('publishes a post via the create-post mutation', () => {
+  it('publishes a post via the create-post mutation', async () => {
     mockRouteParams.current = { mode: 'post' };
-    const { getByTestId } = render(<CommunityComposerScreen />);
-    fireEvent.changeText(getByTestId('community-composer-title'), 'My title');
-    fireEvent.changeText(getByTestId('community-composer-body'), 'My body');
-    fireEvent.press(getByTestId('community-composer-submit'));
+    const { getByTestId } = await render(<CommunityComposerScreen />);
+    await fireEvent.changeText(getByTestId('community-composer-title'), 'My title');
+    await fireEvent.changeText(getByTestId('community-composer-body'), 'My body');
+    await fireEvent.press(getByTestId('community-composer-submit'));
     expect(mockMutate).toHaveBeenCalledWith(
       { title: 'My title', body: 'My body' },
       expect.objectContaining({ onSuccess: expect.any(Function) }),
     );
   });
 
-  it('sends a DM via the send-dm mutation', () => {
+  it('sends a DM via the send-dm mutation', async () => {
     mockRouteParams.current = { mode: 'dm', recipientId: 'coach-1' };
-    const { getByTestId } = render(<CommunityComposerScreen />);
-    fireEvent.changeText(getByTestId('community-composer-body'), 'hello');
-    fireEvent.press(getByTestId('community-composer-submit'));
+    const { getByTestId } = await render(<CommunityComposerScreen />);
+    await fireEvent.changeText(getByTestId('community-composer-body'), 'hello');
+    await fireEvent.press(getByTestId('community-composer-submit'));
     expect(mockMutate).toHaveBeenCalledWith(
       'hello',
       expect.objectContaining({ onSuccess: expect.any(Function) }),

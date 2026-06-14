@@ -36,6 +36,20 @@ import { render } from '@testing-library/react-native';
 const mockUseIsFocused = jest.fn<boolean, []>();
 const mockNavigate = jest.fn();
 
+// @sentry/react-native starts a module-load setInterval (its AsyncExpiringMap
+// cleanup loop, pulled in transitively via ErrorBoundary -> services/sentry).
+// That interval is the open handle behind the "Jest did not exit" warning for
+// this suite -- it is unrelated to anything under test here. Stub the module to
+// a set of inert no-ops so no background timer is ever scheduled.
+jest.mock('@sentry/react-native', () => ({
+  init: jest.fn(),
+  wrap: <T,>(c: T): T => c,
+  withScope: (fn: (scope: { setExtra: jest.Mock }) => void) =>
+    fn({ setExtra: jest.fn() }),
+  captureException: jest.fn(),
+  setUser: jest.fn(),
+}));
+
 jest.mock('@react-navigation/native', () => ({
   useIsFocused: () => mockUseIsFocused(),
   useNavigation: () => ({ navigate: mockNavigate, goBack: jest.fn() }),
@@ -71,9 +85,9 @@ describe('AIBudgetMount — focus-gated polling (NEW-P2-1)', () => {
     mockNavigate.mockClear();
   });
 
-  it('passes { enabled: false } to useAIBudget when the screen is NOT focused', () => {
+  it('passes { enabled: false } to useAIBudget when the screen is NOT focused', async () => {
     mockUseIsFocused.mockReturnValue(false);
-    render(<AIBudgetMount enabled />);
+    await render(<AIBudgetMount enabled />);
 
     // The hook must have been called at least once during render.
     expect(mockUseAIBudget).toHaveBeenCalled();
@@ -85,18 +99,18 @@ describe('AIBudgetMount — focus-gated polling (NEW-P2-1)', () => {
     );
   });
 
-  it('passes { enabled: true } to useAIBudget when focused AND enabled prop is true', () => {
+  it('passes { enabled: true } to useAIBudget when focused AND enabled prop is true', async () => {
     mockUseIsFocused.mockReturnValue(true);
-    render(<AIBudgetMount enabled />);
+    await render(<AIBudgetMount enabled />);
 
     expect(mockUseAIBudget).toHaveBeenLastCalledWith(
       expect.objectContaining({ enabled: true }),
     );
   });
 
-  it('passes { enabled: false } when the `enabled` prop is false even if focused', () => {
+  it('passes { enabled: false } when the `enabled` prop is false even if focused', async () => {
     mockUseIsFocused.mockReturnValue(true);
-    render(<AIBudgetMount enabled={false} />);
+    await render(<AIBudgetMount enabled={false} />);
 
     // Defence-in-depth: an unsubscribed/non-coach user must NOT trigger
     // budget polling regardless of focus state. The AND of (enabled,
@@ -106,9 +120,9 @@ describe('AIBudgetMount — focus-gated polling (NEW-P2-1)', () => {
     );
   });
 
-  it('defaults `enabled` prop to true when omitted (focus still gates)', () => {
+  it('defaults `enabled` prop to true when omitted (focus still gates)', async () => {
     mockUseIsFocused.mockReturnValue(false);
-    render(<AIBudgetMount />);
+    await render(<AIBudgetMount />);
 
     // Component default is `enabled = true` (line 57 in source). With
     // `useIsFocused()=false`, the composed value is still false.

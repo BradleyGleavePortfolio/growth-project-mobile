@@ -210,6 +210,67 @@ export const featureFlags = {
   // band-aid for the client-side ClientPurchase same-row replay problem, which
   // no longer exists now that the backend owns the first-payment decision and
   // the mobile client only reacts to the FIRST_PAYMENT notification.
+
+  // ─── Community v3-1 — opt-in challenges ──────────────────────────────────
+  // Cohort challenges with personal-progress logging and a STRICTLY OPT-IN,
+  // cohort-local leaderboard. Defaults OFF UNCONDITIONALLY (not `isDev`): when
+  // false the CommunityChallengeDetail route MUST NOT register and the screen
+  // is dead code at build time. The backend gate (FEATURE_COMMUNITY_CHALLENGES)
+  // is also OFF in prod, so a dev build that flips this on degrades gracefully.
+  //
+  // env: EXPO_PUBLIC_FF_COMMUNITY_CHALLENGES
+  communityChallenges: readFlag('EXPO_PUBLIC_FF_COMMUNITY_CHALLENGES', false),
+  // ─── MWB-4 — workout-builder autosave (Google-Docs-style save) ───────────
+  // The MWB-3 backend (PATCH /workout-plans/:planId/autosave + POST .../undo,
+  // FEATURE_MWB_AUTOSAVE_UNDO) is merged; MWB-4 is the mobile half: a reusable
+  // useAutosave hook, an AsyncStorage offline mirror that lets an edit survive
+  // an app kill and replay on reconnect, a strict-Zod autosave API layer, and a
+  // calm save-state header pill on the coach workout builder.
+  //
+  // Defaults OFF UNCONDITIONALLY (not `isDev`). When this flag is false the
+  // CoachWorkoutBuilderScreen MUST behave byte-identically to its legacy
+  // explicit-Save (PUT replace-all) form: zero autosave network calls, zero
+  // offline-mirror writes, and no save-state pill rendered. The backend gate
+  // (FEATURE_MWB_AUTOSAVE_UNDO) is ALSO off in prod and returns 404 for the
+  // autosave route while dark, so even a dev build that flips this flag on
+  // degrades to a calm offline/`gone` state rather than an error banner.
+  //
+  // env: EXPO_PUBLIC_FF_MWB_AUTOSAVE
+  mwbAutosave: readFlag('EXPO_PUBLIC_FF_MWB_AUTOSAVE', false),
+  // ─── Roman P3 — backend-authority gates ──────────────────────────────────
+  // Two P3 Roman surfaces speak from signals the backend `main` does NOT yet
+  // expose authoritatively, so each is held behind its own backend-live gate
+  // (separate from the master `romanChat` flag). Both default OFF
+  // UNCONDITIONALLY so the proxy-signal surfaces stay hidden until the backend
+  // ships the real field — flip the matching env var to `true` only once the
+  // authoritative contract is live.
+
+  /**
+   * §2.4 Coach-brief check-in notice. The host currently derives the notice
+   * from a mobile-only Wave 11 scaffold (`latestVerifiedProgress.kind ===
+   * 'check_in_consistency'`) that backend `main` does not return. Keep the
+   * §2.4 surface hidden until backend `main` exposes an authoritative
+   * `latestVerifiedProgress` check-in claim field. OFF until then.
+   *
+   * env: EXPO_PUBLIC_FF_ROMAN_CHECKIN_BACKEND_LIVE
+   */
+  romanCheckInBackendLive: readFlag(
+    'EXPO_PUBLIC_FF_ROMAN_CHECKIN_BACKEND_LIVE',
+    false,
+  ),
+  /**
+   * §2.7 client streak milestone card. The host currently derives the
+   * milestone tier from a client-side recomputed logging count, which is not
+   * an authoritative backend milestone event. Keep the §2.7 card hidden until
+   * the backend exposes an authoritative streak-milestone event (event id,
+   * date, tier). OFF until then.
+   *
+   * env: EXPO_PUBLIC_FF_ROMAN_STREAK_BACKEND_LIVE
+   */
+  romanStreakBackendLive: readFlag(
+    'EXPO_PUBLIC_FF_ROMAN_STREAK_BACKEND_LIVE',
+    false,
+  ),
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;

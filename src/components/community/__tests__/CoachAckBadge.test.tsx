@@ -118,8 +118,8 @@ describe('CoachAckBadge — R1 visibility matrix (4 ack x 3 SLA)', () => {
 
       it(`state=${state} + sla=${sla} → ${
         wantBadge ? 'renders qualifying signals only' : 'renders nothing'
-      }`, () => {
-        const { getByTestId, getByText, queryByTestId, queryByText } = render(
+      }`, async () => {
+        const { getByTestId, getByText, queryByTestId, queryByText } = await render(
           <CoachAckBadge ack={envelope(state, sla)} testID={TEST_ID} />,
         );
 
@@ -157,22 +157,22 @@ describe('CoachAckBadge — R1 visibility matrix (4 ack x 3 SLA)', () => {
     }
   }
 
-  it('none + within renders null (no badge, no testID)', () => {
-    const { queryByTestId } = render(
+  it('none + within renders null (no badge, no testID)', async () => {
+    const { queryByTestId } = await render(
       <CoachAckBadge ack={envelope('none', 'within')} testID={TEST_ID} />,
     );
     expect(queryByTestId(TEST_ID)).toBeNull();
   });
 
-  it('null/absent ack envelope renders null (treated as none + within)', () => {
-    const { queryByTestId } = render(
+  it('null/absent ack envelope renders null (treated as none + within)', async () => {
+    const { queryByTestId } = await render(
       <CoachAckBadge ack={null} testID={TEST_ID} />,
     );
     expect(queryByTestId(TEST_ID)).toBeNull();
   });
 
-  it('none + breached shows ONLY the Overdue chip (no state pill)', () => {
-    const { getByTestId, getByText, queryByTestId } = render(
+  it('none + breached shows ONLY the Overdue chip (no state pill)', async () => {
+    const { getByTestId, getByText, queryByTestId } = await render(
       <CoachAckBadge ack={envelope('none', 'breached')} testID={TEST_ID} />,
     );
     expect(getByTestId(`${TEST_ID}-sla-breached`)).toBeTruthy();
@@ -180,8 +180,8 @@ describe('CoachAckBadge — R1 visibility matrix (4 ack x 3 SLA)', () => {
     expect(queryByTestId(`${TEST_ID}-state-none`)).toBeNull();
   });
 
-  it('replied + breached suppresses the SLA chip (settled thread)', () => {
-    const { getByTestId, getByText, queryByTestId } = render(
+  it('replied + breached suppresses the SLA chip (settled thread)', async () => {
+    const { getByTestId, getByText, queryByTestId } = await render(
       <CoachAckBadge ack={envelope('replied', 'breached')} testID={TEST_ID} />,
     );
     expect(getByTestId(`${TEST_ID}-state-replied`)).toBeTruthy();
@@ -189,8 +189,8 @@ describe('CoachAckBadge — R1 visibility matrix (4 ack x 3 SLA)', () => {
     expect(queryByTestId(`${TEST_ID}-sla-breached`)).toBeNull();
   });
 
-  it('acked reads "Acknowledged", never the abbreviated "Acked"', () => {
-    const { getByText, queryByText } = render(
+  it('acked reads "Acknowledged", never the abbreviated "Acked"', async () => {
+    const { getByText, queryByText } = await render(
       <CoachAckBadge ack={envelope('acked', 'warning')} testID={TEST_ID} />,
     );
     expect(getByText('Acknowledged')).toBeTruthy();
@@ -246,8 +246,8 @@ describe('CoachAckBadge — accessibility ownership (labelledByRow)', () => {
   });
   afterEach(() => jest.restoreAllMocks());
 
-  it('labelledByRow hides the badge from the a11y tree but keeps it visible', () => {
-    const { getByTestId } = render(
+  it('labelledByRow hides the badge from the a11y tree but keeps it visible', async () => {
+    const { getByTestId } = await render(
       <CoachAckBadge
         ack={envelope('acked', 'breached')}
         labelledByRow
@@ -267,8 +267,8 @@ describe('CoachAckBadge — accessibility ownership (labelledByRow)', () => {
     ).toBeTruthy();
   });
 
-  it('standalone (no labelledByRow) announces an Overdue-first label', () => {
-    const { getByTestId } = render(
+  it('standalone (no labelledByRow) announces an Overdue-first label', async () => {
+    const { getByTestId } = await render(
       <CoachAckBadge ack={envelope('acked', 'breached')} testID={TEST_ID} />,
     );
     const node = getByTestId(TEST_ID);
@@ -298,7 +298,7 @@ describe('CoachAckBadge — reduced motion', () => {
   it('reduced motion ON: NO entrance timing, rests at full opacity', async () => {
     isReduceMotionEnabled.mockResolvedValue(true);
     timingSpy.mockClear();
-    const { getByTestId, getByText } = render(
+    const { getByTestId, getByText } = await render(
       // acked + warning so the badge actually renders (qualifying signals).
       <CoachAckBadge ack={envelope('acked', 'warning')} testID={TEST_ID} />,
     );
@@ -326,7 +326,7 @@ describe('CoachAckBadge — reduced motion', () => {
   it('reduced motion OFF: plays a single opacity fade-in toward 1', async () => {
     isReduceMotionEnabled.mockResolvedValue(false);
     timingSpy.mockClear();
-    const { getByTestId } = render(
+    const { getByTestId } = await render(
       // acked + warning so the badge renders under the R1 spec.
       <CoachAckBadge ack={envelope('acked', 'warning')} testID={TEST_ID} />,
     );

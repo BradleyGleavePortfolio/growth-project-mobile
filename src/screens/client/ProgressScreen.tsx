@@ -50,8 +50,69 @@ import { logger } from '../../utils/logger';
 import CoachErrorState from '../../components/community/coach/CoachErrorState';
 import ProgressChartCard from './progress/ProgressChartCard';
 import { featureFlags } from '../../config/featureFlags';
+// §2.7 Streak milestone — Roman marks 3 / 7 / 30-day logging streaks in his
+// voice, beside his face (RomanStreakCard co-locates <RomanAvatar />). Gated
+// behind featureFlags.romanChat (default OFF), the dedicated Roman flag.
+import RomanStreakCard from '../../components/roman/RomanStreakCard';
+import type { RomanStreakTier } from '../../lib/roman/copy';
 
 type Period = '7D' | '30D' | '90D' | 'All';
+
+/**
+ * §2.7 streak-milestone tier selector. The spec surface is a 3/7/30-day
+ * MILESTONE, not a permanent threshold bucket: Roman speaks ONLY on the exact
+ * milestone day. Day 8 through 29 returns null (never claims "Seven days"), and
+ * day 31+ returns null (never claims "Thirty days") — the 30-day celebration
+ * (composed, no exclamation) fires on day 30 only. Every non-milestone
+ * day renders nothing rather than invent a celebratory line. Exported so the
+ * behaviour is unit-tested directly (host-wiring test) without rendering the
+ * full chart-heavy screen.
+ */
+export function streakMilestoneTier(loggingStreak: number): RomanStreakTier | null {
+  if (loggingStreak === 30) return 30;
+  if (loggingStreak === 7) return 7;
+  if (loggingStreak === 3) return 3;
+  return null;
+}
+
+/**
+ * Typed parser for one weight-history row from the API. The server response is
+ * untyped at the boundary and may send either `date` or `created_at`, and
+ * either `weight_lbs` or `weight`. This validates the row shape and normalises
+ * it into a `WeightLog`, returning `null` for any row missing the fields a
+ * `WeightLog` requires (an id and a numeric weight) so callers can drop it
+ * instead of force-casting the untyped result through a double assertion (R69).
+ * The date is bucketed to the user's LOCAL calendar day so the streak compare
+ * is tz-correct on either side of the date line (see audit P0-3).
+ */
+export function parseWeightLogRow(row: unknown, fallbackUserId: string): WeightLog | null {
+  if (typeof row !== 'object' || row === null) return null;
+  const r = row as Record<string, unknown>;
+
+  if (typeof r.id !== 'string' || r.id.length === 0) return null;
+
+  const rawWeight = typeof r.weight_lbs === 'number' ? r.weight_lbs : r.weight;
+  if (typeof rawWeight !== 'number' || Number.isNaN(rawWeight)) return null;
+
+  const rawDateSource = typeof r.date === 'string' ? r.date : r.created_at;
+  const rawDate = typeof rawDateSource === 'string' ? rawDateSource : '';
+  const normDate = /^\d{4}-\d{2}-\d{2}$/.test(rawDate)
+    ? rawDate.slice(0, 10)
+    : bucketDateLocal(new Date(rawDate));
+
+  const createdAt = typeof r.created_at === 'string' ? r.created_at : rawDate;
+
+  return {
+    id: r.id,
+    userId: typeof r.user_id === 'string' && r.user_id.length > 0 ? r.user_id : fallbackUserId,
+    coachId: '',
+    date: normDate,
+    weight: rawWeight,
+    unit: 'lbs',
+    notes: typeof r.notes === 'string' ? r.notes : '',
+    createdAt,
+  };
+}
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -256,26 +317,13 @@ export default function ProgressScreen() {
       // The fetch succeeded — clear any prior error so the chart (or honest
       // empty copy) renders instead of the retry state.
       setWeightHistoryError(false);
-      type WeightRow = { id: string; user_id?: string; date?: string; created_at?: string; weight_lbs?: number; weight?: number; notes?: string };
-      const logs = (((res.data as WeightRow[] | undefined) || []).map((w) => {
-        // Server may send either a bare `YYYY-MM-DD` (already a calendar day)
-        // or a full ISO timestamp from `created_at`. We normalise both into
-        // the user's *local* calendar day so the streak compare below is
-        // tz-correct on either side of the date line. See audit P0-3.
-        const rawDate = w.date || w.created_at || '';
-        const normDate = /^\d{4}-\d{2}-\d{2}$/.test(rawDate)
-          ? rawDate.slice(0, 10)
-          : bucketDateLocal(new Date(rawDate));
-        return {
-          id: w.id,
-          userId: w.user_id || userId,
-          coachId: '',
-          date: normDate,
-          weight: w.weight_lbs || w.weight,
-          unit: 'lbs' as const,
-          notes: w.notes || '',
-        };
-      })) as unknown as WeightLog[];
+      // Boundary parse: each untyped server row is validated/normalised into a
+      // WeightLog via parseWeightLogRow; rows missing an id or numeric weight
+      // are dropped rather than force-cast through a double assertion (R69).
+      const rawRows: unknown[] = Array.isArray(res.data) ? res.data : [];
+      const logs: WeightLog[] = rawRows
+        .map((row) => parseWeightLogRow(row, userId))
+        .filter((x): x is WeightLog => x !== null);
       // Sort by date ascending
       logs.sort((a, b) => a.date.localeCompare(b.date));
       setWeightLogs(logs);
@@ -436,6 +484,11 @@ export default function ProgressScreen() {
   // keeps the legacy static chart/empty state and never mounts the ED.4 card.
   const ed4ChartEnabled = featureFlags.romanFirstPaymentBodyweightPolish;
 
+  // §2.7 Streak milestone tier from the real loggingStreak. See
+  // streakMilestoneTier below: Roman speaks ONLY on the exact milestone day.
+  const streakTier: RomanStreakTier | null = streakMilestoneTier(loggingStreak);
+  const streakFirstName = (currentUser?.firstName ?? '').trim() || 'there';
+
   return (
     <View style={styles.container}>
       <ScrollView
@@ -488,6 +541,33 @@ export default function ProgressScreen() {
             </TouchableOpacity>
           </View>
         </View>
+
+        {/* §2.7 Roman streak milestone — voiced beside his face. HIDE-UNTIL-LIVE
+            (P1-B-02): `streakTier` is derived from a CLIENT-SIDE recomputed
+            logging count (see the loggingStreak fetch/count above), which is
+            not an authoritative backend milestone event — a bounded history
+            window, local date bucketing, or a stale cache could surface a
+            "Thirty days" line that the server cannot vouch for. The card is
+            therefore additionally gated behind featureFlags.romanStreakBackendLive
+            (default OFF) and stays hidden until the backend exposes an
+            authoritative streak-milestone event.
+            Follow-up (roman-streak-backend): when the backend exposes an
+            authoritative milestone event (event id, date, tier) per
+            AI_BUTLER_ROMAN_IDENTITY_SPEC §2.7, drive `streakTier` from that
+            event instead of the local count and flip
+            romanStreakBackendLive on. Until then, the card is hidden. */}
+        {featureFlags.romanChat && featureFlags.romanStreakBackendLive && streakTier !== null && (
+          <FadeInView>
+            <View style={styles.romanStreakWrap}>
+              <RomanStreakCard
+                tier={streakTier}
+                firstName={streakFirstName}
+                mode={streakTier === 3 ? 'default' : 'celebration'}
+                testID="roman-streak-card"
+              />
+            </View>
+          </FadeInView>
+        )}
 
         {/* Calorie Ring + Macros */}
         <FadeInView>
@@ -808,6 +888,10 @@ const makeStyles = (colors: ThemeColors) =>
     width: 18,
     height: 1,
     backgroundColor: colors.border,
+  },
+  romanStreakWrap: {
+    marginHorizontal: 24,
+    marginBottom: 16,
   },
   ringCard: {
     flexDirection: 'row',

@@ -30,7 +30,7 @@ describe('useBiometricGate', () => {
   it('opt-in false → bypasses biometric and returns unlocked', async () => {
     await SecureStore.setItemAsync(BIOMETRIC_OPT_IN_KEY, 'false');
 
-    const { result } = renderHook(() => useBiometricGate());
+    const { result } = await renderHook(() => useBiometricGate());
 
     await waitFor(() => expect(result.current.status).toBe('unlocked'));
     expect(mockAuthenticate).not.toHaveBeenCalled();
@@ -40,7 +40,7 @@ describe('useBiometricGate', () => {
     await SecureStore.setItemAsync(BIOMETRIC_OPT_IN_KEY, 'true');
     mockAuthenticate.mockResolvedValueOnce({ success: true });
 
-    const { result } = renderHook(() => useBiometricGate());
+    const { result } = await renderHook(() => useBiometricGate());
 
     await waitFor(() => expect(result.current.status).toBe('unlocked'));
     expect(mockAuthenticate).toHaveBeenCalledTimes(1);
@@ -50,7 +50,7 @@ describe('useBiometricGate', () => {
     await SecureStore.setItemAsync(BIOMETRIC_OPT_IN_KEY, 'true');
     mockAuthenticate.mockResolvedValueOnce({ success: false });
 
-    const { result } = renderHook(() => useBiometricGate());
+    const { result } = await renderHook(() => useBiometricGate());
 
     await waitFor(() => expect(result.current.status).toBe('locked'));
 
@@ -66,7 +66,7 @@ describe('useBiometricGate', () => {
     await SecureStore.setItemAsync(BIOMETRIC_OPT_IN_KEY, 'true');
     mockHasHardware.mockResolvedValueOnce(false);
 
-    const { result } = renderHook(() => useBiometricGate());
+    const { result } = await renderHook(() => useBiometricGate());
 
     await waitFor(() => expect(result.current.status).toBe('unlocked'));
     expect(mockAuthenticate).not.toHaveBeenCalled();
@@ -77,7 +77,7 @@ describe('useBiometricGate', () => {
     mockHasHardware.mockResolvedValueOnce(true);
     mockIsEnrolled.mockResolvedValueOnce(false);
 
-    const { result } = renderHook(() => useBiometricGate());
+    const { result } = await renderHook(() => useBiometricGate());
 
     await waitFor(() => expect(result.current.status).toBe('unlocked'));
     expect(mockAuthenticate).not.toHaveBeenCalled();
