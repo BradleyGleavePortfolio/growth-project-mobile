@@ -22,8 +22,8 @@
  *   - The elapsed timer auto-stops at RECORDER_MAX_DURATION_MS so a recording
  *     can never exceed the server cap (belt-and-suspenders to the byte check).
  *
- * No `as any` / no double-cast: the port is a typed interface; React state is a
- * discriminated union narrowed by `status`.
+ * Fully typed throughout (no unsafe casts): the port is a typed interface and
+ * React state is a discriminated union narrowed by `status`.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {

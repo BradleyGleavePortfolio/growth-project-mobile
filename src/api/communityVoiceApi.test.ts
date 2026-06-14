@@ -51,7 +51,7 @@ const api = require('../services/api').default as {
   post: jest.Mock;
   delete: jest.Mock;
 };
-const mockedAxios = axios as unknown as { put: jest.Mock };
+const mockedAxios = jest.mocked(axios);
 
 beforeEach(() => {
   api.get.mockReset();
@@ -141,7 +141,7 @@ describe('communityVoiceApi — two-hop publish flow', () => {
     const [url, body, config] = mockedAxios.put.mock.calls[0];
     expect(url).toBe(uploadTarget.upload_url);
     expect(body).toBe(bytes);
-    expect(config.headers['Content-Type']).toBe('audio/mp4');
+    expect(config?.headers?.['Content-Type']).toBe('audio/mp4');
   });
 
   it('uploadBytes maps a transport failure to a typed CommunityApiError', async () => {

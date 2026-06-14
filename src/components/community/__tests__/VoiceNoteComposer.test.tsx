@@ -12,6 +12,8 @@ import React from 'react';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 import { Linking } from 'react-native';
 
+type GetByTestId = Awaited<ReturnType<typeof render>>['getByTestId'];
+
 jest.mock('../../../theme/useTheme', () => {
   const { lightTokens } = jest.requireActual('../../../theme/tokens');
   return {
@@ -93,7 +95,7 @@ describe('VoiceNoteComposer — mic denial recovery', () => {
   it('routes to Settings when the OS will no longer prompt', async () => {
     const openSettings = jest
       .spyOn(Linking, 'openSettings')
-      .mockResolvedValue(undefined as unknown as void);
+      .mockImplementation(async () => {});
     const port = makePort({
       getPermissionStatus: jest.fn().mockResolvedValue('undetermined'),
       requestPermission: jest.fn().mockResolvedValue('denied'),
@@ -114,12 +116,12 @@ describe('VoiceNoteComposer — mic denial recovery', () => {
 });
 
 describe('VoiceNoteComposer — review + send', () => {
-  async function recordTo(getByTestId: (id: string) => unknown) {
+  async function recordTo(getByTestId: GetByTestId) {
     await act(async () => {
-      fireEvent.press(getByTestId('voice-record-button') as never);
+      fireEvent.press(getByTestId('voice-record-button'));
     });
     await act(async () => {
-      fireEvent.press(getByTestId('voice-record-button') as never);
+      fireEvent.press(getByTestId('voice-record-button'));
     });
   }
 
