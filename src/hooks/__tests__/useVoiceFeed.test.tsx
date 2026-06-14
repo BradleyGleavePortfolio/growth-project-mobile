@@ -19,14 +19,34 @@ jest.mock('../../api/communityVoiceApi', () => ({
 }));
 
 import { communityVoiceApi } from '../../api/communityVoiceApi';
+import type { VoiceNoteView } from '../../api/communityVoiceApi';
 import { useVoiceFeed } from '../useVoiceFeed';
 
 const api = jest.mocked(communityVoiceApi);
 const WS = '11111111-1111-4111-8111-111111111111';
 const CURSOR = '99999999-9999-4999-8999-999999999999';
 
-function page(notes: unknown[], next_cursor: string | null = null) {
-  return { voice_notes: notes, next_cursor };
+function note(overrides: Partial<VoiceNoteView> & { id: string }): VoiceNoteView {
+  return {
+    workspace_id: WS,
+    cohort_id: null,
+    conversation_id: null,
+    author_id: 'author-1',
+    url: null,
+    duration_ms: 4000,
+    bytes: 50_000,
+    mime_type: 'audio/mp4',
+    has_waveform: false,
+    created_at: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function page(
+  notes: Array<Partial<VoiceNoteView> & { id: string }>,
+  next_cursor: string | null = null,
+) {
+  return { voice_notes: notes.map(note), next_cursor };
 }
 
 function makeWrapper() {
