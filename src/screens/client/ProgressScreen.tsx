@@ -2,13 +2,21 @@
  * ProgressScreen — Client progress dashboard.
  *
  * Displays weight trend, macros for today, body stats, and recent log entries.
- * The weight line chart is rendered via TgpLineChart from src/ui/charts, which
- * provides the unified Victory Native XL / SVG charting API for this app.
- *
- * Phase 11 / Track 5: migrated WeightLineChart to TgpLineChart wrapper.
+ * The weight trend is rendered via ProgressChartCard (ED.4) — the SVG +
+ * Reanimated card with a draw-in line, haptic scrubber, and auto-PR flag plus
+ * inline Roman commentary on the same data — but ONLY when the
+ * romanFirstPaymentBodyweightPolish flag is ON (audit R5 P2). When the flag is
+ * OFF the screen falls back to LegacyWeightChart, a calm static SVG line that
+ * never mounts the ED.4 card.
  */
 
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, {
+  useEffect,
+  useState,
+  useCallback,
+  useMemo,
+  useRef,
+} from 'react';
 import {
   View,
   Text,
@@ -22,7 +30,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import Svg, { Circle, G } from 'react-native-svg';
+import Svg, { Circle, G, Path as SvgPath } from 'react-native-svg';
 import { weightApi, logApi } from '../../services/api';
 import { useMacroTargets } from '../../hooks/useMacroTargets';
 import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
@@ -38,7 +46,9 @@ import { getTodayString, bucketDateLocal } from '../../utils/date';
 import FadeInView from '../../components/FadeInView';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
-import { TgpLineChart } from '../../ui/charts';
+import { logger } from '../../utils/logger';
+import CoachErrorState from '../../components/community/coach/CoachErrorState';
+import ProgressChartCard from './progress/ProgressChartCard';
 import { featureFlags } from '../../config/featureFlags';
 // §2.7 Streak milestone — Roman marks 3 / 7 / 30-day logging streaks in his
 // voice, beside his face (RomanStreakCard co-locates <RomanAvatar />). Gated
@@ -189,6 +199,81 @@ function CalorieRing({
   );
 }
 
+// Legacy static weight chart (audit R5 P2): the flag-OFF surface. A calm,
+// non-animated SVG line — no draw-in, no haptic scrubber, no auto-PR, and
+// crucially NO ED.4 ProgressChartCard mount. It plots the same {x: epoch ms,
+// y: weight} series the card would, scaled into the given height and the
+// available screen width, so the flag-OFF path stays a faithful but quiet
+// rendering of the trend.
+function LegacyWeightChart({
+  data,
+  height,
+  lineColor,
+  testID,
+}: {
+  data: { x: number; y: number }[];
+  height: number;
+  lineColor: string;
+  testID?: string;
+}) {
+  // chartContainer has 16px horizontal padding each side inside a 24px screen
+  // margin each side, so the inner drawable width is the screen minus those.
+  const width = SCREEN_WIDTH - 24 * 2 - 16 * 2;
+  const PAD = 8;
+
+  const { path, points } = useMemo(() => {
+    if (data.length < 2) {
+      return { path: '', points: [] as { cx: number; cy: number }[] };
+    }
+    const xs = data.map((d) => d.x);
+    const ys = data.map((d) => d.y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const minY = Math.min(...ys);
+    const maxY = Math.max(...ys);
+    const spanX = maxX - minX || 1;
+    const spanY = maxY - minY || 1;
+    const innerW = width - PAD * 2;
+    const innerH = height - PAD * 2;
+
+    const scaled = data.map((d) => {
+      const cx = PAD + ((d.x - minX) / spanX) * innerW;
+      // Invert Y so a higher weight sits nearer the top of the canvas.
+      const cy = PAD + (1 - (d.y - minY) / spanY) * innerH;
+      return { cx, cy };
+    });
+
+    const d = scaled
+      .map((p, i) => `${i === 0 ? 'M' : 'L'}${p.cx.toFixed(2)},${p.cy.toFixed(2)}`)
+      .join(' ');
+    return { path: d, points: scaled };
+  }, [data, height, width]);
+
+  if (!path) return null;
+
+  return (
+    <Svg
+      width={width}
+      height={height}
+      testID={testID}
+      accessibilityRole="image"
+      accessibilityLabel="Weight trend line chart"
+    >
+      <SvgPath
+        d={path}
+        stroke={lineColor}
+        strokeWidth={2}
+        fill="none"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+      {points.map((p, i) => (
+        <Circle key={i} cx={p.cx} cy={p.cy} r={2.5} fill={lineColor} />
+      ))}
+    </Svg>
+  );
+}
+
 export default function ProgressScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -206,6 +291,20 @@ export default function ProgressScreen() {
   const [todayMacros, setTodayMacros] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0 });
   const [loggingStreak, setLoggingStreak] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  // ED.4 (audit R3 P3): the chart-error retry calls loadData directly, but
+  // `refreshing` only reflects pull-to-refresh — so the retry button stayed
+  // enabled and could be spammed. Track the direct retry separately and disable
+  // the button while it is in flight.
+  const [chartRetrying, setChartRetrying] = useState(false);
+  // Synchronous re-entrancy latch: state updates are async, so two taps in the
+  // SAME tick both observe `chartRetrying === false` and could each start a
+  // loadData(). This ref flips synchronously before the state set, so a
+  // same-tick second tap early-returns and only one loadData() runs.
+  const chartRetryingRef = useRef(false);
+  // ED.4 (audit R2 P2): a weight-history fetch failure used to fall through to
+  // the benign "log your weight" empty copy, hiding the error from the client.
+  // Track it so the chart slot can render an honest Roman-tone retry state.
+  const [weightHistoryError, setWeightHistoryError] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!userId) return;
@@ -215,6 +314,9 @@ export default function ProgressScreen() {
 
     try {
       const res = await weightApi.getHistory(days);
+      // The fetch succeeded — clear any prior error so the chart (or honest
+      // empty copy) renders instead of the retry state.
+      setWeightHistoryError(false);
       // Boundary parse: each untyped server row is validated/normalised into a
       // WeightLog via parseWeightLogRow; rows missing an id or numeric weight
       // are dropped rather than force-cast through a double assertion (R69).
@@ -243,9 +345,13 @@ export default function ProgressScreen() {
       }
       setLoggingStreak(streak);
     } catch (err) {
-      // Best-effort streak compute; if it fails the streak stays at its last
-      // good value (or zero on first load) — no user action is useful.
-      console.error('ProgressScreen: streak calc failed', err);
+      // The weight-history load failed. Record it so the chart slot renders an
+      // honest retry state instead of the benign "log your weight" empty copy
+      // (audit R2 P2). Never swallow — log via the shared logger (Law #36).
+      setWeightHistoryError(true);
+      logger.error('progress', 'weight history load failed', {
+        reason: errorMessage(err, 'weight history load failed'),
+      });
     }
 
     // Load today's macros from API
@@ -273,6 +379,24 @@ export default function ProgressScreen() {
     setRefreshing(true);
     await loadData();
     setRefreshing(false);
+  }, [loadData]);
+
+  // Chart-error retry: mark the retry in flight BEFORE the call so the button
+  // disables, and clear it once the call settles (success or failure) so a
+  // genuine re-retry stays possible. loadData never rejects (it handles its own
+  // errors and sets weightHistoryError), but the finally keeps the latch honest
+  // even if that changes.
+  const onChartRetry = useCallback(async () => {
+    // Synchronous guard FIRST so a same-tick double-tap cannot start two loads.
+    if (chartRetryingRef.current) return;
+    chartRetryingRef.current = true;
+    setChartRetrying(true);
+    try {
+      await loadData();
+    } finally {
+      chartRetryingRef.current = false;
+      setChartRetrying(false);
+    }
   }, [loadData]);
 
   const handleLogWeight = async () => {
@@ -341,9 +465,9 @@ export default function ProgressScreen() {
     },
   ];
 
-  // Chart data for TgpLineChart — x is the *epoch milliseconds* of the log
-  // day (parsed as midnight local) so the x-axis can render real, locale-
-  // formatted dates instead of meaningless integer indices. See audit P0-6.
+  // Chart data for ProgressChartCard — x is the *epoch milliseconds* of the log
+  // day (parsed as midnight local); the card derives its own ordering and
+  // axis from this {x, y} series. See audit P0-6.
   const chartData = useMemo(
     () =>
       weightLogs.map((log) => ({
@@ -353,19 +477,12 @@ export default function ProgressScreen() {
     [weightLogs],
   );
 
-  // Compact, locale-aware date formatter for the chart axis + tooltip.
-  // Memoised so we don't allocate a new Intl object on every render — Intl
-  // formatter construction is one of the more expensive things in JS.
-  const chartDateFormatter = useMemo(
-    () => new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }),
-    [],
-  );
-  const formatChartX = useCallback(
-    (ms: number) => chartDateFormatter.format(new Date(ms)),
-    [chartDateFormatter],
-  );
-
   const periods: Period[] = ['7D', '30D', '90D', 'All'];
+
+  // ED.4 flag gate (audit R5 P2): the ProgressChartCard animated surface only
+  // mounts when romanFirstPaymentBodyweightPolish is ON. When OFF the screen
+  // keeps the legacy static chart/empty state and never mounts the ED.4 card.
+  const ed4ChartEnabled = featureFlags.romanFirstPaymentBodyweightPolish;
 
   // §2.7 Streak milestone tier from the real loggingStreak. See
   // streakMilestoneTier below: Roman speaks ONLY on the exact milestone day.
@@ -563,17 +680,51 @@ export default function ProgressScreen() {
           </FadeInView>
         )}
 
-        {/* Weight Chart — Phase 11 Track 5: TgpLineChart replaces inline WeightLineChart */}
-        {chartData.length >= 2 ? (
+        {/* Weight Chart — ED.4: ProgressChartCard (draw-in animation, haptic
+            scrubber, auto-PR flag + Roman commentary). chartData is already the
+            {x: epoch ms, y: weight} shape ProgressChartCard expects, so it maps
+            through without an adapter. */}
+        {weightHistoryError ? (
+          // Honest load-failure state (audit R2 P2): a fetch error must NOT be
+          // dressed up as the benign "log your weight" empty copy. CoachErrorState
+          // co-mounts Roman's neutral face, an honest one-sentence line in his
+          // register (no contractions, no exclamation), and a retry action.
+          <View style={styles.chartContainer}>
+            <Text style={styles.chartTitle}>Weight Trend</Text>
+            <CoachErrorState
+              message="That chart did not load. I will try again."
+              onRetry={onChartRetry}
+              retrying={chartRetrying}
+              testID="progress-weight-chart-error"
+            />
+          </View>
+        ) : chartData.length >= 2 ? (
           <View style={styles.chartContainer}>
             <Text style={styles.chartTitle}>Weight Trend</Text>
             <View style={styles.chartInner}>
-              <TgpLineChart
-                data={chartData}
-                height={180}
-                accessibilityLabel="Weight trend line chart"
-                xFormatter={formatChartX}
-              />
+              {ed4ChartEnabled ? (
+                // ED.4 surface (flag ON): the animated ProgressChartCard.
+                <ProgressChartCard
+                  data={chartData}
+                  liftName="Weight"
+                  height={180}
+                  testID="progress-weight-chart"
+                  // Bodyweight is a trend, not a performance record — a rising
+                  // weight is not a "personal best" (audit R3 P2). PR detection
+                  // / commentary stays OFF here; the path is intact for a
+                  // future real lift series.
+                  enablePRDetection={false}
+                />
+              ) : (
+                // Legacy surface (flag OFF, audit R5 P2): a calm static line,
+                // no draw-in animation, no haptic scrubber, no ED.4 card mount.
+                <LegacyWeightChart
+                  data={chartData}
+                  height={180}
+                  lineColor={colors.primary}
+                  testID="progress-weight-chart-legacy"
+                />
+              )}
             </View>
           </View>
         ) : (

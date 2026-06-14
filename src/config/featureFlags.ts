@@ -174,7 +174,42 @@ export const featureFlags = {
   // env: EXPO_PUBLIC_FF_COMMUNITY_EVENTS
   communityEvents: readFlag('EXPO_PUBLIC_FF_COMMUNITY_EVENTS', false),
   romanChat: readFlag('EXPO_PUBLIC_FF_ROMAN_CHAT', false),
-
+  /**
+   * Roman P4 / ED.3 — First Payment Wow Screen (coach app). Mobile mirror of
+   * the backend's FEATURE_ROMAN_FIRST_PAYMENT gate (Option C —
+   * ROMAN_ED3_REWRITE_PLAN.md). When ON, the coach shell subscribes to the
+   * backend's FIRST_PAYMENT domain notification (useFirstPaymentNotification)
+   * and overlays the celebration screen once (MMKV once-only gate). The mobile
+   * client no longer reads the ClientPurchase table directly — the backend owns
+   * the first-payment decision and emits a normal notification. Default OFF
+   * (production-safe scaffolding); flip on per build once the backend
+   * FIRST_PAYMENT emitter is live. Both old and new paths are killable from the
+   * server via the backend gate.
+   *
+   * env: EXPO_PUBLIC_FF_ROMAN_FIRST_PAYMENT_WOW
+   */
+  romanFirstPaymentWow: readFlag('EXPO_PUBLIC_FF_ROMAN_FIRST_PAYMENT_WOW', false),
+  /**
+   * Roman P4 / ED.4 — Bodyweight progress chart polish (client app). When ON,
+   * the client ProgressScreen mounts the ED.4 `ProgressChartCard` (the SVG +
+   * Reanimated draw-in chart with the haptic scrubber) for the weight trend.
+   * When OFF, the screen renders the legacy chart/empty state and never mounts
+   * the ED.4 animated surface (audit R5 P2 — ED.4 must be flag-gated, with the
+   * legacy behaviour preserved off). Default OFF (production-safe scaffolding);
+   * flip on per build once the ED.4 polish is signed off.
+   *
+   * env: EXPO_PUBLIC_FF_ROMAN_BODYWEIGHT_POLISH
+   */
+  romanFirstPaymentBodyweightPolish: readFlag(
+    'EXPO_PUBLIC_FF_ROMAN_BODYWEIGHT_POLISH',
+    false,
+  ),
+  // NOTE (roman-p4 / Option C): the former
+  // `romanFirstPaymentRequireBackendHistory` forward-hook flag
+  // (EXPO_PUBLIC_FF_ROMAN_REQUIRE_BACKEND_HISTORY) was removed. It was a
+  // band-aid for the client-side ClientPurchase same-row replay problem, which
+  // no longer exists now that the backend owns the first-payment decision and
+  // the mobile client only reacts to the FIRST_PAYMENT notification.
 
   // ─── Community v3-1 — opt-in challenges ──────────────────────────────────
   // Cohort challenges with personal-progress logging and a STRICTLY OPT-IN,
