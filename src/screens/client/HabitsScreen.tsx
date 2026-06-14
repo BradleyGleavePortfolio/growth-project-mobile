@@ -41,6 +41,8 @@ import { makeHABIT_COLORS, type HabitView, type TabMode } from './habits/constan
 import { HabitCard } from './habits/HabitCard';
 import { MoodEnergyPicker } from './habits/MoodEnergyPicker';
 import { AddHabitSheet } from './habits/AddHabitSheet';
+import CompetencePill from '../../components/roman/CompetencePill';
+import { featureFlags } from '../../config/featureFlags';
 
 export default function HabitsScreen() {
   const { colors, semanticColors: sc } = useTheme();
@@ -70,6 +72,11 @@ export default function HabitsScreen() {
   const [notes, setNotes] = useState('');
   const [checkInToast, setCheckInToast] = useState(false);
   const [lastCheckInDate, setLastCheckInDate] = useState<string | null>(null);
+  // ED.6 — coach's most-recent review of today's check-in (ISO or null). Read
+  // straight off the check-in row the backend already returns; null while no
+  // coach review exists OR the backend FEATURE_ROMAN_COACH_REVIEWED_AT flag is
+  // OFF (the column stays NULL), so the pill stays hidden.
+  const [coachReviewedAt, setCoachReviewedAt] = useState<string | null>(null);
 
   // Add-habit modal form
   const [newName, setNewName] = useState('');
@@ -89,10 +96,15 @@ export default function HabitsScreen() {
           stress?: number;
           notes?: string;
           date?: string;
+          coach_reviewed_at?: string | null;
         }
       | null
       | undefined;
-    if (!row) return;
+    if (!row) {
+      setCoachReviewedAt(null);
+      return;
+    }
+    setCoachReviewedAt(row.coach_reviewed_at ?? null);
     if (row.mood != null) setMood(Number(row.mood));
     if (row.energy != null) setEnergy(Number(row.energy));
     if (row.sleep_hours != null) setSleepHours(Number(row.sleep_hours));
@@ -355,6 +367,21 @@ export default function HabitsScreen() {
                 </Text>
               </View>
             )}
+
+            {/* ED.6 — coach-is-watching micro-signal below the check-in body.
+                Gated by the mobile flag; only renders once a coach has reviewed
+                today's check-in (coachReviewedAt non-null, which the backend
+                only stamps when its own flag is ON). placement=bottom draws the
+                hairline above the pill so it reads as a quiet seam under the
+                body it annotates. */}
+            {featureFlags.romanCompetencePill && checkInSaved ? (
+              <CompetencePill
+                reviewedAt={coachReviewedAt}
+                surface="checkIn"
+                placement="bottom"
+                testID="checkin-competence-pill"
+              />
+            ) : null}
 
             <MoodEnergyPicker
               mood={mood}
