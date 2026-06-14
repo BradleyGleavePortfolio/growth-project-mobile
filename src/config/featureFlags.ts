@@ -175,11 +175,16 @@ export const featureFlags = {
   communityEvents: readFlag('EXPO_PUBLIC_FF_COMMUNITY_EVENTS', false),
   romanChat: readFlag('EXPO_PUBLIC_FF_ROMAN_CHAT', false),
   /**
-   * Roman P4 / ED.3 — First Payment Wow Screen (coach app). When ON, the
-   * coach shell opens a Supabase realtime subscription on the coach's first
-   * payment and overlays the celebration screen once (MMKV once-only gate).
-   * Default OFF (production-safe scaffolding); flip on per build once the
-   * payments realtime channel is live.
+   * Roman P4 / ED.3 — First Payment Wow Screen (coach app). Mobile mirror of
+   * the backend's FEATURE_ROMAN_FIRST_PAYMENT gate (Option C —
+   * ROMAN_ED3_REWRITE_PLAN.md). When ON, the coach shell subscribes to the
+   * backend's FIRST_PAYMENT domain notification (useFirstPaymentNotification)
+   * and overlays the celebration screen once (MMKV once-only gate). The mobile
+   * client no longer reads the ClientPurchase table directly — the backend owns
+   * the first-payment decision and emits a normal notification. Default OFF
+   * (production-safe scaffolding); flip on per build once the backend
+   * FIRST_PAYMENT emitter is live. Both old and new paths are killable from the
+   * server via the backend gate.
    *
    * env: EXPO_PUBLIC_FF_ROMAN_FIRST_PAYMENT_WOW
    */
@@ -199,23 +204,12 @@ export const featureFlags = {
     'EXPO_PUBLIC_FF_ROMAN_BODYWEIGHT_POLISH',
     false,
   ),
-  /**
-   * Roman P4 / ED.3 — stricter first-payment proof via a backend row-history
-   * source (audit R5 P1, same-row prior-success replay). Default OFF. The hook
-   * already fails closed on a same-row re-activation by inspecting the OLD
-   * status (a row can only reach past_due / canceled / expired AFTER it was
-   * successful). This flag is a forward hook: when a backend success-history /
-   * ledger endpoint lands, the hook can additionally require an authoritative
-   * "this row never previously succeeded" proof before celebrating. See
-   * AI_BUTLER_ROMAN_IDENTITY_SPEC.md (ED.3) and the forward-hook note in
-   * useFirstPaymentRealtime.ts.
-   *
-   * env: EXPO_PUBLIC_FF_ROMAN_REQUIRE_BACKEND_HISTORY
-   */
-  romanFirstPaymentRequireBackendHistory: readFlag(
-    'EXPO_PUBLIC_FF_ROMAN_REQUIRE_BACKEND_HISTORY',
-    false,
-  ),
+  // NOTE (roman-p4 / Option C): the former
+  // `romanFirstPaymentRequireBackendHistory` forward-hook flag
+  // (EXPO_PUBLIC_FF_ROMAN_REQUIRE_BACKEND_HISTORY) was removed. It was a
+  // band-aid for the client-side ClientPurchase same-row replay problem, which
+  // no longer exists now that the backend owns the first-payment decision and
+  // the mobile client only reacts to the FIRST_PAYMENT notification.
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;
