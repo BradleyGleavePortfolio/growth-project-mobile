@@ -11,6 +11,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
+import StepTransitionView from './onboarding/StepTransitionView';
+import { featureFlags } from '../config/featureFlags';
 
 interface Props {
   step: number;
@@ -86,10 +88,25 @@ export default function OnboardingLayout({
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.title}>{title}</Text>
-        {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+        {/*
+          ED.5 onboarding polish: when `romanOnboardingPolish` is ON, the
+          per-step content cross-fades + slides 8px on mount through the shared
+          StepTransitionView primitive (220ms ease-out cubic), re-triggered per
+          `step`. When OFF, StepTransitionView renders its children at rest with
+          no animation, so the legacy hard-cut behaviour is byte-identical. This
+          is a presentation-only wrap — the step title, subtitle, and content
+          are untouched.
+        */}
+        <StepTransitionView
+          enabled={featureFlags.romanOnboardingPolish}
+          transitionKey={step}
+          style={styles.transition}
+        >
+          <Text style={styles.title}>{title}</Text>
+          {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
 
-        <View style={styles.content}>{children}</View>
+          <View style={styles.content}>{children}</View>
+        </StepTransitionView>
       </ScrollView>
 
       <View style={styles.bottomBar}>
@@ -156,6 +173,11 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 24,
     paddingBottom: 24,
+  },
+  transition: {
+    // The transition wrapper should size to its content inside the scroll view
+    // rather than stretch to fill, so the legacy (flag-off) layout is unchanged.
+    flex: 0,
   },
   title: {
     fontSize: 28,
