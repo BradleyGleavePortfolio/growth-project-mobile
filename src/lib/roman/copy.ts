@@ -639,3 +639,30 @@ export const romanDailyRingsCelebration =
 
 export const romanDailyRingsEncouragement =
   'The day is in motion. Close the rings as you go.';
+// ── ED.5 onboarding permanence markers (PermanenceMarker, coach app) ───────
+
+/**
+ * ED.5 permanence-marker stems. Roman speaks to the COACH during their own
+ * onboarding, the instant a package or its price is saved: a brief, calm line
+ * slides in under the input row for ~1.6s, then fades, leaving a persistent
+ * checkmark beside the field label (the "permanence marker").
+ *
+ * These are Roman's STRAIGHT register — the saved-confirmation moment is a
+ * reassurance, never a celebration, so the lines are measured, not effusive
+ * (spec §1.1). The voice contract holds exactly as in the P3 module above:
+ *   • no exclamation marks (these are not the rationed §2.6 celebration);
+ *   • no emoji;
+ *   • no contractions ("You can", not "You'll");
+ *   • no "your coach" — Roman addresses the coach directly about their own
+ *     setup, so each stem stands alone with no third-party subject.
+ * The PermanenceMarker doctrine test pins all four invariants over both stems.
+ */
+export const romanPermanenceMarker = {
+  /** Shown once a coach creates a package during onboarding. */
+  packageSaved: 'Saved. You can change the package any time.',
+  /** Shown once a coach sets the package price during onboarding. */
+  priceSaved: 'Saved. You can adjust the price any time.',
+} as const;
+
+/** The keys of the permanence-marker copy map (the two onboarding affordances). */
+export type RomanPermanenceMarkerKind = keyof typeof romanPermanenceMarker;

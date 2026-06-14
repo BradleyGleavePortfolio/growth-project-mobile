@@ -338,6 +338,30 @@ export const featureFlags = {
    * env: EXPO_PUBLIC_FF_ROMAN_THREE_ARC_ROUTER
    */
   romanThreeArcRouter: readFlag('EXPO_PUBLIC_FF_ROMAN_THREE_ARC_ROUTER', false),
+  // ─── Roman ED.5 — onboarding polish pass (mobile-only) ───────────────────
+  /**
+   * ED.5 onboarding polish layer over the existing onboarding flow. When ON,
+   * three pure-presentation primitives mount inside the onboarding surfaces:
+   *   • StepTransitionView — a cross-fade + 8px upward slide wrapping each
+   *     onboarding step's content (replaces the prior hard-cut).
+   *   • StripeConnectCard  — a 180deg flip card on the Stripe Connect step that
+   *     reveals the connected state on a successful deep-link return.
+   *   • PermanenceMarker   — a calm Roman-voiced confirmation marker under the
+   *     package / pricing inputs once a coach sets them.
+   *
+   * When OFF the onboarding screens behave EXACTLY as today (hard-cut
+   * transitions, static Stripe card, no permanence marker) and none of the
+   * three new components mount — the ED.5 flag-off doctrine pin asserts this.
+   * This is a PRESENTATION-ONLY flag: there are zero backend changes and no
+   * new telemetry. Default OFF UNCONDITIONALLY (not `isDev`) so a dev build
+   * never surfaces the polish before sign-off.
+   *
+   * env: EXPO_PUBLIC_FF_ROMAN_ONBOARDING_POLISH
+   */
+  romanOnboardingPolish: readFlag(
+    'EXPO_PUBLIC_FF_ROMAN_ONBOARDING_POLISH',
+    false,
+  ),
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;
