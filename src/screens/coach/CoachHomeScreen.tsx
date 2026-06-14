@@ -24,6 +24,10 @@ import StripeSetupBanner from '../../components/coach/StripeSetupBanner';
 import NewClientBanner from '../../components/coach/NewClientBanner';
 // Stream 1 — AI budget meter + forced 80% tutorial + 95% banner + 100% hard pause.
 import AIBudgetMount from '../../components/coach/ai-budget/AIBudgetMount';
+// Roman ED.2 — three-arc check-in/brief/review router (flag-gated, default OFF).
+import CoachThreeArcRouter from '../../components/coach/CoachThreeArcRouter';
+import { useCoachThreeArcCounts } from '../../hooks/useCoachThreeArcCounts';
+import { featureFlags } from '../../config/featureFlags';
 
 
 interface RedFlagClient {
@@ -52,6 +56,11 @@ export default function CoachHomeScreen() {
   const [dashboardError, setDashboardError] = useState<string | null>(null);
   const [riskCounts, setRiskCounts] = useState<RiskBucketCounts | null>(null);
   const isOwner = currentUser?.role === 'owner';
+
+  // Roman ED.2 three-arc router. The fetch is gated on the same flag that gates
+  // the mount, so a flag-OFF build issues no request and renders nothing.
+  const threeArcEnabled = featureFlags.romanThreeArcRouter;
+  const dailyRingsQuery = useCoachThreeArcCounts({ enabled: threeArcEnabled });
 
   const fetchDashboard = useCallback(async () => {
     setDashboardLoading(true);
@@ -277,6 +286,23 @@ export default function CoachHomeScreen() {
           </HapticPressable>
         </View>
       </View>
+
+      {/* Roman ED.2 — three-arc router (flag-gated, default OFF). Deep-links to
+          REAL coach routes: CHECK-INS → ClientsStack, BRIEF → SettingsStack/
+          CoachBrief, REVIEW → Messages. Renders three empty arcs gracefully
+          when the backend flag is OFF (zeroed shape) or while data is loading. */}
+      {threeArcEnabled && (
+        <FadeInView>
+          <CoachThreeArcRouter
+            rings={dailyRingsQuery.data}
+            onPressCheckIns={() => navigation.navigate('ClientsStack')}
+            onPressBrief={() =>
+              navigation.navigate('SettingsStack', { screen: 'CoachBrief' })
+            }
+            onPressReview={() => navigation.navigate('Messages')}
+          />
+        </FadeInView>
+      )}
 
       {/* Key Metrics */}
       <FadeInView>

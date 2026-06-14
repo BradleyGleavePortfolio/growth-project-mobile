@@ -619,6 +619,26 @@ export function romanCoachReview(args: RomanCoachReviewArgs): string {
   return `Your coach reviewed ${object} ${relative}.`;
 }
 
+/**
+ * ED.2 — three-arc router daily-rings line (coach app).
+ *
+ * The line beneath the three arcs IS the celebration (brief §Visual reference:
+ * "No accent celebration animation … The Roman voice line … updates copy when
+ * 3/3 close — that IS the celebration"). Two single stems, both in the STRAIGHT
+ * butler register (a daily completion is a quiet acknowledgement, not a
+ * milestone — no quip, brief §Voice rules). EXCLAMATION-FREE: the session's one
+ * rationed exclamation belongs to romanFirstPayment's celebration (§1.4 / §4),
+ * so the daily line must not spend it. No emoji, no contractions beyond the
+ * possessive "day's", measured respect (§1.1).
+ *
+ *   - celebration  → shown when all three arcs are closed (3/3 complete).
+ *   - encouragement → shown while at least one arc is still open.
+ */
+export const romanDailyRingsCelebration =
+  "Three rings closed. The day's work is done.";
+
+export const romanDailyRingsEncouragement =
+  'The day is in motion. Close the rings as you go.';
 // ── ED.5 onboarding permanence markers (PermanenceMarker, coach app) ───────
 
 /**
