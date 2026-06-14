@@ -21,7 +21,12 @@
  *     border — top or bottom depending on `placement` — so the pill reads as a
  *     quiet seam in the layout rather than a floating chip.
  *   - Text: near-black serif (Cormorant Garamond) at small size.
- *   - A small sage monogram dot (Roman's mark) anchors the line.
+ *   - Roman's mark anchors the line via the existing `RomanAvatar` in its
+ *     compact `monogram` crop (the deep-gold "R" tile). The brief names
+ *     "MonogramBadge" loosely, but that component renders a CLIENT monogram with
+ *     a per-name hue and explicitly reserves the Roman mark for Roman; this pill
+ *     is Roman's voice, so `RomanAvatar crop="monogram"` is the doctrine-correct
+ *     mark and keeps the avatar contract in one place.
  *
  * Feature flag: the rendering decision is made by the CALLER (the screen),
  * which checks `featureFlags.romanCompetencePill` before mounting the pill.
@@ -33,7 +38,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useTheme } from '../../theme/useTheme';
-import { colors } from '../../theme/tokens';
+import RomanAvatar from './RomanAvatar';
 import {
   romanCoachReview,
   type CoachReviewSurface,
@@ -65,10 +70,9 @@ export interface CompetencePillProps {
   testID?: string;
 }
 
-// Sage monogram dot. `forest` is the primary brand accent (the "sage-green
-// variant" the brief names); the ink glyph sits on it. Tokenized — no raw hex.
-const SAGE = colors.forest;
-const DOT_INK = colors.bone ?? '#F5EFE4';
+// Compact Roman monogram size for the pill row (matches RomanAvatar's dense
+// default register).
+const MARK_SIZE = 18;
 
 export default function CompetencePill({
   reviewedAt,
@@ -94,17 +98,15 @@ export default function CompetencePill({
       testID={testID}
       accessibilityRole="text"
       accessibilityLabel={label}
-      style={[styles.row, { backgroundColor: semanticColors.bgSurface }, borderStyle]}
+      style={[styles.row, { backgroundColor: semanticColors.surface }, borderStyle]}
     >
-      <View style={styles.dot} accessibilityElementsHidden importantForAccessibility="no">
-        <Text style={styles.dotMark}>R</Text>
+      <View accessibilityElementsHidden importantForAccessibility="no">
+        <RomanAvatar crop="monogram" size={MARK_SIZE} />
       </View>
       <Text style={[styles.text, { color: semanticColors.textPrimary }]}>{label}</Text>
     </View>
   );
 }
-
-const DOT_SIZE = 16;
 
 const styles = StyleSheet.create({
   row: {
@@ -113,23 +115,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 16,
     gap: 8,
-  },
-  dot: {
-    width: DOT_SIZE,
-    height: DOT_SIZE,
-    borderRadius: DOT_SIZE / 2,
-    backgroundColor: SAGE,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dotMark: {
-    color: DOT_INK,
-    fontSize: DOT_SIZE * 0.56,
-    // Cormorant matches Roman's serif register; weight stays <= 600 to respect
-    // the quiet-luxury doctrine pin (no 700/800).
-    fontFamily: 'CormorantGaramond_500Medium',
-    fontWeight: '500',
-    lineHeight: DOT_SIZE,
   },
   text: {
     flex: 1,
