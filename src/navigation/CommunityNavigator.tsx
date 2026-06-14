@@ -17,6 +17,11 @@
  * `featureFlags.communityClassroom` is true. With that flag OFF (the default)
  * neither route registers, so the read-only student classroom surface is dead
  * code at build time and unreachable.
+ *
+ * v3-3 VOICE NOTES containment: the CommunityVoiceComposer route is registered
+ * ONLY when `featureFlags.communityVoiceNotes` is true. With that flag OFF (the
+ * default) the route never registers, so the record/send voice surface is dead
+ * code at build time and unreachable.
  */
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -34,6 +39,7 @@ import CommunityChallengeDetailScreen from '../screens/community/CommunityChalle
 import CommunityChallengesScreen from '../screens/community/CommunityChallengesScreen';
 import CommunityClassroomScreen from '../screens/community/CommunityClassroomScreen';
 import CommunityLessonDetailScreen from '../screens/community/CommunityLessonDetailScreen';
+import CommunityVoiceComposerScreen from '../screens/community/CommunityVoiceComposerScreen';
 import type { CommunityStackParamList } from '../screens/community/communityNavTypes';
 
 const CommunityStack = createNativeStackNavigator<CommunityStackParamList>();
@@ -78,6 +84,12 @@ export default function CommunityNavigator(): React.ReactElement {
         <CommunityStack.Screen
           name="CommunityLessonDetail"
           component={CommunityLessonDetailScreen}
+        />
+      ) : null}
+      {featureFlags.communityVoiceNotes ? (
+        <CommunityStack.Screen
+          name="CommunityVoiceComposer"
+          component={CommunityVoiceComposerScreen}
         />
       ) : null}
     </CommunityStack.Navigator>

@@ -12,13 +12,13 @@
  * AsyncStorage is mocked globally (jest.setup.js), so these assertions exercise
  * the SAME async get/set surface the device MMKV instance presents.
  */
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import {
   firstPaymentSeenKey,
   hasSeenFirstPayment,
   markFirstPaymentSeen,
 } from '../firstPaymentGate';
-
-const AsyncStorage = require('@react-native-async-storage/async-storage');
 
 beforeEach(async () => {
   await AsyncStorage.clear();

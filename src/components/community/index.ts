@@ -55,3 +55,28 @@ export { default as LessonReleaseLockBadge, relativeUnlockHint } from './LessonR
 export type { LessonReleaseLockBadgeProps } from './LessonReleaseLockBadge';
 export { default as ClassroomEmptyState } from './ClassroomEmptyState';
 export type { ClassroomEmptyStateProps } from './ClassroomEmptyState';
+// ─── Community v3-3 voice notes (flag-gated record/review/send + playback) ─
+export { default as VoiceNoteComposer } from './VoiceNoteComposer';
+export type { VoiceNoteComposerProps } from './VoiceNoteComposer';
+export { default as VoiceNoteRecordButton } from './VoiceNoteRecordButton';
+export type {
+  VoiceNoteRecordButtonProps,
+  RecordButtonStatus,
+} from './VoiceNoteRecordButton';
+export { default as VoiceNoteWaveform } from './VoiceNoteWaveform';
+export type { VoiceNoteWaveformProps } from './VoiceNoteWaveform';
+export { default as VoiceNotePlayer } from './VoiceNotePlayer';
+export type { VoiceNotePlayerProps } from './VoiceNotePlayer';
+export {
+  default as VoicePrivacyCopy,
+  describeVoiceAudience,
+} from './VoicePrivacyCopy';
+export type {
+  VoicePrivacyCopyProps,
+  VoiceAudienceTarget,
+} from './VoicePrivacyCopy';
+export {
+  formatDuration,
+  downsamplePeaks,
+  formatBytes,
+} from './voiceFormat';
