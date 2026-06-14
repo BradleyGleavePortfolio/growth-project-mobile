@@ -52,11 +52,22 @@ import type {
   WorkoutType,
 } from '../../api/workoutBuilderApi';
 import {
+  actionForAddExercise,
+  actionForEditExerciseField,
+  actionForEditPlan,
+  actionForRemoveExercise,
+  actionForReorderExercise,
   useCreateWorkoutPlan,
   useSetWorkoutExercises,
   useUpdateWorkoutPlan,
   useWorkoutPlan,
 } from '../../hooks/useWorkoutBuilder';
+import {
+  useBuilderCommandStack,
+  type BuilderAction,
+  type CommandRowSnapshot,
+  type InverseOp,
+} from '../../hooks/useBuilderCommandStack';
 import { useExerciseSearch } from '../../hooks/useExerciseLibrary';
 import { spacing, typography } from '../../theme/tokens';
 import type { SemanticTokens } from '../../theme/tokens';
@@ -65,10 +76,15 @@ import { featureFlags } from '../../config/featureFlags';
 import { useAutosave } from '../../hooks/useAutosave';
 import { generateClientId } from '../../utils/clientId';
 import AutosaveStatusPill from '../../components/workout/AutosaveStatusPill';
+import UndoButton from '../../components/coach/workout-builder/UndoButton';
+import { romanBuilderUndoToast, romanGenericError } from '../../lib/roman/copy';
 import {
   diffWorkingCopy,
   type WorkoutBuilderWorkingCopy,
 } from './workoutBuilderAutosaveDiff';
+
+/** EW2 undo: the in-screen toast lingers ~1.4 s, then self-dismisses. */
+const UNDO_TOAST_MS = 1400;
 
 type RouteParam = { planId?: string };
 
@@ -215,6 +231,57 @@ function serverRowCompositeSignature(e: WorkoutPlanExercise): string {
   });
 }
 
+/**
+ * EW2 undo: maps an editable `DraftExerciseRow` field to the matching
+ * `CommandRowSnapshot` field (the snapshot uses camelCase server-facing names).
+ * Non-persisted draft fields (clientId, display_name, row_id) are absent, so a
+ * patch touching them pushes no edit action.
+ */
+const DRAFT_TO_SNAPSHOT_FIELD: Partial<
+  Record<keyof DraftExerciseRow, keyof CommandRowSnapshot>
+> = {
+  exercise_external_id: 'exerciseExternalId',
+  sets: 'sets',
+  reps_or_duration_seconds: 'repsOrDurationSeconds',
+  rest_seconds: 'restSeconds',
+  weight_lbs: 'weightLbs',
+  superset_group_id: 'supersetGroupId',
+  notes: 'notes',
+};
+
+/**
+ * EW2 undo: the reverse map — a snapshot field back to the draft field the
+ * inverse `editExerciseField` writes. `rowId` / `displayName` have no editable
+ * draft counterpart through `updateRow`, so they are absent (and undefined-guarded).
+ */
+const SNAPSHOT_TO_DRAFT_FIELD: Partial<
+  Record<keyof CommandRowSnapshot, keyof DraftExerciseRow>
+> = {
+  exerciseExternalId: 'exercise_external_id',
+  sets: 'sets',
+  repsOrDurationSeconds: 'reps_or_duration_seconds',
+  restSeconds: 'rest_seconds',
+  weightLbs: 'weight_lbs',
+  supersetGroupId: 'superset_group_id',
+  notes: 'notes',
+};
+
+/** Reads a snapshot field's CURRENT value off a draft row (the pre-edit value). */
+const SNAPSHOT_VALUE_OF: Record<
+  keyof CommandRowSnapshot,
+  (r: DraftExerciseRow) => CommandRowSnapshot[keyof CommandRowSnapshot]
+> = {
+  rowId: (r) => r.row_id,
+  exerciseExternalId: (r) => r.exercise_external_id,
+  displayName: (r) => r.display_name,
+  sets: (r) => r.sets,
+  repsOrDurationSeconds: (r) => r.reps_or_duration_seconds,
+  restSeconds: (r) => r.rest_seconds,
+  weightLbs: (r) => r.weight_lbs,
+  supersetGroupId: (r) => r.superset_group_id,
+  notes: (r) => r.notes,
+};
+
 export default function CoachWorkoutBuilderScreen() {
   const route = useRoute<RouteProp<Record<string, RouteParam>, string>>();
   const navigation = useNavigation();
@@ -285,14 +352,26 @@ export default function CoachWorkoutBuilderScreen() {
     { enabled: searchEnabled },
   );
 
+  // EW2 undo: a ref the mutation callbacks call to push an inverse-op snapshot
+  // onto the command stack AT GESTURE TIME. It is populated below once the stack
+  // exists (the stack's `applyInverse` closes over these same mutation setters,
+  // so the ref breaks the declaration cycle). When undo is OFF the ref stays
+  // null and every mutation is byte-identical to today — zero push work.
+  const pushUndoActionRef = useRef<((action: BuilderAction) => void) | null>(
+    null,
+  );
+
   const addExercise = useCallback((ex: Exercise) => {
+    // Mint the stable clientId up front so the SAME id is on the new row AND in
+    // the undo snapshot — the inverse (removeExercise) resolves the row by it.
+    const clientId = generateClientId();
     setRows((cur) => [
       ...cur,
       {
         // Stable client identity for this on-device row, minted once at
         // creation. Tracks the row across the id-less insert / adoption window
         // (D-045) and is never serialized to the server.
-        clientId: generateClientId(),
+        clientId,
         // No row_id: a brand-new on-device row. The autosave diff emits an
         // upsert_exercise WITHOUT a row_id (the server assigns one on insert,
         // which the next refetch folds back in).
@@ -306,6 +385,9 @@ export default function CoachWorkoutBuilderScreen() {
         notes: null,
       },
     ]);
+    // EW2: snapshot at gesture time (the row.id is adopted from the server later;
+    // the inverse resolves it via this clientId, so we need no server confirm).
+    pushUndoActionRef.current?.(actionForAddExercise(clientId));
     setSearch('');
   }, []);
 
@@ -314,9 +396,14 @@ export default function CoachWorkoutBuilderScreen() {
       const next = cur.slice();
       const target = idx + dir;
       if (target < 0 || target >= next.length) return cur;
+      const moved = next[idx] as DraftExerciseRow;
       const tmp = next[idx] as DraftExerciseRow;
       next[idx] = next[target] as DraftExerciseRow;
       next[target] = tmp;
+      // EW2: snapshot from/to AT GESTURE TIME (inverse swaps them back).
+      pushUndoActionRef.current?.(
+        actionForReorderExercise(moved.clientId, idx, target),
+      );
       return next;
     });
   }, []);
@@ -347,6 +434,26 @@ export default function CoachWorkoutBuilderScreen() {
         const list = deletedSignaturesRef.current.get(sig) ?? [];
         list.push(target.clientId);
         deletedSignaturesRef.current.set(sig, list);
+        // EW2: snapshot the FULL row + its index BEFORE removal (inverse re-adds
+        // it at the original position). Snapshot is taken at gesture time so a
+        // server failure on the forward delete still leaves the stack honest.
+        pushUndoActionRef.current?.(
+          actionForRemoveExercise(
+            {
+              clientId: target.clientId,
+              rowId: target.row_id,
+              exerciseExternalId: target.exercise_external_id,
+              displayName: target.display_name,
+              sets: target.sets,
+              repsOrDurationSeconds: target.reps_or_duration_seconds,
+              restSeconds: target.rest_seconds,
+              weightLbs: target.weight_lbs,
+              supersetGroupId: target.superset_group_id,
+              notes: target.notes,
+            },
+            idx,
+          ),
+        );
       }
       return cur.filter((_, i) => i !== idx);
     });
@@ -355,7 +462,25 @@ export default function CoachWorkoutBuilderScreen() {
   const updateRow = useCallback(
     (idx: number, patch: Partial<DraftExerciseRow>) => {
       setRows((cur) =>
-        cur.map((r, i) => (i === idx ? { ...r, ...patch } : r)),
+        cur.map((r, i) => {
+          if (i !== idx) return r;
+          // EW2: one push per edited field, capturing the PREVIOUS value BEFORE
+          // the edit (inverse writes it back). A NumberField edit patches a
+          // single field at a time; if a patch carries several we push one
+          // action per changed field so each is independently undoable.
+          const pushUndo = pushUndoActionRef.current;
+          if (pushUndo) {
+            (Object.keys(patch) as (keyof DraftExerciseRow)[]).forEach((key) => {
+              const field = DRAFT_TO_SNAPSHOT_FIELD[key];
+              if (field === undefined) return; // non-persisted field (e.g. clientId)
+              const previousValue = SNAPSHOT_VALUE_OF[field](r);
+              pushUndo(
+                actionForEditExerciseField(r.clientId, field, previousValue),
+              );
+            });
+          }
+          return { ...r, ...patch };
+        }),
       );
     },
     [],
@@ -1155,6 +1280,173 @@ export default function CoachWorkoutBuilderScreen() {
     void autosave.flush();
   }, [runReplayRefetch, autosave]);
 
+  // ─── EW2 client-side optimistic undo (flag-gated) ──────────────────────────
+  // Purely additive over the existing autosave pipe: NO backend, NO endpoint,
+  // NO schema change. When the flag is OFF, `undoEnabled` is false, the command
+  // stack is mounted inert (its `applyInverse` is never reached because we never
+  // populate `pushUndoActionRef`), NO undo button renders, and NO gesture binds
+  // — the screen is byte-identical to today.
+  const undoEnabled = featureFlags.mwbUndo;
+
+  // EW2 success toast (Roman voice). In-screen, ~1.4 s, self-dismissing. Errors
+  // route through the existing generic error stem (romanGenericError) — the
+  // same calm voice every other mutation failure uses.
+  const [undoToast, setUndoToast] = useState<string | null>(null);
+  const undoToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showUndoToast = useCallback((message: string) => {
+    setUndoToast(message);
+    if (undoToastTimerRef.current) clearTimeout(undoToastTimerRef.current);
+    undoToastTimerRef.current = setTimeout(() => {
+      setUndoToast(null);
+      undoToastTimerRef.current = null;
+    }, UNDO_TOAST_MS);
+  }, []);
+  useEffect(
+    () => () => {
+      if (undoToastTimerRef.current) clearTimeout(undoToastTimerRef.current);
+    },
+    [],
+  );
+
+  // Apply a derived inverse op back through the SAME local-state mutations the
+  // forward ops use — so the change rides the existing autosave diff to the
+  // server (the persisted state matches the on-screen state). Reuses setName /
+  // setType / setRows; touches NO network directly.
+  const applyInverse = useCallback((op: InverseOp): void => {
+    switch (op.kind) {
+      case 'removeExercise': {
+        setRows((cur) => {
+          const idx = cur.findIndex((r) => r.clientId === op.clientId);
+          if (idx === -1) return cur;
+          const removed = cur[idx] as DraftExerciseRow;
+          // Mirror removeRow's delete-tracking so the autosave diff/adoption
+          // path treats this exactly as a user delete would (D-045).
+          deletedKeysRef.current.add(removed.clientId);
+          const sig = rowCompositeSignature(removed);
+          const list = deletedSignaturesRef.current.get(sig) ?? [];
+          list.push(removed.clientId);
+          deletedSignaturesRef.current.set(sig, list);
+          return cur.filter((_, i) => i !== idx);
+        });
+        return;
+      }
+      case 'addExercise': {
+        // Re-add the snapshotted row at its original index. A fresh clientId is
+        // minted so the resurrected row has a distinct on-device identity (its
+        // old clientId may be tracked as deleted); the server reinserts it as a
+        // new row via the id-less upsert path, matching a normal add.
+        setRows((cur) => {
+          const next = cur.slice();
+          const restored: DraftExerciseRow = {
+            clientId: generateClientId(),
+            row_id: undefined,
+            exercise_external_id: op.row.exerciseExternalId,
+            display_name: op.row.displayName,
+            sets: op.row.sets,
+            reps_or_duration_seconds: op.row.repsOrDurationSeconds,
+            rest_seconds: op.row.restSeconds,
+            weight_lbs: op.row.weightLbs,
+            superset_group_id: op.row.supersetGroupId,
+            notes: op.row.notes,
+          };
+          const at = Math.min(Math.max(op.atIndex, 0), next.length);
+          next.splice(at, 0, restored);
+          return next;
+        });
+        return;
+      }
+      case 'reorderExercise': {
+        setRows((cur) => {
+          const from = cur.findIndex((r) => r.clientId === op.clientId);
+          if (from === -1) return cur;
+          const next = cur.slice();
+          const [moved] = next.splice(from, 1);
+          const to = Math.min(Math.max(op.toIndex, 0), next.length);
+          next.splice(to, 0, moved as DraftExerciseRow);
+          return next;
+        });
+        return;
+      }
+      case 'editExerciseField': {
+        const draftKey = SNAPSHOT_TO_DRAFT_FIELD[op.field];
+        if (draftKey === undefined) return;
+        setRows((cur) =>
+          cur.map((r) =>
+            r.clientId === op.clientId
+              ? ({ ...r, [draftKey]: op.value } as DraftExerciseRow)
+              : r,
+          ),
+        );
+        return;
+      }
+      case 'editPlan': {
+        if (op.patch.name !== undefined) setName(op.patch.name);
+        if (op.patch.type !== undefined) setType(op.patch.type as WorkoutType);
+        return;
+      }
+      default: {
+        const _never: never = op;
+        return _never;
+      }
+    }
+  }, []);
+
+  const commandStack = useBuilderCommandStack({ applyInverse });
+  const { push: pushUndoAction, undo: undoStack, canUndo } = commandStack;
+  const commandCapacity = commandStack.capacity;
+
+  // Populate the push ref ONLY when the flag is on, so a flag-off build does
+  // zero push work and every mutation is byte-identical to today. The cleanup
+  // nulls it so a flag flip (or unmount) stops capturing.
+  useEffect(() => {
+    if (!undoEnabled) {
+      pushUndoActionRef.current = null;
+      return undefined;
+    }
+    pushUndoActionRef.current = pushUndoAction;
+    return () => {
+      pushUndoActionRef.current = null;
+    };
+  }, [undoEnabled, pushUndoAction]);
+
+  // The single undo handler shared by the toolbar button AND the two-finger
+  // swipe gesture. Pops + re-applies the inverse; on success shows the Roman
+  // success toast; on failure surfaces the generic Roman error and (the stack
+  // having already restored the action) leaves it for a retry.
+  const onUndo = useCallback(() => {
+    void undoStack()
+      .then(() => {
+        showUndoToast(romanBuilderUndoToast.success({ depth: commandCapacity }));
+      })
+      .catch(() => {
+        showUndoToast(romanGenericError({ mode: 'default' }));
+      });
+  }, [undoStack, showUndoToast, commandCapacity]);
+
+  // Plan-meta edits routed through the command stack (flag-gated push). Each
+  // wraps the raw setter and snapshots the PREVIOUS value BEFORE the edit so the
+  // inverse (editPlan with previousPatch) restores it.
+  const handleNameChange = useCallback(
+    (next: string) => {
+      const previous = name;
+      if (undoEnabled && planId && next !== previous) {
+        pushUndoActionRef.current?.(actionForEditPlan(planId, { name: previous }));
+      }
+      setName(next);
+    },
+    [name, planId, undoEnabled],
+  );
+  const handleTypeChange = useCallback(
+    (next: WorkoutType) => {
+      const previous = type;
+      if (undoEnabled && planId && next !== previous) {
+        pushUndoActionRef.current?.(actionForEditPlan(planId, { type: previous }));
+      }
+      setType(next);
+    },
+    [type, planId, undoEnabled],
+  );
+
   return (
     <KeyboardAvoidingView
       style={styles.screen}
@@ -1162,9 +1454,17 @@ export default function CoachWorkoutBuilderScreen() {
     >
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.headerRow}>
-          <Text style={[typography.h2, { color: sc.textPrimary }]}>
-            {isEditing ? 'Edit workout plan' : 'New workout plan'}
-          </Text>
+          <View style={styles.headerLeading}>
+            {/* EW2 undo: left-justified, hairline-divided from the title. Only
+                mounted when the flag is ON — flag-off renders NOTHING here and
+                binds NO gesture (zero UI residue, byte-identical to today). */}
+            {undoEnabled ? (
+              <UndoButton onUndo={onUndo} canUndo={canUndo} />
+            ) : null}
+            <Text style={[typography.h2, { color: sc.textPrimary }]}>
+              {isEditing ? 'Edit workout plan' : 'New workout plan'}
+            </Text>
+          </View>
           {/* Save-state pill: only when autosave is active. Flag-off (or a
               brand-new plan) renders NOTHING here — zero UI residue. Tapping a
               recoverable (offline/conflict) pill retries the flush now. */}
@@ -1179,13 +1479,23 @@ export default function CoachWorkoutBuilderScreen() {
           ) : null}
         </View>
 
+        {/* EW2 undo toast (Roman voice). Transient (~1.4 s), self-dismissing.
+            Only ever shown when undo is active and a revert just completed. */}
+        {undoEnabled && undoToast ? (
+          <View style={styles.undoToast} testID="mwb-undo-toast">
+            <Text style={[typography.caption, { color: sc.textPrimary }]}>
+              {undoToast}
+            </Text>
+          </View>
+        ) : null}
+
         <Text style={[typography.caption, styles.label, { color: sc.textMuted }]}>
           Plan name
         </Text>
         <TextInput
           accessibilityLabel="Plan name"
           value={name}
-          onChangeText={setName}
+          onChangeText={handleNameChange}
           placeholder="e.g. Push day A"
           placeholderTextColor={sc.textMuted}
           style={styles.input}
@@ -1200,7 +1510,7 @@ export default function CoachWorkoutBuilderScreen() {
             <Pressable
               key={t}
               accessibilityRole="button"
-              onPress={() => setType(t)}
+              onPress={() => handleTypeChange(t)}
               style={[
                 styles.typeChip,
                 { borderColor: sc.textMuted },
@@ -1408,6 +1718,21 @@ function makeStyles(sc: SemanticTokens) {
       alignItems: 'center',
       gap: spacing.sm,
       marginBottom: spacing.xs,
+    },
+    headerLeading: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      flexShrink: 1,
+    },
+    undoToast: {
+      backgroundColor: sc.bgSurface,
+      borderRadius: 8,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: sc.border,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      marginBottom: spacing.sm,
     },
     label: { marginTop: spacing.md, marginBottom: spacing.xs },
     input: {

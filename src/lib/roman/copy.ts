@@ -634,9 +634,9 @@ export function romanCoachReview(args: RomanCoachReviewArgs): string {
  *
  * The ERROR path (a network failure during undo) does NOT get a bespoke line:
  * the spec routes it through the existing generic error stem
- * (`romanGenericError`) so a failed undo speaks the same calm voice as any other
- * transient mutation failure, and the command stack is NOT popped so the coach
- * can retry.
+ * (`romanGenericError`) so a failed undo speaks the same calm voice used for
+ * every other transient mutation failure, and the command stack is NOT popped so
+ * the coach can retry.
  */
 export interface RomanBuilderUndoToastArgs {
   /** The command stack's configured capacity (default 20). Spelled as a word. */
