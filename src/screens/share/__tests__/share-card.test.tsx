@@ -156,7 +156,7 @@ describe('ShareCardScreen', () => {
       label: 'Day Streak',
     });
     expect(() => {
-      await fireEvent.press(getByRole('button', { name: 'Share milestone card' }));
+      fireEvent.press(getByRole('button', { name: 'Share milestone card' }));
     }).not.toThrow();
   });
 

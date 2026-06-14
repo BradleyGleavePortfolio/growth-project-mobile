@@ -109,7 +109,7 @@ describe('ContactView — block flow', () => {
     );
 
     pressDestructive('Block', () => {
-      await fireEvent.press(getByLabelText('Block user'));
+      fireEvent.press(getByLabelText('Block user'));
     });
 
     await waitFor(() => expect(mockBlock).toHaveBeenCalledWith('u1'));
@@ -126,7 +126,7 @@ describe('ContactView — block flow', () => {
     );
 
     pressDestructive('Block', () => {
-      await fireEvent.press(getByLabelText('Block user'));
+      fireEvent.press(getByLabelText('Block user'));
     });
 
     await waitFor(() => expect(mockBlock).toHaveBeenCalled());
@@ -147,7 +147,7 @@ describe('ContactView — block flow', () => {
     await waitFor(() => getByLabelText('Unblock user'));
 
     pressDestructive('Unblock', () => {
-      await fireEvent.press(getByLabelText('Unblock user'));
+      fireEvent.press(getByLabelText('Unblock user'));
     });
 
     await waitFor(() => expect(mockUnblock).toHaveBeenCalledWith('u1'));
@@ -169,7 +169,7 @@ describe('ContactView — block flow', () => {
     await waitFor(() => getByLabelText('Unblock user'));
 
     pressDestructive('Unblock', () => {
-      await fireEvent.press(getByLabelText('Unblock user'));
+      fireEvent.press(getByLabelText('Unblock user'));
     });
 
     await waitFor(() => expect(mockUnblock).toHaveBeenCalled());
