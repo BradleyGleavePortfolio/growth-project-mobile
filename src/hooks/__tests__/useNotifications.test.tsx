@@ -27,10 +27,12 @@ import { Text } from 'react-native';
 
 // ── notificationsApi mock — flip the page returned per test. ────────────────
 let mockPageItems: Array<Record<string, unknown>> = [];
-const mockFetchNotifications = jest.fn(async () => ({
-  items: mockPageItems,
-  nextCursor: null,
-}));
+const mockFetchNotifications = jest.fn(
+  async (..._args: unknown[]) => ({
+    items: mockPageItems,
+    nextCursor: null,
+  }),
+);
 jest.mock('../../services/notificationsApi', () => ({
   fetchNotifications: (...args: unknown[]) => mockFetchNotifications(...args),
 }));
