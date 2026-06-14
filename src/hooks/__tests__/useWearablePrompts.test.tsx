@@ -103,7 +103,7 @@ beforeEach(() => {
 describe('useWearablePrompts — disabled posture (no network)', () => {
   it('does NOT fetch when no workspace id is known', async () => {
     const { Wrapper } = makeWrapper();
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () => useWearablePrompts({ workspaceId: undefined, clientId: CLIENT }),
       { wrapper: Wrapper },
     );
@@ -116,7 +116,7 @@ describe('useWearablePrompts — enabled list read', () => {
   it('lists active prompts for the workspace + client (no dismissed by default)', async () => {
     api.list.mockResolvedValue(list([prompt()]));
     const { Wrapper } = makeWrapper();
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () => useWearablePrompts({ workspaceId: WS, clientId: CLIENT }),
       { wrapper: Wrapper },
     );
@@ -132,7 +132,7 @@ describe('useWearablePrompts — enabled list read', () => {
   it('threads includeDismissed through when requested', async () => {
     api.list.mockResolvedValue(list([]));
     const { Wrapper } = makeWrapper();
-    renderHook(
+    await renderHook(
       () =>
         useWearablePrompts({
           workspaceId: WS,
@@ -155,7 +155,7 @@ describe('useGenerateWearablePrompts — mutation invalidates the list', () => {
     api.generate.mockResolvedValue(generateResponse([prompt({ id: 'gen-1' })]));
     const { qc, Wrapper } = makeWrapper();
     const invalidate = jest.spyOn(qc, 'invalidateQueries');
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () => useGenerateWearablePrompts(WS),
       { wrapper: Wrapper },
     );
@@ -182,7 +182,7 @@ describe('useGenerateWearablePrompts — mutation invalidates the list', () => {
       generateResponse([], [{ metricKey: 'RECOVERY_SCORE', reason: 'cooldown' }]),
     );
     const { Wrapper } = makeWrapper();
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () => useGenerateWearablePrompts(WS),
       { wrapper: Wrapper },
     );
@@ -207,7 +207,7 @@ describe('useDismissWearablePrompt — mutation invalidates the list', () => {
     );
     const { qc, Wrapper } = makeWrapper();
     const invalidate = jest.spyOn(qc, 'invalidateQueries');
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () => useDismissWearablePrompt(WS),
       { wrapper: Wrapper },
     );
@@ -233,7 +233,7 @@ describe('useActOnWearablePrompt — mutation invalidates the list', () => {
     );
     const { qc, Wrapper } = makeWrapper();
     const invalidate = jest.spyOn(qc, 'invalidateQueries');
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () => useActOnWearablePrompt(WS),
       { wrapper: Wrapper },
     );

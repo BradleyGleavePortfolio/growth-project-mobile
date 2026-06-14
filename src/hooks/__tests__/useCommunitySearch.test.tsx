@@ -71,7 +71,7 @@ beforeEach(() => {
 describe('useCommunitySearch — disabled postures (no network)', () => {
   it('does NOT fetch when no workspace id is known', async () => {
     const { Wrapper } = makeWrapper();
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () => useCommunitySearch({ workspaceId: undefined, term: 'hello' }),
       { wrapper: Wrapper },
     );
@@ -81,7 +81,7 @@ describe('useCommunitySearch — disabled postures (no network)', () => {
 
   it('does NOT fetch when the term is empty', async () => {
     const { Wrapper } = makeWrapper();
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () => useCommunitySearch({ workspaceId: WS, term: '' }),
       { wrapper: Wrapper },
     );
@@ -91,7 +91,7 @@ describe('useCommunitySearch — disabled postures (no network)', () => {
 
   it('does NOT fetch when the term is whitespace-only', async () => {
     const { Wrapper } = makeWrapper();
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () => useCommunitySearch({ workspaceId: WS, term: '   ' }),
       { wrapper: Wrapper },
     );
@@ -104,7 +104,7 @@ describe('useCommunitySearch — enabled fetch + cursor pagination', () => {
   it('calls search with the TRIMMED term and no cursor on page 1', async () => {
     api.search.mockResolvedValue(page([row()]));
     const { Wrapper } = makeWrapper();
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () => useCommunitySearch({ workspaceId: WS, term: '  hello  ' }),
       { wrapper: Wrapper },
     );
@@ -120,7 +120,7 @@ describe('useCommunitySearch — enabled fetch + cursor pagination', () => {
   it('passes a kind + cohort scope through when provided', async () => {
     api.search.mockResolvedValue(page([]));
     const { Wrapper } = makeWrapper();
-    renderHook(
+    await renderHook(
       () =>
         useCommunitySearch({
           workspaceId: WS,
@@ -145,7 +145,7 @@ describe('useCommunitySearch — enabled fetch + cursor pagination', () => {
       .mockResolvedValueOnce(page([row({ id: 'res-1' })], 'CUR2'))
       .mockResolvedValueOnce(page([row({ id: 'res-2' })], null));
     const { Wrapper } = makeWrapper();
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () => useCommunitySearch({ workspaceId: WS, term: 'hello' }),
       { wrapper: Wrapper },
     );
