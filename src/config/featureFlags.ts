@@ -322,6 +322,22 @@ export const featureFlags = {
    * env: EXPO_PUBLIC_FF_ROMAN_COMPETENCE_PILL
    */
   romanCompetencePill: readFlag('EXPO_PUBLIC_FF_ROMAN_COMPETENCE_PILL', false),
+
+  // ─── Roman ED.2 — three-arc check-in / brief / review router ─────────
+  /**
+   * ED.2 three-arc router widget on Coach Home — three completion arcs
+   * (check-ins reviewed, brief opened, threads reviewed) that deep-link into
+   * the matching coach surfaces on tap. When OFF the CoachThreeArcRouter is
+   * NOT mounted on CoachHomeScreen at all (no fetch, no render). The backend
+   * counts endpoint is gated independently by FEATURE_ROMAN_THREE_ARC_COUNTS,
+   * so this can ship asymmetrically: mobile ON + backend OFF → endpoint returns
+   * a zeroed shape → three empty rings → no behaviour change. Default OFF
+   * UNCONDITIONALLY (not `isDev`) so a dev build never surfaces the widget
+   * before the backend lands.
+   *
+   * env: EXPO_PUBLIC_FF_ROMAN_THREE_ARC_ROUTER
+   */
+  romanThreeArcRouter: readFlag('EXPO_PUBLIC_FF_ROMAN_THREE_ARC_ROUTER', false),
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;
