@@ -228,8 +228,9 @@ describe('ProgressScreen — ED.4 chart load error (audit R2 P2)', () => {
     expect(retryBtn.props.accessibilityState?.disabled).toBe(false);
 
     // Tap retry — the call is held open, so the button must now be disabled.
-    act(() => {
+    await act(async () => {
       fireEvent.press(retryBtn);
+      await Promise.resolve();
     });
     await waitFor(() =>
       expect(
@@ -276,9 +277,14 @@ describe('ProgressScreen — ED.4 chart load error (audit R2 P2)', () => {
 
     const retryBtn = getByTestId('progress-weight-chart-error-retry');
     // Two synchronous presses in the same tick — only the first must start a load.
-    act(() => {
+    // Wrap in awaited act() so RNTL v14 flushes pending effects before assertion,
+    // but keep the two fireEvent.press() calls in the SAME sync block so the
+    // chartRetryingRef guard is exercised as designed (both taps see the same
+    // pre-state, only the first acquires the latch).
+    await act(async () => {
       fireEvent.press(retryBtn);
       fireEvent.press(retryBtn);
+      await Promise.resolve();
     });
 
     // Exactly ONE additional load, proving the second same-tick tap was a no-op.

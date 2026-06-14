@@ -79,12 +79,13 @@ beforeEach(() => {
 
 async function renderHostWithEvent() {
   const utils = await render(<FirstPaymentWowHost>{null}</FirstPaymentWowHost>);
-  act(() => {
+  await act(async () => {
     capturedOnFirstPayment?.({
       amount: 240,
       currency: 'USD',
       clientId: 'client-dana',
     });
+    await Promise.resolve();
   });
   return utils;
 }
@@ -109,8 +110,9 @@ describe('FirstPaymentWowHost — ED.3 (P1-3 dismiss ordering)', () => {
     const button = getByTestId('first-payment-dismiss');
     expect(button.props.accessibilityLabel).toBe(FIRST_PAYMENT_DISMISS_LABEL);
 
-    act(() => {
+    await act(async () => {
       fireEvent.press(button);
+      await Promise.resolve();
     });
 
     // Gate write was requested with the coach id...
@@ -170,12 +172,13 @@ describe('FirstPaymentWowHost — ED.3 (P1-3 dismiss ordering)', () => {
     await waitFor(() => expect(queryByTestId('first-payment-wow')).toBeNull());
 
     // A later notification fires the captured callback again...
-    act(() => {
+    await act(async () => {
       capturedOnFirstPayment?.({
         amount: 300,
         currency: 'USD',
         clientId: 'client-riley',
       });
+      await Promise.resolve();
     });
 
     // ...and the celebration must STILL be absent (no re-show this session).
@@ -192,12 +195,13 @@ describe('FirstPaymentWowHost — ED.3 (P1-3 dismiss ordering)', () => {
     );
 
     // Coach A celebrates, then dismisses.
-    act(() => {
+    await act(async () => {
       capturedOnFirstPayment?.({
         amount: 240,
         currency: 'USD',
         clientId: 'client-dana',
       });
+      await Promise.resolve();
     });
     expect(getByTestId('first-payment-wow')).toBeTruthy();
     await act(async () => {
@@ -207,12 +211,13 @@ describe('FirstPaymentWowHost — ED.3 (P1-3 dismiss ordering)', () => {
     await waitFor(() => expect(queryByTestId('first-payment-wow')).toBeNull());
 
     // A re-fire for coach A stays blocked (same-coach latch holds).
-    act(() => {
+    await act(async () => {
       capturedOnFirstPayment?.({
         amount: 260,
         currency: 'USD',
         clientId: 'client-dana',
       });
+      await Promise.resolve();
     });
     expect(queryByTestId('first-payment-wow')).toBeNull();
 
@@ -222,12 +227,13 @@ describe('FirstPaymentWowHost — ED.3 (P1-3 dismiss ordering)', () => {
 
     // Coach B's first payment MUST celebrate — coach A's dismissal does not
     // suppress it.
-    act(() => {
+    await act(async () => {
       capturedOnFirstPayment?.({
         amount: 300,
         currency: 'USD',
         clientId: 'client-riley',
       });
+      await Promise.resolve();
     });
     expect(getByTestId('first-payment-wow')).toBeTruthy();
   });

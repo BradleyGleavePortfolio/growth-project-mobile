@@ -60,10 +60,13 @@ const PR_SERIES = [
 ];
 
 /** Drive an onLayout so the chart computes pixel geometry (width > 0). */
-function layout(node: Awaited<ReturnType<typeof render>>) {
+async function layout(node: Awaited<ReturnType<typeof render>>) {
   const plot = node.getByLabelText(/progress chart/i);
-  fireEvent(plot, 'layout', {
-    nativeEvent: { layout: { x: 0, y: 0, width: 300, height: 220 } },
+  await act(async () => {
+    fireEvent(plot, 'layout', {
+      nativeEvent: { layout: { x: 0, y: 0, width: 300, height: 220 } },
+    });
+    await Promise.resolve();
   });
 }
 
@@ -84,7 +87,7 @@ describe('ProgressChartCard — ED.4', () => {
         enablePRDetection
       />,
     );
-    layout(node);
+    await layout(node);
 
     // PR flag + glow on the record point.
     expect(node.getByTestId('progress-pr-flag')).toBeTruthy();
@@ -113,23 +116,26 @@ describe('ProgressChartCard — ED.4', () => {
         enablePRDetection
       />,
     );
-    layout(node);
+    await layout(node);
 
-    act(() => {
+    await act(async () => {
       // Begin near the first column.
       panCb.begin?.({ x: 20, y: 100 });
+      await Promise.resolve();
     });
     expect(Haptics.selectionAsync).toHaveBeenCalledTimes(1);
 
-    act(() => {
+    await act(async () => {
       // Stay on the SAME column — must NOT re-fire (no per-frame spam).
       panCb.update?.({ x: 22, y: 100 });
+      await Promise.resolve();
     });
     expect(Haptics.selectionAsync).toHaveBeenCalledTimes(1);
 
-    act(() => {
+    await act(async () => {
       // Cross to the far column — fires again.
       panCb.update?.({ x: 290, y: 100 });
+      await Promise.resolve();
     });
     expect(Haptics.selectionAsync).toHaveBeenCalledTimes(2);
   });
@@ -151,7 +157,7 @@ describe('ProgressChartCard — ED.4', () => {
         enablePRDetection
       />,
     );
-    layout(node);
+    await layout(node);
 
     await act(async () => {
       // Drive a column crossover so selectionHaptic() runs and its promise
@@ -183,7 +189,7 @@ describe('ProgressChartCard — ED.4', () => {
         enablePRDetection
       />,
     );
-    layout(node);
+    await layout(node);
     expect(node.queryByTestId('progress-pr-flag')).toBeNull();
     expect(node.queryByTestId('progress-pr-commentary')).toBeNull();
   });
@@ -195,7 +201,7 @@ describe('ProgressChartCard — ED.4', () => {
     const node = await render(
       <ProgressChartCard data={PR_SERIES} liftName="Weight" reduceMotionOverride />,
     );
-    layout(node);
+    await layout(node);
     expect(node.queryByTestId('progress-pr-flag')).toBeNull();
     expect(node.queryByTestId('progress-pr-commentary')).toBeNull();
     expect(node.queryByTestId('progress-pr-text')).toBeNull();
