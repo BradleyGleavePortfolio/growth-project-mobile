@@ -12,8 +12,12 @@
  *      — Bradley Law #36) AND the overlay still clears, so the coach is never
  *      trapped behind the modal.
  *
- * The realtime hook is mocked to capture its onFirstPayment callback, exactly
- * like the repo's gesture/handler-capture test pattern.
+ * The notification hook (useFirstPaymentNotification) is mocked to capture its
+ * onFirstPayment callback, exactly like the repo's gesture/handler-capture test
+ * pattern. The hook now delivers the fixed FIRST_PAYMENT payload shape
+ * { amount: number; currency: string; clientId: string }; the host formats it
+ * into the celebration's display strings (Option C — no client-side payment
+ * reads).
  */
 import React from 'react';
 import { render, fireEvent, act, waitFor } from '@testing-library/react-native';
@@ -37,13 +41,18 @@ jest.mock('../../../../config/featureFlags', () => ({
   featureFlags: { romanFirstPaymentWow: true },
 }));
 
-// Capture the realtime callback so the test can drive a first-payment event.
+// Capture the notification callback so the test can drive a first-payment event.
+interface FirstPaymentPayload {
+  amount: number;
+  currency: string;
+  clientId: string;
+}
 let capturedOnFirstPayment:
-  | ((e: { amount: string; clientName: string }) => void)
+  | ((p: FirstPaymentPayload) => void)
   | undefined;
-jest.mock('../useFirstPaymentRealtime', () => ({
-  useFirstPaymentRealtime: (args: {
-    onFirstPayment: (e: { amount: string; clientName: string }) => void;
+jest.mock('../../../../hooks/useNotifications', () => ({
+  useFirstPaymentNotification: (args: {
+    onFirstPayment: (p: FirstPaymentPayload) => void;
   }) => {
     capturedOnFirstPayment = args.onFirstPayment;
     // The host now consumes the returned error state (audit R2 P2), so the
@@ -71,7 +80,11 @@ beforeEach(() => {
 function renderHostWithEvent() {
   const utils = render(<FirstPaymentWowHost>{null}</FirstPaymentWowHost>);
   act(() => {
-    capturedOnFirstPayment?.({ amount: '$240.00', clientName: 'Dana' });
+    capturedOnFirstPayment?.({
+      amount: 240,
+      currency: 'USD',
+      clientId: 'client-dana',
+    });
   });
   return utils;
 }
@@ -156,9 +169,13 @@ describe('FirstPaymentWowHost — ED.3 (P1-3 dismiss ordering)', () => {
     });
     await waitFor(() => expect(queryByTestId('first-payment-wow')).toBeNull());
 
-    // A later INSERT fires the captured callback again...
+    // A later notification fires the captured callback again...
     act(() => {
-      capturedOnFirstPayment?.({ amount: '$300.00', clientName: 'Riley' });
+      capturedOnFirstPayment?.({
+        amount: 300,
+        currency: 'USD',
+        clientId: 'client-riley',
+      });
     });
 
     // ...and the celebration must STILL be absent (no re-show this session).
@@ -176,7 +193,11 @@ describe('FirstPaymentWowHost — ED.3 (P1-3 dismiss ordering)', () => {
 
     // Coach A celebrates, then dismisses.
     act(() => {
-      capturedOnFirstPayment?.({ amount: '$240.00', clientName: 'Dana' });
+      capturedOnFirstPayment?.({
+        amount: 240,
+        currency: 'USD',
+        clientId: 'client-dana',
+      });
     });
     expect(getByTestId('first-payment-wow')).toBeTruthy();
     await act(async () => {
@@ -187,7 +208,11 @@ describe('FirstPaymentWowHost — ED.3 (P1-3 dismiss ordering)', () => {
 
     // A re-fire for coach A stays blocked (same-coach latch holds).
     act(() => {
-      capturedOnFirstPayment?.({ amount: '$260.00', clientName: 'Dana' });
+      capturedOnFirstPayment?.({
+        amount: 260,
+        currency: 'USD',
+        clientId: 'client-dana',
+      });
     });
     expect(queryByTestId('first-payment-wow')).toBeNull();
 
@@ -198,7 +223,11 @@ describe('FirstPaymentWowHost — ED.3 (P1-3 dismiss ordering)', () => {
     // Coach B's first payment MUST celebrate — coach A's dismissal does not
     // suppress it.
     act(() => {
-      capturedOnFirstPayment?.({ amount: '$300.00', clientName: 'Riley' });
+      capturedOnFirstPayment?.({
+        amount: 300,
+        currency: 'USD',
+        clientId: 'client-riley',
+      });
     });
     expect(getByTestId('first-payment-wow')).toBeTruthy();
   });
