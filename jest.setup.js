@@ -31,7 +31,7 @@ process.env.EXPO_PUBLIC_API_URL =
   process.env.EXPO_PUBLIC_API_URL || 'http://test.local/api';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
-  require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
+  require('@react-native-async-storage/async-storage/jest'),
 );
 
 // expo-crypto: counter-backed UUID so tests get distinct ids without pulling

@@ -14,7 +14,7 @@ import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
 
 jest.mock('@react-native-async-storage/async-storage', () =>
-  require('@react-native-async-storage/async-storage/jest/async-storage-mock'),
+  require('@react-native-async-storage/async-storage/jest'),
 );
 
 jest.mock('../../services/api', () => ({

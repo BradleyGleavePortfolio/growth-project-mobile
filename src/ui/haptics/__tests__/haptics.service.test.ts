@@ -8,6 +8,21 @@
  *   4. setHapticsEnabled() synchronously overrides the flag.
  */
 
+// async-storage v3's bundled jest mock is a real in-memory impl, not jest.fn()
+// spies. This file expects spy methods (mockImplementation / mockResolvedValue),
+// so we override the global mock with a file-local jest.fn() shape that matches
+// the pattern used by the other PR #200 owned tests (queryClient.*.test.ts).
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  __esModule: true,
+  default: {
+    getAllKeys: jest.fn(),
+    removeMany: jest.fn(),
+    getItem: jest.fn(),
+    setItem: jest.fn(),
+    removeItem: jest.fn(),
+  },
+}));
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // ─── Mock expo-haptics before any module import ───────────────────────────────

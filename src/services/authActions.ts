@@ -173,7 +173,7 @@ export async function clearUserScopedKeys(): Promise<void> {
     const matching = allKeys.filter((k) =>
       namespacedPrefixes.some((prefix) => k.startsWith(prefix)),
     );
-    if (matching.length) await AsyncStorage.multiRemove(matching);
+    if (matching.length) await AsyncStorage.removeMany(matching);
   } catch (err) {
     logger.warn('AuthActions', 'clearUserScopedKeys: AsyncStorage sweep failed', err);
   }
@@ -268,7 +268,7 @@ export async function signOut(userId?: string | null): Promise<void> {
   // Best-effort: cancel the signing-out user's fasting notification (if any)
   // so a "Fast Complete" push can't fire hours after they log out. Read the
   // id from the exact per-user key (no getAllKeys scan) before the
-  // multiRemove below clears it.
+  // removeMany below clears it.
   if (signingOutUserId) {
     try {
       const fastingNotifKey = `fasting:scheduled_notification_id:${signingOutUserId}`;
@@ -293,7 +293,7 @@ export async function signOut(userId?: string | null): Promise<void> {
   try {
     await Promise.all([
       ...SECURE_SIGN_OUT_KEYS.map((k) => secureStorage.removeItem(k)),
-      AsyncStorage.multiRemove([...ASYNC_SIGN_OUT_KEYS, ...prefixedKeys, ...perUserKeys]),
+      AsyncStorage.removeMany([...ASYNC_SIGN_OUT_KEYS, ...prefixedKeys, ...perUserKeys]),
       // R15 (PR #161): route new user-scoped MMKV keys through proper storage
       // wrappers so native MMKV is actually cleared and the AsyncStorage-shim's
       // `prefs:` / `cache:` namespaces are honored.

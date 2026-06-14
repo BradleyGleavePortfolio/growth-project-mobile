@@ -1,3 +1,31 @@
+// async-storage v3's bundled jest mock is a real in-memory impl, not jest.fn()
+// spies. This file checks `(AsyncStorage.removeItem as jest.Mock).mock.calls`,
+// so we override the global mock with stateful jest.fn() shims backed by a
+// local Map. Pattern mirrors queryClient.persister.test.ts (owned by PR #200)
+// plus the in-memory semantics the original test relied on.
+jest.mock('@react-native-async-storage/async-storage', () => {
+  const store = new Map<string, string>();
+  return {
+    __esModule: true,
+    default: {
+      getItem: jest.fn(async (k: string) => (store.has(k) ? store.get(k)! : null)),
+      setItem: jest.fn(async (k: string, v: string) => {
+        store.set(k, v);
+      }),
+      removeItem: jest.fn(async (k: string) => {
+        store.delete(k);
+      }),
+      clear: jest.fn(async () => {
+        store.clear();
+      }),
+      getAllKeys: jest.fn(async () => Array.from(store.keys())),
+      removeMany: jest.fn(async (keys: string[]) => {
+        for (const k of keys) store.delete(k);
+      }),
+    },
+  };
+});
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { secureStorage, __resetSecureStorageForTests } from '../secureStorage';
