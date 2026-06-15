@@ -44,6 +44,37 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 export const DEFAULT_COMMAND_STACK_DEPTH = 20;
 
 /**
+ * Thrown by an `applyInverse` executor when the inverse resolved to a no-op
+ * (e.g. the target row could not be found because its identity drifted). The
+ * hook RESTORES the popped action (treating it like any failure so the coach can
+ * retry / the stack stays honest) and re-throws, but tags the error so the
+ * screen can emit a distinct `mwb_undo_failed { reason: 'noop' }` event rather
+ * than the generic resolve-failure path. (D7B: no-op inverses must not silently
+ * pop with a success toast.)
+ */
+export class CommandNoOpError extends Error {
+  readonly isCommandNoOp = true as const;
+  constructor(message = 'inverse resolved to a no-op') {
+    super(message);
+    this.name = 'CommandNoOpError';
+  }
+}
+
+/** Type guard for {@link CommandNoOpError}. */
+export function isCommandNoOpError(err: unknown): err is CommandNoOpError {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    (err as { isCommandNoOp?: boolean }).isCommandNoOp === true
+  );
+}
+
+/** The outcome of an `undo()` call (lets the screen emit accurate telemetry). */
+export type UndoResult =
+  | { status: 'undone'; remaining: number }
+  | { status: 'empty' };
+
+/**
  * The server-facing snapshot of a single exercise row, captured at gesture time.
  * Mirrors the builder's working-copy row WITHOUT the transient on-device
  * `clientId`/`display_name` — the inverse only needs the persisted fields plus
@@ -193,17 +224,25 @@ export interface UseBuilderCommandStackOptions {
   applyInverse: (op: InverseOp) => void | Promise<void>;
   /** Stack capacity. Defaults to {@link DEFAULT_COMMAND_STACK_DEPTH} (20). */
   depth?: number;
+  /**
+   * Called when a `push` overflows capacity and the oldest entries are FIFO-
+   * evicted (N3 observability). `evictedCount` is how many entries were dropped
+   * (normally 1). Optional so the hook stays usable without telemetry.
+   */
+  onEvict?: (info: { capacity: number; evictedCount: number }) => void;
 }
 
 export interface BuilderCommandStack {
   /** Push a forward action's inverse snapshot. FIFO-evicts the oldest at depth. */
   push: (action: BuilderAction) => void;
   /**
-   * Pop + re-apply the most-recent action's inverse. No-op on an empty stack.
-   * Resolves once the inverse has been applied; rejects (without popping) if the
-   * inverse executor fails, so the coach can retry.
+   * Pop + re-apply the most-recent action's inverse. No-op on an empty stack
+   * (resolves with `{ status: 'empty' }`). Resolves with
+   * `{ status: 'undone', remaining }` once the inverse has been applied; rejects
+   * (after RESTORING the popped action) if the inverse executor fails or throws
+   * {@link CommandNoOpError}, so the coach can retry.
    */
-  undo: () => Promise<void>;
+  undo: () => Promise<UndoResult>;
   /** True when there is at least one action to undo. */
   canUndo: boolean;
   /** Current number of actions on the stack (0..depth). */
@@ -221,8 +260,13 @@ export interface BuilderCommandStack {
 export function useBuilderCommandStack(
   options: UseBuilderCommandStackOptions,
 ): BuilderCommandStack {
-  const { applyInverse, depth = DEFAULT_COMMAND_STACK_DEPTH } = options;
+  const { applyInverse, depth = DEFAULT_COMMAND_STACK_DEPTH, onEvict } = options;
   const capacity = depth > 0 ? depth : DEFAULT_COMMAND_STACK_DEPTH;
+
+  // Read the evict callback through a ref so `push` stays referentially stable
+  // even as the screen rebuilds the closure each render.
+  const onEvictRef = useRef(onEvict);
+  onEvictRef.current = onEvict;
 
   // The stack lives in a REF (the synchronous source of truth) mirrored into
   // component state purely to drive re-renders for `canUndo`/`size`. The ref is
@@ -253,7 +297,11 @@ export function useBuilderCommandStack(
       // FIFO eviction: at capacity, drop the OLDEST entry so the newest
       // gesture is always retained (EW2 edge-case 4).
       if (next.length > capacity) {
-        next.splice(0, next.length - capacity);
+        const evictedCount = next.length - capacity;
+        next.splice(0, evictedCount);
+        // N3: surface the silent overflow so ops can see coaches hitting the
+        // depth bound after flag flip.
+        onEvictRef.current?.({ capacity, evictedCount });
       }
       stackRef.current = next;
       sync();
@@ -261,13 +309,13 @@ export function useBuilderCommandStack(
     [capacity, sync],
   );
 
-  const undo = useCallback(async (): Promise<void> => {
+  const undo = useCallback(async (): Promise<UndoResult> => {
     // Optimistically pop the top action from the ref (synchronous + correct).
     const cur = stackRef.current;
     if (cur.length === 0) {
       // Empty-stack undo is a no-op (EW2: button is disabled at empty, but the
       // gesture can still fire — both resolve to a silent no-op here).
-      return;
+      return { status: 'empty' };
     }
     const popped = cur[cur.length - 1];
     stackRef.current = cur.slice(0, -1);
@@ -276,6 +324,7 @@ export function useBuilderCommandStack(
     const op = inverseOf(popped);
     try {
       await applyInverseRef.current(op);
+      return { status: 'undone', remaining: stackRef.current.length };
     } catch (err) {
       // EW2 edge-case 2: network failure during undo. RESTORE the action so the
       // coach can retry, then re-throw so the screen shows the Roman error voice.

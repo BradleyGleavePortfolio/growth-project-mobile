@@ -17,6 +17,8 @@ import { renderHook, act, waitFor } from '@testing-library/react-native';
 import {
   useBuilderCommandStack,
   inverseOf,
+  CommandNoOpError,
+  isCommandNoOpError,
   DEFAULT_COMMAND_STACK_DEPTH,
   type BuilderAction,
   type CommandRowSnapshot,
@@ -297,5 +299,71 @@ describe('useBuilderCommandStack — stateful contract', () => {
     });
     expect(result.current.size).toBe(0);
     expect(result.current.canUndo).toBe(false);
+  });
+
+  // N3: the bounded stack must SURFACE overflow eviction (was silent before).
+  it('invokes onEvict when a push overflows capacity (N3 telemetry hook)', async () => {
+    const onEvict = jest.fn();
+    const { result } = await renderHook(() =>
+      useBuilderCommandStack({ applyInverse: jest.fn(), depth: 2, onEvict }),
+    );
+    await act(async () => {
+      result.current.push({ kind: 'addExercise', clientId: 'e0' });
+      result.current.push({ kind: 'addExercise', clientId: 'e1' });
+    });
+    // Below capacity — no eviction yet.
+    expect(onEvict).not.toHaveBeenCalled();
+    await act(async () => {
+      result.current.push({ kind: 'addExercise', clientId: 'e2' });
+    });
+    expect(onEvict).toHaveBeenCalledTimes(1);
+    expect(onEvict).toHaveBeenCalledWith({ capacity: 2, evictedCount: 1 });
+  });
+
+  // D7B / N3: undo() reports its outcome so the screen emits accurate telemetry.
+  it('undo() resolves { status: "empty" } on an empty stack', async () => {
+    const { result } = await renderHook(() =>
+      useBuilderCommandStack({ applyInverse: jest.fn() }),
+    );
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await result.current.undo();
+    });
+    expect(outcome).toEqual({ status: 'empty' });
+  });
+
+  it('undo() resolves { status: "undone", remaining } after applying', async () => {
+    const { result } = await renderHook(() =>
+      useBuilderCommandStack({ applyInverse: jest.fn() }),
+    );
+    await act(async () => {
+      result.current.push({ kind: 'addExercise', clientId: 'a' });
+      result.current.push({ kind: 'addExercise', clientId: 'b' });
+    });
+    let outcome: unknown;
+    await act(async () => {
+      outcome = await result.current.undo();
+    });
+    expect(outcome).toEqual({ status: 'undone', remaining: 1 });
+  });
+
+  it('a CommandNoOpError from the executor restores the action and is taggable', async () => {
+    const applyInverse: jest.Mock<Promise<void>, [InverseOp]> = jest.fn();
+    applyInverse.mockRejectedValueOnce(new CommandNoOpError());
+    const { result } = await renderHook(() =>
+      useBuilderCommandStack({ applyInverse }),
+    );
+    await act(async () => {
+      result.current.push({ kind: 'addExercise', clientId: 'drifted' });
+    });
+    let caught: unknown;
+    await act(async () => {
+      await result.current.undo().catch((e) => {
+        caught = e;
+      });
+    });
+    expect(isCommandNoOpError(caught)).toBe(true);
+    // No-op is treated like a failure: the action is restored for retry.
+    await waitFor(() => expect(result.current.canUndo).toBe(true));
   });
 });

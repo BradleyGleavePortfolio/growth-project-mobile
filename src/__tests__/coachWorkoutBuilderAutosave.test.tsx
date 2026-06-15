@@ -278,6 +278,15 @@ jest.mock('@tanstack/react-query', () => {
   };
 });
 
+// N3 telemetry: the screen emits PostHog events for undo invocation, failure,
+// and stack eviction. Mock the analytics `track` at the boundary so the undo
+// cases can assert the exact event names + properties without a real PostHog.
+const mockTrack = jest.fn();
+jest.mock('../lib/analytics', () => ({
+  __esModule: true,
+  track: (...args: unknown[]) => mockTrack(...args),
+}));
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const ORIGINAL_FLAG = process.env.EXPO_PUBLIC_FF_MWB_AUTOSAVE;
@@ -314,6 +323,7 @@ beforeEach(() => {
     lock_token: 'feedfacefeedface',
     saved_at: '2026-01-01T00:00:00.000Z',
   });
+  mockTrack.mockReset();
 });
 
 afterEach(() => {
@@ -1114,5 +1124,283 @@ describe('CoachWorkoutBuilderScreen — EW2 undo command stack', () => {
       await Promise.resolve();
     });
     expect(mockAutosaveCall).not.toHaveBeenCalled();
+  });
+
+  // ── F2: undo integration pins (the inverse op flows back through the screen) ──
+
+  it('remove then undo → the removed row is restored at its original index (F2)', async () => {
+    setFlag(true);
+    enableUndo();
+    jest.useFakeTimers();
+    const Screen = loadScreen();
+    const { getByText, queryByText, getByLabelText, getByTestId } = await render(
+      <Screen />,
+    );
+
+    // The seeded plan has exactly one row: "1. bench".
+    expect(getByText('1. bench')).toBeTruthy();
+
+    // Remove it. removeRow marks the delete-set + pushes actionForRemoveExercise.
+    await act(async () => {
+      await fireEvent.press(getByLabelText('Remove exercise'));
+    });
+    await waitFor(() => expect(queryByText('1. bench')).toBeNull());
+
+    // Undo → the snapshotted row is re-added at index 0 (addExercise inverse),
+    // so "1. bench" is back on screen.
+    await waitFor(() =>
+      expect(
+        getByTestId('mwb-undo-button').props.accessibilityState,
+      ).toEqual({ disabled: false }),
+    );
+    await act(async () => {
+      await fireEvent.press(getByTestId('mwb-undo-button'));
+    });
+    await waitFor(() => expect(getByText('1. bench')).toBeTruthy());
+    // The revert toast confirms the undo.
+    expect(getByTestId('mwb-undo-toast')).toBeTruthy();
+  });
+
+  it('reorder then undo → the moved row returns to its original position (F2)', async () => {
+    setFlag(true);
+    enableUndo();
+    mockSearchItems = [{ id: 'squat', name: 'Back Squat' }];
+    jest.useFakeTimers();
+    const Screen = loadScreen();
+    const { getByLabelText, getByText, getByTestId, getAllByLabelText } =
+      await render(<Screen />);
+
+    // Add a second row so there is something to reorder ("2. Back Squat").
+    await act(async () => {
+      await fireEvent.changeText(
+        getByLabelText('Search exercise catalog'),
+        'squat',
+      );
+    });
+    await act(async () => {
+      await fireEvent.press(getByText('Back Squat'));
+    });
+    expect(getByText('1. bench')).toBeTruthy();
+    expect(getByText('2. Back Squat')).toBeTruthy();
+
+    // Move the squat (row index 1) UP → it becomes "1. Back Squat".
+    await act(async () => {
+      await fireEvent.press(getAllByLabelText('Move exercise up')[1]);
+    });
+    await waitFor(() => expect(getByText('1. Back Squat')).toBeTruthy());
+
+    // Undo the reorder → squat slides back to position 2 (reorder inverse swaps
+    // from/to), so "2. Back Squat" returns.
+    await act(async () => {
+      await fireEvent.press(getByTestId('mwb-undo-button'));
+    });
+    await waitFor(() => expect(getByText('2. Back Squat')).toBeTruthy());
+    expect(getByText('1. bench')).toBeTruthy();
+  });
+
+  it('edit exercise field then undo → the field reverts (F2)', async () => {
+    setFlag(true);
+    enableUndo();
+    jest.useFakeTimers();
+    const Screen = loadScreen();
+    const { getByLabelText, getByTestId } = await render(<Screen />);
+
+    // The seeded bench row has sets = 3. Edit it to 5.
+    const setsField = getByLabelText('Sets');
+    expect(setsField.props.value).toBe('3');
+    await act(async () => {
+      await fireEvent.changeText(setsField, '5');
+    });
+    await waitFor(() => expect(getByLabelText('Sets').props.value).toBe('5'));
+
+    // Undo → editExerciseField inverse writes the previous value (3) back.
+    await act(async () => {
+      await fireEvent.press(getByTestId('mwb-undo-button'));
+    });
+    await waitFor(() => expect(getByLabelText('Sets').props.value).toBe('3'));
+  });
+
+  // ── F3: the revert toast is an accessibility live region (announced) ─────────
+
+  it('the revert toast carries a polite live region + status role (F3 a11y)', async () => {
+    setFlag(true);
+    enableUndo();
+    jest.useFakeTimers();
+    const Screen = loadScreen();
+    const { getByLabelText, getByTestId } = await render(<Screen />);
+
+    await act(async () => {
+      await fireEvent.changeText(getByLabelText('Plan name'), 'Push day B');
+    });
+    await act(async () => {
+      await fireEvent.press(getByTestId('mwb-undo-button'));
+    });
+
+    const toast = await waitFor(() => getByTestId('mwb-undo-toast'));
+    // F3: assistive tech announces the revert without focus change. RN has no
+    // "status" role (that is web ARIA); "alert" is the RN role for a transient
+    // announcement, paired with a polite live region.
+    expect(toast.props.accessibilityLiveRegion).toBe('polite');
+    expect(toast.props.accessibilityRole).toBe('alert');
+  });
+
+  // ── N2: a StrictMode double-invoked updater must not double-push the stack ───
+
+  it('a single edit yields a single undo step under StrictMode (N2 purity)', async () => {
+    setFlag(true);
+    enableUndo();
+    jest.useFakeTimers();
+    const Screen = loadScreen();
+    // StrictMode double-invokes render + state updaters in dev; the N2 fix moved
+    // the command push OUT of the updater so exactly one action is recorded.
+    const { getByLabelText, getByTestId } = await render(
+      <React.StrictMode>
+        <Screen />
+      </React.StrictMode>,
+    );
+
+    // One edit: sets 3 → 4.
+    await act(async () => {
+      await fireEvent.changeText(getByLabelText('Sets'), '4');
+    });
+    await waitFor(() => expect(getByLabelText('Sets').props.value).toBe('4'));
+
+    // First undo restores 3.
+    await act(async () => {
+      await fireEvent.press(getByTestId('mwb-undo-button'));
+    });
+    await waitFor(() => expect(getByLabelText('Sets').props.value).toBe('3'));
+
+    // If the updater had double-pushed, a SECOND action would remain and the
+    // button would still be enabled. N2: exactly one step → now disabled.
+    await waitFor(() =>
+      expect(
+        getByTestId('mwb-undo-button').props.accessibilityState,
+      ).toEqual({ disabled: true }),
+    );
+  });
+
+  // ── N3: undo emits telemetry (invoked / failed / eviction surfaced) ──────────
+
+  it('a successful undo emits MWB_UNDO_INVOKED telemetry (N3)', async () => {
+    setFlag(true);
+    enableUndo();
+    jest.useFakeTimers();
+    const Screen = loadScreen();
+    const { getByLabelText, getByTestId } = await render(<Screen />);
+
+    await act(async () => {
+      await fireEvent.changeText(getByLabelText('Plan name'), 'Push day B');
+    });
+    await act(async () => {
+      await fireEvent.press(getByTestId('mwb-undo-button'));
+    });
+
+    await waitFor(() =>
+      expect(mockTrack).toHaveBeenCalledWith(
+        'mwb_undo_invoked',
+        expect.objectContaining({ stack_depth_before: expect.any(Number) }),
+      ),
+    );
+  });
+
+  it('an empty-stack swipe emits NO undo telemetry (gesture is gated, N3)', async () => {
+    setFlag(true);
+    enableUndo();
+    jest.useFakeTimers();
+    const Screen = loadScreen();
+    const { getByTestId } = await render(<Screen />);
+
+    // Nothing on the stack: the button is disabled and the swipe gesture is
+    // gated on canUndo, so onUndo never runs — no invocation event is emitted.
+    await act(async () => {
+      undoPan.onEnd?.({ translationY: 80 });
+      await Promise.resolve();
+    });
+
+    expect(mockTrack).not.toHaveBeenCalledWith(
+      'mwb_undo_invoked',
+      expect.anything(),
+    );
+    expect(getByTestId('mwb-undo-button').props.accessibilityState).toEqual({
+      disabled: true,
+    });
+  });
+
+  // ── N1 REGRESSION (P1): add → server adopts the row WITH an id → undo still
+  //    removes it. Before the fix the clean full-replace adoption minted a fresh
+  //    clientId, orphaning the command stack so undo was a silent no-op. ────────
+  it('add → server-id adoption → undo STILL removes the added row (N1, P1)', async () => {
+    setFlag(true);
+    enableUndo();
+    mockSearchItems = [{ id: 'squat', name: 'Back Squat' }];
+    jest.useFakeTimers();
+    const Screen = loadScreen();
+    const { getByLabelText, getByText, queryByText, getByTestId } =
+      await render(<Screen />);
+
+    // Add Back Squat (an id-less local insert the command stack tracks by its
+    // freshly-minted clientId).
+    await act(async () => {
+      await fireEvent.changeText(
+        getByLabelText('Search exercise catalog'),
+        'squat',
+      );
+    });
+    await act(async () => {
+      await fireEvent.press(getByText('Back Squat'));
+    });
+    expect(getByText('2. Back Squat')).toBeTruthy();
+
+    // Stage the refreshed server truth: the just-added squat now carries a real
+    // server row id (sets/reps match the seeded add so the signature lines up).
+    // `useWorkoutPlan` reads `mockCurrentPlan` live, so when the add's autosave
+    // fires `onAutosaveSaved` (id-less rows present) it bumps refetchSeq and the
+    // adoption effect re-runs against THIS plan — exercising the clean
+    // full-replace path the N1 fix guards.
+    mockCurrentPlan = {
+      ...EXISTING_PLAN,
+      exercises: [
+        ...EXISTING_PLAN.exercises,
+        {
+          id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+          workout_plan_id: 'plan-1',
+          exercise_external_id: 'squat',
+          order: 2,
+          sets: 3,
+          reps_or_duration_seconds: 10,
+          weight_lbs: null,
+          rest_seconds: 60,
+          superset_group_id: null,
+          notes: null,
+        },
+      ],
+    };
+    // Drain the add's autosave: it lands → onAutosaveSaved bumps refetchSeq →
+    // the adoption effect folds in the server id via the N1 signature match.
+    await act(async () => {
+      jest.advanceTimersByTime(900);
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    // The squat is still on screen after adoption.
+    expect(getByText('2. Back Squat')).toBeTruthy();
+    mockAutosaveCall.mockClear();
+
+    // Undo the add. N1: the command's clientId still resolves to the (now
+    // server-identified) row, so the removeExercise inverse drops it instead of
+    // being a silent no-op.
+    await act(async () => {
+      await fireEvent.press(getByTestId('mwb-undo-button'));
+    });
+    await waitFor(() => expect(queryByText('2. Back Squat')).toBeNull());
+    expect(getByText('1. bench')).toBeTruthy();
+
+    // And the undo is NOT reported as a no-op failure — it genuinely undid.
+    expect(mockTrack).not.toHaveBeenCalledWith(
+      'mwb_undo_failed',
+      expect.objectContaining({ reason: 'noop' }),
+    );
   });
 });

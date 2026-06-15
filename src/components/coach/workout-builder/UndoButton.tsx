@@ -15,8 +15,9 @@
  *     line-icon rule).
  *
  * Tokens only — `semanticColors.bgSurface` for the hairline-divided container,
- * `accentText` for the enabled glyph, `textMuted` for the divider. No raw hex,
- * no `surface` shorthand (theme token is `bgSurface`).
+ * `accentText` for the enabled glyph, `border` for the divider hairline (the
+ * designated divider/hairline token; `textMuted` would be wrong for a structural
+ * separator). No raw hex, no `surface` shorthand (theme token is `bgSurface`).
  *
  * Decoupled by design: this component owns NO command-stack state. It is a pure
  * presentation + gesture surface driven by `canUndo` and `onUndo`, so the screen

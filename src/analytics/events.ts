@@ -90,6 +90,11 @@ export const AnalyticsEvents = {
   TIMELINE_VIEWED: 'timeline_viewed',
   REPORT_VIEWED: 'report_viewed',
   PROGRESS_VIEWED: 'progress_viewed',
+
+  // Coach — workout builder (MWB EW2 undo)
+  MWB_UNDO_INVOKED: 'mwb_undo_invoked',
+  MWB_UNDO_FAILED: 'mwb_undo_failed',
+  MWB_UNDO_STACK_EVICTED: 'mwb_undo_stack_evicted',
 } as const;
 
 /** Union of all event name string literals. */

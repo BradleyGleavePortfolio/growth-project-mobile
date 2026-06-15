@@ -626,11 +626,14 @@ export function romanCoachReview(args: RomanCoachReviewArgs): string {
  * builder with the undo button (or the two-finger swipe-down gesture).
  *
  * Roman's calm butler register, voice-contract compliant (spec §1.1-§1.6): no
- * emoji, no contractions, no exclamation, no hype. The `depth` (the stack's
- * configured capacity, default 20) is spelled out as a word so the line reads as
- * prose rather than a counter — "Reverted. Twenty steps still in the bank." The
- * surface is transient (a ~1.4 s toast), so per the FACE+VOICE invariant note at
- * the top of this module it is exempt from co-locating the avatar.
+ * emoji, no contractions, no exclamation, no hype. The `depth` is the number of
+ * undos STILL REMAINING after this revert (prior audit F5: the toast used to
+ * pass the fixed capacity, so it always read "Twenty …" regardless of how many
+ * steps were left). It is spelled out as a word so the line reads as prose
+ * rather than a counter — "Reverted. Three steps still in the bank." At zero the
+ * line drops the count ("Reverted. That was the last step.") and at one it reads
+ * singular. The surface is transient (a ~1.4 s toast), so per the FACE+VOICE
+ * invariant note at the top of this module it is exempt from co-locating the avatar.
  *
  * The ERROR path (a network failure during undo) does NOT get a bespoke line:
  * the spec routes it through the existing generic error stem
@@ -639,14 +642,32 @@ export function romanCoachReview(args: RomanCoachReviewArgs): string {
  * the coach can retry.
  */
 export interface RomanBuilderUndoToastArgs {
-  /** The command stack's configured capacity (default 20). Spelled as a word. */
+  /** Undos STILL REMAINING after this revert (prior audit F5). Spelled as a word. */
   depth: number;
 }
 
 /** Small fixed table so the depth reads as prose; falls back to the numeral. */
 const CARDINAL_WORDS: Record<number, string> = {
+  0: 'Zero',
+  1: 'One',
+  2: 'Two',
+  3: 'Three',
+  4: 'Four',
+  5: 'Five',
+  6: 'Six',
+  7: 'Seven',
+  8: 'Eight',
+  9: 'Nine',
   10: 'Ten',
+  11: 'Eleven',
+  12: 'Twelve',
+  13: 'Thirteen',
+  14: 'Fourteen',
   15: 'Fifteen',
+  16: 'Sixteen',
+  17: 'Seventeen',
+  18: 'Eighteen',
+  19: 'Nineteen',
   20: 'Twenty',
   25: 'Twenty-five',
   30: 'Thirty',
@@ -658,11 +679,14 @@ function cardinalWord(n: number): string {
 
 export const romanBuilderUndoToast = {
   /**
-   * Success toast for a completed undo. `depth` parameterizes the capacity
-   * phrase (default 20 → "Twenty steps still in the bank.").
+   * Success toast for a completed undo. `depth` is the number of undos remaining
+   * AFTER this revert: 0 → "That was the last step.", 1 → "One step still in the
+   * bank.", N → "N steps still in the bank." (prior audit F5).
    */
-  success(args: RomanBuilderUndoToastArgs = { depth: 20 }): string {
-    return `Reverted. ${cardinalWord(args.depth)} steps still in the bank.`;
+  success(args: RomanBuilderUndoToastArgs = { depth: 0 }): string {
+    if (args.depth <= 0) return 'Reverted. That was the last step.';
+    const noun = args.depth === 1 ? 'step' : 'steps';
+    return `Reverted. ${cardinalWord(args.depth)} ${noun} still in the bank.`;
   },
 } as const;
 /**
