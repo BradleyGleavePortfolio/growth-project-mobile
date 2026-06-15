@@ -110,6 +110,12 @@ import DataExportScreen from '../screens/settings/DataExportScreen';
 // lives in the Settings stack (reachable from coach Settings).
 import ContactView from '../screens/messaging/ContactView';
 import BlockedUsersScreen from '../screens/settings/BlockedUsersScreen';
+// F2 — Named Regimes (coach surface). The RegimeList / RegimeEditor routes are
+// registered ONLY when `featureFlags.namedRegimes` is true; when the flag is
+// OFF neither route registers and both screens are unreachable (the flag-OFF
+// doctrine pin asserts this). Default OFF in production.
+import RegimeListScreen from '../screens/coach/RegimeListScreen';
+import RegimeEditorScreen from '../screens/coach/RegimeEditorScreen';
 import { Colors } from '../constants/colors';
 import { useCoachRoleType } from '../hooks/useCoachRoleType';
 
@@ -185,6 +191,13 @@ export type ClientsStackParamList = {
     role?: 'coach' | 'client' | 'student' | 'other';
     avatarUrl?: string | null;
   };
+  /**
+   * F2 — Named Regimes. Only present in the param list when
+   * `featureFlags.namedRegimes` is true (registered conditionally below).
+   * RegimeEditor takes a nullable regimeId: null === "new regime" entry.
+   */
+  RegimeList: undefined;
+  RegimeEditor: { regimeId: string | null };
 };
 
 export type SettingsStackParamList = {
@@ -377,6 +390,16 @@ function ClientsStackNavigator() {
       />
       {/* iMessage-grade DM — Apple 1.2 contact details surface. */}
       <ClientsStack.Screen name="ContactView" component={ContactView} />
+      {/* F2 — Named Regimes. Registered ONLY when featureFlags.namedRegimes is
+          true; when OFF neither route exists and navigate('RegimeList' / 
+          'RegimeEditor') resolves to nothing (the flag-OFF doctrine pin asserts
+          this). Default OFF in production. */}
+      {featureFlags.namedRegimes && (
+        <ClientsStack.Screen name="RegimeList" component={RegimeListScreen} />
+      )}
+      {featureFlags.namedRegimes && (
+        <ClientsStack.Screen name="RegimeEditor" component={RegimeEditorScreen} />
+      )}
     </ClientsStack.Navigator>
   );
 }

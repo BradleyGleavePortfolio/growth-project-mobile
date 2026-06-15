@@ -125,6 +125,19 @@ export const featureFlags = {
   // env: EXPO_PUBLIC_FF_COACH_COMMUNITY
   coachCommunity: readFlag('EXPO_PUBLIC_FF_COACH_COMMUNITY', false),
 
+  // ─── F2 — Named Regimes + partial-refund decision surface ─────────────
+  // Gates the coach-only RegimeListScreen / RegimeEditorScreen and the
+  // RefundDecisionCard on the client profile. Defaults OFF UNCONDITIONALLY
+  // (not `isDev`). When false the CoachNavigator MUST NOT register the regime
+  // routes and the RefundDecisionCard MUST NOT mount — the surfaces are dead
+  // code at build time. The backend gate is also OFF in prod
+  // (FEATURE_NAMED_REGIMES), and the F1 push-to-existing endpoint may not be
+  // merged yet, so a dev build that flips this on degrades gracefully (the
+  // push button simply 404s).
+  //
+  // env: EXPO_PUBLIC_FF_NAMED_REGIMES
+  namedRegimes: readFlag('EXPO_PUBLIC_FF_NAMED_REGIMES', false),
+
   // ─── Community v2-2 — coach ack signals + inbox SLA ──────────────────────
   // The v2-2 backend (FEATURE_COMMUNITY_ACKS) adds explicit coach ack-signal
   // transitions (seen -> acked -> replied) plus a read-time SLA snapshot per

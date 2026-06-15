@@ -891,3 +891,75 @@ export const deletionApi = {
   cancelDeletion: () =>
     api.post<{ message: string }>('/me/delete-account/cancel'),
 };
+
+// ---------------------------------------------------------------------------
+// F2 — Named Regimes + partial-refund decision surface.
+//
+// Coach-only endpoints implemented in `gpb/src/regimes/*`. All routes are
+// gated server-side by FEATURE_NAMED_REGIMES (404 while OFF) and client-side
+// by the `namedRegimes` feature flag, so the mobile surfaces never mount in
+// production until both flags flip. The "push changes to existing buyers"
+// endpoint belongs to F1 (PR #326); if F1 has not merged the call 404s, which
+// the editor handles gracefully (the flag is OFF in production regardless).
+//
+// Strict response types live in `../types/regimes.ts`.
+// ---------------------------------------------------------------------------
+import type {
+  RegimeListItem,
+  RegimeRevisionItem,
+  PendingRefundDecision,
+  DecideRefundResult,
+  PushToExistingResult,
+} from '../types/regimes';
+
+export const regimesApi = {
+  /** List the coach's active named regimes with package-attachment counts. */
+  list: () => api.get<RegimeListItem[]>('/coach/regimes'),
+
+  /** Read-only revision history for the regime's "last 3 versions" drawer. */
+  getRevisions: (regimeId: string) =>
+    api.get<RegimeRevisionItem[]>(`/coach/regimes/${regimeId}/revisions`),
+
+  /** Promote an existing workout program to a named regime. */
+  promoteFromProgram: (
+    programId: string,
+    body: { regime_display_name?: string },
+  ) =>
+    api.post<RegimeListItem>(
+      `/coach/regimes/${programId}/promote-from-program`,
+      body,
+    ),
+
+  /** Update the regime display name only. */
+  update: (regimeId: string, body: { regime_display_name: string }) =>
+    api.patch<RegimeListItem>(`/coach/regimes/${regimeId}`, body),
+
+  /** Archive a regime (active clients continue, new attachments blocked). */
+  archive: (regimeId: string) =>
+    api.post<{ id: string; archived_at: string }>(
+      `/coach/regimes/${regimeId}/archive`,
+    ),
+
+  /**
+   * F1's opt-in propagation endpoint. Pushes the current regime content to a
+   * package's existing buyers. 404s until F1's PR #326 merges — acceptable
+   * since the F2 flag is OFF in production.
+   */
+  pushToExisting: (packageId: string, contentId: string) =>
+    api.post<PushToExistingResult>(
+      `/v1/coach/packages/${packageId}/contents/${contentId}/push-to-existing`,
+    ),
+};
+
+export const refundDecisionsApi = {
+  /** List pending partial-refund decisions awaiting the coach. */
+  listPending: () =>
+    api.get<PendingRefundDecision[]>('/coach/refunds/pending-decisions'),
+
+  /** Apply a coach decision to a pending partial-refund. */
+  decide: (
+    refundId: string,
+    body: { decision: 'keep_drops' | 'unassign_drops' },
+  ) =>
+    api.post<DecideRefundResult>(`/coach/refunds/${refundId}/decide`, body),
+};

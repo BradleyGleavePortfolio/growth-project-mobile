@@ -712,3 +712,53 @@ export const romanPermanenceMarker = {
 
 /** The keys of the permanence-marker copy map (the two onboarding affordances). */
 export type RomanPermanenceMarkerKind = keyof typeof romanPermanenceMarker;
+
+// ── F: Named Regimes ────────────────────────────────────────────────────────
+//
+// F2 Roman voice for the named-regimes + partial-refund decision surfaces.
+// Appended as its own section per the F2 brief — no other section is touched.
+//
+// Roman's STRAIGHT register: calm, factual confirmations. The voice contract
+// holds exactly as in the sections above:
+//   • no exclamation marks (these are confirmations, not the rationed §2.6
+//     celebration);
+//   • no emoji;
+//   • no banned hype / corporate / slang words.
+
+/** Shown after a coach promotes a workout program to a named regime. */
+export const romanRegimePromoted =
+  'Marked as a regime. You can attach it to packages.';
+
+/** Shown after a coach archives a regime. */
+export const romanRegimeArchived =
+  'Archived. Active clients continue, new purchases blocked.';
+
+export interface RomanRegimePushedArgs {
+  /** Number of pending/active drops updated by the push. */
+  drops_updated: number;
+  /** Number of distinct active buyers affected. */
+  buyers_affected: number;
+}
+
+/**
+ * Shown after the coach taps "Push changes to existing buyers". Parameterised
+ * on the F1 push-to-existing response so the line reports the real counts.
+ */
+export function romanRegimePushed(args: RomanRegimePushedArgs): string {
+  const buyers = args.buyers_affected === 1 ? '1 active buyer' : `${args.buyers_affected} active buyers`;
+  return `Pushed. ${buyers} updated.`;
+}
+
+export interface RomanPartialRefundDecidedArgs {
+  /** The decision the coach took. */
+  decision: 'keep_drops' | 'unassign_drops';
+}
+
+/** Shown after a coach decides a pending partial-refund decision card. */
+export function romanPartialRefundDecided(
+  args: RomanPartialRefundDecidedArgs,
+): string {
+  return args.decision === 'keep_drops'
+    ? 'Kept. The client continues receiving their scheduled drops.'
+    : 'Unassigned. The client\u2019s pending drops are canceled.';
+}
