@@ -40,7 +40,6 @@ import CommunityChallengesScreen from '../screens/community/CommunityChallengesS
 import CommunityClassroomScreen from '../screens/community/CommunityClassroomScreen';
 import CommunityLessonDetailScreen from '../screens/community/CommunityLessonDetailScreen';
 import CommunityVoiceComposerScreen from '../screens/community/CommunityVoiceComposerScreen';
-import CommunityFindScreen from '../screens/community/CommunityFindScreen';
 import type { CommunityStackParamList } from '../screens/community/communityNavTypes';
 
 const CommunityStack = createNativeStackNavigator<CommunityStackParamList>();
@@ -91,17 +90,6 @@ export default function CommunityNavigator(): React.ReactElement {
         <CommunityStack.Screen
           name="CommunityVoiceComposer"
           component={CommunityVoiceComposerScreen}
-        />
-      ) : null}
-      {/*
-        v3-4 SEARCH containment: the CommunityFind route is registered ONLY
-        when `featureFlags.communitySearch` is true. With that flag OFF (the
-        default) the route is absent and is unreachable by deep link.
-      */}
-      {featureFlags.communitySearch ? (
-        <CommunityStack.Screen
-          name="CommunityFind"
-          component={CommunityFindScreen}
         />
       ) : null}
     </CommunityStack.Navigator>

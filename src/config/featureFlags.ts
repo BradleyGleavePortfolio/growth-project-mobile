@@ -236,27 +236,6 @@ export const featureFlags = {
     'EXPO_PUBLIC_FF_COMMUNITY_CLASSROOM_POSTS',
     false,
   ),
-
-  // ─── Community v3-4 — search + wearable-aware coaching prompts ───────────
-  // Two paired surfaces consuming the v3-4 backend (FEATURE_COMMUNITY_SEARCH +
-  // FEATURE_COMMUNITY_WEARABLE_PROMPTS):
-  //   • communitySearch — the CommunityFindScreen (search posts / lessons /
-  //     voice-note transcripts / events across the workspace, RLS-scoped).
-  //   • communityWearablePrompts — the COACH-ONLY CommunityWearablePromptsScreen
-  //     (AI coaching prompts sourced from already-opted-in wearable insights;
-  //     never surfaced to clients).
-  // Both default OFF UNCONDITIONALLY (not `isDev`): when false neither route
-  // registers and both screens are dead code at build time. The backend gates
-  // are also OFF in prod, so a dev build that flips these on still degrades
-  // gracefully to a calm empty / not-available state.
-  //
-  // env: EXPO_PUBLIC_FF_COMMUNITY_SEARCH
-  communitySearch: readFlag('EXPO_PUBLIC_FF_COMMUNITY_SEARCH', false),
-  // env: EXPO_PUBLIC_FF_COMMUNITY_WEARABLE_PROMPTS
-  communityWearablePrompts: readFlag(
-    'EXPO_PUBLIC_FF_COMMUNITY_WEARABLE_PROMPTS',
-    false,
-  ),
   // ─── MWB-4 — workout-builder autosave (Google-Docs-style save) ───────────
   // The MWB-3 backend (PATCH /workout-plans/:planId/autosave + POST .../undo,
   // FEATURE_MWB_AUTOSAVE_UNDO) is merged; MWB-4 is the mobile half: a reusable

@@ -25,11 +25,6 @@ export type CoachCommunityStackParamList = {
   CoachCommunityModeration: undefined;
   /** Coach event list + lifecycle management (v2-3). */
   CoachCommunityEvents: undefined;
-  /**
-   * COACH-ONLY wearable coaching prompts for a single client (v3-4).
-   * Registered only behind `featureFlags.communityWearablePrompts`.
-   */
-  CoachCommunityWearablePrompts: { clientId: string; clientName?: string };
 };
 
 /** Loosely-typed nav prop used by the screens (matches the codebase pattern). */
