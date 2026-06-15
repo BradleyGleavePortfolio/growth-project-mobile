@@ -32,59 +32,20 @@ import { render, waitFor, fireEvent, act } from '@testing-library/react-native';
 // "Invalid hook call" at `useMemo`. Keeping a single React also keeps RTL's
 // auto-cleanup `afterEach` intact, so no test leaks an open handle.
 jest.mock('../config/featureFlags', () => {
-  const truthy = (raw: string | undefined) => {
+  const readEnvFlag = () => {
+    const raw = process.env.EXPO_PUBLIC_FF_MWB_AUTOSAVE;
     if (raw == null || raw === '') return false;
     return ['1', 'true', 'yes', 'on'].includes(String(raw).trim().toLowerCase());
   };
-  const readEnvFlag = () => truthy(process.env.EXPO_PUBLIC_FF_MWB_AUTOSAVE);
-  // EW2 undo reads `featureFlags.mwbUndo` at render time, the same live-getter
-  // pattern as mwbAutosave, so the integration cases below can flip the undo
-  // flag per-test via process.env without a module reset (single React).
-  const readUndoFlag = () => truthy(process.env.EXPO_PUBLIC_FF_MWB_UNDO);
   return {
     __esModule: true,
     featureFlags: {
       get mwbAutosave() {
         return readEnvFlag();
       },
-      get mwbUndo() {
-        return readUndoFlag();
-      },
     },
-    isFeatureEnabled: (key: string) => {
-      if (key === 'mwbAutosave') return readEnvFlag();
-      if (key === 'mwbUndo') return readUndoFlag();
-      return false;
-    },
-  };
-});
-
-// EW2 undo: the screen binds the undo button's two-finger swipe via
-// react-native-gesture-handler, which jest.setup.js does NOT mock. Capture the
-// Pan onEnd so the undo integration cases can drive a swipe synchronously and
-// render the GestureDetector as a passthrough Fragment. Harmless when the undo
-// flag is OFF (the button — and thus the gesture — is never mounted).
-interface UndoPanCapture {
-  onEnd?: (e: { translationY: number }) => void;
-}
-const undoPan: UndoPanCapture = {};
-jest.mock('react-native-gesture-handler', () => {
-  const mockReact = require('react');
-  const makeGesture = () => {
-    const g: Record<string, unknown> = {};
-    g.runOnJS = () => g;
-    g.minPointers = () => g;
-    g.maxPointers = () => g;
-    g.onEnd = (fn: UndoPanCapture['onEnd']) => {
-      undoPan.onEnd = fn;
-      return g;
-    };
-    return g;
-  };
-  return {
-    Gesture: { Pan: makeGesture },
-    GestureDetector: ({ children }: { children: React.ReactNode }) =>
-      mockReact.createElement(mockReact.Fragment, null, children),
+    isFeatureEnabled: (key: string) =>
+      key === 'mwbAutosave' ? readEnvFlag() : false,
   };
 });
 
@@ -198,10 +159,6 @@ const mockCreateMutateAsync = jest.fn().mockResolvedValue({ id: 'plan-1' });
 const mockSetExercisesMutateAsync = jest.fn().mockResolvedValue(undefined);
 jest.mock('../hooks/useWorkoutBuilder', () => ({
   __esModule: true,
-  // The mutation hooks are stubbed; the PURE inverse-op metadata builders the
-  // screen imports (actionFor*, snapshotBuilderRow) are the REAL ones — the undo
-  // integration cases assert the actual inverse contract, not a re-mock of it.
-  ...jest.requireActual('../hooks/useWorkoutBuilder'),
   useWorkoutPlan: () => ({ data: mockCurrentPlan, refetch: mockRefetch }),
   useCreateWorkoutPlan: () => ({ mutateAsync: mockCreateMutateAsync, isPending: false }),
   useUpdateWorkoutPlan: () => ({ mutateAsync: mockUpdateMutateAsync, isPending: false }),
@@ -211,13 +168,9 @@ jest.mock('../hooks/useWorkoutBuilder', () => ({
   }),
 }));
 
-// Default to no search hits (every existing test relies on an empty catalog).
-// `mockSearchItems` lets the EW2 add-then-undo case inject one hit without
-// disturbing the other suites; beforeEach resets it to [].
-let mockSearchItems: Array<{ id: string; name: string }> = [];
 jest.mock('../hooks/useExerciseLibrary', () => ({
   __esModule: true,
-  useExerciseSearch: () => ({ data: { items: mockSearchItems } }),
+  useExerciseSearch: () => ({ data: { items: [] } }),
 }));
 
 // Mock the autosave API boundary so we can count PATCH calls without axios.
@@ -299,9 +252,6 @@ beforeEach(() => {
   // `clearAllMocks` wipes implementations too, so re-establish the defaults the
   // boundary mocks need between tests.
   mockCurrentPlan = EXISTING_PLAN;
-  mockSearchItems = [];
-  delete process.env.EXPO_PUBLIC_FF_MWB_UNDO;
-  undoPan.onEnd = undefined;
   mockReadMirror.mockResolvedValue(null);
   mockClearMirrorIfKey.mockResolvedValue(undefined);
   mockInvalidateQueries.mockResolvedValue(undefined);
@@ -963,156 +913,5 @@ describe('CoachWorkoutBuilderScreen — mirror-degraded durability (P1, #36)', (
     await waitFor(() =>
       expect(writeMirror.mock.calls.length).toBeGreaterThanOrEqual(2),
     );
-  });
-});
-
-// ─── EW2 undo: optimistic command-stack integration ──────────────────────────
-//
-// These cases exercise the undo button + command stack wired into the LIVE
-// screen with BOTH flags on (autosave + undo), proving the inverse op flows back
-// through the same autosave channel the forward op used. The undo flag's live
-// getter (mwbUndo) reads EXPO_PUBLIC_FF_MWB_UNDO, set per-test like the autosave
-// flag — no module reset (single React instance is load-bearing here).
-describe('CoachWorkoutBuilderScreen — EW2 undo command stack', () => {
-  function enableUndo(): void {
-    process.env.EXPO_PUBLIC_FF_MWB_UNDO = 'true';
-  }
-
-  it('add then undo → the added row is removed and a revert toast shows', async () => {
-    setFlag(true); // autosave on
-    enableUndo(); // undo on
-    mockSearchItems = [{ id: 'squat', name: 'Back Squat' }];
-    jest.useFakeTimers();
-    const Screen = loadScreen();
-    const { getByLabelText, getByText, queryByText, getByTestId } = await render(
-      <Screen />,
-    );
-
-    // The undo button mounts (flag on) and is disabled until the first edit.
-    const undoBtn = getByTestId('mwb-undo-button');
-    expect(undoBtn.props.accessibilityState).toEqual({ disabled: true });
-
-    // Type a 2+ char query so the catalog hit renders, then add it.
-    await act(async () => {
-      await fireEvent.changeText(
-        getByLabelText('Search exercise catalog'),
-        'squat',
-      );
-    });
-    await act(async () => {
-      await fireEvent.press(getByText('Back Squat'));
-    });
-    // The new row is on screen ("2. Back Squat" — the seeded bench is #1).
-    expect(getByText('2. Back Squat')).toBeTruthy();
-
-    // Let the add's autosave flush so a baseline call exists, then clear the
-    // counter to isolate the inverse's own autosave.
-    await act(async () => {
-      jest.advanceTimersByTime(900);
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-    await waitFor(() => expect(mockAutosaveCall).toHaveBeenCalled());
-    mockAutosaveCall.mockClear();
-
-    // Undo: the button is now enabled. Tap it.
-    await waitFor(() =>
-      expect(
-        getByTestId('mwb-undo-button').props.accessibilityState,
-      ).toEqual({ disabled: false }),
-    );
-    await act(async () => {
-      await fireEvent.press(getByTestId('mwb-undo-button'));
-    });
-
-    // The added row is gone; the seeded bench remains.
-    await waitFor(() => expect(queryByText('2. Back Squat')).toBeNull());
-    expect(getByText('1. bench')).toBeTruthy();
-
-    // Drain the post-undo debounce. The just-added row never received a server
-    // row_id (the autosave diff emits an id-less insert), so adding then undoing
-    // it nets to no server delta — by design the autosave channel stays quiet
-    // here. The proof of the inverse flowing back through autosave lives in the
-    // edit-field case below, where the edit always produces a diff.
-    await act(async () => {
-      jest.advanceTimersByTime(900);
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    // A success toast in the Roman voice confirms the revert.
-    expect(getByTestId('mwb-undo-toast')).toBeTruthy();
-  });
-
-  it('edit plan field then undo → the field reverts and autosave fires the inverse', async () => {
-    setFlag(true);
-    enableUndo();
-    jest.useFakeTimers();
-    const Screen = loadScreen();
-    const { getByLabelText, getByTestId } = await render(<Screen />);
-
-    const nameInput = getByLabelText('Plan name');
-    expect(nameInput.props.value).toBe('Push day A');
-
-    // Edit the plan name (handleNameChange pushes editPlan{name: previous}).
-    await act(async () => {
-      await fireEvent.changeText(nameInput, 'Push day B');
-    });
-    expect(getByLabelText('Plan name').props.value).toBe('Push day B');
-
-    await act(async () => {
-      jest.advanceTimersByTime(900);
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-    await waitFor(() => expect(mockAutosaveCall).toHaveBeenCalled());
-    mockAutosaveCall.mockClear();
-
-    // Undo → the name reverts to the snapshotted previous value.
-    await act(async () => {
-      await fireEvent.press(getByTestId('mwb-undo-button'));
-    });
-    await waitFor(() =>
-      expect(getByLabelText('Plan name').props.value).toBe('Push day A'),
-    );
-
-    // The revert is itself a dirty edit, so autosave fires the inverse.
-    await act(async () => {
-      jest.advanceTimersByTime(900);
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-    await waitFor(() => expect(mockAutosaveCall).toHaveBeenCalled());
-  });
-
-  it('undo with an empty stack is a no-op (gesture fires, nothing changes)', async () => {
-    setFlag(true);
-    enableUndo();
-    jest.useFakeTimers();
-    const Screen = loadScreen();
-    const { getByLabelText, getByTestId, queryByTestId } = await render(
-      <Screen />,
-    );
-
-    // No edits yet: the button is disabled and the gesture is captured.
-    expect(getByTestId('mwb-undo-button').props.accessibilityState).toEqual({
-      disabled: true,
-    });
-    expect(typeof undoPan.onEnd).toBe('function');
-
-    // Drive a two-finger swipe-down with nothing on the stack.
-    await act(async () => {
-      undoPan.onEnd?.({ translationY: 80 });
-      await Promise.resolve();
-    });
-
-    // Nothing reverted: the name is untouched, no toast, no autosave.
-    expect(getByLabelText('Plan name').props.value).toBe('Push day A');
-    expect(queryByTestId('mwb-undo-toast')).toBeNull();
-    await act(async () => {
-      jest.advanceTimersByTime(900);
-      await Promise.resolve();
-    });
-    expect(mockAutosaveCall).not.toHaveBeenCalled();
   });
 });

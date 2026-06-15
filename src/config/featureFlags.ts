@@ -274,24 +274,6 @@ export const featureFlags = {
   //
   // env: EXPO_PUBLIC_FF_MWB_AUTOSAVE
   mwbAutosave: readFlag('EXPO_PUBLIC_FF_MWB_AUTOSAVE', false),
-  // ─── EW2 — workout-builder client-side undo button ───────────────────────
-  // A purely-additive, CLIENT-SIDE optimistic undo button in the coach workout
-  // builder toolbar. It layers a small in-memory command stack (default depth
-  // N=20) over the already-shipped MWB-4 autosave: each user-driven mutation
-  // pushes an inverse op, and Undo re-applies the inverse through the SAME
-  // autosave channel. The stack lives in component state and is wiped on screen
-  // unmount by design (fearless-experimentation tool, not durable history).
-  //
-  // Defaults OFF UNCONDITIONALLY (not `isDev`). When this flag is false the
-  // CoachWorkoutBuilderScreen MUST render NO undo button and bind NO undo
-  // gesture — zero UI residue, byte-identical to today. The feature is
-  // additive: NO new backend, NO new endpoint, NO schema change — everything
-  // flows through the existing autosave PATCH/PUT pipe, so a dev build that
-  // flips this on still degrades gracefully (an undo simply re-runs an existing
-  // mutation in reverse).
-  //
-  // env: EXPO_PUBLIC_FF_MWB_UNDO
-  mwbUndo: readFlag('EXPO_PUBLIC_FF_MWB_UNDO', false),
   // ─── Roman P3 — backend-authority gates ──────────────────────────────────
   // Two P3 Roman surfaces speak from signals the backend `main` does NOT yet
   // expose authoritatively, so each is held behind its own backend-live gate
