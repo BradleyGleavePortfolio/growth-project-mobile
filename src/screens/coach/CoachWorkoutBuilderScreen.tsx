@@ -35,6 +35,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import {
+  AccessibilityInfo,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -52,12 +53,28 @@ import type {
   WorkoutType,
 } from '../../api/workoutBuilderApi';
 import {
+  actionForAddExercise,
+  actionForEditExerciseField,
+  actionForEditPlan,
+  actionForRemoveExercise,
+  actionForReorderExercise,
   useCreateWorkoutPlan,
   useSetWorkoutExercises,
   useUpdateWorkoutPlan,
   useWorkoutPlan,
 } from '../../hooks/useWorkoutBuilder';
+import {
+  useBuilderCommandStack,
+  CommandNoOpError,
+  isCommandNoOpError,
+  type BuilderAction,
+  type CommandRowSnapshot,
+  type InverseOp,
+} from '../../hooks/useBuilderCommandStack';
+import { useCanonicalDeleteSet } from '../../hooks/useCanonicalDeleteSet';
 import { useExerciseSearch } from '../../hooks/useExerciseLibrary';
+import { track } from '../../lib/analytics';
+import { AnalyticsEvents } from '../../analytics/events';
 import { spacing, typography } from '../../theme/tokens';
 import type { SemanticTokens } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -65,10 +82,15 @@ import { featureFlags } from '../../config/featureFlags';
 import { useAutosave } from '../../hooks/useAutosave';
 import { generateClientId } from '../../utils/clientId';
 import AutosaveStatusPill from '../../components/workout/AutosaveStatusPill';
+import UndoButton from '../../components/coach/workout-builder/UndoButton';
+import { romanBuilderUndoToast, romanGenericError } from '../../lib/roman/copy';
 import {
   diffWorkingCopy,
   type WorkoutBuilderWorkingCopy,
 } from './workoutBuilderAutosaveDiff';
+
+/** EW2 undo: the in-screen toast lingers ~1.4 s, then self-dismisses. */
+const UNDO_TOAST_MS = 1400;
 
 type RouteParam = { planId?: string };
 
@@ -215,6 +237,57 @@ function serverRowCompositeSignature(e: WorkoutPlanExercise): string {
   });
 }
 
+/**
+ * EW2 undo: maps an editable `DraftExerciseRow` field to the matching
+ * `CommandRowSnapshot` field (the snapshot uses camelCase server-facing names).
+ * Non-persisted draft fields (clientId, display_name, row_id) are absent, so a
+ * patch touching them pushes no edit action.
+ */
+const DRAFT_TO_SNAPSHOT_FIELD: Partial<
+  Record<keyof DraftExerciseRow, keyof CommandRowSnapshot>
+> = {
+  exercise_external_id: 'exerciseExternalId',
+  sets: 'sets',
+  reps_or_duration_seconds: 'repsOrDurationSeconds',
+  rest_seconds: 'restSeconds',
+  weight_lbs: 'weightLbs',
+  superset_group_id: 'supersetGroupId',
+  notes: 'notes',
+};
+
+/**
+ * EW2 undo: the reverse map — a snapshot field back to the draft field the
+ * inverse `editExerciseField` writes. `rowId` / `displayName` have no editable
+ * draft counterpart through `updateRow`, so they are absent (and undefined-guarded).
+ */
+const SNAPSHOT_TO_DRAFT_FIELD: Partial<
+  Record<keyof CommandRowSnapshot, keyof DraftExerciseRow>
+> = {
+  exerciseExternalId: 'exercise_external_id',
+  sets: 'sets',
+  repsOrDurationSeconds: 'reps_or_duration_seconds',
+  restSeconds: 'rest_seconds',
+  weightLbs: 'weight_lbs',
+  supersetGroupId: 'superset_group_id',
+  notes: 'notes',
+};
+
+/** Reads a snapshot field's CURRENT value off a draft row (the pre-edit value). */
+const SNAPSHOT_VALUE_OF: Record<
+  keyof CommandRowSnapshot,
+  (r: DraftExerciseRow) => CommandRowSnapshot[keyof CommandRowSnapshot]
+> = {
+  rowId: (r) => r.row_id,
+  exerciseExternalId: (r) => r.exercise_external_id,
+  displayName: (r) => r.display_name,
+  sets: (r) => r.sets,
+  repsOrDurationSeconds: (r) => r.reps_or_duration_seconds,
+  restSeconds: (r) => r.rest_seconds,
+  weightLbs: (r) => r.weight_lbs,
+  supersetGroupId: (r) => r.superset_group_id,
+  notes: (r) => r.notes,
+};
+
 export default function CoachWorkoutBuilderScreen() {
   const route = useRoute<RouteProp<Record<string, RouteParam>, string>>();
   const navigation = useNavigation();
@@ -266,16 +339,24 @@ export default function CoachWorkoutBuilderScreen() {
       notes: e.notes,
     })),
   );
+  // N2: a render-synced mirror of `rows` so the gesture callbacks can read the
+  // live rows and compute their undo snapshot/inverse OUTSIDE the setRows
+  // updater (updaters may be replayed under StrictMode; reading the ref is
+  // always correct and keeps each gesture's push to exactly one entry).
+  const rowsRef = useRef<DraftExerciseRow[]>(rows);
+  rowsRef.current = rows;
 
-  // MWB-4 #237 (D-045): clientIds of rows the coach has removed. A row deleted
-  // BEFORE its server row_id was adopted produces NO remove_exercise op (the
-  // diff needs a row_id), so the dirty signal can stay false and the
+  // MWB-4 #237 (D-045) / D7B: the canonical delete-set — the single owner of the
+  // removed-row bookkeeping (clientId key set + per-signature FIFO lists). A row
+  // deleted BEFORE its server row_id was adopted produces NO remove_exercise op
+  // (the diff needs a row_id), so the dirty signal can stay false and the
   // post-insert refetch's full-replace adoption would otherwise RESURRECT it.
-  // We record the stable clientId on removal (regardless of row_id presence)
-  // and the adoption effect filters server rows through this set so the delete
-  // is preserved — then re-issued as a remove_exercise once the server row_id
-  // is known. Entries are pruned once the server confirms the row is gone.
-  const deletedKeysRef = useRef<Set<string>>(new Set());
+  // `markDeleted` records the stable clientId on removal (regardless of row_id
+  // presence); the adoption effect filters server rows through this set so the
+  // delete is preserved — then re-issued as a remove_exercise once the server
+  // row_id is known; the undo restore path `unmarkDeleted`s the row so a re-add
+  // is not silently re-dropped (prior audit F1).
+  const deleteSet = useCanonicalDeleteSet();
 
   // Search box state — local-only.
   const [search, setSearch] = useState<string>('');
@@ -285,14 +366,26 @@ export default function CoachWorkoutBuilderScreen() {
     { enabled: searchEnabled },
   );
 
+  // EW2 undo: a ref the mutation callbacks call to push an inverse-op snapshot
+  // onto the command stack AT GESTURE TIME. It is populated below once the stack
+  // exists (the stack's `applyInverse` closes over these same mutation setters,
+  // so the ref breaks the declaration cycle). When undo is OFF the ref stays
+  // null and every mutation is byte-identical to today — zero push work.
+  const pushUndoActionRef = useRef<((action: BuilderAction) => void) | null>(
+    null,
+  );
+
   const addExercise = useCallback((ex: Exercise) => {
+    // Mint the stable clientId up front so the SAME id is on the new row AND in
+    // the undo snapshot — the inverse (removeExercise) resolves the row by it.
+    const clientId = generateClientId();
     setRows((cur) => [
       ...cur,
       {
         // Stable client identity for this on-device row, minted once at
         // creation. Tracks the row across the id-less insert / adoption window
         // (D-045) and is never serialized to the server.
-        clientId: generateClientId(),
+        clientId,
         // No row_id: a brand-new on-device row. The autosave diff emits an
         // upsert_exercise WITHOUT a row_id (the server assigns one on insert,
         // which the next refetch folds back in).
@@ -306,57 +399,98 @@ export default function CoachWorkoutBuilderScreen() {
         notes: null,
       },
     ]);
+    // EW2: snapshot at gesture time (the row.id is adopted from the server later;
+    // the inverse resolves it via this clientId, so we need no server confirm).
+    pushUndoActionRef.current?.(actionForAddExercise(clientId));
     setSearch('');
   }, []);
 
   const moveRow = useCallback((idx: number, dir: -1 | 1) => {
-    setRows((cur) => {
-      const next = cur.slice();
-      const target = idx + dir;
-      if (target < 0 || target >= next.length) return cur;
+    // N2: compute the inverse from the live rows BEFORE mutating, then push
+    // AFTER setRows returns — never from inside the updater (React may
+    // double-invoke updaters under StrictMode, which would push twice for one
+    // gesture, violating the EW2 "one entry per gesture" invariant).
+    const cur = rowsRef.current;
+    const target = idx + dir;
+    if (idx < 0 || idx >= cur.length || target < 0 || target >= cur.length) {
+      return;
+    }
+    const moved = cur[idx] as DraftExerciseRow;
+    setRows((prev) => {
+      if (target < 0 || target >= prev.length) return prev;
+      const next = prev.slice();
       const tmp = next[idx] as DraftExerciseRow;
       next[idx] = next[target] as DraftExerciseRow;
       next[target] = tmp;
       return next;
     });
+    // EW2: snapshot from/to AT GESTURE TIME (inverse swaps them back).
+    pushUndoActionRef.current?.(
+      actionForReorderExercise(moved.clientId, idx, target),
+    );
   }, []);
-
-  // Composite signature of a deleted id-less row -> the clientIds removed with
-  // that signature. A row deleted before adoption has no row_id, so the only
-  // way to recognise the server row that the post-insert refetch resurrects is
-  // to match its server-facing fields (D-045). Stored as a FIFO list per
-  // signature so two identical rows added-then-one-deleted are matched one for
-  // one rather than both being dropped.
-  const deletedSignaturesRef = useRef<Map<string, string[]>>(new Map());
 
   const removeRow = useCallback((idx: number) => {
-    setRows((cur) => {
-      const target = cur[idx];
-      // Record the stable clientId of the removed row REGARDLESS of whether it
-      // has a server row_id yet (D-045). If it was deleted in the id-less
-      // insert/adoption window the diff cannot emit a remove_exercise, so this
-      // is the only durable record of the coach's intent; the adoption effect
-      // reads it to keep the row deleted (and re-issue the server-side remove
-      // once the row_id is known) instead of letting the refetch resurrect it.
-      if (target) {
-        deletedKeysRef.current.add(target.clientId);
-        // Index by composite signature too, so a resurrected server row with a
-        // brand-new row_id (the id-less insert the coach then deleted) can be
-        // matched back to this clientId and dropped.
-        const sig = rowCompositeSignature(target);
-        const list = deletedSignaturesRef.current.get(sig) ?? [];
-        list.push(target.clientId);
-        deletedSignaturesRef.current.set(sig, list);
-      }
-      return cur.filter((_, i) => i !== idx);
-    });
-  }, []);
+    // N2: read the target + compute the delete-set mutation and the undo
+    // snapshot from the live rows BEFORE setRows, so a replayed updater cannot
+    // double-mark the delete-set or double-push the undo action.
+    const cur = rowsRef.current;
+    const target = cur[idx];
+    if (!target) return;
+    // Record the stable clientId of the removed row REGARDLESS of whether it has
+    // a server row_id yet (D-045). If it was deleted in the id-less
+    // insert/adoption window the diff cannot emit a remove_exercise, so this is
+    // the only durable record of the coach's intent; the adoption effect reads
+    // it to keep the row deleted (and re-issue the server-side remove once the
+    // row_id is known) instead of letting the refetch resurrect it.
+    deleteSet.markDeleted(target.clientId, rowCompositeSignature(target));
+    setRows((prev) => prev.filter((_, i) => i !== idx));
+    // EW2: snapshot the FULL row + its index BEFORE removal (inverse re-adds it
+    // at the original position). Snapshot is taken at gesture time so a server
+    // failure on the forward delete still leaves the stack honest.
+    pushUndoActionRef.current?.(
+      actionForRemoveExercise(
+        {
+          clientId: target.clientId,
+          rowId: target.row_id,
+          exerciseExternalId: target.exercise_external_id,
+          displayName: target.display_name,
+          sets: target.sets,
+          repsOrDurationSeconds: target.reps_or_duration_seconds,
+          restSeconds: target.rest_seconds,
+          weightLbs: target.weight_lbs,
+          supersetGroupId: target.superset_group_id,
+          notes: target.notes,
+        },
+        idx,
+      ),
+    );
+  }, [deleteSet]);
 
   const updateRow = useCallback(
     (idx: number, patch: Partial<DraftExerciseRow>) => {
-      setRows((cur) =>
-        cur.map((r, i) => (i === idx ? { ...r, ...patch } : r)),
+      // N2: capture the pre-edit row from the live rows and compute the undo
+      // actions BEFORE setRows, then push AFTER — never from inside the updater.
+      const cur = rowsRef.current;
+      const prevRow = cur[idx];
+      setRows((prev) =>
+        prev.map((r, i) => (i === idx ? { ...r, ...patch } : r)),
       );
+      const pushUndo = pushUndoActionRef.current;
+      if (pushUndo && prevRow) {
+        // EW2: one push per edited field, capturing the PREVIOUS value BEFORE the
+        // edit (inverse writes it back). A NumberField edit patches a single
+        // field at a time; if a patch carries several we push one action per
+        // changed field so each is independently undoable.
+        (Object.keys(patch) as (keyof DraftExerciseRow)[]).forEach((key) => {
+          const field = DRAFT_TO_SNAPSHOT_FIELD[key];
+          if (field === undefined) return; // non-persisted field (e.g. clientId)
+          const previousValue = SNAPSHOT_VALUE_OF[field](prevRow);
+          pushUndo(
+            actionForEditExerciseField(prevRow.clientId, field, previousValue),
+          );
+        });
+      }
     },
     [],
   );
@@ -802,23 +936,19 @@ export default function CoachWorkoutBuilderScreen() {
       // D-045 — delete-before-adoption guard. A server row is DROPPED from the
       // adopted local rows when it is the resurrection of a row the coach
       // deleted in the id-less insert/adoption window. We recognise it two
-      // ways: (1) a server row_id we already mapped to a clientId now in
-      // `deletedKeysRef`, or (2) a server row_id we have never seen whose
-      // composite signature matches a row removed while still id-less
-      // (`deletedSignaturesRef`). Matching consumes one entry per signature so
-      // identical rows are dropped one-for-one. Kept rows are mapped verbatim
-      // from server truth (the FULL replace); dropped rows are re-deleted by
-      // the rebaselineTo below.
-      const sigPool = new Map<string, string[]>();
-      for (const [sig, list] of deletedSignaturesRef.current) {
-        sigPool.set(sig, list.slice());
-      }
+      // ways: (1) a server row_id we already mapped to a clientId still marked
+      // deleted in the canonical delete-set, or (2) a server row_id we have
+      // never seen whose composite signature matches a row removed while still
+      // id-less. Matching consumes one entry per signature so identical rows are
+      // dropped one-for-one. Kept rows are mapped verbatim from server truth
+      // (the FULL replace); dropped rows are re-deleted by the rebaselineTo below.
+      const sigPool = deleteSet.snapshotSignatures();
       const keptExercises: WorkoutPlanExercise[] = [];
       const droppedRowIds: string[] = [];
       for (const e of serverExercises) {
         // (1) Known server row_id whose clientId was deleted.
         const mappedClientId = rowIdToClientIdRef.current.get(e.id);
-        if (mappedClientId && deletedKeysRef.current.has(mappedClientId)) {
+        if (mappedClientId && deleteSet.isDeleted(mappedClientId)) {
           droppedRowIds.push(e.id);
           continue;
         }
@@ -838,6 +968,32 @@ export default function CoachWorkoutBuilderScreen() {
           }
         }
         keptExercises.push(e);
+      }
+
+      // N1: preserve command identity across this clean full-replace adoption.
+      // A newly-added id-less local row that the server just confirmed has no
+      // `rowIdToClientIdRef` mapping yet, so `clientIdForServerRow` below would
+      // MINT a fresh clientId — orphaning the command stack's original clientId
+      // and making a later "add then undo" a silent no-op (prior audit N1). We
+      // match each kept server row that is still unmapped back to an id-less
+      // local row by composite signature (FIFO, order-tolerant like D-045) and
+      // seed `rowIdToClientIdRef` with that row's EXISTING clientId BEFORE the
+      // full replace, so the adopted row keeps the identity the command holds.
+      const idlessLocalBySig = new Map<string, string[]>();
+      for (const r of rowsRef.current) {
+        if (r.row_id !== undefined) continue;
+        const sig = rowCompositeSignature(r);
+        const list = idlessLocalBySig.get(sig) ?? [];
+        list.push(r.clientId);
+        idlessLocalBySig.set(sig, list);
+      }
+      for (const e of keptExercises) {
+        if (rowIdToClientIdRef.current.has(e.id)) continue;
+        const sig = serverRowCompositeSignature(e);
+        const pending = idlessLocalBySig.get(sig);
+        if (pending && pending.length > 0) {
+          rowIdToClientIdRef.current.set(e.id, pending.shift() as string);
+        }
       }
 
       setRows(
@@ -861,11 +1017,8 @@ export default function CoachWorkoutBuilderScreen() {
       // later re-add of the same exercise could be wrongly dropped).
       const liveServerRowIds = new Set(serverExercises.map((e) => e.id));
       for (const [rowId, clientId] of rowIdToClientIdRef.current) {
-        if (
-          deletedKeysRef.current.has(clientId) &&
-          !liveServerRowIds.has(rowId)
-        ) {
-          deletedKeysRef.current.delete(clientId);
+        if (deleteSet.isDeleted(clientId) && !liveServerRowIds.has(rowId)) {
+          deleteSet.unmarkByClientId(clientId);
           rowIdToClientIdRef.current.delete(rowId);
         }
       }
@@ -970,6 +1123,7 @@ export default function CoachWorkoutBuilderScreen() {
     clientIdForServerRow,
     autosaveRebaselineTo,
     buildServerWorkingCopy,
+    deleteSet,
   ]);
 
   // The current local row-id signature, derived from the working copy the hook
@@ -1155,6 +1309,247 @@ export default function CoachWorkoutBuilderScreen() {
     void autosave.flush();
   }, [runReplayRefetch, autosave]);
 
+  // ─── EW2 client-side optimistic undo (flag-gated) ──────────────────────────
+  // Purely additive over the existing autosave pipe: NO backend, NO endpoint,
+  // NO schema change. When the flag is OFF, `undoEnabled` is false, the command
+  // stack is mounted inert (its `applyInverse` is never reached because we never
+  // populate `pushUndoActionRef`), NO undo button renders, and NO gesture binds
+  // — the screen is byte-identical to today.
+  const undoEnabled = featureFlags.mwbUndo;
+
+  // EW2 success toast (Roman voice). In-screen, ~1.4 s, self-dismissing. Errors
+  // route through the existing generic error stem (romanGenericError) — the
+  // same calm voice every other mutation failure uses.
+  const [undoToast, setUndoToast] = useState<string | null>(null);
+  const undoToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showUndoToast = useCallback((message: string) => {
+    setUndoToast(message);
+    // F3: announce to VoiceOver/TalkBack on appearance. The live-region on the
+    // toast View covers re-render announcement; this imperative call guarantees
+    // the confirmation is spoken even when the toast text is unchanged between
+    // consecutive undos (a live region only re-announces on content change).
+    AccessibilityInfo.announceForAccessibility(message);
+    if (undoToastTimerRef.current) clearTimeout(undoToastTimerRef.current);
+    undoToastTimerRef.current = setTimeout(() => {
+      setUndoToast(null);
+      undoToastTimerRef.current = null;
+    }, UNDO_TOAST_MS);
+  }, []);
+  useEffect(
+    () => () => {
+      if (undoToastTimerRef.current) clearTimeout(undoToastTimerRef.current);
+    },
+    [],
+  );
+
+  // Apply a derived inverse op back through the SAME local-state mutations the
+  // forward ops use — so the change rides the existing autosave diff to the
+  // server (the persisted state matches the on-screen state). Reuses setName /
+  // setType / setRows; touches NO network directly.
+  const applyInverse = useCallback(
+    (op: InverseOp): void => {
+      switch (op.kind) {
+        case 'removeExercise': {
+          // Undo-of-add: remove the row. Mirror removeRow's delete-tracking so
+          // the autosave diff/adoption path treats this exactly as a user delete
+          // would (D-045). N2: read the row + mutate the delete-set OUTSIDE the
+          // updater so a replayed updater cannot double-mark.
+          const cur = rowsRef.current;
+          const removed = cur.find((r) => r.clientId === op.clientId);
+          // D7B: a missing target means the inverse cannot apply — signal a no-op
+          // so the stack restores the action and the screen emits the right
+          // telemetry instead of showing a false success toast.
+          if (!removed) throw new CommandNoOpError();
+          deleteSet.markDeleted(removed.clientId, rowCompositeSignature(removed));
+          setRows((prev) => prev.filter((r) => r.clientId !== op.clientId));
+          return;
+        }
+        case 'addExercise': {
+          // Undo-of-remove: re-add the snapshotted row at its original index. A
+          // fresh clientId is minted so the resurrected row has a distinct
+          // on-device identity. F1: the original removeRow MARKED the old row
+          // deleted in the canonical delete-set; we MUST unmark it here, or the
+          // next autosave adoption cycle would re-drop the restored row (silently
+          // negating the undo). Resolve the old clientId from the snapshot's
+          // server rowId when present, and consume the matching signature entry.
+          const restoredClientId = generateClientId();
+          const sig = rowCompositeSignature({
+            exercise_external_id: op.row.exerciseExternalId,
+            sets: op.row.sets,
+            reps_or_duration_seconds: op.row.repsOrDurationSeconds,
+            rest_seconds: op.row.restSeconds,
+            weight_lbs: op.row.weightLbs,
+            superset_group_id: op.row.supersetGroupId,
+            notes: op.row.notes,
+          });
+          const oldClientId = op.row.rowId
+            ? rowIdToClientIdRef.current.get(op.row.rowId)
+            : undefined;
+          // Clear the key-based marker (id-known path) AND consume one
+          // signature-based marker (id-less path); unmarkDeleted handles both.
+          deleteSet.unmarkDeleted(oldClientId ?? restoredClientId, sig);
+          setRows((prev) => {
+            const next = prev.slice();
+            const restored: DraftExerciseRow = {
+              clientId: restoredClientId,
+              row_id: undefined,
+              exercise_external_id: op.row.exerciseExternalId,
+              display_name: op.row.displayName,
+              sets: op.row.sets,
+              reps_or_duration_seconds: op.row.repsOrDurationSeconds,
+              rest_seconds: op.row.restSeconds,
+              weight_lbs: op.row.weightLbs,
+              superset_group_id: op.row.supersetGroupId,
+              notes: op.row.notes,
+            };
+            const at = Math.min(Math.max(op.atIndex, 0), next.length);
+            next.splice(at, 0, restored);
+            return next;
+          });
+          return;
+        }
+        case 'reorderExercise': {
+          // D7B: signal a no-op if the target drifted out of the rows.
+          if (!rowsRef.current.some((r) => r.clientId === op.clientId)) {
+            throw new CommandNoOpError();
+          }
+          setRows((cur) => {
+            const from = cur.findIndex((r) => r.clientId === op.clientId);
+            if (from === -1) return cur;
+            const next = cur.slice();
+            const [moved] = next.splice(from, 1);
+            const to = Math.min(Math.max(op.toIndex, 0), next.length);
+            next.splice(to, 0, moved as DraftExerciseRow);
+            return next;
+          });
+          return;
+        }
+        case 'editExerciseField': {
+          const draftKey = SNAPSHOT_TO_DRAFT_FIELD[op.field];
+          if (draftKey === undefined) return;
+          // D7B: signal a no-op if the target drifted out of the rows.
+          if (!rowsRef.current.some((r) => r.clientId === op.clientId)) {
+            throw new CommandNoOpError();
+          }
+          setRows((cur) =>
+            cur.map((r) =>
+              r.clientId === op.clientId
+                ? ({ ...r, [draftKey]: op.value } as DraftExerciseRow)
+                : r,
+            ),
+          );
+          return;
+        }
+        case 'editPlan': {
+          if (op.patch.name !== undefined) setName(op.patch.name);
+          if (op.patch.type !== undefined) setType(op.patch.type as WorkoutType);
+          return;
+        }
+        default: {
+          const _never: never = op;
+          return _never;
+        }
+      }
+    },
+    // F4: stable deps — setRows/setName/setType dispatchers and refs are
+    // React-stable; `deleteSet` is a memoized stable object; `rowCompositeSignature`
+    // and `generateClientId` are module-level. Listed explicitly so a future
+    // non-stable dep is flagged by the linter rather than silently captured stale.
+    [deleteSet],
+  );
+
+  // N3: emit a telemetry event when the bounded stack FIFO-evicts overflow, so
+  // ops can see coaches hitting the depth bound after flag flip. Stable callback.
+  const onUndoStackEvict = useCallback(
+    ({ capacity, evictedCount }: { capacity: number; evictedCount: number }) => {
+      track(AnalyticsEvents.MWB_UNDO_STACK_EVICTED, {
+        capacity,
+        evicted_count: evictedCount,
+        plan_id: planId,
+      });
+    },
+    [planId],
+  );
+
+  const commandStack = useBuilderCommandStack({
+    applyInverse,
+    onEvict: onUndoStackEvict,
+  });
+  const { push: pushUndoAction, undo: undoStack, canUndo, size: commandSize } =
+    commandStack;
+
+  // Populate the push ref ONLY when the flag is on, so a flag-off build does
+  // zero push work and every mutation is byte-identical to today. The cleanup
+  // nulls it so a flag flip (or unmount) stops capturing.
+  useEffect(() => {
+    if (!undoEnabled) {
+      pushUndoActionRef.current = null;
+      return undefined;
+    }
+    pushUndoActionRef.current = pushUndoAction;
+    return () => {
+      pushUndoActionRef.current = null;
+    };
+  }, [undoEnabled, pushUndoAction]);
+
+  // The single undo handler shared by the toolbar button AND the two-finger
+  // swipe gesture. Pops + re-applies the inverse; on success shows the Roman
+  // success toast; on failure surfaces the generic Roman error and (the stack
+  // having already restored the action) leaves it for a retry.
+  const onUndo = useCallback(() => {
+    // N3: record the invocation with the depth BEFORE the pop.
+    track(AnalyticsEvents.MWB_UNDO_INVOKED, {
+      stack_depth_before: commandSize,
+      plan_id: planId,
+    });
+    void undoStack()
+      .then((result) => {
+        if (result.status === 'empty') {
+          // Gesture fired on an empty stack (button is disabled at empty).
+          track(AnalyticsEvents.MWB_UNDO_FAILED, {
+            reason: 'empty',
+            plan_id: planId,
+          });
+          return;
+        }
+        // F5: show the REMAINING depth (post-pop), not the fixed capacity, so the
+        // toast is informative as the history drains.
+        showUndoToast(romanBuilderUndoToast.success({ depth: result.remaining }));
+      })
+      .catch((err: unknown) => {
+        // D7B: distinguish a no-op inverse (identity drift) from a real failure.
+        track(AnalyticsEvents.MWB_UNDO_FAILED, {
+          reason: isCommandNoOpError(err) ? 'noop' : 'resolve_failed',
+          plan_id: planId,
+        });
+        showUndoToast(romanGenericError({ mode: 'default' }));
+      });
+  }, [undoStack, showUndoToast, commandSize, planId]);
+
+  // Plan-meta edits routed through the command stack (flag-gated push). Each
+  // wraps the raw setter and snapshots the PREVIOUS value BEFORE the edit so the
+  // inverse (editPlan with previousPatch) restores it.
+  const handleNameChange = useCallback(
+    (next: string) => {
+      const previous = name;
+      if (undoEnabled && planId && next !== previous) {
+        pushUndoActionRef.current?.(actionForEditPlan(planId, { name: previous }));
+      }
+      setName(next);
+    },
+    [name, planId, undoEnabled],
+  );
+  const handleTypeChange = useCallback(
+    (next: WorkoutType) => {
+      const previous = type;
+      if (undoEnabled && planId && next !== previous) {
+        pushUndoActionRef.current?.(actionForEditPlan(planId, { type: previous }));
+      }
+      setType(next);
+    },
+    [type, planId, undoEnabled],
+  );
+
   return (
     <KeyboardAvoidingView
       style={styles.screen}
@@ -1162,9 +1557,17 @@ export default function CoachWorkoutBuilderScreen() {
     >
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.headerRow}>
-          <Text style={[typography.h2, { color: sc.textPrimary }]}>
-            {isEditing ? 'Edit workout plan' : 'New workout plan'}
-          </Text>
+          <View style={styles.headerLeading}>
+            {/* EW2 undo: left-justified, hairline-divided from the title. Only
+                mounted when the flag is ON — flag-off renders NOTHING here and
+                binds NO gesture (zero UI residue, byte-identical to today). */}
+            {undoEnabled ? (
+              <UndoButton onUndo={onUndo} canUndo={canUndo} />
+            ) : null}
+            <Text style={[typography.h2, { color: sc.textPrimary }]}>
+              {isEditing ? 'Edit workout plan' : 'New workout plan'}
+            </Text>
+          </View>
           {/* Save-state pill: only when autosave is active. Flag-off (or a
               brand-new plan) renders NOTHING here — zero UI residue. Tapping a
               recoverable (offline/conflict) pill retries the flush now. */}
@@ -1179,13 +1582,28 @@ export default function CoachWorkoutBuilderScreen() {
           ) : null}
         </View>
 
+        {/* EW2 undo toast (Roman voice). Transient (~1.4 s), self-dismissing.
+            Only ever shown when undo is active and a revert just completed. */}
+        {undoEnabled && undoToast ? (
+          <View
+            style={styles.undoToast}
+            testID="mwb-undo-toast"
+            accessibilityLiveRegion="polite"
+            accessibilityRole="alert"
+          >
+            <Text style={[typography.caption, { color: sc.textPrimary }]}>
+              {undoToast}
+            </Text>
+          </View>
+        ) : null}
+
         <Text style={[typography.caption, styles.label, { color: sc.textMuted }]}>
           Plan name
         </Text>
         <TextInput
           accessibilityLabel="Plan name"
           value={name}
-          onChangeText={setName}
+          onChangeText={handleNameChange}
           placeholder="e.g. Push day A"
           placeholderTextColor={sc.textMuted}
           style={styles.input}
@@ -1200,7 +1618,7 @@ export default function CoachWorkoutBuilderScreen() {
             <Pressable
               key={t}
               accessibilityRole="button"
-              onPress={() => setType(t)}
+              onPress={() => handleTypeChange(t)}
               style={[
                 styles.typeChip,
                 { borderColor: sc.textMuted },
@@ -1408,6 +1826,21 @@ function makeStyles(sc: SemanticTokens) {
       alignItems: 'center',
       gap: spacing.sm,
       marginBottom: spacing.xs,
+    },
+    headerLeading: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      flexShrink: 1,
+    },
+    undoToast: {
+      backgroundColor: sc.bgSurface,
+      borderRadius: 8,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: sc.border,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      marginBottom: spacing.sm,
     },
     label: { marginTop: spacing.md, marginBottom: spacing.xs },
     input: {
