@@ -90,6 +90,13 @@ export const AnalyticsEvents = {
   TIMELINE_VIEWED: 'timeline_viewed',
   REPORT_VIEWED: 'report_viewed',
   PROGRESS_VIEWED: 'progress_viewed',
+
+  // Community v3-4 — search + coach wearable prompts (mobile emit sites)
+  COMMUNITY_SEARCH_SUBMITTED: 'community_search_submitted',
+  COMMUNITY_SEARCH_RESULT_TAPPED: 'community_search_result_tapped',
+  COACH_WEARABLE_PROMPT_GENERATED: 'coach_wearable_prompt_generated',
+  COACH_WEARABLE_PROMPT_DISMISSED: 'coach_wearable_prompt_dismissed',
+  COACH_WEARABLE_PROMPT_ACTED_ON: 'coach_wearable_prompt_acted_on',
 } as const;
 
 /** Union of all event name string literals. */
@@ -133,4 +140,31 @@ export interface MilestoneReachedProps {
 export interface NotificationPreferenceChangedProps {
   category: 'coach_direct' | 'client_bot' | 'milestones' | 'system';
   enabled: boolean;
+}
+
+// ─── Community v3-4 prop shapes ────────────────────────────────────────────────
+
+export interface CommunitySearchSubmittedProps {
+  query_length: number;
+  result_count: number;
+}
+
+export interface CommunitySearchResultTappedProps {
+  result_type: 'thread' | 'voice_note_transcript' | 'classroom_lesson' | 'event';
+  position: number;
+}
+
+export interface CoachWearablePromptGeneratedProps {
+  client_id: string;
+}
+
+export interface CoachWearablePromptDismissedProps {
+  client_id: string;
+  prompt_id: string;
+}
+
+export interface CoachWearablePromptActedOnProps {
+  client_id: string;
+  prompt_id: string;
+  action: string;
 }

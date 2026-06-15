@@ -41,6 +41,7 @@ import CommunityClassroomScreen from '../screens/community/CommunityClassroomScr
 import CommunityLessonDetailScreen from '../screens/community/CommunityLessonDetailScreen';
 import CommunityVoiceComposerScreen from '../screens/community/CommunityVoiceComposerScreen';
 import CommunityFindScreen from '../screens/community/CommunityFindScreen';
+import CommunityVoiceNoteDetail from '../screens/community/CommunityVoiceNoteDetail';
 import type { CommunityStackParamList } from '../screens/community/communityNavTypes';
 
 const CommunityStack = createNativeStackNavigator<CommunityStackParamList>();
@@ -102,6 +103,18 @@ export default function CommunityNavigator(): React.ReactElement {
         <CommunityStack.Screen
           name="CommunityFind"
           component={CommunityFindScreen}
+        />
+      ) : null}
+      {/*
+        v3-4 SEARCH target: the CommunityVoiceNoteDetail route opens a
+        `voice_note_transcript` search hit. It is registered ONLY behind the
+        same `featureFlags.communitySearch` gate as the search surface itself,
+        so with that flag OFF the route is absent and unreachable by deep link.
+      */}
+      {featureFlags.communitySearch ? (
+        <CommunityStack.Screen
+          name="CommunityVoiceNoteDetail"
+          component={CommunityVoiceNoteDetail}
         />
       ) : null}
     </CommunityStack.Navigator>

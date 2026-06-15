@@ -36,6 +36,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
 import { spacing, radius } from '../../theme/tokens';
 import { featureFlags } from '../../config/featureFlags';
+import { useFeatureFlags } from '../../hooks/useFeatureFlags';
 import { useCommunityMe } from '../../hooks/useCommunity';
 import {
   useWearablePrompts,
@@ -43,6 +44,8 @@ import {
   useDismissWearablePrompt,
   useActOnWearablePrompt,
 } from '../../hooks/useWearablePrompts';
+import { track } from '../../analytics/posthog.service';
+import { AnalyticsEvents } from '../../analytics/events';
 import { dedupeById } from '../../utils/dedupeById';
 import { ThreadHeader } from '../../components/community';
 import WearablePromptCard from '../../components/community/WearablePromptCard';
@@ -68,7 +71,29 @@ export default function CommunityWearablePromptsScreen(): React.ReactElement {
   const prerequisiteLoading = me.isLoading;
   const prerequisiteError = me.isError;
 
-  const list = useWearablePrompts({ workspaceId, clientId });
+  // Server-evaluated runtime gate (fail-safe OFF). The backend resolves this to
+  // false for non-coach roles, so the client trusts it without re-checking the
+  // role itself for the flag. `isLoading` here means the flag map has not
+  // resolved yet — treat that as not-yet-enabled (no premature fetch).
+  const featureFlagsState = useFeatureFlags();
+  const runtimeEnabled = featureFlagsState.flags.coach_community_wearable_prompts;
+  const flagsLoading = featureFlagsState.isLoading;
+
+  // N1: the list query must not fire before EVERY precondition holds — the
+  // server flag resolved ON, the flag map finished loading, the caller is a
+  // coach/owner, the prerequisite finished, and both ids are present. The hook
+  // ANDs this with its own id floors.
+  const list = useWearablePrompts({
+    workspaceId,
+    clientId,
+    enabled:
+      runtimeEnabled &&
+      !flagsLoading &&
+      !prerequisiteLoading &&
+      isCoachOrOwner &&
+      Boolean(workspaceId) &&
+      Boolean(clientId),
+  });
   const generate = useGenerateWearablePrompts(workspaceId);
   const dismiss = useDismissWearablePrompt(workspaceId);
   const actOn = useActOnWearablePrompt(workspaceId);
@@ -81,37 +106,76 @@ export default function CommunityWearablePromptsScreen(): React.ReactElement {
     [list.data],
   );
 
-  // The mutation error is surfaced via the hook's isError flag; this handler
-  // absorbs the rejected promise so it does not bubble as an unhandled
-  // rejection (it is NOT a silent swallow — the error state still renders).
-  const absorbRejection = useCallback((): void => undefined, []);
+  // N2: a failed dismiss / act-on is no longer silently absorbed — we record the
+  // prompt id + action that failed so the matching card can render an inline
+  // retry. `failed` clears on a fresh attempt for the same prompt.
+  const [failed, setFailed] = useState<{
+    promptId: string;
+    action: 'dismiss' | 'actOn';
+  } | null>(null);
 
   const onGenerate = useCallback(() => {
     if (!clientId) return;
-    void generate.mutateAsync({ clientId }).catch(absorbRejection);
-  }, [clientId, generate, absorbRejection]);
+    void generate
+      .mutateAsync({ clientId })
+      .then(() => {
+        // F4: a successful generation is the coach-meaningful event. client_id
+        // is an opaque id (not PII); the prompt bodies are never sent.
+        track(AnalyticsEvents.COACH_WEARABLE_PROMPT_GENERATED, {
+          client_id: clientId,
+        });
+      })
+      // The error state still renders via generate.isError; this catch only
+      // stops the rejected promise bubbling as an unhandled rejection.
+      .catch(() => undefined);
+  }, [clientId, generate]);
 
   const onDismiss = useCallback(
     (promptId: string) => {
       setBusyId(promptId);
+      setFailed((prev) => (prev?.promptId === promptId ? null : prev));
       void dismiss
         .mutateAsync(promptId)
-        .catch(absorbRejection)
+        .then(() => {
+          if (clientId) {
+            track(AnalyticsEvents.COACH_WEARABLE_PROMPT_DISMISSED, {
+              client_id: clientId,
+              prompt_id: promptId,
+            });
+          }
+        })
+        .catch(() => setFailed({ promptId, action: 'dismiss' }))
         .finally(() => setBusyId(null));
     },
-    [dismiss, absorbRejection],
+    [dismiss, clientId],
   );
 
   const onActOn = useCallback(
     (promptId: string) => {
       setBusyId(promptId);
+      setFailed((prev) => (prev?.promptId === promptId ? null : prev));
       void actOn
         .mutateAsync(promptId)
-        .catch(absorbRejection)
+        .then(() => {
+          if (clientId) {
+            track(AnalyticsEvents.COACH_WEARABLE_PROMPT_ACTED_ON, {
+              client_id: clientId,
+              prompt_id: promptId,
+              action: 'acted_on',
+            });
+          }
+        })
+        .catch(() => setFailed({ promptId, action: 'actOn' }))
         .finally(() => setBusyId(null));
     },
-    [actOn, absorbRejection],
+    [actOn, clientId],
   );
+
+  const onRetryFailed = useCallback(() => {
+    if (!failed) return;
+    if (failed.action === 'dismiss') onDismiss(failed.promptId);
+    else onActOn(failed.promptId);
+  }, [failed, onDismiss, onActOn]);
 
   const Container: React.ComponentType<{ children: React.ReactNode }> = ({
     children,
@@ -138,12 +202,14 @@ export default function CommunityWearablePromptsScreen(): React.ReactElement {
     </Container>
   );
 
-  // Defense-in-depth #2: flag off.
-  if (!featureFlags.communityWearablePrompts) {
+  // Defense-in-depth #2: static build-time flag OFF, or the server-evaluated
+  // runtime flag resolved OFF (which also covers a non-coach caller, since the
+  // backend resolves this flag to false for non-coach roles).
+  if (!featureFlags.communityWearablePrompts || (!flagsLoading && !runtimeEnabled)) {
     return neutralUnavailable('wearable-prompts-flag-off');
   }
 
-  if (prerequisiteLoading) {
+  if (prerequisiteLoading || flagsLoading) {
     return (
       <Container>
         <View
@@ -329,6 +395,36 @@ export default function CommunityWearablePromptsScreen(): React.ReactElement {
               onActOn={onActOn}
               busy={busyId === item.id}
             />
+            {failed?.promptId === item.id ? (
+              <View
+                style={styles.itemError}
+                testID={`wearable-prompt-error-${item.id}`}
+              >
+                <Text
+                  style={[styles.errorNote, { color: semanticColors.accentText }]}
+                >
+                  {failed.action === 'dismiss'
+                    ? 'Could not dismiss this prompt. Please try again.'
+                    : 'Could not update this prompt. Please try again.'}
+                </Text>
+                <HapticPressable
+                  intent="light"
+                  onPress={onRetryFailed}
+                  disabled={busyId === item.id}
+                  accessibilityRole="button"
+                  accessibilityLabel="Try again"
+                  accessibilityState={{ disabled: busyId === item.id }}
+                  testID={`wearable-prompt-error-retry-${item.id}`}
+                  style={[styles.retry, { borderColor: semanticColors.accent }]}
+                >
+                  <Text
+                    style={[styles.retryLabel, { color: semanticColors.accentText }]}
+                  >
+                    Try again
+                  </Text>
+                </HapticPressable>
+              </View>
+            ) : null}
           </View>
         )}
         keyExtractor={(item) => item.id}
@@ -370,6 +466,12 @@ const styles = StyleSheet.create({
   },
   generateLabel: { fontSize: 15, fontWeight: '600' },
   errorNote: { fontSize: 13, textAlign: 'center' },
+  itemError: {
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingTop: spacing.sm,
+    paddingHorizontal: spacing.sm,
+  },
   retry: {
     marginTop: spacing.sm,
     borderWidth: StyleSheet.hairlineWidth,

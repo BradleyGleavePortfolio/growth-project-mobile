@@ -44,12 +44,26 @@ export interface UseWearablePromptsOptions {
   workspaceId?: string;
   clientId?: string;
   includeDismissed?: boolean;
+  /**
+   * Caller-supplied gate (N1): the screen passes its resolved flag + role +
+   * prerequisite-loading state here so the list query never fires before ALL
+   * preconditions hold. The hook ANDs it with its own id floors below; when
+   * omitted it defaults to true so other callers keep the id-only behaviour.
+   * This prevents a premature request that the backend would 403 (coach-only)
+   * or that would fetch wearable-sourced coach data behind an OFF flag.
+   */
+  enabled?: boolean;
 }
 
 export function useWearablePrompts(
   opts: UseWearablePromptsOptions,
 ): UseQueryResult<PromptListResponse, Error> {
-  const enabled = Boolean(opts.workspaceId);
+  // N1: require the caller's gate AND a workspace AND a client target. A
+  // coach-only, wearable-sourced read must never fire before the flag is known
+  // ON, the role is confirmed coach/owner, and both ids are present.
+  const callerEnabled = opts.enabled ?? true;
+  const enabled =
+    callerEnabled && Boolean(opts.workspaceId) && Boolean(opts.clientId);
   return useQuery({
     queryKey: wearablePromptsKeys.list(
       opts.workspaceId ?? '∅',

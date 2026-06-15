@@ -41,6 +41,14 @@ export type CommunityStackParamList = {
   /** Single classroom lesson detail (v3-2). Registered only behind communityClassroom. */
   CommunityLessonDetail: { postId: string };
   /**
+   * Single voice-note detail (v3-4 search target). Registered only behind
+   * `communitySearch` — a `voice_note_transcript` search hit opens HERE with the
+   * underlying voice-note id (NOT a postId), plus the PII-stripped transcript
+   * `excerpt` the search row already carried, so the detail can show the matched
+   * text without a second round-trip for the transcript body.
+   */
+  CommunityVoiceNoteDetail: { voiceNoteId: string; excerpt?: string };
+  /**
    * Record + send a voice note (v3-3). Registered only behind
    * `communityVoiceNotes`. The target picks the audience the recording is
    * published to (and is disclosed before send):

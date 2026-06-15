@@ -5,7 +5,7 @@
  * doctrine). Debouncing is the screen's responsibility; this is a pure input.
  */
 import React from 'react';
-import { View, TextInput, Pressable, StyleSheet } from 'react-native';
+import { View, TextInput, Pressable, Platform, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
 import { spacing, radius } from '../../theme/tokens';
@@ -51,6 +51,7 @@ export default function SearchBar({
           accessibilityRole="button"
           accessibilityLabel="Clear search"
           hitSlop={8}
+          style={styles.clear}
           testID="community-search-clear"
         >
           <Ionicons
@@ -75,4 +76,13 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
   },
   input: { flex: 1, fontSize: 15, paddingVertical: 0 },
+  // F7: the clear button is a real tap target — at least the platform minimum
+  // (44pt iOS / 48dp Android), not an 18px glyph with hitSlop alone, so it
+  // satisfies the minimum-touch-target guideline for a visible control.
+  clear: {
+    minWidth: Platform.OS === 'ios' ? 44 : 48,
+    minHeight: Platform.OS === 'ios' ? 44 : 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

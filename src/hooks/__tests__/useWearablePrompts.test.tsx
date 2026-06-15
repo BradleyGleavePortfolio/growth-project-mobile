@@ -150,6 +150,44 @@ describe('useWearablePrompts — enabled list read', () => {
   });
 });
 
+describe('useWearablePrompts — N1 enablement gate (no premature fetch)', () => {
+  it('does NOT fetch when the caller gate (enabled) is false, even with both ids', async () => {
+    const { Wrapper } = makeWrapper();
+    const { result } = await renderHook(
+      () =>
+        useWearablePrompts({ workspaceId: WS, clientId: CLIENT, enabled: false }),
+      { wrapper: Wrapper },
+    );
+    expect(api.list).not.toHaveBeenCalled();
+    expect(result.current.fetchStatus).toBe('idle');
+  });
+
+  it('does NOT fetch when no client target is present (coach-only read needs a client)', async () => {
+    const { Wrapper } = makeWrapper();
+    const { result } = await renderHook(
+      () => useWearablePrompts({ workspaceId: WS, clientId: undefined }),
+      { wrapper: Wrapper },
+    );
+    expect(api.list).not.toHaveBeenCalled();
+    expect(result.current.fetchStatus).toBe('idle');
+  });
+
+  it('fetches once the caller gate is true AND both ids are present', async () => {
+    api.list.mockResolvedValue(list([prompt()]));
+    const { Wrapper } = makeWrapper();
+    const { result } = await renderHook(
+      () =>
+        useWearablePrompts({ workspaceId: WS, clientId: CLIENT, enabled: true }),
+      { wrapper: Wrapper },
+    );
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(api.list).toHaveBeenCalledWith(WS, {
+      clientId: CLIENT,
+      includeDismissed: undefined,
+    });
+  });
+});
+
 describe('useGenerateWearablePrompts — mutation invalidates the list', () => {
   it('calls generate with the input and invalidates the prompts list', async () => {
     api.generate.mockResolvedValue(generateResponse([prompt({ id: 'gen-1' })]));
