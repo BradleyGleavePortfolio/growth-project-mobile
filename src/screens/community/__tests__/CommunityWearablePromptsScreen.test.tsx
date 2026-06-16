@@ -88,6 +88,7 @@ jest.mock('../../../analytics/posthog.service', () => ({
 
 import CommunityWearablePromptsScreen from '../CommunityWearablePromptsScreen';
 import { AnalyticsEvents } from '../../../analytics/events';
+import { logger } from '../../../utils/logger';
 
 function prompt(over: Record<string, unknown> = {}) {
   return {
@@ -108,6 +109,8 @@ function prompt(over: Record<string, unknown> = {}) {
 beforeEach(() => {
   mockTrack.mockReset();
   mockGenerate.mutateAsync.mockReset();
+  mockGenerate.isError = false;
+  mockGenerate.isPending = false;
   mockDismiss.mutateAsync.mockReset();
   mockActOn.mutateAsync.mockReset();
   mockListState.data = { version: 1, prompts: [] };
@@ -178,7 +181,41 @@ describe('CommunityWearablePromptsScreen — N2 inline failure + retry', () => {
   });
 });
 
+describe('CommunityWearablePromptsScreen — N3 onGenerate failure path', () => {
+  it('renders the generate error + logs a warning (no silent absorb) when generate rejects', async () => {
+    const warnSpy = jest.spyOn(logger, 'warn').mockImplementation(() => {});
+    mockGenerate.mutateAsync.mockRejectedValueOnce(new Error('boom'));
+    mockGenerate.isError = true;
+    await render(<CommunityWearablePromptsScreen />);
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('wearable-prompts-generate'));
+    });
+
+    expect(screen.getByTestId('wearable-prompts-generate-error')).toBeTruthy();
+    expect(warnSpy).toHaveBeenCalledWith(
+      'CommunityWearablePromptsScreen.onGenerate',
+      expect.objectContaining({ error: expect.any(Error) }),
+    );
+    warnSpy.mockRestore();
+  });
+});
+
 describe('CommunityWearablePromptsScreen — F4 telemetry', () => {
+  it('emits coach_wearable_prompt_generated on a successful generate', async () => {
+    mockGenerate.mutateAsync.mockResolvedValueOnce(undefined);
+    await render(<CommunityWearablePromptsScreen />);
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId('wearable-prompts-generate'));
+    });
+
+    expect(mockTrack).toHaveBeenCalledWith(
+      AnalyticsEvents.COACH_WEARABLE_PROMPT_GENERATED,
+      { client_id: 'client-1' },
+    );
+  });
+
   it('emits coach_wearable_prompt_dismissed on a successful dismiss', async () => {
     mockListState.data = { version: 1, prompts: [prompt()] };
     mockDismiss.mutateAsync.mockResolvedValueOnce(

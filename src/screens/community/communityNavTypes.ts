@@ -4,11 +4,8 @@
  * `featureFlags.communityTab` is true (see ClientNavigator.tsx). The deep-link
  * route is likewise registered only behind that flag.
  */
-import type {
-  NavigationProp,
-  RouteProp,
-  ParamListBase,
-} from '@react-navigation/native';
+import type { RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 export type CommunityStackParamList = {
   /** Container with the Space sub-tab switcher (Today / Hall / Cohorts / DMs). */
@@ -67,8 +64,8 @@ export type CommunityStackParamList = {
       };
 };
 
-/** Loosely-typed nav prop used by the screens (matches the codebase pattern). */
-export type CommunityNav = NavigationProp<ParamListBase>;
+/** Typed nav prop for the Community sub-stack (route names + params checked). */
+export type CommunityNav = NativeStackNavigationProp<CommunityStackParamList>;
 export type CommunityRoute<T extends keyof CommunityStackParamList> = RouteProp<
   Record<string, CommunityStackParamList[T]>,
   string

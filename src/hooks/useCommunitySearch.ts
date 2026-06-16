@@ -46,6 +46,13 @@ export interface UseCommunitySearchOptions {
   term: string;
   kind?: CommunitySearchKind;
   cohortId?: string;
+  /**
+   * Caller-supplied gate (mirrors useWearablePrompts.enabled): the screen
+   * passes its resolved runtime flag here so the query never fires before the
+   * server flag is known ON. ANDed with the hook's own workspace + term floors;
+   * when omitted it defaults to true so other callers keep id/term-only gating.
+   */
+  enabled?: boolean;
 }
 
 /**
@@ -57,7 +64,9 @@ export function useCommunitySearch(
   opts: UseCommunitySearchOptions,
 ): UseInfiniteQueryResult<InfiniteData<SearchResponse>, Error> {
   const trimmed = opts.term.trim();
-  const enabled = Boolean(opts.workspaceId) && trimmed.length > 0;
+  const callerEnabled = opts.enabled ?? true;
+  const enabled =
+    callerEnabled && Boolean(opts.workspaceId) && trimmed.length > 0;
 
   return useInfiniteQuery({
     queryKey: communitySearchKeys.query(

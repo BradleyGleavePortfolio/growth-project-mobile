@@ -90,6 +90,7 @@ export default function CommunityFindScreen(): React.ReactElement {
   const search = useCommunitySearch({
     workspaceId: workspaceId ?? undefined,
     term,
+    enabled: runtimeEnabled,
   });
 
   const data = useMemo(

@@ -218,6 +218,41 @@ describe('CommunityFindScreen — F8 dependent-flag containment', () => {
 });
 
 describe('CommunityFindScreen — F4 telemetry', () => {
+  it('emits community_search_submitted with length + count only (never the raw term)', async () => {
+    mockSearchState.data = {
+      pages: [
+        {
+          results: [
+            resultRow({ id: 'res-1', kind: 'post', targetId: 'post-1' }),
+            resultRow({ id: 'res-2', kind: 'post', targetId: 'post-2' }),
+          ],
+        },
+      ],
+    };
+    await render(<CommunityFindScreen />);
+    await typeAndSettle('hello');
+
+    expect(mockTrack).toHaveBeenCalledWith(
+      AnalyticsEvents.COMMUNITY_SEARCH_SUBMITTED,
+      { query_length: 5, result_count: 2 },
+    );
+
+    // The raw search term must NEVER leave the device — assert the payload
+    // carries no free-text key under any spelling.
+    const submitted = mockTrack.mock.calls.find(
+      ([event]) => event === AnalyticsEvents.COMMUNITY_SEARCH_SUBMITTED,
+    );
+    expect(submitted).toBeTruthy();
+    const payload = submitted?.[1] as Record<string, unknown>;
+    expect(payload).toEqual(
+      expect.not.objectContaining({ query: expect.anything() }),
+    );
+    expect(payload).toEqual(
+      expect.not.objectContaining({ term: expect.anything() }),
+    );
+    expect(Object.keys(payload)).toEqual(['query_length', 'result_count']);
+  });
+
   it('emits community_search_result_tapped with the result_type + position on tap', async () => {
     mockSearchState.data = {
       pages: [
