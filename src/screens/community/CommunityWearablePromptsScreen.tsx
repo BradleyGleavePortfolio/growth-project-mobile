@@ -47,6 +47,7 @@ import {
 import { track } from '../../analytics/posthog.service';
 import { AnalyticsEvents } from '../../analytics/events';
 import { dedupeById } from '../../utils/dedupeById';
+import { logger } from '../../utils/logger';
 import { ThreadHeader } from '../../components/community';
 import WearablePromptCard from '../../components/community/WearablePromptCard';
 import HapticPressable from '../../components/HapticPressable';
@@ -125,9 +126,11 @@ export default function CommunityWearablePromptsScreen(): React.ReactElement {
           client_id: clientId,
         });
       })
-      // The error state still renders via generate.isError; this catch only
-      // stops the rejected promise bubbling as an unhandled rejection.
-      .catch(() => undefined);
+      // The error state still renders via generate.isError; this catch keeps
+      // the rejected promise from bubbling while preserving observability.
+      .catch((error) =>
+        logger.warn('CommunityWearablePromptsScreen.onGenerate', { error }),
+      );
   }, [clientId, generate]);
 
   const onDismiss = useCallback(

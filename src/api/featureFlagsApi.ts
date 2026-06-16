@@ -54,7 +54,7 @@ export type ServerFeatureFlagKey = (typeof SERVER_FEATURE_FLAG_KEYS)[number];
 export const FeatureFlagsResponseSchema = z
   .object({
     flags: z.record(z.string(), z.boolean()),
-    evaluated_at: z.string(),
+    evaluated_at: z.string().datetime(),
   })
   .strict();
 export type FeatureFlagsResponse = z.infer<typeof FeatureFlagsResponseSchema>;
