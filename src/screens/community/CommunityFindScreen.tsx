@@ -34,8 +34,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
 import { spacing, radius } from '../../theme/tokens';
 import { featureFlags } from '../../config/featureFlags';
+import { useFeatureFlags } from '../../hooks/useFeatureFlags';
 import { useCommunityMe } from '../../hooks/useCommunity';
 import { useCommunitySearch } from '../../hooks/useCommunitySearch';
+import { track } from '../../analytics/posthog.service';
+import {
+  AnalyticsEvents,
+  type CommunitySearchResultTappedProps,
+} from '../../analytics/events';
 import { dedupeById } from '../../utils/dedupeById';
 import { ThreadHeader } from '../../components/community';
 import SearchBar from '../../components/community/SearchBar';
@@ -57,6 +63,20 @@ export default function CommunityFindScreen(): React.ReactElement {
   const prerequisiteLoading = me.isLoading;
   const prerequisiteError = me.isError;
 
+  // Server-evaluated runtime gates (fail-safe OFF). `community_search` is the
+  // inner gate for THIS surface; `community_classroom` / `community_events`
+  // gate whether a lesson / event search HIT may be opened (F8) — a hit can
+  // appear for a surface that is dark for this caller, so we must not navigate
+  // into an unregistered route.
+  const { flags } = useFeatureFlags();
+  const runtimeEnabled = flags.community_search;
+
+  // F8: when a dependent surface is off we cannot open that hit; surface a calm,
+  // transient notice instead of dead-ending into a missing route.
+  const [unavailableKind, setUnavailableKind] = useState<
+    'classroom_lesson' | 'event' | null
+  >(null);
+
   // The raw (immediate) input value vs the debounced term that drives the
   // query. Debouncing lives here so the SearchBar stays a pure input.
   const [input, setInput] = useState('');
@@ -70,6 +90,7 @@ export default function CommunityFindScreen(): React.ReactElement {
   const search = useCommunitySearch({
     workspaceId: workspaceId ?? undefined,
     term,
+    enabled: runtimeEnabled,
   });
 
   const data = useMemo(
@@ -79,24 +100,62 @@ export default function CommunityFindScreen(): React.ReactElement {
 
   const open = useCallback(
     (result: SearchResultRowModel) => {
+      // F4: a result tap is the engagement signal. The position is the index in
+      // the (deduped) result list; ids/excerpts are never sent as event props.
+      const kindToResultType: Record<
+        SearchResultRowModel['kind'],
+        CommunitySearchResultTappedProps['result_type']
+      > = {
+        post: 'thread',
+        voice_note_transcript: 'voice_note_transcript',
+        classroom_lesson: 'classroom_lesson',
+        event: 'event',
+      };
+      const position = data.findIndex((r) => r.id === result.id);
+      track(AnalyticsEvents.COMMUNITY_SEARCH_RESULT_TAPPED, {
+        result_type: kindToResultType[result.kind],
+        position: position >= 0 ? position : 0,
+      });
+
+      setUnavailableKind(null);
       switch (result.kind) {
         case 'post':
-        case 'voice_note_transcript':
           navigation.navigate('CommunityThread', { postId: result.targetId });
           break;
-        case 'classroom_lesson':
-          navigation.navigate('CommunityLessonDetail', {
-            postId: result.targetId,
+        case 'voice_note_transcript':
+          // F1: a voice-note transcript hit opens the dedicated voice-note
+          // detail with the VOICE NOTE id (not a postId), carrying the matched
+          // transcript excerpt the row already held.
+          navigation.navigate('CommunityVoiceNoteDetail', {
+            voiceNoteId: result.targetId,
+            excerpt: result.excerpt,
           });
           break;
+        case 'classroom_lesson':
+          // F8: the classroom surface may be dark for this caller even though a
+          // lesson hit surfaced; only open the (flag-registered) route when the
+          // server flag is ON, else show a calm notice.
+          if (flags.community_classroom) {
+            navigation.navigate('CommunityLessonDetail', {
+              postId: result.targetId,
+            });
+          } else {
+            setUnavailableKind('classroom_lesson');
+          }
+          break;
         case 'event':
-          navigation.navigate('CommunityEventDetail', {
-            eventId: result.targetId,
-          });
+          // F8: same containment for the events surface.
+          if (flags.community_events) {
+            navigation.navigate('CommunityEventDetail', {
+              eventId: result.targetId,
+            });
+          } else {
+            setUnavailableKind('event');
+          }
           break;
       }
     },
-    [navigation],
+    [navigation, data, flags.community_classroom, flags.community_events],
   );
 
   const onEndReached = useCallback(() => {
@@ -119,6 +178,12 @@ export default function CommunityFindScreen(): React.ReactElement {
         ? `${resultCount} ${resultCount === 1 ? 'result' : 'results'}`
         : 'No results',
     );
+    // F4: a settled search is the funnel signal. The raw term is NEVER sent
+    // (only its length) so no free-text query leaves the device.
+    track(AnalyticsEvents.COMMUNITY_SEARCH_SUBMITTED, {
+      query_length: trimmed.length,
+      result_count: resultCount,
+    });
   }, [search.isSuccess, resultCount, trimmed]);
 
   const header = (
@@ -127,8 +192,9 @@ export default function CommunityFindScreen(): React.ReactElement {
     </View>
   );
 
-  // Defense-in-depth: never reachable with the flag off (route not registered).
-  if (!featureFlags.communitySearch) {
+  // Defense-in-depth: never reachable with the static flag off (route not
+  // registered), and additionally hidden if the server flag resolves OFF.
+  if (!featureFlags.communitySearch || !runtimeEnabled) {
     return (
       <SafeAreaView
         style={[styles.flex, { backgroundColor: semanticColors.bgPrimary }]}
@@ -274,6 +340,20 @@ export default function CommunityFindScreen(): React.ReactElement {
     >
       <ThreadHeader title="Search" testID="community-find-header" />
       {header}
+      {unavailableKind ? (
+        <View style={styles.notice} testID="community-find-unavailable-notice">
+          <Ionicons
+            name="information-circle-outline"
+            size={16}
+            color={semanticColors.textMuted}
+          />
+          <Text style={[styles.noticeText, { color: semanticColors.textMuted }]}>
+            {unavailableKind === 'classroom_lesson'
+              ? 'Lessons are not available right now.'
+              : 'Events are not available right now.'}
+          </Text>
+        </View>
+      ) : null}
       <View style={styles.flex}>{bodyContent}</View>
     </SafeAreaView>
   );
@@ -302,4 +382,12 @@ const styles = StyleSheet.create({
   retryLabel: { fontSize: 14, fontWeight: '600' },
   listContent: { padding: spacing.lg, gap: spacing.sm },
   loadMore: { paddingVertical: spacing.lg, alignItems: 'center' },
+  notice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm,
+  },
+  noticeText: { fontSize: 13, flex: 1 },
 });
