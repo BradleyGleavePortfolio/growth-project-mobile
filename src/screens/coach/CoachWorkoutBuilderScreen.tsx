@@ -83,6 +83,8 @@ import { useAutosave } from '../../hooks/useAutosave';
 import { generateClientId } from '../../utils/clientId';
 import AutosaveStatusPill from '../../components/workout/AutosaveStatusPill';
 import UndoButton from '../../components/coach/workout-builder/UndoButton';
+import CustomExerciseComposer from '../../components/coach/workout-builder/CustomExerciseComposer';
+import type { CoachExercise } from '../../api/coachExerciseApi';
 import { romanBuilderUndoToast, romanGenericError } from '../../lib/roman/copy';
 import {
   diffWorkingCopy,
@@ -360,6 +362,9 @@ export default function CoachWorkoutBuilderScreen() {
 
   // Search box state — local-only.
   const [search, setSearch] = useState<string>('');
+  // Custom-move composer visibility (flag-gated; never shown when the flag is OFF).
+  const [showComposer, setShowComposer] = useState<boolean>(false);
+  const customExerciseEnabled = featureFlags.customExercise;
   const searchEnabled = search.trim().length >= 2;
   const { data: searchResult } = useExerciseSearch(
     { q: search.trim(), limit: 8 },
@@ -403,6 +408,32 @@ export default function CoachWorkoutBuilderScreen() {
     // the inverse resolves it via this clientId, so we need no server confirm).
     pushUndoActionRef.current?.(actionForAddExercise(clientId));
     setSearch('');
+  }, []);
+
+  // Custom-move authoring (EXPO_PUBLIC_FF_CUSTOM_EXERCISE): add a plan row that
+  // references a coach-authored library move. The reference id carries the
+  // `custom:` prefix (mirroring the catalog's `seed:` convention) so the wire
+  // contract is unchanged — the backend distinguishes a coach-owned move from a
+  // catalog id by that prefix. Identical row-append + undo-push shape as
+  // `addExercise`, so reorder/remove/undo treat a custom row like any other.
+  const addCustomExercise = useCallback((created: CoachExercise) => {
+    const clientId = generateClientId();
+    setRows((cur) => [
+      ...cur,
+      {
+        clientId,
+        exercise_external_id: `custom:${created.id}`,
+        display_name: created.name,
+        sets: 3,
+        reps_or_duration_seconds: 10,
+        rest_seconds: 60,
+        weight_lbs: null,
+        superset_group_id: null,
+        notes: null,
+      },
+    ]);
+    pushUndoActionRef.current?.(actionForAddExercise(clientId));
+    setShowComposer(false);
   }, []);
 
   const moveRow = useCallback((idx: number, dir: -1 | 1) => {
@@ -1758,6 +1789,26 @@ export default function CoachWorkoutBuilderScreen() {
           </View>
         ) : null}
 
+        {customExerciseEnabled ? (
+          showComposer ? (
+            <CustomExerciseComposer
+              onCreated={addCustomExercise}
+              onCancel={() => setShowComposer(false)}
+            />
+          ) : (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Author your own move"
+              onPress={() => setShowComposer(true)}
+              style={[styles.authorMoveBtn, { borderColor: sc.border }]}
+            >
+              <Text style={[typography.body, { color: sc.accentText }]}>
+                Not in the catalog? Author your own move.
+              </Text>
+            </Pressable>
+          )
+        ) : null}
+
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={isEditing ? 'Save changes' : 'Create plan'}
@@ -1880,6 +1931,14 @@ function makeStyles(sc: SemanticTokens) {
       borderRadius: 8,
       padding: spacing.sm,
       marginBottom: spacing.xs,
+    },
+    authorMoveBtn: {
+      borderWidth: StyleSheet.hairlineWidth,
+      borderRadius: 8,
+      paddingVertical: spacing.sm,
+      paddingHorizontal: spacing.sm,
+      marginTop: spacing.sm,
+      alignItems: 'center',
     },
     saveBtn: {
       marginTop: spacing.xl,
