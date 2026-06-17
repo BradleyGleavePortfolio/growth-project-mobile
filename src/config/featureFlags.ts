@@ -292,6 +292,24 @@ export const featureFlags = {
   //
   // env: EXPO_PUBLIC_FF_MWB_UNDO
   mwbUndo: readFlag('EXPO_PUBLIC_FF_MWB_UNDO', false),
+  // ─── Custom exercise authoring — coach-owned reusable move library ────────
+  // Lets a coach AUTHOR a brand-new move from scratch (free-text name, written
+  // instructions, and their OWN image/video) instead of only selecting from the
+  // fixed ExerciseDB catalog — e.g. a yoga instructor adding a stretch TGP has
+  // no catalog entry for. The authored move + its media are KEPT in a
+  // coach-owned library (CoachExercise) so they are reusable across plans and
+  // clients. The media upload reuses the same presign -> direct-PUT -> durable-
+  // create idiom the community voice-note pipeline already ships.
+  //
+  // Defaults OFF UNCONDITIONALLY (not `isDev`). When this flag is false the
+  // CoachWorkoutBuilderScreen renders NO custom-move composer and fetches NO
+  // library — byte-identical to today, catalog-search only. The backend gate
+  // (FEATURE_CUSTOM_EXERCISE) is ALSO off in prod and the coach-exercise routes
+  // answer 404 while dark, so an asymmetric dev build (mobile ON + backend OFF)
+  // degrades to a calm not-available state rather than an error banner.
+  //
+  // env: EXPO_PUBLIC_FF_CUSTOM_EXERCISE
+  customExercise: readFlag('EXPO_PUBLIC_FF_CUSTOM_EXERCISE', false),
   // ─── Roman P3 — backend-authority gates ──────────────────────────────────
   // Two P3 Roman surfaces speak from signals the backend `main` does NOT yet
   // expose authoritatively, so each is held behind its own backend-live gate

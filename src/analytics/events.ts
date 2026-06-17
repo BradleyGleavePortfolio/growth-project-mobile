@@ -95,6 +95,10 @@ export const AnalyticsEvents = {
   MWB_UNDO_INVOKED: 'mwb_undo_invoked',
   MWB_UNDO_FAILED: 'mwb_undo_failed',
   MWB_UNDO_STACK_EVICTED: 'mwb_undo_stack_evicted',
+
+  // Coach — custom exercise authoring (EXPO_PUBLIC_FF_CUSTOM_EXERCISE)
+  CUSTOM_EXERCISE_CREATED: 'custom_exercise_created',
+  CUSTOM_EXERCISE_CREATE_FAILED: 'custom_exercise_create_failed',
 } as const;
 
 /** Union of all event name string literals. */

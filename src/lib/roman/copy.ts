@@ -689,6 +689,27 @@ export const romanBuilderUndoToast = {
     return `Reverted. ${cardinalWord(args.depth)} ${noun} still in the bank.`;
   },
 } as const;
+// ── Custom exercise authoring (CustomExerciseComposer, coach app) ───────────
+
+/**
+ * Copy for the custom-move composer: a coach authoring a brand-new move that is
+ * not in the fixed catalog (free-text name, written instructions, their own
+ * image/video). Roman's STRAIGHT butler register — saving a move to the
+ * coach's own library is a quiet, durable act, not a celebration. The voice
+ * contract holds as elsewhere in this module: no exclamation marks, no emoji,
+ * no contractions, measured respect (§1.1). The error stem routes through the
+ * shared `romanGenericError` so a failed save speaks the same calm voice as
+ * every other transient mutation failure, and the draft is preserved for retry.
+ */
+export const romanCustomExerciseComposer = {
+  /** Header line on the composer sheet. */
+  title: 'Author your own move',
+  /** Subhead beneath the title. */
+  prompt:
+    'Name the move, write how it is performed, and attach your own image or video. It is kept in your library to use again.',
+  /** Confirmation once the move is saved to the coach library. */
+  saved: 'Saved to your library. The move is yours to reuse.',
+} as const;
 /**
  * ED.2 — three-arc router daily-rings line (coach app).
  *
