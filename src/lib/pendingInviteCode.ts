@@ -6,6 +6,8 @@
  * the code stored in AsyncStorage and then dropped — no surface ever read
  * it back. This module is the single source of truth for:
  *
+ *   - writing the pending code (`writePendingInviteCode`) — used by the
+ *     deep-link handler and the Day-1 pairing retry path
  *   - reading the pending code (`readPendingInviteCode`)
  *   - clearing it after a successful claim (`clearPendingInviteCode`)
  *   - the claim itself (`claimPendingInviteCode`) — POSTs to
@@ -25,11 +27,54 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authApi } from '../services/api';
 
-const KEY = 'pending_invite_code';
+// R15/R20: exactly one canonical, user-scoped key for the pending invite code.
+// The deep-link handler used to write `pending_invite_code:<scope>` while this
+// module read the bare `pending_invite_code`, so the banner never saw the code.
+// Both the reader and every writer now derive the key through `scopedKey()`,
+// so they are always symmetric and always namespaced to the signed-in user.
+const KEY_PREFIX = 'pending_invite_code:';
+
+// Pre-R15 unscoped key. Older builds (and the now-deleted inline writers) wrote
+// the bare form; `readPendingInviteCode` migrates it into the scoped key on the
+// first read, then deletes it. This is safe because signOut wipes the legacy
+// key, so any value found here can only be the current signed-in user's own
+// pre-upgrade code — never a bystander's.
+const LEGACY_KEY = 'pending_invite_code';
+
+// Resolve the scope suffix. Mirrors the deep-link handler: the authenticated
+// user's id from `user_data`, falling back to `anonymous` when it cannot be
+// parsed (unauthenticated cold-start). Shared by the reader and all writers so
+// the key they touch is identical.
+async function resolveScope(): Promise<string> {
+  try {
+    const raw = await AsyncStorage.getItem('user_data');
+    if (raw) {
+      const parsed = JSON.parse(raw) as { id?: string };
+      if (parsed && typeof parsed.id === 'string' && parsed.id) return parsed.id;
+    }
+  } catch {
+    // user_data unreadable — fall through to the anonymous scope.
+  }
+  return 'anonymous';
+}
+
+async function scopedKey(): Promise<string> {
+  return `${KEY_PREFIX}${await resolveScope()}`;
+}
 
 export async function readPendingInviteCode(): Promise<string | null> {
   try {
-    const raw = await AsyncStorage.getItem(KEY);
+    const key = await scopedKey();
+    let raw = await AsyncStorage.getItem(key);
+    if (!raw) {
+      // One-time migration of a pre-R15 unscoped code belonging to this user.
+      const legacy = await AsyncStorage.getItem(LEGACY_KEY);
+      if (legacy && legacy.trim()) {
+        await AsyncStorage.setItem(key, legacy);
+        await AsyncStorage.removeItem(LEGACY_KEY);
+        raw = legacy;
+      }
+    }
     if (!raw) return null;
     const trimmed = raw.trim();
     return trimmed ? trimmed : null;
@@ -40,7 +85,7 @@ export async function readPendingInviteCode(): Promise<string | null> {
 
 export async function writePendingInviteCode(code: string): Promise<void> {
   try {
-    await AsyncStorage.setItem(KEY, code);
+    await AsyncStorage.setItem(await scopedKey(), code);
   } catch {
     // best-effort; the deep-link handler logs its own errors.
   }
@@ -48,7 +93,8 @@ export async function writePendingInviteCode(code: string): Promise<void> {
 
 export async function clearPendingInviteCode(): Promise<void> {
   try {
-    await AsyncStorage.removeItem(KEY);
+    // Drop both the scoped key and any stale legacy key so a claim fully clears.
+    await AsyncStorage.removeMany([await scopedKey(), LEGACY_KEY]);
   } catch {
     // best-effort
   }
