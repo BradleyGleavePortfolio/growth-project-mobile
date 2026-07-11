@@ -69,7 +69,7 @@ type AuthState =
 // the tokens via `route.params`. See navigation/deepLinkUtils.ts.
 import { fragmentToQuery } from './deepLinkUtils';
 import { readUserCache, clearUserCache } from '../lib/userCache';
-import { writePendingInviteCode } from '../lib/pendingInviteCode';
+import { stashInviteCodeFromDeepLink } from '../lib/pendingInviteCode';
 import { EntitlementProvider } from '../entitlements/EntitlementProvider';
 import { isValidPackageShareToken } from '../utils/packageShare';
 
@@ -426,16 +426,12 @@ export default function RootNavigator() {
       }
 
       if (isInvite) {
-        const match = url.match(/\/join\/([^/?#]+)/i);
-        const code = match?.[1];
-        if (code) {
-          // Stash the inbound code so the home PendingInviteBanner can offer
-          // to attach it. `writePendingInviteCode` owns the user-scoped key
-          // (R15) and shares its scope resolution with the reader, so the
-          // banner always looks under the exact key we write here (R20). We
-          // reach this branch only after `authed` was truthy above.
-          await writePendingInviteCode(code);
-        }
+        // Stash the inbound `/join/<code>` so the home PendingInviteBanner can
+        // offer to attach it. `stashInviteCodeFromDeepLink` derives the same
+        // user-scoped key (R15) the banner reads from, so the code is never
+        // orphaned (R20). We reach this branch only after `authed` was truthy
+        // above.
+        await stashInviteCodeFromDeepLink(url);
       }
     };
 
