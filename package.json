@@ -36,7 +36,7 @@
     "@react-navigation/bottom-tabs": "^7.18.2",
     "@react-navigation/native": "^7.1.33",
     "@react-navigation/native-stack": "^7.17.5",
-    "@sentry/react-native": "~7.11.0",
+    "@sentry/react-native": "~8.14.1",
     "@stripe/stripe-react-native": "0.64.0",
     "@supabase/supabase-js": "^2.45.0",
     "@tanstack/query-async-storage-persister": "^5.100.1",
