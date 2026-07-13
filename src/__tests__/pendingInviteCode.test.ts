@@ -22,6 +22,7 @@ import {
 } from '../lib/pendingInviteCode';
 import { setUserCache, readUserCache, clearUserCache } from '../lib/userCache';
 import { logger } from '../utils/logger';
+import { prefsStorage } from '../storage/mmkv';
 
 jest.mock('../services/api', () => ({
   authApi: {
@@ -245,22 +246,64 @@ describe('read/write/clear round-trip and edge cases', () => {
     expect(await AsyncStorage.getItem(LEGACY_KEY)).toBeNull();
   });
 
-  it('degrades to null when AsyncStorage.getItem throws', async () => {
-    signedInSteadyState('user-123');
-    const spy = jest
+  it('logs and returns null when the scoped-key read throws (read-failure branch, observable)', async () => {
+    // Pin identity resolution to MMKV so it never touches AsyncStorage.getItem.
+    // Then EVERY AsyncStorage.getItem rejects — the only such call left is
+    // readPendingInviteCode's own scoped-key read, so the rejection can land
+    // on nothing but the branch under test, independent of the active MMKV
+    // mock variant (native vs AsyncStorage shim).
+    const idSpy = jest
+      .spyOn(prefsStorage, 'getStringAsync')
+      .mockResolvedValue(JSON.stringify({ id: 'user-123' }));
+    const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const getSpy = jest
       .spyOn(AsyncStorage, 'getItem')
-      .mockRejectedValueOnce(new Error('storage unavailable'));
+      .mockRejectedValue(new Error('storage unavailable'));
     expect(await readPendingInviteCode()).toBeNull();
-    spy.mockRestore();
+    expect(warn).toHaveBeenCalledWith(
+      'PendingInviteCode',
+      'readPendingInviteCode failed',
+      expect.any(Error),
+    );
+    getSpy.mockRestore();
+    warn.mockRestore();
+    idSpy.mockRestore();
   });
 
-  it('write swallows storage failures (best-effort)', async () => {
+  it('logs a write failure via logger.error and never leaks the code (no PII)', async () => {
     signedInSteadyState('user-123');
+    const error = jest.spyOn(logger, 'error').mockImplementation(() => undefined);
     const spy = jest
       .spyOn(AsyncStorage, 'setItem')
       .mockRejectedValueOnce(new Error('storage full'));
     await expect(writePendingInviteCode('ABC')).resolves.toBeUndefined();
+    expect(error).toHaveBeenCalledWith(
+      'PendingInviteCode',
+      'writePendingInviteCode failed',
+      expect.any(Error),
+    );
+    // The invite code must never appear in any logged argument.
+    for (const call of error.mock.calls) {
+      expect(JSON.stringify(call)).not.toContain('ABC');
+    }
     spy.mockRestore();
+    error.mockRestore();
+  });
+
+  it('logs a clear failure via logger.warn and still resolves (best-effort)', async () => {
+    signedInSteadyState('user-123');
+    const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    const spy = jest
+      .spyOn(AsyncStorage, 'removeMany')
+      .mockRejectedValueOnce(new Error('remove failed'));
+    await expect(clearPendingInviteCode()).resolves.toBeUndefined();
+    expect(warn).toHaveBeenCalledWith(
+      'PendingInviteCode',
+      'clearPendingInviteCode failed',
+      expect.any(Error),
+    );
+    spy.mockRestore();
+    warn.mockRestore();
   });
 });
 
