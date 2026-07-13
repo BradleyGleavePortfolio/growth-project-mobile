@@ -21,6 +21,7 @@ import {
   writePendingInviteCode,
 } from '../lib/pendingInviteCode';
 import { setUserCache, readUserCache, clearUserCache } from '../lib/userCache';
+import { logger } from '../utils/logger';
 
 jest.mock('../services/api', () => ({
   authApi: {
@@ -93,10 +94,31 @@ describe('scope resolution — canonical MMKV identity (P2 root fix)', () => {
     expect(await AsyncStorage.getItem(scopedKey('stale-user'))).toBeNull();
   });
 
-  it('falls back to the anonymous scope only when no identity exists anywhere', async () => {
+  it('writes nothing and reads null when no identity resolves anywhere (no anonymous shared slot)', async () => {
+    // R15/R92: with no resolvable identity a write must NOT persist to any
+    // shared slot, or the next signed-in user on the device would inherit it.
     await writePendingInviteCode('ANON-CODE');
-    expect(await AsyncStorage.getItem(scopedKey('anonymous'))).toBe('ANON-CODE');
-    expect(await readPendingInviteCode()).toBe('ANON-CODE');
+    expect(await AsyncStorage.getItem(scopedKey('anonymous'))).toBeNull();
+    expect(await AsyncStorage.getItem(LEGACY_KEY)).toBeNull();
+    expect(await readPendingInviteCode()).toBeNull();
+
+    // Once identity resolves, a fresh write is scoped to the real user id.
+    signedInSteadyState('user-123');
+    await writePendingInviteCode('REAL-CODE');
+    expect(await AsyncStorage.getItem(scopedKey('user-123'))).toBe('REAL-CODE');
+    expect(await AsyncStorage.getItem(scopedKey('anonymous'))).toBeNull();
+    expect(await readPendingInviteCode()).toBe('REAL-CODE');
+  });
+
+  it('logs and no-ops a write when identity is unresolvable (observable, not silent)', async () => {
+    const warn = jest.spyOn(logger, 'warn').mockImplementation(() => undefined);
+    await writePendingInviteCode('DROP-ME');
+    expect(warn).toHaveBeenCalled();
+    // The dropped code is never logged (PII): no argument equals the code.
+    for (const call of warn.mock.calls) {
+      expect(call).not.toContain('DROP-ME');
+    }
+    warn.mockRestore();
   });
 });
 
