@@ -400,4 +400,18 @@ describe('ImportDataScreen', () => {
     await waitFor(() => getByTestId('import-status'));
     expect(queryByTestId('import-custom-box')).toBeNull();
   });
+
+  it('resets field, validity, and hint when Custom is re-entered after leaving with a valid URL', async () => {
+    const { getByTestId, queryByTestId } = await render(<ImportDataScreen />);
+    await fireEvent.press(getByTestId('import-platform-custom'));
+    await fireEvent.changeText(getByTestId('import-custom-url'), 'https://app.myplatform.com/login');
+    expect(getByTestId('import-custom-open').props.accessibilityState).toEqual({ disabled: false });
+    // Leave Custom for a shortcut, then come back — single source of truth resets all three.
+    await fireEvent.press(getByTestId('import-platform-truecoach'));
+    await waitFor(() => getByTestId('import-status'));
+    await fireEvent.press(getByTestId('import-platform-custom'));
+    expect(getByTestId('import-custom-url').props.value).toBe('');
+    expect(getByTestId('import-custom-open').props.accessibilityState).toEqual({ disabled: true });
+    expect(queryByTestId('import-custom-hint')).toBeNull();
+  });
 });

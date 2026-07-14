@@ -37,7 +37,7 @@ describe('extensionImport contract', () => {
     });
   });
 
-  it('pair status known union matches the backend lifecycle values', () => {
+  it('pair status known-value set is the decodable lifecycle subset of the open string', () => {
     const values: PairStatus[] = ['pending', 'paired', 'expired'];
     expect(values).toHaveLength(3);
   });
@@ -47,7 +47,7 @@ describe('extensionImport contract', () => {
     expect(decodePairStatus(resp.status)).toBe('pending');
   });
 
-  it('terminal status union matches the backend enum values', () => {
+  it('terminal status known-value set is the decodable subset of the open string', () => {
     const values: ImportTerminalStatus[] = ['success', 'partial', 'failed'];
     expect(values).toHaveLength(3);
   });
@@ -134,7 +134,7 @@ describe('extensionImport contract', () => {
 
   it('every supported phase is a real member of the ImportFlowState union', () => {
     const known = new Set([
-      'intro', 'platformSelected', 'customUrlEntry', 'openingLogin', 'awaitingExtension',
+      'intro', 'customUrlEntry', 'openingLogin', 'awaitingExtension',
       'pairing', 'paired', 'learning', 'importing', 'partial', 'complete', 'failed', 'cancelled',
     ]);
     SUPPORTED_IMPORT_PHASES.forEach((p) => expect(known.has(p)).toBe(true));
@@ -161,7 +161,7 @@ describe('extensionImport contract', () => {
     });
   });
 
-  it('terminal status enum is exactly success/partial/failed', () => {
+  it('terminal status known-value set is exactly success/partial/failed', () => {
     const values: ImportTerminalStatus[] = ['success', 'partial', 'failed'];
     expect(new Set(values).size).toBe(3);
     expect(values).toContain('partial');

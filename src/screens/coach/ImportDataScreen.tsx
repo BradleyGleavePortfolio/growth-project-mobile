@@ -36,7 +36,6 @@ import type { ImportFlowState } from '../../types/extensionImport';
 export default function ImportDataScreen(): React.ReactElement {
   const { colors } = useTheme();
   const [state, setState] = useState<ImportFlowState>({ phase: 'intro' });
-  const [customUrl, setCustomUrl] = useState('');
 
   React.useEffect(() => {
     track(AnalyticsEvents.IMPORT_ENTRY_OPENED);
@@ -80,12 +79,10 @@ export default function ImportDataScreen(): React.ReactElement {
   );
 
   const onCustomUrlChange = useCallback((text: string) => {
-    setCustomUrl(text);
     setState({ phase: 'customUrlEntry', url: text, valid: safeImportLoginUrl(text) != null });
   }, []);
 
   const styles = makeStyles(colors);
-  const customValid = state.phase === 'customUrlEntry' && state.valid;
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content} testID="import-data-screen">
@@ -153,7 +150,7 @@ export default function ImportDataScreen(): React.ReactElement {
           <Text style={styles.sectionHeader}>Your platform's login page</Text>
           <TextInput
             style={styles.input}
-            value={customUrl}
+            value={state.url}
             onChangeText={onCustomUrlChange}
             placeholder="https://app.yourplatform.com/login"
             placeholderTextColor={colors.textMuted}
@@ -165,17 +162,17 @@ export default function ImportDataScreen(): React.ReactElement {
             testID="import-custom-url"
           />
           <TouchableOpacity
-            style={[styles.primaryBtn, !customValid && styles.primaryBtnDisabled]}
-            disabled={!customValid}
-            onPress={() => openLogin(CUSTOM_PLATFORM_ID, customUrl)}
+            style={[styles.primaryBtn, !state.valid && styles.primaryBtnDisabled]}
+            disabled={!state.valid}
+            onPress={() => openLogin(CUSTOM_PLATFORM_ID, state.url)}
             accessibilityRole="button"
             accessibilityLabel="Open login page"
-            accessibilityState={{ disabled: !customValid }}
+            accessibilityState={{ disabled: !state.valid }}
             testID="import-custom-open"
           >
             <Text style={styles.primaryBtnText}>Open login page</Text>
           </TouchableOpacity>
-          {customUrl.length > 0 && !customValid && (
+          {state.url.length > 0 && !state.valid && (
             <Text style={styles.hint} testID="import-custom-hint">
               Enter a secure https web address (public sites only).
             </Text>
