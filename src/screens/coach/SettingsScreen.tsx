@@ -351,6 +351,26 @@ export default function SettingsScreen() {
           <Text style={styles.rowValueHighlight}>{clientCount}</Text>
         </View>
         <View style={styles.divider} />
+        {/* Importer v0.3 — coach-facing Import Data entry. Rendered ONLY when
+            featureFlags.extensionImport is true (default OFF). NOT the Day-1
+            client-invite CoachPairing flow. */}
+        {featureFlags.extensionImport && (
+          <>
+            <TouchableOpacity
+              style={styles.row}
+              onPress={() => navigation.navigate('ImportData')}
+              accessibilityRole="button"
+              accessibilityLabel="Import data from another platform"
+              accessibilityHint="Bring your clients and history across from a coaching platform you already use"
+              testID="settings-import-data"
+            >
+              <Ionicons name="cloud-download-outline" size={20} color={colors.textSecondary} />
+              <Text style={styles.rowLabel}>Import Data</Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            </TouchableOpacity>
+            <View style={styles.divider} />
+          </>
+        )}
         <TouchableOpacity
           style={styles.row}
           onPress={handleOpenInviteCodes}

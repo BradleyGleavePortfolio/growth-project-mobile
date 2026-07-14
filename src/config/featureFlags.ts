@@ -362,6 +362,23 @@ export const featureFlags = {
     'EXPO_PUBLIC_FF_ROMAN_ONBOARDING_POLISH',
     false,
   ),
+
+  // ─── Importer v0.3 — coach-facing extension import entry ─────────────────
+  /**
+   * Post-signup, coach-facing "Import Data" entry in coach Settings. When ON,
+   * a coach can pick a prior coaching platform (or a custom site) and open its
+   * login page in the browser, where the TGP browser extension prompts them to
+   * start an autonomous import. This is NOT the Day-1 client-invite
+   * CoachPairing flow.
+   *
+   * Kill switch: when OFF (the default, unconditionally — not `isDev`) the
+   * Settings row does not render, the `ImportData` route is not registered, and
+   * the screen mounts no network path. Mirrors the backend gate
+   * FEATURE_EXTENSION_PAIRING (pair routes) / FEATURE_SCOUT_INGEST (ingest).
+   *
+   * env: EXPO_PUBLIC_FF_EXTENSION_IMPORT
+   */
+  extensionImport: readFlag('EXPO_PUBLIC_FF_EXTENSION_IMPORT', false),
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;

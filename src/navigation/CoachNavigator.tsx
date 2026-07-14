@@ -76,6 +76,9 @@ import AIMealPlanDraftScreen from '../screens/coach/AIMealPlanDraftScreen';
 import ClientInsightScreen from '../screens/coach/ClientInsightScreen';
 // Phase 10 — GDPR right to erasure.
 import DeleteAccountScreen from '../screens/settings/DeleteAccountScreen';
+// Importer v0.3 — coach-facing extension import entry. Registered ONLY behind
+// featureFlags.extensionImport (default OFF); the kill switch removes the route.
+import ImportDataScreen from '../screens/coach/ImportDataScreen';
 // Stream 1 — AI credit-pack checkout (Stripe webview B2B carve-out).
 import CreditPackCheckoutScreen from '../screens/coach/CreditPackCheckoutScreen';
 // Roman P4 / ED.3 — First Payment Wow overlay host. Wraps the whole coach tab
@@ -204,6 +207,8 @@ export type SettingsStackParamList = {
   DeleteAccount: undefined;
   /** Phase 10 — GDPR Article 20 data portability */
   DataExport: undefined;
+  /** Importer v0.3 — coach-facing extension import entry (flag-gated, default OFF). */
+  ImportData: undefined;
   /** TestFlight coach SaaS — business metrics / Stripe Connect surface. */
   CoachBusinessMetrics: undefined;
   /** TestFlight coach SaaS — team/gym profile and team code. */
@@ -419,6 +424,11 @@ function SettingsStackNavigator() {
       <SettingsStack.Screen name="DeleteAccount" component={DeleteAccountScreen} />
       {/* Phase 10 — GDPR Article 20 data portability */}
       <SettingsStack.Screen name="DataExport" component={DataExportScreen} />
+      {/* Importer v0.3 — coach-facing extension import entry. Registered ONLY
+          when featureFlags.extensionImport is true (default OFF). */}
+      {featureFlags.extensionImport && (
+        <SettingsStack.Screen name="ImportData" component={ImportDataScreen} />
+      )}
       {/* TestFlight coach SaaS — Stripe-Connect-backed business metrics. */}
       <SettingsStack.Screen
         name="CoachBusinessMetrics"
