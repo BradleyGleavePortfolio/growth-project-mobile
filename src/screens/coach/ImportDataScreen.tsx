@@ -22,6 +22,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
+import type { ThemeColors } from '../../theme/ThemeProvider';
 import {
   IMPORT_PLATFORMS,
   CUSTOM_PLATFORM_ID,
@@ -144,7 +145,7 @@ export default function ImportDataScreen(): React.ReactElement {
           }
           testID={`import-platform-${platform.id}`}
         >
-          <Ionicons name={platform.icon as never} size={22} color={colors.textSecondary} />
+          <Ionicons name={platform.icon} size={22} color={colors.textSecondary} />
           <Text style={styles.rowLabel}>{platform.label}</Text>
           <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
         </TouchableOpacity>
@@ -188,7 +189,7 @@ export default function ImportDataScreen(): React.ReactElement {
   );
 }
 
-function makeStyles(colors: Record<string, string>) {
+function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.background },
     content: { padding: 20, gap: 12 },

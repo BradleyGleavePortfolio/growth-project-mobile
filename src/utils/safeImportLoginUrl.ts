@@ -14,7 +14,9 @@
 
 /** Reject hosts that resolve to the device/loopback/private network space. */
 function isPrivateOrLoopbackHost(hostname: string): boolean {
-  const host = hostname.toLowerCase().replace(/\.$/, '');
+  // WHATWG URL keeps IPv6 literals bracketed (e.g. "[::1]"); strip them so the
+  // range checks below see the bare address.
+  const host = hostname.toLowerCase().replace(/\.$/, '').replace(/^\[|\]$/g, '');
 
   if (host === 'localhost' || host.endsWith('.localhost')) return true;
   if (host === '0.0.0.0' || host === '::' || host === '::1') return true;

@@ -352,8 +352,8 @@ export default function SettingsScreen() {
         </View>
         <View style={styles.divider} />
         {/* Importer v0.3 — coach-facing Import Data entry. Rendered ONLY when
-            featureFlags.extensionImport is true (default OFF). NOT the Day-1
-            client-invite CoachPairing flow. */}
+            featureFlags.extensionImport is true (default OFF). Distinct from the
+            Day-1 client-invite pairing flow. */}
         {featureFlags.extensionImport && (
           <>
             <TouchableOpacity
