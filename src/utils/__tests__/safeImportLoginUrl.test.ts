@@ -154,4 +154,74 @@ describe('safeImportLoginUrl', () => {
   it('rejects a loopback host even when credentials are also present', () => {
     expect(safeImportLoginUrl('https://user:pass@127.0.0.1/login')).toBeNull();
   });
+
+  it.each([
+    ['ipv4-mapped loopback', 'https://[::ffff:127.0.0.1]/login'],
+    ['ipv4-mapped private 10/8', 'https://[::ffff:10.0.0.5]/login'],
+    ['ipv4-mapped private 192.168', 'https://[::ffff:192.168.1.1]/login'],
+    ['ipv4-mapped link-local', 'https://[::ffff:169.254.1.1]/login'],
+    ['ipv4-compatible loopback', 'https://[::127.0.0.1]/login'],
+  ])('rejects IPv4-mapped/compatible IPv6 that embeds a private address: %s', (_l, url) => {
+    expect(safeImportLoginUrl(url)).toBeNull();
+  });
+
+  it('accepts an IPv4-mapped IPv6 that embeds a genuinely public address', () => {
+    // ::ffff:8.8.8.8 maps to public 8.8.8.8 — classified by the embedded value.
+    expect(safeImportLoginUrl('https://[::ffff:8.8.8.8]/login')).not.toBeNull();
+  });
+
+  it.each([
+    ['fe80', 'https://[fe80::1]/login'],
+    ['fe90 mid-range', 'https://[fe90::1]/login'],
+    ['fea0 mid-range', 'https://[fea0::1]/login'],
+    ['febf top of range', 'https://[febf::1]/login'],
+  ])('rejects the entire fe80::/10 link-local range: %s', (_l, url) => {
+    expect(safeImportLoginUrl(url)).toBeNull();
+  });
+
+  it.each([
+    ['fec0 above link-local', 'https://[fec0::1]/login'],
+    ['fe00 below link-local', 'https://[fe00::1]/login'],
+    ['public 2001:db8', 'https://[2001:db8::1]/login'],
+  ])('does NOT reject a public IPv6 just outside the private ranges: %s', (_l, url) => {
+    expect(safeImportLoginUrl(url)).not.toBeNull();
+  });
+
+  it.each([
+    ['decimal loopback', 'https://2130706433/login'],
+    ['hex loopback', 'https://0x7f000001/login'],
+    ['octal-dotted loopback', 'https://0177.0.0.1/login'],
+    ['short-form loopback', 'https://127.1/login'],
+    ['hex private 10/8', 'https://0xa000005/login'],
+    ['dotted-decimal private', 'https://10.0.0.1/login'],
+  ])('rejects shorthand/encoded IPv4 that resolves into a private/loopback block: %s', (_l, url) => {
+    expect(safeImportLoginUrl(url)).toBeNull();
+  });
+
+  it.each([
+    ['decimal public 8.8.8.8', 'https://134744072/login'],
+    ['dotted public', 'https://8.8.8.8/login'],
+  ])('accepts shorthand/encoded IPv4 that resolves to a public address: %s', (_l, url) => {
+    expect(safeImportLoginUrl(url)).not.toBeNull();
+  });
+
+  it.each([
+    ['fdny.gov', 'https://fdny.gov/login'],
+    ['fcbarcelona.com', 'https://fcbarcelona.com/login'],
+    ['fe-hyphen public', 'https://fe-example.com/login'],
+    ['fd-prefixed label', 'https://fd-startup.io/login'],
+  ])('does NOT reject a public DNS host that merely starts with fc/fd/fe: %s', (_l, url) => {
+    expect(safeImportLoginUrl(url)).toBe(url);
+  });
+
+  it('accepts an internationalised (IDN) public host (not mis-classified as private)', () => {
+    // A unicode/IDN label is a public DNS host — it must never trip the IP guards.
+    const out = safeImportLoginUrl('https://münchen.example/login');
+    expect(out).not.toBeNull();
+    expect(out).toMatch(/^https:\/\//);
+  });
+
+  it('rejects a bracketed IPv6 literal that is not parseable', () => {
+    expect(safeImportLoginUrl('https://[gggg::1]/login')).toBeNull();
+  });
 });

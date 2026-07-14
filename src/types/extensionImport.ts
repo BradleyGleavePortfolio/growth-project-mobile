@@ -53,12 +53,12 @@ export interface ImportErrorEnvelope {
  * never reports `complete` on a partial, unknown, or stale reading.
  */
 export type ImportFlowState =
-  // ── Supported now ──────────────────────────────────────────────────────
+  // ── Supported now (every member here is constructed and rendered) ────────
   | { phase: 'intro' }
-  | { phase: 'platformSelected'; platformId: string }
   | { phase: 'customUrlEntry'; url: string; valid: boolean }
   | { phase: 'openingLogin'; platformId: string; loginUrl: string }
   | { phase: 'awaitingExtension'; platformId: string }
+  | { phase: 'failed'; message: string }
   // ── Deferred vocabulary (constructed in PR-M2; see decision record) ──────
   | { phase: 'pairing'; pairingCode: string; expiresAt: string }
   | { phase: 'paired' }
@@ -66,14 +66,13 @@ export type ImportFlowState =
   | { phase: 'importing' }
   | { phase: 'partial'; summary?: string }
   | { phase: 'complete' }
-  | { phase: 'failed'; message: string }
   | { phase: 'cancelled' };
 
 /** Phases this PR is allowed to render — the honest, contract-backed subset. */
 export const SUPPORTED_IMPORT_PHASES = [
   'intro',
-  'platformSelected',
   'customUrlEntry',
   'openingLogin',
   'awaitingExtension',
+  'failed',
 ] as const satisfies readonly ImportFlowState['phase'][];

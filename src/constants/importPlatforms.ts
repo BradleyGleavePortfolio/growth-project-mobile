@@ -21,36 +21,11 @@ export interface ImportPlatform {
 
 /** Custom/Other is always last so the site-agnostic path is always present. */
 export const IMPORT_PLATFORMS: readonly ImportPlatform[] = [
-  {
-    id: 'truecoach',
-    label: 'TrueCoach',
-    icon: 'barbell-outline',
-    loginUrl: 'https://app.truecoach.co/login',
-  },
-  {
-    id: 'trainerize',
-    label: 'Trainerize',
-    icon: 'fitness-outline',
-    loginUrl: 'https://www.trainerize.com/login.aspx',
-  },
-  {
-    id: 'everfit',
-    label: 'Everfit',
-    icon: 'pulse-outline',
-    loginUrl: 'https://my.everfit.io/login',
-  },
-  {
-    id: 'mytrainer',
-    label: 'My PT Hub',
-    icon: 'clipboard-outline',
-    loginUrl: 'https://app.mypthub.net/login',
-  },
-  {
-    id: CUSTOM_PLATFORM_ID,
-    label: 'Custom / Other',
-    icon: 'globe-outline',
-    loginUrl: null,
-  },
+  { id: 'truecoach', label: 'TrueCoach', icon: 'barbell-outline', loginUrl: 'https://app.truecoach.co/login' },
+  { id: 'trainerize', label: 'Trainerize', icon: 'fitness-outline', loginUrl: 'https://www.trainerize.com/login.aspx' },
+  { id: 'everfit', label: 'Everfit', icon: 'pulse-outline', loginUrl: 'https://my.everfit.io/login' },
+  { id: 'mytrainer', label: 'My PT Hub', icon: 'clipboard-outline', loginUrl: 'https://app.mypthub.net/login' },
+  { id: CUSTOM_PLATFORM_ID, label: 'Custom / Other', icon: 'globe-outline', loginUrl: null },
 ] as const;
 
 /** Look up a catalog entry by id. Returns undefined for an unknown id. */

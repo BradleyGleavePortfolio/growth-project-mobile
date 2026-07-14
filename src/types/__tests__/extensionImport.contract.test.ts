@@ -19,15 +19,15 @@ describe('extensionImport contract', () => {
   it('supported phases are exactly the honest funnel subset (no complete/progress claims)', () => {
     expect([...SUPPORTED_IMPORT_PHASES]).toEqual([
       'intro',
-      'platformSelected',
       'customUrlEntry',
       'openingLogin',
       'awaitingExtension',
+      'failed',
     ]);
   });
 
   it('does NOT advertise deferred/uncontracted phases as supported', () => {
-    const deferred = ['pairing', 'paired', 'learning', 'importing', 'partial', 'complete', 'failed', 'cancelled'];
+    const deferred = ['pairing', 'paired', 'learning', 'importing', 'partial', 'complete', 'cancelled'];
     deferred.forEach((phase) => {
       expect(SUPPORTED_IMPORT_PHASES as readonly string[]).not.toContain(phase);
     });
@@ -76,10 +76,10 @@ describe('extensionImport contract', () => {
   it('each supported phase constructs a valid state carrying its own fields', () => {
     const states: ImportFlowState[] = [
       { phase: 'intro' },
-      { phase: 'platformSelected', platformId: 'everfit' },
       { phase: 'customUrlEntry', url: 'https://x.example.com', valid: true },
       { phase: 'openingLogin', platformId: 'everfit', loginUrl: 'https://x.example.com' },
       { phase: 'awaitingExtension', platformId: 'everfit' },
+      { phase: 'failed', message: "We couldn't open that site." },
     ];
     const phases = states.map((s) => s.phase);
     expect(phases).toEqual([...SUPPORTED_IMPORT_PHASES]);

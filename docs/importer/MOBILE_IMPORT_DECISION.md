@@ -50,7 +50,11 @@ extension-driven import. That entry did not exist. `CoachPairingScreen` is Day-1
   https-scheme guard pattern (`safeExternalEventUrl`), theme, telemetry, and nav.
 - **Accelerate:** static flag-off tests + behavioral render tests mirror existing
   harnesses (romanFlagOff / communityEventsScreens).
-- **Automate:** CI gates (typecheck, lint, jest, LOC, ratio) enforce the invariants.
+- **Automate:** the single CI job `Typecheck, lint, test` (`tsc --noEmit` + ESLint +
+  the **full** jest suite) enforces correctness. The net-prod-LOC cap and test:src
+  ratio are **review-time gates** measured against baseline `main` — they are not
+  separate CI checks, so they are asserted here with reproducible counts, not implied
+  by a green pipeline.
 
 ## Idiot-index
 
@@ -88,6 +92,20 @@ extension `DESIGN.md` v0.3:
   deferred; typed boundary only.
 - **No cancel endpoint exists.** → the mobile "cancel" is local-only (abandon the flow
   before it starts); no server cancel is faked.
+
+## Gates (verified on the pushed head)
+
+Verified by running the **entire** CI-equivalent locally, not a hand-picked subset:
+
+- `tsc --noEmit`: clean.
+- ESLint: 0 errors (pre-existing warnings only, none in the import-flow files).
+- **Full** jest suite (`npm test`, all suites): green. An earlier revision was
+  reported green from a *targeted* run and was in fact **RED** on the repo-wide
+  Quiet-Luxury doctrine scan (`ImportDataScreen` title used `fontWeight: '700'`).
+  That narrow-suite "green" claim is **retracted**; the title weight is now `'600'`
+  and the full suite is the standard of truth going forward.
+- Net-prod-LOC (added non-blank/non-comment lines vs `main`): **≤ 400** (review-time).
+- test:src ratio: **≥ 2.0** (review-time).
 
 ## Rollback / stop
 
