@@ -3,7 +3,11 @@
  * types mirror the backend OpenAPI slice (PR #504) and that the mobile UI only
  * advertises the honest, contract-backed subset of import phases.
  */
-import { SUPPORTED_IMPORT_PHASES } from '../extensionImport';
+import {
+  SUPPORTED_IMPORT_PHASES,
+  decodePairStatus,
+  decodeTerminalStatus,
+} from '../extensionImport';
 import type {
   ImportFlowState,
   PairStatus,
@@ -33,15 +37,53 @@ describe('extensionImport contract', () => {
     });
   });
 
-  it('pair status union matches the backend enum values', () => {
+  it('pair status known union matches the backend lifecycle values', () => {
     const values: PairStatus[] = ['pending', 'paired', 'expired'];
+    expect(values).toHaveLength(3);
+  });
+
+  it('pair-status wire field is a raw string decoded through decodePairStatus', () => {
     const resp: PairStatusResponse = { status: 'pending' };
-    expect(values).toContain(resp.status);
+    expect(decodePairStatus(resp.status)).toBe('pending');
   });
 
   it('terminal status union matches the backend enum values', () => {
     const values: ImportTerminalStatus[] = ['success', 'partial', 'failed'];
     expect(values).toHaveLength(3);
+  });
+
+  it.each(['pending', 'paired', 'expired'] as const)(
+    'decodePairStatus preserves the known lifecycle value: %s',
+    (raw) => {
+      expect(decodePairStatus(raw)).toBe(raw);
+    },
+  );
+
+  it.each(['completed', 'PAIRED', 'linked', '', 'pending ', 'unknown', 'null'])(
+    'decodePairStatus maps an unknown/future/garbled value to "unknown" (never a lifecycle): %s',
+    (raw) => {
+      expect(decodePairStatus(raw)).toBe('unknown');
+    },
+  );
+
+  it.each(['success', 'partial', 'failed'] as const)(
+    'decodeTerminalStatus preserves the known terminal value: %s',
+    (raw) => {
+      expect(decodeTerminalStatus(raw)).toBe(raw);
+    },
+  );
+
+  it.each(['done', 'complete', 'SUCCESS', 'succeeded', '', 'partial ', 'unknown'])(
+    'decodeTerminalStatus maps an unknown/future terminal value to "unknown" (never success/complete): %s',
+    (raw) => {
+      expect(decodeTerminalStatus(raw)).toBe('unknown');
+    },
+  );
+
+  it('an unknown status never decodes to a paired/complete/success reading', () => {
+    const forbidden = ['paired', 'success'];
+    expect(forbidden).not.toContain(decodePairStatus('a-server-value-we-never-shipped'));
+    expect(forbidden).not.toContain(decodeTerminalStatus('a-server-value-we-never-shipped'));
   });
 
   it('pair-init response mirrors the server-authoritative expiry contract', () => {
@@ -111,11 +153,11 @@ describe('extensionImport contract', () => {
     expect(e.request_id).toBeUndefined();
   });
 
-  it('pair-status response only ever carries a known lifecycle value', () => {
+  it('pair-status wire accepts any string but decodes each known value back to itself', () => {
     const known: PairStatus[] = ['pending', 'paired', 'expired'];
     known.forEach((status) => {
       const resp: PairStatusResponse = { status };
-      expect(known).toContain(resp.status);
+      expect(decodePairStatus(resp.status)).toBe(status);
     });
   });
 

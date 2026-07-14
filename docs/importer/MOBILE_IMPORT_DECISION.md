@@ -83,13 +83,22 @@ extension `DESIGN.md` v0.3:
 
 - `POST /api/extension/pair/init` → `{ pairing_code, expires_at }` (mobile-callable,
   Bearer JWT, gated by `FEATURE_EXTENSION_PAIRING`).
-- `POST /api/extension/pair/status` → `{ status: 'pending' | 'paired' | 'expired' }`.
+- `POST /api/extension/pair/status` → `{ status: string }`. The backend types this
+  field as an **open string**; `pending | paired | expired` are the known values. Mobile
+  therefore keeps the raw string on the wire and decodes it via `decodePairStatus` —
+  any value it does not recognise resolves to `'unknown'`, never to `paired`.
 - `POST /api/extension/pair/redeem` — **extension-only** (unauth code→token exchange).
 - `POST /api/scout/ingest` · `POST /api/scout/progress` · `POST /api/scout/ingest/complete`
-  — **extension-only** writers; terminal status `success | partial | failed`. Gated by
-  `FEATURE_SCOUT_INGEST`.
+  — **extension-only** writers; terminal `status` is likewise an **open string** with
+  known values `success | partial | failed`, decoded via `decodeTerminalStatus` (unknown
+  → `'unknown'`, never `success`/`complete`). Gated by `FEATURE_SCOUT_INGEST`.
 - **No mobile-readable import progress/status endpoint exists.** → progress mirror
   deferred; typed boundary only.
+
+Because the backend does not constrain these fields to an enum, mobile does **not**
+blind-cast arbitrary server strings into a closed union (that would be an
+unverified narrowing). The decoders are the structural seam that keeps the UI truthful
+when the server sends a future, renamed, or garbled value.
 - **No cancel endpoint exists.** → the mobile "cancel" is local-only (abandon the flow
   before it starts); no server cancel is faked.
 

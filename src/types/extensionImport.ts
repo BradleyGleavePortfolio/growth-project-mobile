@@ -23,14 +23,33 @@ export interface PairStatusRequest {
   code: string;
 }
 
+/**
+ * The backend types `status` / `terminal_status` as OPEN strings, so mobile
+ * must not blind-cast an arbitrary server value into a closed enum. We keep the
+ * raw string on the wire and decode it: a value we recognise maps to a known
+ * lifecycle member; anything else (a future/renamed/garbled value) resolves to
+ * `'unknown'` — an honest, non-terminal state that NEVER reads as paired,
+ * complete, or success. `'unknown'` is how the UI stays truthful in the face of
+ * a server value it was not built to interpret.
+ */
 export type PairStatus = 'pending' | 'paired' | 'expired';
+export type DecodedPairStatus = PairStatus | 'unknown';
 
 export interface PairStatusResponse {
-  status: PairStatus;
+  status: string; // raw wire value — decode via decodePairStatus, never cast
+}
+
+export function decodePairStatus(raw: string): DecodedPairStatus {
+  return raw === 'pending' || raw === 'paired' || raw === 'expired' ? raw : 'unknown';
 }
 
 /** Terminal state the extension settles to; mobile cannot read it today. */
 export type ImportTerminalStatus = 'success' | 'partial' | 'failed';
+export type DecodedTerminalStatus = ImportTerminalStatus | 'unknown';
+
+export function decodeTerminalStatus(raw: string): DecodedTerminalStatus {
+  return raw === 'success' || raw === 'partial' || raw === 'failed' ? raw : 'unknown';
+}
 
 /** `message` is a string for domain errors, string[] for validation failures. */
 export interface ImportErrorEnvelope {

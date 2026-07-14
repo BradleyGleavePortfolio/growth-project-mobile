@@ -62,10 +62,7 @@ export default function ImportDataScreen(): React.ReactElement {
       setState({ phase: 'awaitingExtension', platformId });
     } catch {
       track(AnalyticsEvents.IMPORT_LOGIN_OPEN_FAILED, { platform: platformId, reason: 'open_failed' });
-      setState({
-        phase: 'failed',
-        message: "We couldn't open that site in your browser. Please try again.",
-      });
+      setState({ phase: 'failed', message: "We couldn't open that site in your browser. Please try again." });
     }
   }, []);
 
