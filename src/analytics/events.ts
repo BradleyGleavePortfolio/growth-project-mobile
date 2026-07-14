@@ -43,6 +43,13 @@ export const AnalyticsEvents = {
   COACH_ALERT_VIEWED: 'coach_alert_viewed',
   COACH_CLIENT_INVITED: 'coach_client_invited',
 
+  // Coach — data import (v0.3 extension bridge). No tokens/codes/PII: only the
+  // platform slug and coarse funnel step are ever attached as properties.
+  IMPORT_ENTRY_OPENED: 'import_entry_opened',
+  IMPORT_PLATFORM_SELECTED: 'import_platform_selected',
+  IMPORT_LOGIN_OPENED: 'import_login_opened',
+  IMPORT_LOGIN_OPEN_FAILED: 'import_login_open_failed',
+
   // Client — workouts
   WORKOUT_STARTED: 'workout_started',
   WORKOUT_COMPLETED: 'workout_completed',

@@ -362,6 +362,16 @@ export const featureFlags = {
     'EXPO_PUBLIC_FF_ROMAN_ONBOARDING_POLISH',
     false,
   ),
+
+  // ─── Importer v0.3 — coach-facing extension import entry ─────────────────
+  /**
+   * Coach-facing "Import Data" entry. Kill switch: OFF by default
+   * (unconditionally, not `isDev`) hides the Settings row, skips the ImportData
+   * route, and mounts no network path. Mirrors backend FEATURE_EXTENSION_PAIRING.
+   *
+   * env: EXPO_PUBLIC_FF_EXTENSION_IMPORT
+   */
+  extensionImport: readFlag('EXPO_PUBLIC_FF_EXTENSION_IMPORT', false),
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;
