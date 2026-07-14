@@ -83,22 +83,26 @@ extension `DESIGN.md` v0.3:
 
 - `POST /api/extension/pair/init` → `{ pairing_code, expires_at }` (mobile-callable,
   Bearer JWT, gated by `FEATURE_EXTENSION_PAIRING`).
-- `POST /api/extension/pair/status` → `{ status: string }`. The backend types this
-  field as an **open string**; `pending | paired | expired` are the known values. Mobile
-  therefore keeps the raw string on the wire and decodes it via `decodePairStatus` —
-  any value it does not recognise resolves to `'unknown'`, never to `paired`.
+- `POST /api/extension/pair/status` → `{ status }`. The backend **constrains** this
+  field to a **closed enum** `pending | paired | expired` (OpenAPI `enum`, plus the DTO
+  `PAIR_STATUSES` union). Mobile still keeps the raw string on the wire and decodes it via
+  `decodePairStatus` rather than blind-casting — any value it does not recognise resolves
+  to `'unknown'`, never to `paired`.
 - `POST /api/extension/pair/redeem` — **extension-only** (unauth code→token exchange).
 - `POST /api/scout/ingest` · `POST /api/scout/progress` · `POST /api/scout/ingest/complete`
-  — **extension-only** writers; terminal `status` is likewise an **open string** with
-  known values `success | partial | failed`, decoded via `decodeTerminalStatus` (unknown
-  → `'unknown'`, never `success`/`complete`). Gated by `FEATURE_SCOUT_INGEST`.
+  — **extension-only** writers; terminal `status` is likewise a **closed enum**
+  `success | partial | failed` (OpenAPI `enum`, DTO `SCOUT_TERMINAL_STATUSES` +
+  `@IsIn`), decoded via `decodeTerminalStatus` (unknown → `'unknown'`, never
+  `success`/`complete`). Gated by `FEATURE_SCOUT_INGEST`.
 - **No mobile-readable import progress/status endpoint exists.** → progress mirror
   deferred; typed boundary only.
 
-Because the backend does not constrain these fields to an enum, mobile does **not**
-blind-cast arbitrary server strings into a closed union (that would be an
-unverified narrowing). The decoders are the structural seam that keeps the UI truthful
-when the server sends a future, renamed, or garbled value.
+Although the backend constrains both fields to a closed enum, mobile still does **not**
+blind-cast an arbitrary server string into the union — it decodes defensively. This is
+**forward-compatible version-skew defense**, not a claim that the contract is open: if a
+future contract version, a renamed member, or a garbled/malformed response arrives, the
+decoder yields `'unknown'` (a truthful non-terminal reading) instead of asserting an
+unverified member. The decoders are that structural seam.
 - **No cancel endpoint exists.** → the mobile "cancel" is local-only (abandon the flow
   before it starts); no server cancel is faked.
 

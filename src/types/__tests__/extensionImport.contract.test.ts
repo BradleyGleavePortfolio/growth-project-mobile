@@ -11,7 +11,9 @@ import {
 import type {
   ImportFlowState,
   PairStatus,
+  DecodedPairStatus,
   ImportTerminalStatus,
+  DecodedTerminalStatus,
   PairInitRequest,
   PairInitResponse,
   PairStatusRequest,
@@ -37,7 +39,7 @@ describe('extensionImport contract', () => {
     });
   });
 
-  it('pair status known-value set is the decodable lifecycle subset of the open string', () => {
+  it('pair status union mirrors the backend closed enum (pending/paired/expired)', () => {
     const values: PairStatus[] = ['pending', 'paired', 'expired'];
     expect(values).toHaveLength(3);
   });
@@ -47,7 +49,7 @@ describe('extensionImport contract', () => {
     expect(decodePairStatus(resp.status)).toBe('pending');
   });
 
-  it('terminal status known-value set is the decodable subset of the open string', () => {
+  it('terminal status union mirrors the backend closed enum (success/partial/failed)', () => {
     const values: ImportTerminalStatus[] = ['success', 'partial', 'failed'];
     expect(values).toHaveLength(3);
   });
@@ -84,6 +86,26 @@ describe('extensionImport contract', () => {
     const forbidden = ['paired', 'success'];
     expect(forbidden).not.toContain(decodePairStatus('a-server-value-we-never-shipped'));
     expect(forbidden).not.toContain(decodeTerminalStatus('a-server-value-we-never-shipped'));
+  });
+
+  it('decodePairStatus is total and idempotent — the unknown sentinel never re-promotes to a lifecycle member', () => {
+    const decoded = new Set<DecodedPairStatus>(['pending', 'paired', 'expired', 'unknown']);
+    ['pending', 'paired', 'expired', 'unknown', 'PAIRED', 'completed', '', 'x'].forEach((raw) => {
+      const once = decodePairStatus(raw);
+      expect(decoded.has(once)).toBe(true);
+      // Re-decoding a decoded value must be stable: a second pass never drifts
+      // 'unknown' (or any member) into a different lifecycle reading.
+      expect(decodePairStatus(once)).toBe(once);
+    });
+  });
+
+  it('decodeTerminalStatus is total and idempotent across known and unknown inputs', () => {
+    const decoded = new Set<DecodedTerminalStatus>(['success', 'partial', 'failed', 'unknown']);
+    ['success', 'partial', 'failed', 'unknown', 'SUCCESS', 'done', '', 'z'].forEach((raw) => {
+      const once = decodeTerminalStatus(raw);
+      expect(decoded.has(once)).toBe(true);
+      expect(decodeTerminalStatus(once)).toBe(once);
+    });
   });
 
   it('pair-init response mirrors the server-authoritative expiry contract', () => {

@@ -24,13 +24,15 @@ export interface PairStatusRequest {
 }
 
 /**
- * The backend types `status` / `terminal_status` as OPEN strings, so mobile
- * must not blind-cast an arbitrary server value into a closed enum. We keep the
- * raw string on the wire and decode it: a value we recognise maps to a known
- * lifecycle member; anything else (a future/renamed/garbled value) resolves to
- * `'unknown'` — an honest, non-terminal state that NEVER reads as paired,
- * complete, or success. `'unknown'` is how the UI stays truthful in the face of
- * a server value it was not built to interpret.
+ * The backend constrains `status` / `terminal_status` to CLOSED enums at every
+ * layer (OpenAPI `enum`, DTO union + class-validator `@IsIn`). Mobile still keeps
+ * the raw string on the wire and decodes defensively rather than blind-casting a
+ * server value into the union: a recognised value maps to its lifecycle member;
+ * anything else — a value from a future contract version, a renamed member, or a
+ * garbled/malformed response — resolves to `'unknown'` instead of being asserted
+ * as a real member. This is forward-compatible version-skew defense, not a claim
+ * that the published contract is open: `'unknown'` is a non-terminal state that
+ * NEVER reads as paired, complete, or success.
  */
 export type PairStatus = 'pending' | 'paired' | 'expired';
 export type DecodedPairStatus = PairStatus | 'unknown';
