@@ -8,7 +8,7 @@
  * accessibility labelling.
  */
 import React from 'react';
-import { Linking } from 'react-native';
+import { Linking, StyleSheet } from 'react-native';
 import { render, fireEvent, waitFor, cleanup } from '@testing-library/react-native';
 
 jest.mock('../../../theme/useTheme', () => ({
@@ -188,6 +188,12 @@ describe('ImportDataScreen', () => {
   it('marks the intro title as an accessibility header', async () => {
     const { getByText } = await render(<ImportDataScreen />);
     expect(getByText('Import your coaching data').props.accessibilityRole).toBe('header');
+  });
+
+  it('renders the title with a quiet-luxury weight (never 700/800)', async () => {
+    const { getByText } = await render(<ImportDataScreen />);
+    const flat = StyleSheet.flatten(getByText('Import your coaching data').props.style);
+    expect(['700', '800']).not.toContain(String(flat.fontWeight));
   });
 
   it('gives each platform row the button role for screen readers', async () => {

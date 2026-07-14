@@ -193,7 +193,7 @@ function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.background },
     content: { padding: 20, gap: 12 },
-    title: { fontSize: 24, fontWeight: '700', color: colors.textPrimary },
+    title: { fontSize: 24, fontWeight: '600', color: colors.textPrimary },
     body: { fontSize: 15, lineHeight: 22, color: colors.textSecondary },
     prereq: {
       flexDirection: 'row',
