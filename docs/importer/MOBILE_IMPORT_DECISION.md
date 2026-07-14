@@ -133,3 +133,49 @@ server-authoritative `expires_at` countdown), bounded/backoff/background-safe
 `pair/status` polling to the `paired`/`expired` terminal, and — once a mobile-readable
 progress contract lands — the learning/importing/partial/complete progress mirror. Uses
 the typed contract frozen in this PR (`src/types/extensionImport.ts`).
+
+---
+
+## PR-M2 addendum — Live pairing wired (2026-07-14)
+
+**Shipped in PR-M2** (built on the M1 boundary, flag still default-OFF):
+
+- `src/api/extensionPairApi.ts` — thin typed transport for the ONLY two
+  mobile-callable endpoints, `POST /extension/pair/init` and
+  `POST /extension/pair/status` (paths relative to the `/api`-suffixed baseURL).
+- `src/hooks/useExtensionPairing.ts` — the mint→poll state machine:
+  server-authoritative expiry, bounded exponential backoff (2s→15s, ×1.5),
+  AppState pause/resume, prompt local-expiry transition, transient-error
+  tolerance (≤5 consecutive) before a retryable `failed`, single-flight mint
+  (no duplicate intents), and full timer teardown on unmount. Unknown/garbled
+  `status` fails closed (treated as a non-terminal wait, never promoted to
+  `paired`). 401/403 → `authExpired`; 404 → `unavailable`; no token/code is
+  logged, stored, or emitted in telemetry.
+- `src/components/coach/ExtensionPairingPanel.tsx` — renders the honest
+  lifecycle (minting → code+countdown `waiting` → `paired`, plus
+  expired/failed/authExpired/unavailable/cancelled), mounted inside the M1
+  `awaitingExtension` state.
+
+**Verified contract mapping** (against `growth-project-backend`
+`docs/contracts/importer-openapi.json`, fetched live this session):
+
+| Brief-named endpoint (does NOT exist) | Real endpoint used | Note |
+|---|---|---|
+| `POST /auth/extension/pair` | `POST /api/extension/pair/init` | mint `{pairing_code, expires_at}` |
+| `GET /auth/extension/pair/status` | `POST /api/extension/pair/status` | body-only (never query); `{status: pending\|paired\|expired}` |
+| `POST /api/scout/ingest/init` | — | no such route; `scout/*` are extension-only POST writers |
+| `GET /api/scout/ingest/:intentId/status` | — | **no mobile-readable progress route exists** |
+
+**Still blocked (documented, not invented):** there is no mobile-readable import
+progress/`:intentId/status` route and no `scout/ingest/init` intent-creation link
+callable by mobile. The autonomous crawl runs entirely inside the extension after
+`paired`. So the mobile terminal is honestly `paired` ("running in the browser
+extension"); importing/partial/complete and any page/entity count are NOT
+rendered. Cancel is a LOCAL abandon (no server cancel endpoint exists).
+
+**Backend/extension follow-up required to close the progress mirror:** expose a
+mobile-readable, coach-scoped progress read (e.g. `GET /api/scout/ingest/:intentId/status`
+returning the extension-reported terminal `success|partial|failed` + coarse
+progress) plus the intent-id linkage from a paired code, all behind
+`FEATURE_SCOUT_INGEST`. Only then can the mobile importing/partial/complete states
+be wired truthfully.

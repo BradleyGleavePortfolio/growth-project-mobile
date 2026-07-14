@@ -49,6 +49,14 @@ export const AnalyticsEvents = {
   IMPORT_PLATFORM_SELECTED: 'import_platform_selected',
   IMPORT_LOGIN_OPENED: 'import_login_opened',
   IMPORT_LOGIN_OPEN_FAILED: 'import_login_open_failed',
+  // Live pairing (PR-M2). Properties carry ONLY the platform slug and a coarse
+  // failure-reason class — never the pairing code, a token, or any URL/PII.
+  IMPORT_PAIRING_STARTED: 'import_pairing_started',
+  IMPORT_PAIRING_CODE_READY: 'import_pairing_code_ready',
+  IMPORT_PAIRED: 'import_paired',
+  IMPORT_PAIRING_EXPIRED: 'import_pairing_expired',
+  IMPORT_PAIRING_FAILED: 'import_pairing_failed',
+  IMPORT_PAIRING_CANCELLED: 'import_pairing_cancelled',
 
   // Client — workouts
   WORKOUT_STARTED: 'workout_started',
