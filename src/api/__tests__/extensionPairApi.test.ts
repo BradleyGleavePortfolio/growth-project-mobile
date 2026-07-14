@@ -90,9 +90,11 @@ describe('extensionPairApi.init', () => {
 
   it('does not swallow a rejection into a resolved value', async () => {
     api.post.mockRejectedValue(axiosError(401));
-    const spy = jest.fn();
-    await extensionPairApi.init('truecoach').then(spy).catch(() => {});
-    expect(spy).not.toHaveBeenCalled();
+    const onResolve = jest.fn();
+    const onReject = jest.fn();
+    await extensionPairApi.init('truecoach').then(onResolve, onReject);
+    expect(onResolve).not.toHaveBeenCalled();
+    expect(onReject).toHaveBeenCalledTimes(1);
   });
 });
 

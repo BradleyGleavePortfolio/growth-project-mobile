@@ -17,7 +17,7 @@
  * The api transport + analytics are mocked; we assert the hook's orchestration.
  */
 import { act, renderHook, cleanup } from '@testing-library/react-native';
-import { AppState } from 'react-native';
+import { AppState, type AppStateStatus, type NativeEventSubscription } from 'react-native';
 import { AxiosError, AxiosHeaders } from 'axios';
 
 jest.mock('../../api/extensionPairApi', () => ({
@@ -50,7 +50,7 @@ function futureExpiry(ms = 5 * 60 * 1000): string {
   return new Date(Date.now() + ms).toISOString();
 }
 
-let appStateHandler: ((s: string) => void) | null = null;
+let appStateHandler: ((s: AppStateStatus) => void) | null = null;
 
 beforeEach(() => {
   jest.useFakeTimers();
@@ -58,10 +58,10 @@ beforeEach(() => {
   mockStatus.mockReset();
   mockTrack.mockClear();
   appStateHandler = null;
-  jest.spyOn(AppState, 'addEventListener').mockImplementation(((_e: string, cb: (s: string) => void) => {
+  jest.spyOn(AppState, 'addEventListener').mockImplementation((_event, cb) => {
     appStateHandler = cb;
-    return { remove: jest.fn() };
-  }) as unknown as typeof AppState.addEventListener);
+    return { remove: jest.fn() } as NativeEventSubscription;
+  });
 });
 
 afterEach(async () => {
