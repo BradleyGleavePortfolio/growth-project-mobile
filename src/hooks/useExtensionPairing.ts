@@ -22,9 +22,10 @@
  * Resilience: polling backs off (2s → 15s), pauses when the app backgrounds and
  * resumes on foreground, tolerates transient poll errors up to a cap before
  * surfacing a retryable failure, settles to `expired` only when the server
- * /status contract says so, and tears down every timer on unmount. A
- * single-flight guard prevents duplicate mint intents. No token or code is ever
- * logged, stored, or emitted in telemetry.
+ * /status contract says so, and tears down every timer on unmount. Single-flight
+ * guards prevent both duplicate mint intents and concurrent /status polls (a
+ * foreground resume mid-poll never issues a second request). No token or code is
+ * ever logged, stored, or emitted in telemetry.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
@@ -94,6 +95,7 @@ export function useExtensionPairing(
   const pollDelayRef = useRef(POLL_BASE_MS);
   const failureCountRef = useRef(0);
   const mintInFlightRef = useRef(false);
+  const pollInFlightRef = useRef(false);
   const pausedRef = useRef(false);
   const platformRef = useRef(platformSlug);
   platformRef.current = platformSlug;
@@ -107,6 +109,10 @@ export function useExtensionPairing(
   const go = useCallback(
     (next: PairingStatus) => {
       clearTimers();
+      // Ending this session frees the poll single-flight guard so the next
+      // session can poll; a still-outstanding poll from the old session is
+      // discarded by its code check (below) and cannot re-stomp the guard.
+      pollInFlightRef.current = false;
       codeRef.current = null;
       statusRef.current = next;
       if (mountedRef.current) setState({ status: next, code: null });
@@ -121,11 +127,18 @@ export function useExtensionPairing(
   const doPoll = useCallback(async () => {
     if (!mountedRef.current || pausedRef.current) return;
     if (statusRef.current !== 'waiting') return;
+    // Single-flight: a /status request is already outstanding. A foreground
+    // resume (or any re-entry) while one poll is in flight must NOT fire a
+    // second concurrent request; the outstanding poll reschedules the next one.
+    if (pollInFlightRef.current) return;
     const code = codeRef.current;
     if (!code) return;
+    pollInFlightRef.current = true;
     try {
       const res = await extensionPairApi.status(code);
-      if (!mountedRef.current || statusRef.current !== 'waiting') return;
+      // Discard a late/stale result: unmounted, session moved off 'waiting', or
+      // the code was abandoned/re-minted (cancel→retry) while this poll was out.
+      if (!mountedRef.current || statusRef.current !== 'waiting' || codeRef.current !== code) return;
       const decoded = decodePairStatus(res.data?.status ?? '');
       if (decoded === 'paired') {
         go('paired');
@@ -142,7 +155,7 @@ export function useExtensionPairing(
       pollDelayRef.current = Math.min(pollDelayRef.current * POLL_BACKOFF, POLL_MAX_MS);
       pollTimerRef.current = setTimeout(doPoll, pollDelayRef.current);
     } catch (err) {
-      if (!mountedRef.current || statusRef.current !== 'waiting') return;
+      if (!mountedRef.current || statusRef.current !== 'waiting' || codeRef.current !== code) return;
       const s = axiosStatus(err);
       if (s === 401 || s === 403) {
         go('authExpired');
@@ -162,6 +175,10 @@ export function useExtensionPairing(
       }
       pollDelayRef.current = Math.min(pollDelayRef.current * POLL_BACKOFF, POLL_MAX_MS);
       pollTimerRef.current = setTimeout(doPoll, pollDelayRef.current);
+    } finally {
+      // Release only if this invocation still owns the live session; a superseded
+      // (stale) poll must not clear a guard a fresh session's poll now holds.
+      if (codeRef.current === code) pollInFlightRef.current = false;
     }
   }, [go, emitFailed]);
 

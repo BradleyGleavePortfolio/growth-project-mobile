@@ -568,6 +568,121 @@ describe('useExtensionPairing — background / foreground', () => {
   });
 });
 
+describe('useExtensionPairing — single-flight poll (no concurrent /status)', () => {
+  it('a foreground resume while a poll is in flight issues only ONE /status request', async () => {
+    mockInit.mockResolvedValue({ data: { pairing_code: '482913', expires_at: futureExpiry() } });
+    // First poll parks in flight; later polls resolve pending.
+    let resolveStatus: (v: unknown) => void = () => {};
+    mockStatus.mockImplementationOnce(() => new Promise((r) => { resolveStatus = r; }));
+    mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+
+    const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+    await act(async () => {
+      result.current.start();
+    });
+    // Fire the first poll: it awaits the parked /status promise (in flight).
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(2000);
+    });
+    expect(mockStatus).toHaveBeenCalledTimes(1);
+
+    // Foreground while that poll is still outstanding must NOT fire a second one.
+    await act(async () => {
+      appStateHandler?.('active');
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(mockStatus).toHaveBeenCalledTimes(1);
+    expect(result.current.status).toBe('waiting');
+
+    // Settle the in-flight poll → the guard releases and polling continues.
+    await act(async () => {
+      resolveStatus({ data: { status: 'pending' } });
+    });
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(3000);
+    });
+    expect(mockStatus.mock.calls.length).toBeGreaterThan(1);
+    expect(result.current.status).toBe('waiting');
+  });
+
+  it('releases the guard on a poll error so a later poll can still run', async () => {
+    mockInit.mockResolvedValue({ data: { pairing_code: '482913', expires_at: futureExpiry() } });
+    let rejectStatus: (e: unknown) => void = () => {};
+    mockStatus.mockImplementationOnce(() => new Promise((_res, rej) => { rejectStatus = rej; }));
+    mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+
+    const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+    await act(async () => {
+      result.current.start();
+    });
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(2000);
+    });
+    expect(mockStatus).toHaveBeenCalledTimes(1);
+
+    // A concurrent trigger during the in-flight poll still issues no duplicate.
+    await act(async () => {
+      appStateHandler?.('active');
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(mockStatus).toHaveBeenCalledTimes(1);
+
+    // The in-flight poll fails transiently: guard must release, backoff scheduled.
+    await act(async () => {
+      rejectStatus(axiosError(500));
+    });
+    expect(result.current.status).toBe('waiting');
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(3000);
+    });
+    expect(mockStatus.mock.calls.length).toBeGreaterThan(1);
+    expect(result.current.status).toBe('waiting');
+  });
+
+  it('a stale in-flight poll from an abandoned code cannot mutate the re-minted session', async () => {
+    mockInit.mockResolvedValueOnce({ data: { pairing_code: '111111', expires_at: futureExpiry() } });
+    let resolveStale: (v: unknown) => void = () => {};
+    mockStatus.mockImplementationOnce(() => new Promise((r) => { resolveStale = r; }));
+
+    const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+    await act(async () => {
+      result.current.start();
+    });
+    // First poll goes in flight against code 111111, then the code is abandoned.
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(2000);
+    });
+    await act(async () => {
+      result.current.cancel();
+    });
+    expect(result.current.status).toBe('cancelled');
+
+    // Re-mint a fresh code and resume polling on the new session.
+    mockInit.mockResolvedValueOnce({ data: { pairing_code: '222222', expires_at: futureExpiry() } });
+    mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+    await act(async () => {
+      result.current.retry();
+    });
+    expect(result.current.code).toBe('222222');
+
+    // The OLD poll now resolves as `paired`: it must be discarded, never promote
+    // the new session, and must not leave the poll guard stuck.
+    await act(async () => {
+      resolveStale({ data: { status: 'paired' } });
+    });
+    expect(result.current.status).toBe('waiting');
+    expect(result.current.code).toBe('222222');
+    expect(mockTrack.mock.calls.map((c) => c[0])).not.toContain(AnalyticsEvents.IMPORT_PAIRED);
+
+    // The re-minted session keeps polling normally (guard was not leaked).
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(2000);
+    });
+    expect(result.current.status).toBe('waiting');
+    expect(mockStatus.mock.calls.length).toBeGreaterThan(1);
+  });
+});
+
 describe('useExtensionPairing — PII-free telemetry', () => {
   it('never emits the pairing code or a token in any tracked event', async () => {
     mockInit.mockResolvedValue({ data: { pairing_code: '482913', expires_at: futureExpiry() } });
