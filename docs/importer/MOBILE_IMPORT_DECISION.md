@@ -103,22 +103,30 @@ blind-cast an arbitrary server string into the union — it decodes defensively.
 future contract version, a renamed member, or a garbled/malformed response arrives, the
 decoder yields `'unknown'` (a truthful non-terminal reading) instead of asserting an
 unverified member. The decoders are that structural seam.
-- **No cancel endpoint exists.** → the mobile "cancel" is local-only (abandon the flow
-  before it starts); no server cancel is faked.
+- **No cancel endpoint exists.** → the mobile "cancel" is local-only: it stops polling
+  and discards any in-flight mint/poll result (it does not abort the HTTP request); no
+  server cancel is faked.
 
 ## Gates (verified on the pushed head)
 
 Verified by running the **entire** CI-equivalent locally, not a hand-picked subset:
 
 - `tsc --noEmit`: clean.
-- ESLint: 0 errors (pre-existing warnings only, none in the import-flow files).
-- **Full** jest suite (`npm test`, all suites): green. An earlier revision was
-  reported green from a *targeted* run and was in fact **RED** on the repo-wide
-  Quiet-Luxury doctrine scan (`ImportDataScreen` title used `fontWeight: '700'`).
-  That narrow-suite "green" claim is **retracted**; the title weight is now `'600'`
-  and the full suite is the standard of truth going forward.
-- Net-prod-LOC (added non-blank/non-comment lines vs `main`): **≤ 400** (review-time).
-- test:src ratio: **≥ 2.0** (review-time).
+- ESLint: 0 errors, 0 warnings on the import-flow files (no `eslint-disable`, no
+  `as any`, no `require()` — the api test mocks via `import` + `jest.mocked`).
+- **Full** jest suite (`npm test`, all suites): green — 295 suites / 3563 tests
+  (the +3 vs the original 3560 are the single-flight poll-guard tests added at head
+  `35cdc45`; the CI `Typecheck, lint, test` check is green at that head).
+  An earlier revision was reported green from a *targeted* run and was in fact
+  **RED** on the repo-wide Quiet-Luxury doctrine scan (`ImportDataScreen` title
+  used `fontWeight: '700'`). That narrow-suite "green" claim is **retracted**; the
+  title weight is `'600'` and the full suite is the standard of truth.
+- Net-prod-LOC (added non-blank/non-comment lines vs `main`), reproducible per file:
+  events 6 + extensionPairApi 9 + ExtensionPairingPanel 140 + useExtensionPairing 188
+  + ImportDataScreen 6 = **349 (≤ 400, no exception requested)**. The client-clock
+  expiry/countdown deletion (round-cause fix) created this headroom; the single-flight
+  poll guard added at head `35cdc45` accounts for the +6 on `useExtensionPairing`.
+- test:src ratio: 968 test LOC / 349 prod LOC = **2.77 (≥ 2.0)** (review-time).
 
 ## Rollback / stop
 
@@ -128,8 +136,59 @@ mismatch against the frozen OpenAPI slice.
 
 ## Next (named chained follow-up)
 
-**PR-M2 — Live extension pairing + progress UX:** wire `pair/init` (code mint with
-server-authoritative `expires_at` countdown), bounded/backoff/background-safe
-`pair/status` polling to the `paired`/`expired` terminal, and — once a mobile-readable
+**PR-M2 — Live extension pairing + progress UX:** wire `pair/init` (code mint),
+bounded/backoff/background-safe `pair/status` polling to the server-authoritative
+`paired`/`expired` terminal (no client clock, no local countdown), and — once a mobile-readable
 progress contract lands — the learning/importing/partial/complete progress mirror. Uses
 the typed contract frozen in this PR (`src/types/extensionImport.ts`).
+
+---
+
+## PR-M2 addendum — Live pairing wired (2026-07-14)
+
+**Shipped in PR-M2** (built on the M1 boundary, flag still default-OFF):
+
+- `src/api/extensionPairApi.ts` — thin typed transport for the ONLY two
+  mobile-callable endpoints, `POST /extension/pair/init` and
+  `POST /extension/pair/status` (paths relative to the `/api`-suffixed baseURL).
+- `src/hooks/useExtensionPairing.ts` — the mint→poll state machine:
+  **server-authoritative expiry** (the ONLY expiry signal is the `pair/status`
+  terminal returning `expired`; the client never reads its own clock — no
+  `Date.now`/`Date.parse`, no local countdown, no local expiry timer, per
+  Rule 16), bounded exponential backoff (2s→15s, ×1.5), AppState pause/resume,
+  transient-error tolerance (≤5 consecutive) before a retryable `failed`,
+  single-flight mint (no duplicate intents), and full timer teardown on
+  unmount. Unknown/garbled `status` fails closed (treated as a non-terminal
+  wait, never promoted to `paired`). 401/403 → `authExpired`; 404 →
+  `unavailable`; no token/code is logged, stored, or emitted in telemetry.
+  `cancel()` is a LOCAL abandon — it stops polling and discards any in-flight
+  mint/poll result; it never aborts the HTTP request or fakes a server cancel.
+- `src/components/coach/ExtensionPairingPanel.tsx` — renders the honest
+  lifecycle (minting → `waiting` showing the code with an honest "enter it
+  soon" prompt — no client-clock countdown → `paired`, plus
+  expired/failed/authExpired/unavailable/cancelled), mounted inside the M1
+  `awaitingExtension` state.
+
+**Verified contract mapping** (against `growth-project-backend`
+`docs/contracts/importer-openapi.json`, fetched live this session):
+
+| Brief-named endpoint (does NOT exist) | Real endpoint used | Note |
+|---|---|---|
+| `POST /auth/extension/pair` | `POST /api/extension/pair/init` | mint `{pairing_code, expires_at}` |
+| `GET /auth/extension/pair/status` | `POST /api/extension/pair/status` | body-only (never query); `{status: pending\|paired\|expired}` |
+| `POST /api/scout/ingest/init` | — | no such route; `scout/*` are extension-only POST writers |
+| `GET /api/scout/ingest/:intentId/status` | — | **no mobile-readable progress route exists** |
+
+**Still blocked (documented, not invented):** there is no mobile-readable import
+progress/`:intentId/status` route and no `scout/ingest/init` intent-creation link
+callable by mobile. The autonomous crawl runs entirely inside the extension after
+`paired`. So the mobile terminal is honestly `paired` ("running in the browser
+extension"); importing/partial/complete and any page/entity count are NOT
+rendered. Cancel is a LOCAL abandon (no server cancel endpoint exists).
+
+**Backend/extension follow-up required to close the progress mirror:** expose a
+mobile-readable, coach-scoped progress read (e.g. `GET /api/scout/ingest/:intentId/status`
+returning the extension-reported terminal `success|partial|failed` + coarse
+progress) plus the intent-id linkage from a paired code, all behind
+`FEATURE_SCOUT_INGEST`. Only then can the mobile importing/partial/complete states
+be wired truthfully.

@@ -1,14 +1,17 @@
 /**
  * ImportDataScreen — coach-facing entry to the v0.3 site-agnostic import.
  *
- * Honest scope (this PR): intro → data-driven platform picker (incl.
- * Custom/Other) → safe external login-site open, with a clear explanation of
- * the browser-extension prerequisite. The live pairing-code mint/poll and the
- * import progress mirror are the chained follow-up (PR-M2). This screen NEVER
- * claims an import has started, progressed, or completed — it hands the coach
- * to their prior platform's login page and explains what happens next.
+ * Scope: intro → data-driven platform picker (incl. Custom/Other) → safe
+ * external login-site open → live pairing (PR-M2). Once the coach has opened
+ * their prior platform's login page, the ExtensionPairingPanel mints a pairing
+ * code and polls it to the `paired` terminal so the browser extension can take
+ * over. This screen NEVER claims import progress or completion: the mobile
+ * contract has no progress read, so `paired` ("running in the extension") is
+ * the truthful terminal it can show.
  *
- * Gated by featureFlags.extensionImport (default OFF). Mounts no network path.
+ * Gated by featureFlags.extensionImport (default OFF): when OFF the route and
+ * Settings row do not register, so the screen — and its only network path, the
+ * pairing panel — never mount.
  */
 import React, { useCallback, useState } from 'react';
 import {
@@ -32,6 +35,7 @@ import { safeImportLoginUrl } from '../../utils/safeImportLoginUrl';
 import { track } from '../../analytics/posthog.service';
 import { AnalyticsEvents } from '../../analytics/events';
 import type { ImportFlowState } from '../../types/extensionImport';
+import ExtensionPairingPanel from '../../components/coach/ExtensionPairingPanel';
 
 export default function ImportDataScreen(): React.ReactElement {
   const { colors } = useTheme();
@@ -115,12 +119,12 @@ export default function ImportDataScreen(): React.ReactElement {
       )}
 
       {state.phase === 'awaitingExtension' && (
-        <View style={[styles.status, styles.statusInfo]} accessibilityLiveRegion="polite" testID="import-status">
+        <View style={styles.awaiting} accessibilityLiveRegion="polite" testID="import-status">
           <Text style={styles.statusText}>
-            Log in on the page we just opened. When you're in, the browser extension will
-            prompt you to start the import. You can close this screen — nothing is imported
-            until you confirm in the extension.
+            Log in on the page we just opened, then enter the pairing code below in the Growth
+            Project browser extension. Nothing is imported until you confirm in the extension.
           </Text>
+          <ExtensionPairingPanel platformId={state.platformId} />
         </View>
       )}
 
@@ -203,6 +207,7 @@ function makeStyles(colors: ThemeColors) {
     statusInfo: { backgroundColor: colors.surface },
     statusError: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.error },
     statusText: { fontSize: 14, lineHeight: 20, color: colors.textPrimary },
+    awaiting: { gap: 12, marginTop: 4 },
     sectionHeader: { fontSize: 13, fontWeight: '600', color: colors.textMuted, marginTop: 8 },
     row: {
       flexDirection: 'row',
