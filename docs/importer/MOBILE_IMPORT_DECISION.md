@@ -114,16 +114,19 @@ Verified by running the **entire** CI-equivalent locally, not a hand-picked subs
 - `tsc --noEmit`: clean.
 - ESLint: 0 errors, 0 warnings on the import-flow files (no `eslint-disable`, no
   `as any`, no `require()` — the api test mocks via `import` + `jest.mocked`).
-- **Full** jest suite (`npm test`, all suites): green — 295 suites / 3560 tests.
+- **Full** jest suite (`npm test`, all suites): green — 295 suites / 3563 tests
+  (the +3 vs the original 3560 are the single-flight poll-guard tests added at head
+  `35cdc45`; the CI `Typecheck, lint, test` check is green at that head).
   An earlier revision was reported green from a *targeted* run and was in fact
   **RED** on the repo-wide Quiet-Luxury doctrine scan (`ImportDataScreen` title
   used `fontWeight: '700'`). That narrow-suite "green" claim is **retracted**; the
   title weight is `'600'` and the full suite is the standard of truth.
 - Net-prod-LOC (added non-blank/non-comment lines vs `main`), reproducible per file:
-  events 6 + extensionPairApi 9 + ExtensionPairingPanel 140 + useExtensionPairing 182
-  + ImportDataScreen 6 = **343 (≤ 400, no exception requested)**. The client-clock
-  expiry/countdown deletion (round-cause fix) created this headroom.
-- test:src ratio: 877 test LOC / 343 prod LOC = **2.56 (≥ 2.0)** (review-time).
+  events 6 + extensionPairApi 9 + ExtensionPairingPanel 140 + useExtensionPairing 188
+  + ImportDataScreen 6 = **349 (≤ 400, no exception requested)**. The client-clock
+  expiry/countdown deletion (round-cause fix) created this headroom; the single-flight
+  poll guard added at head `35cdc45` accounts for the +6 on `useExtensionPairing`.
+- test:src ratio: 968 test LOC / 349 prod LOC = **2.77 (≥ 2.0)** (review-time).
 
 ## Rollback / stop
 
