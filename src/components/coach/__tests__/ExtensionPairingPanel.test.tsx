@@ -4,8 +4,9 @@
  * The useExtensionPairing hook is mocked so we can drive each lifecycle state
  * deterministically and assert the panel's honest rendering:
  *   - auto-mints exactly once on mount (single-flight guard is the hook's job),
- *   - minting spinner, waiting (code + countdown + cancel), paired (NO progress
- *     or completion claim), and the shared recoverable/attention layout,
+ *   - minting spinner, waiting (code + cancel — no client-clock countdown),
+ *     paired (NO progress or completion claim), and the shared recoverable
+ *     /attention layout,
  *   - the paired copy never claims import progress/percentage/entity counts,
  *   - cancel and retry are wired to the hook,
  *   - Quiet-Luxury doctrine: no 700/800 font weights,
@@ -31,7 +32,6 @@ const mockCancel = jest.fn();
 let mockHookState: {
   status: string;
   code: string | null;
-  expiresAt: string | null;
 };
 jest.mock('../../../hooks/useExtensionPairing', () => ({
   useExtensionPairing: () => ({
@@ -48,7 +48,7 @@ beforeEach(() => {
   mockStart.mockClear();
   mockRetry.mockClear();
   mockCancel.mockClear();
-  mockHookState = { status: 'idle', code: null, expiresAt: null };
+  mockHookState = { status: 'idle', code: null };
 });
 
 afterEach(() => {
@@ -57,13 +57,13 @@ afterEach(() => {
 
 describe('ExtensionPairingPanel — mount', () => {
   it('auto-mints exactly once on mount', async () => {
-    mockHookState = { status: 'minting', code: null, expiresAt: null };
+    mockHookState = { status: 'minting', code: null };
     await render(<ExtensionPairingPanel platformId="truecoach" />);
     expect(mockStart).toHaveBeenCalledTimes(1);
   });
 
   it('does not re-mint across re-renders', async () => {
-    mockHookState = { status: 'minting', code: null, expiresAt: null };
+    mockHookState = { status: 'minting', code: null };
     const { rerender } = await render(<ExtensionPairingPanel platformId="truecoach" />);
     await rerender(<ExtensionPairingPanel platformId="truecoach" />);
     expect(mockStart).toHaveBeenCalledTimes(1);
@@ -72,34 +72,35 @@ describe('ExtensionPairingPanel — mount', () => {
 
 describe('ExtensionPairingPanel — lifecycle rendering', () => {
   it('shows the minting spinner state', async () => {
-    mockHookState = { status: 'minting', code: null, expiresAt: null };
+    mockHookState = { status: 'minting', code: null };
     const { getByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
     expect(getByTestId('pairing-minting')).toBeTruthy();
   });
 
-  it('shows the code + countdown + cancel in the waiting state', async () => {
-    mockHookState = { status: 'waiting', code: '482913', expiresAt: new Date(Date.now() + 90_000).toISOString() };
-    const { getByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
+  it('shows the code + cancel in the waiting state (no client-clock countdown)', async () => {
+    mockHookState = { status: 'waiting', code: '482913' };
+    const { getByTestId, queryByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
     expect(getByTestId('pairing-code')).toHaveTextContent('482913');
-    expect(getByTestId('pairing-countdown')).toHaveTextContent(/^1:(29|30)$/);
     expect(getByTestId('pairing-cancel')).toBeTruthy();
+    // Expiry is server-authoritative — the panel renders no local countdown.
+    expect(queryByTestId('pairing-countdown')).toBeNull();
   });
 
   it('reads the code out spaced for screen readers and never claims completion', async () => {
-    mockHookState = { status: 'waiting', code: '482913', expiresAt: new Date(Date.now() + 60_000).toISOString() };
+    mockHookState = { status: 'waiting', code: '482913' };
     const { getByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
     expect(getByTestId('pairing-code').props.accessibilityLabel).toBe('Pairing code 4 8 2 9 1 3');
   });
 
   it('wires cancel to the hook', async () => {
-    mockHookState = { status: 'waiting', code: '482913', expiresAt: new Date(Date.now() + 60_000).toISOString() };
+    mockHookState = { status: 'waiting', code: '482913' };
     const { getByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
     fireEvent.press(getByTestId('pairing-cancel'));
     expect(mockCancel).toHaveBeenCalledTimes(1);
   });
 
   it('shows an HONEST paired state — no progress, percentage, or entity counts', async () => {
-    mockHookState = { status: 'paired', code: null, expiresAt: null };
+    mockHookState = { status: 'paired', code: null };
     const { getByTestId, toJSON } = await render(<ExtensionPairingPanel platformId="truecoach" />);
     expect(getByTestId('pairing-paired')).toBeTruthy();
     const serialized = JSON.stringify(toJSON());
@@ -114,7 +115,7 @@ describe('ExtensionPairingPanel — lifecycle rendering', () => {
     ['authExpired', 'pairing-retry'],
     ['cancelled', 'pairing-retry'],
   ])('renders the %s attention state with a recovery CTA', async (status, cta) => {
-    mockHookState = { status, code: null, expiresAt: null };
+    mockHookState = { status, code: null };
     const { getByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
     expect(getByTestId(`pairing-${status}`)).toBeTruthy();
     fireEvent.press(getByTestId(cta));
@@ -122,26 +123,14 @@ describe('ExtensionPairingPanel — lifecycle rendering', () => {
   });
 
   it('renders the unavailable state WITHOUT a retry CTA (nothing to retry)', async () => {
-    mockHookState = { status: 'unavailable', code: null, expiresAt: null };
+    mockHookState = { status: 'unavailable', code: null };
     const { getByTestId, queryByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
     expect(getByTestId('pairing-unavailable')).toBeTruthy();
     expect(queryByTestId('pairing-retry')).toBeNull();
   });
 
-  it('zero-pads the countdown seconds (m:ss)', async () => {
-    mockHookState = { status: 'waiting', code: '482913', expiresAt: new Date(Date.now() + 65_000).toISOString() };
-    const { getByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
-    expect(getByTestId('pairing-countdown')).toHaveTextContent(/^1:0[45]$/);
-  });
-
-  it('clamps the countdown at 0:00 for an already-past expiry (never negative)', async () => {
-    mockHookState = { status: 'waiting', code: '482913', expiresAt: new Date(Date.now() - 5_000).toISOString() };
-    const { getByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
-    expect(getByTestId('pairing-countdown')).toHaveTextContent('0:00');
-  });
-
-  it('does not render a code or countdown once paired', async () => {
-    mockHookState = { status: 'paired', code: null, expiresAt: null };
+  it('does not render a code, countdown, or cancel once paired', async () => {
+    mockHookState = { status: 'paired', code: null };
     const { queryByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
     expect(queryByTestId('pairing-code')).toBeNull();
     expect(queryByTestId('pairing-countdown')).toBeNull();
@@ -149,7 +138,7 @@ describe('ExtensionPairingPanel — lifecycle rendering', () => {
   });
 
   it('does not render a retry CTA in the paired state', async () => {
-    mockHookState = { status: 'paired', code: null, expiresAt: null };
+    mockHookState = { status: 'paired', code: null };
     const { queryByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
     expect(queryByTestId('pairing-retry')).toBeNull();
   });
@@ -161,7 +150,7 @@ describe('ExtensionPairingPanel — lifecycle rendering', () => {
     ['unavailable', /available/i],
     ['cancelled', /cancelled/i],
   ])('renders honest, distinct copy for the %s state', async (status, matcher) => {
-    mockHookState = { status, code: null, expiresAt: null };
+    mockHookState = { status, code: null };
     const { getByTestId, toJSON } = await render(<ExtensionPairingPanel platformId="truecoach" />);
     expect(getByTestId(`pairing-${status}`)).toBeTruthy();
     expect(JSON.stringify(toJSON())).toMatch(matcher);
@@ -170,7 +159,7 @@ describe('ExtensionPairingPanel — lifecycle rendering', () => {
   it.each(['expired', 'failed', 'authExpired', 'unavailable', 'cancelled'])(
     'never claims progress, percentage, or counts in the %s attention state',
     async (status) => {
-      mockHookState = { status, code: null, expiresAt: null };
+      mockHookState = { status, code: null };
       const { toJSON } = await render(<ExtensionPairingPanel platformId="truecoach" />);
       const serialized = JSON.stringify(toJSON());
       expect(serialized).not.toMatch(/\b\d{1,3}%/);
@@ -186,7 +175,6 @@ describe('ExtensionPairingPanel — doctrine + accessibility', () => {
       mockHookState = {
         status,
         code: status === 'waiting' ? '482913' : null,
-        expiresAt: status === 'waiting' ? new Date(Date.now() + 60_000).toISOString() : null,
       };
       const { toJSON } = await render(<ExtensionPairingPanel platformId="truecoach" />);
       const flatten = (node: unknown): void => {
@@ -202,7 +190,7 @@ describe('ExtensionPairingPanel — doctrine + accessibility', () => {
   );
 
   it('announces each state via a polite live region', async () => {
-    mockHookState = { status: 'paired', code: null, expiresAt: null };
+    mockHookState = { status: 'paired', code: null };
     const { getByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
     expect(getByTestId('pairing-paired').props.accessibilityLiveRegion).toBe('polite');
   });
@@ -215,14 +203,13 @@ describe('ExtensionPairingPanel — doctrine + accessibility', () => {
     mockHookState = {
       status,
       code: status === 'waiting' ? '482913' : null,
-      expiresAt: status === 'waiting' ? new Date(Date.now() + 60_000).toISOString() : null,
     };
     const { getByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
     expect(getByTestId(testId).props.accessibilityLiveRegion).toBe('polite');
   });
 
   it('titles the paired card honestly as "Paired" (not "Complete"/"Imported")', async () => {
-    mockHookState = { status: 'paired', code: null, expiresAt: null };
+    mockHookState = { status: 'paired', code: null };
     const { toJSON } = await render(<ExtensionPairingPanel platformId="truecoach" />);
     const serialized = JSON.stringify(toJSON());
     expect(serialized).toMatch(/Paired/);
@@ -230,7 +217,7 @@ describe('ExtensionPairingPanel — doctrine + accessibility', () => {
   });
 
   it('gives the cancel control a button role and label', async () => {
-    mockHookState = { status: 'waiting', code: '482913', expiresAt: new Date(Date.now() + 60_000).toISOString() };
+    mockHookState = { status: 'waiting', code: '482913' };
     const { getByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
     const cancel = getByTestId('pairing-cancel');
     expect(cancel.props.accessibilityRole).toBe('button');

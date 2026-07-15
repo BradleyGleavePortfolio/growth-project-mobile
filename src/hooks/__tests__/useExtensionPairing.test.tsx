@@ -3,9 +3,9 @@
  *
  * Covers every behaviour the operator intent and the security gates ride on:
  *   - flag-OFF (default `enabled`) is fully inert: zero network, stays idle,
- *   - mint success → `waiting` with the server code + server-authoritative expiry,
+ *   - mint success → `waiting` with the server code (expiry is server-only),
  *   - poll `paired` → terminal `paired` (the truthful mobile terminal),
- *   - poll `expired` and the local expiry timer both → `expired`,
+ *   - poll `expired` → `expired` (the ONLY expiry signal; no client clock),
  *   - unknown / garbled / malformed status FAILS CLOSED (keeps waiting, is NEVER
  *     promoted to paired/complete),
  *   - 401/403 → `authExpired`, 404 → `unavailable`, ≥5 transient errors → `failed`,
@@ -101,9 +101,8 @@ describe('useExtensionPairing — flag-off / no-slug fail closed', () => {
 });
 
 describe('useExtensionPairing — mint', () => {
-  it('mints a code and moves to waiting with the server code + expiry', async () => {
-    const expiresAt = futureExpiry();
-    mockInit.mockResolvedValue({ data: { pairing_code: '482913', expires_at: expiresAt } });
+  it('mints a code and moves to waiting with the server code', async () => {
+    mockInit.mockResolvedValue({ data: { pairing_code: '482913', expires_at: futureExpiry() } });
     mockStatus.mockResolvedValue({ data: { status: 'pending' } });
 
     const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
@@ -114,7 +113,6 @@ describe('useExtensionPairing — mint', () => {
     expect(mockInit).toHaveBeenCalledWith('truecoach');
     expect(result.current.status).toBe('waiting');
     expect(result.current.code).toBe('482913');
-    expect(result.current.expiresAt).toBe(expiresAt);
     const names = mockTrack.mock.calls.map((c) => c[0]);
     expect(names).toContain(AnalyticsEvents.IMPORT_PAIRING_STARTED);
     expect(names).toContain(AnalyticsEvents.IMPORT_PAIRING_CODE_READY);
@@ -278,29 +276,35 @@ describe('useExtensionPairing — poll lifecycle', () => {
     expect(result.current.status).toBe('failed');
   });
 
-  it('goes expired when the code is already past its expiry at poll time', async () => {
-    mockInit.mockResolvedValue({ data: { pairing_code: '482913', expires_at: new Date(Date.now() - 1000).toISOString() } });
+  it('ignores the client clock: a code whose server expires_at is already past stays waiting while polls say pending', async () => {
+    // The server is the ONLY expiry authority — the hook never reads its own
+    // clock, so a stale/past expires_at must NOT self-expire the code.
+    mockInit.mockResolvedValue({ data: { pairing_code: '482913', expires_at: new Date(Date.now() - 60_000).toISOString() } });
     mockStatus.mockResolvedValue({ data: { status: 'pending' } });
     const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
     await act(async () => {
       result.current.start();
     });
     await act(async () => {
-      await jest.advanceTimersByTimeAsync(2000);
+      await jest.advanceTimersByTimeAsync(60_000);
     });
-    expect(result.current.status).toBe('expired');
+    expect(result.current.status).toBe('waiting');
+    expect(mockTrack.mock.calls.map((c) => c[0])).not.toContain(AnalyticsEvents.IMPORT_PAIRING_EXPIRED);
   });
 
-  it('expires on the server-authoritative countdown even if polls keep saying pending', async () => {
-    mockInit.mockResolvedValue({ data: { pairing_code: '482913', expires_at: futureExpiry(30_000) } });
-    mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+  it('expires only when the server /status contract returns expired', async () => {
+    mockInit.mockResolvedValue({ data: { pairing_code: '482913', expires_at: futureExpiry() } });
+    mockStatus
+      .mockResolvedValueOnce({ data: { status: 'pending' } })
+      .mockResolvedValue({ data: { status: 'expired' } });
     const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
     await act(async () => {
       result.current.start();
     });
     expect(result.current.status).toBe('waiting');
     await act(async () => {
-      await jest.advanceTimersByTimeAsync(31_000);
+      await jest.advanceTimersByTimeAsync(2000); // first poll → pending
+      await jest.advanceTimersByTimeAsync(3000); // next poll → expired
     });
     expect(result.current.status).toBe('expired');
     expect(mockTrack.mock.calls.map((c) => c[0])).toContain(AnalyticsEvents.IMPORT_PAIRING_EXPIRED);
@@ -415,8 +419,8 @@ describe('useExtensionPairing — cancel / retry / teardown', () => {
   });
 
   it('retry re-mints from an expired terminal', async () => {
-    mockInit.mockResolvedValue({ data: { pairing_code: '111111', expires_at: new Date(Date.now() - 1000).toISOString() } });
-    mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+    mockInit.mockResolvedValue({ data: { pairing_code: '111111', expires_at: futureExpiry() } });
+    mockStatus.mockResolvedValue({ data: { status: 'expired' } });
     const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
     await act(async () => {
       result.current.start();
@@ -426,6 +430,7 @@ describe('useExtensionPairing — cancel / retry / teardown', () => {
     });
     expect(result.current.status).toBe('expired');
     mockInit.mockResolvedValue({ data: { pairing_code: '222222', expires_at: futureExpiry() } });
+    mockStatus.mockResolvedValue({ data: { status: 'pending' } });
     await act(async () => {
       result.current.retry();
     });
@@ -539,18 +544,21 @@ describe('useExtensionPairing — background / foreground', () => {
     expect(result.current.code).toBe('482913');
   });
 
-  it('foregrounding a code that expired while backgrounded resolves to expired', async () => {
-    mockInit.mockResolvedValue({ data: { pairing_code: '482913', expires_at: futureExpiry(3000) } });
+  it('foregrounding resumes polling; a server expired terminal on the resume poll resolves to expired', async () => {
+    mockInit.mockResolvedValue({ data: { pairing_code: '482913', expires_at: futureExpiry() } });
     mockStatus.mockResolvedValue({ data: { status: 'pending' } });
     const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
     await act(async () => {
       result.current.start();
     });
-    // Background BEFORE the poll/expiry timers can fire, then let real time pass.
+    // Background BEFORE the poll timer can fire, so no poll runs while hidden.
     await act(async () => {
       appStateHandler?.('background');
       await jest.advanceTimersByTimeAsync(5000);
     });
+    expect(result.current.status).toBe('waiting');
+    // On foreground the resumed poll hits the server, which now reports expired.
+    mockStatus.mockResolvedValue({ data: { status: 'expired' } });
     await act(async () => {
       appStateHandler?.('active');
       await jest.advanceTimersByTimeAsync(0);
@@ -630,8 +638,8 @@ describe('useExtensionPairing — PII-free telemetry', () => {
   });
 
   it('attaches only the platform slug to the expired event', async () => {
-    mockInit.mockResolvedValue({ data: { pairing_code: '482913', expires_at: new Date(Date.now() - 1000).toISOString() } });
-    mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+    mockInit.mockResolvedValue({ data: { pairing_code: '482913', expires_at: futureExpiry() } });
+    mockStatus.mockResolvedValue({ data: { status: 'expired' } });
     const { result } = await renderHook(() => useExtensionPairing('everfit', true));
     await act(async () => {
       result.current.start();

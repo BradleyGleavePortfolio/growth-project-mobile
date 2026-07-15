@@ -9,17 +9,22 @@
  *     hook NEVER reports importing/partial/complete or any page/entity count.
  *     `paired` is the truthful terminal for mobile: the autonomous crawl then
  *     runs inside the extension. Progress mirroring is a documented follow-up.
- *   • There is NO server cancel endpoint, so `cancel()` is a LOCAL abandon
- *     (stops polling, drops the code) — it never fabricates a server cancel.
+ *   • Expiry is SERVER-authoritative: the only expiry signal is the /status
+ *     terminal returning `expired`. The client never reads its own wall clock,
+ *     so there is no local countdown, no local expiry timer, and no
+ *     client-derived TTL (Rule 16 — never trust the client clock).
+ *   • There is NO server cancel endpoint, so `cancel()` is a LOCAL abandon: it
+ *     stops polling, discards any in-flight mint/poll result, and drops the
+ *     code — it never fabricates a server cancel or aborts the HTTP request.
  *   • Unknown/garbled `status` values fail closed: they are treated as a
  *     non-terminal wait and NEVER promoted to `paired`.
  *
  * Resilience: polling backs off (2s → 15s), pauses when the app backgrounds and
  * resumes on foreground, tolerates transient poll errors up to a cap before
- * surfacing a retryable failure, stops promptly at the server-authoritative
- * expiry, and tears down every timer on unmount. A single-flight guard prevents
- * duplicate mint intents. No token or code is ever logged, stored, or emitted
- * in telemetry.
+ * surfacing a retryable failure, settles to `expired` only when the server
+ * /status contract says so, and tears down every timer on unmount. A
+ * single-flight guard prevents duplicate mint intents. No token or code is ever
+ * logged, stored, or emitted in telemetry.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
@@ -45,8 +50,6 @@ export interface PairingState {
   status: PairingStatus;
   /** 6-digit code shown to the coach to read into the extension. Never logged. */
   code: string | null;
-  /** Server-authoritative ISO-8601 expiry; derive any countdown from this. */
-  expiresAt: string | null;
 }
 
 export interface UseExtensionPairing extends PairingState {
@@ -54,7 +57,10 @@ export interface UseExtensionPairing extends PairingState {
   start: () => void;
   /** Re-mint after a terminal/failed state (alias of start). */
   retry: () => void;
-  /** Local abandon: stop polling and drop the code. No server cancel exists. */
+  /**
+   * Local abandon: stop polling, discard any in-flight mint/poll result, and
+   * drop the code. No server cancel exists; this never aborts the HTTP request.
+   */
   cancel: () => void;
 }
 
@@ -79,14 +85,12 @@ export function useExtensionPairing(
   platformSlug: string | null,
   enabled: boolean = featureFlags.extensionImport,
 ): UseExtensionPairing {
-  const [state, setState] = useState<PairingState>({ status: 'idle', code: null, expiresAt: null });
+  const [state, setState] = useState<PairingState>({ status: 'idle', code: null });
 
   const mountedRef = useRef(true);
   const statusRef = useRef<PairingStatus>('idle');
   const codeRef = useRef<string | null>(null);
-  const expiresAtRef = useRef<string | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const expiryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollDelayRef = useRef(POLL_BASE_MS);
   const failureCountRef = useRef(0);
   const mintInFlightRef = useRef(false);
@@ -96,9 +100,7 @@ export function useExtensionPairing(
 
   const clearTimers = useCallback(() => {
     if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
-    if (expiryTimerRef.current) clearTimeout(expiryTimerRef.current);
     pollTimerRef.current = null;
-    expiryTimerRef.current = null;
   }, []);
 
   /** Move to a codeless terminal/reset status and tear down timers. */
@@ -106,19 +108,11 @@ export function useExtensionPairing(
     (next: PairingStatus) => {
       clearTimers();
       codeRef.current = null;
-      expiresAtRef.current = null;
       statusRef.current = next;
-      if (mountedRef.current) setState({ status: next, code: null, expiresAt: null });
+      if (mountedRef.current) setState({ status: next, code: null });
     },
     [clearTimers],
   );
-
-  const isExpiredLocally = useCallback((): boolean => {
-    const at = expiresAtRef.current;
-    if (!at) return false;
-    const t = Date.parse(at);
-    return !Number.isNaN(t) && Date.now() >= t;
-  }, []);
 
   const emitFailed = useCallback((reason: FailReason) => {
     track(AnalyticsEvents.IMPORT_PAIRING_FAILED, { platform: platformRef.current, reason });
@@ -129,11 +123,6 @@ export function useExtensionPairing(
     if (statusRef.current !== 'waiting') return;
     const code = codeRef.current;
     if (!code) return;
-    if (isExpiredLocally()) {
-      go('expired');
-      track(AnalyticsEvents.IMPORT_PAIRING_EXPIRED, { platform: platformRef.current });
-      return;
-    }
     try {
       const res = await extensionPairApi.status(code);
       if (!mountedRef.current || statusRef.current !== 'waiting') return;
@@ -174,21 +163,7 @@ export function useExtensionPairing(
       pollDelayRef.current = Math.min(pollDelayRef.current * POLL_BACKOFF, POLL_MAX_MS);
       pollTimerRef.current = setTimeout(doPoll, pollDelayRef.current);
     }
-  }, [go, isExpiredLocally, emitFailed]);
-
-  const armExpiryTimer = useCallback(() => {
-    if (expiryTimerRef.current) clearTimeout(expiryTimerRef.current);
-    const at = expiresAtRef.current;
-    if (!at) return;
-    const remaining = Date.parse(at) - Date.now();
-    if (Number.isNaN(remaining)) return;
-    expiryTimerRef.current = setTimeout(() => {
-      if (mountedRef.current && statusRef.current === 'waiting') {
-        go('expired');
-        track(AnalyticsEvents.IMPORT_PAIRING_EXPIRED, { platform: platformRef.current });
-      }
-    }, Math.max(remaining, 0));
-  }, [go]);
+  }, [go, emitFailed]);
 
   const start = useCallback(async () => {
     if (!enabled) return; // fail closed: no network path when the feature is OFF
@@ -202,25 +177,24 @@ export function useExtensionPairing(
     try {
       const res = await extensionPairApi.init(slug);
       // `go('minting')` set the ref, but TS narrowed it from the guard above; read fresh.
-      if (!mountedRef.current || (statusRef.current as PairingStatus) !== 'minting') return; // cancelled mid-mint
+      // cancelled/unmounted mid-mint → discard this late result (no HTTP abort).
+      if (!mountedRef.current || (statusRef.current as PairingStatus) !== 'minting') return;
       const code = res.data?.pairing_code ?? null;
-      const expiresAt = res.data?.expires_at ?? null;
-      if (!code || !expiresAt) {
+      if (!code) {
         go('failed');
         emitFailed('network');
         return;
       }
       codeRef.current = code;
-      expiresAtRef.current = expiresAt;
       pollDelayRef.current = POLL_BASE_MS;
       failureCountRef.current = 0;
       statusRef.current = 'waiting';
-      setState({ status: 'waiting', code, expiresAt });
+      setState({ status: 'waiting', code });
       track(AnalyticsEvents.IMPORT_PAIRING_CODE_READY, { platform: slug });
-      armExpiryTimer();
       pollTimerRef.current = setTimeout(doPoll, POLL_BASE_MS);
     } catch (err) {
-      if (!mountedRef.current || (statusRef.current as PairingStatus) !== 'minting') return; // cancelled mid-mint
+      // cancelled/unmounted mid-mint → discard this late result (no HTTP abort).
+      if (!mountedRef.current || (statusRef.current as PairingStatus) !== 'minting') return;
       const s = axiosStatus(err);
       if (s === 401 || s === 403) {
         go('authExpired');
@@ -235,7 +209,7 @@ export function useExtensionPairing(
     } finally {
       mintInFlightRef.current = false;
     }
-  }, [enabled, go, armExpiryTimer, doPoll, emitFailed]);
+  }, [enabled, go, doPoll, emitFailed]);
 
   const cancel = useCallback(() => {
     const wasActive = statusRef.current === 'minting' || statusRef.current === 'waiting';
@@ -243,20 +217,15 @@ export function useExtensionPairing(
     if (wasActive) track(AnalyticsEvents.IMPORT_PAIRING_CANCELLED, { platform: platformRef.current });
   }, [go]);
 
-  // Pause polling in the background; resume (or expire) on foreground.
+  // Pause polling in the background; resume on foreground. Expiry is decided by
+  // the server /status contract on the next poll, never by a client clock.
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next: AppStateStatus) => {
       if (next === 'active') {
         pausedRef.current = false;
         if (statusRef.current === 'waiting') {
-          if (isExpiredLocally()) {
-            go('expired');
-            track(AnalyticsEvents.IMPORT_PAIRING_EXPIRED, { platform: platformRef.current });
-          } else {
-            armExpiryTimer();
-            if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
-            pollTimerRef.current = setTimeout(doPoll, 0);
-          }
+          if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+          pollTimerRef.current = setTimeout(doPoll, 0);
         }
       } else {
         pausedRef.current = true;
@@ -264,7 +233,7 @@ export function useExtensionPairing(
       }
     });
     return () => sub.remove();
-  }, [isExpiredLocally, go, armExpiryTimer, doPoll, clearTimers]);
+  }, [doPoll, clearTimers]);
 
   // Teardown on unmount: cancel every in-flight timer, block late setState.
   useEffect(() => {

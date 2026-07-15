@@ -10,7 +10,7 @@
  * extension") — it never renders importing/partial/complete or any page/entity
  * count. Cancel is a local abandon (no server cancel exists).
  */
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../theme/useTheme';
@@ -21,21 +21,10 @@ interface Props {
   platformId: string;
 }
 
-/** mm:ss remaining until an ISO-8601 instant, clamped at zero. */
-function formatRemaining(expiresAt: string | null): string {
-  if (!expiresAt) return '';
-  const ms = Date.parse(expiresAt) - Date.now();
-  const total = Number.isNaN(ms) ? 0 : Math.max(0, Math.floor(ms / 1000));
-  const m = Math.floor(total / 60);
-  const s = total % 60;
-  return `${m}:${s.toString().padStart(2, '0')}`;
-}
-
 export default function ExtensionPairingPanel({ platformId }: Props): React.ReactElement {
   const { colors } = useTheme();
   const pairing = useExtensionPairing(platformId);
-  const { status, code, expiresAt, start, retry, cancel } = pairing;
-  const [, setTick] = useState(0);
+  const { status, code, start, retry, cancel } = pairing;
   const startedRef = useRef(false);
 
   // Auto-mint once on mount; the hook's single-flight guard makes this safe.
@@ -45,13 +34,6 @@ export default function ExtensionPairingPanel({ platformId }: Props): React.Reac
       start();
     }
   }, [start]);
-
-  // 1s ticker for the visible countdown while a code is live (display only).
-  useEffect(() => {
-    if (status !== 'waiting' || !expiresAt) return;
-    const id = setInterval(() => setTick((t) => t + 1), 1000);
-    return () => clearInterval(id);
-  }, [status, expiresAt]);
 
   const styles = makeStyles(colors);
 
@@ -73,11 +55,8 @@ export default function ExtensionPairingPanel({ platformId }: Props): React.Reac
         </Text>
         <Text style={styles.body}>
           Open the Growth Project extension on the page you just logged into and enter this
-          code. It expires in{' '}
-          <Text style={styles.mono} testID="pairing-countdown">
-            {formatRemaining(expiresAt)}
-          </Text>
-          .
+          code. It’s short-lived for your security, so enter it soon — we’ll let you know here
+          if it expires.
         </Text>
         <TouchableOpacity
           style={styles.secondaryBtn}
@@ -170,7 +149,6 @@ function makeStyles(colors: ThemeColors) {
     title: { fontSize: 17, fontWeight: '600', color: colors.textPrimary },
     code: { fontSize: 34, fontWeight: '600', letterSpacing: 6, color: colors.textPrimary },
     body: { fontSize: 14, lineHeight: 20, color: colors.textSecondary },
-    mono: { fontWeight: '600', color: colors.textPrimary },
     primaryBtn: {
       backgroundColor: colors.primary,
       borderRadius: 12,

@@ -103,22 +103,27 @@ blind-cast an arbitrary server string into the union — it decodes defensively.
 future contract version, a renamed member, or a garbled/malformed response arrives, the
 decoder yields `'unknown'` (a truthful non-terminal reading) instead of asserting an
 unverified member. The decoders are that structural seam.
-- **No cancel endpoint exists.** → the mobile "cancel" is local-only (abandon the flow
-  before it starts); no server cancel is faked.
+- **No cancel endpoint exists.** → the mobile "cancel" is local-only: it stops polling
+  and discards any in-flight mint/poll result (it does not abort the HTTP request); no
+  server cancel is faked.
 
 ## Gates (verified on the pushed head)
 
 Verified by running the **entire** CI-equivalent locally, not a hand-picked subset:
 
 - `tsc --noEmit`: clean.
-- ESLint: 0 errors (pre-existing warnings only, none in the import-flow files).
-- **Full** jest suite (`npm test`, all suites): green. An earlier revision was
-  reported green from a *targeted* run and was in fact **RED** on the repo-wide
-  Quiet-Luxury doctrine scan (`ImportDataScreen` title used `fontWeight: '700'`).
-  That narrow-suite "green" claim is **retracted**; the title weight is now `'600'`
-  and the full suite is the standard of truth going forward.
-- Net-prod-LOC (added non-blank/non-comment lines vs `main`): **≤ 400** (review-time).
-- test:src ratio: **≥ 2.0** (review-time).
+- ESLint: 0 errors, 0 warnings on the import-flow files (no `eslint-disable`, no
+  `as any`, no `require()` — the api test mocks via `import` + `jest.mocked`).
+- **Full** jest suite (`npm test`, all suites): green — 295 suites / 3560 tests.
+  An earlier revision was reported green from a *targeted* run and was in fact
+  **RED** on the repo-wide Quiet-Luxury doctrine scan (`ImportDataScreen` title
+  used `fontWeight: '700'`). That narrow-suite "green" claim is **retracted**; the
+  title weight is `'600'` and the full suite is the standard of truth.
+- Net-prod-LOC (added non-blank/non-comment lines vs `main`), reproducible per file:
+  events 6 + extensionPairApi 9 + ExtensionPairingPanel 140 + useExtensionPairing 182
+  + ImportDataScreen 6 = **343 (≤ 400, no exception requested)**. The client-clock
+  expiry/countdown deletion (round-cause fix) created this headroom.
+- test:src ratio: 877 test LOC / 343 prod LOC = **2.56 (≥ 2.0)** (review-time).
 
 ## Rollback / stop
 
@@ -128,9 +133,9 @@ mismatch against the frozen OpenAPI slice.
 
 ## Next (named chained follow-up)
 
-**PR-M2 — Live extension pairing + progress UX:** wire `pair/init` (code mint with
-server-authoritative `expires_at` countdown), bounded/backoff/background-safe
-`pair/status` polling to the `paired`/`expired` terminal, and — once a mobile-readable
+**PR-M2 — Live extension pairing + progress UX:** wire `pair/init` (code mint),
+bounded/backoff/background-safe `pair/status` polling to the server-authoritative
+`paired`/`expired` terminal (no client clock, no local countdown), and — once a mobile-readable
 progress contract lands — the learning/importing/partial/complete progress mirror. Uses
 the typed contract frozen in this PR (`src/types/extensionImport.ts`).
 
@@ -144,15 +149,20 @@ the typed contract frozen in this PR (`src/types/extensionImport.ts`).
   mobile-callable endpoints, `POST /extension/pair/init` and
   `POST /extension/pair/status` (paths relative to the `/api`-suffixed baseURL).
 - `src/hooks/useExtensionPairing.ts` — the mint→poll state machine:
-  server-authoritative expiry, bounded exponential backoff (2s→15s, ×1.5),
-  AppState pause/resume, prompt local-expiry transition, transient-error
-  tolerance (≤5 consecutive) before a retryable `failed`, single-flight mint
-  (no duplicate intents), and full timer teardown on unmount. Unknown/garbled
-  `status` fails closed (treated as a non-terminal wait, never promoted to
-  `paired`). 401/403 → `authExpired`; 404 → `unavailable`; no token/code is
-  logged, stored, or emitted in telemetry.
+  **server-authoritative expiry** (the ONLY expiry signal is the `pair/status`
+  terminal returning `expired`; the client never reads its own clock — no
+  `Date.now`/`Date.parse`, no local countdown, no local expiry timer, per
+  Rule 16), bounded exponential backoff (2s→15s, ×1.5), AppState pause/resume,
+  transient-error tolerance (≤5 consecutive) before a retryable `failed`,
+  single-flight mint (no duplicate intents), and full timer teardown on
+  unmount. Unknown/garbled `status` fails closed (treated as a non-terminal
+  wait, never promoted to `paired`). 401/403 → `authExpired`; 404 →
+  `unavailable`; no token/code is logged, stored, or emitted in telemetry.
+  `cancel()` is a LOCAL abandon — it stops polling and discards any in-flight
+  mint/poll result; it never aborts the HTTP request or fakes a server cancel.
 - `src/components/coach/ExtensionPairingPanel.tsx` — renders the honest
-  lifecycle (minting → code+countdown `waiting` → `paired`, plus
+  lifecycle (minting → `waiting` showing the code with an honest "enter it
+  soon" prompt — no client-clock countdown → `paired`, plus
   expired/failed/authExpired/unavailable/cancelled), mounted inside the M1
   `awaitingExtension` state.
 
