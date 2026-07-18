@@ -16,8 +16,13 @@
 import { act, renderHook, waitFor, cleanup } from '@testing-library/react-native';
 import { AppState, type AppStateStatus, type NativeEventSubscription } from 'react-native';
 
-const mockStore: { clients: Array<{ id: string }>; loadClients: jest.Mock } = {
+const mockStore: {
+  clients: Array<{ id: string }>;
+  loadError: string | null;
+  loadClients: jest.Mock;
+} = {
   clients: [],
+  loadError: null,
   loadClients: jest.fn(),
 };
 jest.mock('../../store/coachStore', () => ({
@@ -39,14 +44,39 @@ function roster(n: number): Array<{ id: string }> {
   return Array.from({ length: n }, (_, i) => ({ id: `c${i}` }));
 }
 
-/** Make the next roster load resolve to a roster of exactly n rows. */
+/** Make the next roster load succeed with exactly n rows (loadError cleared). */
 function loadYields(n: number): void {
   mockStore.loadClients.mockImplementation(async () => {
+    mockStore.loadError = null;
     mockStore.clients = roster(n);
   });
 }
 
+/** Make the next roster load fail: sets loadError, leaves clients untouched
+ *  (mirrors coachStore, which keeps the prior roster on a failed read). */
+function loadFails(): void {
+  mockStore.loadClients.mockImplementation(async () => {
+    mockStore.loadError = 'Could not load clients. Please try again.';
+  });
+}
+
+/** A gated load that resolves to n rows only once release() is called — lets a
+ *  test switch users while a load is in flight. */
+function deferredLoad(n: number): () => void {
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  mockStore.loadClients.mockImplementation(async () => {
+    await gate;
+    mockStore.loadError = null;
+    mockStore.clients = roster(n);
+  });
+  return release;
+}
+
 let appStateHandler: ((s: AppStateStatus) => void) | null = null;
+let appStateRemove: jest.Mock;
 const foreground = () => act(() => appStateHandler?.('active'));
 
 /** Wait until the baseline roster load has been issued AND its snapshot has
@@ -60,12 +90,14 @@ async function baselineSettled(): Promise<void> {
 
 beforeEach(() => {
   mockStore.clients = [];
+  mockStore.loadError = null;
   mockStore.loadClients.mockReset();
   mockUser = { id: 'coach-1' };
   appStateHandler = null;
+  appStateRemove = jest.fn();
   jest.spyOn(AppState, 'addEventListener').mockImplementation((_event, cb) => {
     appStateHandler = cb;
-    return { remove: jest.fn() } as NativeEventSubscription;
+    return { remove: appStateRemove } as NativeEventSubscription;
   });
 });
 
@@ -92,6 +124,11 @@ describe('useRosterReviewDelta — flag-off containment', () => {
     });
     expect(mockStore.loadClients).not.toHaveBeenCalled();
     expect(result.current.delta).toBe(0);
+  });
+
+  it('registers no AppState listener when disabled', async () => {
+    await renderHook(() => useRosterReviewDelta(false));
+    expect(AppState.addEventListener).not.toHaveBeenCalled();
   });
 });
 
@@ -148,6 +185,29 @@ describe('useRosterReviewDelta — baseline + delta', () => {
     });
     await waitFor(() => expect(result.current.delta).toBe(4));
   });
+
+  it('does not anchor a baseline on a failed load, then captures honestly on retry (Rule 18)', async () => {
+    // Journey start fails: no baseline is anchored, delta stays a flat 0.
+    loadFails();
+    const { result } = await renderHook(() => useRosterReviewDelta(true));
+    await waitFor(() => expect(mockStore.loadClients).toHaveBeenCalledTimes(1));
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(result.current.delta).toBe(0);
+
+    // Retry succeeds against a pre-existing roster of 4 — those are the BASELINE,
+    // never four "new" clients (a failed-then-anchored-at-0 bug would show 4).
+    loadYields(4);
+    await foreground();
+    await waitFor(() => expect(mockStore.loadClients).toHaveBeenCalledTimes(2));
+    expect(result.current.delta).toBe(0);
+
+    // Only genuine growth after the honest baseline counts: 4→6 = 2.
+    loadYields(6);
+    await foreground();
+    await waitFor(() => expect(result.current.delta).toBe(2));
+  });
 });
 
 describe('useRosterReviewDelta — user-scoped isolation', () => {
@@ -189,5 +249,49 @@ describe('useRosterReviewDelta — user-scoped isolation', () => {
     await waitFor(() => expect(result.current.delta).toBe(0));
     await foreground();
     expect(mockStore.loadClients).not.toHaveBeenCalled();
+  });
+
+  it('rejects a stale refresh whose user switched mid-flight (no tenant mix)', async () => {
+    loadYields(2);
+    const { result, rerender } = await renderHook(() => useRosterReviewDelta(true));
+    await baselineSettled(); // coach-1 baseline = 2
+
+    // A refresh is issued for coach-1 but gated so it cannot resolve yet. The
+    // act is awaited so React does not leave a dangling scope that would defer
+    // the coach-2 baseline effect below.
+    const release = deferredLoad(50);
+    await act(async () => {
+      result.current.refresh();
+      await Promise.resolve();
+    });
+
+    // coach-2 signs in while coach-1's load is still in flight; the baseline
+    // effect re-fires and issues coach-2's own load.
+    mockUser = { id: 'coach-2' };
+    rerender(undefined);
+    await waitFor(() => expect(mockStore.loadClients).toHaveBeenCalledWith('coach-2'));
+
+    // On release, coach-1's stale load must be rejected; only coach-2's own
+    // baseline (50) commits → delta 0, never coach-1's 50 − 2 = 48.
+    await act(async () => {
+      release();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(result.current.delta).toBe(0));
+  });
+
+  it('removes its AppState listener on unmount', async () => {
+    loadYields(3);
+    const { unmount } = await renderHook(() => useRosterReviewDelta(true));
+    await baselineSettled(); // settle the load so unmount has no pending work
+    expect(AppState.addEventListener).toHaveBeenCalled(); // a listener was registered
+    const removedBefore = appStateRemove.mock.calls.length;
+    await act(async () => {
+      unmount();
+    });
+    // Unmount runs the hook's own teardown → exactly one further remove().
+    expect(appStateRemove.mock.calls.length).toBe(removedBefore + 1);
   });
 });
