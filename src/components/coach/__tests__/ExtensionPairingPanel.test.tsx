@@ -42,12 +42,36 @@ jest.mock('../../../hooks/useExtensionPairing', () => ({
   }),
 }));
 
+// PR-M3: the roster-derived review delta is mocked so we can drive the paired
+// review copy deterministically; the hook's own behaviour is covered in
+// useRosterReviewDelta.test.tsx.
+let mockDelta = 0;
+const mockRefresh = jest.fn();
+jest.mock('../../../hooks/useRosterReviewDelta', () => ({
+  useRosterReviewDelta: () => ({ delta: mockDelta, refresh: mockRefresh }),
+}));
+
+const mockNavigate = jest.fn();
+jest.mock('@react-navigation/native', () => ({
+  useNavigation: () => ({ navigate: mockNavigate }),
+}));
+
+const mockTrack = jest.fn();
+jest.mock('../../../analytics/posthog.service', () => ({
+  track: (...a: unknown[]) => mockTrack(...a),
+}));
+
 import ExtensionPairingPanel from '../ExtensionPairingPanel';
+import { AnalyticsEvents } from '../../../analytics/events';
 
 beforeEach(() => {
   mockStart.mockClear();
   mockRetry.mockClear();
   mockCancel.mockClear();
+  mockRefresh.mockClear();
+  mockNavigate.mockClear();
+  mockTrack.mockClear();
+  mockDelta = 0;
   mockHookState = { status: 'idle', code: null };
 });
 
@@ -104,9 +128,60 @@ describe('ExtensionPairingPanel — lifecycle rendering', () => {
     const { getByTestId, toJSON } = await render(<ExtensionPairingPanel platformId="truecoach" />);
     expect(getByTestId('pairing-paired')).toBeTruthy();
     const serialized = JSON.stringify(toJSON());
-    expect(serialized).toMatch(/running in the browser extension/i);
+    expect(serialized).toMatch(/runs in the browser extension/i);
     expect(serialized).not.toMatch(/\b\d{1,3}%/);
-    expect(serialized).not.toMatch(/imported successfully|import complete|\b\d+ (clients|records|entities|pages)\b/i);
+    expect(serialized).not.toMatch(/imported successfully|import complete|\b\d+ (records|entities|pages)\b/i);
+  });
+
+  it('renders the roster-derived delta copy (3→5 = 2) in the paired review', async () => {
+    mockDelta = 2;
+    mockHookState = { status: 'paired', code: null };
+    const { getByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
+    expect(getByTestId('pairing-review-delta')).toHaveTextContent(
+      '2 new clients since you started this import',
+    );
+  });
+
+  it('uses the singular form when exactly one new client has arrived', async () => {
+    mockDelta = 1;
+    mockHookState = { status: 'paired', code: null };
+    const { getByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
+    expect(getByTestId('pairing-review-delta')).toHaveTextContent(
+      '1 new client since you started this import',
+    );
+  });
+
+  it('renders a calm still-running copy when no new clients yet (3→3 = 0) — never claims completion', async () => {
+    mockDelta = 0;
+    mockHookState = { status: 'paired', code: null };
+    const { getByTestId, toJSON } = await render(<ExtensionPairingPanel platformId="truecoach" />);
+    expect(getByTestId('pairing-review-delta')).toHaveTextContent(
+      'No new clients have arrived yet. Your import is still running in the browser extension.',
+    );
+    const serialized = JSON.stringify(toJSON());
+    expect(serialized).not.toMatch(/imported successfully|import complete|completed|\bsuccess\b|\b\d{1,3}%/i);
+  });
+
+  it('exposes a typed, reachable CTA to the existing ClientsList and fires review analytics', async () => {
+    mockDelta = 2;
+    mockHookState = { status: 'paired', code: null };
+    const { getByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
+    fireEvent.press(getByTestId('pairing-review-cta'));
+    expect(mockNavigate).toHaveBeenCalledWith('ClientsStack', { screen: 'ClientsList' });
+    expect(mockTrack).toHaveBeenCalledWith(AnalyticsEvents.IMPORT_REVIEW_OPENED, {
+      platform: 'truecoach',
+    });
+  });
+
+  it('review analytics payload carries ONLY the platform slug — no counts, IDs, or PII', async () => {
+    mockDelta = 4;
+    mockHookState = { status: 'paired', code: null };
+    const { getByTestId } = await render(<ExtensionPairingPanel platformId="trainerize" />);
+    fireEvent.press(getByTestId('pairing-review-cta'));
+    const [, props] = mockTrack.mock.calls.find(
+      ([name]) => name === AnalyticsEvents.IMPORT_REVIEW_OPENED,
+    )!;
+    expect(props).toEqual({ platform: 'trainerize' });
   });
 
   it.each([

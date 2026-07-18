@@ -57,6 +57,10 @@ export const AnalyticsEvents = {
   IMPORT_PAIRING_EXPIRED: 'import_pairing_expired',
   IMPORT_PAIRING_FAILED: 'import_pairing_failed',
   IMPORT_PAIRING_CANCELLED: 'import_pairing_cancelled',
+  // Review CTA (PR-M3). Fires when the coach opens the roster review from the
+  // paired panel. Payload carries ONLY the platform slug — never client IDs,
+  // counts, PII, billing, source-specific data, or coach identity.
+  IMPORT_REVIEW_OPENED: 'import_review_opened',
 
   // Client — workouts
   WORKOUT_STARTED: 'workout_started',
