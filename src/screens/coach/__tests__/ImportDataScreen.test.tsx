@@ -26,6 +26,17 @@ jest.mock('../../../analytics/posthog.service', () => ({
   track: (...a: unknown[]) => mockTrack(...a),
 }));
 
+// The nested ExtensionPairingPanel (mounted in the awaiting-extension state) now
+// navigates to the roster review and derives a roster delta; both have their own
+// dedicated suites. Here we stub just enough so the screen renders in isolation
+// without a NavigationContainer.
+jest.mock('@react-navigation/native', () => ({
+  useNavigation: () => ({ navigate: jest.fn() }),
+}));
+jest.mock('../../../hooks/useRosterReviewDelta', () => ({
+  useRosterReviewDelta: () => ({ delta: 0, refresh: jest.fn() }),
+}));
+
 import ImportDataScreen from '../ImportDataScreen';
 import { AnalyticsEvents } from '../../../analytics/events';
 import { IMPORT_PLATFORMS, findImportPlatform } from '../../../constants/importPlatforms';

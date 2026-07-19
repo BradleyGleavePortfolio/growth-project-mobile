@@ -8,24 +8,53 @@
  * Honesty guardrails: the mobile contract has no import-progress read, so the
  * terminal this panel can truthfully show is `paired` ("running in the
  * extension") — it never renders importing/partial/complete or any page/entity
- * count. Cancel is a local abandon (no server cancel exists).
+ * count. Once paired, the panel offers a truthful, roster-derived review: the
+ * ONLY progress it reports is how many clients have appeared in the coach's
+ * authoritative roster since the import started (useRosterReviewDelta), plus a
+ * typed CTA into the existing Clients list. Cancel is a local abandon (no server
+ * cancel exists).
  */
-import React, { useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import {
+  useNavigation,
+  CompositeNavigationProp,
+} from '@react-navigation/native';
+import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/useTheme';
 import type { ThemeColors } from '../../theme/ThemeProvider';
+import type { CoachTabParamList, ClientsStackParamList } from '../../navigation/CoachNavigator';
 import { useExtensionPairing } from '../../hooks/useExtensionPairing';
+import { useRosterReviewDelta } from '../../hooks/useRosterReviewDelta';
+import { track } from '../../analytics/posthog.service';
+import { AnalyticsEvents } from '../../analytics/events';
 
 interface Props {
   platformId: string;
 }
 
+// R27: typed cross-tab nav — the panel lives in SettingsStack but the review CTA
+// jumps to the Clients tab, so the tab nav + destination stack are composed and
+// compile-checked (mirrors StripeSetupBanner).
+type ReviewNav = CompositeNavigationProp<
+  BottomTabNavigationProp<CoachTabParamList, 'ClientsStack'>,
+  NativeStackNavigationProp<ClientsStackParamList, 'ClientsList'>
+>;
+
 export default function ExtensionPairingPanel({ platformId }: Props): React.ReactElement {
   const { colors } = useTheme();
+  const navigation = useNavigation<ReviewNav>();
   const pairing = useExtensionPairing(platformId);
   const { status, code, start, retry, cancel } = pairing;
+  const { delta } = useRosterReviewDelta();
   const startedRef = useRef(false);
+
+  const openReview = useCallback(() => {
+    track(AnalyticsEvents.IMPORT_REVIEW_OPENED, { platform: platformId });
+    navigation.navigate('ClientsStack', { screen: 'ClientsList' });
+  }, [navigation, platformId]);
 
   // Auto-mint once on mount; the hook's single-flight guard makes this safe.
   useEffect(() => {
@@ -72,15 +101,33 @@ export default function ExtensionPairingPanel({ platformId }: Props): React.Reac
   }
 
   if (status === 'paired') {
+    // Roster truth is the ONLY progress source: delta > 0 states the real number
+    // of new clients since journey start; delta == 0 is a calm, honest
+    // still-running message. Neither ever claims imported/complete/partial/%.
+    const reviewCopy =
+      delta > 0
+        ? `${delta} new ${delta === 1 ? 'client' : 'clients'} since you started this import`
+        : 'No new clients have arrived yet. Your import is still running in the browser extension.';
     return (
       <View style={[styles.card, styles.cardOk]} accessibilityLiveRegion="polite" testID="pairing-paired">
         <Ionicons name="checkmark-circle-outline" size={22} color={colors.primary} />
         <Text style={styles.title}>Paired</Text>
-        <Text style={styles.body}>
-          Your import is now running in the browser extension. It works through your prior
-          platform in the background — you can close this screen. Progress and the final
-          result appear in the extension.
+        <Text style={styles.body} testID="pairing-review-delta">
+          {reviewCopy}
         </Text>
+        <Text style={styles.body}>
+          Your import runs in the browser extension. Your client roster is the source of
+          truth — open it to review new clients as they arrive.
+        </Text>
+        <TouchableOpacity
+          style={styles.primaryBtn}
+          onPress={openReview}
+          accessibilityRole="button"
+          accessibilityLabel="Review clients"
+          testID="pairing-review-cta"
+        >
+          <Text style={styles.primaryBtnText}>Review clients</Text>
+        </TouchableOpacity>
       </View>
     );
   }

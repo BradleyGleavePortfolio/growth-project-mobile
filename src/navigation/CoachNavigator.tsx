@@ -121,7 +121,10 @@ export type CoachTabParamList = {
   // The 'Dashboard' name is kept in the param list so any existing
   // navigate('Dashboard') calls in the codebase don't break.
   CommandCenter: undefined;
-  ClientsStack: undefined;
+  // R27: typed nested nav so navigate('ClientsStack', { screen: 'ClientsList' })
+  // type-checks against ClientsStackParamList (mirrors SettingsStack below).
+  // `| undefined` preserves existing no-arg navigate('ClientsStack') callers.
+  ClientsStack: NavigatorScreenParams<ClientsStackParamList> | undefined;
   Templates: undefined;
   Messages: undefined;
   // R27: typed nested nav so navigate('SettingsStack', { screen: 'Billing' })
