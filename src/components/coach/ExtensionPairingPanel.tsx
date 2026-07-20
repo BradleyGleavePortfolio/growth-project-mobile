@@ -28,6 +28,11 @@ import type { ThemeColors } from '../../theme/ThemeProvider';
 import type { CoachTabParamList, ClientsStackParamList } from '../../navigation/CoachNavigator';
 import { useExtensionPairing } from '../../hooks/useExtensionPairing';
 import { useRosterReviewDelta } from '../../hooks/useRosterReviewDelta';
+import {
+  useReconstructCounts,
+  type ReconstructFamilyCounts,
+} from '../../hooks/useReconstructCounts';
+import { FAMILY_LABELS } from '../../types/importReview';
 import { track } from '../../analytics/posthog.service';
 import { AnalyticsEvents } from '../../analytics/events';
 
@@ -119,6 +124,7 @@ export default function ExtensionPairingPanel({ platformId }: Props): React.Reac
           Your import runs in the browser extension. Your client roster is the source of
           truth — open it to review new clients as they arrive.
         </Text>
+        <ReconstructCountsSection />
         <TouchableOpacity
           style={styles.primaryBtn}
           onPress={openReview}
@@ -180,6 +186,131 @@ export default function ExtensionPairingPanel({ platformId }: Props): React.Reac
   );
 }
 
+// PR-M4 per-family counts/reasons block inside the paired panel. Page-local
+// counts + stable reasons only — never a total/percentage/ETA/completion.
+// Renders nothing when the kill switch is off (hook fails closed).
+function ReconstructCountsSection(): React.ReactElement | null {
+  const { colors } = useTheme();
+  const styles = makeStyles(colors);
+  const { enabled, families } = useReconstructCounts();
+  if (!enabled) return null;
+  return (
+    <View
+      style={styles.reviewBlock}
+      accessibilityLiveRegion="polite"
+      testID="reconstruct-counts"
+    >
+      <Text style={styles.label}>What we’ve reconstructed so far</Text>
+      {families.map((f) => (
+        <ReconstructFamilyRow
+          key={f.family}
+          family={f}
+          styles={styles}
+          colors={colors}
+        />
+      ))}
+    </View>
+  );
+}
+
+function ReconstructFamilyRow({
+  family,
+  styles,
+  colors,
+}: {
+  family: ReconstructFamilyCounts;
+  styles: ReturnType<typeof makeStyles>;
+  colors: ThemeColors;
+}): React.ReactElement {
+  const {
+    family: name,
+    count,
+    reasons,
+    isLoading,
+    isRefreshing,
+    errorKind,
+    hasData,
+    hasMore,
+    fetchMore,
+    retry,
+  } = family;
+  const label = FAMILY_LABELS[name];
+
+  // First load, nothing to show yet.
+  if (isLoading && !hasData) {
+    return (
+      <View style={styles.familyRow} testID={`reconstruct-${name}-loading`}>
+        <Text style={styles.familyLabel}>{label}</Text>
+        <ActivityIndicator
+          color={colors.primary}
+          accessibilityRole="progressbar"
+          accessibilityLabel={`Loading ${label}`}
+        />
+      </View>
+    );
+  }
+
+  // Hard failure with no prior data → explicit error + retry (never a silent
+  // zero that would read as "nothing to import").
+  if (errorKind && !hasData) {
+    return (
+      <View style={styles.familyRow} testID={`reconstruct-${name}-error`}>
+        <Text style={styles.familyLabel}>{label}</Text>
+        <View style={styles.familyErrorRow}>
+          <Text style={styles.familyMuted}>Couldn’t load. </Text>
+          <TouchableOpacity
+            onPress={retry}
+            accessibilityRole="button"
+            accessibilityLabel={`Retry ${label}`}
+            testID={`reconstruct-${name}-retry`}
+          >
+            <Text style={styles.linkText}>Try again</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  // Page-local truth only: "N loaded so far" (never a total/percentage), or a
+  // calm "None yet" when the loaded pages are empty.
+  const countLabel = count === 0 ? 'None yet' : `${count} loaded so far`;
+  return (
+    <View style={styles.familyRow} testID={`reconstruct-${name}`}>
+      <View style={styles.familyHeader}>
+        <Text style={styles.familyLabel}>{label}</Text>
+        <Text style={styles.familyCount} testID={`reconstruct-${name}-count`}>
+          {countLabel}
+          {isRefreshing ? ' · refreshing…' : ''}
+        </Text>
+      </View>
+      {reasons.map((r) => (
+        <Text
+          key={r.code}
+          style={styles.familyReason}
+          testID={`reconstruct-${name}-reason`}
+        >
+          {r.message}
+        </Text>
+      ))}
+      {errorKind && hasData ? (
+        <Text style={styles.familyMuted} testID={`reconstruct-${name}-stale`}>
+          Couldn’t refresh just now — showing what loaded earlier.
+        </Text>
+      ) : null}
+      {hasMore ? (
+        <TouchableOpacity
+          onPress={fetchMore}
+          accessibilityRole="button"
+          accessibilityLabel={`Load more ${label}`}
+          testID={`reconstruct-${name}-more`}
+        >
+          <Text style={styles.linkText}>Load more</Text>
+        </TouchableOpacity>
+      ) : null}
+    </View>
+  );
+}
+
 function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
     card: {
@@ -206,5 +337,24 @@ function makeStyles(colors: ThemeColors) {
     primaryBtnText: { color: colors.textOnPrimary, fontSize: 16, fontWeight: '600' },
     secondaryBtn: { paddingVertical: 12, alignItems: 'center' },
     secondaryBtnText: { color: colors.textSecondary, fontSize: 15, fontWeight: '600' },
+    reviewBlock: {
+      gap: 8,
+      paddingTop: 12,
+      marginTop: 4,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+    },
+    familyRow: { gap: 4 },
+    familyHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    },
+    familyErrorRow: { flexDirection: 'row', alignItems: 'center' },
+    familyLabel: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
+    familyCount: { fontSize: 13, color: colors.textSecondary },
+    familyReason: { fontSize: 13, lineHeight: 18, color: colors.textSecondary },
+    familyMuted: { fontSize: 13, color: colors.textMuted },
+    linkText: { fontSize: 13, fontWeight: '600', color: colors.primary },
   });
 }

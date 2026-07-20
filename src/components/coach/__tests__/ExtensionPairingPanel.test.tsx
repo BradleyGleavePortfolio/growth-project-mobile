@@ -51,6 +51,15 @@ jest.mock('../../../hooks/useRosterReviewDelta', () => ({
   useRosterReviewDelta: () => ({ delta: mockDelta, refresh: mockRefresh }),
 }));
 
+// PR-M4: the reconstruct counts hook is mocked. It defaults to DISABLED so the
+// counts section renders nothing, keeping every PR-M2/PR-M3 assertion here
+// unchanged; the section's own states are covered in
+// ExtensionPairingPanel.reconstruct.test.tsx and useReconstructCounts.test.tsx.
+let mockReconstruct: { enabled: boolean; families: unknown[]; refresh: () => void };
+jest.mock('../../../hooks/useReconstructCounts', () => ({
+  useReconstructCounts: () => mockReconstruct,
+}));
+
 const mockNavigate = jest.fn();
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: mockNavigate }),
@@ -73,6 +82,7 @@ beforeEach(() => {
   mockTrack.mockClear();
   mockDelta = 0;
   mockHookState = { status: 'idle', code: null };
+  mockReconstruct = { enabled: false, families: [], refresh: jest.fn() };
 });
 
 afterEach(() => {

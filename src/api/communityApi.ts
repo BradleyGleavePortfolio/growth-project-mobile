@@ -29,9 +29,11 @@
  */
 
 import { z } from 'zod';
-import axios from 'axios';
 import api from '../services/api';
 import { generateIdempotencyKey } from '../utils/idempotency';
+import { call } from './apiCall';
+
+export { CommunityApiError } from './apiCall';
 
 // ─── Shared enums (mirror backend) ───────────────────────────────────────────
 
@@ -282,84 +284,6 @@ export const CommunityDmMessageListResponseSchema = z
 export const CommunityDmMessageResponseSchema = z
   .object({ message: CommunityDmMessageSchema })
   .passthrough();
-
-// ─── Typed error ─────────────────────────────────────────────────────────────
-
-/**
- * Transport / contract error surfaced to the screen hooks. `.status` lets the
- * UI branch on 401 (auth), 403 (forbidden — e.g. DM gate), 410 (gone), and 5xx
- * (server) without re-parsing the axios error. `kind` is a coarse, bounded
- * label (never a raw server message) for telemetry / logging.
- */
-export class CommunityApiError extends Error {
-  constructor(
-    public readonly kind:
-      | 'unauthorized'
-      | 'forbidden'
-      | 'gone'
-      | 'conflict'
-      | 'server'
-      | 'network'
-      | 'contract'
-      | 'unknown',
-    public readonly status: number,
-    message: string,
-    public readonly cause?: unknown,
-  ) {
-    super(message);
-    this.name = 'CommunityApiError';
-    Object.setPrototypeOf(this, CommunityApiError.prototype);
-  }
-}
-
-function classify(status: number): CommunityApiError['kind'] {
-  if (status === 401) return 'unauthorized';
-  if (status === 403) return 'forbidden';
-  if (status === 409) return 'conflict';
-  if (status === 410) return 'gone';
-  if (status >= 500) return 'server';
-  if (status === 0) return 'network';
-  return 'unknown';
-}
-
-/**
- * Run an axios call and normalise failures into a CommunityApiError. ZodErrors
- * (contract drift) are re-wrapped as `contract` so a screen can show a calm
- * "we could not load this" state instead of crashing on a parse throw.
- */
-async function call<T>(
-  schema: z.ZodType<T>,
-  fn: () => Promise<{ data: unknown }>,
-): Promise<T> {
-  let res: { data: unknown };
-  try {
-    res = await fn();
-  } catch (err) {
-    if (axios.isAxiosError(err)) {
-      const status = err.response?.status ?? 0;
-      throw new CommunityApiError(
-        classify(status),
-        status,
-        `community request failed (${status || 'network'})`,
-        err,
-      );
-    }
-    throw new CommunityApiError('unknown', -1, 'community request failed', err);
-  }
-  try {
-    return schema.parse(res.data);
-  } catch (err) {
-    if (err instanceof z.ZodError) {
-      throw new CommunityApiError(
-        'contract',
-        200,
-        'community response shape drifted from the backend contract',
-        err,
-      );
-    }
-    throw err;
-  }
-}
 
 function idempotentHeaders(): { headers: Record<string, string> } {
   // R19 — client-generated key so a retried mutation deduplicates server-side.
