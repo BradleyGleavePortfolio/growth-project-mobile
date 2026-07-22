@@ -57,10 +57,11 @@ const ASYNC_SIGN_OUT_PREFIXES = [
   // "Resume?" prompt with someone else's working state.
   'active_workout_session:',
   // Per-user deep-link landing for invite acceptance (R15). The deep-link
-  // handler writes `pending_invite_code:<userId>` (or `:anonymous`); the
-  // bare `pending_invite_code` legacy key is wiped via ASYNC_SIGN_OUT_KEYS.
-  // The trailing colon keeps unrelated keys like `pending_invite_codex_*`
-  // from being swept.
+  // handler writes `pending_invite_code:<userId>` (never an anonymous slot —
+  // pendingInviteCode.ts no-ops writes when no identity resolves); the bare
+  // `pending_invite_code` legacy key is wiped via ASYNC_SIGN_OUT_KEYS. The
+  // trailing colon keeps unrelated keys like `pending_invite_codex_*` from
+  // being swept.
   'pending_invite_code:',
   // Per-plan workout-builder autosave offline mirror (MWB-4 #237 R11 P2). The
   // mirror stores a previous user's unsent plan ops/metadata keyed as

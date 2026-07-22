@@ -69,6 +69,7 @@ type AuthState =
 // the tokens via `route.params`. See navigation/deepLinkUtils.ts.
 import { fragmentToQuery } from './deepLinkUtils';
 import { readUserCache, clearUserCache } from '../lib/userCache';
+import { stashInviteCodeFromDeepLink } from '../lib/pendingInviteCode';
 import { EntitlementProvider } from '../entitlements/EntitlementProvider';
 import { isValidPackageShareToken } from '../utils/packageShare';
 
@@ -425,34 +426,12 @@ export default function RootNavigator() {
       }
 
       if (isInvite) {
-        const match = url.match(/\/join\/([^/?#]+)/i);
-        const code = match?.[1];
-        if (code) {
-          // Stash the inbound code so RoleSelection (or a future settings
-          // surface) can offer to attach it. R15: every persisted key is
-          // user-scoped so a second user on the same device cannot read
-          // the prior user's pending code. We reach this branch only
-          // after `authed` was truthy above; resolve the user id from
-          // user_data and fall back to `:anonymous` if it cannot be
-          // parsed (which the sign-in flow then claims/migrates).
-          try {
-            let scope = 'anonymous';
-            try {
-              const userRaw = await AsyncStorage.getItem('user_data');
-              if (userRaw) {
-                const parsed = JSON.parse(userRaw) as { id?: string };
-                if (parsed && typeof parsed.id === 'string' && parsed.id) {
-                  scope = parsed.id;
-                }
-              }
-            } catch {
-              // user_data unreadable — keep the `:anonymous` scope.
-            }
-            await AsyncStorage.setItem(`pending_invite_code:${scope}`, code);
-          } catch {
-            // best-effort
-          }
-        }
+        // Stash the inbound `/join/<code>` so the home PendingInviteBanner can
+        // offer to attach it. `stashInviteCodeFromDeepLink` derives the same
+        // user-scoped key (R15) the banner reads from, so the code is never
+        // orphaned (R20). We reach this branch only after `authed` was truthy
+        // above.
+        await stashInviteCodeFromDeepLink(url);
       }
     };
 
