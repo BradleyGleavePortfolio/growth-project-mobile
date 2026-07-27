@@ -19,7 +19,13 @@ jobs:
           cache: npm
 
       - name: Install deps
-        run: npm install
+        # `npm ci`, not `npm install`: it installs the exact tree recorded in
+        # package-lock.json and hard-fails when the lockfile and package.json
+        # disagree. Under `npm install` the lockfile was advisory, so a
+        # transitively-hoisted package could satisfy a production import
+        # without ever being declared — CI stayed green while the Metro bundle
+        # would break the moment the hoist moved.
+        run: npm ci
 
       - name: Validate app config (default mode — catches genuine breakage)
         # Always runs. Catches the things that always have to be true:
