@@ -14,8 +14,21 @@
  *     so there is no local countdown, no local expiry timer, and no
  *     client-derived TTL (Rule 16 — never trust the client clock).
  *   • There is NO server cancel endpoint, so `cancel()` is a LOCAL abandon: it
- *     stops polling, discards any in-flight mint/poll result, and drops the
- *     code — it never fabricates a server cancel or aborts the HTTP request.
+ *     stops polling, discards any in-flight mint/poll result, drops the code and
+ *     erases the durable mirror — it never fabricates a server cancel or aborts
+ *     the HTTP request. Until the backend exposes a revoke route the server-side
+ *     session simply runs to its own expiry; mobile never claims otherwise.
+ *
+ * Durability (M5-C): this flow REQUIRES the coach to leave the app for a browser,
+ * so an OS kill mid-pairing used to drop the code and strand a live server-side
+ * session. The minted session is now mirrored to user-scoped storage (see
+ * storage/importPairingMirror.ts) and rehydrated on relaunch. Rehydration is not
+ * a claim the session is still live (Rule 18): it re-enters `waiting` and polls
+ * immediately, and the server /status contract remains the sole authority. The
+ * persisted `expires_at` is provenance only and is never compared to a client
+ * clock (Rule 16). The idempotency key minted before the first /pair/init is
+ * persisted with it and replayed on retry, so a kill-then-retry cannot open a
+ * second server-side session for one coach intent (Rule 19).
  *   • Unknown/garbled `status` values fail closed: they are treated as a
  *     non-terminal wait and NEVER promoted to `paired`.
  *
@@ -35,6 +48,16 @@ import { decodePairStatus } from '../types/extensionImport';
 import { featureFlags } from '../config/featureFlags';
 import { track } from '../analytics/posthog.service';
 import { AnalyticsEvents } from '../analytics/events';
+import { useCurrentUser } from './useCurrentUser';
+import { generateIdempotencyKey } from '../utils/idempotency';
+import { extractRequestId } from '../utils/correlation';
+import { logger } from '../utils/logger';
+import {
+  IMPORT_PAIRING_MIRROR_VERSION,
+  clearImportPairingMirror,
+  readImportPairingMirror,
+  writeImportPairingMirror,
+} from '../storage/importPairingMirror';
 
 export type PairingStatus =
   | 'idle'
@@ -51,6 +74,13 @@ export interface PairingState {
   status: PairingStatus;
   /** 6-digit code shown to the coach to read into the extension. Never logged. */
   code: string | null;
+  /**
+   * Server correlation id for the request that produced the CURRENT failure
+   * state, when the backend supplied one (M5-D). Null on success and whenever
+   * the server sent nothing — a reference support cannot look up is worse than
+   * none. Showing it is not a diagnosis (Rule 18).
+   */
+  supportReference: string | null;
 }
 
 export interface UseExtensionPairing extends PairingState {
@@ -86,7 +116,11 @@ export function useExtensionPairing(
   platformSlug: string | null,
   enabled: boolean = featureFlags.extensionImport,
 ): UseExtensionPairing {
-  const [state, setState] = useState<PairingState>({ status: 'idle', code: null });
+  const [state, setState] = useState<PairingState>({
+    status: 'idle',
+    code: null,
+    supportReference: null,
+  });
 
   const mountedRef = useRef(true);
   const statusRef = useRef<PairingStatus>('idle');
@@ -100,22 +134,47 @@ export function useExtensionPairing(
   const platformRef = useRef(platformSlug);
   platformRef.current = platformSlug;
 
+  const userId = useCurrentUser()?.id ?? null;
+  const userIdRef = useRef(userId);
+  userIdRef.current = userId;
+  /** Rule 19 key for the CURRENT coach intent; replayed across retries of it. */
+  const idempotencyKeyRef = useRef<string | null>(null);
+  /** False until the durable mirror has been consulted exactly once per mount. */
+  const hydratedRef = useRef(false);
+  /** A start() that arrived before hydration finished, deferred not dropped. */
+  const pendingStartRef = useRef(false);
+  const startRef = useRef<(() => void) | null>(null);
+
   const clearTimers = useCallback(() => {
     if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
     pollTimerRef.current = null;
   }, []);
 
-  /** Move to a codeless terminal/reset status and tear down timers. */
+  /**
+   * Move to a codeless terminal/reset status and tear down timers.
+   * `supportReference` is the server's correlation id for the request that
+   * caused this transition, when it gave one; every non-error transition clears
+   * it so a stale reference can never be attached to a later failure.
+   */
   const go = useCallback(
-    (next: PairingStatus) => {
+    (next: PairingStatus, supportReference: string | null = null) => {
       clearTimers();
       // Ending this session frees the poll single-flight guard so the next
       // session can poll; a still-outstanding poll from the old session is
       // discarded by its code check (below) and cannot re-stomp the guard.
       pollInFlightRef.current = false;
       codeRef.current = null;
+      // No status reached here still owns a code, so the durable mirror is stale
+      // by definition — including 'minting', where a fresh mint supersedes it.
+      const uid = userIdRef.current;
+      if (uid) void clearImportPairingMirror(uid);
+      // Retire the Rule 19 key on every outcome EXCEPT a transient network
+      // 'failed' (and the 'minting' transition): a retry after a lost response is
+      // the SAME coach intent and must replay the same key, whereas a retry after
+      // paired/expired/cancelled/auth/unavailable is a genuinely new intent.
+      if (next !== 'failed' && next !== 'minting') idempotencyKeyRef.current = null;
       statusRef.current = next;
-      if (mountedRef.current) setState({ status: next, code: null });
+      if (mountedRef.current) setState({ status: next, code: null, supportReference });
     },
     [clearTimers],
   );
@@ -157,19 +216,20 @@ export function useExtensionPairing(
     } catch (err) {
       if (!mountedRef.current || statusRef.current !== 'waiting' || codeRef.current !== code) return;
       const s = axiosStatus(err);
+      const ref = extractRequestId(err);
       if (s === 401 || s === 403) {
-        go('authExpired');
+        go('authExpired', ref);
         emitFailed('auth');
         return;
       }
       if (s === 404) {
-        go('unavailable');
+        go('unavailable', ref);
         emitFailed('unavailable');
         return;
       }
       failureCountRef.current += 1;
       if (failureCountRef.current >= MAX_POLL_FAILURES) {
-        go('failed');
+        go('failed', ref);
         emitFailed('network');
         return;
       }
@@ -188,11 +248,31 @@ export function useExtensionPairing(
     if (!slug) return;
     if (mintInFlightRef.current) return; // single-flight
     if (statusRef.current === 'minting' || statusRef.current === 'waiting') return; // no duplicate intent
+    // Minting before the mirror has been read could open a second server-side
+    // session on top of one the coach already has. Defer, never drop.
+    if (!hydratedRef.current) {
+      pendingStartRef.current = true;
+      return;
+    }
+    let key = idempotencyKeyRef.current;
+    if (!key) {
+      try {
+        key = generateIdempotencyKey();
+      } catch (err) {
+        // No CSPRNG means no safe retry key; minting anyway risks a duplicate
+        // session, so fail visibly instead (Rule 19 has no soft fallback).
+        logger.warn('[useExtensionPairing] idempotency key unavailable', err);
+        go('failed');
+        emitFailed('network');
+        return;
+      }
+      idempotencyKeyRef.current = key;
+    }
     mintInFlightRef.current = true;
     go('minting');
     track(AnalyticsEvents.IMPORT_PAIRING_STARTED, { platform: slug });
     try {
-      const res = await extensionPairApi.init(slug);
+      const res = await extensionPairApi.init(slug, key);
       // `go('minting')` set the ref, but TS narrowed it from the guard above; read fresh.
       // cancelled/unmounted mid-mint → discard this late result (no HTTP abort).
       if (!mountedRef.current || (statusRef.current as PairingStatus) !== 'minting') return;
@@ -202,31 +282,90 @@ export function useExtensionPairing(
         emitFailed('network');
         return;
       }
+      // Persist BEFORE showing the code: the coach's next action is to leave the
+      // app, so a code on screen that is not on disk is exactly the state that
+      // an OS kill turns into an orphaned server-side session. A write failure
+      // is logged and the flow continues — degraded durability, not a dead flow.
+      const uid = userIdRef.current;
+      if (uid) {
+        try {
+          await writeImportPairingMirror({
+            version: IMPORT_PAIRING_MIRROR_VERSION,
+            userId: uid,
+            platformId: slug,
+            code,
+            // Stored verbatim for provenance/support only; never clock-compared.
+            expiresAt: res.data?.expires_at ?? '',
+            idempotencyKey: key,
+          });
+        } catch (err) {
+          logger.warn('[useExtensionPairing] mirror write failed', err);
+        }
+        if (!mountedRef.current || (statusRef.current as PairingStatus) !== 'minting') return;
+      }
       codeRef.current = code;
       pollDelayRef.current = POLL_BASE_MS;
       failureCountRef.current = 0;
       statusRef.current = 'waiting';
-      setState({ status: 'waiting', code });
+      setState({ status: 'waiting', code, supportReference: null });
       track(AnalyticsEvents.IMPORT_PAIRING_CODE_READY, { platform: slug });
       pollTimerRef.current = setTimeout(doPoll, POLL_BASE_MS);
     } catch (err) {
       // cancelled/unmounted mid-mint → discard this late result (no HTTP abort).
       if (!mountedRef.current || (statusRef.current as PairingStatus) !== 'minting') return;
       const s = axiosStatus(err);
+      const ref = extractRequestId(err);
       if (s === 401 || s === 403) {
-        go('authExpired');
+        go('authExpired', ref);
         emitFailed('auth');
       } else if (s === 404) {
-        go('unavailable');
+        go('unavailable', ref);
         emitFailed('unavailable');
       } else {
-        go('failed');
+        go('failed', ref);
         emitFailed('network');
       }
     } finally {
       mintInFlightRef.current = false;
     }
   }, [enabled, go, doPoll, emitFailed]);
+
+  startRef.current = start;
+
+  /**
+   * Rehydrate a session that survived a process death. Runs once per mount,
+   * before any mint is allowed through. Finding a record says only "we asked for
+   * this and never saw it finish" — so we re-enter `waiting` and poll at once,
+   * letting the server /status contract decide what the session actually is. A
+   * start() that raced this read is replayed here rather than lost.
+   */
+  useEffect(() => {
+    let abandoned = false;
+    void (async () => {
+      const uid = userIdRef.current;
+      const restored = enabled && uid ? await readImportPairingMirror(uid) : null;
+      if (abandoned || !mountedRef.current) return;
+      hydratedRef.current = true;
+      if (restored && statusRef.current === 'idle') {
+        idempotencyKeyRef.current = restored.idempotencyKey;
+        codeRef.current = restored.code;
+        pollDelayRef.current = POLL_BASE_MS;
+        failureCountRef.current = 0;
+        statusRef.current = 'waiting';
+        setState({ status: 'waiting', code: restored.code, supportReference: null });
+        track(AnalyticsEvents.IMPORT_PAIRING_RESTORED, { platform: restored.platformId });
+        pollTimerRef.current = setTimeout(doPoll, 0);
+        return;
+      }
+      if (pendingStartRef.current) {
+        pendingStartRef.current = false;
+        startRef.current?.();
+      }
+    })();
+    return () => {
+      abandoned = true;
+    };
+  }, [enabled, doPoll]);
 
   const cancel = useCallback(() => {
     const wasActive = statusRef.current === 'minting' || statusRef.current === 'waiting';

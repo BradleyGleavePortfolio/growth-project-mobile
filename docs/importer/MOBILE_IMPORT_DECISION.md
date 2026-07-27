@@ -192,3 +192,37 @@ returning the extension-reported terminal `success|partial|failed` + coarse
 progress) plus the intent-id linkage from a paired code, all behind
 `FEATURE_SCOUT_INGEST`. Only then can the mobile importing/partial/complete states
 be wired truthfully.
+
+## M5-C addendum — durable pairing state, and the revocation gap
+
+The pairing flow deliberately sends the coach out of the app (`Linking.openURL`
+to their prior platform's login page), so an OS kill mid-pairing is an ordinary
+event, not an edge case. Until M5-C every byte of pairing state lived in
+`useState`/`useRef`: a kill dropped the code and returned the coach to the intro
+screen while a live, un-abandoned session was still open server-side.
+
+**What M5-C adds (mobile-only, no invented contract):**
+
+- `src/storage/importPairingMirror.ts` — a user-scoped, versioned, shape-guarded
+  mirror keyed `import_pairing_session:<userId>`, swept on sign-out via
+  `ASYNC_SIGN_OUT_PREFIXES` (Rule 15). A corrupt, version-drifted, shape-drifted,
+  or cross-user payload is discarded and its key deleted.
+- Rehydration in `useExtensionPairing`: a restored record re-enters `waiting` and
+  polls `POST /extension/pair/status` immediately. Restoration is **not** a claim
+  the session is live (Rule 18) — the server decides. The persisted `expires_at`
+  is stored verbatim for provenance/support and is **never** compared to a client
+  clock (Rule 16).
+- Rule 19: the idempotency key minted before the first `/pair/init` is persisted
+  alongside the session and sent as `Idempotency-Key`, so a kill-then-retry of the
+  same coach intent cannot open a second server-side session. A genuinely new
+  intent (after paired/expired/cancelled) mints a fresh key.
+
+**Still blocked — abandoned-session revocation.** The frozen contract exposes
+exactly two coach-callable routes (`pair/init`, `pair/status`); there is no
+`pair/cancel`, `pair/revoke`, or `DELETE` on a code. So `cancel()` remains a
+LOCAL abandon: it stops polling, erases the durable mirror, and drops the code.
+The server-side session runs to its own expiry, and mobile never claims
+otherwise. **Backend follow-up:** a coach-scoped `POST /api/extension/pair/revoke
+{ code }` (idempotent, 404 on an unknown/foreign code) would let the mobile
+cancel path actually close the session; the mobile side is already structured to
+call it from the single `cancel()` seam.

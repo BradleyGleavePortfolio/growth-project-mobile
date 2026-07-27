@@ -33,7 +33,12 @@ function uuidFromBytes(bytes: Uint8Array): string {
   );
 }
 
-export function generateIdempotencyKey(): string {
+/**
+ * Crypto-grade RFC 4122 v4 UUID — the ONE random-id source in the app (R20).
+ * `generateIdempotencyKey` and the request-correlation id both route through
+ * here so there is never a second, weaker generator to audit.
+ */
+export function randomUuid(): string {
   // Single crypto-grade path: Web Crypto API polyfilled by
   // react-native-get-random-values (imported at the top of index.ts).
   // Works identically in dev builds, Expo Go, and production — no
@@ -52,4 +57,8 @@ export function generateIdempotencyKey(): string {
     'generateIdempotencyKey: crypto.getRandomValues is unavailable. ' +
       'Ensure react-native-get-random-values is imported first in index.ts.',
   );
+}
+
+export function generateIdempotencyKey(): string {
+  return randomUuid();
 }

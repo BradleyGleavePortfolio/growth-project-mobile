@@ -20,9 +20,20 @@ const PAIR_INIT_PATH = '/extension/pair/init';
 const PAIR_STATUS_PATH = '/extension/pair/status';
 
 export const extensionPairApi = {
-  /** Mint a 6-digit pairing code bound to the coach + chosen source platform. */
-  init: (chosenPlatform: string) =>
-    api.post<PairInitResponse>(PAIR_INIT_PATH, { chosen_platform: chosenPlatform }),
+  /**
+   * Mint a 6-digit pairing code bound to the coach + chosen source platform.
+   *
+   * `idempotencyKey` is Rule 19: the caller mints it once per coach intent and
+   * replays the same value on every retry, so a lost response — a dropped
+   * connection, or the OS killing the app between the request and its reply —
+   * cannot leave the coach with two live server-side sessions.
+   */
+  init: (chosenPlatform: string, idempotencyKey: string) =>
+    api.post<PairInitResponse>(
+      PAIR_INIT_PATH,
+      { chosen_platform: chosenPlatform },
+      { headers: { 'Idempotency-Key': idempotencyKey } },
+    ),
 
   /** Poll the lifecycle of a code the caller minted. Body-only (never a query). */
   status: (code: string) => api.post<PairStatusResponse>(PAIR_STATUS_PATH, { code }),
