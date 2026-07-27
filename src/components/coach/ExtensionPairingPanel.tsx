@@ -13,9 +13,24 @@
  * authoritative roster since the import started (useRosterReviewDelta), plus a
  * typed CTA into the existing Clients list. Cancel is a local abandon (no server
  * cancel exists).
+ *
+ * Accessibility + copy (M5-F): the code is rendered at 34pt with 6pt letter
+ * spacing, which at large accessibility text sizes used to clip mid-code — and
+ * a clipped pairing code is unusable, not merely ugly. It is now capped and
+ * shrink-to-fit on a single line, exposed to screen readers digit-by-digit
+ * (so "482913" is never read as "four hundred eighty-two thousand..."), and
+ * backed by a copy control, because reading six digits back and forth to a
+ * browser is exactly the task that motor and vision impairments make hardest.
+ * The copy confirmation reflects the ACTUAL clipboard result (Rule 18) — a
+ * failed write says so rather than claiming success.
+ *
+ * Support correlation (M5-D): when the backend supplies a request id on a
+ * failure, the panel shows it as a quotable reference. It is displayed only
+ * when real, and never presented as an explanation of what went wrong.
  */
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
 import {
   useNavigation,
@@ -52,9 +67,27 @@ export default function ExtensionPairingPanel({ platformId }: Props): React.Reac
   const { colors } = useTheme();
   const navigation = useNavigation<ReviewNav>();
   const pairing = useExtensionPairing(platformId);
-  const { status, code, start, retry, cancel } = pairing;
+  const { status, code, supportReference, start, retry, cancel } = pairing;
   const { delta } = useRosterReviewDelta();
   const startedRef = useRef(false);
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
+
+  // A re-minted code invalidates any prior copy confirmation.
+  useEffect(() => {
+    setCopyState('idle');
+  }, [code]);
+
+  const copyCode = useCallback(async () => {
+    if (!code) return;
+    try {
+      await Clipboard.setStringAsync(code);
+      setCopyState('copied');
+    } catch {
+      // Never claim a copy that did not happen — the coach would paste stale
+      // clipboard contents into the extension and see an opaque rejection.
+      setCopyState('failed');
+    }
+  }, [code]);
 
   const openReview = useCallback(() => {
     track(AnalyticsEvents.IMPORT_REVIEW_OPENED, { platform: platformId });
@@ -74,7 +107,11 @@ export default function ExtensionPairingPanel({ platformId }: Props): React.Reac
   if (status === 'minting' || status === 'idle') {
     return (
       <View style={styles.card} accessibilityLiveRegion="polite" testID="pairing-minting">
-        <ActivityIndicator color={colors.primary} />
+        <ActivityIndicator
+          color={colors.primary}
+          accessibilityRole="progressbar"
+          accessibilityLabel="Preparing your secure pairing code"
+        />
         <Text style={styles.body}>Preparing your secure pairing code…</Text>
       </View>
     );
@@ -84,9 +121,43 @@ export default function ExtensionPairingPanel({ platformId }: Props): React.Reac
     return (
       <View style={styles.card} accessibilityLiveRegion="polite" testID="pairing-waiting">
         <Text style={styles.label}>Enter this code in the browser extension</Text>
-        <Text style={styles.code} accessibilityLabel={`Pairing code ${code?.split('').join(' ')}`} testID="pairing-code">
+        <Text
+          style={styles.code}
+          accessibilityRole="text"
+          // Digit-by-digit, so VoiceOver/TalkBack dictate a code the coach can
+          // transcribe instead of reading it as one large number.
+          accessibilityLabel={`Pairing code ${(code ?? '').split('').join(' ')}`}
+          // The code must never clip or wrap at large accessibility text sizes:
+          // cap the multiplier and shrink to fit rather than lose a digit.
+          maxFontSizeMultiplier={1.6}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          testID="pairing-code"
+        >
           {code}
         </Text>
+        <TouchableOpacity
+          style={styles.copyBtn}
+          onPress={copyCode}
+          accessibilityRole="button"
+          accessibilityLabel="Copy pairing code"
+          accessibilityHint="Copies the six digit code so you can paste it into the browser extension"
+          testID="pairing-copy"
+        >
+          <Ionicons name="copy-outline" size={16} color={colors.primary} />
+          <Text style={styles.linkText}>Copy code</Text>
+        </TouchableOpacity>
+        {copyState !== 'idle' ? (
+          <Text
+            style={styles.familyMuted}
+            accessibilityLiveRegion="polite"
+            testID="pairing-copy-status"
+          >
+            {copyState === 'copied'
+              ? 'Copied to clipboard.'
+              : 'Couldn’t copy — enter the code manually.'}
+          </Text>
+        ) : null}
         <Text style={styles.body}>
           Open the Growth Project extension on the page you just logged into and enter this
           code. It’s short-lived for your security, so enter it soon — we’ll let you know here
@@ -171,6 +242,15 @@ export default function ExtensionPairingPanel({ platformId }: Props): React.Reac
     <View style={[styles.card, styles.cardAttention]} accessibilityLiveRegion="polite" testID={`pairing-${status}`}>
       <Text style={styles.title}>{view.title}</Text>
       <Text style={styles.body}>{view.message}</Text>
+      {supportReference ? (
+        <Text
+          style={styles.familyMuted}
+          accessibilityLabel={`Support reference ${supportReference}`}
+          testID="pairing-support-reference"
+        >
+          Support reference: {supportReference}
+        </Text>
+      ) : null}
       {view.cta && (
         <TouchableOpacity
           style={styles.primaryBtn}
@@ -335,6 +415,16 @@ function makeStyles(colors: ThemeColors) {
       marginTop: 4,
     },
     primaryBtnText: { color: colors.textOnPrimary, fontSize: 16, fontWeight: '600' },
+    copyBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      alignSelf: 'flex-start',
+      gap: 6,
+      // 44pt minimum touch target (WCAG 2.5.5 / iOS HIG).
+      minHeight: 44,
+      minWidth: 44,
+      paddingRight: 8,
+    },
     secondaryBtn: { paddingVertical: 12, alignItems: 'center' },
     secondaryBtnText: { color: colors.textSecondary, fontSize: 15, fontWeight: '600' },
     reviewBlock: {

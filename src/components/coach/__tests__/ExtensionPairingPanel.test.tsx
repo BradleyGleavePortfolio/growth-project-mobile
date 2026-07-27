@@ -32,6 +32,7 @@ const mockCancel = jest.fn();
 let mockHookState: {
   status: string;
   code: string | null;
+  supportReference?: string | null;
 };
 jest.mock('../../../hooks/useExtensionPairing', () => ({
   useExtensionPairing: () => ({
@@ -81,7 +82,7 @@ beforeEach(() => {
   mockNavigate.mockClear();
   mockTrack.mockClear();
   mockDelta = 0;
-  mockHookState = { status: 'idle', code: null };
+  mockHookState = { status: 'idle', code: null, supportReference: null };
   mockReconstruct = { enabled: false, families: [], refresh: jest.fn() };
 });
 
