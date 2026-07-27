@@ -22,6 +22,9 @@ jest.mock('../../services/api', () => ({
 
 const post = jest.mocked(api.post);
 
+/** Rule 19 key the caller mints once per intent and replays on every retry. */
+const IDEM_KEY = 'b0a1c2d3-e4f5-4607-8899-aabbccddeeff';
+
 beforeEach(() => {
   post.mockReset();
 });
@@ -40,17 +43,19 @@ describe('extensionPairApi.init', () => {
   it('POSTs /extension/pair/init with the chosen_platform body and returns the response', async () => {
     post.mockResolvedValue({ data: { pairing_code: '123456', expires_at: '2026-07-14T12:05:00Z' } });
 
-    const res = await extensionPairApi.init('truecoach');
+    const res = await extensionPairApi.init('truecoach', IDEM_KEY);
 
     expect(post).toHaveBeenCalledTimes(1);
     expect(post.mock.calls[0][0]).toBe('/extension/pair/init');
     expect(post.mock.calls[0][1]).toEqual({ chosen_platform: 'truecoach' });
+    // R19: the key travels as a header, never in the body or the path.
+    expect(post.mock.calls[0][2]).toEqual({ headers: { 'Idempotency-Key': IDEM_KEY } });
     expect(res.data).toEqual({ pairing_code: '123456', expires_at: '2026-07-14T12:05:00Z' });
   });
 
   it('omits the /api prefix (baseURL already carries it) and sends no query string', async () => {
     post.mockResolvedValue({ data: { pairing_code: '000000', expires_at: 'x' } });
-    await extensionPairApi.init('custom');
+    await extensionPairApi.init('custom', IDEM_KEY);
     const path = post.mock.calls[0][0] as string;
     expect(path.startsWith('/api/')).toBe(false);
     expect(path).not.toContain('?');
@@ -58,41 +63,51 @@ describe('extensionPairApi.init', () => {
 
   it('propagates a 401 (auth) to the caller — never a fake mint', async () => {
     post.mockRejectedValue(axiosError(401));
-    await expect(extensionPairApi.init('everfit')).rejects.toBeInstanceOf(AxiosError);
+    await expect(extensionPairApi.init('everfit', IDEM_KEY)).rejects.toBeInstanceOf(AxiosError);
   });
 
   it('propagates a 404 (server kill-switch off) to the caller', async () => {
     post.mockRejectedValue(axiosError(404));
-    await expect(extensionPairApi.init('everfit')).rejects.toBeInstanceOf(AxiosError);
+    await expect(extensionPairApi.init('everfit', IDEM_KEY)).rejects.toBeInstanceOf(AxiosError);
   });
 
   it('propagates a 500 (transient server fault) to the caller', async () => {
     post.mockRejectedValue(axiosError(500));
-    await expect(extensionPairApi.init('truecoach')).rejects.toBeInstanceOf(AxiosError);
+    await expect(extensionPairApi.init('truecoach', IDEM_KEY)).rejects.toBeInstanceOf(AxiosError);
   });
 
   it('returns the server-authoritative expires_at untouched (no local clock math)', async () => {
     const expiresAt = '2026-07-14T12:05:00.000Z';
     post.mockResolvedValue({ data: { pairing_code: '246810', expires_at: expiresAt } });
-    const res = await extensionPairApi.init('everfit');
+    const res = await extensionPairApi.init('everfit', IDEM_KEY);
     expect(res.data.expires_at).toBe(expiresAt);
     expect(res.data.pairing_code).toBe('246810');
   });
 
   it('sends the exact chosen_platform slug for each distinct platform', async () => {
     post.mockResolvedValue({ data: { pairing_code: '000000', expires_at: 'x' } });
-    await extensionPairApi.init('everfit');
-    await extensionPairApi.init('trainerize');
+    await extensionPairApi.init('everfit', IDEM_KEY);
+    await extensionPairApi.init('trainerize', IDEM_KEY);
     expect(post.mock.calls[0][1]).toEqual({ chosen_platform: 'everfit' });
     expect(post.mock.calls[1][1]).toEqual({ chosen_platform: 'trainerize' });
     expect(post).toHaveBeenCalledTimes(2);
+  });
+
+  it('replays the caller\'s key verbatim so a retry cannot mint a second session', async () => {
+    post.mockRejectedValueOnce(axiosError(500));
+    post.mockResolvedValueOnce({ data: { pairing_code: '135791', expires_at: 'x' } });
+    await expect(extensionPairApi.init('everfit', IDEM_KEY)).rejects.toBeInstanceOf(AxiosError);
+    await extensionPairApi.init('everfit', IDEM_KEY);
+    expect(post.mock.calls[0][2]).toEqual(post.mock.calls[1][2]);
+    const path = post.mock.calls[0][0] as string;
+    expect(path).not.toContain(IDEM_KEY);
   });
 
   it('does not swallow a rejection into a resolved value', async () => {
     post.mockRejectedValue(axiosError(401));
     const onResolve = jest.fn();
     const onReject = jest.fn();
-    await extensionPairApi.init('truecoach').then(onResolve, onReject);
+    await extensionPairApi.init('truecoach', IDEM_KEY).then(onResolve, onReject);
     expect(onResolve).not.toHaveBeenCalled();
     expect(onReject).toHaveBeenCalledTimes(1);
   });

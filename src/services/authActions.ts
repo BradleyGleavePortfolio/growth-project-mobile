@@ -15,6 +15,7 @@ import { readUserCacheSync } from '../lib/userCache';
 import { clearAllStorage, prefsStorage, cacheStorage } from '../storage/mmkv';
 import { deleteWorkoutLogsForUser } from '../offline/sync/sync-engine';
 import { AUTOSAVE_MIRROR_KEY_PREFIX } from '../storage/autosaveMirror';
+import { IMPORT_PAIRING_MIRROR_KEY_PREFIX } from '../storage/importPairingMirror';
 import { useCoachStore } from '../store/coachStore';
 import { useClientStore } from '../store/clientStore';
 import { useFastingStore } from '../store/fastingStore';
@@ -69,6 +70,12 @@ const ASYNC_SIGN_OUT_PREFIXES = [
   // edits in raw AsyncStorage after sign-out (a local-persistence/privacy
   // gap). We sweep via the exported constant so the literal lives in one place.
   AUTOSAVE_MIRROR_KEY_PREFIX,
+  // Per-coach in-flight extension-import pairing session (M5-C, R15). Keyed as
+  // `import_pairing_session:<userId>` and holding a live 6-digit pairing code
+  // plus its idempotency key — a second coach on a shared device must never
+  // inherit it and be handed a session that pairs into someone else's account.
+  // Swept via the exported constant so the literal lives in one place.
+  IMPORT_PAIRING_MIRROR_KEY_PREFIX,
 ];
 
 // Per-user AsyncStorage key prefixes for nutrition/fasting state. R15 requires

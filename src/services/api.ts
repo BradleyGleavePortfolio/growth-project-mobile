@@ -74,6 +74,7 @@ import { env } from '../config/env';
 import { entitlementEvents } from '../entitlements/entitlementEvents';
 import { logger } from '../utils/logger';
 import { generateIdempotencyKey } from '../utils/idempotency';
+import { REQUEST_ID_HEADER, newRequestId } from '../utils/correlation';
 
 function isEntitlementEndpoint(url?: string): boolean {
   if (!url) return false;
@@ -103,6 +104,12 @@ api.interceptors.request.use(async (config) => {
   const token = await secureStorage.getItem('supabase_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+  // Support correlation (M5-D). An opaque per-request v4 UUID that carries no
+  // user, device, or payload data, so it is safe on every route including
+  // unauthenticated ones. A caller that set its own id keeps it.
+  if (!config.headers[REQUEST_ID_HEADER]) {
+    config.headers[REQUEST_ID_HEADER] = newRequestId();
   }
   return config;
 });

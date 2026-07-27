@@ -57,6 +57,10 @@ export const AnalyticsEvents = {
   IMPORT_PAIRING_EXPIRED: 'import_pairing_expired',
   IMPORT_PAIRING_FAILED: 'import_pairing_failed',
   IMPORT_PAIRING_CANCELLED: 'import_pairing_cancelled',
+  // Fires when a pairing session persisted before a process death is picked back
+  // up on relaunch (M5-C). Restoration is NOT a claim the session is still live —
+  // the server /status contract still decides. Payload is the platform slug only.
+  IMPORT_PAIRING_RESTORED: 'import_pairing_restored',
   // Review CTA (PR-M3). Fires when the coach opens the roster review from the
   // paired panel. Payload carries ONLY the platform slug — never client IDs,
   // counts, PII, billing, source-specific data, or coach identity.

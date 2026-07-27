@@ -28,12 +28,42 @@ jest.mock('../../analytics/posthog.service', () => ({
   track: (...a: unknown[]) => mockTrack(...a),
 }));
 
+// The durable mirror (M5-C) is user-scoped, so the hook needs a coach identity.
+// The real storage module runs against the AsyncStorage jest mock so that
+// persistence, restoration, and scoping are exercised end to end, not stubbed.
+let mockCurrentUserId: string | null = 'coach-1';
+jest.mock('../useCurrentUser', () => ({
+  useCurrentUser: () => (mockCurrentUserId ? { id: mockCurrentUserId, email: 'c@x.io' } : null),
+}));
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useExtensionPairing } from '../useExtensionPairing';
 import { extensionPairApi } from '../../api/extensionPairApi';
 import { AnalyticsEvents } from '../../analytics/events';
+import {
+  IMPORT_PAIRING_MIRROR_VERSION,
+  importPairingMirrorKey,
+  readImportPairingMirror,
+} from '../../storage/importPairingMirror';
 
 const mockInit = extensionPairApi.init as jest.Mock;
 const mockStatus = extensionPairApi.status as jest.Mock;
+
+/** Seed a session as if a previous process had minted it and then been killed. */
+async function seedMirror(userId: string, over: Record<string, unknown> = {}) {
+  await AsyncStorage.setItem(
+    importPairingMirrorKey(userId),
+    JSON.stringify({
+      version: IMPORT_PAIRING_MIRROR_VERSION,
+      userId,
+      platformId: 'truecoach',
+      code: '482913',
+      expiresAt: '2026-07-27T10:15:00.000Z',
+      idempotencyKey: 'seeded-key-0001',
+      ...over,
+    }),
+  );
+}
 
 function axiosError(status: number): AxiosError {
   return new AxiosError(`status ${status}`, 'ERR', undefined, undefined, {
@@ -52,7 +82,9 @@ function futureExpiry(ms = 5 * 60 * 1000): string {
 
 let appStateHandler: ((s: AppStateStatus) => void) | null = null;
 
-beforeEach(() => {
+beforeEach(async () => {
+  await AsyncStorage.clear();
+  mockCurrentUserId = 'coach-1';
   jest.useFakeTimers();
   mockInit.mockReset();
   mockStatus.mockReset();
@@ -110,7 +142,7 @@ describe('useExtensionPairing — mint', () => {
       result.current.start();
     });
 
-    expect(mockInit).toHaveBeenCalledWith('truecoach');
+    expect(mockInit).toHaveBeenCalledWith('truecoach', expect.any(String));
     expect(result.current.status).toBe('waiting');
     expect(result.current.code).toBe('482913');
     const names = mockTrack.mock.calls.map((c) => c[0]);
@@ -764,5 +796,273 @@ describe('useExtensionPairing — PII-free telemetry', () => {
     });
     const expired = mockTrack.mock.calls.find((c) => c[0] === AnalyticsEvents.IMPORT_PAIRING_EXPIRED);
     expect(expired?.[1]).toEqual({ platform: 'everfit' });
+  });
+});
+
+/**
+ * M5-C — durability across process death.
+ *
+ * The import flow deliberately sends the coach out of the app to a browser, so
+ * being killed mid-pairing is an ordinary event. Before M5-C the code lived only
+ * in useState: the coach came back to the intro screen while a live server-side
+ * session stayed open with no way to see or abandon it.
+ */
+describe('useExtensionPairing — durable pairing session (M5-C)', () => {
+  it('persists the minted session under the signed-in coach key', async () => {
+    mockInit.mockResolvedValue({
+      data: { pairing_code: '482913', expires_at: '2026-07-27T10:15:00.000Z' },
+    });
+    mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+
+    const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+    await act(async () => {
+      result.current.start();
+    });
+
+    const stored = await readImportPairingMirror('coach-1');
+    expect(stored).toEqual({
+      version: IMPORT_PAIRING_MIRROR_VERSION,
+      userId: 'coach-1',
+      platformId: 'truecoach',
+      code: '482913',
+      // Rule 16: the server's stamp is kept verbatim, never re-derived locally.
+      expiresAt: '2026-07-27T10:15:00.000Z',
+      idempotencyKey: mockInit.mock.calls[0][1],
+    });
+  });
+
+  it('writes nothing when no coach is signed in', async () => {
+    mockCurrentUserId = null;
+    mockInit.mockResolvedValue({ data: { pairing_code: '482913', expires_at: 'x' } });
+    mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+    const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+    await act(async () => {
+      result.current.start();
+    });
+    expect(result.current.status).toBe('waiting');
+    expect(await AsyncStorage.getAllKeys()).toEqual([]);
+  });
+
+  it('restores a killed session into waiting and polls immediately', async () => {
+    await seedMirror('coach-1');
+    mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+
+    const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(0);
+    });
+
+    expect(result.current.status).toBe('waiting');
+    expect(result.current.code).toBe('482913');
+    // Restoration is not a mint: no second server-side session is opened.
+    expect(mockInit).not.toHaveBeenCalled();
+    expect(mockStatus).toHaveBeenCalledWith('482913');
+    expect(mockTrack.mock.calls.map((c) => c[0])).toContain(
+      AnalyticsEvents.IMPORT_PAIRING_RESTORED,
+    );
+  });
+
+  it('restores a session whose stored expiry is long past — the server decides', async () => {
+    // Rule 16. A client-clock check here would silently strand a session the
+    // server may still consider live; instead we poll and let /status answer.
+    await seedMirror('coach-1', { expiresAt: '2001-01-01T00:00:00.000Z' });
+    mockStatus.mockResolvedValue({ data: { status: 'expired' } });
+
+    const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(0);
+    });
+
+    expect(mockStatus).toHaveBeenCalledWith('482913');
+    expect(result.current.status).toBe('expired');
+  });
+
+  it('never restores another coach\'s session', async () => {
+    await seedMirror('coach-2', { code: '999999' });
+    mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+    const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('idle');
+    expect(mockStatus).not.toHaveBeenCalled();
+  });
+
+  it.each<[string, Record<string, unknown>]>([
+    ['a drifted schema version', { version: IMPORT_PAIRING_MIRROR_VERSION + 1 }],
+    ['a cross-user payload', { userId: 'coach-2' }],
+    ['an empty code', { code: '' }],
+  ])('ignores %s and stays idle', async (_label, over) => {
+    await seedMirror('coach-1', over);
+    const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('idle');
+    expect(mockStatus).not.toHaveBeenCalled();
+  });
+
+  it('ignores an unparseable record and stays idle', async () => {
+    await AsyncStorage.setItem(importPairingMirrorKey('coach-1'), '{not json');
+    const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('idle');
+    expect(await AsyncStorage.getItem(importPairingMirrorKey('coach-1'))).toBeNull();
+  });
+
+  it('reads no storage at all when the kill switch is OFF', async () => {
+    await seedMirror('coach-1');
+    const { result } = await renderHook(() => useExtensionPairing('truecoach', false));
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('idle');
+    expect(mockStatus).not.toHaveBeenCalled();
+    // The record survives untouched: a flag-off build must not destroy state a
+    // flag-on build would need.
+    expect(await AsyncStorage.getItem(importPairingMirrorKey('coach-1'))).not.toBeNull();
+  });
+
+  it('defers a start() that raced hydration instead of dropping it', async () => {
+    // ExtensionPairingPanel calls start() from its own mount effect, which fires
+    // before the async mirror read resolves. Minting there would open a second
+    // server-side session on top of the one being restored.
+    mockInit.mockResolvedValue({ data: { pairing_code: '777777', expires_at: 'x' } });
+    mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+    const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+    await act(async () => {
+      result.current.start();
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(mockInit).toHaveBeenCalledTimes(1);
+    expect(result.current.code).toBe('777777');
+  });
+
+  it('cancel is a durable local abandon: the record is erased', async () => {
+    mockInit.mockResolvedValue({ data: { pairing_code: '482913', expires_at: 'x' } });
+    mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+    const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+    await act(async () => {
+      result.current.start();
+    });
+    expect(await readImportPairingMirror('coach-1')).not.toBeNull();
+
+    await act(async () => {
+      result.current.cancel();
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('cancelled');
+    expect(await readImportPairingMirror('coach-1')).toBeNull();
+  });
+
+  it.each<['paired' | 'expired', string]>([
+    ['paired', 'paired'],
+    ['expired', 'expired'],
+  ])('erases the record when the server reports %s', async (wire, expected) => {
+    mockInit.mockResolvedValue({ data: { pairing_code: '482913', expires_at: 'x' } });
+    mockStatus.mockResolvedValue({ data: { status: wire } });
+    const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+    await act(async () => {
+      result.current.start();
+    });
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(2000);
+    });
+    expect(result.current.status).toBe(expected);
+    expect(await readImportPairingMirror('coach-1')).toBeNull();
+  });
+
+  it('does not persist a mint that never produced a code', async () => {
+    mockInit.mockResolvedValue({ data: { expires_at: 'x' } });
+    const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+    await act(async () => {
+      result.current.start();
+    });
+    expect(result.current.status).toBe('failed');
+    expect(await readImportPairingMirror('coach-1')).toBeNull();
+  });
+
+  it('still shows the code when the durable write fails', async () => {
+    // Degraded durability must not become a dead flow.
+    const spy = jest
+      .spyOn(AsyncStorage, 'setItem')
+      .mockRejectedValueOnce(new Error('disk full'));
+    mockInit.mockResolvedValue({ data: { pairing_code: '482913', expires_at: 'x' } });
+    mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+    const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+    await act(async () => {
+      result.current.start();
+    });
+    expect(result.current.status).toBe('waiting');
+    expect(result.current.code).toBe('482913');
+    spy.mockRestore();
+  });
+});
+
+/**
+ * Rule 19 — one coach intent may never open two server-side sessions, however
+ * many times the response is lost.
+ */
+describe('useExtensionPairing — idempotency key (R19)', () => {
+  it('sends an Idempotency-Key with every mint', async () => {
+    mockInit.mockResolvedValue({ data: { pairing_code: '482913', expires_at: 'x' } });
+    mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+    const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+    await act(async () => {
+      result.current.start();
+    });
+    expect(mockInit.mock.calls[0][1]).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+    );
+  });
+
+  it('replays the SAME key when retrying after a transient network failure', async () => {
+    mockInit.mockRejectedValueOnce(new Error('connection reset'));
+    mockInit.mockResolvedValueOnce({ data: { pairing_code: '482913', expires_at: 'x' } });
+    mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+
+    const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+    await act(async () => {
+      result.current.start();
+    });
+    expect(result.current.status).toBe('failed');
+    await act(async () => {
+      result.current.retry();
+    });
+    expect(mockInit).toHaveBeenCalledTimes(2);
+    expect(mockInit.mock.calls[1][1]).toBe(mockInit.mock.calls[0][1]);
+  });
+
+  it('mints a FRESH key after a genuinely new intent (cancel, then start)', async () => {
+    mockInit.mockResolvedValue({ data: { pairing_code: '482913', expires_at: 'x' } });
+    mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+    const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+    await act(async () => {
+      result.current.start();
+    });
+    await act(async () => {
+      result.current.cancel();
+    });
+    await act(async () => {
+      result.current.start();
+    });
+    expect(mockInit).toHaveBeenCalledTimes(2);
+    expect(mockInit.mock.calls[1][1]).not.toBe(mockInit.mock.calls[0][1]);
+  });
+
+  it('replays the persisted key after a process death mid-intent', async () => {
+    // The kill happened between /pair/init and its reply; the retry must carry
+    // the original key so the backend can dedupe rather than mint a second code.
+    await seedMirror('coach-1', { idempotencyKey: 'survived-the-kill' });
+    mockStatus.mockResolvedValue({ data: { status: 'expired' } });
+    mockInit.mockResolvedValue({ data: { pairing_code: '555555', expires_at: 'x' } });
+
+    const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('expired');
   });
 });

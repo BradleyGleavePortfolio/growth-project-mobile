@@ -6,6 +6,10 @@ import {
   AUTOSAVE_MIRROR_KEY_PREFIX,
   autosaveMirrorKey,
 } from '../../storage/autosaveMirror';
+import {
+  IMPORT_PAIRING_MIRROR_KEY_PREFIX,
+  importPairingMirrorKey,
+} from '../../storage/importPairingMirror';
 
 jest.mock('../api', () => ({
   usersApi: { updatePushToken: jest.fn(async () => ({ data: {} })) },
@@ -164,6 +168,30 @@ describe('signOut', () => {
     expect(await AsyncStorage.getItem(seededKey)).toBeNull();
     expect(await AsyncStorage.getItem(autosaveMirrorKey('plan-2'))).toBeNull();
     expect(await AsyncStorage.getItem('mwb_autosave_mirrorx_unrelated')).toBe(
+      'keep',
+    );
+  });
+
+  // M5-C R15 — the extension-import pairing mirror holds a LIVE 6-digit pairing
+  // code plus its idempotency key, keyed `import_pairing_session:<userId>`. Left
+  // behind, the next coach on a shared device relaunches straight into someone
+  // else's pairing session and can pair the extension into the wrong account.
+  it('sweeps the extension-import pairing mirror (import_pairing_session:<userId>) on sign-out', async () => {
+    const seededKey = importPairingMirrorKey('userA');
+    expect(seededKey.startsWith(IMPORT_PAIRING_MIRROR_KEY_PREFIX)).toBe(true);
+    await AsyncStorage.setItem(seededKey, JSON.stringify({ code: '482913' }));
+    await AsyncStorage.setItem(
+      importPairingMirrorKey('userB'),
+      JSON.stringify({ code: '111111' }),
+    );
+    // Sentinel: the prefix ends in a colon, so a similarly-named key survives.
+    await AsyncStorage.setItem('import_pairing_sessionx_unrelated', 'keep');
+
+    await signOut();
+
+    expect(await AsyncStorage.getItem(seededKey)).toBeNull();
+    expect(await AsyncStorage.getItem(importPairingMirrorKey('userB'))).toBeNull();
+    expect(await AsyncStorage.getItem('import_pairing_sessionx_unrelated')).toBe(
       'keep',
     );
   });
