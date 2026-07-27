@@ -372,6 +372,20 @@ export const featureFlags = {
    * env: EXPO_PUBLIC_FF_EXTENSION_IMPORT
    */
   extensionImport: readFlag('EXPO_PUBLIC_FF_EXTENSION_IMPORT', false),
+  /**
+   * Reconstruction-review READ surface (GET /api/scout/reconstruct/entities).
+   * A SEPARATE kill switch from `extensionImport`, because the two gate
+   * different risks: `extensionImport` gates whether a coach can pair at all,
+   * while this gates a polling read against a backend contract that is still
+   * moving. Coupling them meant the only way to stop the read was to also stop
+   * every coach mid-pairing.
+   *
+   * Both must be ON for the review surface to fetch: turning this OFF leaves
+   * pairing fully working and mounts no reconstruct query or listener.
+   *
+   * env: EXPO_PUBLIC_FF_IMPORT_REVIEW
+   */
+  importReview: readFlag('EXPO_PUBLIC_FF_IMPORT_REVIEW', false),
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;
