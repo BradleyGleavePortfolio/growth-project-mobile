@@ -52,10 +52,55 @@ A React Native nutrition & fitness coaching app built with Expo, TypeScript, and
 ## Getting Started
 
 ```bash
-npm install
+npm ci                 # exact locked tree; npm install treats the lockfile as advisory
 cp .env.example .env   # fill in values (see below)
 npx expo start         # then press i / a / w for iOS / Android / web
 ```
+
+### Dependency hygiene
+
+Every package the bundle imports must be declared in `package.json`. A package
+that resolves only because npm hoisted it out of someone else's dependency tree
+is a build break waiting for an unrelated upgrade to move the hoist — and it
+moves with no diff to point at. Note that npm does not warn about this: while
+the package is still required by *something* in the tree, `npm ls` reports it
+healthily nested rather than as `extraneous`.
+
+`src/config/__tests__/declaredDependencies.test.ts` enforces this on every CI
+run. It parses the root entrypoints (`index.ts`, `App.tsx`) and every file under
+`src/` with the TypeScript compiler and checks that each bare specifier —
+static, multi-line, `import('…')` or `require('…')` — is declared, that nothing
+shipped at runtime is a `devDependencies`-only package, and that every
+`compilerOptions.types` entry has a matching `@types/*`. It also reads the
+`run:` steps of every workflow to confirm none of them re-resolves the graph
+with `npm install`: CI installs with `npm ci`, which fails loudly on
+manifest/lock drift instead of silently repairing it.
+
+An undeclared import that is genuinely safe (an optional native module behind a
+`try`/`catch` probe) goes in that suite's `OPTIONAL_UNDECLARED` set with the
+reason written down — that is a review decision, not a way to quiet the guard.
+
+#### Known version gaps
+
+Declaring a package pins the version we already resolve, which is not always the
+newest one. Two ranges are deliberately behind, and each needs its own audited
+PR under rule 14 rather than an in-place bump. Neither is suppressed in
+`.github/dependabot.yml`, so Dependabot will keep proposing them.
+
+- **`zod` is on 3.x; 4.x is current.** We are on the newest 3.x. Moving to 4.x
+  is an API migration for the two boundary-schema modules (`src/api/apiCall.ts`,
+  `src/types/importReview.ts`), and `@expo/cli` pins `zod@^3`, so a root bump
+  leaves a second copy nested under `expo` — the audit has to confirm which one
+  Metro bundles.
+- **`@types/node` is declared `^25.9.1`; 26.x is current, and CI runs Node
+  22.13.** Nothing in the tree pins the major. 21 other packages require
+  `@types/node` — the jest ecosystem, `@types/jsdom`, `@types/graceful-fs`,
+  `chrome-launcher`, `chromium-edge-launcher` — and every one of them asks for
+  `*`, so our root declaration alone decides the installed major. It should
+  track the Node major CI actually runs, which makes that review a *downgrade*
+  to 22.x, not a bump — until then `tsc` will accept Node APIs that are absent
+  at runtime. Changing it moves the resolved tree, so it is not bundled into a
+  declaration-only change.
 
 ### iOS / Android dev build
 
