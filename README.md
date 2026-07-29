@@ -92,12 +92,14 @@ PR under rule 14 rather than an in-place bump. Neither is suppressed in
   `src/types/importReview.ts`), and `@expo/cli` pins `zod@^3`, so a root bump
   leaves a second copy nested under `expo` — the audit has to confirm which one
   Metro bundles.
-- **`@types/node` is on 25.x; 26.x is current, and CI runs Node 22.13.** No
-  package constrains this: the only other requirement in the tree is a `*` from
-  `chrome-launcher`, so the installed major floats freely. It should track the
-  Node major CI actually runs, which means the review is a *downgrade* to 22.x,
-  not a bump — until then `tsc` will accept Node APIs that are absent at
-  runtime. Changing it moves the resolved tree, so it is not bundled into a
+- **`@types/node` is declared `^25.9.1`; 26.x is current, and CI runs Node
+  22.13.** Nothing in the tree pins the major. 21 other packages require
+  `@types/node` — the jest ecosystem, `@types/jsdom`, `@types/graceful-fs`,
+  `chrome-launcher`, `chromium-edge-launcher` — and every one of them asks for
+  `*`, so our root declaration alone decides the installed major. It should
+  track the Node major CI actually runs, which makes that review a *downgrade*
+  to 22.x, not a bump — until then `tsc` will accept Node APIs that are absent
+  at runtime. Changing it moves the resolved tree, so it is not bundled into a
   declaration-only change.
 
 ### iOS / Android dev build
