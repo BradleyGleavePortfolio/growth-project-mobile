@@ -27,6 +27,7 @@ Paste from `docs/QUIET_LUXURY_DOCTRINE.md` §8.
 
 ## Testing
 
+- [ ] `npm ci` — the committed lockfile installs (never `npm install`, which rewrites it)
 - [ ] `npm run typecheck` — clean
 - [ ] `npm test` — passing
 - [ ] `npm run lint` — no new errors

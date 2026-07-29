@@ -52,10 +52,29 @@ A React Native nutrition & fitness coaching app built with Expo, TypeScript, and
 ## Getting Started
 
 ```bash
-npm install
+npm ci                 # exact locked tree; npm install treats the lockfile as advisory
 cp .env.example .env   # fill in values (see below)
 npx expo start         # then press i / a / w for iOS / Android / web
 ```
+
+### Dependency hygiene
+
+Every package `src/` imports must be declared in `package.json`. A package that
+resolves only because npm hoisted it out of someone else's dependency tree is a
+build break waiting for an unrelated upgrade to move the hoist — and it moves
+with no diff to point at.
+
+`src/config/__tests__/declaredDependencies.test.ts` enforces this on every CI
+run. It parses every file under `src/` with the TypeScript compiler and checks
+that each bare specifier — static, multi-line, `import('…')` or `require('…')`
+— is declared, that nothing shipped at runtime is a `devDependencies`-only
+package, and that every `compilerOptions.types` entry has a matching
+`@types/*`. CI installs with `npm ci`, which fails loudly on manifest/lock
+drift instead of silently repairing it.
+
+An undeclared import that is genuinely safe (an optional native module behind a
+`try`/`catch` probe) goes in that suite's `OPTIONAL_UNDECLARED` set with the
+reason written down — that is a review decision, not a way to quiet the guard.
 
 ### iOS / Android dev build
 
