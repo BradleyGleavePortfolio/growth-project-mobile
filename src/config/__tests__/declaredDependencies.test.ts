@@ -3,11 +3,14 @@
  *
  * `zod` used to be imported by production modules (the Zod boundary schemas)
  * while appearing in NEITHER `dependencies` NOR `devDependencies`. It resolved
- * only because npm hoisted `expo -> @expo/cli -> zod` to the top level, and CI
- * ran `npm install`, under which the lockfile is advisory. `npm ls zod`
- * reported it as `extraneous`. The failure mode was invisible in CI and fatal
- * at runtime: if @expo/cli had widened to zod v4 or dropped the dependency,
- * the Metro bundle would have broken on device while every CI job stayed green.
+ * only because `@expo/cli` declares `zod@^3.25.76` and npm deduped that copy up
+ * to the top level, and CI ran `npm install`, under which the lockfile is
+ * advisory. Nothing flagged it: the package WAS required by something in the
+ * tree, so `npm ls zod` listed it healthily nested under `expo -> @expo/cli`
+ * and never as `extraneous`. The tree looked correct while our own manifest
+ * asked for nothing. The failure mode was invisible in CI and fatal at runtime:
+ * if @expo/cli had widened to zod v4 or dropped the dependency, the Metro
+ * bundle would have broken on device while every CI job stayed green.
  *
  * The same shape of bug applies to `@types/node`, which `tsconfig.json` names
  * in `compilerOptions.types` — `tsc --noEmit` cannot run without it — yet
@@ -15,8 +18,9 @@
  *
  * This suite pins those fixes and generalises them, so the NEXT undeclared
  * transitive import fails here instead of on a coach's phone:
- *   1. every bare module specifier imported anywhere under src/ is declared in
- *      package.json,
+ *   1. every bare module specifier imported by bundled source — the root
+ *      entrypoints (`index.ts`, `App.tsx`) and everything under src/ — is
+ *      declared in package.json,
  *   2. every package imported by non-test source is a production dependency,
  *      not a devDependency — this is what makes zod's declaration a *runtime*
  *      one rather than a build-time one,
@@ -24,8 +28,16 @@
  *      range, resolved to a published tarball, so `npm ci` installs it
  *      deliberately rather than as a hoisting side effect,
  *   4. every `compilerOptions.types` entry has a declared `@types/*` package,
- *   5. CI installs with `npm ci`, which hard-fails on lockfile/package.json
- *      drift, rather than `npm install`, which silently repairs it.
+ *   5. no workflow resolves dependencies afresh: CI installs with `npm ci`,
+ *      which hard-fails on lockfile/package.json drift, rather than
+ *      `npm install`, which silently repairs it.
+ *
+ * Both scans read the field they care about instead of the whole file, for the
+ * same reason. Module specifiers come from the TypeScript parser; install
+ * commands come from the value of each workflow's `run:` key. (`ci.yml`
+ * explains rule 5 in comments that name `npm install` directly above the step
+ * that runs `npm ci` — a scan of raw workflow text reports the repo's own
+ * documentation as a violation.)
  *
  * Specifiers are collected with the TypeScript parser rather than regexes.
  * The regex scanner this replaces missed three import forms that production
@@ -47,12 +59,14 @@ import * as ts from 'typescript';
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 const SRC_ROOT = path.join(REPO_ROOT, 'src');
+const WORKFLOW_DIR = path.join(REPO_ROOT, '.github', 'workflows');
 
 function readJson<T>(...segments: string[]): T {
   return JSON.parse(fs.readFileSync(path.join(REPO_ROOT, ...segments), 'utf8')) as T;
 }
 
 const pkg = readJson<{
+  main: string;
   dependencies: Record<string, string>;
   devDependencies: Record<string, string>;
 }>('package.json');
@@ -69,9 +83,14 @@ const lockRoot = lock.packages[''];
 
 const tsconfig = readJson<{ compilerOptions: { types: string[] } }>('tsconfig.json');
 
-const ci = fs.readFileSync(path.join(REPO_ROOT, '.github', 'workflows', 'ci.yml'), 'utf8');
-
 const NODE_BUILTINS = new Set(builtinModules);
+
+/**
+ * npm subcommands that re-resolve the dependency graph and rewrite
+ * package-lock.json. Any of these in CI defeats the point of committing a
+ * lockfile: the job stops testing the tree the repo actually pins.
+ */
+const LOCKFILE_REWRITING_SUBCOMMANDS = new Set(['install', 'i', 'add']);
 
 /**
  * Deliberate, documented exceptions — an undeclared import that is SAFE only
@@ -164,7 +183,21 @@ function walk(dir: string, acc: string[] = []): string[] {
   return acc;
 }
 
-const SOURCE_FILES = walk(SRC_ROOT);
+/**
+ * The repo-root `.ts`/`.tsx` files. `package.json` main is `index.ts`, which
+ * imports `App.tsx`, which is what pulls in everything under src/ — so a
+ * src/-only walk skipped the two modules the bundle actually starts from, and
+ * the packages they alone import (`expo`, `react-native-get-random-values`)
+ * were unguarded. Non-recursive: the root also holds node_modules and .expo.
+ */
+function rootEntrypoints(): string[] {
+  return fs
+    .readdirSync(REPO_ROOT, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && /\.tsx?$/.test(entry.name))
+    .map((entry) => path.join(REPO_ROOT, entry.name));
+}
+
+const SOURCE_FILES = [...rootEntrypoints(), ...walk(SRC_ROOT)];
 
 /** Test scaffolding may lean on devDependencies; shipped code may not. */
 function isTestFile(relativePath: string): boolean {
@@ -174,7 +207,7 @@ function isTestFile(relativePath: string): boolean {
   );
 }
 
-/** Map of package name -> the src files (repo-relative) that import it. */
+/** Map of package name -> the bundled source files (repo-relative) importing it. */
 function collectImports(files: string[]): Map<string, string[]> {
   const found = new Map<string, string[]>();
   for (const file of files) {
@@ -196,7 +229,62 @@ const DECLARED = new Set([
   ...Object.keys(pkg.devDependencies),
 ]);
 
-describe('the import scanner sees every form src/ actually uses', () => {
+/**
+ * The `run:` scripts in a workflow, inline or block-scalar (`run: |`).
+ *
+ * Only the value of the `run:` key is collected, never the surrounding file.
+ * That is what keeps documentation out of the result: ci.yml explains this very
+ * rule in comments that name `npm install` directly above the step that runs
+ * `npm ci`, so scanning the raw file reports the repo's own docs as a breach.
+ */
+function runScriptsIn(workflow: string): string[] {
+  const lines = workflow.split('\n');
+  const scripts: string[] = [];
+  for (let index = 0; index < lines.length; index += 1) {
+    const match = /^(\s*)(?:-\s+)?run:\s*(.*)$/.exec(lines[index]);
+    if (!match) continue;
+    const [, indent, head] = match;
+    if (!/^[|>]/.test(head.trim())) {
+      scripts.push(head);
+      continue;
+    }
+    // Block scalar: the script is every following line indented past the key.
+    const body: string[] = [];
+    while (index + 1 < lines.length) {
+      const next = lines[index + 1];
+      if (next.trim() !== '' && !next.slice(indent.length).startsWith(' ')) break;
+      body.push(next);
+      index += 1;
+    }
+    scripts.push(body.join('\n'));
+  }
+  return scripts;
+}
+
+/**
+ * The npm subcommands a shell script invokes, ignoring anything after a `#`.
+ * Only the subcommand is returned, never its flags: the property under test is
+ * *which* command runs, so `npm ci --prefer-offline` has to read the same as a
+ * bare `npm ci` rather than failing an equality check on the whole line.
+ */
+function npmSubcommandsIn(script: string): string[] {
+  return script
+    .split('\n')
+    .map((line) => line.replace(/#.*$/, ''))
+    .flatMap((line) => [...line.matchAll(/\bnpm\s+([a-z][a-z-]*)/g)].map((match) => match[1]));
+}
+
+const WORKFLOW_FILES = fs.readdirSync(WORKFLOW_DIR).filter((name) => /\.ya?ml$/.test(name));
+
+/** Map of workflow filename -> every npm subcommand any of its steps runs. */
+const WORKFLOW_NPM_SUBCOMMANDS = new Map<string, string[]>(
+  WORKFLOW_FILES.map((name) => [
+    name,
+    runScriptsIn(fs.readFileSync(path.join(WORKFLOW_DIR, name), 'utf8')).flatMap(npmSubcommandsIn),
+  ]),
+);
+
+describe('the import scanner sees every form the codebase actually uses', () => {
   const FIXTURE = [
     'import Animated, {',
     '  useSharedValue,',
@@ -249,10 +337,22 @@ describe('the import scanner sees every form src/ actually uses', () => {
   });
 });
 
-describe('every package imported under src/ is declared in package.json', () => {
+describe('every package imported by bundled source is declared in package.json', () => {
   it('finds source files to scan (the walker is not silently empty)', () => {
     expect(SOURCE_FILES.length).toBeGreaterThan(100);
     expect(IMPORTED.has('react')).toBe(true);
+  });
+
+  it('scans the root entrypoints the bundle starts from, not just src/', () => {
+    const scanned = SOURCE_FILES.map((file) => path.relative(REPO_ROOT, file));
+    // Reading main from the manifest means moving the entrypoint fails here
+    // rather than silently narrowing the scan back to src/.
+    expect(scanned).toContain(pkg.main);
+    expect(scanned).toContain('App.tsx');
+    // Imported by index.ts and by no file under src/, so a src/-only walk
+    // proved nothing about them.
+    expect(IMPORTED.get('react-native-get-random-values')).toContain('index.ts');
+    expect(IMPORTED.get('expo')).toContain('index.ts');
   });
 
   it('attributes the multi-line and dynamic import sites only a parser can see', () => {
@@ -331,11 +431,55 @@ describe('typecheck tooling types are declared', () => {
 });
 
 describe('CI installs deterministically', () => {
-  it('runs npm ci', () => {
-    expect(ci).toMatch(/^\s+run: npm ci$/m);
+  it('reads run: scripts inline and block-scalar, and no surrounding prose', () => {
+    const FIXTURE = [
+      'jobs:',
+      '  verify:',
+      '    steps:',
+      '      - name: Install deps',
+      '        # `npm ci`, not `npm install`: the lockfile is otherwise advisory',
+      '        run: npm ci --prefer-offline',
+      '      - name: Many things',
+      '        run: |',
+      '          npm run lint',
+      '',
+      '          npx tsc --noEmit',
+      '      - uses: actions/checkout@v6',
+    ].join('\n');
+    expect(runScriptsIn(FIXTURE)).toEqual([
+      'npm ci --prefer-offline',
+      ['          npm run lint', '', '          npx tsc --noEmit'].join('\n'),
+    ]);
   });
 
-  it('never falls back to a lockfile-repairing npm install', () => {
-    expect(ci).not.toMatch(/^\s+run: npm install\b/m);
+  it('reads npm subcommands past their flags and ignores commented-out prose', () => {
+    expect(npmSubcommandsIn('npm ci')).toEqual(['ci']);
+    expect(npmSubcommandsIn('npm ci --prefer-offline --no-audit')).toEqual(['ci']);
+    expect(npmSubcommandsIn('npm test --if-present -- --ci')).toEqual(['test']);
+    expect(npmSubcommandsIn('npm ci\nnpm run lint --if-present')).toEqual(['ci', 'run']);
+    expect(npmSubcommandsIn('npx tsc --noEmit')).toEqual([]);
+    // ci.yml documents this very rule in a comment that names `npm install`.
+    expect(npmSubcommandsIn('# `npm ci`, not `npm install`: the lockfile is advisory')).toEqual([]);
+  });
+
+  it('finds workflows to scan (the directory read is not silently empty)', () => {
+    expect(WORKFLOW_FILES).toContain('ci.yml');
+    expect(WORKFLOW_NPM_SUBCOMMANDS.get('ci.yml')).toContain('ci');
+  });
+
+  it('installs the committed lockfile with npm ci', () => {
+    const installing = [...WORKFLOW_NPM_SUBCOMMANDS.entries()]
+      .filter(([, subcommands]) => subcommands.includes('ci'))
+      .map(([name]) => name);
+    expect(installing).not.toEqual([]);
+  });
+
+  it('never resolves dependencies afresh in any workflow', () => {
+    const offenders = [...WORKFLOW_NPM_SUBCOMMANDS.entries()].flatMap(([name, subcommands]) =>
+      subcommands
+        .filter((subcommand) => LOCKFILE_REWRITING_SUBCOMMANDS.has(subcommand))
+        .map((subcommand) => `${name}: npm ${subcommand}`),
+    );
+    expect(offenders).toEqual([]);
   });
 });
