@@ -6,7 +6,7 @@
  *
  * Honesty (Rule 18): the only count is DISTINCT entities LOADED SO FAR — never a
  * total/percentage/ETA/completion. Fails closed (DISABLED, no network/listener)
- * when the kill switch is off or no coach id is known. User-scoped (Rule 15):
+ * when EITHER kill switch is off or no coach id is known. User-scoped (Rule 15):
  * coach id is in the query key, so a second coach never inherits cached pages.
  */
 import { useCallback, useEffect, useMemo, useRef } from 'react';
@@ -103,7 +103,11 @@ export interface ReconstructCounts {
 export function useReconstructCounts(): ReconstructCounts {
   const user = useCurrentUser();
   const coachId = user?.id ?? null;
-  const enabled = featureFlags.extensionImport && !!coachId;
+  // Two independent kill switches, both required: `extensionImport` gates the
+  // import feature as a whole, `importReview` gates only this read, so the read
+  // can be cut without stopping a coach mid-pairing.
+  const enabled =
+    featureFlags.extensionImport && featureFlags.importReview && !!coachId;
 
   // Fixed two-family fan-out — unconditional hooks (Rule 23), never a loop.
   const workouts = useFamilyReconstruct('workouts', coachId, enabled);

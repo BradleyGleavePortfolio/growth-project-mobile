@@ -1,7 +1,8 @@
 /**
  * useReconstructCounts — hook behaviour tests (v0.3 extension-import review,
  * PR-M4). Verifies the honest, page-local counting posture:
- *   - DISABLED (no fetch, no listener) when the kill switch is OFF.
+ *   - DISABLED (no fetch, no listener) when EITHER kill switch is OFF — the
+ *     master `extensionImport` switch or the independent `importReview` one.
  *   - DISABLED when no coach id is known yet (fails closed before auth).
  *   - ENABLED: fetches BOTH canonical families and reports distinct entities
  *     LOADED SO FAR (page-local), never a total.
@@ -23,7 +24,7 @@ import {
 import { renderHook, waitFor, act, cleanup } from '@testing-library/react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-const flags = { extensionImport: true };
+const flags = { extensionImport: true, importReview: true };
 jest.mock('../../config/featureFlags', () => ({
   get featureFlags() {
     return flags;
@@ -81,6 +82,7 @@ const foreground = (s: AppStateStatus = 'active') =>
 
 beforeEach(() => {
   flags.extensionImport = true;
+  flags.importReview = true;
   mockUser = { id: 'coach-1' };
   listEntities.mockReset();
   listEntities.mockResolvedValue(page('workouts', []));
@@ -98,10 +100,19 @@ afterEach(async () => {
 });
 
 describe('useReconstructCounts — disabled postures (no network)', () => {
-  it('does NOT fetch when the kill switch is OFF', async () => {
+  it('does NOT fetch when the master import kill switch is OFF', async () => {
     flags.extensionImport = false;
     const { Wrapper } = makeWrapper();
     const { result } = await renderHook(() => useReconstructCounts(), { wrapper: Wrapper });
+    expect(result.current.enabled).toBe(false);
+    expect(listEntities).not.toHaveBeenCalled();
+  });
+
+  it('does NOT fetch when the review kill switch alone is OFF', async () => {
+    flags.importReview = false;
+    const { Wrapper } = makeWrapper();
+    const { result } = await renderHook(() => useReconstructCounts(), { wrapper: Wrapper });
+    expect(flags.extensionImport).toBe(true);
     expect(result.current.enabled).toBe(false);
     expect(listEntities).not.toHaveBeenCalled();
   });
