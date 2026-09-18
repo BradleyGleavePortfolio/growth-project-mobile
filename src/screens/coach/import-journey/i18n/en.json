@@ -34,5 +34,88 @@
   },
   "accessibility": {
     "roman": "Roman"
+  },
+  "progress": {
+    "navigationTitle": "Import status",
+    "title": "Import in progress",
+    "finding": "Finding records",
+    "transferring": "Transferring records",
+    "checking": "Checking records in TGP",
+    "unknownTotal": "The full source total is not known yet.",
+    "receipts": {
+      "zero": "{count} record receipts confirmed",
+      "one": "{count} record receipt confirmed",
+      "other": "{count} record receipts confirmed"
+    },
+    "native": {
+      "zero": "{count} client records verified in TGP",
+      "one": "{count} client record verified in TGP",
+      "other": "{count} client records verified in TGP"
+    },
+    "lastUpdate": "Last update: {time}.",
+    "statusUnknown": "Current status unconfirmed",
+    "stale": "Updates are unavailable. The import's current status has not been confirmed.",
+    "return": "Return to coaching",
+    "stop": "Stop import",
+    "stopping": "Stop requested. Waiting for confirmation.",
+    "offlineStop": "This phone is offline. Stop the import from the extension on your computer.",
+    "details": "View transfer details"
+  },
+  "result": {
+    "navigationTitle": "Import result",
+    "complete": {
+      "title": "Your records are ready",
+      "roman": "I have checked the imported records in TGP. They are ready to use.",
+      "neutral": "The imported records have been checked in TGP and are ready to use."
+    },
+    "scope": "Checked scope: {scopeLabel}.",
+    "selectedClientRecords": "Selected client records",
+    "openClients": "Open clients in TGP",
+    "partial": {
+      "title": "Some records are ready",
+      "body": "Review the verified records and the items that still need attention."
+    },
+    "reviewVerified": "Review verified records",
+    "unconfirmed": {
+      "title": "Some records are unconfirmed",
+      "zero": "{count} unconfirmed client records",
+      "one": "{count} unconfirmed client record",
+      "other": "{count} unconfirmed client records",
+      "body": "These records may already have reached TGP. Their transfer has not been confirmed."
+    },
+    "coverageUnknown": "Source completeness has not been confirmed.",
+    "nativeUnknown": "Availability in TGP has not been confirmed.",
+    "blocked": {
+      "title": "Import needs attention"
+    },
+    "failed": {
+      "title": "Import did not complete",
+      "body": "Review the confirmed records and the items that could not be completed."
+    },
+    "interrupted": {
+      "title": "Import was interrupted",
+      "body": "The current result needs to be checked before another attempt."
+    },
+    "timeout": {
+      "title": "This import attempt reached its time limit",
+      "body": "Review the records that were confirmed before deciding what to do next."
+    },
+    "cancelled": {
+      "title": "Import stopped",
+      "body": "Records already written may remain in TGP. Review the confirmed result."
+    },
+    "checkStatus": "Check current result",
+    "recovery": "Review recovery steps",
+    "support": "Get help",
+    "close": "Return to coaching",
+    "zero": "No records were found in the checked scope.",
+    "transferOnly": "Transfer confirmed. Availability in TGP has not been confirmed.",
+    "reasonUnknown": "The import needs attention before it can continue.",
+    "unavailable": "The import result is unavailable right now. Check again when you are connected.",
+    "reasons": {
+      "denied": "Access was not granted. Allow access to the selected source to continue.",
+      "scopeUnknown": "The source account could not be confirmed. Check the selected tab before continuing.",
+      "changed": "The source account changed. This import cannot continue with a different account."
+    }
   }
 }
