@@ -29,6 +29,26 @@ it('keeps 12 receipts and 22 unconfirmed client records separate, with both unkn
   expect(v.getByRole('header')).toHaveTextContent('Some records are unconfirmed');
 });
 
+it.each([0, 22])('falls back neutrally for explicit zero unconfirmed clients (starting with %s)', async initialCount => {
+  const props = { ...result(), romanEnabled: false };
+  const v = await render(<ImportResultView {...props} unconfirmedClientRecords={initialCount} />);
+  if (initialCount === 22) {
+    expect(v.getByRole('header')).toHaveTextContent('Some records are unconfirmed');
+    expect(v.getByText(importQuantityCopy('unconfirmedClients', 22)!)).toBeTruthy();
+    await v.rerender(<ImportResultView {...props} unconfirmedClientRecords={0} />);
+  }
+  expect(v.getByRole('header')).toHaveTextContent('The import result is unavailable right now. Check the current result again.');
+  expect(v.queryByText(/Some records are unconfirmed|Their transfer has not been confirmed|record receipts? confirmed|unconfirmed client records/)).toBeNull();
+  expect(v.queryByText(/Your records are ready|Some records are ready|Transfer confirmed|No records were found/)).toBeNull();
+  expect(v.queryByRole('button', { name: /Open|Review verified|Retry|Start/ })).toBeNull();
+  expect(v.getByRole('button', { name: 'Check current result' })).toBeTruthy();
+  expect(v.getByText('Availability in TGP has not been confirmed.')).toBeTruthy();
+  await v.rerender(<ImportResultView {...props} unconfirmedClientRecords={undefined} />);
+  expect(v.getByRole('header')).toHaveTextContent('Some records are unconfirmed');
+  expect(v.queryByText(/unconfirmed client records/)).toBeNull();
+  expect(v.getByText(importQuantityCopy('receipts', 12)!)).toBeTruthy();
+});
+
 it('only emits Stop intent, then separately supplied pending/stale/offline observations', async () => {
   const props = progress(); const v = await render(<ImportProgressView {...props} />);
   await fireEvent.press(v.getByRole('button', { name: 'Stop import' }));
@@ -86,7 +106,7 @@ it('uses only approved reason keys, never a raw exception', async () => {
 it('does not relabel lost acknowledgments when result retrieval becomes unavailable', async () => {
   const props = result(); const v = await render(<ImportResultView {...props} />);
   await v.rerender(<ImportResultView {...props} outcome="unavailable" />);
-  expect(v.getByRole('header')).toHaveTextContent('The import result is unavailable right now. Check again when you are connected.');
+  expect(v.getByRole('header')).toHaveTextContent('The import result is unavailable right now. Check the current result again.');
   expect(v.queryByText(/12|22|failed|Import stopped/)).toBeNull();
   expect(v.getByText(importObservationCopy(observedAt)!)).toBeTruthy();
 });
@@ -116,7 +136,7 @@ it.each([undefined, -1, 0.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1])('omits
   expect(v.getByText('Availability in TGP has not been confirmed.')).toBeTruthy();
   const malformed = { ...props, outcome: 'complete', sourceCoverage: 'complete', requiredFamilies: 'verified', unconfirmedClientRecords: 0, native: { ...native, verifiedClientRecords: quantity }, openClientsAction: action() } as unknown as ImportResultViewProps;
   await v.rerender(<ImportResultView {...malformed} />);
-  expect(v.getByRole('header')).toHaveTextContent('The import result is unavailable right now. Check again when you are connected.');
+  expect(v.getByRole('header')).toHaveTextContent('The import result is unavailable right now. Check the current result again.');
   expect(v.queryByRole('button', { name: 'Open clients in TGP' })).toBeNull();
 });
 
@@ -129,7 +149,7 @@ it.each([
 ])('fails safely on contradictory proof %#', async patch => {
   const malformed = { ...result(), ...patch } as unknown as ImportResultViewProps;
   const v = await render(<ImportResultView {...malformed} />);
-  expect(v.getByRole('header')).toHaveTextContent('The import result is unavailable right now. Check again when you are connected.');
+  expect(v.getByRole('header')).toHaveTextContent('The import result is unavailable right now. Check the current result again.');
   expect(v.queryByText(/Your records are ready|Some records are ready|No records were found/)).toBeNull();
 });
 
@@ -140,6 +160,40 @@ it('requires both supported native action and callback; disabled/unavailable int
   expect(v.queryByRole('button', { name: 'Review recovery steps' })).toBeNull();
   await v.rerender(<ImportResultView {...props} outcome="verifiedSubset" native={native} reviewVerifiedAction={undefined} />);
   expect(v.queryByRole('button', { name: 'Review verified records' })).toBeNull();
+});
+
+it.each([
+  { outcome: 'verifiedSubset', native: { ...native, scope: undefined } },
+  { outcome: 'verifiedSubset', native: { ...native, scope: 'wholeAccount' } },
+  { outcome: 'verifiedSubset', native: { ...native, relationships: undefined } },
+  { outcome: 'verifiedSubset', native: { ...native, readback: undefined } },
+  { outcome: 'verifiedSubset', native, receiptCount: -1 },
+  { outcome: 'complete', native, sourceCoverage: 'complete', requiredFamilies: undefined, unconfirmedClientRecords: 0 },
+  { outcome: 'complete', native, sourceCoverage: 'complete', requiredFamilies: 'verified', receiptCount: NaN, unconfirmedClientRecords: 0 },
+  { outcome: 'provenZero', native, scope: 'selectedClientRecords', sourceCoverage: 'complete', checkedSourceRecords: 0, receiptCount: 0, unconfirmedClientRecords: 0 },
+  { outcome: 'unrecognized-runtime-outcome' },
+])('suppresses quantities and native actions for unsupported proof %#', async patch => {
+  const malformed = { ...result(), ...patch, openClientsAction: action(), reviewVerifiedAction: action() } as unknown as ImportResultViewProps;
+  const v = await render(<ImportResultView {...malformed} />);
+  expect(v.getByRole('header')).toHaveTextContent('The import result is unavailable right now. Check the current result again.');
+  expect(v.queryByText(/record receipts? confirmed|unconfirmed client records|client records verified|Checked scope:/)).toBeNull();
+  expect(v.queryByRole('button', { name: /Open clients|Review verified/ })).toBeNull();
+});
+
+it.each([undefined, 'not-a-function'])('omits enabled actions without a callable callback (%s)', async onPress => {
+  const malformedAction = { enabled: true, onPress } as unknown as ReturnType<typeof action>;
+  const v = await render(<ImportResultView {...result()} outcome="verifiedSubset" native={native} reviewVerifiedAction={malformedAction} checkResultAction={malformedAction} />);
+  expect(v.queryByRole('button', { name: /Review verified|Check current result/ })).toBeNull();
+  expect(v.getByRole('button', { name: 'Return to coaching' })).toBeTruthy();
+});
+
+it('treats an unknown current phase as unconfirmed, not running or stoppable', async () => {
+  const props = progress();
+  const v = await render(<ImportProgressView {...props} observation={{ freshness: 'current', phase: 'runtime-unknown' as 'finding' }} />);
+  expect(v.getByRole('header')).toHaveTextContent('Current status unconfirmed');
+  expect(v.queryByText(/Finding records|Transferring records|Checking records in TGP|runtime-unknown/)).toBeNull();
+  expect(v.queryByRole('button', { name: 'Stop import' })).toBeNull();
+  expect(v.getByRole('button', { name: 'Check current result' })).toBeTruthy();
 });
 
 it('removes Roman face and first-person completion speech when off', async () => {
@@ -156,5 +210,5 @@ it('separates transfer confirmation from native availability and rejects unresol
   expect(v.queryByRole('button', { name: /Open|Review verified/ })).toBeNull();
   const malformed = { ...props, outcome: 'transferOnly', unconfirmedClientRecords: 22 } as unknown as ImportResultViewProps;
   await v.rerender(<ImportResultView {...malformed} />);
-  expect(v.getByRole('header')).toHaveTextContent('The import result is unavailable right now. Check again when you are connected.');
+  expect(v.getByRole('header')).toHaveTextContent('The import result is unavailable right now. Check the current result again.');
 });

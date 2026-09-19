@@ -29,7 +29,15 @@ export function ImportProgressView(props: ImportProgressViewProps) {
   const current = props.observation.freshness === 'current' && phaseKey != null && props.stop !== 'offline';
   const time = importObservationCopy(props.observedAt);
   const receipts = importQuantityCopy('receipts', props.receiptCount, props.locale);
-  return <ImportStatusFrame title={t(current ? 'progress.title' : 'progress.statusUnknown')} navigationTitle={t('progress.navigationTitle')} romanEnabled={props.romanEnabled} onReturnToCoaching={props.onReturnToCoaching} focusOnMount={props.focusOnMount}>
+  const title = t(current ? 'progress.title' : 'progress.statusUnknown');
+  // One meaningful iOS message per change; stale phases, counts and times are
+  // intentionally excluded. Android retains the existing polite live regions.
+  const announcement = [
+    title,
+    current && phaseKey ? t(phaseKey) : t('progress.stale'),
+    props.stop === 'pending' ? t('progress.stopping') : props.stop === 'offline' ? t('progress.offlineStop') : null,
+  ].filter(Boolean).join('\n');
+  return <ImportStatusFrame title={title} announcement={announcement} navigationTitle={t('progress.navigationTitle')} romanEnabled={props.romanEnabled} onReturnToCoaching={props.onReturnToCoaching} focusOnMount={props.focusOnMount}>
     <View style={ui.actions}>
       {!current && <ImportStatusText announce>{t('progress.stale')}</ImportStatusText>}
       {phaseKey && <ImportStatusText announce={current}>{t(phaseKey)}</ImportStatusText>}

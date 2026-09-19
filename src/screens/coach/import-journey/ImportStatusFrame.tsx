@@ -1,5 +1,5 @@
-import React from 'react';
-import { I18nManager, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { AccessibilityInfo, I18nManager, Platform, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../../theme/useTheme';
 import { spacing, typography } from '../../../theme/tokens';
@@ -23,14 +23,26 @@ export function ImportStatusText({ children, secondary = false, announce = false
 }
 
 /** Separate P2 shell; P1 primitives and navigation remain untouched. */
-export function ImportStatusFrame({ title, navigationTitle, romanEnabled, onReturnToCoaching, focusOnMount = false, children }: {
+export function ImportStatusFrame({ title, announcement = title, navigationTitle, romanEnabled, onReturnToCoaching, focusOnMount = false, children }: {
   title: string; navigationTitle: string; romanEnabled: boolean; onReturnToCoaching: () => void;
+  /** Localized meaningful status only; never quantities or observation times. */
+  announcement?: string;
   focusOnMount?: boolean; children: React.ReactNode;
 }) {
   const { semanticColors: c } = useTheme();
   const insets = useSafeAreaInsets();
-  // Background status/phase/count updates announce text, never steal focus.
+  // Background changes never steal focus. Initial entry belongs to the focus
+  // primitive, so do not duplicate it with an imperative announcement.
   const headingRef = useImportHeadingFocus('status-presentation', focusOnMount);
+  const previousAnnouncement = useRef(announcement);
+  useEffect(() => {
+    const changed = previousAnnouncement.current !== announcement;
+    previousAnnouncement.current = announcement;
+    // Live regions handle Android; RN's queued announcement API handles iOS.
+    if (Platform.OS === 'ios' && changed) {
+      AccessibilityInfo.announceForAccessibilityWithOptions(announcement, { queue: true });
+    }
+  }, [announcement]);
   return <ScrollView style={{ flex: 1, backgroundColor: c.bgPrimary }} contentContainerStyle={styles.scroll} automaticallyAdjustContentInsets={false} contentInsetAdjustmentBehavior="never">
     <View style={[styles.content, {
       paddingTop: Math.max(insets.top, spacing.lg), paddingBottom: Math.max(insets.bottom, spacing.lg) + spacing.lg,

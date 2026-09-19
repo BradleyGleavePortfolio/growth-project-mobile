@@ -1,6 +1,6 @@
 import dictionary from '../i18n/en.json';
 // Preserve the original P1 dictionary contract independently of appended P2 groups.
-const en = { common: dictionary.common, offer: dictionary.offer, source: dictionary.source, handoff: dictionary.handoff, accessibility: dictionary.accessibility }; 
+const en = { common: dictionary.common, offer: dictionary.offer, source: dictionary.source, handoff: dictionary.handoff, accessibility: dictionary.accessibility };
 import { importJourneyCopy as t, importOfferQuestion, ImportJourneyCopyKey } from '../importJourneyCopy';
 import { brand, colors, darkTokens, lightTokens } from '../../../../theme/tokens';
 

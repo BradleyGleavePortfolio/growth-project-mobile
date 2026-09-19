@@ -30,7 +30,7 @@ it('changes only when a synthetic observation is explicitly supplied, never beca
   expect(v.queryByText('Stop requested. Waiting for confirmation.')).toBeNull();
   const expected = [
     ['stale', 'Current status unconfirmed'], ['pending', 'Import in progress'],
-    ['unconfirmed', 'Some records are unconfirmed'], ['unavailable', 'The import result is unavailable right now. Check again when you are connected.'],
+    ['unconfirmed', 'Some records are unconfirmed'], ['unavailable', 'The import result is unavailable right now. Check the current result again.'],
     ['subset', 'Some records are ready'], ['zero', 'No records were found in the checked scope.'], ['unreadable', 'Import needs attention'],
   ];
   for (const [fixture, title] of expected) {

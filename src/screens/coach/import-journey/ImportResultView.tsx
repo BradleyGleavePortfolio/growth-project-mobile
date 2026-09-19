@@ -46,7 +46,9 @@ export function ImportResultView(props: ImportResultViewProps) {
   const zero = props.outcome === 'provenZero' && props.scope === 'selectedClientRecords' && props.sourceCoverage === 'complete' && props.checkedSourceRecords === 0 && props.receiptCount === 0 && props.unconfirmedClientRecords === 0 && !('native' in props);
   const validTransfer = props.outcome === 'transferOnly' && isImportQuantity(props.receiptCount) && props.receiptCount > 0 && props.unconfirmedClientRecords === 0 && safeOptionalCounts;
   const invalidProof = (props.outcome === 'complete' && !complete) || (props.outcome === 'verifiedSubset' && !subset) || (props.outcome === 'provenZero' && !zero) || (props.outcome === 'transferOnly' && !validTransfer);
-  const unavailable = props.outcome === 'unavailable' || invalidProof;
+  // An explicit zero contradicts this branch's positive-unconfirmed claim.
+  // Do not turn it into transfer, native-readiness or proven-zero authority.
+  const unavailable = props.outcome === 'unavailable' || invalidProof || (props.outcome === 'unconfirmed' && props.unconfirmedClientRecords === 0);
   const native = (complete || subset) && 'native' in props ? props.native : null;
   let title: string;
   let body: string | null = null;

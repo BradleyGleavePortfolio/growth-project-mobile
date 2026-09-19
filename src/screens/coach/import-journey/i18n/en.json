@@ -111,7 +111,7 @@
     "zero": "No records were found in the checked scope.",
     "transferOnly": "Transfer confirmed. Availability in TGP has not been confirmed.",
     "reasonUnknown": "The import needs attention before it can continue.",
-    "unavailable": "The import result is unavailable right now. Check again when you are connected.",
+    "unavailable": "The import result is unavailable right now. Check the current result again.",
     "reasons": {
       "denied": "Access was not granted. Allow access to the selected source to continue.",
       "scopeUnknown": "The source account could not be confirmed. Check the selected tab before continuing.",
