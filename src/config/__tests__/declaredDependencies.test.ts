@@ -159,13 +159,87 @@ const INSTALLS_THE_COMMITTED_LOCKFILE = new Set(['ci', 'install-ci-test']);
  * because its absence is handled. Adding an entry here is a review decision,
  * not a way to silence the guard.
  *
- * `react-native-mmkv` is require()'d inside a try/catch in storage/mmkv.ts as
- * an optional native-module probe. It is absent from package.json today, so
- * the probe always throws and every build takes the AsyncStorage fallback.
- * Declaring it would change which native modules the app links, so that is a
- * separate decision and is NOT bundled into this dependency-hygiene fix.
+ * `react-native-mmkv` is require()'d in storage/mmkv.ts as an optional
+ * native-module probe. It is absent from package.json today, so every build
+ * takes the AsyncStorage fallback. Declaring it would change which native
+ * modules the app links, so that is a separate decision and is NOT bundled
+ * into this dependency-hygiene fix.
+ *
+ * A try/catch alone does NOT keep that absence out of the release bundle.
+ * Metro resolves every specifier statically at bundle time; the Expo config
+ * enables `transformer.allowOptionalDependencies`, under which Metro tolerates
+ * an unresolvable specifier only while EVERY `require()` of it is a plain
+ * statement directly inside a `try { }` block (Metro's `isOptionalDependency`
+ * walks statement -> block -> TryStatement). If any occurrence of the same
+ * specifier in a module is unguarded, Metro's dependency registry demotes the
+ * whole dependency to required and `expo export` fails with "Unable to resolve
+ * module react-native-mmkv". That is exactly what a second, unguarded require
+ * inside the MmkvStorage constructor did on main `a5933fd6`. The
+ * `optional undeclared packages` suite below pins the guarded shape so the
+ * next unguarded occurrence fails here rather than in a release export.
  */
 const OPTIONAL_UNDECLARED = new Set(['react-native-mmkv']);
+
+type OptionalRequireSite = { file: string; line: number; guarded: boolean };
+
+/**
+ * Metro's optional-dependency condition, applied with the TypeScript parser:
+ * the `require('pkg')` call must be inside a statement whose own parent is the
+ * `tryBlock` of a TryStatement. Anything else that names the package — a
+ * static `import`, a re-export, a dynamic `import()`, or a `require()` inside a
+ * nested block within the try (an `if { }` body, say) — is unguarded.
+ *
+ * Mirrors `isOptionalDependency` in @expo/metro-config's collect-dependencies:
+ * walk up from the call counting statements; on reaching a block, the
+ * dependency is optional only if that block is the `block` of a TryStatement.
+ */
+function optionalRequireSitesIn(source: string, fileName: string, pkgName: string): OptionalRequireSite[] {
+  const parsed = ts.createSourceFile(
+    fileName,
+    source,
+    ts.ScriptTarget.Latest,
+    /* setParentNodes */ true,
+    fileName.endsWith('.ts') ? ts.ScriptKind.TS : ts.ScriptKind.TSX,
+  );
+  const sites: OptionalRequireSite[] = [];
+  const lineOf = (node: ts.Node) => parsed.getLineAndCharacterOfPosition(node.getStart(parsed)).line + 1;
+  const names = (spec: ts.Node | undefined) =>
+    spec !== undefined && ts.isStringLiteralLike(spec) && packageNameOf(spec.text) === pkgName;
+  function isDirectlyInTryBlock(call: ts.CallExpression): boolean {
+    let statements = 0;
+    let p: ts.Node | undefined = call;
+    while (p && statements < 3) {
+      if (ts.isBlock(p)) {
+        return p.parent !== undefined && ts.isTryStatement(p.parent) && p.parent.tryBlock === p;
+      }
+      if (ts.isStatement(p)) statements += 1;
+      p = p.parent;
+    }
+    return false;
+  }
+  function visit(node: ts.Node): void {
+    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
+      if (names(node.moduleSpecifier)) sites.push({ file: fileName, line: lineOf(node), guarded: false });
+    } else if (
+      ts.isImportEqualsDeclaration(node) &&
+      ts.isExternalModuleReference(node.moduleReference)
+    ) {
+      if (names(node.moduleReference.expression)) {
+        sites.push({ file: fileName, line: lineOf(node), guarded: false });
+      }
+    } else if (ts.isCallExpression(node) && node.arguments.length > 0 && names(node.arguments[0])) {
+      const isRequire = ts.isIdentifier(node.expression) && node.expression.text === 'require';
+      sites.push({
+        file: fileName,
+        line: lineOf(node),
+        guarded: isRequire && isDirectlyInTryBlock(node),
+      });
+    }
+    ts.forEachChild(node, visit);
+  }
+  visit(parsed);
+  return sites;
+}
 
 /**
  * Real [package, importing file] pairs that the regex scanner this suite
@@ -560,6 +634,97 @@ describe('every package imported by bundled source is declared in package.json',
       return shipped ? [`${name} (imported by ${shipped})`] : [];
     });
     expect(devOnlyAtRuntime).toEqual([]);
+  });
+});
+
+describe('optional undeclared packages are required in the shape Metro treats as optional', () => {
+  const PKG = 'react-native-mmkv';
+
+  it('recognises only a require that is a plain statement directly inside a try block', () => {
+    const FIXTURE = [
+      'function probe() {',
+      '  let mod;',
+      '  try {',
+      "    mod = require('react-native-mmkv');", // guarded (statement -> block -> try)
+      '  } catch {',
+      '    return null;',
+      '  }',
+      '  return mod;',
+      '}',
+      'function alsoGuarded() {',
+      '  try {',
+      "    const { MMKV } = require('react-native-mmkv');", // guarded (declaration -> block -> try)
+      '    return MMKV;',
+      '  } catch {',
+      '    return undefined;',
+      '  }',
+      '}',
+      'function unguardedCtor() {',
+      "  const { MMKV } = require('react-native-mmkv');", // the main a5933fd6 defect shape
+      '  return MMKV;',
+      '}',
+      'function nestedInTry(flag) {',
+      '  try {',
+      "    if (flag) { require('react-native-mmkv'); }", // inside a nested block: not optional for Metro
+      '  } catch {',
+      '    return;',
+      '  }',
+      '}',
+      "const notThisPackage = require('react-native-mmkv-lookalike');",
+      'export { probe, alsoGuarded, unguardedCtor, nestedInTry, notThisPackage };',
+    ].join('\n');
+    expect(optionalRequireSitesIn(FIXTURE, 'fixture.ts', PKG)).toEqual([
+      { file: 'fixture.ts', line: 4, guarded: true },
+      { file: 'fixture.ts', line: 12, guarded: true },
+      { file: 'fixture.ts', line: 19, guarded: false },
+      { file: 'fixture.ts', line: 24, guarded: false },
+    ]);
+  });
+
+  it('treats static imports, re-exports and dynamic import() of the package as unguarded', () => {
+    const FIXTURE = [
+      "import { MMKV } from 'react-native-mmkv';",
+      "export { MMKV as Store } from 'react-native-mmkv';",
+      "export const lazy = () => import('react-native-mmkv');",
+      'export { MMKV };',
+    ].join('\n');
+    expect(optionalRequireSitesIn(FIXTURE, 'fixture.ts', PKG).map((site) => site.guarded)).toEqual([
+      false,
+      false,
+      false,
+    ]);
+  });
+
+  it('is required by shipped source (the exception is not vacuous)', () => {
+    const sites = SOURCE_FILES.filter((file) => !isTestFile(path.relative(REPO_ROOT, file))).flatMap(
+      (file) => optionalRequireSitesIn(fs.readFileSync(file, 'utf8'), path.relative(REPO_ROOT, file), PKG),
+    );
+    expect(sites.length).toBeGreaterThan(0);
+    expect(sites.map((site) => site.file)).toContain(path.join('src', 'storage', 'mmkv.ts'));
+  });
+
+  it('has no unguarded occurrence in shipped source, so the release bundle can resolve without it', () => {
+    const unguarded = SOURCE_FILES.filter((file) => !isTestFile(path.relative(REPO_ROOT, file)))
+      .flatMap((file) =>
+        optionalRequireSitesIn(fs.readFileSync(file, 'utf8'), path.relative(REPO_ROOT, file), PKG),
+      )
+      .filter((site) => !site.guarded)
+      .map((site) => `${site.file}:${site.line}`);
+    expect(unguarded).toEqual([]);
+  });
+
+  it('is required from exactly one site, so a stray second require cannot demote it again', () => {
+    const sites = SOURCE_FILES.filter((file) => !isTestFile(path.relative(REPO_ROOT, file))).flatMap(
+      (file) => optionalRequireSitesIn(fs.readFileSync(file, 'utf8'), path.relative(REPO_ROOT, file), PKG),
+    );
+    expect(sites).toHaveLength(1);
+  });
+
+  it('is still absent from package.json and the lockfile (no native activation)', () => {
+    expect(DECLARED.has(PKG)).toBe(false);
+    expect(lock.packages[`node_modules/${PKG}`]).toBeUndefined();
+    expect(lockRoot.dependencies?.[PKG]).toBeUndefined();
+    expect(lockRoot.devDependencies?.[PKG]).toBeUndefined();
   });
 });
 
