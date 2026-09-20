@@ -25,17 +25,74 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
 
-// ─── Runtime detection ──────────────────────────────────────────────────────
+// ─── Optional native module (bundle-safe) ───────────────────────────────────
+//
+// `react-native-mmkv` is deliberately NOT declared in package.json (see
+// OPTIONAL_UNDECLARED in src/config/__tests__/declaredDependencies.test.ts),
+// so in every current build it is absent and the AsyncStorage shim below is
+// the real persistence layer.
+//
+// A try/catch alone does NOT make that absence safe for Metro. Metro resolves
+// statically at bundle time; the Expo config enables
+// `transformer.allowOptionalDependencies`, under which an unresolvable
+// specifier is tolerated ONLY while every `require()` of it in this module
+// sits directly inside a `try { }` block. One unguarded require of the same
+// specifier anywhere in the file demotes the whole dependency to required and
+// `expo export` fails with "Unable to resolve module react-native-mmkv" — the
+// exact failure a second, unguarded require inside the MmkvStorage
+// constructor used to cause. The module is therefore required exactly once,
+// here, and the result is handed to MmkvStorage. For an unresolved optional
+// dependency Metro emits a null module id and `require` throws at runtime,
+// which the catch turns into the fallback. The guard test pins this shape.
+//
+// Availability is decided by the loaded module's shape, not by "require did
+// not throw": a resolved-but-empty module (e.g. a Metro `empty` stub) carries
+// no `MMKV` constructor and must be reported as unavailable, otherwise
+// `new MMKV(...)` would crash at startup.
 
-function isMmkvAvailable(): boolean {
-  if (Platform.OS === 'web') return false;
-  if (process.env.NODE_ENV === 'test') return false;
+interface MmkvInstance {
+  getString(key: string): string | undefined;
+  set(key: string, value: string | number): void;
+  delete(key: string): void;
+  getAllKeys(): string[];
+}
+
+interface MmkvModule {
+  MMKV: new (config: { id: string; encryptionKey?: string }) => MmkvInstance;
+}
+
+/**
+ * Truthful capability check on whatever `require('react-native-mmkv')`
+ * returned. Only a module exposing an `MMKV` constructor counts as available.
+ */
+export function asMmkvModule(candidate: unknown): MmkvModule | null {
+  if (candidate === null || candidate === undefined) return null;
+  if (typeof candidate !== 'object' && typeof candidate !== 'function') return null;
+  const ctor = (candidate as { MMKV?: unknown }).MMKV;
+  return typeof ctor === 'function' ? (candidate as MmkvModule) : null;
+}
+
+function loadOptionalMmkv(): MmkvModule | null {
+  if (Platform.OS === 'web') return null;
+  if (process.env.NODE_ENV === 'test') return null;
+  let candidate: unknown;
   try {
-    require('react-native-mmkv');
-    return true;
+    // The ONLY require of this specifier in the app. Keep it as a plain
+    // statement directly inside this try block (Metro's optional condition).
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    candidate = require('react-native-mmkv');
   } catch {
-    return false;
+    return null;
   }
+  return asMmkvModule(candidate);
+}
+
+/** Resolved once at module load; null means the AsyncStorage shim is in use. */
+const optionalMmkv: MmkvModule | null = loadOptionalMmkv();
+
+/** True only when a real `MMKV` constructor was loaded — never inferred. */
+export function isMmkvAvailable(): boolean {
+  return optionalMmkv !== null;
 }
 
 // ─── AsyncStorage shim ──────────────────────────────────────────────────────
@@ -93,14 +150,14 @@ class AsyncStorageShim {
 // ─── MMKV wrapper ────────────────────────────────────────────────────────────
 
 class MmkvStorage {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private store: any;
+  private store: MmkvInstance;
   private namespace: string;
 
-  constructor(namespace: string, encrypted = false) {
+  constructor(mmkv: MmkvModule, namespace: string, encrypted = false) {
     this.namespace = namespace;
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { MMKV } = require('react-native-mmkv');
+    // No second require here: it would demote the optional dependency to a
+    // required one and break the release bundle (see loadOptionalMmkv).
+    const { MMKV } = mmkv;
     this.store = new MMKV({
       id: namespace,
       encryptionKey: encrypted ? `tgp-mmkv-enc-${namespace}` : undefined,
@@ -159,8 +216,8 @@ export interface StorageInstance {
 }
 
 function makeStorage(namespace: string, encrypted = false): StorageInstance {
-  if (isMmkvAvailable()) {
-    return new MmkvStorage(namespace, encrypted);
+  if (optionalMmkv) {
+    return new MmkvStorage(optionalMmkv, namespace, encrypted);
   }
   return new AsyncStorageShim(namespace);
 }
