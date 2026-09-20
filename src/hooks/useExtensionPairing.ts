@@ -167,6 +167,13 @@ export function useExtensionPairing(
    * than relying on that structure.
    */
   const ownerRef = useRef<string | null>(null);
+  /**
+   * Monotonic id of the latest /pair/init attempt. Every settle path of an
+   * attempt (success, catch, finally) acts only if it is still the CURRENT
+   * attempt; owner equality alone is not enough (cancel→retry by the same
+   * coach, or A→B→A, yields the same owner with a newer attempt outstanding).
+   */
+  const mintEpochRef = useRef(0);
 
   const clearTimers = useCallback(() => {
     if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
@@ -186,6 +193,10 @@ export function useExtensionPairing(
       // session can poll; a still-outstanding poll from the old session is
       // discarded by its code check (below) and cannot re-stomp the guard.
       pollInFlightRef.current = false;
+      // Likewise a mint still outstanding no longer counts as an in-flight
+      // intent: its attempt id is stale and every one of its settle paths
+      // discards itself, so the next start() must not be blocked by it.
+      mintInFlightRef.current = false;
       codeRef.current = null;
       // No status reached here still owns a code, so the durable mirror is stale
       // by definition — including 'minting', where a fresh mint supersedes it.
@@ -295,21 +306,23 @@ export function useExtensionPairing(
     // The mint belongs to the coach signed in NOW; a response that lands after
     // the identity changed is discarded, never mirrored under the new coach.
     const owner = userIdRef.current;
+    const attempt = ++mintEpochRef.current;
+    // True once this attempt has been superseded: unmounted, cancelled/ended
+    // (status left 'minting'), a newer attempt started (cancel→retry, A→B→A),
+    // or the identity changed before the retire effect ran. Read fresh each
+    // time — TS narrowed statusRef from the guard above, hence the cast.
+    const stale = () =>
+      !mountedRef.current ||
+      (statusRef.current as PairingStatus) !== 'minting' ||
+      mintEpochRef.current !== attempt ||
+      userIdRef.current !== owner;
+    go('minting'); // also releases any superseded attempt's in-flight flag
     mintInFlightRef.current = true;
-    go('minting');
     track(AnalyticsEvents.IMPORT_PAIRING_STARTED, { platform: slug });
     try {
       const res = await extensionPairApi.init(slug, key);
-      // `go('minting')` set the ref, but TS narrowed it from the guard above; read fresh.
-      // cancelled/unmounted/identity-changed mid-mint → discard this late result
-      // (no HTTP abort).
-      if (
-        !mountedRef.current ||
-        (statusRef.current as PairingStatus) !== 'minting' ||
-        userIdRef.current !== owner
-      ) {
-        return;
-      }
+      // Late result of a superseded attempt → discard (no HTTP abort).
+      if (stale()) return;
       const code = res.data?.pairing_code ?? null;
       if (!code) {
         go('failed');
@@ -335,11 +348,14 @@ export function useExtensionPairing(
         } catch (err) {
           logger.warn('[useExtensionPairing] mirror write failed', err);
         }
-        if (
-          !mountedRef.current ||
-          (statusRef.current as PairingStatus) !== 'minting' ||
-          userIdRef.current !== owner
-        ) {
+        if (stale()) {
+          // The write above may have landed AFTER the coach signed out — i.e.
+          // after signOut() swept `import_pairing_session:<owner>` — leaving a
+          // live code on disk for a coach who is gone. Remove what we wrote.
+          // Bounded residual: a process death between the write and this clear
+          // leaves a user-scoped, payload-checked, server-expiring record that
+          // only that same coach could ever read back.
+          if (userIdRef.current !== owner) void clearImportPairingMirror(uid);
           return;
         }
       }
@@ -351,8 +367,9 @@ export function useExtensionPairing(
       track(AnalyticsEvents.IMPORT_PAIRING_CODE_READY, { platform: slug });
       pollTimerRef.current = setTimeout(doPoll, POLL_BASE_MS);
     } catch (err) {
-      // cancelled/unmounted mid-mint → discard this late result (no HTTP abort).
-      if (!mountedRef.current || (statusRef.current as PairingStatus) !== 'minting') return;
+      // Rejection of a superseded attempt → discard; in particular an old
+      // owner's 401 must never end (or clear the mirror of) a newer session.
+      if (stale()) return;
       const s = axiosStatus(err);
       const ref = extractRequestId(err);
       if (s === 401 || s === 403) {
@@ -366,7 +383,9 @@ export function useExtensionPairing(
         emitFailed('network');
       }
     } finally {
-      mintInFlightRef.current = false;
+      // Release only if this attempt still holds the guard; a superseded
+      // attempt must not free a guard a newer attempt now holds.
+      if (mintEpochRef.current === attempt) mintInFlightRef.current = false;
     }
   }, [enabled, go, doPoll, emitFailed]);
 

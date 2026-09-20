@@ -1230,6 +1230,146 @@ describe('useExtensionPairing — session ownership across identity changes', ()
     expect((await readImportPairingMirror('coach-2'))?.code).toBe('222222');
     expect(await readImportPairingMirror('coach-1')).toBeNull();
   });
+
+  it('A’s /pair/init rejecting 401 while B’s mint is pending neither ends B’s session nor releases B’s guard', async () => {
+    let rejectInitA: (e: unknown) => void = () => {};
+    let resolveInitB: (v: unknown) => void = () => {};
+    mockInit
+      .mockImplementationOnce(() => new Promise((_r, reject) => { rejectInitA = reject; }))
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveInitB = resolve; }));
+    mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+    const removeSpy = jest.spyOn(AsyncStorage, 'removeItem');
+
+    const { result, rerender } = await renderHook(() => useExtensionPairing('truecoach', true));
+    await act(async () => {
+      result.current.start();
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('minting');
+
+    // B signs in on the same mount; B's record was minted for another platform,
+    // so it is dropped and a fresh mint for B is issued and stays pending.
+    await seedMirror('coach-2', { code: '999999', idempotencyKey: 'b-old', platformId: 'trainerize' });
+    mockCurrentUserId = 'coach-2';
+    await act(async () => {
+      rerender({});
+    });
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(mockInit).toHaveBeenCalledTimes(2);
+    expect(result.current.status).toBe('minting');
+    const removesBefore = removeSpy.mock.calls.length;
+
+    // A's stale attempt rejects with 401: B must stay minting, no authExpired,
+    // no mirror clear for B, and B's single-flight guard must remain held.
+    await act(async () => {
+      rejectInitA(axiosError(401));
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('minting');
+    expect(removeSpy.mock.calls.length).toBe(removesBefore);
+    await act(async () => {
+      result.current.start(); // would be a third mint if the stale finally had freed the guard
+    });
+    expect(mockInit).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      resolveInitB({ data: { pairing_code: '222222', expires_at: 'x' } });
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('waiting');
+    expect(result.current.code).toBe('222222');
+    expect((await readImportPairingMirror('coach-2'))?.code).toBe('222222');
+    expect(mockTrack.mock.calls.map((c) => c[0])).not.toContain(AnalyticsEvents.IMPORT_PAIRING_FAILED);
+    removeSpy.mockRestore();
+  });
+
+  it('same coach cancel→retry: the retry mints at once and the cancelled attempt’s late settle is inert', async () => {
+    let settleFirst: { resolve: (v: unknown) => void; reject: (e: unknown) => void } | null = null;
+    let resolveSecond: (v: unknown) => void = () => {};
+    mockInit
+      .mockImplementationOnce(() => new Promise((resolve, reject) => { settleFirst = { resolve, reject }; }))
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveSecond = resolve; }));
+    mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+
+    const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+    await act(async () => {
+      result.current.start();
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('minting');
+    await act(async () => {
+      result.current.cancel();
+    });
+    expect(result.current.status).toBe('cancelled');
+
+    // Retry is a new intent and must not be blocked by the abandoned request.
+    await act(async () => {
+      result.current.start();
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(mockInit).toHaveBeenCalledTimes(2);
+    expect(result.current.status).toBe('minting');
+
+    // The cancelled attempt now resolves with a code: it must not become the
+    // live session, must not be mirrored, and must not free the retry's guard.
+    await act(async () => {
+      settleFirst!.resolve({ data: { pairing_code: '111111', expires_at: 'x' } });
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('minting');
+    expect(result.current.code).toBeNull();
+    expect(await readImportPairingMirror('coach-1')).toBeNull();
+    await act(async () => {
+      result.current.start();
+    });
+    expect(mockInit).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      resolveSecond({ data: { pairing_code: '222222', expires_at: 'x' } });
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('waiting');
+    expect(result.current.code).toBe('222222');
+    expect((await readImportPairingMirror('coach-1'))?.code).toBe('222222');
+  });
+
+  it('a mirror write that completes after A signed out is removed again, not left on disk', async () => {
+    mockInit.mockResolvedValue({ data: { pairing_code: '111111', expires_at: 'x' } });
+    // Hold the mint's setItem open so sign-out (and its key sweep) happens
+    // while the write is still in flight; the write then lands afterwards.
+    const realSetItem = AsyncStorage.setItem.bind(AsyncStorage);
+    let releaseWrite: () => void = () => {};
+    const gate = new Promise<void>((resolve) => { releaseWrite = resolve; });
+    const setSpy = jest.spyOn(AsyncStorage, 'setItem').mockImplementation(async (k, v) => {
+      if (k.startsWith('import_pairing_session:')) await gate;
+      return realSetItem(k, v);
+    });
+
+    const { result, rerender } = await renderHook(() => useExtensionPairing('truecoach', true));
+    await act(async () => {
+      result.current.start();
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('minting'); // code never shown before it is on disk
+
+    // signOut(): identity → null, and the sweep removes A's (not yet written) key.
+    mockCurrentUserId = null;
+    await act(async () => {
+      rerender({});
+    });
+    await AsyncStorage.removeItem('import_pairing_session:coach-1');
+
+    await act(async () => {
+      releaseWrite();
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('idle');
+    expect(result.current.code).toBeNull();
+    expect(await readImportPairingMirror('coach-1')).toBeNull();
+    setSpy.mockRestore();
+  });
 });
 
 /**
