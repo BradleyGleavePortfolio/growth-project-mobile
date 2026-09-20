@@ -17,7 +17,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { transformSync } from '@babel/core';
+import { parseSync, transformSync, traverse, types as t } from '@babel/core';
 import type { TransformOptions } from '@babel/core';
 
 const CONFIG_DIR = path.join(__dirname, '..');
@@ -95,6 +95,39 @@ const sources = Object.fromEntries(
   FILES.map((f) => [f, fs.readFileSync(path.join(CONFIG_DIR, f), 'utf8')]),
 ) as Record<(typeof FILES)[number], string>;
 
+/**
+ * Count `process.env[<anything>]` COMPUTED member reads in real code. Parsing
+ * to an AST (TypeScript syntax, no transforms) means the prose in comments —
+ * which legitimately explains why `process.env[key]` is unsafe — can never
+ * trip the guard, and a computed read can never hide behind formatting.
+ */
+function countComputedProcessEnvReads(source: string, filename: string): number {
+  const ast = parseSync(source, {
+    filename,
+    babelrc: false,
+    configFile: false,
+    sourceType: 'module',
+    parserOpts: { plugins: ['typescript'] },
+  });
+  if (!ast) throw new Error(`babel produced no AST for ${filename}`);
+  let computed = 0;
+  traverse(ast, {
+    MemberExpression(p) {
+      const { object, computed: isComputed } = p.node;
+      if (
+        isComputed &&
+        t.isMemberExpression(object) &&
+        t.isIdentifier(object.object, { name: 'process' }) &&
+        !object.computed &&
+        t.isIdentifier(object.property, { name: 'env' })
+      ) {
+        computed += 1;
+      }
+    },
+  });
+  return computed;
+}
+
 describe('feature-flag readers survive release inlining', () => {
   it('control: the preset does NOT inline a computed process.env[key] lookup', () => {
     const control = [
@@ -110,8 +143,25 @@ describe('feature-flag readers survive release inlining', () => {
     expect(evaluate(code)).toMatchObject({ dynamic: undefined, literal: 'true' });
   });
 
+  it('control: the AST guard counts real computed reads and ignores comments', () => {
+    const withRead = [
+      '// a comment mentioning process.env[key] must not count',
+      '/* nor a block comment: process.env["X"] */',
+      "const key = 'EXPO_PUBLIC_FF_CONTROL';",
+      'export const a = process.env[key];',
+      'export const b = process.env.EXPO_PUBLIC_FF_CONTROL;',
+    ].join('\n');
+    expect(countComputedProcessEnvReads(withRead, 'control.ts')).toBe(1);
+    const commentsOnly = [
+      '// process.env[key]',
+      '/** process.env[key] */',
+      'export const literal = process.env.EXPO_PUBLIC_FF_CONTROL;',
+    ].join('\n');
+    expect(countComputedProcessEnvReads(commentsOnly, 'control.ts')).toBe(0);
+  });
+
   it.each(FILES)('%s has no computed process.env lookup in source', (file) => {
-    expect(sources[file]).not.toMatch(/process\.env\[/);
+    expect(countComputedProcessEnvReads(sources[file], path.join(CONFIG_DIR, file))).toBe(0);
   });
 
   it.each(FILES)(
