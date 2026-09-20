@@ -12,8 +12,18 @@
  * Gated by featureFlags.extensionImport (default OFF): when OFF the route and
  * Settings row do not register, so the screen — and its only network path, the
  * pairing panel — never mount.
+ *
+ * Process-restart continuity (M5-C): the flow sends the coach out of the app, so
+ * an OS kill mid-pairing relaunches into this screen's `intro` phase with the
+ * pairing panel unmounted — the durable mirror written by useExtensionPairing
+ * would never be read. On mount, once the signed-in coach is known and the flag
+ * is ON, this screen peeks that user-scoped mirror and, if a pending session
+ * exists, re-enters `awaitingExtension` for the platform it was minted for so
+ * the panel mounts and the hook restores (and server-validates) the session.
+ * The peek is a local read only; it never claims the session is still live and
+ * never overrides a phase the coach has already moved to.
  */
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -36,14 +46,37 @@ import { track } from '../../analytics/posthog.service';
 import { AnalyticsEvents } from '../../analytics/events';
 import type { ImportFlowState } from '../../types/extensionImport';
 import ExtensionPairingPanel from '../../components/coach/ExtensionPairingPanel';
+import { featureFlags } from '../../config/featureFlags';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
+import { readImportPairingMirror } from '../../storage/importPairingMirror';
 
 export default function ImportDataScreen(): React.ReactElement {
   const { colors } = useTheme();
   const [state, setState] = useState<ImportFlowState>({ phase: 'intro' });
+  const userId = useCurrentUser()?.id ?? null;
 
   React.useEffect(() => {
     track(AnalyticsEvents.IMPORT_ENTRY_OPENED);
   }, []);
+
+  // Resume a pairing session that survived a process death (see header). Runs
+  // when the coach identity resolves; a flag-OFF build reads no storage at all.
+  useEffect(() => {
+    if (!featureFlags.extensionImport || !userId) return;
+    let abandoned = false;
+    void (async () => {
+      const pending = await readImportPairingMirror(userId);
+      if (abandoned || !pending) return;
+      setState((prev) =>
+        prev.phase === 'intro'
+          ? { phase: 'awaitingExtension', platformId: pending.platformId }
+          : prev,
+      );
+    })();
+    return () => {
+      abandoned = true;
+    };
+  }, [userId]);
 
   const openLogin = useCallback(async (platformId: string, rawUrl: string | null) => {
     const safe = safeImportLoginUrl(rawUrl);
@@ -120,11 +153,18 @@ export default function ImportDataScreen(): React.ReactElement {
 
       {state.phase === 'awaitingExtension' && (
         <View style={styles.awaiting} accessibilityLiveRegion="polite" testID="import-status">
+          {/* Reached both right after opening the login page and when a pending
+              session is resumed after a relaunch, so it must not assert that a
+              page "was just opened". */}
           <Text style={styles.statusText}>
-            Log in on the page we just opened, then enter the pairing code below in the Growth
-            Project browser extension. Nothing is imported until you confirm in the extension.
+            Log in to {awaitingPlatformLabel(state.platformId)} in your browser, then enter the
+            pairing code below in the Growth Project browser extension. Nothing is imported until
+            you confirm in the extension.
           </Text>
-          <ExtensionPairingPanel platformId={state.platformId} />
+          {/* Keyed so choosing a different platform remounts the panel: the
+              hook re-hydrates for the new slug and a mirrored session for the
+              old one is discarded, never shown under the wrong platform. */}
+          <ExtensionPairingPanel key={state.platformId} platformId={state.platformId} />
         </View>
       )}
 
@@ -185,6 +225,11 @@ export default function ImportDataScreen(): React.ReactElement {
       )}
     </ScrollView>
   );
+}
+
+function awaitingPlatformLabel(platformId: string): string {
+  if (platformId === CUSTOM_PLATFORM_ID) return 'your platform';
+  return findImportPlatform(platformId)?.label ?? 'your platform';
 }
 
 function makeStyles(colors: ThemeColors) {

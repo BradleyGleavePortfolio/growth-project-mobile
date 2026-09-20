@@ -24,7 +24,16 @@
  * session. The minted session is now mirrored to user-scoped storage (see
  * storage/importPairingMirror.ts) and rehydrated on relaunch. Rehydration is not
  * a claim the session is still live (Rule 18): it re-enters `waiting` and polls
- * immediately, and the server /status contract remains the sole authority. The
+ * immediately, and the server /status contract remains the sole authority.
+ * Because the mirror is user-scoped and `useCurrentUser()` resolves the coach
+ * identity ASYNCHRONOUSLY (its first render is always `null`), hydration waits
+ * for a resolved user id and every `start()` that arrives before then is
+ * deferred, never dropped and never allowed to mint blind: a blind mint would
+ * server-expire a still-live session the coach may already be typing into the
+ * extension. Inside CoachNavigator the cached user is always present (the
+ * navigator mounts only after RootNavigator read it), so the wait is bounded by
+ * one storage read. ImportDataScreen performs the matching screen-level peek so
+ * the panel that hosts this hook is mounted again after a process restart. The
  * persisted `expires_at` is provenance only and is never compared to a client
  * clock (Rule 16). The idempotency key minted before the first /pair/init is
  * persisted with it and replayed on retry (Rule 19). NOTE: the current backend
@@ -142,11 +151,22 @@ export function useExtensionPairing(
   userIdRef.current = userId;
   /** Rule 19 key for the CURRENT coach intent; replayed across retries of it. */
   const idempotencyKeyRef = useRef<string | null>(null);
-  /** False until the durable mirror has been consulted exactly once per mount. */
+  /**
+   * False until the durable mirror has been consulted for a RESOLVED coach id.
+   * Stays false while the identity is still unknown, so `start()` defers.
+   */
   const hydratedRef = useRef(false);
   /** A start() that arrived before hydration finished, deferred not dropped. */
   const pendingStartRef = useRef(false);
   const startRef = useRef<(() => void) | null>(null);
+  /**
+   * Coach id the CURRENT in-memory session (code, key, poll) belongs to. In
+   * the shipped tree RootNavigator swaps the whole coach tree on logout/login,
+   * so a mounted hook only ever sees its owner go A→null in the sign-out
+   * window; the guard below makes the same-mount A→B case safe as well rather
+   * than relying on that structure.
+   */
+  const ownerRef = useRef<string | null>(null);
 
   const clearTimers = useCallback(() => {
     if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
@@ -272,14 +292,24 @@ export function useExtensionPairing(
       }
       idempotencyKeyRef.current = key;
     }
+    // The mint belongs to the coach signed in NOW; a response that lands after
+    // the identity changed is discarded, never mirrored under the new coach.
+    const owner = userIdRef.current;
     mintInFlightRef.current = true;
     go('minting');
     track(AnalyticsEvents.IMPORT_PAIRING_STARTED, { platform: slug });
     try {
       const res = await extensionPairApi.init(slug, key);
       // `go('minting')` set the ref, but TS narrowed it from the guard above; read fresh.
-      // cancelled/unmounted mid-mint → discard this late result (no HTTP abort).
-      if (!mountedRef.current || (statusRef.current as PairingStatus) !== 'minting') return;
+      // cancelled/unmounted/identity-changed mid-mint → discard this late result
+      // (no HTTP abort).
+      if (
+        !mountedRef.current ||
+        (statusRef.current as PairingStatus) !== 'minting' ||
+        userIdRef.current !== owner
+      ) {
+        return;
+      }
       const code = res.data?.pairing_code ?? null;
       if (!code) {
         go('failed');
@@ -290,7 +320,7 @@ export function useExtensionPairing(
       // app, so a code on screen that is not on disk is exactly the state that
       // an OS kill turns into an orphaned server-side session. A write failure
       // is logged and the flow continues — degraded durability, not a dead flow.
-      const uid = userIdRef.current;
+      const uid = owner;
       if (uid) {
         try {
           await writeImportPairingMirror({
@@ -305,7 +335,13 @@ export function useExtensionPairing(
         } catch (err) {
           logger.warn('[useExtensionPairing] mirror write failed', err);
         }
-        if (!mountedRef.current || (statusRef.current as PairingStatus) !== 'minting') return;
+        if (
+          !mountedRef.current ||
+          (statusRef.current as PairingStatus) !== 'minting' ||
+          userIdRef.current !== owner
+        ) {
+          return;
+        }
       }
       codeRef.current = code;
       pollDelayRef.current = POLL_BASE_MS;
@@ -337,30 +373,75 @@ export function useExtensionPairing(
   startRef.current = start;
 
   /**
-   * Rehydrate a session that survived a process death. Runs once per mount,
-   * before any mint is allowed through. Finding a record says only "we asked for
-   * this and never saw it finish" — so we re-enter `waiting` and poll at once,
-   * letting the server /status contract decide what the session actually is. A
-   * start() that raced this read is replayed here rather than lost.
+   * Rehydrate a session that survived a process death. Runs once the coach id
+   * is RESOLVED (not on first render, where `useCurrentUser()` is always null),
+   * and before any mint is allowed through. Finding a record says only "we asked
+   * for this and never saw it finish" — so we re-enter `waiting` and poll at
+   * once, letting the server /status contract decide what the session actually
+   * is. A record minted for a DIFFERENT platform than this mount's is not
+   * shown under the wrong platform: it is discarded, and the mint that follows
+   * supersedes it server-side (single-active-code invariant). A start() that
+   * raced this read is replayed here rather than lost.
    */
   useEffect(() => {
+    if (ownerRef.current !== userId) {
+      // Identity changed on this mount (A→null on sign-out, or A→B). Whatever
+      // session is in memory belongs to the previous owner: retire it locally
+      // — no storage write, the old owner's record is theirs (sign-out wipes
+      // it) — and re-hydrate for the new identity. Any /pair/init or /status
+      // still outstanding is discarded by the status/code checks it lands on.
+      // The coach is still on the awaiting screen, so a session that was live
+      // is carried forward as a pending intent for the new owner.
+      const hadLive = statusRef.current === 'minting' || statusRef.current === 'waiting';
+      if (ownerRef.current !== null && (hadLive || hydratedRef.current)) {
+        clearTimers();
+        pollInFlightRef.current = false;
+        // A mint still outstanding for the old owner no longer counts as this
+        // owner's in-flight intent (its result is discarded above); the
+        // 'minting' status check remains the duplicate-intent guard.
+        mintInFlightRef.current = false;
+        codeRef.current = null;
+        idempotencyKeyRef.current = null;
+        statusRef.current = 'idle';
+        setState({ status: 'idle', code: null, supportReference: null });
+        if (hadLive) pendingStartRef.current = true;
+      }
+      hydratedRef.current = false;
+      ownerRef.current = userId;
+    }
+    if (!userId) return; // identity unknown: stay unhydrated, start() keeps deferring
     let abandoned = false;
     void (async () => {
-      const uid = userIdRef.current;
-      const restored = enabled && uid ? await readImportPairingMirror(uid) : null;
+      const restored = enabled ? await readImportPairingMirror(userId) : null;
       if (abandoned || !mountedRef.current) return;
-      hydratedRef.current = true;
       if (restored && statusRef.current === 'idle') {
-        idempotencyKeyRef.current = restored.idempotencyKey;
-        codeRef.current = restored.code;
-        pollDelayRef.current = POLL_BASE_MS;
-        failureCountRef.current = 0;
-        statusRef.current = 'waiting';
-        setState({ status: 'waiting', code: restored.code, supportReference: null });
-        track(AnalyticsEvents.IMPORT_PAIRING_RESTORED, { platform: restored.platformId });
-        pollTimerRef.current = setTimeout(doPoll, 0);
-        return;
+        const slug = platformRef.current;
+        if (restored.platformId === slug) {
+          hydratedRef.current = true;
+          idempotencyKeyRef.current = restored.idempotencyKey;
+          codeRef.current = restored.code;
+          pollDelayRef.current = POLL_BASE_MS;
+          failureCountRef.current = 0;
+          statusRef.current = 'waiting';
+          setState({ status: 'waiting', code: restored.code, supportReference: null });
+          track(AnalyticsEvents.IMPORT_PAIRING_RESTORED, { platform: restored.platformId });
+          pollTimerRef.current = setTimeout(doPoll, 0);
+          return;
+        }
+        // Minted for another platform: never show it under this one. With a slug
+        // present the mint below supersedes it, so drop the record — AWAITED, so
+        // the clear can never land after (and erase) the new session's write;
+        // with no slug nothing will mint (start() refuses), so leave it on disk.
+        if (slug !== null) {
+          try {
+            await clearImportPairingMirror(userId);
+          } catch (err) {
+            logger.warn('[useExtensionPairing] stale mirror clear failed', err);
+          }
+          if (abandoned || !mountedRef.current) return;
+        }
       }
+      hydratedRef.current = true;
       if (pendingStartRef.current) {
         pendingStartRef.current = false;
         startRef.current?.();
@@ -369,7 +450,7 @@ export function useExtensionPairing(
     return () => {
       abandoned = true;
     };
-  }, [enabled, doPoll]);
+  }, [enabled, doPoll, clearTimers, userId]);
 
   const cancel = useCallback(() => {
     const wasActive = statusRef.current === 'minting' || statusRef.current === 'waiting';

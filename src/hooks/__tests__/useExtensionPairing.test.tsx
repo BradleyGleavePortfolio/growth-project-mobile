@@ -831,16 +831,49 @@ describe('useExtensionPairing — durable pairing session (M5-C)', () => {
     });
   });
 
-  it('writes nothing when no coach is signed in', async () => {
+  it('never mints blind while the coach identity is still unknown (no user, no network)', async () => {
+    // A mint that cannot be mirrored is exactly the orphaned-session hazard the
+    // mirror exists to prevent, and a blind mint would server-expire a session
+    // the coach may already be typing into the extension. Inside
+    // CoachNavigator the identity always resolves, so this is a bounded wait.
     mockCurrentUserId = null;
     mockInit.mockResolvedValue({ data: { pairing_code: '482913', expires_at: 'x' } });
     mockStatus.mockResolvedValue({ data: { status: 'pending' } });
     const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
     await act(async () => {
       result.current.start();
+      await jest.advanceTimersByTimeAsync(50);
     });
-    expect(result.current.status).toBe('waiting');
+    expect(mockInit).not.toHaveBeenCalled();
+    expect(result.current.status).toBe('idle');
     expect(await AsyncStorage.getAllKeys()).toEqual([]);
+  });
+
+  it('mints once the identity resolves after a start() that arrived while it was unknown', async () => {
+    // Real composition: useCurrentUser() is null on its first render and only
+    // resolves after an async storage read. The panel's mount-effect start()
+    // must be deferred to that moment, not dropped and not executed blind.
+    mockCurrentUserId = null;
+    mockInit.mockResolvedValue({ data: { pairing_code: '777777', expires_at: 'x' } });
+    mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+    const { result, rerender } = await renderHook(() => useExtensionPairing('truecoach', true));
+    await act(async () => {
+      result.current.start();
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(mockInit).not.toHaveBeenCalled();
+
+    mockCurrentUserId = 'coach-1';
+    await act(async () => {
+      rerender({});
+    });
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(mockInit).toHaveBeenCalledTimes(1);
+    expect(result.current.status).toBe('waiting');
+    expect(result.current.code).toBe('777777');
+    expect((await readImportPairingMirror('coach-1'))?.code).toBe('777777');
   });
 
   it('restores a killed session into waiting and polls immediately', async () => {
@@ -860,6 +893,76 @@ describe('useExtensionPairing — durable pairing session (M5-C)', () => {
     expect(mockTrack.mock.calls.map((c) => c[0])).toContain(
       AnalyticsEvents.IMPORT_PAIRING_RESTORED,
     );
+  });
+
+  it('restores a killed session when the coach identity resolves ASYNCHRONOUSLY (null on first render)', async () => {
+    // The production timing (S6-A2 / S6-B-3): first render has no user, the
+    // panel calls start() immediately, then the user arrives. The restore must
+    // win and no second server-side session may be opened.
+    await seedMirror('coach-1');
+    mockCurrentUserId = null;
+    mockInit.mockResolvedValue({ data: { pairing_code: '999999', expires_at: 'x' } });
+    mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+
+    const { result, rerender } = await renderHook(() => useExtensionPairing('truecoach', true));
+    await act(async () => {
+      result.current.start(); // what ExtensionPairingPanel does on mount
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('idle');
+    expect(mockInit).not.toHaveBeenCalled();
+    expect(mockStatus).not.toHaveBeenCalled();
+
+    mockCurrentUserId = 'coach-1';
+    await act(async () => {
+      rerender({});
+    });
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('waiting');
+    expect(result.current.code).toBe('482913');
+    expect(mockInit).not.toHaveBeenCalled();
+    expect(mockStatus).toHaveBeenCalledWith('482913');
+    expect(mockTrack.mock.calls.map((c) => c[0])).toContain(
+      AnalyticsEvents.IMPORT_PAIRING_RESTORED,
+    );
+  });
+
+  it('never shows a session minted for another platform under this one: discards it and mints afresh', async () => {
+    await seedMirror('coach-1', { platformId: 'trainerize', code: '424242' });
+    mockInit.mockResolvedValue({ data: { pairing_code: '131313', expires_at: 'x' } });
+    mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+
+    const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+    await act(async () => {
+      result.current.start();
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(mockStatus).not.toHaveBeenCalledWith('424242');
+    expect(mockInit).toHaveBeenCalledTimes(1);
+    expect(result.current.status).toBe('waiting');
+    expect(result.current.code).toBe('131313');
+    expect(mockTrack.mock.calls.map((c) => c[0])).not.toContain(
+      AnalyticsEvents.IMPORT_PAIRING_RESTORED,
+    );
+    // The superseded record is replaced by the new session, not left behind.
+    expect((await readImportPairingMirror('coach-1'))?.platformId).toBe('truecoach');
+  });
+
+  it('leaves a mirrored session untouched when mounted without a platform slug', async () => {
+    // Nothing can mint without a slug, so nothing supersedes the record; it
+    // must survive for the mount that does carry the right platform.
+    await seedMirror('coach-1', { platformId: 'trainerize' });
+    const { result } = await renderHook(() => useExtensionPairing(null, true));
+    await act(async () => {
+      result.current.start();
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('idle');
+    expect(mockInit).not.toHaveBeenCalled();
+    expect(mockStatus).not.toHaveBeenCalled();
+    expect((await readImportPairingMirror('coach-1'))?.platformId).toBe('trainerize');
   });
 
   it('restores a session whose stored expiry is long past — the server decides', async () => {
@@ -998,6 +1101,134 @@ describe('useExtensionPairing — durable pairing session (M5-C)', () => {
     expect(result.current.status).toBe('waiting');
     expect(result.current.code).toBe('482913');
     spy.mockRestore();
+  });
+});
+
+/**
+ * Same-mount identity change. RootNavigator replaces the whole coach tree on
+ * sign-out/sign-in, so in the shipped app a mounted hook only sees A→null (the
+ * sign-out window before the tree swaps). The hook nevertheless owns its
+ * session by coach id so that A→null and A→B are safe by construction: the
+ * old owner's code, key and poll are retired in memory (their storage record
+ * is left alone — sign-out wipes it), and a /pair/init that lands after the
+ * change is never shown or mirrored under the new owner.
+ */
+describe('useExtensionPairing — session ownership across identity changes', () => {
+  it('A→null (sign-out window): retires the code and stops polling, touching no storage', async () => {
+    await seedMirror('coach-1');
+    mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+    const { result, rerender } = await renderHook(() => useExtensionPairing('truecoach', true));
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('waiting');
+    const pollsBefore = mockStatus.mock.calls.length;
+
+    mockCurrentUserId = null;
+    await act(async () => {
+      rerender({});
+    });
+    await act(async () => {
+      // > 3 × POLL_MAX_MS: any surviving poll timer would have fired by now.
+      await jest.advanceTimersByTimeAsync(45_000);
+    });
+    expect(result.current.status).toBe('idle');
+    expect(result.current.code).toBeNull();
+    expect(mockStatus.mock.calls.length).toBe(pollsBefore);
+    expect(mockInit).not.toHaveBeenCalled();
+    // Coach A's record is A's; the hook neither clears nor rewrites it here.
+    expect((await readImportPairingMirror('coach-1'))?.code).toBe('482913');
+  });
+
+  it('A→B: never shows A’s code to B; hydrates B’s own session and leaves A’s record alone', async () => {
+    await seedMirror('coach-1', { code: '111111' });
+    await seedMirror('coach-2', { code: '222222', idempotencyKey: 'b-key' });
+    mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+    const { result, rerender } = await renderHook(() => useExtensionPairing('truecoach', true));
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.code).toBe('111111');
+
+    mockCurrentUserId = 'coach-2';
+    await act(async () => {
+      rerender({});
+    });
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('waiting');
+    expect(result.current.code).toBe('222222');
+    expect(mockInit).not.toHaveBeenCalled();
+    expect(mockStatus).toHaveBeenCalledWith('222222');
+    expect((await readImportPairingMirror('coach-1'))?.code).toBe('111111');
+    expect((await readImportPairingMirror('coach-2'))?.code).toBe('222222');
+  });
+
+  it('A→B with no session for B: carries the live intent forward and mints for B only', async () => {
+    await seedMirror('coach-1', { code: '111111' });
+    mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+    mockInit.mockResolvedValue({ data: { pairing_code: '222222', expires_at: 'x' } });
+    const { result, rerender } = await renderHook(() => useExtensionPairing('truecoach', true));
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.code).toBe('111111');
+
+    mockCurrentUserId = 'coach-2';
+    await act(async () => {
+      rerender({});
+    });
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(mockInit).toHaveBeenCalledTimes(1);
+    expect(result.current.code).toBe('222222');
+    expect((await readImportPairingMirror('coach-2'))).toMatchObject({
+      userId: 'coach-2',
+      code: '222222',
+    });
+    expect((await readImportPairingMirror('coach-1'))?.code).toBe('111111');
+  });
+
+  it('a /pair/init that lands after the identity changed is discarded, not mirrored under the new coach', async () => {
+    let resolveInit: (v: unknown) => void = () => {};
+    mockInit.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveInit = resolve;
+        }),
+    );
+    mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+    const { result, rerender } = await renderHook(() => useExtensionPairing('truecoach', true));
+    await act(async () => {
+      result.current.start();
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('minting');
+    expect(mockInit).toHaveBeenCalledTimes(1);
+
+    // B signs in on the same mount while A's mint is still outstanding; B has
+    // no pending session, so a fresh mint for B is issued (second init call).
+    mockInit.mockResolvedValueOnce({ data: { pairing_code: '222222', expires_at: 'x' } });
+    mockCurrentUserId = 'coach-2';
+    await act(async () => {
+      rerender({});
+    });
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(mockInit).toHaveBeenCalledTimes(2);
+    expect(result.current.code).toBe('222222');
+
+    // A's late response arrives: it must not replace B's code or B's record.
+    await act(async () => {
+      resolveInit({ data: { pairing_code: '111111', expires_at: 'x' } });
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.code).toBe('222222');
+    expect((await readImportPairingMirror('coach-2'))?.code).toBe('222222');
+    expect(await readImportPairingMirror('coach-1')).toBeNull();
   });
 });
 
