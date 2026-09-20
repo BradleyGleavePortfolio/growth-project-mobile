@@ -22,8 +22,10 @@
  * server answering `expired`.
  *
  * Rule 19 (idempotency): the UUID minted before the first /pair/init attempt is
- * persisted here and replayed on every retry, so a kill-then-retry cannot open
- * a second server-side session for the same coach intent.
+ * persisted here and replayed on every retry. The backend currently ignores the
+ * header; a kill-then-retry still cannot leave two live sessions because
+ * /pair/init expires the coach's prior live code server-side. Replaying the key
+ * keeps the client side deterministic and forward compatible.
  *
  * Rule 18 (no fabricated confirmations): restoring a record is NOT a claim the
  * session is still live. It only says "we asked for this and never saw it
@@ -52,8 +54,7 @@ export function importPairingMirrorKey(userId: string): string {
  * One pairing session the coach started and we have not yet seen reach a
  * terminal state. Holds everything needed to pick the flow back up after a
  * process death: which platform they chose, the code they were told to type,
- * the server's own expiry stamp, and the idempotency key that makes a re-mint
- * safe.
+ * the server's own expiry stamp, and the idempotency key replayed on re-mint.
  */
 export interface MirroredPairingSession {
   version: number;

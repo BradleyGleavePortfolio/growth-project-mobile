@@ -24,8 +24,21 @@ const isDev =
   process.env.NODE_ENV !== 'production' &&
   !!(globalThis as { __DEV__?: boolean }).__DEV__;
 
-function envBool(key: string, defaultValue: boolean): boolean {
-  const raw = process.env[key];
+// Static env reads — see `src/config/featureFlags.ts` PUBLIC_ENV for why a
+// computed `process.env[key]` lookup is never inlined into release bundles.
+const PUBLIC_ENV = {
+  EXPO_PUBLIC_FF_AI_CHECK_IN_SUMMARY: process.env.EXPO_PUBLIC_FF_AI_CHECK_IN_SUMMARY,
+  EXPO_PUBLIC_FF_AI_CLIENT_PATH_SUMMARY: process.env.EXPO_PUBLIC_FF_AI_CLIENT_PATH_SUMMARY,
+  EXPO_PUBLIC_FF_AI_COACH_BRIEF_DRAFT: process.env.EXPO_PUBLIC_FF_AI_COACH_BRIEF_DRAFT,
+  EXPO_PUBLIC_FF_AI_FOOD_LOG_EXPLAIN: process.env.EXPO_PUBLIC_FF_AI_FOOD_LOG_EXPLAIN,
+  EXPO_PUBLIC_FF_AI_GATEWAY: process.env.EXPO_PUBLIC_FF_AI_GATEWAY,
+  EXPO_PUBLIC_FF_AI_SOURCE_BADGE: process.env.EXPO_PUBLIC_FF_AI_SOURCE_BADGE,
+} as const;
+
+type PublicEnvKey = keyof typeof PUBLIC_ENV;
+
+function envBool(key: PublicEnvKey, defaultValue: boolean): boolean {
+  const raw = PUBLIC_ENV[key];
   if (raw === undefined || raw === null || raw === '') return defaultValue;
   return raw === '1' || raw.toLowerCase() === 'true';
 }

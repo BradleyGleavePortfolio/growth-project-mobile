@@ -27,8 +27,11 @@
  * immediately, and the server /status contract remains the sole authority. The
  * persisted `expires_at` is provenance only and is never compared to a client
  * clock (Rule 16). The idempotency key minted before the first /pair/init is
- * persisted with it and replayed on retry, so a kill-then-retry cannot open a
- * second server-side session for one coach intent (Rule 19).
+ * persisted with it and replayed on retry (Rule 19). NOTE: the current backend
+ * does not read `Idempotency-Key` on /pair/init; the "one live session per
+ * coach" outcome is guaranteed server-side by /pair/init expiring any prior
+ * live code for the coach (single-active-code invariant). The header is sent
+ * for correlation/forward compatibility, not as the dedupe mechanism.
  *   • Unknown/garbled `status` values fail closed: they are treated as a
  *     non-terminal wait and NEVER promoted to `paired`.
  *
@@ -248,8 +251,9 @@ export function useExtensionPairing(
     if (!slug) return;
     if (mintInFlightRef.current) return; // single-flight
     if (statusRef.current === 'minting' || statusRef.current === 'waiting') return; // no duplicate intent
-    // Minting before the mirror has been read could open a second server-side
-    // session on top of one the coach already has. Defer, never drop.
+    // Minting before the mirror has been read would supersede (server-side
+    // expire) a still-live session the coach may already be typing into the
+    // extension. Defer until hydrated so we resume it instead; never drop.
     if (!hydratedRef.current) {
       pendingStartRef.current = true;
       return;

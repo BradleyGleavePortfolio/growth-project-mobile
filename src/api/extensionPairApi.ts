@@ -24,9 +24,11 @@ export const extensionPairApi = {
    * Mint a 6-digit pairing code bound to the coach + chosen source platform.
    *
    * `idempotencyKey` is Rule 19: the caller mints it once per coach intent and
-   * replays the same value on every retry, so a lost response — a dropped
-   * connection, or the OS killing the app between the request and its reply —
-   * cannot leave the coach with two live server-side sessions.
+   * replays the same value on every retry. The current backend does not read
+   * the header; a lost response — a dropped connection, or the OS killing the
+   * app between the request and its reply — still cannot leave the coach with
+   * two live server-side sessions because /pair/init expires any prior live
+   * code for the coach. Sent for correlation and forward compatibility.
    */
   init: (chosenPlatform: string, idempotencyKey: string) =>
     api.post<PairInitResponse>(

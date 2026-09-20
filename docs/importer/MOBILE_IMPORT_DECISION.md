@@ -213,9 +213,13 @@ screen while a live, un-abandoned session was still open server-side.
   is stored verbatim for provenance/support and is **never** compared to a client
   clock (Rule 16).
 - Rule 19: the idempotency key minted before the first `/pair/init` is persisted
-  alongside the session and sent as `Idempotency-Key`, so a kill-then-retry of the
-  same coach intent cannot open a second server-side session. A genuinely new
-  intent (after paired/expired/cancelled) mints a fresh key.
+  alongside the session and sent as `Idempotency-Key`. Correction (S6 audit): the
+  backend controller does not read this header; the guarantee that a
+  kill-then-retry of the same coach intent cannot leave two live sessions comes
+  from the backend `/pair/init` single-active-code invariant (prior live codes for
+  the coach are expired on mint). The header is kept for correlation/forward
+  compatibility. A genuinely new intent (after paired/expired/cancelled) mints a
+  fresh key.
 
 **Still blocked — abandoned-session revocation.** The frozen contract exposes
 exactly two coach-callable routes (`pair/init`, `pair/status`); there is no
