@@ -103,6 +103,20 @@ function resolveBootUserId(): string | null {
   }
 }
 
+// S6 R3 assessment (identity mirror): readUserCacheSync() is now a truthful
+// in-process mirror that is null until lib/userCache has hydrated. This module
+// is evaluated at import time, BEFORE any hydration, so on every AsyncStorage-
+// shim build resolveBootUserId() is null and the persister key is always
+// ':anonymous' for the whole process lifetime (identical to the pre-R3
+// observable behaviour, where the shim's synchronous read was always
+// undefined). The per-user namespacing therefore does not protect anything on
+// shim builds; isolation rests entirely on purgePersistedQueryCacheForAllUsers()
+// (every sign-in and sign-out) plus queryClient.clear() on sign-out. Fixing
+// that requires re-creating the persister after hydration / on identity
+// change (App.tsx PersistQueryClientProvider composition), which is outside
+// the R3 identity/cache/pairing boundary and is reported for re-scope rather
+// than widened here.
+//
 // NOTE (P1-1): the persister key is resolved ONCE at module load time
 // (via resolveBootUserId()) and cannot be swapped after construction.
 // This means that after an in-session account switch the persister

@@ -128,8 +128,8 @@ function tryComputeMacros(d: {
 async function refreshLocalProfile(payload: Record<string, unknown>): Promise<void> {
   try {
     // patchUserCache deep-merges profile fields without overwriting unrelated
-    // user fields and writes synchronously to MMKV — no async/bridge required.
-    patchUserCache({ profile: payload as never });
+    // user fields; the write is asynchronous (AsyncStorage shim) and awaited.
+    await patchUserCache({ profile: payload as never });
   } catch {
     // Cache refresh is best-effort; the next /auth/me will resync.
   }

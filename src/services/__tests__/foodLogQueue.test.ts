@@ -170,7 +170,7 @@ describe('foodLogQueue — offline enqueue + flush on reconnect', () => {
     expect(dropped).toBe(0);
   });
 
-  it('captures userId once at the top of flush — sign-out mid-flush does not retarget the queue key', async () => {
+  it('captures userId once at the top of flush — sign-out mid-flush neither retargets the queue key nor keeps posting (S6 R3 owner fence)', async () => {
     mockUserCache.id = 'user-A';
     await enqueue({
       kind: 'search',
@@ -190,14 +190,20 @@ describe('foodLogQueue — offline enqueue + flush on reconnect', () => {
     });
     api.__logFood.mockResolvedValueOnce({ data: {} });
 
-    const { flushed } = await flush();
-    expect(flushed).toBe(2);
+    const { flushed, remaining } = await flush();
 
-    // The user-A queue should be drained — not the anonymous one. If we had
-    // re-read userId mid-flush, the second write would have landed in the
-    // anonymous key and left user-A's queue with one stale row.
-    const userAQueue = await AsyncStorage.getItem('pending_food_logs_user-A');
-    expect(userAQueue).toBe('[]');
+    // Item `a` was accepted by the server before the owner changed, but the
+    // write-back is refused: the owner is no longer user-A, so user-A's
+    // on-disk queue is left exactly as it was (a retry is idempotent by
+    // client_uuid) and item `b` is NEVER posted under whatever credentials
+    // the device now holds. Nothing lands in the anonymous key.
+    expect(flushed).toBe(0);
+    expect(remaining).toBe(2);
+    expect(api.__logFood).toHaveBeenCalledTimes(1);
+    const userAQueue = JSON.parse(
+      (await AsyncStorage.getItem('pending_food_logs_user-A')) ?? '[]',
+    ) as Array<{ foodItemId?: string }>;
+    expect(userAQueue.map((q) => q.foodItemId)).toEqual(['a', 'b']);
     expect(
       await AsyncStorage.getItem('pending_food_logs_anonymous'),
     ).toBeNull();

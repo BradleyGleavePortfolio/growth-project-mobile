@@ -33,7 +33,12 @@
  * extension. Inside CoachNavigator the cached user is always present (the
  * navigator mounts only after RootNavigator read it), so the wait is bounded by
  * one storage read. ImportDataScreen performs the matching screen-level peek so
- * the panel that hosts this hook is mounted again after a process restart. The
+ * the panel that hosts this hook is mounted again after a process restart.
+ * S6 R3: that wait is now BOUNDED. If the identity has never resolved on this
+ * mount within IDENTITY_WAIT_MS of a deferred start(), the hook settles to
+ * `identityUnavailable` — a retryable, honest terminal ("we could not confirm
+ * your account") instead of an indefinite "preparing" spinner; no mint and no
+ * storage write happen on that path. The
  * persisted `expires_at` is provenance only and is never compared to a client
  * clock (Rule 16). The idempotency key minted before the first /pair/init is
  * persisted with it and replayed on retry (Rule 19). NOTE: the current backend
@@ -80,7 +85,9 @@ export type PairingStatus =
   | 'authExpired'
   | 'unavailable'
   | 'failed'
-  | 'cancelled';
+  | 'cancelled'
+  /** Coach identity never resolved within the bounded wait; nothing was minted. */
+  | 'identityUnavailable';
 
 export interface PairingState {
   status: PairingStatus;
@@ -111,8 +118,15 @@ const POLL_BASE_MS = 2000;
 const POLL_MAX_MS = 15000;
 const POLL_BACKOFF = 1.5;
 const MAX_POLL_FAILURES = 5;
+/**
+ * Upper bound on waiting for the FIRST identity resolution on a mount before a
+ * deferred start() is surfaced as `identityUnavailable`. Generous relative to
+ * one AsyncStorage read (tens of ms) so it only fires when hydration truly
+ * failed, never during normal boot.
+ */
+export const IDENTITY_WAIT_MS = 8000;
 
-type FailReason = 'auth' | 'unavailable' | 'network';
+type FailReason = 'auth' | 'unavailable' | 'network' | 'identity';
 
 function axiosStatus(err: unknown): number | undefined {
   return err instanceof AxiosError ? err.response?.status : undefined;
@@ -158,6 +172,10 @@ export function useExtensionPairing(
   const hydratedRef = useRef(false);
   /** A start() that arrived before hydration finished, deferred not dropped. */
   const pendingStartRef = useRef(false);
+  /** Bounded wait for the first identity resolution (S6 R3). */
+  const identityTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** True once a resolved coach id has been seen on this mount. */
+  const identityEverResolvedRef = useRef(false);
   const startRef = useRef<(() => void) | null>(null);
   /**
    * Coach id the CURRENT in-memory session (code, key, poll) belongs to. In
@@ -178,6 +196,11 @@ export function useExtensionPairing(
   const clearTimers = useCallback(() => {
     if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
     pollTimerRef.current = null;
+  }, []);
+
+  const clearIdentityTimer = useCallback(() => {
+    if (identityTimerRef.current) clearTimeout(identityTimerRef.current);
+    identityTimerRef.current = null;
   }, []);
 
   /**
@@ -287,6 +310,28 @@ export function useExtensionPairing(
     // extension. Defer until hydrated so we resume it instead; never drop.
     if (!hydratedRef.current) {
       pendingStartRef.current = true;
+      // A retry from the bounded-wait terminal is a visible new wait, not a
+      // silent no-op: return to idle so the panel shows it and the timer below
+      // may settle it again.
+      if (statusRef.current === 'identityUnavailable') {
+        statusRef.current = 'idle';
+        setState({ status: 'idle', code: null, supportReference: null });
+      }
+      // Bounded wait: only while the identity has NEVER resolved on this mount
+      // (cold start / failed hydration). The A→null sign-out window is a
+      // different case: RootNavigator tears the coach tree down, so no timer.
+      if (!identityEverResolvedRef.current && !identityTimerRef.current) {
+        identityTimerRef.current = setTimeout(() => {
+          identityTimerRef.current = null;
+          if (!mountedRef.current) return;
+          if (identityEverResolvedRef.current || !pendingStartRef.current) return;
+          if (statusRef.current !== 'idle') return;
+          pendingStartRef.current = false;
+          statusRef.current = 'identityUnavailable';
+          setState({ status: 'identityUnavailable', code: null, supportReference: null });
+          emitFailed('identity');
+        }, IDENTITY_WAIT_MS);
+      }
       return;
     }
     let key = idempotencyKeyRef.current;
@@ -429,6 +474,15 @@ export function useExtensionPairing(
       ownerRef.current = userId;
     }
     if (!userId) return; // identity unknown: stay unhydrated, start() keeps deferring
+    identityEverResolvedRef.current = true;
+    clearIdentityTimer();
+    // A bounded wait that already gave up is superseded by the identity
+    // arriving: return to idle so the deferred intent below can proceed.
+    if (statusRef.current === 'identityUnavailable') {
+      statusRef.current = 'idle';
+      setState({ status: 'idle', code: null, supportReference: null });
+      pendingStartRef.current = true;
+    }
     let abandoned = false;
     void (async () => {
       const restored = enabled ? await readImportPairingMirror(userId) : null;
@@ -469,7 +523,7 @@ export function useExtensionPairing(
     return () => {
       abandoned = true;
     };
-  }, [enabled, doPoll, clearTimers, userId]);
+  }, [enabled, doPoll, clearTimers, clearIdentityTimer, userId]);
 
   const cancel = useCallback(() => {
     const wasActive = statusRef.current === 'minting' || statusRef.current === 'waiting';
@@ -501,8 +555,9 @@ export function useExtensionPairing(
     return () => {
       mountedRef.current = false;
       clearTimers();
+      clearIdentityTimer();
     };
-  }, [clearTimers]);
+  }, [clearTimers, clearIdentityTimer]);
 
   return { ...state, start, retry: start, cancel };
 }

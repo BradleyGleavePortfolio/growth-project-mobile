@@ -86,7 +86,7 @@ export default function ReadyScreen(_props: Props) {
 
   const markLocalComplete = async () => {
     await AsyncStorage.setItem('day_one_completed', 'true');
-    patchUserCache({ profile: { day_one_completed: true } });
+    await patchUserCache({ profile: { day_one_completed: true } });
   };
 
   const handleFinish = async () => {

@@ -97,18 +97,44 @@ async function writeQueueForKey(
   await AsyncStorage.setItem(key, JSON.stringify(queue));
 }
 
-async function readQueue(): Promise<PendingFoodLog[]> {
-  return readQueueForKey(getQueueKey(readUserCacheSync()?.id));
+// ─── Owner capture / fence (S6 R3) ────────────────────────────────────────
+//
+// Every operation resolves the owning user id ONCE, up front, and keeps
+// reading and writing the queue keyed by that captured owner. Before any
+// write-back it re-checks that the owner is unchanged: if a sign-out or an
+// account switch landed between the read and the write, the write is refused
+// (the entry is NOT re-keyed to whoever is signed in now and never folded into
+// another account's queue). `readUserCacheSync()` is the in-process identity
+// mirror: on the AsyncStorage-shim build it is null until the cache has been
+// hydrated, in which case the entry lands in the anonymous queue, exactly as
+// before — this fence narrows attribution, it never widens it.
+
+/** Current owner id, or undefined for the anonymous queue. */
+function currentOwnerId(): string | undefined {
+  return readUserCacheSync()?.id || undefined;
 }
 
-async function writeQueue(queue: PendingFoodLog[]): Promise<void> {
-  await writeQueueForKey(getQueueKey(readUserCacheSync()?.id), queue);
+export class FoodLogQueueOwnerChangedError extends Error {
+  constructor() {
+    super('food-log queue owner changed during operation; write refused');
+    this.name = 'FoodLogQueueOwnerChangedError';
+  }
+}
+
+/** Write the queue for `owner` only if `owner` is still the signed-in identity. */
+async function writeQueueFenced(
+  owner: string | undefined,
+  queue: PendingFoodLog[],
+): Promise<void> {
+  if (currentOwnerId() !== owner) throw new FoodLogQueueOwnerChangedError();
+  await writeQueueForKey(getQueueKey(owner), queue);
 }
 
 export async function enqueue(
   entry: PendingSearchLog | PendingManualLog,
 ): Promise<void> {
-  const queue = await readQueue();
+  const owner = currentOwnerId();
+  const queue = await readQueueForKey(getQueueKey(owner));
   const item: PendingFoodLog = {
     ...entry,
     // Crypto UUID instead of Math.random so two parallel enqueues on a fast
@@ -117,16 +143,16 @@ export async function enqueue(
     createdAt: Date.now(),
   };
   queue.push(item);
-  await writeQueue(queue);
+  await writeQueueFenced(owner, queue);
 }
 
 export async function getQueueLength(): Promise<number> {
-  return (await readQueue()).length;
+  return (await readQueueForKey(getQueueKey(currentOwnerId()))).length;
 }
 
 export async function clearQueue(): Promise<void> {
-  const key = getQueueKey(readUserCacheSync()?.id);
-  await AsyncStorage.removeItem(key);
+  // Removes only the queue of the owner captured here and now.
+  await AsyncStorage.removeItem(getQueueKey(currentOwnerId()));
 }
 
 // ─── Anonymous-queue handover ─────────────────────────────────────────────
@@ -186,7 +212,10 @@ function classifyFlushError(err: unknown): FlushErrorClass {
 export async function flush(): Promise<{ flushed: number; remaining: number; dropped: number }> {
   // P2-1: capture the userId once at the top of flush so a sign-out mid-flush
   // cannot cause us to read from user A's key and write back into user B's.
-  const userId = readUserCacheSync()?.id;
+  // S6 R3: additionally, every write-back below is fenced on that captured
+  // owner still being the signed-in identity; an owner change mid-flush stops
+  // the flush and leaves the remaining items where they are.
+  const userId = currentOwnerId();
   const key = getQueueKey(userId);
 
   let queue = await readQueueForKey(key);
@@ -196,8 +225,34 @@ export async function flush(): Promise<{ flushed: number; remaining: number; dro
   let dropped = 0;
   let stopped = false;
 
+  /**
+   * Remove `item` from the on-disk queue for the captured owner. Returns false
+   * (and leaves memory + disk untouched) when the owner changed: the item stays
+   * queued for its real owner and the flush stops.
+   */
+  const commitRemoval = async (item: PendingFoodLog): Promise<boolean> => {
+    const next = queue.filter((q) => q.id !== item.id);
+    try {
+      await writeQueueFenced(userId, next);
+    } catch (err) {
+      if (!(err instanceof FoodLogQueueOwnerChangedError)) throw err;
+      logger.warn('FoodLogQueue', 'flush stopped: queue owner changed');
+      stopped = true;
+      return false;
+    }
+    queue = next;
+    return true;
+  };
+
   for (const item of [...queue]) {
     if (stopped) break;
+    // Owner changed since capture (sign-out / account switch): the item must
+    // not be POSTed under another account's JWT, and nothing is written back.
+    if (currentOwnerId() !== userId) {
+      logger.warn('FoodLogQueue', 'flush stopped: queue owner changed');
+      stopped = true;
+      break;
+    }
     try {
       let foodItemId: string | undefined;
       if (item.kind === 'search' && item.foodItemId) {
@@ -218,9 +273,10 @@ export async function flush(): Promise<{ flushed: number; remaining: number; dro
         // the backend upserts on retry rather than creating a duplicate row.
         client_uuid: item.id,
       });
-      flushed++;
-      queue = queue.filter((q) => q.id !== item.id);
-      await writeQueueForKey(key, queue);
+      // The server accepted the item. If the owner changed before the local
+      // write-back, the item stays queued for its owner (idempotent by
+      // `client_uuid` on retry) rather than touching another account's key.
+      if (await commitRemoval(item)) flushed++;
     } catch (err) {
       const cls = classifyFlushError(err);
       if (cls === 'drop') {
@@ -228,9 +284,7 @@ export async function flush(): Promise<{ flushed: number; remaining: number; dro
           id: item.id,
           err,
         });
-        queue = queue.filter((q) => q.id !== item.id);
-        await writeQueueForKey(key, queue);
-        dropped++;
+        if (await commitRemoval(item)) dropped++;
         continue;
       }
       logger.warn('FoodLogQueue', 'flush stopped on transient error', err);

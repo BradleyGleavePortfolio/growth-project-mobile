@@ -21,6 +21,8 @@ jest.mock('../../lib/analytics', () => ({ reset: jest.fn() }));
 
 jest.mock('../../lib/userCache', () => ({
   readUserCacheSync: jest.fn(() => ({ id: 'user-A' })),
+  readUserCache: jest.fn(async () => null),
+  clearUserCache: jest.fn(async () => undefined),
 }));
 
 jest.mock('../../offline/sync/sync-engine', () => ({

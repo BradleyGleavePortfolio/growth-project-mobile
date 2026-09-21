@@ -40,40 +40,58 @@ export interface CurrentUser {
 }
 
 /**
- * Hook that reads the authenticated user from AsyncStorage (user_data key).
- * This replaces useAuthStore().currentUser which was from the OLD SQLite system
- * and always returns null for Supabase-authenticated users.
+ * Hook that reads the authenticated user from the persistent user cache
+ * (`lib/userCache`). The first render is always `null`; the value resolves
+ * after an asynchronous storage read. This replaces useAuthStore().currentUser
+ * which was from the OLD SQLite system and always returns null for
+ * Supabase-authenticated users.
+ *
+ * S6 R3: every load carries an epoch. A read that started before a logout (or
+ * before a newer login-triggered load) is discarded when it settles, so a
+ * stale hydration can neither resurrect a signed-out user nor overwrite a
+ * newer identity; nothing is applied after unmount.
  */
 export function useCurrentUser(): CurrentUser | null {
   const [user, setUser] = useState<CurrentUser | null>(null);
 
-  const loadUser = async () => {
-    try {
-      // readUserCache handles the one-time AsyncStorage → MMKV migration
-      // transparently on first call.
-      const parsed = await readUserCache();
-      if (parsed) {
-        setUser(parsed);
-        // Tag Sentry events with the current user so crash reports are
-        // attributable. No-op when Sentry is not configured.
-        setSentryUser({ id: parsed.id, email: parsed.email });
-      } else {
-        setUser(null);
-        setSentryUser(null);
-      }
-    } catch {
-      setUser(null);
-      setSentryUser(null);
-    }
-  };
-
   useEffect(() => {
-    loadUser();
-    const onLogout = () => setUser(null);
-    const onLogin = () => loadUser();
+    let mounted = true;
+    let epoch = 0;
+
+    const apply = (next: CurrentUser | null) => {
+      setUser(next);
+      // Tag Sentry events with the current user so crash reports are
+      // attributable. No-op when Sentry is not configured.
+      setSentryUser(next ? { id: next.id, email: next.email } : null);
+    };
+
+    const loadUser = async () => {
+      const mine = ++epoch;
+      let next: CurrentUser | null = null;
+      try {
+        // readUserCache reads the namespaced key asynchronously and runs the
+        // verified legacy `user_data` migration when needed.
+        next = await readUserCache();
+      } catch {
+        next = null;
+      }
+      // Superseded by a logout or a newer load, or unmounted → discard.
+      if (!mounted || mine !== epoch) return;
+      apply(next);
+    };
+
+    void loadUser();
+    const onLogout = () => {
+      epoch += 1; // any read still in flight belongs to the previous account
+      apply(null);
+    };
+    const onLogin = () => {
+      void loadUser();
+    };
     authEvents.on('logout', onLogout);
     authEvents.on('login', onLogin);
     return () => {
+      mounted = false;
       authEvents.off('logout', onLogout);
       authEvents.off('login', onLogin);
     };

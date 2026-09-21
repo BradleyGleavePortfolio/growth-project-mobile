@@ -77,22 +77,14 @@ async function bootstrap(db: SQLite.SQLiteDatabase): Promise<void> {
     await db.execAsync(
       `ALTER TABLE workout_logs ADD COLUMN user_id TEXT;`,
     );
-    // Backfill from readUserCacheSync at the time the migration runs.
-    // Loaded via a dynamic import so the static graph doesn't pull userCache
-    // (which pulls MMKV) into the bootstrap path.
-    try {
-      const { readUserCacheSync } = await import('../lib/userCache');
-      const currentUserId: string | undefined = readUserCacheSync()?.id;
-      if (currentUserId) {
-        await db.runAsync(
-          `UPDATE workout_logs SET user_id = ? WHERE user_id IS NULL`,
-          [currentUserId],
-        );
-      }
-    } catch {
-      // No cached user (cold start before login) — leave existing rows with
-      // NULL user_id; pushPending will refuse to send them until reassigned.
-    }
+    // S6 R3: pre-v2 rows have NO recorded owner and are deliberately left
+    // with `user_id IS NULL`. An earlier revision backfilled them with
+    // whichever user happened to be cached when the migration ran; that was
+    // inert on the AsyncStorage-shim build (the synchronous identity read
+    // was always null) and would have become a blind attribution of unowned
+    // rows to the current account once the identity mirror hydrates. Unowned
+    // rows are never pushed (`pushPending` selects `user_id = ?`) and never
+    // shown as another user's data; they are simply not claimed.
     await db.execAsync(
       `CREATE INDEX IF NOT EXISTS idx_workout_logs_user_id ON workout_logs(user_id);`,
     );

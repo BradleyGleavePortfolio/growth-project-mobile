@@ -11,7 +11,7 @@ import { setSentryUser } from './sentry';
 import { purgePersistedQueryCacheForAllUsers, queryClient } from './queryClient';
 import { reset as analyticsReset } from '../lib/analytics';
 import { logger } from '../utils/logger';
-import { readUserCacheSync } from '../lib/userCache';
+import { clearUserCache, readUserCache, readUserCacheSync } from '../lib/userCache';
 import { clearAllStorage, prefsStorage, cacheStorage } from '../storage/mmkv';
 import { deleteWorkoutLogsForUser } from '../offline/sync/sync-engine';
 import { AUTOSAVE_MIRROR_KEY_PREFIX } from '../storage/autosaveMirror';
@@ -220,6 +220,15 @@ async function resolveSigningOutUserId(explicit?: string | null): Promise<string
     const cached = readUserCacheSync();
     if (cached?.id) return cached.id;
   } catch {
+    // Fall through to the hydrating read.
+  }
+  try {
+    // S6 R3: on the AsyncStorage shim the synchronous view is only the
+    // in-memory mirror; a sign-out on a cold process must hydrate first or the
+    // per-user wipe below is silently skipped.
+    const hydrated = await readUserCache();
+    if (hydrated?.id) return hydrated.id;
+  } catch {
     // Fall through to AsyncStorage legacy read.
   }
   try {
@@ -299,6 +308,12 @@ export async function signOut(userId?: string | null): Promise<void> {
 
   try {
     await Promise.all([
+      // S6 R3: empty the in-memory identity mirror (generation bump happens
+      // synchronously on call) and remove the namespaced/legacy user keys, so
+      // no hydration still in flight for this account can resurrect it after
+      // `logout` is emitted below. clearAllStorage() also wipes the namespace;
+      // this is the explicit, mirror-aware path.
+      clearUserCache(),
       ...SECURE_SIGN_OUT_KEYS.map((k) => secureStorage.removeItem(k)),
       AsyncStorage.removeMany([...ASYNC_SIGN_OUT_KEYS, ...prefixedKeys, ...perUserKeys]),
       // R15 (PR #161): route new user-scoped MMKV keys through proper storage

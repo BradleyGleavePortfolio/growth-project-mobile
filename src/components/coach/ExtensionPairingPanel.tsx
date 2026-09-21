@@ -178,12 +178,14 @@ export default function ExtensionPairingPanel({ platformId }: Props): React.Reac
 
   if (status === 'paired') {
     // Roster truth is the ONLY progress source: delta > 0 states the real number
-    // of new clients since journey start; delta == 0 is a calm, honest
-    // still-running message. Neither ever claims imported/complete/partial/%.
+    // of new clients since journey start; delta == 0 is a calm message that
+    // does not assert the extension is still running (S6 R3: `paired` means
+    // the code was accepted, not that an import is in progress). Neither ever
+    // claims imported/complete/partial/%.
     const reviewCopy =
       delta > 0
         ? `${delta} new ${delta === 1 ? 'client' : 'clients'} since you started this import`
-        : 'No new clients have arrived yet. Your import is still running in the browser extension.';
+        : 'No new clients have arrived yet. If the import is running in the browser extension, they will appear here as they arrive.';
     return (
       <View style={[styles.card, styles.cardOk]} accessibilityLiveRegion="polite" testID="pairing-paired">
         <Ionicons name="checkmark-circle-outline" size={22} color={colors.primary} />
@@ -192,8 +194,8 @@ export default function ExtensionPairingPanel({ platformId }: Props): React.Reac
           {reviewCopy}
         </Text>
         <Text style={styles.body}>
-          Your import runs in the browser extension. Your client roster is the source of
-          truth — open it to review new clients as they arrive.
+          Your import runs in the browser extension — this app can’t see its progress. Your
+          client roster is the source of truth — open it to review new clients as they arrive.
         </Text>
         <ReconstructCountsSection />
         <TouchableOpacity
@@ -210,6 +212,13 @@ export default function ExtensionPairingPanel({ platformId }: Props): React.Reac
   }
 
   // Terminal, retryable/attention states share one honest, calm layout.
+  //
+  // Copy truthfulness (S6 R3): mobile has no import-progress or server-cancel
+  // contract, so no state here may assert what the extension did or did not
+  // do. `failed` is reached both before a code exists (mint failed) and after
+  // one was shown (status polling failed), and `cancelled` only stops THIS
+  // device from checking — a code already entered in the extension may still
+  // be running there. The messages say exactly that and no more.
   const recoverable: Record<string, { title: string; message: string; cta: string | null }> = {
     expired: {
       title: 'That code expired',
@@ -218,7 +227,16 @@ export default function ExtensionPairingPanel({ platformId }: Props): React.Reac
     },
     failed: {
       title: "We couldn't reach the pairing service",
-      message: 'Check your connection and try again. Nothing was imported.',
+      message:
+        'We could not check the pairing status from this device. If you already entered a ' +
+        'code in the browser extension, check there. Otherwise check your connection and try again.',
+      cta: 'Try again',
+    },
+    identityUnavailable: {
+      title: "We couldn't confirm your account",
+      message:
+        'Your signed-in account did not load on this device, so no pairing code was created. ' +
+        'Try again, or sign out and back in if this keeps happening.',
       cta: 'Try again',
     },
     authExpired: {
@@ -233,7 +251,10 @@ export default function ExtensionPairingPanel({ platformId }: Props): React.Reac
     },
     cancelled: {
       title: 'Pairing cancelled',
-      message: 'No import was started. You can begin again whenever you’re ready.',
+      message:
+        'This device stopped checking for the pairing. If you already entered the code in the ' +
+        'browser extension, the import may still run there — check the extension. You can ' +
+        'start again here whenever you’re ready.',
       cta: 'Start again',
     },
   };

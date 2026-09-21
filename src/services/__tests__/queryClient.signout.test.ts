@@ -17,6 +17,8 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 
 jest.mock('../../lib/userCache', () => ({
   readUserCacheSync: jest.fn(() => ({ id: 'user-A' })),
+  readUserCache: jest.fn(async () => ({ id: 'user-A' })),
+  clearUserCache: jest.fn(async () => undefined),
 }));
 
 jest.mock('../api', () => ({

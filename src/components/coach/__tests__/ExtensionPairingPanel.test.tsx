@@ -162,12 +162,12 @@ describe('ExtensionPairingPanel — lifecycle rendering', () => {
     );
   });
 
-  it('renders a calm still-running copy when no new clients yet (3→3 = 0) — never claims completion', async () => {
+  it('renders a calm copy when no new clients yet (3→3 = 0) — never claims completion or that the import is running', async () => {
     mockDelta = 0;
     mockHookState = { status: 'paired', code: null };
     const { getByTestId, toJSON } = await render(<ExtensionPairingPanel platformId="truecoach" />);
     expect(getByTestId('pairing-review-delta')).toHaveTextContent(
-      'No new clients have arrived yet. Your import is still running in the browser extension.',
+      'No new clients have arrived yet. If the import is running in the browser extension, they will appear here as they arrive.',
     );
     const serialized = JSON.stringify(toJSON());
     expect(serialized).not.toMatch(/imported successfully|import complete|completed|\bsuccess\b|\b\d{1,3}%/i);

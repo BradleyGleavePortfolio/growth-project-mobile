@@ -596,7 +596,7 @@ export default function RootNavigator() {
         user = parsedUser;
       } catch (err) {
         logger.warn('RootNavigator', 'non-fatal', err);
-        clearUserCache();
+        await clearUserCache();
         setAuthState('unauthenticated');
         return;
       }

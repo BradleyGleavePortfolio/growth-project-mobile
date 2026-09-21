@@ -221,7 +221,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
 
       await secureStorage.setItem('supabase_token', access_token);
       if (refresh_token) await secureStorage.setItem('supabase_refresh_token', refresh_token);
-      setUserCache(user);
+      await setUserCache(user);
       // P1-1 (PR #192): purge any orphan persisted cache blobs written under a
       // stale boot-time key before the first persistence pass for this user.
       await purgePersistedQueryCacheForAllUsers();

@@ -138,7 +138,7 @@ export default function RoleSelectionScreen(_: Props) {
       if (user) {
         user.role = res.data.role;
         if (res.data.coach_id) user.coach_id = res.data.coach_id;
-        setUserCache(user);
+        await setUserCache(user);
         // P1-1 (PR #192): purge any orphan persisted cache blobs written under a
         // stale boot-time key before the first persistence pass for this user.
         await purgePersistedQueryCacheForAllUsers();

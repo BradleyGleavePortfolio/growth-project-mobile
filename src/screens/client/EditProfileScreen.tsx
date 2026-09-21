@@ -364,7 +364,7 @@ export default function EditProfileScreen() {
       // Refresh local user_data so Home + Profile reflect the change without
       // requiring a /auth/me round-trip.
       try {
-        patchUserCache({ profile: payload as never });
+        await patchUserCache({ profile: payload as never });
       } catch (err) {
         console.warn('EditProfile: failed to refresh local user_data', err);
       }
