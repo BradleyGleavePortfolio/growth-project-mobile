@@ -17,15 +17,16 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
   },
 }));
 
-jest.mock('../../lib/userCache', () => ({
-  readUserCacheSync: () => null,
-}));
+// S6-P1: the module no longer reads lib/userCache at import time (the
+// import-time persister singleton is gone), so the userCache mock this suite
+// used to need has been removed.
 
 import {
   persisterKeyForUser,
   purgePersistedQueryCacheForAllUsers,
   QUERY_CACHE_KEY_PREFIX,
 } from '../queryClient';
+import * as queryClientModule from '../queryClient';
 
 describe('queryClient persister — R15 user-scoping', () => {
   it('namespaces the key with the authenticated user id', () => {
@@ -55,6 +56,17 @@ describe('queryClient persister — R15 user-scoping', () => {
     expect(removeMany.mock.calls[0][0].sort()).toEqual(
       ['TGP_RQ_CACHE_V1', 'TGP_RQ_CACHE_V1:user-a', 'TGP_RQ_CACHE_V1:user-b'].sort(),
     );
+  });
+
+  // S6-P1 public-contract change: persistence is created per committed
+  // identity by createIdentityPersistence() (owned by PersistedQueryCacheGate),
+  // so importing this module must no longer construct a persister or touch
+  // storage for the boot-time (always ':anonymous' on shim builds) identity.
+  it('exports no import-time persister singleton and reads no storage at import', () => {
+    expect((queryClientModule as Record<string, unknown>).asyncStoragePersister).toBeUndefined();
+    expect(typeof queryClientModule.createIdentityPersistence).toBe('function');
+    expect(AsyncStorage.getItem).not.toHaveBeenCalled();
+    expect(AsyncStorage.setItem).not.toHaveBeenCalled();
   });
 
   it('purgePersistedQueryCacheForAllUsers no-ops when nothing matches', async () => {

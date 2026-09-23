@@ -45,7 +45,7 @@ const FORBIDDEN_CLAIMS = [
   /\d+%/,
 ];
 
-function allText(tree: ReturnType<typeof render>): string {
+function allText(tree: Awaited<ReturnType<typeof render>>): string {
   return tree.toJSON() ? JSON.stringify(tree.toJSON()) : '';
 }
 

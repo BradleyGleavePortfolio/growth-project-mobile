@@ -38,6 +38,10 @@ import Day1WinScreen from '../screens/client/Day1WinScreen';
 import PackageSelectionSheet from '../components/PackageSelectionSheet';
 import { prefsStorage } from '../storage/mmkv';
 import { signOut } from '../services/authActions';
+// S6-P1: identity boundary for the persisted React Query cache. Mounted
+// inside NavigationContainer around the per-auth-state navigator so the
+// container, its ref and the deep-link replay behaviour are untouched.
+import { PersistedQueryCacheGate } from '../services/PersistedQueryCacheGate';
 import api from '../services/api';
 // Phase 11 Track 9 — Support Inbox: init Crisp and sync identity on login
 import { initCrisp, syncCrispIdentity } from '../services/support/crisp.service';
@@ -286,6 +290,12 @@ export function extractAcceptInviteToken(url: string): string | null {
 
 export default function RootNavigator() {
   const [authState, setAuthState] = useState<AuthState>('loading');
+  // S6-P1: the COMMITTED bootstrap identity that authorizes restoring a
+  // user's persisted query cache — token present AND cached user readable AND
+  // no pending role selection. `undefined` = bootstrap outcome unknown (gate
+  // holds, touches nothing); `null` = committed logged-out; string = user id.
+  // Set on every bootstrap outcome, including the failure paths.
+  const [sessionUserId, setSessionUserId] = useState<string | null | undefined>(undefined);
   const pendingDay1Target = useRef<WinType | null>(null);
   // Deep-link replay state for the public accept-invite path. When a
   // signed-in user clicks an accept-invite URL we sign them out and then
@@ -581,12 +591,14 @@ export default function RootNavigator() {
       const needsRoleSelection = await AsyncStorage.getItem('needs_role_selection');
 
       if (!token || !parsedUser) {
+        setSessionUserId(null);
         setAuthState('unauthenticated');
         return;
       }
 
       // Role selection not done yet — stay in auth flow
       if (needsRoleSelection === 'true') {
+        setSessionUserId(null);
         setAuthState('unauthenticated');
         return;
       }
@@ -597,9 +609,13 @@ export default function RootNavigator() {
       } catch (err) {
         logger.warn('RootNavigator', 'non-fatal', err);
         await clearUserCache();
+        setSessionUserId(null);
         setAuthState('unauthenticated');
         return;
       }
+      // Committed identity: token + valid cached user + no role selection.
+      // A cached user without a string id cannot own a persisted cache key.
+      setSessionUserId(typeof parsedUser.id === 'string' && parsedUser.id.trim() ? parsedUser.id : null);
       const role = user?.role;
 
       if (role === 'coach') {
@@ -730,9 +746,11 @@ export default function RootNavigator() {
       }
 
       // Token exists but no role yet
+      setSessionUserId(null);
       setAuthState('unauthenticated');
     } catch (err) {
       logger.warn('RootNavigator', 'non-fatal', err);
+      setSessionUserId(null);
       setAuthState('unauthenticated');
     }
   };
@@ -811,6 +829,19 @@ export default function RootNavigator() {
       {/* OfflineBanner sits at the top of every auth state so users see the
           offline indicator regardless of which navigator is mounted. */}
       <OfflineBanner />
+      {/* S6-P1: every navigator below renders only for the committed identity
+          (or committed logged-out state) whose persisted cache has been
+          restored/purged. The gate never remounts NavigationContainer; while
+          it restores, no navigator is mounted, so navigationRef.isReady()
+          stays false and the replay effects above keep waiting as before. */}
+      <PersistedQueryCacheGate
+        userId={sessionUserId}
+        renderRestoring={() => (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+          </View>
+        )}
+      >
       {authState === 'unauthenticated' ? (
         <AuthNavigator />
       ) : authState === 'onboarding' ? (
@@ -862,6 +893,7 @@ export default function RootNavigator() {
           <ClientNavigator />
         </EntitlementProvider>
       )}
+      </PersistedQueryCacheGate>
     </NavigationContainer>
   );
 }

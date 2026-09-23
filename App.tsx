@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { PostHogProvider } from 'posthog-react-native';
 import {
   useFonts,
@@ -28,11 +28,7 @@ import { usersApi } from './src/services/api';
 import { authEvents } from './src/utils/authEvents';
 import { secureStorage } from './src/services/secureStorage';
 import { initDatabase } from './src/db/database';
-import {
-  queryClient,
-  asyncStoragePersister,
-  QUERY_CACHE_MAX_AGE,
-} from './src/services/queryClient';
+import { queryClient } from './src/services/queryClient';
 import { initSentry, wrap as sentryWrap, captureError } from './src/services/sentry';
 // Phase 11: typed analytics service replaces the raw lib/analytics track call
 // for app_opened so the typed AnalyticsEvents constant is used.
@@ -220,40 +216,25 @@ function App() {
       */}
       <AnalyticsProvider>
         {/*
-          PersistQueryClientProvider wraps the whole app so any screen migrated
-          to API-first (Fix #2) can use useQuery/useMutation. We use the
-          persisting variant so the React Query cache is hydrated from
-          AsyncStorage on cold start — a user opening the app sees last-known
-          data immediately while a fresh fetch runs in the background, instead
-          of staring at a spinner. The provider is intentionally INSIDE
-          ErrorBoundary so a thrown query error from a single screen doesn't
-          take down the rest of the app — the boundary will catch it, and
-          React Query will retry on the next mount.
+          QueryClientProvider wraps the whole app so any screen migrated to
+          API-first (Fix #2) can use useQuery/useMutation. The provider is
+          intentionally INSIDE ErrorBoundary so a thrown query error from a
+          single screen doesn't take down the rest of the app — the boundary
+          will catch it, and React Query will retry on the next mount.
+
+          S6-P1: this is the plain provider. Persistence of the cache to
+          AsyncStorage is identity-bound and owned by PersistedQueryCacheGate,
+          mounted in RootNavigator once the bootstrap identity is committed —
+          see src/services/PersistedQueryCacheGate.tsx and
+          src/services/queryClient.ts (createIdentityPersistence).
         */}
-        <PersistQueryClientProvider
-          client={queryClient}
-          persistOptions={{
-            persister: asyncStoragePersister,
-            maxAge: QUERY_CACHE_MAX_AGE,
-            // Bump this string whenever the wire shape of any cached query
-            // changes incompatibly. Cache entries with a different buster are
-            // discarded on hydration instead of being deserialized into
-            // mismatched TypeScript types.
-            buster: 'tgp-rq-v2-samples',
-            dehydrateOptions: {
-              // Don't persist transient or per-session-only queries. Anything
-              // tagged with the meta { persist: false } (none today, but future
-              // mutations-in-progress proxies will be) gets evicted before write.
-              shouldDehydrateQuery: (q) => q.meta?.persist !== false,
-            },
-          }}
-        >
+        <QueryClientProvider client={queryClient}>
           {/* Wave 2: dark status-bar icons on the bone background. SDK 56
               edge-to-edge: the bone band itself is painted by <StatusBarBand>
               above; expo-status-bar only controls icon contrast now. */}
           <StatusBar style="dark" />
           {/* ThemeProvider: Premium Visual System — UX Psych Report #5.
-              Must be inside PersistQueryClientProvider so useFoundingNumber()
+              Must be inside QueryClientProvider so useFoundingNumber()
               (which calls useQuery) works correctly. */}
           <ThemeProvider>
             {/* BiometricUnlockGate is a no-op when the user hasn't opted in.
@@ -263,7 +244,7 @@ function App() {
               <RootNavigator />
             </BiometricUnlockGate>
           </ThemeProvider>
-        </PersistQueryClientProvider>
+        </QueryClientProvider>
       </AnalyticsProvider>
       </ErrorBoundary>
       {/* SDK 56 edge-to-edge: paint the bone band behind the Android status

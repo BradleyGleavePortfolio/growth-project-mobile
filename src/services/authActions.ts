@@ -8,7 +8,11 @@ import { authEvents } from '../utils/authEvents';
 import { profileApi, usersApi } from './api';
 import { secureStorage } from './secureStorage';
 import { setSentryUser } from './sentry';
-import { purgePersistedQueryCacheForAllUsers, queryClient } from './queryClient';
+import {
+  purgePersistedQueryCacheForAllUsers,
+  retireAndDrainIdentityPersistences,
+  settleAndClearQueryCache,
+} from './queryClient';
 import { reset as analyticsReset } from '../lib/analytics';
 import { logger } from '../utils/logger';
 import { clearUserCache, readUserCache, readUserCacheSync } from '../lib/userCache';
@@ -306,6 +310,17 @@ export async function signOut(userId?: string | null): Promise<void> {
     ? PER_USER_KEY_PREFIXES.map((p) => `${p}${signingOutUserId}`)
     : [];
 
+  // S6-P2 (S6-A-02): retire the identity persistence that is subscribed to the
+  // live queryClient (write fence + unsubscribe) and wait, bounded, for its
+  // in-flight disk writes BEFORE the purge below. A cache update that lands
+  // during signOut therefore cannot start a private write after the purge, and
+  // `await signOut()` itself is the completed disk-privacy boundary. Until
+  // S6-P2 this retirement happened only in the later PersistedQueryCacheGate
+  // effect, i.e. after signOut had already returned and 'logout' was emitted.
+  // Credentials, analytics, stores and offline mutation queues below are
+  // untouched by this step.
+  await retireAndDrainIdentityPersistences();
+
   try {
     await Promise.all([
       // S6 R3: empty the in-memory identity mirror (generation bump happens
@@ -349,7 +364,15 @@ export async function signOut(userId?: string | null): Promise<void> {
   // The persisted AsyncStorage copy is wiped above via
   // purgePersistedQueryCacheForAllUsers(); this call covers the live
   // singleton that every running screen reads from.
-  queryClient.clear();
+  //
+  // S6-P1 lifecycle correction: signOut runs while the signed-in screens are
+  // still mounted (they unmount only after the 'logout' event below), so a
+  // bare queryClient.clear() here left every mounted useQuery pointed at a
+  // destroyed, un-cached Query; its later removeObserver() re-armed a gcTime
+  // timer nothing could clear (S6-C6). settleAndClearQueryCache() settles
+  // in-flight fetches and detaches observers first, then clears — the cache is
+  // still empty before 'logout' is emitted. See queryClient.ts for the trace.
+  await settleAndClearQueryCache();
 
   authEvents.emit('logout');
 }
