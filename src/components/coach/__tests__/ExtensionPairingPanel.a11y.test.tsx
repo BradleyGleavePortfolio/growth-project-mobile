@@ -33,14 +33,18 @@ let mockHookState: {
   code: string | null;
   supportReference: string | null;
 };
-jest.mock('../../../hooks/useExtensionPairing', () => ({
-  useExtensionPairing: () => ({
-    ...mockHookState,
-    start: jest.fn(),
-    retry: jest.fn(),
-    cancel: jest.fn(),
-  }),
-}));
+jest.mock('../../../hooks/useExtensionPairing', () => {
+  const actual = jest.requireActual('../../../hooks/useExtensionPairing');
+  return {
+    PAIRING_REASON_COPY: actual.PAIRING_REASON_COPY,
+    useExtensionPairing: () => ({
+      ...mockHookState,
+      start: jest.fn(),
+      retry: jest.fn(),
+      cancel: jest.fn(),
+    }),
+  };
+});
 jest.mock('../../../hooks/useCurrentUser', () => ({
   useCurrentUser: () => ({ id: 'coach-1', email: 'coach@example.com', name: 'Jordan Coach' }),
 }));

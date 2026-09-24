@@ -29,9 +29,13 @@ const mockStart = jest.fn();
 const mockRetry = jest.fn();
 const mockCancel = jest.fn();
 let mockHookState: { status: string; code: string | null; supportReference?: string | null };
-jest.mock('../../../hooks/useExtensionPairing', () => ({
-  useExtensionPairing: () => ({ ...mockHookState, start: mockStart, retry: mockRetry, cancel: mockCancel }),
-}));
+jest.mock('../../../hooks/useExtensionPairing', () => {
+  const actual = jest.requireActual('../../../hooks/useExtensionPairing');
+  return {
+    PAIRING_REASON_COPY: actual.PAIRING_REASON_COPY,
+    useExtensionPairing: () => ({ ...mockHookState, start: mockStart, retry: mockRetry, cancel: mockCancel }),
+  };
+});
 jest.mock('../../../hooks/useCurrentUser', () => ({
   useCurrentUser: () => ({ id: 'coach-1', email: 'coach@example.com', name: 'Jordan Coach' }),
 }));

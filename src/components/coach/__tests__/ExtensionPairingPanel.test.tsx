@@ -36,15 +36,24 @@ let mockHookState: {
   status: string;
   code: string | null;
   supportReference?: string | null;
+  reason?: 'conflict' | 'challengeUnavailable' | null;
 };
-jest.mock('../../../hooks/useExtensionPairing', () => ({
-  useExtensionPairing: () => ({
-    ...mockHookState,
-    start: mockStart,
-    retry: mockRetry,
-    cancel: mockCancel,
-  }),
-}));
+// UX-03c: PAIRING_REASON_COPY is the real, frozen contract-named copy from
+// the hook module. The panel imports it directly (not through the mocked
+// hook's return value), so the mock factory re-exports the actual constant
+// alongside the mocked hook function.
+jest.mock('../../../hooks/useExtensionPairing', () => {
+  const actual = jest.requireActual('../../../hooks/useExtensionPairing');
+  return {
+    PAIRING_REASON_COPY: actual.PAIRING_REASON_COPY,
+    useExtensionPairing: () => ({
+      ...mockHookState,
+      start: mockStart,
+      retry: mockRetry,
+      cancel: mockCancel,
+    }),
+  };
+});
 
 // UX-03a: server-owned identity for the paired checklist comes only from
 // useCurrentUser (never a client-edited field). Mocked so the identity line
@@ -253,6 +262,58 @@ describe('ExtensionPairingPanel — lifecycle rendering', () => {
       expect(serialized).not.toMatch(/revoked|disconnected|retired/i);
     },
   );
+});
+
+// UX-03c: contract-named reason copy. When the hook supplies `reason`
+// alongside `failed`/`expired`, the panel must render the exact frozen
+// PAIRING_REASON_COPY message and remedy for that reason — not the generic
+// fallback — and a null/absent reason must keep the pre-existing UX-03a
+// copy exactly as it was, unchanged.
+describe('ExtensionPairingPanel — contract-named reason copy (UX-03c)', () => {
+  it('renders the frozen conflict copy when failed with reason: conflict', async () => {
+    mockHookState = { status: 'failed', code: null, reason: 'conflict' };
+    const { getByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
+    expect(getByTestId('pairing-reason-message')).toHaveTextContent(
+      /This setup was started for a different platform/,
+    );
+    expect(getByTestId('pairing-failed')).toHaveTextContent(/Get a new code/);
+  });
+
+  it('renders the frozen challengeUnavailable copy when expired with reason: challengeUnavailable', async () => {
+    mockHookState = { status: 'expired', code: null, reason: 'challengeUnavailable' };
+    const { getByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
+    expect(getByTestId('pairing-reason-message')).toHaveTextContent(
+      /Your code is no longer valid; your setup is kept/,
+    );
+    expect(getByTestId('pairing-expired')).toHaveTextContent(/Get a new code/);
+  });
+
+  it('keeps the existing generic failed copy when reason is null', async () => {
+    mockHookState = { status: 'failed', code: null, reason: null };
+    const { getByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
+    expect(getByTestId('pairing-reason-message')).toHaveTextContent(/could not check the pairing status/i);
+    expect(getByTestId('pairing-failed')).toHaveTextContent(/Try again/);
+  });
+
+  it('keeps the existing generic expired copy when reason is absent (undefined)', async () => {
+    mockHookState = { status: 'expired', code: null };
+    const { getByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
+    expect(getByTestId('pairing-reason-message')).toHaveTextContent(/Your setup is kept/);
+    expect(getByTestId('pairing-expired')).toHaveTextContent(/Get a new code/);
+  });
+
+  it('never renders the setup nonce, intent id, or a locator for either reason', async () => {
+    mockHookState = { status: 'failed', code: null, reason: 'conflict' };
+    const { toJSON } = await render(<ExtensionPairingPanel platformId="truecoach" />);
+    const serialized = JSON.stringify(toJSON());
+    expect(serialized).not.toMatch(/nonce|intent.?id|https?:\/\//i);
+  });
+
+  it('retains the polite live region on the reason-driven failed/expired card', async () => {
+    mockHookState = { status: 'failed', code: null, reason: 'conflict' };
+    const { getByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
+    expect(getByTestId('pairing-failed').props.accessibilityLiveRegion).toBe('polite');
+  });
 });
 
 describe('ExtensionPairingPanel — doctrine + accessibility', () => {

@@ -54,7 +54,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '../../theme/useTheme';
 import type { ThemeColors } from '../../theme/ThemeProvider';
 import type { CoachTabParamList, ClientsStackParamList } from '../../navigation/CoachNavigator';
-import { useExtensionPairing } from '../../hooks/useExtensionPairing';
+import { useExtensionPairing, PAIRING_REASON_COPY } from '../../hooks/useExtensionPairing';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { track } from '../../analytics/posthog.service';
 import { AnalyticsEvents } from '../../analytics/events';
@@ -75,7 +75,7 @@ export default function ExtensionPairingPanel({ platformId }: Props): React.Reac
   const { colors } = useTheme();
   const navigation = useNavigation<ReviewNav>();
   const pairing = useExtensionPairing(platformId);
-  const { status, code, supportReference, start, retry, cancel } = pairing;
+  const { status, code, supportReference, reason, start, retry, cancel } = pairing;
   const currentUser = useCurrentUser();
   const startedRef = useRef(false);
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
@@ -276,11 +276,20 @@ export default function ExtensionPairingPanel({ platformId }: Props): React.Reac
       cta: 'Start again',
     },
   };
-  const view = recoverable[status];
+  const baseView = recoverable[status];
+  // Contract-named reasons (UX-03c): when the hook supplies a frozen
+  // PAIRING_REASON_COPY reason for the current failed/expired state, render
+  // that fact→remedy copy verbatim instead of the generic fallback. A null
+  // or unrecognized reason keeps the UX-03a/pre-existing copy unchanged.
+  const reasonCopy = reason ? PAIRING_REASON_COPY[reason] : null;
+  const view =
+    reasonCopy && (status === 'failed' || status === 'expired')
+      ? { title: baseView.title, message: reasonCopy.message, cta: reasonCopy.remedy }
+      : baseView;
   return (
     <View style={[styles.card, styles.cardAttention]} accessibilityLiveRegion="polite" testID={`pairing-${status}`}>
       <Text style={styles.title}>{view.title}</Text>
-      <Text style={styles.body}>{view.message}</Text>
+      <Text style={styles.body} testID="pairing-reason-message">{view.message}</Text>
       {supportReference ? (
         <Text
           style={styles.familyMuted}
