@@ -29,6 +29,10 @@ jest.mock('../../../theme/useTheme', () => ({
       textOnPrimary: '#fff', info: '#2b6cb0', error: '#c0392b',
       success: '#2e7d32', textTertiary: '#777',
     },
+    semanticColors: {
+      bgPrimary: '#fff', bgSurface: '#f5f5f5', textPrimary: '#111', textMuted: '#999',
+      textOnAccent: '#fff', textOnDisabled: '#999', disabledBg: '#eee',
+    },
   }),
 }));
 jest.mock('../../../analytics/posthog.service', () => ({ track: jest.fn() }));

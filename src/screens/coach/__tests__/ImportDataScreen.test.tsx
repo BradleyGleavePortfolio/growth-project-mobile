@@ -83,6 +83,7 @@ describe('ImportDataScreen — J3 source-selection presentation', () => {
     mockRecordDecision.mockResolvedValue(true);
     canOpen = jest.spyOn(Linking, 'canOpenURL').mockResolvedValue(true);
     openUrl = jest.spyOn(Linking, 'openURL').mockResolvedValue(undefined);
+    openUrl.mockClear();
   });
   afterEach(async () => {
     // Unmount first, then drain in-flight openLogin microtasks, so a prior
