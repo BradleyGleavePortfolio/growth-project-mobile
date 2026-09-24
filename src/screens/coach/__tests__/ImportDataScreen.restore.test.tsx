@@ -151,14 +151,17 @@ describe('ImportDataScreen — resumes a pairing session after a process restart
       return realGetItem(key);
     });
     const screen = await render(<ImportDataScreen />);
-    await fireEvent.press(screen.getByTestId('import-platform-custom'));
-    expect(screen.getByTestId('import-custom-box')).toBeTruthy();
+    // J3 source-selection presentation: highlight Custom/Other, then confirm
+    // with Continue — the same two-step donor contract exercised elsewhere.
+    await fireEvent.press(screen.getByLabelText('Custom / Other'));
+    await fireEvent.press(screen.getByLabelText('Continue'));
+    expect(screen.getByLabelText(/site address/i)).toBeTruthy();
     // Now the peek resolves with a pending record — and must not override.
     await act(async () => {
       await jest.advanceTimersByTimeAsync(1_500);
     });
     await settle();
-    expect(screen.getByTestId('import-custom-box')).toBeTruthy();
+    expect(screen.getByLabelText(/site address/i)).toBeTruthy();
     expect(screen.queryByTestId('import-status')).toBeNull();
     expect(mockStatus).not.toHaveBeenCalled();
   });

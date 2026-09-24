@@ -28,19 +28,15 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
-  TextInput,
   ScrollView,
   Linking,
+  TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 import { useTheme } from '../../theme/useTheme';
 import type { ThemeColors } from '../../theme/ThemeProvider';
-import {
-  IMPORT_PLATFORMS,
-  CUSTOM_PLATFORM_ID,
-  findImportPlatform,
-} from '../../constants/importPlatforms';
+import { CUSTOM_PLATFORM_ID, findImportPlatform } from '../../constants/importPlatforms';
 import { safeImportLoginUrl } from '../../utils/safeImportLoginUrl';
 import { track } from '../../analytics/posthog.service';
 import { AnalyticsEvents } from '../../analytics/events';
@@ -49,11 +45,26 @@ import ExtensionPairingPanel from '../../components/coach/ExtensionPairingPanel'
 import { featureFlags } from '../../config/featureFlags';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { readImportPairingMirror } from '../../storage/importPairingMirror';
+import { useImportOfferDecision } from '../../hooks/useImportOfferDecision';
+import { ImportSetupView } from './import-journey/ImportSetupView';
 
 export default function ImportDataScreen(): React.ReactElement {
   const { colors } = useTheme();
+  const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const [state, setState] = useState<ImportFlowState>({ phase: 'intro' });
   const userId = useCurrentUser()?.id ?? null;
+  // UX-01 account-scoped offer-decision consumer (accepted contract; this
+  // screen does not own storage/identity). Used ONLY to give the J3 restyle's
+  // "Later" a truthful action — deferring the import per J1 — never to infer
+  // eligibility or mount anything on Home.
+  const { recordDecision } = useImportOfferDecision();
+  // Ephemeral, screen-local UI state (same category as the existing
+  // `intro`/`customUrlEntry` phases per the state matrix's "UI-only phases"
+  // allowance): holds what the coach has highlighted in the ImportSetupView
+  // radio group BEFORE they confirm with Continue. It is never persisted,
+  // never a new ImportFlowState phase, and never itself triggers navigation
+  // or a login open — only Continue does, via the existing selectPlatform.
+  const [highlightedSourceId, setHighlightedSourceId] = useState<string | null>(null);
 
   React.useEffect(() => {
     track(AnalyticsEvents.IMPORT_ENTRY_OPENED);
@@ -119,7 +130,136 @@ export default function ImportDataScreen(): React.ReactElement {
     setState({ phase: 'customUrlEntry', url: text, valid: safeImportLoginUrl(text) != null });
   }, []);
 
+  // J3 source-selection presentation (bounded T2 variant, per parent
+  // disposition (a)): the donor `ImportSetupView` is used exactly as
+  // exported and its default two-step contract is preserved unchanged
+  // (`onSourceChange` remains pure selection state; only `onContinue` —
+  // the same primary action the donor's own tests assert fires only on
+  // the Continue button — triggers the real, pre-existing controller
+  // action). No `computerHandoff` step, no new endpoint/flag/storage.
+  const onSourceHighlighted = useCallback((platformId: string) => {
+    setHighlightedSourceId(platformId);
+  }, []);
+
+  const onSourceContinue = useCallback(() => {
+    if (!highlightedSourceId) return; // Continue is disabled by ImportSetupView until a selection exists.
+    selectPlatform(highlightedSourceId);
+  }, [highlightedSourceId, selectPlatform]);
+
+  const onCustomSourceContinue = useCallback(() => {
+    if (state.phase !== 'customUrlEntry') return;
+    void openLogin(CUSTOM_PLATFORM_ID, state.url);
+  }, [state, openLogin]);
+
+  const onBackFromSourceSelection = useCallback(() => {
+    navigation.goBack();
+  }, [navigation]);
+
+  const onLaterFromSourceSelection = useCallback(() => {
+    // Truthful J1 defer through the accepted UX-01 contract. The write is
+    // awaited (serialized inside the hook regardless of this screen's mount
+    // state) before navigating away; a `false` result — disabled, unresolved
+    // identity, or a failed write — needs no error UI per the contract's own
+    // rule, and no "saved to your account" claim is ever shown either way.
+    void (async () => {
+      await recordDecision('later');
+      navigation.goBack();
+    })();
+  }, [navigation, recordDecision]);
+
+  // R2/R3 closure (independent T2 review, Finding A + parent grant clause
+  // "preserve the preexisting post-login reselection affordance where the
+  // removed base picker allowed it"): the base screen kept its platform
+  // picker mounted alongside both the `failed` banner AND the pairing panel
+  // in `awaitingExtension`, so a coach could switch platforms in place from
+  // either state. The J3 restyle's early-return branching lost both paths;
+  // this single pure local state reset restores both (reused verbatim by
+  // the `failed` and `awaitingExtension` render branches below) — no new
+  // endpoint/flag/storage/timer, no navigation, no pairing/auth change, no
+  // controller change — back to the same `intro` phase the coach started
+  // from, also clearing the ephemeral highlight so the picker opens
+  // unselected, matching intro. `openingLogin` intentionally keeps no such
+  // action: it is transient and resolves on its own within moments, and no
+  // prior test required reselection to be reachable from it.
+  const onTryAnotherPlatform = useCallback(() => {
+    setHighlightedSourceId(null);
+    setState({ phase: 'intro' });
+  }, []);
+
   const styles = makeStyles(colors);
+
+  // J3 source selection (bounded T2 presentation variant): the donor
+  // ImportSetupView, used exactly as exported, owns the full screen body
+  // for these two phases (it renders its own KeyboardAvoidingView/
+  // ScrollView, exactly as every donor test mounts it standalone — nesting
+  // it inside this screen's own ScrollView would be an invalid nested-
+  // scroll layout, not a presentation choice). Its default two-step
+  // contract is preserved unchanged: `onSourceChange` is pure highlight
+  // state (the donor's own tested meaning); Continue — enabled only once a
+  // selection/valid URL exists, exactly per the donor's own `canContinue`
+  // logic — is the single explicit action that invokes the real existing
+  // controller (`selectPlatform` / `openLogin`). No `computerHandoff` step,
+  // no new endpoint/flag/storage. openingLogin/awaitingExtension below keep
+  // the screen's original shell untouched; `failed` keeps it too, plus one
+  // small restored affordance (R2 closure, Finding A, below).
+  // R2 closure (independent T2 review, Finding B): the base screen showed
+  // this exact credential-handling reassurance above the platform list, so
+  // it was visible before the coach committed to a platform. ImportSetupView
+  // does not render this copy itself, so it is composed above it here —
+  // same existing copy, same existing styles/role, no new donor authority,
+  // no new string — for both source-selection phases, visible before
+  // Continue can ever be pressed.
+  const sourceSelectionPrereq = (
+    <View style={styles.prereq} accessibilityRole="summary">
+      <Ionicons name="information-circle-outline" size={18} color={colors.info} />
+      <Text style={styles.prereqText}>
+        You'll log in with your own account. The Growth Project browser extension then
+        asks to start the import — we never see or store your other platform's password.
+      </Text>
+    </View>
+  );
+
+  if (state.phase === 'intro') {
+    return (
+      <View style={styles.setupShell}>
+        {sourceSelectionPrereq}
+        <ImportSetupView
+          step="source"
+          romanEnabled={featureFlags.romanChat}
+          selectedSourceId={highlightedSourceId}
+          customSourceUrl=""
+          validation="idle"
+          onSourceChange={onSourceHighlighted}
+          onCustomSourceChange={onCustomUrlChange}
+          onCustomSourceBlur={() => {}}
+          onContinue={onSourceContinue}
+          onBack={onBackFromSourceSelection}
+          onLater={onLaterFromSourceSelection}
+        />
+      </View>
+    );
+  }
+
+  if (state.phase === 'customUrlEntry') {
+    return (
+      <View style={styles.setupShell}>
+        {sourceSelectionPrereq}
+        <ImportSetupView
+          step="customSource"
+          romanEnabled={featureFlags.romanChat}
+          selectedSourceId={CUSTOM_PLATFORM_ID}
+          customSourceUrl={state.url}
+          validation={state.url.length > 0 && !state.valid ? 'invalid' : 'idle'}
+          onSourceChange={onSourceHighlighted}
+          onCustomSourceChange={onCustomUrlChange}
+          onCustomSourceBlur={() => {}}
+          onContinue={onCustomSourceContinue}
+          onBack={onBackFromSourceSelection}
+          onLater={onLaterFromSourceSelection}
+        />
+      </View>
+    );
+  }
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content} testID="import-data-screen">
@@ -139,15 +279,30 @@ export default function ImportDataScreen(): React.ReactElement {
         </Text>
       </View>
 
-      {(state.phase === 'failed' || state.phase === 'openingLogin') && (
-        <View
-          style={[styles.status, state.phase === 'failed' ? styles.statusError : styles.statusInfo]}
-          accessibilityLiveRegion="polite"
-          testID="import-status"
-        >
-          <Text style={styles.statusText}>
-            {state.phase === 'failed' ? state.message : 'Opening the login page…'}
-          </Text>
+      {state.phase === 'failed' && (
+        <View style={[styles.status, styles.statusError]} accessibilityLiveRegion="polite" testID="import-status">
+          <Text style={styles.statusText}>{state.message}</Text>
+          {/* R2 closure (independent T2 review, Finding A): the base screen
+              kept the platform picker mounted alongside this banner so a
+              coach could immediately retry a different (or the same)
+              platform in place. This restores that in-screen path as a
+              pure local phase reset back to `intro` — no navigation, no
+              new endpoint/flag/storage, no controller change. */}
+          <TouchableOpacity
+            style={styles.retryLink}
+            onPress={onTryAnotherPlatform}
+            accessibilityRole="button"
+            accessibilityLabel="Choose a different platform"
+            testID="import-try-another-platform"
+          >
+            <Text style={styles.retryLinkText}>Choose a different platform</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {state.phase === 'openingLogin' && (
+        <View style={[styles.status, styles.statusInfo]} accessibilityLiveRegion="polite" testID="import-status">
+          <Text style={styles.statusText}>Opening the login page…</Text>
         </View>
       )}
 
@@ -165,62 +320,25 @@ export default function ImportDataScreen(): React.ReactElement {
               hook re-hydrates for the new slug and a mirrored session for the
               old one is discarded, never shown under the wrong platform. */}
           <ExtensionPairingPanel key={state.platformId} platformId={state.platformId} />
-        </View>
-      )}
-
-      <Text style={styles.sectionHeader}>Choose a platform</Text>
-      {IMPORT_PLATFORMS.map((platform) => (
-        <TouchableOpacity
-          key={platform.id}
-          style={styles.row}
-          onPress={() => selectPlatform(platform.id)}
-          accessibilityRole="button"
-          accessibilityLabel={`Import from ${platform.label}`}
-          accessibilityHint={
-            platform.id === CUSTOM_PLATFORM_ID
-              ? 'Enter your own site address to import from any platform'
-              : `Opens the ${platform.label} login page in your browser`
-          }
-          testID={`import-platform-${platform.id}`}
-        >
-          <Ionicons name={platform.icon} size={22} color={colors.textSecondary} />
-          <Text style={styles.rowLabel}>{platform.label}</Text>
-          <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-        </TouchableOpacity>
-      ))}
-
-      {state.phase === 'customUrlEntry' && (
-        <View style={styles.customBox} testID="import-custom-box">
-          <Text style={styles.sectionHeader}>Your platform's login page</Text>
-          <TextInput
-            style={styles.input}
-            value={state.url}
-            onChangeText={onCustomUrlChange}
-            placeholder="https://app.yourplatform.com/login"
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="url"
-            inputMode="url"
-            accessibilityLabel="Custom platform login web address"
-            testID="import-custom-url"
-          />
+          {/* R3 closure (independent T2 review, parent grant clause: preserve
+              the preexisting post-login reselection affordance where the
+              removed base picker allowed it). The base kept every platform
+              row reachable here too, so the coach could switch mid-pairing;
+              this reuses the exact same pure local-reset action already
+              restored for `failed`, with the same semantics — no new state,
+              no pairing/auth change, no probe. Leaving the transient
+              `openingLogin` phase without this action is unchanged from r2:
+              no prior test required it there, and it resolves to either
+              `awaitingExtension` or `failed` almost immediately on its own. */}
           <TouchableOpacity
-            style={[styles.primaryBtn, !state.valid && styles.primaryBtnDisabled]}
-            disabled={!state.valid}
-            onPress={() => openLogin(CUSTOM_PLATFORM_ID, state.url)}
+            style={styles.retryLink}
+            onPress={onTryAnotherPlatform}
             accessibilityRole="button"
-            accessibilityLabel="Open login page"
-            accessibilityState={{ disabled: !state.valid }}
-            testID="import-custom-open"
+            accessibilityLabel="Choose a different platform"
+            testID="import-try-another-platform"
           >
-            <Text style={styles.primaryBtnText}>Open login page</Text>
+            <Text style={styles.retryLinkText}>Choose a different platform</Text>
           </TouchableOpacity>
-          {state.url.length > 0 && !state.valid && (
-            <Text style={styles.hint} testID="import-custom-hint">
-              Enter a secure https web address (public sites only).
-            </Text>
-          )}
         </View>
       )}
     </ScrollView>
@@ -236,6 +354,9 @@ function makeStyles(colors: ThemeColors) {
   return StyleSheet.create({
     screen: { flex: 1, backgroundColor: colors.background },
     content: { padding: 20, gap: 12 },
+    // R2 closure (Finding B): stacks the restored prereq banner above
+    // ImportSetupView, which owns its own flex:1 scroll body beneath it.
+    setupShell: { flex: 1, backgroundColor: colors.background },
     title: { fontSize: 24, fontWeight: '600', color: colors.textPrimary },
     body: { fontSize: 15, lineHeight: 22, color: colors.textSecondary },
     prereq: {
@@ -253,35 +374,9 @@ function makeStyles(colors: ThemeColors) {
     statusError: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.error },
     statusText: { fontSize: 14, lineHeight: 20, color: colors.textPrimary },
     awaiting: { gap: 12, marginTop: 4 },
-    sectionHeader: { fontSize: 13, fontWeight: '600', color: colors.textMuted, marginTop: 8 },
-    row: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 14,
-      paddingVertical: 16,
-      paddingHorizontal: 16,
-      borderRadius: 12,
-      backgroundColor: colors.surface,
-    },
-    rowLabel: { flex: 1, fontSize: 16, color: colors.textPrimary },
-    customBox: { gap: 10, marginTop: 4 },
-    input: {
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: 12,
-      padding: 14,
-      fontSize: 15,
-      color: colors.textPrimary,
-      backgroundColor: colors.surface,
-    },
-    primaryBtn: {
-      backgroundColor: colors.primary,
-      borderRadius: 12,
-      paddingVertical: 15,
-      alignItems: 'center',
-    },
-    primaryBtnDisabled: { opacity: 0.4 },
-    primaryBtnText: { color: colors.textOnPrimary, fontSize: 16, fontWeight: '600' },
-    hint: { fontSize: 13, color: colors.error },
+    // R2 closure (Finding A): a plain in-place text action, matching the
+    // screen's existing understated link styling elsewhere (e.g. Later).
+    retryLink: { marginTop: 10, minHeight: 44, justifyContent: 'center' },
+    retryLinkText: { fontSize: 14, fontWeight: '600', color: colors.primary, textDecorationLine: 'underline' },
   });
 }
