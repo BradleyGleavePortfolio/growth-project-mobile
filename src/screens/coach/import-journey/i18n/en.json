@@ -1,0 +1,38 @@
+{
+  "common": {
+    "later": "Later",
+    "importRecords": "Import my records",
+    "back": "Back",
+    "setupTitle": "Import setup"
+  },
+  "offer": {
+    "question": "Have you coached on another platform before?",
+    "questionSir": "Have you coached on another platform before, sir?",
+    "yes": "Yes",
+    "fresh": "I am starting fresh",
+    "value": "Would you like to bring your clients and coaching history into TGP?",
+    "resume": "Continue import setup"
+  },
+  "source": {
+    "title": "Where are your records?",
+    "body": "Choose a shortcut, or enter another site. Available records are checked on your computer.",
+    "note": "A listed site is a shortcut, not a guarantee that every record can be imported.",
+    "continue": "Continue",
+    "customLabel": "Site address",
+    "customHint": "Enter the secure web address you use to sign in.",
+    "invalid": "Enter a valid public HTTPS address.",
+    "noCredentials": "Do not include a password or sign-in code."
+  },
+  "handoff": {
+    "title": "Continue on a computer",
+    "body": "You will need Chrome on a computer. Keep this setup open while you connect the TGP extension.",
+    "source": "Selected site: {sourceName}",
+    "stepOne": "Open this setup on your computer.",
+    "stepTwo": "Connect the official TGP extension.",
+    "stepThree": "Sign in to your source and review Start.",
+    "noComputer": "I will use a computer later"
+  },
+  "accessibility": {
+    "roman": "Roman"
+  }
+}

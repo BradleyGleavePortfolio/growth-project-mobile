@@ -365,7 +365,7 @@ export default function SettingsScreen() {
               testID="settings-import-data"
             >
               <Ionicons name="cloud-download-outline" size={20} color={colors.textSecondary} />
-              <Text style={styles.rowLabel}>Import Data</Text>
+              <Text style={styles.rowLabel}>Import my records</Text>
               <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
             </TouchableOpacity>
             <View style={styles.divider} />
