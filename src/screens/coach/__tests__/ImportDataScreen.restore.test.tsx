@@ -84,6 +84,7 @@ async function seedMirror(userId: string, platformId = 'trainerize', code = '482
       code,
       expiresAt: '2026-07-27T10:15:00.000Z',
       idempotencyKey: 'seeded-key-0001',
+      setupNonce: 'seeded-nonce-0001',
     }),
   );
 }

@@ -37,7 +37,7 @@ jest.mock('../useCurrentUser', () => ({
 }));
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useExtensionPairing } from '../useExtensionPairing';
+import { PAIRING_REASON_COPY, useExtensionPairing } from '../useExtensionPairing';
 import { extensionPairApi } from '../../api/extensionPairApi';
 import { AnalyticsEvents } from '../../analytics/events';
 import {
@@ -60,16 +60,18 @@ async function seedMirror(userId: string, over: Record<string, unknown> = {}) {
       code: '482913',
       expiresAt: '2026-07-27T10:15:00.000Z',
       idempotencyKey: 'seeded-key-0001',
+      setupNonce: 'seeded-nonce-0001',
       ...over,
     }),
   );
 }
 
-function axiosError(status: number): AxiosError {
+/** AxiosError with an optional C1 error-envelope body (`{ code }`). */
+function axiosError(status: number, data: Record<string, unknown> = {}): AxiosError {
   return new AxiosError(`status ${status}`, 'ERR', undefined, undefined, {
     status,
     statusText: String(status),
-    data: {},
+    data,
     headers: {},
     config: { headers: new AxiosHeaders() },
   });
@@ -142,7 +144,7 @@ describe('useExtensionPairing — mint', () => {
       result.current.start();
     });
 
-    expect(mockInit).toHaveBeenCalledWith('truecoach', expect.any(String));
+    expect(mockInit).toHaveBeenCalledWith('truecoach', expect.any(String), expect.any(String));
     expect(result.current.status).toBe('waiting');
     expect(result.current.code).toBe('482913');
     const names = mockTrack.mock.calls.map((c) => c[0]);
@@ -828,6 +830,7 @@ describe('useExtensionPairing — durable pairing session (M5-C)', () => {
       // Rule 16: the server's stamp is kept verbatim, never re-derived locally.
       expiresAt: '2026-07-27T10:15:00.000Z',
       idempotencyKey: mockInit.mock.calls[0][1],
+      setupNonce: mockInit.mock.calls[0][2],
     });
   });
 
@@ -993,6 +996,7 @@ describe('useExtensionPairing — durable pairing session (M5-C)', () => {
 
   it.each<[string, Record<string, unknown>]>([
     ['a drifted schema version', { version: IMPORT_PAIRING_MIRROR_VERSION + 1 }],
+    ['a v1 payload (no setup nonce)', { version: 1, setupNonce: undefined }],
     ['a cross-user payload', { userId: 'coach-2' }],
     ['an empty code', { code: '' }],
   ])('ignores %s and stays idle', async (_label, over) => {
@@ -1320,7 +1324,7 @@ describe('useExtensionPairing — session ownership across identity changes', ()
     });
     expect(result.current.status).toBe('minting');
     expect(result.current.code).toBeNull();
-    expect(await readImportPairingMirror('coach-1')).toBeNull();
+    expect((await readImportPairingMirror('coach-1'))?.code ?? null).toBeNull();
     await act(async () => {
       result.current.start();
     });
@@ -1435,5 +1439,350 @@ describe('useExtensionPairing — idempotency key (R19)', () => {
       await jest.advanceTimersByTimeAsync(0);
     });
     expect(result.current.status).toBe('expired');
+  });
+});
+
+/**
+ * C1 setup correlation (UX-03b; contract 2.0.0-c1-s1.1 @ a0ea1bea). The
+ * `setup_nonce` is minted with the Rule 19 key, persisted BEFORE /pair/init and
+ * replayed on a same-intent retry; the two contract error codes map to
+ * contract-named reasons; `import_intent_id` is correlation only. Code and
+ * nonce never reach analytics.
+ */
+describe('useExtensionPairing — C1 setup_nonce / import_intent_id correlation', () => {
+  const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+  it('sends a uuid setup_nonce distinct from the idempotency key on every mint', async () => {
+    mockInit.mockResolvedValue({ data: { pairing_code: '482913', expires_at: 'x' } });
+    mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+    const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+    await act(async () => {
+      result.current.start();
+    });
+    const [, key, nonce] = mockInit.mock.calls[0];
+    expect(nonce).toMatch(UUID_V4);
+    expect(nonce).not.toBe(key);
+  });
+
+  it('persists the nonce BEFORE /pair/init is answered (pre-init record, code null)', async () => {
+    let resolveInit: (v: unknown) => void = () => {};
+    mockInit.mockImplementationOnce(() => new Promise((resolve) => { resolveInit = resolve; }));
+    mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+    const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+    await act(async () => {
+      result.current.start();
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.status).toBe('minting');
+    expect(mockInit).toHaveBeenCalledTimes(1);
+    const preInit = await readImportPairingMirror('coach-1');
+    expect(preInit).toEqual({
+      version: IMPORT_PAIRING_MIRROR_VERSION,
+      userId: 'coach-1',
+      platformId: 'truecoach',
+      code: null,
+      expiresAt: null,
+      idempotencyKey: mockInit.mock.calls[0][1],
+      setupNonce: mockInit.mock.calls[0][2],
+    });
+
+    await act(async () => {
+      resolveInit({ data: { pairing_code: '482913', expires_at: 'x' } });
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.code).toBe('482913');
+    expect((await readImportPairingMirror('coach-1'))?.setupNonce).toBe(mockInit.mock.calls[0][2]);
+  });
+
+  it('replays the SAME nonce (and key) when retrying after a transient failure', async () => {
+    mockInit.mockRejectedValueOnce(new Error('connection reset'));
+    mockInit.mockResolvedValueOnce({ data: { pairing_code: '482913', expires_at: 'x' } });
+    mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+    const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+    await act(async () => {
+      result.current.start();
+    });
+    expect(result.current.status).toBe('failed');
+    expect(result.current.reason).toBeNull();
+    await act(async () => {
+      result.current.retry();
+    });
+    expect(mockInit).toHaveBeenCalledTimes(2);
+    expect(mockInit.mock.calls[1][2]).toBe(mockInit.mock.calls[0][2]);
+    expect(mockInit.mock.calls[1][1]).toBe(mockInit.mock.calls[0][1]);
+  });
+
+  it('mints a FRESH nonce after a genuinely new intent (cancel, then start)', async () => {
+    mockInit.mockResolvedValue({ data: { pairing_code: '482913', expires_at: 'x' } });
+    mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+    const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+    await act(async () => {
+      result.current.start();
+    });
+    await act(async () => {
+      result.current.cancel();
+    });
+    await act(async () => {
+      result.current.start();
+    });
+    expect(mockInit).toHaveBeenCalledTimes(2);
+    expect(mockInit.mock.calls[1][2]).not.toBe(mockInit.mock.calls[0][2]);
+  });
+
+  it('E01: a pre-init record left by a kill between init and its reply replays the nonce on relaunch', async () => {
+    await seedMirror('coach-1', {
+      code: null,
+      expiresAt: null,
+      idempotencyKey: 'key-survived-the-kill',
+      setupNonce: 'nonce-survived-the-kill',
+    });
+    mockInit.mockResolvedValue({ data: { pairing_code: '555555', expires_at: 'x' } });
+    mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+    const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+    await act(async () => {
+      result.current.start(); // the panel's mount start, racing hydration
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(mockInit).toHaveBeenCalledTimes(1);
+    expect(mockInit).toHaveBeenCalledWith('truecoach', 'key-survived-the-kill', 'nonce-survived-the-kill');
+    expect(result.current.status).toBe('waiting');
+    expect(result.current.code).toBe('555555');
+    // Nothing was restored (there was no code), so no RESTORED event is claimed.
+    expect(mockTrack.mock.calls.map((c) => c[0])).not.toContain(AnalyticsEvents.IMPORT_PAIRING_RESTORED);
+    // The new code is now on disk under the same intent.
+    expect((await readImportPairingMirror('coach-1'))?.code).toBe('555555');
+  });
+
+  it('a pre-init record for ANOTHER platform is discarded, not replayed', async () => {
+    await seedMirror('coach-1', {
+      code: null,
+      expiresAt: null,
+      platformId: 'trainerize',
+      setupNonce: 'other-platform-nonce',
+    });
+    mockInit.mockResolvedValue({ data: { pairing_code: '555555', expires_at: 'x' } });
+    mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+    const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+    await act(async () => {
+      result.current.start();
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(mockInit).toHaveBeenCalledTimes(1);
+    expect(mockInit.mock.calls[0][2]).not.toBe('other-platform-nonce');
+    expect(result.current.code).toBe('555555');
+  });
+
+  describe('409 setup_nonce_conflict', () => {
+    it('discards the nonce, fails with reason conflict, and the retry is a new intent', async () => {
+      mockInit.mockRejectedValueOnce(axiosError(409, { code: 'setup_nonce_conflict', message: 'x' }));
+      mockInit.mockResolvedValueOnce({ data: { pairing_code: '482913', expires_at: 'x' } });
+      mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+      const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+      await act(async () => {
+        result.current.start();
+      });
+      expect(result.current.status).toBe('failed');
+      expect(result.current.reason).toBe('conflict');
+      expect(result.current.code).toBeNull();
+      expect(await readImportPairingMirror('coach-1')).toBeNull();
+
+      await act(async () => {
+        result.current.retry();
+      });
+      expect(mockInit).toHaveBeenCalledTimes(2);
+      expect(mockInit.mock.calls[1][2]).not.toBe(mockInit.mock.calls[0][2]);
+      expect(mockInit.mock.calls[1][1]).not.toBe(mockInit.mock.calls[0][1]);
+      expect(result.current.status).toBe('waiting');
+      expect(result.current.reason).toBeNull();
+    });
+
+    it('tracks a failed event with reason conflict and no nonce or code', async () => {
+      mockInit.mockRejectedValue(axiosError(409, { code: 'setup_nonce_conflict' }));
+      const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+      await act(async () => {
+        result.current.start();
+      });
+      const failed = mockTrack.mock.calls.find((c) => c[0] === AnalyticsEvents.IMPORT_PAIRING_FAILED);
+      expect(failed?.[1]).toEqual({ platform: 'truecoach', reason: 'conflict' });
+      const nonce = mockInit.mock.calls[0][2] as string;
+      expect(JSON.stringify(mockTrack.mock.calls)).not.toContain(nonce);
+    });
+
+    it('a 409 WITHOUT the contracted code is a generic failure that keeps the intent', async () => {
+      mockInit.mockRejectedValueOnce(axiosError(409));
+      mockInit.mockResolvedValueOnce({ data: { pairing_code: '482913', expires_at: 'x' } });
+      mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+      const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+      await act(async () => {
+        result.current.start();
+      });
+      expect(result.current.status).toBe('failed');
+      expect(result.current.reason).toBeNull();
+      await act(async () => {
+        result.current.retry();
+      });
+      expect(mockInit.mock.calls[1][2]).toBe(mockInit.mock.calls[0][2]);
+    });
+  });
+
+  describe('410 setup_challenge_unavailable', () => {
+    it('is expired-class: status expired with reason challengeUnavailable, mirror cleared, nonce retired', async () => {
+      mockInit.mockRejectedValueOnce(axiosError(410, { code: 'setup_challenge_unavailable' }));
+      mockInit.mockResolvedValueOnce({ data: { pairing_code: '482913', expires_at: 'x' } });
+      mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+      const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+      await act(async () => {
+        result.current.start();
+      });
+      expect(result.current.status).toBe('expired');
+      expect(result.current.reason).toBe('challengeUnavailable');
+      expect(result.current.code).toBeNull();
+      expect(await readImportPairingMirror('coach-1')).toBeNull();
+      const names = mockTrack.mock.calls.map((c) => c[0]);
+      expect(names).toContain(AnalyticsEvents.IMPORT_PAIRING_EXPIRED);
+      expect(names).not.toContain(AnalyticsEvents.IMPORT_PAIRING_FAILED);
+
+      await act(async () => {
+        result.current.retry();
+      });
+      expect(mockInit).toHaveBeenCalledTimes(2);
+      expect(mockInit.mock.calls[1][2]).not.toBe(mockInit.mock.calls[0][2]);
+      expect(result.current.status).toBe('waiting');
+    });
+
+    it('a 410 WITHOUT the contracted code is a generic failure', async () => {
+      mockInit.mockRejectedValue(axiosError(410));
+      const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+      await act(async () => {
+        result.current.start();
+      });
+      expect(result.current.status).toBe('failed');
+      expect(result.current.reason).toBeNull();
+    });
+  });
+
+  it('exposes fact → remedy copy for each contract-named reason', () => {
+    expect(PAIRING_REASON_COPY.challengeUnavailable.message).toBe(
+      'Your code is no longer valid; your setup is kept',
+    );
+    expect(PAIRING_REASON_COPY.challengeUnavailable.remedy).toBe('Get a new code');
+    expect(PAIRING_REASON_COPY.conflict.remedy).toBe('Get a new code');
+    expect(Object.keys(PAIRING_REASON_COPY).sort()).toEqual(['challengeUnavailable', 'conflict']);
+  });
+
+  describe('import_intent_id (correlation only)', () => {
+    it('captures the id from the init reply, mirrors it, and never lets it drive status', async () => {
+      mockInit.mockResolvedValue({
+        data: { pairing_code: '482913', expires_at: 'x', import_intent_id: 'ii-0001' },
+      });
+      mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+      const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+      await act(async () => {
+        result.current.start();
+      });
+      expect(result.current.status).toBe('waiting');
+      expect(result.current.importIntentId).toBe('ii-0001');
+      expect((await readImportPairingMirror('coach-1'))?.importIntentId).toBe('ii-0001');
+    });
+
+    it('captures the id from a status reply and keeps polling on pending', async () => {
+      mockInit.mockResolvedValue({ data: { pairing_code: '482913', expires_at: 'x' } });
+      mockStatus.mockResolvedValue({ data: { status: 'pending', import_intent_id: 'ii-0002' } });
+      const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+      await act(async () => {
+        result.current.start();
+      });
+      expect(result.current.importIntentId).toBeNull();
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(2000);
+      });
+      expect(result.current.status).toBe('waiting');
+      // Snapshot publishes on the next transition; the ref already holds it.
+      await act(async () => {
+        result.current.cancel();
+      });
+      expect(result.current.status).toBe('cancelled');
+      expect(result.current.importIntentId).toBe('ii-0002');
+    });
+
+    it('an import_intent_id alone never promotes to paired (fail closed)', async () => {
+      mockInit.mockResolvedValue({ data: { pairing_code: '482913', expires_at: 'x', import_intent_id: 'ii-0003' } });
+      mockStatus.mockResolvedValue({ data: { import_intent_id: 'ii-0003' } }); // no status
+      const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+      await act(async () => {
+        result.current.start();
+      });
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(2000);
+      });
+      expect(result.current.status).toBe('waiting');
+    });
+
+    it('a malformed id is dropped, not surfaced', async () => {
+      mockInit.mockResolvedValue({ data: { pairing_code: '482913', expires_at: 'x', import_intent_id: 42 } });
+      mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+      const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+      await act(async () => {
+        result.current.start();
+      });
+      expect(result.current.importIntentId).toBeNull();
+      expect((await readImportPairingMirror('coach-1'))?.importIntentId).toBeUndefined();
+    });
+
+    it('is reset for a new intent', async () => {
+      mockInit.mockResolvedValueOnce({ data: { pairing_code: '482913', expires_at: 'x', import_intent_id: 'ii-0004' } });
+      mockInit.mockResolvedValueOnce({ data: { pairing_code: '999999', expires_at: 'x' } });
+      mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+      const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+      await act(async () => {
+        result.current.start();
+      });
+      expect(result.current.importIntentId).toBe('ii-0004');
+      await act(async () => {
+        result.current.cancel();
+      });
+      await act(async () => {
+        result.current.start();
+      });
+      expect(result.current.code).toBe('999999');
+      expect(result.current.importIntentId).toBeNull();
+    });
+  });
+
+  it('never emits the nonce, key, or code in any tracked event across the whole flow', async () => {
+    mockInit.mockRejectedValueOnce(axiosError(409, { code: 'setup_nonce_conflict' }));
+    mockInit.mockResolvedValueOnce({ data: { pairing_code: '482913', expires_at: 'x', import_intent_id: 'ii-9' } });
+    mockStatus.mockResolvedValue({ data: { status: 'paired' } });
+    const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+    await act(async () => {
+      result.current.start();
+    });
+    await act(async () => {
+      result.current.retry();
+    });
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(2000);
+    });
+    expect(result.current.status).toBe('paired');
+    const serialized = JSON.stringify(mockTrack.mock.calls);
+    for (const call of mockInit.mock.calls) {
+      expect(serialized).not.toContain(call[1]);
+      expect(serialized).not.toContain(call[2]);
+    }
+    expect(serialized).not.toContain('482913');
+    expect(serialized).not.toContain('ii-9');
+  });
+
+  it('keeps the public return shape the panel destructures', async () => {
+    const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+    const { status, code, supportReference, start, retry, cancel } = result.current;
+    expect(status).toBe('idle');
+    expect(code).toBeNull();
+    expect(supportReference).toBeNull();
+    expect(typeof start).toBe('function');
+    expect(typeof retry).toBe('function');
+    expect(typeof cancel).toBe('function');
+    expect(result.current.importIntentId).toBeNull();
+    expect(result.current.reason).toBeNull();
   });
 });
