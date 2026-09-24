@@ -1,13 +1,16 @@
 /**
- * ExtensionPairingPanel — behavioral tests (v0.3 import, PR-M2).
+ * ExtensionPairingPanel — behavioral tests (v0.3 import, PR-M2; UX-03a
+ * paired-state truth correction).
  *
  * The useExtensionPairing hook is mocked so we can drive each lifecycle state
  * deterministically and assert the panel's honest rendering:
  *   - auto-mints exactly once on mount (single-flight guard is the hook's job),
  *   - minting spinner, waiting (code + cancel — no client-clock countdown),
- *     paired (NO progress or completion claim), and the shared recoverable
- *     /attention layout,
- *   - the paired copy never claims import progress/percentage/entity counts,
+ *     paired (a calm "Connected to your computer" confirmation with a
+ *     truthful checklist — no roster/reconstruct progress or completion
+ *     claim), and the shared recoverable/attention layout,
+ *   - the paired state names the server-owned identity from useCurrentUser
+ *     and never claims more than "pair/status" proves,
  *   - cancel and retry are wired to the hook,
  *   - Quiet-Luxury doctrine: no 700/800 font weights,
  *   - accessibility: polite live regions, spaced code label, button roles.
@@ -43,22 +46,12 @@ jest.mock('../../../hooks/useExtensionPairing', () => ({
   }),
 }));
 
-// PR-M3: the roster-derived review delta is mocked so we can drive the paired
-// review copy deterministically; the hook's own behaviour is covered in
-// useRosterReviewDelta.test.tsx.
-let mockDelta = 0;
-const mockRefresh = jest.fn();
-jest.mock('../../../hooks/useRosterReviewDelta', () => ({
-  useRosterReviewDelta: () => ({ delta: mockDelta, refresh: mockRefresh }),
-}));
-
-// PR-M4: the reconstruct counts hook is mocked. It defaults to DISABLED so the
-// counts section renders nothing, keeping every PR-M2/PR-M3 assertion here
-// unchanged; the section's own states are covered in
-// ExtensionPairingPanel.reconstruct.test.tsx and useReconstructCounts.test.tsx.
-let mockReconstruct: { enabled: boolean; families: unknown[]; refresh: () => void };
-jest.mock('../../../hooks/useReconstructCounts', () => ({
-  useReconstructCounts: () => mockReconstruct,
+// UX-03a: server-owned identity for the paired checklist comes only from
+// useCurrentUser (never a client-edited field). Mocked so the identity line
+// is deterministic; the hook's own behaviour is covered elsewhere.
+let mockCurrentUser: { id: string; email: string; name?: string } | null;
+jest.mock('../../../hooks/useCurrentUser', () => ({
+  useCurrentUser: () => mockCurrentUser,
 }));
 
 const mockNavigate = jest.fn();
@@ -78,12 +71,10 @@ beforeEach(() => {
   mockStart.mockClear();
   mockRetry.mockClear();
   mockCancel.mockClear();
-  mockRefresh.mockClear();
   mockNavigate.mockClear();
   mockTrack.mockClear();
-  mockDelta = 0;
   mockHookState = { status: 'idle', code: null, supportReference: null };
-  mockReconstruct = { enabled: false, families: [], refresh: jest.fn() };
+  mockCurrentUser = { id: 'coach-1', email: 'coach@example.com', name: 'Jordan Coach' };
 });
 
 afterEach(() => {
@@ -134,58 +125,58 @@ describe('ExtensionPairingPanel — lifecycle rendering', () => {
     expect(mockCancel).toHaveBeenCalledTimes(1);
   });
 
-  it('shows an HONEST paired state — no progress, percentage, or entity counts', async () => {
+  it('shows an HONEST paired state — a calm confirmation, no progress, percentage, or entity counts', async () => {
     mockHookState = { status: 'paired', code: null };
     const { getByTestId, toJSON } = await render(<ExtensionPairingPanel platformId="truecoach" />);
     expect(getByTestId('pairing-paired')).toBeTruthy();
     const serialized = JSON.stringify(toJSON());
-    expect(serialized).toMatch(/runs in the browser extension/i);
+    expect(serialized).toMatch(/Connected to your computer/);
     expect(serialized).not.toMatch(/\b\d{1,3}%/);
     expect(serialized).not.toMatch(/imported successfully|import complete|\b\d+ (records|entities|pages)\b/i);
   });
 
-  it('renders the roster-derived delta copy (3→5 = 2) in the paired review', async () => {
-    mockDelta = 2;
+  it('names the server-owned identity from useCurrentUser in the checklist', async () => {
+    mockCurrentUser = { id: 'coach-1', email: 'coach@example.com', name: 'Jordan Coach' };
     mockHookState = { status: 'paired', code: null };
     const { getByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
-    expect(getByTestId('pairing-review-delta')).toHaveTextContent(
-      '2 new clients since you started this import',
-    );
+    expect(getByTestId('pairing-check-identity')).toHaveTextContent('Jordan Coach', { exact: false });
   });
 
-  it('uses the singular form when exactly one new client has arrived', async () => {
-    mockDelta = 1;
+  it('falls back to email when no display name has resolved', async () => {
+    mockCurrentUser = { id: 'coach-1', email: 'coach@example.com' };
     mockHookState = { status: 'paired', code: null };
     const { getByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
-    expect(getByTestId('pairing-review-delta')).toHaveTextContent(
-      '1 new client since you started this import',
-    );
+    expect(getByTestId('pairing-check-identity')).toHaveTextContent('coach@example.com', { exact: false });
   });
 
-  it('renders a calm copy when no new clients yet (3→3 = 0) — never claims completion or that the import is running', async () => {
-    mockDelta = 0;
+  it('shows the truthful checklist: importer available, identity, and previous platform not yet known', async () => {
+    mockHookState = { status: 'paired', code: null };
+    const { getByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
+    expect(getByTestId('pairing-check-importer')).toHaveTextContent('Importer available', { exact: false });
+    expect(getByTestId('pairing-check-platform')).toHaveTextContent('Not yet known', { exact: false });
+  });
+
+  it('shows the instructional primary action with no URL or locator', async () => {
     mockHookState = { status: 'paired', code: null };
     const { getByTestId, toJSON } = await render(<ExtensionPairingPanel platformId="truecoach" />);
-    expect(getByTestId('pairing-review-delta')).toHaveTextContent(
-      'No new clients have arrived yet. If the import is running in the browser extension, they will appear here as they arrive.',
-    );
+    expect(getByTestId('pairing-paired')).toHaveTextContent('Continue on your computer', { exact: false });
     const serialized = JSON.stringify(toJSON());
-    expect(serialized).not.toMatch(/imported successfully|import complete|completed|\bsuccess\b|\b\d{1,3}%/i);
+    expect(serialized).not.toMatch(/https?:\/\//);
   });
 
-  it('exposes a typed, reachable CTA to the existing ClientsList and fires review analytics', async () => {
-    mockDelta = 2;
+  it('exposes a typed, reachable "Review clients" link with no count or progress claim, and fires review analytics', async () => {
     mockHookState = { status: 'paired', code: null };
-    const { getByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
+    const { getByTestId, toJSON } = await render(<ExtensionPairingPanel platformId="truecoach" />);
     fireEvent.press(getByTestId('pairing-review-cta'));
     expect(mockNavigate).toHaveBeenCalledWith('ClientsStack', { screen: 'ClientsList' });
     expect(mockTrack).toHaveBeenCalledWith(AnalyticsEvents.IMPORT_REVIEW_OPENED, {
       platform: 'truecoach',
     });
+    const serialized = JSON.stringify(toJSON());
+    expect(serialized).not.toMatch(/\b\d+ (new )?clients?\b/i);
   });
 
   it('review analytics payload carries ONLY the platform slug — no counts, IDs, or PII', async () => {
-    mockDelta = 4;
     mockHookState = { status: 'paired', code: null };
     const { getByTestId } = await render(<ExtensionPairingPanel platformId="trainerize" />);
     fireEvent.press(getByTestId('pairing-review-cta'));
@@ -252,6 +243,16 @@ describe('ExtensionPairingPanel — lifecycle rendering', () => {
       expect(serialized).not.toMatch(/imported successfully|import complete|\b\d+ (clients|records|entities|pages)\b/i);
     },
   );
+
+  it.each(['expired', 'failed', 'authExpired', 'unavailable', 'cancelled'])(
+    'never claims a retirement, revocation, or disconnect in the %s attention state',
+    async (status) => {
+      mockHookState = { status, code: null };
+      const { toJSON } = await render(<ExtensionPairingPanel platformId="truecoach" />);
+      const serialized = JSON.stringify(toJSON());
+      expect(serialized).not.toMatch(/revoked|disconnected|retired/i);
+    },
+  );
 });
 
 describe('ExtensionPairingPanel — doctrine + accessibility', () => {
@@ -294,12 +295,13 @@ describe('ExtensionPairingPanel — doctrine + accessibility', () => {
     expect(getByTestId(testId).props.accessibilityLiveRegion).toBe('polite');
   });
 
-  it('titles the paired card honestly as "Paired" (not "Complete"/"Imported")', async () => {
+  it('titles the paired card honestly as "Connected to your computer" (not "Complete"/"Imported"/"Paired")', async () => {
     mockHookState = { status: 'paired', code: null };
     const { toJSON } = await render(<ExtensionPairingPanel platformId="truecoach" />);
     const serialized = JSON.stringify(toJSON());
-    expect(serialized).toMatch(/Paired/);
+    expect(serialized).toMatch(/Connected to your computer/);
     expect(serialized).not.toMatch(/complete|imported|finished|done/i);
+    expect(serialized).not.toMatch(/\bPaired\b/);
   });
 
   it('gives the cancel control a button role and label', async () => {

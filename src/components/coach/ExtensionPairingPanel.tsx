@@ -1,18 +1,24 @@
 /**
  * ExtensionPairingPanel — the live pairing surface of the v0.3 import flow
- * (PR-M2). Mounted only once the coach has opened their prior platform's login
- * page (ImportDataScreen `awaitingExtension`). It mints a pairing code, shows it
- * for the coach to read into the browser extension, and reflects honest,
- * contract-backed lifecycle states via useExtensionPairing.
+ * (PR-M2, corrected UX-03a). Mounted only once the coach has opened their
+ * prior platform's login page (ImportDataScreen `awaitingExtension`). It
+ * mints a pairing code, shows it for the coach to read into the browser
+ * extension, and reflects honest, contract-backed lifecycle states via
+ * useExtensionPairing.
  *
- * Honesty guardrails: the mobile contract has no import-progress read, so the
- * terminal this panel can truthfully show is `paired` ("running in the
- * extension") — it never renders importing/partial/complete or any page/entity
- * count. Once paired, the panel offers a truthful, roster-derived review: the
- * ONLY progress it reports is how many clients have appeared in the coach's
- * authoritative roster since the import started (useRosterReviewDelta), plus a
- * typed CTA into the existing Clients list. Cancel is a local abandon (no server
- * cancel exists).
+ * Honesty guardrails (UX-03a paired-state truth correction): the mobile
+ * contract has no import-progress read, and `pair/status` returning `paired`
+ * proves only that this code was redeemed for this coach's account — nothing
+ * about install, capability, or a previous platform (brief §2 row 4). The
+ * `paired` view therefore shows a calm confirmation ("Connected to your
+ * computer") and a truthful, server-owned-identity checklist. It NEVER shows
+ * roster delta, "reconstructed so far", per-family counts, or any claim that
+ * an import is "running" — those were borrowed progress the accepted contract
+ * cannot back. "Review clients" remains a neutral secondary link with no
+ * count or progress claim (Q1). The primary action is purely instructional
+ * ("Continue on your computer") and carries no URL or locator — no
+ * non-authorizing setup locator exists in accepted source (brief §2 row 2).
+ * Cancel remains a local abandon (no server cancel exists).
  *
  * Accessibility + copy (M5-F): the code is rendered at 34pt with 6pt letter
  * spacing, which at large accessibility text sizes used to clip mid-code — and
@@ -22,11 +28,18 @@
  * backed by a copy control, because reading six digits back and forth to a
  * browser is exactly the task that motor and vision impairments make hardest.
  * The copy confirmation reflects the ACTUAL clipboard result (Rule 18) — a
- * failed write says so rather than claiming success.
+ * failed write says so rather than claiming success. The 6-digit code never
+ * enters a URL, log, analytics event, or any new storage.
  *
  * Support correlation (M5-D): when the backend supplies a request id on a
  * failure, the panel shows it as a quotable reference. It is displayed only
  * when real, and never presented as an explanation of what went wrong.
+ *
+ * Every other status (`minting`, `waiting`, `expired`, `authExpired`,
+ * `unavailable`, `failed`, `cancelled`, `identityUnavailable`) keeps its
+ * existing behaviour; copy is adjusted only to fit the fact → remedy →
+ * retained-setup pattern, and makes no retirement, revocation, or disconnect
+ * claim (there is no such endpoint — brief §2 row 5).
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
@@ -42,12 +55,7 @@ import { useTheme } from '../../theme/useTheme';
 import type { ThemeColors } from '../../theme/ThemeProvider';
 import type { CoachTabParamList, ClientsStackParamList } from '../../navigation/CoachNavigator';
 import { useExtensionPairing } from '../../hooks/useExtensionPairing';
-import { useRosterReviewDelta } from '../../hooks/useRosterReviewDelta';
-import {
-  useReconstructCounts,
-  type ReconstructFamilyCounts,
-} from '../../hooks/useReconstructCounts';
-import { FAMILY_LABELS } from '../../types/importReview';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { track } from '../../analytics/posthog.service';
 import { AnalyticsEvents } from '../../analytics/events';
 
@@ -68,7 +76,7 @@ export default function ExtensionPairingPanel({ platformId }: Props): React.Reac
   const navigation = useNavigation<ReviewNav>();
   const pairing = useExtensionPairing(platformId);
   const { status, code, supportReference, start, retry, cancel } = pairing;
-  const { delta } = useRosterReviewDelta();
+  const currentUser = useCurrentUser();
   const startedRef = useRef(false);
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
 
@@ -177,35 +185,45 @@ export default function ExtensionPairingPanel({ platformId }: Props): React.Reac
   }
 
   if (status === 'paired') {
-    // Roster truth is the ONLY progress source: delta > 0 states the real number
-    // of new clients since journey start; delta == 0 is a calm message that
-    // does not assert the extension is still running (S6 R3: `paired` means
-    // the code was accepted, not that an import is in progress). Neither ever
-    // claims imported/complete/partial/%.
-    const reviewCopy =
-      delta > 0
-        ? `${delta} new ${delta === 1 ? 'client' : 'clients'} since you started this import`
-        : 'No new clients have arrived yet. If the import is running in the browser extension, they will appear here as they arrive.';
+    // Truth boundary (brief §2 row 4): `pair/status` returning `paired` proves
+    // only that this code was redeemed for this coach's account. It is NOT
+    // installed-and-running, capability-known, or previous-platform-connected.
+    // Every checklist line beyond the redemption fact and the server-owned
+    // identity therefore reads "Not yet known" rather than inferring anything.
+    // Server-owned identity comes from useCurrentUser only (Q2) — never a
+    // client-edited field — and falls back to email when no display name has
+    // resolved yet.
+    const identityLabel = currentUser?.name || currentUser?.email || 'your account';
     return (
       <View style={[styles.card, styles.cardOk]} accessibilityLiveRegion="polite" testID="pairing-paired">
         <Ionicons name="checkmark-circle-outline" size={22} color={colors.primary} />
-        <Text style={styles.title}>Paired</Text>
-        <Text style={styles.body} testID="pairing-review-delta">
-          {reviewCopy}
-        </Text>
-        <Text style={styles.body}>
-          Your import runs in the browser extension — this app can’t see its progress. Your
-          client roster is the source of truth — open it to review new clients as they arrive.
-        </Text>
-        <ReconstructCountsSection />
+        <Text style={styles.title}>Connected to your computer</Text>
+        <View style={styles.checklist} testID="pairing-checklist">
+          <ChecklistRow styles={styles} colors={colors} label="Importer available" testID="pairing-check-importer" />
+          <ChecklistRow
+            styles={styles}
+            colors={colors}
+            label={`Connected to TGP as ${identityLabel}`}
+            testID="pairing-check-identity"
+          />
+          <ChecklistRow
+            styles={styles}
+            colors={colors}
+            label="Previous platform"
+            value="Not yet known"
+            testID="pairing-check-platform"
+            pending
+          />
+        </View>
+        <Text style={styles.body}>Continue on your computer</Text>
         <TouchableOpacity
-          style={styles.primaryBtn}
+          style={styles.secondaryBtn}
           onPress={openReview}
           accessibilityRole="button"
           accessibilityLabel="Review clients"
           testID="pairing-review-cta"
         >
-          <Text style={styles.primaryBtnText}>Review clients</Text>
+          <Text style={styles.secondaryBtnText}>Review clients</Text>
         </TouchableOpacity>
       </View>
     );
@@ -213,16 +231,16 @@ export default function ExtensionPairingPanel({ platformId }: Props): React.Reac
 
   // Terminal, retryable/attention states share one honest, calm layout.
   //
-  // Copy truthfulness (S6 R3): mobile has no import-progress or server-cancel
-  // contract, so no state here may assert what the extension did or did not
-  // do. `failed` is reached both before a code exists (mint failed) and after
-  // one was shown (status polling failed), and `cancelled` only stops THIS
-  // device from checking — a code already entered in the extension may still
-  // be running there. The messages say exactly that and no more.
+  // Copy truthfulness (S6 R3, reaffirmed by brief §4): mobile has no
+  // import-progress or server-cancel contract, so no state here may assert
+  // what the extension did or did not do, or that anything was retired,
+  // revoked, or disconnected — no such endpoint exists (brief §2 row 5). Each
+  // message follows fact → remedy → retained-setup: state what happened, what
+  // to do next, and that the coach's setup/attempt is kept, not discarded.
   const recoverable: Record<string, { title: string; message: string; cta: string | null }> = {
     expired: {
-      title: 'That code expired',
-      message: 'Pairing codes are short-lived for your security. Generate a new one to continue.',
+      title: 'This code expired',
+      message: 'Your setup is kept — get a new code to continue.',
       cta: 'Get a new code',
     },
     failed: {
@@ -287,127 +305,36 @@ export default function ExtensionPairingPanel({ platformId }: Props): React.Reac
   );
 }
 
-// PR-M4 per-family counts/reasons block inside the paired panel. Page-local
-// counts + stable reasons only — never a total/percentage/ETA/completion.
-// Renders nothing when the kill switch is off (hook fails closed).
-function ReconstructCountsSection(): React.ReactElement | null {
-  const { colors } = useTheme();
-  const styles = makeStyles(colors);
-  const { enabled, families } = useReconstructCounts();
-  if (!enabled) return null;
-  return (
-    <View
-      style={styles.reviewBlock}
-      accessibilityLiveRegion="polite"
-      testID="reconstruct-counts"
-    >
-      <Text style={styles.label}>What we’ve reconstructed so far</Text>
-      {families.map((f) => (
-        <ReconstructFamilyRow
-          key={f.family}
-          family={f}
-          styles={styles}
-          colors={colors}
-        />
-      ))}
-    </View>
-  );
-}
-
-function ReconstructFamilyRow({
-  family,
+// Truthful checklist row for the `paired` state (UX-03a). Each row states
+// either a known fact (checkmark) or an explicit "Not yet known" — never an
+// inferred or borrowed claim.
+function ChecklistRow({
   styles,
   colors,
+  label,
+  value,
+  pending = false,
+  testID,
 }: {
-  family: ReconstructFamilyCounts;
   styles: ReturnType<typeof makeStyles>;
   colors: ThemeColors;
+  label: string;
+  value?: string;
+  pending?: boolean;
+  testID: string;
 }): React.ReactElement {
-  const {
-    family: name,
-    count,
-    reasons,
-    isLoading,
-    isRefreshing,
-    errorKind,
-    hasData,
-    hasMore,
-    fetchMore,
-    retry,
-  } = family;
-  const label = FAMILY_LABELS[name];
-
-  // First load, nothing to show yet.
-  if (isLoading && !hasData) {
-    return (
-      <View style={styles.familyRow} testID={`reconstruct-${name}-loading`}>
-        <Text style={styles.familyLabel}>{label}</Text>
-        <ActivityIndicator
-          color={colors.primary}
-          accessibilityRole="progressbar"
-          accessibilityLabel={`Loading ${label}`}
-        />
-      </View>
-    );
-  }
-
-  // Hard failure with no prior data → explicit error + retry (never a silent
-  // zero that would read as "nothing to import").
-  if (errorKind && !hasData) {
-    return (
-      <View style={styles.familyRow} testID={`reconstruct-${name}-error`}>
-        <Text style={styles.familyLabel}>{label}</Text>
-        <View style={styles.familyErrorRow}>
-          <Text style={styles.familyMuted}>Couldn’t load. </Text>
-          <TouchableOpacity
-            onPress={retry}
-            accessibilityRole="button"
-            accessibilityLabel={`Retry ${label}`}
-            testID={`reconstruct-${name}-retry`}
-          >
-            <Text style={styles.linkText}>Try again</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
-  }
-
-  // Page-local truth only: "N loaded so far" (never a total/percentage), or a
-  // calm "None yet" when the loaded pages are empty.
-  const countLabel = count === 0 ? 'None yet' : `${count} loaded so far`;
   return (
-    <View style={styles.familyRow} testID={`reconstruct-${name}`}>
-      <View style={styles.familyHeader}>
-        <Text style={styles.familyLabel}>{label}</Text>
-        <Text style={styles.familyCount} testID={`reconstruct-${name}-count`}>
-          {countLabel}
-          {isRefreshing ? ' · refreshing…' : ''}
-        </Text>
-      </View>
-      {reasons.map((r) => (
-        <Text
-          key={r.code}
-          style={styles.familyReason}
-          testID={`reconstruct-${name}-reason`}
-        >
-          {r.message}
-        </Text>
-      ))}
-      {errorKind && hasData ? (
-        <Text style={styles.familyMuted} testID={`reconstruct-${name}-stale`}>
-          Couldn’t refresh just now — showing what loaded earlier.
-        </Text>
-      ) : null}
-      {hasMore ? (
-        <TouchableOpacity
-          onPress={fetchMore}
-          accessibilityRole="button"
-          accessibilityLabel={`Load more ${label}`}
-          testID={`reconstruct-${name}-more`}
-        >
-          <Text style={styles.linkText}>Load more</Text>
-        </TouchableOpacity>
-      ) : null}
+    <View style={styles.checklistRow} testID={testID}>
+      {pending ? (
+        <Ionicons name="ellipse-outline" size={16} color={colors.textMuted} />
+      ) : (
+        <Ionicons name="checkmark" size={16} color={colors.primary} />
+      )}
+      <Text style={styles.checklistLabel}>
+        {label}
+        {pending ? '' : ' ✓'}
+      </Text>
+      {value ? <Text style={styles.checklistValue}>{value}</Text> : null}
     </View>
   );
 }
@@ -448,23 +375,16 @@ function makeStyles(colors: ThemeColors) {
     },
     secondaryBtn: { paddingVertical: 12, alignItems: 'center' },
     secondaryBtnText: { color: colors.textSecondary, fontSize: 15, fontWeight: '600' },
-    reviewBlock: {
+    checklist: {
       gap: 8,
       paddingTop: 12,
       marginTop: 4,
       borderTopWidth: StyleSheet.hairlineWidth,
       borderTopColor: colors.border,
     },
-    familyRow: { gap: 4 },
-    familyHeader: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-    },
-    familyErrorRow: { flexDirection: 'row', alignItems: 'center' },
-    familyLabel: { fontSize: 14, fontWeight: '600', color: colors.textPrimary },
-    familyCount: { fontSize: 13, color: colors.textSecondary },
-    familyReason: { fontSize: 13, lineHeight: 18, color: colors.textSecondary },
+    checklistRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    checklistLabel: { fontSize: 14, color: colors.textPrimary, flexShrink: 1 },
+    checklistValue: { fontSize: 14, color: colors.textMuted },
     familyMuted: { fontSize: 13, color: colors.textMuted },
     linkText: { fontSize: 13, fontWeight: '600', color: colors.primary },
   });

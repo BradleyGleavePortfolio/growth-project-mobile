@@ -41,11 +41,8 @@ jest.mock('../../../hooks/useExtensionPairing', () => ({
     cancel: jest.fn(),
   }),
 }));
-jest.mock('../../../hooks/useRosterReviewDelta', () => ({
-  useRosterReviewDelta: () => ({ delta: 0, refresh: jest.fn() }),
-}));
-jest.mock('../../../hooks/useReconstructCounts', () => ({
-  useReconstructCounts: () => ({ enabled: false, families: [], refresh: jest.fn() }),
+jest.mock('../../../hooks/useCurrentUser', () => ({
+  useCurrentUser: () => ({ id: 'coach-1', email: 'coach@example.com', name: 'Jordan Coach' }),
 }));
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: jest.fn() }),
