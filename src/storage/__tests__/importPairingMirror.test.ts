@@ -34,6 +34,7 @@ function session(over: Partial<MirroredPairingSession> = {}): MirroredPairingSes
     code: '482913',
     expiresAt: '2026-07-27T10:15:00.000Z',
     idempotencyKey: 'b0a1c2d3-e4f5-4607-8899-aabbccddeeff',
+    setupNonce: '7f1e2d3c-4b5a-4968-8776-655443322110',
     ...over,
   };
 }
@@ -128,6 +129,8 @@ describe('malformed payloads are discarded, not half-trusted', () => {
     ['an empty code', { code: '' }],
     ['an empty platform', { platformId: '' }],
     ['an empty idempotency key', { idempotencyKey: '' }],
+    ['an empty setup nonce', { setupNonce: '' }],
+    ['an empty import intent id', { importIntentId: '' }],
     ['an empty user id', { userId: '' }],
   ])('discards %s and deletes the key', async (_label, over) => {
     await AsyncStorage.setItem(
@@ -138,7 +141,7 @@ describe('malformed payloads are discarded, not half-trusted', () => {
     expect(await AsyncStorage.getItem(importPairingMirrorKey('coach-1'))).toBeNull();
   });
 
-  it.each(['version', 'platformId', 'code', 'expiresAt', 'idempotencyKey'])(
+  it.each(['version', 'platformId', 'code', 'expiresAt', 'idempotencyKey', 'setupNonce'])(
     'discards a record missing %s',
     async (field) => {
       const partial: Record<string, unknown> = { ...session() };
@@ -150,6 +153,64 @@ describe('malformed payloads are discarded, not half-trusted', () => {
       expect(await readImportPairingMirror('coach-1')).toBeNull();
     },
   );
+
+  it('discards a v1 record (schema before the setup nonce) by the version rule', async () => {
+    // Exactly what a coach upgrading from the v1 build has on disk: no
+    // migration, a logged discard, and a fresh mint on the next start.
+    const v1: Record<string, unknown> = { ...session(), version: 1 };
+    delete v1.setupNonce;
+    await AsyncStorage.setItem(importPairingMirrorKey('coach-1'), JSON.stringify(v1));
+    expect(await readImportPairingMirror('coach-1')).toBeNull();
+    expect(await AsyncStorage.getItem(importPairingMirrorKey('coach-1'))).toBeNull();
+  });
+
+  it.each<[string, Record<string, unknown>]>([
+    ['a code with no expiry stamp', { code: '482913', expiresAt: null }],
+    ['a non-string import intent id', { importIntentId: 7 }],
+    ['a non-string code', { code: 482913 }],
+  ])('discards %s', async (_label, over) => {
+    await AsyncStorage.setItem(
+      importPairingMirrorKey('coach-1'),
+      JSON.stringify({ ...session(), ...over }),
+    );
+    expect(await readImportPairingMirror('coach-1')).toBeNull();
+  });
+});
+
+/**
+ * C1 (UX-03b, schema v2): the setup nonce is persisted BEFORE /pair/init, so a
+ * record may legitimately exist with no code yet; the server's import intent id
+ * rides along as optional correlation.
+ */
+describe('v2: pre-init record and import intent id', () => {
+  it('round-trips a pre-init record (code and expiry null, nonce present)', async () => {
+    const preInit = session({ code: null, expiresAt: null });
+    await writeImportPairingMirror(preInit);
+    expect(await readImportPairingMirror('coach-1')).toEqual(preInit);
+  });
+
+  it('round-trips an optional import intent id', async () => {
+    const withIntent = session({ importIntentId: 'ii-0001' });
+    await writeImportPairingMirror(withIntent);
+    expect(await readImportPairingMirror('coach-1')).toEqual(withIntent);
+  });
+
+  it('a record without an import intent id reads back without the key', async () => {
+    await writeImportPairingMirror(session());
+    const read = await readImportPairingMirror('coach-1');
+    expect(read).not.toBeNull();
+    expect('importIntentId' in (read as object)).toBe(false);
+  });
+
+  it('a pre-init record is superseded by the full record of the same intent', async () => {
+    await writeImportPairingMirror(session({ code: null, expiresAt: null }));
+    await writeImportPairingMirror(session({ code: '482913' }));
+    expect((await readImportPairingMirror('coach-1'))?.code).toBe('482913');
+  });
+
+  it('the schema version is 2', () => {
+    expect(IMPORT_PAIRING_MIRROR_VERSION).toBe(2);
+  });
 });
 
 describe('clear', () => {

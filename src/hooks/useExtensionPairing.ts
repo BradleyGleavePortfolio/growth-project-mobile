@@ -56,12 +56,39 @@
  * guards prevent both duplicate mint intents and concurrent /status polls (a
  * foreground resume mid-poll never issues a second request). No token or code is
  * ever logged, stored, or emitted in telemetry.
+ *
+ * C1 setup correlation (UX-03b; contract `2.0.0-c1-s1.1` @ backend `a0ea1bea`,
+ * consumer-frozen pair surface — see types/extensionImport.ts):
+ *   • A `setup_nonce` (uuid) is minted alongside the Rule 19 key, PERSISTED to
+ *     the mirror BEFORE /pair/init is sent (a pre-init record with `code: null`),
+ *     and replayed on a same-intent retry — including after a process death
+ *     between the request and its reply (E01). It lets the server hand back the
+ *     coach's OWN attempt instead of minting a second one; it authorises nothing.
+ *   • 409 `setup_nonce_conflict` (nonce already used for another platform):
+ *     the nonce is DISCARDED and the state is `failed` with `reason: 'conflict'`;
+ *     the remedy is "Get a new code" (a retry is a genuinely new intent).
+ *   • 410 `setup_challenge_unavailable` (challenge gone): expired-class state
+ *     `expired` with `reason: 'challengeUnavailable'` and the copy "Your code is
+ *     no longer valid; your setup is kept" — the server's durable setup survives
+ *     challenge expiry; nothing here claims what the extension did.
+ *   • `import_intent_id` from init/status replies is captured into
+ *     `importIntentId` as CORRELATION ONLY (support, `pair/session` lookup). It
+ *     never drives eligibility, `paired`, Start, connection, or result state.
+ *   • Mobile never calls `pair/redeem`; there is no revocation or disconnect
+ *     endpoint and no such claim is made. Code and nonce never enter a URL,
+ *     log, analytics, or telemetry payload.
+ *   The public return shape is additive: `importIntentId` and `reason` are new
+ *   optional members; every pre-existing member and status is unchanged.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
 import { AxiosError } from 'axios';
 import { extensionPairApi } from '../api/extensionPairApi';
-import { decodePairStatus } from '../types/extensionImport';
+import {
+  decodeImportIntentId,
+  decodePairInitErrorCode,
+  decodePairStatus,
+} from '../types/extensionImport';
 import { featureFlags } from '../config/featureFlags';
 import { track } from '../analytics/posthog.service';
 import { AnalyticsEvents } from '../analytics/events';
@@ -89,6 +116,26 @@ export type PairingStatus =
   /** Coach identity never resolved within the bounded wait; nothing was minted. */
   | 'identityUnavailable';
 
+/**
+ * Contract-named cause of the CURRENT `failed` / `expired` state, when the C1
+ * pair/init contract supplied one. Null for every other transition. Presentation
+ * may map it to copy (see PAIRING_REASON_COPY); it is never a server truth claim.
+ */
+export type PairingReason = 'conflict' | 'challengeUnavailable';
+
+/** Fact → remedy copy for each contract-named reason (A11Y-07 pattern). */
+export const PAIRING_REASON_COPY: Readonly<Record<PairingReason, { message: string; remedy: string }>> =
+  Object.freeze({
+    conflict: Object.freeze({
+      message: 'This setup was started for a different platform, so it can’t be reused here.',
+      remedy: 'Get a new code',
+    }),
+    challengeUnavailable: Object.freeze({
+      message: 'Your code is no longer valid; your setup is kept',
+      remedy: 'Get a new code',
+    }),
+  });
+
 export interface PairingState {
   status: PairingStatus;
   /** 6-digit code shown to the coach to read into the extension. Never logged. */
@@ -100,6 +147,15 @@ export interface PairingState {
    * none. Showing it is not a diagnosis (Rule 18).
    */
   supportReference: string | null;
+  /**
+   * Server `import_intent_id` for the CURRENT intent, when the init/status
+   * reply carried one. CORRELATION ONLY (support, `pair/session`): never read
+   * as eligibility, connection, Start, or result truth. Optional so existing
+   * panel doubles that predate it stay type-compatible.
+   */
+  importIntentId?: string | null;
+  /** Contract-named cause of the current failed/expired state, if any. */
+  reason?: PairingReason | null;
 }
 
 export interface UseExtensionPairing extends PairingState {
@@ -126,10 +182,17 @@ const MAX_POLL_FAILURES = 5;
  */
 export const IDENTITY_WAIT_MS = 8000;
 
-type FailReason = 'auth' | 'unavailable' | 'network' | 'identity';
+type FailReason = 'auth' | 'unavailable' | 'network' | 'identity' | 'conflict';
 
 function axiosStatus(err: unknown): number | undefined {
   return err instanceof AxiosError ? err.response?.status : undefined;
+}
+
+/** Domain `code` from a C1 error envelope body, or undefined. Never the message. */
+function axiosErrorCode(err: unknown): unknown {
+  if (!(err instanceof AxiosError)) return undefined;
+  const data: unknown = err.response?.data;
+  return data && typeof data === 'object' ? (data as { code?: unknown }).code : undefined;
 }
 
 /**
@@ -146,6 +209,8 @@ export function useExtensionPairing(
     status: 'idle',
     code: null,
     supportReference: null,
+    importIntentId: null,
+    reason: null,
   });
 
   const mountedRef = useRef(true);
@@ -165,6 +230,10 @@ export function useExtensionPairing(
   userIdRef.current = userId;
   /** Rule 19 key for the CURRENT coach intent; replayed across retries of it. */
   const idempotencyKeyRef = useRef<string | null>(null);
+  /** C1 `setup_nonce` for the CURRENT intent; persisted pre-init, replayed on retry. */
+  const setupNonceRef = useRef<string | null>(null);
+  /** Server `import_intent_id` for the CURRENT intent. Correlation only. */
+  const importIntentIdRef = useRef<string | null>(null);
   /**
    * False until the durable mirror has been consulted for a RESOLVED coach id.
    * Stays false while the identity is still unknown, so `start()` defers.
@@ -203,6 +272,25 @@ export function useExtensionPairing(
     identityTimerRef.current = null;
   }, []);
 
+  /** Publish a state snapshot; `importIntentId` always mirrors the current intent's ref. */
+  const emit = useCallback(
+    (
+      status: PairingStatus,
+      code: string | null,
+      supportReference: string | null = null,
+      reason: PairingReason | null = null,
+    ) => {
+      setState({
+        status,
+        code,
+        supportReference,
+        importIntentId: importIntentIdRef.current,
+        reason,
+      });
+    },
+    [],
+  );
+
   /**
    * Move to a codeless terminal/reset status and tear down timers.
    * `supportReference` is the server's correlation id for the request that
@@ -210,7 +298,7 @@ export function useExtensionPairing(
    * it so a stale reference can never be attached to a later failure.
    */
   const go = useCallback(
-    (next: PairingStatus, supportReference: string | null = null) => {
+    (next: PairingStatus, supportReference: string | null = null, reason: PairingReason | null = null) => {
       clearTimers();
       // Ending this session frees the poll single-flight guard so the next
       // session can poll; a still-outstanding poll from the old session is
@@ -222,18 +310,27 @@ export function useExtensionPairing(
       mintInFlightRef.current = false;
       codeRef.current = null;
       // No status reached here still owns a code, so the durable mirror is stale
-      // by definition — including 'minting', where a fresh mint supersedes it.
+      // by definition — EXCEPT 'minting': start() immediately overwrites the
+      // record with this intent's pre-init (nonce) record, and a same-intent
+      // retry must not lose the nonce it is about to replay.
       const uid = userIdRef.current;
-      if (uid) void clearImportPairingMirror(uid);
-      // Retire the Rule 19 key on every outcome EXCEPT a transient network
-      // 'failed' (and the 'minting' transition): a retry after a lost response is
-      // the SAME coach intent and must replay the same key, whereas a retry after
-      // paired/expired/cancelled/auth/unavailable is a genuinely new intent.
-      if (next !== 'failed' && next !== 'minting') idempotencyKeyRef.current = null;
+      if (uid && next !== 'minting') void clearImportPairingMirror(uid);
+      // Retire the Rule 19 key AND the setup nonce on every outcome EXCEPT a
+      // transient 'failed' (and the 'minting' transition): a retry after a lost
+      // response is the SAME coach intent and must replay the same key + nonce,
+      // whereas a retry after paired/expired/cancelled/auth/unavailable is a
+      // genuinely new intent. (A 409 conflict discards them explicitly.)
+      if (next !== 'failed' && next !== 'minting') {
+        idempotencyKeyRef.current = null;
+        setupNonceRef.current = null;
+      }
+      // A new intent has no correlation id yet; every other transition keeps
+      // the current intent's id for support (it is never UI truth).
+      if (next === 'minting') importIntentIdRef.current = null;
       statusRef.current = next;
-      if (mountedRef.current) setState({ status: next, code: null, supportReference });
+      if (mountedRef.current) emit(next, null, supportReference, reason);
     },
-    [clearTimers],
+    [clearTimers, emit],
   );
 
   const emitFailed = useCallback((reason: FailReason) => {
@@ -255,6 +352,10 @@ export function useExtensionPairing(
       // Discard a late/stale result: unmounted, session moved off 'waiting', or
       // the code was abandoned/re-minted (cancel→retry) while this poll was out.
       if (!mountedRef.current || statusRef.current !== 'waiting' || codeRef.current !== code) return;
+      // Correlation only: remember the server's setup id when it names one.
+      // It never influences which branch below is taken.
+      const intent = decodeImportIntentId(res.data?.import_intent_id);
+      if (intent) importIntentIdRef.current = intent;
       const decoded = decodePairStatus(res.data?.status ?? '');
       if (decoded === 'paired') {
         go('paired');
@@ -315,7 +416,7 @@ export function useExtensionPairing(
       // may settle it again.
       if (statusRef.current === 'identityUnavailable') {
         statusRef.current = 'idle';
-        setState({ status: 'idle', code: null, supportReference: null });
+        emit('idle', null);
       }
       // Bounded wait: only while the identity has NEVER resolved on this mount
       // (cold start / failed hydration). The A→null sign-out window is a
@@ -328,25 +429,29 @@ export function useExtensionPairing(
           if (statusRef.current !== 'idle') return;
           pendingStartRef.current = false;
           statusRef.current = 'identityUnavailable';
-          setState({ status: 'identityUnavailable', code: null, supportReference: null });
+          emit('identityUnavailable', null);
           emitFailed('identity');
         }, IDENTITY_WAIT_MS);
       }
       return;
     }
     let key = idempotencyKeyRef.current;
-    if (!key) {
+    let nonce = setupNonceRef.current;
+    if (!key || !nonce) {
       try {
-        key = generateIdempotencyKey();
+        key = key ?? generateIdempotencyKey();
+        nonce = nonce ?? generateIdempotencyKey();
       } catch (err) {
-        // No CSPRNG means no safe retry key; minting anyway risks a duplicate
-        // session, so fail visibly instead (Rule 19 has no soft fallback).
+        // No CSPRNG means no safe retry key or nonce; minting anyway risks a
+        // duplicate session, so fail visibly instead (Rule 19 has no soft
+        // fallback). Never log the values themselves.
         logger.warn('[useExtensionPairing] idempotency key unavailable', err);
         go('failed');
         emitFailed('network');
         return;
       }
       idempotencyKeyRef.current = key;
+      setupNonceRef.current = nonce;
     }
     // The mint belongs to the coach signed in NOW; a response that lands after
     // the identity changed is discarded, never mirrored under the new coach.
@@ -365,20 +470,56 @@ export function useExtensionPairing(
     mintInFlightRef.current = true;
     track(AnalyticsEvents.IMPORT_PAIRING_STARTED, { platform: slug });
     try {
-      const res = await extensionPairApi.init(slug, key);
-      // Late result of a superseded attempt → discard (no HTTP abort).
-      if (stale()) return;
+      // Persist the nonce BEFORE the request (E01): if the OS kills the app
+      // between /pair/init and its reply, the relaunch finds this pre-init
+      // record and replays the same nonce, so the server can hand back the
+      // coach's own attempt instead of a blind second mint. A write failure is
+      // logged and the flow continues — degraded durability, not a dead flow;
+      // the stale record it could not overwrite is cleared so an OLD code
+      // cannot be restored under this new intent.
+      const uid = owner;
+      if (uid) {
+        try {
+          await writeImportPairingMirror({
+            version: IMPORT_PAIRING_MIRROR_VERSION,
+            userId: uid,
+            platformId: slug,
+            code: null,
+            expiresAt: null,
+            idempotencyKey: key,
+            setupNonce: nonce,
+          });
+        } catch (err) {
+          logger.warn('[useExtensionPairing] pre-init mirror write failed', err);
+          void clearImportPairingMirror(uid);
+        }
+        if (stale()) {
+          if (userIdRef.current !== owner) void clearImportPairingMirror(uid);
+          return;
+        }
+      }
+      const res = await extensionPairApi.init(slug, key, nonce);
+      // Late result of a superseded attempt → discard (no HTTP abort). If the
+      // coach changed meanwhile, the pre-init record THIS attempt wrote is
+      // removed too (same rule as the post-write branch below): nothing this
+      // attempt put on disk survives an owner change.
+      if (stale()) {
+        if (uid && userIdRef.current !== owner) void clearImportPairingMirror(uid);
+        return;
+      }
       const code = res.data?.pairing_code ?? null;
       if (!code) {
         go('failed');
         emitFailed('network');
         return;
       }
+      // Server setup correlation, when issued. Captured only; never drives state.
+      const intent = decodeImportIntentId(res.data?.import_intent_id);
+      importIntentIdRef.current = intent;
       // Persist BEFORE showing the code: the coach's next action is to leave the
       // app, so a code on screen that is not on disk is exactly the state that
       // an OS kill turns into an orphaned server-side session. A write failure
       // is logged and the flow continues — degraded durability, not a dead flow.
-      const uid = owner;
       if (uid) {
         try {
           await writeImportPairingMirror({
@@ -389,6 +530,8 @@ export function useExtensionPairing(
             // Stored verbatim for provenance/support only; never clock-compared.
             expiresAt: res.data?.expires_at ?? '',
             idempotencyKey: key,
+            setupNonce: nonce,
+            ...(intent ? { importIntentId: intent } : {}),
           });
         } catch (err) {
           logger.warn('[useExtensionPairing] mirror write failed', err);
@@ -408,7 +551,7 @@ export function useExtensionPairing(
       pollDelayRef.current = POLL_BASE_MS;
       failureCountRef.current = 0;
       statusRef.current = 'waiting';
-      setState({ status: 'waiting', code, supportReference: null });
+      emit('waiting', code);
       track(AnalyticsEvents.IMPORT_PAIRING_CODE_READY, { platform: slug });
       pollTimerRef.current = setTimeout(doPoll, POLL_BASE_MS);
     } catch (err) {
@@ -417,13 +560,31 @@ export function useExtensionPairing(
       if (stale()) return;
       const s = axiosStatus(err);
       const ref = extractRequestId(err);
+      const domainCode = decodePairInitErrorCode(axiosErrorCode(err));
       if (s === 401 || s === 403) {
         go('authExpired', ref);
         emitFailed('auth');
       } else if (s === 404) {
         go('unavailable', ref);
         emitFailed('unavailable');
+      } else if (s === 409 && domainCode === 'setup_nonce_conflict') {
+        // The nonce names an attempt the server already bound to ANOTHER
+        // platform ("no mutation"). Discard it — and the Rule 19 key with it —
+        // so the coach's retry is a genuinely new intent ("Get a new code").
+        setupNonceRef.current = null;
+        idempotencyKeyRef.current = null;
+        go('failed', ref, 'conflict');
+        emitFailed('conflict');
+      } else if (s === 410 && domainCode === 'setup_challenge_unavailable') {
+        // The challenge behind this nonce is gone. Expired-class: the code is no
+        // longer valid; the server keeps the durable setup. `go('expired')`
+        // retires key + nonce, so the retry mints a fresh challenge rather than
+        // replaying a nonce the server just refused.
+        go('expired', ref, 'challengeUnavailable');
+        track(AnalyticsEvents.IMPORT_PAIRING_EXPIRED, { platform: slug });
       } else {
+        // Includes 400 `code_mint_failed`, a 409/410 without its contracted
+        // code, 429 and transport faults: generic retryable failure, same intent.
         go('failed', ref);
         emitFailed('network');
       }
@@ -432,7 +593,7 @@ export function useExtensionPairing(
       // attempt must not free a guard a newer attempt now holds.
       if (mintEpochRef.current === attempt) mintInFlightRef.current = false;
     }
-  }, [enabled, go, doPoll, emitFailed]);
+  }, [enabled, go, doPoll, emit, emitFailed]);
 
   startRef.current = start;
 
@@ -466,8 +627,10 @@ export function useExtensionPairing(
         mintInFlightRef.current = false;
         codeRef.current = null;
         idempotencyKeyRef.current = null;
+        setupNonceRef.current = null;
+        importIntentIdRef.current = null;
         statusRef.current = 'idle';
-        setState({ status: 'idle', code: null, supportReference: null });
+        emit('idle', null);
         if (hadLive) pendingStartRef.current = true;
       }
       hydratedRef.current = false;
@@ -480,7 +643,7 @@ export function useExtensionPairing(
     // arriving: return to idle so the deferred intent below can proceed.
     if (statusRef.current === 'identityUnavailable') {
       statusRef.current = 'idle';
-      setState({ status: 'idle', code: null, supportReference: null });
+      emit('idle', null);
       pendingStartRef.current = true;
     }
     let abandoned = false;
@@ -492,11 +655,25 @@ export function useExtensionPairing(
         if (restored.platformId === slug) {
           hydratedRef.current = true;
           idempotencyKeyRef.current = restored.idempotencyKey;
+          setupNonceRef.current = restored.setupNonce;
+          importIntentIdRef.current = restored.importIntentId ?? null;
+          if (restored.code === null) {
+            // Pre-init record (E01): /pair/init never replied before the kill.
+            // There is nothing to show and nothing to poll; the key + nonce are
+            // now in memory, so the start() that follows (the panel's mount
+            // start, or one that raced this read) REPLAYS the same intent
+            // instead of minting blind. No restored event: no code was restored.
+            if (pendingStartRef.current) {
+              pendingStartRef.current = false;
+              startRef.current?.();
+            }
+            return;
+          }
           codeRef.current = restored.code;
           pollDelayRef.current = POLL_BASE_MS;
           failureCountRef.current = 0;
           statusRef.current = 'waiting';
-          setState({ status: 'waiting', code: restored.code, supportReference: null });
+          emit('waiting', restored.code);
           track(AnalyticsEvents.IMPORT_PAIRING_RESTORED, { platform: restored.platformId });
           pollTimerRef.current = setTimeout(doPoll, 0);
           return;
@@ -523,7 +700,7 @@ export function useExtensionPairing(
     return () => {
       abandoned = true;
     };
-  }, [enabled, doPoll, clearTimers, clearIdentityTimer, userId]);
+  }, [enabled, doPoll, clearTimers, clearIdentityTimer, emit, userId]);
 
   const cancel = useCallback(() => {
     const wasActive = statusRef.current === 'minting' || statusRef.current === 'waiting';

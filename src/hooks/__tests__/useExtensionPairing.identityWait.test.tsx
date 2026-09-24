@@ -116,7 +116,7 @@ describe('bounded identity wait — real useCurrentUser over an empty identity s
       result.current.start();
       await jest.advanceTimersByTimeAsync(10);
     });
-    unmount();
+    await unmount();
     await act(async () => {
       await jest.advanceTimersByTimeAsync(IDENTITY_WAIT_MS + 10);
     });

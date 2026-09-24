@@ -27,6 +27,19 @@
  * /pair/init expires the coach's prior live code server-side. Replaying the key
  * keeps the client side deterministic and forward compatible.
  *
+ * C1 setup correlation (UX-03b, schema v2): `setupNonce` is the C1
+ * `setup_nonce` — a client-minted uuid persisted BEFORE the first /pair/init so
+ * that a process death between the request and its reply (E01) still leaves
+ * the coach able to recover their OWN attempt by replaying it. A record may
+ * therefore exist with `code: null` ("we asked, no reply yet"). `importIntentId`
+ * is the server's `import_intent_id`, kept as correlation only — never read as
+ * eligibility, connection, Start, or result truth. Like the code, the nonce is
+ * never logged and never sent to telemetry: it names an owned attempt.
+ *
+ * Version rule: v1 payloads (no nonce) fail the shape guard and are discarded
+ * on read — the coach simply re-mints. This is the existing, designed discard
+ * mechanism, not a migration.
+ *
  * Rule 18 (no fabricated confirmations): restoring a record is NOT a claim the
  * session is still live. It only says "we asked for this and never saw it
  * finish" — the server decides what the session actually is.
@@ -43,7 +56,7 @@ import { logger } from '../utils/logger';
 export const IMPORT_PAIRING_MIRROR_KEY_PREFIX = 'import_pairing_session:';
 
 /** Schema version — bump to discard incompatible on-disk payloads on read. */
-export const IMPORT_PAIRING_MIRROR_VERSION = 1;
+export const IMPORT_PAIRING_MIRROR_VERSION = 2;
 
 /** Build the per-user mirror key. Exported so the shape lives in one place. */
 export function importPairingMirrorKey(userId: string): string {
@@ -53,8 +66,10 @@ export function importPairingMirrorKey(userId: string): string {
 /**
  * One pairing session the coach started and we have not yet seen reach a
  * terminal state. Holds everything needed to pick the flow back up after a
- * process death: which platform they chose, the code they were told to type,
- * the server's own expiry stamp, and the idempotency key replayed on re-mint.
+ * process death: which platform they chose, the code they were told to type
+ * (null while /pair/init is still unanswered), the server's own expiry stamp,
+ * the idempotency key and the setup nonce replayed on re-mint, and the
+ * server's setup correlation id when it has issued one.
  */
 export interface MirroredPairingSession {
   version: number;
@@ -62,12 +77,27 @@ export interface MirroredPairingSession {
   userId: string;
   /** `chosen_platform` slug the session was minted for. */
   platformId: string;
-  /** The 6-digit code shown to the coach. Never logged, never sent to telemetry. */
-  code: string;
-  /** Server-authoritative ISO-8601 expiry, stored verbatim. Never compared locally. */
-  expiresAt: string;
+  /**
+   * The 6-digit code shown to the coach, or null while the first /pair/init of
+   * this intent has not replied (pre-init record). Never logged, never sent to
+   * telemetry.
+   */
+  code: string | null;
+  /**
+   * Server-authoritative ISO-8601 expiry, stored verbatim; null on a pre-init
+   * record. Never compared locally.
+   */
+  expiresAt: string | null;
   /** Rule 19 key, replayed on every re-mint of this same intent. */
   idempotencyKey: string;
+  /** C1 `setup_nonce` for this intent, persisted before init. Never logged. */
+  setupNonce: string;
+  /** Server `import_intent_id` — correlation only, never UI truth. Optional. */
+  importIntentId?: string;
+}
+
+function isNonEmptyString(v: unknown): v is string {
+  return typeof v === 'string' && v.length > 0;
 }
 
 function isMirroredPairingSession(
@@ -75,17 +105,24 @@ function isMirroredPairingSession(
 ): value is MirroredPairingSession {
   if (!value || typeof value !== 'object') return false;
   const v = value as Record<string, unknown>;
+  // A code, when present, is a non-empty string; null means "init unanswered".
+  // An absent (undefined) or empty code is a malformed record, not a pre-init one.
+  const codeOk = v.code === null || isNonEmptyString(v.code);
+  const expiresOk = v.expiresAt === null || typeof v.expiresAt === 'string';
+  // Pre-init records carry no expiry; a record WITH a code must carry the
+  // server's stamp (verbatim string) exactly as v1 did.
+  const codeExpiryCoherent = v.code === null || typeof v.expiresAt === 'string';
+  const intentOk = v.importIntentId === undefined || isNonEmptyString(v.importIntentId);
   return (
     v.version === IMPORT_PAIRING_MIRROR_VERSION &&
-    typeof v.userId === 'string' &&
-    v.userId.length > 0 &&
-    typeof v.platformId === 'string' &&
-    v.platformId.length > 0 &&
-    typeof v.code === 'string' &&
-    v.code.length > 0 &&
-    typeof v.expiresAt === 'string' &&
-    typeof v.idempotencyKey === 'string' &&
-    v.idempotencyKey.length > 0
+    isNonEmptyString(v.userId) &&
+    isNonEmptyString(v.platformId) &&
+    codeOk &&
+    expiresOk &&
+    codeExpiryCoherent &&
+    isNonEmptyString(v.idempotencyKey) &&
+    isNonEmptyString(v.setupNonce) &&
+    intentOk
   );
 }
 

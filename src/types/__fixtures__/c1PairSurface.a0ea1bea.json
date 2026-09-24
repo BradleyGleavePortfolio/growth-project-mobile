@@ -1,0 +1,862 @@
+{
+  "$fixture": {
+    "extraction": {
+      "method": "exact copy of the five listed path items; transitive closure of every #/components/schemas/* $ref reachable from them; security schemes named by their `security` requirements; JSON re-serialised with sorted keys and 2-space indent",
+      "paths": [
+        "/api/extension/pair/init",
+        "/api/extension/pair/status",
+        "/api/extension/pair/current",
+        "/api/extension/pair/session",
+        "/api/extension/pair/redeem"
+      ],
+      "schemas": [
+        "ErrorEnvelope",
+        "PairCurrentDto",
+        "PairInitDto",
+        "PairInitResult",
+        "PairRedeemDto",
+        "PairRedeemResult",
+        "PairSessionDto",
+        "PairSessionResult",
+        "PairStatusDto",
+        "PairStatusResult",
+        "RateLimitError"
+      ],
+      "securitySchemes": [
+        "bearer"
+      ]
+    },
+    "name": "c1-pair-surface",
+    "purpose": "S7-2' consumer-frozen pair surface of the C1 importer contract, mechanically projected for the TGP mobile consumer contract test. Do not hand-edit; regenerate with execution/cf8ff737/ux03b/extract_pair_surface_fixture.py.",
+    "source": {
+      "artifact": "docs/contracts/importer-openapi.json",
+      "commit": "a0ea1bea92ba830d5ffb712a3dcb26e7be0a0992",
+      "contract_version": "2.0.0-c1-s1.1",
+      "openapi": "3.1.0",
+      "repository": "growth-project-backend",
+      "sha256": "bdb022dd6c4fb64cdf291fdde3796b99e4b23004f676b7cb46a58460526ba4e5"
+    }
+  },
+  "components": {
+    "schemas": {
+      "ErrorEnvelope": {
+        "properties": {
+          "code": {
+            "description": "Machine-readable failure discriminant, present only when the handler set one (e.g. `extension_refresh_invalid`, `invalid`). Absent for generic validation/guard errors.",
+            "example": "invalid",
+            "type": "string"
+          },
+          "error": {
+            "description": "Short error class name (Nest default), e.g. `Bad Request`, `Unauthorized`.",
+            "example": "Bad Request",
+            "type": "string"
+          },
+          "message": {
+            "description": "Human-readable message. A single string for most errors; an array of strings when the global ValidationPipe reports one entry per failed constraint.",
+            "example": "Invalid pairing code.",
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ]
+          },
+          "path": {
+            "description": "Request path the error occurred on.",
+            "example": "/api/scout/ingest",
+            "type": "string"
+          },
+          "request_id": {
+            "description": "Correlation id from RequestIdMiddleware; omitted when absent.",
+            "example": "5f2c9b1e-6d3a-4c8b-9f0e-1a2b3c4d5e6f",
+            "type": "string"
+          },
+          "statusCode": {
+            "description": "HTTP status code, echoed in the body.",
+            "example": 400,
+            "type": "number"
+          },
+          "timestamp": {
+            "description": "ISO-8601 instant the error envelope was built.",
+            "example": "2026-07-13T18:30:00.000Z",
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "statusCode",
+          "message",
+          "error",
+          "timestamp",
+          "path"
+        ],
+        "type": "object"
+      },
+      "PairCurrentDto": {
+        "properties": {
+          "setup_nonce": {
+            "description": "Optional saved setup nonce: recover this owned attempt instead of the current setup.",
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "PairInitDto": {
+        "properties": {
+          "chosen_platform": {
+            "description": "Source coaching platform the coach is migrating from. Lowercase slug driven by the extension ROADMAP matrix (truecoach, trainerize, mypthub, …).",
+            "example": "truecoach",
+            "type": "string"
+          },
+          "setup_nonce": {
+            "description": "Optional saved setup nonce: recover this owned attempt instead of the current setup.",
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "chosen_platform"
+        ],
+        "type": "object"
+      },
+      "PairInitResult": {
+        "properties": {
+          "expires_at": {
+            "description": "ISO-8601 instant the code expires (short TTL, DESIGN §4).",
+            "example": "2026-07-09T18:35:00.000Z",
+            "format": "date-time",
+            "type": "string"
+          },
+          "import_intent_id": {
+            "description": "Server-issued setup correlation, not authorization or accepted Start. Absent on legacy unbound rows.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "pairing_code": {
+            "description": "6-digit numeric pairing code the coach reads out to the extension.",
+            "example": "142856",
+            "type": "string"
+          }
+        },
+        "required": [
+          "pairing_code",
+          "expires_at"
+        ],
+        "type": "object"
+      },
+      "PairRedeemDto": {
+        "properties": {
+          "code": {
+            "description": "6-digit numeric pairing code minted by POST /api/extension/pair/init.",
+            "example": "142856",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "type": "object"
+      },
+      "PairRedeemResult": {
+        "properties": {
+          "access_token": {
+            "description": "Coach-bound Supabase access token.",
+            "type": "string"
+          },
+          "chosen_platform": {
+            "description": "Source platform the code was minted for (echoed to the extension).",
+            "example": "truecoach",
+            "type": "string"
+          },
+          "import_intent_id": {
+            "description": "Server-issued setup correlation, not authorization or accepted Start. Absent on legacy unbound rows.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "refresh_token": {
+            "description": "Coach-bound Supabase refresh token.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "access_token",
+          "refresh_token",
+          "chosen_platform"
+        ],
+        "type": "object"
+      },
+      "PairSessionDto": {
+        "properties": {
+          "import_intent_id": {
+            "description": "Server-issued import_intent_id saved from pairing init.",
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "import_intent_id"
+        ],
+        "type": "object"
+      },
+      "PairSessionResult": {
+        "properties": {
+          "chosen_platform": {
+            "description": "Source platform selected at pairing, not proof of any imported data.",
+            "type": "string"
+          },
+          "import_intent_id": {
+            "description": "Persisted server-issued setup correlation.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "description": "Lifecycle state of the polled code.",
+            "enum": [
+              "pending",
+              "paired",
+              "expired"
+            ],
+            "example": "pending",
+            "type": "string"
+          }
+        },
+        "required": [
+          "import_intent_id",
+          "status",
+          "chosen_platform"
+        ],
+        "type": "object"
+      },
+      "PairStatusDto": {
+        "properties": {
+          "code": {
+            "description": "6-digit numeric pairing code to poll (the code the caller minted).",
+            "example": "142856",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "type": "object"
+      },
+      "PairStatusResult": {
+        "properties": {
+          "import_intent_id": {
+            "description": "Server-issued setup correlation, not authorization or accepted Start. Absent on legacy unbound rows.",
+            "format": "uuid",
+            "type": "string"
+          },
+          "status": {
+            "description": "Lifecycle state of the polled code.",
+            "enum": [
+              "pending",
+              "paired",
+              "expired"
+            ],
+            "example": "pending",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
+      "RateLimitError": {
+        "properties": {
+          "error": {
+            "description": "Always `Too Many Requests`.",
+            "example": "Too Many Requests",
+            "type": "string"
+          },
+          "message": {
+            "description": "Generic backoff message (never echoes input or which limit fired).",
+            "example": "Too many attempts. Please wait before trying again.",
+            "type": "string"
+          },
+          "retryAfter": {
+            "description": "Seconds to wait before retrying; matches the `Retry-After` header.",
+            "example": 3600,
+            "type": "number"
+          },
+          "statusCode": {
+            "description": "Always 429.",
+            "example": 429,
+            "type": "number"
+          }
+        },
+        "required": [
+          "statusCode",
+          "error",
+          "message",
+          "retryAfter"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "bearer": {
+        "bearerFormat": "JWT",
+        "description": "Supabase-issued JWT. Send as `Authorization: Bearer <token>`. Tokens are verified against the Supabase JWKS in JwtAuthGuard.",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "description": "Frozen public contract for the tgp-importer Chrome extension + mobile pairing surface. Generated from the backend @nestjs/swagger document — do not hand-edit. Run `npm run contract:importer` to regenerate.",
+    "title": "Growth Project API — Importer Contract",
+    "version": "2.0.0-c1-s1.1"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/extension/pair/current": {
+      "post": {
+        "description": "Empty body reads current setup; saved setup_nonce reads that exact owned attempt. Never creates a setup, issues tokens, or authorizes Start. Setup only; no-store.",
+        "operationId": "ExtensionPairController_current",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PairCurrentDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PairSessionResult"
+                }
+              }
+            },
+            "description": "Owned setup."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid nonce or extra body fields."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bearer authentication required."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Coach/owner role required."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "No owned setup or feature disabled."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            },
+            "description": "Authenticated user throttle."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Recover owned setup without knowing its server ID",
+        "tags": [
+          "extension-pair"
+        ]
+      }
+    },
+    "/api/extension/pair/init": {
+      "post": {
+        "description": "Mobile-authenticated coach mints a 6-digit code bound to their account + chosen source platform. Optional setup_nonce gives account-scoped retry recovery without extending challenge expiry. Returns pairing_code, expires_at and server import_intent_id. Returns 404 when FEATURE_EXTENSION_PAIRING is off.",
+        "operationId": "ExtensionPairController_init",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PairInitDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PairInitResult"
+                }
+              }
+            },
+            "description": "Pairing code minted."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "code_mint_failed"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Rejected init. Standard HttpExceptionFilter envelope. Two sources: the domain path sets `code: \"code_mint_failed\"` when the mint-retry budget is exhausted; a malformed body (chosen_platform failing the slug/length rules) is rejected by the global ValidationPipe with NO `code` and `message` as a string ARRAY of constraint violations. `code` is therefore optional here and pinned to `code_mint_failed` only when present."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Missing or invalid bearer token (global JwtAuthGuard runs before role checks)."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Caller is not a coach."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Pairing feature disabled (uniform R-DARK-1 404)."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "setup_nonce_conflict"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Same nonce used for another platform; no mutation."
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "setup_challenge_unavailable"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Challenge unavailable. Read current with saved setup_nonce to recover the owned intent."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            },
+            "description": "Rate limit exceeded. This route carries no explicit @Throttle, so it is governed by the global authenticated default (UserThrottlerGuard, keyed by user id). Documented for parity with the other throttled importer routes."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Mint a pairing code (mobile app → extension bridge)",
+        "tags": [
+          "extension-pair"
+        ]
+      }
+    },
+    "/api/extension/pair/redeem": {
+      "post": {
+        "description": "UNAUTHENTICATED. The extension exchanges a 6-digit code for a coach-bound Supabase token pair + chosen_platform, with stored import_intent_id for new pairings (legacy rows omit it). Single-use: a second redeem of the same code returns 410 already_used. Expired → 410 expired; unknown/malformed → 400 invalid. After too many failed attempts a code is hard-locked → 410 locked. Rate-limited per IP. Returns 404 when FEATURE_EXTENSION_PAIRING is off.",
+        "operationId": "ExtensionPairController_redeem",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PairRedeemDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PairRedeemResult"
+                }
+              }
+            },
+            "description": "Token pair issued."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "invalid"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Rejected pairing code. Standard HttpExceptionFilter envelope. Two sources: the domain path sets `code: \"invalid\"` with a string `message`; a malformed body (not 6 digits) is rejected by the global ValidationPipe with NO `code` and `message` as a string ARRAY of constraint violations. `code` is therefore optional here and pinned to `invalid` only when present."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Pairing feature disabled (uniform R-DARK-1 404)."
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ErrorEnvelope"
+                    },
+                    {
+                      "properties": {
+                        "code": {
+                          "enum": [
+                            "expired",
+                            "already_used",
+                            "locked"
+                          ],
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "code"
+                      ],
+                      "type": "object"
+                    }
+                  ]
+                }
+              }
+            },
+            "description": "Code expired, already used, or locked. Standard envelope with a required `code` from the redeem 410 enum."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            },
+            "description": "Rate limit exceeded (per-IP redeem throttle)."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Session mint failed before code claim (upstream auth error); retry the unexpired code. Standard HttpExceptionFilter envelope; no domain `code` is guaranteed."
+          }
+        },
+        "summary": "Redeem a pairing code (extension bootstrap)",
+        "tags": [
+          "extension-pair"
+        ]
+      }
+    },
+    "/api/extension/pair/session": {
+      "post": {
+        "description": "Body-only lookup; durable setup survives challenge expiry and retirement. Setup only, never accepted Start or import completion. Global authenticated user throttle applies. No codes or tokens returned.",
+        "operationId": "ExtensionPairController_session",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PairSessionDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PairSessionResult"
+                }
+              }
+            },
+            "description": "Owned pairing setup."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Invalid UUID or extra body fields."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Bearer authentication required."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Coach or owner role required."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Unknown, foreign, inactive owner, legacy unbound, or feature disabled."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            },
+            "description": "Global authenticated per-user limit exceeded."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Retrieve owned durable pairing setup by server intent",
+        "tags": [
+          "extension-pair"
+        ]
+      }
+    },
+    "/api/extension/pair/status": {
+      "post": {
+        "description": "Mobile-authenticated coach polls their OWN code. The code travels in the POST body (never a query string, which would leak into logs/history/APM). Returns setup status and stored import_intent_id when bound (absent on legacy rows). A code the caller did not mint reads as `expired` (never confirms another coach's code). Returns 404 when FEATURE_EXTENSION_PAIRING is off.",
+        "operationId": "ExtensionPairController_status",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PairStatusDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PairStatusResult"
+                }
+              }
+            },
+            "description": "Pairing code status."
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Malformed body (global ValidationPipe). The 6-digit code field uses the same `@Matches(/^[0-9]{6}$/)` rule as redeem; constraint failures yield a standard envelope with `message` as a string ARRAY and no domain `code`."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Missing or invalid bearer token (global JwtAuthGuard runs before role checks)."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Caller is not a coach."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Pairing feature disabled (uniform R-DARK-1 404)."
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RateLimitError"
+                }
+              }
+            },
+            "description": "Rate limit exceeded. Like init, status carries no explicit @Throttle and is governed by the global authenticated default (UserThrottlerGuard, keyed by user id). Documented for parity with the other throttled importer routes."
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Poll a pairing code status",
+        "tags": [
+          "extension-pair"
+        ]
+      }
+    }
+  }
+}
