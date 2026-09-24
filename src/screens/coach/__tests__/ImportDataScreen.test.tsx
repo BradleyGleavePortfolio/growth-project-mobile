@@ -46,6 +46,9 @@ jest.mock('@react-navigation/native', () => ({
 jest.mock('../../../hooks/useRosterReviewDelta', () => ({
   useRosterReviewDelta: () => ({ delta: 0, refresh: jest.fn() }),
 }));
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+}));
 
 // UX-01 accepted contract: exercised via its real public shape so a false
 // result and identity/status gating are honored exactly as documented,

@@ -41,6 +41,9 @@ jest.mock('../../../hooks/useRosterReviewDelta', () => ({
 jest.mock('../../../api/extensionPairApi', () => ({
   extensionPairApi: { init: jest.fn(), status: jest.fn() },
 }));
+jest.mock('react-native-safe-area-context', () => ({
+  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+}));
 
 // The kill switch is read at module scope by the screen and as the hook's
 // default `enabled`; flip it per test through a getter.
