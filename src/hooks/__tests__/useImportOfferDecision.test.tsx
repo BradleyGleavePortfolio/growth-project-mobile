@@ -117,9 +117,21 @@ describe('useImportOfferDecision — inert and unresolved states', () => {
 
 describe('useImportOfferDecision — reading the persisted answer', () => {
   it('is loading (render nothing) until the read settles, then ready with null when unanswered', async () => {
+    // Hold the read open: RNTL's async renderHook flushes an unheld in-memory
+    // read inside its own act, so the intermediate state is only observable
+    // while getItem is still pending.
+    const held = deferred<string | null>();
+    const getSpy = jest.spyOn(AsyncStorage, 'getItem').mockImplementationOnce(() => held.promise);
+    spies.push(getSpy);
+
     const { result } = await renderHook(() => useImportOfferDecision(true));
     expect(result.current.status).toBe('loading');
     expect(result.current.decision).toBeNull();
+
+    await act(async () => {
+      held.resolve(null);
+      await flush();
+    });
     await waitFor(() => expect(result.current.status).toBe('ready'));
     expect(result.current.decision).toBeNull();
   });
