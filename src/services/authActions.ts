@@ -20,6 +20,7 @@ import { clearAllStorage, prefsStorage, cacheStorage } from '../storage/mmkv';
 import { deleteWorkoutLogsForUser } from '../offline/sync/sync-engine';
 import { AUTOSAVE_MIRROR_KEY_PREFIX } from '../storage/autosaveMirror';
 import { IMPORT_PAIRING_MIRROR_KEY_PREFIX } from '../storage/importPairingMirror';
+import { IMPORT_OFFER_DECISION_KEY_PREFIX } from '../storage/importOfferDecision';
 import { useCoachStore } from '../store/coachStore';
 import { useClientStore } from '../store/clientStore';
 import { useFastingStore } from '../store/fastingStore';
@@ -89,6 +90,14 @@ const ASYNC_SIGN_OUT_PREFIXES = [
 const PER_USER_KEY_PREFIXES = [
   'fasting:scheduled_notification_id:', // FastingScreen — scheduled push id
   'macro_targets:', // useMacroTargets — per-user macro cache
+  // Per-coach Roman import-offer answer (UX-01 J0/J1), keyed
+  // `import_offer_decision:<userId>`. Non-secret and readable only under the
+  // owning coach's key, so — like macro_targets — only the signing-out coach's
+  // EXACT key is removed; a bystander coach's answer on a shared device is not
+  // clobbered. Sign-out clears this local answer only; it makes no claim about
+  // the desktop extension connection. Swept via the exported constant so the
+  // literal lives in one place.
+  IMPORT_OFFER_DECISION_KEY_PREFIX,
 ];
 
 // Belt-and-braces wipe for the cacheStorage MMKV namespace. clearAllStorage()

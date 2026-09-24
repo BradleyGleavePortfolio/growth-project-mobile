@@ -10,6 +10,10 @@ import {
   IMPORT_PAIRING_MIRROR_KEY_PREFIX,
   importPairingMirrorKey,
 } from '../../storage/importPairingMirror';
+import {
+  IMPORT_OFFER_DECISION_KEY_PREFIX,
+  importOfferDecisionKey,
+} from '../../storage/importOfferDecision';
 
 jest.mock('../api', () => ({
   usersApi: { updatePushToken: jest.fn(async () => ({ data: {} })) },
@@ -196,6 +200,34 @@ describe('signOut', () => {
     expect(await AsyncStorage.getItem('import_pairing_sessionx_unrelated')).toBe(
       'keep',
     );
+  });
+
+  // UX-01 (J0/J1) R15 — the per-coach Roman import-offer answer is keyed
+  // `import_offer_decision:<userId>`. It is non-secret and readable only under
+  // the owning coach's key, so sign-out removes the signing-out coach's EXACT
+  // key (like macro_targets:<userId>) and leaves a bystander coach's answer on
+  // a shared device untouched. Sign-out clears local app state only; nothing
+  // here claims the desktop extension connection was revoked.
+  it('removes only the signing-out coach\'s import_offer_decision:<userId> on sign-out', async () => {
+    const signingOutKey = importOfferDecisionKey('user-A'); // readUserCacheSync → user-A
+    expect(signingOutKey.startsWith(IMPORT_OFFER_DECISION_KEY_PREFIX)).toBe(true);
+    await AsyncStorage.setItem(
+      signingOutKey,
+      JSON.stringify({ version: 1, userId: 'user-A', decision: 'later' }),
+    );
+    const bystanderKey = importOfferDecisionKey(BYSTANDER_USER);
+    await AsyncStorage.setItem(
+      bystanderKey,
+      JSON.stringify({ version: 1, userId: BYSTANDER_USER, decision: 'starting_fresh' }),
+    );
+    // Sentinel: the prefix ends in a colon, so a similarly-named key survives.
+    await AsyncStorage.setItem('import_offer_decisionx_unrelated', 'keep');
+
+    await signOut();
+
+    expect(await AsyncStorage.getItem(signingOutKey)).toBeNull();
+    expect(await AsyncStorage.getItem(bystanderKey)).not.toBeNull();
+    expect(await AsyncStorage.getItem('import_offer_decisionx_unrelated')).toBe('keep');
   });
 
   // R15 — Audit #2 P1-5 regression coverage. The previous implementation only
