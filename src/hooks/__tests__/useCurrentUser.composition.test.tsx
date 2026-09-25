@@ -57,8 +57,9 @@ describe('useCurrentUser — real identity composition', () => {
     if (releaseRead === undefined) {
       throw new Error('Expected the user-cache read to be held');
     }
+    const release = releaseRead;
     await act(async () => {
-      releaseRead();
+      release();
       await Promise.resolve();
     });
     await flush();
