@@ -403,7 +403,6 @@ const ENTRYPOINT_ONLY = [...collectImports(ROOT_MODULES).keys()]
 const ENTRYPOINT_ONLY_PACKAGES = [
   '@expo-google-fonts/cormorant-garamond',
   '@expo-google-fonts/inter',
-  '@tanstack/react-query-persist-client',
   'expo',
   'expo-splash-screen',
   'expo-status-bar',

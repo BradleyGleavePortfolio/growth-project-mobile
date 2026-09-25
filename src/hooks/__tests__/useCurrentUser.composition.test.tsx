@@ -42,8 +42,25 @@ const flush = async () => {
 describe('useCurrentUser — real identity composition', () => {
   it('is null on first render and resolves the identity written by a sign-in', async () => {
     await setUserCache(userA);
+    let releaseRead: (() => void) | undefined;
+    const realGet = AsyncStorage.getItem.bind(AsyncStorage);
+    jest.spyOn(AsyncStorage, 'getItem').mockImplementation(async (key) => {
+      if (key === 'prefs:auth.user_data' && releaseRead === undefined) {
+        await new Promise<void>((resolve) => {
+          releaseRead = resolve;
+        });
+      }
+      return realGet(key);
+    });
     const { result } = await renderHook(() => useCurrentUser());
     expect(result.current).toBeNull();
+    if (releaseRead === undefined) {
+      throw new Error('Expected the user-cache read to be held');
+    }
+    await act(async () => {
+      releaseRead();
+      await Promise.resolve();
+    });
     await flush();
     expect(result.current).toEqual(userA);
     expect(setSentryUser).toHaveBeenLastCalledWith({ id: 'user-A', email: 'a@example.com' });
