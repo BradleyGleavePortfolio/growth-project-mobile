@@ -38,6 +38,8 @@ import {
 } from '../../types/importRunStatus';
 
 export const NOT_KNOWN_YET = 'Not known yet';
+/** The server sent a value this app version does not recognise (distinct from "not sent"). */
+export const NOT_RECOGNISED = 'Not recognised by this app version';
 
 /** status (+ mode) → headline + body. Legacy terminals are the extension's report, not a server check. */
 export const VERDICT_COPY: Record<RunReadStatus, { title: string; body: string }> = {
@@ -76,8 +78,16 @@ export const REASON_COPY: Record<RunReasonCode, string> = {
   coverage_basis_unknown: 'We can’t tell yet whether everything was found.',
 };
 
+/** Server person state → row copy. Each recognised state keeps its own wording; only an unrecognised one is "not known". */
+const ROSTER_STATE_TEXT: Record<RosterPersonState, string> = {
+  InvitePending: 'Imported, not yet joined',
+  Invited: 'Imported — marked invited, not yet joined',
+  Claimed: 'Imported — marked as joined',
+  Suspended: 'Imported — marked suspended',
+  Deleted: 'Imported — marked removed',
+};
 export const ROSTER_STATE_COPY = (state: RosterPersonState | 'unknown'): string =>
-  state === 'InvitePending' ? 'Imported, not yet joined' : 'Imported — joining status not known yet';
+  state === 'unknown' ? 'Imported — joining status not known yet' : ROSTER_STATE_TEXT[state];
 
 function formatTime(isoOrMs: string | number): string | null {
   const d = new Date(isoOrMs);
@@ -108,7 +118,7 @@ export function verdictLines(reading: DecodedRunStatus): {
   };
   if (reading.status === 'running') {
     const phase = reading.phase;
-    out.step = phase === null || phase === 'unknown' ? NOT_KNOWN_YET : PHASE_COPY[phase];
+    out.step = phase === null ? NOT_KNOWN_YET : phase === 'unknown' ? NOT_RECOGNISED : PHASE_COPY[phase];
     return out;
   }
   // Legacy rows never carry a reason code (the server did not arbitrate them).
@@ -116,9 +126,11 @@ export function verdictLines(reading: DecodedRunStatus): {
   if (!legacy && !(reading.status === 'complete' && reading.reasonCode === null)) {
     const code = reading.reasonCode;
     out.reason =
-      code === null || code === 'unknown'
+      code === null
         ? { text: NOT_KNOWN_YET, code: null }
-        : { text: REASON_COPY[code], code };
+        : code === 'unknown'
+          ? { text: NOT_RECOGNISED, code: null }
+          : { text: REASON_COPY[code], code };
   }
   out.finishedAt = (reading.completedAt && formatTime(reading.completedAt)) || NOT_KNOWN_YET;
   return out;
@@ -166,7 +178,7 @@ export default function ImportRunVerdictCard({ importIntentId }: { importIntentI
       <>
         <Text style={styles.title} testID="verdict-not-found">Import status: {NOT_KNOWN_YET.toLowerCase()}</Text>
         <Text style={styles.body}>
-          The server has nothing to show for this import yet. Once the import starts on your computer, its status appears here.
+          The server didn’t return a status for this import. Check again later.
         </Text>
       </>
     );
@@ -247,11 +259,26 @@ function ImportedRosterSection({ importIntentId }: { importIntentId: string }): 
         </Text>
         <Text style={styles.muted} testID="roster-accounting">
           {a
-            ? `Found ${a.staged}: ${a.reconstructed} imported, ${a.skipped} skipped, ${a.failed} couldn’t be imported.`
+            ? `Client records sorted into your roster: ${a.staged} (${a.reconstructed} imported, ${a.skipped} skipped, ${a.failed} couldn’t be imported). This count covers client records only.`
             : `Totals: ${NOT_KNOWN_YET.toLowerCase()}.`}
         </Text>
+        {a ? (
+          <Text style={styles.muted} testID="roster-unclassified">
+            {a.unclassified === null
+              ? `Records that couldn’t be sorted into any kind of data: ${NOT_KNOWN_YET.toLowerCase()}.`
+              : `Records that couldn’t be sorted into any kind of data: ${a.unclassified}. They aren’t counted above.`}
+          </Text>
+        ) : null}
         {roster.persons.length === 0 ? (
-          <Text style={styles.body} testID="roster-empty">The server has no imported people to show for this import.</Text>
+          roster.hasMore || roster.incomplete ? (
+            // Pages are cut from server ledger rows before removed people are
+            // filtered out, so an empty page says nothing about the whole import.
+            <Text style={styles.body} testID="roster-empty-page">
+              No people on the pages loaded so far.{roster.hasMore ? ' Show more to keep looking.' : ''}
+            </Text>
+          ) : (
+            <Text style={styles.body} testID="roster-empty">The server has no imported people to show for this import.</Text>
+          )
         ) : (
           roster.persons.map((p) => (
             <View key={p.id} style={styles.personRow} testID={`roster-person-${p.id}`}>

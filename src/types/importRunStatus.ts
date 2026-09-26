@@ -163,12 +163,22 @@ export interface DecodedRosterPerson {
   state: RosterPersonState | 'unknown';
 }
 
-/** Ledger-derived accounting; `undefined` as a whole when any member is not a non-negative integer. */
+/**
+ * Ledger-derived accounting; `undefined` as a whole when any of the four
+ * roster-family counts is not a non-negative integer. `staged` counts ONLY the
+ * intent's rows the source registry classifies to the roster (clients) family.
+ *
+ * `unclassified` (S11-E, additive): the intent's staged rows no source spec
+ * classifies to any family; never folded into `staged`. Decoded on its own:
+ * a non-negative integer, or `null` when absent (older server) or malformed —
+ * never defaulted to 0, and a bad value never voids the other four counts.
+ */
 export interface DecodedRosterAccounting {
   staged: number;
   reconstructed: number;
   skipped: number;
   failed: number;
+  unclassified: number | null;
 }
 
 export interface DecodedRosterPage {
@@ -189,7 +199,13 @@ function decodeAccounting(raw: unknown): DecodedRosterAccounting | undefined {
   if (!isCount(a.staged) || !isCount(a.reconstructed) || !isCount(a.skipped) || !isCount(a.failed)) {
     return undefined;
   }
-  return { staged: a.staged, reconstructed: a.reconstructed, skipped: a.skipped, failed: a.failed };
+  return {
+    staged: a.staged,
+    reconstructed: a.reconstructed,
+    skipped: a.skipped,
+    failed: a.failed,
+    unclassified: isCount(a.unclassified) ? a.unclassified : null,
+  };
 }
 
 /**

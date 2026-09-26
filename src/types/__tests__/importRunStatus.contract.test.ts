@@ -186,7 +186,7 @@ describe('decodeRosterPage — fail closed', () => {
     const r = decodeRosterPage(page(), INTENT);
     expect(r).toEqual({
       intentId: INTENT,
-      accounting: { staged: 3, reconstructed: 2, skipped: 1, failed: 0 },
+      accounting: { staged: 3, reconstructed: 2, skipped: 1, failed: 0, unclassified: null },
       persons: [{ id: 'p-1', displayName: 'Jordan Ellis', state: 'InvitePending' }],
       nextCursor: null,
       hasMore: false,
@@ -207,6 +207,36 @@ describe('decodeRosterPage — fail closed', () => {
     const r = decodeRosterPage(page({ accounting: { staged: 3, reconstructed: null, skipped: 1, failed: 0 } }), INTENT);
     expect(r).toBeDefined();
     expect(r?.accounting).toBeUndefined();
+  });
+
+  it('S11-E unclassified: zero classified + 5 unclassified decodes verbatim (never folded or zeroed)', () => {
+    const r = decodeRosterPage(
+      page({ accounting: { staged: 0, reconstructed: 0, skipped: 0, failed: 0, unclassified: 5 } }),
+      INTENT,
+    );
+    expect(r?.accounting).toEqual({ staged: 0, reconstructed: 0, skipped: 0, failed: 0, unclassified: 5 });
+  });
+
+  it('unclassified absent (older server) → null, the four counts still decode', () => {
+    const r = decodeRosterPage(page(), INTENT);
+    expect(r?.accounting?.unclassified).toBeNull();
+    expect(r?.accounting?.staged).toBe(3);
+  });
+
+  it.each([[-1], [1.5], ['5'], [null], [{}]])('malformed unclassified %p → null only; never 0, never voids the block', (bad) => {
+    const r = decodeRosterPage(
+      page({ accounting: { staged: 3, reconstructed: 2, skipped: 1, failed: 0, unclassified: bad } }),
+      INTENT,
+    );
+    expect(r?.accounting).toEqual({ staged: 3, reconstructed: 2, skipped: 1, failed: 0, unclassified: null });
+  });
+
+  it('extra accounting fields are tolerated and not surfaced', () => {
+    const r = decodeRosterPage(
+      page({ accounting: { staged: 3, reconstructed: 2, skipped: 1, failed: 0, unclassified: 2, future_bucket: 9 } }),
+      INTENT,
+    );
+    expect(r?.accounting).toEqual({ staged: 3, reconstructed: 2, skipped: 1, failed: 0, unclassified: 2 });
   });
 
   it('roster_bridge_pending absent / non-boolean → null (not known)', () => {

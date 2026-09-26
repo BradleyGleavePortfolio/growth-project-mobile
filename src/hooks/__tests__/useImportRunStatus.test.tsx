@@ -247,6 +247,42 @@ describe('useImportedRoster — flag + settle gating and pagination', () => {
     expect(result.current.incomplete).toBe(false);
   });
 
+  it('empty first page with a cursor keeps hasMore; the next page’s people then appear', async () => {
+    flags.importReview = true;
+    rosterFn.mockImplementation((_i: string, cursor?: string) =>
+      Promise.resolve(cursor === 'C2' ? rosterPage(['a'], null) : rosterPage([], 'C2')),
+    );
+    const { Wrapper } = makeWrapper();
+    const { result } = await renderHook(() => useImportedRoster(INTENT, true), { wrapper: Wrapper });
+    await waitFor(() => expect(result.current.view).toBe('page'));
+    expect(result.current.persons).toEqual([]);
+    expect(result.current.hasMore).toBe(true);
+    expect(result.current.incomplete).toBe(false);
+    await act(async () => {
+      result.current.fetchMore();
+    });
+    await waitFor(() => expect(result.current.persons.map((p) => p.id)).toEqual(['a']));
+    expect(rosterFn).toHaveBeenCalledWith(INTENT, 'C2');
+    expect(result.current.hasMore).toBe(false);
+  });
+
+  it('S11-E unclassified reaches the view verbatim; absent stays null', async () => {
+    flags.importReview = true;
+    const withU = rosterPage(['a'], null);
+    (withU.body.accounting as Record<string, number>).unclassified = 5;
+    rosterFn.mockResolvedValue(withU);
+    const { Wrapper } = makeWrapper();
+    const { result } = await renderHook(() => useImportedRoster(INTENT, true), { wrapper: Wrapper });
+    await waitFor(() => expect(result.current.view).toBe('page'));
+    expect(result.current.accounting?.unclassified).toBe(5);
+
+    rosterFn.mockResolvedValue(rosterPage(['a'], null));
+    const w2 = makeWrapper();
+    const r2 = await renderHook(() => useImportedRoster(INTENT, true), { wrapper: w2.Wrapper });
+    await waitFor(() => expect(r2.result.current.view).toBe('page'));
+    expect(r2.result.current.accounting?.unclassified).toBeNull();
+  });
+
   it('404 → notFound; undecodable → unreadable (never an empty list)', async () => {
     flags.importReview = true;
     rosterFn.mockResolvedValue({ kind: 'notFound' });

@@ -4,8 +4,11 @@
  *     explicit "not recognised" state (never success);
  *   - success mark ONLY for server `complete`; legacy terminals carry the
  *     "reported by the extension" note and no mark;
- *   - phase only while open, reason only once ended; null/unknown → "Not known
- *     yet", and no "0" is ever rendered for an unknown;
+ *   - phase only while open, reason only once ended; null (not sent) → "Not
+ *     known yet", an unrecognised value → "Not recognised by this app version",
+ *     and no "0" is ever rendered for an unknown;
+ *   - roster accounting is scoped to client records, S11-E `unclassified` shown
+ *     on its own; an empty page with more to load is page-scoped, never "none";
  *   - claimed_status is never rendered;
  *   - stale reading labelled; 404 / error / undecodable → not known yet;
  *   - roster list mounts only behind importReview and only once settled, rows
@@ -58,6 +61,7 @@ jest.mock('../../../hooks/useImportRunStatus', () => ({
 import ImportRunVerdictCard, {
   LEGACY_NOTE,
   NOT_KNOWN_YET,
+  NOT_RECOGNISED,
   PHASE_COPY,
   REASON_COPY,
   VERDICT_COPY,
@@ -170,10 +174,18 @@ describe('ImportRunVerdictCard — open run', () => {
     expect(queryByTestId('verdict-icon-neutral')).toBeTruthy();
   });
 
-  it.each([[null], ['unknown' as const]])('phase %p → "Not known yet", never a guessed step', async (phase) => {
-    mockRun = { view: 'reading', reading: reading({ phase }) };
+  it('phase null (not sent) → "Not known yet", never a guessed step', async () => {
+    mockRun = { view: 'reading', reading: reading({ phase: null }) };
     const { getByTestId } = await renderCard();
     expect(getByTestId('verdict-step')).toHaveTextContent(NOT_KNOWN_YET, { exact: false });
+    expect(getByTestId('verdict-step')).not.toHaveTextContent(NOT_RECOGNISED, { exact: false });
+  });
+
+  it('phase the app does not recognise → "Not recognised by this app version", distinct from not known', async () => {
+    mockRun = { view: 'reading', reading: reading({ phase: 'unknown' }) };
+    const { getByTestId } = await renderCard();
+    expect(getByTestId('verdict-step')).toHaveTextContent(NOT_RECOGNISED, { exact: false });
+    expect(getByTestId('verdict-step')).not.toHaveTextContent(NOT_KNOWN_YET, { exact: false });
   });
 
   it('a phase on a terminal reading is never shown', async () => {
@@ -216,12 +228,24 @@ describe('ImportRunVerdictCard — terminal verdicts', () => {
     expect(getByTestId('verdict-reason-code')).toHaveTextContent(`Reason code: ${code}`);
   });
 
-  it.each([[null], ['unknown' as const]])('reason %p on a non-complete terminal → "Not known yet", no code', async (code) => {
-    mockRun = { view: 'reading', reading: reading({ status: 'failed', reasonCode: code }) };
+  it('reason null (not sent) on a non-complete terminal → "Not known yet", no code', async () => {
+    mockRun = { view: 'reading', reading: reading({ status: 'failed', reasonCode: null }) };
     const { getByTestId, queryByTestId } = await renderCard();
     expect(getByTestId('verdict-reason')).toHaveTextContent(NOT_KNOWN_YET, { exact: false });
+    expect(getByTestId('verdict-reason')).not.toHaveTextContent(NOT_RECOGNISED, { exact: false });
     expect(queryByTestId('verdict-reason-code')).toBeNull();
   });
+
+  it.each(['failed', 'complete'] as const)(
+    'unrecognised reason on server %s → "Not recognised by this app version", no code, no guessed text',
+    async (status) => {
+      mockRun = { view: 'reading', reading: reading({ status, reasonCode: 'unknown' }) };
+      const { getByTestId, queryByTestId } = await renderCard();
+      expect(getByTestId('verdict-reason')).toHaveTextContent(NOT_RECOGNISED, { exact: false });
+      expect(getByTestId('verdict-reason')).not.toHaveTextContent(NOT_KNOWN_YET, { exact: false });
+      expect(queryByTestId('verdict-reason-code')).toBeNull();
+    },
+  );
 
   it('complete with no reason code shows no reason line', async () => {
     mockRun = { view: 'reading', reading: reading({ status: 'complete' }) };
@@ -290,7 +314,7 @@ describe('ImportRunVerdictCard — imported people (behind importReview)', () =>
         { id: 'p1', displayName: 'Jordan Ellis', state: 'InvitePending' },
         { id: 'p2', displayName: null, state: 'unknown' },
       ],
-      accounting: { staged: 3, reconstructed: 2, skipped: 1, failed: 0 },
+      accounting: { staged: 3, reconstructed: 2, skipped: 1, failed: 0, unclassified: null },
       rosterBridgePending: true,
       hasMore: true,
     };
@@ -300,7 +324,12 @@ describe('ImportRunVerdictCard — imported people (behind importReview)', () =>
     expect(getByTestId('roster-person-p2')).toHaveTextContent('Name not provided', { exact: false });
     expect(getByTestId('roster-person-p2')).toHaveTextContent('joining status not known yet', { exact: false });
     expect(getByTestId('roster-bridge-note')).toHaveTextContent('aren’t in your client list', { exact: false });
-    expect(getByTestId('roster-accounting')).toHaveTextContent('Found 3: 2 imported, 1 skipped', { exact: false });
+    expect(getByTestId('roster-accounting')).toHaveTextContent(
+      'Client records sorted into your roster: 3 (2 imported, 1 skipped',
+      { exact: false },
+    );
+    expect(getByTestId('roster-accounting')).toHaveTextContent('client records only', { exact: false });
+    expect(getByTestId('roster-unclassified')).toHaveTextContent('not known yet', { exact: false });
     fireEvent.press(getByTestId('roster-more'));
     expect(mockFetchMore).toHaveBeenCalled();
     expectNoBannedWords(text);
@@ -310,11 +339,82 @@ describe('ImportRunVerdictCard — imported people (behind importReview)', () =>
     flags.importReview = true;
     mockRun = { view: 'reading', reading: reading({ status: 'complete' }) };
     mockRoster = { view: 'page', persons: [], rosterBridgePending: null };
-    const { getByTestId, text } = await renderCard();
+    const { getByTestId, queryByTestId, text } = await renderCard();
     expect(getByTestId('roster-accounting')).toHaveTextContent('not known yet', { exact: false });
     expect(getByTestId('roster-bridge-note')).toHaveTextContent('not known yet', { exact: false });
     expect(getByTestId('roster-empty')).toBeTruthy();
+    expect(queryByTestId('roster-unclassified')).toBeNull();
     expect(text).not.toMatch(/\b0\b/);
+  });
+
+  it('zero roster-classified + unclassified 5 → the 5 is shown; the zeros are scoped to client records, never the whole truth', async () => {
+    flags.importReview = true;
+    mockRun = { view: 'reading', reading: reading({ status: 'complete' }) };
+    mockRoster = {
+      view: 'page',
+      persons: [],
+      accounting: { staged: 0, reconstructed: 0, skipped: 0, failed: 0, unclassified: 5 },
+      rosterBridgePending: true,
+    };
+    const { getByTestId, text } = await renderCard();
+    expect(getByTestId('roster-accounting')).toHaveTextContent('Client records sorted into your roster: 0', { exact: false });
+    expect(getByTestId('roster-accounting')).toHaveTextContent('client records only', { exact: false });
+    expect(getByTestId('roster-unclassified')).toHaveTextContent(
+      'Records that couldn’t be sorted into any kind of data: 5. They aren’t counted above.',
+    );
+    expect(text).not.toMatch(/Found 0/);
+    expectNoBannedWords(text);
+  });
+
+  it('unclassified absent/malformed (decoded null) → "not known yet", never 0', async () => {
+    flags.importReview = true;
+    mockRun = { view: 'reading', reading: reading({ status: 'complete' }) };
+    mockRoster = {
+      view: 'page',
+      persons: [{ id: 'p1', displayName: 'Jordan Ellis', state: 'InvitePending' }],
+      accounting: { staged: 1, reconstructed: 1, skipped: 0, failed: 0, unclassified: null },
+      rosterBridgePending: true,
+    };
+    const { getByTestId } = await renderCard();
+    expect(getByTestId('roster-unclassified')).toHaveTextContent('not known yet', { exact: false });
+    expect(getByTestId('roster-unclassified')).not.toHaveTextContent(/: 0\b/);
+  });
+
+  it('empty loaded page while more pages remain → page-scoped message, never "no imported people"', async () => {
+    flags.importReview = true;
+    mockRun = { view: 'reading', reading: reading({ status: 'complete' }) };
+    mockRoster = { view: 'page', persons: [], rosterBridgePending: true, hasMore: true };
+    const { getByTestId, queryByTestId, text } = await renderCard();
+    expect(getByTestId('roster-empty-page')).toHaveTextContent('No people on the pages loaded so far. Show more to keep looking.');
+    expect(queryByTestId('roster-empty')).toBeNull();
+    expect(text).not.toMatch(/no imported people/i);
+    expect(getByTestId('roster-more')).toBeTruthy();
+  });
+
+  it('empty loaded pages with a failed later page → page-scoped + incomplete, never "no imported people"', async () => {
+    flags.importReview = true;
+    mockRun = { view: 'reading', reading: reading({ status: 'complete' }) };
+    mockRoster = { view: 'page', persons: [], rosterBridgePending: true, hasMore: false, incomplete: true };
+    const { getByTestId, queryByTestId } = await renderCard();
+    expect(getByTestId('roster-empty-page')).toHaveTextContent('No people on the pages loaded so far.');
+    expect(getByTestId('roster-incomplete')).toBeTruthy();
+    expect(queryByTestId('roster-empty')).toBeNull();
+  });
+
+  it.each([
+    ['InvitePending', 'Imported, not yet joined'],
+    ['Invited', 'Imported — marked invited, not yet joined'],
+    ['Claimed', 'Imported — marked as joined'],
+    ['Suspended', 'Imported — marked suspended'],
+    ['Deleted', 'Imported — marked removed'],
+    ['unknown', 'Imported — joining status not known yet'],
+  ])('person state %s keeps its own wording', async (state, copy) => {
+    flags.importReview = true;
+    mockRun = { view: 'reading', reading: reading({ status: 'complete' }) };
+    mockRoster = { view: 'page', persons: [{ id: 'p1', displayName: 'A B', state }], rosterBridgePending: true };
+    const { getByTestId, text } = await renderCard();
+    expect(getByTestId('roster-person-p1')).toHaveTextContent(copy, { exact: false });
+    expectNoBannedWords(text);
   });
 
   it.each(['notFound', 'unreadable', 'error'])('roster %s → "not known yet", never an empty list', async (view) => {
