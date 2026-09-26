@@ -1933,4 +1933,156 @@ describe('useExtensionPairing — S11-C readiness', () => {
     const serialized = JSON.stringify(mockCurrent.mock.calls) + JSON.stringify(mockTrack.mock.calls);
     expect(serialized).not.toContain('482913');
   });
+
+  // Round-2 audit B2: the reading must not be presented as durably current
+  // when it was read once at the instant of pairing (typically 'none', since
+  // no Start has been accepted yet) and then never refreshed. A foreground
+  // while still paired re-reads it — single-flight with the initial read,
+  // epoch-guarded the same way, never a retry loop.
+  describe('B2: foreground re-read while paired', () => {
+    it('a foreground while paired fires exactly one more pair/current call and updates the reading', async () => {
+      mockCurrent.mockResolvedValue({
+        data: { import_intent_id: 'ii-1', status: 'paired', chosen_platform: 'truecoach', readiness: { run: 'none', source_declared: false, declared_platforms: null } },
+      });
+      const { result } = await mintToPaired();
+      expect(result.current.readiness).toEqual({ run: 'none', sourceDeclared: false, declaredPlatforms: null });
+      expect(mockCurrent).toHaveBeenCalledTimes(1);
+
+      mockCurrent.mockResolvedValue({
+        data: { import_intent_id: 'ii-1', status: 'paired', chosen_platform: 'truecoach', readiness: { run: 'open', source_declared: true, declared_platforms: 1 } },
+      });
+      await act(async () => {
+        appStateHandler?.('active');
+        await Promise.resolve();
+      });
+      expect(mockCurrent).toHaveBeenCalledTimes(2);
+      expect(result.current.readiness).toEqual({ run: 'open', sourceDeclared: true, declaredPlatforms: 1 });
+    });
+
+    it('a foreground event while a readiness read is already in flight does not fire a second overlapping call (single-flight)', async () => {
+      let resolveFirst!: (v: unknown) => void;
+      mockCurrent.mockImplementation(() => new Promise((res) => { resolveFirst = res; }));
+      const { result } = await mintToPaired();
+      expect(mockCurrent).toHaveBeenCalledTimes(1);
+
+      // A second foreground fires while the first read is still outstanding.
+      await act(async () => {
+        appStateHandler?.('active');
+        await Promise.resolve();
+      });
+      expect(mockCurrent).toHaveBeenCalledTimes(1); // no overlap
+
+      await act(async () => {
+        resolveFirst({
+          data: { import_intent_id: 'ii-1', status: 'paired', chosen_platform: 'truecoach', readiness: { run: 'open', source_declared: true, declared_platforms: 1 } },
+        });
+        await Promise.resolve();
+      });
+      expect(result.current.readiness).toEqual({ run: 'open', sourceDeclared: true, declaredPlatforms: 1 });
+
+      // Now that the first read settled, a fresh foreground fires a new one.
+      mockCurrent.mockResolvedValue({
+        data: { import_intent_id: 'ii-1', status: 'paired', chosen_platform: 'truecoach', readiness: { run: 'terminal', source_declared: true, declared_platforms: 1 } },
+      });
+      await act(async () => {
+        appStateHandler?.('active');
+        await Promise.resolve();
+      });
+      expect(mockCurrent).toHaveBeenCalledTimes(2);
+    });
+
+    it('a foreground while NOT paired (still waiting) does not call pair/current', async () => {
+      mockInit.mockResolvedValue({ data: { pairing_code: '482913', expires_at: futureExpiry() } });
+      mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+      const { result } = await renderHook(() => useExtensionPairing('truecoach', true));
+      await act(async () => {
+        result.current.start();
+      });
+      await act(async () => {
+        appStateHandler?.('active');
+        await jest.advanceTimersByTimeAsync(0);
+      });
+      expect(mockCurrent).not.toHaveBeenCalled();
+    });
+  });
+
+  // Round-2 audit C5: an empty-body pair/current reads the coach's
+  // unsuperseded setup, which need not still be THIS pairing's intent if a
+  // second-device pair/init landed mid-flight. Only attach the reading when
+  // the two intent ids agree (or neither side names one yet).
+  describe('C5: discards a reading whose import_intent_id disagrees with this pairing', () => {
+    it('discards a pair/current reading for a different import_intent_id', async () => {
+      mockStatus.mockResolvedValue({ data: { status: 'paired', import_intent_id: 'ii-mine' } });
+      mockCurrent.mockResolvedValue({
+        data: { import_intent_id: 'ii-someone-elses', status: 'paired', chosen_platform: 'truecoach', readiness: { run: 'open', source_declared: true, declared_platforms: 1 } },
+      });
+      mockInit.mockResolvedValue({ data: { pairing_code: '482913', expires_at: futureExpiry() } });
+      const hook = await renderHook(() => useExtensionPairing('truecoach', true));
+      await act(async () => {
+        hook.result.current.start();
+      });
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(2000);
+      });
+      expect(hook.result.current.status).toBe('paired');
+      expect(hook.result.current.readiness).toBeUndefined();
+    });
+
+    it('attaches a pair/current reading whose import_intent_id matches this pairing', async () => {
+      mockStatus.mockResolvedValue({ data: { status: 'paired', import_intent_id: 'ii-mine' } });
+      mockCurrent.mockResolvedValue({
+        data: { import_intent_id: 'ii-mine', status: 'paired', chosen_platform: 'truecoach', readiness: { run: 'open', source_declared: true, declared_platforms: 1 } },
+      });
+      mockInit.mockResolvedValue({ data: { pairing_code: '482913', expires_at: futureExpiry() } });
+      const hook = await renderHook(() => useExtensionPairing('truecoach', true));
+      await act(async () => {
+        hook.result.current.start();
+      });
+      await act(async () => {
+        await jest.advanceTimersByTimeAsync(2000);
+      });
+      expect(hook.result.current.readiness).toEqual({ run: 'open', sourceDeclared: true, declaredPlatforms: 1 });
+    });
+  });
+
+  // Round-2 audit C6: isolate the epoch guard from the status guard by
+  // moving off paired AND BACK ON again (re-pair) before the first read
+  // resolves — status is 'paired' again when the stale response lands, but
+  // the epoch it carries is stale, so only the epoch check can catch it.
+  it('C6: a late response from BEFORE a re-pair is discarded even though status reads paired again by the time it lands', async () => {
+    let resolveFirst!: (v: unknown) => void;
+    mockCurrent.mockImplementation(() => new Promise((res) => { resolveFirst = res; }));
+    const { result } = await mintToPaired();
+    expect(mockCurrent).toHaveBeenCalledTimes(1);
+
+    // Cancel, then re-mint and re-pair before the first read resolves.
+    mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+    mockInit.mockResolvedValue({ data: { pairing_code: '111222', expires_at: futureExpiry() } });
+    await act(async () => {
+      result.current.cancel();
+    });
+    mockStatus.mockResolvedValue({ data: { status: 'paired' } });
+    mockCurrent.mockImplementationOnce(async () => ({
+      data: { import_intent_id: 'ii-2', status: 'paired', chosen_platform: 'truecoach', readiness: { run: 'terminal', source_declared: true, declared_platforms: 5 } },
+    }));
+    await act(async () => {
+      result.current.retry();
+    });
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(2000);
+    });
+    expect(result.current.status).toBe('paired');
+    expect(result.current.readiness).toEqual({ run: 'terminal', sourceDeclared: true, declaredPlatforms: 5 });
+
+    // The FIRST read (from before the re-pair) now resolves. Status is
+    // 'paired' again (the new pairing), so only the epoch guard can catch
+    // this; a status-only guard would wrongly accept it.
+    await act(async () => {
+      resolveFirst({
+        data: { import_intent_id: 'ii-1', status: 'paired', chosen_platform: 'truecoach', readiness: { run: 'open', source_declared: true, declared_platforms: 1 } },
+      });
+      await Promise.resolve();
+    });
+    expect(result.current.readiness).toEqual({ run: 'terminal', sourceDeclared: true, declaredPlatforms: 5 });
+  });
 });

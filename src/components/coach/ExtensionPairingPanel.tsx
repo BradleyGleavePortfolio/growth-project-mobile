@@ -49,7 +49,14 @@
  * authorized/ready/connected/verified — real source authorization stays
  * unknown to mobile), `declared_platforms` is a bare count (never a platform
  * name), and a `terminal` run carries no invented detail — it points to the
- * existing import status read instead.
+ * existing import status read instead. This row is ALWAYS rendered with the
+ * neutral (pending) icon and no " checkmark" suffix, for every run value
+ * INCLUDING `terminal` (round-2 audit B1): `terminal` covers failed,
+ * cancelled and timed_out alike, and a success mark next to any of those
+ * would fabricate an outcome this block never reports. The row also refreshes
+ * once on every app foreground while still `paired` (round-2 audit B2), so it
+ * does not present a point-in-time snapshot as durably current — see
+ * `useExtensionPairing`'s foreground handler.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
@@ -232,7 +239,14 @@ export default function ExtensionPairingPanel({ platformId }: Props): React.Reac
               label="Import setup"
               value={readinessCopy(readiness)}
               testID="pairing-check-readiness"
-              pending={readiness.run !== 'terminal'}
+              // B1 (D-S11-5 / mission invariant 6): this row is ALWAYS the
+              // neutral (pending) icon with no " checkmark" suffix, for every
+              // run value including 'terminal'. 'terminal' covers failed,
+              // cancelled AND timed_out (D-S11 G4) with no detail carried
+              // here — a success mark next to it would fabricate an outcome
+              // the block does not report. Detail lives only on the existing
+              // import status read this row points to.
+              pending
             />
           ) : null}
         </View>
@@ -356,12 +370,16 @@ export default function ExtensionPairingPanel({ platformId }: Props): React.Reac
  */
 function readinessCopy(readiness: DecodedReadiness): string {
   if (readiness.run === 'terminal') {
-    return 'Finished — check your import status for details';
+    return 'Ended — check your import status for details';
   }
   if (!readiness.sourceDeclared) {
     return readiness.run === 'none' ? 'Not started yet' : 'Waiting for a declaration';
   }
-  const count = readiness.declaredPlatforms ?? 0;
+  // decodeReadiness enforces declaredPlatforms === null iff run === 'none' and
+  // sourceDeclared === (declaredPlatforms ?? 0) > 0, so sourceDeclared true
+  // guarantees a non-null, non-negative integer here — no `?? 0` fallback: an
+  // inconsistent block (which would need one) never survives the decoder.
+  const count = readiness.declaredPlatforms as number;
   const noun = count === 1 ? 'source' : 'sources';
   return `Declaration received (${count} ${noun})`;
 }

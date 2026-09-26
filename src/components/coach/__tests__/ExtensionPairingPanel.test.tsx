@@ -17,7 +17,14 @@
  */
 import React from 'react';
 import { StyleSheet } from 'react-native';
-import { render, fireEvent, cleanup } from '@testing-library/react-native';
+import { render, fireEvent, cleanup, act } from '@testing-library/react-native';
+
+// Mirrors the mocked theme below — used by the B1 tests to distinguish
+// ChecklistRow's pending-icon colour (textMuted) from its done-icon colour
+// (primary), since the Ionicons glyph name itself is not literal text in
+// this test environment's render tree (see the B1 describe block).
+const MUTED_ICON_COLOR = '#999';
+const PRIMARY_ICON_COLOR = '#2c4a36';
 
 jest.mock('../../../theme/useTheme', () => ({
   useTheme: () => ({
@@ -376,13 +383,83 @@ describe('ExtensionPairingPanel — doctrine + accessibility', () => {
 });
 
 /**
+ * Round-2 audit C7 fix: collect every string leaf out of an RTL toJSON()
+ * host-node tree. toJSON() is RTL's own serializable snapshot (plain
+ * strings/objects/arrays) — never a React element, so it can never carry a
+ * circular _owner Fiber the way `element.props.children` can under React
+ * 19.2 dev (that circularity is what threw "Converting circular structure to
+ * JSON" — the CI red this fix closes). Safe to JSON.stringify directly, but
+ * walking to exact string leaves also means a false match can't hide inside
+ * a coincidentally-matching object key.
+ */
+function collectText(node: unknown, out: string[] = []): string[] {
+  if (typeof node === 'string') {
+    out.push(node);
+  } else if (Array.isArray(node)) {
+    for (const child of node) collectText(child, out);
+  } else if (node && typeof node === 'object') {
+    // RTL's toJSON() node shape is `{ type, props, children }` — `children`
+    // is a sibling of `props`, not nested inside it.
+    const n = node as { children?: unknown };
+    if ('children' in n) collectText(n.children, out);
+  }
+  return out;
+}
+
+/**
+ * Finds the toJSON() host-node subtree carrying a given testID, without a
+ * live RTL query. RTL's toJSON() node shape is `{ type, props, children }`
+ * — `children` is a SIBLING of `props`, not nested inside it — so a walker
+ * has to descend via the node's own `children` field.
+ */
+function findByTestId(node: unknown, testID: string): unknown {
+  if (!node || typeof node !== 'object') return null;
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const found = findByTestId(child, testID);
+      if (found) return found;
+    }
+    return null;
+  }
+  const n = node as { props?: { testID?: string }; children?: unknown };
+  if (n.props?.testID === testID) return node;
+  if ('children' in n) return findByTestId(n.children, testID);
+  return null;
+}
+
+// Applies to the readiness row/labels ALONE, where every rendered word is
+// something readinessCopy() produced — an unqualified match is correct
+// there. The full-card sweep below deliberately keeps the narrower
+// "source ... connected"-shaped match, because the pre-existing, out-of-scope
+// pairing copy legitimately says "Connected to your computer" / "Connected to
+// TGP as ..." (about the PAIRING, never the import source) elsewhere on the
+// same card.
+function expectNoBannedWords(strings: string[]): void {
+  const joined = strings.join(' \u241F ');
+  expect(joined).not.toMatch(/\bauthorized\b/i);
+  expect(joined).not.toMatch(/\bready\b/i);
+  expect(joined).not.toMatch(/\bconnected\b/i);
+  expect(joined).not.toMatch(/\bverified\b/i);
+}
+
+function expectNoBannedSourceClaims(strings: string[]): void {
+  const joined = strings.join(' \u241F ');
+  expect(joined).not.toMatch(/source (is )?authorized/i);
+  expect(joined).not.toMatch(/source (is )?ready/i);
+  expect(joined).not.toMatch(/source (is )?connected/i);
+  expect(joined).not.toMatch(/source (is )?verified/i);
+}
+
+/**
  * S11-C (D-S11-5, UX-03/04) readiness row — ExtensionPairingPanel.
  *
  * The panel renders a neutral readiness row inside the `paired` checklist
  * ONLY when useExtensionPairing's `readiness` is a known reading; absence
  * renders NOTHING (never a "no"/zero row). These tests pin the row's
  * presence/absence per state and the exact honesty-compliant copy, plus a
- * banned-words sweep across every readiness string this module can render.
+ * banned-words sweep (collected via collectText/toJSON — round-2 audit C7,
+ * never via JSON.stringify on a raw React element) across every readiness
+ * string and a11y label this module can render.
  */
 describe('ExtensionPairingPanel — S11-C readiness row', () => {
   it('renders no readiness row when readiness is absent (not known)', async () => {
@@ -442,6 +519,47 @@ describe('ExtensionPairingPanel — S11-C readiness row', () => {
     expect(row).toHaveTextContent('import status', { exact: false });
   });
 
+  // Round-2 audit B1: 'terminal' covers failed, cancelled AND timed_out alike
+  // (D-S11 G4) with no detail carried in this block — a completed/success
+  // checkmark next to it would fabricate an outcome never reported here. The
+  // row must render the SAME neutral icon and no " checkmark" suffix as
+  // every other state, specifically for terminal (the state a naive
+  // "pending = run !== 'terminal'" reading would get wrong).
+  // The Ionicons glyph itself resolves to an empty-string Text child in this
+  // test environment (no font glyph map loaded) — "ellipse-outline" vs
+  // "checkmark" is not a literal string anywhere in the render tree. The
+  // reliably inspectable signal ChecklistRow actually varies by `pending` is
+  // the icon's colour (colors.textMuted when pending vs colors.primary when
+  // not — see ChecklistRow's two Ionicons branches) and the label's " ✓"
+  // text suffix, which IS a literal string. Both are asserted below.
+  it('B1: run=terminal renders the neutral (pending-coloured) icon, never a success checkmark or "✓" suffix', async () => {
+    mockHookState = {
+      status: 'paired',
+      code: null,
+      readiness: { run: 'terminal', sourceDeclared: true, declaredPlatforms: 1 },
+    };
+    const { getByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
+    const row = getByTestId('pairing-check-readiness');
+    const serialized = JSON.stringify(row.toJSON());
+    expect(serialized).not.toContain('✓');
+    expect(serialized).not.toContain('checkmark');
+    expect(serialized).toContain(MUTED_ICON_COLOR); // the pending-icon colour, never PRIMARY_ICON_COLOR
+    expect(serialized).not.toContain(PRIMARY_ICON_COLOR);
+  });
+
+  it.each<['none' | 'open' | 'terminal', { run: 'none' | 'open' | 'terminal'; sourceDeclared: boolean; declaredPlatforms: number | null }]>([
+    ['none', { run: 'none', sourceDeclared: false, declaredPlatforms: null }],
+    ['open', { run: 'open', sourceDeclared: true, declaredPlatforms: 1 }],
+    ['terminal', { run: 'terminal', sourceDeclared: true, declaredPlatforms: 1 }],
+  ])('B1: the readiness row never shows a checkmark, a "✓" suffix, or the done-icon colour for run=%s', async (_run, readiness) => {
+    mockHookState = { status: 'paired', code: null, readiness };
+    const { getByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
+    const serialized = JSON.stringify(getByTestId('pairing-check-readiness').toJSON());
+    expect(serialized).not.toContain('✓');
+    expect(serialized).not.toMatch(/"checkmark"/);
+    expect(serialized).not.toContain(PRIMARY_ICON_COLOR);
+  });
+
   it('never renders the readiness row outside the paired state', async () => {
     mockHookState = { status: 'waiting', code: '482913', readiness: { run: 'open', sourceDeclared: true, declaredPlatforms: 1 } };
     const { queryByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
@@ -459,14 +577,63 @@ describe('ExtensionPairingPanel — S11-C readiness row', () => {
     async (_label, readiness) => {
       mockHookState = { status: 'paired', code: null, readiness };
       const { getByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
-      const text = getByTestId('pairing-check-readiness').props.children ?? '';
-      const serialized = JSON.stringify(text);
-      expect(serialized).not.toMatch(/\bauthorized\b/i);
-      expect(serialized).not.toMatch(/\bready\b/i);
-      expect(serialized).not.toMatch(/\bconnected\b/i);
-      expect(serialized).not.toMatch(/\bverified\b/i);
+      // Round-2 audit C7: collect rendered text SAFELY via the row's toJSON()
+      // string leaves, never via .props.children + JSON.stringify(element) —
+      // React elements can carry a circular _owner Fiber under React 19.2 dev,
+      // which throws "Converting circular structure to JSON" (CI's C7 red).
+      // toJSON() is RTL's own serializable host-node snapshot; no element, no
+      // Fiber, no cycle.
+      const serialized = collectText(getByTestId('pairing-check-readiness').toJSON());
+      expectNoBannedWords(serialized);
     },
   );
+
+  it('banned-words sweep over every rendered a11y label on the readiness row, every state', async () => {
+    const states: Array<{ run: 'none' | 'open' | 'terminal'; sourceDeclared: boolean; declaredPlatforms: number | null }> = [
+      { run: 'none', sourceDeclared: false, declaredPlatforms: null },
+      { run: 'open', sourceDeclared: false, declaredPlatforms: null },
+      { run: 'open', sourceDeclared: true, declaredPlatforms: 1 },
+      { run: 'open', sourceDeclared: true, declaredPlatforms: 4 },
+      { run: 'terminal', sourceDeclared: true, declaredPlatforms: 2 },
+    ];
+    for (const readiness of states) {
+      mockHookState = { status: 'paired', code: null, readiness };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let toJSON: () => unknown = null as any;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let unmount: () => void = null as any;
+      // Flushed explicitly via act(): this panel's mount-time effects
+      // (auto-mint, the copyState reset keyed on `code`) schedule a
+      // post-mount update on every instance. Repeated manual
+      // render()+unmount() cycles inside ONE `it` (needed to sweep every
+      // readiness state without a separate `it` per state) were observed to
+      // leave one iteration's pending effect unflushed into the next
+      // iteration's render, corrupting that render's own tree ("overlapping
+      // act() calls" from React, and a missing row despite the component
+      // source rendering it unconditionally whenever readiness is set).
+      // Awaiting act() around render, and again as an explicit flush before
+      // moving on, settles each iteration fully before the next begins.
+      await act(async () => {
+        const rendered = await render(<ExtensionPairingPanel platformId="truecoach" />);
+        toJSON = rendered.toJSON;
+        unmount = rendered.unmount;
+        await Promise.resolve();
+      });
+      const row = findByTestId(toJSON(), 'pairing-check-readiness');
+      expect(row).not.toBeNull();
+      // RN Text has no accessibilityLabel override on this row (the plain
+      // string children ARE the accessible name — see the module doc
+      // comment), so the a11y-relevant surface is exactly the row's own
+      // string-leaf text, walked safely off the SAME toJSON() snapshot used
+      // to locate it above (never JSON.stringify on a raw element/fiber —
+      // the C7 fix this closes).
+      expectNoBannedWords(collectText(row));
+      await act(async () => {
+        unmount();
+        await Promise.resolve();
+      });
+    }
+  });
 
   it('banned-words sweep over the FULL rendered paired card, every readiness state', async () => {
     const states: Array<{ run: 'none' | 'open' | 'terminal'; sourceDeclared: boolean; declaredPlatforms: number | null }> = [
@@ -479,11 +646,7 @@ describe('ExtensionPairingPanel — S11-C readiness row', () => {
     for (const readiness of states) {
       mockHookState = { status: 'paired', code: null, readiness };
       const { toJSON, unmount } = await render(<ExtensionPairingPanel platformId="truecoach" />);
-      const serialized = JSON.stringify(toJSON());
-      expect(serialized).not.toMatch(/source (is )?authorized/i);
-      expect(serialized).not.toMatch(/source (is )?ready/i);
-      expect(serialized).not.toMatch(/source (is )?connected/i);
-      expect(serialized).not.toMatch(/source (is )?verified/i);
+      expectNoBannedSourceClaims(collectText(toJSON()));
       unmount();
     }
   });

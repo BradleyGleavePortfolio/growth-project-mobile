@@ -563,6 +563,9 @@ describe('S11-C readiness — consumer contract (fixture s11cPairSurface.7fdcbc0
 
   describe('fixture provenance', () => {
     it('is projected from the S11-C backend commit (sha256 + commit pinned), same five pair paths as C1', () => {
+      expect(s11cFixture.$fixture.source.sha256).toBe(
+        '889d25c6a529512596b01ba6554bbf4038ca7f33fdc66f6c9c14118b44dc53f4',
+      );
       expect(s11cFixture.$fixture.source.commit).toBe('7fdcbc044dba1747d0db2f2750ced951f3b6b752');
       expect(s11cFixture.$fixture.source.artifact).toBe('docs/contracts/importer-openapi.json');
       expect(s11cFixture.openapi).toBe('3.1.0');
@@ -623,6 +626,28 @@ describe('S11-C readiness — consumer contract (fixture s11cPairSurface.7fdcbc0
       ['a non-numeric non-null declared_platforms', { run: 'open', source_declared: true, declared_platforms: '2' }],
       ['a NaN declared_platforms', { run: 'open', source_declared: true, declared_platforms: NaN }],
       ['a missing declared_platforms', { run: 'open', source_declared: true }],
+      // C1 (round-2 audit): integer/non-negative and both cross-field rules.
+      // None of these is a value the landed server can emit, but the decoder
+      // must not accept them anyway — it is the ONLY gate the render layer
+      // relies on to never need a `?? 0` / unknown-becomes-zero fallback.
+      ['a non-integer declared_platforms', { run: 'open', source_declared: true, declared_platforms: 1.5 }],
+      ['a negative declared_platforms', { run: 'open', source_declared: true, declared_platforms: -1 }],
+      [
+        'declared_platforms=null on a non-none run (null iff none violated)',
+        { run: 'open', source_declared: false, declared_platforms: null },
+      ],
+      [
+        'a non-null declared_platforms on run=none (null iff none violated)',
+        { run: 'none', source_declared: false, declared_platforms: 0 },
+      ],
+      [
+        'source_declared=true with declared_platforms=0 (source_declared/count disagree)',
+        { run: 'open', source_declared: true, declared_platforms: 0 },
+      ],
+      [
+        'source_declared=false with declared_platforms=2 (source_declared/count disagree)',
+        { run: 'open', source_declared: false, declared_platforms: 2 },
+      ],
     ])('fails closed to undefined for %s (never a lifecycle reading)', (_label, raw) => {
       expect(decodeReadiness(raw)).toBeUndefined();
     });
@@ -632,6 +657,11 @@ describe('S11-C readiness — consumer contract (fixture s11cPairSurface.7fdcbc0
       expect(decoded).toBeUndefined();
       expect(decoded).not.toBe(false);
       expect(decoded).not.toBe(0);
+    });
+
+    it('C1: accepts declared_platforms=0 exactly when source_declared is also false (the zero-but-open case)', () => {
+      const decoded = decodeReadiness({ run: 'open', source_declared: false, declared_platforms: 0 });
+      expect(decoded).toEqual({ run: 'open', sourceDeclared: false, declaredPlatforms: 0 });
     });
   });
 

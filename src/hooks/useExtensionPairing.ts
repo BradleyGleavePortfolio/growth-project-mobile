@@ -257,6 +257,15 @@ export function useExtensionPairing(
   const readinessRef = useRef<DecodedReadiness | undefined>(undefined);
   /** Single-flight guard + staleness token for the readiness fetch. */
   const readinessEpochRef = useRef(0);
+  /**
+   * The epoch of the readiness read currently in flight, or `null` when none
+   * is. Scoped BY epoch (not a bare boolean) so a still-outstanding read from
+   * a since-superseded epoch (moved off paired, then re-paired) never blocks
+   * the new epoch's own read — only a second call within the SAME epoch
+   * (e.g. two foreground events in quick succession, or a foreground racing
+   * the initial paired-transition read) is treated as an overlap and skipped.
+   */
+  const readinessInFlightEpochRef = useRef<number | null>(null);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollDelayRef = useRef(POLL_BASE_MS);
   const failureCountRef = useRef(0);
@@ -389,18 +398,25 @@ export function useExtensionPairing(
 
   /**
    * S11-C (D-S11-5, UX-03/04): read advisory readiness for the just-paired
-   * intent via pair/current (pair/status carries no readiness block). Fires
-   * once per `paired` transition, single-flight, and is PURELY ADDITIVE: a
-   * malformed payload, a transport error, or a superseded epoch (unmounted,
+   * intent via pair/current (pair/status carries no readiness block). Two
+   * call sites share this: once on the `waiting -> paired` transition, and
+   * once per app foreground while the hook is still `paired` (round-2 audit
+   * B2 — the row is a live-while-paired reading, not a one-shot snapshot
+   * presented as durably current). Both sites are single-flight together
+   * (readinessInFlightEpochRef) and epoch-guarded: a malformed payload, a
+   * transport error, an in-flight overlap, or a superseded epoch (unmounted,
    * moved off `paired`, or a newer paired transition already running) all
-   * leave `readiness` at its prior (unknown) value and never touch `status`,
-   * `code`, or any other field — exactly like the server's own read failure,
-   * which omits the block rather than failing the setup response.
+   * leave `readiness` at its prior (unknown or previously-read) value and
+   * never touch `status`, `code`, or any other field — exactly like the
+   * server's own read failure, which omits the block rather than failing the
+   * setup response. This never retries on a timer; a foreground event or the
+   * next paired transition is the only thing that tries again.
    */
   const fetchReadiness = useCallback(async () => {
     const epoch = readinessEpochRef.current;
-    // No setup_nonce to replay here: `go('paired')` (called just before this
-    // function, in doPoll) already retired it, and the just-paired setup IS
+    if (readinessInFlightEpochRef.current === epoch) return; // overlap within the SAME epoch only
+    readinessInFlightEpochRef.current = epoch;
+    // No setup_nonce to replay here: the just-paired/still-paired setup IS
     // this coach's current setup — the same "empty body reads the current
     // setup" semantics pair/current documents for its normal (non-recovery)
     // caller. There is nothing to recover; this is not the E01 nonce-replay
@@ -411,13 +427,23 @@ export function useExtensionPairing(
         return;
       }
       const decoded = decodePairCurrentResponse(res.data);
-      if (decoded.readiness) {
+      // C5: pair/current with no setup_nonce reads the coach's unsuperseded
+      // setup, which — inside this one round trip — need not still be THIS
+      // pairing's intent (e.g. a second-device pair/init landed mid-flight).
+      // Only attach the reading when the two ids agree, or when either side
+      // does not name one (nothing to disagree with yet).
+      const thisIntent = importIntentIdRef.current;
+      const readIntent = decoded.importIntentId;
+      const sameIntent = !thisIntent || !readIntent || thisIntent === readIntent;
+      if (decoded.readiness && sameIntent) {
         readinessRef.current = decoded.readiness;
         emit('paired', null, null, null);
       }
     } catch {
       // Advisory read only — never surfaces as a failure state or retries on a
-      // timer; the next paired transition (a fresh mint/redeem) tries again.
+      // timer; the next foreground event or paired transition tries again.
+    } finally {
+      if (readinessInFlightEpochRef.current === epoch) readinessInFlightEpochRef.current = null;
     }
   }, [emit]);
 
@@ -714,6 +740,13 @@ export function useExtensionPairing(
         idempotencyKeyRef.current = null;
         setupNonceRef.current = null;
         importIntentIdRef.current = null;
+        // C4 (round-2 audit): retire readiness here too, for symmetry with
+        // every other off-`paired` transition. Harmless today (the panel
+        // renders the row only in `paired`, and the next go('minting') would
+        // clear it anyway) but this path sets `idle` directly rather than
+        // through go(), so it did not previously.
+        readinessRef.current = undefined;
+        readinessEpochRef.current += 1;
         statusRef.current = 'idle';
         emit('idle', null);
         if (hadLive) pendingStartRef.current = true;
@@ -795,6 +828,11 @@ export function useExtensionPairing(
 
   // Pause polling in the background; resume on foreground. Expiry is decided by
   // the server /status contract on the next poll, never by a client clock.
+  // S11-C (round-2 audit B2): a foreground while already `paired` also
+  // re-reads readiness once — `fetchReadiness` is single-flight and
+  // epoch-guarded on its own, so this never duplicates the paired-transition
+  // read and never queues a retry loop; a late/superseded response is
+  // discarded there, not here.
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next: AppStateStatus) => {
       if (next === 'active') {
@@ -802,6 +840,8 @@ export function useExtensionPairing(
         if (statusRef.current === 'waiting') {
           if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
           pollTimerRef.current = setTimeout(doPoll, 0);
+        } else if (statusRef.current === 'paired') {
+          void fetchReadiness();
         }
       } else {
         pausedRef.current = true;
@@ -809,7 +849,7 @@ export function useExtensionPairing(
       }
     });
     return () => sub.remove();
-  }, [doPoll, clearTimers]);
+  }, [doPoll, clearTimers, fetchReadiness]);
 
   // Teardown on unmount: cancel every in-flight timer, block late setState.
   useEffect(() => {

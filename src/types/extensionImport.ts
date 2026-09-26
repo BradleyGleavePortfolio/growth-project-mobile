@@ -111,8 +111,8 @@ export interface PairSessionRequest {
  *   - `run: 'terminal'` carries no detail here; terminal status/reasons stay
  *     on the existing import status read (GET /api/scout/import/status) —
  *     this block never invents them.
- *   - `declared_platforms` is a COUNT only (null when run is 'none'); never a
- *     platform name.
+ *   - `declared_platforms` is a COUNT only (null exactly when run is 'none',
+ *     a non-negative integer otherwise); never a platform name.
  */
 export const READINESS_RUN_STATES = ['none', 'open', 'terminal'] as const;
 export type ReadinessRunState = (typeof READINESS_RUN_STATES)[number];
@@ -140,12 +140,21 @@ export interface DecodedReadiness {
  * Strict parse of the optional `readiness` wire block. Fails closed to
  * `undefined` (not `false`/`0`/a fabricated member) for: an absent block, a
  * non-object, a `run` outside the closed enum, a non-boolean
- * `source_declared`, or a `declared_platforms` that is not `null` and not a
- * finite number. A `declared_platforms` of `null` is preserved verbatim (it is
- * only ever null when `run` is `'none'` per contract, but this decoder does
- * not enforce that cross-field rule — an inconsistent-but-well-typed payload
- * still decodes; the render layer only ever displays the count, never asserts
- * the invariant itself).
+ * `source_declared`, or a `declared_platforms` that is not exactly one of
+ * (a) `null` or (b) a non-negative integer.
+ *
+ * This ALSO enforces the two cross-field invariants the landed server
+ * (`readReadiness`, 7fdcbc04 extension-pair.service.ts:238-244) always
+ * satisfies, rather than accepting any well-typed-but-inconsistent payload:
+ *   - `declared_platforms === null` if and only if `run === 'none'` (the
+ *     server only ever returns null on that branch; every other branch
+ *     returns `Set(...).size`, an integer of 0 or more).
+ *   - `source_declared === (declared_platforms ?? 0) > 0` (the server derives
+ *     `source_declared` from that same size).
+ * A payload that is well-typed member-by-member but violates either rule is
+ * not a value the landed server can produce, so it decodes to `undefined`
+ * (unknown) rather than being rendered — the render layer therefore never
+ * needs, and no longer has, a `?? 0` fallback for an inconsistent count.
  */
 export function decodeReadiness(raw: unknown): DecodedReadiness | undefined {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
@@ -156,9 +165,12 @@ export function decodeReadiness(raw: unknown): DecodedReadiness | undefined {
   }
   if (typeof v.source_declared !== 'boolean') return undefined;
   const declared = v.declared_platforms;
-  if (declared !== null && (typeof declared !== 'number' || !Number.isFinite(declared))) {
+  if (declared !== null && (typeof declared !== 'number' || !Number.isInteger(declared) || declared < 0)) {
     return undefined;
   }
+  if ((declared === null) !== (run === 'none')) return undefined;
+  const effectiveCount = declared ?? 0;
+  if (v.source_declared !== effectiveCount > 0) return undefined;
   return {
     run: run as ReadinessRunState,
     sourceDeclared: v.source_declared,
