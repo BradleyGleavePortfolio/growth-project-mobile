@@ -8,6 +8,14 @@
  * the functions below. These shapes are the single source of truth the mobile
  * client codes against, not invented.
  *
+ * S11-C addendum (UX-03/04, D-S11-5): `PairCurrentResponse` (returned by both
+ * pair/current and pair/session) now MAY carry an optional `readiness` block,
+ * mirrored from backend PR #560 head `7fdcbc044dba1747d0db2f2750ced951f3b6b752`
+ * (same artifact path, schemas `PairReadiness` / `PairSessionResult.readiness`).
+ * That later slice is pinned separately in
+ * `./__fixtures__/s11cPairSurface.7fdcbc04.json` — see decodeReadiness below
+ * and the `S11-C readiness` describe block in the contract test.
+ *
  * Mobile-callable (bearer): POST /api/extension/pair/init, pair/status,
  * pair/current, pair/session. Extension-only (never mobile-callable):
  * pair/redeem (UNAUTHENTICATED; exchanges the code for coach-bound tokens),
@@ -85,15 +93,91 @@ export interface PairSessionRequest {
 }
 
 /**
+ * S11-C (D-S11-5) advisory setup-to-run readiness, raw wire shape mirroring
+ * backend `PairReadiness` (backend PR #560, `7fdcbc044dba1747d0db2f2750ced951f3b6b752`,
+ * `docs/contracts/importer-openapi.json` schema `PairReadiness`; service/DTO at
+ * the same commit: src/extension-pair/extension-pair.{dto,service}.ts). Present
+ * only inside `PairCurrentResponse.readiness` on `pair/session` and
+ * `pair/current` — `pair/status` never carries it. Decode via
+ * decodeReadiness, never cast: any malformed/unrecognised value must decode to
+ * `undefined` (not known), never coerced into a lifecycle member.
+ *
+ * D-S11-5 honesty rules (binding on every consumer of the decoded value):
+ *   - `run` absent (the whole block absent) means NOT KNOWN — never rendered
+ *     as "no"/"not ready"/zero.
+ *   - `source_declared: true` may read "declaration received"; NEVER "source
+ *     authorized", "source ready", "connected", or "verified". Real source
+ *     authorization stays unknown (owner-reserved verifier).
+ *   - `run: 'terminal'` carries no detail here; terminal status/reasons stay
+ *     on the existing import status read (GET /api/scout/import/status) —
+ *     this block never invents them.
+ *   - `declared_platforms` is a COUNT only (null when run is 'none'); never a
+ *     platform name.
+ */
+export const READINESS_RUN_STATES = ['none', 'open', 'terminal'] as const;
+export type ReadinessRunState = (typeof READINESS_RUN_STATES)[number];
+
+export interface PairReadiness {
+  run: string; // raw wire value — decode via decodeReadiness, never cast
+  source_declared: boolean;
+  declared_platforms: number | null;
+}
+
+/**
+ * Decoded readiness the UI is allowed to render. `run` is narrowed to the
+ * closed enum; `declaredPlatforms` is a bare count. There is no `unknown`
+ * member on `run` here — an unrecognised/malformed block decodes to
+ * `undefined` at the `decodeReadiness` boundary instead, so a caller that has
+ * a `DecodedReadiness` at all is holding a genuinely known reading.
+ */
+export interface DecodedReadiness {
+  run: ReadinessRunState;
+  sourceDeclared: boolean;
+  declaredPlatforms: number | null;
+}
+
+/**
+ * Strict parse of the optional `readiness` wire block. Fails closed to
+ * `undefined` (not `false`/`0`/a fabricated member) for: an absent block, a
+ * non-object, a `run` outside the closed enum, a non-boolean
+ * `source_declared`, or a `declared_platforms` that is not `null` and not a
+ * finite number. A `declared_platforms` of `null` is preserved verbatim (it is
+ * only ever null when `run` is `'none'` per contract, but this decoder does
+ * not enforce that cross-field rule — an inconsistent-but-well-typed payload
+ * still decodes; the render layer only ever displays the count, never asserts
+ * the invariant itself).
+ */
+export function decodeReadiness(raw: unknown): DecodedReadiness | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const v = raw as Record<string, unknown>;
+  const run = v.run;
+  if (typeof run !== 'string' || !(READINESS_RUN_STATES as readonly string[]).includes(run)) {
+    return undefined;
+  }
+  if (typeof v.source_declared !== 'boolean') return undefined;
+  const declared = v.declared_platforms;
+  if (declared !== null && (typeof declared !== 'number' || !Number.isFinite(declared))) {
+    return undefined;
+  }
+  return {
+    run: run as ReadinessRunState,
+    sourceDeclared: v.source_declared,
+    declaredPlatforms: declared,
+  };
+}
+
+/**
  * Wire shape of the backend `PairSessionResult`, returned by BOTH
  * pair/current and pair/session. Setup only: it never carries a code or a
  * token and never means accepted Start or import completion. Decode via
- * decodePairCurrentResponse, never cast.
+ * decodePairCurrentResponse, never cast. `readiness` is OPTIONAL (S11-C,
+ * D-S11-5): absent means not known, never "no" — see decodeReadiness above.
  */
 export interface PairCurrentResponse {
   import_intent_id: string;
   status: string; // raw wire value — decode via decodePairStatus
   chosen_platform: string;
+  readiness?: PairReadiness;
 }
 export type PairSessionResponse = PairCurrentResponse;
 
@@ -102,12 +186,16 @@ export type PairSessionResponse = PairCurrentResponse;
  * unrecognised enum value AND for a payload that is not the contracted shape
  * (missing/empty required field, wrong type, non-object). `'unknown'` never
  * reads as paired. `importIntentId` and `chosenPlatform` are correlation /
- * display inputs only, never eligibility or connection truth.
+ * display inputs only, never eligibility or connection truth. `readiness` is
+ * `undefined` whenever the server omitted the block OR sent something
+ * decodeReadiness could not parse — both read as NOT KNOWN (S11-C, D-S11-5),
+ * never as a negative/zero reading.
  */
 export interface DecodedPairCurrent {
   status: DecodedPairStatus;
   importIntentId: string | null;
   chosenPlatform: string | null;
+  readiness?: DecodedReadiness;
 }
 
 export const UNKNOWN_PAIR_CURRENT: Readonly<DecodedPairCurrent> = Object.freeze({
@@ -127,7 +215,17 @@ export function decodePairCurrentResponse(raw: unknown): DecodedPairCurrent {
     // owned setup we can reason about, so the whole reading fails closed.
     return UNKNOWN_PAIR_CURRENT;
   }
-  return { status: decodePairStatus(v.status), importIntentId, chosenPlatform };
+  // readiness is OPTIONAL on the wire and decoded independently of the rest of
+  // this payload's validity: a malformed/absent block never discards an
+  // otherwise-valid setup reading, and a valid block is never attached to a
+  // reading this function is about to reject above.
+  const readiness = decodeReadiness(v.readiness);
+  return {
+    status: decodePairStatus(v.status),
+    importIntentId,
+    chosenPlatform,
+    ...(readiness ? { readiness } : {}),
+  };
 }
 
 /**

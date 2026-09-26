@@ -5,12 +5,14 @@
  */
 import {
   PAIR_INIT_ERROR_CODES,
+  READINESS_RUN_STATES,
   SUPPORTED_IMPORT_PHASES,
   UNKNOWN_PAIR_CURRENT,
   decodeImportIntentId,
   decodePairCurrentResponse,
   decodePairInitErrorCode,
   decodePairStatus,
+  decodeReadiness,
   decodeTerminalStatus,
 } from '../extensionImport';
 import type {
@@ -31,6 +33,12 @@ import type {
 // S7-2′ consumer-frozen pair surface, mechanically projected (see the describe
 // block at the bottom of this file for provenance pins).
 import fixture from '../__fixtures__/c1PairSurface.a0ea1bea.json';
+// S11-C (D-S11-5, UX-03/04) readiness addendum, mechanically projected from the
+// LATER backend commit that adds the optional `readiness` block to the SAME
+// five pair paths. See the `S11-C readiness` describe block at the bottom of
+// this file for provenance pins and
+// execution/fa72efb2/mobile-readiness/tooling/extract_s11c_pair_surface_fixture.py.
+import s11cFixture from '../__fixtures__/s11cPairSurface.7fdcbc04.json';
 
 describe('extensionImport contract', () => {
   it('supported phases are exactly the honest funnel subset (no complete/progress claims)', () => {
@@ -526,6 +534,159 @@ describe('C1 pair surface — consumer contract (fixture c1PairSurface.a0ea1bea)
 
     it('returns the server string verbatim, never coerced', () => {
       expect(decodeImportIntentId('ii-0001')).toBe('ii-0001');
+    });
+  });
+});
+
+/**
+ * S11-C (D-S11-5, UX-03/04) readiness addendum — consumer contract for the
+ * `readiness` block backend PR #560 added to `PairSessionResult` at head
+ * `7fdcbc044dba1747d0db2f2750ced951f3b6b752`. Mechanically projected the same
+ * way as the C1 fixture above (see `s11cFixture.$fixture.extraction`), over
+ * the SAME five pair paths, from a LATER commit than the frozen C1 surface.
+ * Decodes fixture-derived examples through decodeReadiness /
+ * decodePairCurrentResponse so a contract drift on this later slice, or a
+ * decoder that stops failing closed, breaks here first.
+ */
+describe('S11-C readiness — consumer contract (fixture s11cPairSurface.7fdcbc04)', () => {
+  const s11cSchemas = s11cFixture.components.schemas as unknown as Record<string, JsonSchema>;
+  const s11cPaths = s11cFixture.paths as unknown as Record<string, PathItem>;
+
+  function s11cResolve(ref: string): JsonSchema {
+    const prefix = '#/components/schemas/';
+    expect(ref.startsWith(prefix)).toBe(true);
+    const name = ref.slice(prefix.length);
+    const s = s11cSchemas[name];
+    expect(s).toBeDefined();
+    return s;
+  }
+
+  describe('fixture provenance', () => {
+    it('is projected from the S11-C backend commit (sha256 + commit pinned), same five pair paths as C1', () => {
+      expect(s11cFixture.$fixture.source.commit).toBe('7fdcbc044dba1747d0db2f2750ced951f3b6b752');
+      expect(s11cFixture.$fixture.source.artifact).toBe('docs/contracts/importer-openapi.json');
+      expect(s11cFixture.openapi).toBe('3.1.0');
+      expect(Object.keys(s11cPaths).sort()).toEqual([...PAIR_SURFACE_PATHS].sort());
+    });
+
+    it('adds exactly one new schema (PairReadiness) to the C1 closure', () => {
+      const c1Names = new Set(fixture.$fixture.extraction.schemas as string[]);
+      const s11cNames = s11cFixture.$fixture.extraction.schemas as string[];
+      const added = s11cNames.filter((n) => !c1Names.has(n));
+      expect(added).toEqual(['PairReadiness']);
+    });
+  });
+
+  describe('PairSessionResult.readiness', () => {
+    it('is OPTIONAL on PairSessionResult — absence is a valid, honest reading (not known)', () => {
+      const result = s11cResolve('#/components/schemas/PairSessionResult');
+      expect(result.required).toEqual(['import_intent_id', 'status', 'chosen_platform']);
+      expect(result.properties?.readiness).toBeDefined();
+      expect((result.required ?? []).includes('readiness')).toBe(false);
+    });
+
+    it('PairReadiness requires run, source_declared and declared_platforms (declared_platforms nullable)', () => {
+      const readiness = s11cResolve('#/components/schemas/PairReadiness');
+      expect([...(readiness.required ?? [])].sort()).toEqual(
+        ['declared_platforms', 'run', 'source_declared'].sort(),
+      );
+      expect(readiness.properties?.run.enum).toEqual(['none', 'open', 'terminal']);
+      expect(readiness.properties?.declared_platforms).toMatchObject({ nullable: true, type: 'number' });
+    });
+
+    it('the mobile ReadinessRunState union mirrors the closed backend enum exactly', () => {
+      const readiness = s11cResolve('#/components/schemas/PairReadiness');
+      expect([...READINESS_RUN_STATES].sort()).toEqual([...readiness.properties!.run.enum!].sort());
+    });
+  });
+
+  describe('decodeReadiness — strict parse, fails closed to undefined (never false/0/a fabricated member)', () => {
+    it.each(['none', 'open', 'terminal'] as const)(
+      'decodes a well-formed block for run=%s',
+      (run) => {
+        const declared = run === 'none' ? null : 2;
+        const decoded = decodeReadiness({ run, source_declared: run !== 'none', declared_platforms: declared });
+        expect(decoded).toEqual({ run, sourceDeclared: run !== 'none', declaredPlatforms: declared });
+      },
+    );
+
+    it.each<[string, unknown]>([
+      ['undefined (absent block)', undefined],
+      ['null', null],
+      ['a string', 'none'],
+      ['an array', []],
+      ['an unrecognised run value', { run: 'live', source_declared: true, declared_platforms: 1 }],
+      ['a missing run', { source_declared: true, declared_platforms: 1 }],
+      ['a non-string run', { run: 1, source_declared: true, declared_platforms: 1 }],
+      ['a non-boolean source_declared', { run: 'open', source_declared: 'yes', declared_platforms: 1 }],
+      ['a missing source_declared', { run: 'open', declared_platforms: 1 }],
+      ['a non-numeric non-null declared_platforms', { run: 'open', source_declared: true, declared_platforms: '2' }],
+      ['a NaN declared_platforms', { run: 'open', source_declared: true, declared_platforms: NaN }],
+      ['a missing declared_platforms', { run: 'open', source_declared: true }],
+    ])('fails closed to undefined for %s (never a lifecycle reading)', (_label, raw) => {
+      expect(decodeReadiness(raw)).toBeUndefined();
+    });
+
+    it('never decodes to a truthy-but-wrong shape — the return is exactly undefined or a DecodedReadiness', () => {
+      const decoded = decodeReadiness('garbage');
+      expect(decoded).toBeUndefined();
+      expect(decoded).not.toBe(false);
+      expect(decoded).not.toBe(0);
+    });
+  });
+
+  describe('decodePairCurrentResponse folds a valid readiness block in and fails closed on a malformed one', () => {
+    const base = { import_intent_id: 'ii-1', status: 'paired', chosen_platform: 'truecoach' };
+
+    it('absent readiness — decoded reading has no readiness key at all (not known, never false/zero)', () => {
+      const decoded = decodePairCurrentResponse(base);
+      expect(decoded.status).toBe('paired');
+      expect('readiness' in decoded).toBe(false);
+    });
+
+    it('present + well-formed readiness is folded into the decoded reading verbatim (field renamed to camelCase)', () => {
+      const decoded = decodePairCurrentResponse({
+        ...base,
+        readiness: { run: 'open', source_declared: true, declared_platforms: 3 },
+      });
+      expect(decoded.readiness).toEqual({ run: 'open', sourceDeclared: true, declaredPlatforms: 3 });
+    });
+
+    it('malformed readiness never discards an otherwise-valid setup reading — it just omits readiness', () => {
+      const decoded = decodePairCurrentResponse({ ...base, readiness: { run: 'somewhere-else' } });
+      expect(decoded.status).toBe('paired');
+      expect(decoded.importIntentId).toBe('ii-1');
+      expect('readiness' in decoded).toBe(false);
+    });
+
+    it('a readiness block attached to an otherwise-invalid payload never survives — the whole reading fails closed', () => {
+      const decoded = decodePairCurrentResponse({
+        status: 'paired',
+        readiness: { run: 'open', source_declared: true, declared_platforms: 3 },
+        // import_intent_id and chosen_platform missing — contract requires both.
+      });
+      expect(decoded).toEqual(UNKNOWN_PAIR_CURRENT);
+      expect('readiness' in decoded).toBe(false);
+    });
+
+    it('run="none" with declared_platforms=null decodes and renders as a genuinely known "none" reading', () => {
+      const decoded = decodePairCurrentResponse({
+        ...base,
+        readiness: { run: 'none', source_declared: false, declared_platforms: null },
+      });
+      expect(decoded.readiness).toEqual({ run: 'none', sourceDeclared: false, declaredPlatforms: null });
+    });
+
+    it('decodes an example built from every enum member of the S11-C fixture schema', () => {
+      const readinessSchema = s11cResolve('#/components/schemas/PairReadiness');
+      for (const run of readinessSchema.properties!.run.enum!) {
+        const declared = run === 'none' ? null : 1;
+        const decoded = decodePairCurrentResponse({
+          ...base,
+          readiness: { run, source_declared: run !== 'none', declared_platforms: declared },
+        });
+        expect(decoded.readiness?.run).toBe(run);
+      }
     });
   });
 });
