@@ -21,7 +21,7 @@ import { AppState, type AppStateStatus, type NativeEventSubscription } from 'rea
 import { AxiosError, AxiosHeaders } from 'axios';
 
 jest.mock('../../api/extensionPairApi', () => ({
-  extensionPairApi: { init: jest.fn(), status: jest.fn() },
+  extensionPairApi: { init: jest.fn(), status: jest.fn(), current: jest.fn() },
 }));
 const mockTrack = jest.fn();
 jest.mock('../../analytics/posthog.service', () => ({
@@ -48,6 +48,7 @@ import {
 
 const mockInit = extensionPairApi.init as jest.Mock;
 const mockStatus = extensionPairApi.status as jest.Mock;
+const mockCurrent = extensionPairApi.current as jest.Mock;
 
 /** Seed a session as if a previous process had minted it and then been killed. */
 async function seedMirror(userId: string, over: Record<string, unknown> = {}) {
@@ -95,6 +96,13 @@ beforeEach(async () => {
   jest.spyOn(AppState, 'addEventListener').mockImplementation((_event, cb) => {
     appStateHandler = cb;
     return { remove: jest.fn() } as NativeEventSubscription;
+  });
+  // S11-C: default the readiness read (fired once on entering `paired`) to a
+  // response with no readiness block, so every pre-existing test that never
+  // asserts on it is unaffected — absence is the honest default reading.
+  mockCurrent.mockReset();
+  mockCurrent.mockResolvedValue({
+    data: { import_intent_id: 'ii-default', status: 'paired', chosen_platform: 'truecoach' },
   });
 });
 
@@ -1784,5 +1792,145 @@ describe('useExtensionPairing — C1 setup_nonce / import_intent_id correlation'
     expect(typeof cancel).toBe('function');
     expect(result.current.importIntentId).toBeNull();
     expect(result.current.reason).toBeNull();
+  });
+});
+
+/**
+ * S11-C (D-S11-5, UX-03/04) readiness — useExtensionPairing.readiness.
+ *
+ * pair/status never carries a readiness block; pair/current does (backend PR
+ * #560, head 7fdcbc04). These tests pin that the hook fires exactly one
+ * pair/current read on entering `paired`, that a well-formed block populates
+ * `readiness`, and that an absent/malformed block or a transport failure
+ * leaves `readiness` undefined (not known) WITHOUT ever touching `status`.
+ */
+describe('useExtensionPairing — S11-C readiness', () => {
+  async function mintToPaired() {
+    mockInit.mockResolvedValue({ data: { pairing_code: '482913', expires_at: futureExpiry() } });
+    mockStatus.mockResolvedValue({ data: { status: 'paired' } });
+    const hook = await renderHook(() => useExtensionPairing('truecoach', true));
+    await act(async () => {
+      hook.result.current.start();
+    });
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(2000);
+    });
+    expect(hook.result.current.status).toBe('paired');
+    return hook;
+  }
+
+  it('is undefined (not known) immediately on reaching paired, before the readiness read resolves', async () => {
+    let resolveCurrent!: (v: unknown) => void;
+    mockCurrent.mockReset();
+    mockCurrent.mockImplementation(() => new Promise((res) => { resolveCurrent = res; }));
+    const { result } = await mintToPaired();
+    expect(result.current.status).toBe('paired');
+    expect(result.current.readiness).toBeUndefined();
+    await act(async () => {
+      resolveCurrent({
+        data: { import_intent_id: 'ii-1', status: 'paired', chosen_platform: 'truecoach', readiness: { run: 'open', source_declared: true, declared_platforms: 1 } },
+      });
+      await Promise.resolve();
+    });
+    expect(result.current.readiness).toEqual({ run: 'open', sourceDeclared: true, declaredPlatforms: 1 });
+  });
+
+  it('fires exactly one pair/current call per paired transition (single-flight)', async () => {
+    await mintToPaired();
+    expect(mockCurrent).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls pair/current with no setup_nonce (the just-paired setup IS the current setup; the nonce was already retired)', async () => {
+    await mintToPaired();
+    expect(mockCurrent).toHaveBeenCalledWith();
+  });
+
+  it('populates readiness from a well-formed block (run=none, no declaration)', async () => {
+    mockCurrent.mockResolvedValue({
+      data: { import_intent_id: 'ii-1', status: 'paired', chosen_platform: 'truecoach', readiness: { run: 'none', source_declared: false, declared_platforms: null } },
+    });
+    const { result } = await mintToPaired();
+    expect(result.current.readiness).toEqual({ run: 'none', sourceDeclared: false, declaredPlatforms: null });
+  });
+
+  it('populates readiness from a well-formed block (run=terminal, declared)', async () => {
+    mockCurrent.mockResolvedValue({
+      data: { import_intent_id: 'ii-1', status: 'paired', chosen_platform: 'truecoach', readiness: { run: 'terminal', source_declared: true, declared_platforms: 2 } },
+    });
+    const { result } = await mintToPaired();
+    expect(result.current.readiness).toEqual({ run: 'terminal', sourceDeclared: true, declaredPlatforms: 2 });
+  });
+
+  it('stays undefined when the server omits the readiness block entirely', async () => {
+    mockCurrent.mockResolvedValue({
+      data: { import_intent_id: 'ii-1', status: 'paired', chosen_platform: 'truecoach' },
+    });
+    const { result } = await mintToPaired();
+    expect(result.current.readiness).toBeUndefined();
+    expect(result.current.status).toBe('paired');
+  });
+
+  it('stays undefined (never coerced) when the readiness block is malformed', async () => {
+    mockCurrent.mockResolvedValue({
+      data: { import_intent_id: 'ii-1', status: 'paired', chosen_platform: 'truecoach', readiness: { run: 'somewhere-else', source_declared: true, declared_platforms: 1 } },
+    });
+    const { result } = await mintToPaired();
+    expect(result.current.readiness).toBeUndefined();
+    expect(result.current.status).toBe('paired');
+  });
+
+  it('a pair/current transport failure leaves readiness undefined and never demotes paired', async () => {
+    mockCurrent.mockRejectedValue(new Error('network down'));
+    const { result } = await mintToPaired();
+    expect(result.current.readiness).toBeUndefined();
+    expect(result.current.status).toBe('paired');
+  });
+
+  it('clears readiness on a later transition off paired (retry after expiry) and does not resurrect a stale value', async () => {
+    mockCurrent.mockResolvedValue({
+      data: { import_intent_id: 'ii-1', status: 'paired', chosen_platform: 'truecoach', readiness: { run: 'open', source_declared: true, declared_platforms: 1 } },
+    });
+    const { result } = await mintToPaired();
+    expect(result.current.readiness).toEqual({ run: 'open', sourceDeclared: true, declaredPlatforms: 1 });
+
+    // A fresh mint (e.g. after cancel+retry) moves status off paired; the
+    // stale readiness reading must not survive into the new intent.
+    mockStatus.mockResolvedValue({ data: { status: 'pending' } });
+    mockInit.mockResolvedValue({ data: { pairing_code: '111222', expires_at: futureExpiry() } });
+    await act(async () => {
+      result.current.cancel();
+    });
+    expect(result.current.readiness).toBeUndefined();
+    await act(async () => {
+      result.current.retry();
+    });
+    expect(result.current.readiness).toBeUndefined();
+  });
+
+  it('a late readiness response for a superseded (no-longer-paired) attempt never attaches its reading', async () => {
+    let resolveCurrent!: (v: unknown) => void;
+    mockCurrent.mockImplementation(() => new Promise((res) => { resolveCurrent = res; }));
+    const { result } = await mintToPaired();
+
+    // Move off paired before the pair/current read resolves.
+    await act(async () => {
+      result.current.cancel();
+    });
+    expect(result.current.status).toBe('cancelled');
+
+    await act(async () => {
+      resolveCurrent({
+        data: { import_intent_id: 'ii-1', status: 'paired', chosen_platform: 'truecoach', readiness: { run: 'open', source_declared: true, declared_platforms: 1 } },
+      });
+      await Promise.resolve();
+    });
+    expect(result.current.readiness).toBeUndefined();
+    expect(result.current.status).toBe('cancelled');
+  });
+
+  it('never sends the pairing code, setup nonce, or any token through pair/current or telemetry', async () => {
+    await mintToPaired();
+    const serialized = JSON.stringify(mockCurrent.mock.calls) + JSON.stringify(mockTrack.mock.calls);
+    expect(serialized).not.toContain('482913');
   });
 });

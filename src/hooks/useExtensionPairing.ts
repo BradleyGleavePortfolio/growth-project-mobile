@@ -79,6 +79,25 @@
  *     log, analytics, or telemetry payload.
  *   The public return shape is additive: `importIntentId` and `reason` are new
  *   optional members; every pre-existing member and status is unchanged.
+ *
+ * S11-C readiness (UX-03/04; contract addendum at backend PR #560, head
+ * `7fdcbc044dba1747d0db2f2750ced951f3b6b752`, D-S11-5 - see
+ * types/extensionImport.ts decodeReadiness):
+ *   - pair/status carries NO readiness block; pair/current and pair/session do.
+ *     Once THIS attempt's poll settles to `paired`, the hook fires exactly one
+ *     pair/current read (single-flight, epoch-guarded against a later
+ *     transition away from `paired`) purely to populate the advisory
+ *     `readiness` field. It never gates, delays, or retries the `paired`
+ *     transition itself - that remains decided solely by pair/status.
+ *   - `readiness` is `undefined` (not known) until that read resolves with a
+ *     well-formed block, and stays undefined forever if the read fails, the
+ *     block is malformed, or the server omits it - the exact same "omit, never
+ *     fabricate" contract the backend's own readReadiness applies. A read
+ *     failure here is silently absorbed; it is not surfaced as a hook failure
+ *     state, matching the block's advisory (not authoritative) status.
+ *   - Every transition OFF `paired` (expired, cancelled, a fresh retry, sign-
+ *     out) clears the stored readiness and invalidates any in-flight fetch, so
+ *     a late response can never attach a stale reading to a new session.
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AppState, type AppStateStatus } from 'react-native';
@@ -86,8 +105,10 @@ import { AxiosError } from 'axios';
 import { extensionPairApi } from '../api/extensionPairApi';
 import {
   decodeImportIntentId,
+  decodePairCurrentResponse,
   decodePairInitErrorCode,
   decodePairStatus,
+  type DecodedReadiness,
 } from '../types/extensionImport';
 import { featureFlags } from '../config/featureFlags';
 import { track } from '../analytics/posthog.service';
@@ -156,6 +177,18 @@ export interface PairingState {
   importIntentId?: string | null;
   /** Contract-named cause of the current failed/expired state, if any. */
   reason?: PairingReason | null;
+  /**
+   * S11-C (D-S11-5, UX-03/04) advisory setup-to-run readiness, read via
+   * pair/current once this intent settles to `paired` (pair/status carries no
+   * readiness block). `undefined` means NOT KNOWN — the read has not
+   * completed yet, the server omitted the block, or the block failed to
+   * decode — and is never rendered as a negative/zero reading. This read is
+   * advisory only: it never demotes `paired`, never blocks the checklist, and
+   * a failure is silently absorbed (stays undefined) rather than surfaced as
+   * an error state, exactly like the server's own read failure (`readReadiness`
+   * omits the block rather than failing the setup response).
+   */
+  readiness?: DecodedReadiness;
 }
 
 export interface UseExtensionPairing extends PairingState {
@@ -216,6 +249,14 @@ export function useExtensionPairing(
   const mountedRef = useRef(true);
   const statusRef = useRef<PairingStatus>('idle');
   const codeRef = useRef<string | null>(null);
+  /**
+   * S11-C readiness for the CURRENT paired intent (undefined = not known).
+   * Populated only after a successful pair/current read following `paired`;
+   * never written by the mint/poll path itself (pair/status carries none).
+   */
+  const readinessRef = useRef<DecodedReadiness | undefined>(undefined);
+  /** Single-flight guard + staleness token for the readiness fetch. */
+  const readinessEpochRef = useRef(0);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pollDelayRef = useRef(POLL_BASE_MS);
   const failureCountRef = useRef(0);
@@ -286,6 +327,7 @@ export function useExtensionPairing(
         supportReference,
         importIntentId: importIntentIdRef.current,
         reason,
+        ...(readinessRef.current ? { readiness: readinessRef.current } : {}),
       });
     },
     [],
@@ -315,6 +357,14 @@ export function useExtensionPairing(
       // retry must not lose the nonce it is about to replay.
       const uid = userIdRef.current;
       if (uid && next !== 'minting') void clearImportPairingMirror(uid);
+      // Readiness is advisory data for the CURRENT paired intent only; every
+      // transition away from (or never having reached) `paired` invalidates it
+      // and bumps the epoch so a still-outstanding fetch discards its result
+      // rather than attaching a stale reading to a new/terminal session.
+      if (next !== 'paired') {
+        readinessRef.current = undefined;
+        readinessEpochRef.current += 1;
+      }
       // Retire the Rule 19 key AND the setup nonce on every outcome EXCEPT a
       // transient 'failed' (and the 'minting' transition): a retry after a lost
       // response is the SAME coach intent and must replay the same key + nonce,
@@ -336,6 +386,40 @@ export function useExtensionPairing(
   const emitFailed = useCallback((reason: FailReason) => {
     track(AnalyticsEvents.IMPORT_PAIRING_FAILED, { platform: platformRef.current, reason });
   }, []);
+
+  /**
+   * S11-C (D-S11-5, UX-03/04): read advisory readiness for the just-paired
+   * intent via pair/current (pair/status carries no readiness block). Fires
+   * once per `paired` transition, single-flight, and is PURELY ADDITIVE: a
+   * malformed payload, a transport error, or a superseded epoch (unmounted,
+   * moved off `paired`, or a newer paired transition already running) all
+   * leave `readiness` at its prior (unknown) value and never touch `status`,
+   * `code`, or any other field — exactly like the server's own read failure,
+   * which omits the block rather than failing the setup response.
+   */
+  const fetchReadiness = useCallback(async () => {
+    const epoch = readinessEpochRef.current;
+    // No setup_nonce to replay here: `go('paired')` (called just before this
+    // function, in doPoll) already retired it, and the just-paired setup IS
+    // this coach's current setup — the same "empty body reads the current
+    // setup" semantics pair/current documents for its normal (non-recovery)
+    // caller. There is nothing to recover; this is not the E01 nonce-replay
+    // path start()/the mirror use.
+    try {
+      const res = await extensionPairApi.current();
+      if (!mountedRef.current || statusRef.current !== 'paired' || readinessEpochRef.current !== epoch) {
+        return;
+      }
+      const decoded = decodePairCurrentResponse(res.data);
+      if (decoded.readiness) {
+        readinessRef.current = decoded.readiness;
+        emit('paired', null, null, null);
+      }
+    } catch {
+      // Advisory read only — never surfaces as a failure state or retries on a
+      // timer; the next paired transition (a fresh mint/redeem) tries again.
+    }
+  }, [emit]);
 
   const doPoll = useCallback(async () => {
     if (!mountedRef.current || pausedRef.current) return;
@@ -360,6 +444,7 @@ export function useExtensionPairing(
       if (decoded === 'paired') {
         go('paired');
         track(AnalyticsEvents.IMPORT_PAIRED, { platform: platformRef.current });
+        void fetchReadiness();
         return;
       }
       if (decoded === 'expired') {
@@ -398,7 +483,7 @@ export function useExtensionPairing(
       // (stale) poll must not clear a guard a fresh session's poll now holds.
       if (codeRef.current === code) pollInFlightRef.current = false;
     }
-  }, [go, emitFailed]);
+  }, [go, emitFailed, fetchReadiness]);
 
   const start = useCallback(async () => {
     if (!enabled) return; // fail closed: no network path when the feature is OFF

@@ -8,6 +8,15 @@
  * tokens — it is an extension-only route and this module deliberately has no
  * method for it. `pair/session` and every `scout/*` route are not wired here.
  *
+ * S11-C addendum (UX-03/04, D-S11-5): `current()`'s response type
+ * (`PairCurrentResponse`) now carries an OPTIONAL `readiness` block, mirrored
+ * from backend PR #560 head `7fdcbc044dba1747d0db2f2750ced951f3b6b752`. This
+ * module's request/response shape is unchanged — the same `current()` call
+ * this file already made now has one more optional field to decode; see
+ * `useExtensionPairing`'s `fetchReadiness` for the one call site and
+ * `decodeReadiness` / `decodePairCurrentResponse` in extensionImport.ts for
+ * the strict, fail-closed parse.
+ *
  * Paths are relative to the axios `baseURL`, which already carries the backend
  * `/api` global prefix (see src/config/env.ts), so the wire paths resolve to
  * `/api/extension/pair/init`, `/api/extension/pair/status` and

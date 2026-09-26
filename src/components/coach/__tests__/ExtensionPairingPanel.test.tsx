@@ -37,6 +37,7 @@ let mockHookState: {
   code: string | null;
   supportReference?: string | null;
   reason?: 'conflict' | 'challengeUnavailable' | null;
+  readiness?: { run: 'none' | 'open' | 'terminal'; sourceDeclared: boolean; declaredPlatforms: number | null };
 };
 // UX-03c: PAIRING_REASON_COPY is the real, frozen contract-named copy from
 // the hook module. The panel imports it directly (not through the mocked
@@ -371,5 +372,119 @@ describe('ExtensionPairingPanel — doctrine + accessibility', () => {
     const cancel = getByTestId('pairing-cancel');
     expect(cancel.props.accessibilityRole).toBe('button');
     expect(cancel.props.accessibilityLabel).toMatch(/cancel/i);
+  });
+});
+
+/**
+ * S11-C (D-S11-5, UX-03/04) readiness row — ExtensionPairingPanel.
+ *
+ * The panel renders a neutral readiness row inside the `paired` checklist
+ * ONLY when useExtensionPairing's `readiness` is a known reading; absence
+ * renders NOTHING (never a "no"/zero row). These tests pin the row's
+ * presence/absence per state and the exact honesty-compliant copy, plus a
+ * banned-words sweep across every readiness string this module can render.
+ */
+describe('ExtensionPairingPanel — S11-C readiness row', () => {
+  it('renders no readiness row when readiness is absent (not known)', async () => {
+    mockHookState = { status: 'paired', code: null };
+    const { queryByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
+    expect(queryByTestId('pairing-check-readiness')).toBeNull();
+  });
+
+  it('run=none, no declaration: "Not started yet" — never reads as a negative/zero claim', async () => {
+    mockHookState = {
+      status: 'paired',
+      code: null,
+      readiness: { run: 'none', sourceDeclared: false, declaredPlatforms: null },
+    };
+    const { getByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
+    expect(getByTestId('pairing-check-readiness')).toHaveTextContent('Not started yet', { exact: false });
+  });
+
+  it('run=open, no declaration yet: "Waiting for a declaration"', async () => {
+    mockHookState = {
+      status: 'paired',
+      code: null,
+      readiness: { run: 'open', sourceDeclared: false, declaredPlatforms: null },
+    };
+    const { getByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
+    expect(getByTestId('pairing-check-readiness')).toHaveTextContent('Waiting for a declaration', { exact: false });
+  });
+
+  it('run=open, source declared with a platform count: "Declaration received (N source(s))" — count only, no name', async () => {
+    mockHookState = {
+      status: 'paired',
+      code: null,
+      readiness: { run: 'open', sourceDeclared: true, declaredPlatforms: 1 },
+    };
+    const { getByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
+    expect(getByTestId('pairing-check-readiness')).toHaveTextContent('Declaration received (1 source)', { exact: false });
+  });
+
+  it('run=open, source declared with multiple platforms: pluralizes the count, still no platform name', async () => {
+    mockHookState = {
+      status: 'paired',
+      code: null,
+      readiness: { run: 'open', sourceDeclared: true, declaredPlatforms: 3 },
+    };
+    const { getByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
+    expect(getByTestId('pairing-check-readiness')).toHaveTextContent('Declaration received (3 sources)', { exact: false });
+  });
+
+  it('run=terminal: points to the existing import status read, invents no detail', async () => {
+    mockHookState = {
+      status: 'paired',
+      code: null,
+      readiness: { run: 'terminal', sourceDeclared: true, declaredPlatforms: 1 },
+    };
+    const { getByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
+    const row = getByTestId('pairing-check-readiness');
+    expect(row).toHaveTextContent('import status', { exact: false });
+  });
+
+  it('never renders the readiness row outside the paired state', async () => {
+    mockHookState = { status: 'waiting', code: '482913', readiness: { run: 'open', sourceDeclared: true, declaredPlatforms: 1 } };
+    const { queryByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
+    expect(queryByTestId('pairing-check-readiness')).toBeNull();
+  });
+
+  it.each<[string, { run: 'none' | 'open' | 'terminal'; sourceDeclared: boolean; declaredPlatforms: number | null }]>([
+    ['none/undeclared', { run: 'none', sourceDeclared: false, declaredPlatforms: null }],
+    ['open/undeclared', { run: 'open', sourceDeclared: false, declaredPlatforms: null }],
+    ['open/declared-1', { run: 'open', sourceDeclared: true, declaredPlatforms: 1 }],
+    ['open/declared-2', { run: 'open', sourceDeclared: true, declaredPlatforms: 2 }],
+    ['terminal/declared', { run: 'terminal', sourceDeclared: true, declaredPlatforms: 1 }],
+  ])(
+    'banned-words sweep (%s): never says authorized/ready/connected/verified about the source',
+    async (_label, readiness) => {
+      mockHookState = { status: 'paired', code: null, readiness };
+      const { getByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
+      const text = getByTestId('pairing-check-readiness').props.children ?? '';
+      const serialized = JSON.stringify(text);
+      expect(serialized).not.toMatch(/\bauthorized\b/i);
+      expect(serialized).not.toMatch(/\bready\b/i);
+      expect(serialized).not.toMatch(/\bconnected\b/i);
+      expect(serialized).not.toMatch(/\bverified\b/i);
+    },
+  );
+
+  it('banned-words sweep over the FULL rendered paired card, every readiness state', async () => {
+    const states: Array<{ run: 'none' | 'open' | 'terminal'; sourceDeclared: boolean; declaredPlatforms: number | null }> = [
+      { run: 'none', sourceDeclared: false, declaredPlatforms: null },
+      { run: 'open', sourceDeclared: false, declaredPlatforms: null },
+      { run: 'open', sourceDeclared: true, declaredPlatforms: 1 },
+      { run: 'open', sourceDeclared: true, declaredPlatforms: 4 },
+      { run: 'terminal', sourceDeclared: true, declaredPlatforms: 2 },
+    ];
+    for (const readiness of states) {
+      mockHookState = { status: 'paired', code: null, readiness };
+      const { toJSON, unmount } = await render(<ExtensionPairingPanel platformId="truecoach" />);
+      const serialized = JSON.stringify(toJSON());
+      expect(serialized).not.toMatch(/source (is )?authorized/i);
+      expect(serialized).not.toMatch(/source (is )?ready/i);
+      expect(serialized).not.toMatch(/source (is )?connected/i);
+      expect(serialized).not.toMatch(/source (is )?verified/i);
+      unmount();
+    }
   });
 });

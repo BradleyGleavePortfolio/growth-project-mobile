@@ -40,6 +40,16 @@
  * existing behaviour; copy is adjusted only to fit the fact → remedy →
  * retained-setup pattern, and makes no retirement, revocation, or disconnect
  * claim (there is no such endpoint — brief §2 row 5).
+ *
+ * S11-C readiness row (UX-03/04, D-S11-5): the `paired` checklist gains one
+ * more row, rendered ONLY when useExtensionPairing's `readiness` is a known
+ * reading (absent means not known and renders nothing — never a "no" row).
+ * Copy is produced by readinessCopy() below, held to the contract's honesty
+ * rules: `source_declared` reads only "declaration received" (never
+ * authorized/ready/connected/verified — real source authorization stays
+ * unknown to mobile), `declared_platforms` is a bare count (never a platform
+ * name), and a `terminal` run carries no invented detail — it points to the
+ * existing import status read instead.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
@@ -55,6 +65,7 @@ import { useTheme } from '../../theme/useTheme';
 import type { ThemeColors } from '../../theme/ThemeProvider';
 import type { CoachTabParamList, ClientsStackParamList } from '../../navigation/CoachNavigator';
 import { useExtensionPairing, PAIRING_REASON_COPY } from '../../hooks/useExtensionPairing';
+import type { DecodedReadiness } from '../../types/extensionImport';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { track } from '../../analytics/posthog.service';
 import { AnalyticsEvents } from '../../analytics/events';
@@ -75,7 +86,7 @@ export default function ExtensionPairingPanel({ platformId }: Props): React.Reac
   const { colors } = useTheme();
   const navigation = useNavigation<ReviewNav>();
   const pairing = useExtensionPairing(platformId);
-  const { status, code, supportReference, reason, start, retry, cancel } = pairing;
+  const { status, code, supportReference, reason, readiness, start, retry, cancel } = pairing;
   const currentUser = useCurrentUser();
   const startedRef = useRef(false);
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
@@ -214,6 +225,16 @@ export default function ExtensionPairingPanel({ platformId }: Props): React.Reac
             testID="pairing-check-platform"
             pending
           />
+          {readiness ? (
+            <ChecklistRow
+              styles={styles}
+              colors={colors}
+              label="Import setup"
+              value={readinessCopy(readiness)}
+              testID="pairing-check-readiness"
+              pending={readiness.run !== 'terminal'}
+            />
+          ) : null}
         </View>
         <Text style={styles.body}>Continue on your computer</Text>
         <TouchableOpacity
@@ -312,6 +333,37 @@ export default function ExtensionPairingPanel({ platformId }: Props): React.Reac
       )}
     </View>
   );
+}
+
+/**
+ * S11-C (D-S11-5, UX-03/04) readiness row copy — a neutral setup-progress
+ * fact, never a source-authorization claim. Rendered only when `readiness`
+ * decoded to a known reading (the caller checks this); this function itself
+ * never runs on an absent/unknown block.
+ *
+ * Honesty rules this copy is pinned to (do not loosen without re-reading
+ * docs/decisions/2026-09-26-s11-journey.md D-S11-5):
+ *   - `run: 'none'` never reads as "no"/"not ready"/zero — it states only that
+ *     no run has started for this setup yet, which is a fact, not an absence
+ *     claim about the coach's readiness.
+ *   - `source_declared: true` reads ONLY "declaration received" — never
+ *     "source authorized", "source ready", "connected", or "verified". Real
+ *     source authorization stays unknown to mobile (owner-reserved verifier).
+ *   - `declared_platforms` renders as a bare COUNT ("1 source" / "2 sources")
+ *     — never a platform name (the block does not carry one).
+ *   - `run: 'terminal'` carries no detail here; this row points the coach to
+ *     the existing import status read rather than inventing a reason.
+ */
+function readinessCopy(readiness: DecodedReadiness): string {
+  if (readiness.run === 'terminal') {
+    return 'Finished — check your import status for details';
+  }
+  if (!readiness.sourceDeclared) {
+    return readiness.run === 'none' ? 'Not started yet' : 'Waiting for a declaration';
+  }
+  const count = readiness.declaredPlatforms ?? 0;
+  const noun = count === 1 ? 'source' : 'sources';
+  return `Declaration received (${count} ${noun})`;
 }
 
 // Truthful checklist row for the `paired` state (UX-03a). Each row states
