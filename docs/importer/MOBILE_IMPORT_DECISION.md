@@ -1,3 +1,5 @@
+> Importer north star: docs/importer/NORTH_STAR.md.
+
 # Mobile Import Data — Decision Record
 
 **Date:** 2026-07-14 · **Author:** Bradley Gleave · **Wave:** importer-wave (v0.3 site-agnostic autonomous import)
