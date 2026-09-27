@@ -441,7 +441,7 @@ Legacy `FoodItem` rows produced before this fix may carry
 the per-100g fields as per-serving macros and scaling by `qty` directly.
 
 Companion backend PR (server-side normalisation, density table, NL parser):
-see PR linked from `fix/food-logger-trainerize-floor`.
+see the linked food-logger quality-floor change.
 
 ## Coach AI
 

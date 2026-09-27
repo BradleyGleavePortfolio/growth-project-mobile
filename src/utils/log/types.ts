@@ -1,6 +1,6 @@
 import { MealType } from '../../types';
 
-// Canonical assumption (post-Trainerize-floor fix): every FoodItem returned by
+// Canonical assumption after the quality-floor fix: every FoodItem returned by
 // the backend stores its macros on a per-100g basis. The old per-serving math
 // path is gone — see src/utils/log/macros.ts for the conversion logic and
 // README.md for the architectural note.
