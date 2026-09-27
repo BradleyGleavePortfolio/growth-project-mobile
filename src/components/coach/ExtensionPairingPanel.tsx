@@ -61,15 +61,18 @@
  * S12-B3 (M-bind) / R1 (Roman status binding): when the pairing carries the
  * server-issued `import_intent_id`, the paired card also mounts
  * `ImportRunStatusJourney`, which reads GET scout/import/status for that
- * intent via the same `useImportRunStatus` hook and renders it through the
- * Roman P2 progress/result views (src/screens/coach/import-journey/), mapped
- * by the one pure adapter `importRunStatusAdapter.ts` — the server's status,
- * phase and reason code only (null/absent/unrecognised → the views' own
- * honest "not known"/"unavailable" presentation, never a guess). This is the
+ * intent via the same `useImportRunStatus` hook. It renders the running phase
+ * through the Roman P2 `ImportProgressView`, and every other state (loading,
+ * error, not-found, unreadable, or any terminal/unknown reading) through the
+ * SAME verdict content `ImportRunVerdictCard` uses (`verdictLines`,
+ * `staleNote`, `LEGACY_NOTE`, `UNKNOWN_VERDICT` — shared from
+ * `./importVerdictContent`, never re-derived), presented inside the Roman
+ * shell (`ImportStatusFrame`) instead of the card's own view. This is the
  * only status surface here now: `ImportRunVerdictCard`'s mount is retired in
  * its favour (the component itself is untouched and still unit-tested). The
- * imported-people list from S12-B3 is a separate surface, still behind
- * importReview, and is out of R1's scope.
+ * imported-people list (`ImportedRosterSection`, unchanged, still behind
+ * `featureFlags.importReview`) mounts under this same surface once the run is
+ * terminal — the identical gated component, not a separate implementation.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';

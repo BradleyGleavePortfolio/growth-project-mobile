@@ -28,55 +28,24 @@ import { useTheme } from '../../theme/useTheme';
 import type { ThemeColors } from '../../theme/ThemeProvider';
 import { featureFlags } from '../../config/featureFlags';
 import { useImportRunStatus, useImportedRoster } from '../../hooks/useImportRunStatus';
+import { isTerminal, type RosterPersonState } from '../../types/importRunStatus';
 import {
-  isTerminal,
-  type DecodedRunStatus,
-  type RosterPersonState,
-  type RunPhase,
-  type RunReadStatus,
-  type RunReasonCode,
-} from '../../types/importRunStatus';
+  LEGACY_NOTE,
+  NOT_KNOWN_YET,
+  NOT_RECOGNISED,
+  PHASE_COPY,
+  REASON_COPY,
+  UNKNOWN_VERDICT,
+  VERDICT_COPY,
+  formatTime,
+  verdictLines,
+} from './importVerdictContent';
 
-export const NOT_KNOWN_YET = 'Not known yet';
-/** The server sent a value this app version does not recognise (distinct from "not sent"). */
-export const NOT_RECOGNISED = 'Not recognised by this app version';
-
-/** status (+ mode) → headline + body. Legacy terminals are the extension's report, not a server check. */
-export const VERDICT_COPY: Record<RunReadStatus, { title: string; body: string }> = {
-  running: { title: 'Import in progress', body: 'The server has not reached a result for this import yet.' },
-  complete: { title: 'Import complete', body: 'The server checked this import and marked it complete.' },
-  partial: { title: 'Import partly finished', body: 'Some of your data came across, but not all of it.' },
-  blocked: { title: 'Import stopped — needs attention', body: 'The server stopped this import before it could finish.' },
-  failed: { title: 'Import didn’t finish', body: 'This import ended without bringing your data across.' },
-  cancelled: { title: 'Import cancelled', body: 'This import was cancelled before it finished.' },
-  timed_out: { title: 'Import stopped — took too long', body: 'This import went past its time limit and was stopped.' },
-  success: { title: 'Import finished', body: 'The browser extension reported it finished.' },
-};
-
-export const LEGACY_NOTE = 'Reported by the browser extension. The server did not check this result.';
-
-export const UNKNOWN_VERDICT = {
-  title: 'Import status not recognised',
-  body: 'This version of the app can’t read the status the server sent. Check again later or update the app.',
-};
-
-export const PHASE_COPY: Record<RunPhase, string> = {
-  discovering: 'Finding your data',
-  transferring: 'Copying your data',
-  reconciling: 'Checking what was copied',
-};
-
-export const REASON_COPY: Record<RunReasonCode, string> = {
-  reconciliation_not_performed: 'The copied data hasn’t been checked yet.',
-  cancelled_by_coach: 'You cancelled this import.',
-  deadline_exceeded: 'The import went past its time limit.',
-  transfer_failed: 'Copying data from your previous platform failed.',
-  unresolved_family: 'Some kinds of data couldn’t be matched to TGP.',
-  revoked: 'Access for this import was withdrawn.',
-  unresolved_identities: 'Some people couldn’t be matched to TGP accounts yet.',
-  relationship_unverified: 'Links between records couldn’t be checked.',
-  coverage_basis_unknown: 'We can’t tell yet whether everything was found.',
-};
+// Re-exported unchanged so this file's own test suite (and any other existing
+// importer) keeps working with no edits — the content itself now lives in
+// importVerdictContent.ts, the one shared source both this card and the
+// Roman P2 presentation (R1) read from. See that file for the honesty rules.
+export { LEGACY_NOTE, NOT_KNOWN_YET, NOT_RECOGNISED, PHASE_COPY, REASON_COPY, UNKNOWN_VERDICT, VERDICT_COPY, verdictLines };
 
 /** Server person state → row copy. Each recognised state keeps its own wording; only an unrecognised one is "not known". */
 const ROSTER_STATE_TEXT: Record<RosterPersonState, string> = {
@@ -88,53 +57,6 @@ const ROSTER_STATE_TEXT: Record<RosterPersonState, string> = {
 };
 export const ROSTER_STATE_COPY = (state: RosterPersonState | 'unknown'): string =>
   state === 'unknown' ? 'Imported — joining status not known yet' : ROSTER_STATE_TEXT[state];
-
-function formatTime(isoOrMs: string | number): string | null {
-  const d = new Date(isoOrMs);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
-}
-
-/** Pure mapping of a decoded reading → the lines the card renders. Exported for tests. */
-export function verdictLines(reading: DecodedRunStatus): {
-  title: string;
-  body: string;
-  success: boolean;
-  legacyNote: boolean;
-  step?: string;
-  reason?: { text: string; code: RunReasonCode | null };
-  finishedAt?: string;
-} {
-  if (reading.status === 'unknown') {
-    return { ...UNKNOWN_VERDICT, success: false, legacyNote: false };
-  }
-  const copy = VERDICT_COPY[reading.status];
-  const legacy = reading.mode === 'legacy';
-  const out: ReturnType<typeof verdictLines> = {
-    title: copy.title,
-    body: copy.body,
-    success: reading.status === 'complete' && reading.mode === 'server',
-    legacyNote: legacy && isTerminal(reading.status),
-  };
-  if (reading.status === 'running') {
-    const phase = reading.phase;
-    out.step = phase === null ? NOT_KNOWN_YET : phase === 'unknown' ? NOT_RECOGNISED : PHASE_COPY[phase];
-    return out;
-  }
-  // Legacy rows never carry a reason code (the server did not arbitrate them).
-  // A `complete` verdict with no reason code has no reason to show.
-  if (!legacy && !(reading.status === 'complete' && reading.reasonCode === null)) {
-    const code = reading.reasonCode;
-    out.reason =
-      code === null
-        ? { text: NOT_KNOWN_YET, code: null }
-        : code === 'unknown'
-          ? { text: NOT_RECOGNISED, code: null }
-          : { text: REASON_COPY[code], code };
-  }
-  out.finishedAt = (reading.completedAt && formatTime(reading.completedAt)) || NOT_KNOWN_YET;
-  return out;
-}
 
 export default function ImportRunVerdictCard({ importIntentId }: { importIntentId: string }): React.ReactElement | null {
   const { colors } = useTheme();
@@ -239,7 +161,10 @@ export default function ImportRunVerdictCard({ importIntentId }: { importIntentI
   );
 }
 
-function ImportedRosterSection({ importIntentId }: { importIntentId: string }): React.ReactElement | null {
+// Exported (unchanged) so the Roman P2 presentation (R1) can mount the same
+// gated detail section under its single status surface, per R1_REVIEW.md B5
+// — not a separate reimplementation, the identical component and gate.
+export function ImportedRosterSection({ importIntentId }: { importIntentId: string }): React.ReactElement | null {
   const { colors } = useTheme();
   const styles = makeStyles(colors);
   const roster = useImportedRoster(importIntentId, true);
