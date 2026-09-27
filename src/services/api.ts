@@ -389,7 +389,7 @@ export const logApi = {
     meal_type: 'breakfast' | 'lunch' | 'dinner' | 'snack';
     food_item_id: string;
     quantity_multiplier?: number;
-    // Trainerize-floor: also persist the human-readable quantity + unit the
+    // Also persist the human-readable quantity + unit the
     // user picked so coaches can see "6 oz" instead of "quantity_multiplier:
     // 1.7008". Backend stores these on LoggedFoodEntry.
     original_quantity?: number;

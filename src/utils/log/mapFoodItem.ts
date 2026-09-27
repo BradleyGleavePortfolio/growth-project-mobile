@@ -21,7 +21,7 @@ export interface RawFoodItem {
   image_url?: string | null;
   image_front_thumb_url?: string | null;
   image_front_small_url?: string | null;
-  // Fields added in the Trainerize-floor backend PR.
+  // Fields added in the food-logger quality-floor backend change.
   nutrient_basis?: NutrientBasis;
   supports_volume_units?: boolean;
   cup_grams?: number;

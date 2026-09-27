@@ -1,0 +1,22 @@
+[
+  {
+    "glob": "docs/importer/NORTH_STAR.md",
+    "reason": "Current importer governance record states the retired legacy oracle.",
+    "retire": "V1 learned-path parity"
+  },
+  {
+    "glob": "src/**/__tests__/**",
+    "reason": "Tests preserve source-contract evidence.",
+    "retire": "V1 learned-path parity"
+  },
+  {
+    "glob": "src/**/__fixtures__/**",
+    "reason": "Fixtures preserve source-contract evidence.",
+    "retire": "V1 learned-path parity"
+  },
+  {
+    "glob": "src/constants/importPlatforms.ts",
+    "reason": "Source-picker shortcuts are data.",
+    "retire": "Roman neutral source entry"
+  }
+]

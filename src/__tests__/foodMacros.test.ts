@@ -1,7 +1,7 @@
 /**
  * Macro math correctness tests for the food logger.
  *
- * The Trainerize-floor fix re-centred `calcMacros` on a strict per-100g
+ * The quality-floor fix re-centred `calcMacros` on a strict per-100g
  * canonical basis. These tests cover the five spot-check foods called out
  * in the audit (§5) plus the regression cases the old code got wrong:
  *

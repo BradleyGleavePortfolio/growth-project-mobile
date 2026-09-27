@@ -27,6 +27,9 @@ jobs:
         # would break the moment the hoist moved.
         run: npm ci
 
+      - name: Vendor-name guard
+        run: npm run guard:vendors
+
       - name: Validate app config (default mode — catches genuine breakage)
         # Always runs. Catches the things that always have to be true:
         # missing custom scheme, mismatched bundle ids, stale Google client

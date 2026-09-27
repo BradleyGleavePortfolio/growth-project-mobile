@@ -185,7 +185,7 @@ export default function LogScreen() {
         const suggestions: RawFoodItem[] = Array.isArray(data?.suggestions)
           ? data.suggestions
           : [];
-        // NL parse hints (post-Trainerize-floor backend). Optional — old
+        // NL parse hints from the quality-floor backend. Optional — old
         // backends just won't include them.
         const pq = typeof data?.parsed_quantity === 'number' ? data.parsed_quantity : null;
         const pu = typeof data?.parsed_unit === 'string' ? data.parsed_unit.toLowerCase() : null;
