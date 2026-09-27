@@ -14,24 +14,30 @@
  *   - stale or unavailable stays honest: no reading, an error, a 404, an
  *     undecodable body, or an unrecognised status/mode all map to the P2
  *     views' own "not known" / "unavailable" presentation — never a guess.
- *   - `complete` is shown ONLY when the server says complete — but the P2
- *     `ImportResultView` contract additionally REQUIRES a native write
- *     summary (verified client count, relationships, readback) this hook's
- *     reading never carries: `useImportRunStatus` decodes only status, mode,
- *     phase, reason code and timestamps (src/types/importRunStatus.ts). This
- *     adapter has no native summary to supply and manufacturing one would be
- *     exactly the inference the grant forbids, so a server `complete` (and
- *     likewise `partial`, which would need `verifiedSubset`'s `native` too)
- *     maps to the result view's own honest `unavailable` presentation — the
- *     server's word is real, but this slice has no proof to show alongside
- *     it. Wiring `complete`/`verifiedSubset` end to end needs a future slice
- *     that reads the native/roster proof and supplies it here.
- *   - `partial` / `failed` are shown with the server's reasons: `failed`
- *     already carries its own P2 copy; `blocked` is the one P2 outcome with a
- *     reason slot, so a `reason_code` that maps to a recognised local blocked
- *     reason is surfaced through it. An unrecognised or absent reason code
- *     maps to the local `unknown` blocked reason — never a raw server string
- *     (P2_README "no raw exceptions, arbitrary scope prose").
+ *   - `complete` is shown ONLY when the server says complete, and `partial`
+ *     only when the server says partial. The server's own verdict IS the
+ *     authority (S9 reconciliation settles `complete` before the server ever
+ *     emits it) — `ImportRunVerdictCard` shows exactly this on main today, so
+ *     this Roman binding must never regress the coach to a lesser
+ *     `unavailable` for the same read. Because this hook's reading carries no
+ *     native write summary (verified client count, relationships, readback —
+ *     `useImportRunStatus` decodes only status, mode, phase, reason code and
+ *     timestamps, src/types/importRunStatus.ts), `ImportResultView`'s
+ *     native-proof-gated `complete`/`verifiedSubset` outcomes are still never
+ *     used here (manufacturing a native summary would be exactly the
+ *     inference the grant forbids). Instead this adapter emits the view's
+ *     separate `serverVerdict` outcome (`authority:'server'`), which renders
+ *     the same complete/partial headline and body `ImportRunVerdictCard` uses
+ *     today, with no counts (this adapter never had any to show, so it never
+ *     invents them — parity with the card, not new proof).
+ *   - `partial` / `blocked` / `failed` are shown with the server's reasons:
+ *     `failed` already carries its own P2 copy; `blocked` and `partial`
+ *     (via `serverVerdict`) are the two P2 outcomes with a reason slot, so a
+ *     `reason_code` that maps to a recognised local reason is surfaced
+ *     through it. An unrecognised or absent reason code maps to the local
+ *     `unknown` reason — never a raw server string (P2_README "no raw
+ *     exceptions, arbitrary scope prose"). `complete` never carries a reason
+ *     (a settled complete has none to show, matching the card).
  *   - A legacy-mode terminal (`mode: 'legacy'`) is the extension's own report,
  *     reflected verbatim by the server, never arbitrated — it NEVER reads as
  *     `complete` here, matching the honesty rule in importRunStatus.ts.
@@ -64,15 +70,18 @@ const BLOCKED_REASON_MAP: Record<RunReasonCode, BlockedReason> = {
 
 /**
  * The display-only slice of `ImportResultViewProps` this adapter can ever
- * produce. `complete` / `verifiedSubset` / `transferOnly` / `provenZero` all
- * require proof (native summary, source coverage, checked-source counts)
- * this hook's reading never carries, so this adapter never emits them (see
- * the module doc) — the result type says so, rather than a wider type this
- * function could not honestly fill in.
+ * produce. `verifiedSubset` / `transferOnly` / `provenZero` and the
+ * native-proof-gated `complete` all require proof (native summary, source
+ * coverage, checked-source counts) this hook's reading never carries, so
+ * this adapter never emits them (see the module doc). A server `complete` or
+ * `partial` verdict is instead carried through `serverVerdict`
+ * (`authority:'server'`) — the result type says so, rather than a wider type
+ * this function could not honestly fill in.
  */
 export type AdapterResultProps =
   | { outcome: 'unconfirmed' | 'interrupted' | 'failed' | 'timedOut' | 'cancelled' | 'unavailable'; observedAt?: ImportObservedAt }
-  | { outcome: 'blocked'; reason: 'denied' | 'scopeUnknown' | 'changed' | 'unknown'; observedAt?: ImportObservedAt };
+  | { outcome: 'blocked'; reason: 'denied' | 'scopeUnknown' | 'changed' | 'unknown'; observedAt?: ImportObservedAt }
+  | { outcome: 'serverVerdict'; authority: 'server'; status: 'complete' | 'partial'; reason?: 'denied' | 'scopeUnknown' | 'changed' | 'unknown'; observedAt?: ImportObservedAt };
 
 export type ImportJourneyStatusView =
   | { kind: 'none' }
@@ -130,12 +139,17 @@ export function mapImportRunStatusToJourneyView(run: ImportRunStatus): ImportJou
 
   switch (reading.status) {
     case 'complete':
-    case 'partial':
-      // The server's word is real, but `complete`/`verifiedSubset` require a
-      // native write summary this hook's reading never carries — see the
-      // module doc. Showing it as unavailable is honest; showing it as
-      // complete/partial without proof would not be.
-      return { kind: 'result', props: { outcome: 'unavailable', observedAt } };
+      // The server settled complete (S9 reconciliation) — its verdict is the
+      // authority. No reason to show: a settled complete has none, matching
+      // ImportRunVerdictCard.
+      return { kind: 'result', props: { outcome: 'serverVerdict', authority: 'server', status: 'complete', observedAt } };
+    case 'partial': {
+      // Partial is shown with the server's own reason, mapped to the same
+      // local reason keys `blocked` uses — never a raw server string.
+      const code = reading.reasonCode;
+      const reason = code && code !== 'unknown' ? BLOCKED_REASON_MAP[code] : 'unknown';
+      return { kind: 'result', props: { outcome: 'serverVerdict', authority: 'server', status: 'partial', reason, observedAt } };
+    }
     case 'blocked': {
       const code = reading.reasonCode;
       const reason = code && code !== 'unknown' ? BLOCKED_REASON_MAP[code] : 'unknown';

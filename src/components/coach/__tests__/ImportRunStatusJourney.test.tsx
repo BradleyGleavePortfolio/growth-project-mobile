@@ -50,11 +50,25 @@ describe('ImportRunStatusJourney', () => {
     expect(v.getByText('Transferring records')).toBeTruthy();
   });
 
-  it('server complete → the result view renders unavailable (no native proof carried by this hook)', async () => {
+  it('server complete → the result view shows complete, matching the server verdict authority (no regression from ImportRunVerdictCard)', async () => {
     mockRunState = { view: 'reading', reading: { intentId: 'intent-1', status: 'complete', mode: 'server', phase: null, reasonCode: null, claimedStatus: null, completedAt: '2026-01-01T00:00:00Z', startedAt: null } };
     const v = await render(<ImportRunStatusJourney importIntentId="intent-1" />);
-    expect(v.getByRole('header')).toHaveTextContent('The import result is unavailable right now. Check the current result again.');
-    expect(v.queryByText('Your records are ready')).toBeNull();
+    expect(v.getByRole('header')).toHaveTextContent('Your records are ready');
+    expect(v.getByText('The imported records have been checked in TGP and are ready to use.')).toBeTruthy();
+  });
+
+  it('server partial with a reason → the result view shows partial with the mapped reason (no regression from ImportRunVerdictCard)', async () => {
+    mockRunState = { view: 'reading', reading: { intentId: 'intent-1', status: 'partial', mode: 'server', phase: null, reasonCode: 'unresolved_identities', claimedStatus: null, completedAt: null, startedAt: null } };
+    const v = await render(<ImportRunStatusJourney importIntentId="intent-1" />);
+    expect(v.getByRole('header')).toHaveTextContent('Some records are ready');
+    expect(v.getByText('The source account could not be confirmed. Check the selected tab before continuing.')).toBeTruthy();
+  });
+
+  it('server complete never shows counts — no native proof is invented to accompany the server word', async () => {
+    mockRunState = { view: 'reading', reading: { intentId: 'intent-1', status: 'complete', mode: 'server', phase: null, reasonCode: null, claimedStatus: null, completedAt: null, startedAt: null } };
+    const v = await render(<ImportRunStatusJourney importIntentId="intent-1" />);
+    expect(v.queryByText(/client record/)).toBeNull();
+    expect(v.queryByText(/record receipt/)).toBeNull();
   });
 
   it('blocked with a recognised reason code → the result view surfaces the mapped reason', async () => {

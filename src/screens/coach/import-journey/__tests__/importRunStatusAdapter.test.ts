@@ -108,14 +108,39 @@ describe('mapImportRunStatusToJourneyView — legacy terminals are never shown a
 });
 
 describe('mapImportRunStatusToJourneyView — server terminals', () => {
-  it('complete → unavailable: the server said complete, but this hook carries no native-write proof', () => {
+  it('complete → serverVerdict, complete: the server settled it, shown as the authority it is (parity with ImportRunVerdictCard)', () => {
     const result = mapImportRunStatusToJourneyView(run({ view: 'reading', reading: reading({ status: 'complete' }) }));
-    expect(result).toEqual({ kind: 'result', props: { outcome: 'unavailable', observedAt: undefined } });
+    expect(result).toEqual({ kind: 'result', props: { outcome: 'serverVerdict', authority: 'server', status: 'complete', observedAt: undefined } });
   });
 
-  it('partial → unavailable: verifiedSubset would need a native summary this hook does not carry', () => {
-    const result = mapImportRunStatusToJourneyView(run({ view: 'reading', reading: reading({ status: 'partial' }) }));
-    expect(result).toEqual({ kind: 'result', props: { outcome: 'unavailable', observedAt: undefined } });
+  it('complete never carries a reason, even if one happened to be present on the reading', () => {
+    const result = mapImportRunStatusToJourneyView(run({ view: 'reading', reading: reading({ status: 'complete', reasonCode: 'revoked' }) }));
+    expect(result).toEqual({ kind: 'result', props: { outcome: 'serverVerdict', authority: 'server', status: 'complete', observedAt: undefined } });
+  });
+
+  it.each([
+    ['revoked', 'denied'],
+    ['cancelled_by_coach', 'changed'],
+    ['unresolved_family', 'scopeUnknown'],
+    ['unresolved_identities', 'scopeUnknown'],
+    ['relationship_unverified', 'scopeUnknown'],
+    ['coverage_basis_unknown', 'scopeUnknown'],
+    ['reconciliation_not_performed', 'unknown'],
+    ['deadline_exceeded', 'unknown'],
+    ['transfer_failed', 'unknown'],
+  ] as const)('partial with reason_code %s → serverVerdict, partial, reason %s', (code, reason) => {
+    const result = mapImportRunStatusToJourneyView(run({ view: 'reading', reading: reading({ status: 'partial', reasonCode: code }) }));
+    expect(result).toEqual({ kind: 'result', props: { outcome: 'serverVerdict', authority: 'server', status: 'partial', reason, observedAt: undefined } });
+  });
+
+  it('partial with a null reason_code → serverVerdict, partial, reason unknown (never a raw null)', () => {
+    const result = mapImportRunStatusToJourneyView(run({ view: 'reading', reading: reading({ status: 'partial', reasonCode: null }) }));
+    expect(result).toEqual({ kind: 'result', props: { outcome: 'serverVerdict', authority: 'server', status: 'partial', reason: 'unknown', observedAt: undefined } });
+  });
+
+  it('partial with an unrecognised reason_code → serverVerdict, partial, reason unknown', () => {
+    const result = mapImportRunStatusToJourneyView(run({ view: 'reading', reading: reading({ status: 'partial', reasonCode: 'unknown' }) }));
+    expect(result).toEqual({ kind: 'result', props: { outcome: 'serverVerdict', authority: 'server', status: 'partial', reason: 'unknown', observedAt: undefined } });
   });
 
   it('failed → result, failed', () => {
