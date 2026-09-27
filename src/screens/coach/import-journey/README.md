@@ -1,3 +1,5 @@
+> Importer north star: docs/importer/NORTH_STAR.md.
+
 # Roman importer — private P1 presentation
 
 Controlled leaf views only. **Not registered, production-reachable, integrated,
