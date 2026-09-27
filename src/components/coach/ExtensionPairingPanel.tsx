@@ -58,11 +58,18 @@
  * does not present a point-in-time snapshot as durably current — see
  * `useExtensionPairing`'s foreground handler.
  *
- * S12-B3 (M-bind): when the pairing carries the server-issued
- * `import_intent_id`, the paired card also mounts ImportRunVerdictCard, which
- * reads GET scout/import/status for that intent and renders the server's
- * status, phase and reason code only (null/absent/unrecognised → "Not known
- * yet"). The imported-people list inside it stays behind importReview.
+ * S12-B3 (M-bind) / R1 (Roman status binding): when the pairing carries the
+ * server-issued `import_intent_id`, the paired card also mounts
+ * `ImportRunStatusJourney`, which reads GET scout/import/status for that
+ * intent via the same `useImportRunStatus` hook and renders it through the
+ * Roman P2 progress/result views (src/screens/coach/import-journey/), mapped
+ * by the one pure adapter `importRunStatusAdapter.ts` — the server's status,
+ * phase and reason code only (null/absent/unrecognised → the views' own
+ * honest "not known"/"unavailable" presentation, never a guess). This is the
+ * only status surface here now: `ImportRunVerdictCard`'s mount is retired in
+ * its favour (the component itself is untouched and still unit-tested). The
+ * imported-people list from S12-B3 is a separate surface, still behind
+ * importReview, and is out of R1's scope.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
@@ -80,7 +87,7 @@ import type { CoachTabParamList, ClientsStackParamList } from '../../navigation/
 import { useExtensionPairing, PAIRING_REASON_COPY } from '../../hooks/useExtensionPairing';
 import type { DecodedReadiness } from '../../types/extensionImport';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
-import ImportRunVerdictCard from './ImportRunVerdictCard';
+import ImportRunStatusJourney from './ImportRunStatusJourney';
 import { track } from '../../analytics/posthog.service';
 import { AnalyticsEvents } from '../../analytics/events';
 
@@ -257,10 +264,13 @@ export default function ExtensionPairingPanel({ platformId }: Props): React.Reac
             />
           ) : null}
         </View>
-        {/* S12-B3: the server's own run status/verdict for THIS paired intent,
-            mounted only when the server issued an intent id (legacy unbound
-            rows have none, so nothing is shown rather than a guess). */}
-        {importIntentId ? <ImportRunVerdictCard importIntentId={importIntentId} /> : null}
+        {/* R1 (Roman status binding): the server's own run status/verdict for
+            THIS paired intent, mounted only when the server issued an intent
+            id (legacy unbound rows have none, so nothing is shown rather than
+            a guess). Retired ImportRunVerdictCard's mount here in favour of
+            the Roman P2 progress/result views over the same useImportRunStatus
+            read — exactly one status surface. */}
+        {importIntentId ? <ImportRunStatusJourney importIntentId={importIntentId} /> : null}
         <Text style={styles.body}>Continue on your computer</Text>
         <TouchableOpacity
           style={styles.secondaryBtn}
