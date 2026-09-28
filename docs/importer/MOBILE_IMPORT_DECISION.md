@@ -1,3 +1,4 @@
+> SUPERSEDED — see [NORTH_STAR.md](NORTH_STAR.md) and canonical AGENT_RULES G01–G22 ([tgp-agent-context/AGENT_RULES.md](https://github.com/BradleyGleavePortfolio/tgp-agent-context/blob/main/AGENT_RULES.md)).
 > Importer north star: docs/importer/NORTH_STAR.md.
 
 # Mobile Import Data — Decision Record
