@@ -48,7 +48,12 @@ export function ImportProgressView(props: ImportProgressViewProps) {
       {props.stop === 'offline' && <ImportStatusText announce>{t('progress.offlineStop')}</ImportStatusText>}
     </View>
     <View style={ui.actions}>
-      {!current && <ImportStatusAction primary action={props.checkResultAction} label={t('result.checkStatus')} />}
+      {/* B1 (R300-A): the manual "check result" refresh is available for EVERY
+          reading, including a current recognised phase — a coach watching a
+          seemingly stationary import must still be able to ask the server
+          directly, exactly as the retired card's unconditional action did.
+          Only its emphasis (primary) shifts to the stale case. */}
+      <ImportStatusAction primary={!current} action={props.checkResultAction} label={t('result.checkStatus')} />
       <ImportJourneyAction label={t('progress.return')} onPress={props.onReturnToCoaching} />
       {current && <ImportStatusAction action={props.stopAction} disabled={props.stop !== 'notRequested'} label={t('progress.stop')} />}
       <ImportStatusAction action={props.detailsAction} label={t('progress.details')} />
