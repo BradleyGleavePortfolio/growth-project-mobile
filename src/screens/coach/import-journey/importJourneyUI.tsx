@@ -7,12 +7,21 @@ import { importJourneyCopy as t } from './importJourneyCopy';
 
 /** Local presentation primitives only; no provider or task authority. */
 export function ImportJourneyAction({
-  label, onPress, primary = false, disabled = false, hint,
+  label, onPress, primary = false, disabled = false, busy = false, hint,
 }: {
   label: string;
   onPress: () => void;
   primary?: boolean;
   disabled?: boolean;
+  /**
+   * R300-A3-B1: an in-flight read (`run.isRefreshing`) disables the action
+   * AND exposes `accessibilityState.busy` — a screen reader announces
+   * "button, busy" rather than silently dropping the disabled control, and
+   * a sighted coach cannot fire a second overlapping refetch. Defaults to
+   * `false`: every other caller (standalone P2 actions, non-refresh
+   * buttons) is completely unaffected.
+   */
+  busy?: boolean;
   hint?: string;
 }) {
   const { semanticColors: c } = useTheme();
@@ -23,7 +32,7 @@ export function ImportJourneyAction({
         accessibilityRole="button"
         accessibilityLabel={label}
         accessibilityHint={hint}
-        accessibilityState={{ disabled }}
+        accessibilityState={busy ? { disabled, busy } : { disabled }}
         disabled={disabled}
         onPress={() => onPress()}
         onFocus={() => setFocused(true)}

@@ -1,9 +1,14 @@
 /**
- * S12-B3 — ExtensionPairingPanel mounts ImportRunVerdictCard for the PAIRED
- * intent only: with the server-issued import_intent_id while `paired`, never
- * without one (legacy unbound rows), and never in any other pairing status.
- * The card itself is stubbed; its states are covered in
- * ImportRunVerdictCard.test.tsx.
+ * R1 (Roman status binding) — ExtensionPairingPanel mounts
+ * ImportRunStatusJourney for the PAIRED intent only: with the server-issued
+ * import_intent_id while `paired`, never without one (legacy unbound rows),
+ * and never in any other pairing status. This is the same mount contract
+ * S12-B3's ImportRunVerdictCard held (see git history) — R1 retires that
+ * card's production mount in favour of the Roman P2 views over the same
+ * useImportRunStatus read; exactly one status surface. The journey component
+ * itself is stubbed here; its states are covered in
+ * ImportRunStatusJourney.test.tsx (and ImportRunVerdictCard.test.tsx still
+ * covers the untouched, now-unmounted card component directly).
  */
 import React from 'react';
 import { render, cleanup } from '@testing-library/react-native';
@@ -29,43 +34,43 @@ jest.mock('../../../hooks/useExtensionPairing', () => {
 jest.mock('../../../hooks/useCurrentUser', () => ({
   useCurrentUser: () => ({ id: 'coach-1', email: 'coach@example.com' }),
 }));
-jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ navigate: jest.fn() }) }));
+jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ navigate: jest.fn(), goBack: jest.fn() }) }));
 jest.mock('../../../analytics/posthog.service', () => ({ track: jest.fn() }));
 
-const mockCard = jest.fn();
-jest.mock('../ImportRunVerdictCard', () => ({
+const mockJourney = jest.fn();
+jest.mock('../ImportRunStatusJourney', () => ({
   __esModule: true,
   default: (props: { importIntentId: string }) => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { Text: MockText } = require('react-native');
-    mockCard(props);
-    return <MockText testID="verdict-stub">{props.importIntentId}</MockText>;
+    mockJourney(props);
+    return <MockText testID="journey-stub">{props.importIntentId}</MockText>;
   },
 }));
 
 import ExtensionPairingPanel from '../ExtensionPairingPanel';
 
-beforeEach(() => mockCard.mockClear());
+beforeEach(() => mockJourney.mockClear());
 afterEach(() => cleanup());
 
-describe('ExtensionPairingPanel — S12-B3 verdict mount', () => {
-  it('paired + server intent id → mounts the verdict card for exactly that intent', async () => {
+describe('ExtensionPairingPanel — R1 Roman status journey mount', () => {
+  it('paired + server intent id → mounts the Roman status journey for exactly that intent', async () => {
     mockHookState = { status: 'paired', code: null, importIntentId: 'intent-42' };
     const { getByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
-    expect(getByTestId('verdict-stub')).toHaveTextContent('intent-42');
-    expect(mockCard).toHaveBeenLastCalledWith({ importIntentId: 'intent-42' });
+    expect(getByTestId('journey-stub')).toHaveTextContent('intent-42');
+    expect(mockJourney).toHaveBeenLastCalledWith({ importIntentId: 'intent-42' });
   });
 
-  it.each([[null], [undefined], ['']])('paired without an intent id (%p) → no verdict card', async (importIntentId) => {
+  it.each([[null], [undefined], ['']])('paired without an intent id (%p) → no status journey', async (importIntentId) => {
     mockHookState = { status: 'paired', code: null, importIntentId };
     const { queryByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
-    expect(queryByTestId('verdict-stub')).toBeNull();
-    expect(mockCard).not.toHaveBeenCalled();
+    expect(queryByTestId('journey-stub')).toBeNull();
+    expect(mockJourney).not.toHaveBeenCalled();
   });
 
-  it.each(['waiting', 'expired', 'failed', 'cancelled'])('%s → no verdict card even with an intent id', async (status) => {
+  it.each(['waiting', 'expired', 'failed', 'cancelled'])('%s → no status journey even with an intent id', async (status) => {
     mockHookState = { status, code: status === 'waiting' ? '123456' : null, importIntentId: 'intent-42' };
     const { queryByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
-    expect(queryByTestId('verdict-stub')).toBeNull();
+    expect(queryByTestId('journey-stub')).toBeNull();
   });
 });

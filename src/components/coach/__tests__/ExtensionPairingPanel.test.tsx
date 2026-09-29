@@ -345,10 +345,19 @@ describe('ExtensionPairingPanel — doctrine + accessibility', () => {
     },
   );
 
-  it('announces each state via a polite live region', async () => {
+  // R300-A3-B2: the "paired" card's OWN `polite` region was removed —
+  // it sat directly around `ImportRunStatusJourney` (mounted only when an
+  // intent id is present), so Android's live-region propagation
+  // re-announced that ENTIRE card, including the import status child,
+  // whenever anything changed inside it. That status now announces its
+  // own material changes via `AccessibilityInfo.announceForAccessibility`
+  // with no live region anywhere on its own path
+  // (`ImportRunStatusJourney.host.test.tsx` covers the real paired host
+  // tree end to end); no ancestor here may set one around it.
+  it('the paired card no longer carries its own polite live region (the import status child announces itself imperatively instead)', async () => {
     mockHookState = { status: 'paired', code: null };
     const { getByTestId } = await render(<ExtensionPairingPanel platformId="truecoach" />);
-    expect(getByTestId('pairing-paired').props.accessibilityLiveRegion).toBe('polite');
+    expect(getByTestId('pairing-paired').props.accessibilityLiveRegion).toBeUndefined();
   });
 
   it.each([

@@ -58,11 +58,21 @@
  * does not present a point-in-time snapshot as durably current — see
  * `useExtensionPairing`'s foreground handler.
  *
- * S12-B3 (M-bind): when the pairing carries the server-issued
- * `import_intent_id`, the paired card also mounts ImportRunVerdictCard, which
- * reads GET scout/import/status for that intent and renders the server's
- * status, phase and reason code only (null/absent/unrecognised → "Not known
- * yet"). The imported-people list inside it stays behind importReview.
+ * S12-B3 (M-bind) / R1 (Roman status binding): when the pairing carries the
+ * server-issued `import_intent_id`, the paired card also mounts
+ * `ImportRunStatusJourney`, which reads GET scout/import/status for that
+ * intent via the same `useImportRunStatus` hook. It renders the running phase
+ * through the Roman P2 `ImportProgressView`, and every other state (loading,
+ * error, not-found, unreadable, or any terminal/unknown reading) through the
+ * SAME verdict content `ImportRunVerdictCard` uses (`verdictLines`,
+ * `staleNote`, `LEGACY_NOTE`, `UNKNOWN_VERDICT` — shared from
+ * `./importVerdictContent`, never re-derived), presented inside the Roman
+ * shell (`ImportStatusFrame`) instead of the card's own view. This is the
+ * only status surface here now: `ImportRunVerdictCard`'s mount is retired in
+ * its favour (the component itself is untouched and still unit-tested). The
+ * imported-people list (`ImportedRosterSection`, unchanged, still behind
+ * `featureFlags.importReview`) mounts under this same surface once the run is
+ * terminal — the identical gated component, not a separate implementation.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
@@ -80,7 +90,7 @@ import type { CoachTabParamList, ClientsStackParamList } from '../../navigation/
 import { useExtensionPairing, PAIRING_REASON_COPY } from '../../hooks/useExtensionPairing';
 import type { DecodedReadiness } from '../../types/extensionImport';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
-import ImportRunVerdictCard from './ImportRunVerdictCard';
+import ImportRunStatusJourney from './ImportRunStatusJourney';
 import { track } from '../../analytics/posthog.service';
 import { AnalyticsEvents } from '../../analytics/events';
 
@@ -219,8 +229,20 @@ export default function ExtensionPairingPanel({ platformId }: Props): React.Reac
     // client-edited field — and falls back to email when no display name has
     // resolved yet.
     const identityLabel = currentUser?.name || currentUser?.email || 'your account';
+    // R300-A3-B2: this card's own `polite` region is REMOVED — it was a
+    // live-region ancestor sitting directly around `ImportRunStatusJourney`
+    // below, so RN's Android live-region propagation re-announced the
+    // ENTIRE card (checklist rows, identity, everything) on any change
+    // inside it, including the import status child the review flagged.
+    // This card's status/identity text is otherwise stable once "paired"
+    // (the review targeted the IMPORT STATUS child's own announcements, not
+    // this card's own transition into the "paired" state, which the parent
+    // list/switch statement re-renders wholesale on status change anyway).
+    // The import status child now announces its own material changes via
+    // `AccessibilityInfo.announceForAccessibility` with no live region at
+    // all — no ancestor in this host may set one around it.
     return (
-      <View style={[styles.card, styles.cardOk]} accessibilityLiveRegion="polite" testID="pairing-paired">
+      <View style={[styles.card, styles.cardOk]} testID="pairing-paired">
         <Ionicons name="checkmark-circle-outline" size={22} color={colors.primary} />
         <Text style={styles.title}>Connected to your computer</Text>
         <View style={styles.checklist} testID="pairing-checklist">
@@ -257,10 +279,13 @@ export default function ExtensionPairingPanel({ platformId }: Props): React.Reac
             />
           ) : null}
         </View>
-        {/* S12-B3: the server's own run status/verdict for THIS paired intent,
-            mounted only when the server issued an intent id (legacy unbound
-            rows have none, so nothing is shown rather than a guess). */}
-        {importIntentId ? <ImportRunVerdictCard importIntentId={importIntentId} /> : null}
+        {/* R1 (Roman status binding): the server's own run status/verdict for
+            THIS paired intent, mounted only when the server issued an intent
+            id (legacy unbound rows have none, so nothing is shown rather than
+            a guess). Retired ImportRunVerdictCard's mount here in favour of
+            the Roman P2 progress/result views over the same useImportRunStatus
+            read — exactly one status surface. */}
+        {importIntentId ? <ImportRunStatusJourney importIntentId={importIntentId} /> : null}
         <Text style={styles.body}>Continue on your computer</Text>
         <TouchableOpacity
           style={styles.secondaryBtn}

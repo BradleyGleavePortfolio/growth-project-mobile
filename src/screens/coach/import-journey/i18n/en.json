@@ -105,6 +105,7 @@
       "body": "Records already written may remain in TGP. Review the confirmed result."
     },
     "checkStatus": "Check current result",
+    "checkingStatus": "Checking…",
     "recovery": "Review recovery steps",
     "support": "Get help",
     "close": "Return to coaching",
