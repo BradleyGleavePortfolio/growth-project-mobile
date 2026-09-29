@@ -87,8 +87,11 @@ export default function CoachPairingScreen({ navigation, route }: Props) {
       return;
     }
     // Stash the code so the same user can retry from the home banner
-    // if they back out — keeps Rule 11 (never shrink) intact.
-    writePendingInviteCode(trimmed).catch(() => undefined);
+    // if they back out — keeps Rule 11 (never shrink) intact. The helper
+    // never rejects: it logs storage failures through its own structured
+    // logger, so we mark the promise intentionally un-awaited rather than
+    // attaching a redundant no-op catch.
+    void writePendingInviteCode(trimmed);
     setError(errorCopy(result.error));
   };
 
