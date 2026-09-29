@@ -167,7 +167,7 @@ describe('rendered parity — refresh action preserved (existing capability, not
   it('Check again is present and calls the same run.refresh the card calls', async () => {
     mockRun = { view: 'reading', reading: reading({ status: 'failed', mode: 'server' }), stale: false, readAt: null };
     const roman = await render(<ImportRunStatusJourney importIntentId="intent-1" />);
-    await fireEvent.press(roman.getByRole('button', { name: 'Check again' }));
+    await fireEvent.press(roman.getByRole('button', { name: 'Check current result' }));
     expect(mockRefresh).toHaveBeenCalledTimes(1);
   });
 

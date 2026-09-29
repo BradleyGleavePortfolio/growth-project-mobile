@@ -9,20 +9,41 @@ export type ImportNativeSummary = {
   scope: 'selectedClientRecords'; verifiedClientRecords: number;
   relationships: 'verified'; readback: 'verified';
 };
-type ResultBase = {
-  romanEnabled: boolean; focusOnMount?: boolean; observedAt?: ImportObservedAt; locale?: string;
-  receiptCount?: number; unconfirmedClientRecords?: number;
-  onReturnToCoaching: () => void;
+type ResultActions = {
   checkResultAction?: ImportViewAction; recoveryAction?: ImportViewAction; helpAction?: ImportViewAction; detailsAction?: ImportViewAction;
 };
-export type ImportResultViewProps = ResultBase & (
+type ResultFacts = { romanEnabled: boolean; observedAt?: ImportObservedAt; locale?: string; receiptCount?: number; unconfirmedClientRecords?: number };
+/**
+ * The outcome union, declared ONCE without frame-only fields
+ * (`romanEnabled`/`focusOnMount`/`onReturnToCoaching`) so both the
+ * standalone-view props and the reusable body props share exactly the same
+ * discriminated shape (a shared base intersected with `Omit` over a union
+ * does not narrow reliably under `outcome`; declaring the union directly
+ * does).
+ */
+type ResultOutcome = ResultActions & ResultFacts & (
   | { outcome: 'unconfirmed' | 'interrupted' | 'failed' | 'timedOut' | 'cancelled' | 'unavailable' }
   | { outcome: 'transferOnly'; receiptCount: number; unconfirmedClientRecords: 0 }
   | { outcome: 'blocked'; reason: 'denied' | 'scopeUnknown' | 'changed' | 'unknown' }
   | { outcome: 'verifiedSubset'; native: ImportNativeSummary; reviewVerifiedAction?: ImportViewAction }
   | { outcome: 'complete'; native: ImportNativeSummary; sourceCoverage: 'complete'; requiredFamilies: 'verified'; unconfirmedClientRecords: 0; openClientsAction?: ImportViewAction }
   | { outcome: 'provenZero'; scope: 'selectedClientRecords'; sourceCoverage: 'complete'; checkedSourceRecords: 0; receiptCount: 0; unconfirmedClientRecords: 0 }
+  /**
+   * R300-A2-B4: an already-decoded, already-verified verdict — the honest
+   * per-status/per-reason-code/legacy/stale vocabulary `verdictLines()`
+   * produces (9 reason codes, 6 server terminals, 3 legacy terminals, plus
+   * `unknown`) does not fit the proof-gated outcomes above without either
+   * collapsing distinct causes (R1_REVIEW A2) or inventing native-record
+   * proof the server never sent. This outcome renders EXACTLY the caller's
+   * own title/body/reason/legacy text — no proof is verified or derived
+   * here, because none is claimed: the caller already read it straight off
+   * `useImportRunStatus`/`verdictLines`, the server's own decoded facts.
+   */
+  | { outcome: 'verdict'; verdictTitle: string; verdictBody: string; secondaryVoice?: string; legacyNote?: string; reasonText?: string; finishedAt?: string; success?: boolean }
 );
+export type ImportResultViewProps = ResultOutcome & { focusOnMount?: boolean; onReturnToCoaching: () => void };
+/** Body-only props: the frame's `onReturnToCoaching` is optional here (see ImportProgressBodyProps for why). */
+export type ImportResultBodyProps = ResultOutcome & { onReturnToCoaching?: () => void };
 function validNative(value: unknown): value is ImportNativeSummary {
   if (!value || typeof value !== 'object') return false;
   const v = value as ImportNativeSummary;
@@ -38,8 +59,15 @@ const ordinaryCopy = {
   unavailable: ['result.unavailable', 'result.coverageUnknown'],
 } as const;
 
-/** Pure result presentation: no cached authority, identifiers, routes, retry or Start. */
-export function ImportResultView(props: ImportResultViewProps) {
+/** Pure derivation shared by the standalone frame-wrapped view and the reusable body (R300-A2-B4). */
+export function importResultPresentation(props: ImportResultBodyProps) {
+  if (props.outcome === 'verdict') {
+    return {
+      unavailable: false, complete: false, subset: false, zero: false, native: null,
+      title: props.verdictTitle, body: props.verdictBody, receipts: null, unconfirmed: null, nativeCount: null,
+      scope: null, time: null, suppressFacts: true,
+    };
+  }
   const safeOptionalCounts = [props.receiptCount, props.unconfirmedClientRecords].every(v => v === undefined || isImportQuantity(v));
   const subset = props.outcome === 'verifiedSubset' && validNative(props.native) && safeOptionalCounts;
   const complete = props.outcome === 'complete' && validNative(props.native) && props.sourceCoverage === 'complete' && props.requiredFamilies === 'verified' && props.unconfirmedClientRecords === 0 && safeOptionalCounts;
@@ -70,7 +98,34 @@ export function ImportResultView(props: ImportResultViewProps) {
   const nativeCount = native ? importQuantityCopy('nativeClients', native.verifiedClientRecords, props.locale) : null;
   const scope = native ? importCheckedScopeCopy(native.scope) : zero && props.outcome === 'provenZero' ? importCheckedScopeCopy(props.scope) : null;
   const time = importObservationCopy(props.observedAt);
-  return <ImportStatusFrame title={title} navigationTitle={t('result.navigationTitle')} romanEnabled={props.romanEnabled} onReturnToCoaching={props.onReturnToCoaching} focusOnMount={props.focusOnMount}>
+  return { unavailable, complete, subset, zero, native, title, body, receipts, unconfirmed, nativeCount, scope, time, suppressFacts };
+}
+
+/**
+ * R300-A2-B4: the reusable body content, with NO frame/ScrollView/Back of its
+ * own — mounted by BOTH the standalone `ImportResultView` (below, inside
+ * `ImportStatusFrame`) and (for the `complete`/`unavailable` shapes it can
+ * truthfully compute today) `ImportRunStatusJourney`'s inline terminal
+ * branch, inside `ImportInlineStatusFrame`.
+ */
+export function ImportResultBody(props: ImportResultBodyProps) {
+  const { complete, subset, zero, native, body, receipts, unconfirmed, nativeCount, scope, time, suppressFacts } = importResultPresentation(props);
+  if (props.outcome === 'verdict') {
+    return <>
+      <View style={ui.actions}>
+        <ImportStatusText>{body}</ImportStatusText>
+        {props.secondaryVoice ? <ImportStatusText>{props.secondaryVoice}</ImportStatusText> : null}
+        {props.legacyNote ? <ImportStatusText secondary>{props.legacyNote}</ImportStatusText> : null}
+        {props.reasonText ? <ImportStatusText>Reason: {props.reasonText}</ImportStatusText> : null}
+        {props.finishedAt ? <ImportStatusText>Ended: {props.finishedAt}</ImportStatusText> : null}
+      </View>
+      <View style={ui.actions}>
+        <ImportStatusAction primary action={props.checkResultAction} label={t('result.checkStatus')} />
+        {props.onReturnToCoaching ? <ImportJourneyAction label={t('result.close')} onPress={props.onReturnToCoaching} /> : null}
+      </View>
+    </>;
+  }
+  return <>
     <View style={ui.actions}>
       {body && <ImportStatusText>{body}</ImportStatusText>}
       {scope && <ImportStatusText>{scope}</ImportStatusText>}
@@ -88,7 +143,15 @@ export function ImportResultView(props: ImportResultViewProps) {
       <ImportStatusAction action={props.recoveryAction} label={t('result.recovery')} />
       <ImportStatusAction action={props.helpAction} label={t('result.support')} />
       <ImportStatusAction action={props.detailsAction} label={t('progress.details')} />
-      <ImportJourneyAction label={t('result.close')} onPress={props.onReturnToCoaching} />
+      {props.onReturnToCoaching ? <ImportJourneyAction label={t('result.close')} onPress={props.onReturnToCoaching} /> : null}
     </View>
+  </>;
+}
+
+/** Pure result presentation: no cached authority, identifiers, routes, retry or Start. */
+export function ImportResultView(props: ImportResultViewProps) {
+  const { title } = importResultPresentation(props);
+  return <ImportStatusFrame title={title} navigationTitle={t('result.navigationTitle')} romanEnabled={props.romanEnabled} onReturnToCoaching={props.onReturnToCoaching} focusOnMount={props.focusOnMount}>
+    <ImportResultBody {...props} />
   </ImportStatusFrame>;
 }

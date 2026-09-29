@@ -10,11 +10,15 @@
  * R300-A closure (B1-B4), asserted here with tests that FAIL on 41812117:
  *   - B1: "Check current result" exists and calls run.refresh even for a
  *     CURRENT recognised running phase (41812117 mounted it only `!current`).
- *   - B2: accessibility semantics — Android live region on the inline card,
- *     and freshness/reason live-region text — for a same-title stale/reason
- *     transition (41812117 had no live region here at all: it used
- *     `ImportStatusFrame`'s screen ScrollView, whose own live region only
- *     fires on a TITLE change).
+ *   - B2 (closed further per R300-A2): a SINGLE change-sensitive Android
+ *     announcement target (`ImportLiveAnnouncement`, rendered by
+ *     `ImportInlineStatusFrame`), outside the changing checked-at/roster
+ *     subtree — not the whole card, not the header, and not a duplicate
+ *     region on the visible stale/reason text (1ab5a47 had polite on the
+ *     outer card, the heading, AND the stale text simultaneously: a nested,
+ *     triple-announcing region). It fires only when the composed
+ *     announcement (title + reason + a human-readable freshness fact, never
+ *     a raw "stale" token or a timestamp) actually changes.
  *   - B3: NO screen-level Back/Return control in this inline mount, and NO
  *     nested ScrollView (41812117 rendered both, via `ImportStatusFrame` /
  *     `ImportProgressView`).
@@ -108,7 +112,7 @@ describe('ImportRunStatusJourney', () => {
   it('Check again calls the real run.refresh — no fabricated no-op', async () => {
     mockRunState = { view: 'reading', reading: { intentId: 'intent-1', status: 'failed', mode: 'server', phase: null, reasonCode: null, claimedStatus: null, completedAt: null, startedAt: null } };
     const v = await render(<ImportRunStatusJourney importIntentId="intent-1" />);
-    await fireEvent.press(v.getByRole('button', { name: 'Check again' }));
+    await fireEvent.press(v.getByRole('button', { name: 'Check current result' }));
     expect(mockRefresh).toHaveBeenCalledTimes(1);
   });
 
@@ -137,54 +141,101 @@ describe('ImportRunStatusJourney', () => {
     });
   });
 
-  describe('B2 — material freshness/reason changes are announced under an unchanged title, without repeating timestamps', () => {
-    it('the inline card carries a polite Android live region (whole-card, matching the retired card\'s own live region)', async () => {
+  describe('B2 — a single change-sensitive Android announcement target, outside the changing timestamp/roster subtree, with human-readable freshness/reason text (R300-A2)', () => {
+    /**
+     * Walks RTL's `toJSON()` host-node tree (plain, non-circular — same
+     * convention `ExtensionPairingPanel.test.tsx`'s `collectText`/
+     * `findByTestId` use) collecting every node whose props carry
+     * `accessibilityLiveRegion: 'polite'`. This is the ONE Android
+     * live-region target this suite asserts about.
+     */
+    function collectText(node: unknown, out: string[] = []): string[] {
+      if (typeof node === 'string') {
+        out.push(node);
+      } else if (Array.isArray(node)) {
+        for (const child of node) collectText(child, out);
+      } else if (node && typeof node === 'object') {
+        const n = node as { children?: unknown };
+        if ('children' in n) collectText(n.children, out);
+      }
+      return out;
+    }
+    /** Node shape is `{ type, props, children }` — `children` (the text) is a SIBLING of `props`, not nested inside it. */
+    function findLiveRegions(node: unknown, out: Array<{ text: string; props: Record<string, unknown> }> = []): Array<{ text: string; props: Record<string, unknown> }> {
+      if (!node || typeof node !== 'object') return out;
+      if (Array.isArray(node)) {
+        for (const child of node) findLiveRegions(child, out);
+        return out;
+      }
+      const n = node as { props?: Record<string, unknown>; children?: unknown };
+      if (n.props?.accessibilityLiveRegion === 'polite') out.push({ text: collectText(n.children).join(''), props: n.props });
+      if ('children' in n) findLiveRegions(n.children, out);
+      return out;
+    }
+    const liveNode = (v: Awaited<ReturnType<typeof render>>) => findLiveRegions(v.toJSON());
+
+    it('carries exactly ONE polite live region — never on the outer card, never on the header', async () => {
       mockRunState = { view: 'reading', reading: { intentId: 'intent-1', status: 'complete', mode: 'server', phase: null, reasonCode: null, claimedStatus: null, completedAt: null, startedAt: null }, stale: false };
       const v = await render(<ImportRunStatusJourney importIntentId="intent-1" />);
-      expect(v.getByRole('header').props.accessibilityLiveRegion).toBe('polite');
+      expect(v.getByRole('header').props.accessibilityLiveRegion).toBeUndefined();
+      const regions = liveNode(v);
+      expect(regions).toHaveLength(1);
+      expect(regions[0].props.importantForAccessibility).toBe('no-hide-descendants');
     });
 
-    it('a stale line appears with an accessibility live region, under the SAME unchanged "Import complete" title', async () => {
+    it('the live region speaks the human-readable stale explanation, never the raw "stale" token, under the SAME unchanged "Import complete" title', async () => {
       mockRunState = { view: 'reading', reading: { intentId: 'intent-1', status: 'complete', mode: 'server', phase: null, reasonCode: null, claimedStatus: null, completedAt: null, startedAt: null }, stale: false, readAt: 1700000000000 };
       const v = await render(<ImportRunStatusJourney importIntentId="intent-1" />);
       expect(v.getByRole('header')).toHaveTextContent('Import complete');
       expect(v.queryByText(/Couldn.t refresh/)).toBeNull();
+      expect(liveNode(v)[0].text).not.toMatch(/\bstale\b/);
       mockRunState = { ...mockRunState, stale: true };
       await v.rerender(<ImportRunStatusJourney importIntentId="intent-1" />);
-      // Title text is unchanged, but the retained-verdict fact is now visible
-      // and screen-reader-announced (accessibilityLiveRegion), never silent.
+      // Title text is unchanged, but the retained-verdict fact is now visible…
       expect(v.getByRole('header')).toHaveTextContent('Import complete');
       const staleText = v.getByText(/Couldn.t refresh\. Showing what the server said/);
       expect(staleText).toBeTruthy();
-      expect(staleText.props.accessibilityLiveRegion).toBe('polite');
+      // …and it is NOT itself a live region (it changes on every poll; a
+      // second live region here would nest under the one in the frame).
+      expect(staleText.props.accessibilityLiveRegion).not.toBe('polite');
+      // The ONE live-region node now speaks the human sentence, never "stale".
+      const region = liveNode(v)[0];
+      expect(region.text).toContain('Couldn’t refresh');
+      expect(region.text).not.toMatch(/\bstale\b/);
     });
 
-    it('a reason change under the SAME "Import stopped — needs attention" title is visible and live-region-announced', async () => {
+    it('a reason change under the SAME "Import stopped — needs attention" title updates the ONE live region, not a duplicate on the header', async () => {
       mockRunState = { view: 'reading', reading: { intentId: 'intent-1', status: 'blocked', mode: 'server', phase: null, reasonCode: 'revoked', claimedStatus: null, completedAt: null, startedAt: null }, stale: false };
       const v = await render(<ImportRunStatusJourney importIntentId="intent-1" />);
       expect(v.getByRole('header')).toHaveTextContent('Import stopped — needs attention');
       expect(v.getByText('Reason: Access for this import was withdrawn.')).toBeTruthy();
+      expect(liveNode(v)[0].text).toContain('Access for this import was withdrawn.');
       mockRunState = { ...mockRunState, reading: { ...(mockRunState.reading as object), reasonCode: 'unresolved_identities' } };
       await v.rerender(<ImportRunStatusJourney importIntentId="intent-1" />);
       expect(v.getByRole('header')).toHaveTextContent('Import stopped — needs attention');
       expect(v.getByText('Reason: Some people couldn’t be matched to TGP accounts yet.')).toBeTruthy();
-      // The whole card remains a live region, so this reason swap under an
-      // unchanged title is still exposed to a screen-reader user (B2).
-      expect(v.getByRole('header').props.accessibilityLiveRegion).toBe('polite');
+      // Still exactly one live region — the header itself never carries one.
+      expect(v.getByRole('header').props.accessibilityLiveRegion).toBeUndefined();
+      const regions = liveNode(v);
+      expect(regions).toHaveLength(1);
+      expect(regions[0].text).toContain('Some people couldn’t be matched to TGP accounts yet.');
     });
 
-    it('does not repeat the checked-at timestamp text as a separate change signal on every refresh', async () => {
+    it('does NOT re-fire merely because the checked-at timestamp changed with an unchanged verdict', async () => {
       mockRunState = { view: 'reading', reading: { intentId: 'intent-1', status: 'complete', mode: 'server', phase: null, reasonCode: null, claimedStatus: null, completedAt: null, startedAt: null }, stale: false, readAt: 1700000000000 };
       const v = await render(<ImportRunStatusJourney importIntentId="intent-1" />);
       const before = v.getByText(/Last checked/);
       expect(before).toBeTruthy();
-      // A later successful read (new readAt, still fresh) is a timestamp-only
-      // change — it must not gain its own extra live-region announcement
-      // beyond the one stable whole-card region already asserted above.
+      expect(before.props.accessibilityLiveRegion).not.toBe('polite');
+      const announcementBefore = liveNode(v)[0].text;
+      // A later successful read (new readAt, still fresh, same verdict) is a
+      // timestamp-only change — the checked-at text updates, but the ONE live
+      // region's own text (what TalkBack actually re-speaks) does not change.
       mockRunState = { ...mockRunState, readAt: 1700000600000 };
       await v.rerender(<ImportRunStatusJourney importIntentId="intent-1" />);
       expect(v.getByText(/Last checked/)).toBeTruthy();
       expect(v.getByRole('header')).toHaveTextContent('Import complete');
+      expect(liveNode(v)[0].text).toBe(announcementBefore);
     });
   });
 
@@ -247,6 +298,38 @@ describe('ImportRunStatusJourney', () => {
       expect(v.getByText('Reported by the browser extension. The server did not check this result.')).toBeTruthy();
       expect(v.queryByText('I have checked the imported records in TGP. They are ready to use.')).toBeNull();
       expect(v.queryByText('The imported records have been checked in TGP and are ready to use.')).toBeNull();
+    });
+  });
+
+  describe('B4 (R300-A2) — the journey MOUNTS the actual P2 progress/result primitives, not a parallel reimplementation', () => {
+    it('running: shows the honest "full source total is not known yet" fact that ONLY `ImportProgressBody` renders — a parallel hand-rolled branch would never emit it', async () => {
+      mockRunState = { view: 'reading', reading: { intentId: 'intent-1', status: 'running', mode: 'server', phase: 'discovering', reasonCode: null, claimedStatus: null, completedAt: null, startedAt: null } };
+      const v = await render(<ImportRunStatusJourney importIntentId="intent-1" />);
+      // This exact sentence lives ONLY inside `ImportProgressBody`
+      // (`sourceCoverage !== 'confirmed'`) — the journey passing this
+      // through proves it is rendering that shared component's body, not a
+      // hand-derived duplicate of its phase/current/stale logic.
+      expect(v.getByText('The full source total is not known yet.')).toBeTruthy();
+    });
+
+    it('running: an unrecognised phase and a stale phase both fall back through the SAME shared `importProgressPresentation` adapter the standalone view uses (identical "not known" title)', async () => {
+      mockRunState = { view: 'reading', reading: { intentId: 'intent-1', status: 'running', mode: 'server', phase: 'unknown', reasonCode: null, claimedStatus: null, completedAt: null, startedAt: null } };
+      const v = await render(<ImportRunStatusJourney importIntentId="intent-1" />);
+      expect(v.getByRole('header')).toHaveTextContent('Current status unconfirmed');
+      expect(v.getByText("Updates are unavailable. The import's current status has not been confirmed.")).toBeTruthy();
+    });
+
+    it('terminal: the "Check current result" label is the shared P2 action label (`result.checkStatus`) — the retired journey-local "Check again" string is gone', async () => {
+      mockRunState = { view: 'reading', reading: { intentId: 'intent-1', status: 'failed', mode: 'server', phase: null, reasonCode: null, claimedStatus: null, completedAt: null, startedAt: null } };
+      const v = await render(<ImportRunStatusJourney importIntentId="intent-1" />);
+      expect(v.getByRole('button', { name: 'Check current result' })).toBeTruthy();
+      expect(v.queryByRole('button', { name: 'Check again' })).toBeNull();
+    });
+
+    it('terminal: a reason change is rendered through the shared body\'s "Reason:" line, not a bespoke format', async () => {
+      mockRunState = { view: 'reading', reading: { intentId: 'intent-1', status: 'blocked', mode: 'server', phase: null, reasonCode: 'revoked', claimedStatus: null, completedAt: null, startedAt: null } };
+      const v = await render(<ImportRunStatusJourney importIntentId="intent-1" />);
+      expect(v.getByText(/^Reason: /)).toBeTruthy();
     });
   });
 });
