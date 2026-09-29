@@ -27,6 +27,7 @@
  *     the plain card body, identical Roman on/off).
  */
 import React from 'react';
+import { AccessibilityInfo } from 'react-native';
 import { render, cleanup, fireEvent } from '@testing-library/react-native';
 
 jest.mock('react-native-safe-area-context', () => ({ useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }) }));
@@ -48,11 +49,16 @@ jest.mock('../../../config/featureFlags', () => ({
 
 import ImportRunStatusJourney from '../ImportRunStatusJourney';
 
+let announceSpy: jest.SpyInstance;
 beforeEach(() => {
   flags.romanChat = false;
   mockRefresh.mockClear();
+  announceSpy = jest.spyOn(AccessibilityInfo, 'announceForAccessibility').mockImplementation(() => {});
 });
-afterEach(() => cleanup());
+afterEach(() => {
+  announceSpy.mockRestore();
+  cleanup();
+});
 
 describe('ImportRunStatusJourney', () => {
   it('disabled → renders nothing (no flag / no coach / no intent, matching the retired card)', async () => {
@@ -141,101 +147,70 @@ describe('ImportRunStatusJourney', () => {
     });
   });
 
-  describe('B2 — a single change-sensitive Android announcement target, outside the changing timestamp/roster subtree, with human-readable freshness/reason text (R300-A2)', () => {
-    /**
-     * Walks RTL's `toJSON()` host-node tree (plain, non-circular — same
-     * convention `ExtensionPairingPanel.test.tsx`'s `collectText`/
-     * `findByTestId` use) collecting every node whose props carry
-     * `accessibilityLiveRegion: 'polite'`. This is the ONE Android
-     * live-region target this suite asserts about.
-     */
-    function collectText(node: unknown, out: string[] = []): string[] {
-      if (typeof node === 'string') {
-        out.push(node);
-      } else if (Array.isArray(node)) {
-        for (const child of node) collectText(child, out);
-      } else if (node && typeof node === 'object') {
-        const n = node as { children?: unknown };
-        if ('children' in n) collectText(n.children, out);
-      }
-      return out;
-    }
-    /** Node shape is `{ type, props, children }` — `children` (the text) is a SIBLING of `props`, not nested inside it. */
-    function findLiveRegions(node: unknown, out: Array<{ text: string; props: Record<string, unknown> }> = []): Array<{ text: string; props: Record<string, unknown> }> {
-      if (!node || typeof node !== 'object') return out;
-      if (Array.isArray(node)) {
-        for (const child of node) findLiveRegions(child, out);
-        return out;
-      }
-      const n = node as { props?: Record<string, unknown>; children?: unknown };
-      if (n.props?.accessibilityLiveRegion === 'polite') out.push({ text: collectText(n.children).join(''), props: n.props });
-      if ('children' in n) findLiveRegions(n.children, out);
-      return out;
-    }
-    const liveNode = (v: Awaited<ReturnType<typeof render>>) => findLiveRegions(v.toJSON());
-
-    it('carries exactly ONE polite live region — never on the outer card, never on the header', async () => {
+  describe('B2 (R300-A3) — no live regions anywhere on this inline path; a single imperative announcement on BOTH platforms, timestamp-free', () => {
+    it('carries NO polite live region anywhere in the rendered tree — not on the outer card, not the header, not any visible text', async () => {
       mockRunState = { view: 'reading', reading: { intentId: 'intent-1', status: 'complete', mode: 'server', phase: null, reasonCode: null, claimedStatus: null, completedAt: null, startedAt: null }, stale: false };
       const v = await render(<ImportRunStatusJourney importIntentId="intent-1" />);
+      const serialized = JSON.stringify(v.toJSON());
+      expect(serialized).not.toContain('"accessibilityLiveRegion":"polite"');
       expect(v.getByRole('header').props.accessibilityLiveRegion).toBeUndefined();
-      const regions = liveNode(v);
-      expect(regions).toHaveLength(1);
-      expect(regions[0].props.importantForAccessibility).toBe('no-hide-descendants');
     });
 
-    it('the live region speaks the human-readable stale explanation, never the raw "stale" token, under the SAME unchanged "Import complete" title', async () => {
+    it('announces via AccessibilityInfo.announceForAccessibility on mount-then-change, never the raw "stale" token', async () => {
       mockRunState = { view: 'reading', reading: { intentId: 'intent-1', status: 'complete', mode: 'server', phase: null, reasonCode: null, claimedStatus: null, completedAt: null, startedAt: null }, stale: false, readAt: 1700000000000 };
       const v = await render(<ImportRunStatusJourney importIntentId="intent-1" />);
       expect(v.getByRole('header')).toHaveTextContent('Import complete');
       expect(v.queryByText(/Couldn.t refresh/)).toBeNull();
-      expect(liveNode(v)[0].text).not.toMatch(/\bstale\b/);
+      expect(announceSpy).not.toHaveBeenCalledWith(expect.stringMatching(/\bstale\b/));
+      announceSpy.mockClear();
       mockRunState = { ...mockRunState, stale: true };
       await v.rerender(<ImportRunStatusJourney importIntentId="intent-1" />);
-      // Title text is unchanged, but the retained-verdict fact is now visible…
       expect(v.getByRole('header')).toHaveTextContent('Import complete');
       const staleText = v.getByText(/Couldn.t refresh\. Showing what the server said/);
       expect(staleText).toBeTruthy();
-      // …and it is NOT itself a live region (it changes on every poll; a
-      // second live region here would nest under the one in the frame).
       expect(staleText.props.accessibilityLiveRegion).not.toBe('polite');
-      // The ONE live-region node now speaks the human sentence, never "stale".
-      const region = liveNode(v)[0];
-      expect(region.text).toContain('Couldn’t refresh');
-      expect(region.text).not.toMatch(/\bstale\b/);
+      expect(announceSpy).toHaveBeenCalledTimes(1);
+      const spoken = announceSpy.mock.calls[0][0] as string;
+      expect(spoken).toContain('Couldn’t refresh');
+      expect(spoken).not.toMatch(/\bstale\b/);
     });
 
-    it('a reason change under the SAME "Import stopped — needs attention" title updates the ONE live region, not a duplicate on the header', async () => {
+    it('a reason change under the SAME title re-announces exactly once via the imperative API', async () => {
       mockRunState = { view: 'reading', reading: { intentId: 'intent-1', status: 'blocked', mode: 'server', phase: null, reasonCode: 'revoked', claimedStatus: null, completedAt: null, startedAt: null }, stale: false };
       const v = await render(<ImportRunStatusJourney importIntentId="intent-1" />);
       expect(v.getByRole('header')).toHaveTextContent('Import stopped — needs attention');
       expect(v.getByText('Reason: Access for this import was withdrawn.')).toBeTruthy();
-      expect(liveNode(v)[0].text).toContain('Access for this import was withdrawn.');
+      announceSpy.mockClear();
       mockRunState = { ...mockRunState, reading: { ...(mockRunState.reading as object), reasonCode: 'unresolved_identities' } };
       await v.rerender(<ImportRunStatusJourney importIntentId="intent-1" />);
       expect(v.getByRole('header')).toHaveTextContent('Import stopped — needs attention');
       expect(v.getByText('Reason: Some people couldn’t be matched to TGP accounts yet.')).toBeTruthy();
-      // Still exactly one live region — the header itself never carries one.
       expect(v.getByRole('header').props.accessibilityLiveRegion).toBeUndefined();
-      const regions = liveNode(v);
-      expect(regions).toHaveLength(1);
-      expect(regions[0].text).toContain('Some people couldn’t be matched to TGP accounts yet.');
+      expect(announceSpy).toHaveBeenCalledTimes(1);
+      expect(announceSpy.mock.calls[0][0]).toContain('Some people couldn’t be matched to TGP accounts yet.');
     });
 
-    it('does NOT re-fire merely because the checked-at timestamp changed with an unchanged verdict', async () => {
+    it('does NOT re-announce merely because the checked-at timestamp changed with an unchanged verdict (the speech key excludes observation times)', async () => {
       mockRunState = { view: 'reading', reading: { intentId: 'intent-1', status: 'complete', mode: 'server', phase: null, reasonCode: null, claimedStatus: null, completedAt: null, startedAt: null }, stale: false, readAt: 1700000000000 };
       const v = await render(<ImportRunStatusJourney importIntentId="intent-1" />);
-      const before = v.getByText(/Last checked/);
-      expect(before).toBeTruthy();
-      expect(before.props.accessibilityLiveRegion).not.toBe('polite');
-      const announcementBefore = liveNode(v)[0].text;
-      // A later successful read (new readAt, still fresh, same verdict) is a
-      // timestamp-only change — the checked-at text updates, but the ONE live
-      // region's own text (what TalkBack actually re-speaks) does not change.
+      expect(v.getByText(/Last checked/)).toBeTruthy();
+      announceSpy.mockClear();
       mockRunState = { ...mockRunState, readAt: 1700000600000 };
       await v.rerender(<ImportRunStatusJourney importIntentId="intent-1" />);
       expect(v.getByText(/Last checked/)).toBeTruthy();
       expect(v.getByRole('header')).toHaveTextContent('Import complete');
-      expect(liveNode(v)[0].text).toBe(announcementBefore);
+      expect(announceSpy).not.toHaveBeenCalled();
+    });
+
+    it('does NOT re-announce merely because a later stale poll observed a newer time, with the SAME stale verdict (visible text may still update its timestamp)', async () => {
+      mockRunState = { view: 'reading', reading: { intentId: 'intent-1', status: 'complete', mode: 'server', phase: null, reasonCode: null, claimedStatus: null, completedAt: null, startedAt: null }, stale: true, readAt: 1700000000000 };
+      const v = await render(<ImportRunStatusJourney importIntentId="intent-1" />);
+      expect(v.getByText(/Couldn.t refresh\. Showing what the server said/)).toBeTruthy();
+      announceSpy.mockClear();
+      mockRunState = { ...mockRunState, readAt: 1700000600000 };
+      await v.rerender(<ImportRunStatusJourney importIntentId="intent-1" />);
+      expect(v.getByText(/Couldn.t refresh\. Showing what the server said/)).toBeTruthy();
+      expect(announceSpy).not.toHaveBeenCalled();
     });
   });
 
@@ -330,6 +305,60 @@ describe('ImportRunStatusJourney', () => {
       mockRunState = { view: 'reading', reading: { intentId: 'intent-1', status: 'blocked', mode: 'server', phase: null, reasonCode: 'revoked', claimedStatus: null, completedAt: null, startedAt: null } };
       const v = await render(<ImportRunStatusJourney importIntentId="intent-1" />);
       expect(v.getByText(/^Reason: /)).toBeTruthy();
+    });
+  });
+
+  describe('R300-A3-B1 — in-flight refresh restores disabled + "Checking…" feedback, on both the running and terminal branches', () => {
+    it('running, isRefreshing=true → the check action is disabled and labelled "Checking…", with accessibilityState busy+disabled', async () => {
+      mockRunState = { view: 'reading', reading: { intentId: 'intent-1', status: 'running', mode: 'server', phase: 'transferring', reasonCode: null, claimedStatus: null, completedAt: null, startedAt: null }, isRefreshing: true };
+      const v = await render(<ImportRunStatusJourney importIntentId="intent-1" />);
+      const button = v.getByRole('button', { name: 'Checking…' });
+      expect(button).toBeTruthy();
+      expect(button.props.accessibilityState).toEqual({ disabled: true, busy: true });
+      expect(v.queryByRole('button', { name: 'Check current result' })).toBeNull();
+    });
+
+    it('running, isRefreshing=true → repeated press does not double-fire (the button is actually disabled)', async () => {
+      mockRunState = { view: 'reading', reading: { intentId: 'intent-1', status: 'running', mode: 'server', phase: 'transferring', reasonCode: null, claimedStatus: null, completedAt: null, startedAt: null }, isRefreshing: true };
+      const v = await render(<ImportRunStatusJourney importIntentId="intent-1" />);
+      const button = v.getByRole('button', { name: 'Checking…' });
+      await fireEvent.press(button);
+      await fireEvent.press(button);
+      expect(mockRefresh).not.toHaveBeenCalled();
+    });
+
+    it('running, isRefreshing=false → the action reads "Check current result" and is enabled, exactly as before', async () => {
+      mockRunState = { view: 'reading', reading: { intentId: 'intent-1', status: 'running', mode: 'server', phase: 'transferring', reasonCode: null, claimedStatus: null, completedAt: null, startedAt: null }, isRefreshing: false };
+      const v = await render(<ImportRunStatusJourney importIntentId="intent-1" />);
+      const button = v.getByRole('button', { name: 'Check current result' });
+      expect(button.props.accessibilityState).toEqual({ disabled: false });
+      await fireEvent.press(button);
+      expect(mockRefresh).toHaveBeenCalledTimes(1);
+    });
+
+    it('terminal, isRefreshing=true → the check action is disabled and labelled "Checking…", with accessibilityState busy+disabled', async () => {
+      mockRunState = { view: 'reading', reading: { intentId: 'intent-1', status: 'failed', mode: 'server', phase: null, reasonCode: null, claimedStatus: null, completedAt: null, startedAt: null }, isRefreshing: true };
+      const v = await render(<ImportRunStatusJourney importIntentId="intent-1" />);
+      const button = v.getByRole('button', { name: 'Checking…' });
+      expect(button).toBeTruthy();
+      expect(button.props.accessibilityState).toEqual({ disabled: true, busy: true });
+      expect(v.queryByRole('button', { name: 'Check current result' })).toBeNull();
+    });
+
+    it('terminal, isRefreshing=true → repeated press does not double-fire', async () => {
+      mockRunState = { view: 'reading', reading: { intentId: 'intent-1', status: 'failed', mode: 'server', phase: null, reasonCode: null, claimedStatus: null, completedAt: null, startedAt: null }, isRefreshing: true };
+      const v = await render(<ImportRunStatusJourney importIntentId="intent-1" />);
+      const button = v.getByRole('button', { name: 'Checking…' });
+      await fireEvent.press(button);
+      await fireEvent.press(button);
+      expect(mockRefresh).not.toHaveBeenCalled();
+    });
+
+    it('terminal, isRefreshing=false → the action reads "Check current result" and is enabled, exactly as before r3', async () => {
+      mockRunState = { view: 'reading', reading: { intentId: 'intent-1', status: 'failed', mode: 'server', phase: null, reasonCode: null, claimedStatus: null, completedAt: null, startedAt: null }, isRefreshing: false };
+      const v = await render(<ImportRunStatusJourney importIntentId="intent-1" />);
+      const button = v.getByRole('button', { name: 'Check current result' });
+      expect(button.props.accessibilityState).toEqual({ disabled: false });
     });
   });
 });

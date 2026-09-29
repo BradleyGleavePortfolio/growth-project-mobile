@@ -7,12 +7,26 @@ import { importJourneyCopy as t } from './importJourneyCopy';
 import { ImportJourneyAction, ImportJourneyPortrait, ui, useImportHeadingFocus } from './importJourneyUI';
 
 /** Capability + callback are supplied by a future accepted host; neither is verified here. */
-export type ImportViewAction = { enabled: boolean; onPress: () => void };
+export type ImportViewAction = {
+  enabled: boolean; onPress: () => void;
+  /**
+   * R300-A3-B1: an in-flight read disables the action and swaps its label
+   * to `busyLabel` ("Checking…"), restoring exactly the affordance the
+   * pre-refactor journey and `ImportRunVerdictCard` both had
+   * (`disabled={run.isRefreshing}`, label toggling to `'Checking…'`).
+   * Optional and unset by every standalone P2 action — only the inline
+   * journey's refresh action sets it, so no other button's behavior
+   * changes.
+   */
+  busy?: boolean;
+  busyLabel?: string;
+};
 export function ImportStatusAction({ action, label, primary = false, disabled = false }: {
   action?: ImportViewAction; label: string; primary?: boolean; disabled?: boolean;
 }) {
   if (!action || action.enabled !== true || typeof action.onPress !== 'function') return null;
-  return <ImportJourneyAction label={label} primary={primary} disabled={disabled} onPress={action.onPress} />;
+  const busy = action.busy === true;
+  return <ImportJourneyAction label={busy && action.busyLabel ? action.busyLabel : label} primary={primary} disabled={disabled || busy} busy={busy} onPress={action.onPress} />;
 }
 
 export function ImportStatusText({ children, secondary = false, announce = false }: {
@@ -40,27 +54,48 @@ function ImportLiveAnnouncement({ text }: { text: string }) {
 }
 
 /**
- * B2 (R300-A): iOS has one queued announcement API; Android relies on live
- * regions on the changed text itself. This hook is the ONE place that decides
- * whether a NEW `announcement` string differs from the previous one — shared
- * by the full-screen frame and the inline variant so both platforms announce
- * a material change (freshness/reason) exactly once, never on every render
- * and never merely because a timestamp/count changed underneath an otherwise
- * identical sentence (callers must exclude those from `announcement`).
+ * B2 (R300-A) — R300-A3-B1/B2 rewrite: the ONE place that decides whether a
+ * NEW `announcement` key differs from the previous one, for BOTH the
+ * standalone full-screen frame and the inline card. `mode` picks the
+ * announcement API, not a live region in either case:
+ *   - `'queued'` (standalone frame, unchanged contract, never flagged by any
+ *     review — its own targeted accessibility suite asserts this exact
+ *     behavior and passes unmodified): iOS's queued
+ *     `announceForAccessibilityWithOptions`; Android continues to rely on
+ *     this frame's own existing live-region Text nodes, exactly as before.
+ *   - `'inline'` (R300-A3-B2, the paired-host card): NO live region
+ *     anywhere on this surface. `ExtensionPairingPanel`'s own "paired" card
+ *     ancestor keeps `accessibilityLiveRegion="polite"` for ITS OWN
+ *     content, and RN's Android live-region propagation re-announces the
+ *     WHOLE changing subtree under any ancestor that has one — a child
+ *     cannot opt out of an ancestor's region (`importantForAccessibility=
+ *     "no-hide-descendants"` changes swipe/explore-by-touch grouping, not
+ *     live-region delivery, per RN's `BaseViewManager` mapping). The only
+ *     reliable single-source-of-truth is `AccessibilityInfo.
+ *     announceForAccessibility` fired exactly once per real change, on
+ *     BOTH iOS and Android. `announcement` must already exclude every
+ *     observation timestamp (status + freshness + reason only) — the
+ *     caller is responsible for that; this hook only decides whether the
+ *     key changed.
  */
-function useImportStatusAnnouncement(announcement: string) {
+function useImportStatusAnnouncement(announcement: string, mode: 'queued' | 'inline' = 'queued') {
   const previous = useRef(announcement);
   useEffect(() => {
     const changed = previous.current !== announcement;
     previous.current = announcement;
-    if (Platform.OS === 'ios' && changed) {
+    if (!changed) return;
+    if (mode === 'inline') {
+      // R300-A3-B2: no live region on this surface at all — announce on
+      // BOTH platforms imperatively, never via `accessibilityLiveRegion`.
+      AccessibilityInfo.announceForAccessibility(announcement);
+    } else if (Platform.OS === 'ios') {
       // R300-A2-B2: `announcement` is ALWAYS the human-readable sentence
       // (never a raw internal token like "stale") — every caller composes it
       // from real copy strings, so VoiceOver speaks the same explanation a
       // sighted coach reads, not an implementation detail.
       AccessibilityInfo.announceForAccessibilityWithOptions(announcement, { queue: true });
     }
-  }, [announcement]);
+  }, [announcement, mode]);
 }
 
 /** Separate P2 shell; P1 primitives and navigation remain untouched. */
@@ -110,22 +145,24 @@ export function ImportStatusFrame({ title, announcement = title, navigationTitle
  */
 export function ImportInlineStatusFrame({ title, announcement = title, romanEnabled, focusOnMount = false, children }: {
   title: string; romanEnabled: boolean;
-  /** Localized meaningful status only; never quantities or observation times. */
+  /**
+   * The speech key: status + freshness + reason only, NEVER a timestamp
+   * (R300-A3 B2). Announced imperatively via `AccessibilityInfo.
+   * announceForAccessibility` on BOTH platforms — no live region anywhere
+   * on this inline path (R300-A3-B2): not on this card, not on its heading.
+   * `ExtensionPairingPanel`'s own "paired" card ancestor still carries its
+   * own `accessibilityLiveRegion="polite"` for ITS OWN content; nothing
+   * here relies on, fights, or needs a region to co-exist with it.
+   */
   announcement?: string;
   focusOnMount?: boolean; children: React.ReactNode;
 }) {
   const { semanticColors: c } = useTheme();
   const headingRef = useImportHeadingFocus('status-presentation', focusOnMount);
-  useImportStatusAnnouncement(announcement);
-  // R300-A2-B2: no live region on the outer card (the host `ExtensionPairingPanel`
-  // already has its own polite region at the paired-card level, so a second one
-  // here would nest and double-speak) and none on the heading either —
-  // `ImportLiveAnnouncement` below is the SINGLE change-sensitive target, and it
-  // sits outside whatever changing timestamp/roster content `children` renders.
+  useImportStatusAnnouncement(announcement, 'inline');
   return <View style={[styles.inlineContent, { backgroundColor: c.bgSurface, borderColor: c.border }]}>
     {romanEnabled && <ImportJourneyPortrait />}
     <Text ref={headingRef} accessibilityRole="header" style={[typography.h2, ui.text, { color: c.textPrimary }]}>{title}</Text>
-    <ImportLiveAnnouncement text={announcement} />
     {children}
   </View>;
 }

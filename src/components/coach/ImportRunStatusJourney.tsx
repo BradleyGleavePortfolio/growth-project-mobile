@@ -126,7 +126,18 @@ export default function ImportRunStatusJourney({ importIntentId }: { importInten
 
   if (run.view === 'disabled') return null;
 
-  const refreshAction = { enabled: true, onPress: run.refresh };
+  // R300-A3-B1: restore the pre-r3 in-flight affordance — disabled AND
+  // labelled "Checking…" while `run.isRefreshing`, exactly as
+  // `ImportRunVerdictCard` and the pre-refactor journey both had, on BOTH
+  // the running (`ImportProgressBody`) and terminal (`ImportResultBody`)
+  // branches. `busy` also sets `accessibilityState.busy` so a screen
+  // reader hears the in-flight state, not merely a silently-disabled button.
+  const refreshAction = {
+    enabled: true,
+    onPress: run.refresh,
+    busy: run.isRefreshing,
+    busyLabel: t('result.checkingStatus'),
+  };
   const stale = staleNote(run.stale, run.readAt);
   const settled = run.view === 'reading' && !!run.reading && isTerminal(run.reading.status);
   const roster = settled ? <ImportedRosterSection importIntentId={importIntentId} /> : null;
@@ -199,12 +210,14 @@ export default function ImportRunStatusJourney({ importIntentId }: { importInten
   // server's own body and the Roman/neutral completion voice stay two
   // DISTINCT text nodes (never merged into one string) so a coach can tell
   // "what the server said" apart from "Roman's own completion sentence".
-  // R300-A2-B2: `stale.text` is included ONLY for `kind === 'stale'` (the
-  // human "Couldn't refresh…" sentence, never the raw "stale" token) — the
-  // `checkedAt` variant is a bare "Last checked HH:MM" timestamp that
-  // changes on every successful poll without being a new fact, and must
-  // never re-trigger the single live-region announcement.
-  const announcement = [title, romanVoice, stale?.kind === 'stale' ? stale.text : null, reasonText]
+  // R300-A3-B2: the SPOKEN key must exclude every observation timestamp,
+  // even though `staleNote()`'s own `stale.text` embeds "at HH:MM" in its
+  // VISIBLE sentence (`StaleFooter` below still shows that full text). A
+  // second stale read at a later time, with the SAME verdict, must NOT
+  // re-announce — only status+freshness+reason changes are real facts.
+  // `STALE_FACT_NO_TIME` is the timestamp-free twin of that same fact, used
+  // ONLY for the announcement key, never rendered.
+  const announcement = [title, romanVoice, stale?.kind === 'stale' ? STALE_FACT_NO_TIME : null, reasonText]
     .filter(Boolean).join('\n');
 
   return (
@@ -231,6 +244,16 @@ function progressAnnouncement(observation: { freshness: 'current'; phase: Import
   const phaseKey = observation.freshness === 'current' ? PHASE_TEXT_KEY[observation.phase] : null;
   return [title, phaseKey ? t(phaseKey) : t('progress.stale')].join('\n');
 }
+
+/**
+ * R300-A3-B2: the timestamp-free twin of `staleNote()`'s `stale.text` —
+ * the SAME human fact ("couldn't refresh, showing what the server said"),
+ * with no "at HH:MM" clause, so a later poll that stays stale never
+ * re-announces on time alone. This is real copy — never a raw internal
+ * token like "stale" — spoken as-is; only the VISIBLE `StaleFooter` below
+ * additionally shows the timestamped version of the same fact.
+ */
+const STALE_FACT_NO_TIME = "Couldn’t refresh. Showing what the server said.";
 
 const PHASE_TEXT_KEY: Record<ImportProgressPhase, 'progress.finding' | 'progress.transferring' | 'progress.checking'> = {
   finding: 'progress.finding', transferring: 'progress.transferring', checking: 'progress.checking',

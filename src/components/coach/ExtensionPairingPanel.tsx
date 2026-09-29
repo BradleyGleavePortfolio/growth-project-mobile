@@ -229,8 +229,20 @@ export default function ExtensionPairingPanel({ platformId }: Props): React.Reac
     // client-edited field — and falls back to email when no display name has
     // resolved yet.
     const identityLabel = currentUser?.name || currentUser?.email || 'your account';
+    // R300-A3-B2: this card's own `polite` region is REMOVED — it was a
+    // live-region ancestor sitting directly around `ImportRunStatusJourney`
+    // below, so RN's Android live-region propagation re-announced the
+    // ENTIRE card (checklist rows, identity, everything) on any change
+    // inside it, including the import status child the review flagged.
+    // This card's status/identity text is otherwise stable once "paired"
+    // (the review targeted the IMPORT STATUS child's own announcements, not
+    // this card's own transition into the "paired" state, which the parent
+    // list/switch statement re-renders wholesale on status change anyway).
+    // The import status child now announces its own material changes via
+    // `AccessibilityInfo.announceForAccessibility` with no live region at
+    // all — no ancestor in this host may set one around it.
     return (
-      <View style={[styles.card, styles.cardOk]} accessibilityLiveRegion="polite" testID="pairing-paired">
+      <View style={[styles.card, styles.cardOk]} testID="pairing-paired">
         <Ionicons name="checkmark-circle-outline" size={22} color={colors.primary} />
         <Text style={styles.title}>Connected to your computer</Text>
         <View style={styles.checklist} testID="pairing-checklist">

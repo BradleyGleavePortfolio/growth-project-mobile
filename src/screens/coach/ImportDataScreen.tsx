@@ -307,39 +307,51 @@ export default function ImportDataScreen(): React.ReactElement {
       )}
 
       {state.phase === 'awaitingExtension' && (
-        <View style={styles.awaiting} accessibilityLiveRegion="polite" testID="import-status">
-          {/* Reached both right after opening the login page and when a pending
-              session is resumed after a relaunch, so it must not assert that a
-              page "was just opened". */}
-          <Text style={styles.statusText}>
-            Log in to {awaitingPlatformLabel(state.platformId)} in your browser, then enter the
-            pairing code below in the Growth Project browser extension. Nothing is imported until
-            you confirm in the extension.
-          </Text>
+        // R300-A3-B2: `import-status`'s own `polite` region is UNCHANGED
+        // (pre-existing, never flagged; its own targeted accessibility test
+        // asserts this exact node's prop and passes unmodified) — but it now
+        // wraps ONLY the phase-announcement Text and retry action, not
+        // `ExtensionPairingPanel`. That panel (and the import status journey
+        // it mounts) renders as a SIBLING immediately after, outside this
+        // live region, so no ancestor here re-announces the import status's
+        // own subtree on change — that status announces its own material
+        // changes via `AccessibilityInfo.announceForAccessibility` with no
+        // live region of its own.
+        <React.Fragment>
+          <View style={styles.awaiting} accessibilityLiveRegion="polite" testID="import-status">
+            {/* Reached both right after opening the login page and when a pending
+                session is resumed after a relaunch, so it must not assert that a
+                page "was just opened". */}
+            <Text style={styles.statusText}>
+              Log in to {awaitingPlatformLabel(state.platformId)} in your browser, then enter the
+              pairing code below in the Growth Project browser extension. Nothing is imported until
+              you confirm in the extension.
+            </Text>
+            {/* R3 closure (independent T2 review, parent grant clause: preserve
+                the preexisting post-login reselection affordance where the
+                removed base picker allowed it). The base kept every platform
+                row reachable here too, so the coach could switch mid-pairing;
+                this reuses the exact same pure local-reset action already
+                restored for `failed`, with the same semantics — no new state,
+                no pairing/auth change, no probe. Leaving the transient
+                `openingLogin` phase without this action is unchanged from r2:
+                no prior test required it there, and it resolves to either
+                `awaitingExtension` or `failed` almost immediately on its own. */}
+            <TouchableOpacity
+              style={styles.retryLink}
+              onPress={onTryAnotherPlatform}
+              accessibilityRole="button"
+              accessibilityLabel="Choose a different platform"
+              testID="import-try-another-platform"
+            >
+              <Text style={styles.retryLinkText}>Choose a different platform</Text>
+            </TouchableOpacity>
+          </View>
           {/* Keyed so choosing a different platform remounts the panel: the
               hook re-hydrates for the new slug and a mirrored session for the
               old one is discarded, never shown under the wrong platform. */}
           <ExtensionPairingPanel key={state.platformId} platformId={state.platformId} />
-          {/* R3 closure (independent T2 review, parent grant clause: preserve
-              the preexisting post-login reselection affordance where the
-              removed base picker allowed it). The base kept every platform
-              row reachable here too, so the coach could switch mid-pairing;
-              this reuses the exact same pure local-reset action already
-              restored for `failed`, with the same semantics — no new state,
-              no pairing/auth change, no probe. Leaving the transient
-              `openingLogin` phase without this action is unchanged from r2:
-              no prior test required it there, and it resolves to either
-              `awaitingExtension` or `failed` almost immediately on its own. */}
-          <TouchableOpacity
-            style={styles.retryLink}
-            onPress={onTryAnotherPlatform}
-            accessibilityRole="button"
-            accessibilityLabel="Choose a different platform"
-            testID="import-try-another-platform"
-          >
-            <Text style={styles.retryLinkText}>Choose a different platform</Text>
-          </TouchableOpacity>
-        </View>
+        </React.Fragment>
       )}
     </ScrollView>
   );
