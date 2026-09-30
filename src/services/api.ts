@@ -75,6 +75,7 @@ import { entitlementEvents } from '../entitlements/entitlementEvents';
 import { logger } from '../utils/logger';
 import { generateIdempotencyKey } from '../utils/idempotency';
 import { REQUEST_ID_HEADER, newRequestId } from '../utils/correlation';
+import type { SignupPolicyResponse } from '../lib/signupPolicy';
 
 function isEntitlementEndpoint(url?: string): boolean {
   if (!url) return false;
@@ -320,11 +321,25 @@ export interface InvitePreview {
   reason?: string;
 }
 
+/**
+ * `/auth/signup-with-code` response. `invite_attached` / `invite_attach_error`
+ * come from the C03 backend change; older backends omit them (treated as
+ * unknown, see lib/inviteAttachOutcome).
+ */
+export interface SignupWithCodeResponse {
+  message?: string;
+  requires_verification?: boolean;
+  user_id?: string;
+  email?: string;
+  invite_attached?: boolean;
+  invite_attach_error?: string;
+}
+
 export const authApi = {
   register: (data: { email: string; password: string; name: string; phone?: string; invite_code?: string }) =>
     api.post('/auth/register', data),
   signupWithCode: (data: { email: string; password: string; name: string; phone?: string; invite_code: string }) =>
-    api.post('/auth/signup-with-code', data),
+    api.post<SignupWithCodeResponse>('/auth/signup-with-code', data),
   login: (data: { email: string; password: string }) =>
     api.post('/auth/login', data),
   googleAuth: (token: string, inviteCode?: string) =>
@@ -332,21 +347,16 @@ export const authApi = {
   // Apple Sign-In: POST the identity token from expo-apple-authentication.
   // Backend verifies the JWT against Apple's JWKS and returns the same
   // session shape as /auth/google.
+  // Same body as utils/appleAuth.buildAppleAuthBody (live DTO whitelist:
+  // token, full_name string, invite_code). Unused by screens today.
   appleAuth: (
     identityToken: string,
-    extras: {
-      authorizationCode?: string;
-      email?: string;
-      fullName?: { given_name?: string; family_name?: string };
-      inviteCode?: string;
-    } = {},
+    extras: { fullName?: string; inviteCode?: string } = {},
   ) =>
     api.post('/auth/apple', {
-      identity_token: identityToken,
-      authorization_code: extras.authorizationCode,
-      email: extras.email,
-      full_name: extras.fullName,
-      invite_code: extras.inviteCode,
+      token: identityToken,
+      ...(extras.fullName ? { full_name: extras.fullName } : {}),
+      ...(extras.inviteCode ? { invite_code: extras.inviteCode } : {}),
     }),
     attachInviteCode: (code: string) =>
     api.post('/auth/attach-invite-code', { invite_code: code }),
@@ -363,10 +373,10 @@ export const authApi = {
     api.get<InvitePreview>(`/invite/${encodeURIComponent(code)}/preview`),
   // Backend feature flag: when true, codeless client signup is rejected.
   // Mobile checks this on the signup screen so the UX matches policy.
-  getSignupPolicy: () =>
-    api.get<{ require_invite_code: boolean; google_signin_enabled: boolean }>(
-      '/auth/signup-policy',
-    ),
+  // Canonical fields: `invite_code_required` + `providers[]`. Legacy names are
+  // typed as optional so `normalizeSignupPolicy` can fall back to them. Read
+  // it only through `lib/signupPolicy.normalizeSignupPolicy`.
+  getSignupPolicy: () => api.get<SignupPolicyResponse>('/auth/signup-policy'),
 };
 
 export const profileApi = {

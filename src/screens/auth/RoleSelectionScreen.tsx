@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthStackParamList } from '../../navigation/AuthNavigator';
 import { errorMessage } from '../../types/common';
@@ -19,9 +20,14 @@ import { authEvents } from '../../utils/authEvents';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { readUserCache, setUserCache } from '../../lib/userCache';
 import { purgePersistedQueryCacheForAllUsers } from '../../services/queryClient';
+import { getLastKnownSignupPolicy, loadSignupPolicy, UNKNOWN_SIGNUP_POLICY } from '../../lib/signupPolicy';
+import { inviteAttachErrorMessage } from '../../lib/inviteAttachOutcome';
+import PasteInviteCodeButton from '../../components/invite/PasteInviteCodeButton';
+import { typography } from '../../theme/tokens';
 
 type Props = {
   navigation: NativeStackNavigationProp<AuthStackParamList, 'RoleSelection'>;
+  route?: RouteProp<AuthStackParamList, 'RoleSelection'>;
 };
 
 // Role selection is now a client-only flow. Coach and admin promotion are
@@ -31,28 +37,52 @@ type Props = {
 // Rationale: per-seat billing means a client cannot promote themselves into a
 // paid coach tier; only an admin can. Removing the in-app become-coach UI
 // closes the privilege-escalation gap that existed in the prior version.
-export default function RoleSelectionScreen(_: Props) {
+// Security (audit): never log an Axios error object; it can carry request
+// config / Authorization. Status and error class only.
+function logRedacted(label: string, err: unknown): void {
+  if (!__DEV__) return;
+  const status = (err as { response?: { status?: number } } | undefined)?.response?.status;
+  const kind = err instanceof Error ? err.name : typeof err;
+  console.warn(label, { status: status ?? null, kind });
+}
+
+export default function RoleSelectionScreen({ route }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  // Retry mode: signup created the account but the backend reported
+  // `invite_attached:false`. The code field is mandatory here so the client
+  // cannot slide past without a coach; there is an explicit, labelled
+  // "continue without a coach" only when the live policy allows codeless.
+  const attachRetryReason = route?.params?.inviteAttachError;
+  const isAttachRetry = typeof attachRetryReason === 'string';
   const [loading, setLoading] = useState(false);
-  const [requireInviteCode, setRequireInviteCode] = useState(true);
-  const [inviteCode, setInviteCode] = useState('');
+  const [requireInviteCode, setRequireInviteCode] = useState(
+    () => (getLastKnownSignupPolicy() ?? UNKNOWN_SIGNUP_POLICY).inviteCodeRequired,
+  );
+  const [inviteCode, setInviteCode] = useState(route?.params?.inviteCode ?? '');
   const [invitePreview, setInvitePreview] = useState<InvitePreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [error, setError] = useState('');
+  const [cachedCoachId, setCachedCoachId] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
     (async () => {
-      try {
-        const res = await authApi.getSignupPolicy();
-        if (!mounted) return;
-        setRequireInviteCode(res.data?.require_invite_code ?? true);
-      } catch {
-        if (!mounted) return;
-        setRequireInviteCode(true);
-      }
+      // Shared reader (audit A1): reuses the policy CreateAccount already
+      // fetched when this GET fails, and never invents a code requirement.
+      const { policy } = await loadSignupPolicy(() => authApi.getSignupPolicy());
+      if (!mounted) return;
+      setRequireInviteCode(policy.inviteCodeRequired);
 
+      // B4: never in retry mode. A failed attach to coach B must not be
+      // silently skipped because the user is already linked to coach A; the
+      // retry screen offers an explicit "Keep my current coach" instead.
+      try {
+        const u0 = await readUserCache();
+        if (mounted) setCachedCoachId(typeof u0?.coach_id === 'string' ? u0.coach_id : null);
+      } catch {
+        // ignore
+      }
       // If the user already has a coach attached (e.g. they signed up with
       // an invite code, or it was attached during Google sign-in), skip role
       // selection entirely — the backend already knows their coach and the
@@ -60,7 +90,7 @@ export default function RoleSelectionScreen(_: Props) {
       try {
         const u = await readUserCache();
       if (u) {
-          if (mounted && u?.coach_id) {
+          if (mounted && u?.coach_id && !isAttachRetry) {
             await AsyncStorage.removeItem('needs_role_selection');
             authEvents.emit();
             return;
@@ -83,13 +113,10 @@ export default function RoleSelectionScreen(_: Props) {
     }
     setPreviewLoading(true);
     try {
-      try {
-        const res = await authApi.getInvitePreview(trimmed);
-        setInvitePreview(res.data ?? null);
-      } catch {
-        const res = await authApi.validateInviteCode(trimmed);
-        setInvitePreview(res.data ?? null);
-      }
+      // Preview only (resolves both code families); no validate fallback,
+      // which would mislabel a permanent CoachProfile code as invalid.
+      const res = await authApi.getInvitePreview(trimmed);
+      setInvitePreview(res.data ?? null);
     } catch {
       setInvitePreview(null);
     } finally {
@@ -97,59 +124,130 @@ export default function RoleSelectionScreen(_: Props) {
     }
   };
 
-  const handleContinue = async () => {
-    setError('');
-    const trimmed = inviteCode.trim();
+  // Merge the server-confirmed role / coach into the cached user.
+  const persistRole = async (role: string | undefined, coachId: string | null | undefined) => {
+    const user = await readUserCache();
+    if (!user) return;
+    if (role) user.role = role as typeof user.role;
+    if (coachId) user.coach_id = coachId;
+    await setUserCache(user);
+    // P1-1 (PR #192): purge any orphan persisted cache blobs written under a
+    // stale boot-time key before the first persistence pass for this user.
+    await purgePersistedQueryCacheForAllUsers();
+  };
 
-    if (requireInviteCode && !trimmed) {
+  // Re-audit R3: a server-confirmed attachment is remembered here, in
+  // session state that does not depend on the local cache write. Once set,
+  // Continue retries only persistence + role completion and never calls
+  // attachInviteCode again (a second call would consume another use of a
+  // bounded code or be rejected for an exhausted single-use code).
+  const attachedRef = useRef<{ role: string; coachId: string | null } | null>(null);
+  const [attached, setAttached] = useState<{ role: string; coachId: string | null } | null>(null);
+  const inFlightRef = useRef(false);
+
+  const finishAfterAttach = async (confirmed: { role: string; coachId: string | null }) => {
+    await persistRole(confirmed.role, confirmed.coachId);
+    // Finalize role selection WITHOUT a code (no second redemption). The
+    // attach already set the role on the server, so a failure here is not
+    // fatal and is not retried as a redemption.
+    try {
+      const fin = await authApi.selectRole('student', undefined);
+      if (typeof fin?.data?.role === 'string') await persistRole(fin.data.role, fin.data.coach_id);
+    } catch (finErr) {
+      logRedacted('selectRole finalize after attach failed', finErr);
+    }
+    await AsyncStorage.removeItem('needs_role_selection');
+    authEvents.emit();
+  };
+
+  const handleKeepCurrentCoach = async () => {
+    await AsyncStorage.removeItem('needs_role_selection');
+    authEvents.emit();
+  };
+
+  const handleContinue = async (opts: { skipCode?: boolean } = {}) => {
+    if (inFlightRef.current) return;
+    setError('');
+
+    // R3: already connected on the server; only finish locally.
+    const confirmed = attachedRef.current;
+    if (confirmed) {
+      inFlightRef.current = true;
+      setLoading(true);
+      try {
+        await finishAfterAttach(confirmed);
+      } catch (err) {
+        logRedacted('finish sign-up after attach failed', err);
+        const msg = 'You are connected to your coach. We could not finish saving sign-up on this device. Tap Finish sign-up to try again.';
+        setError(msg);
+        Alert.alert('Connected, finishing sign-up', msg);
+      } finally {
+        inFlightRef.current = false;
+        setLoading(false);
+      }
+      return;
+    }
+
+    const trimmed = opts.skipCode ? '' : inviteCode.trim();
+
+    if ((requireInviteCode || (isAttachRetry && !opts.skipCode)) && !trimmed) {
       setError('Enter the invite code your coach shared.');
       return;
     }
 
+    inFlightRef.current = true;
     setLoading(true);
+    // Audit A2: exactly ONE redemption. `attachInviteCode` resolves both
+    // code families (permanent CoachProfile GP- links and InviteCode rows),
+    // consumes one use, and sets {role:'student', coach_id} on the server.
+    // It is never followed by selectRole(code). Any attach failure, 4xx or
+    // transient, is shown to the user; nothing falls through to a second
+    // redemption.
+    let stage: 'attach' | 'finish' = 'attach';
     try {
-      // If a code was supplied, attach it before completing role selection.
-      //
-      // Audit fix H-4: the attachInviteCode call used to swallow every
-      // failure silently and rely on the second-line selectRole call
-      // to surface bad-code errors. That worked in practice — the
-      // server re-validates inside selectRole — but if the contracts
-      // ever drift, a partial signup with no coach link goes
-      // undetected. We now special-case 4xx (an invalid / expired /
-      // capped code) and re-throw so the outer catch surfaces the
-      // server message verbatim. Transient failures (5xx, network)
-      // still fall through so selectRole can retry — this preserves
-      // the resilience the comment described.
       if (trimmed) {
-        try {
-          await authApi.attachInviteCode(trimmed);
-        } catch (err) {
-          const status =
-            (err as { response?: { status?: number } } | undefined)?.response?.status ?? 0;
-          if (status >= 400 && status < 500) throw err;
-          if (__DEV__) {
-            console.warn('attachInviteCode transient failure, retrying via selectRole', err);
-          }
-        }
+        const res = await authApi.attachInviteCode(trimmed);
+        const data = (res?.data ?? {}) as { role?: string; coach_id?: string | null };
+        const confirmedNow = {
+          role: typeof data.role === 'string' ? data.role : 'student',
+          coachId: typeof data.coach_id === 'string' ? data.coach_id : null,
+        };
+        attachedRef.current = confirmedNow;
+        setAttached(confirmedNow);
+        stage = 'finish';
+        await finishAfterAttach(confirmedNow);
+      } else {
+        const res = await authApi.selectRole('student', undefined);
+        await persistRole(res.data.role, res.data.coach_id);
+        await AsyncStorage.removeItem('needs_role_selection');
+        authEvents.emit();
       }
-
-      const res = await authApi.selectRole('student', trimmed || undefined);
-      const user = await readUserCache();
-      if (user) {
-        user.role = res.data.role;
-        if (res.data.coach_id) user.coach_id = res.data.coach_id;
-        await setUserCache(user);
-        // P1-1 (PR #192): purge any orphan persisted cache blobs written under a
-        // stale boot-time key before the first persistence pass for this user.
-        await purgePersistedQueryCacheForAllUsers();
-      }
-      await AsyncStorage.removeItem('needs_role_selection');
-      authEvents.emit();
     } catch (err) {
-      const msg = errorMessage(err, 'Could not complete sign-up. Please try again.');
+      if (stage === 'finish') {
+        logRedacted('finish sign-up after attach failed', err);
+        const msg = 'You are connected to your coach. We could not finish saving sign-up on this device. Tap Finish sign-up to try again.';
+        setError(msg);
+        Alert.alert('Connected, finishing sign-up', msg);
+        return;
+      }
+      const r = err as {
+        response?: { status?: number; data?: { reason?: string; code?: string; message?: string } };
+      };
+      const status = r?.response?.status ?? 0;
+      // A 4xx on the attach/select call is an invite problem (bad, expired,
+      // used-up code, coach unavailable): show friendly copy, never the raw
+      // server string.
+      const msg =
+        trimmed && status >= 400 && status < 500
+          ? inviteAttachErrorMessage(
+              r.response?.data?.reason ?? r.response?.data?.code ?? r.response?.data?.message ?? 'invalid',
+            )
+          : errorMessage(err, 'Could not complete sign-up. Please try again.');
       setError(msg);
-      Alert.alert('Sign-up unavailable', msg);
+      if (isAttachRetry) Alert.alert('Coach not connected yet', msg);
+      else Alert.alert('Sign-up unavailable', msg);
     } finally {
+      inFlightRef.current = false;
       setLoading(false);
     }
   };
@@ -161,8 +259,20 @@ export default function RoleSelectionScreen(_: Props) {
       <View style={styles.header}>
         <Text style={styles.greeting}>One more step.</Text>
         <Text style={styles.title}>Pair with your coach</Text>
+        {isAttachRetry ? (
+          <View
+            style={styles.retryBox}
+            accessible
+            accessibilityRole="alert"
+            testID="invite-attach-retry-banner"
+          >
+            <Text style={styles.retryText}>{inviteAttachErrorMessage(attachRetryReason)}</Text>
+          </View>
+        ) : null}
         <Text style={styles.subtitle}>
-          {requireInviteCode
+          {isAttachRetry
+            ? 'Enter your invite code to connect to your coach.'
+            : requireInviteCode
             ? 'Enter the invite code your coach shared. This connects you to their roster.'
             : 'If your coach shared an invite code, enter it now. Otherwise continue.'}
         </Text>
@@ -184,8 +294,25 @@ export default function RoleSelectionScreen(_: Props) {
             autoCapitalize="characters"
             autoCorrect={false}
             accessibilityLabel="Coach invite code"
+            testID="role-invite-code-input"
+            editable={!attached}
           />
-          {previewLoading ? (
+          <PasteInviteCodeButton
+            disabled={loading || !!attached}
+            testID="role-paste-invite-code"
+            onCode={(code) => {
+              setError('');
+              setInviteCode(code);
+              setInvitePreview(null);
+              void previewCode(code);
+            }}
+            onNoCode={(message) => setError(message)}
+          />
+          {attached ? (
+            <Text style={styles.invitePreviewOk} testID="role-attached-note">
+              Connected, finishing sign-up.
+            </Text>
+          ) : previewLoading ? (
             <Text style={styles.invitePreviewMuted}>Checking code…</Text>
           ) : invitePreview?.valid ? (
             <Text style={styles.invitePreviewOk}>
@@ -202,18 +329,45 @@ export default function RoleSelectionScreen(_: Props) {
 
         <TouchableOpacity
           style={[styles.continueBtn, loading && styles.btnDisabled]}
-          onPress={handleContinue}
+          onPress={() => handleContinue()}
           disabled={loading}
           activeOpacity={0.85}
           accessibilityRole="button"
-          accessibilityLabel="Continue"
+          accessibilityLabel={attached ? 'Finish sign-up' : isAttachRetry ? 'Connect to my coach' : 'Continue'}
+          testID="role-continue"
         >
           {loading ? (
             <ActivityIndicator color={colors.textOnPrimary} />
           ) : (
-            <Text style={styles.continueText}>Continue</Text>
+            <Text style={styles.continueText}>
+              {attached ? 'Finish sign-up' : isAttachRetry ? 'Connect to my coach' : 'Continue'}
+            </Text>
           )}
         </TouchableOpacity>
+
+        {isAttachRetry && cachedCoachId && !attached ? (
+          <TouchableOpacity
+            onPress={handleKeepCurrentCoach}
+            disabled={loading}
+            accessibilityRole="button"
+            accessibilityLabel="Keep my current coach"
+            testID="role-keep-current-coach"
+          >
+            <Text style={styles.skipText}>Keep my current coach</Text>
+          </TouchableOpacity>
+        ) : null}
+
+        {isAttachRetry && !requireInviteCode && !cachedCoachId && !attached ? (
+          <TouchableOpacity
+            onPress={() => handleContinue({ skipCode: true })}
+            disabled={loading}
+            accessibilityRole="button"
+            accessibilityLabel="Continue without a coach for now"
+            testID="role-skip-coach"
+          >
+            <Text style={styles.skipText}>Continue without a coach for now</Text>
+          </TouchableOpacity>
+        ) : null}
 
         <View style={styles.coachNote}>
           <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
@@ -285,6 +439,16 @@ const makeStyles = (colors: ThemeColors) =>
   invitePreviewBad: { fontSize: 13, color: colors.error, marginTop: 4 },
   invitePreviewMuted: { fontSize: 13, color: colors.textMuted, marginTop: 4 },
   errorText: { fontSize: 13, color: colors.error, marginTop: 4 },
+  retryBox: {
+    backgroundColor: colors.surface,
+    borderLeftWidth: 2,
+    borderLeftColor: colors.error,
+    borderRadius: 4,
+    padding: 12,
+    marginVertical: 12,
+  },
+  retryText: { ...typography.bodySmall, color: colors.textPrimary },
+  skipText: { ...typography.bodySmall, color: colors.textMuted, textAlign: 'center', paddingVertical: 8 },
   continueBtn: {
     backgroundColor: colors.primary,
     borderRadius: 4,

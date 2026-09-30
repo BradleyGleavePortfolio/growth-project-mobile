@@ -47,7 +47,7 @@ const ROUTES: Route[] = [
   // Auth ─────────────────────────────────────────────────────────────────────
   { method: 'GET',  pattern: /^\/auth\/me$/,                handler: () => DEMO_AUTH_ME },
   { method: 'GET',  pattern: /^\/auth\/signup-policy$/,
-    handler: () => ({ require_invite_code: false, google_signin_enabled: true }) },
+    handler: () => ({ invite_code_required: false, coach_code_required: false, providers: ['email', 'google', 'apple'] }) },
 
   // Profile / preferences ────────────────────────────────────────────────────
   { method: 'GET',  pattern: /^\/profile$/,                 handler: () => DEMO_USER.profile },
