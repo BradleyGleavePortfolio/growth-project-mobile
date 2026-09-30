@@ -115,6 +115,48 @@ describe('ImportRunStatusJourney', () => {
     await on.unmount();
   });
 
+  describe('S15a no_usable_result', () => {
+    const noUsable = (over: Record<string, unknown> = {}) => ({
+      view: 'reading',
+      reading: { intentId: 'intent-1', status: 'failed', mode: 'server', phase: null, reasonCode: 'no_usable_result', claimedStatus: null, completedAt: '2026-01-01T00:00:00Z', startedAt: null, ...over },
+    });
+    const ROMAN = 'I couldn’t bring anything usable into TGP from this import, so nothing is ready to use yet. On your computer, check that you’re signed in to your previous platform and can see your client records there, then run the import again.';
+    const NEUTRAL = 'Nothing usable was brought into TGP from this import, so nothing is ready to use yet. On your computer, check that you’re signed in to your previous platform and can see your client records there, then run the import again.';
+    const REASON = 'Reason: Nothing usable was imported: nothing that was found could be turned into records you can use in TGP.';
+
+    it('Roman on → server failed title/body, the exact reason, and Roman\'s own next-step voice as a distinct node', async () => {
+      flags.romanChat = true;
+      mockRunState = noUsable();
+      const v = await render(<ImportRunStatusJourney importIntentId="intent-1" />);
+      expect(v.getByRole('header')).toHaveTextContent('Import didn’t finish');
+      expect(v.getByText('This import ended without bringing your data across.')).toBeTruthy();
+      expect(v.getByText(REASON)).toBeTruthy();
+      expect(v.getByText(ROMAN)).toBeTruthy();
+      expect(v.queryByText(NEUTRAL)).toBeNull();
+      // Never a success claim or a not-recognised fallback for this known code.
+      expect(v.queryByText(/ready to use\./)).toBeNull();
+      expect(v.queryByText(/Not recognised/)).toBeNull();
+    });
+
+    it('Roman off → identical facts, neutral voice', async () => {
+      flags.romanChat = false;
+      mockRunState = noUsable();
+      const v = await render(<ImportRunStatusJourney importIntentId="intent-1" />);
+      expect(v.getByRole('header')).toHaveTextContent('Import didn’t finish');
+      expect(v.getByText(REASON)).toBeTruthy();
+      expect(v.getByText(NEUTRAL)).toBeTruthy();
+      expect(v.queryByText(ROMAN)).toBeNull();
+    });
+
+    it.each([['transfer_failed'], [null], ['unknown']])('a failed run with reason %p never shows the no-usable voice', async (reasonCode) => {
+      flags.romanChat = true;
+      mockRunState = noUsable({ reasonCode });
+      const v = await render(<ImportRunStatusJourney importIntentId="intent-1" />);
+      expect(v.queryByText(ROMAN)).toBeNull();
+      expect(v.queryByText(NEUTRAL)).toBeNull();
+    });
+  });
+
   it('Check again calls the real run.refresh — no fabricated no-op', async () => {
     mockRunState = { view: 'reading', reading: { intentId: 'intent-1', status: 'failed', mode: 'server', phase: null, reasonCode: null, claimedStatus: null, completedAt: null, startedAt: null } };
     const v = await render(<ImportRunStatusJourney importIntentId="intent-1" />);

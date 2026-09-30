@@ -92,6 +92,10 @@
       "title": "Import did not complete",
       "body": "Review the confirmed records and the items that could not be completed."
     },
+    "noUsable": {
+      "roman": "I couldn’t bring anything usable into TGP from this import, so nothing is ready to use yet. On your computer, check that you’re signed in to your previous platform and can see your client records there, then run the import again.",
+      "neutral": "Nothing usable was brought into TGP from this import, so nothing is ready to use yet. On your computer, check that you’re signed in to your previous platform and can see your client records there, then run the import again."
+    },
     "interrupted": {
       "title": "Import was interrupted",
       "body": "The current result needs to be checked before another attempt."

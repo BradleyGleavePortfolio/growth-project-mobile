@@ -25,8 +25,11 @@ stacked on P1 `003a9774083812a465fbc78a99aaba5ca16ccfa5`, not main.
   RNWeb harness, CI and connected imports. Historical WIP RNWeb results are not
   adopted as repair-head evidence. No integration or publication authorization.
 
-Controlled leaf views only. No production registration, service, storage, provider,
+Controlled leaf views. The views themselves own no service, storage, provider,
 polling, timer, authority cache, IDs, URLs, source-opening, Start, retry or routing.
+They are no longer unregistered: `ImportRunStatusJourney` mounts `ImportProgressBody` /
+`ImportResultBody` inside the `EXPO_PUBLIC_FF_EXTENSION_IMPORT`-gated `ImportData` route
+(default OFF); see `README.md` (doc drift D-05). Polling lives in `useImportRunStatus`.
 P2 extends the English dictionary without changing existing P1 text. P1 screens,
 shared primitives and interaction tests are preserved; the original P1-only copy
 test now scopes its same assertions to its original five dictionary groups.
