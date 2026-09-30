@@ -147,6 +147,7 @@ export function AIBudgetMount({
             visible
             budget={budget}
             onClose={() => setTutorialSeen(true)}
+            purchasesHidden={purchasesHidden}
             onSelectPack={(amount) => {
               setTutorialSeen(true);
               goToCheckout(amount);
@@ -158,6 +159,7 @@ export function AIBudgetMount({
             visible
             budget={budget}
             onClose={() => setHardPauseDismissed(true)}
+            purchasesHidden={purchasesHidden}
             onSelectPack={(amount) => {
               setHardPauseDismissed(true);
               goToCheckout(amount);

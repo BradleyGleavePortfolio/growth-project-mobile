@@ -34,7 +34,7 @@
  *    `clientPaymentsApi.createBillingPortalSession()` is still available
  *    for any future surface that needs to mint a portal URL on demand.
  *  - Tapping a package opens Stripe Checkout in the branded in-app
- *    webview (Apple Rule 3.1.3(b)/(e) B2B exemption). The success /
+ *    webview (basis: Guideline 3.1.3(d), real-time 1:1). The success /
  *    cancel deep links are intercepted by the webview screen and routed
  *    via `CheckoutReturn`; this screen refreshes payment-status on focus.
  */
@@ -228,8 +228,8 @@ export default function ClientPackagesScreen() {
           );
           return;
         }
-        // Apple Rule 3.1.3(b)/(e) B2B exemption: open Stripe Checkout in
-        // a branded in-app webview so the user never leaves the app.
+        // Guideline 3.1.3(d): real-time 1:1 coaching may be paid outside IAP.
+        // Stripe Checkout opens in the branded in-app webview (UX, not the basis).
         navigateToBrandedCheckout({
           checkoutUrl: res.data.url,
           packageName: pkg.name,
@@ -248,8 +248,8 @@ export default function ClientPackagesScreen() {
 
   const handleUpdateCard = useCallback(() => {
     if (!status?.ok || !status.data.dunning?.update_card_url) return;
-    // Stripe Billing Portal is a payment surface (Rule 8 / Apple B2B
-    // exemption): keep it inside the branded in-app webview so the user
+    // Stripe Billing Portal for the client's 1:1 package (Guideline
+    // 3.1.3(d); the webview is UX, not the basis): keep it in the branded webview so the user
     // never leaves the app. The portal redirects back to
     // `com.growthproject.app://` on save, which the webview's deep-link
     // gate intercepts and routes to CheckoutReturn — payment-status is

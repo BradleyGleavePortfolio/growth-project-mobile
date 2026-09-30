@@ -282,7 +282,7 @@ export type MoreStackParamList = {
   CheckoutReturn: { outcome?: 'success' | 'cancel'; session_id?: string };
   /**
    * Payments — branded in-app Stripe Checkout webview. See screen docstring
-   * for the Apple Rule 3.1.3(b)/(e) B2B exemption rationale.
+   * (basis for 1:1 packages: Guideline 3.1.3(d); the webview is not an exemption).
    */
   BrandedCheckoutWebView: BrandedCheckoutWebViewParams;
   /** iMessage-grade DM — Apple 1.2 compliance contact details surface. */
@@ -475,7 +475,7 @@ function MoreStackNavigator() {
       {/* PR-15B — post-checkout unpack moment. Reachable from
           CheckoutReturnScreen on a successful confirm. */}
       <MoreStackNav.Screen name="PurchaseUnpack"  component={PurchaseUnpackScreen} />
-      {/* Branded in-app webview checkout (Apple B2B exemption — see screen docstring). */}
+      {/* Branded in-app webview checkout (1:1 packages, Guideline 3.1.3(d); see screen docstring). */}
       <MoreStackNav.Screen
         name="BrandedCheckoutWebView"
         component={BrandedCheckoutWebViewScreen}

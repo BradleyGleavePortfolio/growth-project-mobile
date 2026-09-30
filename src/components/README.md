@@ -52,6 +52,8 @@ There is no global floating chat widget here, and no celebration / trophy chrome
 | `CalorieRing.tsx`, `MacroBar.tsx`, `WaterTracker.tsx` | Hand-rolled SVG charts with no third-party chart lib. |
 | `MealCard.tsx`, `FoodImage.tsx`, `ExerciseLogModal.tsx` | Per-domain primitives. |
 | `DaySelector.tsx` | Horizontal day picker with `getTodayString` ergonomics. |
+| `purchases/NonP2PPurchaseHidden.tsx`, `purchases/withNonP2PPurchaseGate.tsx` | Neutral "Not available in this app" state and a route wrapper for non-P2P purchase screens on iOS (see `src/config/purchaseSurfaces.ts`). |
+| `coach/ai-budget/*` | AI usage meter, 95% banner, 80% tutorial and hard-pause modal. When `nonP2PPurchasesHidden()` is true, the meter is a non-interactive readout with neutral accessibility copy, the banner has no CTA, the tutorial shows three usage-only cards ending in "Done", and the hard pause says when AI resumes. None of them mentions packs, buying or top-ups. |
 
 ## Data flow
 

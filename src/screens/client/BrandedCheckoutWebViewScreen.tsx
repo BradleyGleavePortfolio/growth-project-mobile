@@ -1,5 +1,6 @@
 /**
- * BrandedCheckoutWebViewScreen — branded in-app Stripe checkout (B2B exemption).
+ * BrandedCheckoutWebViewScreen — branded in-app Stripe checkout for client 1:1
+ * packages (Guideline 3.1.3(d); the webview itself confers no exemption).
  *
  * Why this exists:
  *   - Apple App Review Rule 3.1.3(b)/(e) ("Multiplatform / Enterprise B2B")
@@ -113,7 +114,8 @@ export const CHECKOUT_ALLOWED_HOSTS: readonly string[] = [
   // Stripe Customer Billing Portal — past-due clients tap "Update card"
   // in the dunning banner and the backend mints a billing.stripe.com
   // session URL. Keeping this in the branded webview avoids punting to
-  // Safari and preserves the Apple B2B exemption posture.
+  // Safari. The filing basis for client 1:1 packages is Guideline
+  // 3.1.3(d); this allow-list is a host check, not product classification.
   'billing.stripe.com',
 ];
 

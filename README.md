@@ -393,6 +393,12 @@ src/
 
 ## Navigation
 
+**iOS purchase surfaces.** `src/config/purchaseSurfaces.ts` is the single gate.
+- Client 1:1 coach packages stay available on iOS (Guideline 3.1.3(d), Stripe).
+- Coach AI credit packs, coach plan/seat upgrade instructions, billing-portal CTAs, and payment or non-attendance community links are hidden on iOS when `nonP2PPurchasesHidden()` is true.
+- The gate fails closed. It needs the bundle flag `EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES` to be explicitly `false` **and** a native build below 6. Build 6 and later always hide, so an OTA update cannot turn these purchases on.
+- API requests send `X-Client-Platform`, `X-Client-Native-Build` and `X-Client-Purchase-Policy` for server-side enforcement.
+
 Bottom tabs are icons-only (no labels). Four tabs, in order:
 
 1. **Home** — accessibility label `Home`, route name `Home`. Wraps `HomeStack` (`HomeMain`, `Habits`, `Notifications`, `Messages`).
