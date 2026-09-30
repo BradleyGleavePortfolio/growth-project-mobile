@@ -19,8 +19,8 @@
  * Phase 9: Bell icon in HomeStack header routes to NotificationCenter.
  *   NotificationCenter and NotificationPreferences added to HomeStackParamList.
  */
-import React, { useEffect, useState } from 'react';
-import { AppState, TouchableOpacity, View } from 'react-native';
+import React from 'react';
+import { View } from 'react-native';
 import { StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -94,10 +94,6 @@ import WorkoutAssignmentDetailScreen from '../screens/client/WorkoutAssignmentDe
 // Phase 9 — Notification center
 import NotificationCenterScreen from '../screens/notifications/NotificationCenterScreen';
 import NotificationPreferencesScreen from '../screens/notifications/NotificationPreferencesScreen';
-import NotificationBadge from '../components/NotificationBadge';
-import { fetchUnreadCount } from '../services/notificationsApi';
-import { logger } from '../utils/logger';
-import { normalizeError } from '../screens/client/_completionLogging';
 // Phase 10 — GDPR Article 20 data portability
 import DataExportScreen from '../screens/settings/DataExportScreen';
 // Payments — client-facing packages + checkout return (backend PR #215).
@@ -137,6 +133,7 @@ import UnreadBadge from '../components/community/UnreadBadge';
 // the entitlement gate runs before the screen body. Server-side
 // ClientEntitlementGuard remains canonical (Rule 20).
 import { withProtectedScreen } from '../entitlements/withProtectedScreen';
+import { withPurchaseSurfaceGate } from '../entitlements/withPurchaseSurfaceGate';
 
 const ProtectedWorkoutScreen = withProtectedScreen(WorkoutScreen);
 const ProtectedActiveWorkoutScreen = withProtectedScreen(ActiveWorkoutScreen);
@@ -152,6 +149,11 @@ const ProtectedAIGuideScreen = withProtectedScreen(AIGuideScreen);
 const ProtectedMessagesScreen = withProtectedScreen(MessagesScreen);
 const ProtectedClientBookingRequestScreen = withProtectedScreen(ClientBookingRequestScreen);
 const ProtectedClientUpcomingSessionsScreen = withProtectedScreen(ClientUpcomingSessionsScreen);
+// Clinic launch (App Review 3.1): purchase screens render the neutral
+// invite-code state on iOS while EXPO_PUBLIC_FF_IOS_HIDE_PURCHASES is on.
+const GatedClientPackagesScreen = withPurchaseSurfaceGate(ClientPackagesScreen);
+const GatedPackageCheckoutScreen = withPurchaseSurfaceGate(PackageCheckoutScreen);
+const GatedBrandedCheckoutWebViewScreen = withPurchaseSurfaceGate(BrandedCheckoutWebViewScreen);
 
 // ─── Param lists ──────────────────────────────────────────────────────────────
 
@@ -313,41 +315,6 @@ export type MoreStackParamList = {
   };
 };
 
-// ─── Phase 9: unread count polling for the bell icon ─────────────────────────
-
-function useClientUnreadCount(): number {
-  const [count, setCount] = useState(0);
-  useEffect(() => {
-    let mounted = true;
-    const refresh = async () => {
-      try {
-        const n = await fetchUnreadCount();
-        if (mounted) setCount(n);
-      } catch (error) {
-        // Non-fatal: the badge keeps its last-known count on a failed poll.
-        // Surfaced for diagnosis rather than swallowed (R69) so a persistently
-        // failing unread-count fetch is visible instead of silently stale.
-        logger.warn('clientNavigator.unread-count', {
-          route: 'ClientNavigator',
-          action: 'fetch-unread-count',
-          error: normalizeError(error),
-        });
-      }
-    };
-    refresh();
-    const interval = setInterval(refresh, 30000);
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') refresh();
-    });
-    return () => {
-      mounted = false;
-      clearInterval(interval);
-      sub.remove();
-    };
-  }, []);
-  return count;
-}
-
 // ─── Stack navigators ─────────────────────────────────────────────────────────
 
 const Tab           = createBottomTabNavigator<ClientTabParamList>();
@@ -356,33 +323,15 @@ const WorkoutStackNav = createNativeStackNavigator<WorkoutStackParamList>();
 const MoreStackNav  = createNativeStackNavigator<MoreStackParamList>();
 
 function HomeStackNavigator() {
-  const unreadCount = useClientUnreadCount();
+  // The Home stack runs headerShown:false, so a headerRight bell here never
+  // rendered (dead UI). The bell + "Message your coach" entry now live in the
+  // Home screen body (components/home/HomeHeaderActions).
   return (
     <HomeStackNav.Navigator
-      screenOptions={({ navigation }) => ({
+      screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: colors.bone },
-        // Phase 9: bell icon injected into every screen in the Home stack.
-        // We use a custom header right rather than showing the header title,
-        // so each screen continues to render its own title.
-        headerRight: () => (
-          <TouchableOpacity
-            onPress={() => navigation.navigate('NotificationCenter')}
-            style={styles.bellButton}
-            accessibilityRole="button"
-            accessibilityLabel={
-              unreadCount > 0
-                ? `Notifications, ${unreadCount > 99 ? '99+' : unreadCount} unread`
-                : 'Notifications'
-            }
-          >
-            <View style={styles.bellWrap}>
-              <Ionicons name="notifications-outline" size={24} color={colors.ink} />
-              <NotificationBadge count={unreadCount} />
-            </View>
-          </TouchableOpacity>
-        ),
-      })}
+      }}
     >
       <HomeStackNav.Screen name="HomeMain"              component={HomeScreen} />
       <HomeStackNav.Screen name="Habits"                component={HabitsScreen} />
@@ -526,7 +475,7 @@ function MoreStackNavigator() {
       {/* Payments — client-facing packages list + Stripe Checkout return
           (backend PR #215). The return screen is the deep-link target for
           tgp://checkout/{success,cancel}; see RootNavigator.linking. */}
-      <MoreStackNav.Screen name="ClientPackages"  component={ClientPackagesScreen} />
+      <MoreStackNav.Screen name="ClientPackages"  component={GatedClientPackagesScreen} />
       <MoreStackNav.Screen name="CheckoutReturn"  component={CheckoutReturnScreen} />
       {/* PR-13 — buyer-facing Deliverables timeline (drip engine surface). */}
       <MoreStackNav.Screen name="Deliverables"    component={DeliverablesScreen} />
@@ -536,7 +485,7 @@ function MoreStackNavigator() {
       {/* Branded in-app webview checkout (Apple B2B exemption — see screen docstring). */}
       <MoreStackNav.Screen
         name="BrandedCheckoutWebView"
-        component={BrandedCheckoutWebViewScreen}
+        component={GatedBrandedCheckoutWebViewScreen}
         options={{ presentation: 'modal', headerShown: false, gestureEnabled: false }}
       />
       {/* iMessage-grade DM — Apple App Review 1.2 compliance surfaces. */}
@@ -558,7 +507,7 @@ function MoreStackNavigator() {
           and from the MembershipScreen. */}
       <MoreStackNav.Screen
         name="PackageCheckout"
-        component={PackageCheckoutScreen}
+        component={GatedPackageCheckoutScreen}
         options={{ presentation: 'modal' }}
       />
     </MoreStackNav.Navigator>
@@ -669,17 +618,6 @@ export default function ClientNavigator() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  bellButton: {
-    marginRight: 16,
-    padding: 4,
-  },
-  bellWrap: {
-    position: 'relative',
-    width: 28,
-    height: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
   communityIconWrap: {
     position: 'relative',
     width: 28,

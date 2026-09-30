@@ -23,7 +23,9 @@ import { registerPushChannels } from './src/notifications/push-channels';
 import {
   registerForPushNotifications,
   installForegroundHandler,
+  installNotificationResponseHandler,
 } from './src/services/pushNotifications';
+import { routePushTap } from './src/services/pushTapRouter';
 import { usersApi } from './src/services/api';
 import { authEvents } from './src/utils/authEvents';
 import { secureStorage } from './src/services/secureStorage';
@@ -115,17 +117,30 @@ function App() {
     initApp();
   }, []);
 
+  // Push taps (background + cold start) route through pushTapRouter, which
+  // RootNavigator feeds with its NavigationContainer ref. Installed ONCE at
+  // the app root; before this the handler existed but was never called, so
+  // tapping a push did nothing.
+  useEffect(() => {
+    if (isScreenshotMode()) return undefined;
+    return installNotificationResponseHandler(routePushTap);
+  }, []);
+
   // Register the Expo push token with the backend whenever the user signs in.
   // authEvents fires after every successful auth state change (login, token
   // refresh, etc.). We gate on a valid supabase_token so we don't fire on
   // the unauthenticated path. Best-effort: push registration failure must
   // never block the app boot.
+  //
+  // Rule 28: this path NEVER shows the OS permission prompt. It only
+  // registers the token when permission is already granted. The prompt is
+  // deferred to the post-onboarding Home card (PushPermissionCard).
   useEffect(() => {
     const tryRegisterPushToken = async () => {
       try {
         const token = await secureStorage.getItem('supabase_token');
         if (!token) return; // not authenticated
-        const result = await registerForPushNotifications();
+        const result = await registerForPushNotifications({ requestPermission: false });
         if (result.token) {
           await usersApi.updatePushToken(result.token);
         }

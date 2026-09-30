@@ -30,7 +30,8 @@ describe('AuthCallbackScreen', () => {
     // the landing is idempotent (Home if signed in, Login if not).
     expect(SCREEN_SRC).toMatch(/secureStorage\.getItem\(\s*['"]supabase_token['"]/);
     expect(SCREEN_SRC).toMatch(/navigation\.reset/);
-    expect(SCREEN_SRC).toMatch(/['"]Home['"]/);
+    // Signed in → re-bootstrap via authEvents (the auth stack has no Home).
+    expect(SCREEN_SRC).toMatch(/authEvents\.emit\(\)/);
     expect(SCREEN_SRC).toMatch(/['"]Login['"]/);
   });
 
@@ -42,5 +43,13 @@ describe('AuthCallbackScreen', () => {
 describe('RootNavigator linking config wires auth/callback', () => {
   it('declares the AuthCallback path so tgp://auth/callback is routable', () => {
     expect(ROOT_NAV_SRC).toMatch(/AuthCallback:\s*['"]auth\/callback['"]/);
+  });
+
+  it('is mounted in AuthNavigator so the linking route is live (no dead route)', () => {
+    const AUTH_NAV_SRC = fs.readFileSync(
+      path.join(ROOT, 'src', 'navigation', 'AuthNavigator.tsx'),
+      'utf8',
+    );
+    expect(AUTH_NAV_SRC).toMatch(/<Stack\.Screen name="AuthCallback" component=\{AuthCallbackScreen\} \/>/);
   });
 });

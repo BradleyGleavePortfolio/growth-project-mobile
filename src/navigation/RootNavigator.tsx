@@ -74,6 +74,8 @@ type AuthState =
 import { fragmentToQuery } from './deepLinkUtils';
 import { readUserCache, clearUserCache } from '../lib/userCache';
 import { EntitlementProvider } from '../entitlements/EntitlementProvider';
+import { shouldOfferPackagePrompt } from '../lib/packagePromptGate';
+import { attachPushNavigator, flushPendingPushTap } from '../services/pushTapRouter';
 import { isValidPackageShareToken } from '../utils/packageShare';
 
 // A-2 helper. Convert `https://app.trygrowthproject.com/<path>` to its
@@ -164,12 +166,8 @@ export const linking: LinkingOptions<Record<string, object | undefined>> = {
       // the URL routable. The screen lives at
       // `src/screens/auth/AuthCallbackScreen.tsx` as an idempotent
       // landing stub — on mount it inspects the auth state and
-      // dispatches to Home (authenticated) or Login (not). The screen
-      // is intentionally not yet mounted under AuthNavigator (which
-      // is owned by another lane); when the auth stack is next
-      // refactored, mount the component under this route name. Until
-      // then the linking entry alone is enough to give the parser a
-      // legitimate target so the URL does not silently fail.
+      // re-bootstraps (authenticated) or resets to Login (not). It is
+      // mounted in AuthNavigator under this route name (clinic C10).
       AuthCallback: 'auth/callback',
       CreateAccount: {
         path: 'join/:invite_code?',
@@ -290,6 +288,15 @@ export function extractAcceptInviteToken(url: string): string | null {
 
 export default function RootNavigator() {
   const [authState, setAuthState] = useState<AuthState>('loading');
+
+  // Push-tap routing: hand the container ref to pushTapRouter once, then
+  // replay any held tap whenever the mounted navigator changes (a cold-start
+  // tap waits here until the client/coach navigator is actually up).
+  useEffect(() => attachPushNavigator(navigationRef), []);
+  useEffect(() => {
+    const t = setTimeout(() => flushPendingPushTap(), 0);
+    return () => clearTimeout(t);
+  }, [authState]);
   // S6-P1: the COMMITTED bootstrap identity that authorizes restoring a
   // user's persisted query cache — token present AND cached user readable AND
   // no pending role selection. `undefined` = bootstrap outcome unknown (gate
@@ -734,7 +741,9 @@ export default function RootNavigator() {
             : null;
           if (dismissedAt) {
             const elapsed = Date.now() - new Date(dismissedAt).getTime();
-            if (elapsed > TWENTY_FOUR_HOURS) {
+            if (elapsed > TWENTY_FOUR_HOURS && (await shouldOfferPackagePrompt())) {
+              // Suppressed for active (comp) entitlements and on iOS while
+              // client purchase surfaces are hidden (App Review 3.1).
               setAuthState('package_prompt');
               return;
             }
@@ -814,6 +823,8 @@ export default function RootNavigator() {
   return (
     <NavigationContainer
       ref={navigationRef}
+      onReady={() => flushPendingPushTap()}
+      onStateChange={() => { flushPendingPushTap(); }}
       linking={linking}
       theme={{
         ...DefaultTheme,

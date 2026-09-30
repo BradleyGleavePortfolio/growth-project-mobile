@@ -48,6 +48,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_COMMUNITY_WEARABLE_PROMPTS: process.env.EXPO_PUBLIC_FF_COMMUNITY_WEARABLE_PROMPTS,
   EXPO_PUBLIC_FF_DELIVERABLES: process.env.EXPO_PUBLIC_FF_DELIVERABLES,
   EXPO_PUBLIC_FF_EXTENSION_IMPORT: process.env.EXPO_PUBLIC_FF_EXTENSION_IMPORT,
+  EXPO_PUBLIC_FF_IOS_HIDE_PURCHASES: process.env.EXPO_PUBLIC_FF_IOS_HIDE_PURCHASES,
   EXPO_PUBLIC_FF_IMPORT_REVIEW: process.env.EXPO_PUBLIC_FF_IMPORT_REVIEW,
   EXPO_PUBLIC_FF_MWB_AUTOSAVE: process.env.EXPO_PUBLIC_FF_MWB_AUTOSAVE,
   EXPO_PUBLIC_FF_PRIVATE_COMMUNITY_HUB: process.env.EXPO_PUBLIC_FF_PRIVATE_COMMUNITY_HUB,
@@ -431,6 +432,24 @@ export const featureFlags = {
    * env: EXPO_PUBLIC_FF_IMPORT_REVIEW
    */
   importReview: readFlag('EXPO_PUBLIC_FF_IMPORT_REVIEW', false),
+
+  // ─── Clinic launch (C11) — App Review 3.1 risk removal ───────────────────
+  /**
+   * Hide every client purchase CTA / paywall upsell on iOS. When ON (and the
+   * device is iOS), an inactive client sees a neutral "Ask your coach for an
+   * invite code" state instead of any checkout, package sheet or plan list.
+   * Web purchase flows and Android are untouched; coach screens are untouched.
+   *
+   * Default: ON in release builds (production + preview), OFF in dev so the
+   * checkout flow can still be exercised locally. eas.json also sets it to
+   * "true" explicitly for the preview and production profiles.
+   *
+   * Read through `src/config/purchaseSurfaces.ts` (it adds the iOS check);
+   * do not read this flag directly.
+   *
+   * env: EXPO_PUBLIC_FF_IOS_HIDE_PURCHASES
+   */
+  iosHidePurchases: readFlag('EXPO_PUBLIC_FF_IOS_HIDE_PURCHASES', !isDev),
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;
