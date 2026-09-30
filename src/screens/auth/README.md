@@ -35,7 +35,7 @@ Pre-login surface area: welcome, login, invite-gated signup, password reset, and
 | `POST` | `/auth/forgot-password` | none | `{ email }` | `{ sent: true }` |
 | `POST` | `/auth/validate-invite-code` | none | `{ code }` | `InvitePreview` |
 | `GET` | `/invite/:code/preview` | none | — | `InvitePreview` |
-| `GET` | `/auth/signup-policy` | none | — | `{ require_invite_code, google_signin_enabled }` |
+| `GET` | `/auth/signup-policy` | none | — | `{ invite_code_required, coach_code_required, providers[] }` (read via `lib/signupPolicy.normalizeSignupPolicy`; legacy `require_invite_code` / `google_signin_enabled` are a fallback only) |
 
 ## Screens and state machine
 
@@ -93,7 +93,7 @@ Persisted state, in order of write:
 
 - The mobile build does **not** embed any Google client ID. Sign-in is brokered entirely through Supabase. The OAuth secret lives in the Supabase dashboard.
 - Invite codes are validated server-side. The mobile validation call (`/auth/validate-invite-code`) is a UX preflight; the authoritative check is the `signupWithCode` endpoint, which stamps `coach_id` in the same transaction that creates the user.
-- Codeless signups are allowed only when `/auth/signup-policy` returns `require_invite_code: false`. If the policy fetch fails, the form falls back to the strictest setting — never accidentally let a codeless client through.
+- Codeless signups are allowed only when `/auth/signup-policy` returns `invite_code_required: false`. If the policy fetch fails, the form falls back to the strictest setting — never accidentally let a codeless client through.
 - `RoleSelectionScreen` only ever calls `selectRole('student', …)`. There is no client-side path to elevate to a coach role.
 - Passwords are checked against four rules client-side (length, uppercase, digit, symbol) before submission. The backend re-validates.
 - Raw upstream auth errors are never echoed to the UI. `LoginScreen` and `CreateAccountScreen` route every error through `utils/authErrorMessage.toFriendlyAuthError`, which maps Supabase strings, Google OAuth (`access_denied`, `redirect_uri_mismatch`), network failures, and our backend responses into safe, quiet copy. Cancellations stay silent — no banner, no alert, no jargon. See `src/utils/__tests__/authErrorMessage.test.ts` for the contract.
@@ -114,7 +114,7 @@ Apple Sign-In has no mobile-side env vars — the Apple bundle ID is read from `
 | Symptom | Cause | Recovery |
 | --- | --- | --- |
 | "Cannot reach server" on Login | Backend cold start (Fly.io free tier ~25 s) or no network | Retry — the form keeps state. |
-| "An invite code from your coach is required" | `require_invite_code: true` from policy and the field is empty | User must obtain a code from their coach. |
+| "An invite code from your coach is required" | `invite_code_required: true` from policy and the field is empty | User must obtain a code from their coach. |
 | "That invite code is not valid" | Code expired, revoked, or `max_uses` reached | Coach issues a new code from `coach/InviteCodesScreen`. |
 | "Email not yet verified" on the verify step | User has not opened the Supabase confirmation email | Re-tap the verify button after opening the link. |
 | Google flow returns to the app on a blank screen | Redirect URI not allowlisted in Supabase | Add `tgp://auth/callback` (and the universal-link URL if used) to Supabase auth → URL configuration. |
@@ -142,7 +142,7 @@ npm run lint
 
 - The signup form is invite-gated by default. Reviewers (Play / App Store) cannot self-register; either supply pre-created accounts or a working invite code in the listing's "App access" notes. See `PLAY_STORE_READINESS.md` §9.
 - Welcome surfaces a quiet *"By invitation only — request access"* mailto link, and `CreateAccountScreen` shows a *"Don't have a code? Request access"* hint under the invite-code field when the policy requires one. There is no fake self-serve flow — the access posture is legible.
-- The Google button is hidden when `/auth/signup-policy` returns `google_signin_enabled: false`. This is the kill switch if Supabase OAuth ever needs to be cut without a release.
+- The Google button is shown only when `/auth/signup-policy` `providers` includes `google` (strict default: hidden). This is the kill switch if Supabase OAuth ever needs to be cut without a release.
 - Deep links into the signup screen depend on hosted `assetlinks.json` / `apple-app-site-association`. Until those go live, the `https://` form opens a chooser; the `tgp://` form works because it does not need verification.
 - The Apple Sign-In button renders nothing on Android and on iOS devices where `isAvailableAsync()` returns false (very old hardware, non-Apple-ID accounts). The layout does not shift — the container has a `minHeight: 48` so there is no jump.
 
@@ -150,3 +150,11 @@ npm run lint
 
 - Manual on-device verification of Apple Sign-In requires a real iOS device; the native sheet does not work in most simulator configurations. Confirm on device before marking the PR ready for App Store submission.
 - The Apple Developer portal capability ("Sign In with Apple" on `com.growthproject.app`) must be enabled by the account owner before the production build can call the native sheet. EAS will regenerate the provisioning profile automatically on the next `eas build --platform ios --profile production`.
+
+## Invite attach failures (C03)
+
+`/auth/signup-with-code` (and `/auth/apple`) may return `invite_attached: false` plus `invite_attach_error`. The account exists but has no coach. CreateAccount never continues silently: after email verification (or Apple success) it replaces to `RoleSelection` with `{ inviteAttachError, inviteCode }`. RoleSelection then shows a retry banner with friendly copy (`lib/inviteAttachOutcome.inviteAttachErrorMessage`, never the raw reason), prefills the code, and requires a code to continue. An explicit "Continue without a coach for now" link is offered only when the live policy is codeless.
+
+## Paste invite code
+
+Both CreateAccount and RoleSelection have a "Paste invite code" button (`components/invite/PasteInviteCodeButton`, expo-clipboard). The clipboard is read only on tap. It accepts a bare code (`GP-XXXX`) or a join link (`https://app.trygrowthproject.com/join/<code>`, `tgp://join/<code>`, `?code=`); see `lib/inviteCodeInput.extractInviteCode`.

@@ -19,7 +19,7 @@ import { secureStorage } from '../../services/secureStorage';
 import { authEvents } from '../../utils/authEvents';
 import { track, identify } from '../../lib/analytics';
 import { AnalyticsEvents } from '../../analytics/events';
-import { toFriendlyAuthError } from '../../utils/authErrorMessage';
+import { toFriendlyAuthError, toFriendlyAppleAuthError } from '../../utils/authErrorMessage';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
 import type { NavigationProp, ParamListBase, RouteProp } from '@react-navigation/native';
@@ -159,10 +159,10 @@ export default function LoginScreen({ navigation, route }: Props) {
 
       if (!result.success) {
         if (result.cancelled) return;
-        const friendly = toFriendlyAuthError(result.error);
+        const friendly = toFriendlyAppleAuthError(result.error);
         if (!friendly.cancelled) {
           setError(friendly.message);
-          Alert.alert('Sign-in', friendly.message);
+          Alert.alert('Sign in with Apple', friendly.message);
         }
         return;
       }
@@ -180,7 +180,7 @@ export default function LoginScreen({ navigation, route }: Props) {
         authEvents.emit();
       }
     } catch (err) {
-      const friendly = toFriendlyAuthError(err);
+      const friendly = toFriendlyAppleAuthError(err);
       if (!friendly.cancelled) setError(friendly.message);
     } finally {
       setAppleLoading(false);

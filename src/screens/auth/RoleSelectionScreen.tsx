@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthStackParamList } from '../../navigation/AuthNavigator';
 import { errorMessage } from '../../types/common';
@@ -19,9 +20,13 @@ import { authEvents } from '../../utils/authEvents';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { readUserCache, setUserCache } from '../../lib/userCache';
 import { purgePersistedQueryCacheForAllUsers } from '../../services/queryClient';
+import { normalizeSignupPolicy, STRICT_SIGNUP_POLICY } from '../../lib/signupPolicy';
+import { inviteAttachErrorMessage } from '../../lib/inviteAttachOutcome';
+import PasteInviteCodeButton from '../../components/invite/PasteInviteCodeButton';
 
 type Props = {
   navigation: NativeStackNavigationProp<AuthStackParamList, 'RoleSelection'>;
+  route?: RouteProp<AuthStackParamList, 'RoleSelection'>;
 };
 
 // Role selection is now a client-only flow. Coach and admin promotion are
@@ -31,12 +36,18 @@ type Props = {
 // Rationale: per-seat billing means a client cannot promote themselves into a
 // paid coach tier; only an admin can. Removing the in-app become-coach UI
 // closes the privilege-escalation gap that existed in the prior version.
-export default function RoleSelectionScreen(_: Props) {
+export default function RoleSelectionScreen({ route }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  // Retry mode: signup created the account but the backend reported
+  // `invite_attached:false`. The code field is mandatory here so the client
+  // cannot slide past without a coach; there is an explicit, labelled
+  // "continue without a coach" only when the live policy allows codeless.
+  const attachRetryReason = route?.params?.inviteAttachError;
+  const isAttachRetry = typeof attachRetryReason === 'string';
   const [loading, setLoading] = useState(false);
   const [requireInviteCode, setRequireInviteCode] = useState(true);
-  const [inviteCode, setInviteCode] = useState('');
+  const [inviteCode, setInviteCode] = useState(route?.params?.inviteCode ?? '');
   const [invitePreview, setInvitePreview] = useState<InvitePreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [error, setError] = useState('');
@@ -47,10 +58,10 @@ export default function RoleSelectionScreen(_: Props) {
       try {
         const res = await authApi.getSignupPolicy();
         if (!mounted) return;
-        setRequireInviteCode(res.data?.require_invite_code ?? true);
+        setRequireInviteCode(normalizeSignupPolicy(res.data).inviteCodeRequired);
       } catch {
         if (!mounted) return;
-        setRequireInviteCode(true);
+        setRequireInviteCode(STRICT_SIGNUP_POLICY.inviteCodeRequired);
       }
 
       // If the user already has a coach attached (e.g. they signed up with
@@ -97,11 +108,11 @@ export default function RoleSelectionScreen(_: Props) {
     }
   };
 
-  const handleContinue = async () => {
+  const handleContinue = async (opts: { skipCode?: boolean } = {}) => {
     setError('');
-    const trimmed = inviteCode.trim();
+    const trimmed = opts.skipCode ? '' : inviteCode.trim();
 
-    if (requireInviteCode && !trimmed) {
+    if ((requireInviteCode || (isAttachRetry && !opts.skipCode)) && !trimmed) {
       setError('Enter the invite code your coach shared.');
       return;
     }
@@ -146,9 +157,22 @@ export default function RoleSelectionScreen(_: Props) {
       await AsyncStorage.removeItem('needs_role_selection');
       authEvents.emit();
     } catch (err) {
-      const msg = errorMessage(err, 'Could not complete sign-up. Please try again.');
+      const r = err as {
+        response?: { status?: number; data?: { reason?: string; code?: string; message?: string } };
+      };
+      const status = r?.response?.status ?? 0;
+      // A 4xx on the attach/select call is an invite problem (bad, expired,
+      // used-up code, coach unavailable): show friendly copy, never the raw
+      // server string.
+      const msg =
+        trimmed && status >= 400 && status < 500
+          ? inviteAttachErrorMessage(
+              r.response?.data?.reason ?? r.response?.data?.code ?? r.response?.data?.message ?? 'invalid',
+            )
+          : errorMessage(err, 'Could not complete sign-up. Please try again.');
       setError(msg);
-      Alert.alert('Sign-up unavailable', msg);
+      if (isAttachRetry) Alert.alert('Coach not connected yet', msg);
+      else Alert.alert('Sign-up unavailable', msg);
     } finally {
       setLoading(false);
     }
@@ -161,8 +185,20 @@ export default function RoleSelectionScreen(_: Props) {
       <View style={styles.header}>
         <Text style={styles.greeting}>One more step.</Text>
         <Text style={styles.title}>Pair with your coach</Text>
+        {isAttachRetry ? (
+          <View
+            style={styles.retryBox}
+            accessible
+            accessibilityRole="alert"
+            testID="invite-attach-retry-banner"
+          >
+            <Text style={styles.retryText}>{inviteAttachErrorMessage(attachRetryReason)}</Text>
+          </View>
+        ) : null}
         <Text style={styles.subtitle}>
-          {requireInviteCode
+          {isAttachRetry
+            ? 'Enter your invite code to connect to your coach.'
+            : requireInviteCode
             ? 'Enter the invite code your coach shared. This connects you to their roster.'
             : 'If your coach shared an invite code, enter it now. Otherwise continue.'}
         </Text>
@@ -184,6 +220,18 @@ export default function RoleSelectionScreen(_: Props) {
             autoCapitalize="characters"
             autoCorrect={false}
             accessibilityLabel="Coach invite code"
+            testID="role-invite-code-input"
+          />
+          <PasteInviteCodeButton
+            disabled={loading}
+            testID="role-paste-invite-code"
+            onCode={(code) => {
+              setError('');
+              setInviteCode(code);
+              setInvitePreview(null);
+              void previewCode(code);
+            }}
+            onNoCode={(message) => setError(message)}
           />
           {previewLoading ? (
             <Text style={styles.invitePreviewMuted}>Checking code…</Text>
@@ -202,18 +250,31 @@ export default function RoleSelectionScreen(_: Props) {
 
         <TouchableOpacity
           style={[styles.continueBtn, loading && styles.btnDisabled]}
-          onPress={handleContinue}
+          onPress={() => handleContinue()}
           disabled={loading}
           activeOpacity={0.85}
           accessibilityRole="button"
-          accessibilityLabel="Continue"
+          accessibilityLabel={isAttachRetry ? 'Connect to my coach' : 'Continue'}
+          testID="role-continue"
         >
           {loading ? (
             <ActivityIndicator color={colors.textOnPrimary} />
           ) : (
-            <Text style={styles.continueText}>Continue</Text>
+            <Text style={styles.continueText}>{isAttachRetry ? 'Connect to my coach' : 'Continue'}</Text>
           )}
         </TouchableOpacity>
+
+        {isAttachRetry && !requireInviteCode ? (
+          <TouchableOpacity
+            onPress={() => handleContinue({ skipCode: true })}
+            disabled={loading}
+            accessibilityRole="button"
+            accessibilityLabel="Continue without a coach for now"
+            testID="role-skip-coach"
+          >
+            <Text style={styles.skipText}>Continue without a coach for now</Text>
+          </TouchableOpacity>
+        ) : null}
 
         <View style={styles.coachNote}>
           <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
@@ -285,6 +346,16 @@ const makeStyles = (colors: ThemeColors) =>
   invitePreviewBad: { fontSize: 13, color: colors.error, marginTop: 4 },
   invitePreviewMuted: { fontSize: 13, color: colors.textMuted, marginTop: 4 },
   errorText: { fontSize: 13, color: colors.error, marginTop: 4 },
+  retryBox: {
+    backgroundColor: colors.surface,
+    borderLeftWidth: 2,
+    borderLeftColor: colors.error,
+    borderRadius: 4,
+    padding: 12,
+    marginVertical: 12,
+  },
+  retryText: { fontSize: 14, lineHeight: 20, color: colors.textPrimary },
+  skipText: { fontSize: 13, color: colors.textMuted, textAlign: 'center', paddingVertical: 8 },
   continueBtn: {
     backgroundColor: colors.primary,
     borderRadius: 4,

@@ -47,6 +47,11 @@ export interface AppleAuthResult {
   // silent (no error banner) on this case to match the Google flow.
   cancelled?: boolean;
   error?: string;
+  // Invite-attach outcome (C03 contract). `invite_attached:false` means the
+  // account exists but is not connected to the coach; callers route to the
+  // enter-code retry step instead of continuing silently.
+  invite_attached?: boolean;
+  invite_attach_error?: string;
 }
 
 export interface AppleAuthOptions {
@@ -115,7 +120,8 @@ export async function signInWithApple(
     // POST the identity token to /auth/apple. The backend verifies the JWT
     // against Apple's JWKS, upserts the user, and returns a Supabase session.
     const response = await api.post('/auth/apple', body);
-    const { access_token, refresh_token, user, is_new_user } = response.data;
+    const { access_token, refresh_token, user, is_new_user, invite_attached, invite_attach_error } =
+      response.data ?? {};
 
     if (access_token) {
       await secureStorage.setItem('supabase_token', access_token);
@@ -132,6 +138,8 @@ export async function signInWithApple(
       access_token,
       user,
       is_new_user,
+      ...(typeof invite_attached === 'boolean' ? { invite_attached } : {}),
+      ...(typeof invite_attach_error === 'string' ? { invite_attach_error } : {}),
     };
   } catch (err) {
     const apiErr = err as { response?: { data?: { message?: string } }; message?: string };

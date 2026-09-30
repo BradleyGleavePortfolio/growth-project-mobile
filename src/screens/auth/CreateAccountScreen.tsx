@@ -18,7 +18,10 @@ import { authApi, InvitePreview } from '../../services/api';
 import { secureStorage } from '../../services/secureStorage';
 import { track } from '../../lib/analytics';
 import { AnalyticsEvents } from '../../analytics/events';
-import { toFriendlyAuthError } from '../../utils/authErrorMessage';
+import { toFriendlyAuthError, toFriendlyAppleAuthError } from '../../utils/authErrorMessage';
+import { normalizeSignupPolicy, STRICT_SIGNUP_POLICY } from '../../lib/signupPolicy';
+import { readInviteAttachOutcome } from '../../lib/inviteAttachOutcome';
+import PasteInviteCodeButton from '../../components/invite/PasteInviteCodeButton';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
@@ -69,7 +72,12 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
   const [invitePreview, setInvitePreview] = useState<InvitePreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [requireInviteCode, setRequireInviteCode] = useState(true);
-  const [googleEnabled, setGoogleEnabled] = useState(true);
+  // Google is hidden until the server advertises it in `providers`.
+  const [googleEnabled, setGoogleEnabled] = useState(false);
+  // Set when signup succeeded but the backend reported
+  // `invite_attached:false`. The raw reason is forwarded to the
+  // RoleSelection retry step, which renders friendly copy for it.
+  const [inviteAttachError, setInviteAttachError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [verifyLoading, setVerifyLoading] = useState(false);
   const [error, setError] = useState('');
@@ -83,12 +91,13 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
       try {
         const res = await authApi.getSignupPolicy();
         if (!mounted) return;
-        setRequireInviteCode(res.data?.require_invite_code ?? true);
-        setGoogleEnabled(res.data?.google_signin_enabled ?? true);
+        const policy = normalizeSignupPolicy(res.data);
+        setRequireInviteCode(policy.inviteCodeRequired);
+        setGoogleEnabled(policy.googleEnabled);
       } catch {
         if (!mounted) return;
-        setRequireInviteCode(true);
-        setGoogleEnabled(true);
+        setRequireInviteCode(STRICT_SIGNUP_POLICY.inviteCodeRequired);
+        setGoogleEnabled(STRICT_SIGNUP_POLICY.googleEnabled);
       }
     })();
     return () => {
@@ -178,14 +187,20 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
       // route so the backend can stamp coachId atomically. Falls back to the
       // legacy /auth/register for codeless flows when policy allows it.
       if (trimmedCode) {
-        await authApi.signupWithCode({
+        const res = await authApi.signupWithCode({
           name,
           email,
           password,
           phone: phone || undefined,
           invite_code: trimmedCode,
         });
+        // C03: the account can be created while the coach attach fails.
+        // Never continue silently; remember it so the post-verify step
+        // routes to the enter-code retry screen.
+        const outcome = readInviteAttachOutcome(res?.data);
+        setInviteAttachError(outcome.attached === false ? outcome.reason ?? 'unknown' : null);
       } else {
+        setInviteAttachError(null);
         await authApi.register({
           name,
           email,
@@ -228,7 +243,14 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
 
       await AsyncStorage.setItem('needs_role_selection', 'true');
 
-      navigation.replace('RoleSelection');
+      if (inviteAttachError !== null) {
+        navigation.replace('RoleSelection', {
+          inviteAttachError,
+          inviteCode: inviteCode.trim() || undefined,
+        });
+      } else {
+        navigation.replace('RoleSelection');
+      }
     } catch (err) {
       const msg = errorMessage(err, '').toLowerCase();
       if (msg.includes('email') || msg.includes('confirm')) {
@@ -253,17 +275,24 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
       const result = await signInWithApple({ inviteCode: trimmedCode || undefined });
       if (!result.success) {
         if (result.cancelled) return;
-        const friendly = toFriendlyAuthError(result.error);
+        const friendly = toFriendlyAppleAuthError(result.error);
         if (!friendly.cancelled) {
           setError(friendly.message);
-          Alert.alert('Sign-in', friendly.message);
+          Alert.alert('Sign in with Apple', friendly.message);
         }
         return;
       }
       await AsyncStorage.setItem('needs_role_selection', 'true');
-      navigation.replace('RoleSelection');
+      if (trimmedCode && result.invite_attached === false) {
+        navigation.replace('RoleSelection', {
+          inviteAttachError: result.invite_attach_error ?? 'unknown',
+          inviteCode: trimmedCode,
+        });
+      } else {
+        navigation.replace('RoleSelection');
+      }
     } catch (err) {
-      const friendly = toFriendlyAuthError(err);
+      const friendly = toFriendlyAppleAuthError(err);
       if (!friendly.cancelled) setError(friendly.message);
     } finally {
       setLoading(false);
@@ -313,6 +342,15 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
           <Text style={styles.verifySubBody}>
             Confirm the link, then return here to continue.
           </Text>
+
+          {inviteAttachError !== null ? (
+            <View style={styles.noticeBox} testID="invite-attach-pending-notice">
+              <Text style={styles.noticeText}>
+                Your account was created, but we could not connect you to your coach yet. After
+                you verify, we will ask for your invite code again.
+              </Text>
+            </View>
+          ) : null}
 
           {error ? (
             <View style={styles.errorBox}>
@@ -378,6 +416,17 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
             autoCapitalize="characters"
             autoCorrect={false}
             accessibilityLabel="Coach invite code"
+            testID="invite-code-input"
+          />
+          <PasteInviteCodeButton
+            disabled={loading}
+            onCode={(code) => {
+              setError('');
+              setInviteCode(code);
+              setInvitePreview(null);
+              void previewCode(code);
+            }}
+            onNoCode={(message) => setError(message)}
           />
           {previewLoading ? (
             <Text style={styles.invitePreviewMuted}>Checking code…</Text>
@@ -543,6 +592,15 @@ const makeStyles = (colors: ThemeColors) =>
     borderLeftColor: colors.error,
   },
   errorText: { color: colors.error, fontSize: 14, fontFamily: 'Inter_400Regular' },
+  noticeBox: {
+    backgroundColor: colors.surface,
+    borderRadius: Radius.sm,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+    borderLeftWidth: 2,
+    borderLeftColor: colors.primary,
+  },
+  noticeText: { color: colors.dark, fontSize: 14, fontFamily: 'Inter_400Regular' },
   inputGroup: { marginBottom: Spacing.md },
   inputLabel: { ...Typography.label, marginBottom: Spacing.xs },
   input: {
