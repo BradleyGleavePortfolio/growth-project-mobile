@@ -27,12 +27,55 @@ import { authApi } from '../services/api';
 
 const KEY = 'pending_invite_code';
 
+// Audit B2: change notification so an already-mounted PendingInviteBanner
+// repaints when a foreground invite link writes a code (no auth reboot).
+type Listener = () => void;
+const listeners = new Set<Listener>();
+
+export function subscribePendingInviteCode(listener: Listener): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+function notify(): void {
+  for (const l of Array.from(listeners)) {
+    try {
+      l();
+    } catch {
+      // a listener must not break the writer
+    }
+  }
+}
+
+function clean(raw: string | null | undefined): string | null {
+  const trimmed = (raw ?? '').trim();
+  return trimmed ? trimmed : null;
+}
+
+/**
+ * Legacy scoped keys (`pending_invite_code:<userId|anonymous>`, written by
+ * older internal-tester builds) are NEVER read into canonical state. The
+ * app has no public installs, so there is nothing to migrate, and reading
+ * them raced sign-out and account switches (re-audit R1/R2). They are
+ * removed best-effort at sign-out by the `pending_invite_code:` prefix
+ * sweep in services/authActions.
+ */
+
+/**
+ * Code from a signed-in invite URL: `https://<host>/join/<code>` or
+ * `tgp://join/<code>`. Returns the raw path segment (the server validates).
+ */
+export function extractJoinPathCode(url: string): string | null {
+  const match = url.match(/\/join\/([^/?#]+)/i);
+  return match?.[1] ?? null;
+}
+
 export async function readPendingInviteCode(): Promise<string | null> {
   try {
-    const raw = await AsyncStorage.getItem(KEY);
-    if (!raw) return null;
-    const trimmed = raw.trim();
-    return trimmed ? trimmed : null;
+    const canonical = clean(await AsyncStorage.getItem(KEY));
+    return canonical;
   } catch {
     return null;
   }
@@ -43,7 +86,9 @@ export async function writePendingInviteCode(code: string): Promise<void> {
     await AsyncStorage.setItem(KEY, code);
   } catch {
     // best-effort; the deep-link handler logs its own errors.
+    return;
   }
+  notify();
 }
 
 export async function clearPendingInviteCode(): Promise<void> {
@@ -51,7 +96,9 @@ export async function clearPendingInviteCode(): Promise<void> {
     await AsyncStorage.removeItem(KEY);
   } catch {
     // best-effort
+    return;
   }
+  notify();
 }
 
 export interface ClaimResult {

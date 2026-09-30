@@ -16,9 +16,8 @@
  *      same as the Google flow.
  *
  * Backend endpoint required: POST /auth/apple
- *   Request:  { identity_token: string, authorization_code?: string,
- *               full_name?: { given_name?: string; family_name?: string },
- *               email?: string, invite_code?: string }
+ *   Request:  { token: string, full_name?: string, invite_code?: string }
+ *             (see buildAppleAuthBody — only fields the live DTO whitelists)
  *   Response: { access_token, refresh_token, user, is_new_user }
  *
  * If the backend endpoint is not yet deployed, the call below fails through
@@ -31,6 +30,38 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import api from '../services/api';
 import { secureStorage } from '../services/secureStorage';
+
+/**
+ * Request body for POST /auth/apple.
+ *
+ * The live backend's AppleAuthDto is `{ token, full_name?: string,
+ * invite_code?, raw_nonce? }` under a `forbidNonWhitelisted` ValidationPipe,
+ * so ANY extra key (identity_token, authorization_code, email, an object
+ * full_name) is rejected with 400 "property identity_token should not exist".
+ * The backend fix (clinic/c02-apple-contract) accepts `token` OR
+ * `identity_token` plus a string full_name, so this body — only whitelisted
+ * fields, the JWT under `token`, and the name joined into one string — works
+ * against both the current and the fixed server. Email is read from the
+ * verified identity token server-side, so it is not sent.
+ */
+export function buildAppleAuthBody(input: {
+  identityToken: string;
+  givenName?: string | null;
+  familyName?: string | null;
+  inviteCode?: string;
+}): { token: string; full_name?: string; invite_code?: string } {
+  const body: { token: string; full_name?: string; invite_code?: string } = {
+    token: input.identityToken,
+  };
+  const fullName = [input.givenName, input.familyName]
+    .map((part) => (typeof part === 'string' ? part.trim() : ''))
+    .filter(Boolean)
+    .join(' ')
+    .slice(0, 200);
+  if (fullName) body.full_name = fullName;
+  if (input.inviteCode) body.invite_code = input.inviteCode;
+  return body;
+}
 
 export interface AppleAuthResult {
   success: boolean;
@@ -47,6 +78,11 @@ export interface AppleAuthResult {
   // silent (no error banner) on this case to match the Google flow.
   cancelled?: boolean;
   error?: string;
+  // Invite-attach outcome (C03 contract). `invite_attached:false` means the
+  // account exists but is not connected to the coach; callers route to the
+  // enter-code retry step instead of continuing silently.
+  invite_attached?: boolean;
+  invite_attach_error?: string;
 }
 
 export interface AppleAuthOptions {
@@ -99,23 +135,18 @@ export async function signInWithApple(
   // The fullName fields are ONLY populated on the very first sign-in; the
   // backend must persist them on first contact and never expect them again.
   try {
-    const body: Record<string, string | undefined | { given_name?: string; family_name?: string }> = {
-      identity_token: credential.identityToken,
-      authorization_code: credential.authorizationCode ?? undefined,
-    };
-    if (credential.email) body.email = credential.email;
-    if (credential.fullName) {
-      body.full_name = {
-        given_name: credential.fullName.givenName ?? undefined,
-        family_name: credential.fullName.familyName ?? undefined,
-      };
-    }
-    if (options.inviteCode) body.invite_code = options.inviteCode;
+    const body = buildAppleAuthBody({
+      identityToken: credential.identityToken,
+      givenName: credential.fullName?.givenName,
+      familyName: credential.fullName?.familyName,
+      inviteCode: options.inviteCode,
+    });
 
     // POST the identity token to /auth/apple. The backend verifies the JWT
     // against Apple's JWKS, upserts the user, and returns a Supabase session.
     const response = await api.post('/auth/apple', body);
-    const { access_token, refresh_token, user, is_new_user } = response.data;
+    const { access_token, refresh_token, user, is_new_user, invite_attached, invite_attach_error } =
+      response.data ?? {};
 
     if (access_token) {
       await secureStorage.setItem('supabase_token', access_token);
@@ -132,6 +163,8 @@ export async function signInWithApple(
       access_token,
       user,
       is_new_user,
+      ...(typeof invite_attached === 'boolean' ? { invite_attached } : {}),
+      ...(typeof invite_attach_error === 'string' ? { invite_attach_error } : {}),
     };
   } catch (err) {
     const apiErr = err as { response?: { data?: { message?: string } }; message?: string };

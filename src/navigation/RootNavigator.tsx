@@ -77,6 +77,7 @@ import { EntitlementProvider } from '../entitlements/EntitlementProvider';
 import { shouldOfferPackagePrompt } from '../lib/packagePromptGate';
 import { attachPushNavigator, clearPendingPushTap, flushPendingPushTap } from '../services/pushTapRouter';
 import { isValidPackageShareToken } from '../utils/packageShare';
+import { extractJoinPathCode, writePendingInviteCode } from '../lib/pendingInviteCode';
 
 // A-2 helper. Convert `https://app.trygrowthproject.com/<path>` to its
 // `tgp://<path>` equivalent so the post-signOut replay never escapes to
@@ -447,33 +448,18 @@ export default function RootNavigator() {
       }
 
       if (isInvite) {
-        const match = url.match(/\/join\/([^/?#]+)/i);
-        const code = match?.[1];
+        const code = extractJoinPathCode(url);
         if (code) {
-          // Stash the inbound code so RoleSelection (or a future settings
-          // surface) can offer to attach it. R15: every persisted key is
-          // user-scoped so a second user on the same device cannot read
-          // the prior user's pending code. We reach this branch only
-          // after `authed` was truthy above; resolve the user id from
-          // user_data and fall back to `:anonymous` if it cannot be
-          // parsed (which the sign-in flow then claims/migrates).
-          try {
-            let scope = 'anonymous';
-            try {
-              const userRaw = await AsyncStorage.getItem('user_data');
-              if (userRaw) {
-                const parsed = JSON.parse(userRaw) as { id?: string };
-                if (parsed && typeof parsed.id === 'string' && parsed.id) {
-                  scope = parsed.id;
-                }
-              }
-            } catch {
-              // user_data unreadable — keep the `:anonymous` scope.
-            }
-            await AsyncStorage.setItem(`pending_invite_code:${scope}`, code);
-          } catch {
-            // best-effort
-          }
+          // Stash the inbound code through the single pendingInviteCode
+          // helper so PendingInviteBanner (Home) actually sees it. The old
+          // code wrote `pending_invite_code:<scope>` while the reader used
+          // the bare key, so deep-link codes were never surfaced.
+          // R15: the key is wiped on sign-out (authActions
+          // ASYNC_SIGN_OUT_KEYS includes `pending_invite_code`, and the
+          // `pending_invite_code:` prefix sweep still clears old variants).
+          // B2: the write notifies subscribers, so an already-mounted
+          // PendingInviteBanner repaints without an auth reboot.
+          await writePendingInviteCode(code);
         }
       }
     };

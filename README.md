@@ -398,6 +398,7 @@ src/
 - Coach AI credit packs, coach plan/seat upgrade instructions, billing-portal CTAs, and payment or non-attendance community links are hidden on iOS when `nonP2PPurchasesHidden()` is true.
 - The gate fails closed. It needs the bundle flag `EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES` to be explicitly `false` **and** a native build below 6. Build 6 and later always hide, so an OTA update cannot turn these purchases on.
 - API requests send `X-Client-Platform`, `X-Client-Native-Build` and `X-Client-Purchase-Policy` for server-side enforcement.
+Auth stack: `Welcome`, `Login`, `CreateAccount`, `ForgotPassword`, `RoleSelection` (params `{ inviteAttachError?, inviteCode? }`), `AcceptInvite`, `ResetPassword`. The signup policy (`GET /auth/signup-policy`) is read through `src/lib/signupPolicy.ts` by CreateAccount, RoleSelection and Login. See `src/navigation/README.md` for invite redemption and retry.
 
 Bottom tabs are icons-only (no labels). Four tabs, in order:
 

@@ -1,0 +1,70 @@
+import { normalizeSignupPolicy, STRICT_SIGNUP_POLICY } from '../signupPolicy';
+
+describe('normalizeSignupPolicy', () => {
+  it('reads the live backend shape (invite_code_required + providers)', () => {
+    const p = normalizeSignupPolicy({
+      invite_code_required: false,
+      coach_code_required: false,
+      providers: ['email', 'apple'],
+    });
+    expect(p).toEqual({
+      inviteCodeRequired: false,
+      providers: ['email', 'apple'],
+      googleEnabled: false,
+      appleEnabled: true,
+    });
+  });
+
+  it('enables Google only when providers includes google', () => {
+    expect(normalizeSignupPolicy({ invite_code_required: true, providers: ['email', 'google'] }).googleEnabled).toBe(true);
+    expect(normalizeSignupPolicy({ invite_code_required: true, providers: ['email'] }).googleEnabled).toBe(false);
+  });
+
+  it('providers wins over the legacy google flag', () => {
+    const p = normalizeSignupPolicy({ providers: ['email'], google_signin_enabled: true, invite_code_required: false });
+    expect(p.googleEnabled).toBe(false);
+  });
+
+  it('falls back to legacy names when canonical ones are absent', () => {
+    expect(normalizeSignupPolicy({ require_invite_code: false, google_signin_enabled: true })).toEqual({
+      inviteCodeRequired: false,
+      providers: ['email', 'google'],
+      googleEnabled: true,
+      appleEnabled: false,
+    });
+  });
+
+  it('uses coach_code_required when invite_code_required is missing', () => {
+    expect(normalizeSignupPolicy({ coach_code_required: false, providers: [] }).inviteCodeRequired).toBe(false);
+  });
+
+  it('is strict for missing/garbage payloads', () => {
+    expect(normalizeSignupPolicy(null)).toEqual(STRICT_SIGNUP_POLICY);
+    expect(normalizeSignupPolicy('nope')).toEqual(STRICT_SIGNUP_POLICY);
+    const p = normalizeSignupPolicy({ providers: ['GOOGLE ', 42, 'myspace', 'google'] });
+    expect(p.inviteCodeRequired).toBe(true);
+    expect(p.providers).toEqual(['google']);
+  });
+});
+
+describe('loadSignupPolicy (shared reader, audit A1)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const mod = require('../signupPolicy') as typeof import('../signupPolicy');
+  beforeEach(() => mod.__resetSignupPolicyCacheForTests());
+
+  it('unknown on first failure: code optional, Google and Apple hidden', async () => {
+    const r = await mod.loadSignupPolicy(() => Promise.reject(new Error('x')));
+    expect(r.source).toBe('unknown');
+    expect(r.policy).toEqual(mod.UNKNOWN_SIGNUP_POLICY);
+    expect(r.policy.inviteCodeRequired).toBe(false);
+    expect(r.policy.googleEnabled).toBe(false);
+  });
+
+  it('reuses the last live policy on a later failure', async () => {
+    await mod.loadSignupPolicy(() => Promise.resolve({ data: { invite_code_required: true, providers: ['email', 'google'] } }));
+    const r = await mod.loadSignupPolicy(() => Promise.reject(new Error('x')));
+    expect(r.source).toBe('last_known');
+    expect(r.policy.inviteCodeRequired).toBe(true);
+    expect(r.policy.googleEnabled).toBe(true);
+  });
+});
