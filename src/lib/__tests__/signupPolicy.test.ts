@@ -46,3 +46,25 @@ describe('normalizeSignupPolicy', () => {
     expect(p.providers).toEqual(['google']);
   });
 });
+
+describe('loadSignupPolicy (shared reader, audit A1)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const mod = require('../signupPolicy') as typeof import('../signupPolicy');
+  beforeEach(() => mod.__resetSignupPolicyCacheForTests());
+
+  it('unknown on first failure: code optional, Google and Apple hidden', async () => {
+    const r = await mod.loadSignupPolicy(() => Promise.reject(new Error('x')));
+    expect(r.source).toBe('unknown');
+    expect(r.policy).toEqual(mod.UNKNOWN_SIGNUP_POLICY);
+    expect(r.policy.inviteCodeRequired).toBe(false);
+    expect(r.policy.googleEnabled).toBe(false);
+  });
+
+  it('reuses the last live policy on a later failure', async () => {
+    await mod.loadSignupPolicy(() => Promise.resolve({ data: { invite_code_required: true, providers: ['email', 'google'] } }));
+    const r = await mod.loadSignupPolicy(() => Promise.reject(new Error('x')));
+    expect(r.source).toBe('last_known');
+    expect(r.policy.inviteCodeRequired).toBe(true);
+    expect(r.policy.googleEnabled).toBe(true);
+  });
+});

@@ -75,7 +75,7 @@ import { fragmentToQuery } from './deepLinkUtils';
 import { readUserCache, clearUserCache } from '../lib/userCache';
 import { EntitlementProvider } from '../entitlements/EntitlementProvider';
 import { isValidPackageShareToken } from '../utils/packageShare';
-import { writePendingInviteCode } from '../lib/pendingInviteCode';
+import { extractJoinPathCode, writePendingInviteCode } from '../lib/pendingInviteCode';
 
 // A-2 helper. Convert `https://app.trygrowthproject.com/<path>` to its
 // `tgp://<path>` equivalent so the post-signOut replay never escapes to
@@ -436,8 +436,7 @@ export default function RootNavigator() {
       }
 
       if (isInvite) {
-        const match = url.match(/\/join\/([^/?#]+)/i);
-        const code = match?.[1];
+        const code = extractJoinPathCode(url);
         if (code) {
           // Stash the inbound code through the single pendingInviteCode
           // helper so PendingInviteBanner (Home) actually sees it. The old
@@ -446,6 +445,8 @@ export default function RootNavigator() {
           // R15: the key is wiped on sign-out (authActions
           // ASYNC_SIGN_OUT_KEYS includes `pending_invite_code`, and the
           // `pending_invite_code:` prefix sweep still clears old variants).
+          // B2: the write notifies subscribers, so an already-mounted
+          // PendingInviteBanner repaints without an auth reboot.
           await writePendingInviteCode(code);
         }
       }

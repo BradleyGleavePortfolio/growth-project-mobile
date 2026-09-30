@@ -18,6 +18,7 @@ import {
   claimPendingInviteCode,
   clearPendingInviteCode,
   readPendingInviteCode,
+  subscribePendingInviteCode,
 } from '../lib/pendingInviteCode';
 import { authEvents } from '../utils/authEvents';
 
@@ -38,8 +39,22 @@ export default function PendingInviteBanner() {
   useEffect(() => {
     refresh();
     const unsub = authEvents.onAuthChange(refresh);
+    // B2: repaint when a foreground invite link writes a new code. Only a
+    // non-empty value is applied here, so a clear during a claim does not
+    // hide the success / error line (the claim flow schedules its own
+    // refresh).
+    const unsubPending = subscribePendingInviteCode(() => {
+      void readPendingInviteCode().then((next) => {
+        if (next) {
+          setStatus('idle');
+          setErrMessage(null);
+          setCode(next);
+        }
+      });
+    });
     return () => {
       unsub();
+      unsubPending();
       if (refreshTimerRef.current !== null) clearTimeout(refreshTimerRef.current);
     };
   }, [refresh]);

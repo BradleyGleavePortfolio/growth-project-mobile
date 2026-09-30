@@ -62,6 +62,7 @@ jest.mock('../../../theme/ThemeProvider', () => ({
 }));
 
 import CreateAccountScreen from '../CreateAccountScreen';
+import { __resetSignupPolicyCacheForTests } from '../../../lib/signupPolicy';
 
 function makeNav() {
   return { replace: jest.fn(), navigate: jest.fn() };
@@ -79,6 +80,7 @@ async function renderScreen(params?: { invite_code?: string }) {
 describe('CreateAccountScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    __resetSignupPolicyCacheForTests();
     mockPreview.mockResolvedValue({ data: { valid: true, coach_name: 'Bradley' } });
     mockValidate.mockResolvedValue({ data: { valid: true, coach_name: 'Bradley' } });
     jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
@@ -107,11 +109,51 @@ describe('CreateAccountScreen', () => {
     expect(await findByText('Continue with Google')).toBeTruthy();
   });
 
-  it('policy failure is strict: code required, Google hidden', async () => {
+  it('A1: policy GET failure keeps Google hidden but lets a no-code email signup reach the backend', async () => {
     mockGetSignupPolicy.mockRejectedValue(new Error('network'));
-    const { findByText, queryByText } = await renderScreen();
-    expect(await findByText('INVITE CODE')).toBeTruthy();
-    expect(queryByText('Continue with Google')).toBeNull();
+    mockRegister.mockResolvedValue({ data: { requires_verification: true } });
+    const utils = await renderScreen();
+    expect(await utils.findByText('INVITE CODE (OPTIONAL)')).toBeTruthy();
+    expect(utils.queryByText('Continue with Google')).toBeNull();
+    await fillAndSubmit(utils);
+    await waitFor(() => expect(mockRegister).toHaveBeenCalledTimes(1));
+    expect(mockRegister.mock.calls[0][0]).toEqual({
+      name: 'Pat Client',
+      email: 'pat@example.com',
+      password: 'Str0ng!pass',
+      phone: undefined,
+    });
+    expect(await utils.findByText('I verified my email')).toBeTruthy();
+  });
+
+  it('A1: an explicit required-code policy is still enforced', async () => {
+    mockGetSignupPolicy.mockResolvedValue({ data: { invite_code_required: true, providers: ['email'] } });
+    const utils = await renderScreen();
+    expect(await utils.findByText('INVITE CODE')).toBeTruthy();
+    await fillAndSubmit(utils);
+    expect(await utils.findByText('An invite code from your coach is required to join.')).toBeTruthy();
+    expect(mockRegister).not.toHaveBeenCalled();
+  });
+
+  it('A2: a permanent CoachProfile GP- code passes preflight via the public preview (validate would reject it)', async () => {
+    mockGetSignupPolicy.mockResolvedValue({ data: { invite_code_required: false, providers: ['email'] } });
+    mockPreview.mockResolvedValue({ data: { valid: true, coach_name: 'Bradley' } });
+    mockValidate.mockResolvedValue({ data: { valid: false, reason: 'not_found' } });
+    mockSignupWithCode.mockResolvedValue({ data: { requires_verification: true, invite_attached: true } });
+    const utils = await renderScreen({ invite_code: 'GP-BRADLEY' });
+    await fillAndSubmit(utils);
+    await waitFor(() => expect(mockSignupWithCode).toHaveBeenCalledTimes(1));
+    expect(mockSignupWithCode.mock.calls[0][0]).toMatchObject({ invite_code: 'GP-BRADLEY' });
+    expect(mockValidate).not.toHaveBeenCalled();
+  });
+
+  it('A2: a code the preview reports invalid is stopped before signup', async () => {
+    mockGetSignupPolicy.mockResolvedValue({ data: { invite_code_required: false, providers: ['email'] } });
+    mockPreview.mockResolvedValue({ data: { valid: false } });
+    const utils = await renderScreen({ invite_code: 'GP-NOPE' });
+    await fillAndSubmit(utils);
+    expect(await utils.findByText('That invite code is not valid. Please check with your coach.')).toBeTruthy();
+    expect(mockSignupWithCode).not.toHaveBeenCalled();
   });
 
   it('paste invite code accepts a /join/<code> URL', async () => {

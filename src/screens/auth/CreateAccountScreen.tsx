@@ -19,7 +19,7 @@ import { secureStorage } from '../../services/secureStorage';
 import { track } from '../../lib/analytics';
 import { AnalyticsEvents } from '../../analytics/events';
 import { toFriendlyAuthError, toFriendlyAppleAuthError } from '../../utils/authErrorMessage';
-import { normalizeSignupPolicy, STRICT_SIGNUP_POLICY } from '../../lib/signupPolicy';
+import { getLastKnownSignupPolicy, loadSignupPolicy, UNKNOWN_SIGNUP_POLICY } from '../../lib/signupPolicy';
 import { readInviteAttachOutcome } from '../../lib/inviteAttachOutcome';
 import PasteInviteCodeButton from '../../components/invite/PasteInviteCodeButton';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
@@ -32,6 +32,7 @@ import { signInWithApple } from '../../utils/appleAuth';
 import { setUserCache } from '../../lib/userCache';
 import { purgePersistedQueryCacheForAllUsers } from '../../services/queryClient';
 import { Colors } from '../../constants/colors';
+import { typography } from '../../theme/tokens';
 
 interface Props {
   navigation: NativeStackNavigationProp<AuthStackParamList>;
@@ -71,9 +72,13 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
   const [inviteCode, setInviteCode] = useState(route?.params?.invite_code ?? '');
   const [invitePreview, setInvitePreview] = useState<InvitePreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
-  const [requireInviteCode, setRequireInviteCode] = useState(true);
+  const [requireInviteCode, setRequireInviteCode] = useState(
+    () => (getLastKnownSignupPolicy() ?? UNKNOWN_SIGNUP_POLICY).inviteCodeRequired,
+  );
   // Google is hidden until the server advertises it in `providers`.
-  const [googleEnabled, setGoogleEnabled] = useState(false);
+  const [googleEnabled, setGoogleEnabled] = useState(
+    () => getLastKnownSignupPolicy()?.googleEnabled === true,
+  );
   // Set when signup succeeded but the backend reported
   // `invite_attached:false`. The raw reason is forwarded to the
   // RoleSelection retry step, which renders friendly copy for it.
@@ -82,23 +87,18 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
   const [verifyLoading, setVerifyLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Pull policy from backend so the signup form matches the live invite-gating
-  // rule. If the request fails, fall back to the strictest setting (require
-  // invite code) so we never accidentally let a codeless client through.
+  // Signup policy through the shared reader (audit A1): a live policy wins,
+  // then the last policy fetched this session, then UNKNOWN_SIGNUP_POLICY
+  // (code optional, Google hidden). A failed GET never blocks a codeless
+  // email signup; the backend stays the authority on whether a code is
+  // needed.
   useEffect(() => {
     let mounted = true;
     (async () => {
-      try {
-        const res = await authApi.getSignupPolicy();
-        if (!mounted) return;
-        const policy = normalizeSignupPolicy(res.data);
-        setRequireInviteCode(policy.inviteCodeRequired);
-        setGoogleEnabled(policy.googleEnabled);
-      } catch {
-        if (!mounted) return;
-        setRequireInviteCode(STRICT_SIGNUP_POLICY.inviteCodeRequired);
-        setGoogleEnabled(STRICT_SIGNUP_POLICY.googleEnabled);
-      }
+      const { policy } = await loadSignupPolicy(() => authApi.getSignupPolicy());
+      if (!mounted) return;
+      setRequireInviteCode(policy.inviteCodeRequired);
+      setGoogleEnabled(policy.googleEnabled);
     })();
     return () => {
       mounted = false;
@@ -122,13 +122,10 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
     try {
       // Prefer the public preview endpoint (no auth, returns coach branding).
       // Fall back to the legacy validate endpoint if preview is unavailable.
-      try {
-        const res = await authApi.getInvitePreview(trimmed);
-        setInvitePreview(res.data ?? null);
-      } catch {
-        const res = await authApi.validateInviteCode(trimmed);
-        setInvitePreview(res.data ?? null);
-      }
+      // Preview only (resolves both code families); no validate fallback,
+      // which would mislabel a permanent CoachProfile code as invalid.
+      const res = await authApi.getInvitePreview(trimmed);
+      setInvitePreview(res.data ?? null);
     } catch {
       setInvitePreview(null);
     } finally {
@@ -167,18 +164,21 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
     setError('');
 
     if (trimmedCode) {
+      // Audit A2: preflight through the public preview, which resolves both
+      // code families (permanent CoachProfile GP- links and InviteCode rows).
+      // /auth/validate-invite-code only knows InviteCode rows and rejected
+      // the permanent clinic QR code. A preview failure (network) does not
+      // block: signup-with-code re-checks the code authoritatively.
       try {
-        const res = await authApi.validateInviteCode(trimmedCode);
-        if (!res.data?.valid) {
+        const res = await authApi.getInvitePreview(trimmedCode);
+        if (res.data && res.data.valid === false) {
           setError('That invite code is not valid. Please check with your coach.');
           setLoading(false);
           return;
         }
-        setInvitePreview(res.data);
+        if (res.data) setInvitePreview(res.data);
       } catch {
-        setError('Could not verify the invite code. Check your connection and try again.');
-        setLoading(false);
-        return;
+        // fall through to the authoritative signup call
       }
     }
 
@@ -600,7 +600,7 @@ const makeStyles = (colors: ThemeColors) =>
     borderLeftWidth: 2,
     borderLeftColor: colors.primary,
   },
-  noticeText: { color: colors.dark, fontSize: 14, fontFamily: 'Inter_400Regular' },
+  noticeText: { ...typography.bodySmall, color: colors.dark },
   inputGroup: { marginBottom: Spacing.md },
   inputLabel: { ...Typography.label, marginBottom: Spacing.xs },
   input: {

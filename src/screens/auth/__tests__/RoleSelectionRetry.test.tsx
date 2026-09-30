@@ -35,6 +35,7 @@ jest.mock('../../../theme/ThemeProvider', () => ({
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 
 import RoleSelectionScreen from '../RoleSelectionScreen';
+import { __resetSignupPolicyCacheForTests } from '../../../lib/signupPolicy';
 
 function route(params?: { inviteAttachError?: string; inviteCode?: string }) {
   return { key: 'k', name: 'RoleSelection' as const, params };
@@ -43,6 +44,7 @@ function route(params?: { inviteAttachError?: string; inviteCode?: string }) {
 describe('RoleSelection retry step', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    __resetSignupPolicyCacheForTests();
     jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     mockGetSignupPolicy.mockResolvedValue({ data: { invite_code_required: false, providers: ['email', 'apple'] } });
   });
@@ -71,7 +73,7 @@ describe('RoleSelection retry step', () => {
   });
 
   it('a successful retry attaches, selects student and finishes', async () => {
-    mockAttach.mockResolvedValue({ data: { ok: true } });
+    mockAttach.mockResolvedValue({ data: { role: 'student', coach_id: 'coach-b' } });
     mockSelectRole.mockResolvedValue({ data: { role: 'student', coach_id: 'coach-b' } });
     const { findByTestId, getByTestId } = await render(
       <RoleSelectionScreen navigation={{} as never} route={route({ inviteAttachError: 'expired', inviteCode: 'GP-OLD1' })} />,
@@ -81,7 +83,9 @@ describe('RoleSelection retry step', () => {
     await waitFor(() => expect(getByTestId('role-invite-code-input').props.value).toBe('GP-NEW2'));
     await fireEvent.press(getByTestId('role-continue'));
     await waitFor(() => expect(mockAttach).toHaveBeenCalledWith('GP-NEW2'));
-    await waitFor(() => expect(mockSelectRole).toHaveBeenCalledWith('student', 'GP-NEW2'));
+    // A2: finalize without a code; attach was the only redemption.
+    await waitFor(() => expect(mockSelectRole).toHaveBeenCalledWith('student', undefined));
+    expect(mockAttach).toHaveBeenCalledTimes(1);
     await waitFor(() => expect(mockEmit).toHaveBeenCalled());
   });
 

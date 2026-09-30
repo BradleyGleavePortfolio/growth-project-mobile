@@ -24,18 +24,97 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authApi } from '../services/api';
+import { readUserCache } from './userCache';
 
 const KEY = 'pending_invite_code';
+/** Legacy scoped keys written by older builds: `pending_invite_code:<userId|anonymous>`. */
+const legacyKey = (scope: string) => `${KEY}:${scope}`;
+
+// Audit B2: change notification so an already-mounted PendingInviteBanner
+// repaints when a foreground invite link writes a code (no auth reboot).
+type Listener = () => void;
+const listeners = new Set<Listener>();
+
+export function subscribePendingInviteCode(listener: Listener): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+function notify(): void {
+  for (const l of Array.from(listeners)) {
+    try {
+      l();
+    } catch {
+      // a listener must not break the writer
+    }
+  }
+}
+
+function clean(raw: string | null | undefined): string | null {
+  const trimmed = (raw ?? '').trim();
+  return trimmed ? trimmed : null;
+}
+
+/**
+ * Audit B1: one-time migration of the old scoped keys. Only the CURRENT
+ * user's key (from readUserCache) and the pre-login `anonymous` key are
+ * migrated. Another user's scoped key is never read. An anonymous code was
+ * captured on this device before sign-in, which is the same meaning as the
+ * bare key, and claiming it still goes through the banner's consent step.
+ * A newer canonical value always wins. The legacy key is deleted only after
+ * the canonical write succeeded.
+ */
+async function migrateLegacyPendingCode(): Promise<string | null> {
+  let userId: string | null = null;
+  try {
+    const u = await readUserCache();
+    userId = typeof u?.id === 'string' && u.id.trim() ? u.id : null;
+  } catch {
+    userId = null;
+  }
+  const scopes = userId ? [userId, 'anonymous'] : ['anonymous'];
+  for (const scope of scopes) {
+    let legacy: string | null = null;
+    try {
+      legacy = clean(await AsyncStorage.getItem(legacyKey(scope)));
+    } catch {
+      legacy = null;
+    }
+    if (!legacy) continue;
+    try {
+      await AsyncStorage.setItem(KEY, legacy);
+    } catch {
+      return legacy; // show it this time; keep the legacy key for the next read
+    }
+    try {
+      await AsyncStorage.removeItem(legacyKey(scope));
+    } catch {
+      // canonical copy exists; a leftover legacy key is harmless
+    }
+    return legacy;
+  }
+  return null;
+}
+
+/**
+ * Code from a signed-in invite URL: `https://<host>/join/<code>` or
+ * `tgp://join/<code>`. Returns the raw path segment (the server validates).
+ */
+export function extractJoinPathCode(url: string): string | null {
+  const match = url.match(/\/join\/([^/?#]+)/i);
+  return match?.[1] ?? null;
+}
 
 export async function readPendingInviteCode(): Promise<string | null> {
   try {
-    const raw = await AsyncStorage.getItem(KEY);
-    if (!raw) return null;
-    const trimmed = raw.trim();
-    return trimmed ? trimmed : null;
+    const canonical = clean(await AsyncStorage.getItem(KEY));
+    if (canonical) return canonical;
   } catch {
     return null;
   }
+  return migrateLegacyPendingCode();
 }
 
 export async function writePendingInviteCode(code: string): Promise<void> {
@@ -43,7 +122,9 @@ export async function writePendingInviteCode(code: string): Promise<void> {
     await AsyncStorage.setItem(KEY, code);
   } catch {
     // best-effort; the deep-link handler logs its own errors.
+    return;
   }
+  notify();
 }
 
 export async function clearPendingInviteCode(): Promise<void> {
@@ -51,7 +132,9 @@ export async function clearPendingInviteCode(): Promise<void> {
     await AsyncStorage.removeItem(KEY);
   } catch {
     // best-effort
+    return;
   }
+  notify();
 }
 
 export interface ClaimResult {

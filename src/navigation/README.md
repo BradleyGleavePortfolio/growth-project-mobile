@@ -14,7 +14,7 @@ React Navigation v7 is the routing layer. `RootNavigator` decides which sub-navi
 | File | What it does |
 | --- | --- |
 | `RootNavigator.tsx` | Decides between `unauthenticated`, `onboarding`, `coach`, `student`. Owns the `LinkingOptions`, the `NavigationContainer` theme, and the offline banner. There is no global floating chat widget — it was deleted in #63 along with the `hideWidget` predicate; the dedicated AI surface is `AIGuideScreen` under the client `MoreStack`. |
-| `AuthNavigator.tsx` | Stack: `Welcome`, `Login`, `CreateAccount`, `ForgotPassword`, `RoleSelection`. The only navigator that's reachable from a deep link. |
+| `AuthNavigator.tsx` | Stack: `Welcome`, `Login`, `CreateAccount`, `ForgotPassword`, `RoleSelection`. The only navigator that's reachable from a deep link. `RoleSelection` params: `{ inviteAttachError?: string; inviteCode?: string } \| undefined`. `inviteAttachError` puts the screen in retry mode after signup reported `invite_attached:false`, and `inviteCode` prefills the field. |
 | `LeanOnboardingNavigator.tsx` | Stack: `LeanQ1`, `LeanQ2`, `LeanQ3`, `LeanQ4`. Default for new accounts. `LeanQ4` is the optional body-metric capture step (height + current weight, imperial / metric toggle, both fields skippable). |
 | `OnboardingNavigator.tsx` | The legacy 10-step flow. Preserved but not routed to from a fresh signup today. |
 | `ClientNavigator.tsx` | 4-tab bottom bar, icons-only. Route names: `Home`, `WorkoutTab`, `Log`, `MoreTab`. Accessibility labels: `Home`, `Train`, `Log food`, `Profile and more`. `Home`, `WorkoutTab`, and `MoreTab` are nested native stacks; `Log` is a single screen (`LogScreen` — food/macro logging). The Profile tab (`MoreTab`) houses every secondary screen, including `AIGuide` and `Membership`. `RecipeDetail` accepts a single serialisable `{ recipeId: string }` param — never the whole recipe object. |
@@ -67,7 +67,10 @@ See `docs/well-known/README.md` for hosting and verification commands.
 ## Security and tenancy
 
 - The auth gate is the only path to a signed-in navigator. There is no escape hatch from `AuthNavigator` to a tab.
-- `RoleSelectionScreen` is reachable both from the email-signup verify step and from the Google-signup completion. It hardcodes `selectRole('student', …)` — there is no client-side path to a coach role.
+- `RoleSelectionScreen` is reachable from the email-signup verify step and from Apple/Google signup completion. It only ever selects the client role, so there is no client-side path to a coach role.
+  - With a code, `POST /auth/attach-invite-code` is the single redemption. It resolves permanent CoachProfile `GP-` codes and InviteCode rows. The screen then calls `selectRole('student', undefined)`; it never calls `selectRole(code)` (audit #303 A2).
+  - In retry mode (`inviteAttachError`), a code is required. The screen offers "Keep my current coach" when the user already has one, or "Continue without a coach for now" when the policy is codeless. It never skips automatically (B4).
+  - Signup policy comes from the shared `lib/signupPolicy.loadSignupPolicy`: live, then last-known this session, then unknown. On unknown, the code is optional and Google is hidden, so a policy outage never blocks codeless signup (A1).
 - `secureStorage` migrates any legacy AsyncStorage token into Keychain / Keystore on first read. After migration the AsyncStorage copy is deleted.
 - The role read from `user_data` is treated as advisory only. The backend re-derives role from the JWT on every request, so a tampered local copy cannot grant access.
 

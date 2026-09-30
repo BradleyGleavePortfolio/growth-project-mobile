@@ -20,9 +20,10 @@ import { authEvents } from '../../utils/authEvents';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { readUserCache, setUserCache } from '../../lib/userCache';
 import { purgePersistedQueryCacheForAllUsers } from '../../services/queryClient';
-import { normalizeSignupPolicy, STRICT_SIGNUP_POLICY } from '../../lib/signupPolicy';
+import { getLastKnownSignupPolicy, loadSignupPolicy, UNKNOWN_SIGNUP_POLICY } from '../../lib/signupPolicy';
 import { inviteAttachErrorMessage } from '../../lib/inviteAttachOutcome';
 import PasteInviteCodeButton from '../../components/invite/PasteInviteCodeButton';
+import { typography } from '../../theme/tokens';
 
 type Props = {
   navigation: NativeStackNavigationProp<AuthStackParamList, 'RoleSelection'>;
@@ -36,6 +37,15 @@ type Props = {
 // Rationale: per-seat billing means a client cannot promote themselves into a
 // paid coach tier; only an admin can. Removing the in-app become-coach UI
 // closes the privilege-escalation gap that existed in the prior version.
+// Security (audit): never log an Axios error object; it can carry request
+// config / Authorization. Status and error class only.
+function logRedacted(label: string, err: unknown): void {
+  if (!__DEV__) return;
+  const status = (err as { response?: { status?: number } } | undefined)?.response?.status;
+  const kind = err instanceof Error ? err.name : typeof err;
+  console.warn(label, { status: status ?? null, kind });
+}
+
 export default function RoleSelectionScreen({ route }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
@@ -46,24 +56,33 @@ export default function RoleSelectionScreen({ route }: Props) {
   const attachRetryReason = route?.params?.inviteAttachError;
   const isAttachRetry = typeof attachRetryReason === 'string';
   const [loading, setLoading] = useState(false);
-  const [requireInviteCode, setRequireInviteCode] = useState(true);
+  const [requireInviteCode, setRequireInviteCode] = useState(
+    () => (getLastKnownSignupPolicy() ?? UNKNOWN_SIGNUP_POLICY).inviteCodeRequired,
+  );
   const [inviteCode, setInviteCode] = useState(route?.params?.inviteCode ?? '');
   const [invitePreview, setInvitePreview] = useState<InvitePreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [error, setError] = useState('');
+  const [cachedCoachId, setCachedCoachId] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
     (async () => {
-      try {
-        const res = await authApi.getSignupPolicy();
-        if (!mounted) return;
-        setRequireInviteCode(normalizeSignupPolicy(res.data).inviteCodeRequired);
-      } catch {
-        if (!mounted) return;
-        setRequireInviteCode(STRICT_SIGNUP_POLICY.inviteCodeRequired);
-      }
+      // Shared reader (audit A1): reuses the policy CreateAccount already
+      // fetched when this GET fails, and never invents a code requirement.
+      const { policy } = await loadSignupPolicy(() => authApi.getSignupPolicy());
+      if (!mounted) return;
+      setRequireInviteCode(policy.inviteCodeRequired);
 
+      // B4: never in retry mode. A failed attach to coach B must not be
+      // silently skipped because the user is already linked to coach A; the
+      // retry screen offers an explicit "Keep my current coach" instead.
+      try {
+        const u0 = await readUserCache();
+        if (mounted) setCachedCoachId(typeof u0?.coach_id === 'string' ? u0.coach_id : null);
+      } catch {
+        // ignore
+      }
       // If the user already has a coach attached (e.g. they signed up with
       // an invite code, or it was attached during Google sign-in), skip role
       // selection entirely — the backend already knows their coach and the
@@ -71,7 +90,7 @@ export default function RoleSelectionScreen({ route }: Props) {
       try {
         const u = await readUserCache();
       if (u) {
-          if (mounted && u?.coach_id) {
+          if (mounted && u?.coach_id && !isAttachRetry) {
             await AsyncStorage.removeItem('needs_role_selection');
             authEvents.emit();
             return;
@@ -94,18 +113,32 @@ export default function RoleSelectionScreen({ route }: Props) {
     }
     setPreviewLoading(true);
     try {
-      try {
-        const res = await authApi.getInvitePreview(trimmed);
-        setInvitePreview(res.data ?? null);
-      } catch {
-        const res = await authApi.validateInviteCode(trimmed);
-        setInvitePreview(res.data ?? null);
-      }
+      // Preview only (resolves both code families); no validate fallback,
+      // which would mislabel a permanent CoachProfile code as invalid.
+      const res = await authApi.getInvitePreview(trimmed);
+      setInvitePreview(res.data ?? null);
     } catch {
       setInvitePreview(null);
     } finally {
       setPreviewLoading(false);
     }
+  };
+
+  // Merge the server-confirmed role / coach into the cached user.
+  const persistRole = async (role: string | undefined, coachId: string | null | undefined) => {
+    const user = await readUserCache();
+    if (!user) return;
+    if (role) user.role = role as typeof user.role;
+    if (coachId) user.coach_id = coachId;
+    await setUserCache(user);
+    // P1-1 (PR #192): purge any orphan persisted cache blobs written under a
+    // stale boot-time key before the first persistence pass for this user.
+    await purgePersistedQueryCacheForAllUsers();
+  };
+
+  const handleKeepCurrentCoach = async () => {
+    await AsyncStorage.removeItem('needs_role_selection');
+    authEvents.emit();
   };
 
   const handleContinue = async (opts: { skipCode?: boolean } = {}) => {
@@ -119,40 +152,33 @@ export default function RoleSelectionScreen({ route }: Props) {
 
     setLoading(true);
     try {
-      // If a code was supplied, attach it before completing role selection.
-      //
-      // Audit fix H-4: the attachInviteCode call used to swallow every
-      // failure silently and rely on the second-line selectRole call
-      // to surface bad-code errors. That worked in practice — the
-      // server re-validates inside selectRole — but if the contracts
-      // ever drift, a partial signup with no coach link goes
-      // undetected. We now special-case 4xx (an invalid / expired /
-      // capped code) and re-throw so the outer catch surfaces the
-      // server message verbatim. Transient failures (5xx, network)
-      // still fall through so selectRole can retry — this preserves
-      // the resilience the comment described.
+      // Audit A2: exactly ONE redemption. `attachInviteCode` resolves both
+      // code families (permanent CoachProfile GP- links and InviteCode rows),
+      // consumes one use, and sets {role:'student', coach_id} on the server.
+      // It is never followed by selectRole(code), which would redeem a second
+      // time (exhausting a single-use code) and cannot resolve permanent
+      // CoachProfile codes. Any attach failure, 4xx or transient, is shown to
+      // the user; nothing falls through to a second redemption.
+      let role: string | undefined;
+      let coachId: string | null | undefined;
       if (trimmed) {
+        const attached = await authApi.attachInviteCode(trimmed);
+        const data = (attached?.data ?? {}) as { role?: string; coach_id?: string | null };
+        role = typeof data.role === 'string' ? data.role : 'student';
+        coachId = data.coach_id;
+        // Persist the successful attach before anything else can fail.
+        await persistRole(role, coachId);
+        // Finalize role selection WITHOUT a code (no second redemption). The
+        // attach already set the role, so a failure here is not fatal.
         try {
-          await authApi.attachInviteCode(trimmed);
-        } catch (err) {
-          const status =
-            (err as { response?: { status?: number } } | undefined)?.response?.status ?? 0;
-          if (status >= 400 && status < 500) throw err;
-          if (__DEV__) {
-            console.warn('attachInviteCode transient failure, retrying via selectRole', err);
-          }
+          const fin = await authApi.selectRole('student', undefined);
+          if (typeof fin?.data?.role === 'string') await persistRole(fin.data.role, fin.data.coach_id);
+        } catch (finErr) {
+          logRedacted('selectRole finalize after attach failed', finErr);
         }
-      }
-
-      const res = await authApi.selectRole('student', trimmed || undefined);
-      const user = await readUserCache();
-      if (user) {
-        user.role = res.data.role;
-        if (res.data.coach_id) user.coach_id = res.data.coach_id;
-        await setUserCache(user);
-        // P1-1 (PR #192): purge any orphan persisted cache blobs written under a
-        // stale boot-time key before the first persistence pass for this user.
-        await purgePersistedQueryCacheForAllUsers();
+      } else {
+        const res = await authApi.selectRole('student', undefined);
+        await persistRole(res.data.role, res.data.coach_id);
       }
       await AsyncStorage.removeItem('needs_role_selection');
       authEvents.emit();
@@ -264,7 +290,19 @@ export default function RoleSelectionScreen({ route }: Props) {
           )}
         </TouchableOpacity>
 
-        {isAttachRetry && !requireInviteCode ? (
+        {isAttachRetry && cachedCoachId ? (
+          <TouchableOpacity
+            onPress={handleKeepCurrentCoach}
+            disabled={loading}
+            accessibilityRole="button"
+            accessibilityLabel="Keep my current coach"
+            testID="role-keep-current-coach"
+          >
+            <Text style={styles.skipText}>Keep my current coach</Text>
+          </TouchableOpacity>
+        ) : null}
+
+        {isAttachRetry && !requireInviteCode && !cachedCoachId ? (
           <TouchableOpacity
             onPress={() => handleContinue({ skipCode: true })}
             disabled={loading}
@@ -354,8 +392,8 @@ const makeStyles = (colors: ThemeColors) =>
     padding: 12,
     marginVertical: 12,
   },
-  retryText: { fontSize: 14, lineHeight: 20, color: colors.textPrimary },
-  skipText: { fontSize: 13, color: colors.textMuted, textAlign: 'center', paddingVertical: 8 },
+  retryText: { ...typography.bodySmall, color: colors.textPrimary },
+  skipText: { ...typography.bodySmall, color: colors.textMuted, textAlign: 'center', paddingVertical: 8 },
   continueBtn: {
     backgroundColor: colors.primary,
     borderRadius: 4,

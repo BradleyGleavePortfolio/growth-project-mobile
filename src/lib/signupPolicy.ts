@@ -37,7 +37,10 @@ export interface SignupPolicy {
   appleEnabled: boolean;
 }
 
-/** Strictest safe fallback used when the policy request fails. */
+/**
+ * Fallback for a malformed policy body (a 2xx that is not an object). Also
+ * kept as the conservative provider posture.
+ */
 export const STRICT_SIGNUP_POLICY: SignupPolicy = {
   inviteCodeRequired: true,
   providers: ['email'],
@@ -85,4 +88,58 @@ export function normalizeSignupPolicy(raw: unknown): SignupPolicy {
     googleEnabled,
     appleEnabled: providers.includes('apple'),
   };
+}
+
+/**
+ * Policy to use when the GET failed and nothing was fetched before
+ * (audit A1). The policy is informational: the backend enforces the invite
+ * requirement on /auth/register and /auth/select-role. So an outage must NOT
+ * add a mobile-only admission gate. The code is optional here and the
+ * backend answers with a clear error if it really needs one. Optional
+ * providers (Google, Apple) stay hidden while the policy is unknown, because
+ * tapping an unconfigured provider fails mid-flow.
+ */
+export const UNKNOWN_SIGNUP_POLICY: SignupPolicy = {
+  inviteCodeRequired: false,
+  providers: ['email'],
+  googleEnabled: false,
+  appleEnabled: false,
+};
+
+export type SignupPolicySource = 'live' | 'last_known' | 'unknown';
+
+let lastKnown: SignupPolicy | null = null;
+
+/** Test-only reset of the shared last-known policy. */
+export function __resetSignupPolicyCacheForTests(): void {
+  lastKnown = null;
+}
+
+export function getLastKnownSignupPolicy(): SignupPolicy | null {
+  return lastKnown;
+}
+
+/**
+ * Single shared reader used by CreateAccount, RoleSelection and Login.
+ * On success the policy is remembered for the whole app session, so a failed
+ * GET on a later screen reuses what the user was already shown instead of
+ * falling back. `fetchPolicy` is injected so this module stays free of the
+ * API client.
+ */
+export async function loadSignupPolicy(
+  fetchPolicy: () => Promise<{ data?: unknown } | undefined>,
+): Promise<{ policy: SignupPolicy; source: SignupPolicySource }> {
+  try {
+    const res = await fetchPolicy();
+    const raw = res?.data;
+    if (raw && typeof raw === 'object') {
+      const policy = normalizeSignupPolicy(raw);
+      lastKnown = policy;
+      return { policy, source: 'live' };
+    }
+  } catch {
+    // fall through
+  }
+  if (lastKnown) return { policy: lastKnown, source: 'last_known' };
+  return { policy: UNKNOWN_SIGNUP_POLICY, source: 'unknown' };
 }

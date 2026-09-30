@@ -15,6 +15,7 @@ import { Text, TouchableOpacity, StyleSheet } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { extractInviteCode } from '../../lib/inviteCodeInput';
 import { useTheme } from '../../theme/ThemeProvider';
+import { typography } from '../../theme/tokens';
 
 export const PASTE_EMPTY_MESSAGE =
   'We could not find an invite code on your clipboard. Copy the code from your coach, then tap Paste again.';
@@ -63,5 +64,5 @@ export default function PasteInviteCodeButton({ onCode, onNoCode, disabled, test
 
 const styles = StyleSheet.create({
   button: { alignSelf: 'flex-start', marginTop: 8, paddingVertical: 4 },
-  text: { fontSize: 14, fontFamily: 'Inter_500Medium' },
+  text: { ...typography.bodyMd },
 });
