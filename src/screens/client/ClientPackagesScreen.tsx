@@ -50,6 +50,8 @@ import {
   View,
 } from 'react-native';
 import { SkeletonScreen } from '../../ui/skeletons/Skeleton';
+import api from '../../services/api';
+import { oneToOneCoachingLabel } from '../../config/purchaseSurfaces';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation, NavigationProp, ParamListBase } from '@react-navigation/native';
 
@@ -134,6 +136,22 @@ export default function ClientPackagesScreen() {
   // is referenceable from module-scope sub-components (e.g. DunningBanner).
   const styles = useMemo(() => makeStyles(semanticColors, tokens), [semanticColors]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
+
+  // Clinic launch: plans are 1:1 person-to-person coaching (Guideline
+  // 3.1.3(d)), so the screen names the individual coach.
+  const [coachName, setCoachName] = useState<string | null>(null);
+  useEffect(() => {
+    let mounted = true;
+    api
+      .get<{ name?: string }>('/v1/clients/me/coach')
+      .then((res) => {
+        if (mounted && typeof res?.data?.name === 'string') setCoachName(res.data.name);
+      })
+      .catch(() => undefined);
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const [packages, setPackages] = useState<PaymentsResult<ClientCoachPackage[]> | null>(null);
   const [status, setStatus] = useState<PaymentsResult<ClientPaymentStatus> | null>(null);
@@ -278,11 +296,13 @@ export default function ClientPackagesScreen() {
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={semanticColors.accent} />
       }
     >
-      <Text style={styles.header}>Coaching plans</Text>
+      <Text style={styles.header} testID="client-packages-header">
+        {oneToOneCoachingLabel(coachName)}
+      </Text>
       <Text style={styles.subheader}>
-        Your coach's plans are listed below. Payment is handled inside The
-        Growth Project by Stripe's secure checkout — your card never touches
-        our servers.
+        Each plan is personal coaching delivered one to one by your coach.
+        Payment is handled by Stripe's secure checkout. Your card never
+        touches our servers.
       </Text>
 
       {/* Past-due / dunning banner */}

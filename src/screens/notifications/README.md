@@ -161,3 +161,9 @@ No additional env vars are required while mocked. When live, the standard `EXPO_
 - Notification grouping by kind (collapsible sections) once the list grows beyond 50 items.
 - Rich push payloads (image, action buttons) — requires Expo Notifications v3 + backend change.
 - Per-schedule quiet hours (different windows per day of week).
+
+## Push tap routing (clinic launch)
+
+- `installNotificationResponseHandler(routePushTap)` is installed once in `App.tsx` (skipped in screenshot mode). It handles live taps and the cold-start tap from `getLastNotificationResponseAsync`, de-duplicated by notification id.
+- `src/services/pushTapRouter.ts` holds a tap until the root navigator is ready and the auth stack is gone. RootNavigator attaches the container ref and flushes on `onReady`, `onStateChange` and auth-state change. Client screens inside tab stacks are mapped to their tab (`Messages` → `Home`, `Timeline` → `MoreTab`, ...).
+- The OS permission prompt is no longer shown at sign-in. `registerForPushNotifications({ requestPermission: false })` only registers the token when permission is already granted. The prompt comes from `components/home/PushPermissionCard.tsx` on Home, and only when the user taps "Turn on".

@@ -133,7 +133,6 @@ import UnreadBadge from '../components/community/UnreadBadge';
 // the entitlement gate runs before the screen body. Server-side
 // ClientEntitlementGuard remains canonical (Rule 20).
 import { withProtectedScreen } from '../entitlements/withProtectedScreen';
-import { withPurchaseSurfaceGate } from '../entitlements/withPurchaseSurfaceGate';
 
 const ProtectedWorkoutScreen = withProtectedScreen(WorkoutScreen);
 const ProtectedActiveWorkoutScreen = withProtectedScreen(ActiveWorkoutScreen);
@@ -149,12 +148,6 @@ const ProtectedAIGuideScreen = withProtectedScreen(AIGuideScreen);
 const ProtectedMessagesScreen = withProtectedScreen(MessagesScreen);
 const ProtectedClientBookingRequestScreen = withProtectedScreen(ClientBookingRequestScreen);
 const ProtectedClientUpcomingSessionsScreen = withProtectedScreen(ClientUpcomingSessionsScreen);
-// Clinic launch (App Review 3.1): purchase screens render the neutral
-// invite-code state on iOS while EXPO_PUBLIC_FF_IOS_HIDE_PURCHASES is on.
-const GatedClientPackagesScreen = withPurchaseSurfaceGate(ClientPackagesScreen);
-const GatedPackageCheckoutScreen = withPurchaseSurfaceGate(PackageCheckoutScreen);
-const GatedBrandedCheckoutWebViewScreen = withPurchaseSurfaceGate(BrandedCheckoutWebViewScreen);
-
 // ─── Param lists ──────────────────────────────────────────────────────────────
 
 export type HomeStackParamList = {
@@ -475,7 +468,7 @@ function MoreStackNavigator() {
       {/* Payments — client-facing packages list + Stripe Checkout return
           (backend PR #215). The return screen is the deep-link target for
           tgp://checkout/{success,cancel}; see RootNavigator.linking. */}
-      <MoreStackNav.Screen name="ClientPackages"  component={GatedClientPackagesScreen} />
+      <MoreStackNav.Screen name="ClientPackages"  component={ClientPackagesScreen} />
       <MoreStackNav.Screen name="CheckoutReturn"  component={CheckoutReturnScreen} />
       {/* PR-13 — buyer-facing Deliverables timeline (drip engine surface). */}
       <MoreStackNav.Screen name="Deliverables"    component={DeliverablesScreen} />
@@ -485,7 +478,7 @@ function MoreStackNavigator() {
       {/* Branded in-app webview checkout (Apple B2B exemption — see screen docstring). */}
       <MoreStackNav.Screen
         name="BrandedCheckoutWebView"
-        component={GatedBrandedCheckoutWebViewScreen}
+        component={BrandedCheckoutWebViewScreen}
         options={{ presentation: 'modal', headerShown: false, gestureEnabled: false }}
       />
       {/* iMessage-grade DM — Apple App Review 1.2 compliance surfaces. */}
@@ -507,7 +500,7 @@ function MoreStackNavigator() {
           and from the MembershipScreen. */}
       <MoreStackNav.Screen
         name="PackageCheckout"
-        component={GatedPackageCheckoutScreen}
+        component={PackageCheckoutScreen}
         options={{ presentation: 'modal' }}
       />
     </MoreStackNav.Navigator>

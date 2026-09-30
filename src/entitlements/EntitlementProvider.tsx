@@ -6,8 +6,6 @@ import { entitlementEvents, EntitlementRequiredPayload } from './entitlementEven
 import { queryClient } from '../services/queryClient';
 import { logger } from '../utils/logger';
 import { PaywallSheet } from './PaywallSheet';
-import { clientPurchasesHidden } from '../config/purchaseSurfaces';
-import NeutralAccessSheet from './NeutralAccessSheet';
 
 export type EntitlementStatus =
   | 'unknown'
@@ -85,8 +83,7 @@ export function EntitlementProvider({ children, onOpenPlans }: EntitlementProvid
 
   const openPlans = useCallback(() => {
     setPaywallVisible(true);
-    // iOS v1: never navigate to the package list; the neutral sheet is shown.
-    if (onOpenPlans && !clientPurchasesHidden()) onOpenPlans();
+    if (onOpenPlans) onOpenPlans();
   }, [onOpenPlans]);
 
   const dismissPaywall = useCallback(() => {
@@ -152,21 +149,12 @@ export function EntitlementProvider({ children, onOpenPlans }: EntitlementProvid
       }}
     >
       {children}
-      {clientPurchasesHidden() ? (
-        // iOS v1: a 402 opens the neutral invite-code sheet, never checkout.
-        <NeutralAccessSheet
-          visible={paywallVisible}
-          onClose={dismissPaywall}
-          onAttached={refreshEntitlement}
-        />
-      ) : (
-        <PaywallSheet
-          visible={paywallVisible}
-          message={paywallMessage}
-          onClose={dismissPaywall}
-          onSubscribe={handleSubscribe}
-        />
-      )}
+      <PaywallSheet
+        visible={paywallVisible}
+        message={paywallMessage}
+        onClose={dismissPaywall}
+        onSubscribe={handleSubscribe}
+      />
     </EntitlementContext.Provider>
   );
 }

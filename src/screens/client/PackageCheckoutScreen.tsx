@@ -28,6 +28,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { oneToOneCoachingLabel } from '../../config/purchaseSurfaces';
 import { Ionicons } from '@expo/vector-icons';
 // Apple Rule 3.1.3(b)/(e) B2B exemption — Stripe checkout opens inside the
 // in-app branded webview, NOT expo-web-browser. The BrandedCheckoutWebView
@@ -236,7 +237,9 @@ export default function PackageCheckoutScreen({ navigation, route }: Props) {
         >
           <Ionicons name="close" size={24} color={semanticColors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.topTitle}>Coaching package</Text>
+        <Text style={styles.topTitle} testID="package-checkout-title">
+          {oneToOneCoachingLabel(pkg?.coach?.displayName)}
+        </Text>
         <View style={styles.backBtn} />
       </View>
 

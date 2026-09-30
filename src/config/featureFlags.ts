@@ -48,7 +48,7 @@ const PUBLIC_ENV = {
   EXPO_PUBLIC_FF_COMMUNITY_WEARABLE_PROMPTS: process.env.EXPO_PUBLIC_FF_COMMUNITY_WEARABLE_PROMPTS,
   EXPO_PUBLIC_FF_DELIVERABLES: process.env.EXPO_PUBLIC_FF_DELIVERABLES,
   EXPO_PUBLIC_FF_EXTENSION_IMPORT: process.env.EXPO_PUBLIC_FF_EXTENSION_IMPORT,
-  EXPO_PUBLIC_FF_IOS_HIDE_PURCHASES: process.env.EXPO_PUBLIC_FF_IOS_HIDE_PURCHASES,
+  EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES: process.env.EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES,
   EXPO_PUBLIC_FF_IMPORT_REVIEW: process.env.EXPO_PUBLIC_FF_IMPORT_REVIEW,
   EXPO_PUBLIC_FF_MWB_AUTOSAVE: process.env.EXPO_PUBLIC_FF_MWB_AUTOSAVE,
   EXPO_PUBLIC_FF_PRIVATE_COMMUNITY_HUB: process.env.EXPO_PUBLIC_FF_PRIVATE_COMMUNITY_HUB,
@@ -435,21 +435,21 @@ export const featureFlags = {
 
   // ─── Clinic launch (C11) — App Review 3.1 risk removal ───────────────────
   /**
-   * Hide every client purchase CTA / paywall upsell on iOS. When ON (and the
-   * device is iOS), an inactive client sees a neutral "Ask your coach for an
-   * invite code" state instead of any checkout, package sheet or plan list.
-   * Web purchase flows and Android are untouched; coach screens are untouched.
+   * Clinic launch (App Review): hide, on iOS only, purchases that are NOT
+   * 1:1 person-to-person services. Client purchases of 1:1 coach packages
+   * stay available: they are real-time 1:1 coaching between a client and an
+   * individual coach, filed under Guideline 3.1.3(d) and paid through
+   * Stripe. Hidden when ON: coach AI credit packs (CreditPackCheckout and
+   * every "Buy credits" entry), coach subscription / seat CTAs in Billing,
+   * and any one-to-many (group, cohort, community) paid product.
    *
-   * Default: ON in release builds (production + preview), OFF in dev so the
-   * checkout flow can still be exercised locally. eas.json also sets it to
-   * "true" explicitly for the preview and production profiles.
+   * Default: ON in release builds (production + preview), OFF in dev.
+   * eas.json also sets it to "true" for the preview and production profiles.
+   * Read through `src/config/purchaseSurfaces.ts` (it adds the iOS check).
    *
-   * Read through `src/config/purchaseSurfaces.ts` (it adds the iOS check);
-   * do not read this flag directly.
-   *
-   * env: EXPO_PUBLIC_FF_IOS_HIDE_PURCHASES
+   * env: EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES
    */
-  iosHidePurchases: readFlag('EXPO_PUBLIC_FF_IOS_HIDE_PURCHASES', !isDev),
+  iosHideNonP2PPurchases: readFlag('EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES', !isDev),
 } as const;
 
 export type FeatureFlagKey = keyof typeof featureFlags;

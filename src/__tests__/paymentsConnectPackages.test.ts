@@ -599,11 +599,7 @@ describe('navigation wiring', () => {
   const rootNav = readSrc('navigation/RootNavigator.tsx');
 
   it('ClientNavigator registers ClientPackages + CheckoutReturn', () => {
-    // Clinic C11: the route is registered through withPurchaseSurfaceGate so
-    // iOS builds with EXPO_PUBLIC_FF_IOS_HIDE_PURCHASES render the neutral
-    // invite-code state instead; the underlying screen is unchanged.
-    expect(clientNav).toMatch(/name="ClientPackages"\s+component=\{GatedClientPackagesScreen\}/);
-    expect(clientNav).toMatch(/const GatedClientPackagesScreen = withPurchaseSurfaceGate\(ClientPackagesScreen\)/);
+    expect(clientNav).toMatch(/name="ClientPackages"\s+component=\{ClientPackagesScreen\}/);
     expect(clientNav).toMatch(/name="CheckoutReturn"\s+component=\{CheckoutReturnScreen\}/);
   });
 

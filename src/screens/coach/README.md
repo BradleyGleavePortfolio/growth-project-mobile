@@ -176,3 +176,12 @@ These rows belong in `docs/RELEASE_SMOKE.md`'s real-device-proof section; captur
 - The InviteCodes screen is the only place an invite URL is produced. If the universal-link host ever changes, that share string and `app.json → expo.android.intentFilters` must change together.
 - "Become a coach" is **not** a self-serve action. The role is granted server-side; there is no surface in the mobile app that flips a client into a coach.
 - Coach billing is in-app only as a status surface and a portal handoff. There is no in-app card capture, no in-app price list, no Stripe Elements. Coaches who churn do so through the same portal a coach who upgrades does. If a future iteration introduces in-app purchase, it must declare against Play Billing / StoreKit and add the corresponding Play data-safety entry.
+
+## iOS: purchases that are not 1:1 services (clinic launch)
+
+With `EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES` on (default in release builds; set in `eas.json` preview + production), iOS builds hide:
+- The `CreditPackCheckout` route, wrapped by `components/purchases/withNonP2PPurchaseGate`.
+- The "Buy credits" banner CTA, the meter chip tap, and `PackOptionsRow` in the tutorial and hard-pause modals.
+- The "Start subscription" / "Manage billing" button and invoice links in `CoachBillingScreen`. The status copy switches to a neutral note.
+
+Android and web are unchanged. See `src/config/purchaseSurfaces.ts`.

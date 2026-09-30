@@ -81,6 +81,11 @@ import DeleteAccountScreen from '../screens/settings/DeleteAccountScreen';
 import ImportDataScreen from '../screens/coach/ImportDataScreen';
 // Stream 1 — AI credit-pack checkout (Stripe webview B2B carve-out).
 import CreditPackCheckoutScreen from '../screens/coach/CreditPackCheckoutScreen';
+import { withNonP2PPurchaseGate } from '../components/purchases/withNonP2PPurchaseGate';
+
+// AI credit packs are not a 1:1 person-to-person service; hidden on iOS
+// builds with EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES (purchaseSurfaces.ts).
+const GatedCreditPackCheckoutScreen = withNonP2PPurchaseGate(CreditPackCheckoutScreen);
 // Roman P4 / ED.3 — First Payment Wow overlay host. Wraps the whole coach tab
 // shell so the §2.6 celebration can overlay any tab when the coach's first
 // payment INSERT lands (flag-gated; MMKV once-only).
@@ -467,7 +472,7 @@ function SettingsStackNavigator() {
       {/* Stream 1 — AI credit pack checkout (Stripe webview, B2B carve-out). */}
       <SettingsStack.Screen
         name="CreditPackCheckout"
-        component={CreditPackCheckoutScreen}
+        component={GatedCreditPackCheckoutScreen}
       />
     </SettingsStack.Navigator>
   );

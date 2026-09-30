@@ -15,6 +15,7 @@ import { View, Text, StyleSheet, type ViewStyle } from 'react-native';
 import HapticPressable from '../../HapticPressable';
 import { useTheme, type ThemeColors } from '../../../theme/ThemeProvider';
 import { formatCents } from '../../../api/types/coachAIBudget';
+import { nonP2PPurchasesHidden } from '../../../config/purchaseSurfaces';
 
 export interface PackOptionsRowProps {
   /** Pack option face-values in cents (server-provided). */
@@ -29,9 +30,12 @@ export function PackOptionsRow({
   onSelect,
   style,
   testID,
-}: PackOptionsRowProps): React.ReactElement {
+}: PackOptionsRowProps): React.ReactElement | null {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  // iOS: credit packs are not a 1:1 service (purchaseSurfaces.ts). Covers the
+  // tutorial and hard-pause modals, which both render this row.
+  if (nonP2PPurchasesHidden()) return null;
 
   return (
     <View style={[styles.row, style]} testID={testID ?? 'ai-pack-options'}>

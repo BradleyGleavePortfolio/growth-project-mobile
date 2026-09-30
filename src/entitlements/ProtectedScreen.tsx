@@ -21,15 +21,13 @@ import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useEntitlement } from './EntitlementProvider';
 import { useTheme } from '../theme/useTheme';
-import { clientPurchasesHidden } from '../config/purchaseSurfaces';
-import NeutralAccessState from './NeutralAccessState';
 
 interface ProtectedScreenProps {
   children: React.ReactNode;
 }
 
 export function ProtectedScreen({ children }: ProtectedScreenProps) {
-  const { entitlementActive, status, openPlans, refreshEntitlement } = useEntitlement();
+  const { entitlementActive, status, openPlans } = useEntitlement();
   const { colors, tokens } = useTheme();
 
   if (status === 'loading' || status === 'checking' || status === 'unknown') {
@@ -44,11 +42,6 @@ export function ProtectedScreen({ children }: ProtectedScreenProps) {
   }
 
   // Fail closed: only an explicit `true` lets paid content render.
-  if (entitlementActive !== true && clientPurchasesHidden()) {
-    // iOS v1: no purchase CTA. Neutral invite-code state instead (App Review 3.1).
-    return <NeutralAccessState onAttached={refreshEntitlement} />;
-  }
-
   if (entitlementActive !== true) {
     return (
       <View

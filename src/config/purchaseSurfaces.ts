@@ -1,33 +1,37 @@
 /**
- * Single decision point for "may this build show a client purchase surface?"
+ * Single decision point for "may this iOS build show a purchase that is not
+ * a 1:1 person-to-person service?"
  *
- * Clinic launch default (PLAN §4 default 2): iOS v1 ships with NO in-app
- * purchase surfaces for clients, removing the App Review 3.1 payments risk.
- * Clinic clients get a comp entitlement from their invite code (C01), so
- * they never need to buy. An inactive client on iOS sees a neutral
- * "Ask your coach for an invite code" state instead of checkout.
+ * Owner decision (clinic launch): client payments for 1:1 coach packages are
+ * real-time 1:1 coaching between a client and an individual coach, filed
+ * under App Review Guideline 3.1.3(d) and paid through Stripe. They stay
+ * available on iOS. Everything else that is sold in the app is hidden on iOS
+ * while `EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES` is on:
+ *   - coach AI credit packs: CreditPackCheckout route, "Buy credits" banner
+ *     CTA, meter chip tap, PackOptionsRow in the tutorial / hard-pause modals
+ *   - coach subscription / seat CTAs: "Start subscription" / "Manage billing"
+ *     and invoice links in CoachBillingScreen (there are no seat fees now)
+ *   - one-to-many paid products (group, cohort, community). None is sold in
+ *     the app today; any future one must check this gate.
  *
- * Every client purchase entry point calls `clientPurchasesHidden()`:
- *   - ProtectedScreen (locked-tab state)            src/entitlements/ProtectedScreen.tsx
- *   - PaywallSheet (402-triggered sheet)            src/entitlements/EntitlementProvider.tsx
- *   - onOpenPlans → ClientPackages navigation       src/navigation/RootNavigator.tsx
- *   - Day1Win PackageSelectionSheet                 src/screens/client/Day1WinScreen.tsx
- *   - 24h package_prompt re-surface                 src/navigation/RootNavigator.tsx
- *   - Membership "View packages" button             src/screens/client/MembershipScreen.tsx
- *   - ClientPackages / PackageCheckout screens      (render the neutral state)
- *
- * Server entitlement stays canonical (rule 22); this only hides UI.
+ * Server state stays canonical (rule 22); this only hides UI.
  */
 import { Platform } from 'react-native';
 import { featureFlags } from './featureFlags';
 
-export function clientPurchasesHidden(
+export function nonP2PPurchasesHidden(
   platform: string = Platform.OS,
-  flag: boolean = featureFlags.iosHidePurchases,
+  flag: boolean = featureFlags.iosHideNonP2PPurchases,
 ): boolean {
   return platform === 'ios' && flag === true;
 }
 
-export const NEUTRAL_ACCESS_TITLE = 'Ask your coach for an invite code';
-export const NEUTRAL_ACCESS_BODY =
-  'Your coach gives you access to this part of the app. Ask them for your invite code, then enter it to unlock everything.';
+export const NON_P2P_HIDDEN_TITLE = 'Not available in this app';
+export const NON_P2P_HIDDEN_BODY =
+  'This purchase is not offered in the iOS app. Your account and anything you already have are unchanged.';
+
+/** Copy for 1:1 package checkout: names the individual coach and the 1:1 nature. */
+export function oneToOneCoachingLabel(coachName?: string | null): string {
+  const name = typeof coachName === 'string' ? coachName.trim() : '';
+  return name ? `1:1 coaching with ${name}` : '1:1 coaching with your coach';
+}

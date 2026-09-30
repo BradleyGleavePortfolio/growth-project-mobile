@@ -130,3 +130,7 @@ npm run typecheck
 - The AI Guide screen is part of the "Personal communications → in-app messages" data-safety declaration, not the "Marketing" category. Keep that mapping in sync with `PLAY_STORE_READINESS.md` §8 if the screen ever does push notifications.
 - The Trust Center entry point lives in Settings → Trust & Privacy. Its export and delete actions fire `data_export_requested` and `account_deletion_requested` analytics events; Play reviewers exercise both during data-safety verification.
 - `MembershipScreen` is intentionally read-only on the client side. Coach-managed billing is handled by the coach app (`CoachBillingScreen` under the Settings stack). If a self-serve client billing surface is ever introduced, it must add a backend contract and a new screen — do not bolt it onto `MembershipScreen`.
+
+## 1:1 coach packages on iOS (clinic launch)
+
+Client packages are 1:1 person-to-person coaching (App Review Guideline 3.1.3(d)) paid through Stripe, so they stay available on iOS. `ClientPackagesScreen` and `PackageCheckoutScreen` name the individual coach through `oneToOneCoachingLabel()`, for example "1:1 coaching with Bradley". Comp or entitled clients never see the package prompt: `lib/packagePromptGate.shouldOfferPackagePrompt()` is checked by Day1Win and by the 24h `package_prompt`.
