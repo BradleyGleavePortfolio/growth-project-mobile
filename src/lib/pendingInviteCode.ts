@@ -24,11 +24,8 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authApi } from '../services/api';
-import { readUserCache } from './userCache';
 
 const KEY = 'pending_invite_code';
-/** Legacy scoped keys written by older builds: `pending_invite_code:<userId|anonymous>`. */
-const legacyKey = (scope: string) => `${KEY}:${scope}`;
 
 // Audit B2: change notification so an already-mounted PendingInviteBanner
 // repaints when a foreground invite link writes a code (no auth reboot).
@@ -58,45 +55,13 @@ function clean(raw: string | null | undefined): string | null {
 }
 
 /**
- * Audit B1: one-time migration of the old scoped keys. Only the CURRENT
- * user's key (from readUserCache) and the pre-login `anonymous` key are
- * migrated. Another user's scoped key is never read. An anonymous code was
- * captured on this device before sign-in, which is the same meaning as the
- * bare key, and claiming it still goes through the banner's consent step.
- * A newer canonical value always wins. The legacy key is deleted only after
- * the canonical write succeeded.
+ * Legacy scoped keys (`pending_invite_code:<userId|anonymous>`, written by
+ * older internal-tester builds) are NEVER read into canonical state. The
+ * app has no public installs, so there is nothing to migrate, and reading
+ * them raced sign-out and account switches (re-audit R1/R2). They are
+ * removed best-effort at sign-out by the `pending_invite_code:` prefix
+ * sweep in services/authActions.
  */
-async function migrateLegacyPendingCode(): Promise<string | null> {
-  let userId: string | null = null;
-  try {
-    const u = await readUserCache();
-    userId = typeof u?.id === 'string' && u.id.trim() ? u.id : null;
-  } catch {
-    userId = null;
-  }
-  const scopes = userId ? [userId, 'anonymous'] : ['anonymous'];
-  for (const scope of scopes) {
-    let legacy: string | null = null;
-    try {
-      legacy = clean(await AsyncStorage.getItem(legacyKey(scope)));
-    } catch {
-      legacy = null;
-    }
-    if (!legacy) continue;
-    try {
-      await AsyncStorage.setItem(KEY, legacy);
-    } catch {
-      return legacy; // show it this time; keep the legacy key for the next read
-    }
-    try {
-      await AsyncStorage.removeItem(legacyKey(scope));
-    } catch {
-      // canonical copy exists; a leftover legacy key is harmless
-    }
-    return legacy;
-  }
-  return null;
-}
 
 /**
  * Code from a signed-in invite URL: `https://<host>/join/<code>` or
@@ -110,11 +75,10 @@ export function extractJoinPathCode(url: string): string | null {
 export async function readPendingInviteCode(): Promise<string | null> {
   try {
     const canonical = clean(await AsyncStorage.getItem(KEY));
-    if (canonical) return canonical;
+    return canonical;
   } catch {
     return null;
   }
-  return migrateLegacyPendingCode();
 }
 
 export async function writePendingInviteCode(code: string): Promise<void> {

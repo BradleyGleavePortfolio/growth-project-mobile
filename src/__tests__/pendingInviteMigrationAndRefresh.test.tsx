@@ -1,13 +1,12 @@
 /**
- * Audit #303 B1 (one-time migration of old scoped pending keys) and B2
- * (an already-mounted Home banner repaints on a foreground invite link).
+ * Audit #303: legacy scoped pending keys are never read (operator decision,
+ * re-audit R1/R2), and B2 (an already-mounted Home banner repaints on a
+ * foreground invite link).
  */
 import React from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { act, render, waitFor } from '@testing-library/react-native';
 
-let mockUser: { id: string } | null = { id: 'u1' };
-jest.mock('../lib/userCache', () => ({ readUserCache: jest.fn(() => Promise.resolve(mockUser)) }));
 jest.mock('../services/api', () => ({ authApi: { attachInviteCode: jest.fn() } }));
 jest.mock('../theme/ThemeProvider', () => ({
   useTheme: () => ({ colors: new Proxy({}, { get: () => '#000000' }) }),
@@ -24,43 +23,21 @@ import PendingInviteBanner from '../components/PendingInviteBanner';
 
 beforeEach(async () => {
   await AsyncStorage.clear();
-  mockUser = { id: 'u1' };
   jest.restoreAllMocks();
 });
 
-describe('B1: legacy scoped pending-invite keys', () => {
-  it("migrates the current user's scoped key once, then deletes it", async () => {
+describe('legacy scoped pending-invite keys (re-audit R1/R2: no migration)', () => {
+  it('are never read into canonical state, for the current user, anonymous, or another user', async () => {
     await AsyncStorage.setItem('pending_invite_code:u1', 'GP-OLD1');
-    expect(await readPendingInviteCode()).toBe('GP-OLD1');
-    expect(await AsyncStorage.getItem('pending_invite_code')).toBe('GP-OLD1');
-    expect(await AsyncStorage.getItem('pending_invite_code:u1')).toBeNull();
-  });
-
-  it("never reads another user's scoped key", async () => {
+    await AsyncStorage.setItem('pending_invite_code:anonymous', 'GP-ANON');
     await AsyncStorage.setItem('pending_invite_code:u2', 'GP-THEIRS');
     expect(await readPendingInviteCode()).toBeNull();
-    expect(await AsyncStorage.getItem('pending_invite_code:u2')).toBe('GP-THEIRS');
-  });
-
-  it('claims the pre-login anonymous key (device-local, consent still required to attach)', async () => {
-    mockUser = null;
-    await AsyncStorage.setItem('pending_invite_code:anonymous', 'GP-ANON');
-    expect(await readPendingInviteCode()).toBe('GP-ANON');
-    expect(await AsyncStorage.getItem('pending_invite_code:anonymous')).toBeNull();
-  });
-
-  it('a newer canonical value wins over a legacy key', async () => {
-    await AsyncStorage.setItem('pending_invite_code', 'GP-NEW');
-    await AsyncStorage.setItem('pending_invite_code:u1', 'GP-OLD1');
+    expect(await AsyncStorage.getItem('pending_invite_code')).toBeNull();
+    await writePendingInviteCode('GP-NEW');
     expect(await readPendingInviteCode()).toBe('GP-NEW');
-    expect(await AsyncStorage.getItem('pending_invite_code:u1')).toBe('GP-OLD1');
-  });
-
-  it('keeps the legacy key when the canonical write fails', async () => {
-    await AsyncStorage.setItem('pending_invite_code:u1', 'GP-OLD1');
-    jest.spyOn(AsyncStorage, 'setItem').mockRejectedValueOnce(new Error('disk full'));
-    expect(await readPendingInviteCode()).toBe('GP-OLD1');
-    expect(await AsyncStorage.getItem('pending_invite_code:u1')).toBe('GP-OLD1');
+    await clearPendingInviteCode();
+    // Clearing the canonical code never resurrects a legacy one.
+    expect(await readPendingInviteCode()).toBeNull();
     expect(await AsyncStorage.getItem('pending_invite_code')).toBeNull();
   });
 });

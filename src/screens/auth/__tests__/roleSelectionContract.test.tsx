@@ -63,10 +63,19 @@ jest.mock('../../../services/api', () => ({
 }));
 
 let mockCachedUser: { id: string; role: string | null; coach_id?: string | null } | null = null;
+// Persisted copy vs in-memory copy, like the real userCache: setUserCache
+// updates memory first, then the persistent write can reject.
+let mockPersistedUser: { id: string; role: string | null; coach_id?: string | null } | null = null;
+let mockCacheWriteFailures = 0;
 jest.mock('../../../lib/userCache', () => ({
   readUserCache: jest.fn(() => Promise.resolve(mockCachedUser ? { ...mockCachedUser } : null)),
   setUserCache: jest.fn((u: typeof mockCachedUser) => {
     mockCachedUser = u ? { ...u } : null;
+    if (mockCacheWriteFailures > 0) {
+      mockCacheWriteFailures -= 1;
+      return Promise.reject(new Error('disk full'));
+    }
+    mockPersistedUser = u ? { ...u } : null;
     return Promise.resolve();
   }),
 }));
@@ -97,6 +106,7 @@ async function submitCode(code: string, params = { inviteAttachError: 'unknown' 
 }
 
 beforeEach(async () => {
+  jest.restoreAllMocks();
   jest.clearAllMocks();
   __resetSignupPolicyCacheForTests();
   jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
@@ -110,6 +120,8 @@ beforeEach(async () => {
     'INV-TEN': { coachId: 'coach-ten', used: 3, max: 10, family: 'invite' },
   };
   mockCachedUser = { id: 'u1', role: null, coach_id: null };
+  mockPersistedUser = null;
+  mockCacheWriteFailures = 0;
   await AsyncStorage.setItem('needs_role_selection', 'true');
 });
 
@@ -208,3 +220,77 @@ describe('B4: retry mode never auto-skips for a user who already has a coach', (
     await waitFor(() => expect(mockEmit).toHaveBeenCalled());
   });
 });
+
+describe('R3: server-confirmed attach survives a local persistence failure', () => {
+  async function pressTwiceWithFailure(code: string, inject: () => void) {
+    inject();
+    const utils = await submitCode(code);
+    await waitFor(() => expect(Alert.alert).toHaveBeenCalledWith('Connected, finishing sign-up', expect.any(String)));
+    expect(utils.getByTestId('role-attached-note')).toBeTruthy();
+    expect(utils.getByText('Finish sign-up')).toBeTruthy();
+    expect(utils.queryByText(/Coach not connected/)).toBeNull();
+    expect(mockEmit).not.toHaveBeenCalled();
+    expect(await AsyncStorage.getItem('needs_role_selection')).toBe('true');
+    await fireEvent.press(utils.getByTestId('role-continue'));
+    await waitFor(() => expect(mockEmit).toHaveBeenCalledTimes(1));
+    expect(mockCalls.filter((c) => c.startsWith('attach:'))).toEqual([`attach:${code}`]);
+    expect(await AsyncStorage.getItem('needs_role_selection')).toBeNull();
+    return utils;
+  }
+
+  it('single-use code + failed cache write: exactly one redemption across two presses', async () => {
+    await pressTwiceWithFailure('INV-ONE', () => {
+      mockCacheWriteFailures = 1;
+    });
+    expect(mockDb.codes['INV-ONE'].used).toBe(1);
+    expect(mockPersistedUser).toMatchObject({ role: 'student', coach_id: 'coach-one' });
+  });
+
+  it('bounded code + failed cache write: consumes exactly one use across two presses', async () => {
+    await pressTwiceWithFailure('INV-TEN', () => {
+      mockCacheWriteFailures = 1;
+    });
+    expect(mockDb.codes['INV-TEN'].used).toBe(4);
+    expect(mockPersistedUser).toMatchObject({ coach_id: 'coach-ten' });
+  });
+
+  it('single-use code + failed role-flag removal: exactly one redemption across two presses', async () => {
+    await pressTwiceWithFailure('INV-ONE', () => {
+      const real = AsyncStorage.removeItem;
+      let failed = false;
+      jest.spyOn(AsyncStorage, 'removeItem').mockImplementation((k: string) => {
+        if (k === 'needs_role_selection' && !failed) {
+          failed = true;
+          return Promise.reject(new Error('disk full'));
+        }
+        return real(k);
+      });
+    });
+    expect(mockDb.codes['INV-ONE'].used).toBe(1);
+  });
+
+  it('bounded code + failed role-flag removal: exactly one use consumed', async () => {
+    await pressTwiceWithFailure('INV-TEN', () => {
+      const real = AsyncStorage.removeItem;
+      let failed = false;
+      jest.spyOn(AsyncStorage, 'removeItem').mockImplementation((k: string) => {
+        if (k === 'needs_role_selection' && !failed) {
+          failed = true;
+          return Promise.reject(new Error('disk full'));
+        }
+        return real(k);
+      });
+    });
+    expect(mockDb.codes['INV-TEN'].used).toBe(4);
+  });
+
+  it('while connected-but-unsaved, the code field and the skip / keep-coach options are locked', async () => {
+    mockCacheWriteFailures = 1;
+    const utils = await submitCode('INV-ONE');
+    await waitFor(() => expect(utils.getByTestId('role-attached-note')).toBeTruthy());
+    expect(utils.getByTestId('role-invite-code-input').props.editable).toBe(false);
+    expect(utils.queryByTestId('role-skip-coach')).toBeNull();
+    expect(utils.queryByTestId('role-keep-current-coach')).toBeNull();
+  });
+});
+

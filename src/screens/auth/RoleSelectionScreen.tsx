@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -136,13 +136,58 @@ export default function RoleSelectionScreen({ route }: Props) {
     await purgePersistedQueryCacheForAllUsers();
   };
 
+  // Re-audit R3: a server-confirmed attachment is remembered here, in
+  // session state that does not depend on the local cache write. Once set,
+  // Continue retries only persistence + role completion and never calls
+  // attachInviteCode again (a second call would consume another use of a
+  // bounded code or be rejected for an exhausted single-use code).
+  const attachedRef = useRef<{ role: string; coachId: string | null } | null>(null);
+  const [attached, setAttached] = useState<{ role: string; coachId: string | null } | null>(null);
+  const inFlightRef = useRef(false);
+
+  const finishAfterAttach = async (confirmed: { role: string; coachId: string | null }) => {
+    await persistRole(confirmed.role, confirmed.coachId);
+    // Finalize role selection WITHOUT a code (no second redemption). The
+    // attach already set the role on the server, so a failure here is not
+    // fatal and is not retried as a redemption.
+    try {
+      const fin = await authApi.selectRole('student', undefined);
+      if (typeof fin?.data?.role === 'string') await persistRole(fin.data.role, fin.data.coach_id);
+    } catch (finErr) {
+      logRedacted('selectRole finalize after attach failed', finErr);
+    }
+    await AsyncStorage.removeItem('needs_role_selection');
+    authEvents.emit();
+  };
+
   const handleKeepCurrentCoach = async () => {
     await AsyncStorage.removeItem('needs_role_selection');
     authEvents.emit();
   };
 
   const handleContinue = async (opts: { skipCode?: boolean } = {}) => {
+    if (inFlightRef.current) return;
     setError('');
+
+    // R3: already connected on the server; only finish locally.
+    const confirmed = attachedRef.current;
+    if (confirmed) {
+      inFlightRef.current = true;
+      setLoading(true);
+      try {
+        await finishAfterAttach(confirmed);
+      } catch (err) {
+        logRedacted('finish sign-up after attach failed', err);
+        const msg = 'You are connected to your coach. We could not finish saving sign-up on this device. Tap Finish sign-up to try again.';
+        setError(msg);
+        Alert.alert('Connected, finishing sign-up', msg);
+      } finally {
+        inFlightRef.current = false;
+        setLoading(false);
+      }
+      return;
+    }
+
     const trimmed = opts.skipCode ? '' : inviteCode.trim();
 
     if ((requireInviteCode || (isAttachRetry && !opts.skipCode)) && !trimmed) {
@@ -150,39 +195,41 @@ export default function RoleSelectionScreen({ route }: Props) {
       return;
     }
 
+    inFlightRef.current = true;
     setLoading(true);
+    // Audit A2: exactly ONE redemption. `attachInviteCode` resolves both
+    // code families (permanent CoachProfile GP- links and InviteCode rows),
+    // consumes one use, and sets {role:'student', coach_id} on the server.
+    // It is never followed by selectRole(code). Any attach failure, 4xx or
+    // transient, is shown to the user; nothing falls through to a second
+    // redemption.
+    let stage: 'attach' | 'finish' = 'attach';
     try {
-      // Audit A2: exactly ONE redemption. `attachInviteCode` resolves both
-      // code families (permanent CoachProfile GP- links and InviteCode rows),
-      // consumes one use, and sets {role:'student', coach_id} on the server.
-      // It is never followed by selectRole(code), which would redeem a second
-      // time (exhausting a single-use code) and cannot resolve permanent
-      // CoachProfile codes. Any attach failure, 4xx or transient, is shown to
-      // the user; nothing falls through to a second redemption.
-      let role: string | undefined;
-      let coachId: string | null | undefined;
       if (trimmed) {
-        const attached = await authApi.attachInviteCode(trimmed);
-        const data = (attached?.data ?? {}) as { role?: string; coach_id?: string | null };
-        role = typeof data.role === 'string' ? data.role : 'student';
-        coachId = data.coach_id;
-        // Persist the successful attach before anything else can fail.
-        await persistRole(role, coachId);
-        // Finalize role selection WITHOUT a code (no second redemption). The
-        // attach already set the role, so a failure here is not fatal.
-        try {
-          const fin = await authApi.selectRole('student', undefined);
-          if (typeof fin?.data?.role === 'string') await persistRole(fin.data.role, fin.data.coach_id);
-        } catch (finErr) {
-          logRedacted('selectRole finalize after attach failed', finErr);
-        }
+        const res = await authApi.attachInviteCode(trimmed);
+        const data = (res?.data ?? {}) as { role?: string; coach_id?: string | null };
+        const confirmedNow = {
+          role: typeof data.role === 'string' ? data.role : 'student',
+          coachId: typeof data.coach_id === 'string' ? data.coach_id : null,
+        };
+        attachedRef.current = confirmedNow;
+        setAttached(confirmedNow);
+        stage = 'finish';
+        await finishAfterAttach(confirmedNow);
       } else {
         const res = await authApi.selectRole('student', undefined);
         await persistRole(res.data.role, res.data.coach_id);
+        await AsyncStorage.removeItem('needs_role_selection');
+        authEvents.emit();
       }
-      await AsyncStorage.removeItem('needs_role_selection');
-      authEvents.emit();
     } catch (err) {
+      if (stage === 'finish') {
+        logRedacted('finish sign-up after attach failed', err);
+        const msg = 'You are connected to your coach. We could not finish saving sign-up on this device. Tap Finish sign-up to try again.';
+        setError(msg);
+        Alert.alert('Connected, finishing sign-up', msg);
+        return;
+      }
       const r = err as {
         response?: { status?: number; data?: { reason?: string; code?: string; message?: string } };
       };
@@ -200,6 +247,7 @@ export default function RoleSelectionScreen({ route }: Props) {
       if (isAttachRetry) Alert.alert('Coach not connected yet', msg);
       else Alert.alert('Sign-up unavailable', msg);
     } finally {
+      inFlightRef.current = false;
       setLoading(false);
     }
   };
@@ -247,9 +295,10 @@ export default function RoleSelectionScreen({ route }: Props) {
             autoCorrect={false}
             accessibilityLabel="Coach invite code"
             testID="role-invite-code-input"
+            editable={!attached}
           />
           <PasteInviteCodeButton
-            disabled={loading}
+            disabled={loading || !!attached}
             testID="role-paste-invite-code"
             onCode={(code) => {
               setError('');
@@ -259,7 +308,11 @@ export default function RoleSelectionScreen({ route }: Props) {
             }}
             onNoCode={(message) => setError(message)}
           />
-          {previewLoading ? (
+          {attached ? (
+            <Text style={styles.invitePreviewOk} testID="role-attached-note">
+              Connected, finishing sign-up.
+            </Text>
+          ) : previewLoading ? (
             <Text style={styles.invitePreviewMuted}>Checking code…</Text>
           ) : invitePreview?.valid ? (
             <Text style={styles.invitePreviewOk}>
@@ -280,17 +333,19 @@ export default function RoleSelectionScreen({ route }: Props) {
           disabled={loading}
           activeOpacity={0.85}
           accessibilityRole="button"
-          accessibilityLabel={isAttachRetry ? 'Connect to my coach' : 'Continue'}
+          accessibilityLabel={attached ? 'Finish sign-up' : isAttachRetry ? 'Connect to my coach' : 'Continue'}
           testID="role-continue"
         >
           {loading ? (
             <ActivityIndicator color={colors.textOnPrimary} />
           ) : (
-            <Text style={styles.continueText}>{isAttachRetry ? 'Connect to my coach' : 'Continue'}</Text>
+            <Text style={styles.continueText}>
+              {attached ? 'Finish sign-up' : isAttachRetry ? 'Connect to my coach' : 'Continue'}
+            </Text>
           )}
         </TouchableOpacity>
 
-        {isAttachRetry && cachedCoachId ? (
+        {isAttachRetry && cachedCoachId && !attached ? (
           <TouchableOpacity
             onPress={handleKeepCurrentCoach}
             disabled={loading}
@@ -302,7 +357,7 @@ export default function RoleSelectionScreen({ route }: Props) {
           </TouchableOpacity>
         ) : null}
 
-        {isAttachRetry && !requireInviteCode && !cachedCoachId ? (
+        {isAttachRetry && !requireInviteCode && !cachedCoachId && !attached ? (
           <TouchableOpacity
             onPress={() => handleContinue({ skipCode: true })}
             disabled={loading}
