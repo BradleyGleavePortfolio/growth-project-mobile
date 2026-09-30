@@ -676,12 +676,79 @@ function writeReleaseBlockerMd() {
   fs.writeFileSync(RELEASE_BLOCKER_MD, lines.join('\n'), 'utf8');
 }
 
+// Clinic C11: expo-updates (EAS Update). The binary must carry a runtime
+// version and an updates URL pinned to this project's EAS projectId, with a
+// non-blocking launch (fallbackToCacheTimeout 0). Each store/preview build
+// profile in eas.json must name its update channel so `eas update --channel`
+// reaches exactly the builds it is meant for. eas.json / package.json are
+// optional here (the mutation tests run on a partial copy of the repo).
+const RUNTIME_POLICIES = ['appVersion', 'fingerprint', 'nativeVersion', 'sdkVersion'];
+const CHECK_AUTOMATICALLY = ['ON_LOAD', 'ON_ERROR_RECOVERY', 'WIFI_ONLY', 'NEVER'];
+const EXPECTED_CHANNELS = { preview: 'preview', production: 'production' };
+
+function validateUpdates(app) {
+  const expo = (app && app.expo) || {};
+  const pkgPath = path.join(ROOT, 'package.json');
+  let hasDep = false;
+  if (fs.existsSync(pkgPath)) {
+    const pkg = readJson(pkgPath);
+    hasDep = !!(pkg && (pkg.dependencies || {})['expo-updates']);
+  }
+  if (!hasDep && !expo.updates && !expo.runtimeVersion) return;
+
+  const rv = expo.runtimeVersion;
+  if (rv == null) {
+    fail('app.json: expo.runtimeVersion is required when expo-updates is installed (use { "policy": "fingerprint" })');
+  } else if (typeof rv === 'object') {
+    if (!RUNTIME_POLICIES.includes(rv.policy)) {
+      fail(`app.json: expo.runtimeVersion.policy must be one of ${RUNTIME_POLICIES.join(', ')}, got ${JSON.stringify(rv.policy)}`);
+    }
+  } else if (typeof rv !== 'string' || !rv.trim()) {
+    fail(`app.json: expo.runtimeVersion must be a policy object or a non-empty string, got ${JSON.stringify(rv)}`);
+  }
+
+  const updates = expo.updates;
+  if (!updates || typeof updates !== 'object') {
+    fail('app.json: expo.updates is required when expo-updates is installed');
+    return;
+  }
+  const projectId = expo.extra && expo.extra.eas && expo.extra.eas.projectId;
+  const expectedUrl = projectId ? `https://u.expo.dev/${projectId}` : null;
+  if (!expectedUrl) {
+    fail('app.json: expo.extra.eas.projectId is required for EAS Update');
+  } else if (updates.url !== expectedUrl) {
+    fail(`app.json: expo.updates.url must be ${expectedUrl} (EAS Update for this project), got ${JSON.stringify(updates.url)}`);
+  }
+  if (updates.enabled === false) {
+    warn('app.json: expo.updates.enabled is false — over-the-air fixes will not reach this binary');
+  }
+  if (updates.checkAutomatically != null && !CHECK_AUTOMATICALLY.includes(updates.checkAutomatically)) {
+    fail(`app.json: expo.updates.checkAutomatically must be one of ${CHECK_AUTOMATICALLY.join(', ')}, got ${JSON.stringify(updates.checkAutomatically)}`);
+  }
+  if (updates.fallbackToCacheTimeout !== 0) {
+    fail(`app.json: expo.updates.fallbackToCacheTimeout must be 0 (never block launch on the network), got ${JSON.stringify(updates.fallbackToCacheTimeout)}`);
+  }
+
+  const easPath = path.join(ROOT, 'eas.json');
+  if (fs.existsSync(easPath)) {
+    const eas = readJson(easPath);
+    const build = (eas && eas.build) || {};
+    for (const [profile, channel] of Object.entries(EXPECTED_CHANNELS)) {
+      if (!build[profile]) continue;
+      if (build[profile].channel !== channel) {
+        fail(`eas.json: build.${profile}.channel must be "${channel}" for EAS Update, got ${JSON.stringify(build[profile].channel)}`);
+      }
+    }
+  }
+}
+
 function main() {
   const app = readJson(APP_JSON);
   validateAppJson(app);
   validateStoreListings(app);
   validateEnvExample();
   validateLinkingTemplates();
+  validateUpdates(app);
 
   // Write (or clean up) RELEASE_BLOCKER.md before deciding the exit code.
   writeReleaseBlockerMd();
