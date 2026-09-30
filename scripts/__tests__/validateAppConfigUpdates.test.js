@@ -17,7 +17,7 @@ function makeWorkspace() {
   fs.mkdirSync(path.join(dir, 'scripts'), { recursive: true });
   fs.mkdirSync(path.join(dir, 'docs', 'well-known'), { recursive: true });
   fs.copyFileSync(VALIDATOR, path.join(dir, 'scripts', 'validate-app-config.js'));
-  for (const f of ['app.json', '.env.example', 'eas.json', 'package.json']) {
+  for (const f of ['app.json', '.env.example', 'eas.json', 'package.json', 'fingerprint.config.js']) {
     fs.copyFileSync(path.join(REPO_ROOT, f), path.join(dir, f));
   }
   for (const f of ['assetlinks.json', 'apple-app-site-association']) {
@@ -132,6 +132,9 @@ describe('validate-app-config — EAS Update gate', () => {
       ['embedded update disabled', 'app.json', (j) => { j.expo.updates.useEmbeddedUpdate = false; }, /useEmbeddedUpdate/],
       ['production hide flag false', 'eas.json', (j) => { j.build.production.env.EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES = 'false'; }, /build\.production\.env\.EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES must be "true"/],
       ['preview hide flag missing', 'eas.json', (j) => { delete j.build.preview.env.EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES; }, /build\.preview\.env\.EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES must be "true"/],
+      ['production environment → preview', 'eas.json', (j) => { j.build.production.environment = 'preview'; }, /build\.production\.environment must be "production"/],
+      ['preview environment missing', 'eas.json', (j) => { delete j.build.preview.environment; }, /build\.preview\.environment must be "preview"/],
+      ['production profile deleted', 'eas.json', (j) => { delete j.build.production; }, /build\.production is required/],
     ];
     it.each(cases)('rejects %s', (_name, file, fn, re) => {
       withWorkspace((dir) => {
@@ -139,6 +142,21 @@ describe('validate-app-config — EAS Update gate', () => {
         const r = run(dir);
         expect(r.status).not.toBe(0);
         expect(r.parsed.errors.some((e) => re.test(e))).toBe(true);
+      });
+    });
+  });
+
+  describe('re-audit #305 A1: purchase gate is a fingerprint input', () => {
+    it.each([
+      ['fingerprint.config.js deleted', (dir) => fs.rmSync(path.join(dir, 'fingerprint.config.js'))],
+      ['gate file dropped from extraSources', (dir) => fs.writeFileSync(path.join(dir, 'fingerprint.config.js'), 'module.exports = { extraSources: [] };')],
+      ['config throws', (dir) => fs.writeFileSync(path.join(dir, 'fingerprint.config.js'), 'throw new Error("x");')],
+    ])('rejects %s', (_name, fn) => {
+      withWorkspace((dir) => {
+        fn(dir);
+        const r = run(dir);
+        expect(r.status).not.toBe(0);
+        expect(r.parsed.errors.some((e) => /fingerprint\.config\.js/.test(e))).toBe(true);
       });
     });
   });

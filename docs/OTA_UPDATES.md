@@ -22,6 +22,8 @@ builds without a new App Store review.
 - `fallbackToCacheTimeout` is not 0.
 - A wrong updates URL or channel.
 - `EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES` is not `"true"` in the preview/production build profiles.
+- The `preview`/`production` build profile is missing, or its `environment` differs from its channel.
+- `fingerprint.config.js` is missing, fails to load, or no longer lists `src/config/purchaseSurfaces.ts` in `extraSources`.
 
 Mutation tests: `scripts/__tests__/validateAppConfigUpdates.test.js`.
 
@@ -48,6 +50,24 @@ npx expo-updates runtimeversion:resolve --platform ios
 
 and compare with the runtime shown for the build on expo.dev.
 
+### The purchase gate is a runtime input (`fingerprint.config.js`)
+
+`fingerprint.config.js` adds `src/config/purchaseSurfaces.ts` to the
+fingerprint. Any edit to the gate file therefore resolves to a **new runtime**:
+- raising `IOS_P2P_ONLY_MIN_NATIVE_BUILD`
+- changing the hide decision
+- changing the host or URL-shape lists
+
+Installed binaries only download updates for their own runtime, so a gate
+change cannot reach users by OTA and has to ship in a new store build that goes
+through App Review. **Accepted trade-off:** every gate-file edit needs a new
+store build. Evidence: `node scripts/fingerprint-gate-check.js --platform ios`
+(also `scripts/__tests__/purchaseGateFingerprint.test.js`, iOS and Android)
+shows two in-memory gate edits each change the runtime while every other
+fingerprint source is byte-identical:
+- threshold 6 → 600
+- always show
+
 ## One-time owner step
 
 The Expo project owner (`the-growth-project` account) must enable EAS Update
@@ -70,7 +90,14 @@ The guard (`scripts/eas-update-guard.js`) runs
 `eas update --channel <c> --environment <c> --message <m>` only when all of these hold:
 1. `--environment` is given and equals the channel. SDK 55+ requires it.
 2. `src/config/purchaseSurfaces.ts` matches the reviewed hash in `scripts/purchase-policy.sha256`.
-3. `EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES` is exactly `"true"` in that EAS environment. This is read with `eas env:exec`; if the read fails, the guard refuses to publish.
+3. The **remote** EAS project variable `EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES` in that environment is exactly `"true"`.
+   - **Lookup:** `eas env:get <env> --variable-name EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES --format short --scope project --non-interactive`, with the flag stripped from the child's environment.
+   - **Requirement:** the output must contain exactly one `NAME=true` record.
+   - **Refusals (fail closed):** a missing variable (eas-cli prints "not found" and still exits 0), an empty, masked (sensitive/secret) or duplicate value, or a failed lookup.
+   - **Why not `eas env:exec`:** it merges the parent shell env and skips absent remote values, so a locally exported `true` could pass as remote. The guard therefore never trusts the local shell.
+4. The local shell does not set the flag to anything other than `"true"`. The publish child also runs without the local flag, so the bundle takes the EAS environment's value.
+
+Tests: `scripts/__tests__/easUpdateGuard.test.js` drives `main()` end to end with an injected runner. No refusal case reaches `eas update`.
 
 The unguarded equivalent, for reference only, is
 `eas update --channel production --environment production --message "<what changed>"`.
@@ -92,9 +119,10 @@ eas env:create --environment preview    --name EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_P
 ### Why an OTA cannot turn on non-P2P purchases (and the limits)
 
 - **Runtime gate.** `nonP2PPurchasesHidden()` (`src/config/purchaseSurfaces.ts`) fails closed. It shows non-P2P purchases on iOS only when the bundle flag is explicitly `false` **and** the installed binary's `CFBundleVersion` (read natively via expo-application, not changeable by an update) is below 6. Build 6 is the first binary that has expo-updates, so every OTA-capable iOS binary stays hidden whatever the bundle says. `src/__tests__/iosNonP2PSurfacesMatrix.test.tsx` renders the real surfaces with an "OTA" bundle (flag false) on build 6 and 7 and asserts they stay hidden. Verified 1:1 packages and Android keep their flows.
+- **Runtime immutability.** The gate file is a fingerprint input (above), so an OTA that edits the threshold or decision targets a runtime no installed binary has.
 - **Governance.** The publish guard above, plus the pinned policy hash (CI also checks the lock through `easUpdateGuard.test.js`).
 - **Server.** Every native request sends `X-Client-Platform`, `X-Client-Native-Build` and `X-Client-Purchase-Policy` (`p2p-only` on hidden iOS). Backend follow-up, not in this PR: reject AI credit-pack checkout, coach subscription/portal sessions and other non-P2P session creation for `X-Client-Platform: ios` requests.
-- **Limit.** Anyone who can publish can still ship arbitrary JS, including JS that edits the gate. That is a publisher-permission question. Restrict EAS publish rights to the owner.
+- **Limit.** Anyone who can publish can still ship arbitrary JS that bypasses the gate from *another* file, for example by not calling it. That is a publisher-permission question. Restrict EAS publish rights to the owner.
 
 ### Update signing
 

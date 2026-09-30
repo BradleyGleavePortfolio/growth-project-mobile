@@ -711,6 +711,25 @@ function validateUpdates(app) {
     }
   }
 
+  // Re-audit #305 A1 / #304 B3: the iOS purchase gate must be a fingerprint
+  // input, so a JS-only edit to it (e.g. the native-build threshold) yields a
+  // new runtime that installed binaries never download.
+  const fpPath = path.join(ROOT, 'fingerprint.config.js');
+  let fpSources = [];
+  if (fs.existsSync(fpPath)) {
+    try {
+      delete require.cache[require.resolve(fpPath)];
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const cfg = require(fpPath);
+      fpSources = Array.isArray(cfg && cfg.extraSources) ? cfg.extraSources : [];
+    } catch (e) {
+      fail(`fingerprint.config.js: could not be loaded (${e.message})`);
+    }
+  }
+  if (!fpSources.some((s) => s && s.type === 'file' && s.filePath === 'src/config/purchaseSurfaces.ts')) {
+    fail('fingerprint.config.js: extraSources must include { type: "file", filePath: "src/config/purchaseSurfaces.ts" } (purchase gate must change the runtime)');
+  }
+
   const updates = expo.updates;
   if (!updates || typeof updates !== 'object') {
     fail('app.json: expo.updates is required when expo-updates is installed');
@@ -744,7 +763,14 @@ function validateUpdates(app) {
     const eas = readJson(easPath);
     const build = (eas && eas.build) || {};
     for (const [profile, channel] of Object.entries(EXPECTED_CHANNELS)) {
-      if (!build[profile]) continue;
+      if (!build[profile]) {
+        // Re-audit #305 C1: a deleted OTA profile must not pass silently.
+        if (profile === 'preview' || profile === 'production') fail(`eas.json: build.${profile} is required (OTA channel "${channel}")`);
+        continue;
+      }
+      if ((profile === 'preview' || profile === 'production') && build[profile].environment !== channel) {
+        fail(`eas.json: build.${profile}.environment must be "${channel}" (matches its channel and the update --environment), got ${JSON.stringify(build[profile].environment)}`);
+      }
       if (build[profile].channel !== channel) {
         fail(`eas.json: build.${profile}.channel must be "${channel}" for EAS Update, got ${JSON.stringify(build[profile].channel)}`);
       }
