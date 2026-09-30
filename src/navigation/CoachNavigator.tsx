@@ -79,7 +79,7 @@ import DeleteAccountScreen from '../screens/settings/DeleteAccountScreen';
 // Importer v0.3 — coach-facing extension import entry. Registered ONLY behind
 // featureFlags.extensionImport (default OFF); the kill switch removes the route.
 import ImportDataScreen from '../screens/coach/ImportDataScreen';
-// Stream 1 — AI credit-pack checkout (Stripe webview B2B carve-out).
+// Stream 1 — AI credit-pack checkout (Stripe webview). Not a 1:1 service: hidden on iOS by the non-P2P purchase gate.
 import CreditPackCheckoutScreen from '../screens/coach/CreditPackCheckoutScreen';
 import { withNonP2PPurchaseGate } from '../components/purchases/withNonP2PPurchaseGate';
 
@@ -469,7 +469,7 @@ function SettingsStackNavigator() {
       />
       {/* iMessage-grade DM — Apple 1.2 compliance blocked-users management. */}
       <SettingsStack.Screen name="BlockedUsers" component={BlockedUsersScreen} />
-      {/* Stream 1 — AI credit pack checkout (Stripe webview, B2B carve-out). */}
+      {/* Stream 1 — AI credit pack checkout (Stripe webview). Gated on iOS (non-P2P). */}
       <SettingsStack.Screen
         name="CreditPackCheckout"
         component={GatedCreditPackCheckoutScreen}

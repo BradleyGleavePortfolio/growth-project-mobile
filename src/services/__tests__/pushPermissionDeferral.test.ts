@@ -10,6 +10,7 @@ const mockRequestPerms = jest.fn();
 const mockGetToken = jest.fn();
 const mockAddResponse = jest.fn();
 const mockGetLast = jest.fn();
+const mockClearLast = jest.fn(() => Promise.resolve());
 jest.mock('expo-notifications', () => ({
   getPermissionsAsync: () => mockGetPerms(),
   requestPermissionsAsync: () => mockRequestPerms(),
@@ -19,6 +20,7 @@ jest.mock('expo-notifications', () => ({
   addNotificationReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
   addNotificationResponseReceivedListener: (cb: unknown) => mockAddResponse(cb),
   getLastNotificationResponseAsync: () => mockGetLast(),
+  clearLastNotificationResponseAsync: () => mockClearLast(),
   AndroidImportance: { MAX: 5 },
 }));
 
@@ -75,6 +77,31 @@ describe('installNotificationResponseHandler', () => {
     live?.(response('warm', { actionScreen: 'Timeline', actionParams: { id: 'm1' } }));
     expect(onResponse).toHaveBeenCalledWith('Timeline', { id: 'm1' }, 'warm');
     cleanup();
+  });
+
+  it('C3: consumes the cold-start response after routing it, so a remount cannot re-route it', async () => {
+    mockAddResponse.mockImplementation(() => ({ remove: jest.fn() }));
+    mockGetLast.mockResolvedValueOnce(response('cold', { actionScreen: 'Messages' })).mockResolvedValue(null);
+    const onResponse = jest.fn();
+    installNotificationResponseHandler(onResponse)();
+    await Promise.resolve();
+    await Promise.resolve();
+    // cleanup ran before the promise resolved: nothing routed, nothing consumed
+    expect(onResponse).not.toHaveBeenCalled();
+    mockGetLast.mockReset();
+    mockGetLast.mockResolvedValueOnce(response('cold', { actionScreen: 'Messages' })).mockResolvedValue(null);
+    const cleanup = installNotificationResponseHandler(onResponse);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(onResponse).toHaveBeenCalledTimes(1);
+    expect(mockClearLast).toHaveBeenCalledTimes(1);
+    cleanup();
+    // Remount (e.g. JS reload): native store is now empty, so no replay.
+    const again = installNotificationResponseHandler(onResponse);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(onResponse).toHaveBeenCalledTimes(1);
+    again();
   });
 });
 

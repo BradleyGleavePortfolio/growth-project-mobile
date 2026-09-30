@@ -75,7 +75,7 @@ import { fragmentToQuery } from './deepLinkUtils';
 import { readUserCache, clearUserCache } from '../lib/userCache';
 import { EntitlementProvider } from '../entitlements/EntitlementProvider';
 import { shouldOfferPackagePrompt } from '../lib/packagePromptGate';
-import { attachPushNavigator, flushPendingPushTap } from '../services/pushTapRouter';
+import { attachPushNavigator, clearPendingPushTap, flushPendingPushTap } from '../services/pushTapRouter';
 import { isValidPackageShareToken } from '../utils/packageShare';
 
 // A-2 helper. Convert `https://app.trygrowthproject.com/<path>` to its
@@ -294,6 +294,11 @@ export default function RootNavigator() {
   // tap waits here until the client/coach navigator is actually up).
   useEffect(() => attachPushNavigator(navigationRef), []);
   useEffect(() => {
+    // A held tap belongs to the session it arrived in; sign-out drops it.
+    if (authState === 'unauthenticated') {
+      clearPendingPushTap();
+      return undefined;
+    }
     const t = setTimeout(() => flushPendingPushTap(), 0);
     return () => clearTimeout(t);
   }, [authState]);

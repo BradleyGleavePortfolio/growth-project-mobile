@@ -239,6 +239,7 @@ describe.each(ROWS)('$name', (row) => {
     beforeEach(() => {
       mockRouteParams.current = { eventId: 'ev-1' };
       jest.spyOn(Linking, 'openURL').mockResolvedValue(true as never);
+      (Linking.openURL as jest.Mock).mockClear();
     });
     afterEach(() => jest.restoreAllMocks());
 
@@ -255,18 +256,57 @@ describe.each(ROWS)('$name', (row) => {
       }
     });
 
+    it.each([
+      ['YouTube paid channel membership', 'https://www.youtube.com/channel/UCkRfArvrzheW2E7b6SVT7vQ/join'],
+      ['YouTube handle membership', 'https://www.youtube.com/@coach/join'],
+      ['Vimeo on-demand sale', 'https://vimeo.com/ondemand/fitclass'],
+      ['YouTube redirect to a payment link', 'https://www.youtube.com/redirect?q=https%3A%2F%2Fbuy.stripe.com%2Fx'],
+      ['Zoom pricing', 'https://zoom.us/pricing'],
+      ['Twitch subscription', 'https://www.twitch.tv/subs/coach'],
+    ])('%s: neither renders nor opens when hidden; usable when shown', async (_label, url) => {
+      mockEvent = event(url);
+      const { queryByTestId } = await render(<CommunityEventDetailScreen />);
+      const link = queryByTestId('community-event-detail-link');
+      if (row.hidden) {
+        expect(link).toBeNull();
+        expect(Linking.openURL).not.toHaveBeenCalled();
+      } else {
+        expect(link).toBeTruthy();
+        await fireEvent.press(link!);
+        expect(Linking.openURL).toHaveBeenCalledWith(new URL(url).href);
+      }
+    });
+
+    it('notification entry: a routed CommunityEventDetail tap lands on the same gated screen', async () => {
+      const { routePushTap, attachPushNavigator, __resetPushTapRouterForTests } = jest.requireActual('../services/pushTapRouter');
+      __resetPushTapRouterForTests();
+      let routed: Record<string, unknown> | undefined;
+      attachPushNavigator({
+        isReady: () => true,
+        getRootState: () => ({ routeNames: ['CoachTabs', 'CommunityEventDetail'] }),
+        navigate: (_n: string, p?: Record<string, unknown>) => {
+          routed = p;
+        },
+      });
+      routePushTap('CommunityEventDetail', { eventId: 'ev-1' }, `n-${row.name}`);
+      mockRouteParams.current = routed ?? {};
+      mockEvent = event('https://www.youtube.com/channel/UCkRfArvrzheW2E7b6SVT7vQ/join');
+      const { queryByTestId } = await render(<CommunityEventDetailScreen />);
+      expect(queryByTestId('community-event-detail-link') === null).toBe(row.hidden);
+    });
+
     it('approved attendance link (Zoom) still opens', async () => {
-      mockEvent = event('https://us02web.zoom.us/j/123456');
+      mockEvent = event('https://us02web.zoom.us/j/12345678901');
       const { getByTestId } = await render(<CommunityEventDetailScreen />);
       await fireEvent.press(getByTestId('community-event-detail-link'));
-      expect(Linking.openURL).toHaveBeenCalledWith('https://us02web.zoom.us/j/123456');
+      expect(Linking.openURL).toHaveBeenCalledWith('https://us02web.zoom.us/j/12345678901');
     });
 
     it('replay on YouTube still opens', async () => {
-      mockEvent = { ...event('https://www.youtube.com/watch?v=abc'), state: 'replay' };
+      mockEvent = { ...event('https://www.youtube.com/watch?v=dQw4w9WgXcQ'), state: 'replay' };
       const { getByTestId } = await render(<CommunityEventDetailScreen />);
       await fireEvent.press(getByTestId('community-event-detail-link'));
-      expect(Linking.openURL).toHaveBeenCalledWith('https://www.youtube.com/watch?v=abc');
+      expect(Linking.openURL).toHaveBeenCalledWith('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
     });
   });
 });
@@ -287,11 +327,46 @@ describe('payment URL classifier', () => {
     expect(isPaymentUrl(url)).toBe(expected);
   });
 
+  it.each([
+    ['https://us02web.zoom.us/j/12345678901?pwd=abc', true],
+    ['https://zoom.us/wc/join/12345678901', true],
+    ['https://zoom.us/rec/share/AbC-12_x', true],
+    ['https://meet.google.com/abc-defg-hij', true],
+    ['https://teams.microsoft.com/l/meetup-join/19%3ameeting_x/0', true],
+    ['https://www.youtube.com/watch?v=dQw4w9WgXcQ', true],
+    ['https://www.youtube.com/live/dQw4w9WgXcQ', true],
+    ['https://youtu.be/dQw4w9WgXcQ', true],
+    ['https://vimeo.com/123456789', true],
+    ['https://vimeo.com/event/123456', true],
+    ['https://www.loom.com/share/0123456789abcdef0123456789abcdef', true],
+    ['https://www.twitch.tv/coachlive', true],
+    ['https://team.daily.co/room1', true],
+    ['https://www.youtube.com/channel/UCkRfArvrzheW2E7b6SVT7vQ/join', false],
+    ['https://www.youtube.com/@coach/join', false],
+    ['https://www.youtube.com/@coach', false],
+    ['https://www.youtube.com/watch?v=short', false],
+    ['https://www.youtube.com/redirect?q=https%3A%2F%2Fbuy.stripe.com%2Fx', false],
+    ['https://www.youtube.com/watch?v=dQw4w9WgXcQ&next=https://buy.stripe.com/x', false],
+    ['https://vimeo.com/ondemand/fitclass', false],
+    ['https://vimeo.com/store', false],
+    ['https://zoom.us/pricing', false],
+    ['https://zoom.us/j/1', false],
+    ['https://www.twitch.tv/subs/coach', false],
+    ['https://www.twitch.tv/store', false],
+    ['https://www.daily.co/pricing', false],
+    ['https://whereby.com/coachroom', false],
+    ['https://restream.io/x', false],
+    ['https://user:pw@zoom.us/j/12345678901', false],
+    ['https://zoom.us:8443/j/12345678901', false],
+  ])('hidden shape check %s → %s', (url, expected) => {
+    expect(externalLinkAllowed(url, true)).toBe(expected);
+  });
+
   it('hidden mode fails closed for non-attendance hosts and http', () => {
     expect(externalLinkAllowed('https://example.com/live', true)).toBe(false);
-    expect(externalLinkAllowed('http://zoom.us/j/1', true)).toBe(false);
-    expect(externalLinkAllowed('https://zoom.us.evil.com/j/1', true)).toBe(false);
-    expect(externalLinkAllowed('https://zoom.us/j/1', true)).toBe(true);
+    expect(externalLinkAllowed('http://zoom.us/j/12345678901', true)).toBe(false);
+    expect(externalLinkAllowed('https://zoom.us.evil.com/j/12345678901', true)).toBe(false);
+    expect(externalLinkAllowed('https://zoom.us/j/12345678901', true)).toBe(true);
     expect(externalLinkAllowed('https://example.com/live', false)).toBe(true);
   });
 });

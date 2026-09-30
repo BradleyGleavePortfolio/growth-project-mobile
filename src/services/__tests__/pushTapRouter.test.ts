@@ -1,6 +1,7 @@
 import {
   __resetPushTapRouterForTests,
   attachPushNavigator,
+  clearPendingPushTap,
   flushPendingPushTap,
   routePushTap,
   PushNavigator,
@@ -77,5 +78,24 @@ describe('pushTapRouter', () => {
     attachPushNavigator(nav);
     routePushTap(undefined);
     expect(nav.navigate).not.toHaveBeenCalled();
+  });
+
+  it('C3: a tap held while signed out is dropped at sign-out and never replays into the next session', () => {
+    const auth = makeNav(['Welcome', 'Login']);
+    attachPushNavigator(auth);
+    routePushTap('Messages', { threadId: 'userA' }, 'nA');
+    expect(auth.navigate).not.toHaveBeenCalled();
+    clearPendingPushTap(); // RootNavigator does this on authState 'unauthenticated'
+    const next = makeNav(CLIENT_TABS);
+    attachPushNavigator(next);
+    expect(flushPendingPushTap()).toBe(false);
+    expect(next.navigate).not.toHaveBeenCalled();
+  });
+
+  it('a community event tap reaches CommunityEventDetail with its params (the screen owns the purchase-link gate)', () => {
+    const nav = makeNav(['CoachTabs', 'CommunityEventDetail']);
+    attachPushNavigator(nav);
+    routePushTap('CommunityEventDetail', { eventId: 'ev-1' }, 'nE');
+    expect(nav.navigate).toHaveBeenCalledWith('CommunityEventDetail', { eventId: 'ev-1' });
   });
 });
