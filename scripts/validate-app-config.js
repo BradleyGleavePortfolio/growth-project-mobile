@@ -682,7 +682,6 @@ function writeReleaseBlockerMd() {
 // profile in eas.json must name its update channel so `eas update --channel`
 // reaches exactly the builds it is meant for. eas.json / package.json are
 // optional here (the mutation tests run on a partial copy of the repo).
-const RUNTIME_POLICIES = ['appVersion', 'fingerprint', 'nativeVersion', 'sdkVersion'];
 const CHECK_AUTOMATICALLY = ['ON_LOAD', 'ON_ERROR_RECOVERY', 'WIFI_ONLY', 'NEVER'];
 const EXPECTED_CHANNELS = { preview: 'preview', production: 'production' };
 
@@ -696,15 +695,20 @@ function validateUpdates(app) {
   }
   if (!hasDep && !expo.updates && !expo.runtimeVersion) return;
 
+  // Audit #305 C1: pin the fingerprint policy. appVersion / sdkVersion / a
+  // fixed string would let a JS update reach a binary with different native
+  // code, because this app keeps version 1.0.0.
   const rv = expo.runtimeVersion;
   if (rv == null) {
     fail('app.json: expo.runtimeVersion is required when expo-updates is installed (use { "policy": "fingerprint" })');
-  } else if (typeof rv === 'object') {
-    if (!RUNTIME_POLICIES.includes(rv.policy)) {
-      fail(`app.json: expo.runtimeVersion.policy must be one of ${RUNTIME_POLICIES.join(', ')}, got ${JSON.stringify(rv.policy)}`);
+  } else if (typeof rv !== 'object' || rv.policy !== 'fingerprint') {
+    fail(`app.json: expo.runtimeVersion must be { "policy": "fingerprint" }, got ${JSON.stringify(rv)}`);
+  }
+  for (const platform of ['ios', 'android']) {
+    const prv = expo[platform] && expo[platform].runtimeVersion;
+    if (prv != null && !(typeof prv === 'object' && prv.policy === 'fingerprint')) {
+      fail(`app.json: expo.${platform}.runtimeVersion override must be { "policy": "fingerprint" } or absent, got ${JSON.stringify(prv)}`);
     }
-  } else if (typeof rv !== 'string' || !rv.trim()) {
-    fail(`app.json: expo.runtimeVersion must be a policy object or a non-empty string, got ${JSON.stringify(rv)}`);
   }
 
   const updates = expo.updates;
@@ -725,6 +729,12 @@ function validateUpdates(app) {
   if (updates.checkAutomatically != null && !CHECK_AUTOMATICALLY.includes(updates.checkAutomatically)) {
     fail(`app.json: expo.updates.checkAutomatically must be one of ${CHECK_AUTOMATICALLY.join(', ')}, got ${JSON.stringify(updates.checkAutomatically)}`);
   }
+  if (updates.disableAntiBrickingMeasures === true) {
+    fail('app.json: expo.updates.disableAntiBrickingMeasures must not be true (keeps the embedded-update rollback path)');
+  }
+  if (updates.useEmbeddedUpdate === false) {
+    fail('app.json: expo.updates.useEmbeddedUpdate must not be false (the binary must boot offline on its embedded bundle)');
+  }
   if (updates.fallbackToCacheTimeout !== 0) {
     fail(`app.json: expo.updates.fallbackToCacheTimeout must be 0 (never block launch on the network), got ${JSON.stringify(updates.fallbackToCacheTimeout)}`);
   }
@@ -737,6 +747,12 @@ function validateUpdates(app) {
       if (!build[profile]) continue;
       if (build[profile].channel !== channel) {
         fail(`eas.json: build.${profile}.channel must be "${channel}" for EAS Update, got ${JSON.stringify(build[profile].channel)}`);
+      }
+      // Audit #305 A1/B1: the iOS non-P2P purchase hide flag must be on in
+      // every OTA-capable store/internal profile.
+      const flag = ((build[profile].env || {}).EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES);
+      if (flag !== 'true') {
+        fail(`eas.json: build.${profile}.env.EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES must be "true", got ${JSON.stringify(flag)}`);
       }
     }
   }

@@ -120,4 +120,26 @@ describe('validate-app-config — EAS Update gate', () => {
       expect(r.parsed.errors.some((e) => /expo\.updates is required/.test(e))).toBe(true);
     });
   });
+
+  describe('audit #305 C1 / A1 pinned invariants', () => {
+    const cases = [
+      ['runtimeVersion appVersion', 'app.json', (j) => { j.expo.runtimeVersion = { policy: 'appVersion' }; }, /runtimeVersion must be \{ "policy": "fingerprint" \}/],
+      ['runtimeVersion fixed string', 'app.json', (j) => { j.expo.runtimeVersion = '1.0.0'; }, /runtimeVersion must be \{ "policy": "fingerprint" \}/],
+      ['runtimeVersion sdkVersion', 'app.json', (j) => { j.expo.runtimeVersion = { policy: 'sdkVersion' }; }, /runtimeVersion must be/],
+      ['iOS runtime override', 'app.json', (j) => { j.expo.ios.runtimeVersion = '1.0.0'; }, /expo\.ios\.runtimeVersion override/],
+      ['Android runtime override', 'app.json', (j) => { j.expo.android.runtimeVersion = { policy: 'appVersion' }; }, /expo\.android\.runtimeVersion override/],
+      ['anti-bricking disabled', 'app.json', (j) => { j.expo.updates.disableAntiBrickingMeasures = true; }, /disableAntiBrickingMeasures/],
+      ['embedded update disabled', 'app.json', (j) => { j.expo.updates.useEmbeddedUpdate = false; }, /useEmbeddedUpdate/],
+      ['production hide flag false', 'eas.json', (j) => { j.build.production.env.EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES = 'false'; }, /build\.production\.env\.EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES must be "true"/],
+      ['preview hide flag missing', 'eas.json', (j) => { delete j.build.preview.env.EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES; }, /build\.preview\.env\.EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES must be "true"/],
+    ];
+    it.each(cases)('rejects %s', (_name, file, fn, re) => {
+      withWorkspace((dir) => {
+        mutate(dir, file, fn);
+        const r = run(dir);
+        expect(r.status).not.toBe(0);
+        expect(r.parsed.errors.some((e) => re.test(e))).toBe(true);
+      });
+    });
+  });
 });
