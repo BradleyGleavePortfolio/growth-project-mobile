@@ -193,6 +193,12 @@ function makeWorkspace() {
     path.join(REPO_ROOT, '.env.example'),
     path.join(dir, '.env.example'),
   );
+  // Re-audit #305 A1: app.json enables expo.updates, so the validator also
+  // requires the purchase gate in fingerprint.config.js.
+  fs.copyFileSync(
+    path.join(REPO_ROOT, 'fingerprint.config.js'),
+    path.join(dir, 'fingerprint.config.js'),
+  );
   fs.copyFileSync(
     path.join(REPO_ROOT, 'docs', 'well-known', 'assetlinks.json'),
     path.join(dir, 'docs', 'well-known', 'assetlinks.json'),
