@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -19,7 +19,7 @@ import { secureStorage } from '../../services/secureStorage';
 import { authEvents } from '../../utils/authEvents';
 import { track, identify } from '../../lib/analytics';
 import { AnalyticsEvents } from '../../analytics/events';
-import { toFriendlyAuthError } from '../../utils/authErrorMessage';
+import { toFriendlyAuthError, toFriendlyAppleAuthError } from '../../utils/authErrorMessage';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
 import type { NavigationProp, ParamListBase, RouteProp } from '@react-navigation/native';
@@ -30,6 +30,7 @@ import { signInWithApple } from '../../utils/appleAuth';
 import { setUserCache } from '../../lib/userCache';
 import { purgePersistedQueryCacheForAllUsers } from '../../services/queryClient';
 import { Colors } from '../../constants/colors';
+import { getLastKnownSignupPolicy, loadSignupPolicy } from '../../lib/signupPolicy';
 
 interface Props {
   navigation: NativeStackNavigationProp<AuthStackParamList>;
@@ -65,6 +66,20 @@ export default function LoginScreen({ navigation, route }: Props) {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [appleLoading, setAppleLoading] = useState(false);
   const [error, setError] = useState('');
+  // B3: Google only when the shared signup policy advertises it (hidden
+  // while unknown), same reader as CreateAccount.
+  const [googleEnabled, setGoogleEnabled] = useState(
+    () => getLastKnownSignupPolicy()?.googleEnabled === true,
+  );
+  useEffect(() => {
+    let mounted = true;
+    void loadSignupPolicy(() => authApi.getSignupPolicy()).then(({ policy }) => {
+      if (mounted) setGoogleEnabled(policy.googleEnabled);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -159,10 +174,10 @@ export default function LoginScreen({ navigation, route }: Props) {
 
       if (!result.success) {
         if (result.cancelled) return;
-        const friendly = toFriendlyAuthError(result.error);
+        const friendly = toFriendlyAppleAuthError(result.error);
         if (!friendly.cancelled) {
           setError(friendly.message);
-          Alert.alert('Sign-in', friendly.message);
+          Alert.alert('Sign in with Apple', friendly.message);
         }
         return;
       }
@@ -180,7 +195,7 @@ export default function LoginScreen({ navigation, route }: Props) {
         authEvents.emit();
       }
     } catch (err) {
-      const friendly = toFriendlyAuthError(err);
+      const friendly = toFriendlyAppleAuthError(err);
       if (!friendly.cancelled) setError(friendly.message);
     } finally {
       setAppleLoading(false);
@@ -268,31 +283,35 @@ export default function LoginScreen({ navigation, route }: Props) {
           )}
         </TouchableOpacity>
 
-        {/* Divider */}
-        <View style={styles.divider} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>or</Text>
-          <View style={styles.dividerLine} />
-        </View>
+        {googleEnabled ? (
+          <>
+            {/* Divider */}
+            <View style={styles.divider} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>or</Text>
+              <View style={styles.dividerLine} />
+            </View>
 
-        {/* Google Sign-In button */}
-        <TouchableOpacity
-          style={[styles.googleButton, googleLoading && styles.buttonDisabled]}
-          onPress={handleGoogleLogin}
-          disabled={googleLoading}
-          accessibilityRole="button"
-          accessibilityLabel="Continue with Google"
-          accessibilityState={{ disabled: googleLoading, busy: googleLoading }}
-        >
-          {googleLoading ? (
-            <ActivityIndicator color={colors.dark} />
-          ) : (
-            <>
-              <Text style={styles.googleG}>G</Text>
-              <Text style={styles.googleButtonText}>Continue with Google</Text>
-            </>
-          )}
-        </TouchableOpacity>
+            {/* Google Sign-In button */}
+            <TouchableOpacity
+              style={[styles.googleButton, googleLoading && styles.buttonDisabled]}
+              onPress={handleGoogleLogin}
+              disabled={googleLoading}
+              accessibilityRole="button"
+              accessibilityLabel="Continue with Google"
+              accessibilityState={{ disabled: googleLoading, busy: googleLoading }}
+            >
+              {googleLoading ? (
+                <ActivityIndicator color={colors.dark} />
+              ) : (
+                <>
+                  <Text style={styles.googleG}>G</Text>
+                  <Text style={styles.googleButtonText}>Continue with Google</Text>
+                </>
+              )}
+            </TouchableOpacity>
+          </>
+        ) : null}
 
         {/* Apple Sign-In — required by App Store when any third-party
             sign-in is offered. AppleSignInButton renders nothing on Android

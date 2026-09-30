@@ -96,3 +96,20 @@ export function toFriendlyAuthError(raw: unknown): FriendlyAuthError {
     message: 'Sign-in didn’t complete. Please try again.',
   };
 }
+
+/**
+ * Apple-specific friendly copy. Sign in with Apple failures (backend 400/503,
+ * contract drift, missing identity token) must never show a raw message or a
+ * dead end: tell the user it did not work and offer the email path.
+ * Cancellation stays silent (`cancelled: true`).
+ */
+export const APPLE_SIGN_IN_UNAVAILABLE_MESSAGE =
+  'Sign in with Apple didn’t go through. Please try again, or use your email instead.';
+
+export function toFriendlyAppleAuthError(raw: unknown): FriendlyAuthError {
+  const base = toFriendlyAuthError(raw);
+  if (base.cancelled || base.category === 'network' || base.category === 'rate_limited') {
+    return base;
+  }
+  return { category: base.category, cancelled: false, message: APPLE_SIGN_IN_UNAVAILABLE_MESSAGE };
+}

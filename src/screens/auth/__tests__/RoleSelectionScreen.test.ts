@@ -1,12 +1,13 @@
-// Audit fix H-4: source-level guard for the invite-code error
-// surface in RoleSelectionScreen.
+// Source-level guards for the RoleSelection invite path.
 //
-// Previously every failure from attachInviteCode was swallowed in an
-// empty catch. This worked when selectRole then re-validated, but a
-// silent fallthrough on a 4xx response is fragile to contract drift.
-// We now special-case 4xx so the outer catch surfaces the server
-// message; 5xx / network errors still fall through so the resilience
-// behaviour the original code documented is preserved.
+// History: audit H-4 made a 4xx attach failure surface to the user. The
+// clinic audit of #303 (A2) then showed that the old "attach, then
+// selectRole(code)" sequence redeemed a code twice. It also showed that
+// selectRole(code) cannot resolve permanent CoachProfile codes. The
+// contract is now: attach is the single redemption, finalize with
+// selectRole('student', undefined), and every attach failure is surfaced
+// (no fallthrough to a second redemption). Behavioural coverage lives in
+// RoleSelectionRetry.test.tsx and roleSelectionContract.test.tsx.
 
 import * as fs from 'fs';
 import * as path from 'path';
@@ -17,20 +18,16 @@ const SRC = fs.readFileSync(
   'utf8',
 );
 
-describe('RoleSelectionScreen invite-code error path', () => {
-  it('reads the response status from the axios error', () => {
-    expect(SRC).toMatch(/response\?:\s*\{\s*status\?:\s*number\s*\}/);
+describe('RoleSelectionScreen invite-code path', () => {
+  it('never passes a code to selectRole (single redemption via attach)', () => {
+    expect(SRC).not.toMatch(/selectRole\('student', trimmed/);
+    expect(SRC).toMatch(/authApi\.selectRole\('student', undefined\)/);
+    expect(SRC).toMatch(/await authApi\.attachInviteCode\(trimmed\)/);
   });
 
-  it('rethrows on 4xx so the outer catch surfaces it', () => {
-    expect(SRC).toMatch(/status >= 400 && status < 500/);
-    expect(SRC).toMatch(/throw err/);
-  });
-
-  it('does not rethrow on 5xx or network errors', () => {
-    // The truthy branch falls through to selectRole; we look for the
-    // dev-only warning that lives on that path.
-    expect(SRC).toMatch(/transient failure, retrying via selectRole/);
+  it('does not log raw error objects', () => {
+    expect(SRC).not.toMatch(/console\.warn\([^)]*,\s*err\)/);
+    expect(SRC).toMatch(/function logRedacted/);
   });
 
   it('still funnels final errors through the existing Alert + setError', () => {

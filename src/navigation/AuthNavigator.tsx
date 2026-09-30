@@ -24,7 +24,10 @@ export type AuthStackParamList = {
   // present for the form to submit; missing tokens render an expired-link
   // empty state. See screens/auth/ResetPasswordScreen.tsx.
   ResetPassword: { access_token?: string; refresh_token?: string } | undefined;
-  RoleSelection: undefined;
+  // `inviteAttachError` is set when signup succeeded but the backend said
+  // `invite_attached:false`; RoleSelection then shows the enter-code retry
+  // state with friendly copy and the code prefilled.
+  RoleSelection: { inviteAttachError?: string; inviteCode?: string } | undefined;
   // Email Pipeline v1 — public accept screen. Reachable via:
   //   tgp://invite/accept/:token
   //   https://app.trygrowthproject.com/invite/accept/:token
