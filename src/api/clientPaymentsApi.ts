@@ -236,8 +236,9 @@ export interface ScheduledDropView {
 export interface CheckoutSession {
   /**
    * Stripe-hosted Checkout URL — must be opened in the branded in-app
-   * `BrandedCheckoutWebView` so the flow stays inside the app (Rule 8 /
-   * Apple Rule 3.1.3(b)/(e) B2B exemption). Never open a payment URL
+   * `BrandedCheckoutWebView` so the flow stays inside the app (Rule 8). The
+   * iOS basis for client 1:1 packages is Guideline 3.1.3(d); the webview
+   * is not an exemption. Never open a payment URL
    * outside the branded webview on a payment surface.
    */
   url: string;

@@ -52,6 +52,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import HapticPressable from '../../HapticPressable';
 import { useTheme, type ThemeColors } from '../../../theme/ThemeProvider';
 import { PackOptionsRow } from './PackOptionsRow';
+import { nonP2PPurchasesHidden } from '../../../config/purchaseSurfaces';
 import {
   formatCents,
   type CoachAIBudgetResponse,
@@ -72,6 +73,8 @@ export interface AIBudgetTutorialModalProps {
   onClose: () => void;
   /** Called when the coach selects a pack on card 4. Routes to checkout. */
   onSelectPack: (amountCents: number | 'custom') => void;
+  /** iOS with non-P2P purchases hidden: usage-only cards, no pack cards. */
+  purchasesHidden?: boolean;
   testID?: string;
 }
 
@@ -81,8 +84,28 @@ type Card = {
   icon: keyof typeof Ionicons.glyphMap;
 };
 
-function getCards(budget: CoachAIBudgetResponse): Card[] {
+function getCards(budget: CoachAIBudgetResponse, purchasesHidden: boolean): Card[] {
   const total = formatCents(budget.total_displayed_cents);
+  if (purchasesHidden) {
+    // Neutral usage information only: no packs, top-ups or "buy later".
+    return [
+      {
+        title: 'How AI usage works',
+        body: `Every AI draft (workouts, meal plans, briefs, client chat) runs on a real model and has a real cost. Your monthly plan includes ${total} of AI value.`,
+        icon: 'sparkles-outline',
+      },
+      {
+        title: 'Why a budget?',
+        body: 'A per-coach budget keeps a runaway client chat loop from using up your month, and keeps AI inside your plan instead of a per-call surcharge.',
+        icon: 'shield-checkmark-outline',
+      },
+      {
+        title: 'When you reach your allowance',
+        body: 'AI features pause until your allowance renews at the start of your next period. The Coach Home meter shows how much you have used.',
+        icon: 'time-outline',
+      },
+    ];
+  }
   return [
     {
       title: 'How AI usage works',
@@ -112,11 +135,12 @@ export function AIBudgetTutorialModal({
   budget,
   onClose,
   onSelectPack,
+  purchasesHidden = nonP2PPurchasesHidden(),
   testID,
 }: AIBudgetTutorialModalProps): React.ReactElement {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const cards = useMemo(() => getCards(budget), [budget]);
+  const cards = useMemo(() => getCards(budget, purchasesHidden), [budget, purchasesHidden]);
   const lastIndex = cards.length - 1;
   const [index, setIndex] = useState(0);
 
@@ -216,7 +240,18 @@ export function AIBudgetTutorialModal({
             </Animated.View>
 
             <View style={styles.footer}>
-              {isLast ? (
+              {isLast && purchasesHidden ? (
+                <HapticPressable
+                  intent="light"
+                  onPress={persistAndClose}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close AI usage guide"
+                  style={styles.laterBtn}
+                  testID="ai-tutorial-done"
+                >
+                  <Text style={styles.laterText}>Done</Text>
+                </HapticPressable>
+              ) : isLast ? (
                 <View style={styles.lastCardActions}>
                   <PackOptionsRow
                     options={budget.pack_options_cents}

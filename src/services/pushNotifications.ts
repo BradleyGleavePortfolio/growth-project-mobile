@@ -30,13 +30,31 @@ export interface PushRegistrationResult {
 // ─── Push token registration ──────────────────────────────────────────────────
 // Unchanged from PR #145 — preserved as-is.
 
-export async function registerForPushNotifications(): Promise<PushRegistrationResult> {
+export interface RegisterPushOptions {
+  /**
+   * When false, never show the OS permission prompt: register the token only
+   * if permission was ALREADY granted. Used on sign-in / warm start so the
+   * prompt is deferred to a value moment after onboarding (rule 28).
+   * Default true keeps the explicit opt-in call sites (priming screens)
+   * unchanged.
+   */
+  requestPermission?: boolean;
+}
+
+export async function registerForPushNotifications(
+  options: RegisterPushOptions = {},
+): Promise<PushRegistrationResult> {
+  const requestPermission = options.requestPermission !== false;
   if (Platform.OS === 'web') {
     return { token: null, granted: false };
   }
 
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
+
+  if (existingStatus !== 'granted' && !requestPermission) {
+    return { token: null, granted: false };
+  }
 
   if (existingStatus !== 'granted') {
     const { status } = await Notifications.requestPermissionsAsync();
@@ -118,14 +136,51 @@ export function installForegroundHandler(): () => void {
 // Handles taps on background / killed-state notifications.
 // Returns a cleanup function — call from App.tsx on unmount.
 
+export type NotificationResponseCallback = (
+  actionScreen?: string,
+  actionParams?: Record<string, string>,
+  notificationId?: string,
+) => void;
+
+function dispatchResponse(
+  response: Notifications.NotificationResponse | null | undefined,
+  onResponse: NotificationResponseCallback,
+): void {
+  if (!response) return;
+  const request = response.notification?.request;
+  const data = request?.content?.data;
+  const actionScreen = typeof data?.actionScreen === 'string' ? data.actionScreen : undefined;
+  const rawParams = data?.actionParams;
+  const actionParams =
+    rawParams && typeof rawParams === 'object' ? (rawParams as Record<string, string>) : undefined;
+  onResponse(actionScreen, actionParams, request?.identifier);
+}
+
+/**
+ * Install ONCE at the app root (App.tsx). Routes taps on background pushes
+ * and, via getLastNotificationResponseAsync, the tap that cold-started the
+ * app. The callback receives the notification id so callers can dedupe the
+ * cold-start replay against the live listener.
+ */
 export function installNotificationResponseHandler(
-  onResponse: (actionScreen?: string, actionParams?: Record<string, string>) => void,
+  onResponse: NotificationResponseCallback,
 ): () => void {
+  if (Platform.OS === 'web') return () => undefined;
   const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
-    const data = response.notification.request.content.data;
-    const actionScreen = (data?.actionScreen as string) ?? undefined;
-    const actionParams = (data?.actionParams as Record<string, string>) ?? undefined;
-    onResponse(actionScreen, actionParams);
+    dispatchResponse(response, onResponse);
   });
-  return () => subscription.remove();
+  let cancelled = false;
+  const getLast = (Notifications as { getLastNotificationResponseAsync?: () => Promise<Notifications.NotificationResponse | null> })
+    .getLastNotificationResponseAsync;
+  if (typeof getLast === 'function') {
+    getLast()
+      .then((response) => {
+        if (!cancelled) dispatchResponse(response, onResponse);
+      })
+      .catch(() => undefined);
+  }
+  return () => {
+    cancelled = true;
+    subscription.remove();
+  };
 }

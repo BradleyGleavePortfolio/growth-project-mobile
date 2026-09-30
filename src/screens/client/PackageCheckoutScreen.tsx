@@ -28,9 +28,12 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { oneToOneCoachingLabel } from '../../config/purchaseSurfaces';
 import { Ionicons } from '@expo/vector-icons';
-// Apple Rule 3.1.3(b)/(e) B2B exemption — Stripe checkout opens inside the
-// in-app branded webview, NOT expo-web-browser. The BrandedCheckoutWebView
+// Filing basis: Guideline 3.1.3(d). A client package is real-time 1:1
+// coaching with an individual coach, so it may be paid outside IAP. The
+// branded webview (or any transport) confers NO exemption by itself.
+// Stripe checkout opens in the in-app branded webview. The BrandedCheckoutWebView
 // screen owns the URL allow-list, deep-link short-circuit, and the
 // CheckoutReturn refresh that keeps webhook-derived state authoritative.
 import type { NavigationProp, ParamListBase, RouteProp } from '@react-navigation/native';
@@ -180,8 +183,8 @@ export default function PackageCheckoutScreen({ navigation, route }: Props) {
         );
         return;
       }
-      // Apple Rule 3.1.3(b)/(e) B2B exemption — open Stripe Checkout in the
-      // branded in-app webview rather than expo-web-browser. The webview owns
+      // Guideline 3.1.3(d) (real-time 1:1 service); transport is not the
+      // basis. Stripe Checkout opens in the branded in-app webview, which owns
       // the URL allow-list, deep-link short-circuit, and refresh; webhooks
       // remain the source of truth for subscription state.
       successTap();
@@ -236,7 +239,9 @@ export default function PackageCheckoutScreen({ navigation, route }: Props) {
         >
           <Ionicons name="close" size={24} color={semanticColors.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.topTitle}>Coaching package</Text>
+        <Text style={styles.topTitle} testID="package-checkout-title">
+          {oneToOneCoachingLabel(pkg?.coach?.displayName)}
+        </Text>
         <View style={styles.backBtn} />
       </View>
 

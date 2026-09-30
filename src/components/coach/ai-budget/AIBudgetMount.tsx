@@ -37,6 +37,7 @@ import { AIBudgetBanner } from './AIBudgetBanner';
 import { AIBudgetTutorialModal, tutorialSeenKey } from './AIBudgetTutorialModal';
 import { AIBudgetHardPauseModal } from './AIBudgetHardPauseModal';
 import { surfaceFor, type CoachAIBudgetResponse } from '../../../api/types/coachAIBudget';
+import { nonP2PPurchasesHidden } from '../../../config/purchaseSurfaces';
 
 export interface AIBudgetMountProps {
   /**
@@ -70,6 +71,8 @@ export function AIBudgetMount({
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
 
   const surface = useMemo(() => surfaceFor(budget), [budget]);
+  // iOS: AI credit packs are not a 1:1 service, so no buy entry points.
+  const purchasesHidden = nonP2PPurchasesHidden();
 
   // Tutorial-seen state. Resolved per period_start: a new period (after
   // monthly rollover) resets the "seen" flag automatically because the key
@@ -124,7 +127,7 @@ export function AIBudgetMount({
     surface === 'chip' ? (
       <AIBudgetMeter
         budget={budget}
-        onPress={() => goToCheckout('custom')}
+        onPress={purchasesHidden ? undefined : () => goToCheckout('custom')}
         testID="ai-budget-mount-chip"
       />
     ) : null;
@@ -134,13 +137,17 @@ export function AIBudgetMount({
       <View testID="ai-budget-mount">
         {meterSlot ? meterSlot(chip) : chip}
         {surface === 'banner' && (
-          <AIBudgetBanner budget={budget} onBuyCredits={() => goToCheckout('custom')} />
+          <AIBudgetBanner
+            budget={budget}
+            onBuyCredits={purchasesHidden ? undefined : () => goToCheckout('custom')}
+          />
         )}
         {surface === 'tutorial' && tutorialSeen === false && (
           <AIBudgetTutorialModal
             visible
             budget={budget}
             onClose={() => setTutorialSeen(true)}
+            purchasesHidden={purchasesHidden}
             onSelectPack={(amount) => {
               setTutorialSeen(true);
               goToCheckout(amount);
@@ -152,6 +159,7 @@ export function AIBudgetMount({
             visible
             budget={budget}
             onClose={() => setHardPauseDismissed(true)}
+            purchasesHidden={purchasesHidden}
             onSelectPack={(amount) => {
               setHardPauseDismissed(true);
               goToCheckout(amount);

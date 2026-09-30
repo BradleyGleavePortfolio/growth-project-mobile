@@ -28,6 +28,7 @@ import { firstWinApi, WinType } from '../../services/firstWinApi';
 import { track } from '../../lib/analytics';
 import { typography } from '../../theme/tokens';
 import PackageSelectionSheet from '../../components/PackageSelectionSheet';
+import { shouldOfferPackagePrompt } from '../../lib/packagePromptGate';
 import { prefsStorage } from '../../storage/mmkv';
 import api from '../../services/api';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
@@ -119,6 +120,12 @@ export default function Day1WinScreen({ onComplete }: Day1WinScreenProps) {
 
   // Check the 24h gate and package availability, then either show sheet or call onComplete.
   const maybeShowPackageSheet = useCallback(async (target?: WinType) => {
+    // Clinic launch: never offer packages to an already-entitled (comp)
+    // client, and never on iOS while purchase surfaces are hidden.
+    if (!(await shouldOfferPackagePrompt())) {
+      onComplete(target);
+      return;
+    }
     const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
     const userId = currentUser?.id;
     try {

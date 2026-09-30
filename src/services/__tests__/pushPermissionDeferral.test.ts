@@ -1,0 +1,90 @@
+/**
+ * Rule 28: sign-in must not show the OS push prompt, and the tap handler
+ * must be installed at the app root.
+ */
+import * as fs from 'fs';
+import * as path from 'path';
+
+const mockGetPerms = jest.fn();
+const mockRequestPerms = jest.fn();
+const mockGetToken = jest.fn();
+const mockAddResponse = jest.fn();
+const mockGetLast = jest.fn();
+jest.mock('expo-notifications', () => ({
+  getPermissionsAsync: () => mockGetPerms(),
+  requestPermissionsAsync: () => mockRequestPerms(),
+  getExpoPushTokenAsync: () => mockGetToken(),
+  setNotificationChannelAsync: jest.fn(),
+  setNotificationHandler: jest.fn(),
+  addNotificationReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
+  addNotificationResponseReceivedListener: (cb: unknown) => mockAddResponse(cb),
+  getLastNotificationResponseAsync: () => mockGetLast(),
+  AndroidImportance: { MAX: 5 },
+}));
+
+import { registerForPushNotifications, installNotificationResponseHandler } from '../pushNotifications';
+
+function response(id: string, data: Record<string, unknown>) {
+  return { notification: { request: { identifier: id, content: { data } } } };
+}
+
+describe('registerForPushNotifications', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('requestPermission:false never prompts when permission is undetermined', async () => {
+    mockGetPerms.mockResolvedValue({ status: 'undetermined' });
+    const res = await registerForPushNotifications({ requestPermission: false });
+    expect(res).toEqual({ token: null, granted: false });
+    expect(mockRequestPerms).not.toHaveBeenCalled();
+    expect(mockGetToken).not.toHaveBeenCalled();
+  });
+
+  it('requestPermission:false still registers the token when already granted', async () => {
+    mockGetPerms.mockResolvedValue({ status: 'granted' });
+    mockGetToken.mockResolvedValue({ data: 'ExponentPushToken[abc]' });
+    const res = await registerForPushNotifications({ requestPermission: false });
+    expect(res).toEqual({ token: 'ExponentPushToken[abc]', granted: true });
+    expect(mockRequestPerms).not.toHaveBeenCalled();
+  });
+
+  it('default (explicit opt-in) still prompts', async () => {
+    mockGetPerms.mockResolvedValue({ status: 'undetermined' });
+    mockRequestPerms.mockResolvedValue({ status: 'granted' });
+    mockGetToken.mockResolvedValue({ data: 'tok' });
+    const res = await registerForPushNotifications();
+    expect(mockRequestPerms).toHaveBeenCalledTimes(1);
+    expect(res.token).toBe('tok');
+  });
+});
+
+describe('installNotificationResponseHandler', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('routes live taps and the cold-start tap with their ids', async () => {
+    let live: ((r: unknown) => void) | undefined;
+    mockAddResponse.mockImplementation((cb: (r: unknown) => void) => {
+      live = cb;
+      return { remove: jest.fn() };
+    });
+    mockGetLast.mockResolvedValue(response('cold', { actionScreen: 'Messages' }));
+    const onResponse = jest.fn();
+    const cleanup = installNotificationResponseHandler(onResponse);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(onResponse).toHaveBeenCalledWith('Messages', undefined, 'cold');
+    live?.(response('warm', { actionScreen: 'Timeline', actionParams: { id: 'm1' } }));
+    expect(onResponse).toHaveBeenCalledWith('Timeline', { id: 'm1' }, 'warm');
+    cleanup();
+  });
+});
+
+describe('app wiring (source guards)', () => {
+  const APP = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'App.tsx'), 'utf8');
+  it('App.tsx installs the tap handler once, routed through pushTapRouter', () => {
+    expect(APP).toMatch(/return installNotificationResponseHandler\(routePushTap\);\s*\n\s*\}, \[\]\);/);
+  });
+  it('sign-in token registration never requests permission', () => {
+    expect(APP).toMatch(/registerForPushNotifications\(\{ requestPermission: false \}\)/);
+    expect(APP).not.toMatch(/registerForPushNotifications\(\)/);
+  });
+});

@@ -29,6 +29,7 @@ import { coachTeamApi } from '../../api/coachTeamApi';
 import { authApi } from '../../services/api';
 import type { TeamStackParamList } from '../../navigation/CoachNavigator';
 import SubCoachInviteModal from './SubCoachInviteModal';
+import { nonP2PPurchasesHidden } from '../../config/purchaseSurfaces';
 
 const SCALE_TIERS = ['scale', 'enterprise'];
 
@@ -134,9 +135,22 @@ function SubCoachRow({
   );
 }
 
-function UpgradeGate() {
+export function UpgradeGate({ purchasesHidden = nonP2PPurchasesHidden() }: { purchasesHidden?: boolean } = {}) {
+  // iOS with non-P2P purchases hidden: neutral access information only, no
+  // instruction to upgrade (plan changes are not offered in the iOS app).
+  if (purchasesHidden) {
+    return (
+      <View style={styles.gate} testID="team-gate-neutral">
+        <Text style={styles.gateTitle}>Team management</Text>
+        <Text style={styles.gateBody}>
+          Team management is not included in your current plan. Your clients and
+          coaching are unchanged.
+        </Text>
+      </View>
+    );
+  }
   return (
-    <View style={styles.gate}>
+    <View style={styles.gate} testID="team-gate-upgrade">
       <Text style={styles.gateTitle}>Scale plan required</Text>
       <Text style={styles.gateBody}>
         Team management is available on the Scale plan and above. Upgrade to
