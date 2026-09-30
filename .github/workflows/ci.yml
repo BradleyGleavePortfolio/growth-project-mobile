@@ -30,6 +30,13 @@ jobs:
       - name: Vendor-name guard
         run: npm run guard:vendors
 
+      - name: Hermes guard (@supabase/* dynamic import)
+        # EAS build d3db0b56 failed in createBundleReleaseJsAndAssets: Hermes
+        # rejects supabase-js 2.106.x `import(OTEL_PKG)`. Fails if any
+        # installed @supabase/* file has a non-literal dynamic import(), or
+        # supabase-js is 2.106.0–2.117.1 without a "react-native" condition.
+        run: npm run guard:supabase-hermes
+
       - name: Validate app config (default mode — catches genuine breakage)
         # Always runs. Catches the things that always have to be true:
         # missing custom scheme, mismatched bundle ids, stale Google client
