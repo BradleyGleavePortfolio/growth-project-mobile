@@ -30,6 +30,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as AppleAuthentication from 'expo-apple-authentication';
 import api from '../services/api';
 import { secureStorage } from '../services/secureStorage';
+import { postWithIntendedRole, type IntendedRole } from '../lib/intendedRole';
 
 /**
  * Request body for POST /auth/apple.
@@ -89,6 +90,8 @@ export interface AppleAuthOptions {
   // Forwarded to /auth/apple so a new (or existing) user can be attached to
   // the right coach during the upsert — matches the Google flow.
   inviteCode?: string;
+  /** Signup role choice; ignored when an invite code is present (always client). */
+  intendedRole?: IntendedRole;
 }
 
 // Apple-specific cancel error code surfaced by expo-apple-authentication.
@@ -144,7 +147,11 @@ export async function signInWithApple(
 
     // POST the identity token to /auth/apple. The backend verifies the JWT
     // against Apple's JWKS, upserts the user, and returns a Supabase session.
-    const response = await api.post('/auth/apple', body);
+    const response = await postWithIntendedRole(
+      (b) => api.post('/auth/apple', b),
+      body,
+      options.inviteCode ? 'client' : options.intendedRole,
+    );
     const { access_token, refresh_token, user, is_new_user, invite_attached, invite_attach_error } =
       response.data ?? {};
 

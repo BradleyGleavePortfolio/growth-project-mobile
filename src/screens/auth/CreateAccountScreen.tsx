@@ -31,6 +31,9 @@ import AppleSignInButton from '../../components/AppleSignInButton';
 import { signInWithApple } from '../../utils/appleAuth';
 import { setUserCache } from '../../lib/userCache';
 import { purgePersistedQueryCacheForAllUsers } from '../../services/queryClient';
+import { authEvents } from '../../utils/authEvents';
+import RoleChoice from '../../components/auth/RoleChoice';
+import { isServerCoach, type IntendedRole } from '../../lib/intendedRole';
 import { Colors } from '../../constants/colors';
 import { typography } from '../../theme/tokens';
 
@@ -39,7 +42,7 @@ interface Props {
   route?: { params?: { invite_code?: string; email?: string } };
 }
 
-type Step = 'register' | 'verify';
+type Step = 'role' | 'register' | 'verify';
 
 /**
  * Conservative sanitiser for an inbound prefilled email. Strips
@@ -62,7 +65,12 @@ function sanitisePrefillEmail(raw: unknown): string {
 export default function CreateAccountScreen({ navigation, route }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
-  const [step, setStep] = useState<Step>('register');
+  // Role choice (C13): people who arrive with an invite / QR code are always
+  // clients and skip it; everyone else picks first.
+  const arrivedWithCode = !!route?.params?.invite_code;
+  const [step, setStep] = useState<Step>(arrivedWithCode ? 'register' : 'role');
+  const [intendedRole, setIntendedRole] = useState<IntendedRole>('client');
+  const isCoachSignup = intendedRole === 'coach' && !arrivedWithCode;
   const [name, setName] = useState('');
   const [email, setEmail] = useState<string>(() =>
     sanitisePrefillEmail(route?.params?.email),
@@ -108,6 +116,8 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
   // Auto-preview when an invite code is prefilled from a deep link.
   useEffect(() => {
     if (route?.params?.invite_code) {
+      setIntendedRole('client');
+      setStep((prev) => (prev === 'role' ? 'register' : prev));
       previewCode(route.params.invite_code);
     }
   }, [route?.params?.invite_code]);
@@ -147,9 +157,10 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
       return;
     }
 
-    const trimmedCode = inviteCode.trim();
+    // A coach signup never carries a client invite code.
+    const trimmedCode = isCoachSignup ? '' : inviteCode.trim();
 
-    if (requireInviteCode && !trimmedCode) {
+    if (requireInviteCode && !isCoachSignup && !trimmedCode) {
       setError('An invite code from your coach is required to join.');
       return;
     }
@@ -206,7 +217,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
           email,
           password,
           phone: phone || undefined,
-        });
+        }, intendedRole);
       }
 
       await AsyncStorage.setItem('pending_email', email);
@@ -226,6 +237,27 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
     }
   };
 
+  // After a session exists: a server-confirmed coach goes straight to the
+  // app (RootNavigator mounts CoachNavigator from user.role). Everyone else,
+  // including a coach request the backend did not apply yet, continues to
+  // RoleSelection as before.
+  const routeAfterAuth = async (
+    user: { role?: unknown } | null | undefined,
+    retryParams?: { inviteAttachError: string; inviteCode?: string },
+  ) => {
+    if (isServerCoach(user)) {
+      await setUserCache(user as Parameters<typeof setUserCache>[0]);
+      await purgePersistedQueryCacheForAllUsers();
+      await AsyncStorage.removeItem('needs_role_selection');
+      authEvents.emit();
+      return;
+    }
+    await AsyncStorage.setItem('needs_role_selection', 'true');
+    if (retryParams) navigation.replace('RoleSelection', retryParams);
+    else if (isCoachSignup) navigation.replace('RoleSelection', { coachRequestPending: true });
+    else navigation.replace('RoleSelection');
+  };
+
   const handleCheckVerified = async () => {
     setVerifyLoading(true);
     setError('');
@@ -241,16 +273,12 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
       // stale boot-time key before the first persistence pass for this user.
       await purgePersistedQueryCacheForAllUsers();
 
-      await AsyncStorage.setItem('needs_role_selection', 'true');
-
-      if (inviteAttachError !== null) {
-        navigation.replace('RoleSelection', {
-          inviteAttachError,
-          inviteCode: inviteCode.trim() || undefined,
-        });
-      } else {
-        navigation.replace('RoleSelection');
-      }
+      await routeAfterAuth(
+        user,
+        inviteAttachError !== null
+          ? { inviteAttachError, inviteCode: inviteCode.trim() || undefined }
+          : undefined,
+      );
     } catch (err) {
       const msg = errorMessage(err, '').toLowerCase();
       if (msg.includes('email') || msg.includes('confirm')) {
@@ -264,15 +292,19 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
   };
 
   const handleAppleSignup = async () => {
-    const trimmedCode = inviteCode.trim();
-    if (requireInviteCode && !trimmedCode) {
+    // A coach signup never carries a client invite code.
+    const trimmedCode = isCoachSignup ? '' : inviteCode.trim();
+    if (requireInviteCode && !isCoachSignup && !trimmedCode) {
       setError('Enter your coach invite code before continuing with Apple.');
       return;
     }
     setLoading(true);
     setError('');
     try {
-      const result = await signInWithApple({ inviteCode: trimmedCode || undefined });
+      const result = await signInWithApple({
+        inviteCode: trimmedCode || undefined,
+        intendedRole: trimmedCode ? 'client' : intendedRole,
+      });
       if (!result.success) {
         if (result.cancelled) return;
         const friendly = toFriendlyAppleAuthError(result.error);
@@ -282,15 +314,12 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
         }
         return;
       }
-      await AsyncStorage.setItem('needs_role_selection', 'true');
-      if (trimmedCode && result.invite_attached === false) {
-        navigation.replace('RoleSelection', {
-          inviteAttachError: result.invite_attach_error ?? 'unknown',
-          inviteCode: trimmedCode,
-        });
-      } else {
-        navigation.replace('RoleSelection');
-      }
+      await routeAfterAuth(
+        result.user,
+        trimmedCode && result.invite_attached === false
+          ? { inviteAttachError: result.invite_attach_error ?? 'unknown', inviteCode: trimmedCode }
+          : undefined,
+      );
     } catch (err) {
       const friendly = toFriendlyAppleAuthError(err);
       if (!friendly.cancelled) setError(friendly.message);
@@ -300,8 +329,9 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
   };
 
   const handleGoogleSignup = async () => {
-    const trimmedCode = inviteCode.trim();
-    if (requireInviteCode && !trimmedCode) {
+    // A coach signup never carries a client invite code.
+    const trimmedCode = isCoachSignup ? '' : inviteCode.trim();
+    if (requireInviteCode && !isCoachSignup && !trimmedCode) {
       setError('Enter your coach invite code before continuing with Google.');
       return;
     }
@@ -309,7 +339,10 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
     setError('');
     try {
       const { signInWithGoogle } = await import('../../utils/googleAuth');
-      const result = await signInWithGoogle({ inviteCode: trimmedCode || undefined });
+      const result = await signInWithGoogle({
+        inviteCode: trimmedCode || undefined,
+        intendedRole: trimmedCode ? 'client' : intendedRole,
+      });
 
       if (!result.success) {
         const friendly = toFriendlyAuthError(result.error);
@@ -320,8 +353,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
         return;
       }
 
-      await AsyncStorage.setItem('needs_role_selection', 'true');
-      navigation.replace('RoleSelection');
+      await routeAfterAuth(result.user);
     } catch (err) {
       const friendly = toFriendlyAuthError(err);
       if (!friendly.cancelled) setError(friendly.message);
@@ -378,6 +410,28 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
     );
   }
 
+  if (step === 'role') {
+    return (
+      <View style={styles.container}>
+        <ScrollView contentContainerStyle={styles.scroll}>
+          <View style={styles.header}>
+            <Text style={styles.title} accessibilityRole="header">How will you use the app?</Text>
+            <Text style={styles.subtitle}>
+              Have an invite code from your coach? Choose the first option and enter it on the next step.
+            </Text>
+          </View>
+          <RoleChoice
+            onChoose={(role) => {
+              setIntendedRole(role);
+              setError('');
+              setStep('register');
+            }}
+          />
+        </ScrollView>
+      </View>
+    );
+  }
+
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -385,12 +439,27 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
     >
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
-          <Text style={styles.title} accessibilityRole="header">Join your coach</Text>
-          <Text style={styles.subtitle}>
-            {requireInviteCode
-              ? 'Enter the invite code your coach shared to begin.'
-              : 'Create your account to begin.'}
+          <Text style={styles.title} accessibilityRole="header">
+            {isCoachSignup ? 'Create your coach account' : 'Join your coach'}
           </Text>
+          <Text style={styles.subtitle}>
+            {isCoachSignup
+              ? 'Set up your account, then your coaching practice.'
+              : requireInviteCode
+                ? 'Enter the invite code your coach shared to begin.'
+                : 'Create your account to begin.'}
+          </Text>
+          {!arrivedWithCode ? (
+            <Text
+              style={styles.changeRole}
+              accessibilityRole="button"
+              accessibilityLabel="Change how you will use the app"
+              testID="role-choice-change"
+              onPress={() => setStep('role')}
+            >
+              {isCoachSignup ? 'Here to train instead?' : 'Coach clients instead?'}
+            </Text>
+          ) : null}
         </View>
 
         {error ? (
@@ -399,65 +468,67 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
           </View>
         ) : null}
 
-        <View style={styles.inputGroup}>
-          <Text style={styles.inputLabel}>
-            {requireInviteCode ? 'INVITE CODE' : 'INVITE CODE (OPTIONAL)'}
-          </Text>
-          <TextInput
-            style={styles.input}
-            value={inviteCode}
-            onChangeText={(v) => {
-              setInviteCode(v);
-              setInvitePreview(null);
-            }}
-            onBlur={() => previewCode(inviteCode)}
-            placeholder="From your coach"
-            placeholderTextColor={colors.textMuted}
-            autoCapitalize="characters"
-            autoCorrect={false}
-            accessibilityLabel="Coach invite code"
-            testID="invite-code-input"
-          />
-          <PasteInviteCodeButton
-            disabled={loading}
-            onCode={(code) => {
-              setError('');
-              setInviteCode(code);
-              setInvitePreview(null);
-              void previewCode(code);
-            }}
-            onNoCode={(message) => setError(message)}
-          />
-          {previewLoading ? (
-            <Text style={styles.invitePreviewMuted}>Checking code…</Text>
-          ) : invitePreview?.valid ? (
-            <Text style={styles.invitePreviewOk}>
-              You will be paired with{' '}
-              {invitePreview.business_name || invitePreview.coach_name || 'your coach'}.
+        {isCoachSignup ? null : (
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>
+              {requireInviteCode ? 'INVITE CODE' : 'INVITE CODE (OPTIONAL)'}
             </Text>
-          ) : invitePreview && !invitePreview.valid ? (
-            <Text style={styles.invitePreviewBad}>
-              {invitePreview.reason || 'This code is not currently active.'}
-            </Text>
-          ) : requireInviteCode ? (
-            <Text style={styles.invitePreviewMuted}>
-              Don't have a code?{' '}
-              <Text
-                style={styles.requestAccessLink}
-                accessibilityRole="link"
-                accessibilityLabel="Request access by email"
-                onPress={() =>
-                  Linking.openURL(
-                    'mailto:hello@thegrowthproject.app?subject=Request%20access%20to%20The%20Growth%20Project',
-                  )
-                }
-              >
-                Request access
+            <TextInput
+              style={styles.input}
+              value={inviteCode}
+              onChangeText={(v) => {
+                setInviteCode(v);
+                setInvitePreview(null);
+              }}
+              onBlur={() => previewCode(inviteCode)}
+              placeholder="From your coach"
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              accessibilityLabel="Coach invite code"
+              testID="invite-code-input"
+            />
+            <PasteInviteCodeButton
+              disabled={loading}
+              onCode={(code) => {
+                setError('');
+                setInviteCode(code);
+                setInvitePreview(null);
+                void previewCode(code);
+              }}
+              onNoCode={(message) => setError(message)}
+            />
+            {previewLoading ? (
+              <Text style={styles.invitePreviewMuted}>Checking code…</Text>
+            ) : invitePreview?.valid ? (
+              <Text style={styles.invitePreviewOk}>
+                You will be paired with{' '}
+                {invitePreview.business_name || invitePreview.coach_name || 'your coach'}.
               </Text>
-              .
-            </Text>
-          ) : null}
-        </View>
+            ) : invitePreview && !invitePreview.valid ? (
+              <Text style={styles.invitePreviewBad}>
+                {invitePreview.reason || 'This code is not currently active.'}
+              </Text>
+            ) : requireInviteCode ? (
+              <Text style={styles.invitePreviewMuted}>
+                Don't have a code?{' '}
+                <Text
+                  style={styles.requestAccessLink}
+                  accessibilityRole="link"
+                  accessibilityLabel="Request access by email"
+                  onPress={() =>
+                    Linking.openURL(
+                      'mailto:hello@thegrowthproject.app?subject=Request%20access%20to%20The%20Growth%20Project',
+                    )
+                  }
+                >
+                  Request access
+                </Text>
+                .
+              </Text>
+            ) : null}
+          </View>
+        )}
 
         <View style={styles.inputGroup}>
           <Text style={styles.inputLabel}>FULL NAME</Text>
@@ -583,6 +654,7 @@ const makeStyles = (colors: ThemeColors) =>
   header: { marginTop: Spacing.xl, marginBottom: Spacing.xl },
   title: { ...Typography.h1, marginBottom: Spacing.xs },
   subtitle: { ...Typography.body },
+  changeRole: { ...Typography.body, color: colors.primary, marginTop: Spacing.sm },
   errorBox: {
     backgroundColor: Colors.noticeCriticalBg,
     borderRadius: Radius.sm,

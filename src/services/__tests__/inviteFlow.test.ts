@@ -143,6 +143,8 @@ describe('email signup with invite code (atomic path)', () => {
       email: 'alice@example.com',
       password: 'Password1!',
       invite_code: 'SMOKE01',
+      // C13: invite-code signup is always a client.
+      intended_role: 'client',
     });
   });
 
@@ -172,6 +174,15 @@ describe('Google OAuth attach', () => {
     expect(axiosMock.__instance.post).toHaveBeenCalledWith('/auth/google', {
       token: 'GOOGLE_TOKEN',
       invite_code: 'SMOKE01',
+      intended_role: 'client',
+    });
+  });
+
+  it('C13: a codeless Google signup forwards the chosen intended_role', async () => {
+    await authApi.googleAuth('GOOGLE_TOKEN', undefined, 'coach');
+    expect(axiosMock.__instance.post).toHaveBeenCalledWith('/auth/google', {
+      token: 'GOOGLE_TOKEN',
+      intended_role: 'coach',
     });
   });
 

@@ -37,7 +37,7 @@ jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 import RoleSelectionScreen from '../RoleSelectionScreen';
 import { __resetSignupPolicyCacheForTests } from '../../../lib/signupPolicy';
 
-function route(params?: { inviteAttachError?: string; inviteCode?: string }) {
+function route(params?: { inviteAttachError?: string; inviteCode?: string; coachRequestPending?: boolean }) {
   return { key: 'k', name: 'RoleSelection' as const, params };
 }
 
@@ -128,6 +128,17 @@ describe('RoleSelection retry step', () => {
     await waitFor(() => expect(mockSelectRole).toHaveBeenCalledWith('student', undefined));
     expect(mockAttach).not.toHaveBeenCalled();
     await waitFor(() => expect(mockEmit).toHaveBeenCalled());
+  });
+
+  it('C13: a coach request the backend did not apply shows a plain notice and never selects coach', async () => {
+    mockSelectRole.mockResolvedValue({ data: { role: 'student' } });
+    const { findByTestId, getByTestId } = await render(
+      <RoleSelectionScreen navigation={{} as never} route={route({ coachRequestPending: true })} />,
+    );
+    expect(await findByTestId('coach-request-pending')).toBeTruthy();
+    await fireEvent.press(getByTestId('role-continue'));
+    await waitFor(() => expect(mockSelectRole).toHaveBeenCalledWith('student', undefined));
+    expect(mockSelectRole).not.toHaveBeenCalledWith('coach', expect.anything());
   });
 });
 

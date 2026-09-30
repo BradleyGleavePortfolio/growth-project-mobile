@@ -15,6 +15,7 @@ import { createClient } from '@supabase/supabase-js';
 import { secureStorage } from '../services/secureStorage';
 import { env } from '../config/env';
 import { errorMessage } from '../types/common';
+import type { IntendedRole } from '../lib/intendedRole';
 
 // Ensure the browser session is completed when returning to the app
 WebBrowser.maybeCompleteAuthSession();
@@ -42,6 +43,8 @@ export interface GoogleAuthOptions {
   // When set, the invite code is forwarded to /auth/google so the backend can
   // attach the new (or existing) user to the right coach during the upsert.
   inviteCode?: string;
+  /** Signup role choice; ignored when an invite code is present (always client). */
+  intendedRole?: IntendedRole;
 }
 
 export async function signInWithGoogle(
@@ -129,7 +132,7 @@ export async function signInWithGoogle(
     }
 
     try {
-      const response = await authApi.googleAuth(accessToken, options.inviteCode);
+      const response = await authApi.googleAuth(accessToken, options.inviteCode, options.intendedRole);
       const { user } = response.data;
 
       // Defensive second pass: if the backend doesn't yet support the

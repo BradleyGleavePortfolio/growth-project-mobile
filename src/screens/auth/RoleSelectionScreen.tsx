@@ -30,13 +30,27 @@ type Props = {
   route?: RouteProp<AuthStackParamList, 'RoleSelection'>;
 };
 
-// Role selection is now a client-only flow. Coach and admin promotion are
-// handled by an OWNER from the web console — there is no self-serve coach
-// upgrade in the mobile app.
+// RoleSelection: the last signup step, reached after a session exists.
 //
-// Rationale: per-seat billing means a client cannot promote themselves into a
-// paid coach tier; only an admin can. Removing the in-app become-coach UI
-// closes the privilege-escalation gap that existed in the prior version.
+// Who sees it:
+//   - Clients (chose "I'm here to train", or arrived with an invite / QR code
+//     and are therefore always clients). They pair with a coach here: enter
+//     or paste a code, or continue without one when the live signup policy
+//     is codeless. This screen only ever selects the client ('student') role.
+//   - Retry: signup reported `invite_attached:false`, so the code is mandatory
+//     and the banner explains why (see inviteAttachError below).
+//   - A person who chose "I coach clients" (CreateAccount role step, C13)
+//     while the backend has not applied `intended_role` yet. The server still
+//     returned a non-coach user, so we say so plainly and let them continue
+//     as a client or stop here. We never self-promote to coach from the app.
+//
+// Who does NOT see it: a user whose server-returned `user.role` is 'coach'
+// (the backend honoured `intended_role: 'coach'`). CreateAccount finishes
+// auth directly and RootNavigator mounts CoachNavigator.
+//
+// Authorization: the role always comes from the server. `selectRole('coach')`
+// stays rejected by the backend (audit C3), and this screen never calls it.
+
 // Security (audit): never log an Axios error object; it can carry request
 // config / Authorization. Status and error class only.
 function logRedacted(label: string, err: unknown): void {
@@ -55,6 +69,7 @@ export default function RoleSelectionScreen({ route }: Props) {
   // "continue without a coach" only when the live policy allows codeless.
   const attachRetryReason = route?.params?.inviteAttachError;
   const isAttachRetry = typeof attachRetryReason === 'string';
+  const coachRequestPending = route?.params?.coachRequestPending === true;
   const [loading, setLoading] = useState(false);
   const [requireInviteCode, setRequireInviteCode] = useState(
     () => (getLastKnownSignupPolicy() ?? UNKNOWN_SIGNUP_POLICY).inviteCodeRequired,
@@ -259,6 +274,14 @@ export default function RoleSelectionScreen({ route }: Props) {
       <View style={styles.header}>
         <Text style={styles.greeting}>One more step.</Text>
         <Text style={styles.title}>Pair with your coach</Text>
+        {coachRequestPending ? (
+          <View style={styles.retryBox} accessible testID="coach-request-pending">
+            <Text style={styles.retryText}>
+              Coach sign-up is not open on this account yet. You can continue as a client for now.
+              To run your practice here, contact support and we will set up coach access.
+            </Text>
+          </View>
+        ) : null}
         {isAttachRetry ? (
           <View
             style={styles.retryBox}

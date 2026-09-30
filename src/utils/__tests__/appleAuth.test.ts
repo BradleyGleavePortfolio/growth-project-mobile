@@ -55,6 +55,8 @@ describe('signInWithApple', () => {
       token: 'apple-id-token',
       full_name: 'Ada Lovelace',
       invite_code: 'INV-123',
+      // C13: with an invite code the user is always a client.
+      intended_role: 'client',
     });
     expect(result.success).toBe(true);
     expect(result.is_new_user).toBe(true);

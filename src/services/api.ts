@@ -348,14 +348,27 @@ export interface SignupWithCodeResponse {
 }
 
 export const authApi = {
-  register: (data: { email: string; password: string; name: string; phone?: string; invite_code?: string }) =>
-    api.post('/auth/register', data),
+  // `intended_role` (signup role choice) is optional and dropped on a retry
+  // when the backend does not know it yet; see lib/intendedRole.ts.
+  register: (
+    data: { email: string; password: string; name: string; phone?: string; invite_code?: string },
+    intendedRole?: IntendedRole,
+  ) => postWithIntendedRole((body) => api.post('/auth/register', body), data, intendedRole),
+  // Invite-code signup is always a client.
   signupWithCode: (data: { email: string; password: string; name: string; phone?: string; invite_code: string }) =>
-    api.post<SignupWithCodeResponse>('/auth/signup-with-code', data),
+    postWithIntendedRole(
+      (body) => api.post<SignupWithCodeResponse>('/auth/signup-with-code', body),
+      data,
+      'client',
+    ),
   login: (data: { email: string; password: string }) =>
     api.post('/auth/login', data),
-  googleAuth: (token: string, inviteCode?: string) =>
-    api.post('/auth/google', inviteCode ? { token, invite_code: inviteCode } : { token }),
+  googleAuth: (token: string, inviteCode?: string, intendedRole?: IntendedRole) =>
+    postWithIntendedRole(
+      (body) => api.post('/auth/google', body),
+      inviteCode ? { token, invite_code: inviteCode } : { token },
+      inviteCode ? 'client' : intendedRole,
+    ),
   // Apple Sign-In: POST the identity token from expo-apple-authentication.
   // Backend verifies the JWT against Apple's JWKS and returns the same
   // session shape as /auth/google.
@@ -621,6 +634,7 @@ import type {
   CrossPillarSearchResponse,
   PracticeTypeResponse,
 } from '../types/crossPillar';
+import { postWithIntendedRole, type IntendedRole } from '../lib/intendedRole';
 
 export const practiceTypeApi = {
   get: () => api.get<PracticeTypeResponse>('/coach/practice'),

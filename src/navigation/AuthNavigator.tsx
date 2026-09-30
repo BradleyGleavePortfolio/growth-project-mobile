@@ -27,7 +27,7 @@ export type AuthStackParamList = {
   // `inviteAttachError` is set when signup succeeded but the backend said
   // `invite_attached:false`; RoleSelection then shows the enter-code retry
   // state with friendly copy and the code prefilled.
-  RoleSelection: { inviteAttachError?: string; inviteCode?: string } | undefined;
+  RoleSelection: { inviteAttachError?: string; inviteCode?: string; coachRequestPending?: boolean } | undefined;
   // Email Pipeline v1 — public accept screen. Reachable via:
   //   tgp://invite/accept/:token
   //   https://app.trygrowthproject.com/invite/accept/:token

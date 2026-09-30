@@ -158,3 +158,10 @@ npm run lint
 ## Paste invite code
 
 Both CreateAccount and RoleSelection have a "Paste invite code" button (`components/invite/PasteInviteCodeButton`, expo-clipboard). The clipboard is read only on tap. It accepts a bare code (`GP-XXXX`) or a join link (`https://app.trygrowthproject.com/join/<code>`, `tgp://join/<code>`, `?code=`); see `lib/inviteCodeInput.extractInviteCode`.
+
+## Signup role choice (C13)
+
+- People who start CreateAccount **without** an invite code first choose "I'm here to train" or "I coach clients" (`components/auth/RoleChoice.tsx`). People who arrive with an invite or QR code (`route.params.invite_code`) are always clients and skip the choice.
+- The choice is sent as the optional `intended_role: 'client' | 'coach'` on `/auth/register`, `/auth/apple` and `/auth/google`. `/auth/signup-with-code` always sends `'client'`, and any request that carries an invite code sends `'client'`.
+- Today's backend rejects unknown fields (`forbidNonWhitelisted`, 400 "property intended_role should not exist"). `lib/intendedRole.postWithIntendedRole` retries once without the field on exactly that error. Because the pipe rejects before the handler runs, the retry cannot double-create an account.
+- Routing uses the **server** role only. If the returned `user.role === 'coach'`, CreateAccount clears `needs_role_selection` and emits `authEvents`, and RootNavigator mounts CoachNavigator. Otherwise the flow continues to RoleSelection. For a coach request the backend did not apply, RoleSelection gets `{ coachRequestPending: true }` and shows a plain notice. The app never calls `selectRole('coach')`.

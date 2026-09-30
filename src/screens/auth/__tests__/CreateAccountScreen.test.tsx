@@ -61,6 +61,9 @@ jest.mock('../../../theme/ThemeProvider', () => ({
   useTheme: () => ({ colors: new Proxy({}, { get: () => '#000000' }) }),
 }));
 
+const mockEmit = jest.fn();
+jest.mock('../../../utils/authEvents', () => ({ authEvents: { emit: () => mockEmit() } }));
+
 import CreateAccountScreen from '../CreateAccountScreen';
 import { __resetSignupPolicyCacheForTests } from '../../../lib/signupPolicy';
 
@@ -68,12 +71,14 @@ function makeNav() {
   return { replace: jest.fn(), navigate: jest.fn() };
 }
 
-async function renderScreen(params?: { invite_code?: string }) {
+async function renderScreen(params?: { invite_code?: string }, role: 'client' | 'coach' | null = 'client') {
   const nav = makeNav();
   const utils = await render(
     <CreateAccountScreen navigation={nav as never} route={params ? { params } : undefined} />,
   );
   await waitFor(() => expect(mockGetSignupPolicy).toHaveBeenCalled());
+  // C13: without an invite code the first step is the role choice.
+  if (!params?.invite_code && role) await fireEvent.press(await utils.findByTestId(`role-choice-${role}`));
   return { nav, ...utils };
 }
 
@@ -244,6 +249,63 @@ describe('CreateAccountScreen', () => {
     expect(mockSignupWithCode).not.toHaveBeenCalled();
     await fireEvent.press(await utils.findByText('I verified my email'));
     await waitFor(() => expect(utils.nav.replace).toHaveBeenCalledWith('RoleSelection'));
+  });
+
+  describe('C13 role choice', () => {
+    it('no invite code: role choice comes first', async () => {
+      mockGetSignupPolicy.mockResolvedValue({ data: { invite_code_required: false, providers: ['email'] } });
+      const utils = await renderScreen(undefined, null);
+      expect(await utils.findByTestId('role-choice')).toBeTruthy();
+      expect(utils.getByText("I'm here to train")).toBeTruthy();
+      expect(utils.getByText('I coach clients')).toBeTruthy();
+      expect(utils.queryByTestId('invite-code-input')).toBeNull();
+    });
+
+    it('arriving with an invite / QR code skips the choice (always a client)', async () => {
+      mockGetSignupPolicy.mockResolvedValue({ data: { invite_code_required: false, providers: ['email'] } });
+      const utils = await renderScreen({ invite_code: 'GP-PNW1' });
+      expect(utils.queryByTestId('role-choice')).toBeNull();
+      expect(utils.getByTestId('invite-code-input')).toBeTruthy();
+      expect(utils.queryByTestId('role-choice-change')).toBeNull();
+    });
+
+    it('client choice sends intended_role client on /auth/register', async () => {
+      mockGetSignupPolicy.mockResolvedValue({ data: { invite_code_required: false, providers: ['email'] } });
+      mockRegister.mockResolvedValue({ data: {} });
+      const utils = await renderScreen();
+      await fillAndSubmit(utils);
+      await waitFor(() => expect(mockRegister).toHaveBeenCalledTimes(1));
+      expect(mockRegister.mock.calls[0][1]).toBe('client');
+    });
+
+    it('coach choice: no invite field, intended_role coach, and a server-confirmed coach skips RoleSelection', async () => {
+      mockGetSignupPolicy.mockResolvedValue({ data: { invite_code_required: true, providers: ['email'] } });
+      mockRegister.mockResolvedValue({ data: {} });
+      mockLogin.mockResolvedValue({ data: { access_token: 'a', user: { id: 'u1', role: 'coach' } } });
+      const utils = await renderScreen(undefined, 'coach');
+      expect(utils.getByText('Create your coach account')).toBeTruthy();
+      expect(utils.queryByTestId('invite-code-input')).toBeNull();
+      await fillAndSubmit(utils);
+      await waitFor(() => expect(mockRegister).toHaveBeenCalledTimes(1));
+      expect(mockRegister.mock.calls[0][0]).not.toHaveProperty('invite_code');
+      expect(mockRegister.mock.calls[0][1]).toBe('coach');
+      await fireEvent.press(await utils.findByText('I verified my email'));
+      await waitFor(() => expect(mockEmit).toHaveBeenCalled());
+      expect(utils.nav.replace).not.toHaveBeenCalled();
+    });
+
+    it('coach choice ignored by the current backend: falls back to RoleSelection with a plain notice', async () => {
+      mockGetSignupPolicy.mockResolvedValue({ data: { invite_code_required: false, providers: ['email'] } });
+      mockRegister.mockResolvedValue({ data: {} });
+      mockLogin.mockResolvedValue({ data: { access_token: 'a', user: { id: 'u1', role: 'student' } } });
+      const utils = await renderScreen(undefined, 'coach');
+      await fillAndSubmit(utils);
+      await fireEvent.press(await utils.findByText('I verified my email'));
+      await waitFor(() =>
+        expect(utils.nav.replace).toHaveBeenCalledWith('RoleSelection', { coachRequestPending: true }),
+      );
+      expect(mockEmit).not.toHaveBeenCalled();
+    });
   });
 });
 
