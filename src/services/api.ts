@@ -347,21 +347,16 @@ export const authApi = {
   // Apple Sign-In: POST the identity token from expo-apple-authentication.
   // Backend verifies the JWT against Apple's JWKS and returns the same
   // session shape as /auth/google.
+  // Same body as utils/appleAuth.buildAppleAuthBody (live DTO whitelist:
+  // token, full_name string, invite_code). Unused by screens today.
   appleAuth: (
     identityToken: string,
-    extras: {
-      authorizationCode?: string;
-      email?: string;
-      fullName?: { given_name?: string; family_name?: string };
-      inviteCode?: string;
-    } = {},
+    extras: { fullName?: string; inviteCode?: string } = {},
   ) =>
     api.post('/auth/apple', {
-      identity_token: identityToken,
-      authorization_code: extras.authorizationCode,
-      email: extras.email,
-      full_name: extras.fullName,
-      invite_code: extras.inviteCode,
+      token: identityToken,
+      ...(extras.fullName ? { full_name: extras.fullName } : {}),
+      ...(extras.inviteCode ? { invite_code: extras.inviteCode } : {}),
     }),
     attachInviteCode: (code: string) =>
     api.post('/auth/attach-invite-code', { invite_code: code }),

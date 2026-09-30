@@ -29,7 +29,7 @@ Pre-login surface area: welcome, login, invite-gated signup, password reset, and
 | `POST` | `/auth/register` | none | `{ email, password, name, phone?, invite_code? }` | `{ user }` |
 | `POST` | `/auth/signup-with-code` | none | `{ email, password, name, phone?, invite_code }` | `{ user }` |
 | `POST` | `/auth/google` | none | `{ token, invite_code? }` | `{ access_token, refresh_token, user, is_new_user }` |
-| `POST` | `/auth/apple` | none | `{ identity_token, authorization_code?, email?, full_name?, invite_code? }` | `{ access_token, refresh_token, user, is_new_user }` |
+| `POST` | `/auth/apple` | none | `{ token, full_name?: string, invite_code? }` (only keys the live DTO whitelists; see `buildAppleAuthBody`) | `{ access_token, refresh_token, user, is_new_user }` |
 | `POST` | `/auth/select-role` | JWT | `{ role, coach_code? }` | `{ user }` |
 | `POST` | `/auth/attach-invite-code` | JWT | `{ invite_code }` | `{ user }` |
 | `POST` | `/auth/forgot-password` | none | `{ email }` | `{ sent: true }` |
@@ -61,7 +61,7 @@ Welcome ─► Login ─► (set token) ─► RootNavigator.bootstrapAuth
             └─► Apple button (iOS) ─► utils/appleAuth.signInWithApple
                                        │
                                        ├─► expo-apple-authentication native sheet
-                                       ├─► /auth/apple { identity_token, … }
+                                       ├─► /auth/apple { token, … }
                                        └─► (new user) ─► RoleSelection
 
 Welcome ─► CreateAccount ─► /auth/signup-policy            (gate)

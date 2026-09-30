@@ -15,7 +15,7 @@ jest.mock('../../services/api', () => ({
   default: { post: (...args: unknown[]) => mockApiPost(...args) },
 }));
 
-import { signInWithApple } from '../appleAuth';
+import { buildAppleAuthBody, signInWithApple } from '../appleAuth';
 import { secureStorage } from '../../services/secureStorage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -49,16 +49,13 @@ describe('signInWithApple', () => {
     const result = await signInWithApple({ inviteCode: 'INV-123' });
 
     expect(mockSignInAsync).toHaveBeenCalledTimes(1);
-    expect(mockApiPost).toHaveBeenCalledWith(
-      '/auth/apple',
-      expect.objectContaining({
-        identity_token: 'apple-id-token',
-        authorization_code: 'auth-code',
-        email: 'me@example.com',
-        full_name: { given_name: 'Ada', family_name: 'Lovelace' },
-        invite_code: 'INV-123',
-      }),
-    );
+    // Exact body: only keys the live AppleAuthDto whitelists
+    // (forbidNonWhitelisted rejected identity_token with a 400).
+    expect(mockApiPost).toHaveBeenCalledWith('/auth/apple', {
+      token: 'apple-id-token',
+      full_name: 'Ada Lovelace',
+      invite_code: 'INV-123',
+    });
     expect(result.success).toBe(true);
     expect(result.is_new_user).toBe(true);
     expect(await secureStorage.getItem('supabase_token')).toBe('access-jwt');
@@ -96,5 +93,26 @@ describe('signInWithApple', () => {
     const result = await signInWithApple();
     expect(result.success).toBe(false);
     expect(mockSignInAsync).not.toHaveBeenCalled();
+  });
+});
+
+describe('buildAppleAuthBody (live + fixed backend contract)', () => {
+  const LIVE_DTO_KEYS = ['token', 'full_name', 'invite_code', 'raw_nonce'];
+
+  it('never sends a key the live DTO rejects', () => {
+    const body = buildAppleAuthBody({
+      identityToken: 'jwt', givenName: 'Ada', familyName: 'Lovelace', inviteCode: 'GP-AB12',
+    });
+    for (const k of Object.keys(body)) expect(LIVE_DTO_KEYS).toContain(k);
+    expect(body).not.toHaveProperty('identity_token');
+    expect(body).not.toHaveProperty('authorization_code');
+    expect(body).not.toHaveProperty('email');
+  });
+
+  it('joins the name into one string and omits it when Apple sends none', () => {
+    expect(buildAppleAuthBody({ identityToken: 'jwt', givenName: ' Ada ', familyName: null }))
+      .toEqual({ token: 'jwt', full_name: 'Ada' });
+    expect(buildAppleAuthBody({ identityToken: 'jwt' })).toEqual({ token: 'jwt' });
+    expect(buildAppleAuthBody({ identityToken: 'jwt', givenName: 'x'.repeat(300) }).full_name).toHaveLength(200);
   });
 });

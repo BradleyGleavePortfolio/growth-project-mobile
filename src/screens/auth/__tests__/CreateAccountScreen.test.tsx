@@ -190,4 +190,18 @@ describe('CreateAccountScreen', () => {
       }),
     );
   });
+
+  it('codeless policy: email signup with NO invite code registers and continues to RoleSelection', async () => {
+    mockGetSignupPolicy.mockResolvedValue({ data: { invite_code_required: false, providers: ['email', 'apple'] } });
+    mockRegister.mockResolvedValue({ data: { requires_verification: true } });
+    mockLogin.mockResolvedValue({ data: { access_token: 'a', refresh_token: 'r', user: { id: 'u1' } } });
+    const utils = await renderScreen();
+    await fillAndSubmit(utils);
+    await waitFor(() => expect(mockRegister).toHaveBeenCalledTimes(1));
+    expect(mockRegister.mock.calls[0][0]).not.toHaveProperty('invite_code');
+    expect(mockSignupWithCode).not.toHaveBeenCalled();
+    await fireEvent.press(await utils.findByText('I verified my email'));
+    await waitFor(() => expect(utils.nav.replace).toHaveBeenCalledWith('RoleSelection'));
+  });
 });
+

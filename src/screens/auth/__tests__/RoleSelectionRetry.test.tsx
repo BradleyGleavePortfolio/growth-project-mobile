@@ -115,4 +115,15 @@ describe('RoleSelection retry step', () => {
     expect(queryByTestId('invite-attach-retry-banner')).toBeNull();
     expect(queryByTestId('role-skip-coach')).toBeNull();
   });
+
+  it('codeless policy: Continue with no code selects the client role without a coach', async () => {
+    mockSelectRole.mockResolvedValue({ data: { role: 'student' } });
+    const { findByText } = await render(<RoleSelectionScreen navigation={{} as never} route={route()} />);
+    await waitFor(() => expect(mockGetSignupPolicy).toHaveBeenCalled());
+    await fireEvent.press(await findByText('Continue'));
+    await waitFor(() => expect(mockSelectRole).toHaveBeenCalledWith('student', undefined));
+    expect(mockAttach).not.toHaveBeenCalled();
+    await waitFor(() => expect(mockEmit).toHaveBeenCalled());
+  });
 });
+
