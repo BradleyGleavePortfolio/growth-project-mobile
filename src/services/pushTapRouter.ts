@@ -86,6 +86,15 @@ export function flushPendingPushTap(): boolean {
   return true;
 }
 
+/**
+ * Re-audit #304 C3: drop a held tap when the session ends (sign-out or
+ * account switch) so one user's notification is never replayed into the
+ * next user's session. Delivered-id dedupe is kept.
+ */
+export function clearPendingPushTap(): void {
+  pending = null;
+}
+
 /** Test-only reset. */
 export function __resetPushTapRouterForTests(): void {
   navigator = null;

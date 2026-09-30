@@ -175,7 +175,14 @@ export function installNotificationResponseHandler(
   if (typeof getLast === 'function') {
     getLast()
       .then((response) => {
-        if (!cancelled) dispatchResponse(response, onResponse);
+        if (cancelled || !response) return;
+        dispatchResponse(response, onResponse);
+        // Re-audit #304 C3: consume the cold-start response so a later
+        // remount / JS reload does not re-route the same tap. The router
+        // keeps it (in memory) until a navigator is ready.
+        const clearLast = (Notifications as { clearLastNotificationResponseAsync?: () => Promise<void> })
+          .clearLastNotificationResponseAsync;
+        if (typeof clearLast === 'function') void clearLast().catch(() => undefined);
       })
       .catch(() => undefined);
   }

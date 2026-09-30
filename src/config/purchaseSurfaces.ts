@@ -119,31 +119,77 @@ export const PAYMENT_HOST_SUFFIXES: readonly string[] = [
 ];
 
 /**
- * Attendance/replay hosts, mirroring the backend's built-in community event
- * allowlist (community/events/community-event-link.ts). The backend accepts
- * `external_url` only for these hosts, plus operator-added hosts from
- * COMMUNITY_EVENT_LINK_HOSTS. On hidden iOS builds the app fails closed to
- * this built-in list, so an operator-added host does not open on iOS.
+ * Re-audit #304 B2: a host is not an attendance contract. YouTube `/join`
+ * (paid channel membership), Vimeo `/ondemand`, `/redirect?q=<pay url>` and
+ * `/pricing` all live on "attendance" domains. On hidden iOS builds we
+ * therefore POSITIVELY match known meeting / live / replay URL shapes for the
+ * hosts the backend accepts (community/events/community-event-link.ts). Any
+ * other path, host or shape fails closed.
  */
-export const ATTENDANCE_HOST_SUFFIXES: readonly string[] = [
-  'zoom.us',
-  'zoom.com',
-  'meet.google.com',
-  'teams.microsoft.com',
-  'teams.live.com',
-  'youtube.com',
-  'youtu.be',
-  'vimeo.com',
-  'loom.com',
-  'whereby.com',
-  'riverside.fm',
-  'streamyard.com',
-  'restream.io',
-  'twitch.tv',
-  'daily.co',
+type AttendanceShape = {
+  provider: string;
+  host: (h: string) => boolean;
+  path: RegExp;
+  /** Optional query requirement (e.g. YouTube /watch needs a video id). */
+  query?: (q: URLSearchParams) => boolean;
+};
+
+const exact = (...hosts: string[]) => (h: string) => hosts.includes(h);
+const suffix = (root: string) => (h: string) => h === root || h.endsWith(`.${root}`);
+const subdomainOnly = (root: string, excluded: string[] = []) => (h: string) =>
+  h.endsWith(`.${root}`) && !excluded.includes(h.slice(0, -root.length - 1));
+const YT_ID = '[A-Za-z0-9_-]{11}';
+const TWITCH_RESERVED = new Set([
+  'subs', 'subscriptions', 'prime', 'turbo', 'settings', 'directory', 'downloads', 'jobs', 'p',
+  'store', 'bits', 'products', 'wallet', 'payments', 'checkout', 'search', 'friends', 'inventory',
+]);
+
+export const ATTENDANCE_URL_SHAPES: readonly AttendanceShape[] = [
+  { provider: 'zoom', host: suffix('zoom.us'), path: /^\/(j|s|w)\/\d{9,11}\/?$/ },
+  { provider: 'zoom', host: suffix('zoom.us'), path: /^\/wc\/(join\/)?\d{9,11}(\/join)?\/?$/ },
+  { provider: 'zoom', host: suffix('zoom.us'), path: /^\/rec\/(play|share)\/[A-Za-z0-9._-]+\/?$/ },
+  { provider: 'zoom', host: suffix('zoom.com'), path: /^\/(j|s|w)\/\d{9,11}\/?$/ },
+  { provider: 'meet', host: exact('meet.google.com'), path: /^\/[a-z]{3}-[a-z]{4}-[a-z]{3}\/?$/ },
+  { provider: 'teams', host: exact('teams.microsoft.com'), path: /^\/l\/meetup-join\/[^/]+(\/[^/]+)*\/?$/ },
+  { provider: 'teams', host: exact('teams.live.com'), path: /^\/meet\/\d{6,20}\/?$/ },
+  {
+    provider: 'youtube',
+    host: exact('youtube.com', 'www.youtube.com', 'm.youtube.com'),
+    path: /^\/watch\/?$/,
+    query: (q) => new RegExp(`^${YT_ID}$`).test(q.get('v') ?? ''),
+  },
+  { provider: 'youtube', host: exact('youtube.com', 'www.youtube.com', 'm.youtube.com'), path: new RegExp(`^/(live|embed)/${YT_ID}/?$`) },
+  { provider: 'youtube', host: exact('youtu.be'), path: new RegExp(`^/${YT_ID}/?$`) },
+  { provider: 'vimeo', host: exact('vimeo.com', 'www.vimeo.com'), path: /^\/(event\/)?\d+(\/[0-9a-f]{6,})?\/?$/ },
+  { provider: 'vimeo', host: exact('player.vimeo.com'), path: /^\/video\/\d+\/?$/ },
+  { provider: 'loom', host: exact('loom.com', 'www.loom.com'), path: /^\/(share|embed)\/[0-9a-f]{32}\/?$/ },
+  { provider: 'riverside', host: exact('riverside.fm', 'www.riverside.fm'), path: /^\/studio\/[A-Za-z0-9-]+\/?$/ },
+  { provider: 'streamyard', host: exact('streamyard.com', 'www.streamyard.com'), path: /^\/watch\/[A-Za-z0-9]+\/?$/ },
+  { provider: 'twitch', host: exact('twitch.tv', 'www.twitch.tv', 'm.twitch.tv'), path: /^\/videos\/\d+\/?$/ },
+  { provider: 'daily', host: subdomainOnly('daily.co', ['www', 'dashboard', 'docs', 'api']), path: /^\/[A-Za-z0-9_-]+\/?$/ },
 ];
 
-const PAYMENT_PATH = /\/(checkout|checkouts|pay|payment|payments|purchase|buy|cart|subscribe|billing|invoice)(\/|$|\?)/i;
+function matchesAttendanceShape(u: URL): boolean {
+  const host = u.hostname.toLowerCase();
+  // Twitch channel live page: /<channel>, never a reserved commerce path.
+  if (exact('twitch.tv', 'www.twitch.tv', 'm.twitch.tv')(host)) {
+    const m = u.pathname.match(/^\/([A-Za-z0-9_]{4,25})\/?$/);
+    if (m && !TWITCH_RESERVED.has(m[1].toLowerCase())) return true;
+  }
+  return ATTENDANCE_URL_SHAPES.some(
+    (s) => s.host(host) && s.path.test(u.pathname) && (!s.query || s.query(u.searchParams)),
+  );
+}
+
+/** A query value that is itself a URL (open redirect / wrapped payment link). */
+function hasEmbeddedUrl(u: URL): boolean {
+  for (const [, v] of u.searchParams) {
+    if (/^(https?:|\/\/)|%2f%2f|:\/\//i.test(v)) return true;
+  }
+  return /(^|\/)(redirect|out|away|l\.php)(\/|$)/i.test(u.pathname);
+}
+
+const PAYMENT_PATH = /\/(checkout|checkouts|pay|payment|payments|purchase|buy|cart|subscribe|billing|invoice|pricing|plans|membership|memberships|ondemand|store|shop|donate|tip|tickets)(\/|$|\?)/i;
 
 function hostMatches(host: string, suffixes: readonly string[]): boolean {
   return suffixes.some((s) => host === s || host.endsWith(`.${s}`));
@@ -180,6 +226,7 @@ export function externalLinkAllowed(
     return false;
   }
   if (u.protocol !== 'https:') return false;
-  if (isPaymentUrl(raw)) return false;
-  return hostMatches(u.hostname.toLowerCase(), ATTENDANCE_HOST_SUFFIXES);
+  if (u.username || u.password || (u.port && u.port !== '443')) return false;
+  if (isPaymentUrl(raw) || hasEmbeddedUrl(u)) return false;
+  return matchesAttendanceShape(u);
 }
