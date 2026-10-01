@@ -75,7 +75,8 @@ import { entitlementEvents } from '../entitlements/entitlementEvents';
 import { withTutorialSignal } from '../tutorial/tutorialEvents';
 import { logger } from '../utils/logger';
 import { generateIdempotencyKey } from '../utils/idempotency';
-import { REQUEST_ID_HEADER, newRequestId } from '../utils/correlation';
+import { REQUEST_ID_HEADER, extractRequestId, newRequestId } from '../utils/correlation';
+import { dunningLockoutStore, isLockedDunningResponse } from '../entitlements/dunning/dunningLockoutStore';
 import { Platform } from 'react-native';
 import { nativeBuildNumber, purchasePolicyHeader } from '../config/purchaseSurfaces';
 import type { SignupPolicyResponse } from '../lib/signupPolicy';
@@ -219,6 +220,21 @@ api.interceptors.response.use(
     // Do NOT log the user out; just surface a friendly message.
     if (!error.response) {
       error.message = 'Cannot reach server. Please check your connection and try again.';
+      return Promise.reject(error);
+    }
+
+    // 403 LOCKED_DUNNING — Smart Dunning v2 Day-10 payment lockout. Report
+    // it once to the app-wide store so DunningLockoutProvider shows the single
+    // calm lockout screen; individual screens never render their own error
+    // for it. The message is specific so any screen that does surface
+    // error.message still says what happened and what to do.
+    if (isLockedDunningResponse(error.response.status, error.response.data)) {
+      dunningLockoutStore.reportLocked({
+        requestId: extractRequestId(error),
+        requestUrl: (error.config as { url?: string } | undefined)?.url,
+      });
+      error.message =
+        'Your plan is paused because a payment has not gone through. Update your card to restore access.';
       return Promise.reject(error);
     }
 

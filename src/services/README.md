@@ -122,3 +122,4 @@ Unit tests of interest:
 - `secureStorage.ts` is the single security-critical file in this directory. The migration step exists so existing logged-in users don't get logged out on the upgrade that introduced SecureStore — leave it alone unless you intend to force re-login.
 - Realtime is best-effort. The 60 s polling fallback is the contract; do not rely on the WebSocket for correctness.
 - SecureStore keys owned by the app: `supabase_token`, `supabase_refresh_token`, and `biometric_unlock_enabled` (the opt-in flag for `BiometricUnlockGate`, owned by `src/hooks/useBiometricGate.ts`).
+- `403 { code: 'LOCKED_DUNNING' }` (Smart Dunning v2 Day-10 lockout) is caught in the response interceptor. It reports to `dunningLockoutStore` with the backend request id and sets a specific `error.message`. The app shows one lockout screen (`src/entitlements/dunning`) and individual screens do not render their own error for it.

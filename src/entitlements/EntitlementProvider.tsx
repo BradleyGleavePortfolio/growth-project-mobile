@@ -6,6 +6,7 @@ import { entitlementEvents, EntitlementRequiredPayload } from './entitlementEven
 import { queryClient } from '../services/queryClient';
 import { logger } from '../utils/logger';
 import { PaywallSheet } from './PaywallSheet';
+import { dunningLockoutStore } from './dunning/dunningLockoutStore';
 
 export type EntitlementStatus =
   | 'unknown'
@@ -64,6 +65,8 @@ export function EntitlementProvider({ children, onOpenPlans, onMessageCoach }: E
   const hasSettledRef = useRef(false);
 
   const isStudent = user?.role === 'student';
+  const [dunningLocked, setDunningLocked] = useState<boolean>(dunningLockoutStore.isLocked());
+  useEffect(() => dunningLockoutStore.subscribe((locked) => setDunningLocked(locked)), []);
 
   const refreshEntitlement = useCallback(async (): Promise<boolean> => {
     if (!isStudent) return true;
@@ -164,7 +167,9 @@ export function EntitlementProvider({ children, onOpenPlans, onMessageCoach }: E
     >
       {children}
       <PaywallSheet
-        visible={paywallVisible}
+        // A payment lockout has its own full-screen state; never stack the
+        // plan picker on top of it (S-DUNNING).
+        visible={paywallVisible && !dunningLocked}
         message={paywallMessage}
         onClose={dismissPaywall}
         onSubscribe={handleSubscribe}

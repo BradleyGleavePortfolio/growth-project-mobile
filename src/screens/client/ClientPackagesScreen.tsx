@@ -62,6 +62,7 @@ import {
   type PaymentsResult,
 } from '../../api/clientPaymentsApi';
 import { useTheme } from '../../theme/ThemeProvider';
+import { DunningBanner as SmartDunningBanner } from '../../entitlements/dunning/DunningBanner';
 import tokens, { type SemanticTokens, type Tokens } from '../../theme/tokens';
 import { featureFlags } from '../../config/featureFlags';
 
@@ -313,6 +314,11 @@ export default function ClientPackagesScreen() {
           styles={styles}
         />
       ) : null}
+
+      {/* Smart Dunning v2 Days 0-9 notice (GET /v1/checkout/dunning). The
+          legacy banner above only renders from payment-status, whose dunning
+          field is always null today. */}
+      <SmartDunningBanner surface="ClientPackagesScreen" />
 
       {/* Current plan summary */}
       {status.ok && status.data.state !== 'none' && status.data.package_name ? (
