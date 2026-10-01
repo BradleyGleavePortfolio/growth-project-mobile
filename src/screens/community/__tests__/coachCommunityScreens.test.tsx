@@ -185,7 +185,7 @@ jest.mock('../../../hooks/useCoachCommunity', () => {
     useCreateCohort: () => ({ mutate: mockCreateMutate, isPending: false }),
     useInviteMember: () => ({ mutate: mockInviteMutate, isPending: false }),
     useRemoveMember: () => ({ mutate: mockRemoveMutate, isPending: false }),
-    useHideFlagged: () => ({ mutate: mockHideMutate, isPending: false }),
+    useModerateFlagged: () => ({ mutate: mockHideMutate, isPending: false }),
   };
 });
 
@@ -772,13 +772,42 @@ describe('Coach mutations — create / invite / remove / ack / hide', () => {
     expect(mockHideMutate).not.toHaveBeenCalled();
     await fireEvent.press(getByTestId('coach-community-moderation-hide-confirm-confirm'));
     expect(mockHideMutate).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'cccccccc-cccc-cccc-cccc-cccccccccccc', target_type: 'post' }),
+      {
+        item: expect.objectContaining({
+          id: 'cccccccc-cccc-cccc-cccc-cccccccccccc',
+          target_type: 'post',
+        }),
+        action: 'hide',
+      },
       expect.objectContaining({
         onSuccess: expect.any(Function),
         onSettled: expect.any(Function),
       }),
     );
   });
+
+  it.each(['warn', 'ban', 'dismiss'] as const)(
+    '%s routes through the confirmation and sends that action',
+    async (action) => {
+      mockState.flagged = {
+        data: [flaggedItem()],
+        isLoading: false,
+        isError: false,
+        isRefetching: false,
+        refetch: jest.fn(),
+      };
+      const { getByTestId } = await render(<CoachCommunityModerationScreen />);
+      await fireEvent.press(
+        getByTestId(`coach-community-flagged-${action}-cccccccc-cccc-cccc-cccc-cccccccccccc`),
+      );
+      expect(mockHideMutate).not.toHaveBeenCalled();
+      await fireEvent.press(getByTestId('coach-community-moderation-hide-confirm-confirm'));
+      expect(mockHideMutate).toHaveBeenCalledWith(
+        { item: expect.objectContaining({ id: 'cccccccc-cccc-cccc-cccc-cccccccccccc' }), action },
+        expect.objectContaining({ onSuccess: expect.any(Function) }),
+      );
+    },
+  );
 
   it('cancelling the hide confirmation fires no mutation', async () => {
     mockState.flagged = {

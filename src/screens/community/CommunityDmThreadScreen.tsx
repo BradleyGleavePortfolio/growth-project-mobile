@@ -10,6 +10,7 @@
  */
 import React from 'react';
 import {
+  Alert,
   View,
   StyleSheet,
   FlatList,
@@ -17,7 +18,7 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { useTheme } from '../../theme/useTheme';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import {
@@ -31,12 +32,15 @@ import {
   MessageBubble,
   ComposerInput,
 } from '../../components/community';
-import type { CommunityRoute } from './communityNavTypes';
+import SafetyMenu from '../../components/community/SafetyMenu';
+import { communityErrorCode, contentRejectedMessage } from '../../api/communitySafetyApi';
+import type { CommunityNav, CommunityRoute } from './communityNavTypes';
 
 const DM_MAX = 4000; // mirror backend SendDmDto (body 1..4000)
 
 export default function CommunityDmThreadScreen(): React.ReactElement {
   const { semanticColors } = useTheme();
+  const navigation = useNavigation<CommunityNav>();
   const route = useRoute<CommunityRoute<'CommunityDmThread'>>();
   const recipientId = route.params?.recipientId ?? '';
   const participantLabel = route.params?.participantLabel ?? 'Coach';
@@ -49,6 +53,25 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
 
   const data = messages.data ?? [];
   const isEmpty = !messages.isLoading && (messages.isError || data.length === 0);
+  // Header-level Report / Block acts on the latest message from the other
+  // person (a report needs concrete content to review).
+  const latestFromOther = data.find((m) => m.sender_user_id === recipientId && !m.deleted);
+
+  const onSend = (body: string) =>
+    sendDm.mutateAsync(body).then(
+      () => undefined,
+      (err: unknown) => {
+        const rejected = contentRejectedMessage(err);
+        if (rejected) {
+          Alert.alert('Please rephrase', rejected);
+        } else if (communityErrorCode(err) === 'community.dm.blocked') {
+          Alert.alert('Message not sent', 'You cannot message this member.');
+        } else {
+          Alert.alert('Message not sent', 'Could not send your message. Please try again.');
+        }
+        throw err;
+      },
+    );
 
   return (
     <SafeAreaView
@@ -60,10 +83,22 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <ThreadHeader
-          title={participantLabel}
-          testID="community-dmthread-header"
-        />
+        <View style={styles.headerRow}>
+          <View style={styles.flex}>
+            <ThreadHeader title={participantLabel} testID="community-dmthread-header" />
+          </View>
+          {latestFromOther ? (
+            <SafetyMenu
+              targetType="message"
+              targetId={latestFromOther.id}
+              authorUserId={recipientId}
+              authorName={participantLabel}
+              viewerUserId={client?.id}
+              onBlocked={() => navigation.goBack()}
+              testID="community-dmthread-safety"
+            />
+          ) : null}
+        </View>
 
         {isEmpty ? (
           <View style={styles.center}>
@@ -85,11 +120,26 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
             data={data}
             keyExtractor={(m) => m.id}
             renderItem={({ item }) => (
-              <MessageBubble
-                message={item}
-                myUserId={client?.id ?? ''}
-                testID={`dm-message-${item.id}`}
-              />
+              <View style={styles.messageRow}>
+                <View style={styles.flex}>
+                  <MessageBubble
+                    message={item}
+                    myUserId={client?.id ?? ''}
+                    testID={`dm-message-${item.id}`}
+                  />
+                </View>
+                {item.sender_user_id !== client?.id && !item.deleted ? (
+                  <SafetyMenu
+                    targetType="message"
+                    targetId={item.id}
+                    authorUserId={item.sender_user_id}
+                    authorName={participantLabel}
+                    viewerUserId={client?.id}
+                    onBlocked={() => navigation.goBack()}
+                    testID={`dm-message-safety-${item.id}`}
+                  />
+                ) : null}
+              </View>
             )}
             contentContainerStyle={styles.list}
             style={styles.flex}
@@ -100,7 +150,7 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
           placeholder="Message"
           maxLength={DM_MAX}
           sending={sendDm.isPending}
-          onSubmit={(body) => sendDm.mutate(body)}
+          onSubmit={onSend}
           testID="community-dmthread-composer"
         />
       </KeyboardAvoidingView>
@@ -113,4 +163,6 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   center: { flex: 1, justifyContent: 'center' },
   list: { paddingVertical: 8 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', paddingRight: 8 },
+  messageRow: { flexDirection: 'row', alignItems: 'center' },
 });

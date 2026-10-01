@@ -29,6 +29,7 @@ import { spacing, radius } from '../../theme/tokens';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { usePosts } from '../../hooks/useCommunity';
 import { CommunityEmptyState, PostCard } from '../../components/community';
+import SafetyMenu from '../../components/community/SafetyMenu';
 import HapticPressable from '../../components/HapticPressable';
 import type { CommunityPost } from '../../api/communityApi';
 import type { CommunityNav } from './communityNavTypes';
@@ -211,6 +212,15 @@ export default function CommunitySpaceScreen({
             <PostCard
               post={item}
               onPress={openThread}
+              accessory={
+                <SafetyMenu
+                  targetType="post"
+                  targetId={item.id}
+                  authorUserId={item.author_user_id}
+                  viewerUserId={client?.id}
+                  testID={`post-safety-${item.id}`}
+                />
+              }
               testID={`post-card-${item.id}`}
             />
           )}

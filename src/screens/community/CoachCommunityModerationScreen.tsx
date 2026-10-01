@@ -1,19 +1,18 @@
 /**
  * CoachCommunityModerationScreen — the flagged-content review queue (v1-6).
- * Consumes the existing moderation endpoints: `GET /community/moderation/flagged`
- * (read), `POST /community/posts/:id/hide`, and
- * `POST /community/messages/:id/hide` (decision).
+ * Consumes the backend moderation contract: `GET /community/moderation/flagged`
+ * (read) and `PATCH /community/moderation/items/:id` (decision). The old
+ * `POST /community/{posts,messages}/:id/hide` routes never existed server-side.
  *
  * Each row shows the offending content verbatim, the author, the cohort, a
- * coarse reason label, and the single real decision: HIDE. The destructive Hide
- * path routes through a confirmation modal (hard gate §2.3 — no one-tap hide)
- * and is optimistic with rollback (see useHideFlagged).
- *
- * APPROVE REMOVED (fixer R1 / G10.2 Option A): the v1-6 backend exposes no
- * durable approve/clear endpoint, so an "Approve" action could only ever be a
- * client-side dismissal masquerading as a backend decision (a silent no-op).
- * Per the decacorn rule the action was removed; it can return when a real
- * approve endpoint ships.
+ * coarse reason label, and four real decisions (Apple App Review 1.2):
+ *   Hide    — remove the content for everyone
+ *   Warn    — notify the author; they keep access
+ *   Ban     — remove the author from the community space and hide the content
+ *   Dismiss — close the report with no action (a real server decision)
+ * Every decision routes through a confirmation modal (hard gate §2.3 — no
+ * one-tap action) and is optimistic with rollback (see useModerateFlagged).
+ * "Approve" (a client-only no-op) stays removed (fixer R1 / G10.2 Option A).
  *
  * When a flagged item targets a POST, the content area opens the post-detail
  * surface (with the flagged badge) so the coach can read the full thread before
@@ -50,34 +49,88 @@ import CompletionToast, {
 } from '../../components/community/CompletionToast';
 import {
   useCoachFlagged,
-  useHideFlagged,
+  useModerateFlagged,
   useCoachEmptyStatePayload,
 } from '../../hooks/useCoachCommunity';
-import type { CoachFlaggedItem } from '../../api/coachCommunityApi';
+import type { CoachFlaggedItem, CoachModerationAction } from '../../api/coachCommunityApi';
+
+interface PendingDecision {
+  item: CoachFlaggedItem;
+  action: CoachModerationAction;
+}
+
+const DECISIONS: ReadonlyArray<{
+  action: CoachModerationAction;
+  label: string;
+  destructive: boolean;
+}> = [
+  { action: 'dismiss', label: 'Dismiss', destructive: false },
+  { action: 'warn', label: 'Warn', destructive: false },
+  { action: 'hide', label: 'Hide', destructive: true },
+  { action: 'ban', label: 'Ban', destructive: true },
+];
+
+const DONE_COPY: Record<CoachModerationAction, string> = {
+  hide: 'Hidden.',
+  warn: 'Warning sent.',
+  ban: 'Member removed.',
+  dismiss: 'Report dismissed.',
+};
+
+function confirmCopy(d: PendingDecision): { title: string; body: string; confirm: string } {
+  const what = `this ${d.item.target_type} from ${d.item.author_name}`;
+  switch (d.action) {
+    case 'hide':
+      return {
+        title: 'Hide this content',
+        body: `Hide ${what}? It is removed from the room for everyone.`,
+        confirm: 'Hide',
+      };
+    case 'warn':
+      return {
+        title: 'Warn this member',
+        body: `Send ${d.item.author_name} a warning about ${what}? They keep their access.`,
+        confirm: 'Warn',
+      };
+    case 'ban':
+      return {
+        title: 'Ban this member',
+        body: `Remove ${d.item.author_name} from this community space and hide ${what}? They lose access to every room and message in the space.`,
+        confirm: 'Ban',
+      };
+    default:
+      return {
+        title: 'Dismiss this report',
+        body: `Close the report on ${what} without taking action?`,
+        confirm: 'Dismiss',
+      };
+  }
+}
 import type { CoachCommunityNav } from './coachCommunityNavTypes';
 
 export default function CoachCommunityModerationScreen(): React.ReactElement {
   const { semanticColors } = useTheme();
   const navigation = useNavigation<CoachCommunityNav>();
   const flagged = useCoachFlagged();
-  const hide = useHideFlagged();
+  const moderate = useModerateFlagged();
   const emptyState = useCoachEmptyStatePayload(
     'coach_community_moderation_empty',
   );
   const completion = useCompletionToast();
 
-  const [pendingHide, setPendingHide] = useState<CoachFlaggedItem | null>(null);
+  const [pending, setPending] = useState<PendingDecision | null>(null);
 
   const items = flagged.data ?? [];
   const isEmpty = !flagged.isLoading && !flagged.isError && items.length === 0;
 
-  const onConfirmHide = useCallback(() => {
-    if (!pendingHide) return;
-    hide.mutate(pendingHide, {
-      onSuccess: () => completion.show('Hidden.'),
-      onSettled: () => setPendingHide(null),
+  const onConfirm = useCallback(() => {
+    if (!pending) return;
+    const { action } = pending;
+    moderate.mutate(pending, {
+      onSuccess: () => completion.show(DONE_COPY[action]),
+      onSettled: () => setPending(null),
     });
-  }, [pendingHide, hide, completion]);
+  }, [pending, moderate, completion]);
 
   const onOpenPost = useCallback(
     (item: CoachFlaggedItem) => {
@@ -145,24 +198,33 @@ export default function CoachCommunityModerationScreen(): React.ReactElement {
             ) : null}
           </HapticPressable>
           <View style={styles.actions}>
-            <HapticPressable
-              intent="warning"
-              onPress={() => setPendingHide(item)}
-              accessibilityRole="button"
-              accessibilityLabel={`Hide content from ${item.author_name}`}
-              testID={`coach-community-flagged-hide-${item.id}`}
-              style={[
-                styles.hideAction,
-                {
-                  backgroundColor: semantic.danger.bg,
-                  borderColor: semantic.danger.border,
-                },
-              ]}
-            >
-              <Text style={[styles.hideLabel, { color: semantic.danger.fg }]}>
-                Hide
-              </Text>
-            </HapticPressable>
+            {DECISIONS.map((d) => (
+              <HapticPressable
+                key={d.action}
+                intent={d.destructive ? 'warning' : 'light'}
+                onPress={() => setPending({ item, action: d.action })}
+                accessibilityRole="button"
+                accessibilityLabel={`${d.label} ${
+                  d.action === 'warn' || d.action === 'ban' ? item.author_name : `content from ${item.author_name}`
+                }`}
+                testID={`coach-community-flagged-${d.action}-${item.id}`}
+                style={[
+                  styles.hideAction,
+                  d.destructive
+                    ? { backgroundColor: semantic.danger.bg, borderColor: semantic.danger.border }
+                    : { backgroundColor: semanticColors.bgSurface, borderColor: semanticColors.border },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.hideLabel,
+                    { color: d.destructive ? semantic.danger.fg : semanticColors.textPrimary },
+                  ]}
+                >
+                  {d.label}
+                </Text>
+              </HapticPressable>
+            ))}
           </View>
         </View>
       );
@@ -217,20 +279,17 @@ export default function CoachCommunityModerationScreen(): React.ReactElement {
         />
       )}
 
-      {/* Hide confirmation (destructive — hard gate, no one-tap hide). */}
+      {/* Decision confirmation (hard gate, no one-tap moderation). The testID
+          keeps the historical `hide-confirm` name the suites target. */}
       <ConfirmModal
-        visible={pendingHide != null}
-        title="Hide this content"
-        body={
-          pendingHide
-            ? `Hide this ${pendingHide.target_type} from ${pendingHide.author_name}? It is removed from the room for everyone.`
-            : undefined
-        }
-        confirmLabel="Hide"
-        variant="destructive"
-        busy={hide.isPending}
-        onConfirm={onConfirmHide}
-        onCancel={() => setPendingHide(null)}
+        visible={pending != null}
+        title={pending ? confirmCopy(pending).title : ''}
+        body={pending ? confirmCopy(pending).body : undefined}
+        confirmLabel={pending ? confirmCopy(pending).confirm : 'Confirm'}
+        variant={pending && (pending.action === 'hide' || pending.action === 'ban') ? 'destructive' : 'constructive'}
+        busy={moderate.isPending}
+        onConfirm={onConfirm}
+        onCancel={() => setPending(null)}
         testID="coach-community-moderation-hide-confirm"
       />
 
@@ -285,13 +344,14 @@ const styles = StyleSheet.create({
   },
   actions: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'flex-end',
     gap: spacing.sm,
     marginTop: spacing.sm,
   },
   hideAction: {
     minHeight: 44,
-    minWidth: 96,
+    minWidth: 72,
     paddingHorizontal: spacing.lg,
     justifyContent: 'center',
     alignItems: 'center',

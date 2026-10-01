@@ -29,6 +29,7 @@ import {
   type CoachCohortDetail,
   type CoachCohortMember,
   type CoachFlaggedItem,
+  type CoachModerationAction,
   type CoachEmptyStatesResponse,
   type CoachEmptyStateSurfaceKey,
   type RomanCopyPayload,
@@ -395,23 +396,25 @@ export function useRemoveMember(
   });
 }
 
+/** Variables for useModerateFlagged. */
+export interface ModerateFlaggedVars {
+  item: CoachFlaggedItem;
+  action: CoachModerationAction;
+}
+
 /**
- * Hide a flagged item (post or message). Optimistically removes it from the
- * flagged queue and decrements the dashboard flagged-today count; rolls both
- * back on failure. The confirmation modal gates this before it fires.
+ * Act on a flagged item (hide / warn / ban / dismiss) via
+ * PATCH /community/moderation/items/:id. Every action resolves the report, so
+ * the row is optimistically removed from the queue and the dashboard
+ * flagged-today count decremented; both roll back on failure. The
+ * confirmation modal gates this before it fires.
  */
-export function useHideFlagged(): UseMutationResult<
-  void,
-  unknown,
-  CoachFlaggedItem
-> {
+export function useModerateFlagged(): UseMutationResult<void, unknown, ModerateFlaggedVars> {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (item: CoachFlaggedItem) =>
-      item.target_type === 'post'
-        ? coachCommunityApi.hidePost(item.target_id)
-        : coachCommunityApi.hideMessage(item.target_id),
-    onMutate: async (item) => {
+    mutationFn: ({ item, action }: ModerateFlaggedVars) =>
+      coachCommunityApi.actOnItem(item.id, action),
+    onMutate: async ({ item }) => {
       await qc.cancelQueries({ queryKey: coachCommunityKeys.flagged() });
       await qc.cancelQueries({ queryKey: coachCommunityKeys.dashboard() });
       const prevFlagged = qc.getQueryData<CoachFlaggedItem[]>(
@@ -434,7 +437,7 @@ export function useHideFlagged(): UseMutationResult<
       }
       return { prevFlagged, prevDash };
     },
-    onError: (_err, _item, ctx) => {
+    onError: (_err, _vars, ctx) => {
       const c = ctx as
         | { prevFlagged?: CoachFlaggedItem[]; prevDash?: CoachDashboard }
         | undefined;

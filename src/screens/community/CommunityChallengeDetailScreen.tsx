@@ -61,6 +61,8 @@ import {
   type CommunityChallengeParticipation,
 } from '../../api/communityChallengesApi';
 import { CommunityApiError } from '../../api/communityApi';
+import { contentRejectedMessage } from '../../api/communitySafetyApi';
+import SafetyMenu from '../../components/community/SafetyMenu';
 import { generateIdempotencyKey } from '../../utils/idempotency';
 import { dedupeById } from '../../utils/dedupeById';
 import type { CommunityRoute } from './communityNavTypes';
@@ -69,6 +71,9 @@ const COMMENT_MAX = 2000; // mirror backend CreateChallengeCommentDto
 
 /** A human, non-shaming reason for an error surface (no raw error leakage). */
 function describeError(err: unknown): string {
+  // Apple 1.2 content filter: show the server's rephrase message.
+  const rejected = contentRejectedMessage(err);
+  if (rejected) return rejected;
   if (err instanceof CommunityApiError) {
     switch (err.kind) {
       case 'forbidden':
@@ -584,6 +589,15 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
               color={semanticColors.textMuted}
             />
           </HapticPressable>
+        ) : null}
+        {!mine ? (
+          <SafetyMenu
+            targetType="comment"
+            targetId={item.id}
+            authorUserId={item.author_user_id}
+            viewerUserId={client?.id}
+            testID={`community-challenge-comment-${item.id}-safety`}
+          />
         ) : null}
       </View>
     );

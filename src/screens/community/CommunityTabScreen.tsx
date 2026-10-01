@@ -15,7 +15,12 @@
  * Standardized on semanticColors / tokens.ts.
  */
 import React, { useMemo, useState } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
+import HapticPressable from '../../components/HapticPressable';
+import { spacing } from '../../theme/tokens';
+import type { CommunityNav } from './communityNavTypes';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../theme/useTheme';
 import { featureFlags } from '../../config/featureFlags';
@@ -35,6 +40,7 @@ import CommunityChallengesScreen from './CommunityChallengesScreen';
 
 export default function CommunityTabScreen(): React.ReactElement {
   const { semanticColors } = useTheme();
+  const navigation = useNavigation<CommunityNav>();
   const client = useCurrentUser();
   const badge = useCommunityBadge(client?.id);
   const me = useCommunityMe();
@@ -80,6 +86,20 @@ export default function CommunityTabScreen(): React.ReactElement {
         onSelect={setActive}
         testID="community-space-tabbar"
       />
+      {/* Apple 1.2: guidelines, report/block help, contact and block list. */}
+      <HapticPressable
+        intent="light"
+        onPress={() => navigation.navigate('CommunitySafety')}
+        accessibilityRole="button"
+        accessibilityLabel="Community safety: guidelines, reporting, blocking and contact"
+        style={styles.safetyLink}
+        testID="community-safety-link"
+      >
+        <Ionicons name="shield-checkmark-outline" size={14} color={semanticColors.textMuted} />
+        <Text style={[styles.safetyText, { color: semanticColors.textMuted }]}>
+          Community safety
+        </Text>
+      </HapticPressable>
       <View style={styles.body}>
         {active === 'today' ? (
           <CommunityTodayScreen embedded />
@@ -141,5 +161,16 @@ const styles = StyleSheet.create({
   },
   body: {
     flex: 1,
+  },
+  safetyLink: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.lg,
+  },
+  safetyText: {
+    fontSize: 13,
   },
 });

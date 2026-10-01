@@ -39,6 +39,10 @@ import { generateIdempotencyKey } from '../utils/idempotency';
 export const COACH_MOD_TARGET_TYPES = ['post', 'message'] as const;
 export type CoachModTargetType = (typeof COACH_MOD_TARGET_TYPES)[number];
 
+/** Moderation decisions accepted by PATCH /community/moderation/items/:id. */
+export const COACH_MODERATION_ACTIONS = ['hide', 'warn', 'ban', 'dismiss'] as const;
+export type CoachModerationAction = (typeof COACH_MODERATION_ACTIONS)[number];
+
 /** Cohort membership role enum (mirrors the client API role language). */
 export const COACH_COHORT_MEMBER_ROLES = ['client', 'coach', 'owner'] as const;
 export type CoachCohortMemberRole =
@@ -173,6 +177,8 @@ export const CoachFlaggedItemSchema = z
     cohort_name: z.string().nullable(),
     /** Coarse reason label from the report pipeline (never a raw message). */
     reason: z.string(),
+    /** Author of the reported content (null when the content is gone). */
+    author_user_id: z.string().uuid().nullable().optional(),
     created_at: z.string(),
   })
   .passthrough();
@@ -635,28 +641,21 @@ export const coachCommunityApi = {
   },
 
   /**
-   * POST /community/posts/:id/hide — hide a flagged post. Destructive; always
-   * confirmed in the UI before this fires (hard gate §2.3). Idempotent (R19).
+   * PATCH /community/moderation/items/:id — act on a queued report (coach of
+   * that workspace or platform owner only; server-enforced).
+   *   hide    — removes the content for everyone
+   *   warn    — notifies the author; access kept
+   *   ban     — removes the author's access to the community space AND hides
+   *             the content (the coach / platform owner can never be banned)
+   *   dismiss — closes the report with no action
+   * Destructive actions are always confirmed in the UI first. Idempotent (R19).
+   * Replaces the never-implemented POST /community/{posts,messages}/:id/hide.
    */
-  hidePost(postId: string): Promise<void> {
+  actOnItem(itemId: string, action: CoachModerationAction, notes?: string): Promise<void> {
     return call(z.unknown(), () =>
-      api.post<unknown>(
-        `/community/posts/${postId}/hide`,
-        {},
-        idempotentHeaders(),
-      ),
-    ).then(() => undefined);
-  },
-
-  /**
-   * POST /community/messages/:id/hide — hide a flagged message. Destructive;
-   * always confirmed in the UI before this fires. Idempotent (R19).
-   */
-  hideMessage(messageId: string): Promise<void> {
-    return call(z.unknown(), () =>
-      api.post<unknown>(
-        `/community/messages/${messageId}/hide`,
-        {},
+      api.patch<unknown>(
+        `/community/moderation/items/${itemId}`,
+        notes ? { action, notes } : { action },
         idempotentHeaders(),
       ),
     ).then(() => undefined);
