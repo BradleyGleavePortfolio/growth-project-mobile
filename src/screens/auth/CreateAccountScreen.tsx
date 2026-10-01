@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -39,6 +39,8 @@ import RoleChoice from '../../components/auth/RoleChoice';
 import {
   COACH_SIGNUP_UNAVAILABLE,
   COACH_SIGNUP_UNAVAILABLE_MESSAGE,
+  COACH_SIGNUP_UNCONFIRMED,
+  COACH_SIGNUP_UNCONFIRMED_MESSAGE,
   intendedRoleForRequest,
   isCoachSignupUnavailable,
   isServerCoach,
@@ -61,7 +63,10 @@ interface Props {
 // 'policy': the live signup policy has not answered yet and nothing is
 // cached, so the screen does not know whether to ask the role question.
 // The form is held back until the answer (or the UNKNOWN fallback) arrives.
-type Step = 'policy' | 'role' | 'register' | 'verify';
+// 'coach-unavailable': the user chose coach, then the live policy said role
+// choice is off. Nothing has been created; the user is told and must choose
+// explicitly (client instead, or check again). Never switched silently.
+type Step = 'policy' | 'role' | 'register' | 'verify' | 'coach-unavailable';
 
 function firstStep(arrivedWithCode: boolean, roleChoice: boolean | null): Step {
   if (arrivedWithCode) return 'register';
@@ -133,6 +138,31 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
   const [loading, setLoading] = useState(false);
   const [verifyLoading, setVerifyLoading] = useState(false);
   const [error, setError] = useState('');
+  const [recheckLoading, setRecheckLoading] = useState(false);
+  const [recheckNote, setRecheckNote] = useState('');
+
+  // The policy effect below runs once and resolves later; it reads the
+  // current choice and step through refs, not the mount-time closure.
+  const isCoachSignupRef = useRef(isCoachSignup);
+  isCoachSignupRef.current = isCoachSignup;
+  const stepRef = useRef(step);
+  stepRef.current = step;
+
+  // Drop a provider session whose role outcome is not proven, so nothing on
+  // the device claims an account that the server did not confirm.
+  const dropUnconfirmedSession = async () => {
+    for (const drop of [
+      () => secureStorage.removeItem('supabase_token'),
+      () => secureStorage.removeItem('supabase_refresh_token'),
+      () => AsyncStorage.removeItem('user_data'),
+    ]) {
+      try {
+        await drop();
+      } catch {
+        // best effort; the error copy is shown regardless
+      }
+    }
+  };
 
   // Signup policy through the shared reader (audit A1): a live policy wins,
   // then the last policy fetched this session, then UNKNOWN_SIGNUP_POLICY
@@ -146,11 +176,25 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
       if (!mounted) return;
       setRequireInviteCode(policy.inviteCodeRequired);
       setGoogleEnabled(policy.googleEnabled);
+      // #306 r2 (B2): the cached policy offered the choice, the user chose
+      // coach, and the live policy now says role choice is off. Keep the
+      // coach intent, say so, and require an explicit choice. Never fall
+      // through to a client registration the user did not choose.
+      const coachChoiceWithdrawn =
+        !policy.roleChoice &&
+        isCoachSignupRef.current &&
+        stepRef.current !== 'verify' &&
+        stepRef.current !== 'policy';
       setRoleChoiceEnabled(policy.roleChoice);
+      if (coachChoiceWithdrawn) {
+        setError('');
+        setStep('coach-unavailable');
+        return;
+      }
       setStep((prev) => {
         if (prev === 'policy') return firstStep(arrivedWithCode, policy.roleChoice);
-        // Cached policy said yes, live policy says no: there is no choice
-        // to make, so continue as a client.
+        // Cached policy said yes, live policy says no, and no coach choice
+        // was made: there is no choice to make, so continue as a client.
         if (prev === 'role' && !policy.roleChoice) return 'register';
         return prev;
       });
@@ -203,6 +247,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
   };
 
   const handleRegister = async () => {
+    if (step === 'coach-unavailable') return;
     if (!name || !email || !password) {
       setError('Please complete the required fields');
       return;
@@ -319,6 +364,15 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
       isNewUser?: boolean;
     } = {},
   ) => {
+    // #306 r2 (B1): a coach request is reported only from a server-returned
+    // role. A missing role proves nothing, so the user is told the outcome is
+    // unconfirmed and the provisional session is dropped; never "created as
+    // a client account".
+    if (isCoachSignup && typeof user?.role !== 'string') {
+      await dropUnconfirmedSession();
+      setError(COACH_SIGNUP_UNCONFIRMED_MESSAGE);
+      return;
+    }
     if (isServerCoach(user)) {
       await setUserCache(user as Parameters<typeof setUserCache>[0]);
       await purgePersistedQueryCacheForAllUsers();
@@ -372,6 +426,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
   };
 
   const handleAppleSignup = async () => {
+    if (step === 'coach-unavailable') return;
     // A coach signup never carries a client invite code.
     const trimmedCode = isCoachSignup ? '' : inviteCode.trim();
     if (requireInviteCode && !isCoachSignup && !trimmedCode) {
@@ -421,6 +476,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
   };
 
   const handleGoogleSignup = async () => {
+    if (step === 'coach-unavailable') return;
     // A coach signup never carries a client invite code.
     const trimmedCode = isCoachSignup ? '' : inviteCode.trim();
     if (requireInviteCode && !isCoachSignup && !trimmedCode) {
@@ -438,6 +494,10 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
       if (!result.success) {
         if (result.error_code === COACH_SIGNUP_UNAVAILABLE) {
           setError(COACH_SIGNUP_UNAVAILABLE_MESSAGE);
+          return;
+        }
+        if (result.error_code === COACH_SIGNUP_UNCONFIRMED) {
+          setError(COACH_SIGNUP_UNCONFIRMED_MESSAGE);
           return;
         }
         const friendly = toFriendlyAuthError(result.error);
@@ -494,6 +554,15 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
           {coachRequestNotApplied ? (
             <View style={styles.noticeBox} testID="coach-request-not-applied-notice">
               <Text style={styles.noticeText}>{signupRoleNoticeMessage('coach_request_not_applied')}</Text>
+              <Text
+                style={styles.supportLink}
+                accessibilityRole="link"
+                accessibilityLabel="Contact support"
+                testID="coach-request-not-applied-support"
+                onPress={() => navigation.navigate('SupportInbox')}
+              >
+                Contact support
+              </Text>
             </View>
           ) : null}
 
@@ -530,6 +599,82 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
           <ActivityIndicator color={colors.primary} />
           <Text style={styles.verifySubBody}>Preparing sign-up.</Text>
         </View>
+      </View>
+    );
+  }
+
+  const recheckPolicy = async () => {
+    setRecheckLoading(true);
+    setRecheckNote('');
+    try {
+      const { policy } = await loadSignupPolicy(() => authApi.getSignupPolicy());
+      setRequireInviteCode(policy.inviteCodeRequired);
+      setGoogleEnabled(policy.googleEnabled);
+      setRoleChoiceEnabled(policy.roleChoice);
+      if (policy.roleChoice) {
+        // Coach sign-up is back: return to the coach form the user chose.
+        setStep('register');
+      } else {
+        setRecheckNote('Coach sign-up is still not available.');
+      }
+    } finally {
+      setRecheckLoading(false);
+    }
+  };
+
+  if (step === 'coach-unavailable') {
+    return (
+      <View style={styles.container}>
+        <ScrollView contentContainerStyle={styles.scroll}>
+          <View style={styles.header}>
+            <Text style={styles.title} accessibilityRole="header">
+              Coach sign-up is not available right now
+            </Text>
+          </View>
+          <View
+            style={styles.noticeBox}
+            accessible
+            accessibilityRole="alert"
+            accessibilityLiveRegion="assertive"
+            testID="coach-choice-withdrawn-notice"
+          >
+            <Text style={styles.noticeText}>
+              You chose to coach clients, but coach sign-up was switched off while you were signing up. No account has been created. You can create a client account instead, or check again later.
+            </Text>
+          </View>
+          {recheckNote ? (
+            <Text style={styles.subtitle} testID="coach-choice-recheck-note">{recheckNote}</Text>
+          ) : null}
+          <TouchableOpacity
+            style={styles.registerButton}
+            onPress={() => {
+              setIntendedRole('client');
+              setRecheckNote('');
+              setError('');
+              setStep('register');
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Create a client account instead"
+            testID="coach-choice-withdrawn-client"
+          >
+            <Text style={styles.registerButtonText}>Create a client account instead</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.secondaryButton, recheckLoading && styles.buttonDisabled]}
+            onPress={recheckPolicy}
+            disabled={recheckLoading}
+            accessibilityRole="button"
+            accessibilityLabel="Check again for coach sign-up"
+            accessibilityState={{ disabled: recheckLoading, busy: recheckLoading }}
+            testID="coach-choice-withdrawn-recheck"
+          >
+            {recheckLoading ? (
+              <ActivityIndicator color={colors.primary} />
+            ) : (
+              <Text style={styles.secondaryButtonText}>Check again</Text>
+            )}
+          </TouchableOpacity>
+        </ScrollView>
       </View>
     );
   }
@@ -834,6 +979,16 @@ const makeStyles = (colors: ThemeColors) =>
   },
   buttonDisabled: { opacity: 0.6 },
   registerButtonText: { ...Typography.button, color: colors.white },
+  secondaryButton: {
+    borderRadius: Radius.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.primary,
+    padding: Spacing.md,
+    alignItems: 'center',
+    marginTop: Spacing.md,
+  },
+  secondaryButtonText: { ...Typography.button, color: colors.primary },
+  supportLink: { ...typography.bodySmall, color: colors.primary, textDecorationLine: 'underline', marginTop: Spacing.sm },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',

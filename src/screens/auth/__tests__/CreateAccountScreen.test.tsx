@@ -11,7 +11,7 @@
 import React from 'react';
 import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockGetSignupPolicy = jest.fn();
 const mockSignupWithCode = jest.fn();
@@ -55,7 +55,11 @@ jest.mock('../../../components/AppleSignInButton', () => {
 });
 
 jest.mock('../../../services/secureStorage', () => ({
-  secureStorage: { setItem: jest.fn(() => Promise.resolve()), getItem: jest.fn(() => Promise.resolve(null)) },
+  secureStorage: {
+    setItem: jest.fn(() => Promise.resolve()),
+    getItem: jest.fn(() => Promise.resolve(null)),
+    removeItem: jest.fn(() => Promise.resolve()),
+  },
 }));
 jest.mock('../../../lib/userCache', () => ({ setUserCache: jest.fn(() => Promise.resolve()) }));
 jest.mock('../../../services/queryClient', () => ({
@@ -70,7 +74,8 @@ const mockEmit = jest.fn();
 jest.mock('../../../utils/authEvents', () => ({ authEvents: { emit: () => mockEmit() } }));
 
 import CreateAccountScreen from '../CreateAccountScreen';
-import { __resetSignupPolicyCacheForTests } from '../../../lib/signupPolicy';
+import { __resetSignupPolicyCacheForTests, loadSignupPolicy } from '../../../lib/signupPolicy';
+import { secureStorage } from '../../../services/secureStorage';
 import { CoachSignupUnavailableError } from '../../../lib/intendedRole';
 import { SIGNUP_ROLE_NOTICE_KEY } from '../../../lib/signupRoleNotice';
 
@@ -532,5 +537,131 @@ describe('CreateAccountScreen', () => {
       expect(utils.getByTestId('invite-code-input')).toBeTruthy();
     });
   });
-});
+  // Fix round 2: reproductions of the independent audits at b21b89b5
+  // (Sol B1/B2, Opus C1/C2/C4). Each test failed on that head.
+  describe('#306 fix round 2', () => {
+    const CREATED_AS_CLIENT = /created as a client account/;
 
+    // Cached policy says role choice is on; the live GET is held so the test
+    // decides when (and with what) it answers.
+    async function renderWithCachedPolicyAndPendingLive() {
+      await loadSignupPolicy(async () => ({ data: { ...ROLE_CHOICE_POLICY, providers: ['email', 'apple', 'google'] } }));
+      let resolveLive: (v: unknown) => void = () => undefined;
+      mockGetSignupPolicy.mockReturnValueOnce(new Promise((r) => { resolveLive = r; }));
+      const nav = makeNav();
+      const utils = await render(<CreateAccountScreen navigation={nav as never} route={undefined} />);
+      await fireEvent.press(utils.getByTestId('role-choice-coach'));
+      expect(utils.getByText('Create your coach account')).toBeTruthy();
+      const disableLive = async () => {
+        await act(async () => {
+          resolveLive({ data: { ...ROLE_CHOICE_POLICY, providers: ['email', 'apple', 'google'], role_choice: false } });
+        });
+      };
+      return { nav, utils, disableLive };
+    }
+
+    it('Sol B1: Google coach signup with an unconfirmed backend outcome is a truthful failure, never "created as a client"', async () => {
+      mockGetSignupPolicy.mockResolvedValue({ data: { ...ROLE_CHOICE_POLICY, providers: ['email', 'google'] } });
+      mockSignInWithGoogle.mockResolvedValue({ success: false, error: 'x', error_code: 'coach_signup_unconfirmed' });
+      const utils = await renderScreen(undefined, 'coach');
+      await fireEvent.press(await utils.findByText('Continue with Google'));
+      expect(await utils.findByText(/We could not confirm your coach account/)).toBeTruthy();
+      expect(utils.queryByText(CREATED_AS_CLIENT)).toBeNull();
+      expect(utils.queryByText(/No account was created/)).toBeNull();
+      expect(utils.nav.replace).not.toHaveBeenCalled();
+      expect(mockEmit).not.toHaveBeenCalled();
+      expect(await AsyncStorage.getItem(SIGNUP_ROLE_NOTICE_KEY)).toBeNull();
+    });
+
+    it('Sol B1: a provider success WITHOUT a server role on the coach form is not reported as a client account; the session is dropped', async () => {
+      mockGetSignupPolicy.mockResolvedValue({ data: { ...ROLE_CHOICE_POLICY, providers: ['email', 'google'] } });
+      // The shape the pre-fix Google fallback produced: basic user, no role.
+      mockSignInWithGoogle.mockResolvedValue({
+        success: true, is_new_user: true, server_confirmed: false, user: { id: 'u1', email: 'a@b.c', name: 'A' },
+      });
+      const utils = await renderScreen(undefined, 'coach');
+      await fireEvent.press(await utils.findByText('Continue with Google'));
+      expect(await utils.findByText(/We could not confirm your coach account/)).toBeTruthy();
+      expect(utils.nav.replace).not.toHaveBeenCalled();
+      expect(mockEmit).not.toHaveBeenCalled();
+      expect(await AsyncStorage.getItem(SIGNUP_ROLE_NOTICE_KEY)).toBeNull();
+      expect(secureStorage.removeItem).toHaveBeenCalledWith('supabase_token');
+    });
+
+    it('Sol B1: same rule for Apple (success with no server role on the coach form)', async () => {
+      mockGetSignupPolicy.mockResolvedValue({ data: ROLE_CHOICE_POLICY });
+      mockSignInWithApple.mockResolvedValue({ success: true, is_new_user: true, user: { id: 'u1' } });
+      const utils = await renderScreen(undefined, 'coach');
+      await fireEvent.press(utils.getByTestId('apple-button'));
+      expect(await utils.findByText(/We could not confirm your coach account/)).toBeTruthy();
+      expect(utils.nav.replace).not.toHaveBeenCalled();
+      expect(await AsyncStorage.getItem(SIGNUP_ROLE_NOTICE_KEY)).toBeNull();
+    });
+
+    it('Sol B2 (email): cached-enabled -> chose coach -> live disabled: user is told, nothing is submitted, client needs an explicit choice', async () => {
+      const { utils, disableLive } = await renderWithCachedPolicyAndPendingLive();
+      mockRegister.mockResolvedValue({ data: { requires_verification: true, role: 'student' } });
+      await disableLive();
+      expect(await utils.findByTestId('coach-choice-withdrawn-notice')).toBeTruthy();
+      expect(utils.getByText(/No account has been created/)).toBeTruthy();
+      // The form is gone, so nothing can be submitted as a client by accident.
+      expect(utils.queryByLabelText('Create account')).toBeNull();
+      expect(utils.queryByLabelText('Full name')).toBeNull();
+      expect(mockRegister).not.toHaveBeenCalled();
+      // Explicit re-choice: only now does a client registration go out.
+      await fireEvent.press(utils.getByTestId('coach-choice-withdrawn-client'));
+      expect(await utils.findByText('Join your coach')).toBeTruthy();
+      await fillAndSubmit(utils as never);
+      await waitFor(() => expect(mockRegister).toHaveBeenCalledTimes(1));
+      expect(mockRegister.mock.calls[0][1]).toBeUndefined();
+    });
+
+    it('Sol B2 (providers): after the live disable neither Apple nor Google can run until the user chooses', async () => {
+      const { utils, disableLive } = await renderWithCachedPolicyAndPendingLive();
+      await disableLive();
+      expect(await utils.findByTestId('coach-choice-withdrawn-notice')).toBeTruthy();
+      expect(utils.queryByTestId('apple-button')).toBeNull();
+      expect(utils.queryByText('Continue with Google')).toBeNull();
+      expect(mockSignInWithApple).not.toHaveBeenCalled();
+      expect(mockSignInWithGoogle).not.toHaveBeenCalled();
+    });
+
+    it('Sol B2: "Check again" returns to the coach form when coach sign-up is back, and says so when it is not', async () => {
+      const { utils, disableLive } = await renderWithCachedPolicyAndPendingLive();
+      await disableLive();
+      await utils.findByTestId('coach-choice-withdrawn-notice');
+      mockGetSignupPolicy.mockResolvedValueOnce({ data: { ...ROLE_CHOICE_POLICY, role_choice: false } });
+      await fireEvent.press(utils.getByTestId('coach-choice-withdrawn-recheck'));
+      expect(await utils.findByTestId('coach-choice-recheck-note')).toBeTruthy();
+      mockGetSignupPolicy.mockResolvedValueOnce({ data: ROLE_CHOICE_POLICY });
+      mockSignInWithApple.mockResolvedValue({ success: true, is_new_user: true, user: { id: 'c1', role: 'coach' } });
+      await fireEvent.press(utils.getByTestId('coach-choice-withdrawn-recheck'));
+      expect(await utils.findByText('Create your coach account')).toBeTruthy();
+      await fireEvent.press(utils.getByTestId('apple-button'));
+      await waitFor(() => expect(mockSignInWithApple).toHaveBeenCalledTimes(1));
+      expect(mockSignInWithApple.mock.calls[0][0]).toEqual({ inviteCode: undefined, intendedRole: 'coach' });
+    });
+
+    it('B2 boundary: a live disable before any coach choice still continues as a client (no choice was made)', async () => {
+      await loadSignupPolicy(async () => ({ data: ROLE_CHOICE_POLICY }));
+      let resolveLive: (v: unknown) => void = () => undefined;
+      mockGetSignupPolicy.mockReturnValueOnce(new Promise((r) => { resolveLive = r; }));
+      const utils = await render(<CreateAccountScreen navigation={makeNav() as never} route={undefined} />);
+      expect(utils.getByTestId('role-choice')).toBeTruthy();
+      await act(async () => {
+        resolveLive({ data: { ...ROLE_CHOICE_POLICY, role_choice: false } });
+      });
+      expect(await utils.findByText('Join your coach')).toBeTruthy();
+      expect(utils.queryByTestId('coach-choice-withdrawn-notice')).toBeNull();
+    });
+
+    it('Opus C4: the "contact support" notice on the verify step links to the in-app support screen', async () => {
+      mockGetSignupPolicy.mockResolvedValue({ data: ROLE_CHOICE_POLICY });
+      mockRegister.mockResolvedValue({ data: { requires_verification: true, role: 'student' } });
+      const utils = await renderScreen(undefined, 'coach');
+      await fillAndSubmit(utils);
+      await fireEvent.press(await utils.findByTestId('coach-request-not-applied-support'));
+      expect(utils.nav.navigate).toHaveBeenCalledWith('SupportInbox');
+    });
+  });
+});

@@ -9,6 +9,7 @@ import RoleSelectionScreen from '../screens/auth/RoleSelectionScreen';
 import type { SignupRoleNoticeKind } from '../lib/signupRoleNotice';
 import AcceptInviteScreen from '../screens/auth/AcceptInviteScreen';
 import AuthCallbackScreen from '../screens/auth/AuthCallbackScreen';
+import SupportInboxScreen from '../screens/support/SupportInboxScreen';
 import { Colors } from '../constants/colors';
 
 export type AuthStackParamList = {
@@ -40,6 +41,10 @@ export type AuthStackParamList = {
   AcceptInvite: { token: string };
   // Idempotent landing for a stray `tgp://auth/callback` (OAuth redirect URI).
   AuthCallback: undefined;
+  // In-app support (Crisp; initCrisp runs at app start regardless of auth).
+  // Registered here so signup notices that say "contact support" can open
+  // it before the user has reached Settings (#306 fix round 2).
+  SupportInbox: undefined;
 };
 
 const Stack = createNativeStackNavigator<AuthStackParamList>();
@@ -61,6 +66,7 @@ export default function AuthNavigator() {
       <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
       <Stack.Screen name="AcceptInvite" component={AcceptInviteScreen} />
       <Stack.Screen name="AuthCallback" component={AuthCallbackScreen} />
+      <Stack.Screen name="SupportInbox" component={SupportInboxScreen} />
     </Stack.Navigator>
   );
 }
