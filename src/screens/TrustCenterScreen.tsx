@@ -30,6 +30,8 @@ import { Spacing, Radius } from '../theme/index';
 import { typography, shadows } from '../theme/tokens';
 import { track } from '../lib/analytics';
 import api, { deletionApi } from '../services/api';
+import { purgeConsultationDraft } from '../lib/consultation/storage';
+import { readUserCacheSync } from '../lib/userCache';
 import { dataExportApi } from '../services/dataExportApi';
 import { helpUrl } from '../config/env';
 import { useTheme, ThemeColors } from '../theme/ThemeProvider';
@@ -219,6 +221,10 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
             setDeleteBusy(true);
             try {
               await deletionApi.requestDeletion();
+              // Purge the local consultation draft (health answers) as soon as
+              // deletion is requested (Sol A-04).
+              const uid = readUserCacheSync()?.id;
+              if (uid) await purgeConsultationDraft(uid).catch(() => undefined);
               Alert.alert(
                 'Confirmation email sent',
                 'We have emailed a confirmation link. After you confirm, your account enters a 14-day grace period during which you can cancel from Settings.',

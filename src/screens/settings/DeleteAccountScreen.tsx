@@ -37,6 +37,7 @@ import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { warningTap } from '../../utils/haptics';
 import { signOut } from '../../services/authActions';
 import { deletionApi } from '../../services/api';
+import { purgeConsultationDraft } from '../../lib/consultation/storage';
 import { errorMessage } from '../../types/common';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 
@@ -73,6 +74,9 @@ export default function DeleteAccountScreen({ navigation }: DeleteAccountScreenP
 
     try {
       await deletionApi.requestDeletion();
+      // Purge the local consultation draft (health answers) at once, before
+      // the sign-out that follows the alert (Sol A-04).
+      if (currentUser?.id) await purgeConsultationDraft(currentUser.id).catch(() => undefined);
       // Inform the user before signing them out. We call signOut after the
       // alert so the auth-event navigation reset does not race with the Alert
       // dismissal on older React Navigation versions.

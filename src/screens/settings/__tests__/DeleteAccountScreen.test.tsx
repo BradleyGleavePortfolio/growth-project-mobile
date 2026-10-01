@@ -190,6 +190,26 @@ describe('DeleteAccountScreen', () => {
       });
     });
 
+    it('purges the encrypted consultation draft as soon as deletion is requested (Sol A-04)', async () => {
+      const { writeLocalState, readLocalState } = jest.requireActual('../../../lib/consultation/storage');
+      await writeLocalState('user-1', { screenId: 'P4', answers: { P4: 'yes', P4_note: 'Sensitive screening note' } });
+      expect((await readLocalState('user-1'))?.answers.P4_note).toBe('Sensitive screening note');
+      mockedDeletionApi.requestDeletion.mockResolvedValue({
+        data: { message: 'Email sent', expires_at: '2026-01-01T00:00:00Z' },
+      } as never);
+
+      const { getByTestId } = await renderScreen();
+      await fireEvent.changeText(getByTestId('confirm-input'), 'DELETE');
+      await act(async () => {
+        await fireEvent.press(getByTestId('confirm-button'));
+      });
+
+      await waitFor(() => expect(Alert.alert).toHaveBeenCalled());
+      // Purged before (and independent of) the sign-out the alert triggers.
+      expect(mockedSignOut).not.toHaveBeenCalled();
+      expect(await readLocalState('user-1')).toBeNull();
+    });
+
     it('shows a success Alert with the 14-day grace message', async () => {
       mockedDeletionApi.requestDeletion.mockResolvedValue({
         data: { message: 'Email sent', expires_at: '2026-01-01T00:00:00Z' },
