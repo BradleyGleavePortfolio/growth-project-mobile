@@ -27,6 +27,9 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { AuthStackParamList } from '../../navigation/AuthNavigator';
 import AppleSignInButton from '../../components/AppleSignInButton';
 import { signInWithApple } from '../../utils/appleAuth';
+// Static import (was a dynamic `import()`): Metro bundles the module either
+// way, and a static import lets the Google path be exercised in Jest.
+import { signInWithGoogle } from '../../utils/googleAuth';
 import { setUserCache } from '../../lib/userCache';
 import { purgePersistedQueryCacheForAllUsers } from '../../services/queryClient';
 import { Colors } from '../../constants/colors';
@@ -164,7 +167,6 @@ export default function LoginScreen({ navigation, route }: Props) {
     setGoogleLoading(true);
     setError('');
     try {
-      const { signInWithGoogle } = await import('../../utils/googleAuth');
       const result = await signInWithGoogle();
 
       if (!result.success) {
