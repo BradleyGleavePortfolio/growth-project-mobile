@@ -1,26 +1,36 @@
 {
   "project_info": {
-    "project_number": "129391466712",
-    "project_id": "tgp-fitness",
-    "storage_bucket": "tgp-fitness.firebasestorage.app"
+    "project_number": "963513798354",
+    "project_id": "project-2c2ffa46-a1eb-4f5c-b68",
+    "storage_bucket": "project-2c2ffa46-a1eb-4f5c-b68.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:129391466712:android:5232e0e1fb79ace671dfad",
+        "mobilesdk_app_id": "1:963513798354:android:b17f558013031d01c3270b",
         "android_client_info": {
           "package_name": "com.growthproject.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "963513798354-b1si2i5t238kmq2jh572kvirtrnv9oee.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
-          "current_key": "AIzaSyD8IdFwkatjOBJfCYHPt2br3DKCeLiqtrg"
+          "current_key": "AIzaSyBHMD5AJMz3lQdE88jZrePrfIvAcW8l-tk"
         }
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "963513798354-b1si2i5t238kmq2jh572kvirtrnv9oee.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }
