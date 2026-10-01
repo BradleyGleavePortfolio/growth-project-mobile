@@ -59,3 +59,14 @@ export function helpUrl(pathname?: string): string {
   const suffix = pathname.startsWith('/') ? pathname : `/${pathname}`;
   return `${resolvedHelpBaseUrl}${suffix}`;
 }
+
+// Public policy pages, served by the backend at the site root
+// (growth-project-backend src/public-pages/trust-pages.html.ts: /privacy,
+// /consumer-health-privacy, /terms). They are NOT under the help centre, so
+// never build them with helpUrl(): helpUrl('/privacy') resolves to
+// /help/privacy, which is not the policy. The paths must match the backend's
+// PRIVACY_POLICY_PATH / CONSUMER_HEALTH_POLICY_PATH.
+export const PUBLIC_SITE_BASE_URL = 'https://app.trygrowthproject.com';
+export const PRIVACY_POLICY_URL = `${PUBLIC_SITE_BASE_URL}/privacy`;
+export const CONSUMER_HEALTH_POLICY_URL = `${PUBLIC_SITE_BASE_URL}/consumer-health-privacy`;
+export const TERMS_URL = `${PUBLIC_SITE_BASE_URL}/terms`;

@@ -55,6 +55,8 @@ Everything a signed-in `student` user sees. Mounted under `ClientNavigator`, whi
 
 The **Trust Center** itself lives at `src/screens/TrustCenterScreen.tsx` (not in this directory because it is shared with the coach navigator).
 
+Trust Center policy links (2026-09-30): the footer links to the **Privacy Policy** (`PRIVACY_POLICY_URL`, `https://app.trygrowthproject.com/privacy`), the **Consumer Health Data Privacy Policy** (`CONSUMER_HEALTH_POLICY_URL`, `/consumer-health-privacy`, required to be reachable from in-app settings by Washington RCW 19.373) and the help centre (`helpUrl()`). The list lives in `src/screens/trustCenterLinks.ts`; the URLs live in `src/config/env.ts`. Policy pages sit at the site root, so never build them with `helpUrl()` (the old `helpUrl('/privacy')` opened `/help/privacy`, which is not the policy). The transparency bullets say what the coach sees (consultation answers, logs, check-ins, connected health data), that Roman conversations are private from the coach and deleted after 180 days, and that service providers such as Anthropic process data only as the policy describes. The unsupported "US East" data-residency row and bullets were removed. Tests: `src/screens/__tests__/trustCenterPolicyLinks.test.tsx`. Any reusable consumer-health link (for example the consultation agreement screen) should import `CONSUMER_HEALTH_POLICY_URL` from `src/config/env.ts`.
+
 ### Clinic tutorial additions (featureFlags.clientTutorial, default OFF)
 
 | Screen | Addition |

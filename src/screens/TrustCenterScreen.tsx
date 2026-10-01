@@ -5,7 +5,8 @@
  *
  * Section 1: security metadata fetched from GET /api/system/trust-meta
  * Section 2: User actions — data export + account deletion
- * Section 3: Bullet list — who has access, what's encrypted, where data lives
+ * Section 3: Bullet list — who has access, what's encrypted
+ * Footer: Privacy Policy, Consumer Health Data Privacy Policy, help centre
  *
  * Analytics events (PII-safe):
  *   trust_center_opened
@@ -31,7 +32,7 @@ import { typography, shadows } from '../theme/tokens';
 import { track } from '../lib/analytics';
 import api, { deletionApi } from '../services/api';
 import { dataExportApi } from '../services/dataExportApi';
-import { helpUrl } from '../config/env';
+import { trustCenterLinks } from './trustCenterLinks';
 import { useTheme, ThemeColors } from '../theme/ThemeProvider';
 import { Colors } from '../constants/colors';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
@@ -284,11 +285,6 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
                 value="TLS 1.3 + AES-256 at rest"
               />
               <MetaRow
-                icon="location-outline"
-                label="Data residency"
-                value="US East"
-              />
-              <MetaRow
                 icon="document-text-outline"
                 label="Audit policy"
                 value={`Version ${meta.auditPolicyVersion}`}
@@ -308,7 +304,7 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
               <Ionicons name="people-outline" size={18} color={colors.primary} />
             </View>
             <Text style={styles.actionInfoText}>
-              Workouts and meals stay private to you and your assigned coach
+              Your answers and logs are shared with your coach. Your Roman conversations stay private from your coach.
             </Text>
           </View>
 
@@ -370,38 +366,39 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
         <View style={styles.card}>
           <Text style={styles.bulletGroupLabel}>Who can see your data</Text>
           <BulletItem text="You — always" />
-          <BulletItem text="Your assigned coach — only what you log (meals + workouts)" />
-          <BulletItem text="No one else — we do not sell, share, or license your data" />
+          <BulletItem text="Your coach — your consultation answers, logs, check-ins and connected health data" />
+          <BulletItem text="Not your coach — your Roman conversations, which are deleted after 180 days" />
+          <BulletItem text="Service providers that run the app for us, such as Anthropic for Roman, only as described in the Privacy Policy" />
+          <BulletItem text="We do not sell your data or use your health data for advertising" />
 
           <Text style={[styles.bulletGroupLabel, { marginTop: 16 }]}>What is encrypted</Text>
           <BulletItem text="All data in transit uses TLS 1.3 (the strongest available)" />
           <BulletItem text="All stored data is encrypted with AES-256 at rest" />
           <BulletItem text="Authentication tokens are stored in your device's secure enclave (Keychain / Keystore)" />
-
-          <Text style={[styles.bulletGroupLabel, { marginTop: 16 }]}>Where your data lives</Text>
-          <BulletItem text="Servers located in US East data centres" />
-          <BulletItem text="We do not transfer data outside the US without your consent" />
-          <BulletItem text="Backups are encrypted and stored in the same region" />
         </View>
       </View>
 
       <View style={styles.footer}>
         <Text style={styles.footerText}>Questions or concerns?</Text>
-        <Text
-          style={styles.footerLink}
-          accessibilityRole="link"
-          accessibilityLabel="Open the help centre"
-          onPress={() => {
-            Linking.openURL(helpUrl('/privacy')).catch(() => {
-              Alert.alert(
-                'Help unavailable',
-                'Could not open the help centre right now. Please try again later.',
-              );
-            });
-          }}
-        >
-          Visit the help centre
-        </Text>
+        {trustCenterLinks().map((link) => (
+          <Text
+            key={link.testID}
+            testID={link.testID}
+            style={styles.footerLink}
+            accessibilityRole="link"
+            accessibilityLabel={link.accessibilityLabel}
+            onPress={() => {
+              Linking.openURL(link.url).catch(() => {
+                Alert.alert(
+                  link.failureTitle,
+                  'Could not open this page right now. Please try again later.',
+                );
+              });
+            }}
+          >
+            {link.label}
+          </Text>
+        ))}
       </View>
     </ScrollView>
   );
