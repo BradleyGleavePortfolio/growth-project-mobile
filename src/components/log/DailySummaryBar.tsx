@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Colors, Radius, Spacing, colors } from '../../theme/index';
+import type { MacroDisplayMode } from '../../macros/macroDisplay';
 
 interface DailyTotals {
   calories: number;
@@ -12,13 +13,28 @@ interface DailyTotals {
 interface Props {
   dailyTotals: DailyTotals;
   remaining: number;
+  /**
+   * 'simple' during a never-tracker's first week (clinic contract v1
+   * addition 8): calories and protein only. Defaults to 'full'.
+   */
+  mode?: MacroDisplayMode;
 }
 
-export default function DailySummaryBar({ dailyTotals, remaining }: Props) {
+export default function DailySummaryBar({
+  dailyTotals,
+  remaining,
+  mode = 'full',
+}: Props) {
+  const simple = mode === 'simple';
   return (
-    <View style={styles.summaryBar}>
+    <View
+      style={styles.summaryBar}
+      testID={simple ? 'daily-summary-simple' : 'daily-summary-full'}
+    >
       <View style={styles.summaryItem}>
-        <Text style={styles.summaryValue}>{Math.round(dailyTotals.calories)}</Text>
+        <Text style={styles.summaryValue}>
+          {Math.round(dailyTotals.calories)}
+        </Text>
         <Text style={styles.summaryLabel}>Eaten</Text>
       </View>
       <View style={styles.summaryDivider} />
@@ -35,20 +51,24 @@ export default function DailySummaryBar({ dailyTotals, remaining }: Props) {
         </Text>
         <Text style={styles.summaryLabel}>Protein</Text>
       </View>
-      <View style={styles.summaryDivider} />
-      <View style={styles.summaryItem}>
-        <Text style={[styles.summaryValue, { color: Colors.gold }]}>
-          {Math.round(dailyTotals.carbs)}g
-        </Text>
-        <Text style={styles.summaryLabel}>Carbs</Text>
-      </View>
-      <View style={styles.summaryDivider} />
-      <View style={styles.summaryItem}>
-        <Text style={[styles.summaryValue, { color: colors.data.habit }]}>
-          {Math.round(dailyTotals.fat)}g
-        </Text>
-        <Text style={styles.summaryLabel}>Fat</Text>
-      </View>
+      {simple ? null : (
+        <>
+          <View style={styles.summaryDivider} />
+          <View style={styles.summaryItem}>
+            <Text style={[styles.summaryValue, { color: Colors.gold }]}>
+              {Math.round(dailyTotals.carbs)}g
+            </Text>
+            <Text style={styles.summaryLabel}>Carbs</Text>
+          </View>
+          <View style={styles.summaryDivider} />
+          <View style={styles.summaryItem}>
+            <Text style={[styles.summaryValue, { color: colors.data.habit }]}>
+              {Math.round(dailyTotals.fat)}g
+            </Text>
+            <Text style={styles.summaryLabel}>Fat</Text>
+          </View>
+        </>
+      )}
     </View>
   );
 }

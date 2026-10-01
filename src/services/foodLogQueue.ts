@@ -24,6 +24,7 @@ import { randomUUID } from 'expo-crypto';
 import { foodApi, logApi } from './api';
 import { readUserCacheSync } from '../lib/userCache';
 import { logger } from '../utils/logger';
+import { emitTutorialSignal } from '../tutorial/tutorialEvents';
 
 const ANONYMOUS_QUEUE_KEY = 'pending_food_logs_anonymous';
 
@@ -144,6 +145,9 @@ export async function enqueue(
   };
   queue.push(item);
   await writeQueueFenced(owner, queue);
+  // Clinic tutorial: an entry accepted by the offline queue counts as the
+  // client's first logged meal (it is saved and will sync).
+  emitTutorialSignal('meal_logged');
 }
 
 export async function getQueueLength(): Promise<number> {

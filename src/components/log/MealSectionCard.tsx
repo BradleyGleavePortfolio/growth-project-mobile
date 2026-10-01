@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, Radius, Spacing } from '../../theme/index';
 import { FoodLog, MealType } from '../../types';
 import type { IoniconName } from '../../types/common';
+import { foodMacroLine, type MacroDisplayMode } from '../../macros/macroDisplay';
 
 interface Props {
   label: string;
@@ -18,6 +19,8 @@ interface Props {
   // logged entry. Optional so older parents that haven't wired editing yet
   // keep working unchanged.
   onEditPress?: (log: FoodLog) => void;
+  /** 'simple' during a never-tracker's first week: protein only per entry. */
+  macroMode?: MacroDisplayMode;
 }
 
 export default function MealSectionCard({
@@ -29,6 +32,7 @@ export default function MealSectionCard({
   onAddPress,
   onDeletePress,
   onEditPress,
+  macroMode = 'full',
 }: Props) {
   return (
     <View style={styles.mealSection}>
@@ -83,7 +87,7 @@ export default function MealSectionCard({
                 ) : null}
               </Text>
               <Text style={styles.foodMacros}>
-                P: {Math.round(log.protein)}g · C: {Math.round(log.carbs)}g · F: {Math.round(log.fat)}g
+                {foodMacroLine(log, macroMode)}
               </Text>
             </View>
             <Text style={styles.foodCals}>{Math.round(log.calories)}</Text>

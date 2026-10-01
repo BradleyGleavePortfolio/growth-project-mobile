@@ -20,6 +20,8 @@ import { featureFlags } from '../../config/featureFlags';
 // so it carries Roman's actual face rather than a disembodied sparkles glyph.
 // Canonical avatar lives in the roman/ lane (D-013).
 import RomanAvatar from '../../components/roman/RomanAvatar';
+import TutorialTarget from '../../components/tutorial/TutorialTarget';
+import type { TutorialTargetId } from '../../tutorial/tutorialSteps';
 type MoreItem = {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
@@ -30,6 +32,8 @@ type MoreItem = {
   // When true, the row renders Roman's face (RomanAvatar) in place of the
   // Ionicons glyph — the face+voice rule for the Roman-branded row.
   isRoman?: boolean;
+  // Clinic tutorial spotlight id for this row (wearables step).
+  tutorialTarget?: TutorialTargetId;
 };
 
 const MORE_ITEMS: MoreItem[] = [
@@ -145,12 +149,40 @@ const ROMAN_MORE_ITEM: MoreItem = {
   isRoman: true,
 };
 
+/**
+ * Clinic tutorial rows (featureFlags.clientTutorial, default OFF): the
+ * wearable Connections hub and the Health shell (Fitness + Recovery / sleep)
+ * are registered in MoreStack but had no menu entry. The tutorial's wearable
+ * step points at these two rows, so they ship behind the same flag.
+ */
+const TUTORIAL_MORE_ITEMS: MoreItem[] = [
+  {
+    icon: 'heart-outline',
+    label: 'Health and sleep',
+    description: 'Activity, heart rate and sleep from your devices',
+    target: { type: 'stack', screen: 'Health' },
+    a11yHint: 'Opens your health and sleep data',
+    tutorialTarget: 'more-health',
+  },
+  {
+    icon: 'watch-outline',
+    label: 'Connected devices',
+    description: 'Apple Health, Health Connect and wearables',
+    target: { type: 'stack', screen: 'Connections' },
+    a11yHint: 'Opens your connected devices',
+    tutorialTarget: 'more-connections',
+  },
+];
+
 export default function MoreScreen() {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const items = useMemo<MoreItem[]>(
-    () => (featureFlags.romanChat ? [ROMAN_MORE_ITEM, ...MORE_ITEMS] : MORE_ITEMS),
+    () => {
+      const base = featureFlags.romanChat ? [ROMAN_MORE_ITEM, ...MORE_ITEMS] : MORE_ITEMS;
+      return featureFlags.clientTutorial ? [...TUTORIAL_MORE_ITEMS, ...base] : base;
+    },
     [],
   );
 
@@ -177,6 +209,7 @@ export default function MoreScreen() {
           // ARIA `role` is used because RN's AccessibilityRole union omits
           // "listitem".
           <View key={item.label} role="listitem">
+            <TutorialTargetWrap id={item.tutorialTarget}>
             <HapticPressable
               intent="light"
               style={styles.item}
@@ -199,11 +232,22 @@ export default function MoreScreen() {
               </View>
               <Ionicons name="chevron-forward" size={20} color={colors.textMuted} />
             </HapticPressable>
+            </TutorialTargetWrap>
           </View>
         ))}
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+function TutorialTargetWrap({
+  id,
+  children,
+}: {
+  id?: TutorialTargetId;
+  children: React.ReactNode;
+}): React.ReactElement {
+  return id ? <TutorialTarget id={id}>{children}</TutorialTarget> : <>{children}</>;
 }
 
 const makeStyles = (colors: ThemeColors) =>
