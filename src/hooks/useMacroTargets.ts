@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { macrosApi } from '../api/macrosApi';
 import { useCurrentUser } from './useCurrentUser';
+import { reportMacroDisplay } from '../macros/macroDisplayStore';
 
 export interface MacroTargets {
   calories: number;
@@ -82,6 +83,9 @@ export function useMacroTargets(): MacroTargets | null {
         const res = await macrosApi.currentForSelf();
         const serverTarget = res.data;
         if (cancelled) return;
+        // Lighter start for never-trackers: the same body carries
+        // macro_display_mode / simple_until. Absent means 'full'.
+        reportMacroDisplay(serverTarget);
 
         if (serverTarget) {
           // Map server field names (calories_kcal / fats_g) to the shape

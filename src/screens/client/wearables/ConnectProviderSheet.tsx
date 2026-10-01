@@ -53,6 +53,7 @@ import {
 } from '../../../hooks/useWearableConnections';
 import { connectOnDeviceProvider } from '../../../services/health/onDeviceConnect';
 import { colors, radius, spacing, typography, withAlpha } from '../../../theme/tokens';
+import { emitTutorialSignal } from '../../../tutorial/tutorialEvents';
 
 /**
  * The auth-session return URL. The backend server callback completes the OAuth
@@ -109,6 +110,9 @@ export default function ConnectProviderSheet({
       // list — the server may have completed the connection even if the
       // in-app session reported a dismiss (e.g. redirect handled out-of-band).
       invalidate();
+      // Clinic tutorial: only an explicit success counts as connected; a
+      // dismiss is confirmed (or not) by the re-read connections list.
+      if (result.type === 'success') emitTutorialSignal('wearable_connected');
       if (result.type === 'success' || result.type === 'dismiss') {
         onConnected?.();
         onClose();
@@ -125,6 +129,7 @@ export default function ConnectProviderSheet({
         case 'granted':
           // Permission granted on-device; re-read so the hub reflects it.
           invalidate();
+          emitTutorialSignal('wearable_connected');
           onConnected?.();
           onClose();
           return;

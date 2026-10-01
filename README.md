@@ -122,6 +122,10 @@ eas login
 # Build for the store (profile names in eas.json)
 eas build --platform ios --profile production
 eas build --platform android --profile production
+
+# Clinic launch build: production plus the clinic flags (Roman tutorial,
+# Community tab with Hall + Cohorts, coach brief). See src/tutorial/README.md.
+eas build --platform ios --profile clinic
 ```
 
 ## Environment variables

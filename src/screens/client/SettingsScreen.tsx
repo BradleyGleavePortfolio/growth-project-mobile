@@ -26,6 +26,7 @@ import { updateSupabasePassword } from '../../utils/supabaseAuth';
 import { useTheme, ThemeColors, AppearanceOverride } from '../../theme/ThemeProvider';
 import { errorMessage } from '../../types/common';
 import BiometricUnlockSetting from '../../components/BiometricUnlockSetting';
+import TutorialSettingsRow from '../../components/tutorial/TutorialSettingsRow';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 
 export default function SettingsScreen({ navigation }: { navigation: NavigationProp<ParamListBase> }) {
@@ -189,6 +190,9 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </HapticPressable>
         </View>
+
+        {/* Clinic tutorial: resume or rerun Roman's tour (flag-gated). */}
+        <TutorialSettingsRow />
 
         {/* Nutrition Preferences */}
         <Text style={styles.sectionLabel}>Nutrition Preferences</Text>

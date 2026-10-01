@@ -10,9 +10,13 @@
  *
  * Sprint B-2 wiring: no edits from this screen — clients view, coaches
  * prescribe via CoachMacrosReviewScreen. Mutation paths live there.
+ *
+ * Lighter start (clinic contract v1 addition 8): while the client's macro
+ * display mode is 'simple', only calories and protein are shown, with one
+ * quiet line saying carbohydrate and fat join after the first week.
  */
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect } from 'react';
 import {
   RefreshControl,
   ScrollView,
@@ -22,6 +26,13 @@ import {
 } from 'react-native';
 import type { MacroTarget } from '../../api/macrosApi';
 import { useCurrentMacrosForSelf } from '../../hooks/useMacros';
+import { useCurrentUser } from '../../hooks/useCurrentUser';
+import {
+  SIMPLE_VIEW_NOTE,
+  targetCells,
+  type MacroDisplayMode,
+} from '../../macros/macroDisplay';
+import { reportMacroDisplay, useMacroDisplayMode } from '../../macros/macroDisplayStore';
 import { typography, spacing } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import type { SemanticTokens } from '../../theme/tokens';
@@ -31,6 +42,11 @@ export default function ClientMacrosScreen() {
   const styles = makeStyles(sc);
   const { data, isLoading, isError, refetch, isRefetching } =
     useCurrentMacrosForSelf();
+  const currentUser = useCurrentUser();
+  const mode = useMacroDisplayMode(currentUser?.id ?? null);
+  useEffect(() => {
+    if (data) reportMacroDisplay(data);
+  }, [data]);
 
   const onRefresh = useCallback(() => {
     void refetch();
@@ -61,7 +77,7 @@ export default function ClientMacrosScreen() {
           Could not load your targets right now. Pull to retry.
         </Text>
       ) : data ? (
-        <TargetCard target={data} styles={styles} sc={sc} />
+        <TargetCard target={data} mode={mode} styles={styles} sc={sc} />
       ) : (
         <EmptyState styles={styles} sc={sc} />
       )}
@@ -69,15 +85,25 @@ export default function ClientMacrosScreen() {
   );
 }
 
+const CELL_LABEL = { protein: 'Protein', carbs: 'Carbs', fat: 'Fats', fiber: 'Fiber' } as const;
+
 function TargetCard({
   target,
+  mode = 'full',
   styles,
   sc,
 }: {
   target: MacroTarget;
+  mode?: MacroDisplayMode;
   styles: Styles;
   sc: SemanticTokens;
 }) {
+  const values = {
+    protein: target.protein_g,
+    carbs: target.carbs_g,
+    fat: target.fats_g,
+    fiber: target.fiber_g,
+  };
   return (
     <View style={styles.card}>
       <View>
@@ -92,11 +118,19 @@ function TargetCard({
       <View style={styles.hairline} />
 
       <View style={styles.macroGrid}>
-        <MacroCell label="Protein" value={target.protein_g} sc={sc} />
-        <MacroCell label="Carbs" value={target.carbs_g} sc={sc} />
-        <MacroCell label="Fats" value={target.fats_g} sc={sc} />
-        <MacroCell label="Fiber" value={target.fiber_g} sc={sc} />
+        {targetCells(mode).map((k) => (
+          <MacroCell key={k} label={CELL_LABEL[k]} value={values[k]} sc={sc} />
+        ))}
       </View>
+
+      {mode === 'simple' ? (
+        <Text
+          style={[typography.bodySmall, { color: sc.textMuted }]}
+          testID="macros-simple-note"
+        >
+          {SIMPLE_VIEW_NOTE}
+        </Text>
+      ) : null}
 
       {target.notes ? (
         <View>

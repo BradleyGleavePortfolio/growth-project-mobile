@@ -72,6 +72,7 @@ import { authEvents } from '../utils/authEvents';
 import { secureStorage } from './secureStorage';
 import { env } from '../config/env';
 import { entitlementEvents } from '../entitlements/entitlementEvents';
+import { withTutorialSignal } from '../tutorial/tutorialEvents';
 import { logger } from '../utils/logger';
 import { generateIdempotencyKey } from '../utils/idempotency';
 import { REQUEST_ID_HEADER, newRequestId } from '../utils/correlation';
@@ -419,7 +420,9 @@ export const logApi = {
     // Idempotency key from the offline queue so a flush retry doesn't create
     // a duplicate LoggedFoodEntry. Optional — direct (non-queued) logs omit it.
     client_uuid?: string;
-  }) => api.post('/log/food', data),
+    // Clinic tutorial: a 2xx food log is the real "first meal" action. The
+    // response passes through untouched; a failure emits nothing.
+  }) => withTutorialSignal(api.post('/log/food', data), 'meal_logged'),
   getDaily: (date: string) =>
     api.get(`/log/daily?date=${date}`),
   updateEntry: (id: string, data: Record<string, unknown>) =>
@@ -651,7 +654,9 @@ export const messagesApi = {
     const qs = q.toString();
     return api.get(`/messages${qs ? `?${qs}` : ''}`);
   },
-  send: (body: string) => api.post('/messages', { body }),
+  // Clinic tutorial teach-back: a 2xx send to the client's coach thread is
+  // the real "message your coach" action. Response passes through untouched.
+  send: (body: string) => withTutorialSignal(api.post('/messages', { body }), 'message_sent'),
   markRead: () => api.post('/messages/read'),
   unreadCount: () => api.get('/messages/unread-count'),
   // ED.6 — coach-review marker for the client's thread. Returns
