@@ -154,50 +154,78 @@ describe('consultationApi', () => {
   });
 });
 
-describe('aiConsentApi (R2a contract: GET /me/ai-consent, POST and DELETE /me/ai-consent/roman)', () => {
+describe('aiConsentApi (backend #622: GET /me/ai-consent, POST and DELETE /me/ai-consent/roman)', () => {
   const { aiConsentApi, isLiveGrant } = jest.requireActual('../../../api/aiConsentApi') as typeof import('../../../api/aiConsentApi');
-  const roman = { granted: true, version: 'client-ai-v3', granted_at: '2026-10-01T10:00:00Z', revoked_at: null, current_version: 'client-ai-v3' };
+  const body = (over: Record<string, unknown> = {}) => ({
+    purpose: 'client_ai_processing',
+    processor: 'anthropic',
+    granted: true,
+    state: 'granted',
+    version: 'client-ai-v3',
+    granted_at: '2026-10-01T10:00:00Z',
+    withdrawn_at: null,
+    current_version: 'client-ai-v3',
+    needs_reconsent: false,
+    copy: {
+      version: 'client-ai-v3',
+      processor: 'anthropic',
+      paragraph: { text: 'p', sha256: 'a'.repeat(64) },
+      box_label: { text: 'b', sha256: 'b'.repeat(64) },
+      sha256: 'c'.repeat(64),
+    },
+    ...over,
+  });
 
-  it('uses the contract routes and body, and parses the status', async () => {
-    mockGet.mockResolvedValueOnce({ status: 200, data: { roman, copy: { version: 'client-ai-v3', text: 't', sha256: 'a'.repeat(64), processor: 'anthropic' } } });
+  it('uses the contract routes and body, and parses the #622 status', async () => {
+    mockGet.mockResolvedValueOnce({ status: 200, data: body() });
     const got = await aiConsentApi.getStatus();
     expect(mockGet).toHaveBeenLastCalledWith('/me/ai-consent');
-    expect(got).toMatchObject({ kind: 'ok', status: { roman: { granted: true, version: 'client-ai-v3' }, copy: { version: 'client-ai-v3', sha256: 'a'.repeat(64) } } });
+    expect(got).toMatchObject({
+      kind: 'ok',
+      status: { granted: true, state: 'granted', version: 'client-ai-v3', copy: { sha256: 'c'.repeat(64), paragraph: { text: 'p' } } },
+    });
 
-    const body = { version: 'client-ai-v3', copy_sha256: 'b'.repeat(64), platform: 'ios' as const };
-    mockPost.mockResolvedValueOnce({ data: { roman } });
-    await expect(aiConsentApi.grantRoman(body)).resolves.toMatchObject({ kind: 'ok' });
-    expect(mockPost).toHaveBeenLastCalledWith('/me/ai-consent/roman', body);
+    const req = { version: 'client-ai-v3', copy_sha256: 'b'.repeat(64), platform: 'ios' as const };
+    mockPost.mockResolvedValueOnce({ data: body() });
+    await expect(aiConsentApi.grantRoman(req)).resolves.toMatchObject({ kind: 'ok' });
+    expect(mockPost).toHaveBeenLastCalledWith('/me/ai-consent/roman', req);
 
-    mockDelete.mockResolvedValueOnce({ data: { roman: { ...roman, granted: false, revoked_at: '2026-10-01T11:00:00Z' } } });
-    await expect(aiConsentApi.withdrawRoman()).resolves.toMatchObject({ kind: 'ok', status: { roman: { granted: false } } });
+    mockDelete.mockResolvedValueOnce({ data: body({ granted: false, state: 'withdrawn', granted_at: null, withdrawn_at: '2026-10-01T11:00:00Z' }) });
+    await expect(aiConsentApi.withdrawRoman()).resolves.toMatchObject({ kind: 'ok', status: { granted: false, state: 'withdrawn' } });
     expect(mockDelete).toHaveBeenLastCalledWith('/me/ai-consent/roman');
+  });
+
+  it('never reads granted without state "granted"; unknown shapes are errors', async () => {
+    mockGet.mockResolvedValueOnce({ status: 200, data: body({ state: 'needs_reconsent' }) });
+    await expect(aiConsentApi.getStatus()).resolves.toMatchObject({ status: { granted: false, needs_reconsent: true } });
+    mockGet.mockResolvedValueOnce({ status: 200, data: { roman: { granted: true } } });
+    await expect(aiConsentApi.getStatus()).resolves.toEqual({ kind: 'error', status: 200 });
   });
 
   it('404 and 503 are "unavailable"; 409 CONSENT_VERSION_MISMATCH is explicit; other failures are errors', async () => {
     for (const status of [404, 503]) {
-      mockGet.mockRejectedValueOnce({ response: { status } });
-      await expect(aiConsentApi.getStatus()).resolves.toEqual({ kind: 'unavailable' });
+      mockGet.mockRejectedValueOnce({ response: { status, data: { code: 'AI_CONSENT_UNAVAILABLE' } } });
+      await expect(aiConsentApi.getStatus()).resolves.toEqual({ kind: 'unavailable', status });
       mockPost.mockRejectedValueOnce({ response: { status } });
-      await expect(aiConsentApi.grantRoman({ version: 'client-ai-v3' })).resolves.toEqual({ kind: 'unavailable' });
+      await expect(aiConsentApi.grantRoman({ version: 'client-ai-v3' })).resolves.toEqual({ kind: 'unavailable', status });
       mockDelete.mockRejectedValueOnce({ response: { status } });
-      await expect(aiConsentApi.withdrawRoman()).resolves.toEqual({ kind: 'unavailable' });
+      await expect(aiConsentApi.withdrawRoman()).resolves.toEqual({ kind: 'unavailable', status });
     }
-    mockPost.mockRejectedValueOnce({ response: { status: 409, data: { code: 'CONSENT_VERSION_MISMATCH', current_version: 'client-ai-v4' } } });
-    await expect(aiConsentApi.grantRoman({ version: 'client-ai-v3' })).resolves.toEqual({ kind: 'version_mismatch', current_version: 'client-ai-v4' });
+    mockPost.mockRejectedValueOnce({ response: { status: 409, data: { statusCode: 409, code: 'CONSENT_VERSION_MISMATCH', message: 'x' } } });
+    await expect(aiConsentApi.grantRoman({ version: 'client-ai-v3' })).resolves.toEqual({ kind: 'version_mismatch' });
+    mockPost.mockRejectedValueOnce({ response: { status: 409, data: { code: 'AI_CONSENT_CONFLICT' } } });
+    await expect(aiConsentApi.grantRoman({ version: 'client-ai-v3' })).resolves.toEqual({ kind: 'error', status: 409, code: 'AI_CONSENT_CONFLICT' });
     mockPost.mockRejectedValueOnce(new Error('Network Error'));
     await expect(aiConsentApi.grantRoman({ version: 'client-ai-v3' })).resolves.toEqual({ kind: 'error', status: null });
-    mockGet.mockResolvedValueOnce({ status: 200, data: { unexpected: true } });
-    await expect(aiConsentApi.getStatus()).resolves.toEqual({ kind: 'error', status: 200 });
   });
 
-  it('isLiveGrant needs a current, unrevoked grant of exactly that version', () => {
-    expect(isLiveGrant(roman, 'client-ai-v3')).toBe(true);
-    expect(isLiveGrant({ ...roman, revoked_at: '2026-10-01T11:00:00Z' }, 'client-ai-v3')).toBe(false);
-    expect(isLiveGrant({ ...roman, revoked_at: '2026-10-01T09:00:00Z' }, 'client-ai-v3')).toBe(true);
-    expect(isLiveGrant({ ...roman, version: 'client-ai-v2' }, 'client-ai-v3')).toBe(false);
-    expect(isLiveGrant({ ...roman, needs_reconsent: true }, 'client-ai-v3')).toBe(false);
-    expect(isLiveGrant({ ...roman, granted: false }, 'client-ai-v3')).toBe(false);
+  it('isLiveGrant needs state "granted" of exactly that version', () => {
+    const s = (over: Record<string, unknown> = {}) => ({ ...body(), copy: null, ...over }) as never;
+    expect(isLiveGrant(s(), 'client-ai-v3')).toBe(true);
+    expect(isLiveGrant(s({ state: 'withdrawn', granted: false }), 'client-ai-v3')).toBe(false);
+    expect(isLiveGrant(s({ version: 'client-ai-v2' }), 'client-ai-v3')).toBe(false);
+    expect(isLiveGrant(s({ state: 'needs_reconsent' }), 'client-ai-v3')).toBe(false);
+    expect(isLiveGrant(s({ granted: false }), 'client-ai-v3')).toBe(false);
   });
 });
 

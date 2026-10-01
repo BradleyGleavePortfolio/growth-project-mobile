@@ -13,8 +13,8 @@ import React from 'react';
 import { Alert, AlertButton } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import RomanAiConsentScreen, { choiceOf, RomanAiConsentApi, ROMAN_AI_COPY } from '../RomanAiConsentScreen';
-import type { AiConsentOutcome, AiConsentStatusResponse, RomanConsentRecord } from '../../../api/aiConsentApi';
-import { AI_CONSENT_COPY_SHA256, AI_CONSENT_PARAGRAPH } from '../../../lib/consultation/copy';
+import type { AiConsentOutcome, AiConsentStatusResponse } from '../../../api/aiConsentApi';
+import { AI_CONSENT_CHECKBOX_LABEL, AI_CONSENT_COPY_SHA256, AI_CONSENT_PARAGRAPH } from '../../../lib/consultation/copy';
 import { logger } from '../../../utils/logger';
 
 jest.mock('../../../services/api', () => ({ __esModule: true, default: {} }));
@@ -27,22 +27,24 @@ jest.mock('../../../theme/ThemeProvider', () => ({
 }));
 jest.mock('expo-font', () => ({ isLoaded: () => true, loadAsync: jest.fn() }));
 
-function status(over: Partial<RomanConsentRecord> = {}, copy: AiConsentStatusResponse['copy'] = null): AiConsentStatusResponse {
+/** A #622 status body. Defaults to "not granted". */
+function status(over: Partial<AiConsentStatusResponse> = {}): AiConsentStatusResponse {
   return {
-    roman: {
-      granted: false,
-      version: null,
-      granted_at: null,
-      revoked_at: null,
-      current_version: 'client-ai-v3',
-      needs_reconsent: false,
-      ...over,
-    },
-    copy,
+    purpose: 'client_ai_processing',
+    processor: 'anthropic',
+    granted: false,
+    state: 'not_granted',
+    version: null,
+    granted_at: null,
+    withdrawn_at: null,
+    current_version: 'client-ai-v3',
+    needs_reconsent: false,
+    copy: null,
+    ...over,
   };
 }
-const ALLOWED = status({ granted: true, version: 'client-ai-v3', granted_at: '2026-10-01T10:00:00Z' });
-const WITHDRAWN = status({ granted: false, version: 'client-ai-v3', granted_at: '2026-10-01T10:00:00Z', revoked_at: '2026-10-01T11:00:00Z' });
+const ALLOWED = status({ granted: true, state: 'granted', version: 'client-ai-v3', granted_at: '2026-10-01T10:00:00Z' });
+const WITHDRAWN = status({ state: 'withdrawn', version: 'client-ai-v3', withdrawn_at: '2026-10-01T11:00:00Z' });
 
 function makeApi(first: AiConsentOutcome, over: Partial<Record<keyof RomanAiConsentApi, jest.Mock>> = {}) {
   return {
@@ -162,17 +164,19 @@ describe('RomanAiConsentScreen', () => {
   it('409 CONSENT_VERSION_MISMATCH on Allow asks for an app update', async () => {
     const api = makeApi(
       { kind: 'ok', status: status() },
-      { grantRoman: jest.fn(async (): Promise<AiConsentOutcome> => ({ kind: 'version_mismatch', current_version: 'client-ai-v4' })) },
+      { grantRoman: jest.fn(async (): Promise<AiConsentOutcome> => ({ kind: 'version_mismatch' })) },
     );
     const r = await renderScreen(api);
     await waitFor(() => r.getByTestId('roman-ai-not_allowed'));
     await fireEvent.press(r.getByTestId('roman-ai-allow'));
     confirmLastAlert('Allow');
     await waitFor(() => expect(r.getByTestId('roman-ai-notice').props.children).toBe(ROMAN_AI_COPY.updateApp));
+    // #622: the 409 carries no version, so the screen re-reads the state.
+    expect(api.getStatus).toHaveBeenCalledTimes(2);
   });
 
   it('a newer server version: no Allow from this build, but a live grant can still be withdrawn', async () => {
-    const newer = status({ granted: true, version: 'client-ai-v3', granted_at: '2026-10-01T10:00:00Z', current_version: 'client-ai-v4' });
+    const newer = status({ state: 'needs_reconsent', needs_reconsent: true, version: 'client-ai-v3', granted_at: '2026-10-01T10:00:00Z', current_version: 'client-ai-v4' });
     const r = await renderScreen(makeApi({ kind: 'ok', status: newer }));
     await waitFor(() => r.getByTestId('roman-ai-update_app'));
     expect(r.queryByTestId('roman-ai-allow')).toBeNull();
@@ -180,7 +184,7 @@ describe('RomanAiConsentScreen', () => {
   });
 
   it('a grant of earlier copy needs re-consent: Allow is offered, Withdraw too', async () => {
-    const old = status({ granted: true, version: 'client-ai-v2', granted_at: '2026-09-01T10:00:00Z', needs_reconsent: true });
+    const old = status({ state: 'needs_reconsent', version: 'client-ai-v2', granted_at: '2026-09-01T10:00:00Z', needs_reconsent: true });
     const r = await renderScreen(makeApi({ kind: 'ok', status: old }));
     await waitFor(() => r.getByTestId('roman-ai-reconsent'));
     expect(r.getByTestId('roman-ai-allow')).toBeTruthy();
@@ -195,18 +199,25 @@ describe('RomanAiConsentScreen', () => {
     expect(navigation.navigate).toHaveBeenCalledWith('DeleteAccount');
   });
 
-  it('C-9: warns when the server copy for this version does not hash to the app copy', async () => {
-    const r = await renderScreen(
-      makeApi({ kind: 'ok', status: { ...ALLOWED, copy: { version: 'client-ai-v3', sha256: 'f'.repeat(64) } } }),
-    );
-    await waitFor(() => r.getByTestId('roman-ai-allowed'));
-    expect(logger.warn).toHaveBeenCalledTimes(1);
-    await r.unmount();
-    const ok = await renderScreen(
-      makeApi({ kind: 'ok', status: { ...ALLOWED, copy: { version: 'client-ai-v3', sha256: AI_CONSENT_COPY_SHA256 } } }),
-    );
-    await waitFor(() => ok.getByTestId('roman-ai-allowed'));
-    expect(logger.warn).toHaveBeenCalledTimes(1);
+  it('C-9: warns when the server copy for this version is not the app copy (hash or text)', async () => {
+    const copy = (over: object = {}) => ({
+      version: 'client-ai-v3',
+      paragraph: { text: AI_CONSENT_PARAGRAPH, sha256: 'x' },
+      box_label: { text: AI_CONSENT_CHECKBOX_LABEL, sha256: 'y' },
+      sha256: AI_CONSENT_COPY_SHA256,
+      ...over,
+    });
+    for (const [c, warns] of [
+      [copy(), false],
+      [copy({ sha256: 'f'.repeat(64) }), true],
+      [copy({ paragraph: { text: 'Different words', sha256: 'x' } }), true],
+    ] as const) {
+      (logger.warn as jest.Mock).mockClear();
+      const r = await renderScreen(makeApi({ kind: 'ok', status: { ...ALLOWED, copy: c } }));
+      await waitFor(() => r.getByTestId('roman-ai-allowed'));
+      expect((logger.warn as jest.Mock).mock.calls.length).toBe(warns ? 1 : 0);
+      await r.unmount();
+    }
   });
 
   it('copy is plain: no exclamation marks, no medical claims', () => {

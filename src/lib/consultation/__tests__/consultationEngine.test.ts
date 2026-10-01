@@ -94,11 +94,13 @@ describe('definitions', () => {
       'I agree to the training waiver, and to The Growth Project and my coach collecting and using my information to coach me.',
     );
     expect(AI_CONSENT_PARAGRAPH).toMatch(/powered by Anthropic, a third-party AI provider/);
-    expect(AI_CONSENT_PARAGRAPH).toMatch(/never your coach\u2019s private notes/);
+    expect(AI_CONSENT_PARAGRAPH).toMatch(/never your coach's private notes/);
     expect(AI_CONSENT_PARAGRAPH).toMatch(/kept for 180 days/);
     expect(AI_CONSENT_CHECKBOX_LABEL).toMatch(/^Optional: I allow Roman/);
     expect(CONSENT_FOOTER).toMatch(/^Nothing is sent until you continue\./);
     expect(CONSENT_FOOTER).toMatch(/guided tour works either way/);
+    // Verbatim contract copy uses straight apostrophes (the R2a server copy hashes depend on it).
+    expect(AI_CONSENT_PARAGRAPH + AI_CONSENT_CHECKBOX_LABEL + CONSENT_FOOTER).not.toMatch(/\u2019/);
     // Plain copy: no exclamation marks.
     for (const t of [...CONSENT_PARAGRAPHS, CONSENT_CHECKBOX_LABEL, AI_CONSENT_PARAGRAPH, AI_CONSENT_CHECKBOX_LABEL, CONSENT_FOOTER]) {
       expect(t).not.toMatch(/!/);
@@ -121,10 +123,13 @@ describe('definitions', () => {
     expect(sha(aiConsentCopyText())).toBe(AI_CONSENT_COPY_SHA256);
     expect(consentCopyText().startsWith('Before we start\n\nThe Growth Project provides')).toBe(true);
     expect(aiConsentCopyText()).toBe(`${AI_CONSENT_PARAGRAPH}\n\n${AI_CONSENT_CHECKBOX_LABEL}`);
+    // Backend R2a (#622) pins the same text: paragraph 4, box 2 label and their join.
+    expect(sha(AI_CONSENT_PARAGRAPH)).toBe('77c0e7062adb29cf59a532b130e50d5b373789c3564972cc309d8361bf57227b');
+    expect(sha(AI_CONSENT_CHECKBOX_LABEL)).toBe('77da153df7f06a045e1abbbb83b771f8a33941d47268e276becc6b4ffe5e5eba');
     // If this fails, the copy changed: bump CONSULT_CONSENT_COPY_VERSION (and
     // AI_CONSENT_VERSION for paragraph 4 / box 2) and re-pin with the new text.
-    expect(CONSENT_COPY_SHA256).toBe('4d2efe380f1833f5878b5747ad8887a01b6b459e8f2e87512c695faf0e5b57c7');
-    expect(AI_CONSENT_COPY_SHA256).toBe('88b7920d2c6cf0209199e0a8031be502db4d3cb206fa299bbf2549facf92052c');
+    expect(CONSENT_COPY_SHA256).toBe('154bd332c992e4e28ac58d1f1c40e856ff055581e383d85656f245853f55589f');
+    expect(AI_CONSENT_COPY_SHA256).toBe('d8738c900ed2bfbb12b7ca6423132a532fc47e2cd0fe52854cc38e34c427840f');
   });
 
   it('P8 gives guidance and a next step before the physician line', () => {

@@ -112,7 +112,7 @@ describe('ConsultationFlow', () => {
     expect(r.getByText(/Roman, the assistant in this app, is powered by Anthropic, a third-party AI provider/)).toBeTruthy();
     expect(r.getByText(/If you joined through a clinic, the clinic does not see it\./)).toBeTruthy();
     expect(r.getByTestId('consent-footer').props.children).toBe(
-      'Nothing is sent until you continue. You can change the optional choice at any time in Settings > Privacy. Roman\u2019s guided tour works either way.',
+      "Nothing is sent until you continue. You can change the optional choice at any time in Settings > Privacy. Roman's guided tour works either way.",
     );
     // Chapter 0: no progress bar and no Finish later before the agreement.
     expect(r.queryByTestId('consult-finish-later')).toBeNull();

@@ -5,7 +5,7 @@
  * local draft through the real storage.
  */
 import type { CompleteOnboardingResponse, CompleteOutcome } from '../../../api/consultationApi';
-import type { AiConsentOutcome, AiConsentStatusResponse, RomanConsentRecord } from '../../../api/aiConsentApi';
+import type { AiConsentOutcome, AiConsentStatusResponse } from '../../../api/aiConsentApi';
 import type { ConsultationApi } from '../../../screens/consultation/ConsultationFlow';
 import { AI_CONSENT_VERSION } from '../consentVersion';
 import { writeLocalState } from '../storage';
@@ -26,23 +26,24 @@ export const RESULT: CompleteOnboardingResponse = {
   coach: { id: 'coach-1', display_name: 'Bradley' },
 };
 
-/** A GET /me/ai-consent body (R2a / contract shape). Defaults to "not allowed". */
-export function aiStatus(over: Partial<RomanConsentRecord> = {}): AiConsentStatusResponse {
+/** A GET /me/ai-consent body (backend #622 shape). Defaults to "not granted". */
+export function aiStatus(over: Partial<AiConsentStatusResponse> = {}): AiConsentStatusResponse {
   return {
-    roman: {
-      granted: false,
-      version: null,
-      granted_at: null,
-      revoked_at: null,
-      current_version: AI_CONSENT_VERSION,
-      needs_reconsent: false,
-      ...over,
-    },
+    purpose: 'client_ai_processing',
+    processor: 'anthropic',
+    granted: false,
+    state: 'not_granted',
+    version: null,
+    granted_at: null,
+    withdrawn_at: null,
+    current_version: AI_CONSENT_VERSION,
+    needs_reconsent: false,
     copy: null,
+    ...over,
   };
 }
 
-export const AI_ALLOWED = aiStatus({ granted: true, version: AI_CONSENT_VERSION, granted_at: '2026-09-30T19:00:00.000Z' });
+export const AI_ALLOWED = aiStatus({ granted: true, state: 'granted', version: AI_CONSENT_VERSION, granted_at: '2026-09-30T19:00:00.000Z' });
 
 export function makeApi(overrides: Partial<Record<keyof ConsultationApi, jest.Mock>> = {}) {
   const api = {

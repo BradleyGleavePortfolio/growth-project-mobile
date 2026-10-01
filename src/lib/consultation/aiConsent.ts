@@ -6,7 +6,7 @@
  * assignment, coach messaging, community, wearables, the scripted Roman
  * tutorial, the welcome message or reminders. A failed call is retried once
  * and otherwise left for Settings > Privacy > Roman and AI. While the ledger
- * is not deployed (404 / 503) the call is skipped silently.
+ * is not deployed (404) or switched off (503) the call is skipped silently.
  */
 import { Platform } from 'react-native';
 import type { AiConsentOutcome, GrantRomanConsentRequest } from '../../api/aiConsentApi';
@@ -24,7 +24,13 @@ export function romanGrantBody(): GrantRomanConsentRequest {
   return { version: AI_CONSENT_VERSION, copy_sha256: AI_CONSENT_COPY_SHA256, platform: platformTag() };
 }
 
-/** POST the box 2 grant; one retry on a transient failure, none on 404/503/409. */
+/**
+ * POST the box 2 grant (backend #622 error table, operator ruling
+ * 2026-10-01): one retry on a transient failure (network, 5xx other than
+ * 503, 409 AI_CONSENT_CONFLICT). 404 (ledger not deployed) and 503
+ * AI_CONSENT_UNAVAILABLE (switch off) are skipped silently; 400 and 409
+ * CONSENT_VERSION_MISMATCH are not retried. Whatever is left goes to Settings.
+ */
 export async function grantRomanWithRetry(
   grant: (body: GrantRomanConsentRequest) => Promise<AiConsentOutcome>,
 ): Promise<RomanGrantResult> {
@@ -36,8 +42,9 @@ export async function grantRomanWithRetry(
       out = { kind: 'error', status: null };
     }
     if (out.kind === 'ok') return 'granted';
-    if (out.kind === 'unavailable') return 'unavailable';
     if (out.kind === 'version_mismatch') return 'version_mismatch';
+    if (out.kind === 'unavailable') return 'unavailable';
+    if (out.kind === 'error' && out.status === 400) return 'failed'; // a bug; do not retry as-is
   }
   return 'failed';
 }

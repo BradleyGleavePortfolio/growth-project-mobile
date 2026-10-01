@@ -449,10 +449,10 @@ describe('D2 box 2: optional Roman and AI, recorded on the AI consent ledger, ne
     expect(r.queryByTestId('consent-error')).toBeNull();
   });
 
-  it('while the ledger is not deployed (404 / 503) the grant is skipped silently, with no retry', async () => {
-    for (const _status of [404, 503]) {
+  it('ledger not deployed (404) or switched off (503): skipped silently, no retry, left for Settings', async () => {
+    for (const [status, calls] of [[404, 1], [503, 1]] as const) {
       await resetStores();
-      const grantRomanConsent = jest.fn(async () => ({ kind: 'unavailable' as const }));
+      const grantRomanConsent = jest.fn(async () => ({ kind: 'unavailable' as const, status }));
       const api = makeApi({ grantRomanConsent });
       await seedLocal({}, 'P0');
       const r = await renderFlow(api);
@@ -461,11 +461,27 @@ describe('D2 box 2: optional Roman and AI, recorded on the AI consent ledger, ne
       await fireEvent.press(r.getByTestId('consent-ai-checkbox'));
       await fireEvent.press(r.getByTestId('consult-continue'));
       await waitFor(() => r.getByTestId('consult-screen-G1'));
-      await waitFor(() => expect(grantRomanConsent).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(grantRomanConsent).toHaveBeenCalledTimes(calls));
       await tick();
-      expect(grantRomanConsent).toHaveBeenCalledTimes(1);
+      expect(grantRomanConsent).toHaveBeenCalledTimes(calls);
+      expect(r.queryByTestId('consent-error')).toBeNull();
       r.unmount();
     }
+  });
+
+  it('409 CONSENT_VERSION_MISMATCH on the box 2 grant is not retried and never blocks', async () => {
+    const grantRomanConsent = jest.fn(async () => ({ kind: 'version_mismatch' as const }));
+    const api = makeApi({ grantRomanConsent });
+    await seedLocal({}, 'P0');
+    const r = await renderFlow(api);
+    await waitFor(() => r.getByTestId('consult-screen-P0'));
+    await fireEvent.press(r.getByTestId('consent-checkbox'));
+    await fireEvent.press(r.getByTestId('consent-ai-checkbox'));
+    await fireEvent.press(r.getByTestId('consult-continue'));
+    await waitFor(() => r.getByTestId('consult-screen-G1'));
+    await waitFor(() => expect(grantRomanConsent).toHaveBeenCalledTimes(1));
+    await tick();
+    expect(grantRomanConsent).toHaveBeenCalledTimes(1);
   });
 
   it('back on P0 later, box 2 shows the earlier choice; unticking it withdraws (DELETE), box 1 stays', async () => {

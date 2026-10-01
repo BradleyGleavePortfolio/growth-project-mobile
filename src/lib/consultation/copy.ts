@@ -3,8 +3,9 @@
  * agreement text (versioned, two boxes), the P8 message, and the
  * deterministic summary.
  *
- * P0 copy is consent copy (D2 contract, ops/CONSENT_D2_CONTRACT.md, draft v2
- * pending owner sign-off). Any change to the P0 paragraphs, either box label
+ * P0 copy is consent copy (D2 contract, ops/CONSENT_D2_CONTRACT.md, copy v2
+ * approved by the owner 2026-10-01 09:07, implemented verbatim with straight
+ * apostrophes so the R2a server copy hashes match). Any change to the P0 paragraphs, either box label
  * or the footer must bump CONSULT_CONSENT_COPY_VERSION (and, for paragraph 4
  * or box 2, AI_CONSENT_VERSION), update the pinned hashes below, and goes
  * through T4 review (privacy / data path).
@@ -29,14 +30,14 @@ export const CONSENT_CHECKBOX_LABEL =
 
 /** Paragraph 4: shown above box 2, and again in Settings > Privacy > Roman and AI. */
 export const AI_CONSENT_PARAGRAPH =
-  'Roman, the assistant in this app, is powered by Anthropic, a third-party AI provider. If you allow it, your information is sent to Anthropic so Roman can answer your questions and your coach can use AI drafts about your training. Only your own data is used, never another client\u2019s, and never your coach\u2019s private notes. Your conversations with Roman are private from your coach, kept for 180 days, and you can delete them at any time.';
+  "Roman, the assistant in this app, is powered by Anthropic, a third-party AI provider. If you allow it, your information is sent to Anthropic so Roman can answer your questions and your coach can use AI drafts about your training. Only your own data is used, never another client's, and never your coach's private notes. Your conversations with Roman are private from your coach, kept for 180 days, and you can delete them at any time.";
 
 /** Box 2 (optional, unticked by default). */
 export const AI_CONSENT_CHECKBOX_LABEL =
-  'Optional: I allow Roman and my coach\u2019s AI tools to use my information, processed by Anthropic.';
+  "Optional: I allow Roman and my coach's AI tools to use my information, processed by Anthropic.";
 
 export const CONSENT_FOOTER =
-  'Nothing is sent until you continue. You can change the optional choice at any time in Settings > Privacy. Roman\u2019s guided tour works either way.';
+  "Nothing is sent until you continue. You can change the optional choice at any time in Settings > Privacy. Roman's guided tour works either way.";
 
 /**
  * Exact text of the whole P0 screen, in display order (title, paragraphs
@@ -69,8 +70,8 @@ export function aiConsentCopyText(): string {
  * without these (and the versions) changing too. Pinned rather than hashed
  * at runtime so the record never depends on a native digest call.
  */
-export const CONSENT_COPY_SHA256 = '4d2efe380f1833f5878b5747ad8887a01b6b459e8f2e87512c695faf0e5b57c7';
-export const AI_CONSENT_COPY_SHA256 = '88b7920d2c6cf0209199e0a8031be502db4d3cb206fa299bbf2549facf92052c';
+export const CONSENT_COPY_SHA256 = '154bd332c992e4e28ac58d1f1c40e856ff055581e383d85656f245853f55589f';
+export const AI_CONSENT_COPY_SHA256 = 'd8738c900ed2bfbb12b7ca6423132a532fc47e2cd0fe52854cc38e34c427840f';
 
 /** P8: general guidance and a safe next step, then the physician line. */
 export const P8_COPY = {

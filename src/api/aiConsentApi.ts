@@ -1,11 +1,15 @@
 /**
- * aiConsentApi: the AI processing consent ledger (backend "R2a", split out of
- * #601 under the D2 ruling, ops/CONSENT_D2_CONTRACT.md).
+ * aiConsentApi: the AI processing consent ledger (backend R2a, #622, split
+ * out of #601 under the D2 ruling, ops/CONSENT_D2_CONTRACT.md). Shapes follow
+ * the "API contract (final)" section of #622.
  *
  *   GET    /me/ai-consent        status, current version, server copy
  *   POST   /me/ai-consent/roman  { version, copy_sha256?, platform?, app_version?, locale? }
  *                                grant (idempotent); 409 CONSENT_VERSION_MISMATCH
  *   DELETE /me/ai-consent/roman  withdraw (idempotent)
+ *
+ * All three answer with the same status body. 503 AI_CONSENT_UNAVAILABLE
+ * while the ledger switch is off; 404 from a backend without it.
  *
  * This records box 2 of the P0 agreement only (Roman and the coach's AI
  * drafts, processed by Anthropic). Box 1 (waiver, collection and use for
@@ -16,28 +20,38 @@
  */
 import api from '../services/api';
 
-/** The `roman` block of GET /me/ai-consent (and of the grant/withdraw responses). */
-export interface RomanConsentRecord {
-  granted: boolean;
-  version: string | null;
-  granted_at: string | null;
-  revoked_at: string | null;
-  current_version: string;
-  needs_reconsent?: boolean;
+export type AiConsentState = 'granted' | 'withdrawn' | 'needs_reconsent' | 'not_granted';
+
+/** A text block of the server copy with its sha256 (lowercase hex). */
+export interface AiConsentCopyPart {
+  text: string;
+  sha256: string;
 }
 
-/** Server copy for the current version: the AI paragraph and box label, and its sha256. */
+/** Server copy for the current version: paragraph 4 and the box 2 label. */
 export interface AiConsentServerCopy {
   version: string;
-  text?: string;
-  sha256?: string;
   processor?: string;
-  data_categories?: string[];
+  paragraph?: AiConsentCopyPart;
+  box_label?: AiConsentCopyPart;
+  /** sha256 of `paragraph.text + "\n\n" + box_label.text`. */
+  sha256?: string;
 }
 
+/** GET /me/ai-consent (and the grant / withdraw responses). */
 export interface AiConsentStatusResponse {
-  roman: RomanConsentRecord;
-  copy?: AiConsentServerCopy | null;
+  purpose?: string;
+  processor?: string;
+  /** True only for state "granted". */
+  granted: boolean;
+  state: AiConsentState;
+  /** Copy version of the latest decision, or null. */
+  version: string | null;
+  granted_at: string | null;
+  withdrawn_at: string | null;
+  current_version: string;
+  needs_reconsent: boolean;
+  copy: AiConsentServerCopy | null;
 }
 
 export interface GrantRomanConsentRequest {
@@ -51,10 +65,10 @@ export interface GrantRomanConsentRequest {
 export type AiConsentOutcome =
   | { kind: 'ok'; status: AiConsentStatusResponse | null }
   /** 404 / 503: the ledger is not deployed or switched off. Say so; record nothing. */
-  | { kind: 'unavailable' }
+  | { kind: 'unavailable'; status?: 404 | 503 }
   /** 409 CONSENT_VERSION_MISMATCH: the server needs different copy (app update). */
-  | { kind: 'version_mismatch'; current_version: string | null }
-  | { kind: 'error'; status: number | null };
+  | { kind: 'version_mismatch' }
+  | { kind: 'error'; status: number | null; code?: string };
 
 interface AxiosLikeError {
   response?: { status?: number; data?: unknown };
@@ -74,57 +88,59 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return !!v && typeof v === 'object' && !Array.isArray(v);
 }
 
-/** Accept only a body that has a readable `roman` block; anything else is "no status". */
+const STATES: readonly AiConsentState[] = ['granted', 'withdrawn', 'needs_reconsent', 'not_granted'];
+
+function copyPart(v: unknown): AiConsentCopyPart | undefined {
+  return isRecord(v) && typeof v.text === 'string' && typeof v.sha256 === 'string'
+    ? { text: v.text, sha256: v.sha256 }
+    : undefined;
+}
+
+/** Accept only a readable status body; anything else is "no status". */
 export function parseStatus(body: unknown): AiConsentStatusResponse | null {
-  if (!isRecord(body) || !isRecord(body.roman)) return null;
-  const r = body.roman;
-  if (typeof r.granted !== 'boolean' || typeof r.current_version !== 'string') return null;
+  if (!isRecord(body)) return null;
+  const state = STATES.find((x) => x === body.state);
+  if (!state || typeof body.granted !== 'boolean' || typeof body.current_version !== 'string') return null;
   const str = (v: unknown) => (typeof v === 'string' ? v : null);
-  const copy = isRecord(body.copy) && typeof body.copy.version === 'string'
-    ? {
-        version: body.copy.version,
-        text: typeof body.copy.text === 'string' ? body.copy.text : undefined,
-        sha256: typeof body.copy.sha256 === 'string' ? body.copy.sha256 : undefined,
-        processor: typeof body.copy.processor === 'string' ? body.copy.processor : undefined,
-      }
-    : null;
+  const c = body.copy;
+  const copy: AiConsentServerCopy | null =
+    isRecord(c) && typeof c.version === 'string'
+      ? {
+          version: c.version,
+          processor: str(c.processor) ?? undefined,
+          paragraph: copyPart(c.paragraph),
+          box_label: copyPart(c.box_label),
+          sha256: str(c.sha256) ?? undefined,
+        }
+      : null;
   return {
-    roman: {
-      granted: r.granted,
-      version: str(r.version),
-      granted_at: str(r.granted_at),
-      revoked_at: str(r.revoked_at),
-      current_version: r.current_version,
-      needs_reconsent: r.needs_reconsent === true,
-    },
+    purpose: str(body.purpose) ?? undefined,
+    processor: str(body.processor) ?? undefined,
+    // `granted` is true only for state "granted" (contract); never trust one without the other.
+    granted: body.granted === true && state === 'granted',
+    state,
+    version: str(body.version),
+    granted_at: str(body.granted_at),
+    withdrawn_at: str(body.withdrawn_at),
+    current_version: body.current_version,
+    needs_reconsent: body.needs_reconsent === true || state === 'needs_reconsent',
     copy,
   };
 }
 
 function failure(err: unknown): AiConsentOutcome {
   const status = statusOf(err);
-  if (status === 404 || status === 503) return { kind: 'unavailable' };
+  if (status === 404 || status === 503) return { kind: 'unavailable', status };
   const data = dataOf(err);
-  const code = [data?.code, data?.error, data?.message].find((x) => typeof x === 'string');
-  if (status === 409 && code === 'CONSENT_VERSION_MISMATCH') {
-    return {
-      kind: 'version_mismatch',
-      current_version: typeof data?.current_version === 'string' ? data.current_version : null,
-    };
-  }
-  return { kind: 'error', status };
+  const code = [data?.code, data?.error].find((x): x is string => typeof x === 'string');
+  if (status === 409 && code === 'CONSENT_VERSION_MISMATCH') return { kind: 'version_mismatch' };
+  return code ? { kind: 'error', status, code } : { kind: 'error', status };
 }
 
-/**
- * Whether the record is a live grant of `version`: granted, not revoked
- * after it was granted, of exactly that version, and not flagged for
- * re-consent.
- */
-export function isLiveGrant(r: RomanConsentRecord | null | undefined, version: string): boolean {
-  if (!r || r.granted !== true || !r.granted_at) return false;
-  if (r.revoked_at && Date.parse(r.revoked_at) >= Date.parse(r.granted_at)) return false;
-  if (r.needs_reconsent) return false;
-  return r.version === version && r.current_version === version;
+/** Whether the status is a live grant of `version` (state "granted" for the current copy). */
+export function isLiveGrant(s: AiConsentStatusResponse | null | undefined, version: string): boolean {
+  if (!s || s.state !== 'granted' || s.granted !== true || s.needs_reconsent) return false;
+  return s.version === version && s.current_version === version;
 }
 
 export const aiConsentApi = {

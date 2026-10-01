@@ -59,13 +59,18 @@ export const ROMAN_AI_COPY = {
   deleteAccount: 'Delete my account',
 } as const;
 
-/** What the record means for this build (version-aware). */
+/**
+ * What the status means for this build (backend #622 `state`).
+ * Withdraw is offered whenever the latest decision is a grant, even of older
+ * copy, so a client can always stop it.
+ */
 export function choiceOf(status: AiConsentStatusResponse): { choice: RomanAiChoice; withdrawable: boolean } {
-  const r = status.roman;
-  const liveAny = r.granted === true && !!r.granted_at && (!r.revoked_at || Date.parse(r.revoked_at) < Date.parse(r.granted_at));
-  if (r.current_version !== AI_CONSENT_VERSION) return { choice: 'update_app', withdrawable: liveAny };
-  if (liveAny && r.version === AI_CONSENT_VERSION && !r.needs_reconsent) return { choice: 'allowed', withdrawable: true };
-  if (liveAny) return { choice: 'reconsent', withdrawable: true };
+  const latestIsGrant = status.state === 'granted' || status.state === 'needs_reconsent';
+  if (status.current_version !== AI_CONSENT_VERSION) return { choice: 'update_app', withdrawable: latestIsGrant };
+  if (status.state === 'granted' && status.granted && status.version === AI_CONSENT_VERSION) {
+    return { choice: 'allowed', withdrawable: true };
+  }
+  if (latestIsGrant) return { choice: 'reconsent', withdrawable: true };
   return { choice: 'not_allowed', withdrawable: false };
 }
 
@@ -100,9 +105,12 @@ export default function RomanAiConsentScreen({
     if (out.kind === 'ok' && out.status) {
       const c = out.status.copy;
       // C-9: the server copy for this version must be the text shown here.
-      if (c?.version === AI_CONSENT_VERSION && c.sha256 && c.sha256.toLowerCase() !== AI_CONSENT_COPY_SHA256) {
-        logger.warn('RomanAiConsent', 'server AI copy hash differs from the app copy for this version');
-      }
+      const differs =
+        c?.version === AI_CONSENT_VERSION &&
+        ((!!c.sha256 && c.sha256.toLowerCase() !== AI_CONSENT_COPY_SHA256) ||
+          (!!c.paragraph && c.paragraph.text !== AI_CONSENT_PARAGRAPH) ||
+          (!!c.box_label && c.box_label.text !== AI_CONSENT_CHECKBOX_LABEL));
+      if (differs) logger.warn('RomanAiConsent', 'server AI copy differs from the app copy for this version');
     }
     setView(toView(out) ?? { phase: 'error' });
   }, [api]);
@@ -124,9 +132,13 @@ export default function RomanAiConsentScreen({
         else await load();
         return;
       }
-      if (out.kind === 'unavailable') setNotice(ROMAN_AI_COPY.unavailable);
-      else if (out.kind === 'version_mismatch') setNotice(ROMAN_AI_COPY.updateApp);
-      else setNotice(ROMAN_AI_COPY.actionError);
+      if (out.kind === 'version_mismatch') {
+        // #622: the 409 carries no version; re-read the current state, then explain.
+        await load();
+        if (mounted.current) setNotice(ROMAN_AI_COPY.updateApp);
+        return;
+      }
+      setNotice(out.kind === 'unavailable' ? ROMAN_AI_COPY.unavailable : ROMAN_AI_COPY.actionError);
     },
     [api, busy, load],
   );
