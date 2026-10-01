@@ -16,6 +16,10 @@ import { readLocalState } from '../../../lib/consultation/storage';
 
 jest.mock('../../../services/api', () => ({ __esModule: true, default: {} }));
 jest.mock('../../../hooks/useReducedMotion', () => ({ useReducedMotion: () => true }));
+const mockStartClientTutorial = jest.fn((..._args: unknown[]) => true);
+jest.mock('../../../tutorial/tutorialStore', () => ({
+  startClientTutorial: (...args: unknown[]) => mockStartClientTutorial(...args),
+}));
 
 function renderFlow(api: ConsultationApi, onFinished = jest.fn()) {
   return render(
@@ -33,6 +37,7 @@ function renderFlow(api: ConsultationApi, onFinished = jest.fn()) {
 }
 
 beforeEach(async () => {
+  mockStartClientTutorial.mockClear();
   await resetStores();
 });
 
@@ -194,7 +199,28 @@ describe('ConsultationFlow', () => {
     expect(r.getByText('Your plan · Four weeks')).toBeTruthy();
     expect(r.getByText('Your first session is tomorrow.')).toBeTruthy();
     expect(r.queryByTestId('plan-physician-line')).toBeNull();
+    // The tutorial (#309) starts only after the plan reveal's finish, never earlier.
+    expect(mockStartClientTutorial).not.toHaveBeenCalled();
 
+    await fireEvent.press(r.getByTestId('consult-finish'));
+    expect(mockStartClientTutorial).toHaveBeenCalledTimes(1);
+    expect(mockStartClientTutorial).toHaveBeenCalledWith(RESULT);
+    expect(onFinished).toHaveBeenCalledWith(RESULT);
+  });
+
+  it('a tutorial start failure never blocks finishing the consultation', async () => {
+    mockStartClientTutorial.mockImplementationOnce(() => {
+      throw new Error('tutorial store unavailable');
+    });
+    const api = makeApi();
+    const onFinished = jest.fn();
+    await seedLocal(fullAnswers(), 'SUM');
+    const r = await renderFlow(api, onFinished);
+    await waitFor(() => r.getByTestId('consult-screen-SUM'));
+    await fireEvent.press(r.getByTestId('consult-prepare'));
+    await waitFor(() => r.getByTestId('consult-screen-MACRO'));
+    await fireEvent.press(r.getByTestId('consult-macro-next'));
+    await waitFor(() => r.getByTestId('consult-screen-PLAN'));
     await fireEvent.press(r.getByTestId('consult-finish'));
     expect(onFinished).toHaveBeenCalledWith(RESULT);
   });

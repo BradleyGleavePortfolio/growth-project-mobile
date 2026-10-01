@@ -65,6 +65,7 @@ import { DraftHandle, openDraft, purgeConsultationDraft, readLocalState, SyncedM
 import { reconcileResume } from '../../lib/consultation/resume';
 import type { AnswerValue, Answers, ChapterId } from '../../lib/consultation/types';
 import { logger } from '../../utils/logger';
+import { startClientTutorial } from '../../tutorial/tutorialStore';
 import QuestionScreen from './QuestionScreen';
 import { AnalyticsExcluded, palette, STEP_MS } from './components';
 import {
@@ -647,11 +648,15 @@ export default function ConsultationFlow({
   const finish = useCallback(() => {
     if (!result) return;
     void purgeConsultationDraft(userId);
-    // INTEGRATION NOTE (#309, client tutorial, not yet on main): once #309 is
-    // merged, call `startClientTutorial(result)` from 'src/tutorial/tutorialStore'
-    // here, before onFinished. `result` is the POST /me/onboarding/complete
-    // body (completeResponse.data). It is idempotent and returns false when
-    // featureFlags.clientTutorial is off, so no extra flag check is needed.
+    // Start Roman's client tutorial (#309) with the POST /me/onboarding/complete
+    // body (completeResponse.data). Idempotent; returns false and does nothing
+    // when featureFlags.clientTutorial is off. A tutorial fault never blocks
+    // finishing the consultation.
+    try {
+      startClientTutorial(result);
+    } catch (err) {
+      logger.warn('ConsultationFlow', 'startClientTutorial failed', err);
+    }
     onFinished(result);
   }, [onFinished, result, userId]);
 
