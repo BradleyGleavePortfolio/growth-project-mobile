@@ -1,0 +1,300 @@
+/**
+ * Consultation copy that is longer than a single definition field: the P0
+ * "I agree" text (versioned), the P8 message, and the deterministic summary.
+ *
+ * P0 copy is consent copy. Any change to CONSENT_PARAGRAPHS or
+ * CONSENT_CHECKBOX_LABEL must bump CONSULT_CONSENT_COPY_VERSION and goes
+ * through T4 review (privacy / data path).
+ */
+import { anyScreeningYes, ageOn } from './engine';
+import type { Answers, MeasureAnswer } from './types';
+
+/** Version of the combined waiver + data visibility text shown at P0. */
+export const CONSULT_CONSENT_COPY_VERSION = 'consult-consent-v1' as const;
+
+/**
+ * The Roman AI processing consent version the backend (#601) requires.
+ * The P0 box records this grant too, so there is no separate AI screen.
+ */
+export const ROMAN_AI_CONSENT_VERSION = 'roman-ai-v1' as const;
+
+export const CONSENT_PARAGRAPHS: readonly string[] = [
+  'The Growth Project provides personal training and nutrition guidance only. We do not diagnose, treat, or give medical advice. Nothing in this app replaces the advice of a physician or other qualified health provider.',
+  'Exercise carries some risk of injury. You choose how hard to work, you stop if something hurts, and you take part at your own risk.',
+  'The Growth Project, your coach and Roman can see your in-app logs and answers: your profile, this consultation including the screening questions, your targets, food and workout logs, check-ins, any health, sleep or wearable data you connect, your messages with your coach, and posts you write in the community.',
+  'Roman is powered by Anthropic, a third-party AI provider. To answer you, Roman sends that information about you to Anthropic. It is used only to help you, and Roman never sees other clients\u2019 data.',
+  'Your conversations with Roman are private from your coach. They are stored securely on The Growth Project\u2019s servers for 180 days, and you can delete them at any time. Our staff open them only for support, safety or fixing a problem.',
+  "The next seven questions are a standard trainer screening. Please answer honestly. There's no wrong answer, and every answer leads to a plan that fits you.",
+];
+
+export const CONSENT_CHECKBOX_LABEL =
+  'I agree to the training waiver, and to The Growth Project, my coach and Roman seeing my in-app logs and answers, with Anthropic processing them for Roman.';
+
+/** Exact text the consent hash covers (paragraphs + box label). */
+export function consentCopyText(): string {
+  return [...CONSENT_PARAGRAPHS, CONSENT_CHECKBOX_LABEL].join('\n\n');
+}
+
+/** P8: general guidance and a safe next step, then the physician line. */
+export const P8_COPY = {
+  intro:
+    'One of your answers means we will start gently, and give your physician a say before anything demanding.',
+  guidanceTitle: 'Until then, a few good habits',
+  guidance: [
+    'Choose an effort where you can still hold a conversation. If you are breathless, ease off.',
+    'Warm up for five minutes, and rest fully between sets.',
+    'Stop if you feel chest discomfort, unusual shortness of breath, dizziness or sharp pain. Rest, and tell {coach}.',
+  ],
+  nextTitle: "Here's what happens next",
+  next: [
+    'You can finish setting up today and explore the app.',
+    'Your plan will start with our gentlest, lowest-impact program as a safe default.',
+    '{Coach} will be told, so they can check in with you.',
+    'Your safest next step: book a visit with your physician and mention you are starting a training program. Once you have their OK, message {coach} and your plan can be adjusted.',
+  ],
+  physician:
+    'Based on your answers, we recommend you check with your physician before starting a new exercise program. This is a standard precaution, not a diagnosis.',
+  emergency:
+    'If you ever have chest pain, trouble breathing or feel faint, call 911. If you are struggling emotionally, call or text 988.',
+  disclaimer:
+    'This app provides workout and dietary guidance only. It does not diagnose or treat any medical condition, and it is not a substitute for professional medical advice.',
+};
+
+// ── Summary ───────────────────────────────────────────────────────────────
+
+const GOAL: Record<string, string> = {
+  fat_loss: 'Lose body fat',
+  muscle_gain: 'Build muscle and strength',
+  maintenance: 'Maintain and feel better',
+  performance: 'Train for a sport or event',
+};
+const REASON: Record<string, string> = {
+  energy: 'more energy',
+  strength: 'to feel stronger',
+  confidence: 'to feel confident in your body',
+  family: 'to keep up with family',
+  event: 'an event coming up',
+  longevity: 'to stay active for the long run',
+};
+const ACTIVITY: Record<string, string> = {
+  sedentary: 'Mostly sitting',
+  light: 'Lightly active',
+  moderate: 'Moderately active',
+  active: 'Very active',
+  very_active: 'Physically demanding days',
+};
+const EXPERIENCE: Record<string, string> = {
+  beginner: 'New to structured training',
+  intermediate: 'Some training experience',
+  advanced: 'Experienced with training',
+};
+const DAYS: Record<string, string> = { '2': 'One to two', '3': 'Three', '4': 'Four', '5': 'Five or more' };
+const TIME: Record<string, string> = { morning: 'mornings', midday: 'midday', evening: 'evenings', varies: 'at varying times' };
+const WHERE: Record<string, string> = {
+  gym: 'at a gym',
+  home_some: 'at home',
+  none: 'anywhere, with no equipment',
+  mix: 'at a mix of gym and home',
+};
+const EQUIPMENT: Record<string, string> = {
+  dumbbells: 'dumbbells',
+  kettlebells: 'kettlebells',
+  resistance_bands: 'bands',
+  barbell: 'a barbell',
+  pull_up_bar: 'a pull-up bar',
+  cardio_machine: 'a cardio machine',
+  other: 'other equipment',
+};
+const LENGTH: Record<string, string> = {
+  '20_30': 'Twenty to thirty minutes each.',
+  '30_45': 'Thirty to forty-five minutes each.',
+  '45_60': 'Forty-five to sixty minutes each.',
+  '60_plus': 'Over an hour each.',
+};
+const AREAS: Record<string, string> = {
+  lower_back: 'lower back',
+  upper_back_neck: 'upper back or neck',
+  shoulder: 'shoulder',
+  elbow_wrist: 'elbow or wrist',
+  hip: 'hip',
+  knee: 'knee',
+  ankle_foot: 'ankle or foot',
+  other: 'another area',
+};
+const PATTERN: Record<string, string> = {
+  none: 'No particular pattern',
+  vegetarian: 'Vegetarian',
+  vegan: 'Vegan',
+  pescatarian: 'Pescatarian',
+  keto: 'Keto',
+  paleo: 'Paleo',
+  other: 'Your own way of eating',
+};
+const AVOID: Record<string, string> = {
+  dairy: 'dairy',
+  gluten: 'gluten',
+  nuts: 'nuts',
+  shellfish: 'shellfish',
+  eggs: 'eggs',
+  soy: 'soy',
+  pork: 'pork',
+  halal: 'halal only',
+  kosher: 'kosher only',
+  other: 'a few other foods',
+};
+const NUMBER_WORDS: Record<string, string> = { '2': 'two', '3': 'three', '4': 'four', '5': 'five or more' };
+
+export function joinList(items: string[]): string {
+  if (items.length <= 1) return items.join('');
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
+}
+
+function arr(v: unknown): string[] {
+  return Array.isArray(v) ? (v as string[]) : [];
+}
+
+export function formatHeight(cm: number, unit: 'imperial' | 'metric'): string {
+  if (unit === 'metric') return `${Math.round(cm)} cm`;
+  const inches = Math.round(cm / 2.54);
+  return `${Math.floor(inches / 12)} ft ${inches % 12} in`;
+}
+
+export function formatWeight(lbs: number, unit: 'imperial' | 'metric'): string {
+  if (unit === 'metric') return `${Math.round(lbs * 0.453592)} kg`;
+  return `${Math.round(lbs)} lb`;
+}
+
+export interface SummarySection {
+  title: string;
+  body: string;
+  /** Chapter the Edit link jumps to (null: no Edit, e.g. screening). */
+  editChapter: 1 | 2 | 3 | 4 | 6 | null;
+}
+
+export function buildSummary(a: Answers, now: Date = new Date()): SummarySection[] {
+  const NA = 'Not answered.';
+
+  // Goal
+  const goal = GOAL[String(a.G1)] ?? NA;
+  const reasons = arr(a.G2)
+    .map((r) => (r === 'other' ? (typeof a.G2_other === 'string' && a.G2_other.trim() ? a.G2_other.trim() : 'your own reasons') : REASON[r]))
+    .filter(Boolean);
+  const goalBody = GOAL[String(a.G1)] ? `${goal}${reasons.length ? `, for ${joinList(reasons)}` : ''}.` : NA;
+
+  // Body
+  const m = a.B3 as MeasureAnswer | undefined;
+  let bodyBody = NA;
+  if (m && typeof m === 'object' && 'height_cm' in m) {
+    const goalW = typeof a.B4 === 'number' ? `, aiming for ${formatWeight(a.B4, m.unit)}` : '';
+    const age = typeof a.B2 === 'string' ? ageOn(a.B2, now) : NaN;
+    const agePart = Number.isNaN(age) ? '' : `${age} years, `;
+    bodyBody = `${agePart}${formatHeight(m.height_cm, m.unit)} and ${formatWeight(m.weight_lbs, m.unit)}${goalW}.`;
+  }
+
+  // Week
+  const parts: string[] = [];
+  if (ACTIVITY[String(a.L1)]) parts.push(`${ACTIVITY[String(a.L1)]}.`);
+  if (EXPERIENCE[String(a.T1)]) parts.push(`${EXPERIENCE[String(a.T1)]}.`);
+  if (DAYS[String(a.S1)]) {
+    let s = `${DAYS[String(a.S1)]} sessions a week`;
+    if (TIME[String(a.S2)]) s += `, ${TIME[String(a.S2)]}`;
+    if (WHERE[String(a.S3)]) s += `, ${WHERE[String(a.S3)]}`;
+    const eq = a.S3 === 'home_some' ? arr(a.S3b).map((e) => EQUIPMENT[e]).filter(Boolean) : [];
+    if (eq.length) s += ` with ${joinList(eq)}`;
+    parts.push(`${s}.`);
+  }
+  if (LENGTH[String(a.T4)]) parts.push(LENGTH[String(a.T4)]);
+  const weekBody = parts.length ? parts.join(' ') : NA;
+
+  // Care notes
+  let care = NA;
+  if (a.T3 === 'no') care = 'Nothing noted.';
+  if (a.T3 === 'yes') {
+    const areas = arr(a.T3_areas).map((x) => AREAS[x]).filter(Boolean);
+    care = areas.length ? `Extra care for your ${joinList(areas)}.` : 'Extra care noted.';
+  }
+
+  // Eating
+  let eat = NA;
+  if (PATTERN[String(a.N1)]) {
+    const avoid = arr(a.N2).filter((x) => x !== 'nothing').map((x) => AVOID[x]).filter(Boolean);
+    const avoidPart = arr(a.N2).includes('nothing') ? ', nothing avoided' : avoid.length ? `, avoiding ${joinList(avoid)}` : '';
+    const meals = NUMBER_WORDS[String(a.N3)] ? `, ${NUMBER_WORDS[String(a.N3)]} meals a day` : '';
+    eat = `${PATTERN[String(a.N1)]}${avoidPart}${meals}.`;
+  }
+
+  const screening = anyScreeningYes(a)
+    ? 'Complete. Please check with your physician before starting.'
+    : 'Complete.';
+
+  return [
+    { title: 'Your goal', body: goalBody, editChapter: 1 },
+    { title: 'Your body', body: bodyBody, editChapter: 2 },
+    { title: 'Your week', body: weekBody, editChapter: 3 },
+    { title: 'Care notes', body: care, editChapter: 4 },
+    { title: 'How you eat', body: eat, editChapter: 6 },
+    { title: 'Safety screening', body: screening, editChapter: null },
+  ];
+}
+
+const PLANT_BASED = new Set(['vegetarian', 'vegan']);
+
+/** Macro reveal: Roman's short line, by goal. */
+export function macroRomanLine(goal: unknown, firstName: string | null | undefined, floorApplied: boolean): string {
+  const name = firstName?.trim() ? `, ${firstName.trim()}` : '';
+  const aim =
+    goal === 'fat_loss'
+      ? 'This is set to help you lose fat at a steady pace.'
+      : goal === 'muscle_gain'
+        ? 'This is set to help you build muscle steadily.'
+        : 'This is set to keep you fuelled and steady.';
+  const floor = floorApplied
+    ? " I've kept this at a steady minimum so you have enough energy to train."
+    : '';
+  return `Here are your daily targets${name}. ${aim}${floor} Aim for close, not perfect.`;
+}
+
+export function proteinExample(eatingPattern: unknown, proteinG: number): string {
+  const servings = Math.max(1, Math.round(proteinG / 30));
+  const foods = eatingPattern === 'vegan'
+    ? 'tofu, tempeh, or lentils'
+    : PLANT_BASED.has(String(eatingPattern))
+      ? 'tofu, lentils, or eggs'
+      : 'chicken, fish, or tofu';
+  return `Your target is ${proteinG} g, about the amount in ${servings} palm-sized servings of ${foods}.`;
+}
+
+const WEEKS_WORDS: Record<number, string> = { 1: 'One', 2: 'Two', 3: 'Three', 4: 'Four', 5: 'Five', 6: 'Six', 8: 'Eight', 12: 'Twelve' };
+export function weeksEyebrow(weeks: number): string {
+  const w = WEEKS_WORDS[weeks] ?? String(weeks);
+  return `Your plan · ${w} ${weeks === 1 ? 'week' : 'weeks'}`;
+}
+
+/** Training days (0 = Monday) spread across a week for a days-per-week count. */
+export function trainingDayPattern(daysPerWeek: number): number[] {
+  const map: Record<number, number[]> = {
+    1: [2],
+    2: [0, 3],
+    3: [0, 2, 4],
+    4: [0, 1, 3, 4],
+    5: [0, 1, 2, 3, 4],
+    6: [0, 1, 2, 3, 4, 5],
+    7: [0, 1, 2, 3, 4, 5, 6],
+  };
+  return map[Math.min(7, Math.max(1, Math.round(daysPerWeek)))] ?? [];
+}
+
+/** "Your first session is Thursday." from the C1 ISO date. */
+export function firstSessionLine(c1: unknown, now: Date = new Date()): string | null {
+  if (typeof c1 !== 'string') return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(c1);
+  if (!m) return null;
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diff = Math.round((d.getTime() - today.getTime()) / 86400000);
+  if (diff === 0) return 'Your first session is today.';
+  if (diff === 1) return 'Your first session is tomorrow.';
+  const names = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  return `Your first session is ${names[d.getDay()]}.`;
+}

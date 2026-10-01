@@ -51,7 +51,7 @@ If a change in this repo would violate one of the rules below, the rule wins. Wh
 
 ## 7. Single onboarding, single splash
 
-- The lean 3-question flow (`LeanQ1`–`LeanQ3`) is the only onboarding path for new accounts. The legacy 10-step flow is preserved for existing users only and is not reachable from a fresh signup.
+- The lean 3-question flow (`LeanQ1`–`LeanQ3`) is the only onboarding path for new accounts in general builds. When `featureFlags.consultationOnboarding` is on (the `clinic` EAS profile), the consultation in `src/screens/consultation/` replaces it entirely; it follows this doctrine (see its README). The legacy 10-step flow is preserved for existing users only and is not reachable from a fresh signup.
 - `AppSplash` is the only splash component. The earlier `SplashScreen.tsx` duplicate has been removed.
 
 ## 8. Every PR updates the corresponding README

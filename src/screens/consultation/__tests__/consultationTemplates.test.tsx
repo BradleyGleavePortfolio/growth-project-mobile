@@ -1,0 +1,181 @@
+/**
+ * Template render tests (wheels, unit tabs, T3 detail, summary edit) plus
+ * the API client contract and the rollback flag.
+ */
+import * as fs from 'fs';
+import * as path from 'path';
+import React from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import ConsultationFlow, { ConsultationApi } from '../ConsultationFlow';
+import { answersBeforeSafety, fullAnswers, NOW } from '../../../lib/consultation/__fixtures__/consultFixtures';
+import { storageKey } from '../../../lib/consultation/storage';
+import type { Answers } from '../../../lib/consultation/types';
+
+const mockPut = jest.fn();
+const mockGet = jest.fn();
+const mockPost = jest.fn();
+jest.mock('../../../services/api', () => ({
+  __esModule: true,
+  default: {
+    put: (...a: unknown[]) => mockPut(...a),
+    get: (...a: unknown[]) => mockGet(...a),
+    post: (...a: unknown[]) => mockPost(...a),
+  },
+}));
+jest.mock('../../../hooks/useReducedMotion', () => ({ useReducedMotion: () => true }));
+
+function makeApi(): ConsultationApi {
+  return {
+    save: jest.fn(async () => ({ saved_at: 'x', completed_chapters: [] })),
+    getState: jest.fn(async () => null),
+    complete: jest.fn(async () => ({ kind: 'error' as const, status: 500 })),
+    grantConsent: jest.fn(async () => undefined),
+  };
+}
+
+async function seed(answers: Answers, screenId: string) {
+  await AsyncStorage.setItem(storageKey('u1'), JSON.stringify({ version: 'consult-v1', answers, screenId, updatedAt: 'x' }));
+}
+
+const renderFlow = (api = makeApi()) =>
+  render(<ConsultationFlow userId="u1" firstName="Maya" api={api} onFinished={jest.fn()} now={() => NOW} autoAdvanceMs={0} prepMinMs={0} />);
+
+beforeEach(async () => {
+  await AsyncStorage.clear();
+  mockPut.mockReset();
+  mockGet.mockReset();
+  mockPost.mockReset();
+});
+
+describe('templates', () => {
+  it('B2 wheels are adjustable and stop under-16s with a calm message', async () => {
+    const a = fullAnswers();
+    delete a.B2;
+    await seed(a, 'B2');
+    const r = await renderFlow();
+    await waitFor(() => r.getByTestId('consult-screen-B2'));
+    const year = r.getByTestId('wheel-dob-year');
+    expect(year.props.accessibilityRole).toBe('adjustable');
+    expect(year.props.accessibilityValue).toEqual({ text: '1996' });
+    // Move the year to 2012 (age 14).
+    for (let i = 0; i < 16; i += 1) {
+      await fireEvent(r.getByTestId('wheel-dob-year'), 'accessibilityAction', { nativeEvent: { actionName: 'increment' } });
+    }
+    expect(r.getByTestId('wheel-dob-year').props.accessibilityValue).toEqual({ text: '2012' });
+    expect(r.getByTestId('consult-validation').props.children).toMatch(/16 and over/);
+    expect(r.getByTestId('consult-continue').props.accessibilityState).toMatchObject({ disabled: true });
+  });
+
+  it('B3 converts units in place without resetting', async () => {
+    await seed(fullAnswers(), 'B3');
+    const r = await renderFlow();
+    await waitFor(() => r.getByTestId('consult-screen-B3'));
+    expect(r.getByTestId('wheel-height').props.accessibilityValue).toEqual({ text: '5 ft 6 in' });
+    await fireEvent.press(r.getByTestId('unit-metric'));
+    expect(r.getByTestId('wheel-height').props.accessibilityValue).toEqual({ text: '168 cm' });
+    expect(r.getByTestId('wheel-weight').props.accessibilityValue).toEqual({ text: '78 kg' });
+    expect(r.getByTestId('unit-metric').props.accessibilityState).toMatchObject({ selected: true });
+  });
+
+  it('B4 shows a soft note, never a block', async () => {
+    await seed(fullAnswers({ B4: 230 }), 'B4');
+    const r = await renderFlow();
+    await waitFor(() => r.getByTestId('consult-screen-B4'));
+    expect(r.getByTestId('goal-weight-note').props.children).toMatch(/above your current weight/);
+    expect(r.getByTestId('consult-continue').props.accessibilityState).toMatchObject({ disabled: false });
+  });
+
+  it('T3 yes expands on the same screen and needs an area', async () => {
+    const a = answersBeforeSafety();
+    delete a.T3;
+    await seed(a, 'T3');
+    const r = await renderFlow();
+    await waitFor(() => r.getByTestId('consult-screen-T3'));
+    await fireEvent.press(r.getByTestId('consult-option-yes'));
+    expect(r.getByText('Where?')).toBeTruthy();
+    expect(r.getByTestId('consult-continue').props.accessibilityState).toMatchObject({ disabled: true });
+    await fireEvent.press(r.getByTestId('consult-detail-chip-knee'));
+    expect(r.getByTestId('consult-continue').props.accessibilityState).toMatchObject({ disabled: false });
+    await fireEvent.press(r.getByTestId('consult-continue'));
+    await waitFor(() => r.getByTestId('consult-screen-T4'));
+  });
+
+  it('summary Edit jumps to the chapter and its last Continue returns to the summary', async () => {
+    await seed(fullAnswers(), 'SUM');
+    const r = await renderFlow();
+    await waitFor(() => r.getByTestId('consult-screen-SUM'));
+    await fireEvent.press(r.getByTestId('summary-edit-1'));
+    await waitFor(() => r.getByTestId('consult-screen-G1'));
+    await fireEvent.press(r.getByTestId('consult-option-muscle_gain'));
+    await waitFor(() => r.getByTestId('consult-screen-G2'));
+    await fireEvent.press(r.getByTestId('consult-continue'));
+    await waitFor(() => r.getByTestId('consult-screen-SUM'));
+    expect(r.getByText(/^Build muscle and strength/)).toBeTruthy();
+  });
+});
+
+describe('consultationApi', () => {
+  // Loaded lazily so the services/api mock above applies.
+  const { consultationApi, conflictCodeOf } = jest.requireActual('../../../api/consultationApi') as typeof import('../../../api/consultationApi');
+
+  it('uses the contract routes and body', async () => {
+    mockPut.mockResolvedValue({ data: { saved_at: 't', completed_chapters: [1, 2] } });
+    await expect(consultationApi.save({ version: 'consult-v1', answers: { G1: 'fat_loss' } })).resolves.toEqual({ saved_at: 't', completed_chapters: [1, 2] });
+    expect(mockPut).toHaveBeenCalledWith('/me/onboarding/consultation', { version: 'consult-v1', answers: { G1: 'fat_loss' } });
+
+    mockPost.mockResolvedValue({ data: { macros: {} } });
+    await expect(consultationApi.complete()).resolves.toEqual({ kind: 'ok', data: { macros: {} } });
+    expect(mockPost).toHaveBeenCalledWith('/me/onboarding/complete', {});
+
+    mockPost.mockResolvedValue({ data: {} });
+    await consultationApi.grantConsent({ version: 'roman-ai-v1', platform: 'ios' });
+    expect(mockPost).toHaveBeenLastCalledWith('/me/ai-consent/roman', { version: 'roman-ai-v1', platform: 'ios' });
+  });
+
+  it('maps 409 machine codes and other failures', async () => {
+    mockPost.mockRejectedValueOnce({ response: { status: 409, data: { code: 'consent_missing' } } });
+    await expect(consultationApi.complete()).resolves.toEqual({ kind: 'conflict', code: 'consent_missing' });
+    mockPost.mockRejectedValueOnce({ response: { status: 409, data: { error: 'not_attached' } } });
+    await expect(consultationApi.complete()).resolves.toEqual({ kind: 'conflict', code: 'not_attached' });
+    mockPost.mockRejectedValueOnce({ response: { status: 409, data: { message: 'something else' } } });
+    await expect(consultationApi.complete()).resolves.toEqual({ kind: 'conflict', code: 'unknown' });
+    mockPost.mockRejectedValueOnce(new Error('Network Error'));
+    await expect(consultationApi.complete()).resolves.toEqual({ kind: 'error', status: null });
+    expect(conflictCodeOf({ response: { data: { code: 'consultation_incomplete' } } })).toBe('consultation_incomplete');
+  });
+
+  it('GET /me/onboarding returns null when the endpoint is not deployed', async () => {
+    mockGet.mockRejectedValueOnce({ response: { status: 404 } });
+    await expect(consultationApi.getState()).resolves.toBeNull();
+    mockGet.mockRejectedValueOnce({ response: { status: 500 } });
+    await expect(consultationApi.getState()).rejects.toBeTruthy();
+  });
+});
+
+describe('rollback flag', () => {
+  const root = path.resolve(__dirname, '../../../..');
+
+  it('defaults off in general builds', () => {
+    jest.isolateModules(() => {
+      const prev = process.env.EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING;
+      delete process.env.EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING;
+      const { featureFlags } = jest.requireActual('../../../config/featureFlags');
+      expect(featureFlags.consultationOnboarding).toBe(false);
+      if (prev !== undefined) process.env.EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING = prev;
+    });
+  });
+
+  it('is on only in the clinic EAS profile', () => {
+    const eas = JSON.parse(fs.readFileSync(path.join(root, 'eas.json'), 'utf8'));
+    expect(eas.build.clinic.env.EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING).toBe('true');
+    for (const name of Object.keys(eas.build).filter((n) => n !== 'clinic')) {
+      expect(eas.build[name].env?.EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING).toBeUndefined();
+    }
+  });
+
+  it('RootNavigator mounts the consultation instead of the lean flow when on', () => {
+    const src = fs.readFileSync(path.join(root, 'src/navigation/RootNavigator.tsx'), 'utf8');
+    expect(src).toMatch(/featureFlags\.consultationOnboarding \? \(\s*<ConsultationOnboardingNavigator \/>\s*\) : \(\s*<LeanOnboardingNavigator \/>/);
+  });
+});

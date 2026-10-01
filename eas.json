@@ -34,6 +34,14 @@
         "EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER": "false",
         "EXPO_PUBLIC_NOTIFICATIONS_MOCK": "false"
       }
+    },
+    "clinic": {
+      "extends": "production",
+      "env": {
+        "EXPO_PUBLIC_USE_MOCK_COMMAND_CENTER": "false",
+        "EXPO_PUBLIC_NOTIFICATIONS_MOCK": "false",
+        "EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING": "true"
+      }
     }
   }
 }

@@ -20,6 +20,7 @@ import CoachWizardNavigator from './CoachWizardNavigator';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import OnboardingNavigator from './OnboardingNavigator';
 import LeanOnboardingNavigator from './LeanOnboardingNavigator';
+import ConsultationOnboardingNavigator from './ConsultationOnboardingNavigator';
 import Day1OnboardingNavigator from './Day1OnboardingNavigator';
 import { readResumeState as readDay1ResumeState } from '../screens/day-one/resume';
 import OfflineBanner from '../components/OfflineBanner';
@@ -831,9 +832,13 @@ export default function RootNavigator() {
       {authState === 'unauthenticated' ? (
         <AuthNavigator />
       ) : authState === 'onboarding' ? (
-        // Psych Report #1: 3-question lean flow (< 60 s to first win).
-        // Original OnboardingNavigator is preserved; route around it here.
-        <LeanOnboardingNavigator />
+        // Consultation onboarding (consult-v1) when the flag is on; it has no
+        // skip-to-finish path. Flag off: the lean flow, unchanged.
+        featureFlags.consultationOnboarding ? (
+          <ConsultationOnboardingNavigator />
+        ) : (
+          <LeanOnboardingNavigator />
+        )
       ) : authState === 'day1onboarding' ? (
         // Day-1 final onboarding. Mounts after signup + lean for any student
         // who has not yet flipped `profile.day_one_completed`. The Ready
