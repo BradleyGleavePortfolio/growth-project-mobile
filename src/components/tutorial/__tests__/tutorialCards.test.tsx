@@ -46,6 +46,7 @@ import {
   useTutorialStore,
 } from '../../../tutorial/tutorialStore';
 import type { OnboardingCompletePayload, TutorialSignal } from '../../../tutorial/types';
+import { __resetMacroDisplayStoreForTests } from '../../../macros/macroDisplayStore';
 
 const PAYLOAD: OnboardingCompletePayload = {
   macros: { calories: 1789, protein_g: 150, carbs_g: 185, fat_g: 50, floor_applied: true },
@@ -65,6 +66,7 @@ let unsub: () => void = () => undefined;
 beforeEach(async () => {
   await AsyncStorage.clear();
   __resetTutorialStoreForTests();
+  __resetMacroDisplayStoreForTests();
   mockFlags.clientTutorial = true;
   mockNavigate.mockClear();
   mockParentNavigate.mockClear();
@@ -111,6 +113,36 @@ describe('MacroExplanationCard', () => {
     mockFlags.clientTutorial = false;
     await rerender(<MacroExplanationCard />);
     expect(screen.queryByTestId('macro-explanation-card')).toBeNull();
+  });
+});
+
+describe('MacroExplanationCard, lighter start (simple view)', () => {
+  it('shows calories and protein only, and says why', async () => {
+    await render(<MacroExplanationCardView macros={PAYLOAD.macros!} mode="simple" />);
+    expect(screen.getByText('1,789')).toBeTruthy();
+    expect(screen.getByText(/^150/, { includeHiddenElements: true })).toBeTruthy();
+    expect(screen.queryByText('CARBS', { includeHiddenElements: true })).toBeNull();
+    expect(screen.queryByText('FAT', { includeHiddenElements: true })).toBeNull();
+    expect(screen.queryByText(/^185/, { includeHiddenElements: true })).toBeNull();
+    expect(screen.getByLabelText('1,789 calories a day. Protein 150 grams.')).toBeTruthy();
+    await fireEvent.press(screen.getByLabelText('How to use these numbers'));
+    expect(screen.getByTestId('macro-explanation-body').props.children).toMatch(
+      /watch two things only: calories and protein\..*Carbohydrate and fat join these after the first week\./,
+    );
+    expect(seen).toEqual(['macro_card_opened']);
+  });
+
+  it('follows the stored display mode when pinned on Home', async () => {
+    await hydrateTutorial('u1', 'Maya');
+    startClientTutorial({ ...PAYLOAD, macro_display_mode: 'simple', simple_until: '2999-01-01' });
+    await render(<MacroExplanationCard />);
+    expect(screen.queryByText('CARBS', { includeHiddenElements: true })).toBeNull();
+  });
+
+  it('defaults to the full card when the backend sends no mode', async () => {
+    await render(<MacroExplanationCardView macros={PAYLOAD.macros!} />);
+    expect(screen.getByText('CARBS', { includeHiddenElements: true })).toBeTruthy();
+    expect(screen.getByText('FAT', { includeHiddenElements: true })).toBeTruthy();
   });
 });
 

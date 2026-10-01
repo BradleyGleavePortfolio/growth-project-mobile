@@ -37,6 +37,13 @@ import CoachIntroductionBanner from '../../components/home/CoachIntroductionBann
 // Clinic tutorial (C08/C09): pinned macro card, Message your coach row and the
 // passive re-offer line. Renders nothing unless featureFlags.clientTutorial.
 import TutorialHomeSlot from '../../components/tutorial/TutorialHomeSlot';
+// Lighter start for never-trackers (clinic contract v1 addition 8): the
+// grid shows calories and protein only while the macro display mode is
+// 'simple', and a one-time Roman card introduces carbohydrate and fat when
+// the simple week ends. 'full' (the existing grid) when the backend is silent.
+import FullMacrosIntroCard from '../../components/home/FullMacrosIntroCard';
+import { useMacroDisplayMode } from '../../macros/macroDisplayStore';
+import { homeCells, type HomeCell } from '../../macros/macroDisplay';
 import { workoutApi } from '../../services/api';
 import {
   getProfileCompletion,
@@ -234,6 +241,24 @@ export default function HomeScreen() {
   const carbs   = buildMacro(dailyTotals?.carbs,   carbsTarget);
   const fat     = buildMacro(dailyTotals?.fat,     fatTarget);
 
+  const macroMode = useMacroDisplayMode(currentUser?.id ?? null);
+  const calorieTarget = currentUser?.profile?.calorie_target;
+  const calories = (() => {
+    const logged = dailyTotals?.calories;
+    if (logged && logged > 0) {
+      return {
+        value: `${Math.round(logged)}`,
+        hint: calorieTarget ? `of ${Math.round(calorieTarget)} kcal` : 'kcal',
+        prompt: false,
+      };
+    }
+    if (calorieTarget && calorieTarget > 0) {
+      return { value: '0', hint: `of ${Math.round(calorieTarget)} kcal`, prompt: false };
+    }
+    return { value: '—', hint: undefined, prompt: true };
+  })();
+  const macroCells = { CALORIES: calories, PROTEIN: protein, CARBS: carbs, FAT: fat };
+
   useEffect(() => {
     if (currentUser) {
       loadDayData(currentUser.id);
@@ -341,6 +366,8 @@ export default function HomeScreen() {
         {/* Coach introduction banner — shown once, dismissible */}
         <CoachIntroductionBanner />
 
+        <FullMacrosIntroCard carbsG={carbsTarget} fatG={fatTarget} />
+
         <TutorialHomeSlot />
 
         {/* Single CTA — conditional on whether workouts exist */}
@@ -385,41 +412,30 @@ export default function HomeScreen() {
 
         {/* Below-fold rule + 2×2 numbers grid */}
         <View style={{ height: 1, backgroundColor: sc.border, marginTop: 96, marginBottom: 32 }} />
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-          <NumberCell
-            label="PROTEIN"
-            value={protein.value}
-            hint={protein.hint}
-            onPress={protein.prompt ? goToLog : undefined}
-            accessibilityLabel={
-              protein.prompt
-                ? 'Log a meal to see your protein'
-                : `Protein: ${protein.value}${protein.hint ? `, ${protein.hint}` : ''}`
-            }
-          />
-          <NumberCell
-            label="CARBS"
-            value={carbs.value}
-            hint={carbs.hint}
-            onPress={carbs.prompt ? goToLog : undefined}
-            accessibilityLabel={
-              carbs.prompt
-                ? 'Log a meal to see your carbs'
-                : `Carbs: ${carbs.value}${carbs.hint ? `, ${carbs.hint}` : ''}`
-            }
-          />
-          <NumberCell
-            label="FAT"
-            value={fat.value}
-            hint={fat.hint}
-            onPress={fat.prompt ? goToLog : undefined}
-            accessibilityLabel={
-              fat.prompt
-                ? 'Log a meal to see your fat'
-                : `Fat: ${fat.value}${fat.hint ? `, ${fat.hint}` : ''}`
-            }
-          />
-          <NumberCell label="WATER" value={waterL} />
+        <View
+          style={{ flexDirection: 'row', flexWrap: 'wrap' }}
+          testID={macroMode === 'simple' ? 'home-number-grid-simple' : 'home-number-grid'}
+        >
+          {homeCells(macroMode).map((cell: HomeCell) => {
+            if (cell === 'WATER') return <NumberCell key={cell} label="WATER" value={waterL} />;
+            const m = macroCells[cell];
+            const word = cell.toLowerCase();
+            const title = word.charAt(0).toUpperCase() + word.slice(1);
+            return (
+              <NumberCell
+                key={cell}
+                label={cell}
+                value={m.value}
+                hint={m.hint}
+                onPress={m.prompt ? goToLog : undefined}
+                accessibilityLabel={
+                  m.prompt
+                    ? `Log a meal to see your ${word}`
+                    : `${title}: ${m.value}${m.hint ? `, ${m.hint}` : ''}`
+                }
+              />
+            );
+          })}
         </View>
         {/* Sprint B-2 — cross-pillar holistic insights tile. Rendered
             below the macro numbers; quietly returns null while loading

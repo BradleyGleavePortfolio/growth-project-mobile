@@ -34,6 +34,7 @@ import { colors, radius, typography } from '../../theme/tokens';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
 import RomanAvatar from '../roman/RomanAvatar';
+import { useMacroDisplayMode } from '../../macros/macroDisplayStore';
 import {
   buildCopyContext,
   clearTutorialCelebration,
@@ -81,6 +82,7 @@ interface Props {
 
 export default function TutorialOverlay({ tabs, onNavigate }: Props): React.ReactElement | null {
   const store = useTutorialStore();
+  const macroMode = useMacroDisplayMode();
   const { semanticColors: sc } = useTheme();
   const reduceMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
@@ -92,7 +94,7 @@ export default function TutorialOverlay({ tabs, onNavigate }: Props): React.Reac
   const step = currentStep(tutorial);
   const gate = currentGate(tutorial);
   const gateKey = `${tutorial.stepIndex}:${tutorial.gateIndex}`;
-  const copy = useMemo(() => buildCopyContext(store), [store]);
+  const copy = useMemo(() => buildCopyContext(store, macroMode), [store, macroMode]);
   const line = gate ? capitalizeFirst(gate.line(copy).trim()) : '';
 
   useEffect(() => {

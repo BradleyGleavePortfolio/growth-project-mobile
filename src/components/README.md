@@ -54,6 +54,8 @@ There is no global floating chat widget here, and no celebration / trophy chrome
 | `DaySelector.tsx` | Horizontal day picker with `getTodayString` ergonomics. |
 | `invite/PasteInviteCodeButton.tsx` | "Paste invite code" text button used by CreateAccount and RoleSelection. It reads the clipboard only on tap and parses with `lib/inviteCodeInput.extractInviteCode`, which accepts a bare code, `/join/<code>`, `tgp://join/<code>` or `?code=`, and never truncates a token. It fills the field and never auto-attaches. |
 | `tutorial/` | Clinic launch Roman-led tutorial UI (featureFlags.clientTutorial, default OFF): `TutorialHost` (hydration, signals, live macros, overlay mount), `TutorialOverlay` (Roman coach-mark card, progress, spotlight, skip/resume, defer, done line, completion), `TutorialTarget` (spotlight measurement wrapper), the C08 `MacroExplanationCard` (Home) and `PlanExplanationCard` (Train), `TutorialHomeSlot` (re-offer line, macro card, Message your coach row), `TutorialSettingsRow` (Settings > Tutorial). Logic and flags: `src/tutorial/README.md`. |
+| `home/FullMacrosIntroCard.tsx` | One quiet Roman card on Home. It introduces carbohydrate and fat once, on the day a never-tracker's simple macro view ends. Dismissible and persisted per user. See `src/macros/README.md`. |
+| `log/DailySummaryBar.tsx`, `log/MealSectionCard.tsx` | Accept a `mode` / `macroMode` prop (`simple` or `full`, default `full`). `simple` shows calories and protein only. |
 | `PendingInviteBanner.tsx` | Home consent banner for a pending invite code. It refreshes on auth events and on `subscribePendingInviteCode` (a foreground invite link). Legacy scoped `pending_invite_code:*` keys are never read; they are only deleted at sign-out. |
 
 ## Data flow

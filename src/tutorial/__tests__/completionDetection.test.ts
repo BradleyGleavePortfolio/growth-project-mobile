@@ -10,7 +10,7 @@
  *   - explicit deferral is a machine action (tutorialMachine.test.ts).
  * Failures never emit.
  */
-import api, { logApi, messagesApi } from '../../services/api';
+import api, { logApi, messagesApi, waterApi } from '../../services/api';
 import { messagesModerationApi } from '../../api/messagesApi';
 import { enqueue } from '../../services/foodLogQueue';
 import { subscribeTutorialSignals, withTutorialSignal } from '../tutorialEvents';
@@ -55,6 +55,12 @@ describe('meal logged', () => {
       log: { date: '2026-10-01', meal_type: 'snack' },
     } as never);
     expect(seen).toEqual(['meal_logged']);
+  });
+
+  it('a water entry is not a meal (owner intent: log your first meal; audit B1)', async () => {
+    jest.spyOn(api, 'post').mockImplementation(() => ok({ id: 'w1' }));
+    await waterApi.log({ amount_ml: 250, date: '2026-10-01' });
+    expect(seen).toEqual([]);
   });
 });
 

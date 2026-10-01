@@ -26,6 +26,8 @@ const SPARSE: CopyContext = {
   platform: 'android',
 };
 
+const SIMPLE: CopyContext = { ...CTX, macroMode: 'simple' };
+
 function allLines(ctx: CopyContext): string[] {
   const out: string[] = [];
   for (const s of TUTORIAL_STEPS) {
@@ -44,6 +46,7 @@ const BANNED = [
 describe.each([
   ['full context', CTX],
   ['sparse context', SPARSE],
+  ['simple macro view', SIMPLE],
 ])('tutorial copy (%s)', (_name, ctx) => {
   const lines = allLines(ctx);
 
@@ -96,5 +99,55 @@ describe('real numbers', () => {
     const wear = TUTORIAL_STEPS.find((s) => s.id === 'wearables')!;
     expect(wear.gates[0].line(CTX)).toContain('Apple Health');
     expect(wear.gates[0].line(SPARSE)).toContain('Health Connect');
+  });
+});
+
+describe('fix round (audit B1, C1)', () => {
+  const meal = TUTORIAL_STEPS.find((s) => s.id === 'first_meal')!;
+
+  it('the first-meal step points at a food entry and never invites water (B1)', () => {
+    const lines = meal.gates.map((g) => g.line(CTX)).join(' ');
+    expect(lines).not.toMatch(/water|drunk|drink/i);
+    expect(lines).toContain('Add Food');
+    expect(meal.title).toBe('Log your first meal');
+    const gate = meal.gates[1];
+    expect(gate.kind === 'signal' && gate.signal).toBe('meal_logged');
+  });
+
+  it.each([
+    ['full', CTX],
+    ['sparse', SPARSE],
+  ])('makes no promise the app does not keep (%s)', (_n, ctx) => {
+    const lines = allLines(ctx).join('\n');
+    expect(lines).not.toMatch(/let you know/i);
+    expect(lines).not.toMatch(/reply soon|will reply|will get back/i);
+    expect(lines).not.toMatch(/notify you|send you a notification/i);
+  });
+
+  it('pending and sent lines say only what the app does', () => {
+    const plan = TUTORIAL_STEPS.find((s) => s.id === 'plan')!;
+    const macros = TUTORIAL_STEPS.find((s) => s.id === 'macros')!;
+    const msg = TUTORIAL_STEPS.find((s) => s.id === 'first_message')!;
+    expect(plan.pendingLine!(CTX)).toContain('It will appear on Train once it is ready.');
+    expect(macros.pendingLine!(CTX)).toContain('They will appear on Home once they are ready.');
+    expect(msg.doneLine!(CTX)).toBe('Sent. Bradley will see it in your conversation.');
+  });
+});
+
+describe('lighter start: the macro step in the simple view', () => {
+  const step = TUTORIAL_STEPS.find((s) => s.id === 'macros')!;
+
+  it('Roman keeps it to two numbers and explains why', () => {
+    const line = step.gates[1].line(SIMPLE);
+    expect(line).toMatch(/^This first week, we keep it to two numbers: 1,789 calories and 150 grams of protein\./);
+    expect(line).toContain('Carbohydrate and fat are already worked out');
+    expect(line).not.toMatch(/185|\b50 grams/);
+    expect(line).toMatch(/Tap How to use these numbers\.$/);
+  });
+
+  it('full (or absent) mode keeps the four-number line unchanged', () => {
+    const full = step.gates[1].line(CTX);
+    expect(full).toContain('185 grams of carbohydrate and 50 grams of fat');
+    expect(step.gates[1].line({ ...CTX, macroMode: 'full' })).toBe(full);
   });
 });

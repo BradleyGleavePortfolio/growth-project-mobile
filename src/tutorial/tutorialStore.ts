@@ -23,6 +23,8 @@ import { saveTutorial, loadTutorial } from './tutorialStorage';
 import { TUTORIAL_STEPS, type CopyContext, type TutorialTargetId } from './tutorialSteps';
 import { subscribeTutorialSignals } from './tutorialEvents';
 import { parseOnboardingPayload } from './onboardingPayload';
+import type { MacroDisplayMode } from '../macros/macroDisplay';
+import { reportMacroDisplay, selectMacroDisplayMode, useMacroDisplayStore } from '../macros/macroDisplayStore';
 import type {
   OnboardingCompletePayload,
   OnboardingMacros,
@@ -91,7 +93,10 @@ function envOf(s: TutorialStoreState): MachineEnv {
   };
 }
 
-export function buildCopyContext(s: TutorialStoreState): CopyContext {
+export function buildCopyContext(
+  s: TutorialStoreState,
+  macroMode: MacroDisplayMode = selectMacroDisplayMode(useMacroDisplayStore.getState()),
+): CopyContext {
   const os = Platform.OS;
   return {
     firstName: s.firstName,
@@ -100,6 +105,7 @@ export function buildCopyContext(s: TutorialStoreState): CopyContext {
     macros: resolveMacros(s),
     spaces: Array.isArray(s.payload?.spaces) ? (s.payload?.spaces ?? []) : [],
     platform: os === 'ios' ? 'ios' : os === 'android' ? 'android' : 'other',
+    macroMode,
   };
 }
 
@@ -149,6 +155,8 @@ export function startClientTutorial(
 ): boolean {
   if (!featureFlags.clientTutorial) return false;
   const restart = !!opts?.restart;
+  // The complete payload also carries macro_display_mode / simple_until.
+  reportMacroDisplay(payload);
   const parsed = parseOnboardingPayload(payload);
   if (parsed) useTutorialStore.setState({ payload: parsed });
   const s = useTutorialStore.getState();

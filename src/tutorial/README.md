@@ -14,7 +14,7 @@ The approach is Duolingo mechanics inside Quiet Luxury visuals: a progress indic
 | `communityCohorts` | `EXPO_PUBLIC_FF_COMMUNITY_COHORTS` | OFF | **ON (required)** | The three per-plan spaces are cohort spaces. |
 | `communityDm` | `EXPO_PUBLIC_FF_COMMUNITY_DM` | OFF | OFF (not required) | Messaging the coach uses the existing coach thread (`POST /messages`, HomeStack `Messages`), not community DMs. Leave it OFF unless the owner wants client-to-client DMs. |
 | `romanChat` | `EXPO_PUBLIC_FF_ROMAN_CHAT` | OFF | Not required by the tour | Roman's tour lines are fixed templates with no AI call. Free-form Ask Roman is a separate slice with its own gate. |
-| `coachBrief` | `EXPO_PUBLIC_FF_COACH_BRIEF` | dev only | **ON (coach side)** | The tour does not need it. The clinic coach does: it surfaces the readiness-screening flag from onboarding complete (d). |
+| `coachBrief` | `EXPO_PUBLIC_FF_COACH_BRIEF` | dev only | **ON (coach side)** | The tour does not need it. Kept in the clinic profile by owner direction (2026-09-30 16:31): the owner wants coach daily summaries, and it surfaces the readiness-screening flag from onboarding complete (d). |
 
 The `clinic` profile in `eas.json` extends `production` and sets the flags marked ON above. The `production` profile is unchanged.
 
@@ -59,6 +59,15 @@ The two teach-back steps have no button and no "Later". The client can skip the 
 - `tutorialEvents.ts`: a dependency-free signal bus. Emit points: `services/api.ts` (`logApi.logFood`, `messagesApi.send`), `api/messagesApi.ts` (`sendReply`), `services/foodLogQueue.ts` (`enqueue`), `screens/client/wearables/ConnectProviderSheet.tsx`, and the two explanation cards.
 - `navigationFocus.ts`: the focused route path from the tab navigator's `state` event.
 - `onboardingPayload.ts`: defensive parsing of the complete payload and `/me/macros/current`.
+
+## Fix round (audit of fb9a7f8)
+
+- **B1.** The first-meal step now says "Tap Add Food under any meal, choose one thing you have eaten today, and save it." The water sentence is gone. A water entry (`POST /nutrition/water`) deliberately does not complete the step, because the owner's intent is "log your first meal". A test pins this.
+- **C1.** Roman no longer promises things the app does not do. The pending lines now say where the plan or numbers will appear ("It will appear on Train once it is ready.", "They will appear on Home once they are ready."). The sent line is "Sent. {coach} will see it in your conversation." A test rejects "let you know" and "reply soon".
+
+## Lighter start in the macro step
+
+When the client's macro display mode is `simple` (see `src/macros/README.md`), the macro step says: "This first week, we keep it to two numbers: {calories} calories and {protein} grams of protein. Carbohydrate and fat are already worked out for you, and they will join these on Home when the week is done. Tap How to use these numbers." The pinned macro card shows calories and protein only, and its explanation matches. `CopyContext.macroMode` carries the mode. When it is absent, the full four-number line is used, unchanged.
 
 ## Roman's face
 

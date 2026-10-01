@@ -27,6 +27,7 @@ import FoodSearchModal from '../../components/log/FoodSearchModal';
 import QuantityPickerModal from '../../components/log/QuantityPickerModal';
 import { ManualFields } from '../../components/log/ManualFoodEntryForm';
 import { useMacroTargets } from '../../hooks/useMacroTargets';
+import { useMacroDisplayMode } from '../../macros/macroDisplayStore';
 import { useFoodBrowse } from '../../hooks/useFoodBrowse';
 import { SearchResult, MEAL_SECTIONS } from '../../utils/log/types';
 import { quantityMultiplier, parseQuantityInput } from '../../utils/log/macros';
@@ -50,6 +51,9 @@ export default function LogScreen() {
   const network = useNetworkStatus();
   const online = isEffectivelyOnline(network);
   const macroTargets = useMacroTargets();
+  // Lighter start for never-trackers: calories and protein only until the
+  // server's simple_until passes. 'full' when the backend sends nothing.
+  const macroMode = useMacroDisplayMode(currentUser?.id ?? null);
 
   const {
     selectedDate,
@@ -461,7 +465,7 @@ export default function LogScreen() {
 
         <DaySelector selectedDate={selectedDate} onDateChange={handleDateChange} />
 
-        <DailySummaryBar dailyTotals={dailyTotals} remaining={remaining} />
+        <DailySummaryBar dailyTotals={dailyTotals} remaining={remaining} mode={macroMode} />
 
         {MEAL_SECTIONS.map((section) => (
           <MealSectionCard
@@ -474,6 +478,7 @@ export default function LogScreen() {
             onAddPress={openAddFood}
             onDeletePress={handleDeleteFood}
             onEditPress={handleEditFood}
+            macroMode={macroMode}
           />
         ))}
 

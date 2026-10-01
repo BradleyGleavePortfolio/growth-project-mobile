@@ -63,6 +63,16 @@ The **Trust Center** itself lives at `src/screens/TrustCenterScreen.tsx` (not in
 | `WorkoutScreen.tsx` | `<PlanExplanationCard />` above the coach-assigned CTA: the assigned program, its weeks and days a week, and "Why this plan" with the reasons from onboarding complete. |
 | `MoreScreen.tsx` | "Health and sleep" (`Health`) and "Connected devices" (`Connections`) rows. Both were registered routes with no entry point. |
 | `SettingsScreen.tsx` | Settings > Tutorial: resume or run the tour again. |
+
+### Lighter start for never-trackers (no flag; driven by the backend `macro_display_mode`)
+
+| Screen | Behaviour while `simple` (absent field = `full`, unchanged) |
+| --- | --- |
+| `HomeScreen.tsx` | Number grid shows Calories, Protein and Water. Once the simple week ends, `FullMacrosIntroCard` (Roman, once, dismissible, persisted) introduces carbohydrate and fat. |
+| `LogScreen.tsx` | Summary bar shows Eaten, Remaining and Protein. Food entries show protein only. |
+| `ClientMacrosScreen.tsx` | Calories and Protein, plus one quiet note that carbohydrate and fat join after the first week. |
+
+Rules and persistence: `src/macros/README.md`.
 | `wearables/ConnectProviderSheet.tsx` | Emits the tutorial `wearable_connected` signal on an on-device grant or OAuth success. |
 
 Roman's tour runs over these real screens. See `src/tutorial/README.md`.

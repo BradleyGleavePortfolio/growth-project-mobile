@@ -33,6 +33,7 @@ import { currentGate } from '../../tutorial/tutorialMachine';
 import { macrosFromTarget, parseOnboardingPayload } from '../../tutorial/onboardingPayload';
 import type { TutorialNavTarget } from '../../tutorial/tutorialSteps';
 import TutorialOverlay from './TutorialOverlay';
+import { reportMacroDisplay } from '../../macros/macroDisplayStore';
 
 export function hasConnectedWearable(list: unknown): boolean {
   return (
@@ -61,7 +62,9 @@ function TutorialEffects(): null {
   useEffect(() => attachTutorialSignals(), []);
 
   useEffect(() => {
-    if (macrosQuery.data !== undefined) setTutorialLiveMacros(macrosFromTarget(macrosQuery.data));
+    if (macrosQuery.data === undefined) return;
+    reportMacroDisplay(macrosQuery.data);
+    setTutorialLiveMacros(macrosFromTarget(macrosQuery.data));
   }, [macrosQuery.data]);
 
   useEffect(() => {
@@ -70,6 +73,7 @@ function TutorialEffects(): null {
     api
       .get('/me/onboarding')
       .then((res) => {
+        if (!cancelled) reportMacroDisplay(res?.data);
         const parsed = parseOnboardingPayload(res?.data);
         if (!cancelled && parsed) setTutorialPayload(parsed);
       })
