@@ -47,6 +47,19 @@ jest.mock('../../../api/communitySafetyApi', () => {
   };
 });
 
+// Owner-approved copy, 2026-10-01 09:07 PDT (launch copy sections 2 and 4).
+const APPROVED_GUIDELINES = [
+  'Be respectful. No harassment, bullying, hate speech or threats.',
+  'No sexual or explicit content.',
+  'No spam, advertising or scams.',
+  'Share training experience, not medical advice. This is a personal-training community.',
+  "Keep private things private. Do not share anyone else's personal or health information.",
+  'Report anything that breaks these rules. Reports go to your coach and to the team.',
+  'This space is not for emergencies. If you are in danger, call 911. If you are struggling emotionally, call or text 988.',
+];
+const APPROVED_COMMITMENT =
+  'Reports are reviewed within 24 hours, every day, by your coach and The Growth Project team. Content that breaks these guidelines is removed, and people who break them repeatedly lose access. If you block someone, they can no longer see your posts or message you, and they are not told.';
+
 async function renderScreen() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return await render(
@@ -89,6 +102,17 @@ describe('CommunitySafetyScreen', () => {
     mockListBlocks.mockResolvedValue([]);
     const { findByText } = await renderScreen();
     expect(await findByText('Bradley@Bradleytgpcoaching.com')).toBeTruthy();
+  });
+
+  it('falls back to the owner-approved guidelines and 24-hour commitment, byte for byte', async () => {
+    mockGetInfo.mockRejectedValue(new Error('offline'));
+    mockListBlocks.mockResolvedValue([]);
+    const { findByText, getByTestId } = await renderScreen();
+    for (const rule of APPROVED_GUIDELINES) {
+      expect(await findByText(rule)).toBeTruthy();
+    }
+    expect(getByTestId('community-safety-commitment').props.children).toBe(APPROVED_COMMITMENT);
+    expect(await findByText(APPROVED_COMMITMENT)).toBeTruthy();
   });
 
   it('unblocks a member after confirmation', async () => {

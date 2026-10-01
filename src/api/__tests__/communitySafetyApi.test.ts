@@ -10,6 +10,12 @@ import {
   communityErrorCode,
   blockErrorMessage,
   CONTENT_REJECTED_FALLBACK,
+  COMMUNITY_GUIDELINES,
+  COMMUNITY_REPORT_REASONS,
+  COMMUNITY_REPORT_SENT_MESSAGE,
+  COMMUNITY_RESPONSE_COMMITMENT,
+  COMMUNITY_REVIEW_WITHIN_24H,
+  COMMUNITY_SAFETY_FALLBACK_EMAIL,
 } from '../communitySafetyApi';
 import { CommunityApiError } from '../communityApi';
 
@@ -139,5 +145,53 @@ describe('error helpers', () => {
     );
     expect(blockErrorMessage(axiosError(400, { code: 'community.block.self' }))).toMatch(/yourself/);
     expect(blockErrorMessage(axiosError(500))).toMatch(/try again/);
+  });
+});
+
+describe('owner-approved community safety copy (2026-10-01 09:07 PDT)', () => {
+  const H24 =
+    'Reports are reviewed within 24 hours, every day, by your coach and The Growth Project team.';
+
+  it('pins the 24-hour moderation sentence and the full commitment', () => {
+    expect(COMMUNITY_REVIEW_WITHIN_24H).toBe(H24);
+    expect(COMMUNITY_RESPONSE_COMMITMENT).toBe(
+      `${H24} Content that breaks these guidelines is removed, and people who break them repeatedly lose access. If you block someone, they can no longer see your posts or message you, and they are not told.`,
+    );
+    expect(COMMUNITY_REPORT_SENT_MESSAGE).toBe(
+      `Thank you. ${H24} Content that breaks these guidelines is removed, and people who break them repeatedly lose access.`,
+    );
+  });
+
+  it('pins the safety contact email', () => {
+    expect(COMMUNITY_SAFETY_FALLBACK_EMAIL).toBe('Bradley@Bradleytgpcoaching.com');
+  });
+
+  it('pins the seven guidelines, including rules 5 and 7', () => {
+    expect(COMMUNITY_GUIDELINES).toHaveLength(7);
+    expect(COMMUNITY_GUIDELINES[4]).toBe(
+      "Keep private things private. Do not share anyone else's personal or health information.",
+    );
+    expect(COMMUNITY_GUIDELINES[6]).toBe(
+      'This space is not for emergencies. If you are in danger, call 911. If you are struggling emotionally, call or text 988.',
+    );
+  });
+
+  it('pins the report reason labels', () => {
+    expect(COMMUNITY_REPORT_REASONS.map((r) => r.label)).toEqual([
+      'Harassment or bullying',
+      'Hate speech or discrimination',
+      'Sexual or explicit content',
+      'Threats or violence',
+      'Self-harm or suicide',
+      'Spam or scams',
+      'Harmful health misinformation',
+      'Something else',
+    ]);
+  });
+
+  it('has no exclamation marks in shipped safety copy', () => {
+    for (const line of [...COMMUNITY_GUIDELINES, COMMUNITY_RESPONSE_COMMITMENT, COMMUNITY_REPORT_SENT_MESSAGE]) {
+      expect(line).not.toContain('!');
+    }
   });
 });

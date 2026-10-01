@@ -41,6 +41,35 @@ export const COMMUNITY_REPORT_REASONS: ReadonlyArray<{ code: string; label: stri
 /** Published fallback when /community/safety cannot be reached. */
 export const COMMUNITY_SAFETY_FALLBACK_EMAIL = 'Bradley@Bradleytgpcoaching.com';
 
+/**
+ * Community guidelines (owner-approved copy, 2026-10-01 09:07 PDT). Mirrors
+ * backend COMMUNITY_GUIDELINES; shown when /community/safety cannot be
+ * reached. The server copy wins when present.
+ */
+export const COMMUNITY_GUIDELINES: ReadonlyArray<string> = [
+  'Be respectful. No harassment, bullying, hate speech or threats.',
+  'No sexual or explicit content.',
+  'No spam, advertising or scams.',
+  'Share training experience, not medical advice. This is a personal-training community.',
+  "Keep private things private. Do not share anyone else's personal or health information.",
+  'Report anything that breaks these rules. Reports go to your coach and to the team.',
+  'This space is not for emergencies. If you are in danger, call 911. If you are struggling emotionally, call or text 988.',
+];
+
+/** The 24-hour moderation sentence (owner-approved 2026-10-01 09:07 PDT). */
+export const COMMUNITY_REVIEW_WITHIN_24H =
+  'Reports are reviewed within 24 hours, every day, by your coach and The Growth Project team.';
+
+/**
+ * Public moderation commitment (owner-approved 2026-10-01 09:07 PDT). Mirrors
+ * backend COMMUNITY_RESPONSE_COMMITMENT; the server copy wins when present.
+ */
+export const COMMUNITY_RESPONSE_COMMITMENT = `${COMMUNITY_REVIEW_WITHIN_24H} Content that breaks these guidelines is removed, and people who break them repeatedly lose access. If you block someone, they can no longer see your posts or message you, and they are not told.`;
+
+/** Report confirmation: the approved 24-hour and removal sentences. */
+export const COMMUNITY_REPORT_SENT_TITLE = 'Report sent';
+export const COMMUNITY_REPORT_SENT_MESSAGE = `Thank you. ${COMMUNITY_REVIEW_WITHIN_24H} Content that breaks these guidelines is removed, and people who break them repeatedly lose access.`;
+
 export const CONTENT_REJECTED_CODE = 'community.content.rejected';
 export const CONTENT_REJECTED_FALLBACK =
   'This was not posted because it appears to contain abusive or explicit language. Please rephrase it.';

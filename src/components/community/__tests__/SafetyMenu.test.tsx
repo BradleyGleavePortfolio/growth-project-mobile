@@ -100,7 +100,12 @@ describe('SafetyMenu', () => {
         reason: 'harassment',
       }),
     );
-    await waitFor(() => expect(alertSpy).toHaveBeenCalledWith('Report sent', expect.any(String)));
+    await waitFor(() =>
+      expect(alertSpy).toHaveBeenCalledWith(
+        'Report sent',
+        'Thank you. Reports are reviewed within 24 hours, every day, by your coach and The Growth Project team. Content that breaks these guidelines is removed, and people who break them repeatedly lose access.',
+      ),
+    );
   });
 
   it('blocks only after confirmation, then refetches community data and calls onBlocked', async () => {

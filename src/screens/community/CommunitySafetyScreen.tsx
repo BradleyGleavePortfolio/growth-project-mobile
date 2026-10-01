@@ -26,6 +26,8 @@ import { useTheme } from '../../theme/useTheme';
 import { spacing, radius } from '../../theme/tokens';
 import {
   communitySafetyApi,
+  COMMUNITY_GUIDELINES,
+  COMMUNITY_RESPONSE_COMMITMENT,
   COMMUNITY_SAFETY_FALLBACK_EMAIL,
 } from '../../api/communitySafetyApi';
 
@@ -33,14 +35,6 @@ export const communitySafetyKeys = {
   info: ['community', 'safety', 'info'] as const,
   blocks: ['community', 'safety', 'blocks'] as const,
 };
-
-const FALLBACK_GUIDELINES = [
-  'Be respectful. No harassment, bullying, hate speech or threats.',
-  'No sexual or explicit content.',
-  'No spam, advertising or scams.',
-  'Share training experience, not medical advice.',
-  'Report anything that breaks these rules.',
-];
 
 export default function CommunitySafetyScreen(): React.ReactElement {
   const { semanticColors } = useTheme();
@@ -60,10 +54,8 @@ export default function CommunitySafetyScreen(): React.ReactElement {
   });
 
   const email = info.data?.contact_email || COMMUNITY_SAFETY_FALLBACK_EMAIL;
-  const guidelines = info.data?.guidelines?.length ? info.data.guidelines : FALLBACK_GUIDELINES;
-  const commitment =
-    info.data?.response_commitment ??
-    'Reports are reviewed by your coach and the team. Content that breaks the rules is removed and repeat offenders lose access.';
+  const guidelines = info.data?.guidelines?.length ? info.data.guidelines : COMMUNITY_GUIDELINES;
+  const commitment = info.data?.response_commitment || COMMUNITY_RESPONSE_COMMITMENT;
 
   const confirmUnblock = (userId: string, name: string) =>
     Alert.alert(`Unblock ${name}?`, 'You will see their community content again and can message each other.', [

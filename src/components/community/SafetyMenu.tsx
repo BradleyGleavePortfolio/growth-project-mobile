@@ -22,6 +22,8 @@ import {
   communitySafetyApi,
   blockErrorMessage,
   COMMUNITY_REPORT_REASONS,
+  COMMUNITY_REPORT_SENT_MESSAGE,
+  COMMUNITY_REPORT_SENT_TITLE,
   type CommunityReportTargetType,
 } from '../../api/communitySafetyApi';
 
@@ -70,10 +72,7 @@ export default function SafetyMenu({
     try {
       await communitySafetyApi.report({ target_type: targetType, target_id: targetId, reason });
       close();
-      Alert.alert(
-        'Report sent',
-        'Thank you. Your coach and the team review reports and remove content that breaks the community guidelines.',
-      );
+      Alert.alert(COMMUNITY_REPORT_SENT_TITLE, COMMUNITY_REPORT_SENT_MESSAGE);
     } catch {
       Alert.alert('Could not send report', 'Please try again.');
     } finally {
