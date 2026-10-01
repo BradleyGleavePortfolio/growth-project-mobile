@@ -137,7 +137,7 @@ All runtime env vars are read via `expo-constants` / `EXPO_PUBLIC_*`. Copy
 | `EXPO_PUBLIC_SENTRY_DSN` | no | When set, Sentry is initialised in `services/sentry.ts`. Missing DSN means `wrap`, `captureError`, `setSentryUser` are no-ops. |
 | `EXPO_PUBLIC_ENVIRONMENT` | no | Sentry `environment` tag. Defaults to `'production'`. |
 | `SENTRY_AUTH_TOKEN` | no (recommended for prod) | EAS-time secret consumed by `@sentry/react-native/expo`'s release-upload step. When unset the build still succeeds, but no source maps reach Sentry, so production stack traces stay minified. See "Sentry release tracking" below. |
-| `EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING` | no | Consultation onboarding instead of the lean flow. Off by default; `true` in the `clinic` EAS profile. Calls `PUT /me/onboarding/consultation`, `GET /me/onboarding`, `POST /me/onboarding/complete`, `POST /me/ai-consent/roman`. |
+| `EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING` | no | Consultation onboarding instead of the lean flow. Off by default; `true` in the `clinic` EAS profile. Calls `PUT /me/onboarding/consultation`, `GET /me/onboarding`, `POST /me/onboarding/complete`, `POST /me/ai-consent/onboarding`, `GET /me/ai-consent`. |
 | `EXPO_PUBLIC_POSTHOG_KEY` | no | PostHog project key. Empty string disables capture. |
 | `EXPO_PUBLIC_POSTHOG_HOST` | no | Defaults to `https://us.i.posthog.com`. |
 | `EXPO_PUBLIC_CRISP_WEBSITE_ID` | yes (support inbox) | Crisp website ID for the in-app support inbox. Found in the Crisp dashboard under **Settings -> Website Settings -> Setup instructions**. Ships in the bundle (public key). See `docs/support-inbox.md`. |

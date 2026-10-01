@@ -10,8 +10,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added — Consultation onboarding (consult-v1), behind a flag
 
 - Config-driven consultation engine (`src/lib/consultation/`): screens as data with chapters, templates, validation and conditions; chapter progress, back, resume and per-chapter save via `PUT /me/onboarding/consultation`.
-- `src/screens/consultation/`: W1 to C1, the single P0 "I agree" box (training waiver plus data visibility, names Anthropic), P1 to P7 screening with the conditional P8 message, summary, preparing, macro and plan reveals from `POST /me/onboarding/complete` with 409 handling.
+- `src/screens/consultation/`: W1, then the single P0 "I agree" box (training waiver plus data visibility, names Anthropic) before any question, G1 to C1, P1 to P7 screening with the conditional P8 message, summary, preparing, macro and plan reveals from `POST /me/onboarding/complete` with 409 handling.
 - `featureFlags.consultationOnboarding` (`EXPO_PUBLIC_FF_CONSULTATION_ONBOARDING`), off by default, on in the new `clinic` EAS profile. Flag off keeps the lean flow unchanged.
+- Privacy and correctness (PR #310 fix round): the flow is excluded from PostHog touch autocapture; nothing is uploaded before the agreement is recorded through `POST /me/ai-consent/onboarding`, and the first save is P0 alone (consent-first); the stored agreement must match the displayed copy version, and stale, revoked or rejected (`409 CONSENT_VERSION_MISMATCH`, `409 consent_missing`) records go back to P0 unticked; the local draft is encrypted in SecureStore, expires after 30 days, and is purged on sign-out, account deletion and finish with late writes fenced; saves are serialized and coalesced; resume reconciles with the server by revision and timestamp; the frame respects safe-area insets.
 
 ### Added — Phase 10 — GDPR right to erasure
 
