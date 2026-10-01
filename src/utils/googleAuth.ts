@@ -20,6 +20,7 @@ import { authApi } from '../services/api';
 import { env } from '../config/env';
 import { errorMessage } from '../types/common';
 import { readInviteAttachOutcome } from '../lib/inviteAttachOutcome';
+import { toAuthErrorDetail, type AuthErrorDetail } from './authErrorDetail';
 import {
   COACH_SIGNUP_UNAVAILABLE,
   COACH_SIGNUP_UNCONFIRMED,
@@ -77,6 +78,17 @@ export interface GoogleAuthResult {
    * this identity (lib/coachSignupAttempt), not to every Google sign-in.
    */
   provider_email?: string;
+  /**
+   * #306 r6 (Sol C-306-5): the stable id of this Google sign-in (the Supabase
+   * auth user id). Returned on success and on coach outcomes so the
+   * unconfirmed-attempt marker matches this Google account only.
+   */
+  provider_subject?: string;
+  /**
+   * #306 r6 (Sol B-306-5): the backend failure, sanitised (status, machine
+   * code, request id) so screens can map and report it.
+   */
+  error_detail?: AuthErrorDetail;
 }
 
 export interface GoogleAuthOptions {
@@ -220,6 +232,7 @@ export async function signInWithGoogle(
         user,
         is_new_user: response.data.is_new_user,
         server_confirmed: true,
+        ...(supaUser.id ? { provider_subject: supaUser.id } : {}),
         ...(typeof inviteAttached === 'boolean'
           ? { invite_attached: inviteAttached, invite_code: options.inviteCode }
           : {}),
@@ -238,6 +251,8 @@ export async function signInWithGoogle(
           // #306 r5 (Sol B-306-1): lets the screen check this sign-in's
           // earlier unconfirmed attempt before it says "No account was created".
           ...(supaUser.email ? { provider_email: supaUser.email } : {}),
+          ...(supaUser.id ? { provider_subject: supaUser.id } : {}),
+          error_detail: toAuthErrorDetail(backendErr),
         };
       }
       if (options.intendedRole === 'coach') {
@@ -258,6 +273,8 @@ export async function signInWithGoogle(
           error: 'Could not confirm the coach account',
           error_code: COACH_SIGNUP_UNCONFIRMED,
           ...(supaUser.email ? { provider_email: supaUser.email } : {}),
+          ...(supaUser.id ? { provider_subject: supaUser.id } : {}),
+          error_detail: toAuthErrorDetail(backendErr),
         };
       }
       // Backend call failed — but we still have Supabase auth
@@ -281,6 +298,10 @@ export async function signInWithGoogle(
       };
     }
   } catch (err) {
-    return { success: false, error: errorMessage(err) || 'Google sign-in failed' };
+    return {
+      success: false,
+      error: errorMessage(err) || 'Google sign-in failed',
+      error_detail: toAuthErrorDetail(err),
+    };
   }
 }

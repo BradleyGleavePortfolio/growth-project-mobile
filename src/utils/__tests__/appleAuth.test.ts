@@ -15,7 +15,12 @@ jest.mock('../../services/api', () => ({
   default: { post: (...args: unknown[]) => mockApiPost(...args) },
 }));
 
-import { buildAppleAuthBody, emailFromAppleIdentityToken, signInWithApple } from '../appleAuth';
+import {
+  buildAppleAuthBody,
+  emailFromAppleIdentityToken,
+  signInWithApple,
+  subjectFromAppleIdentityToken,
+} from '../appleAuth';
 import { secureStorage } from '../../services/secureStorage';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -230,5 +235,57 @@ describe('signInWithApple: provider email on coach outcomes (#306 r5)', () => {
     });
     const result = await signInWithApple({ intendedRole: 'coach' });
     expect(result).toMatchObject({ error_code: 'coach_signup_unavailable', provider_email: 'pat@icloud.com' });
+  });
+});
+
+describe('signInWithApple: failure detail and provider subject (#306 r6)', () => {
+  const REF = 'feedface-0000-4000-8000-000000000000';
+  beforeEach(async () => {
+    Platform.OS = 'ios';
+    mockSignInAsync.mockReset();
+    mockIsAvailableAsync.mockReset().mockResolvedValue(true);
+    mockApiPost.mockReset();
+    await AsyncStorage.clear();
+  });
+
+  it('reads the sub claim as the stable subject', () => {
+    expect(subjectFromAppleIdentityToken(tokenWith({ sub: '001234.abc' }))).toBe('001234.abc');
+    expect(subjectFromAppleIdentityToken(tokenWith({ email: 'pat@icloud.com' }))).toBeUndefined();
+    expect(subjectFromAppleIdentityToken('apple-id-token')).toBeUndefined();
+  });
+
+  it('Sol B-306-5: an unknown backend failure keeps status, machine code and the backend reference', async () => {
+    mockSignInAsync.mockResolvedValueOnce({ identityToken: tokenWith({ sub: 'apple-sub-1' }) });
+    mockApiPost.mockRejectedValueOnce({
+      message: 'Request failed with status code 500',
+      response: { status: 500, data: { message: 'Internal server error', code: 'internal_error', request_id: REF } },
+      config: { headers: { Authorization: 'Bearer private-test-token' } },
+    });
+    const result = await signInWithApple();
+    expect(result).toMatchObject({
+      success: false,
+      error: 'Internal server error',
+      error_detail: { status: 500, code: 'internal_error', requestId: REF },
+    });
+    expect(JSON.stringify(result.error_detail)).not.toMatch(/private-test-token/);
+  });
+
+  it('an array message is joined, not dropped', async () => {
+    mockSignInAsync.mockResolvedValueOnce({ identityToken: 'apple-id-token' });
+    mockApiPost.mockRejectedValueOnce({ response: { status: 400, data: { message: ['token must be a string'] } } });
+    const result = await signInWithApple();
+    expect(result.error).toBe('token must be a string');
+  });
+
+  it('coach outcomes and success carry the Apple user id (credential.user, else the token sub)', async () => {
+    mockSignInAsync.mockResolvedValueOnce({ identityToken: tokenWith({ sub: 'apple-sub-1' }) });
+    mockApiPost.mockRejectedValueOnce(new Error('Cannot reach server'));
+    expect(await signInWithApple({ intendedRole: 'coach' })).toMatchObject({
+      error_code: 'coach_signup_unconfirmed',
+      provider_subject: 'apple-sub-1',
+    });
+    mockSignInAsync.mockResolvedValueOnce({ identityToken: 'apple-id-token', user: 'apple-user-2' });
+    mockApiPost.mockResolvedValueOnce({ data: { access_token: 'a', user: { id: 'u2', role: 'student' }, is_new_user: false } });
+    expect(await signInWithApple()).toMatchObject({ success: true, provider_subject: 'apple-user-2' });
   });
 });

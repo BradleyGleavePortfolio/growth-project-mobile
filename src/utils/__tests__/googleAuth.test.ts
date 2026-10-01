@@ -168,3 +168,41 @@ describe('signInWithGoogle: invite code outcome (#306 r5, Sol B-306-3)', () => {
     expect(result).toMatchObject({ error_code: 'coach_signup_unavailable', provider_email: 'pat@example.com' });
   });
 });
+
+describe('signInWithGoogle: failure detail and provider subject (#306 r6)', () => {
+  const REF = 'feedface-0000-4000-8000-000000000000';
+  const http500WithRef = Object.assign(new Error('Request failed with status code 500'), {
+    response: { status: 500, data: { message: 'Internal server error', request_id: REF } },
+    config: { headers: { Authorization: 'Bearer private-test-token' }, data: '{"password":"PrivateTestPassword"}' },
+  });
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    mockStore.clear();
+    await AsyncStorage.clear();
+  });
+
+  it('an unconfirmed coach result carries the sanitised detail (status, reference) and the Supabase subject', async () => {
+    mockGoogleAuth.mockRejectedValue(http500WithRef);
+    const result = await signInWithGoogle({ intendedRole: 'coach' });
+    expect(result).toMatchObject({
+      error_code: 'coach_signup_unconfirmed',
+      provider_subject: 'supa-1',
+      error_detail: { kind: 'auth_error_detail', status: 500, requestId: REF },
+    });
+    // Sol B-306-5: nothing from the request config travels with it.
+    expect(JSON.stringify(result.error_detail)).not.toMatch(/private-test-token|PrivateTestPassword/);
+  });
+
+  it('the coach refusal also carries the subject, so the screen matches this Google account only', async () => {
+    mockGoogleAuth.mockRejectedValue(new CoachSignupUnavailableError());
+    const result = await signInWithGoogle({ intendedRole: 'coach' });
+    expect(result).toMatchObject({ error_code: 'coach_signup_unavailable', provider_subject: 'supa-1' });
+  });
+
+  it('a server answer returns the subject for the Login reconciliation', async () => {
+    mockGoogleAuth.mockResolvedValue({ data: { user: { id: 'u1', role: 'student' }, is_new_user: false } });
+    const result = await signInWithGoogle();
+    expect(result).toMatchObject({ success: true, server_confirmed: true, provider_subject: 'supa-1' });
+  });
+});

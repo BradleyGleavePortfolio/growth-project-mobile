@@ -105,6 +105,8 @@ export interface CoachRecoveryGate {
   userId: string;
   method: CoachSignupMethod;
   identity?: string;
+  /** #306 r6: stable provider subject of the sign-in (Apple / Google), when known. */
+  subject?: string;
   /** Whether this account needed role selection before the notice was shown. */
   priorPending: boolean;
   at: number;
@@ -121,6 +123,7 @@ export async function readCoachRecoveryGate(): Promise<CoachRecoveryGate | null>
       userId: g.userId,
       method: g.method,
       ...(typeof g.identity === 'string' && g.identity ? { identity: g.identity } : {}),
+      ...(typeof g.subject === 'string' && g.subject ? { subject: g.subject } : {}),
       priorPending: g.priorPending === true,
       at: typeof g.at === 'number' ? g.at : 0,
     };

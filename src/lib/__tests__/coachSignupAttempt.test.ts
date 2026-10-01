@@ -131,3 +131,50 @@ describe('normaliseEmail (#306 r5, Opus C-306-3 iii)', () => {
     expect(await hasUnconfirmedCoachSignup('email', 'ｐａｔ@example.com')).toBe(true);
   });
 });
+
+describe('provider subject (#306 r6, Sol C-306-5)', () => {
+  beforeEach(async () => {
+    await AsyncStorage.clear();
+  });
+
+  it('an Apple marker with a subject never matches a different Apple ID, even when neither side has an email', async () => {
+    await rememberUnconfirmedCoachSignup('apple', { subject: 'apple-sub-A' });
+    expect(await hasUnconfirmedCoachSignup('apple', { subject: 'apple-sub-B' })).toBe(false);
+    expect(await hasUnconfirmedCoachSignup('apple', { subject: 'apple-sub-B', email: 'other@example.com' })).toBe(false);
+    expect(await hasUnconfirmedCoachSignup('apple', { subject: 'apple-sub-A' })).toBe(true);
+  });
+
+  it('the subject decides over the email for Google (same address, different account id)', async () => {
+    await rememberUnconfirmedCoachSignup('google', { email: 'pat@example.com', subject: 'supa-A' });
+    expect(await hasUnconfirmedCoachSignup('google', { email: 'pat@example.com', subject: 'supa-B' })).toBe(false);
+    expect(await hasUnconfirmedCoachSignup('google', { email: 'PAT@example.com', subject: 'supa-A' })).toBe(true);
+    // A sign-in that knows only the email still compares on the email.
+    expect(await hasUnconfirmedCoachSignup('google', 'pat@example.com')).toBe(true);
+    expect(await hasUnconfirmedCoachSignup('google', 'someone@example.com')).toBe(false);
+  });
+
+  it('a different subject never resolves (consumes) the marker; the same subject does', async () => {
+    await rememberUnconfirmedCoachSignup('apple', { subject: 'apple-sub-A' });
+    expect(await resolveUnconfirmedCoachSignup('apple', { subject: 'apple-sub-B' })).toBe(false);
+    expect(await hasAnyUnconfirmedCoachSignup()).toBe(true);
+    expect(await resolveUnconfirmedCoachSignup('apple', { subject: 'apple-sub-A' })).toBe(true);
+    expect(await hasAnyUnconfirmedCoachSignup()).toBe(false);
+  });
+
+  it('reconcile uses the provider subject from the sign-in', async () => {
+    await rememberUnconfirmedCoachSignup('apple', { subject: 'apple-sub-A' });
+    const user = { role: 'student', email: 'relay@privaterelay.appleid.com' };
+    expect(await reconcileCoachAttempt('apple', user, { providerSubject: 'apple-sub-B' })).toBeNull();
+    expect(await reconcileCoachAttempt('apple', user, { providerSubject: 'apple-sub-A' })).toBe('coach_retry_not_applied');
+  });
+
+  it('documented residual: a marker with no identity at all (helper threw before any was known) still matches by method', async () => {
+    await rememberUnconfirmedCoachSignup('apple');
+    expect(await hasUnconfirmedCoachSignup('apple', { subject: 'apple-sub-B' })).toBe(true);
+  });
+
+  it('an email marker ignores any subject', async () => {
+    await rememberUnconfirmedCoachSignup('email', { email: 'pat@example.com', subject: 'x' });
+    expect(await hasUnconfirmedCoachSignup('email', 'pat@example.com')).toBe(true);
+  });
+});

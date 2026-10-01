@@ -16,7 +16,7 @@
  * headers carry the bearer token), so only a synthetic error with the flow,
  * status, backend code and reference is reported.
  */
-import { extractRequestId, REQUEST_ID_HEADER } from './correlation';
+import { toAuthErrorDetail } from './authErrorDetail';
 import { randomUuid } from './idempotency';
 import { captureError } from '../services/sentry';
 import {
@@ -46,22 +46,14 @@ export interface AuthFailure {
   cancelled: boolean;
 }
 
-function headerValue(headers: unknown, name: string): string | null {
-  if (!headers || typeof headers !== 'object') return null;
-  for (const [k, v] of Object.entries(headers as Record<string, unknown>)) {
-    if (k.toLowerCase() === name.toLowerCase() && typeof v === 'string' && v) return v;
-  }
-  return null;
-}
-
 /**
  * Reference for an unknown failure: the server's `request_id` (body or
  * `x-request-id` header) when present, else the id this app sent with the
- * request, else a fresh local id. Shown shortened (8 characters).
+ * request, else a fresh local id. Shown shortened (8 characters). Works on a
+ * raw request error and on the detail a provider helper returned (r6).
  */
 export function failureReference(err: unknown): { full: string; short: string } {
-  const sent = headerValue((err as { config?: { headers?: unknown } } | null)?.config?.headers, REQUEST_ID_HEADER);
-  let full = extractRequestId(err) ?? sent;
+  let full = toAuthErrorDetail(err).requestId;
   if (!full) {
     try {
       full = randomUuid();
@@ -74,15 +66,33 @@ export function failureReference(err: unknown): { full: string; short: string } 
 }
 
 function statusOf(err: unknown): number | null {
-  const s = (err as { response?: { status?: unknown } } | null)?.response?.status;
-  return typeof s === 'number' ? s : null;
+  return toAuthErrorDetail(err).status;
 }
 
 function codeOf(err: unknown): string | null {
-  const d = (err as { response?: { data?: unknown } } | null)?.response?.data;
-  if (!d || typeof d !== 'object') return null;
-  const c = (d as { code?: unknown; error?: unknown }).code ?? (d as { error?: unknown }).error;
-  return typeof c === 'string' ? c.slice(0, 80) : null;
+  return toAuthErrorDetail(err).code;
+}
+
+/**
+ * Report a failure to Sentry under its reference (sanitised: fixed event
+ * name, flow, provider, status, machine code, reference; never the body,
+ * headers, tokens or email). Returns the reference shown to the user.
+ */
+export function reportAuthFailure(
+  err: unknown,
+  flow: AuthFlow,
+  provider: AuthProviderName = 'email',
+  outcome: 'failed' | 'unconfirmed' = 'failed',
+): { full: string; short: string } {
+  const ref = failureReference(err);
+  captureError(new Error(`auth_${flow}_${outcome}`), {
+    flow,
+    provider,
+    status: statusOf(err),
+    code: codeOf(err),
+    reference: ref.full,
+  });
+  return ref;
 }
 
 const UNKNOWN_LEAD: Record<AuthFlow, string> = {
@@ -98,14 +108,7 @@ export function unknownAuthFailure(
   flow: AuthFlow,
   provider: AuthProviderName = 'email',
 ): AuthFailure {
-  const ref = failureReference(err);
-  captureError(new Error(`auth_${flow}_failed`), {
-    flow,
-    provider,
-    status: statusOf(err),
-    code: codeOf(err),
-    reference: ref.full,
-  });
+  const ref = reportAuthFailure(err, flow, provider);
   const lead =
     provider === 'apple'
       ? 'Sign in with Apple didn’t go through.'
@@ -135,6 +138,10 @@ export function isNetworkFailure(err: unknown): boolean {
   return toFriendlyAuthError(raw).category === 'network' || /cannot reach server/i.test(raw);
 }
 
+const EMAIL_UNCONFIRMED_CODE = /^(?:email_not_confirmed|email_unconfirmed|email_not_verified|unverified_email)$/i;
+const EMAIL_UNCONFIRMED_TEXT =
+  /email (?:address )?(?:is )?not (?:yet )?(?:been )?(?:confirmed|verified)|verify your email|confirm your email|email[_ ]?verification/i;
+
 /** Sign-in on Login (email, Apple, Google), and the verify step's sign-in. */
 export function describeSignInFailure(
   err: unknown,
@@ -158,19 +165,32 @@ export function describeSignInFailure(
       cancelled: false,
     };
   }
-  if (base.category === 'invalid_credentials' || status === 401) {
+  // #306 r6 (Sol B-306-4): the specific meaning wins over the status. The
+  // backend answers an unconfirmed email with 401 too ("Email not
+  // confirmed..."), so that is checked before any 401 fallback, from the
+  // machine code or the message itself; a bare "email" in a message is not
+  // evidence (the wrong-password 401 is "Invalid email or password").
+  if (EMAIL_UNCONFIRMED_CODE.test(codeOf(err) ?? '') || EMAIL_UNCONFIRMED_TEXT.test(raw)) {
     return {
-      kind: 'invalid_credentials',
-      message: 'That email and password don’t match. Check them, or use Forgot password to set a new one.',
+      kind: 'email_unconfirmed',
+      message:
+        flow === 'verify'
+          ? 'Your email is not verified yet. Open the link we sent to this address, then tap I verified my email.'
+          : 'Your email is not confirmed yet. Open the link we sent, then sign in.',
       support: false,
       reference: null,
       cancelled: false,
     };
   }
-  if (base.category === 'email_unconfirmed') {
+  // A 401 means wrong credentials only for an email and password sign-in. A
+  // provider 401 (token refused) is not about a password (Opus C-306-6).
+  if (base.category === 'invalid_credentials' || (status === 401 && provider === 'email')) {
     return {
-      kind: 'email_unconfirmed',
-      message: 'Your email is not confirmed yet. Open the link we sent, then sign in.',
+      kind: 'invalid_credentials',
+      message:
+        flow === 'verify'
+          ? 'That email and password don’t match an account. Log in with the password you use for this email, or reset it with Forgot password.'
+          : 'That email and password don’t match. Check them, or use Forgot password to set a new one.',
       support: false,
       reference: null,
       cancelled: false,
@@ -203,13 +223,5 @@ export function describeSignupFailure(err: unknown, provider: AuthProviderName =
 }
 
 function messageOf(err: unknown): string {
-  if (typeof err === 'string') return err;
-  const d = (err as { response?: { data?: unknown } } | null)?.response?.data;
-  if (d && typeof d === 'object') {
-    const m = (d as { message?: unknown }).message;
-    if (typeof m === 'string') return m;
-  }
-  if (err instanceof Error) return err.message;
-  const m = (err as { message?: unknown } | null)?.message;
-  return typeof m === 'string' ? m : '';
+  return toAuthErrorDetail(err).message;
 }

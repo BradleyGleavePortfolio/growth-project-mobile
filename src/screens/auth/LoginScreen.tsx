@@ -64,6 +64,7 @@ import {
 interface CoachAttemptRecovery {
   method: CoachSignupMethod;
   identity?: string;
+  subject?: string;
   userId: string | null;
   priorPending: boolean;
   proceed: () => Promise<void>;
@@ -138,7 +139,7 @@ export default function LoginScreen({ navigation, route }: Props) {
   const continueAfterCoachAttemptCheck = async (
     method: CoachSignupMethod,
     user: { role?: unknown; email?: unknown } | null | undefined,
-    opts: { emailHint?: string; isNewUser?: boolean },
+    opts: { emailHint?: string; isNewUser?: boolean; providerSubject?: string },
     proceed: () => Promise<void>,
   ) => {
     const userId = userIdOf(user as { id?: unknown } | null | undefined);
@@ -166,14 +167,22 @@ export default function LoginScreen({ navigation, route }: Props) {
     }
     const identity =
       typeof user?.email === 'string' && user.email ? user.email : opts.emailHint || undefined;
+    const subject = opts.providerSubject || (gateForThisAccount && gate ? gate.subject : undefined);
     const priorPending = gateForThisAccount && gate ? gate.priorPending : await isRoleSelectionPendingFor(userId);
     await setSignupRoleNotice(notice);
     if (userId) {
-      await writeCoachRecoveryGate({ userId, method, identity, priorPending, at: Date.now() });
+      await writeCoachRecoveryGate({
+        userId,
+        method,
+        identity,
+        ...(subject ? { subject } : {}),
+        priorPending,
+        at: Date.now(),
+      });
       // Hold the auth stack on a cold start until the notice is acknowledged.
       await markRoleSelectionPending(userId).catch(() => undefined);
     }
-    setRecovery({ method, identity, userId, priorPending, proceed });
+    setRecovery({ method, identity, ...(subject ? { subject } : {}), userId, priorPending, proceed });
   };
 
   const acknowledgeRecovery = async () => {
@@ -186,7 +195,7 @@ export default function LoginScreen({ navigation, route }: Props) {
       else await clearRoleSelectionPending();
       await clearCoachRecoveryGate();
       await clearSignupRoleNotice();
-      await resolveUnconfirmedCoachSignup(recovery.method, recovery.identity);
+      await resolveUnconfirmedCoachSignup(recovery.method, { email: recovery.identity, subject: recovery.subject });
       const { proceed } = recovery;
       setRecovery(null);
       await proceed();
@@ -298,7 +307,7 @@ export default function LoginScreen({ navigation, route }: Props) {
 
       if (!result.success) {
         // Cancellation stays silent.
-        const failure = describeSignInFailure(result.error, { provider: 'google' });
+        const failure = describeSignInFailure(result.error_detail ?? result.error, { provider: 'google' });
         if (!failure.cancelled) {
           showFailure(failure);
           Alert.alert('Sign in with Google', failure.message);
@@ -336,7 +345,7 @@ export default function LoginScreen({ navigation, route }: Props) {
         await continueAfterCoachAttemptCheck(
           'google',
           result.user,
-          { isNewUser: result.is_new_user },
+          { isNewUser: result.is_new_user, providerSubject: result.provider_subject },
           proceedGoogle,
         );
     } catch (err) {
@@ -362,7 +371,7 @@ export default function LoginScreen({ navigation, route }: Props) {
 
       if (!result.success) {
         if (result.cancelled) return;
-        const failure = describeSignInFailure(result.error, { provider: 'apple' });
+        const failure = describeSignInFailure(result.error_detail ?? result.error, { provider: 'apple' });
         if (!failure.cancelled) {
           showFailure(failure);
           Alert.alert('Sign in with Apple', failure.message);
@@ -393,7 +402,7 @@ export default function LoginScreen({ navigation, route }: Props) {
       await continueAfterCoachAttemptCheck(
         'apple',
         result.user,
-        { isNewUser: result.is_new_user },
+        { isNewUser: result.is_new_user, providerSubject: result.provider_subject },
         proceedApple,
       );
     } catch (err) {

@@ -41,7 +41,29 @@ export type CoachSignupMethod = 'email' | 'apple' | 'google';
 interface Marker {
   method: CoachSignupMethod;
   email?: string;
+  /** #306 r6 (Sol C-306-5): stable provider id (Apple user id, Google Supabase user id). */
+  subject?: string;
   at: number;
+}
+
+/**
+ * Who signed in: an email (string, as before) or, for Apple and Google, the
+ * email and the stable provider subject when known.
+ */
+export type CoachSignupIdentity =
+  | string
+  | null
+  | undefined
+  | { email?: string | null; subject?: string | null };
+
+function identityOf(id: CoachSignupIdentity): { email?: string; subject?: string } {
+  if (id && typeof id === 'object') {
+    const email = normaliseEmail(id.email);
+    const subject = typeof id.subject === 'string' && id.subject.trim() ? id.subject.trim().slice(0, 200) : undefined;
+    return { ...(email ? { email } : {}), ...(subject ? { subject } : {}) };
+  }
+  const email = normaliseEmail(id);
+  return email ? { email } : {};
 }
 
 export function normaliseEmail(email: string | undefined | null): string | undefined {
@@ -92,6 +114,7 @@ async function readMarkers(now: number): Promise<Marker[]> {
     const marker: Marker = { method: m.method, at: m.at };
     const email = normaliseEmail(typeof m.email === 'string' ? m.email : undefined);
     if (email) marker.email = email;
+    if (typeof m.subject === 'string' && m.subject) marker.subject = m.subject;
     if (marker.method === 'email' && !marker.email) continue;
     if (fresh(marker, now)) out.push(marker);
   }
@@ -108,39 +131,49 @@ async function writeMarkers(markers: Marker[]): Promise<void> {
 }
 
 /**
- * Does `m` describe the same sign-in as (method, email)?
+ * Does `m` describe the same sign-in as (method, identity)?
  *  - email: the address must match.
- *  - apple / google: when both sides know the email they must match; when
- *    either does not (Apple often hides it), the method alone decides, so an
+ *  - apple / google (#306 r6, Sol C-306-5): when both sides know the stable
+ *    provider subject, it decides (a different Apple ID or Google account
+ *    never matches, even with no email). Otherwise, when both know the email,
+ *    it decides. Only when no identity can be compared (a marker written
+ *    when the helper threw before any identity was known, or by an r5 build
+ *    within its 30-minute window) does the method alone decide, so an
  *    unproven outcome is never forgotten for lack of an identifier.
  */
-function sameSignIn(m: Marker, method: CoachSignupMethod, email: string | undefined): boolean {
+function sameSignIn(m: Marker, method: CoachSignupMethod, id: { email?: string; subject?: string }): boolean {
   if (m.method !== method) return false;
-  if (method === 'email') return !!email && m.email === email;
-  if (m.email && email) return m.email === email;
+  if (method === 'email') return !!id.email && m.email === id.email;
+  if (m.subject && id.subject) return m.subject === id.subject;
+  if (m.email && id.email) return m.email === id.email;
   return true;
+}
+
+function sameMarker(m: Marker, method: CoachSignupMethod, id: { email?: string; subject?: string }): boolean {
+  return m.method === method && m.email === id.email && m.subject === id.subject;
 }
 
 export async function rememberUnconfirmedCoachSignup(
   method: CoachSignupMethod,
-  email?: string | null,
+  identity?: CoachSignupIdentity,
   now: number = Date.now(),
 ): Promise<void> {
-  const e = normaliseEmail(email);
-  if (method === 'email' && !e) return;
-  const kept = (await readMarkers(now)).filter((m) => !(m.method === method && m.email === e));
-  const marker: Marker = { method, at: now, ...(e ? { email: e } : {}) };
+  const id = identityOf(identity);
+  if (method === 'email' && !id.email) return;
+  if (method === 'email') delete id.subject;
+  const kept = (await readMarkers(now)).filter((m) => !sameMarker(m, method, id));
+  const marker: Marker = { method, at: now, ...id };
   await writeMarkers([...kept, marker]);
 }
 
 /** True when an unconfirmed coach attempt with the same method (and identity) is recent. */
 export async function hasUnconfirmedCoachSignup(
   method: CoachSignupMethod,
-  email?: string | null,
+  identity?: CoachSignupIdentity,
   now: number = Date.now(),
 ): Promise<boolean> {
-  const e = normaliseEmail(email);
-  return (await readMarkers(now)).some((m) => sameSignIn(m, method, e));
+  const id = identityOf(identity);
+  return (await readMarkers(now)).some((m) => sameSignIn(m, method, id));
 }
 
 /** True when any unconfirmed coach attempt from this device is recent. */
@@ -154,12 +187,12 @@ export async function hasAnyUnconfirmedCoachSignup(now: number = Date.now()): Pr
  */
 export async function resolveUnconfirmedCoachSignup(
   method: CoachSignupMethod,
-  email?: string | null,
+  identity?: CoachSignupIdentity,
   now: number = Date.now(),
 ): Promise<boolean> {
-  const e = normaliseEmail(email);
+  const id = identityOf(identity);
   const markers = await readMarkers(now);
-  const kept = markers.filter((m) => !sameSignIn(m, method, e));
+  const kept = markers.filter((m) => !sameSignIn(m, method, id));
   if (kept.length !== markers.length) {
     await writeMarkers(kept);
     return true;
@@ -189,16 +222,17 @@ export async function clearUnconfirmedCoachSignup(): Promise<void> {
 export async function reconcileCoachAttempt(
   method: CoachSignupMethod,
   user: { role?: unknown; email?: unknown } | null | undefined,
-  opts: { emailHint?: string | null; isNewUser?: boolean } = {},
+  opts: { emailHint?: string | null; isNewUser?: boolean; providerSubject?: string | null } = {},
   now: number = Date.now(),
 ): Promise<'coach_retry_not_applied' | null> {
   if (typeof user?.role !== 'string') return null;
   const email = normaliseEmail(typeof user.email === 'string' && user.email ? user.email : opts.emailHint ?? undefined);
-  if (!(await hasUnconfirmedCoachSignup(method, email, now))) return null;
+  const id = { email, subject: method === 'email' ? undefined : opts.providerSubject };
+  if (!(await hasUnconfirmedCoachSignup(method, id, now))) return null;
   // A server coach, or an account the server says it created just now (so
   // the earlier attempt did not create one): resolved, nothing to say.
   if (user.role === 'coach' || opts.isNewUser === true) {
-    await resolveUnconfirmedCoachSignup(method, email, now);
+    await resolveUnconfirmedCoachSignup(method, id, now);
     return null;
   }
   return 'coach_retry_not_applied';
