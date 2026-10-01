@@ -15,14 +15,15 @@
  * with this client is a separate task (see
  * `/home/user/workspace/sprint-scheduling-ui/AUDIT.md` §3).
  *
- * Notably NOT covered by this client today:
- *   - CoachAvailabilityOverride CRUD (the schema/migration includes
- *     the model, but the backend controller does not yet expose
- *     overrides — held back to a backend follow-up).
- *   - Computed open-slots endpoint (`/open-slots`) — does not exist
- *     yet on the backend. Concrete slot rendering is deferred.
- *   - Google OAuth browser flow (the mobile opens the URLs in an
- *     in-app browser; not API client surface).
+ * S-SCHED (2026-10-01): the backend now exposes computed open slots
+ * (`GET /scheduling/coaches/:coachId/open-slots`, honours time off,
+ * booked sessions, the appointment type length and the coach time zone),
+ * coach time-off overrides (`/scheduling/coach/availability-overrides`),
+ * `GET /scheduling/my-coaches`, and `scope=upcoming|past` on the session
+ * list. All are covered below.
+ *
+ * Not covered: the Google OAuth browser flow (Google Calendar sync stays
+ * off and is not a dependency of native scheduling).
  */
 
 import api from '../services/api';
@@ -109,6 +110,13 @@ export interface SessionType {
   duration_minutes: number;
   auto_approve: boolean;
   default_video_provider: SchedulingVideoProvider;
+  /** S-SCHED: the coach's welcome call type (at most one active per coach). */
+  is_welcome?: boolean;
+  /**
+   * S-SCHED: https link attached to a session of this type when it is
+   * confirmed and has no link yet. Coach-only; clients always get null.
+   */
+  default_meeting_url?: string | null;
   archived_at: string | null;
   created_at: string;
   updated_at: string;
@@ -120,6 +128,8 @@ export interface CreateSessionTypeInput {
   duration_minutes: number;
   auto_approve?: boolean;
   default_video_provider?: SchedulingVideoProvider;
+  is_welcome?: boolean;
+  default_meeting_url?: string;
 }
 
 export interface UpdateSessionTypeInput {
@@ -129,6 +139,70 @@ export interface UpdateSessionTypeInput {
   auto_approve?: boolean;
   default_video_provider?: SchedulingVideoProvider;
   archived?: boolean;
+  is_welcome?: boolean;
+  /** null clears the link. */
+  default_meeting_url?: string | null;
+}
+
+/** GET /scheduling/my-coaches — the coaches this client can book with. */
+export interface BookableCoach {
+  coach_id: string;
+  name: string;
+  /** Coach IANA time zone; null when the coach never set one (server uses UTC). */
+  timezone: string | null;
+}
+
+/** GET /scheduling/coaches/:coachId/open-slots */
+export interface OpenSlotsPayload {
+  coach_id: string;
+  timezone: string;
+  generated_at: string;
+  slots: { start_at: string; end_at: string }[];
+}
+
+export type AvailabilityOverrideKind = 'holiday' | 'block' | 'extra';
+
+/** A date-keyed exception to the weekly hours, in the coach's time zone. */
+export interface AvailabilityOverride {
+  id: string;
+  coach_id: string;
+  /** Calendar date; the backend returns an ISO string, use the first 10 chars. */
+  date: string;
+  start_minute: number | null;
+  end_minute: number | null;
+  kind: AvailabilityOverrideKind;
+  note: string | null;
+}
+
+export interface CreateAvailabilityOverrideInput {
+  /** YYYY-MM-DD in the coach's time zone. */
+  date: string;
+  kind: AvailabilityOverrideKind;
+  /** HH:MM, coach-local. Omit both for a full day off. */
+  start_time?: string;
+  end_time?: string;
+  note?: string;
+}
+
+export type SessionListScope = 'upcoming' | 'past';
+
+/**
+ * Backend error code (e.g. SLOT_TAKEN, SLOT_UNAVAILABLE) from an axios-style
+ * error. Scheduling exceptions put the code in `error`; the global filter
+ * also forwards an optional `code`.
+ */
+export function schedulingErrorCode(err: unknown): string | null {
+  const data = (err as { response?: { data?: { code?: unknown; error?: unknown } } } | null)
+    ?.response?.data;
+  if (data && typeof data.code === 'string') return data.code;
+  if (data && typeof data.error === 'string' && /^[A-Z_]+$/.test(data.error)) return data.error;
+  return null;
+}
+
+/** HTTP status from an axios-style error, or null for network failures. */
+export function schedulingErrorStatus(err: unknown): number | null {
+  const status = (err as { response?: { status?: unknown } } | null)?.response?.status;
+  return typeof status === 'number' ? status : null;
 }
 
 // ─── Availability (recurring weekly windows) ────────────────────────────────
@@ -252,12 +326,61 @@ export const schedulingApi = {
     return res.data;
   },
 
+  // Bookable coaches (client)
+  listMyCoaches: async (): Promise<BookableCoach[]> => {
+    const res = await api.get<BookableCoach[]>('/scheduling/my-coaches');
+    return res.data;
+  },
+
   // Session types
-  listSessionTypes: async (coachId: string): Promise<SessionType[]> => {
+  listSessionTypes: async (
+    coachId: string,
+    opts: { includeArchived?: boolean } = {},
+  ): Promise<SessionType[]> => {
     const res = await api.get<SessionType[]>(
       `/scheduling/coaches/${encodeURIComponent(coachId)}/session-types`,
+      opts.includeArchived ? { params: { include_archived: 'true' } } : undefined,
     );
     return res.data;
+  },
+
+  // Open slots (server-computed; max 14-day range)
+  getOpenSlots: async (
+    coachId: string,
+    args: { from: string; to: string; sessionTypeId?: string },
+  ): Promise<OpenSlotsPayload> => {
+    const params: Record<string, string> = { from: args.from, to: args.to };
+    if (args.sessionTypeId) params.session_type_id = args.sessionTypeId;
+    const res = await api.get<OpenSlotsPayload>(
+      `/scheduling/coaches/${encodeURIComponent(coachId)}/open-slots`,
+      { params },
+    );
+    return res.data;
+  },
+
+  // Coach time off
+  listMyAvailabilityOverrides: async (
+    args: { from?: string; to?: string } = {},
+  ): Promise<AvailabilityOverride[]> => {
+    const res = await api.get<AvailabilityOverride[]>(
+      '/scheduling/coach/availability-overrides',
+      { params: args },
+    );
+    return res.data;
+  },
+
+  createAvailabilityOverride: async (
+    input: CreateAvailabilityOverrideInput,
+  ): Promise<AvailabilityOverride> => {
+    const res = await api.post<AvailabilityOverride>(
+      '/scheduling/coach/availability-overrides',
+      input,
+    );
+    return res.data;
+  },
+
+  deleteAvailabilityOverride: async (id: string): Promise<void> => {
+    await api.delete(`/scheduling/coach/availability-overrides/${encodeURIComponent(id)}`);
   },
 
   createSessionType: async (
@@ -298,8 +421,14 @@ export const schedulingApi = {
   },
 
   // Sessions
-  listMySessions: async (limit?: number): Promise<CoachingSession[]> => {
-    const params = limit !== undefined ? { limit: String(limit) } : undefined;
+  listMySessions: async (
+    limit?: number,
+    scope?: SessionListScope,
+  ): Promise<CoachingSession[]> => {
+    const p: Record<string, string> = {};
+    if (limit !== undefined) p.limit = String(limit);
+    if (scope) p.scope = scope;
+    const params = Object.keys(p).length > 0 ? p : undefined;
     const res = await api.get<CoachingSession[]>('/scheduling/sessions', {
       params,
     });

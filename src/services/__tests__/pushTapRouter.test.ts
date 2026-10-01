@@ -2,6 +2,7 @@ const mockFlags = {
   communityTab: true,
   communityEvents: true,
   coachCommunity: true,
+  clientCalendar: true,
 };
 jest.mock('../../config/featureFlags', () => ({
   get featureFlags() {
@@ -53,6 +54,7 @@ describe('pushTapRouter', () => {
     mockFlags.communityTab = true;
     mockFlags.communityEvents = true;
     mockFlags.coachCommunity = true;
+    mockFlags.clientCalendar = true;
     mockHidden = false;
   });
 
@@ -100,6 +102,41 @@ describe('pushTapRouter', () => {
       routePushTap('SomethingNew');
       expect(nav.navigate).toHaveBeenCalledTimes(1);
       expect(nav.navigate).toHaveBeenCalledWith('Home', { screen: 'NotificationCenter', params: undefined });
+    });
+  });
+
+  describe('S-SCHED booking pushes', () => {
+    it('client CalendarSession -> Calendar tab session view with the session id', () => {
+      const nav = makeNav([...CLIENT_TABS, 'CalendarTab']);
+      attachPushNavigator(nav);
+      setPushSession(STUDENT_A);
+      routePushTap('CalendarSession', { sessionId: 's-1' }, 'nb1');
+      expect(nav.navigate).toHaveBeenCalledWith('CalendarTab', { screen: 'CalendarSession', params: { sessionId: 's-1' } });
+    });
+
+    it('client CalendarSession with the Calendar flag off -> notification center', () => {
+      mockFlags.clientCalendar = false;
+      const nav = makeNav(CLIENT_TABS);
+      attachPushNavigator(nav);
+      setPushSession(STUDENT_A);
+      routePushTap('CalendarSession', { sessionId: 's-1' }, 'nb2');
+      expect(nav.navigate).toHaveBeenCalledWith('Home', { screen: 'NotificationCenter', params: { sessionId: 's-1' } });
+    });
+
+    it('client CalendarSession when the tab is not mounted -> notification center, not a dead route', () => {
+      const nav = makeNav(CLIENT_TABS);
+      attachPushNavigator(nav);
+      setPushSession(STUDENT_A);
+      routePushTap('CalendarSession', { sessionId: 's-1' }, 'nb3');
+      expect(nav.navigate).toHaveBeenCalledWith('Home', { screen: 'NotificationCenter', params: { sessionId: 's-1' } });
+    });
+
+    it('coach CoachBookingInbox -> Clients stack booking inbox', () => {
+      const nav = makeNav(COACH_TABS);
+      attachPushNavigator(nav);
+      setPushSession(COACH_A);
+      routePushTap('CoachBookingInbox', { sessionId: 's-1' }, 'nb4');
+      expect(nav.navigate).toHaveBeenCalledWith('ClientsStack', { screen: 'CoachBookingInbox', params: { sessionId: 's-1' } });
     });
   });
 

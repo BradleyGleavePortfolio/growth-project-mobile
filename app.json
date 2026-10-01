@@ -126,6 +126,13 @@
       "expo-font",
       "expo-localization",
       [
+        "expo-calendar",
+        {
+          "calendarPermission": "The Growth Project adds the coaching sessions you choose to your calendar, and updates or removes them if a session moves or is cancelled.",
+          "remindersPermission": false
+        }
+      ],
+      [
         "expo-local-authentication",
         {
           "faceIDPermission": "Unlock the app and confirm sensitive actions with Face ID"

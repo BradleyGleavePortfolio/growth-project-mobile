@@ -140,6 +140,11 @@ import { setTutorialRoute } from '../tutorial/tutorialStore';
 import { focusedRoutePath, withInitialLeaf, type NavStateLike } from '../tutorial/navigationFocus';
 import type { TutorialNavTarget } from '../tutorial/tutorialSteps';
 import { logger } from '../utils/logger';
+// S-SCHED — client Calendar tab (featureFlags.clientCalendar, default OFF).
+import CalendarHomeScreen from '../screens/client/calendar/CalendarHomeScreen';
+import CalendarBookScreen from '../screens/client/calendar/CalendarBookScreen';
+import CalendarSessionScreen from '../screens/client/calendar/CalendarSessionScreen';
+import type { CalendarStackParamList } from './calendarRoutes';
 
 const ProtectedWorkoutScreen = withProtectedScreen(WorkoutScreen);
 const ProtectedActiveWorkoutScreen = withProtectedScreen(ActiveWorkoutScreen);
@@ -160,6 +165,11 @@ const ProtectedAIGuideScreen = withProtectedScreen(AIGuideScreen);
 // gating it here would trap an unentitled client in a loop.
 const ProtectedClientBookingRequestScreen = withProtectedScreen(ClientBookingRequestScreen);
 const ProtectedClientUpcomingSessionsScreen = withProtectedScreen(ClientUpcomingSessionsScreen);
+// Scheduling endpoints sit behind ClientEntitlementGuard server-side, so the
+// Calendar screens take the same client-side gate as the booking screens.
+const ProtectedCalendarHomeScreen = withProtectedScreen(CalendarHomeScreen);
+const ProtectedCalendarBookScreen = withProtectedScreen(CalendarBookScreen);
+const ProtectedCalendarSessionScreen = withProtectedScreen(CalendarSessionScreen);
 // ─── Param lists ──────────────────────────────────────────────────────────────
 
 export type HomeStackParamList = {
@@ -180,6 +190,8 @@ export type ClientTabParamList = {
   WorkoutTab: undefined;  // Train
   Log:        undefined;  // Coach (Log+Plan hub — keeps Log screen for food logging)
   MoreTab:    undefined;  // Profile / More
+  // S-SCHED — only mounted when featureFlags.clientCalendar is true.
+  CalendarTab: { screen?: keyof CalendarStackParamList; params?: object } | undefined;
   // v1-5 Community tab — only mounted when featureFlags.communityTab is true.
   CommunityTab: undefined;
 };
@@ -326,6 +338,26 @@ const Tab           = createBottomTabNavigator<ClientTabParamList>();
 const HomeStackNav  = createNativeStackNavigator<HomeStackParamList>();
 const WorkoutStackNav = createNativeStackNavigator<WorkoutStackParamList>();
 const MoreStackNav  = createNativeStackNavigator<MoreStackParamList>();
+const CalendarStackNav = createNativeStackNavigator<CalendarStackParamList>();
+
+function CalendarStackNavigator() {
+  return (
+    <CalendarStackNav.Navigator
+      screenOptions={{
+        headerShown: true,
+        headerTitle: '',
+        headerShadowVisible: false,
+        headerStyle: { backgroundColor: colors.bone },
+        headerTintColor: colors.ink,
+        contentStyle: { backgroundColor: colors.bone },
+      }}
+    >
+      <CalendarStackNav.Screen name="CalendarHome" component={ProtectedCalendarHomeScreen} options={{ headerShown: false }} />
+      <CalendarStackNav.Screen name="CalendarBook" component={ProtectedCalendarBookScreen} />
+      <CalendarStackNav.Screen name="CalendarSession" component={ProtectedCalendarSessionScreen} />
+    </CalendarStackNav.Navigator>
+  );
+}
 
 function HomeStackNavigator() {
   // The Home stack runs headerShown:false, so a headerRight bell here never
@@ -539,10 +571,13 @@ function CommunityTabBarIcon({ color }: { color: string }) {
   );
 }
 
+// Order must match the rendered <Tab.Screen> order (the overlay spotlights
+// tab N of this list).
 const TUTORIAL_TABS = [
   'Home',
   'WorkoutTab',
   'Log',
+  ...(featureFlags.clientCalendar ? ['CalendarTab'] : []),
   'MoreTab',
   ...(featureFlags.communityTab ? ['CommunityTab'] : []),
 ];
@@ -554,7 +589,10 @@ export default function ClientNavigator() {
   const tabNavRef = React.useRef<{ navigate: (name: string, params?: object) => void } | null>(null);
   const onTutorialNavigate = React.useCallback((t: TutorialNavTarget) => {
     try {
-      tabNavRef.current?.navigate(t.tab, t.screen ? { screen: t.screen } : undefined);
+      tabNavRef.current?.navigate(
+        t.tab,
+        t.screen ? { screen: t.screen, ...(t.params ? { params: t.params } : {}) } : undefined,
+      );
     } catch (err) {
       logger.warn('ClientNavigator', 'tutorial navigate failed', err);
     }
@@ -622,6 +660,20 @@ export default function ClientNavigator() {
           ),
         }}
       />
+      {/* S-SCHED Calendar tab — gated by featureFlags.clientCalendar (default
+          OFF). Off: the tab, its routes and deep links do not register. */}
+      {featureFlags.clientCalendar && (
+        <Tab.Screen
+          name="CalendarTab"
+          component={CalendarStackNavigator}
+          options={{
+            tabBarAccessibilityLabel: 'Calendar',
+            tabBarIcon: ({ color }) => (
+              <Ionicons name="calendar-outline" size={24} color={color} />
+            ),
+          }}
+        />
+      )}
       <Tab.Screen
         name="MoreTab"
         component={MoreStackNavigator}

@@ -68,6 +68,13 @@ export const CLIENT_PUSH_ROUTES: Record<string, Resolver> = {
   Deliverables: () => ({ root: 'MoreTab', screen: 'Deliverables' }),
   WorkoutMain: () => ({ root: 'WorkoutTab', screen: 'WorkoutMain' }),
   Log: () => ({ root: 'Log' }),
+  // S-SCHED: booking request / confirm / decline / reschedule / cancel and
+  // the 24h / 1h reminders carry actionScreen CalendarSession + sessionId.
+  // Flag off: the tab does not exist, so land on the notification center.
+  CalendarSession: () =>
+    featureFlags.clientCalendar
+      ? { root: 'CalendarTab', screen: 'CalendarSession' }
+      : { root: 'Home', screen: 'NotificationCenter' },
   CommunityEventDetail: () =>
     featureFlags.communityTab && featureFlags.communityEvents
       ? { root: 'CommunityTab', screen: 'CommunityEventDetail' }
@@ -80,6 +87,8 @@ export const COACH_PUSH_ROUTES: Record<string, Resolver> = {
   NotificationCenter: () => ({ root: 'ClientsStack', screen: 'NotificationCenter' }),
   Notifications: () => ({ root: 'ClientsStack', screen: 'NotificationCenter' }),
   NotificationPreferences: () => ({ root: 'ClientsStack', screen: 'NotificationPreferences' }),
+  // S-SCHED: coach booking pushes open the booking inbox.
+  CoachBookingInbox: () => ({ root: 'ClientsStack', screen: 'CoachBookingInbox' }),
   // AI credit top-ups are not purchasable on hidden iOS builds: a budget
   // push lands on Settings, never on the checkout route (whose gated
   // wrapper would only say "Managed on the web").

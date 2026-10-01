@@ -36,6 +36,14 @@ export default function CoachBookingInboxScreen() {
     () => (data ?? []).filter((s) => s.status === 'requested'),
     [data],
   );
+  // S-SCHED: a light agenda of confirmed upcoming sessions, same data.
+  const confirmed = useMemo<CoachingSession[]>(
+    () =>
+      (data ?? []).filter(
+        (s) => s.status === 'scheduled' || s.status === 'pending_provider',
+      ),
+    [data],
+  );
 
   if (isLoading) {
     return <SkeletonScreen count={5} />;
@@ -150,6 +158,36 @@ export default function CoachBookingInboxScreen() {
           </View>
         );
       })}
+
+      <Text
+        style={[typography.h2, { color: colors.textPrimary, marginTop: spacing.xl }]}
+        accessibilityRole="header"
+      >
+        Upcoming sessions
+      </Text>
+      {confirmed.length === 0 ? (
+        <Text
+          style={[typography.body, { color: colors.textMuted, marginTop: spacing.md }]}
+          testID="coach-agenda-empty"
+        >
+          No confirmed sessions coming up.
+        </Text>
+      ) : (
+        confirmed.map((s) => (
+          <View
+            key={s.id}
+            style={[styles.card, { borderColor: colors.border }]}
+            testID={`coach-agenda-${s.id}`}
+            accessible
+            accessibilityLabel={`${s.title}, ${formatRange(s.start_at, s.end_at)}`}
+          >
+            <Text style={[typography.body, { color: colors.textPrimary }]}>{s.title}</Text>
+            <Text style={[typography.bodySmall, { color: colors.textMuted }]}>
+              {formatRange(s.start_at, s.end_at)}
+            </Text>
+          </View>
+        ))
+      )}
     </ScrollView>
   );
 }

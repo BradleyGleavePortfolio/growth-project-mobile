@@ -31,6 +31,7 @@ const isDev =
 const PUBLIC_ENV = {
   EXPO_PUBLIC_FEATURE_BLOODWORK: process.env.EXPO_PUBLIC_FEATURE_BLOODWORK,
   EXPO_PUBLIC_FF_ADMIN_CONTROL_ROOM: process.env.EXPO_PUBLIC_FF_ADMIN_CONTROL_ROOM,
+  EXPO_PUBLIC_FF_CLIENT_CALENDAR: process.env.EXPO_PUBLIC_FF_CLIENT_CALENDAR,
   EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT: process.env.EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT,
   EXPO_PUBLIC_FF_CLIENT_TUTORIAL: process.env.EXPO_PUBLIC_FF_CLIENT_TUTORIAL,
   EXPO_PUBLIC_FF_COACH_BRIEF: process.env.EXPO_PUBLIC_FF_COACH_BRIEF,
@@ -102,6 +103,21 @@ export const featureFlags = {
    * env: EXPO_PUBLIC_FF_CLIENT_TUTORIAL
    */
   clientTutorial: readFlag('EXPO_PUBLIC_FF_CLIENT_TUTORIAL', false),
+
+  // ─── S-SCHED — client Calendar tab (native scheduling) ───────────────────
+  /**
+   * The client Calendar bottom tab (coach, appointment types, open slots,
+   * booking, upcoming and past sessions, Add to my calendar), the booking
+   * push routes into it, and the two Roman tutorial steps that depend on it
+   * (Calendar intro, welcome call). OFF by default unconditionally; the
+   * kill switch. ON in the clinic and production EAS profiles once the
+   * S-SCHED audits pass. Off means: no tab, no Calendar routes, booking
+   * pushes open the notification center, the tutorial is exactly as before.
+   * Google Calendar sync is unrelated and stays off.
+   *
+   * env: EXPO_PUBLIC_FF_CLIENT_CALENDAR
+   */
+  clientCalendar: readFlag('EXPO_PUBLIC_FF_CLIENT_CALENDAR', false),
 
   // ─── Wave 11 — runtime scaffolding ───────────────────────────────────────
   /** Client Path Copilot — AI summaries + drafts on the client home tab. */
