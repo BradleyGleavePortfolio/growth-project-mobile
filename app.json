@@ -155,7 +155,13 @@
           "healthUpdatePermission": "The Growth Project may write workouts you log to Apple Health so all your activity stays in one place."
         }
       ],
-      "react-native-health-connect"
+      "react-native-health-connect",
+      [
+        "./plugins/withAndroidMinSdk",
+        {
+          "minSdkVersion": 26
+        }
+      ]
     ],
     "extra": {
       "storeListings": {
