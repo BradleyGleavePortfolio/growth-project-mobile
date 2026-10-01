@@ -199,6 +199,17 @@ function validateAppJson(app) {
     );
   }
 
+  // iOS build number must be at or above the native purchase-surface anchor
+  // (src/config/purchaseSurfaces.ts IOS_P2P_ONLY_MIN_NATIVE_BUILD = 6): every
+  // binary from 6 up keeps non-P2P purchases hidden whatever an OTA bundle's
+  // flag says. Audit #304 C1.
+  const IOS_P2P_ONLY_MIN_NATIVE_BUILD = 6;
+  if (!/^\d+$/.test(String(ios.buildNumber || '')) || parseInt(ios.buildNumber, 10) < IOS_P2P_ONLY_MIN_NATIVE_BUILD) {
+    fail(
+      `app.json: expo.ios.buildNumber must be an integer string >= ${IOS_P2P_ONLY_MIN_NATIVE_BUILD} (native purchase-surface anchor), got ${JSON.stringify(ios.buildNumber)}`,
+    );
+  }
+
   // Android
   const android = expo.android || {};
   if (android.package !== EXPECTED.androidPackage) {

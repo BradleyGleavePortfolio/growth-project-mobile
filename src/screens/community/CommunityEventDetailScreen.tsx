@@ -48,6 +48,7 @@ import { useCommunityMe } from '../../hooks/useCommunity';
 import { useCommunityEvent, useRsvpEvent } from '../../hooks/useCommunityEvents';
 import { describeMutationError } from '../../api/communityEventsApi';
 import { safeExternalEventUrl } from '../../utils/safeExternalEventUrl';
+import { externalLinkAllowed } from '../../config/purchaseSurfaces';
 import type {
   CommunityClientRsvpStatus,
   CommunityEventState,
@@ -79,7 +80,9 @@ export default function CommunityEventDetailScreen(): React.ReactElement {
   const onOpenLink = useCallback(() => {
     setLinkError(null);
     const safe = safeExternalEventUrl(event?.external_url);
-    if (!safe) {
+    // Audit #304 B2: on hidden iOS builds a payment / non-attendance link
+    // never opens, even if the button were somehow reached.
+    if (!safe || !externalLinkAllowed(safe)) {
       setLinkError('This link can’t be opened safely.');
       return;
     }
@@ -277,7 +280,7 @@ export default function CommunityEventDetailScreen(): React.ReactElement {
           </Text>
         ) : null}
 
-        {event.external_url ? (
+        {event.external_url && externalLinkAllowed(safeExternalEventUrl(event.external_url)) ? (
           <>
             <HapticPressable
               intent="medium"

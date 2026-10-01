@@ -79,8 +79,13 @@ import DeleteAccountScreen from '../screens/settings/DeleteAccountScreen';
 // Importer v0.3 — coach-facing extension import entry. Registered ONLY behind
 // featureFlags.extensionImport (default OFF); the kill switch removes the route.
 import ImportDataScreen from '../screens/coach/ImportDataScreen';
-// Stream 1 — AI credit-pack checkout (Stripe webview B2B carve-out).
+// Stream 1 — AI credit-pack checkout (Stripe webview). Not a 1:1 service: hidden on iOS by the non-P2P purchase gate.
 import CreditPackCheckoutScreen from '../screens/coach/CreditPackCheckoutScreen';
+import { withNonP2PPurchaseGate } from '../components/purchases/withNonP2PPurchaseGate';
+
+// AI credit packs are not a 1:1 person-to-person service; hidden on iOS
+// builds with EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES (purchaseSurfaces.ts).
+const GatedCreditPackCheckoutScreen = withNonP2PPurchaseGate(CreditPackCheckoutScreen);
 // Roman P4 / ED.3 — First Payment Wow overlay host. Wraps the whole coach tab
 // shell so the §2.6 celebration can overlay any tab when the coach's first
 // payment INSERT lands (flag-gated; MMKV once-only).
@@ -464,10 +469,10 @@ function SettingsStackNavigator() {
       />
       {/* iMessage-grade DM — Apple 1.2 compliance blocked-users management. */}
       <SettingsStack.Screen name="BlockedUsers" component={BlockedUsersScreen} />
-      {/* Stream 1 — AI credit pack checkout (Stripe webview, B2B carve-out). */}
+      {/* Stream 1 — AI credit pack checkout (Stripe webview). Gated on iOS (non-P2P). */}
       <SettingsStack.Screen
         name="CreditPackCheckout"
-        component={CreditPackCheckoutScreen}
+        component={GatedCreditPackCheckoutScreen}
       />
     </SettingsStack.Navigator>
   );

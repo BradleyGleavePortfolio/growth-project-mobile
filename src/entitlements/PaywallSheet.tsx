@@ -11,6 +11,17 @@
  * surface instead of a raw error. If the package list can't be loaded
  * (offline, server down), the "Subscribe" CTA falls back to the full
  * ClientPackages screen.
+ *
+ * iOS (audit #304 B1, App Review 3.1.1): this sheet sits in front of
+ * Roman, Community, Log, Workouts, Messages and other app features. On a
+ * build where `nonP2PPurchasesHidden()` is true it therefore never lists a
+ * package and never shows a Subscribe CTA: a Stripe purchase framed as
+ * "unlock this feature" is exactly what 3.1.1 forbids. It shows
+ * "Your coach manages your access" with a Message-your-coach action instead,
+ * and does not fetch packages at all. Server-provided 402 copy is ignored in
+ * that mode (it may say "subscribe"). The only iOS purchase surface is the
+ * 1:1 coaching screen (ClientPackages, labelled by oneToOneCoachingLabel),
+ * reached deliberately from More, never from a feature gate.
  */
 import React, { useCallback, useEffect, useState } from 'react';
 import {
@@ -25,12 +36,21 @@ import {
 import { clientPaymentsApi, ClientCoachPackage } from '../api/clientPaymentsApi';
 import { useTheme } from '../theme/useTheme';
 import { logger } from '../utils/logger';
+import { nonP2PPurchasesHidden } from '../config/purchaseSurfaces';
+
+export const COACH_MANAGED_TITLE = 'Your coach manages your access';
+export const COACH_MANAGED_BODY =
+  'Your coach sets up what is included in your coaching. Send them a message and they will take it from here.';
 
 export interface PaywallSheetProps {
   visible: boolean;
   message?: string | null;
   onClose: () => void;
   onSubscribe: (packageId?: string) => void;
+  /** Opens the in-app thread with the coach (always free server-side). */
+  onMessageCoach?: () => void;
+  /** Defaults to nonP2PPurchasesHidden(); injectable for tests. */
+  purchasesHidden?: boolean;
 }
 
 type PackagesState =
@@ -39,7 +59,113 @@ type PackagesState =
   | { kind: 'ready'; packages: ClientCoachPackage[] }
   | { kind: 'unavailable'; reason: 'not_configured' | 'error'; message?: string };
 
-export function PaywallSheet({ visible, message, onClose, onSubscribe }: PaywallSheetProps) {
+export function PaywallSheet({
+  visible,
+  message,
+  onClose,
+  onSubscribe,
+  onMessageCoach,
+  purchasesHidden,
+}: PaywallSheetProps) {
+  const hidden = purchasesHidden ?? nonP2PPurchasesHidden();
+  if (hidden) {
+    return (
+      <CoachManagedAccessSheet
+        visible={visible}
+        onClose={onClose}
+        onMessageCoach={onMessageCoach}
+      />
+    );
+  }
+  return (
+    <PackagePaywallSheet
+      visible={visible}
+      message={message}
+      onClose={onClose}
+      onSubscribe={onSubscribe}
+    />
+  );
+}
+
+/**
+ * iOS hidden-purchase variant: no packages, no prices, no Subscribe. One
+ * clear sentence and one explicit action (message the coach).
+ */
+function CoachManagedAccessSheet({
+  visible,
+  onClose,
+  onMessageCoach,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  onMessageCoach?: () => void;
+}) {
+  const { colors, tokens } = useTheme();
+  return (
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <View
+        style={[styles.backdrop, { backgroundColor: colors.cardShadow }]}
+        testID="paywall-sheet"
+      >
+        <View
+          style={[
+            styles.sheet,
+            { backgroundColor: colors.background, borderTopColor: colors.border },
+          ]}
+          testID="paywall-coach-managed"
+        >
+          <ScrollView contentContainerStyle={styles.scroll}>
+            <Text style={[styles.title, { color: colors.textPrimary, ...tokens.typography.h2 }]}>
+              {COACH_MANAGED_TITLE}
+            </Text>
+            <Text style={[styles.message, { color: colors.textSecondary, ...tokens.typography.body }]}>
+              {COACH_MANAGED_BODY}
+            </Text>
+            {onMessageCoach ? (
+              <TouchableOpacity
+                style={[styles.coachCta, { backgroundColor: colors.primary }]}
+                onPress={onMessageCoach}
+                testID="paywall-message-coach"
+                accessibilityRole="button"
+              >
+                <Text
+                  style={[
+                    styles.coachCtaText,
+                    { color: colors.textOnPrimary, ...tokens.typography.bodyMd },
+                  ]}
+                >
+                  Message your coach
+                </Text>
+              </TouchableOpacity>
+            ) : null}
+            <TouchableOpacity
+              style={styles.closeCta}
+              onPress={onClose}
+              testID="paywall-close"
+              accessibilityRole="button"
+            >
+              <Text
+                style={[
+                  styles.closeText,
+                  { color: colors.textSecondary, ...tokens.typography.bodySmall },
+                ]}
+              >
+                Not now
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function PackagePaywallSheet({
+  visible,
+  message,
+  onClose,
+  onSubscribe,
+}: Omit<PaywallSheetProps, 'onMessageCoach' | 'purchasesHidden'>) {
   const theme = useTheme();
   const { colors, tokens } = theme;
   const [pkgState, setPkgState] = useState<PackagesState>({ kind: 'idle' });
@@ -298,6 +424,15 @@ const styles = StyleSheet.create({
   },
   subscribeText: {
     fontWeight: '600',
+  },
+  coachCta: {
+    borderRadius: 4,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  coachCtaText: {
+    fontWeight: '500',
   },
   closeCta: {
     paddingVertical: 12,

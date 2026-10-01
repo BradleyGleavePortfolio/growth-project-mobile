@@ -2,7 +2,7 @@
  * PurchaseUnpackScreen — PR-15B post-checkout unpack moment.
  *
  * What we assert:
- *   1. The screen renders an "Unlocked now" section for status='fired'
+ *   1. The screen renders an "Ready now" section for status='fired'
  *      drops and a "Coming up" section for pending|due drops.
  *   2. Per-asset_type tappable destinations are IDENTICAL to the PR-13
  *      DeliverablesScreen routing table (workout → WorkoutAssignmentDetail,
@@ -151,8 +151,8 @@ describe('PurchaseUnpackScreen — source guards', () => {
     expect(SRC).toMatch(/\brouteForDrop\b/);
   });
 
-  it('renders Unlocked now + Coming up section labels (not Delivered/Upcoming)', () => {
-    expect(SRC).toMatch(/Unlocked now/);
+  it('renders Ready now + Coming up section labels (not Delivered/Upcoming)', () => {
+    expect(SRC).toMatch(/Ready now/);
     expect(SRC).toMatch(/Coming up/);
   });
 
@@ -408,7 +408,7 @@ describe('PurchaseUnpackScreen — RTL mount', () => {
     mockGetPurchaseDrops.mockResolvedValue({ ok: true, data: sampleDrops() });
     const { getByTestId, getByText } = await render(<PurchaseUnpackScreen />);
     await waitFor(() => expect(getByTestId('purchase-unpack-list')).toBeTruthy());
-    expect(getByText('Unlocked now')).toBeTruthy();
+    expect(getByText('Ready now')).toBeTruthy();
     expect(getByText('Coming up')).toBeTruthy();
     // Receipt header is visible with package name + amount.
     expect(getByTestId('purchase-unpack-receipt')).toBeTruthy();

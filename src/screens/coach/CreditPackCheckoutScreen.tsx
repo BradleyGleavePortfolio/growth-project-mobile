@@ -1,10 +1,12 @@
 /**
  * CreditPackCheckoutScreen — Stripe-webview entry point for AI credit packs.
  *
- * Apple App Review Rule 3.1.3(b)/(e) B2B exemption applies (same posture as
- * `BrandedCheckoutWebViewScreen` for coach packages). Coach saaS, sold to a
- * business, billed outside of IAP via a branded Stripe Checkout in a webview.
- * NEVER use IAP for these packs — mega-prompt failure mode.
+ * AI credit packs are NOT a 1:1 person-to-person service. On iOS this route
+ * is replaced by the neutral NonP2PPurchaseHidden state (withNonP2PPurchaseGate
+ * in CoachNavigator, flag EXPO_PUBLIC_FF_IOS_HIDE_NON_P2P_PURCHASES plus the
+ * native-build anchor in config/purchaseSurfaces). On other platforms packs
+ * are billed through Stripe Checkout in a webview. The webview transport is
+ * not an App Review basis for anything.
  *
  * Two-phase flow:
  *   1. Selection phase — render `<PackOptionsRow />` plus a custom-amount

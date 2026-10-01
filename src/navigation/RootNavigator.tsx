@@ -75,6 +75,13 @@ type AuthState =
 import { fragmentToQuery } from './deepLinkUtils';
 import { readUserCache, clearUserCache } from '../lib/userCache';
 import { EntitlementProvider } from '../entitlements/EntitlementProvider';
+import { shouldOfferPackagePrompt } from '../lib/packagePromptGate';
+import {
+  attachPushNavigator,
+  flushPendingPushTap,
+  pushSessionFor,
+  setPushSession,
+} from '../services/pushTapRouter';
 import { isValidPackageShareToken } from '../utils/packageShare';
 import { extractJoinPathCode, writePendingInviteCode } from '../lib/pendingInviteCode';
 
@@ -166,12 +173,8 @@ export const linking: LinkingOptions<Record<string, object | undefined>> = {
       // the URL routable. The screen lives at
       // `src/screens/auth/AuthCallbackScreen.tsx` as an idempotent
       // landing stub — on mount it inspects the auth state and
-      // dispatches to Home (authenticated) or Login (not). The screen
-      // is intentionally not yet mounted under AuthNavigator (which
-      // is owned by another lane); when the auth stack is next
-      // refactored, mount the component under this route name. Until
-      // then the linking entry alone is enough to give the parser a
-      // legitimate target so the URL does not silently fail.
+      // re-bootstraps (authenticated) or resets to Login (not). It is
+      // mounted in AuthNavigator under this route name (clinic C10).
       AuthCallback: 'auth/callback',
       CreateAccount: {
         path: 'join/:invite_code?',
@@ -292,12 +295,24 @@ export function extractAcceptInviteToken(url: string): string | null {
 
 export default function RootNavigator() {
   const [authState, setAuthState] = useState<AuthState>('loading');
+
+  // Push-tap routing: hand the container ref to pushTapRouter once. The
+  // session effect below (after sessionUserId is declared) tells the router
+  // exactly when an app navigator is mounted and for which user, so a held
+  // tap is delivered only into the account and navigator it belongs to.
+  useEffect(() => attachPushNavigator(navigationRef), []);
   // S6-P1: the COMMITTED bootstrap identity that authorizes restoring a
   // user's persisted query cache — token present AND cached user readable AND
   // no pending role selection. `undefined` = bootstrap outcome unknown (gate
   // holds, touches nothing); `null` = committed logged-out; string = user id.
   // Set on every bootstrap outcome, including the failure paths.
   const [sessionUserId, setSessionUserId] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    // Audit #304 (Sol B3, Opus C3): explicit session state, not route names.
+    setPushSession(pushSessionFor(authState, sessionUserId));
+    const t = setTimeout(() => flushPendingPushTap(), 0);
+    return () => clearTimeout(t);
+  }, [authState, sessionUserId]);
   const pendingDay1Target = useRef<WinType | null>(null);
   // Deep-link replay state for the public accept-invite path. When a
   // signed-in user clicks an accept-invite URL we sign them out and then
@@ -721,7 +736,9 @@ export default function RootNavigator() {
             : null;
           if (dismissedAt) {
             const elapsed = Date.now() - new Date(dismissedAt).getTime();
-            if (elapsed > TWENTY_FOUR_HOURS) {
+            if (elapsed > TWENTY_FOUR_HOURS && (await shouldOfferPackagePrompt())) {
+              // Suppressed for active (comp) entitlements and on iOS while
+              // client purchase surfaces are hidden (App Review 3.1).
               setAuthState('package_prompt');
               return;
             }
@@ -783,6 +800,17 @@ export default function RootNavigator() {
     return () => clearTimeout(t);
   }, [authState]);
 
+  // iOS coach-managed gate action (audit #304 B1): the client's thread with
+  // their coach lives on the Home stack and is free server-side.
+  const openCoachThread = () => {
+    try {
+      const nav = navigationRef as unknown as {
+        navigate: (name: string, params?: object) => void;
+      };
+      nav.navigate('Home', { screen: 'Messages' });
+    } catch (err) { logger.warn('RootNavigator', 'non-fatal', err); }
+  };
+
   if (authState === 'loading') {
     return (
       <View style={styles.loadingContainer}>
@@ -801,6 +829,8 @@ export default function RootNavigator() {
   return (
     <NavigationContainer
       ref={navigationRef}
+      onReady={() => flushPendingPushTap()}
+      onStateChange={() => { flushPendingPushTap(); }}
       linking={linking}
       theme={{
         ...DefaultTheme,
@@ -862,6 +892,7 @@ export default function RootNavigator() {
               nav.navigate('MoreTab', { screen: 'ClientPackages' });
             } catch (err) { logger.warn('RootNavigator', 'non-fatal', err); }
           }}
+          onMessageCoach={openCoachThread}
         >
           <ClientNavigator />
           <PackageSelectionSheet
@@ -880,6 +911,7 @@ export default function RootNavigator() {
               nav.navigate('MoreTab', { screen: 'ClientPackages' });
             } catch (err) { logger.warn('RootNavigator', 'non-fatal', err); }
           }}
+          onMessageCoach={openCoachThread}
         >
           <ClientNavigator />
         </EntitlementProvider>

@@ -26,6 +26,7 @@ import { useNavigation, NavigationProp, ParamListBase } from '@react-navigation/
 import HapticPressable from '../../components/HapticPressable';
 import { useCurrentUser } from '../../hooks/useCurrentUser';
 import { aiApi, AIStructuredContext, usersApi } from '../../services/api';
+import { nonP2PPurchasesHidden } from '../../config/purchaseSurfaces';
 
 import { colors as colorTokens, typography } from '../../theme/tokens';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
@@ -204,22 +205,29 @@ export default function MembershipScreen() {
               <Text style={styles.primaryActionLabel}>MESSAGE YOUR COACH</Text>
             </HapticPressable>
 
-            {/* Secondary — open the public site for general inquiries */}
-            <HapticPressable
-              intent="light"
-              style={styles.secondaryAction}
-              onPress={() =>
-                Linking.openURL('https://app.trygrowthproject.com').catch(
-                  () => undefined,
-                )
-              }
-              accessibilityRole="link"
-              accessibilityLabel="Open trygrowthproject.com"
-            >
-              <Text style={styles.secondaryActionLabel}>
-                Open trygrowthproject.com
-              </Text>
-            </HapticPressable>
+            {/* Secondary — open the public site for general inquiries.
+                Audit #304 C2: not rendered on hidden iOS builds. A website
+                link from the membership/billing context reads as steering to
+                an external purchase (Guideline 3.1.1). The permitted 1:1
+                coaching path is the in-app ClientPackages screen. */}
+            {nonP2PPurchasesHidden() ? null : (
+              <HapticPressable
+                testID="membership-website-link"
+                intent="light"
+                style={styles.secondaryAction}
+                onPress={() =>
+                  Linking.openURL('https://app.trygrowthproject.com').catch(
+                    () => undefined,
+                  )
+                }
+                accessibilityRole="link"
+                accessibilityLabel="Open trygrowthproject.com"
+              >
+                <Text style={styles.secondaryActionLabel}>
+                  Open trygrowthproject.com
+                </Text>
+              </HapticPressable>
+            )}
           </>
         )}
       </ScrollView>

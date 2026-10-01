@@ -21,7 +21,8 @@ import {
 
 export interface AIBudgetBannerProps {
   budget: CoachAIBudgetResponse;
-  onBuyCredits: () => void;
+  /** Omitted when credit-pack purchases are hidden (iOS); the CTA is not rendered. */
+  onBuyCredits?: () => void;
   testID?: string;
 }
 
@@ -49,16 +50,18 @@ export function AIBudgetBanner({
           {formatPeriodEnd(budget.period_end)}
         </Text>
       </View>
-      <HapticPressable
-        intent="medium"
-        onPress={onBuyCredits}
-        accessibilityRole="button"
-        accessibilityLabel="Buy AI credits"
-        style={styles.cta}
-        testID="ai-budget-banner-cta"
-      >
-        <Text style={styles.ctaText}>Buy credits</Text>
-      </HapticPressable>
+      {onBuyCredits ? (
+        <HapticPressable
+          intent="medium"
+          onPress={onBuyCredits}
+          accessibilityRole="button"
+          accessibilityLabel="Buy AI credits"
+          style={styles.cta}
+          testID="ai-budget-banner-cta"
+        >
+          <Text style={styles.ctaText}>Buy credits</Text>
+        </HapticPressable>
+      ) : null}
     </View>
   );
 }
