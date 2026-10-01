@@ -33,8 +33,11 @@ export function romanGrantBody(): GrantRomanConsentRequest {
  */
 export async function grantRomanWithRetry(
   grant: (body: GrantRomanConsentRequest) => Promise<AiConsentOutcome>,
+  /** Checked before each attempt: false stops (e.g. another user signed in). */
+  canContinue: () => boolean = () => true,
 ): Promise<RomanGrantResult> {
   for (let attempt = 0; attempt < 2; attempt += 1) {
+    if (!canContinue()) return 'failed';
     let out: AiConsentOutcome;
     try {
       out = await grant(romanGrantBody());
@@ -57,8 +60,13 @@ export type RomanWithdrawResult = 'withdrawn' | 'failed';
  * except 400 / 404 (nothing to retry against). Unconfirmed is reported so
  * the flow can keep box 2 truthful and point to Settings.
  */
-export async function withdrawRomanWithRetry(withdraw: () => Promise<AiConsentOutcome>): Promise<RomanWithdrawResult> {
+export async function withdrawRomanWithRetry(
+  withdraw: () => Promise<AiConsentOutcome>,
+  /** Checked before each attempt: false stops (e.g. another user signed in). */
+  canContinue: () => boolean = () => true,
+): Promise<RomanWithdrawResult> {
   for (let attempt = 0; attempt < 2; attempt += 1) {
+    if (!canContinue()) return 'failed';
     let out: AiConsentOutcome;
     try {
       out = await withdraw();

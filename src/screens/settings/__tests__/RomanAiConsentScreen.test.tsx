@@ -12,7 +12,8 @@ import * as path from 'path';
 import React from 'react';
 import { Alert, AlertButton } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
-import RomanAiConsentScreen, { choiceOf, headOf, RomanAiConsentApi, ROMAN_AI_COPY } from '../RomanAiConsentScreen';
+import RomanAiConsentScreen, { actionNoticeOf, choiceOf, headOf, RomanAiConsentApi, ROMAN_AI_COPY } from '../RomanAiConsentScreen';
+import { captureError } from '../../../services/sentry';
 import type { AiConsentOutcome, AiConsentStatusResponse } from '../../../api/aiConsentApi';
 import { AI_CONSENT_CHECKBOX_LABEL, AI_CONSENT_COPY_SHA256, AI_CONSENT_PARAGRAPH } from '../../../lib/consultation/copy';
 import { logger } from '../../../utils/logger';
@@ -26,6 +27,7 @@ jest.mock('../../../theme/ThemeProvider', () => ({
   }),
 }));
 jest.mock('expo-font', () => ({ isLoaded: () => true, loadAsync: jest.fn() }));
+jest.mock('../../../services/sentry', () => ({ captureError: jest.fn(), setSentryUser: jest.fn() }));
 
 /** A #622 status body. Defaults to "not granted". */
 function status(over: Partial<AiConsentStatusResponse> = {}): AiConsentStatusResponse {
@@ -135,14 +137,50 @@ describe('RomanAiConsentScreen', () => {
     expect(api.grantRoman).not.toHaveBeenCalled();
   });
 
-  it('a load failure says so calmly and offers a retry', async () => {
-    const api = makeApi({ kind: 'error', status: 500 });
+  it('owner rule 13:34: a load failure offline says so and offers a retry; nothing goes to Sentry', async () => {
+    (captureError as jest.Mock).mockClear();
+    const api = makeApi({ kind: 'error', status: null });
     const r = await renderScreen(api);
     await waitFor(() => r.getByTestId('roman-ai-error'));
-    expect(r.getByText(ROMAN_AI_COPY.loadError)).toBeTruthy();
+    expect(r.getByText(ROMAN_AI_COPY.loadOffline)).toBeTruthy();
+    expect(r.getByTestId('roman-ai-retry')).toBeTruthy();
+    expect(captureError).not.toHaveBeenCalled();
   });
 
-  it('a failed or unavailable action keeps the state and shows a notice', async () => {
+  it('owner rule 13:34: an unexpected load failure shows a short reference and support, and goes to Sentry', async () => {
+    (captureError as jest.Mock).mockClear();
+    const api = makeApi({ kind: 'error', status: 500, requestId: '3f9c2a71-0000-4000-8000-000000000000' });
+    const r = await renderScreen(api);
+    await waitFor(() => r.getByTestId('roman-ai-error'));
+    const text = ROMAN_AI_COPY.loadServer('3f9c2a71');
+    expect(r.getByText(text)).toBeTruthy();
+    expect(text).toMatch(/reference 3f9c2a71/);
+    expect(text).toMatch(/Bradley@Bradleytgpcoaching\.com/);
+    expect(captureError).toHaveBeenCalledTimes(1);
+    expect((captureError as jest.Mock).mock.calls[0][1]).toMatchObject({ status: 500, request_id: '3f9c2a71-0000-4000-8000-000000000000' });
+  });
+
+  it('owner rule 13:34: every action failure says what happened and what to do; none is generic', () => {
+    const cases: Array<[Extract<AiConsentOutcome, { kind: 'error' }>, string]> = [
+      [{ kind: 'error', status: null }, ROMAN_AI_COPY.actionOffline],
+      [{ kind: 'error', status: 429 }, ROMAN_AI_COPY.actionBusy],
+      [{ kind: 'error', status: 409, code: 'AI_CONSENT_CONFLICT' }, ROMAN_AI_COPY.actionConflict],
+      [{ kind: 'error', status: 500, requestId: 'abcdef12-zz' }, ROMAN_AI_COPY.actionServer('abcdef12')],
+      [{ kind: 'error', status: 400 }, ROMAN_AI_COPY.actionServer(null)],
+    ];
+    for (const [out, expected] of cases) {
+      const msg = actionNoticeOf(out, 'withdraw');
+      expect(msg).toBe(expected);
+      expect(msg).not.toMatch(/went wrong|did not go through/i);
+      expect(msg).not.toMatch(/^Please try again\.?$/);
+    }
+    for (const v of Object.values(ROMAN_AI_COPY)) {
+      const text = typeof v === 'function' ? v('abc12345') : v;
+      expect(text).not.toMatch(/!|went wrong/);
+    }
+  });
+
+  it('a failed or unavailable action re-reads the state, keeps it, and shows a specific notice', async () => {
     const api = makeApi(
       { kind: 'ok', status: ALLOWED },
       { withdrawRoman: jest.fn(async (): Promise<AiConsentOutcome> => ({ kind: 'error', status: 500 })) },
@@ -152,8 +190,9 @@ describe('RomanAiConsentScreen', () => {
     await fireEvent.press(r.getByTestId('roman-ai-withdraw'));
     confirmLastAlert('Withdraw');
     await waitFor(() => r.getByTestId('roman-ai-notice'));
-    expect(r.getByTestId('roman-ai-notice').props.children).toBe(ROMAN_AI_COPY.actionError);
+    expect(r.getByTestId('roman-ai-notice').props.children).toBe(ROMAN_AI_COPY.actionServer(null));
     expect(r.getByTestId('roman-ai-allowed')).toBeTruthy();
+    expect(api.getStatus).toHaveBeenCalledTimes(2);
 
     api.withdrawRoman.mockResolvedValueOnce({ kind: 'unavailable' });
     await fireEvent.press(r.getByTestId('roman-ai-withdraw'));
@@ -250,7 +289,8 @@ describe('RomanAiConsentScreen', () => {
   });
 
   it('copy is plain: no exclamation marks, no medical claims', () => {
-    for (const t of Object.values(ROMAN_AI_COPY)) {
+    for (const v of Object.values(ROMAN_AI_COPY)) {
+      const t = typeof v === 'function' ? v('abc12345') : v;
       expect(t).not.toMatch(/!/);
       expect(t).not.toMatch(/diagnos|treat|cure/i);
     }

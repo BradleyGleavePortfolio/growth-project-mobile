@@ -63,7 +63,7 @@ export function makeApi(overrides: Partial<Record<keyof ConsultationApi, jest.Mo
 export async function seedLocal(
   answers: Answers,
   screenId: string,
-  opts: { userId?: string; dirty?: boolean; editedAt?: string; synced?: { saved_at: string | null; revision: number | null } | null; aiRoman?: boolean } = {},
+  opts: { userId?: string; dirty?: boolean; editedAt?: string; synced?: { saved_at: string | null; revision: number | null } | null; aiRoman?: boolean; aiWant?: boolean } = {},
 ) {
   await writeLocalState(opts.userId ?? 'u1', {
     answers,
@@ -72,11 +72,13 @@ export async function seedLocal(
     editedAt: opts.editedAt ?? '2026-09-30T19:00:00.000Z',
     synced: opts.synced ?? null,
     ...(opts.aiRoman === undefined ? {} : { aiRoman: opts.aiRoman }),
+    ...(opts.aiWant === undefined ? {} : { aiWant: opts.aiWant }),
   });
 }
 
 /** Clear AsyncStorage and the SecureStore mock between tests. */
 export async function resetStores() {
   await AsyncStorage.clear();
-  (SecureStore as unknown as { __store?: Map<string, string> }).__store?.clear();
+  const store: unknown = Reflect.get(SecureStore, '__store');
+  if (store instanceof Map) store.clear();
 }

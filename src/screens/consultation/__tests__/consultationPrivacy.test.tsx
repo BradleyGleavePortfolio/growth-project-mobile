@@ -20,7 +20,8 @@ import { Alert, AlertButton, Linking, Text, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
-import ConsultationFlow, { ConsultationApi } from '../ConsultationFlow';
+import ConsultationFlow, { AI_STATUS_WAIT_MS, ConsultationApi } from '../ConsultationFlow';
+import type { AiConsentOutcome } from '../../../api/aiConsentApi';
 import type { CompleteOutcome } from '../../../api/consultationApi';
 import { answersBeforeSafety, fullAnswers, NOW } from '../../../lib/consultation/__fixtures__/consultFixtures';
 import { AI_ALLOWED, aiStatus, makeApi, resetStores, seedLocal } from '../../../lib/consultation/__fixtures__/flowHarness';
@@ -37,7 +38,7 @@ import {
   writeLocalState,
 } from '../../../lib/consultation/storage';
 import { signOut } from '../../../services/authActions';
-import { AI_CONSENT_COPY_SHA256, AI_WITHDRAW_NOTICE, CONSENT_COPY_SHA256, CONSULT_CONSENT_COPY_VERSION, SUPPORT_EMAIL } from '../../../lib/consultation/copy';
+import { AI_CONSENT_COPY_SHA256, AI_GRANT_NOTICE, AI_WITHDRAW_NOTICE, CONSENT_COPY_SHA256, CONSULT_CONSENT_COPY_VERSION, SUPPORT_EMAIL } from '../../../lib/consultation/copy';
 
 jest.mock('../../../services/api', () => ({
   __esModule: true,
@@ -46,7 +47,7 @@ jest.mock('../../../services/api', () => ({
   profileApi: { get: jest.fn(async () => ({ data: {} })) },
 }));
 jest.mock('../../../hooks/useReducedMotion', () => ({ useReducedMotion: () => true }));
-jest.mock('../../../services/sentry', () => ({ setSentryUser: jest.fn() }));
+jest.mock('../../../services/sentry', () => ({ setSentryUser: jest.fn(), captureError: jest.fn() }));
 jest.mock('../../../lib/analytics', () => ({ reset: jest.fn() }));
 jest.mock('../../../lib/userCache', () => ({
   readUserCacheSync: jest.fn(() => ({ id: 'u1' })),
@@ -610,7 +611,10 @@ describe('B-310-1 the box 2 grant waits for the agreement to land', () => {
     await tick();
     await fireEvent.press(r.getByTestId('consult-back'));
     await waitFor(() => r.getByTestId('consult-screen-P0'));
-    // Not confirmed, so box 2 is shown unticked; leaving it so means no.
+    // B-310-3: box 2 shows the client's latest choice (yes, still waiting);
+    // unticking it is the newer choice and cancels the held grant.
+    expect(aiBox(r)).toBe(true);
+    await fireEvent.press(r.getByTestId('consent-ai-checkbox'));
     expect(aiBox(r)).toBe(false);
     await fireEvent.press(r.getByTestId('consult-continue'));
     await waitFor(() => r.getByTestId('consult-screen-G1'));
@@ -672,16 +676,28 @@ describe('B-310-2 box 2 on P0 shows only confirmed results', () => {
     await waitFor(() => expect(aiBox(r)).toBe(false));
   });
 
-  it('a late GET never overrides a box the client has just tapped', async () => {
-    let answer: (v: unknown) => void = () => undefined;
-    const api = makeApi({ getRomanConsent: jest.fn(() => new Promise((res) => { answer = res; })) });
-    await seedLocal({}, 'P0');
+  it('a late GET never overrides a box the client has just tapped; the latest choice is applied (B-310-3)', async () => {
+    let answer: (v: AiConsentOutcome) => void = () => undefined;
+    const api = makeApi({ getRomanConsent: jest.fn(() => new Promise<AiConsentOutcome>((res) => { answer = res; })) });
+    // This phone last saw "not allowed"; a grant was made elsewhere since.
+    await seedLocal({ P0: fullAnswers().P0 }, 'P0', { aiRoman: false });
     const r = await renderFlow(api);
     await waitFor(() => r.getByTestId('consult-screen-P0'));
     await fireEvent.press(r.getByTestId('consent-ai-checkbox'));
     await fireEvent.press(r.getByTestId('consent-ai-checkbox'));
+    await fireEvent.press(r.getByTestId('consult-continue'));
+    await waitFor(() => r.getByTestId('consult-screen-G1'));
     await act(async () => answer({ kind: 'ok', status: AI_ALLOWED }));
+    await waitFor(() => expect(api.withdrawRomanConsent).toHaveBeenCalledTimes(1));
+    await tick();
+    expect(api.grantRomanConsent).not.toHaveBeenCalled();
+    expect(api.withdrawRomanConsent).toHaveBeenCalledTimes(1);
+    await fireEvent.press(r.getByTestId('consult-back'));
+    await waitFor(() => r.getByTestId('consult-screen-P0'));
     expect(aiBox(r)).toBe(false);
+    const saved = await readLocalState('u1', NOW);
+    expect(saved?.aiRoman).toBe(false);
+    expect(saved?.aiWant).toBeUndefined();
   });
 
   it('unticking on a return: DELETE with exactly one retry; still unconfirmed shows a calm notice, box 2 stays ticked', async () => {
@@ -729,6 +745,165 @@ describe('B-310-2 box 2 on P0 shows only confirmed results', () => {
     expect(aiBox(r)).toBe(false);
     expect((await readLocalState('u1', NOW))?.aiRoman).toBe(false);
     alert.mockRestore();
+  });
+});
+
+describe('B-310-3 / C-310-6 / C-310-7 the latest box 2 choice wins', () => {
+  it('B-310-3: a grant in flight when the client unticks on a return: exactly one DELETE after it; unticked from then on', async () => {
+    let releaseGrant: (v: AiConsentOutcome) => void = () => undefined;
+    const grantRomanConsent = jest.fn(() => new Promise<AiConsentOutcome>((res) => { releaseGrant = res; }));
+    const api = makeApi({ grantRomanConsent });
+    const r = await continueWithBothBoxes(api);
+    await waitFor(() => expect(grantRomanConsent).toHaveBeenCalledTimes(1));
+    await fireEvent.press(r.getByTestId('consult-back'));
+    await waitFor(() => r.getByTestId('consult-screen-P0'));
+    expect(aiBox(r)).toBe(true);
+    await fireEvent.press(r.getByTestId('consent-ai-checkbox'));
+    await fireEvent.press(r.getByTestId('consult-continue'));
+    await waitFor(() => r.getByTestId('consult-screen-G1'));
+    expect(api.withdrawRomanConsent).not.toHaveBeenCalled();
+    await act(async () => releaseGrant({ kind: 'ok', status: AI_ALLOWED }));
+    await waitFor(() => expect(api.withdrawRomanConsent).toHaveBeenCalledTimes(1));
+    await tick();
+    await tick();
+    expect(api.withdrawRomanConsent).toHaveBeenCalledTimes(1);
+    expect(grantRomanConsent).toHaveBeenCalledTimes(1);
+    expect(grantRomanConsent.mock.invocationCallOrder[0]).toBeLessThan(api.withdrawRomanConsent.mock.invocationCallOrder[0]);
+    const saved = await readLocalState('u1', NOW);
+    expect(saved?.aiRoman).toBe(false);
+    expect(saved?.aiWant).toBeUndefined();
+    await fireEvent.press(r.getByTestId('consult-back'));
+    await waitFor(() => r.getByTestId('consult-screen-P0'));
+    expect(aiBox(r)).toBe(false);
+  });
+
+  it('B-310-3: the latest choice survives a restart: unticked, closed before the DELETE landed, sent on the next launch', async () => {
+    const withdrawRomanConsent = jest
+      .fn<Promise<AiConsentOutcome>, []>()
+      .mockImplementationOnce(() => new Promise<AiConsentOutcome>(() => undefined))
+      .mockResolvedValue({ kind: 'ok', status: aiStatus({ state: 'withdrawn', version: 'client-ai-v3' }) });
+    const api = makeApi({ withdrawRomanConsent });
+    await seedLocal({ P0: fullAnswers().P0 }, 'G1', { aiRoman: true });
+    const r = await renderFlow(api);
+    await waitFor(() => r.getByTestId('consult-screen-G1'));
+    await fireEvent.press(r.getByTestId('consult-back'));
+    await waitFor(() => r.getByTestId('consult-screen-P0'));
+    await fireEvent.press(r.getByTestId('consent-ai-checkbox'));
+    await fireEvent.press(r.getByTestId('consult-continue'));
+    await waitFor(() => r.getByTestId('consult-screen-G1'));
+    await waitFor(() => expect(withdrawRomanConsent).toHaveBeenCalledTimes(1));
+    await tick();
+    expect((await readLocalState('u1', NOW))?.aiWant).toBe(false);
+    await restartFlow(r, api);
+    await waitFor(() => expect(withdrawRomanConsent).toHaveBeenCalledTimes(2));
+    await tick();
+    await tick();
+    const saved = await readLocalState('u1', NOW);
+    expect(saved?.aiRoman).toBe(false);
+    expect(saved?.aiWant).toBeUndefined();
+    expect(api.grantRomanConsent).not.toHaveBeenCalled();
+  });
+
+  it('C-310-6: a grant that could not be saved says so calmly and points to Settings', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const api = makeApi({ grantRomanConsent: jest.fn(async (): Promise<AiConsentOutcome> => ({ kind: 'error', status: 500 })) });
+    const r = await continueWithBothBoxes(api);
+    await waitFor(() => expect(alert).toHaveBeenCalledWith(AI_GRANT_NOTICE.title, AI_GRANT_NOTICE.body));
+    expect(api.grantRomanConsent).toHaveBeenCalledTimes(2);
+    expect(AI_GRANT_NOTICE.body).toMatch(/not allowed yet.*Settings > Privacy > Roman and AI\.$/);
+    expect(AI_GRANT_NOTICE.body).not.toMatch(/!|went wrong/);
+    // Box 2 falls back to the confirmed state.
+    await fireEvent.press(r.getByTestId('consult-back'));
+    await waitFor(() => r.getByTestId('consult-screen-P0'));
+    expect(aiBox(r)).toBe(false);
+    alert.mockRestore();
+  });
+
+  it.each([404, 503] as const)('C-310-6: ledger %s stays silent (D2: skipped, left for Settings)', async (status) => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const api = makeApi({ grantRomanConsent: jest.fn(async (): Promise<AiConsentOutcome> => ({ kind: 'unavailable', status })) });
+    await continueWithBothBoxes(api);
+    await waitFor(() => expect(api.grantRomanConsent).toHaveBeenCalledTimes(1));
+    await tick();
+    await tick();
+    expect(alert).not.toHaveBeenCalled();
+    alert.mockRestore();
+  });
+
+  it('C-310-7: with nothing known on this phone, box 2 waits for GET /me/ai-consent; taps do nothing until it answers', async () => {
+    let answer: (v: AiConsentOutcome) => void = () => undefined;
+    const api = makeApi({ getRomanConsent: jest.fn(() => new Promise<AiConsentOutcome>((res) => { answer = res; })) });
+    await seedLocal({}, 'P0');
+    const r = await renderFlow(api);
+    await waitFor(() => r.getByTestId('consult-screen-P0'));
+    const box = () => r.getByTestId('consent-ai-checkbox').props.accessibilityState;
+    expect(box()).toMatchObject({ checked: false, disabled: true, busy: true });
+    await fireEvent.press(r.getByTestId('consent-ai-checkbox'));
+    expect(box().checked).toBe(false);
+    // Box 1 is never held up.
+    await fireEvent.press(r.getByTestId('consent-checkbox'));
+    expect(r.getByTestId('consent-checkbox').props.accessibilityState?.checked).toBe(true);
+    await act(async () => answer({ kind: 'ok', status: AI_ALLOWED }));
+    await waitFor(() => expect(box()).toMatchObject({ checked: true }));
+    expect(box().disabled).toBeFalsy();
+  });
+
+  it('C-310-7: if GET /me/ai-consent does not answer, box 2 becomes tappable after the wait', async () => {
+    const api = makeApi({ getRomanConsent: jest.fn(() => new Promise<AiConsentOutcome>(() => undefined)) });
+    await seedLocal({}, 'P0');
+    const r = await renderFlow(api);
+    await waitFor(() => r.getByTestId('consult-screen-P0'));
+    expect(r.getByTestId('consent-ai-checkbox').props.accessibilityState?.disabled).toBe(true);
+    await act(async () => {
+      await new Promise((res) => setTimeout(res, AI_STATUS_WAIT_MS + 50));
+    });
+    expect(r.getByTestId('consent-ai-checkbox').props.accessibilityState?.disabled).toBeFalsy();
+    await fireEvent.press(r.getByTestId('consent-ai-checkbox'));
+    expect(aiBox(r)).toBe(true);
+  }, 15000);
+
+  it('C-310-7: a phone that already knows the choice shows box 2 tappable at once', async () => {
+    const api = makeApi({ getRomanConsent: jest.fn(() => new Promise<AiConsentOutcome>(() => undefined)) });
+    await seedLocal({ P0: fullAnswers().P0 }, 'P0', { aiRoman: true });
+    const r = await renderFlow(api);
+    await waitFor(() => r.getByTestId('consult-screen-P0'));
+    expect(r.getByTestId('consent-ai-checkbox').props.accessibilityState).toMatchObject({ checked: true });
+    expect(r.getByTestId('consent-ai-checkbox').props.accessibilityState?.disabled).toBeFalsy();
+  });
+
+  it.each([
+    ['the same user is still signed in', 'u1', 2],
+    ['a different user signed in', 'u2', 1],
+    ['nobody is signed in', null, 1],
+  ] as const)('after the hand-off, a queued box 2 step still runs only when %s', async (_label, sessionUser, grants) => {
+    let releaseGrant: (v: AiConsentOutcome) => void = () => undefined;
+    const grantRomanConsent = jest
+      .fn<Promise<AiConsentOutcome>, []>()
+      .mockImplementationOnce(() => new Promise<AiConsentOutcome>((res) => { releaseGrant = res; }))
+      .mockResolvedValue({ kind: 'ok', status: AI_ALLOWED });
+    const sessionUserId = jest.fn(() => sessionUser);
+    const api = { ...makeApi({ grantRomanConsent }), sessionUserId };
+    const onFinished = jest.fn();
+    // The client chose yes on P0; the grant waits for the save at Prepare.
+    await seedLocal(fullAnswers(), 'SUM', { aiWant: true });
+    const r = await renderFlow(api, { onFinished });
+    await waitFor(() => r.getByTestId('consult-screen-SUM'));
+    await fireEvent.press(r.getByTestId('consult-prepare'));
+    await waitFor(() => expect(grantRomanConsent).toHaveBeenCalledTimes(1));
+    await waitFor(() => r.getByTestId('consult-screen-MACRO'));
+    await fireEvent.press(r.getByTestId('consult-macro-next'));
+    await waitFor(() => r.getByTestId('consult-screen-PLAN'));
+    await fireEvent.press(r.getByTestId('consult-finish'));
+    await waitFor(() => expect(onFinished).toHaveBeenCalled());
+    // The app replaces the consultation with the client app.
+    await r.rerender(<View testID="client-app" />);
+    expect(r.queryByTestId('consult-screen-PLAN')).toBeNull();
+    // The first attempt fails after the flow has gone; its one retry is sent
+    // only while the same client is signed in.
+    await act(async () => releaseGrant({ kind: 'error', status: null }));
+    await tick();
+    await tick();
+    expect(grantRomanConsent).toHaveBeenCalledTimes(grants);
   });
 });
 
@@ -799,7 +974,14 @@ describe('C-310-1 / C-310-3 completion guard and the way out of problem screens'
 // ── A-04 ─────────────────────────────────────────────────────────────────────
 
 describe('A-04 encrypted, bounded, purged draft', () => {
-  const secure = SecureStore as unknown as { __store: Map<string, string> };
+  /** The SecureStore mock's backing map (jest setup). */
+  const secure = {
+    get __store(): Map<string, string> {
+      const store: unknown = Reflect.get(SecureStore, '__store');
+      if (!(store instanceof Map)) throw new Error('SecureStore mock has no __store');
+      return store;
+    },
+  };
   const sensitive = { P4: 'yes', P4_note: 'Sensitive screening note' };
 
   it('the draft is stored only in SecureStore, in values under 2 KB, never in AsyncStorage', async () => {

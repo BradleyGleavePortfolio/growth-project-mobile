@@ -346,5 +346,16 @@ export const AI_WITHDRAW_NOTICE = {
   body: 'I could not change your Roman and AI choice just now, so it is still allowed. You can change it at any time in Settings > Privacy > Roman and AI.',
 } as const;
 
+/**
+ * Shown when a ticked box 2 could not be recorded on the ledger after one
+ * retry (Opus C-310-6). Never shown while the ledger is not deployed or
+ * switched off (404 / 503: skipped silently by contract). Box 2 shows
+ * unticked again, because nothing was recorded.
+ */
+export const AI_GRANT_NOTICE = {
+  title: 'Roman and AI',
+  body: 'I could not save your Roman and AI choice just now, so it is not allowed yet. Your training is not affected. You can allow it at any time in Settings > Privacy > Roman and AI.',
+} as const;
+
 /** Support contact on the problem and paused screens (owner-approved, operator C-310-3). */
 export const SUPPORT_EMAIL = 'Bradley@Bradleytgpcoaching.com';

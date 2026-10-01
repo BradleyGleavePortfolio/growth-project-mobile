@@ -62,3 +62,25 @@ export function extractRequestId(err: unknown): string | null {
   }
   return headerValue((response as { headers?: unknown }).headers, 'x-request-id');
 }
+
+/**
+ * The reference to show next to an unexpected failure (owner rule
+ * 2026-10-01 13:34: unknown errors show a short reference and a support
+ * path). The server's correlation id when it sent one; otherwise the
+ * `X-Request-Id` this app sent with that request, which the backend adopts
+ * for its logs and the Sentry report carries. Null when neither exists.
+ */
+export function supportReferenceOf(err: unknown): string | null {
+  const fromServer = extractRequestId(err);
+  if (fromServer) return fromServer;
+  if (!err || typeof err !== 'object') return null;
+  const config = (err as { config?: { headers?: unknown } }).config;
+  return headerValue(config?.headers, REQUEST_ID_HEADER.toLowerCase());
+}
+
+/** The short form shown to people (first 8 characters); support can search by prefix. */
+export function shortReference(ref: string | null | undefined): string | null {
+  if (typeof ref !== 'string') return null;
+  const clean = ref.replace(/[^A-Za-z0-9-]/g, '');
+  return clean ? clean.slice(0, 8) : null;
+}

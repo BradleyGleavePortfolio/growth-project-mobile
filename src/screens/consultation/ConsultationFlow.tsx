@@ -20,8 +20,14 @@
  *   - Box 2, when ticked, is recorded after the P0 save by
  *     POST /me/ai-consent/roman (R2a). Non-blocking: it never holds the
  *     flow, is retried once, is skipped silently while the ledger is not
- *     deployed (404 / 503), and is otherwise left for Settings > Privacy.
- *     It is never required for completion.
+ *     deployed (404 / 503), and is otherwise left for Settings > Privacy
+ *     with a calm notice. It is never required for completion.
+ *   - Box 2 follows the client's LATEST explicit choice (Sol / Opus
+ *     B-310-3): every choice made on P0 is kept (also in the draft) and
+ *     carried out through one serialized chain that decides each request
+ *     only after the earlier ones settled, so an untick made while a grant
+ *     is in flight, or before GET /me/ai-consent answers, always ends with
+ *     the grant withdrawn.
  *   - A stored P0 is honoured only when it matches this build's copy
  *     version; stale or malformed records send the client back to P0 with
  *     both boxes unticked. The app never ticks a box on its own.
@@ -51,7 +57,7 @@ import {
 } from '../../api/consultationApi';
 import { aiConsentApi, isLiveGrant } from '../../api/aiConsentApi';
 import { grantRomanWithRetry, withdrawRomanWithRetry } from '../../lib/consultation/aiConsent';
-import { AI_WITHDRAW_NOTICE } from '../../lib/consultation/copy';
+import { AI_GRANT_NOTICE, AI_WITHDRAW_NOTICE } from '../../lib/consultation/copy';
 import { AI_CONSENT_VERSION } from '../../lib/consultation/consentVersion';
 import { CONSULTATION_VERSION, screenById } from '../../lib/consultation/definitions';
 import {
@@ -70,10 +76,22 @@ import {
   previousScreenId,
   resumeScreenId,
 } from '../../lib/consultation/engine';
-import { aiRomanOf, DraftHandle, openDraft, purgeConsultationDraft, readLocalState, SyncedMarker, writeDraft } from '../../lib/consultation/storage';
+import {
+  aiRomanOf,
+  aiWantOf,
+  DraftHandle,
+  openDraft,
+  purgeConsultationDraft,
+  readLocalState,
+  SyncedMarker,
+  writeDraft,
+} from '../../lib/consultation/storage';
+import { readUserCacheSync } from '../../lib/userCache';
 import { reconcileResume } from '../../lib/consultation/resume';
 import type { AnswerValue, Answers, ChapterId } from '../../lib/consultation/types';
 import { logger } from '../../utils/logger';
+import { shortReference, supportReferenceOf } from '../../utils/correlation';
+import { reportUnexpected, UnexpectedFailure } from '../../lib/consultation/report';
 import { startClientTutorial } from '../../tutorial/tutorialStore';
 import QuestionScreen from './QuestionScreen';
 import { AnalyticsExcluded, palette, STEP_MS } from './components';
@@ -93,6 +111,11 @@ export type ConsultationApi = Pick<typeof consultationApi, 'save' | 'getState' |
   grantRomanConsent: typeof aiConsentApi.grantRoman;
   /** Box 2 unticked again on a later visit to P0: DELETE /me/ai-consent/roman. */
   withdrawRomanConsent: typeof aiConsentApi.withdrawRoman;
+  /**
+   * The signed-in user right now. Box 2 requests still queued when the
+   * client finishes go out only while this is still the same user.
+   */
+  sessionUserId?: () => string | null;
 };
 
 const defaultApi: ConsultationApi = {
@@ -102,7 +125,16 @@ const defaultApi: ConsultationApi = {
   getRomanConsent: aiConsentApi.getStatus,
   grantRomanConsent: aiConsentApi.grantRoman,
   withdrawRomanConsent: aiConsentApi.withdrawRoman,
+  sessionUserId: () => readUserCacheSync()?.id ?? null,
 };
+
+/**
+ * How long box 2 waits for GET /me/ai-consent before it becomes tappable
+ * when this device knows nothing yet (Opus C-310-7). Bounded so a slow read
+ * never holds the optional box for the whole API timeout; a later answer is
+ * still reconciled with whatever the client chose.
+ */
+export const AI_STATUS_WAIT_MS = 3000;
 
 export interface ConsultationFlowProps {
   userId: string | null;
@@ -139,6 +171,13 @@ interface SaveQueue {
   closed: boolean;
 }
 
+/** The machine `code` of a failed request's body, when it has one. */
+function machineCodeOf(err: unknown): string | null {
+  const data = (err as { response?: { data?: unknown } } | null)?.response?.data;
+  const code = data && typeof data === 'object' ? (data as Record<string, unknown>).code : undefined;
+  return typeof code === 'string' ? code : null;
+}
+
 function newQueue(): SaveQueue {
   return { tail: Promise.resolve<SaveOutcome>('ok'), waiting: null, pending: null, closed: false };
 }
@@ -159,6 +198,10 @@ export default function ConsultationFlow({
   const [answers, setAnswersState] = useState<Answers>({});
   const [result, setResult] = useState<CompleteOnboardingResponse | null>(null);
   const [problem, setProblem] = useState<CompleteProblem>('unknown');
+  /** Short support reference shown with an unexpected failure (owner rule 13:34). */
+  const [problemRef, setProblemRef] = useState<string | null>(null);
+  /** The last failed intake save: status, machine code and support reference. */
+  const lastSaveFailure = useRef<UnexpectedFailure>({ status: null });
   const [consentError, setConsentError] = useState<ConsentError>(null);
   const [consentNonce, setConsentNonce] = useState(0);
   const answersRef = useRef<Answers>({});
@@ -179,18 +222,32 @@ export default function ConsultationFlow({
    */
   const consentOnServer = useRef(false);
   /**
-   * Box 2 (Opus B-310-1 / B-310-2). `aiConfirmed` is the ledger state as
-   * last CONFIRMED (a grant or withdrawal that returned ok, or GET
-   * /me/ai-consent), persisted in the draft; null when unknown. P0 shows
-   * only this. `aiPendingGrant`: the client ticked box 2 but the intake save
-   * carrying box 1 has not landed yet, so the grant waits for the next save
-   * that does. `aiChain` keeps grant / withdraw requests in order.
+   * Box 2 (Opus B-310-1 / B-310-2, Sol / Opus B-310-3).
+   *   - `aiConfirmed`: the ledger state as last CONFIRMED (a grant or
+   *     withdrawal that returned ok, or GET /me/ai-consent); null when
+   *     unknown. Persisted in the draft (`aiRoman`).
+   *   - `aiWant`: the client's latest explicit choice on P0 that the ledger
+   *     has not confirmed yet; null when there is none. Persisted in the
+   *     draft (`aiWant`), so it survives a restart.
+   *   - `aiHeld`: a wanted grant waits for an intake save that landed box 1
+   *     (B-310-1). Withdrawals never wait.
+   *   - `aiChain`: one request at a time; each step decides what to send
+   *     only when it runs, from the latest `aiWant` and `aiConfirmed`.
+   * P0 shows `aiWant` when there is one, otherwise `aiConfirmed`.
    */
   const aiConfirmed = useRef<boolean | null>(null);
-  const [aiConfirmedShown, setAiConfirmedShown] = useState(false);
-  const aiPendingGrant = useRef(false);
+  /** Whether `aiConfirmed` came from the server on this load (not only the draft). */
+  const aiFresh = useRef(false);
+  const aiWant = useRef<boolean | null>(null);
+  const [aiShown, setAiShown] = useState(false);
+  /** False while nothing is known on this device and GET has not answered (C-310-7). */
+  const [aiReady, setAiReady] = useState(false);
+  const aiReadyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const aiHeld = useRef(false);
   const aiRequests = useRef(0);
   const aiChain = useRef<Promise<void>>(Promise.resolve());
+  /** The load generation handed off at finish; its queued box 2 steps may still run. */
+  const handedOff = useRef<number | null>(null);
   const onSaveOk = useRef<() => void>(() => undefined);
   const lastPersistedId = useRef<string>('W1');
   /** One "Prepare my plan" at a time (Opus C-310-1). */
@@ -222,6 +279,7 @@ export default function ConsultationFlow({
         dirty: dirty.current,
         synced: synced.current,
         ...(aiConfirmed.current === null ? {} : { aiRoman: aiConfirmed.current }),
+        ...(aiWant.current === null ? {} : { aiWant: aiWant.current }),
       });
     },
     [],
@@ -257,11 +315,19 @@ export default function ConsultationFlow({
     [nowFn, persistLocal, setAnswers, setPhaseBoth],
   );
 
-  /** Remove the stored P0 and show the agreement unticked. */
+  /**
+   * Remove the stored P0 and show the agreement unticked. A box 2 grant
+   * still waiting on that agreement is dropped with it (the client chooses
+   * again); a wanted withdrawal stays, because withdrawing is always allowed.
+   */
   const dropConsent = useCallback(
     (error: ConsentError = null) => {
       consentOnServer.current = false;
       p0Handled.current = false;
+      if (aiWant.current === true) {
+        aiHeld.current = false;
+        setAiWant(null);
+      }
       const next = { ...answersRef.current };
       delete next.P0;
       setAnswers(next);
@@ -269,6 +335,8 @@ export default function ConsultationFlow({
       setConsentNonce((n) => n + 1);
       return next;
     },
+    // setAiWant reads refs and setters only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [setAnswers],
   );
 
@@ -342,6 +410,11 @@ export default function ConsultationFlow({
             return backToAgreement(p0Only ? 'version_mismatch' : null);
           }
           if (status === 409 && conflictCodeOf(err) === 'completion_in_progress') return 'busy';
+          lastSaveFailure.current = {
+            status,
+            code: machineCodeOf(err),
+            requestId: status === null ? null : supportReferenceOf(err),
+          };
           if (status === 400) {
             logger.warn('ConsultationFlow', 'save rejected: invalid answers; kept on this device');
             return 'invalid';
@@ -369,10 +442,14 @@ export default function ConsultationFlow({
     draft.current = openDraft(userId);
     consentOnServer.current = false;
     aiConfirmed.current = null;
-    setAiConfirmedShown(false);
-    aiPendingGrant.current = false;
+    aiFresh.current = false;
+    aiWant.current = null;
+    setAiShown(false);
+    setAiReady(false);
+    aiHeld.current = false;
     aiRequests.current = 0;
     aiChain.current = Promise.resolve();
+    handedOff.current = null;
     preparing.current = false;
     const live = () => gen === generation.current;
     (async () => {
@@ -384,17 +461,27 @@ export default function ConsultationFlow({
         logger.warn('ConsultationFlow', 'GET /me/onboarding failed; using local state', err);
       }
       if (!live()) return;
-      // B-310-2: box 2 starts from the last confirmed ledger state on this
-      // device, then from the ledger itself when it answers.
+      // B-310-2 / B-310-3: box 2 starts from the last confirmed ledger state
+      // and the client's last unconfirmed choice on this device, then from
+      // the ledger itself when it answers.
       aiConfirmed.current = aiRomanOf(local);
-      setAiConfirmedShown(aiConfirmed.current === true);
-      if (server?.completed && server.result) {
+      aiWant.current = aiWantOf(local);
+      // A wanted grant waits for a save that lands box 1, except after
+      // completion, which the server grants only with box 1 on file.
+      const completed = !!(server?.completed && server.result);
+      aiHeld.current = aiWant.current === true && !completed;
+      showAi();
+      // Box 2 is tappable at once when this device knows something (C-310-7).
+      if (aiConfirmed.current !== null || aiWant.current !== null) markAiReady();
+      else aiReadyTimer.current = setTimeout(markAiReady, AI_STATUS_WAIT_MS);
+      if (aiWant.current !== null) reconcileAi(gen);
+      void refreshAiFromLedger(gen);
+      if (completed && server?.result) {
         setAnswers((server.answers ?? local?.answers ?? {}) as Answers, false);
         setResult(server.result);
         setPhaseBoth('macro');
         return;
       }
-      void refreshAiFromLedger(gen);
       // The server already holds a current agreement: no P0-only PUT needed.
       consentOnServer.current =
         isConsentAnswerCurrent((server?.answers as Answers | null | undefined)?.P0) && server?.consent_recorded !== false;
@@ -425,109 +512,165 @@ export default function ConsultationFlow({
       generation.current += 1;
       queue.current.closed = true;
       clearTimer();
+      if (aiReadyTimer.current) clearTimeout(aiReadyTimer.current);
+      aiReadyTimer.current = null;
     };
     // Load once per user.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
   // ── Consent (P0) ───────────────────────────────────────────────────────
-  /** Record a confirmed box 2 state and keep it in the draft (B-310-2). */
-  const setAiConfirmed = useCallback(
-    (v: boolean) => {
-      aiConfirmed.current = v;
-      setAiConfirmedShown(v);
-      // Kept in the draft while there is one (never after completion).
-      const p = phaseRef.current;
-      if (p !== 'loading' && p !== 'macro' && p !== 'plan') persistLocal(answersRef.current, lastPersistedId.current);
-    },
-    [persistLocal],
-  );
+  /** Box 2 on P0: the latest unconfirmed choice, else the confirmed state. */
+  function showAi() {
+    setAiShown(aiWant.current ?? aiConfirmed.current === true);
+  }
+
+  function markAiReady() {
+    if (aiReadyTimer.current) clearTimeout(aiReadyTimer.current);
+    aiReadyTimer.current = null;
+    setAiReady(true);
+  }
+
+  /** Keep box 2 in the draft while there is one (never after completion). */
+  function persistAi() {
+    const p = phaseRef.current;
+    if (p !== 'loading' && p !== 'macro' && p !== 'plan') persistLocal(answersRef.current, lastPersistedId.current);
+  }
+
+  /** Record a confirmed ledger state (B-310-2); a choice it satisfies is done. */
+  function setAiConfirmed(v: boolean) {
+    aiConfirmed.current = v;
+    aiFresh.current = true;
+    if (aiWant.current === v) aiWant.current = null;
+    showAi();
+    persistAi();
+  }
+
+  function setAiWant(v: boolean | null) {
+    aiWant.current = v;
+    showAi();
+    persistAi();
+  }
+
+  /**
+   * Box 2 steps run for the load they started in. After the hand-off at
+   * finish the flow unmounts, but steps already queued still run while the
+   * same user is signed in, so a choice made just before finishing is not
+   * lost; a different or signed-out user stops them.
+   */
+  function aiLive(gen: number): boolean {
+    if (gen === generation.current) return true;
+    if (handedOff.current !== gen || !userId) return false;
+    return api.sessionUserId?.() === userId;
+  }
 
   /**
    * GET /me/ai-consent once per load, never blocking. Applied only while no
    * grant or withdrawal has been sent this session, so a slow read can never
-   * overwrite a newer confirmed result. 404 / 503 / errors keep the draft value.
+   * overwrite a newer confirmed result; then reconciled with the client's
+   * latest choice (a late grant against an unticked choice is withdrawn,
+   * B-310-3). 404 / 503 / errors keep the draft value.
    */
   async function refreshAiFromLedger(gen: number) {
     try {
       const out = await api.getRomanConsent();
-      if (gen !== generation.current || aiRequests.current > 0) return;
-      if (out.kind === 'ok' && out.status) setAiConfirmed(isLiveGrant(out.status, AI_CONSENT_VERSION));
+      if (!aiLive(gen)) return;
+      if (aiRequests.current === 0 && out.kind === 'ok' && out.status) {
+        setAiConfirmed(isLiveGrant(out.status, AI_CONSENT_VERSION));
+        reconcileAi(gen);
+      }
     } catch {
       // Unknown: keep the draft value.
+    } finally {
+      if (gen === generation.current) markAiReady();
     }
   }
 
-  /** POST the grant (one retry inside). Confirmed only on ok. */
-  const sendGrant = useCallback(
-    (gen: number) => {
-      aiPendingGrant.current = false;
-      aiRequests.current += 1;
-      aiChain.current = aiChain.current
-        .then(async () => {
-          if (gen !== generation.current) return;
-          const result = await grantRomanWithRetry(api.grantRomanConsent);
-          if (gen !== generation.current) return;
-          if (result === 'granted') setAiConfirmed(true);
-          else if (result !== 'unavailable') {
-            logger.warn('ConsultationFlow', `optional AI choice not recorded (${result}); left for Settings`);
+  /**
+   * Queue one reconcile step (B-310-3). The step decides when it runs, after
+   * every earlier request settled: grant when the latest choice is yes, the
+   * ledger is not confirmed granted and box 1 has landed; withdraw when the
+   * latest choice is no and the ledger is confirmed granted; otherwise
+   * nothing. A choice the ledger cannot take is dropped, so box 2 falls back
+   * to the confirmed state, with a calm notice (B-310-2, C-310-6).
+   */
+  function reconcileAi(gen: number) {
+    aiChain.current = aiChain.current
+      .then(async () => {
+        if (!aiLive(gen)) return;
+        const want = aiWant.current;
+        const have = aiConfirmed.current;
+        if (want === null) return;
+        if (want === have) {
+          // Matches what the server said on this load: done. Matches only
+          // the draft: kept until the server answers, so a grant made
+          // elsewhere that a slow GET reports is still withdrawn (B-310-3).
+          if (aiFresh.current) setAiWant(null);
+          return;
+        }
+        if (want) {
+          if (aiHeld.current) return; // sent by onSaveOk once box 1 lands
+          aiRequests.current += 1;
+          // The retry is re-checked too: it must never go out under another user's session.
+          const result = await grantRomanWithRetry(api.grantRomanConsent, () => aiLive(gen));
+          if (!aiLive(gen)) return;
+          if (result === 'granted') {
+            setAiConfirmed(true);
+            return;
           }
-        })
-        .catch(() => undefined);
-    },
-    [api, setAiConfirmed],
-  );
+          if (aiWant.current === true) setAiWant(null);
+          if (result === 'unavailable') return; // ledger off: skipped silently
+          logger.warn('ConsultationFlow', `optional AI choice not recorded (${result}); left for Settings`);
+          Alert.alert(AI_GRANT_NOTICE.title, AI_GRANT_NOTICE.body);
+          return;
+        }
+        // No: nothing is known to be on file yet. The choice stays, so a
+        // grant that a later GET reports is still withdrawn.
+        if (have !== true) return;
+        aiRequests.current += 1;
+        const result = await withdrawRomanWithRetry(api.withdrawRomanConsent, () => aiLive(gen));
+        if (!aiLive(gen)) return;
+        if (result === 'withdrawn') {
+          setAiConfirmed(false);
+          return;
+        }
+        // Box 2 shows ticked again: the grant stands until a withdrawal is confirmed.
+        if (aiWant.current === false) setAiWant(null);
+        logger.warn('ConsultationFlow', 'optional AI withdrawal not confirmed; left for Settings');
+        Alert.alert(AI_WITHDRAW_NOTICE.title, AI_WITHDRAW_NOTICE.body);
+      })
+      .catch(() => undefined);
+  }
 
   // A held grant goes after the next save that lands the agreement (B-310-1).
   onSaveOk.current = () => {
-    if (aiPendingGrant.current) sendGrant(generation.current);
+    if (!aiHeld.current) return;
+    aiHeld.current = false;
+    reconcileAi(generation.current);
   };
 
   /**
    * Box 2 at P0 Continue. Never awaited by the flow, never required.
-   *   - ticked, not confirmed: grant, but only after the intake save
-   *     carrying box 1 succeeded (B-310-1). On any other outcome the grant is
-   *     held until a later save lands the agreement; if none does in this
-   *     session it is left for Settings > Privacy > Roman and AI. A rejected
-   *     agreement (back to P0) drops it: the client chooses again.
-   *   - unticked, confirmed granted: withdraw, one retry; still unconfirmed
-   *     shows a calm notice and box 2 stays ticked (B-310-2).
-   *   - otherwise nothing is sent.
+   * `choice` is the client's explicit choice on this visit (null: box 2 left
+   * as shown, nothing new).
+   *   - yes: kept as the latest choice; the grant waits for an intake save
+   *     that lands box 1 (B-310-1). A rejected agreement (back to P0) drops
+   *     it in dropConsent: the client chooses again.
+   *   - no: kept as the latest choice and reconciled at once; if a grant is
+   *     in flight or a GET is still out, the withdrawal follows it (B-310-3).
+   * Called after the P0 save is queued, so a rejection of that save always
+   * comes after this.
    */
   const recordAiChoice = useCallback(
-    (p0Saved: Promise<SaveOutcome>, allow: boolean) => {
-      const gen = generation.current;
-      if (allow) {
-        if (aiConfirmed.current === true) {
-          aiPendingGrant.current = false;
-          return;
-        }
-        aiPendingGrant.current = true; // sent by onSaveOk when the save lands
-        void p0Saved.then((saved) => {
-          if (gen !== generation.current) return;
-          if (saved === 'consent' || saved === 'version') aiPendingGrant.current = false;
-        }, () => undefined);
-        return;
-      }
-      aiPendingGrant.current = false;
-      if (aiConfirmed.current !== true) return;
-      aiRequests.current += 1;
-      aiChain.current = aiChain.current
-        .then(async () => {
-          if (gen !== generation.current) return;
-          const result = await withdrawRomanWithRetry(api.withdrawRomanConsent);
-          if (gen !== generation.current) return;
-          if (result === 'withdrawn') {
-            setAiConfirmed(false);
-            return;
-          }
-          // Box 2 stays ticked: the grant stands until a withdrawal is confirmed.
-          logger.warn('ConsultationFlow', 'optional AI withdrawal not confirmed; left for Settings');
-          Alert.alert(AI_WITHDRAW_NOTICE.title, AI_WITHDRAW_NOTICE.body);
-        })
-        .catch(() => undefined);
+    (choice: boolean | null) => {
+      if (choice === null) return;
+      aiHeld.current = choice;
+      setAiWant(choice);
+      if (!choice) reconcileAi(generation.current);
     },
-    [api, setAiConfirmed],
+    // The helpers it calls read refs and these props only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [api, userId],
   );
 
   // ── Navigation ─────────────────────────────────────────────────────────
@@ -577,7 +720,7 @@ export default function ConsultationFlow({
   );
 
   const onNext = useCallback(
-    (patch?: Answers, aiAllowed = false) => {
+    (patch?: Answers, aiChoice: boolean | null = null) => {
       clearTimer();
       const from = screenRef.current;
       if (from === 'P0') {
@@ -591,9 +734,9 @@ export default function ConsultationFlow({
         setConsentError(null);
         persistLocal(ans, 'P0');
         // Box 1: the intake starts with the agreement (P0 alone first).
-        const saved = enqueueSave(ans);
+        void enqueueSave(ans);
         // Box 2: optional, recorded after the P0 save, never blocking.
-        recordAiChoice(saved, aiAllowed);
+        recordAiChoice(aiChoice);
         goNext('P0', ans);
         return;
       }
@@ -653,10 +796,13 @@ export default function ConsultationFlow({
       const left = prepMinMs - (Date.now() - started);
       if (left > 0) await new Promise((r) => setTimeout(r, left));
     };
-    const fail = async (p: CompleteProblem) => {
+    const fail = async (p: CompleteProblem, unexpected?: { where: string } & UnexpectedFailure) => {
+      // Owner rule 13:34: an unexpected failure is reported and shows a short reference.
+      if (unexpected) reportUnexpected(unexpected.where, unexpected);
       await hold();
       if (!live()) return;
       queue.current.closed = false;
+      setProblemRef(shortReference(unexpected?.requestId));
       setProblem(p);
       setPhaseBoth('problem');
     };
@@ -664,8 +810,11 @@ export default function ConsultationFlow({
       if (out === 'consent') return fail('consent_missing');
       if (out === 'version') return fail('consent_version_mismatch');
       if (out === 'busy') return fail('completion_in_progress');
-      if (out === 'invalid') return fail('invalid_answers');
-      return fail('network');
+      const f = lastSaveFailure.current;
+      if (out === 'invalid') return fail('invalid_answers', { where: 'PUT /me/onboarding/consultation', ...f });
+      // No response at all: the connection. A response we do not expect: our side.
+      if (f.status === null) return fail('network');
+      return fail('unknown', { where: 'PUT /me/onboarding/consultation', ...f });
     };
 
     // 1. Box 1 must be on file (box 2 is never required).
@@ -716,8 +865,12 @@ export default function ConsultationFlow({
       setPhaseBoth('macro');
       return;
     }
-    if (outcome.kind === 'conflict') return fail(outcome.code === 'unknown' ? 'unknown' : outcome.code);
-    return fail(outcome.status === null ? 'network' : 'unknown');
+    if (outcome.kind === 'conflict') {
+      if (outcome.code !== 'unknown') return fail(outcome.code);
+      return fail('unknown', { where: 'POST /me/onboarding/complete', status: 409, code: 'unknown', requestId: outcome.requestId });
+    }
+    if (outcome.status === null) return fail('network');
+    return fail('unknown', { where: 'POST /me/onboarding/complete', status: outcome.status, requestId: outcome.requestId });
   }, [api, consentCurrent, dropConsent, enqueueSave, prepMinMs, setPhaseBoth]);
 
   const prepare = useCallback(async () => {
@@ -749,6 +902,8 @@ export default function ConsultationFlow({
 
   const finish = useCallback(() => {
     if (!result) return;
+    // Box 2 steps already queued still run after the flow unmounts (same user only).
+    handedOff.current = generation.current;
     void purgeConsultationDraft(userId);
     // Start Roman's client tutorial (#309) with the POST /me/onboarding/complete
     // body (completeResponse.data). Idempotent; returns false and does nothing
@@ -790,7 +945,15 @@ export default function ConsultationFlow({
       );
     }
     if (phase === 'problem') {
-      return <CompleteProblemScreen problem={problem} onAction={onProblemAction} onBack={() => setPhaseBoth('summary')} onSignOut={onSignOut} />;
+      return (
+        <CompleteProblemScreen
+          problem={problem}
+          reference={problemRef}
+          onAction={onProblemAction}
+          onBack={() => setPhaseBoth('summary')}
+          onSignOut={onSignOut}
+        />
+      );
     }
     if (phase === 'paused') {
       return <PausedScreen ctx={ctx} onResume={() => showScreen(screenRef.current)} onSignOut={onSignOut} />;
@@ -817,7 +980,7 @@ export default function ConsultationFlow({
         onNext={onNext}
         onBack={prev ? () => void onBack() : null}
         onFinishLater={screen.chapter === 0 ? null : onFinishLater}
-        consent={{ error: consentError, aiAllowed: aiConfirmedShown }}
+        consent={{ error: consentError, aiAllowed: aiShown, aiReady }}
       />
     );
   }

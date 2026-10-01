@@ -387,20 +387,27 @@ export function Checkbox({
   onToggle,
   label,
   testID,
+  disabled = false,
+  hint,
 }: {
   checked: boolean;
   onToggle: () => void;
   label: string;
   testID?: string;
+  /** Not tappable yet (box 2 while the saved choice is being read, Opus C-310-7). */
+  disabled?: boolean;
+  hint?: string;
 }) {
   return (
     <Pressable
-      onPress={onToggle}
+      onPress={disabled ? undefined : onToggle}
+      disabled={disabled}
       accessibilityRole="checkbox"
       accessibilityLabel={label}
-      accessibilityState={{ checked }}
+      accessibilityHint={hint}
+      accessibilityState={disabled ? { checked, disabled: true, busy: true } : { checked }}
       testID={testID}
-      style={({ pressed }) => [s.checkRow, checked && s.rowSel, pressed && s.pressed]}
+      style={({ pressed }) => [s.checkRow, checked && s.rowSel, pressed && s.pressed, disabled && s.checkDisabled]}
     >
       <View style={[s.box, checked && s.boxOn]}>
         {checked ? <Ionicons name="checkmark" size={16} color={palette.onAccent} /> : null}
@@ -706,6 +713,7 @@ export const s = StyleSheet.create({
   linkText: { ...typography.bodySmall, color: palette.muted },
   linkAccent: { color: palette.accent },
   pressed: { opacity: 0.85 },
+  checkDisabled: { opacity: 0.6 },
   hair: { height: 1, backgroundColor: palette.border, marginVertical: spacing.xl },
   listItem: {
     ...typography.bodySmall,

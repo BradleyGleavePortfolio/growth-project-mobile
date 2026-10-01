@@ -59,6 +59,14 @@ export interface LocalConsultationState {
    * absent when unknown (Opus B-310-2). A yes/no flag, not health data.
    */
   aiRoman?: boolean;
+  /**
+   * Box 2 as the client last CHOSE it on P0 (ticked or unticked, then
+   * Continue) while the ledger has not yet confirmed that choice (Sol / Opus
+   * B-310-3). Kept so a choice made just before the app closes is still
+   * carried out on the next launch; removed once the ledger confirms it or
+   * it definitively fails. A yes/no flag, not health data.
+   */
+  aiWant?: boolean;
 }
 
 export type DraftWrite = Omit<LocalConsultationState, 'version' | 'updatedAt'>;
@@ -66,6 +74,11 @@ export type DraftWrite = Omit<LocalConsultationState, 'version' | 'updatedAt'>;
 /** The confirmed box 2 flag of a stored draft (unknown unless a real boolean). */
 export function aiRomanOf(state: LocalConsultationState | null | undefined): boolean | null {
   return typeof state?.aiRoman === 'boolean' ? state.aiRoman : null;
+}
+
+/** The client's latest unconfirmed box 2 choice in a stored draft (none unless a real boolean). */
+export function aiWantOf(state: LocalConsultationState | null | undefined): boolean | null {
+  return typeof state?.aiWant === 'boolean' ? state.aiWant : null;
 }
 
 const persistAvailable = () => Platform.OS !== 'web';

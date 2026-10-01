@@ -21,8 +21,10 @@ import HapticPressable from '../../components/HapticPressable';
 import { useTheme, ThemeColors } from '../../theme/ThemeProvider';
 import { aiConsentApi as defaultApi, AiConsentOutcome, AiConsentStatusResponse } from '../../api/aiConsentApi';
 import { romanGrantBody } from '../../lib/consultation/aiConsent';
-import { AI_CONSENT_CHECKBOX_LABEL, AI_CONSENT_COPY_SHA256, AI_CONSENT_PARAGRAPH } from '../../lib/consultation/copy';
+import { AI_CONSENT_CHECKBOX_LABEL, AI_CONSENT_COPY_SHA256, AI_CONSENT_PARAGRAPH, SUPPORT_EMAIL } from '../../lib/consultation/copy';
 import { AI_CONSENT_VERSION } from '../../lib/consultation/consentVersion';
+import { reportUnexpected } from '../../lib/consultation/report';
+import { shortReference } from '../../utils/correlation';
 import { logger } from '../../utils/logger';
 
 export type RomanAiConsentApi = Pick<typeof defaultApi, 'getStatus' | 'grantRoman' | 'withdrawRoman'>;
@@ -30,7 +32,7 @@ export type RomanAiConsentApi = Pick<typeof defaultApi, 'getStatus' | 'grantRoma
 type View_ =
   | { phase: 'loading' }
   | { phase: 'unavailable' }
-  | { phase: 'error' }
+  | { phase: 'error'; offline: boolean; reference: string | null }
   | { phase: 'ready'; status: AiConsentStatusResponse };
 
 export type RomanAiChoice = 'allowed' | 'not_allowed' | 'reconsent' | 'update_app';
@@ -43,9 +45,16 @@ export const ROMAN_AI_COPY = {
   notAllowedBody: 'Roman and your coach\u2019s AI tools do not use your information. Your coaching, plan, messages and Roman\u2019s guided tour work as usual.',
   reconsentBody: 'The wording of this choice has changed since you last chose, so it is off for now. You can allow it again below.',
   updateApp: 'This choice has been updated since this version of the app. Please update the app to change it.',
-  unavailable: 'This choice is unavailable right now. Please try again later.',
-  loadError: 'I couldn\u2019t load your choice just now. Please check your connection and try again.',
-  actionError: 'That did not go through. Please try again.',
+  unavailable: `The Roman and AI setting is switched off on our side at the moment, so it cannot be changed here yet. Nothing is recorded. You can check back later, or write to support at ${SUPPORT_EMAIL}.`,
+  loadOffline: 'I could not reach the server to load your choice. Check your connection, then tap Try again.',
+  loadServer: (ref: string | null) =>
+    `The server could not load your choice. Tap Try again. If it keeps happening, write to support at ${SUPPORT_EMAIL}${ref ? ` and mention reference ${ref}` : ''}.`,
+  actionOffline:
+    'I could not reach the server, so your change is not confirmed. The choice shown above is the current one. Check your connection, then try again.',
+  actionBusy: 'Your choice was changed several times in a row, so this change was not saved. Wait a minute, then try again.',
+  actionConflict: 'Your choice was being changed somewhere else at the same moment, so this change was not saved. The choice shown above is the current one. You can change it again.',
+  actionServer: (ref: string | null) =>
+    `The server could not save your change, so the choice shown above still stands. Try again. If it keeps happening, write to support at ${SUPPORT_EMAIL}${ref ? ` and mention reference ${ref}` : ''}.`,
   allow: 'Allow',
   withdraw: 'Withdraw',
   retry: 'Try again',
@@ -81,10 +90,27 @@ export function headOf(status: AiConsentStatusResponse): string {
     : ROMAN_AI_COPY.notAllowedHead;
 }
 
-function toView(out: AiConsentOutcome): View_ | null {
-  if (out.kind === 'ok') return out.status ? { phase: 'ready', status: out.status } : null;
+function toView(out: AiConsentOutcome): View_ {
+  if (out.kind === 'ok' && out.status) return { phase: 'ready', status: out.status };
   if (out.kind === 'unavailable') return { phase: 'unavailable' };
-  return null;
+  const status = out.kind === 'error' ? out.status : null;
+  const requestId = out.kind === 'error' ? out.requestId ?? null : null;
+  if (status === null && out.kind === 'error') return { phase: 'error', offline: true, reference: null };
+  // Unexpected: a short reference, a support path, and a Sentry report.
+  reportUnexpected('GET /me/ai-consent', { status, code: out.kind === 'error' ? out.code : out.kind, requestId });
+  return { phase: 'error', offline: false, reference: shortReference(requestId) };
+}
+
+/**
+ * What to say when Allow or Withdraw did not go through (owner rule
+ * 2026-10-01 13:34: say what happened and what to do next).
+ */
+export function actionNoticeOf(out: Extract<AiConsentOutcome, { kind: 'error' }>, op: 'allow' | 'withdraw'): string {
+  if (out.status === null) return ROMAN_AI_COPY.actionOffline;
+  if (out.status === 429) return ROMAN_AI_COPY.actionBusy;
+  if (out.status === 409 && out.code === 'AI_CONSENT_CONFLICT') return ROMAN_AI_COPY.actionConflict;
+  reportUnexpected(op === 'allow' ? 'POST /me/ai-consent/roman' : 'DELETE /me/ai-consent/roman', out);
+  return ROMAN_AI_COPY.actionServer(shortReference(out.requestId));
 }
 
 export default function RomanAiConsentScreen({
@@ -119,7 +145,7 @@ export default function RomanAiConsentScreen({
           (!!c.box_label && c.box_label.text !== AI_CONSENT_CHECKBOX_LABEL));
       if (differs) logger.warn('RomanAiConsent', 'server AI copy differs from the app copy for this version');
     }
-    setView(toView(out) ?? { phase: 'error' });
+    setView(toView(out));
   }, [api]);
 
   useEffect(() => {
@@ -145,7 +171,14 @@ export default function RomanAiConsentScreen({
         if (mounted.current) setNotice(ROMAN_AI_COPY.updateApp);
         return;
       }
-      setNotice(out.kind === 'unavailable' ? ROMAN_AI_COPY.unavailable : ROMAN_AI_COPY.actionError);
+      if (out.kind === 'unavailable') {
+        setNotice(ROMAN_AI_COPY.unavailable);
+        return;
+      }
+      // Re-read, so the screen shows the choice that actually stands, then explain.
+      const notice = actionNoticeOf(out, kind);
+      await load();
+      if (mounted.current) setNotice(notice);
     },
     [api, busy, load],
   );
@@ -184,7 +217,11 @@ export default function RomanAiConsentScreen({
       return (
         <View style={styles.card} testID={`roman-ai-${view.phase}`}>
           <Text style={styles.body} accessibilityLiveRegion="polite">
-            {view.phase === 'unavailable' ? ROMAN_AI_COPY.unavailable : ROMAN_AI_COPY.loadError}
+            {view.phase === 'unavailable'
+              ? ROMAN_AI_COPY.unavailable
+              : view.offline
+                ? ROMAN_AI_COPY.loadOffline
+                : ROMAN_AI_COPY.loadServer(view.reference)}
           </Text>
           {button(ROMAN_AI_COPY.retry, () => void load(), 'roman-ai-retry', true)}
         </View>

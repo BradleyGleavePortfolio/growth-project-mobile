@@ -178,7 +178,11 @@ describe('B-02 ordered, serialized saves', () => {
     // Robust to timing (coalescing may merge taps): the first PUT carries P0
     // alone (consent first, backend #607), P0-only PUTs happen once, and the
     // full-answer PUTs never exceed the three Pause taps.
-    const calls = save.mock.calls as unknown as Array<[{ answers: Record<string, unknown> }]>;
+    const calls: Array<[{ answers: Record<string, unknown> }]> = save.mock.calls.map((c: unknown[]) => {
+      const body: unknown = c[0];
+      const answers: unknown = body && typeof body === 'object' ? Reflect.get(body, 'answers') : undefined;
+      return [{ answers: answers && typeof answers === 'object' ? { ...answers } : {} }];
+    });
     const isP0Only = (c: [{ answers: Record<string, unknown> }]) =>
       Object.keys(c[0].answers).length === 1 && 'P0' in c[0].answers;
     expect(calls.length).toBeGreaterThanOrEqual(2);

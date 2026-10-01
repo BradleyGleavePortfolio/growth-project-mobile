@@ -153,7 +153,7 @@ const PROBLEM_COPY: Record<CompleteProblem, { head: string; body: string; cta: s
   },
   invalid_answers: {
     head: 'A few answers need another look.',
-    body: 'Some of your answers could not be saved as they are. They are kept on this phone. Please look over the summary, change anything that looks wrong, and try again.',
+    body: `Some of your answers could not be saved as they are. They are kept on this phone. Please look over the summary, change anything that looks wrong, and try again. If it happens again, write to ${SUPPORT_EMAIL}.`,
     cta: 'Review my answers',
   },
   network: {
@@ -162,11 +162,19 @@ const PROBLEM_COPY: Record<CompleteProblem, { head: string; body: string; cta: s
     cta: 'Try again',
   },
   unknown: {
-    head: 'Something went wrong on our side.',
-    body: 'Your answers are saved. Please try again in a moment.',
+    head: 'I could not prepare your plan just now.',
+    body: `The server ran into a problem on our side. Your answers are kept on this phone, so nothing is lost. Tap Try again. If it happens again, write to ${SUPPORT_EMAIL}.`,
     cta: 'Try again',
   },
 };
+
+/**
+ * The support line for an unexpected failure (owner rule 2026-10-01 13:34):
+ * the short reference of the failed request, to quote to support.
+ */
+export function referenceLine(reference: string | null | undefined): string | null {
+  return reference ? `Reference: ${reference}. Please mention it if you write to us.` : null;
+}
 
 /**
  * Operator C-310-3: a minimal way out of the problem and paused screens.
@@ -218,17 +226,26 @@ export function CompleteProblemScreen({
   onAction,
   onBack,
   onSignOut,
+  reference,
 }: {
   problem: CompleteProblem;
   onAction: () => void;
   onBack: () => void;
   onSignOut?: () => void;
+  /** Short support reference of the failed request (unknown and invalid answers only). */
+  reference?: string | null;
 }) {
   const c = PROBLEM_COPY[problem];
+  const ref = problem === 'unknown' || problem === 'invalid_answers' ? referenceLine(reference) : null;
   return (
     <Frame onBack={onBack} testID={`consult-problem-${problem}`} footer={<PrimaryButton label={c.cta} onPress={onAction} testID="consult-problem-action" />}>
       <Text style={[s.h2, { marginTop: 24 }]} accessibilityRole="header">{c.head}</Text>
       <Text style={[s.body, { marginTop: 12 }]}>{c.body}</Text>
+      {ref ? (
+        <Text style={[s.body, { marginTop: 12 }]} selectable testID="consult-problem-reference">
+          {ref}
+        </Text>
+      ) : null}
       <EscapeRow onSignOut={onSignOut} />
     </Frame>
   );

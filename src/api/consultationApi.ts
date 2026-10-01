@@ -18,6 +18,7 @@
  */
 import api from '../services/api';
 import type { Answers } from '../lib/consultation/types';
+import { supportReferenceOf } from '../utils/correlation';
 
 export type ConsultationVersion = 'consult-v1';
 
@@ -107,8 +108,9 @@ export type CompleteConflictCode = (typeof COMPLETE_CONFLICT_CODES)[number];
 
 export type CompleteOutcome =
   | { kind: 'ok'; data: CompleteOnboardingResponse }
-  | { kind: 'conflict'; code: CompleteConflictCode | 'unknown' }
-  | { kind: 'error'; status: number | null };
+  /** `requestId`: the support reference of the failed request, when known (owner rule 13:34). */
+  | { kind: 'conflict'; code: CompleteConflictCode | 'unknown'; requestId?: string | null }
+  | { kind: 'error'; status: number | null; requestId?: string | null };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -163,8 +165,10 @@ export const consultationApi = {
       return { kind: 'ok', data: res.data };
     } catch (err) {
       const status = httpStatusOf(err);
-      if (status === 409) return { kind: 'conflict', code: conflictCodeOf(err) };
-      return { kind: 'error', status };
+      const requestId = status === null ? null : supportReferenceOf(err);
+      const ref = requestId ? { requestId } : {};
+      if (status === 409) return { kind: 'conflict', code: conflictCodeOf(err), ...ref };
+      return { kind: 'error', status, ...ref };
     }
   },
 };

@@ -19,6 +19,7 @@
  * "not deployed yet" (404 / 503) as a calm, explicit state.
  */
 import api from '../services/api';
+import { supportReferenceOf } from '../utils/correlation';
 
 export type AiConsentState = 'granted' | 'withdrawn' | 'needs_reconsent' | 'not_granted';
 
@@ -68,7 +69,8 @@ export type AiConsentOutcome =
   | { kind: 'unavailable'; status?: 404 | 503 }
   /** 409 CONSENT_VERSION_MISMATCH: the server needs different copy (app update). */
   | { kind: 'version_mismatch' }
-  | { kind: 'error'; status: number | null; code?: string };
+  /** Anything else. `requestId`: the support reference of the failed request, when known. */
+  | { kind: 'error'; status: number | null; code?: string; requestId?: string | null };
 
 interface AxiosLikeError {
   response?: { status?: number; data?: unknown };
@@ -134,7 +136,8 @@ function failure(err: unknown): AiConsentOutcome {
   const data = dataOf(err);
   const code = [data?.code, data?.error].find((x): x is string => typeof x === 'string');
   if (status === 409 && code === 'CONSENT_VERSION_MISMATCH') return { kind: 'version_mismatch' };
-  return code ? { kind: 'error', status, code } : { kind: 'error', status };
+  const requestId = status === null ? null : supportReferenceOf(err);
+  return { kind: 'error', status, ...(code ? { code } : {}), ...(requestId ? { requestId } : {}) };
 }
 
 /** Whether the status is a live grant of `version` (state "granted" for the current copy). */

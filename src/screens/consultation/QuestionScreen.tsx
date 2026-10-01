@@ -59,12 +59,23 @@ export interface QuestionScreenProps {
   /** Set an answer. `advance` asks the flow to move on (auto-advance). */
   onAnswer: (key: string, value: AnswerValue | undefined, opts?: { advance?: boolean }) => void;
   /** Continue / Skip: move to the next screen. */
-  /** `aiAllowed` is box 2 of P0 (optional Roman and AI); other screens omit it. */
-  onNext: (patch?: Answers, aiAllowed?: boolean) => void;
+  /**
+   * `aiChoice` is box 2 of P0 (optional Roman and AI): true / false when the
+   * client tapped box 2 on this visit (their explicit latest choice), null
+   * when they left it as shown. Other screens omit it.
+   */
+  onNext: (patch?: Answers, aiChoice?: boolean | null) => void;
   onBack: (() => void) | null;
   onFinishLater: (() => void) | null;
   /** P0 only: recording in progress, or why the last attempt failed. */
-  consent?: { error: 'version_mismatch' | null; aiAllowed?: boolean };
+  /**
+   * `aiAllowed`: what box 2 shows (the client's latest choice while the
+   * ledger is catching up, else the confirmed ledger state). `aiReady`:
+   * false while the saved choice is still being read and nothing is known
+   * on this device yet (Opus C-310-7), so an untouched box is never mistaken
+   * for a choice.
+   */
+  consent?: { error: 'version_mismatch' | null; aiAllowed?: boolean; aiReady?: boolean };
 }
 
 const MONTHS = [
@@ -431,7 +442,10 @@ const CONSENT_ERROR_COPY = {
 /** Open the public Privacy Policy (same page the Trust Center links to). */
 export function openPrivacyPolicy(): void {
   Linking.openURL(PRIVACY_POLICY_URL).catch(() => {
-    Alert.alert('Privacy Policy unavailable', 'Could not open the Privacy Policy right now. Please try again later.');
+    Alert.alert(
+      'Privacy Policy',
+      `This phone could not open the link. You can read the Privacy Policy in any web browser at ${PRIVACY_POLICY_URL.replace(/^https:\/\//, '')}.`,
+    );
   });
 }
 
@@ -441,16 +455,20 @@ function ConsentBody(props: BodyProps) {
   // stale or malformed records render box 1 unticked.
   const already = isConsentAnswerCurrent(answers.P0);
   const [checked, setChecked] = useState(already);
-  // Box 2 is optional and unticked by default (D2). It shows only the
-  // CONFIRMED ledger state (Opus B-310-2): a confirmed grant from earlier,
-  // the draft after a restart, or GET /me/ai-consent when it answers. A
-  // late answer never overrides what the client has just tapped.
-  const aiConfirmed = !!state?.aiAllowed;
-  const [aiChecked, setAiChecked] = useState(aiConfirmed);
+  // Box 2 is optional and unticked by default (D2). It shows the client's
+  // latest choice while the ledger is catching up, otherwise the confirmed
+  // ledger state (Opus B-310-2, B-310-3): a confirmed result from earlier,
+  // the draft after a restart, or GET /me/ai-consent when it answers. A late
+  // answer never overrides what the client has just tapped, and only a tap
+  // on this visit counts as a new choice: an untouched box keeps what it
+  // showed.
+  const aiShown = !!state?.aiAllowed;
+  const aiReady = state?.aiReady !== false;
+  const [aiChecked, setAiChecked] = useState(aiShown);
   const aiTouched = useRef(false);
   useEffect(() => {
-    if (!aiTouched.current) setAiChecked(aiConfirmed);
-  }, [aiConfirmed]);
+    if (!aiTouched.current) setAiChecked(aiShown);
+  }, [aiShown]);
   const error = state?.error ?? null;
   const consent = useMemo<ConsentAnswer>(
     () => ({
@@ -473,7 +491,7 @@ function ConsentBody(props: BodyProps) {
           label={props.screen.cta ?? 'Continue'}
           disabled={!checked || blocked}
           hint={checked ? undefined : 'Tick the first box to continue'}
-          onPress={() => onNext({ P0: already ? answers.P0 : consent }, aiChecked)}
+          onPress={() => onNext({ P0: already ? answers.P0 : consent }, aiTouched.current ? aiChecked : null)}
           testID="consult-continue"
         />
       }
@@ -495,6 +513,8 @@ function ConsentBody(props: BodyProps) {
           setAiChecked((c) => !c);
         }}
         label={AI_CONSENT_CHECKBOX_LABEL}
+        disabled={!aiReady}
+        hint={aiReady ? undefined : 'Checking your saved choice'}
         testID="consent-ai-checkbox"
       />
       <Text style={[s.mutedSmall, { marginTop: 16 }]} testID="consent-footer">{CONSENT_FOOTER}</Text>

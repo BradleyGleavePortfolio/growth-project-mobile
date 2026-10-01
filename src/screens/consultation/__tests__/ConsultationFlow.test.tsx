@@ -18,6 +18,10 @@ import { CONSENT_COPY_SHA256, consentCopyText } from '../../../lib/consultation/
 
 jest.mock('../../../services/api', () => ({ __esModule: true, default: {} }));
 jest.mock('../../../hooks/useReducedMotion', () => ({ useReducedMotion: () => true }));
+jest.mock('../../../services/sentry', () => ({
+  ...jest.requireActual('../../../services/sentry'),
+  captureError: jest.fn(),
+}));
 const mockStartClientTutorial = jest.fn((..._args: unknown[]) => true);
 jest.mock('../../../tutorial/tutorialStore', () => ({
   startClientTutorial: (...args: unknown[]) => mockStartClientTutorial(...args),
@@ -338,6 +342,48 @@ describe('ConsultationFlow', () => {
     expect(api.complete).not.toHaveBeenCalled();
   });
 
+  it('owner rule 13:34: an unexpected complete failure (500) says what happened, shows a short reference and support, and goes to Sentry', async () => {
+    const { captureError } = jest.requireMock('../../../services/sentry') as { captureError: jest.Mock };
+    captureError.mockClear();
+    const complete = jest
+      .fn<Promise<CompleteOutcome>, []>()
+      .mockResolvedValueOnce({ kind: 'error', status: 500, requestId: '7d1e44b0-1111-4222-8333-444455556666' })
+      .mockResolvedValueOnce({ kind: 'ok', data: RESULT });
+    const api = makeApi({ complete });
+    await seedLocal(fullAnswers(), 'SUM');
+    const r = await renderFlow(api);
+    await waitFor(() => r.getByTestId('consult-screen-SUM'));
+    await fireEvent.press(r.getByTestId('consult-prepare'));
+    await waitFor(() => r.getByTestId('consult-problem-unknown'));
+    expect(r.queryByText(/went wrong/i)).toBeNull();
+    expect(r.getByText(/The server ran into a problem on our side\..*Bradley@Bradleytgpcoaching\.com/)).toBeTruthy();
+    expect(r.getByTestId('consult-problem-reference').props.children).toBe('Reference: 7d1e44b0. Please mention it if you write to us.');
+    expect(r.getByTestId('consult-support')).toBeTruthy();
+    expect(captureError).toHaveBeenCalledTimes(1);
+    expect(captureError.mock.calls[0][1]).toMatchObject({ where: 'POST /me/onboarding/complete', status: 500, request_id: '7d1e44b0-1111-4222-8333-444455556666' });
+    // Nothing from the answers is reported.
+    expect(JSON.stringify(captureError.mock.calls)).not.toMatch(/answers|P0|agreed/);
+    await fireEvent.press(r.getByTestId('consult-problem-action'));
+    await waitFor(() => r.getByTestId('consult-screen-MACRO'));
+  });
+
+  it('owner rule 13:34: a final save answered 500 is our side (reference, Sentry), not a connection problem', async () => {
+    const { captureError } = jest.requireMock('../../../services/sentry') as { captureError: jest.Mock };
+    captureError.mockClear();
+    const err = Object.assign(new Error('500'), {
+      response: { status: 500, data: { code: 'internal_error' }, headers: { 'x-request-id': 'a1b2c3d4-e5f6-4000-8000-000000000000' } },
+    });
+    const api = makeApi({ save: jest.fn(async () => { throw err; }) });
+    await seedLocal(fullAnswers(), 'SUM');
+    const r = await renderFlow(api);
+    await waitFor(() => r.getByTestId('consult-screen-SUM'));
+    await fireEvent.press(r.getByTestId('consult-prepare'));
+    await waitFor(() => r.getByTestId('consult-problem-unknown'));
+    expect(r.getByTestId('consult-problem-reference').props.children).toMatch(/^Reference: a1b2c3d4\./);
+    expect(captureError.mock.calls[0][1]).toMatchObject({ where: 'PUT /me/onboarding/consultation', status: 500, code: 'internal_error' });
+    expect(api.complete).not.toHaveBeenCalled();
+  });
+
   it('an already completed onboarding replays the reveal from GET /me/onboarding', async () => {
     const api = makeApi({
       getState: jest.fn(async () => ({ answers: fullAnswers(), completed: true, result: RESULT })),
@@ -417,7 +463,10 @@ describe('C-8 Privacy Policy link on P0', () => {
     const r = await renderFlow(makeApi());
     await waitFor(() => r.getByTestId('consult-screen-P0'));
     await fireEvent.press(r.getByTestId('consent-privacy-link'));
-    await waitFor(() => expect(alert).toHaveBeenCalledWith('Privacy Policy unavailable', expect.stringMatching(/try again later\.$/)));
+    // Owner rule 13:34: says what happened and gives a working next step (the address).
+    await waitFor(() =>
+      expect(alert).toHaveBeenCalledWith('Privacy Policy', expect.stringMatching(/could not open the link.*app\.trygrowthproject\.com\/privacy\.$/)),
+    );
     open.mockRestore();
     alert.mockRestore();
   });
