@@ -111,6 +111,7 @@ There are no navigation-level jest tests; the structure is exercised end-to-end 
 Both `ClientNavigator` and `CoachNavigator` now inject a bell icon into the header of their respective primary stack navigators.
 
 ### ClientNavigator
+- Clinic tutorial (featureFlags.clientTutorial, default OFF): the tab navigator is wrapped in `TutorialHost`, and `screenListeners` is now a function. It reports the focused route path (`state` event, via `src/tutorial/navigationFocus.ts`) to the tutorial step machine and captures the tab navigation object so the overlay's "Take me there" can open `Home/Messages`, `MoreTab/Connections` and `MoreTab/Health`. Tab list and routes are unchanged. With the flag OFF the host is a pass-through. See `src/tutorial/README.md`.
 
 The bell is rendered as `headerRight` on every screen inside `HomeStackNavigator`. It shows a `NotificationBadge` with the live unread count (polled every 30 s, refreshed on foreground). Tapping navigates to `HomeStack → NotificationCenter`.
 

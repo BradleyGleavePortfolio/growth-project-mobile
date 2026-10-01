@@ -55,6 +55,18 @@ Everything a signed-in `student` user sees. Mounted under `ClientNavigator`, whi
 
 The **Trust Center** itself lives at `src/screens/TrustCenterScreen.tsx` (not in this directory because it is shared with the coach navigator).
 
+### Clinic tutorial additions (featureFlags.clientTutorial, default OFF)
+
+| Screen | Addition |
+| --- | --- |
+| `HomeScreen.tsx` | `<TutorialHomeSlot />` below the coach introduction banner: the pinned macro explanation card (C08, real `/me/macros/current` or onboarding numbers), a "Message your coach" row into HomeStack `Messages`, and after a skipped tour one quiet line that resumes it. |
+| `WorkoutScreen.tsx` | `<PlanExplanationCard />` above the coach-assigned CTA: the assigned program, its weeks and days a week, and "Why this plan" with the reasons from onboarding complete. |
+| `MoreScreen.tsx` | "Health and sleep" (`Health`) and "Connected devices" (`Connections`) rows. Both were registered routes with no entry point. |
+| `SettingsScreen.tsx` | Settings > Tutorial: resume or run the tour again. |
+| `wearables/ConnectProviderSheet.tsx` | Emits the tutorial `wearable_connected` signal on an on-device grant or OAuth success. |
+
+Roman's tour runs over these real screens. See `src/tutorial/README.md`.
+
 ## Data flow
 
 ```

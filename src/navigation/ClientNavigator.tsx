@@ -137,6 +137,12 @@ import UnreadBadge from '../components/community/UnreadBadge';
 // the entitlement gate runs before the screen body. Server-side
 // ClientEntitlementGuard remains canonical (Rule 20).
 import { withProtectedScreen } from '../entitlements/withProtectedScreen';
+// Clinic launch — Roman-led client tutorial (C09). The host is a pass-through
+// unless featureFlags.clientTutorial is on.
+import TutorialHost from '../components/tutorial/TutorialHost';
+import { setTutorialRoute } from '../tutorial/tutorialStore';
+import { focusedRoutePath, withInitialLeaf, type NavStateLike } from '../tutorial/navigationFocus';
+import type { TutorialNavTarget } from '../tutorial/tutorialSteps';
 
 const ProtectedWorkoutScreen = withProtectedScreen(WorkoutScreen);
 const ProtectedActiveWorkoutScreen = withProtectedScreen(ActiveWorkoutScreen);
@@ -585,8 +591,28 @@ function CommunityTabBarIcon({ color }: { color: string }) {
   );
 }
 
+const TUTORIAL_TABS = [
+  'Home',
+  'WorkoutTab',
+  'Log',
+  'MoreTab',
+  ...(featureFlags.communityTab ? ['CommunityTab'] : []),
+];
+
 export default function ClientNavigator() {
+  // Latest tab-screen navigation object, captured from screenListeners, so
+  // the tutorial overlay (which sits outside the navigator) can offer
+  // "Take me there" for screens behind a menu.
+  const tabNavRef = React.useRef<{ navigate: (name: string, params?: object) => void } | null>(null);
+  const onTutorialNavigate = React.useCallback((t: TutorialNavTarget) => {
+    try {
+      tabNavRef.current?.navigate(t.tab, t.screen ? { screen: t.screen } : undefined);
+    } catch (err) {
+      logger.warn('ClientNavigator', 'tutorial navigate failed', err);
+    }
+  }, []);
   return (
+    <TutorialHost tabs={TUTORIAL_TABS} onNavigate={onTutorialNavigate}>
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
@@ -601,11 +627,21 @@ export default function ClientNavigator() {
           height: 64,
         },
       }}
-      screenListeners={{
-        tabPress: () => {
-          // Phase 11 / Track 3: haptic selection feedback on tab switch
-          HapticService.selection();
-        },
+      screenListeners={({ navigation }) => {
+        if (featureFlags.clientTutorial) tabNavRef.current = navigation;
+        return {
+          tabPress: () => {
+            // Phase 11 / Track 3: haptic selection feedback on tab switch
+            HapticService.selection();
+          },
+          // Clinic tutorial: report the focused route path so route gates
+          // (e.g. "tap Train") are satisfied by real navigation only.
+          state: (e) => {
+            if (!featureFlags.clientTutorial) return;
+            const data = e.data as { state?: NavStateLike } | undefined;
+            setTutorialRoute(withInitialLeaf(focusedRoutePath(data?.state)));
+          },
+        };
       }}
     >
       <Tab.Screen
@@ -663,6 +699,7 @@ export default function ClientNavigator() {
         />
       )}
     </Tab.Navigator>
+    </TutorialHost>
   );
 }
 

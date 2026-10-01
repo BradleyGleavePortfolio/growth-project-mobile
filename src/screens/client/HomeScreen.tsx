@@ -34,6 +34,9 @@ import { useTheme } from '../../theme/ThemeProvider';
 import HolisticInsightsTile from '../../components/home/HolisticInsightsTile';
 import PendingInviteBanner from '../../components/PendingInviteBanner';
 import CoachIntroductionBanner from '../../components/home/CoachIntroductionBanner';
+// Clinic tutorial (C08/C09): pinned macro card, Message your coach row and the
+// passive re-offer line. Renders nothing unless featureFlags.clientTutorial.
+import TutorialHomeSlot from '../../components/tutorial/TutorialHomeSlot';
 import { workoutApi } from '../../services/api';
 import {
   getProfileCompletion,
@@ -337,6 +340,8 @@ export default function HomeScreen() {
 
         {/* Coach introduction banner — shown once, dismissible */}
         <CoachIntroductionBanner />
+
+        <TutorialHomeSlot />
 
         {/* Single CTA — conditional on whether workouts exist */}
         {workoutExists === 'loading' ? (
