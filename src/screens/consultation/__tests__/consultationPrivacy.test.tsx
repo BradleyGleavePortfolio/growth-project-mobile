@@ -16,14 +16,14 @@
  */
 import * as path from 'path';
 import React from 'react';
-import { Text, View } from 'react-native';
+import { Alert, AlertButton, Linking, Text, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import ConsultationFlow, { ConsultationApi } from '../ConsultationFlow';
 import type { CompleteOutcome } from '../../../api/consultationApi';
 import { answersBeforeSafety, fullAnswers, NOW } from '../../../lib/consultation/__fixtures__/consultFixtures';
-import { makeApi, resetStores, seedLocal } from '../../../lib/consultation/__fixtures__/flowHarness';
+import { AI_ALLOWED, aiStatus, makeApi, resetStores, seedLocal } from '../../../lib/consultation/__fixtures__/flowHarness';
 import {
   DRAFT_CHUNK_CHARS,
   DRAFT_RETENTION_MS,
@@ -37,7 +37,7 @@ import {
   writeLocalState,
 } from '../../../lib/consultation/storage';
 import { signOut } from '../../../services/authActions';
-import { AI_CONSENT_COPY_SHA256, CONSENT_COPY_SHA256, CONSULT_CONSENT_COPY_VERSION } from '../../../lib/consultation/copy';
+import { AI_CONSENT_COPY_SHA256, AI_WITHDRAW_NOTICE, CONSENT_COPY_SHA256, CONSULT_CONSENT_COPY_VERSION, SUPPORT_EMAIL } from '../../../lib/consultation/copy';
 
 jest.mock('../../../services/api', () => ({
   __esModule: true,
@@ -68,8 +68,8 @@ const { autocaptureFromTouchEvent } = require(
   path.resolve(__dirname, '../../../../node_modules/posthog-react-native/dist/autocapture.js'),
 ) as { autocaptureFromTouchEvent: (e: unknown, posthog: { autocapture: jest.Mock }, opts?: unknown) => void };
 
-function renderFlow(api: ConsultationApi, props: Partial<React.ComponentProps<typeof ConsultationFlow>> = {}) {
-  return render(
+function flowElement(api: ConsultationApi, props: Partial<React.ComponentProps<typeof ConsultationFlow>> = {}) {
+  return (
     <ConsultationFlow
       userId="u1"
       firstName="Maya"
@@ -80,8 +80,17 @@ function renderFlow(api: ConsultationApi, props: Partial<React.ComponentProps<ty
       autoAdvanceMs={0}
       prepMinMs={0}
       {...props}
-    />,
+    />
   );
+}
+
+function renderFlow(api: ConsultationApi, props: Partial<React.ComponentProps<typeof ConsultationFlow>> = {}) {
+  return render(flowElement(api, props));
+}
+
+/** An app restart: the flow is mounted afresh (new key) and reads the draft again. */
+function restartFlow(r: Awaited<ReturnType<typeof renderFlow>>, api: ConsultationApi, n = 2) {
+  return r.rerender(<React.Fragment key={`restart-${n}`}>{flowElement(api)}</React.Fragment>);
 }
 
 beforeEach(async () => {
@@ -522,6 +531,268 @@ describe('D2 box 2: optional Roman and AI, recorded on the AI consent ledger, ne
     await tick();
     expect(api.save).toHaveBeenCalledTimes(1);
     expect(api.grantRomanConsent).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── Fix round 3 (Opus final audit at 00cfb6c) ───────────────────────────────
+
+const httpErr = (status: number, code?: string) =>
+  Object.assign(new Error(String(status)), { response: { status, data: code ? { code } : {} } });
+const offline = () => new Error('Network Error');
+
+/** P0 from a seeded draft, both boxes ticked, Continue: lands on G1. */
+async function continueWithBothBoxes(api: ConsultationApi, props: Partial<React.ComponentProps<typeof ConsultationFlow>> = {}) {
+  await seedLocal({}, 'P0');
+  const r = await renderFlow(api, props);
+  await waitFor(() => r.getByTestId('consult-screen-P0'));
+  await fireEvent.press(r.getByTestId('consent-checkbox'));
+  await fireEvent.press(r.getByTestId('consent-ai-checkbox'));
+  await fireEvent.press(r.getByTestId('consult-continue'));
+  await waitFor(() => r.getByTestId('consult-screen-G1'));
+  return r;
+}
+
+const aiBox = (r: { getByTestId: (id: string) => { props: { accessibilityState?: { checked?: boolean } } } }) =>
+  r.getByTestId('consent-ai-checkbox').props.accessibilityState?.checked;
+
+describe('B-310-1 the box 2 grant waits for the agreement to land', () => {
+  it.each([
+    ['offline', offline()],
+    ['500', httpErr(500)],
+    ['409 completion_in_progress', httpErr(409, 'completion_in_progress')],
+  ])('P0 save fails (%s): no grant; the next save that lands the agreement sends it once', async (_label, err) => {
+    const api = makeApi();
+    api.save.mockRejectedValueOnce(err);
+    const r = await continueWithBothBoxes(api);
+    await tick();
+    await tick();
+    expect(api.save).toHaveBeenCalledTimes(1);
+    expect(api.grantRomanConsent).not.toHaveBeenCalled();
+    // Finish later saves again; this time the agreement lands, then the grant goes.
+    await fireEvent.press(r.getByTestId('consult-finish-later'));
+    await waitFor(() => expect(api.grantRomanConsent).toHaveBeenCalledTimes(1));
+    const lastSave = api.save.mock.invocationCallOrder[api.save.mock.invocationCallOrder.length - 1];
+    expect(lastSave).toBeLessThan(api.grantRomanConsent.mock.invocationCallOrder[0]);
+    expect(Object.keys(api.save.mock.calls[1][0].answers)).toEqual(['P0']);
+    await tick();
+    expect(api.grantRomanConsent).toHaveBeenCalledTimes(1);
+  });
+
+  it('every save fails: the grant is never sent this session (left for Settings), and onboarding is not blocked', async () => {
+    const api = makeApi({ save: jest.fn(async () => { throw offline(); }) });
+    const r = await continueWithBothBoxes(api);
+    await fireEvent.press(r.getByTestId('consult-finish-later'));
+    await waitFor(() => r.getByTestId('consult-paused'));
+    await tick();
+    await tick();
+    expect(api.save.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(api.grantRomanConsent).not.toHaveBeenCalled();
+  });
+
+  it('the agreement is rejected (P0-only PUT 409 consent_missing): the held grant is dropped, the client chooses again', async () => {
+    const api = makeApi({ save: jest.fn(async () => { throw httpErr(409, 'consent_missing'); }) });
+    await seedLocal({}, 'P0');
+    const r = await renderFlow(api);
+    await waitFor(() => r.getByTestId('consult-screen-P0'));
+    await fireEvent.press(r.getByTestId('consent-checkbox'));
+    await fireEvent.press(r.getByTestId('consent-ai-checkbox'));
+    await fireEvent.press(r.getByTestId('consult-continue'));
+    await waitFor(() => r.getByTestId('consent-error'));
+    await tick();
+    expect(api.grantRomanConsent).not.toHaveBeenCalled();
+    expect(aiBox(r)).toBe(false);
+  });
+
+  it('a held grant is cancelled when the client unticks box 2 on a return to P0', async () => {
+    const api = makeApi();
+    api.save.mockRejectedValueOnce(offline());
+    const r = await continueWithBothBoxes(api);
+    await tick();
+    await fireEvent.press(r.getByTestId('consult-back'));
+    await waitFor(() => r.getByTestId('consult-screen-P0'));
+    // Not confirmed, so box 2 is shown unticked; leaving it so means no.
+    expect(aiBox(r)).toBe(false);
+    await fireEvent.press(r.getByTestId('consult-continue'));
+    await waitFor(() => r.getByTestId('consult-screen-G1'));
+    await fireEvent.press(r.getByTestId('consult-finish-later'));
+    await waitFor(() => r.getByTestId('consult-paused'));
+    await tick();
+    expect(api.grantRomanConsent).not.toHaveBeenCalled();
+    expect(api.withdrawRomanConsent).not.toHaveBeenCalled();
+  });
+});
+
+describe('B-310-2 box 2 on P0 shows only confirmed results', () => {
+  it('grant confirmed, app restarted, Back to P0: box 2 is ticked (from the draft); Continue sends nothing', async () => {
+    const api = makeApi();
+    const r1 = await continueWithBothBoxes(api);
+    await waitFor(() => expect(api.grantRomanConsent).toHaveBeenCalledTimes(1));
+    await tick();
+    await tick();
+    expect((await readLocalState('u1', NOW))?.aiRoman).toBe(true);
+    const r = r1;
+    await restartFlow(r, api);
+    await waitFor(() => r.getByTestId('consult-screen-G1'));
+    await fireEvent.press(r.getByTestId('consult-back'));
+    await waitFor(() => r.getByTestId('consult-screen-P0'));
+    expect(aiBox(r)).toBe(true);
+    await fireEvent.press(r.getByTestId('consult-continue'));
+    await waitFor(() => r.getByTestId('consult-screen-G1'));
+    await tick();
+    expect(api.grantRomanConsent).toHaveBeenCalledTimes(1);
+    expect(api.withdrawRomanConsent).not.toHaveBeenCalled();
+  });
+
+  it('a grant that was never confirmed shows unticked after a restart', async () => {
+    const api = makeApi({ grantRomanConsent: jest.fn(async () => ({ kind: 'error' as const, status: 500 })) });
+    const r1 = await continueWithBothBoxes(api);
+    await waitFor(() => expect(api.grantRomanConsent).toHaveBeenCalledTimes(2));
+    await tick();
+    const r = r1;
+    await restartFlow(r, api);
+    await waitFor(() => r.getByTestId('consult-screen-G1'));
+    await fireEvent.press(r.getByTestId('consult-back'));
+    await waitFor(() => r.getByTestId('consult-screen-P0'));
+    expect(aiBox(r)).toBe(false);
+  });
+
+  it('GET /me/ai-consent is the truth when it answers: granted ticks box 2', async () => {
+    const api = makeApi({ getRomanConsent: jest.fn(async () => ({ kind: 'ok' as const, status: AI_ALLOWED })) });
+    await seedLocal({}, 'P0');
+    const r = await renderFlow(api);
+    await waitFor(() => r.getByTestId('consult-screen-P0'));
+    await waitFor(() => expect(aiBox(r)).toBe(true));
+  });
+
+  it('GET /me/ai-consent is the truth when it answers: withdrawn unticks a draft that said allowed', async () => {
+    const api = makeApi({ getRomanConsent: jest.fn(async () => ({ kind: 'ok' as const, status: aiStatus({ state: 'withdrawn', version: 'client-ai-v3' }) })) });
+    await seedLocal({}, 'P0', { aiRoman: true });
+    const r = await renderFlow(api);
+    await waitFor(() => r.getByTestId('consult-screen-P0'));
+    await waitFor(() => expect(aiBox(r)).toBe(false));
+  });
+
+  it('a late GET never overrides a box the client has just tapped', async () => {
+    let answer: (v: unknown) => void = () => undefined;
+    const api = makeApi({ getRomanConsent: jest.fn(() => new Promise((res) => { answer = res; })) });
+    await seedLocal({}, 'P0');
+    const r = await renderFlow(api);
+    await waitFor(() => r.getByTestId('consult-screen-P0'));
+    await fireEvent.press(r.getByTestId('consent-ai-checkbox'));
+    await fireEvent.press(r.getByTestId('consent-ai-checkbox'));
+    await act(async () => answer({ kind: 'ok', status: AI_ALLOWED }));
+    expect(aiBox(r)).toBe(false);
+  });
+
+  it('unticking on a return: DELETE with exactly one retry; still unconfirmed shows a calm notice, box 2 stays ticked', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const api = makeApi({ withdrawRomanConsent: jest.fn(async () => ({ kind: 'error' as const, status: 500 })) });
+    await seedLocal({ P0: fullAnswers().P0 }, 'G1', { aiRoman: true });
+    const r = await renderFlow(api);
+    await waitFor(() => r.getByTestId('consult-screen-G1'));
+    await fireEvent.press(r.getByTestId('consult-back'));
+    await waitFor(() => r.getByTestId('consult-screen-P0'));
+    expect(aiBox(r)).toBe(true);
+    await fireEvent.press(r.getByTestId('consent-ai-checkbox'));
+    await fireEvent.press(r.getByTestId('consult-continue'));
+    await waitFor(() => r.getByTestId('consult-screen-G1'));
+    await waitFor(() => expect(alert).toHaveBeenCalledWith(AI_WITHDRAW_NOTICE.title, AI_WITHDRAW_NOTICE.body));
+    expect(api.withdrawRomanConsent).toHaveBeenCalledTimes(2);
+    expect(AI_WITHDRAW_NOTICE.body).toMatch(/Settings > Privacy > Roman and AI\.$/);
+    await fireEvent.press(r.getByTestId('consult-back'));
+    await waitFor(() => r.getByTestId('consult-screen-P0'));
+    expect(aiBox(r)).toBe(true);
+    expect((await readLocalState('u1', NOW))?.aiRoman).toBe(true);
+    alert.mockRestore();
+  });
+
+  it('a withdrawal confirmed on the retry: no notice, box 2 unticked from then on (draft too)', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const withdrawRomanConsent = jest
+      .fn()
+      .mockResolvedValueOnce({ kind: 'error', status: null })
+      .mockResolvedValue({ kind: 'ok', status: aiStatus({ state: 'withdrawn' }) });
+    const api = makeApi({ withdrawRomanConsent });
+    await seedLocal({ P0: fullAnswers().P0 }, 'G1', { aiRoman: true });
+    const r = await renderFlow(api);
+    await waitFor(() => r.getByTestId('consult-screen-G1'));
+    await fireEvent.press(r.getByTestId('consult-back'));
+    await waitFor(() => r.getByTestId('consult-screen-P0'));
+    await fireEvent.press(r.getByTestId('consent-ai-checkbox'));
+    await fireEvent.press(r.getByTestId('consult-continue'));
+    await waitFor(() => expect(withdrawRomanConsent).toHaveBeenCalledTimes(2));
+    await tick();
+    await tick();
+    expect(alert).not.toHaveBeenCalled();
+    await fireEvent.press(r.getByTestId('consult-back'));
+    await waitFor(() => r.getByTestId('consult-screen-P0'));
+    expect(aiBox(r)).toBe(false);
+    expect((await readLocalState('u1', NOW))?.aiRoman).toBe(false);
+    alert.mockRestore();
+  });
+});
+
+describe('C-310-1 / C-310-3 completion guard and the way out of problem screens', () => {
+  it('C-310-1: two synchronous taps on Prepare my plan complete once', async () => {
+    let finish: (v: CompleteOutcome) => void = () => undefined;
+    const complete = jest.fn(() => new Promise<CompleteOutcome>((res) => { finish = res; }));
+    const api = makeApi({ complete });
+    await seedLocal(fullAnswers(), 'SUM');
+    const r = await renderFlow(api);
+    await waitFor(() => r.getByTestId('consult-screen-SUM'));
+    const prep = r.getByTestId('consult-prepare');
+    await act(async () => {
+      fireEvent.press(prep);
+      fireEvent.press(prep);
+    });
+    await waitFor(() => expect(complete).toHaveBeenCalledTimes(1));
+    await tick();
+    expect(complete).toHaveBeenCalledTimes(1);
+    await act(async () => finish({ kind: 'error', status: null }));
+    // After a failure, Try again works (the guard is released).
+    await waitFor(() => r.getByTestId('consult-problem-network'));
+    await fireEvent.press(r.getByTestId('consult-problem-action'));
+    await waitFor(() => expect(complete).toHaveBeenCalledTimes(2));
+  });
+
+  it('C-310-3: the problem screen keeps Try again primary and offers Contact support and Sign out', async () => {
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const onSignOut = jest.fn();
+    const api = makeApi({ complete: jest.fn(async (): Promise<CompleteOutcome> => ({ kind: 'conflict', code: 'not_attached' })) });
+    await seedLocal(fullAnswers(), 'SUM');
+    const r = await renderFlow(api, { onSignOut });
+    await waitFor(() => r.getByTestId('consult-screen-SUM'));
+    await fireEvent.press(r.getByTestId('consult-prepare'));
+    await waitFor(() => r.getByTestId('consult-problem-not_attached'));
+    expect(r.getByTestId('consult-problem-action')).toBeTruthy();
+    await fireEvent.press(r.getByTestId('consult-support'));
+    expect(SUPPORT_EMAIL).toBe('Bradley@Bradleytgpcoaching.com');
+    expect(open).toHaveBeenCalledWith(expect.stringMatching(/^mailto:Bradley@Bradleytgpcoaching\.com\?subject=/));
+    await fireEvent.press(r.getByTestId('consult-sign-out'));
+    expect(onSignOut).not.toHaveBeenCalled(); // asks first
+    const buttons = (alert.mock.calls[alert.mock.calls.length - 1][2] ?? []) as AlertButton[];
+    buttons.find((b) => b.style === 'destructive')?.onPress?.();
+    expect(onSignOut).toHaveBeenCalledTimes(1);
+    open.mockRestore();
+    alert.mockRestore();
+  });
+
+  it('C-310-3: the paused screen has the same way out', async () => {
+    const r = await continueWithBothBoxes(makeApi(), { onSignOut: jest.fn() });
+    await fireEvent.press(r.getByTestId('consult-finish-later'));
+    await waitFor(() => r.getByTestId('consult-paused'));
+    expect(r.getByTestId('consult-resume')).toBeTruthy();
+    expect(r.getByTestId('consult-support')).toBeTruthy();
+    expect(r.getByTestId('consult-sign-out')).toBeTruthy();
+  });
+
+  it('C-310-3: without a sign-out handler only Contact support shows', async () => {
+    const r = await continueWithBothBoxes(makeApi());
+    await fireEvent.press(r.getByTestId('consult-finish-later'));
+    await waitFor(() => r.getByTestId('consult-paused'));
+    expect(r.getByTestId('consult-support')).toBeTruthy();
+    expect(r.queryByTestId('consult-sign-out')).toBeNull();
   });
 });
 

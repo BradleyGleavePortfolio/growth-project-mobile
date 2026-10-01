@@ -5,7 +5,7 @@
  * computes macros on the device.
  */
 import React, { useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Alert, Linking, Pressable, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Answers } from '../../lib/consultation/types';
 import type { CompleteOnboardingResponse } from '../../api/consultationApi';
@@ -18,7 +18,8 @@ import {
   trainingDayPattern,
   weeksEyebrow,
 } from '../../lib/consultation/copy';
-import { FadeIn, Frame, palette, PrimaryButton, RomanLine, s } from './components';
+import { FadeIn, Frame, palette, PrimaryButton, RomanLine, s, TextLink } from './components';
+import { SUPPORT_EMAIL } from '../../lib/consultation/copy';
 
 function Disclosure({ label, children, testID }: { label: string; children: React.ReactNode; testID?: string }) {
   const [open, setOpen] = useState(false);
@@ -167,23 +168,80 @@ const PROBLEM_COPY: Record<CompleteProblem, { head: string; body: string; cta: s
   },
 };
 
-export function CompleteProblemScreen({ problem, onAction, onBack }: { problem: CompleteProblem; onAction: () => void; onBack: () => void }) {
+/**
+ * Operator C-310-3: a minimal way out of the problem and paused screens.
+ * "Try again" (or Continue) stays the primary action; below it, contact
+ * support by email and, when the host provides it, sign out.
+ */
+export const ESCAPE_COPY = {
+  support: 'Contact support',
+  signOut: 'Sign out',
+  signOutTitle: 'Sign out?',
+  signOutBody: 'Answers that have not reached the server yet are removed from this phone. You can sign in again at any time.',
+  cancel: 'Cancel',
+  supportUnavailable: 'Email is not set up on this phone. You can write to ' + SUPPORT_EMAIL + '.',
+} as const;
+
+export function supportMailto(): string {
+  return `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Help with my consultation')}`;
+}
+
+function EscapeRow({ onSignOut }: { onSignOut?: () => void }) {
+  return (
+    <View style={{ marginTop: 24 }} testID="consult-escape">
+      <TextLink
+        label={ESCAPE_COPY.support}
+        role="link"
+        testID="consult-support"
+        onPress={() => {
+          Linking.openURL(supportMailto()).catch(() => Alert.alert(ESCAPE_COPY.support, ESCAPE_COPY.supportUnavailable));
+        }}
+      />
+      {onSignOut ? (
+        <TextLink
+          label={ESCAPE_COPY.signOut}
+          testID="consult-sign-out"
+          onPress={() =>
+            Alert.alert(ESCAPE_COPY.signOutTitle, ESCAPE_COPY.signOutBody, [
+              { text: ESCAPE_COPY.cancel, style: 'cancel' },
+              { text: ESCAPE_COPY.signOut, style: 'destructive', onPress: onSignOut },
+            ])
+          }
+        />
+      ) : null}
+    </View>
+  );
+}
+
+export function CompleteProblemScreen({
+  problem,
+  onAction,
+  onBack,
+  onSignOut,
+}: {
+  problem: CompleteProblem;
+  onAction: () => void;
+  onBack: () => void;
+  onSignOut?: () => void;
+}) {
   const c = PROBLEM_COPY[problem];
   return (
     <Frame onBack={onBack} testID={`consult-problem-${problem}`} footer={<PrimaryButton label={c.cta} onPress={onAction} testID="consult-problem-action" />}>
       <Text style={[s.h2, { marginTop: 24 }]} accessibilityRole="header">{c.head}</Text>
       <Text style={[s.body, { marginTop: 12 }]}>{c.body}</Text>
+      <EscapeRow onSignOut={onSignOut} />
     </Frame>
   );
 }
 
 // ─── Paused ─────────────────────────────────────────────────────────────────
 
-export function PausedScreen({ ctx, onResume }: { ctx: CopyContext; onResume: () => void }) {
+export function PausedScreen({ ctx, onResume, onSignOut }: { ctx: CopyContext; onResume: () => void; onSignOut?: () => void }) {
   return (
     <Frame testID="consult-paused" footer={<PrimaryButton label="Continue my consultation" onPress={onResume} testID="consult-resume" />}>
       <Text style={[s.h1, { marginTop: 48 }]} accessibilityRole="header">Your place is kept.</Text>
       <RomanLine text={fillCopy("Whenever you're ready, we'll pick up exactly where you left off. {Coach} will see your answers once you finish.", ctx)} />
+      <EscapeRow onSignOut={onSignOut} />
     </Frame>
   );
 }

@@ -50,6 +50,8 @@ export function makeApi(overrides: Partial<Record<keyof ConsultationApi, jest.Mo
     save: jest.fn(async () => ({ saved_at: '2026-09-30T19:00:00Z', completed_chapters: [1] })),
     getState: jest.fn(async () => null),
     complete: jest.fn(async (): Promise<CompleteOutcome> => ({ kind: 'ok', data: RESULT })),
+    // GET /me/ai-consent: not deployed by default (box 2 starts from the draft).
+    getRomanConsent: jest.fn(async (): Promise<AiConsentOutcome> => ({ kind: 'unavailable', status: 404 })),
     grantRomanConsent: jest.fn(async (): Promise<AiConsentOutcome> => ({ kind: 'ok', status: AI_ALLOWED })),
     withdrawRomanConsent: jest.fn(async (): Promise<AiConsentOutcome> => ({ kind: 'ok', status: aiStatus() })),
     ...overrides,
@@ -61,7 +63,7 @@ export function makeApi(overrides: Partial<Record<keyof ConsultationApi, jest.Mo
 export async function seedLocal(
   answers: Answers,
   screenId: string,
-  opts: { userId?: string; dirty?: boolean; editedAt?: string; synced?: { saved_at: string | null; revision: number | null } | null } = {},
+  opts: { userId?: string; dirty?: boolean; editedAt?: string; synced?: { saved_at: string | null; revision: number | null } | null; aiRoman?: boolean } = {},
 ) {
   await writeLocalState(opts.userId ?? 'u1', {
     answers,
@@ -69,6 +71,7 @@ export async function seedLocal(
     dirty: opts.dirty ?? true,
     editedAt: opts.editedAt ?? '2026-09-30T19:00:00.000Z',
     synced: opts.synced ?? null,
+    ...(opts.aiRoman === undefined ? {} : { aiRoman: opts.aiRoman }),
   });
 }
 

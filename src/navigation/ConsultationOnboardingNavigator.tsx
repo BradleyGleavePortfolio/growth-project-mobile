@@ -23,6 +23,7 @@ import type { CompleteOnboardingResponse } from '../api/consultationApi';
 import { authEvents } from '../utils/authEvents';
 import { logger } from '../utils/logger';
 import { patchUserCache } from '../lib/userCache';
+import { signOut } from '../services/authActions';
 
 function firstNameOf(user: { firstName?: string; name?: string } | null): string | null {
   if (!user) return null;
@@ -53,6 +54,7 @@ export default function ConsultationOnboardingNavigator() {
       firstName={firstNameOf(user)}
       coachName={null}
       onFinished={onFinished}
+      onSignOut={() => void signOut(user.id)}
     />
   );
 }

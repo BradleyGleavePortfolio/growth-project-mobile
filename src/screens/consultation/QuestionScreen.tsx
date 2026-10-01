@@ -3,7 +3,7 @@
  * The template id picks the body; copy, options and validation all come
  * from `lib/consultation/definitions.ts`.
  */
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Linking, Text, View } from 'react-native';
 import { PRIVACY_POLICY_URL } from '../../config/env';
 import type {
@@ -441,9 +441,16 @@ function ConsentBody(props: BodyProps) {
   // stale or malformed records render box 1 unticked.
   const already = isConsentAnswerCurrent(answers.P0);
   const [checked, setChecked] = useState(already);
-  // Box 2 is optional and unticked by default (D2). On a later visit it shows
-  // what the client chose earlier in this session.
-  const [aiChecked, setAiChecked] = useState(!!state?.aiAllowed);
+  // Box 2 is optional and unticked by default (D2). It shows only the
+  // CONFIRMED ledger state (Opus B-310-2): a confirmed grant from earlier,
+  // the draft after a restart, or GET /me/ai-consent when it answers. A
+  // late answer never overrides what the client has just tapped.
+  const aiConfirmed = !!state?.aiAllowed;
+  const [aiChecked, setAiChecked] = useState(aiConfirmed);
+  const aiTouched = useRef(false);
+  useEffect(() => {
+    if (!aiTouched.current) setAiChecked(aiConfirmed);
+  }, [aiConfirmed]);
   const error = state?.error ?? null;
   const consent = useMemo<ConsentAnswer>(
     () => ({
@@ -483,7 +490,10 @@ function ConsentBody(props: BodyProps) {
       <Text style={[s.small, { marginTop: 20, marginBottom: 12 }]} testID="consent-ai-paragraph">{AI_CONSENT_PARAGRAPH}</Text>
       <Checkbox
         checked={aiChecked}
-        onToggle={() => setAiChecked((c) => !c)}
+        onToggle={() => {
+          aiTouched.current = true;
+          setAiChecked((c) => !c);
+        }}
         label={AI_CONSENT_CHECKBOX_LABEL}
         testID="consent-ai-checkbox"
       />

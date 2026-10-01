@@ -74,6 +74,13 @@ export function choiceOf(status: AiConsentStatusResponse): { choice: RomanAiChoi
   return { choice: 'not_allowed', withdrawable: false };
 }
 
+/** The heading: "Allowed" only for a live server grant (C-310-2). */
+export function headOf(status: AiConsentStatusResponse): string {
+  return status.granted === true && status.state === 'granted' && !status.needs_reconsent
+    ? ROMAN_AI_COPY.allowedHead
+    : ROMAN_AI_COPY.notAllowedHead;
+}
+
 function toView(out: AiConsentOutcome): View_ | null {
   if (out.kind === 'ok') return out.status ? { phase: 'ready', status: out.status } : null;
   if (out.kind === 'unavailable') return { phase: 'unavailable' };
@@ -184,8 +191,9 @@ export default function RomanAiConsentScreen({
       );
     }
     const { choice, withdrawable } = choiceOf(view.status);
-    const allowed = choice === 'allowed';
-    const head = allowed ? ROMAN_AI_COPY.allowedHead : choice === 'update_app' && withdrawable ? ROMAN_AI_COPY.allowedHead : ROMAN_AI_COPY.notAllowedHead;
+    // Opus C-310-2: "Allowed" only when the server says it is granted now
+    // (never for an older grant waiting for a new choice).
+    const head = headOf(view.status);
     const line =
       choice === 'allowed'
         ? ROMAN_AI_COPY.allowedBody
@@ -208,7 +216,9 @@ export default function RomanAiConsentScreen({
   }
 
   return (
-    <View style={styles.container} testID="roman-ai-screen">
+    // C-310-4: excluded from analytics autocapture, so the Allow / Withdraw
+    // choice never reaches product analytics.
+    <View style={styles.container} testID="roman-ai-screen" ph-no-capture>
       <View style={styles.topBar}>
         <HapticPressable
           intent="light"

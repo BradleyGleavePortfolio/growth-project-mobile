@@ -48,3 +48,26 @@ export async function grantRomanWithRetry(
   }
   return 'failed';
 }
+
+export type RomanWithdrawResult = 'withdrawn' | 'failed';
+
+/**
+ * DELETE the box 2 grant when the client unticks it on a return to P0
+ * (Opus B-310-2): exactly one retry on anything but a confirmed result,
+ * except 400 / 404 (nothing to retry against). Unconfirmed is reported so
+ * the flow can keep box 2 truthful and point to Settings.
+ */
+export async function withdrawRomanWithRetry(withdraw: () => Promise<AiConsentOutcome>): Promise<RomanWithdrawResult> {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    let out: AiConsentOutcome;
+    try {
+      out = await withdraw();
+    } catch {
+      out = { kind: 'error', status: null };
+    }
+    if (out.kind === 'ok') return 'withdrawn';
+    if (out.kind === 'unavailable' && out.status === 404) return 'failed';
+    if (out.kind === 'error' && out.status === 400) return 'failed';
+  }
+  return 'failed';
+}

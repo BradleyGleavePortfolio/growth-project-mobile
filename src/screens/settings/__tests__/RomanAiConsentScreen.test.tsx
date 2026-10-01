@@ -12,7 +12,7 @@ import * as path from 'path';
 import React from 'react';
 import { Alert, AlertButton } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
-import RomanAiConsentScreen, { choiceOf, RomanAiConsentApi, ROMAN_AI_COPY } from '../RomanAiConsentScreen';
+import RomanAiConsentScreen, { choiceOf, headOf, RomanAiConsentApi, ROMAN_AI_COPY } from '../RomanAiConsentScreen';
 import type { AiConsentOutcome, AiConsentStatusResponse } from '../../../api/aiConsentApi';
 import { AI_CONSENT_CHECKBOX_LABEL, AI_CONSENT_COPY_SHA256, AI_CONSENT_PARAGRAPH } from '../../../lib/consultation/copy';
 import { logger } from '../../../utils/logger';
@@ -189,6 +189,35 @@ describe('RomanAiConsentScreen', () => {
     await waitFor(() => r.getByTestId('roman-ai-reconsent'));
     expect(r.getByTestId('roman-ai-allow')).toBeTruthy();
     expect(r.getByTestId('roman-ai-withdraw')).toBeTruthy();
+  });
+
+  it('C-310-2: a newer server version with no live grant reads Not allowed', async () => {
+    const newer = status({ state: 'needs_reconsent', needs_reconsent: true, granted: false, version: 'client-ai-v3', granted_at: '2026-10-01T10:00:00Z', current_version: 'client-ai-v4' });
+    const r = await renderScreen(makeApi({ kind: 'ok', status: newer }));
+    await waitFor(() => r.getByTestId('roman-ai-update_app'));
+    expect(r.getByTestId('roman-ai-state').props.children).toBe('Not allowed');
+  });
+
+  it('C-310-2: a grant of earlier copy reads Not allowed', async () => {
+    const old = status({ state: 'needs_reconsent', needs_reconsent: true, granted: false, version: 'client-ai-v2', granted_at: '2026-09-01T10:00:00Z' });
+    const r = await renderScreen(makeApi({ kind: 'ok', status: old }));
+    await waitFor(() => r.getByTestId('roman-ai-reconsent'));
+    expect(r.getByTestId('roman-ai-state').props.children).toBe('Not allowed');
+    expect(headOf(old)).toBe('Not allowed');
+    expect(headOf(ALLOWED)).toBe('Allowed');
+  });
+
+  it('C-310-2: granted at the server\'s newer version (another device) reads Allowed', async () => {
+    const live = status({ state: 'granted', granted: true, version: 'client-ai-v4', granted_at: '2026-10-01T10:00:00Z', current_version: 'client-ai-v4' });
+    const r = await renderScreen(makeApi({ kind: 'ok', status: live }));
+    await waitFor(() => r.getByTestId('roman-ai-update_app'));
+    expect(r.getByTestId('roman-ai-state').props.children).toBe('Allowed');
+  });
+
+  it('C-310-4: the whole screen is excluded from analytics autocapture', async () => {
+    const r = await renderScreen(makeApi({ kind: 'ok', status: ALLOWED }));
+    await waitFor(() => r.getByTestId('roman-ai-allowed'));
+    expect(r.getByTestId('roman-ai-screen').props['ph-no-capture']).toBe(true);
   });
 
   it('points to Delete account for stopping all collection', async () => {

@@ -53,9 +53,20 @@ export interface LocalConsultationState {
   dirty: boolean;
   /** What the server had when this device last synced. */
   synced: SyncedMarker | null;
+  /**
+   * Box 2 (Roman and AI) as last CONFIRMED by the AI consent ledger on this
+   * device: true after a confirmed grant, false after a confirmed withdrawal,
+   * absent when unknown (Opus B-310-2). A yes/no flag, not health data.
+   */
+  aiRoman?: boolean;
 }
 
 export type DraftWrite = Omit<LocalConsultationState, 'version' | 'updatedAt'>;
+
+/** The confirmed box 2 flag of a stored draft (unknown unless a real boolean). */
+export function aiRomanOf(state: LocalConsultationState | null | undefined): boolean | null {
+  return typeof state?.aiRoman === 'boolean' ? state.aiRoman : null;
+}
 
 const persistAvailable = () => Platform.OS !== 'web';
 const SECURE_OPTS: SecureStore.SecureStoreOptions = {

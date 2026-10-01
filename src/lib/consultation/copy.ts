@@ -336,3 +336,15 @@ export function firstSessionLine(c1: unknown, now: Date = new Date()): string | 
   const names = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
   return `Your first session is ${names[d.getDay()]}.`;
 }
+
+/**
+ * Shown when unticking box 2 on a return to P0 could not be confirmed after
+ * one retry (Opus B-310-2). Box 2 stays ticked, because the grant stands.
+ */
+export const AI_WITHDRAW_NOTICE = {
+  title: 'Roman and AI',
+  body: 'I could not change your Roman and AI choice just now, so it is still allowed. You can change it at any time in Settings > Privacy > Roman and AI.',
+} as const;
+
+/** Support contact on the problem and paused screens (owner-approved, operator C-310-3). */
+export const SUPPORT_EMAIL = 'Bradley@Bradleytgpcoaching.com';
