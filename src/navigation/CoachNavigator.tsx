@@ -58,6 +58,8 @@ import ClientReassignModal from '../screens/coach/ClientReassignModal';
 // Sprint B-2 — coach surfaces. Macros review (PR #130), workout
 // builder + meal templates + bulk invite (this PR).
 import CoachMacrosReviewScreen from '../screens/coach/CoachMacrosReviewScreen';
+// S-REACH — coach view of a client's consultation answers (backend #607).
+import ClientConsultationScreen from '../screens/coach/ClientConsultationScreen';
 import CoachWorkoutBuilderScreen from '../screens/coach/CoachWorkoutBuilderScreen';
 import CoachMealTemplatesScreen from '../screens/coach/CoachMealTemplatesScreen';
 import CoachBulkInviteScreen from '../screens/coach/CoachBulkInviteScreen';
@@ -159,6 +161,8 @@ export type ClientsStackParamList = {
   BloodworkReviewQueue: undefined;
   // Sprint B-2 coach surfaces — closed by this PR.
   CoachMacrosReview:    { clientId: string; clientName: string };
+  /** S-REACH — consultation answers (flag coachConsultationView; ON in clinic). */
+  ClientConsultation:   { clientId: string; clientName: string };
   CoachWorkoutBuilder:  { planId?: string } | undefined;
   CoachMealTemplates:   undefined;
   CoachBulkInvite:      undefined;
@@ -312,7 +316,11 @@ function ClientsStackNavigator() {
       <ClientsStack.Screen name="InviteCodes"       component={InviteCodesScreen} />
       <ClientsStack.Screen name="RiskBoard"         component={RiskBoardScreen} />
       <ClientsStack.Screen name="ClientRiskDetail"  component={ClientRiskDetailScreen} />
-      <ClientsStack.Screen name="BloodworkReviewQueue" component={BloodworkReviewQueueScreen} />
+      {/* Bloodwork review: registered only behind featureFlags.bloodwork (OFF).
+          Personal training only, no lab surfaces in v1.0 (S-REACH). */}
+      {featureFlags.bloodwork && (
+        <ClientsStack.Screen name="BloodworkReviewQueue" component={BloodworkReviewQueueScreen} />
+      )}
       {/* Phase 8: legacy CoachHomeScreen demoted to sub-screen so existing
           navigate('Dashboard') deep links keep resolving. The home tab is
           now CommandCenter. */}
@@ -324,6 +332,14 @@ function ClientsStackNavigator() {
         name="CoachMacrosReview"
         component={CoachMacrosReviewScreen}
       />
+      {/* S-REACH — consultation answers, from client detail > Summary. */}
+      {featureFlags.coachConsultationView && (
+        <ClientsStack.Screen
+          name="ClientConsultation"
+          component={ClientConsultationScreen}
+          options={{ headerShown: true, title: 'Consultation', headerBackTitle: 'Back' }}
+        />
+      )}
       <ClientsStack.Screen
         name="CoachWorkoutBuilder"
         component={CoachWorkoutBuilderScreen}

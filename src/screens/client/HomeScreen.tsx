@@ -44,6 +44,8 @@ import TutorialHomeSlot from '../../components/tutorial/TutorialHomeSlot';
 // 'simple', and a one-time Roman card introduces carbohydrate and fat when
 // the simple week ends. 'full' (the existing grid) when the backend is silent.
 import FullMacrosIntroCard from '../../components/home/FullMacrosIntroCard';
+// S-REACH: rows into the meal plan, macro targets, progress and habits.
+import HomeQuickLinks from '../../components/home/HomeQuickLinks';
 import { useMacroDisplayMode } from '../../macros/macroDisplayStore';
 import { homeCells, type HomeCell } from '../../macros/macroDisplay';
 import { workoutApi } from '../../services/api';
@@ -445,6 +447,7 @@ export default function HomeScreen() {
             below the macro numbers; quietly returns null while loading
             and renders honest empty-state copy when there is not yet
             enough data or the finance pillar is unavailable. */}
+        <HomeQuickLinks />
         <HolisticInsightsTile />
       </ScrollView>
     </SafeAreaView>

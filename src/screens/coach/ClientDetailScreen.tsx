@@ -28,6 +28,7 @@ import { DateRangeSelector } from './client-detail/DateRangeSelector';
 import { TimelineTab } from './client-detail/TimelineTab';
 import { WeeklySummaryTab } from './client-detail/WeeklySummaryTab';
 import { FoodLogReviewSection } from './client-detail/FoodLogReviewSection';
+import { featureFlags } from '../../config/featureFlags';
 import { SummaryTab } from './client-detail/SummaryTab';
 import { WorkoutsTab } from './client-detail/WorkoutsTab';
 import { MealPlanTab } from './client-detail/MealPlanTab';
@@ -453,6 +454,15 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
               })
             }
             onOpenWorkoutBuilder={() => navigation.navigate('CoachWorkoutBuilder', undefined)}
+            onOpenConsultation={
+              featureFlags.coachConsultationView
+                ? () =>
+                    navigation.navigate('ClientConsultation', {
+                      clientId,
+                      clientName: route.params.clientName,
+                    })
+                : undefined
+            }
             onOpenAskAi={() => setAskAiVisible(true)}
             colors={colors}
             styles={styles}

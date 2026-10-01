@@ -30,11 +30,13 @@ const isDev =
  */
 const PUBLIC_ENV = {
   EXPO_PUBLIC_FEATURE_BLOODWORK: process.env.EXPO_PUBLIC_FEATURE_BLOODWORK,
+  EXPO_PUBLIC_FF_AI_GUIDE: process.env.EXPO_PUBLIC_FF_AI_GUIDE,
   EXPO_PUBLIC_FF_ADMIN_CONTROL_ROOM: process.env.EXPO_PUBLIC_FF_ADMIN_CONTROL_ROOM,
   EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT: process.env.EXPO_PUBLIC_FF_CLIENT_PATH_COPILOT,
   EXPO_PUBLIC_FF_CLIENT_TUTORIAL: process.env.EXPO_PUBLIC_FF_CLIENT_TUTORIAL,
   EXPO_PUBLIC_FF_COACH_BRIEF: process.env.EXPO_PUBLIC_FF_COACH_BRIEF,
   EXPO_PUBLIC_FF_COACH_COMMUNITY: process.env.EXPO_PUBLIC_FF_COACH_COMMUNITY,
+  EXPO_PUBLIC_FF_COACH_CONSULTATION_VIEW: process.env.EXPO_PUBLIC_FF_COACH_CONSULTATION_VIEW,
   EXPO_PUBLIC_FF_COMMUNITY_ACKS: process.env.EXPO_PUBLIC_FF_COMMUNITY_ACKS,
   EXPO_PUBLIC_FF_COMMUNITY_AI_TRIAGE: process.env.EXPO_PUBLIC_FF_COMMUNITY_AI_TRIAGE,
   EXPO_PUBLIC_FF_COMMUNITY_CHALLENGES: process.env.EXPO_PUBLIC_FF_COMMUNITY_CHALLENGES,
@@ -102,6 +104,29 @@ export const featureFlags = {
    * env: EXPO_PUBLIC_FF_CLIENT_TUTORIAL
    */
   clientTutorial: readFlag('EXPO_PUBLIC_FF_CLIENT_TUTORIAL', false),
+
+  // ─── S-REACH — launch reachability (2026-10-01) ──────────────────────────
+  /**
+   * Client "Guidance" chat (AIGuideScreen over POST /ai/chat): a live,
+   * free-form AI conversation. Operator ruling D1 ships no live AI chat in
+   * v1.0, and ruling D2 allows no AI processing of a client before they tick
+   * the optional AI box, which this path does not check. OFF unconditionally:
+   * the More row and the AIGuide route are both absent until the owner turns
+   * this on after the consent ledger lands.
+   *
+   * env: EXPO_PUBLIC_FF_AI_GUIDE
+   */
+  aiGuide: readFlag('EXPO_PUBLIC_FF_AI_GUIDE', false),
+  /**
+   * Coach view of a client's consultation answers (owner decision 09-30):
+   * the "Consultation" action on client detail and the ClientConsultation
+   * route, reading GET /coach/clients/:clientId/consultation (backend #607).
+   * OFF by default; ON in the `clinic` EAS profile. While #607 is not
+   * deployed the screen shows an honest "not available yet" state on 404.
+   *
+   * env: EXPO_PUBLIC_FF_COACH_CONSULTATION_VIEW
+   */
+  coachConsultationView: readFlag('EXPO_PUBLIC_FF_COACH_CONSULTATION_VIEW', false),
 
   // ─── Wave 11 — runtime scaffolding ───────────────────────────────────────
   /** Client Path Copilot — AI summaries + drafts on the client home tab. */

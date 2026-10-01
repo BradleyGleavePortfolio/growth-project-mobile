@@ -46,7 +46,8 @@
         "EXPO_PUBLIC_FF_COMMUNITY_TAB": "true",
         "EXPO_PUBLIC_FF_COMMUNITY_HALL": "true",
         "EXPO_PUBLIC_FF_COMMUNITY_COHORTS": "true",
-        "EXPO_PUBLIC_FF_COACH_BRIEF": "true"
+        "EXPO_PUBLIC_FF_COACH_BRIEF": "true",
+        "EXPO_PUBLIC_FF_COACH_CONSULTATION_VIEW": "true"
       }
     }
   }

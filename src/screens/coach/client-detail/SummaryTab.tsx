@@ -2,6 +2,7 @@ import React from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import CoachAiSection from '../../../components/coach/CoachAiSection';
+import { featureFlags } from '../../../config/featureFlags';
 import {
   extractClientAllergies,
   extractClientDietaryRestrictions,
@@ -24,6 +25,7 @@ export function SummaryTab({
   onOpenMacrosReview,
   onOpenWorkoutBuilder,
   onOpenAskAi,
+  onOpenConsultation,
   colors,
   styles,
 }: {
@@ -43,6 +45,12 @@ export function SummaryTab({
    * omitted, the "Ask AI" pill renders disabled.
    */
   onOpenAskAi?: () => void;
+  /**
+   * S-REACH — opens the client's consultation answers. The pill renders only
+   * when featureFlags.coachConsultationView is on (the route is registered
+   * behind the same flag) and a handler is supplied, so it is never dead.
+   */
+  onOpenConsultation?: () => void;
   colors: ThemeColors;
   styles: ClientDetailStyles;
 }) {
@@ -130,6 +138,18 @@ export function SummaryTab({
           <Ionicons name="notifications-outline" size={18} color={colors.primary} />
           <Text style={styles.actionPillText}>Send Nudge</Text>
         </TouchableOpacity>
+        {featureFlags.coachConsultationView && onOpenConsultation ? (
+          <TouchableOpacity
+            style={styles.actionPill}
+            onPress={onOpenConsultation}
+            accessibilityRole="button"
+            accessibilityLabel="Open consultation answers"
+            testID="summary-tab-consultation-pill"
+          >
+            <Ionicons name="document-text-outline" size={18} color={colors.primary} />
+            <Text style={styles.actionPillText}>Consultation</Text>
+          </TouchableOpacity>
+        ) : null}
         <TouchableOpacity
           style={styles.actionPill}
           onPress={onOpenMacrosReview}

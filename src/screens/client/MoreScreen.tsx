@@ -26,8 +26,9 @@ type MoreItem = {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   description: string;
-  // Either a sibling tab (via getParent) or a nested screen inside the More stack.
-  target: { type: 'tab'; tab: string } | { type: 'stack'; screen: string; parentScreen?: string };
+  // Either a screen inside a sibling tab's stack (via the tab navigator) or a
+  // nested screen inside the More stack.
+  target: { type: 'tab'; tab: string; screen: string } | { type: 'stack'; screen: string };
   a11yHint: string;
   // When true, the row renders Roman's face (RomanAvatar) in place of the
   // Ionicons glyph — the face+voice rule for the Roman-branded row.
@@ -36,14 +37,71 @@ type MoreItem = {
   tutorialTarget?: TutorialTargetId;
 };
 
-const MORE_ITEMS: MoreItem[] = [
+/**
+ * S-REACH (2026-10-01): coaching surfaces that were registered but had no
+ * menu entry. Each one reads a live backend route (see
+ * ops REACHABILITY_MAP.md); none is flag-gated because each works today.
+ */
+export const COACHING_MORE_ITEMS: MoreItem[] = [
   {
-    icon: 'chatbubble-ellipses-outline',
-    label: 'Guidance',
-    description: 'Ask your coach’s guide anything',
-    target: { type: 'stack', screen: 'AIGuide' },
-    a11yHint: 'Opens guidance — your coach’s AI assistant',
+    icon: 'calendar-outline',
+    label: 'Meal plan',
+    description: 'The meals your coach planned for you',
+    target: { type: 'stack', screen: 'Plan' },
+    a11yHint: 'Opens your meal plan',
   },
+  {
+    icon: 'nutrition-outline',
+    label: 'Macro targets',
+    description: 'Your daily calories and protein, and more',
+    target: { type: 'stack', screen: 'ClientMacros' },
+    a11yHint: 'Opens the targets your coach set for you',
+  },
+  {
+    icon: 'trending-up-outline',
+    label: 'Progress',
+    description: 'Weight trend and today’s totals',
+    target: { type: 'stack', screen: 'Progress' },
+    a11yHint: 'Opens your progress',
+  },
+  {
+    icon: 'checkmark-circle-outline',
+    label: 'Habits and check-in',
+    description: 'Daily habits and how you feel today',
+    target: { type: 'tab', tab: 'Home', screen: 'Habits' },
+    a11yHint: 'Opens your habits and daily check-in',
+  },
+  {
+    icon: 'time-outline',
+    label: 'Timeline',
+    description: 'Your journey so far, week by week',
+    target: { type: 'stack', screen: 'Timeline' },
+    a11yHint: 'Opens your timeline',
+  },
+  {
+    icon: 'library-outline',
+    label: 'Exercise library',
+    description: 'How each exercise is done',
+    target: { type: 'tab', tab: 'WorkoutTab', screen: 'ExerciseLibrary' },
+    a11yHint: 'Opens the exercise library',
+  },
+];
+
+/**
+ * Live AI chat (POST /ai/chat). Hidden unless featureFlags.aiGuide is on
+ * (default OFF): ruling D1 ships no live AI chat in v1.0 and ruling D2 allows
+ * no AI processing before the client opts in. The AIGuide route is gated by
+ * the same flag in ClientNavigator, so there is no dead row either way.
+ */
+const GUIDANCE_MORE_ITEM: MoreItem = {
+  icon: 'chatbubble-ellipses-outline',
+  label: 'Guidance',
+  description: 'Ask your coach’s guide anything',
+  target: { type: 'stack', screen: 'AIGuide' },
+  a11yHint: 'Opens guidance — your coach’s AI assistant',
+};
+
+const MORE_ITEMS: MoreItem[] = [
   {
     icon: 'ribbon-outline',
     label: 'Membership',
@@ -180,7 +238,12 @@ export default function MoreScreen() {
   const navigation = useNavigation<NavigationProp<ParamListBase>>();
   const items = useMemo<MoreItem[]>(
     () => {
-      const base = featureFlags.romanChat ? [ROMAN_MORE_ITEM, ...MORE_ITEMS] : MORE_ITEMS;
+      const general = featureFlags.aiGuide ? [GUIDANCE_MORE_ITEM, ...MORE_ITEMS] : MORE_ITEMS;
+      const base = [
+        ...(featureFlags.romanChat ? [ROMAN_MORE_ITEM] : []),
+        ...COACHING_MORE_ITEMS,
+        ...general,
+      ];
       return featureFlags.clientTutorial ? [...TUTORIAL_MORE_ITEMS, ...base] : base;
     },
     [],
@@ -189,7 +252,12 @@ export default function MoreScreen() {
   const handlePress = (item: MoreItem) => {
     if (item.target.type === 'stack') {
       navigation.navigate(item.target.screen);
+      return;
     }
+    // A screen in another tab's stack: go through the tab navigator and keep
+    // that stack's own first screen underneath (initial: false) so back works.
+    const tabs = navigation.getParent() ?? navigation;
+    tabs.navigate(item.target.tab, { screen: item.target.screen, initial: false });
   };
 
   return (

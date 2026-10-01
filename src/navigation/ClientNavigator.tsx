@@ -322,6 +322,23 @@ export type MoreStackParamList = {
 
 // ─── Stack navigators ─────────────────────────────────────────────────────────
 
+/**
+ * S-REACH: screens that used to be tabs (Plan, Progress) or had no entry
+ * (ClientMacros, Habits, Timeline) render their own title but no back
+ * control, and some have no safe-area padding. Pushed from More or Home they
+ * get a native header with only the back chevron, so the way back is visible.
+ */
+function backOnlyHeader(title = '') {
+  return {
+    headerShown: true,
+    title,
+    headerBackTitle: 'Back',
+    headerShadowVisible: false,
+    headerStyle: { backgroundColor: colors.bone },
+    headerTintColor: colors.ink,
+  } as const;
+}
+
 const Tab           = createBottomTabNavigator<ClientTabParamList>();
 const HomeStackNav  = createNativeStackNavigator<HomeStackParamList>();
 const WorkoutStackNav = createNativeStackNavigator<WorkoutStackParamList>();
@@ -339,7 +356,7 @@ function HomeStackNavigator() {
       }}
     >
       <HomeStackNav.Screen name="HomeMain"              component={HomeScreen} />
-      <HomeStackNav.Screen name="Habits"                component={HabitsScreen} />
+      <HomeStackNav.Screen name="Habits"                component={HabitsScreen} options={backOnlyHeader()} />
       <HomeStackNav.Screen name="Notifications"         component={NotificationsScreen} />
       <HomeStackNav.Screen name="Messages"              component={MessagesScreen} />
       {/* Phase 9 — Notification center screens */}
@@ -414,24 +431,31 @@ function MoreStackNavigator() {
       <MoreStackNav.Screen name="PrepGuide"    component={PrepGuideScreen} />
       <MoreStackNav.Screen name="Fast"         component={ProtectedFastingScreen} />
       <MoreStackNav.Screen name="Community"    component={ProtectedCommunityScreen} />
-      <MoreStackNav.Screen name="Progress"     component={ProgressScreen} />
+      <MoreStackNav.Screen name="Progress"     component={ProgressScreen} options={backOnlyHeader()} />
       <MoreStackNav.Screen name="Settings"     component={SettingsScreen} />
       <MoreStackNav.Screen name="Widgets"      component={WidgetsScreen} />
       <MoreStackNav.Screen name="Report"       component={ReportScreen} />
       <MoreStackNav.Screen name="Learn"        component={EducationScreen} />
-      <MoreStackNav.Screen name="Plan"         component={ProtectedPlanScreen} />
+      <MoreStackNav.Screen name="Plan"         component={ProtectedPlanScreen} options={backOnlyHeader()} />
       <MoreStackNav.Screen name="TrustCenter"  component={TrustCenterScreen} />
       <MoreStackNav.Screen name="DeleteAccount" component={DeleteAccountScreen} />
       <MoreStackNav.Screen name="Preferences"  component={PreferencesScreen} />
-      <MoreStackNav.Screen name="AIGuide"      component={ProtectedAIGuideScreen} />
+      {/* S-REACH: live AI chat; OFF until consent (D2) and D1 allow it. */}
+      {featureFlags.aiGuide && (
+        <MoreStackNav.Screen name="AIGuide"      component={ProtectedAIGuideScreen} />
+      )}
       <MoreStackNav.Screen name="Membership"   component={MembershipScreen} />
       {/* Phase 7B — Transformation Timeline */}
-      <MoreStackNav.Screen name="Timeline"     component={TimelineScreen} />
+      <MoreStackNav.Screen name="Timeline"     component={TimelineScreen} options={backOnlyHeader()} />
       {/* Phase 7C — Peer Leaderboard (opt-in) */}
       <MoreStackNav.Screen name="Leaderboard"          component={LeaderboardScreen} />
       <MoreStackNav.Screen name="LeaderboardSettings"  component={LeaderboardSettingsScreen} />
-      {/* Bloodwork — client-entered labs (flag OFF by default) */}
-      <MoreStackNav.Screen name="Bloodwork"    component={BloodworkEntryScreen} />
+      {/* Bloodwork — client-entered labs. Registered only behind
+          featureFlags.bloodwork (OFF): personal training only, no lab
+          surfaces in v1.0 (S-REACH). */}
+      {featureFlags.bloodwork && (
+        <MoreStackNav.Screen name="Bloodwork"    component={BloodworkEntryScreen} />
+      )}
       {/* Wave 11 — gated routes. Only registered when the matching feature
           flag is explicitly true, so stub/coming-soon copy never ships to
           production binaries (the screens still render an empty state if
@@ -462,7 +486,11 @@ function MoreStackNavigator() {
           Reachable via deep-link and from MoreScreen entries (added
           in a follow-up; route registration first so deep-links
           work today). */}
-      <MoreStackNav.Screen name="ClientMacros"        component={ProtectedClientMacrosScreen} />
+      <MoreStackNav.Screen
+        name="ClientMacros"
+        component={ProtectedClientMacrosScreen}
+        options={backOnlyHeader('Macro targets')}
+      />
       <MoreStackNav.Screen name="ClientDailyMealPlan" component={ProtectedClientDailyMealPlanScreen} />
       <MoreStackNav.Screen name="ClientWorkoutViewer" component={ProtectedClientWorkoutViewerScreen} />
       <MoreStackNav.Screen name="WorkoutAssignmentDetail" component={ProtectedWorkoutAssignmentDetailScreen} />
