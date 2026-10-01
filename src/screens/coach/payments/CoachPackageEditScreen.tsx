@@ -43,6 +43,11 @@ import { track } from '../../../lib/analytics';
 import { useTheme } from '../../../theme/ThemeProvider';
 import type { SemanticTokens, Tokens } from '../../../theme/tokens';
 import { parseDollarsToCents } from '../../../utils/currency';
+import {
+  PACKAGE_PRICE_ERROR_CODES,
+  PACKAGE_PRICE_HELPER,
+  packagePriceIssue,
+} from '../../../utils/packagePrice';
 import { buildPackageShareUrl } from '../../../utils/packageShare';
 import { useCurrentUser } from '../../../hooks/useCurrentUser';
 import PackageDetailSurface, {
@@ -131,14 +136,9 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
       return { payload: null, message: 'Please give the package a name.' };
     }
     const cents = parseDollarsToCents(priceText);
-    if (cents == null) {
-      return { payload: null, message: 'Enter a valid price.' };
-    }
-    if (cents === 0) {
-      return {
-        payload: null,
-        message: 'Price must be greater than zero. Use a free invite code for comps.',
-      };
+    const priceIssue = packagePriceIssue(cents, billingInterval, original?.priceCents);
+    if (cents == null || priceIssue) {
+      return { payload: null, message: priceIssue };
     }
     const features = featuresText
       .split('\n')
@@ -167,7 +167,7 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
       },
       message: null,
     };
-  }, [title, description, priceText, billingInterval, trialText, featuresText]);
+  }, [title, description, priceText, billingInterval, trialText, featuresText, original]);
 
   const handleSave = useCallback(async () => {
     const v = validate();
@@ -212,6 +212,9 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
             'The packages backend module is not deployed in this environment.',
           ),
         );
+      } else if (code && PACKAGE_PRICE_ERROR_CODES.has(code)) {
+        warningTap();
+        Alert.alert('Check the price', errorMessage(err, PACKAGE_PRICE_HELPER));
       } else if (code === 'PACKAGE_PRICING_LOCKED') {
         warningTap();
         Alert.alert(
@@ -338,6 +341,10 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
   }
 
   const archived = original?.status === 'archived';
+  // S-FEE — inline price rule under the field, as the coach types.
+  const priceInlineIssue = priceText.trim()
+    ? packagePriceIssue(parseDollarsToCents(priceText), billingInterval, original?.priceCents)
+    : null;
   // Pricing is immutable once a package has active subscribers — surface that
   // up-front (helper copy) and again if the backend rejects a price change.
   const pricingLocked = isEdit && (original?.subscriberCount ?? 0) > 0;
@@ -404,6 +411,12 @@ export default function CoachPackageEditScreen({ navigation, route }: Props) {
           keyboardType="decimal-pad"
           maxLength={12}
         />
+        <Text
+          testID="package-price-helper"
+          style={priceInlineIssue ? styles.priceIssueText : styles.priceHelperText}
+        >
+          {priceInlineIssue ?? PACKAGE_PRICE_HELPER}
+        </Text>
 
         <Label semanticColors={semanticColors} tokens={tokens}>Billing</Label>
         <View style={styles.segment}>
@@ -778,6 +791,8 @@ const makeStyles = (semanticColors: SemanticTokens, tokens: Tokens) =>
       paddingVertical: 12,
     },
     linkBtnText: { fontSize: 14, color: semanticColors.accent, fontWeight: '500' },
+    priceHelperText: { marginTop: 6, fontSize: 12, color: semanticColors.textMuted },
+    priceIssueText: { marginTop: 6, fontSize: 12, color: tokens.colors.error },
     errorText: {
       marginTop: 12,
       color: tokens.colors.error,

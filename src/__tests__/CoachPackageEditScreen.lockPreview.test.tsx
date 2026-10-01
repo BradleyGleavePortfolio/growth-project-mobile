@@ -171,3 +171,75 @@ describe('CoachPackageEditScreen — preview as buyer', () => {
     expect(getByLabelText('Checkout disabled in preview')).toBeTruthy();
   });
 });
+
+describe('CoachPackageEditScreen — S-FEE price rule ($19.99 minimum or free)', () => {
+  it('shows the price rule under the price field', async () => {
+    const props = makeProps(pkg());
+    const { getByTestId } = await render(
+      <CoachPackageEditScreen navigation={props.navigation} route={props.route} />,
+    );
+    expect(getByTestId('package-price-helper').props.children).toBe(
+      'Paid packages start at $19.99, or make it free.',
+    );
+  });
+
+  it('blocks saving a paid price under $19.99 and says what to do', async () => {
+    const props = makeProps(pkg());
+    const { getByDisplayValue, getByLabelText, getAllByText } = await render(
+      <CoachPackageEditScreen navigation={props.navigation} route={props.route} />,
+    );
+    await fireEvent.changeText(getByDisplayValue('99.00'), '10.00');
+    await fireEvent.press(getByLabelText('Save changes'));
+    expect(mockUpdate).not.toHaveBeenCalled();
+    // Inline under the field and as the save error.
+    expect(getAllByText('Paid packages start at $19.99, or make it free.').length).toBe(2);
+  });
+
+  it('blocks a free recurring package with the one-time message', async () => {
+    const props = makeProps(pkg());
+    const { getByDisplayValue, getByLabelText, getAllByText } = await render(
+      <CoachPackageEditScreen navigation={props.navigation} route={props.route} />,
+    );
+    await fireEvent.changeText(getByDisplayValue('99.00'), '0');
+    await fireEvent.press(getByLabelText('Save changes'));
+    expect(mockUpdate).not.toHaveBeenCalled();
+    expect(
+      getAllByText(
+        'Free packages are one-time. Switch billing to One-time, or set a price of $19.99 or more.',
+      ).length,
+    ).toBe(2);
+  });
+
+  it('keeps a package saved under $19.99 editable while its price is unchanged', async () => {
+    mockUpdate.mockResolvedValue({ data: pkg({ priceCents: 1000 }) });
+    const props = makeProps(pkg({ priceCents: 1000 }));
+    const { getByLabelText } = await render(
+      <CoachPackageEditScreen navigation={props.navigation} route={props.route} />,
+    );
+    await fireEvent.press(getByLabelText('Save changes'));
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+  });
+
+  it('shows the server price message when the backend rejects the price', async () => {
+    mockUpdate.mockRejectedValue({
+      response: {
+        data: {
+          error: 'PACKAGE_RECURRING_PRICE_BELOW_MINIMUM',
+          message:
+            'The recurring price starts at $19.99. Set it to $19.99 or more, or remove the recurring price.',
+        },
+      },
+    });
+    const props = makeProps(pkg());
+    const { getByLabelText } = await render(
+      <CoachPackageEditScreen navigation={props.navigation} route={props.route} />,
+    );
+    await fireEvent.press(getByLabelText('Save changes'));
+    await waitFor(() => {
+      const calls = (Alert.alert as jest.Mock).mock.calls;
+      const hit = calls.find((c) => c[0] === 'Check the price');
+      expect(hit).toBeTruthy();
+      expect(hit[1]).toMatch(/recurring price starts at \$19\.99/);
+    });
+  });
+});
