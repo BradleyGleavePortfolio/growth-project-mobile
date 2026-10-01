@@ -33,7 +33,7 @@ import {
 } from '../../hooks/useCommunity';
 import { ThreadHeader } from '../../components/community';
 import { romanCopy } from '../../components/community/romanVoice';
-import { communityErrorCode, contentRejectedMessage } from '../../api/communitySafetyApi';
+import { describeCommunityFailure } from '../../api/communityErrors';
 import type { CommunityNav, CommunityRoute } from './communityNavTypes';
 
 const TITLE_MAX = 200; // mirror backend CreatePostDto.title (1..200)
@@ -71,14 +71,8 @@ export default function CommunityComposerScreen(): React.ReactElement {
   // Apple 1.2 content filter: the server rejects objectionable text with 422.
   // The draft stays in the fields so the member can rephrase.
   const showSendError = (err: unknown) => {
-    const rejected = contentRejectedMessage(err);
-    if (rejected) {
-      Alert.alert('Please rephrase', rejected);
-    } else if (communityErrorCode(err) === 'community.dm.blocked') {
-      Alert.alert('Message not sent', 'You cannot message this member.');
-    } else {
-      Alert.alert('Not sent', 'Could not send this. Please try again.');
-    }
+    const failure = describeCommunityFailure(err, mode === 'dm' ? 'send_message' : 'send_post');
+    Alert.alert(failure.title, failure.message);
   };
 
   const submit = () => {

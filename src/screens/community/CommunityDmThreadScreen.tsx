@@ -33,7 +33,7 @@ import {
   ComposerInput,
 } from '../../components/community';
 import SafetyMenu from '../../components/community/SafetyMenu';
-import { communityErrorCode, contentRejectedMessage } from '../../api/communitySafetyApi';
+import { describeCommunityFailure } from '../../api/communityErrors';
 import type { CommunityNav, CommunityRoute } from './communityNavTypes';
 
 const DM_MAX = 4000; // mirror backend SendDmDto (body 1..4000)
@@ -61,14 +61,11 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
     sendDm.mutateAsync(body).then(
       () => undefined,
       (err: unknown) => {
-        const rejected = contentRejectedMessage(err);
-        if (rejected) {
-          Alert.alert('Please rephrase', rejected);
-        } else if (communityErrorCode(err) === 'community.dm.blocked') {
-          Alert.alert('Message not sent', 'You cannot message this member.');
-        } else {
-          Alert.alert('Message not sent', 'Could not send your message. Please try again.');
-        }
+        // Content filter (draft kept), DM closed by a block, DMs turned off,
+        // offline, rate limit: specific copy; anything else carries a
+        // support reference and goes to Sentry.
+        const failure = describeCommunityFailure(err, 'send_message');
+        Alert.alert(failure.title, failure.message);
         throw err;
       },
     );
@@ -94,6 +91,7 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
               authorUserId={recipientId}
               authorName={participantLabel}
               viewerUserId={client?.id}
+              viewerCoachId={client?.coach_id}
               onBlocked={() => navigation.goBack()}
               testID="community-dmthread-safety"
             />
@@ -135,6 +133,7 @@ export default function CommunityDmThreadScreen(): React.ReactElement {
                     authorUserId={item.sender_user_id}
                     authorName={participantLabel}
                     viewerUserId={client?.id}
+                    viewerCoachId={client?.coach_id}
                     onBlocked={() => navigation.goBack()}
                     testID={`dm-message-safety-${item.id}`}
                   />

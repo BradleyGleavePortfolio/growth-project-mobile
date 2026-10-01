@@ -31,6 +31,11 @@ jest.mock('../../HapticPressable', () => {
 
 jest.mock('@expo/vector-icons', () => ({ Ionicons: () => null }));
 
+const mockCapture = jest.fn();
+jest.mock('../../../services/sentry', () => ({
+  captureError: (...a: unknown[]) => mockCapture(...a),
+}));
+
 const mockReport = jest.fn();
 const mockBlock = jest.fn();
 jest.mock('../../../api/communitySafetyApi', () => {
@@ -70,6 +75,7 @@ let alertSpy: jest.SpyInstance;
 beforeEach(() => {
   mockReport.mockReset().mockResolvedValue(undefined);
   mockBlock.mockReset().mockResolvedValue(undefined);
+  mockCapture.mockReset();
   alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
 });
 afterEach(() => alertSpy.mockRestore());
@@ -114,7 +120,12 @@ describe('SafetyMenu', () => {
     await fireEvent.press(getByTestId('sm'));
     await fireEvent.press(getByTestId('sm-block'));
     expect(mockBlock).not.toHaveBeenCalled();
-    expect(alertSpy).toHaveBeenCalledWith('Block Sam?', expect.any(String), expect.any(Array));
+    // Two-way block copy: both people stop seeing each other.
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Block Sam?',
+      "You and Sam will no longer see each other's posts, comments, messages or voice notes, and neither of you can message the other. They are not told. You can unblock them from Community safety.",
+      expect.any(Array),
+    );
     await act(async () => {
       await pressAlertButton('Block');
     });
@@ -125,7 +136,13 @@ describe('SafetyMenu', () => {
 
   it('shows the server copy when blocking the coach is refused', async () => {
     const err = Object.assign(new Error('403'), {
-      response: { status: 403, data: { code: 'community.block.workspace_coach' } },
+      response: {
+        status: 403,
+        data: {
+          code: 'community.block.workspace_coach',
+          message: 'You cannot block your coach. You can report a message or post.',
+        },
+      },
     });
     mockBlock.mockRejectedValueOnce(err);
     const { getByTestId } = await renderMenu();
@@ -135,8 +152,81 @@ describe('SafetyMenu', () => {
       await pressAlertButton('Block');
     });
     expect(alertSpy).toHaveBeenLastCalledWith(
-      'Could not block',
-      expect.stringMatching(/cannot block your own coach/),
+      'Not blocked',
+      'You cannot block your coach. You can report a message or post.',
+    );
+    expect(mockCapture).not.toHaveBeenCalled();
+  });
+
+  it('does not offer Block on the coach’s own content (no dead button); Report stays', async () => {
+    const { getByTestId, queryByTestId } = await renderMenu({
+      authorUserId: 'coach-1',
+      authorName: 'Coach Dana',
+      viewerCoachId: 'coach-1',
+    });
+    await fireEvent.press(getByTestId('sm'));
+    expect(getByTestId('sm-report')).toBeTruthy();
+    expect(queryByTestId('sm-block')).toBeNull();
+  });
+
+  it('a refused report says what happened and what to do (rate limit, offline)', async () => {
+    mockReport.mockRejectedValueOnce(
+      Object.assign(new Error('429'), { response: { status: 429, data: {} } }),
+    );
+    const { getByTestId } = await renderMenu();
+    await fireEvent.press(getByTestId('sm'));
+    await fireEvent.press(getByTestId('sm-report'));
+    await fireEvent.press(getByTestId('sm-reason-harassment'));
+    await waitFor(() =>
+      expect(alertSpy).toHaveBeenLastCalledWith(
+        'Report not sent',
+        'You are doing that a little too often. Wait a minute, then try again.',
+      ),
+    );
+    mockReport.mockRejectedValueOnce(
+      Object.assign(new Error('Network Error'), { isAxiosError: true, config: { headers: {} } }),
+    );
+    // the sheet stays on the reasons so the member can send again at once
+    await fireEvent.press(getByTestId('sm-reason-spam'));
+    await waitFor(() =>
+      expect(alertSpy).toHaveBeenLastCalledWith(
+        'Report not sent',
+        'You appear to be offline. Check your connection, then try again.',
+      ),
+    );
+    expect(mockCapture).not.toHaveBeenCalled();
+  });
+
+  it('an unexpected failure shows a short reference and the support email, and goes to Sentry', async () => {
+    mockReport.mockRejectedValueOnce(
+      Object.assign(new Error('500'), {
+        response: {
+          status: 500,
+          data: {},
+          headers: { 'x-request-id': '3f2a9c1e-1111-4222-8333-444455556666' },
+        },
+      }),
+    );
+    const { getByTestId } = await renderMenu();
+    await fireEvent.press(getByTestId('sm'));
+    await fireEvent.press(getByTestId('sm-report'));
+    await fireEvent.press(getByTestId('sm-reason-harassment'));
+    await waitFor(() =>
+      expect(alertSpy).toHaveBeenLastCalledWith(
+        'Report not sent',
+        expect.stringContaining('quote reference 3F2A9C1E'),
+      ),
+    );
+    const last = alertSpy.mock.calls[alertSpy.mock.calls.length - 1];
+    expect(last[1]).toMatch(/@/);
+    expect(last[1]).not.toMatch(/!/);
+    expect(mockCapture).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({
+        action: 'report',
+        request_id: '3f2a9c1e-1111-4222-8333-444455556666',
+        reference: '3F2A9C1E',
+      }),
     );
   });
 

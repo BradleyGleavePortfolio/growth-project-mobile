@@ -30,7 +30,7 @@ import {
 } from '../../hooks/useCommunity';
 import { communityApi } from '../../api/communityApi';
 import { useQuery } from '@tanstack/react-query';
-import { contentRejectedMessage } from '../../api/communitySafetyApi';
+import { describeCommunityFailure } from '../../api/communityErrors';
 import SafetyMenu from '../../components/community/SafetyMenu';
 import {
   CommunityEmptyState,
@@ -85,6 +85,7 @@ export default function CommunityThreadScreen(): React.ReactElement {
               targetId={post.data.id}
               authorUserId={post.data.author_user_id}
               viewerUserId={client?.id}
+              viewerCoachId={client?.coach_id}
               onBlocked={() => navigation.goBack()}
               testID="community-thread-post-safety"
             />
@@ -135,6 +136,7 @@ export default function CommunityThreadScreen(): React.ReactElement {
                   targetId={item.id}
                   authorUserId={item.author_user_id}
                   viewerUserId={client?.id}
+                  viewerCoachId={client?.coach_id}
                   testID={`comment-safety-${item.id}`}
                 />
               </View>
@@ -153,12 +155,10 @@ export default function CommunityThreadScreen(): React.ReactElement {
               () => undefined,
               (err: unknown) => {
                 // Apple 1.2 content filter: keep the draft (the composer
-                // restores it on rejection) and say why.
-                const rejected = contentRejectedMessage(err);
-                Alert.alert(
-                  rejected ? 'Please rephrase' : 'Reply not sent',
-                  rejected ?? 'Could not send your reply. Please try again.',
-                );
+                // restores it on rejection) and say why. Every other failure
+                // gets specific copy or a support reference.
+                const failure = describeCommunityFailure(err, 'send_reply');
+                Alert.alert(failure.title, failure.message);
                 throw err;
               },
             )

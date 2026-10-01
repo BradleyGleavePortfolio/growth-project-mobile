@@ -25,7 +25,7 @@
  * (face + voice contract). A CompletionToast confirms a successful Hide (G11).
  * Touch targets are >= 44pt.
  */
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -33,6 +33,7 @@ import {
   FlatList,
   ActivityIndicator,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../theme/useTheme';
@@ -107,6 +108,7 @@ function confirmCopy(d: PendingDecision): { title: string; body: string; confirm
   }
 }
 import type { CoachCommunityNav } from './coachCommunityNavTypes';
+import { describeCommunityFailure } from '../../api/communityErrors';
 
 export default function CoachCommunityModerationScreen(): React.ReactElement {
   const { semanticColors } = useTheme();
@@ -122,12 +124,22 @@ export default function CoachCommunityModerationScreen(): React.ReactElement {
 
   const items = flagged.data ?? [];
   const isEmpty = !flagged.isLoading && !flagged.isError && items.length === 0;
+  // Described once per error (an unexpected one is reported to Sentry once).
+  const queueFailure = useMemo(
+    () => (flagged.isError ? describeCommunityFailure(flagged.error, 'load_queue') : null),
+    [flagged.isError, flagged.error],
+  );
 
   const onConfirm = useCallback(() => {
     if (!pending) return;
     const { action } = pending;
     moderate.mutate(pending, {
       onSuccess: () => completion.show(DONE_COPY[action]),
+      // The hook rolls the optimistic removal back; say what happened.
+      onError: (err: unknown) => {
+        const failure = describeCommunityFailure(err, 'moderate');
+        Alert.alert(failure.title, failure.message);
+      },
       onSettled: () => setPending(null),
     });
   }, [pending, moderate, completion]);
@@ -253,7 +265,7 @@ export default function CoachCommunityModerationScreen(): React.ReactElement {
     >
       {flagged.isError ? (
         <CoachErrorState
-          message="Could not load the review queue. Pull to retry."
+          message={queueFailure?.message ?? ''}
           onRetry={() => flagged.refetch()}
           retrying={flagged.isRefetching}
           testID="coach-community-moderation-error"

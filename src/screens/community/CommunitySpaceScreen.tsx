@@ -13,7 +13,7 @@
  * renders the SAME calm retryable error the route renders instead of collapsing
  * a null workspace id into an inert empty state.
  */
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   StyleSheet,
@@ -33,6 +33,7 @@ import SafetyMenu from '../../components/community/SafetyMenu';
 import HapticPressable from '../../components/HapticPressable';
 import type { CommunityPost } from '../../api/communityApi';
 import type { CommunityNav } from './communityNavTypes';
+import { COMMUNITY_SUPPORT_EMAIL, describeCommunityFailure } from '../../api/communityErrors';
 
 interface Props {
   embedded?: boolean;
@@ -95,6 +96,11 @@ export default function CommunitySpaceScreen({
   // True-empty is only a successful query that returned zero posts.
   const isPostsError = !posts.isLoading && posts.isError;
   const isEmpty = !posts.isLoading && !posts.isError && data.length === 0;
+  // Described once per error (an unexpected one is reported to Sentry once).
+  const postsFailure = useMemo(
+    () => (isPostsError ? describeCommunityFailure(posts.error, 'load_posts') : null),
+    [isPostsError, posts.error],
+  );
 
   const Container: React.ComponentType<{ children: React.ReactNode }> = embedded
     ? ({ children }) => <View style={styles.flex}>{children}</View>
@@ -140,7 +146,7 @@ export default function CommunitySpaceScreen({
             color={semanticColors.textMuted}
           />
           <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
-            We could not load this space. Please try again.
+            {`We could not load this space. Check your connection, then tap Try again. If it keeps happening, email ${COMMUNITY_SUPPORT_EMAIL}.`}
           </Text>
           <HapticPressable
             intent="light"
@@ -171,7 +177,7 @@ export default function CommunitySpaceScreen({
             color={semanticColors.textMuted}
           />
           <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
-            We could not load these posts. Please try again.
+            {postsFailure?.message}
           </Text>
           <HapticPressable
             intent="light"
@@ -218,6 +224,7 @@ export default function CommunitySpaceScreen({
                   targetId={item.id}
                   authorUserId={item.author_user_id}
                   viewerUserId={client?.id}
+                  viewerCoachId={client?.coach_id}
                   testID={`post-safety-${item.id}`}
                 />
               }

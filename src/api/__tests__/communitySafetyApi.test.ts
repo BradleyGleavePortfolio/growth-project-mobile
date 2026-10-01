@@ -27,7 +27,10 @@ jest.mock('../../services/api', () => ({
 jest.mock('../../utils/idempotency', () => ({
   __esModule: true,
   generateIdempotencyKey: () => 'test-idem-key',
+  randomUuid: () => 'abcdef12-0000-4000-8000-000000000000',
 }));
+
+jest.mock('../../services/sentry', () => ({ captureError: jest.fn() }));
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const api = require('../../services/api').default as {
@@ -141,10 +144,17 @@ describe('error helpers', () => {
       'community.dm.blocked',
     );
     expect(blockErrorMessage(axiosError(403, { code: 'community.block.workspace_coach' }))).toMatch(
-      /cannot block your own coach/,
+      /cannot block your coach/,
     );
     expect(blockErrorMessage(axiosError(400, { code: 'community.block.self' }))).toMatch(/yourself/);
-    expect(blockErrorMessage(axiosError(500))).toMatch(/try again/);
+    // server wording wins for member-facing block codes
+    expect(
+      blockErrorMessage(axiosError(404, { code: 'community.block.not_found', message: 'Server words.' })),
+    ).toBe('Server words.');
+    // unexpected: never a bare "try again"; carries a reference and the support email
+    const unknown = blockErrorMessage(axiosError(500));
+    expect(unknown).toMatch(/reference ABCDEF12/);
+    expect(unknown).toMatch(/@/);
   });
 });
 

@@ -24,6 +24,7 @@ import HapticPressable from '../../components/HapticPressable';
 import { ThreadHeader } from '../../components/community';
 import { useTheme } from '../../theme/useTheme';
 import { spacing, radius } from '../../theme/tokens';
+import { describeCommunityFailure } from '../../api/communityErrors';
 import {
   communitySafetyApi,
   COMMUNITY_GUIDELINES,
@@ -50,15 +51,27 @@ export default function CommunitySafetyScreen(): React.ReactElement {
   const unblock = useMutation({
     mutationFn: (userId: string) => communitySafetyApi.unblock(userId),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['community'] }),
-    onError: () => Alert.alert('Could not unblock', 'Please try again.'),
+    onError: (err: unknown) => {
+      const failure = describeCommunityFailure(
+        err,
+        'unblock',
+        info.data?.contact_email || COMMUNITY_SAFETY_FALLBACK_EMAIL,
+      );
+      Alert.alert(failure.title, failure.message);
+    },
   });
 
   const email = info.data?.contact_email || COMMUNITY_SAFETY_FALLBACK_EMAIL;
   const guidelines = info.data?.guidelines?.length ? info.data.guidelines : COMMUNITY_GUIDELINES;
   const commitment = info.data?.response_commitment || COMMUNITY_RESPONSE_COMMITMENT;
+  // Described once per error (an unexpected one is reported to Sentry once).
+  const blocksFailure = React.useMemo(
+    () => (blocks.isError ? describeCommunityFailure(blocks.error, 'load_blocks', email) : null),
+    [blocks.isError, blocks.error, email],
+  );
 
   const confirmUnblock = (userId: string, name: string) =>
-    Alert.alert(`Unblock ${name}?`, 'You will see their community content again and can message each other.', [
+    Alert.alert(`Unblock ${name}?`, 'You will both see each other’s community content again, and you can message each other.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Unblock', onPress: () => unblock.mutate(userId) },
     ]);
@@ -128,7 +141,19 @@ export default function CommunitySafetyScreen(): React.ReactElement {
           {blocks.isLoading ? (
             <ActivityIndicator color={semanticColors.accent} />
           ) : blocks.isError ? (
-            <Text style={body}>Could not load your block list.</Text>
+            <View testID="community-safety-blocks-error">
+              <Text style={body}>{blocksFailure?.message}</Text>
+              <HapticPressable
+                intent="light"
+                onPress={() => blocks.refetch()}
+                accessibilityRole="button"
+                accessibilityLabel="Load the block list again"
+                style={styles.unblock}
+                testID="community-safety-blocks-retry"
+              >
+                <Text style={[styles.link, { color: semanticColors.accent }]}>Try again</Text>
+              </HapticPressable>
+            </View>
           ) : (blocks.data ?? []).length === 0 ? (
             <Text style={[body, { color: semanticColors.textMuted }]}>
               You have not blocked anyone.

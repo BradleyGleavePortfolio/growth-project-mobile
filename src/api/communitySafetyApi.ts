@@ -19,6 +19,7 @@ import { z } from 'zod';
 import api from '../services/api';
 import { generateIdempotencyKey } from '../utils/idempotency';
 import { call } from './apiCall';
+import { COMMUNITY_SUPPORT_EMAIL, describeCommunityFailure } from './communityErrors';
 
 /** Report targets accepted by the backend report route. */
 export type CommunityReportTargetType = 'post' | 'comment' | 'message';
@@ -39,7 +40,7 @@ export const COMMUNITY_REPORT_REASONS: ReadonlyArray<{ code: string; label: stri
 ];
 
 /** Published fallback when /community/safety cannot be reached. */
-export const COMMUNITY_SAFETY_FALLBACK_EMAIL = 'Bradley@Bradleytgpcoaching.com';
+export const COMMUNITY_SAFETY_FALLBACK_EMAIL = COMMUNITY_SUPPORT_EMAIL;
 
 /**
  * Community guidelines (owner-approved copy, 2026-10-01 09:07 PDT). Mirrors
@@ -184,16 +185,11 @@ export function contentRejectedMessage(err: unknown): string | null {
     : CONTENT_REJECTED_FALLBACK;
 }
 
-/** Calm copy for a failed block, branching on the server's codes. */
+/**
+ * Copy for a failed block: the server's member-facing message for its block
+ * codes (`community.block.self` / `not_found` / `workspace_coach`), specific
+ * status copy otherwise, and a support reference for anything unexpected.
+ */
 export function blockErrorMessage(err: unknown): string {
-  switch (communityErrorCode(err)) {
-    case 'community.block.workspace_coach':
-      return 'You cannot block your own coach. You can report the content, or contact the team from Community safety.';
-    case 'community.block.self':
-      return 'You cannot block yourself.';
-    case 'community.block.not_found':
-      return 'This member could not be found.';
-    default:
-      return 'Could not block this member. Please try again.';
-  }
+  return describeCommunityFailure(err, 'block').message;
 }

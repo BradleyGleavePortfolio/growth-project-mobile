@@ -6,10 +6,13 @@
  *
  * A 44pt "More" button opens a sheet:
  *   - Report…  -> reason list (backend report reasons) -> POST /community/moderation/reports
- *   - Block <name> (only for other people's content) -> confirm -> POST /community/blocks
- * Blocking hides the person's content and closes DMs both ways; the blocked
- * person is not told. Members cannot block their own coach (server 403), in
- * which case the calm server-specific copy is shown and they can still report.
+ *   - Block <name> (only for other members' content) -> confirm -> POST /community/blocks
+ * Blocking is two-way: neither person sees the other's posts, comments,
+ * messages or voice notes, and DMs close both ways; the blocked person is not
+ * told. Members cannot block their own coach, so Block is not offered on the
+ * coach's content (no dead button); Report always is.
+ * Failures use describeCommunityFailure: specific copy per server code and
+ * status, a support reference (and a Sentry report) for anything unexpected.
  */
 import React, { useState } from 'react';
 import { Alert, Modal, View, Text, StyleSheet, ActivityIndicator } from 'react-native';
@@ -18,9 +21,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import HapticPressable from '../HapticPressable';
 import { useTheme } from '../../theme/useTheme';
 import { spacing, radius, semantic } from '../../theme/tokens';
+import { describeCommunityFailure } from '../../api/communityErrors';
 import {
   communitySafetyApi,
-  blockErrorMessage,
   COMMUNITY_REPORT_REASONS,
   COMMUNITY_REPORT_SENT_MESSAGE,
   COMMUNITY_REPORT_SENT_TITLE,
@@ -35,6 +38,11 @@ export interface SafetyMenuProps {
   authorName?: string | null;
   /** Viewer's own user id; their own content gets no Report/Block. */
   viewerUserId?: string | null;
+  /**
+   * The viewer's coach (owner of the community workspace). Members cannot
+   * block their coach, so Block is not offered on the coach's content.
+   */
+  viewerCoachId?: string | null;
   /** Called after a successful block (screens refetch / navigate away). */
   onBlocked?: (userId: string) => void;
   testID?: string;
@@ -48,6 +56,7 @@ export default function SafetyMenu({
   authorUserId,
   authorName,
   viewerUserId,
+  viewerCoachId,
   onBlocked,
   testID = 'safety-menu',
 }: SafetyMenuProps): React.ReactElement | null {
@@ -59,7 +68,8 @@ export default function SafetyMenu({
 
   const isOwn = !!viewerUserId && !!authorUserId && viewerUserId === authorUserId;
   if (isOwn || !targetId) return null;
-  const canBlock = !!authorUserId;
+  const isCoach = !!viewerCoachId && !!authorUserId && viewerCoachId === authorUserId;
+  const canBlock = !!authorUserId && !isCoach;
   const who = authorName?.trim() || 'this member';
 
   const close = () => {
@@ -73,8 +83,9 @@ export default function SafetyMenu({
       await communitySafetyApi.report({ target_type: targetType, target_id: targetId, reason });
       close();
       Alert.alert(COMMUNITY_REPORT_SENT_TITLE, COMMUNITY_REPORT_SENT_MESSAGE);
-    } catch {
-      Alert.alert('Could not send report', 'Please try again.');
+    } catch (err) {
+      const failure = describeCommunityFailure(err, 'report');
+      Alert.alert(failure.title, failure.message);
     } finally {
       setBusy(false);
     }
@@ -84,7 +95,7 @@ export default function SafetyMenu({
     if (!authorUserId) return;
     Alert.alert(
       `Block ${who}?`,
-      'You will no longer see their posts, comments, messages or voice notes, and neither of you can message the other. They are not notified. You can unblock them from Community safety.',
+      `You and ${who} will no longer see each other's posts, comments, messages or voice notes, and neither of you can message the other. They are not told. You can unblock them from Community safety.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -100,7 +111,8 @@ export default function SafetyMenu({
               await qc.invalidateQueries({ queryKey: ['community'] });
               onBlocked?.(authorUserId);
             } catch (err) {
-              Alert.alert('Could not block', blockErrorMessage(err));
+              const failure = describeCommunityFailure(err, 'block');
+              Alert.alert(failure.title, failure.message);
             } finally {
               setBusy(false);
             }

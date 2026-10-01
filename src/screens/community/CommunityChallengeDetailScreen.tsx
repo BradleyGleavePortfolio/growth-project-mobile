@@ -66,11 +66,16 @@ import SafetyMenu from '../../components/community/SafetyMenu';
 import { generateIdempotencyKey } from '../../utils/idempotency';
 import { dedupeById } from '../../utils/dedupeById';
 import type { CommunityRoute } from './communityNavTypes';
+import { describeCommunityFailure, type CommunityAction } from '../../api/communityErrors';
 
 const COMMENT_MAX = 2000; // mirror backend CreateChallengeCommentDto
 
-/** A human, non-shaming reason for an error surface (no raw error leakage). */
-function describeError(err: unknown): string {
+/**
+ * A human, non-shaming reason for an error surface (no raw error leakage).
+ * Known kinds get specific copy; anything else gets a support reference and
+ * a Sentry report (owner rule 13:34: no generic errors).
+ */
+function describeError(err: unknown, action: CommunityAction = 'challenge_action'): string {
   // Apple 1.2 content filter: show the server's rephrase message.
   const rejected = contentRejectedMessage(err);
   if (rejected) return rejected;
@@ -84,13 +89,11 @@ function describeError(err: unknown): string {
         return 'Your progress was updated elsewhere. We have refreshed it for you.';
       case 'network':
         return 'We could not reach the server. Check your connection and try again.';
-      case 'contract':
-        return 'Something looks off on our end. Please try again shortly.';
       default:
-        return 'We could not load this challenge. Please try again.';
+        break;
     }
   }
-  return 'We could not load this challenge. Please try again.';
+  return describeCommunityFailure(err, action).message;
 }
 
 export default function CommunityChallengeDetailScreen(): React.ReactElement {
@@ -120,6 +123,11 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
     queryFn: () => communityChallengesApi.getChallenge(challengeId),
     enabled: !!challengeId && featureFlags.communityChallenges,
   });
+  // Described once per error (an unexpected one is reported to Sentry once).
+  const detailErrorMessage = useMemo(
+    () => (detail.isError ? describeError(detail.error, 'load_challenge') : ''),
+    [detail.isError, detail.error],
+  );
 
   // Comments are cursor-paginated: the page limit is part of the key (a
   // distinct page size is a distinct cache entry) and the cursor is threaded
@@ -511,7 +519,7 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
             We could not load this challenge
           </Text>
           <Text style={[styles.muted, { color: semanticColors.textMuted }]}>
-            {describeError(detail.error)}
+            {detailErrorMessage}
           </Text>
           <HapticPressable
             intent="light"
@@ -596,6 +604,7 @@ export default function CommunityChallengeDetailScreen(): React.ReactElement {
             targetId={item.id}
             authorUserId={item.author_user_id}
             viewerUserId={client?.id}
+            viewerCoachId={client?.coach_id}
             testID={`community-challenge-comment-${item.id}-safety`}
           />
         ) : null}
