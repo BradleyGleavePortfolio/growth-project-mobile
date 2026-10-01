@@ -9,26 +9,19 @@
 import { anyScreeningYes, ageOn } from './engine';
 import type { Answers, MeasureAnswer } from './types';
 
-/** Version of the combined waiver + data visibility text shown at P0. */
-export const CONSULT_CONSENT_COPY_VERSION = 'consult-consent-v1' as const;
-
-/**
- * The Roman AI processing consent version the backend (#601) requires.
- * The P0 box records this grant too, so there is no separate AI screen.
- */
-export const ROMAN_AI_CONSENT_VERSION = 'roman-ai-v1' as const;
+export { CONSULT_CONSENT_COPY_VERSION, CONSENT_BINDING } from './consentVersion';
 
 export const CONSENT_PARAGRAPHS: readonly string[] = [
   'The Growth Project provides personal training and nutrition guidance only. We do not diagnose, treat, or give medical advice. Nothing in this app replaces the advice of a physician or other qualified health provider.',
   'Exercise carries some risk of injury. You choose how hard to work, you stop if something hurts, and you take part at your own risk.',
   'The Growth Project, your coach and Roman can see your in-app logs and answers: your profile, this consultation including the screening questions, your targets, food and workout logs, check-ins, any health, sleep or wearable data you connect, your messages with your coach, and posts you write in the community.',
-  'Roman is powered by Anthropic, a third-party AI provider. To answer you, Roman sends that information about you to Anthropic. It is used only to help you, and Roman never sees other clients\u2019 data.',
+  'Roman is powered by Anthropic, a third-party AI provider. To answer you, and to prepare your coach\u2019s AI drafts about you, that information is sent to Anthropic. It is used only to help you. Only your own data is used, never another client\u2019s, and never your coach\u2019s private notes.',
   'Your conversations with Roman are private from your coach. They are stored securely on The Growth Project\u2019s servers for 180 days, and you can delete them at any time. Our staff open them only for support, safety or fixing a problem.',
-  "The next seven questions are a standard trainer screening. Please answer honestly. There's no wrong answer, and every answer leads to a plan that fits you.",
+  'Nothing you answer here is sent until you tick the box. You can withdraw this agreement at any time in Settings; Roman and AI drafts then stop until you agree again.',
 ];
 
 export const CONSENT_CHECKBOX_LABEL =
-  'I agree to the training waiver, and to The Growth Project, my coach and Roman seeing my in-app logs and answers, with Anthropic processing them for Roman.';
+  'I agree to the training waiver, and to The Growth Project, my coach and Roman seeing my in-app logs and answers, with Anthropic processing them for Roman and my coach\u2019s AI drafts.';
 
 /** Exact text the consent hash covers (paragraphs + box label). */
 export function consentCopyText(): string {

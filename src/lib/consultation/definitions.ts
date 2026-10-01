@@ -2,8 +2,9 @@
  * Consultation screen definitions (consult-v1), as data.
  *
  * Copy is taken from the approved prototype (proto/js/screens-consult.js)
- * with the owner rulings applied: one "I agree" box at P0 that covers the
- * training waiver and data visibility, Roman sees every answer, and the P8
+ * with the owner rulings applied: one "I agree" box at P0 (straight after
+ * W1, before any answer is collected) that covers the training waiver and
+ * data visibility, Roman sees every answer, and the P8
  * message gives general guidance and a safe next step before the physician
  * line. `{coach}` / `{Coach}` and `{first}` are filled at render time by
  * `fillCopy` so a missing coach name reads "your coach" / "Your coach".
@@ -89,6 +90,20 @@ export const SCREENS: readonly ScreenDef[] = [
     sub: "You'll leave with your daily targets and a plan built around your week.",
     timeLeft: 'About five minutes.',
     cta: 'Begin my consultation',
+  },
+
+  // P0, the single "I agree" box (owner ruling 16:31 #5, operator decision on
+  // Sol A-02): it comes straight after the welcome, before any answer is
+  // collected, so nothing is uploaded until it is ticked and recorded.
+  {
+    id: 'P0',
+    chapter: 0,
+    template: 'consent',
+    eyebrow: 'Your consultation',
+    question: 'Before we get started',
+    longQuestion: true,
+    cta: 'Continue',
+    validation: { required: true },
   },
 
   // ── Chapter 1 · Goals ──────────────────────────────────────────────────
@@ -502,19 +517,7 @@ export const SCREENS: readonly ScreenDef[] = [
     validation: { minSelections: 1, maxSelections: 3 },
   },
 
-  // ── Chapter 7 · Safety ─────────────────────────────────────────────────
-  {
-    id: 'P0',
-    chapter: 7,
-    template: 'consent',
-    eyebrow: chapterEyebrow(7),
-    timeLeft: 'About 2 minutes left',
-    pause: true,
-    question: 'Before we get started',
-    longQuestion: true,
-    cta: 'Continue',
-    validation: { required: true },
-  },
+  // ── Chapter 7 · Safety (readiness screening; the agreement is P0, after W1) ──
   screeningScreen(1),
   screeningScreen(2),
   screeningScreen(3),

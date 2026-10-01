@@ -6,6 +6,7 @@
  * unit-tested directly in `__tests__/consultationEngine.test.ts`.
  */
 import { SCREENS, SCREENING_KEYS, TOTAL_CHAPTERS } from './definitions';
+import { CONSULT_CONSENT_COPY_VERSION } from './consentVersion';
 import type {
   AnswerValue,
   Answers,
@@ -128,12 +129,25 @@ export function validateScreen(screen: ScreenDef, answers: Answers, now: Date = 
   if (screen.template === 'intro' || screen.template === 'message') return { valid: true };
 
   if (screen.template === 'consent') {
-    const c = answers.P0;
-    const ok = !!c && typeof c === 'object' && !Array.isArray(c) && 'agreed' in c && c.agreed === true;
-    return ok ? { valid: true } : { valid: false, message: 'Tick the box to continue.' };
+    return isConsentAnswerCurrent(answers.P0)
+      ? { valid: true }
+      : { valid: false, message: 'Tick the box to continue.' };
   }
 
   if (rule.required && !hasValue(v)) return { valid: false };
+
+  // Cached or server answers must be one of the screen's options (Sol C-01):
+  // a corrupted or outdated value sends the client back to the screen rather
+  // than turning into a server 400.
+  if (hasValue(v) && (screen.template === 'rows' || screen.template === 'yesno' || screen.template === 'chips')) {
+    const allowed = new Set(optionsFor(screen, now).map((o) => o.value));
+    const values = Array.isArray(v) ? v : [v];
+    if (screen.template !== 'chips' || screen.single) {
+      if (Array.isArray(v) || typeof v !== 'string' || !allowed.has(v)) return { valid: false };
+    } else if (!Array.isArray(v) || !values.every((x) => typeof x === 'string' && allowed.has(x))) {
+      return { valid: false };
+    }
+  }
 
   if (screen.template === 'dob' && hasValue(v)) {
     const age = ageOn(String(v), now);
@@ -147,9 +161,11 @@ export function validateScreen(screen: ScreenDef, answers: Answers, now: Date = 
   }
 
   if (screen.template === 'measure' && hasValue(v)) {
-    const m = v as { height_cm?: number; weight_lbs?: number };
-    if (!m.height_cm || m.height_cm < 120 || m.height_cm > 230) return { valid: false };
-    if (!m.weight_lbs || m.weight_lbs < 70 || m.weight_lbs > 600) return { valid: false };
+    const m = (v && typeof v === 'object' && !Array.isArray(v) ? v : {}) as { height_cm?: unknown; weight_lbs?: unknown };
+    const h = m.height_cm;
+    const w = m.weight_lbs;
+    if (typeof h !== 'number' || !Number.isFinite(h) || h < 120 || h > 230) return { valid: false };
+    if (typeof w !== 'number' || !Number.isFinite(w) || w < 70 || w > 600) return { valid: false };
   }
 
   if (Array.isArray(v)) {
@@ -166,6 +182,13 @@ export function validateScreen(screen: ScreenDef, answers: Answers, now: Date = 
     if (d.chipsKey && d.chipsRequired && !hasValue(answers[d.chipsKey])) {
       return { valid: false, message: 'Choose at least one area.' };
     }
+    if (d.chipsKey && d.chipsOptions && hasValue(answers[d.chipsKey])) {
+      const allowed = new Set(d.chipsOptions.map((o) => o.value));
+      const cur = answers[d.chipsKey];
+      if (!Array.isArray(cur) || !cur.every((x) => typeof x === 'string' && allowed.has(x))) {
+        return { valid: false, message: 'Choose at least one area.' };
+      }
+    }
     if (d.textKey) {
       const t = answers[d.textKey];
       const max = d.textMaxLength ?? rule.detailMaxLength;
@@ -176,6 +199,21 @@ export function validateScreen(screen: ScreenDef, answers: Answers, now: Date = 
   }
 
   return { valid: true };
+}
+
+/**
+ * True only for an affirmative P0 record that matches the copy version this
+ * build displays (Sol A-03). Anything else (missing, malformed, not agreed,
+ * an older or newer copy version, an unreadable timestamp) is not consent:
+ * the client is sent back to P0 with the box unticked.
+ */
+export function isConsentAnswerCurrent(v: AnswerValue | undefined): boolean {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return false;
+  const c = v as { agreed?: unknown; copy_version?: unknown; agreed_at?: unknown };
+  if (c.agreed !== true) return false;
+  if (c.copy_version !== CONSULT_CONSENT_COPY_VERSION) return false;
+  if (typeof c.agreed_at !== 'string' || Number.isNaN(Date.parse(c.agreed_at))) return false;
+  return true;
 }
 
 /** Whether a screen with no answer yet may be passed (Skip / optional). */

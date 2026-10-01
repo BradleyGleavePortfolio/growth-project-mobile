@@ -39,9 +39,9 @@ export function fullAnswers(overrides: Answers = {}): Answers {
   };
 }
 
-/** Answers through the end of chapter 6 (the safety chapter not started). */
+/** Answers through the end of chapter 6 (agreement given, safety chapter not started). */
 export function answersBeforeSafety(): Answers {
   const a = fullAnswers();
-  for (const k of ['P0', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'C1']) delete a[k];
+  for (const k of ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'C1']) delete a[k];
   return a;
 }

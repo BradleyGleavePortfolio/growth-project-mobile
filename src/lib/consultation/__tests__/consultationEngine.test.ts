@@ -12,6 +12,7 @@ import {
   fillCopy,
   firstIncompleteScreenId,
   firstSessionOptions,
+  isConsentAnswerCurrent,
   isVisible,
   nextScreenId,
   previousScreenId,
@@ -22,7 +23,7 @@ import {
   validateScreen,
   visibleScreens,
 } from '../engine';
-import { buildSummary, CONSENT_CHECKBOX_LABEL, CONSENT_PARAGRAPHS, P8_COPY } from '../copy';
+import { buildSummary, CONSENT_CHECKBOX_LABEL, CONSENT_PARAGRAPHS, CONSULT_CONSENT_COPY_VERSION, P8_COPY } from '../copy';
 import { answersBeforeSafety, fullAnswers, NOW } from '../__fixtures__/consultFixtures';
 
 const def = (id: string) => {
@@ -34,9 +35,9 @@ const def = (id: string) => {
 describe('definitions', () => {
   it('lists every contract screen in order, as data', () => {
     expect(SCREENS.map((s) => s.id)).toEqual([
-      'W1', 'G1', 'G2', 'B1', 'B2', 'B3', 'B4', 'L1', 'L2', 'T1', 'T2', 'T3', 'T4',
+      'W1', 'P0', 'G1', 'G2', 'B1', 'B2', 'B3', 'B4', 'L1', 'L2', 'T1', 'T2', 'T3', 'T4',
       'S1', 'S2', 'S3', 'S3b', 'N1', 'N2', 'N3', 'N4', 'N5',
-      'P0', 'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'C1',
+      'P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'C1',
     ]);
     for (const s of SCREENS) {
       expect(typeof s.chapter).toBe('number');
@@ -72,6 +73,10 @@ describe('definitions', () => {
     expect(text).toMatch(/only for support, safety or fixing a problem/);
     expect(CONSENT_CHECKBOX_LABEL).toMatch(/^I agree/);
     expect(CONSENT_CHECKBOX_LABEL).toMatch(/training waiver/);
+    // v2: the grant also covers the coach's AI drafts, and says how to withdraw.
+    expect(text).toMatch(/coach\u2019s AI drafts/);
+    expect(text).toMatch(/withdraw this agreement at any time in Settings/);
+    expect(text).toMatch(/Nothing you answer here is sent until you tick the box/);
   });
 
   it('P8 gives guidance and a next step before the physician line', () => {
@@ -169,6 +174,47 @@ describe('validation', () => {
     expect(validateScreen(def('P0'), fullAnswers()).valid).toBe(true);
   });
 
+  it('P0 comes straight after W1, before any answer, and the safety chapter has no consent box (A-02)', () => {
+    expect(SCREENS[0].id).toBe('W1');
+    expect(SCREENS[1].id).toBe('P0');
+    expect(def('P0').chapter).toBe(0);
+    const safety = SCREENS.filter((x) => x.chapter === 7);
+    expect(safety.map((x) => x.id)).toEqual(['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8']);
+    expect(safety.some((x) => x.template === 'consent')).toBe(false);
+    expect(SCREENS.filter((x) => x.template === 'consent')).toHaveLength(1);
+    // With no answers at all, the first gap is the agreement.
+    expect(firstIncompleteScreenId({}, NOW)).toBe('P0');
+    expect(resumeScreenId(null, { G1: 'fat_loss' }, NOW)).toBe('P0');
+  });
+
+  it('a stored P0 counts only when it matches the displayed copy version (A-03)', () => {
+    const cur = (v: unknown) => isConsentAnswerCurrent(v as never);
+    const ok = { agreed: true, copy_version: CONSULT_CONSENT_COPY_VERSION, agreed_at: '2026-09-30T19:00:00.000Z' };
+    expect(cur(ok)).toBe(true);
+    expect(cur({ ...ok, copy_version: 'consult-consent-v0' })).toBe(false);
+    expect(cur({ ...ok, copy_version: 'obsolete-v0' })).toBe(false);
+    expect(cur({ ...ok, agreed: false })).toBe(false);
+    expect(cur({ ...ok, agreed_at: 'not a date' })).toBe(false);
+    expect(cur({ agreed: true })).toBe(false);
+    expect(cur('yes')).toBe(false);
+    expect(cur(['agreed'])).toBe(false);
+    expect(cur(undefined)).toBe(false);
+    expect(validateScreen(def('P0'), { P0: { ...ok, copy_version: 'obsolete-v0' } as never }).valid).toBe(false);
+    expect(resumeScreenId('SUM', fullAnswers({ P0: { ...ok, copy_version: 'obsolete-v0' } as never }), NOW)).toBe('P0');
+  });
+
+  it('cached answers must be real options, finite measures and a current C1 (C-01)', () => {
+    expect(validateScreen(def('B1'), { B1: 'invalid-option' }, NOW).valid).toBe(false);
+    expect(validateScreen(def('B1'), { B1: 'female' }, NOW).valid).toBe(true);
+    expect(validateScreen(def('B3'), { B3: { height_cm: 'garbage', weight_lbs: 'garbage' } } as never, NOW).valid).toBe(false);
+    expect(validateScreen(def('B3'), { B3: 'not-a-measure' } as never, NOW).valid).toBe(false);
+    expect(validateScreen(def('C1'), { C1: '2020-01-01' }, NOW).valid).toBe(false);
+    expect(validateScreen(def('C1'), { C1: '2026-10-01' }, NOW).valid).toBe(true);
+    expect(validateScreen(def('N2'), { N2: ['dairy', 'not-a-food'] }, NOW).valid).toBe(false);
+    expect(validateScreen(def('T3'), { T3: 'yes', T3_areas: ['elbow_wrist', 'tail'] }, NOW).valid).toBe(false);
+    expect(validateScreen(def('S1'), { S1: 4 } as never, NOW).valid).toBe(false);
+  });
+
   it('screening questions are required, never skippable', () => {
     for (const k of ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7']) {
       expect(def(k).skippable).toBeFalsy();
@@ -192,8 +238,8 @@ describe('chapter progress', () => {
     expect(chapterProgress('B3', fullAnswers())).toEqual({ chapter: 2, position: 3, count: 4, totalChapters: 8 });
     expect(chapterProgress('S3', fullAnswers()).count).toBe(4);
     expect(chapterProgress('S3', fullAnswers({ S3: 'gym' })).count).toBe(3);
-    expect(chapterProgress('P1', fullAnswers()).count).toBe(8); // P0 + P1-P7
-    expect(chapterProgress('P1', fullAnswers({ P1: 'yes' })).count).toBe(9); // + P8
+    expect(chapterProgress('P1', fullAnswers()).count).toBe(7); // P1-P7 (P0 moved to the start)
+    expect(chapterProgress('P1', fullAnswers({ P1: 'yes' })).count).toBe(8); // + P8
   });
 
   it('fills completed chapters and the current one partially', () => {
@@ -218,19 +264,20 @@ describe('resume', () => {
 
   it('returns to the saved screen when it is still visible', () => {
     expect(resumeScreenId('P0', answersBeforeSafety(), NOW)).toBe('P0');
+    expect(resumeScreenId('P1', answersBeforeSafety(), NOW)).toBe('P1');
     expect(resumeScreenId('N3', answersBeforeSafety(), NOW)).toBe('N3');
   });
 
   it('returns to an earlier gap before the saved screen', () => {
     const a = answersBeforeSafety();
     delete a.L1;
-    expect(resumeScreenId('P0', a, NOW)).toBe('L1');
+    expect(resumeScreenId('N3', a, NOW)).toBe('L1');
   });
 
   it('falls back to the first gap when the saved screen is now hidden', () => {
     const a = answersBeforeSafety();
     a.S3 = 'gym';
-    expect(resumeScreenId('S3b', a, NOW)).toBe('P0');
+    expect(resumeScreenId('S3b', a, NOW)).toBe('P1');
   });
 
   it('resumes at the summary when everything is answered', () => {
