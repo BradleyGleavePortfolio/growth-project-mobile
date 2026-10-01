@@ -1,5 +1,5 @@
 /**
- * Settings > Data & Privacy > Roman and AI (D2 ruling 2026-10-01; Opus A-05).
+ * Settings > Privacy > Roman and AI (D2 ruling 2026-10-01; Opus A-05).
  *
  * Box 2 of the onboarding agreement, at any time: shows the current choice
  * from GET /me/ai-consent and lets the client allow it
@@ -8,7 +8,7 @@
  *
  * Box 1 (the training waiver, and The Growth Project and the coach
  * collecting and using the client's information to coach them) cannot be
- * withdrawn while keeping an account; the screen points to Delete my account.
+ * withdrawn while keeping an account; the screen points to Settings > Account > Delete account.
  *
  * While the consent ledger is not deployed (404 / 503) the screen says the
  * choice is unavailable right now and records nothing.
@@ -55,8 +55,8 @@ export const ROMAN_AI_COPY = {
     'Roman and your coach\u2019s AI drafts will stop using your information. Your coaching, plan and messages carry on as before. You can allow it again at any time.',
   cancel: 'Cancel',
   accountLine:
-    'Your training agreement, and The Growth Project and your coach using your information to coach you, stay in place while you have an account. To stop all collection, delete your account in Settings > Data & Privacy > Delete my account.',
-  deleteAccount: 'Delete my account',
+    'Your training agreement, and The Growth Project and your coach using your information to coach you, stay in place while you have an account. To stop all collection, delete your account in Settings > Account > Delete account.',
+  deleteAccount: 'Delete account',
 } as const;
 
 /**

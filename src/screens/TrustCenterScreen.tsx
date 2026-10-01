@@ -197,7 +197,7 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
       await dataExportApi.requestExport();
       Alert.alert(
         'Export Requested',
-        'Your data export has been queued. Open Data & Privacy in Settings to track progress and download the file when ready.',
+        'Your data export has been queued. Open Privacy in Settings to track progress and download the file when ready.',
         [{ text: 'OK' }],
       );
     } catch {

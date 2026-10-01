@@ -190,6 +190,19 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
             <Text style={styles.rowLabel}>Change Password</Text>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </HapticPressable>
+          {/* Settings > Account > Delete account (D2 contract wording). */}
+          <HapticPressable
+            intent="warning"
+            style={styles.row}
+            onPress={() => navigation.navigate('DeleteAccount')}
+            accessibilityRole="button"
+            accessibilityLabel="Delete account"
+            testID="settings-delete-account"
+            accessibilityHint="Opens the account deletion screen with a 14-day grace period"
+          >
+            <Text style={[styles.rowLabel, { color: colors.error }]}>Delete account</Text>
+            <Ionicons name="trash-outline" size={18} color={colors.error} />
+          </HapticPressable>
         </View>
 
         {/* Clinic tutorial: resume or rerun Roman's tour (flag-gated). */}
@@ -406,8 +419,8 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
           </HapticPressable>
         </View>
 
-        {/* Data & Privacy */}
-        <Text style={styles.sectionLabel}>Data & Privacy</Text>
+        {/* Privacy (D2 contract wording: Settings > Privacy > Roman and AI) */}
+        <Text style={styles.sectionLabel}>Privacy</Text>
         <View style={styles.card}>
           {/* Psych #2: Trust as Emotion — Trust Center navigation row */}
           <HapticPressable
@@ -474,17 +487,6 @@ export default function SettingsScreen({ navigation }: { navigation: NavigationP
               <Text style={styles.rowLabel}>My data</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </HapticPressable>
-          <HapticPressable
-            intent="warning"
-            style={styles.row}
-            onPress={() => navigation.navigate('DeleteAccount')}
-            accessibilityRole="button"
-            accessibilityLabel="Delete my account"
-            accessibilityHint="Opens the account deletion screen with a 14-day grace period"
-          >
-            <Text style={[styles.rowLabel, { color: colors.error }]}>Delete my account</Text>
-            <Ionicons name="trash-outline" size={18} color={colors.error} />
           </HapticPressable>
           <HapticPressable intent="warning" style={styles.row} onPress={handleResetOnboarding}>
             <Text style={styles.rowLabel}>Reset Onboarding</Text>

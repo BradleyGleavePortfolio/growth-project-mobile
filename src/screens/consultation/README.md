@@ -30,7 +30,7 @@ The lean flow's skip-to-finish path (LeanQ2 "Skip, I'll set this later" calling 
 | `src/navigation/ConsultationOnboardingNavigator.tsx` | Mounts the flow with the cached user; on finish stores `onboarding_complete`, marks the cached profile `onboarding_completed`, and emits `authEvents` so `RootNavigator` re-bootstraps straight into the app (with the flag on the old Day-1 flow and Day-1 win are skipped; Opus B-05). |
 | `src/lib/consultation/aiConsent.ts` | Box 2 grant body (`client-ai-v3`, copy hash, platform) and the one-retry, non-blocking grant. |
 | `src/api/aiConsentApi.ts` | `GET /me/ai-consent`, `POST` / `DELETE /me/ai-consent/roman` (backend R2a). Never throws; 404 / 503 is `unavailable`. |
-| `src/screens/settings/RomanAiConsentScreen.tsx` | Settings > Data & Privacy > Roman and AI: shows, allows and withdraws box 2. |
+| `src/screens/settings/RomanAiConsentScreen.tsx` | Settings > Privacy > Roman and AI: shows, allows and withdraws box 2. |
 
 ## Screens
 
@@ -79,7 +79,7 @@ Shown only after a yes on P1 to P7. Order: a calm opening, general habits (conve
 | `POST /me/onboarding/complete` | "Prepare my plan". 200 drives the macro and plan reveals (`macro_display_mode: 'simple'` shows calories and protein only; Opus C-4). 409 `consultation_incomplete` routes to the first missing answer, `consent_missing` resends the saved P0 alone, saves again and retries once, then routes to P0; `consent_version_mismatch` routes to P0; `not_attached`, `clinic_not_configured` and `completion_in_progress` show their own message. A final save rejected with `409 completion_in_progress` or `400 invalid_answers` shows its own message, not the connection one (Opus C-2). |
 | `POST /me/ai-consent/roman` | After the P0 save, only when box 2 is ticked. Non-blocking. |
 | `DELETE /me/ai-consent/roman` | Back on P0, when box 2 is unticked after being ticked. |
-| `GET /me/ai-consent` | Settings > Data & Privacy > Roman and AI only. The flow does not read it. |
+| `GET /me/ai-consent` | Settings > Privacy > Roman and AI only. The flow does not read it. |
 
 Answer values: single selects are option values; multi selects are arrays; `B2` is `YYYY-MM-DD`; `B3` is `{ height_cm, weight_lbs, unit }`; `B4` is lbs or null; `C1` is the first-session date `YYYY-MM-DD`; detail keys are `G2_other`, `T3_areas`, `T3_note`, `N2_other`, `P1_note` to `P7_note`.
 

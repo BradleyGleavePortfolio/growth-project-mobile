@@ -237,7 +237,7 @@ export type MoreStackParamList = {
   Plan:        undefined;
   TrustCenter: undefined;
   DeleteAccount: undefined;
-  /** D2: Settings > Data & Privacy > Roman and AI (box 2 allow / withdraw). */
+  /** D2: Settings > Privacy > Roman and AI (box 2 allow / withdraw). */
   RomanAiConsent: undefined;
   Preferences: undefined;
   AIGuide:     undefined;

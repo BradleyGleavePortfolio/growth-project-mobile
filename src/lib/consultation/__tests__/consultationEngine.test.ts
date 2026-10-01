@@ -365,6 +365,19 @@ describe('save payload', () => {
     expect(kept.G2_other).toBe('Run a 10k');
   });
 
+  it('every key a save can carry, clears included, is a key backend #607 accepts (unknown keys are a 400)', () => {
+    // Mirrors VALIDATORS in growth-project-backend src/onboarding/consultation-answers.ts at #607 245da2e7.
+    const screening = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7'];
+    const accepted = new Set([
+      'B1', 'B2', 'B3', 'B4', 'C1', 'G1', 'G2', 'G2_other', 'L1', 'L2', 'N1', 'N2', 'N2_other', 'N3', 'N4', 'N5',
+      'P0', 'S1', 'S2', 'S3', 'S3b', 'T1', 'T2', 'T3', 'T3_areas', 'T3_note', 'T4',
+      ...screening, ...screening.map((k) => `${k}_note`),
+    ]);
+    for (const a of [{}, fullAnswers(), fullAnswers({ S3: 'home_some', T3: 'yes', P2: 'yes', G2: ['other'] })]) {
+      for (const k of Object.keys(answersForSave(a))) expect(accepted.has(k) ? k : `unknown:${k}`).toBe(k);
+    }
+  });
+
   it('a body of P0 and clears only counts as consent-only', () => {
     expect(hasAnswersBeyondConsent({ P0: fullAnswers().P0, P8: null, T3_note: null })).toBe(false);
     expect(hasAnswersBeyondConsent({ P0: fullAnswers().P0, G1: 'fat_loss' })).toBe(true);

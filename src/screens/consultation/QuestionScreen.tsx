@@ -4,7 +4,8 @@
  * from `lib/consultation/definitions.ts`.
  */
 import React, { useMemo, useState } from 'react';
-import { Text, View } from 'react-native';
+import { Alert, Linking, Text, View } from 'react-native';
+import { PRIVACY_POLICY_URL } from '../../config/env';
 import type {
   AnswerValue,
   Answers,
@@ -427,6 +428,13 @@ const CONSENT_ERROR_COPY = {
     'The agreement has been updated since this version of the app. Please update the app to read the current agreement before you continue.',
 } as const;
 
+/** Open the public Privacy Policy (same page the Trust Center links to). */
+export function openPrivacyPolicy(): void {
+  Linking.openURL(PRIVACY_POLICY_URL).catch(() => {
+    Alert.alert('Privacy Policy unavailable', 'Could not open the Privacy Policy right now. Please try again later.');
+  });
+}
+
 function ConsentBody(props: BodyProps) {
   const { answers, onNext, header, consent: state } = props;
   // Only a record matching this build's copy version counts (Sol A-03):
@@ -480,6 +488,9 @@ function ConsentBody(props: BodyProps) {
         testID="consent-ai-checkbox"
       />
       <Text style={[s.mutedSmall, { marginTop: 16 }]} testID="consent-footer">{CONSENT_FOOTER}</Text>
+      {/* C-8 (operator 2026-10-01): the Privacy Policy, below the two boxes.
+          Not part of the consent text or its hash; opening it sends nothing. */}
+      <TextLink label="Privacy Policy" onPress={openPrivacyPolicy} testID="consent-privacy-link" role="link" />
       {error ? (
         <Text style={s.errorNote} accessibilityLiveRegion="polite" testID="consent-error">
           {CONSENT_ERROR_COPY[error]}

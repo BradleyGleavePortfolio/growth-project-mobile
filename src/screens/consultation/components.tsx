@@ -131,16 +131,19 @@ export function TextLink({
   onPress,
   testID,
   accent,
+  role = 'button',
 }: {
   label: string;
   onPress: () => void;
   testID?: string;
   accent?: boolean;
+  /** "link" for a control that leaves the app (opens a web page). */
+  role?: 'button' | 'link';
 }) {
   return (
     <Pressable
       onPress={onPress}
-      accessibilityRole="button"
+      accessibilityRole={role}
       accessibilityLabel={label}
       testID={testID}
       hitSlop={8}

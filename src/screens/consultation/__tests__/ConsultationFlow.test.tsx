@@ -7,13 +7,14 @@
  * handling (consultation_incomplete, consent_missing, not_attached).
  */
 import React from 'react';
+import { Alert, Linking } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import ConsultationFlow, { ConsultationApi } from '../ConsultationFlow';
 import type { CompleteOutcome } from '../../../api/consultationApi';
 import { answersBeforeSafety, fullAnswers, NOW } from '../../../lib/consultation/__fixtures__/consultFixtures';
 import { makeApi, RESULT, resetStores, seedLocal } from '../../../lib/consultation/__fixtures__/flowHarness';
 import { readLocalState } from '../../../lib/consultation/storage';
-import { CONSENT_COPY_SHA256 } from '../../../lib/consultation/copy';
+import { CONSENT_COPY_SHA256, consentCopyText } from '../../../lib/consultation/copy';
 
 jest.mock('../../../services/api', () => ({ __esModule: true, default: {} }));
 jest.mock('../../../hooks/useReducedMotion', () => ({ useReducedMotion: () => true }));
@@ -383,6 +384,48 @@ const lastBody = (save: jest.Mock) => {
   const calls = (save as SaveMock).mock.calls;
   return calls[calls.length - 1][0].answers;
 };
+
+describe('C-8 Privacy Policy link on P0', () => {
+  it('renders below the two boxes, opens the public Privacy Policy, and sends nothing', async () => {
+    const open = jest.spyOn(Linking, 'openURL').mockResolvedValue(true);
+    const api = makeApi();
+    await seedLocal({}, 'P0');
+    const r = await renderFlow(api);
+    await waitFor(() => r.getByTestId('consult-screen-P0'));
+    const link = r.getByTestId('consent-privacy-link');
+    expect(link.props.accessibilityRole).toBe('link');
+    expect(link.props.accessibilityLabel).toBe('Privacy Policy');
+    // Order on screen: box 1, box 2, footer, then the link.
+    const tree = JSON.stringify(r.toJSON());
+    const at = (id: string) => tree.indexOf(`"testID":"${id}"`);
+    expect(at('consent-privacy-link')).toBeGreaterThan(-1);
+    expect(at('consent-checkbox')).toBeLessThan(at('consent-ai-checkbox'));
+    expect(at('consent-ai-checkbox')).toBeLessThan(at('consent-privacy-link'));
+    expect(at('consent-footer')).toBeLessThan(at('consent-privacy-link'));
+    await fireEvent.press(link);
+    expect(open).toHaveBeenCalledWith('https://app.trygrowthproject.com/privacy');
+    expect(r.getByTestId('consult-screen-P0')).toBeTruthy();
+    expect(api.save).not.toHaveBeenCalled();
+    expect(api.grantRomanConsent).not.toHaveBeenCalled();
+    open.mockRestore();
+  });
+
+  it('a link that cannot open shows a calm message', async () => {
+    const open = jest.spyOn(Linking, 'openURL').mockRejectedValue(new Error('no browser'));
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    await seedLocal({}, 'P0');
+    const r = await renderFlow(makeApi());
+    await waitFor(() => r.getByTestId('consult-screen-P0'));
+    await fireEvent.press(r.getByTestId('consent-privacy-link'));
+    await waitFor(() => expect(alert).toHaveBeenCalledWith('Privacy Policy unavailable', expect.stringMatching(/try again later\.$/)));
+    open.mockRestore();
+    alert.mockRestore();
+  });
+
+  it('the link is not part of the consent text or its hash', () => {
+    expect(consentCopyText()).not.toMatch(/Privacy Policy/);
+  });
+});
 
 describe('B-06 cleared details are cleared on the server (null), not kept', () => {
   it('deselecting "other" on G2 sends G2_other: null with the chapter save', async () => {

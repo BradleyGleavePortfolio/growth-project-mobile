@@ -1,10 +1,10 @@
 /**
- * Settings > Data & Privacy > Roman and AI (D2; Opus A-05 on #310).
+ * Settings > Privacy > Roman and AI (D2; Opus A-05 on #310).
  *
  * Shows the box 2 choice from GET /me/ai-consent, allows it
  * (POST /me/ai-consent/roman) or withdraws it (DELETE) after a
  * confirmation, says "unavailable right now" while the ledger is not
- * deployed (404 / 503), and points to Delete my account for stopping all
+ * deployed (404 / 503), and points to Delete account for stopping all
  * collection.
  */
 import * as fs from 'fs';
@@ -128,7 +128,7 @@ describe('RomanAiConsentScreen', () => {
     expect(r.queryByTestId('roman-ai-allow')).toBeNull();
     expect(r.queryByTestId('roman-ai-withdraw')).toBeNull();
     // The account line is still there.
-    expect(r.getByTestId('roman-ai-account-line').props.children).toMatch(/Delete my account/);
+    expect(r.getByTestId('roman-ai-account-line').props.children).toMatch(/Settings > Account > Delete account/);
     api.getStatus.mockResolvedValueOnce({ kind: 'ok', status: ALLOWED });
     await fireEvent.press(r.getByTestId('roman-ai-retry'));
     await waitFor(() => r.getByTestId('roman-ai-allowed'));
@@ -191,7 +191,7 @@ describe('RomanAiConsentScreen', () => {
     expect(r.getByTestId('roman-ai-withdraw')).toBeTruthy();
   });
 
-  it('points to Delete my account for stopping all collection', async () => {
+  it('points to Delete account for stopping all collection', async () => {
     const r = await renderScreen(makeApi({ kind: 'ok', status: ALLOWED }));
     await waitFor(() => r.getByTestId('roman-ai-allowed'));
     expect(r.getByTestId('roman-ai-account-line').props.children).toBe(ROMAN_AI_COPY.accountLine);
@@ -237,7 +237,26 @@ describe('Settings entry and route', () => {
   const root = path.resolve(__dirname, '../../..');
   const read = (rel: string) => fs.readFileSync(path.join(root, rel), 'utf8');
 
-  it('the Data & Privacy row opens RomanAiConsent, only in builds where the choice exists', () => {
+  it('section and row labels match the approved copy: Settings > Privacy, Settings > Account > Delete account', () => {
+    const settings = read('screens/client/SettingsScreen.tsx');
+    expect(settings).toMatch(/<Text style=\{styles\.sectionLabel\}>Privacy<\/Text>/);
+    expect(settings).not.toMatch(/Data & Privacy/);
+    expect(settings).not.toMatch(/Delete my account/);
+    // The Delete account row sits in the Account section (before the next section label).
+    const account = settings.indexOf('<Text style={styles.sectionLabel}>Account</Text>');
+    const del = settings.indexOf('>Delete account</Text>');
+    const next = settings.indexOf('<Text style={styles.sectionLabel}>', account + 1);
+    expect(account).toBeGreaterThan(-1);
+    expect(del).toBeGreaterThan(account);
+    expect(del).toBeLessThan(next);
+    // Roman and AI sits in the Privacy section.
+    const privacy = settings.indexOf('<Text style={styles.sectionLabel}>Privacy</Text>');
+    expect(settings.indexOf("navigate('RomanAiConsent')")).toBeGreaterThan(privacy);
+    expect(ROMAN_AI_COPY.accountLine).toMatch(/Settings > Account > Delete account\.$/);
+    expect(ROMAN_AI_COPY.deleteAccount).toBe('Delete account');
+  });
+
+  it('the Privacy row opens RomanAiConsent, only in builds where the choice exists', () => {
     const settings = read('screens/client/SettingsScreen.tsx');
     const gate = settings.search(/\{featureFlags\.consultationOnboarding \|\| featureFlags\.romanChat \? \(/);
     const row = settings.search(/navigation\.navigate\('RomanAiConsent'\)/);
