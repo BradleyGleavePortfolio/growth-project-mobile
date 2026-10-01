@@ -13,7 +13,7 @@
  */
 
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 jest.mock('react-native-safe-area-context', () => {
   const ReactLocal = require('react');
@@ -72,8 +72,33 @@ jest.mock('../ClientWearableInsightPanel', () => {
 });
 
 const mockUseWearableConnections = jest.fn();
+const mockInvalidateWearables = jest.fn();
 jest.mock('../../../../hooks/useWearableConnections', () => ({
   useWearableConnections: () => mockUseWearableConnections(),
+  useInvalidateWearableConnections: () => mockInvalidateWearables,
+}));
+
+// S14: the AI panel is behind a default-off flag (D2 consent); the getter
+// lets each test choose the value without re-importing the shell.
+let mockAiInsightsFlag = true;
+jest.mock('../../../../config/featureFlags', () => ({
+  featureFlags: {
+    get wearableAiInsights() {
+      return mockAiInsightsFlag;
+    },
+  },
+}));
+
+// S14: refresh-on-open runs the on-device import seam.
+const mockImportHistory = jest.fn();
+let mockDeviceSource: string | null = 'APPLE_HEALTHKIT';
+jest.mock('../../../../services/health/onDeviceSync', () => ({
+  deviceSourceForPlatform: () => mockDeviceSource,
+  importOnDeviceHistory: (...args: unknown[]) => mockImportHistory(...args),
+}));
+
+jest.mock('../../../../utils/logger', () => ({
+  logger: { log: jest.fn(), warn: jest.fn(), error: jest.fn() },
 }));
 
 // Reduce-motion ON ⇒ the shell takes its documented instant-swap path, so the
@@ -94,6 +119,15 @@ jest.mock('@react-navigation/native', () => ({
 import WearablesShell from '../WearablesShell';
 
 beforeEach(() => {
+  mockAiInsightsFlag = true;
+  mockDeviceSource = 'APPLE_HEALTHKIT';
+  mockImportHistory.mockReset();
+  mockImportHistory.mockResolvedValue({
+    kind: 'imported',
+    source: 'APPLE_HEALTHKIT',
+    postedCount: 0,
+  });
+  mockInvalidateWearables.mockReset();
   mockNavigate.mockReset();
   mockSetParams.mockReset();
   mockRouteParams = {};
@@ -153,5 +187,28 @@ describe('WearablesShell', () => {
     await fireEvent.press(screen.getByLabelText('Recovery'));
     expect(screen.getByText('AI_PANEL_SLEEP_RECOVERY')).toBeTruthy();
     expect(screen.queryByText('AI_PANEL_HEALTH_FITNESS')).toBeNull();
+  });
+
+  it('S14: does not mount the AI panel while wearableAiInsights is off', async () => {
+    mockAiInsightsFlag = false;
+    await render(<WearablesShell />);
+    expect(screen.getByText('FITNESS_OVERVIEW')).toBeTruthy();
+    expect(screen.queryByText('AI_PANEL_HEALTH_FITNESS')).toBeNull();
+    await fireEvent.press(screen.getByLabelText('Recovery'));
+    expect(screen.queryByText('AI_PANEL_SLEEP_RECOVERY')).toBeNull();
+  });
+
+  it("S14: refreshes this phone's connected health store once on open", async () => {
+    await render(<WearablesShell />);
+    await waitFor(() => expect(mockInvalidateWearables).toHaveBeenCalledTimes(1));
+    expect(mockImportHistory).toHaveBeenCalledTimes(1);
+    expect(mockImportHistory).toHaveBeenCalledWith('APPLE_HEALTHKIT');
+  });
+
+  it('S14: does not refresh when this phone has no connected health store', async () => {
+    mockDeviceSource = 'HEALTH_CONNECT';
+    await render(<WearablesShell />);
+    expect(screen.getByText('FITNESS_OVERVIEW')).toBeTruthy();
+    expect(mockImportHistory).not.toHaveBeenCalled();
   });
 });

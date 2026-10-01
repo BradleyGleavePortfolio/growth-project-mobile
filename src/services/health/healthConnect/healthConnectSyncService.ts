@@ -36,11 +36,13 @@ import type { NormalizedSample } from './types';
 export const LAST_SYNC_AT_KEY = 'health_connect_last_sync_at';
 
 /**
- * Default look-back when there is no persisted `lastSyncAt` (first sync). Seven
- * days balances a useful initial backfill against the device-permitted history
- * window without flooding the ingestion lane on first connect.
+ * History import on first connect (no persisted `lastSyncAt`). 30 days matches
+ * the history Health Connect lets an app read by default (data older than 30
+ * days before the first grant needs the separate history permission) and the
+ * Apple Health connector's import window, so both platforms import the same
+ * history. Batching in `../ingestBatching.ts` keeps each request small.
  */
-export const DEFAULT_BACKFILL_DAYS = 7;
+export const DEFAULT_BACKFILL_DAYS = 30;
 
 /**
  * Overlap re-read, in minutes. We rewind the read-window start by this much
@@ -121,12 +123,17 @@ function grantedReadRecordTypes(
 }
 
 /**
- * Run a full Health Connect sync for the given subject user + connection.
+ * Run a full Health Connect sync through the given server connection. The
+ * subject user is never sent: the backend derives it from the JWT (S14).
  *
  * Steps:
  *   1. Platform guard (Android only).
  *   2. Initialize the SDK.
- *   3. Request permission; if NONE granted → throw HealthConnectPermissionDeniedError.
+ *   3. Read the granted permissions; only when none of our read types is
+ *      granted, show the permission UI once. If still NONE granted → throw
+ *      HealthConnectPermissionDeniedError. (Re-showing the system dialog on
+ *      every background refresh would nag the user, so it is not requested
+ *      again once any read access exists.)
  *   4. Read every granted record type for `[windowStart, now)`.
  *   5. Normalize → NormalizedSample[].
  *   6. POST to the ingestion lane.
@@ -136,7 +143,6 @@ function grantedReadRecordTypes(
  * retried over the same window next time (no silent data gap, #36).
  */
 export async function syncHealthConnect(
-  userId: string,
   connectionId: string,
   deps: HealthConnectSyncDeps = {},
 ): Promise<HealthConnectSyncResult> {
@@ -149,10 +155,12 @@ export async function syncHealthConnect(
   // (2) Boot the SDK.
   await client.initialize();
 
-  // (3) Ask for permissions; reconcile against what's actually granted.
-  await client.requestPermission();
-  const granted = await client.getGrantedPermissions();
-  const grantedRecordTypes = grantedReadRecordTypes(granted);
+  // (3) Reconcile against what's actually granted; ask only when nothing is.
+  let grantedRecordTypes = grantedReadRecordTypes(await client.getGrantedPermissions());
+  if (grantedRecordTypes.length === 0) {
+    await client.requestPermission();
+    grantedRecordTypes = grantedReadRecordTypes(await client.getGrantedPermissions());
+  }
   if (grantedRecordTypes.length === 0) {
     logger.warn('healthConnectSync', 'all read permissions denied', {
       requested: HEALTH_CONNECT_RECORD_TYPES.length,
@@ -184,10 +192,10 @@ export async function syncHealthConnect(
   }
 
   // (5) Normalize device-side.
-  const ctx: NormalizeContext = { userId, connectionId };
+  const ctx: NormalizeContext = { connectionId };
   const samples: NormalizedSample[] = normalizeAll(ctx, byType);
 
-  // (6) POST (idempotent; empty batch is a no-op).
+  // (6) POST in request-sized batches (idempotent; empty batch is a no-op).
   const { inserted, skipped } = await ingestApi.ingest(samples);
 
   // (7) Persist watermark ONLY after a successful POST.

@@ -71,10 +71,10 @@ describe('useHealthKitSync', () => {
 
     let resolved: unknown;
     await act(async () => {
-      resolved = await result.current.sync({ userId: 'u', connectionId: 'c' });
+      resolved = await result.current.sync({ connectionId: 'c' });
     });
 
-    expect(mockSync).toHaveBeenCalledWith({ userId: 'u', connectionId: 'c' });
+    expect(mockSync).toHaveBeenCalledWith({ connectionId: 'c' });
     expect(resolved).toEqual(RESULT);
     await waitFor(() => expect(result.current.mutation.data).toEqual(RESULT));
   });
@@ -85,7 +85,7 @@ describe('useHealthKitSync', () => {
 
     await act(async () => {
       await expect(
-        result.current.sync({ userId: 'u', connectionId: 'c' }),
+        result.current.sync({ connectionId: 'c' }),
       ).rejects.toThrow('ingest down');
     });
 

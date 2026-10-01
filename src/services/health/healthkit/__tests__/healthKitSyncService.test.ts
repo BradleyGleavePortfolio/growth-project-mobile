@@ -47,6 +47,8 @@ import {
   HealthKitSyncService,
   HEALTHKIT_LAST_SYNC_KEY,
   HEALTHKIT_INGEST_PATH,
+  SYNC_OVERLAP_MINUTES,
+  floorToLocalHour,
   DEFAULT_BACKFILL_DAYS,
 } from '../healthKitSyncService';
 
@@ -71,7 +73,7 @@ const SAMPLE_READ: HealthKitReadResult = {
   heartRate: [{ value: 70, startDate: '2026-05-30T00:00:00.000Z', endDate: '2026-05-30T00:00:00.000Z' }],
 };
 
-const OPTS = { userId: 'user-1', connectionId: 'conn-1', now: NOW };
+const OPTS = { connectionId: 'conn-1', now: NOW };
 
 beforeEach(() => {
   store.clear();
@@ -97,8 +99,9 @@ describe('HealthKitSyncService.sync — happy path', () => {
     expect(body.length).toBeGreaterThan(0);
     // Every element is a NormalizedSample with the canonical fields.
     for (const s of body) {
+      // S14: the body never names the subject user.
+      expect(s).not.toHaveProperty('userId');
       expect(s).toMatchObject({
-        userId: 'user-1',
         connectionId: 'conn-1',
         provider: 'APPLE_HEALTHKIT',
       });
@@ -127,18 +130,43 @@ describe('HealthKitSyncService.sync — read window', () => {
     const client = makeClient(SAMPLE_READ);
     await new HealthKitSyncService(client as never).sync(OPTS);
     const [{ since, until }] = client.readSamples.mock.calls[0];
-    const expectedSince = new Date(NOW.getTime() - DEFAULT_BACKFILL_DAYS * 86400000);
+    const expectedSince = floorToLocalHour(
+      new Date(NOW.getTime() - DEFAULT_BACKFILL_DAYS * 86400000),
+    );
     expect(since.toISOString()).toBe(expectedSince.toISOString());
     expect(until.toISOString()).toBe(NOW.toISOString());
   });
 
-  it('uses the stored cursor as the lower bound on incremental runs', async () => {
-    const cursor = '2026-05-29T00:00:00.000Z';
+  it('S14: re-reads SYNC_OVERLAP_MINUTES behind the stored cursor, floored to the local hour', async () => {
+    const cursor = '2026-05-29T10:25:00.000Z';
     store.set(HEALTHKIT_LAST_SYNC_KEY, cursor);
     const client = makeClient(SAMPLE_READ);
     await new HealthKitSyncService(client as never).sync(OPTS);
     const [{ since }] = client.readSamples.mock.calls[0];
-    expect(since.toISOString()).toBe(cursor);
+    const expected = floorToLocalHour(new Date(Date.parse(cursor) - SYNC_OVERLAP_MINUTES * 60_000));
+    expect(since.toISOString()).toBe(expected.toISOString());
+    expect(since.getMinutes()).toBe(0);
+    expect(since.getTime()).toBeLessThanOrEqual(Date.parse(cursor) - SYNC_OVERLAP_MINUTES * 60_000);
+  });
+
+  it('S14: splits a large import into request-sized batches', async () => {
+    const heartRate = Array.from({ length: 600 }, (_, i) => ({
+      value: 60 + (i % 40),
+      startDate: new Date(Date.parse('2026-05-30T00:00:00.000Z') + i * 60_000).toISOString(),
+      endDate: new Date(Date.parse('2026-05-30T00:00:00.000Z') + i * 60_000).toISOString(),
+    }));
+    const svc = new HealthKitSyncService(makeClient({ heartRate }) as never);
+    const result = await svc.sync(OPTS);
+    expect(result.postedCount).toBe(600);
+    expect(mockPost.mock.calls.length).toBeGreaterThanOrEqual(3);
+    const posted = mockPost.mock.calls.reduce(
+      (n: number, call: unknown[]) => n + (call[1] as unknown[]).length,
+      0,
+    );
+    expect(posted).toBe(600);
+    for (const call of mockPost.mock.calls) {
+      expect(JSON.stringify(call[1]).length).toBeLessThanOrEqual(90_000);
+    }
   });
 
   it('ignores an unparseable stored cursor and backfills instead', async () => {
@@ -146,7 +174,9 @@ describe('HealthKitSyncService.sync — read window', () => {
     const client = makeClient(SAMPLE_READ);
     await new HealthKitSyncService(client as never).sync(OPTS);
     const [{ since }] = client.readSamples.mock.calls[0];
-    const expectedSince = new Date(NOW.getTime() - DEFAULT_BACKFILL_DAYS * 86400000);
+    const expectedSince = floorToLocalHour(
+      new Date(NOW.getTime() - DEFAULT_BACKFILL_DAYS * 86400000),
+    );
     expect(since.toISOString()).toBe(expectedSince.toISOString());
   });
 });

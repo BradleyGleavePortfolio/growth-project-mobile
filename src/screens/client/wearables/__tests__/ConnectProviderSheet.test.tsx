@@ -43,6 +43,14 @@ jest.mock('../../../../services/health/onDeviceConnect', () => ({
   connectOnDeviceProvider: (...args: unknown[]) => mockConnectOnDevice(...args),
 }));
 
+// S14: the on-device grant now registers the source and imports history.
+const mockImportHistory = jest.fn();
+jest.mock('../../../../services/health/onDeviceSync', () => ({
+  deviceSourceFor: (p: string) =>
+    p === 'APPLE_HEALTHKIT' ? 'APPLE_HEALTHKIT' : p === 'GARMIN' ? null : 'HEALTH_CONNECT',
+  importOnDeviceHistory: (...args: unknown[]) => mockImportHistory(...args),
+}));
+
 import ConnectProviderSheet from '../ConnectProviderSheet';
 import { subscribeTutorialSignals } from '../../../../tutorial/tutorialEvents';
 import type { TutorialSignal } from '../../../../tutorial/types';
@@ -61,6 +69,12 @@ beforeEach(() => {
   mockInvalidate.mockReset();
   mockOpenAuthSessionAsync.mockReset();
   mockConnectOnDevice.mockReset();
+  mockImportHistory.mockReset();
+  mockImportHistory.mockResolvedValue({
+    kind: 'imported',
+    source: 'APPLE_HEALTHKIT',
+    postedCount: 3,
+  });
 });
 
 describe('ConnectProviderSheet — cloud OAuth provider', () => {
@@ -110,6 +124,52 @@ describe('ConnectProviderSheet — cloud OAuth provider', () => {
   });
 });
 
+describe('ConnectProviderSheet — S14 history import', () => {
+  it('keeps the sheet open with plain copy when the import lane is off', async () => {
+    mockConnectOnDevice.mockResolvedValue('granted');
+    mockImportHistory.mockResolvedValue({
+      kind: 'disabled',
+      source: 'APPLE_HEALTHKIT',
+    });
+    const onClose = jest.fn();
+    await render(<ConnectProviderSheet provider="APPLE_HEALTHKIT" visible onClose={onClose} />);
+
+    await fireEvent.press(screen.getByLabelText('Continue connecting Apple Health'));
+
+    await waitFor(() =>
+      expect(screen.getByText(/Health data import isn't switched on yet/)).toBeTruthy(),
+    );
+    expect(onClose).not.toHaveBeenCalled();
+    expect(tutorialSignals).toEqual([]);
+  });
+
+  it('shows a retry message when the import fails', async () => {
+    mockConnectOnDevice.mockResolvedValue('granted');
+    mockImportHistory.mockRejectedValue(new Error('network'));
+    const onClose = jest.fn();
+    await render(<ConnectProviderSheet provider="APPLE_HEALTHKIT" visible onClose={onClose} />);
+
+    await fireEvent.press(screen.getByLabelText('Continue connecting Apple Health'));
+
+    await waitFor(() =>
+      expect(screen.getByText(/couldn't bring in your history yet/)).toBeTruthy(),
+    );
+    expect(mockInvalidate).toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('imports Samsung Health through the Health Connect source', async () => {
+    mockConnectOnDevice.mockResolvedValue('granted');
+    const onClose = jest.fn();
+    await render(<ConnectProviderSheet provider="SAMSUNG_HEALTH" visible onClose={onClose} />);
+
+    await fireEvent.press(screen.getByLabelText(/Continue connecting Samsung Health/));
+
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(mockImportHistory).toHaveBeenCalledWith('HEALTH_CONNECT');
+  });
+});
+
 describe('ConnectProviderSheet — on-device provider', () => {
   it('drives the native permission request and closes on grant', async () => {
     mockConnectOnDevice.mockResolvedValue('granted');
@@ -127,7 +187,10 @@ describe('ConnectProviderSheet — on-device provider', () => {
 
     await fireEvent.press(screen.getByLabelText('Continue connecting Apple Health'));
 
-    await waitFor(() => expect(mockConnectOnDevice).toHaveBeenCalledWith('APPLE_HEALTHKIT'));
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(mockConnectOnDevice).toHaveBeenCalledWith('APPLE_HEALTHKIT');
+    // S14: the grant runs the 30-day history import before closing.
+    expect(mockImportHistory).toHaveBeenCalledWith('APPLE_HEALTHKIT');
     expect(mockInvalidate).toHaveBeenCalledTimes(1);
     expect(onConnected).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledTimes(1);

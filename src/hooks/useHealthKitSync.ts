@@ -4,7 +4,7 @@
  *
  * A HealthKit sync is an imperative action (request consent → read → POST), so
  * this is a `useMutation` rather than a `useQuery`. The Connections Hub calls
- * `sync({ userId, connectionId })` from an "Sync now" button and renders
+ * `sync({ connectionId })` from an "Sync now" button and renders
  * `isPending` / `data` / `error`.
  *
  * Platform: on non-iOS devices the underlying client throws

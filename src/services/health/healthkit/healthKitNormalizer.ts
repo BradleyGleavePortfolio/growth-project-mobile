@@ -75,8 +75,8 @@ export type WearableMetricType =
  * the POST body deserializes directly into `NormalizedSample[]`.
  */
 export interface NormalizedSample {
-  /** Subject client User.id. */
-  userId: string;
+  // S14: no `userId`. The backend derives the subject from the JWT and
+  // rejects any body `userId` with WEARABLES_INGEST_USER_ID_FORBIDDEN.
   /** The connection this sample was ingested through. */
   connectionId: string;
   /** Source provider — always APPLE_HEALTHKIT for this connector. */
@@ -134,7 +134,7 @@ const DESCRIPTORS = {
 
 /** Identity for the normalizer — who the samples belong to / came through. */
 export interface NormalizationContext {
-  userId: string;
+  // S14: no userId — the backend stamps the subject from the JWT.
   connectionId: string;
   /** Optional IANA timezone for the device, threaded onto every sample. */
   sourceTz?: string | null;
@@ -187,7 +187,6 @@ function quantitySample(
   const value = typeof raw === 'number' ? raw : Number(raw);
   if (!Number.isFinite(value)) return null;
   return {
-    userId: ctx.userId,
     connectionId: ctx.connectionId,
     provider: APPLE_HEALTHKIT,
     metric: descriptor.metric,
@@ -224,7 +223,6 @@ function mapWorkouts(
   const out: NormalizedSample[] = [];
   for (const w of workouts) {
     const base = {
-      userId: ctx.userId,
       connectionId: ctx.connectionId,
       provider: APPLE_HEALTHKIT,
       startAt: w.start,
@@ -265,7 +263,6 @@ function mapBloodPressure(
   const out: NormalizedSample[] = [];
   for (const s of samples) {
     const base = {
-      userId: ctx.userId,
       connectionId: ctx.connectionId,
       provider: APPLE_HEALTHKIT,
       startAt: s.startDate,
@@ -412,7 +409,6 @@ function mapSleep(
   for (const [bucket, descriptor] of stageDescriptors) {
     if (minutes[bucket] <= 0) continue;
     out.push({
-      userId: ctx.userId,
       connectionId: ctx.connectionId,
       provider: APPLE_HEALTHKIT,
       metric: descriptor.metric,
@@ -430,7 +426,6 @@ function mapSleep(
   const totalAsleep = minutes.rem + minutes.deep + minutes.light + asleepCoarseMin;
   if (totalAsleep > 0) {
     out.push({
-      userId: ctx.userId,
       connectionId: ctx.connectionId,
       provider: APPLE_HEALTHKIT,
       metric: 'SLEEP_TOTAL_MIN',

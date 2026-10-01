@@ -52,6 +52,7 @@ import {
   useStartOauth,
 } from '../../../hooks/useWearableConnections';
 import { connectOnDeviceProvider } from '../../../services/health/onDeviceConnect';
+import { deviceSourceFor, importOnDeviceHistory } from '../../../services/health/onDeviceSync';
 import { colors, radius, spacing, typography, withAlpha } from '../../../theme/tokens';
 import { emitTutorialSignal } from '../../../tutorial/tutorialEvents';
 
@@ -92,6 +93,7 @@ export default function ConnectProviderSheet({
   const invalidate = useInvalidateWearableConnections();
   const [error, setError] = useState<string | null>(null);
   const [requestingOnDevice, setRequestingOnDevice] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   const onDevice = provider != null && isOnDeviceProvider(provider);
   const config = provider != null ? configFor(provider) : null;
@@ -126,13 +128,40 @@ export default function ConnectProviderSheet({
       const outcome = await connectOnDeviceProvider(target);
       const name = configFor(target).displayName;
       switch (outcome) {
-        case 'granted':
-          // Permission granted on-device; re-read so the hub reflects it.
+        case 'granted': {
+          // S14: permission granted on-device. Register the device source and
+          // import the last 30 days so the Health and Sleep views show real
+          // data, then re-read connections and samples.
+          const source = deviceSourceFor(target);
+          if (source == null) {
+            setError(`${name} can't be connected on this device.`);
+            return;
+          }
+          setImporting(true);
+          let result;
+          try {
+            result = await importOnDeviceHistory(source);
+          } catch {
+            invalidate();
+            setError(
+              `${name} is connected, but we couldn't bring in your history yet. Check your connection and try again.`,
+            );
+            return;
+          } finally {
+            setImporting(false);
+          }
           invalidate();
+          if (result.kind === 'disabled') {
+            setError(
+              `Health data import isn't switched on yet. Your coach will let you know when it is ready.`,
+            );
+            return;
+          }
           emitTutorialSignal('wearable_connected');
           onConnected?.();
           onClose();
           return;
+        }
         case 'denied':
           setError(
             `${name} access wasn't granted. Open ${name} permissions and allow access, then try again.`,
@@ -219,6 +248,12 @@ export default function ConnectProviderSheet({
                     Continue to grant access.
                   </Text>
                 </View>
+              )}
+
+              {importing && (
+                <Text style={styles.noteText} accessibilityLiveRegion="polite">
+                  Bringing in your last 30 days of health data. This can take a minute.
+                </Text>
               )}
 
               {error != null && (

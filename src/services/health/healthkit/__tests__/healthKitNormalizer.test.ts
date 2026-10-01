@@ -18,7 +18,6 @@ import {
 import type { HealthKitReadResult } from '../healthKitClient';
 
 const CTX: NormalizationContext = {
-  userId: 'user-1',
   connectionId: 'conn-1',
   sourceTz: 'America/Los_Angeles',
 };
@@ -44,7 +43,8 @@ describe('normalizeHealthKitResult — quantity metrics', () => {
     expect(s.unit).toBe('count');
     expect(s.bucket).toBe('HEALTH_FITNESS');
     expect(s.provider).toBe(APPLE_HEALTHKIT);
-    expect(s.userId).toBe('user-1');
+    // S14: the subject user is never on the sample (server takes it from the JWT).
+    expect(s).not.toHaveProperty('userId');
     expect(s.connectionId).toBe('conn-1');
     expect(s.sourceTz).toBe('America/Los_Angeles');
   });
@@ -248,7 +248,7 @@ describe('normalizeHealthKitResult — drop policy', () => {
   });
 
   it('stamps sourceTz null when omitted from context', () => {
-    const out = normalizeHealthKitResult({ steps: [q(5)] }, { userId: 'u', connectionId: 'c' });
+    const out = normalizeHealthKitResult({ steps: [q(5)] }, { connectionId: 'c' });
     expect(one(out, 'STEPS').sourceTz).toBeNull();
   });
 });

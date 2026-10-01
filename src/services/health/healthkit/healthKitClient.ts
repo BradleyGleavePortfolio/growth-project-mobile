@@ -161,6 +161,8 @@ interface HKInputOptions {
   ascending?: boolean;
   type?: string;
   limit?: number;
+  /** Statistics bucket length in minutes (cumulative-sum readers). */
+  period?: number;
 }
 interface HKPermissions {
   permissions: { read: string[]; write: string[] };
@@ -171,7 +173,7 @@ interface HKAnchoredWorkoutResults {
 }
 interface HealthKitNativeModule {
   initHealthKit(permissions: HKPermissions, cb: HKCallback<unknown>): void;
-  getStepCount(o: HKInputOptions, cb: HKCallback<HealthKitSample>): void;
+  getDailyStepCountSamples(o: HKInputOptions, cb: HKCallback<HealthKitSample[]>): void;
   getActiveEnergyBurned(o: HKInputOptions, cb: HKCallback<HealthKitSample[]>): void;
   getRestingHeartRateSamples(o: HKInputOptions, cb: HKCallback<HealthKitSample[]>): void;
   getHeartRateSamples(o: HKInputOptions, cb: HKCallback<HealthKitSample[]>): void;
@@ -310,8 +312,24 @@ export class HealthKitClient {
       }
     };
 
+    // Cumulative metrics (steps, active energy) are read as HOURLY statistics
+    // buckets (S14). `react-native-health` anchors buckets at the query start,
+    // so the sync service floors the window start to the local hour; that
+    // keeps bucket boundaries, and therefore the backend dedup key, stable
+    // across syncs. A bucket that has not finished yet (its end is after
+    // `until`) is dropped here and read again, complete, on the next sync,
+    // because the backend keeps the first copy of a dedup key and never
+    // updates it. (`getStepCount` returned one day's total only, for the
+    // `date` option, ignoring the import window.)
+    const hourly: HKInputOptions = { ...o, period: 60 };
+    const completeOnly = (buckets: HealthKitSample[] | undefined): HealthKitSample[] | undefined =>
+      buckets?.filter((b) => {
+        const end = Date.parse(b.endDate);
+        return Number.isFinite(end) && end <= window.until.getTime();
+      });
+
     const [
-      stepResult,
+      stepBuckets,
       activeEnergy,
       restingHeartRate,
       heartRate,
@@ -326,8 +344,8 @@ export class HealthKitClient {
       respiratoryRate,
       bodyTemperature,
     ] = await Promise.all([
-      settle<HealthKitSample>((cb) => AppleHealthKit.getStepCount(o, cb)),
-      settle<HealthKitSample[]>((cb) => AppleHealthKit.getActiveEnergyBurned(o, cb)),
+      settle<HealthKitSample[]>((cb) => AppleHealthKit.getDailyStepCountSamples(hourly, cb)),
+      settle<HealthKitSample[]>((cb) => AppleHealthKit.getActiveEnergyBurned(hourly, cb)),
       settle<HealthKitSample[]>((cb) => AppleHealthKit.getRestingHeartRateSamples(o, cb)),
       settle<HealthKitSample[]>((cb) => AppleHealthKit.getHeartRateSamples(o, cb)),
       settle<HealthKitSample[]>((cb) => AppleHealthKit.getVo2MaxSamples(o, cb)),
@@ -342,13 +360,9 @@ export class HealthKitClient {
       settle<HealthKitSample[]>((cb) => AppleHealthKit.getBodyTemperatureSamples(o, cb)),
     ]);
 
-    // `getStepCount` returns a single aggregate HealthValue; wrap to an array
-    // so the normalizer has one uniform shape across quantity metrics.
-    const steps = stepResult ? [stepResult] : undefined;
-
     return {
-      steps,
-      activeEnergy,
+      steps: completeOnly(stepBuckets),
+      activeEnergy: completeOnly(activeEnergy),
       restingHeartRate,
       heartRate,
       vo2Max,

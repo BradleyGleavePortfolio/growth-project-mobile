@@ -31,7 +31,16 @@ import {
 } from '@react-navigation/native';
 import { colors, spacing } from '../../../theme/tokens';
 import type { WearableMetricBucket } from '../../../api/wearablesSamplesApi';
-import { useWearableConnections } from '../../../hooks/useWearableConnections';
+import {
+  useInvalidateWearableConnections,
+  useWearableConnections,
+} from '../../../hooks/useWearableConnections';
+import { featureFlags } from '../../../config/featureFlags';
+import {
+  deviceSourceForPlatform,
+  importOnDeviceHistory,
+} from '../../../services/health/onDeviceSync';
+import { logger } from '../../../utils/logger';
 import { useReduceMotion } from './components/useReduceMotion';
 import {
   SHELL_CROSSFADE_MS,
@@ -59,6 +68,28 @@ export default function WearablesShell() {
 
   const connectionsQuery = useWearableConnections();
   const connections = connectionsQuery.data ?? [];
+  const invalidateWearables = useInvalidateWearableConnections();
+
+  // S14: refresh on open. When this phone's health store (Apple Health on
+  // iOS, Health Connect on Android) is connected, read what is new since the
+  // last sync and post it, then refetch so the views show it. Once per mount;
+  // failures are logged and the views keep showing what is already stored.
+  const deviceSource = deviceSourceForPlatform();
+  const hasDeviceConnection = connections.some(
+    (c) => c.provider === deviceSource && c.status === 'connected',
+  );
+  const [refreshStarted, setRefreshStarted] = useState(false);
+  useEffect(() => {
+    if (refreshStarted || deviceSource == null || !hasDeviceConnection) return;
+    setRefreshStarted(true);
+    importOnDeviceHistory(deviceSource)
+      .then((outcome) => {
+        if (outcome.kind === 'imported') invalidateWearables();
+      })
+      .catch((err: unknown) => {
+        logger.warn('[wearables] on-device refresh failed', err);
+      });
+  }, [refreshStarted, deviceSource, hasDeviceConnection, invalidateWearables]);
 
   const goToConnections = useCallback(() => {
     navigation.navigate('Connections');
@@ -98,17 +129,24 @@ export default function WearablesShell() {
     setBucket((prev: WearableMetricBucket) => (prev === fromParam ? prev : fromParam));
   }, [route.params?.bucket]);
 
-  // Each bucket screen renders the client AI insight panel in its `aiPanelSlot`
-  // (the read-only HK-5b surface — no approve/dismiss; that is coach-only, HK-6).
+  // Each bucket screen can render the client AI insight panel in its
+  // `aiPanelSlot` (the read-only HK-5b surface — no approve/dismiss; that is
+  // coach-only, HK-6). S14: only behind `wearableAiInsights` (default OFF)
+  // until the panel honours the D2 AI-processing consent.
+  const aiPanelsOn = featureFlags.wearableAiInsights;
   const content =
     bucket === 'HEALTH_FITNESS' ? (
       <HealthFitnessScreen
-        aiPanelSlot={<ClientWearableInsightPanel bucket="HEALTH_FITNESS" />}
+        aiPanelSlot={
+          aiPanelsOn ? <ClientWearableInsightPanel bucket="HEALTH_FITNESS" /> : undefined
+        }
       />
     ) : (
       <SleepRecoveryScreen
         bucketParam={paramForBucket(bucket)}
-        aiPanelSlot={<ClientWearableInsightPanel bucket="SLEEP_RECOVERY" />}
+        aiPanelSlot={
+          aiPanelsOn ? <ClientWearableInsightPanel bucket="SLEEP_RECOVERY" /> : undefined
+        }
       />
     );
 

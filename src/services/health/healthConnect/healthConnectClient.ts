@@ -53,7 +53,11 @@ interface HealthConnectLib {
   readRecords: (
     recordType: string,
     options: {
-      timeRangeFilter: { operator: 'between'; startTime: string; endTime: string };
+      timeRangeFilter: {
+        operator: 'between';
+        startTime: string;
+        endTime: string;
+      };
     },
   ) => Promise<{ records?: unknown[] }>;
 }
@@ -232,6 +236,14 @@ export async function requestPermission(): Promise<HealthConnectPermission[]> {
 }
 
 /**
+ * Page bound for one record type's read. Health Connect returns at most 1000
+ * records per page (its default page size); 30 days of phone step intervals or
+ * watch heart-rate series can exceed one page, so we follow `pageToken` up to
+ * this many pages (S14 history import) instead of silently keeping page one.
+ */
+export const MAX_READ_PAGES = 20;
+
+/**
  * Read all records of a single type within `[startTime, endTime)`. Returns the
  * raw, provider-native records array (opaque to callers other than the
  * normalizer). Uses the library's `'between'` time-range filter.
@@ -247,20 +259,36 @@ export async function readRecords(
 ): Promise<unknown[]> {
   assertSupported();
   // The library accepts a record-type string + options; result is
-  // `{ records: T[] }`. We cast through `unknown` because our record-type
-  // union is wider than the library's per-call generic and we treat records
-  // opaquely until normalization.
-  const result = (await (loadHealthConnectLib().readRecords as unknown as (
+  // `{ records: T[], pageToken?: string }`. We cast through `unknown` because
+  // our record-type union is wider than the library's per-call generic and we
+  // treat records opaquely until normalization.
+  const read = loadHealthConnectLib().readRecords as unknown as (
     rt: string,
-    opts: { timeRangeFilter: { operator: 'between'; startTime: string; endTime: string } },
-  ) => Promise<{ records?: unknown[] }>)(recordType, {
-    timeRangeFilter: {
-      operator: 'between',
-      startTime: range.startTime,
-      endTime: range.endTime,
+    opts: {
+      timeRangeFilter: { operator: 'between'; startTime: string; endTime: string };
+      pageToken?: string;
     },
-  }));
-  return Array.isArray(result?.records) ? result.records : [];
+  ) => Promise<{ records?: unknown[]; pageToken?: string }>;
+
+  const out: unknown[] = [];
+  let pageToken: string | undefined;
+  for (let page = 0; page < MAX_READ_PAGES; page += 1) {
+    const result = await read(recordType, {
+      timeRangeFilter: {
+        operator: 'between',
+        startTime: range.startTime,
+        endTime: range.endTime,
+      },
+      ...(pageToken ? { pageToken } : {}),
+    });
+    if (Array.isArray(result?.records)) out.push(...result.records);
+    pageToken =
+      typeof result?.pageToken === 'string' && result.pageToken.length > 0
+        ? result.pageToken
+        : undefined;
+    if (!pageToken) break;
+  }
+  return out;
 }
 
 /**

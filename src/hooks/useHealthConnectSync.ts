@@ -22,8 +22,7 @@ export const HEALTH_CONNECT_SYNC_MUTATION_KEY = ['healthConnect', 'sync'] as con
 
 /** Arguments to a single sync invocation. */
 export interface HealthConnectSyncVariables {
-  /** Subject client User.id. */
-  userId: string;
+  // S14: no userId — the backend derives the subject from the JWT.
   /** Server-assigned Health Connect connection row id. */
   connectionId: string;
 }
@@ -62,8 +61,8 @@ export function useHealthConnectSync(
     HealthConnectSyncVariables
   >({
     mutationKey: HEALTH_CONNECT_SYNC_MUTATION_KEY,
-    mutationFn: ({ userId, connectionId }: HealthConnectSyncVariables) =>
-      syncHealthConnect(userId, connectionId, deps),
+    mutationFn: ({ connectionId }: HealthConnectSyncVariables) =>
+      syncHealthConnect(connectionId, deps),
   });
 
   return {

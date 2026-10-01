@@ -20,7 +20,7 @@ import { Platform } from 'react-native';
 jest.mock('react-native-health', () => {
   const native = {
     initHealthKit: jest.fn(),
-    getStepCount: jest.fn(),
+    getDailyStepCountSamples: jest.fn(),
     getActiveEnergyBurned: jest.fn(),
     getRestingHeartRateSamples: jest.fn(),
     getHeartRateSamples: jest.fn(),
@@ -72,7 +72,7 @@ function rejectWith(fn: jest.Mock, error: string): void {
 beforeEach(() => {
   jest.clearAllMocks();
   // Default: all readers resolve with empty arrays.
-  resolveWith(mockNative.getStepCount, { value: 0, startDate: '', endDate: '' });
+  resolveWith(mockNative.getDailyStepCountSamples, []);
   resolveWith(mockNative.getActiveEnergyBurned, []);
   resolveWith(mockNative.getRestingHeartRateSamples, []);
   resolveWith(mockNative.getHeartRateSamples, []);
@@ -163,15 +163,51 @@ describe('HealthKitClient.readSamples', () => {
 
   beforeEach(() => setPlatform('ios'));
 
-  it('wraps the single getStepCount value into an array', async () => {
-    resolveWith(mockNative.getStepCount, {
-      value: 1234,
-      startDate: '2026-05-30T00:00:00Z',
-      endDate: '2026-05-31T00:00:00Z',
-    });
+  it('S14: reads steps as hourly buckets over the whole import window', async () => {
+    resolveWith(mockNative.getDailyStepCountSamples, [
+      {
+        value: 1234,
+        startDate: '2026-05-30T08:00:00.000Z',
+        endDate: '2026-05-30T09:00:00.000Z',
+      },
+      {
+        value: 50,
+        startDate: '2026-05-30T09:00:00.000Z',
+        endDate: '2026-05-30T10:00:00.000Z',
+      },
+    ]);
     const res = await new HealthKitClient().readSamples(window);
-    expect(res.steps).toHaveLength(1);
-    expect(res.steps?.[0].value).toBe(1234);
+    const [opts] = mockNative.getDailyStepCountSamples.mock.calls[0];
+    expect(opts).toMatchObject({
+      startDate: window.since.toISOString(),
+      endDate: window.until.toISOString(),
+      period: 60,
+    });
+    expect(res.steps?.map((s) => s.value)).toEqual([1234, 50]);
+  });
+
+  it('S14: drops a still-open hourly bucket for steps and active energy', async () => {
+    const open = {
+      startDate: '2026-05-30T23:00:00.000Z',
+      endDate: '2026-05-31T00:30:00.000Z',
+    };
+    const done = {
+      startDate: '2026-05-30T22:00:00.000Z',
+      endDate: '2026-05-30T23:00:00.000Z',
+    };
+    resolveWith(mockNative.getDailyStepCountSamples, [
+      { value: 10, ...done },
+      { value: 20, ...open },
+    ]);
+    resolveWith(mockNative.getActiveEnergyBurned, [
+      { value: 30, ...done },
+      { value: 40, ...open },
+    ]);
+    const res = await new HealthKitClient().readSamples(window);
+    expect(res.steps?.map((s) => s.value)).toEqual([10]);
+    expect(res.activeEnergy?.map((s) => s.value)).toEqual([30]);
+    const [energyOpts] = mockNative.getActiveEnergyBurned.mock.calls[0];
+    expect(energyOpts.period).toBe(60);
   });
 
   it('maps anchored workouts to the workouts field (data array)', async () => {
@@ -213,7 +249,7 @@ describe('HealthKitClient.readSamples', () => {
 
   it('runs all 14 readers in one pass', async () => {
     await new HealthKitClient().readSamples(window);
-    expect(mockNative.getStepCount).toHaveBeenCalledTimes(1);
+    expect(mockNative.getDailyStepCountSamples).toHaveBeenCalledTimes(1);
     expect(mockNative.getActiveEnergyBurned).toHaveBeenCalledTimes(1);
     expect(mockNative.getRestingHeartRateSamples).toHaveBeenCalledTimes(1);
     expect(mockNative.getHeartRateSamples).toHaveBeenCalledTimes(1);

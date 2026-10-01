@@ -18,6 +18,7 @@
  * Disconnect is a single mutation that invalidates on success.
  */
 
+import { WEARABLE_SAMPLES_ROOT_KEY } from './useWearableSamples';
 import {
   useMutation,
   useQuery,
@@ -80,9 +81,15 @@ export function useDisconnectProvider() {
  * Imperative invalidation of the connections cache. Used by the connect flow
  * after an OAuth auth session returns (the result lands server-side, so the
  * client must re-fetch to observe it).
+ *
+ * S14: also invalidates the wearable samples cache. A connect or on-device
+ * history import changes which samples exist, so the Health and Sleep views
+ * must refetch rather than keep showing an empty window.
  */
 export function useInvalidateWearableConnections(): () => void {
   const qc = useQueryClient();
-  return () =>
+  return () => {
     void qc.invalidateQueries({ queryKey: WEARABLE_CONNECTIONS_QUERY_KEY });
+    void qc.invalidateQueries({ queryKey: WEARABLE_SAMPLES_ROOT_KEY });
+  };
 }

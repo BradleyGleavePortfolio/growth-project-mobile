@@ -100,7 +100,7 @@ describe('platform guard', () => {
   it('throws HealthConnectUnsupportedError on ios', async () => {
     setPlatform('ios');
     await expect(
-      syncHealthConnect('u', 'c', makeDeps(makeClient())),
+      syncHealthConnect('c', makeDeps(makeClient())),
     ).rejects.toBeInstanceOf(HealthConnectUnsupportedError);
   });
 });
@@ -111,7 +111,7 @@ describe('permission-denied path', () => {
       getGrantedPermissions: jest.fn().mockResolvedValue([]),
     });
     await expect(
-      syncHealthConnect('u', 'c', makeDeps(client)),
+      syncHealthConnect('c', makeDeps(client)),
     ).rejects.toBeInstanceOf(HealthConnectPermissionDeniedError);
     // Watermark NOT written on a denied run.
     expect(store[LAST_SYNC_AT_KEY]).toBeUndefined();
@@ -127,7 +127,7 @@ describe('permission-denied path', () => {
       ]),
     });
     const ingest = jest.fn();
-    const res = await syncHealthConnect('u', 'c', makeDeps(client, ingest));
+    const res = await syncHealthConnect('c', makeDeps(client, ingest));
     expect(res.grantedRecordTypes).toEqual(['Steps']);
     // Only the granted type was read.
     expect(client.readRecords).toHaveBeenCalledTimes(1);
@@ -139,7 +139,7 @@ describe('permission-denied path', () => {
 describe('windowing', () => {
   it('uses now - DEFAULT_BACKFILL_DAYS on first sync', async () => {
     const client = makeClient();
-    await syncHealthConnect('u', 'c', makeDeps(client));
+    await syncHealthConnect('c', makeDeps(client));
     const firstCallRange = client.readRecords.mock.calls[0][1];
     const expectedStart = new Date(
       NOW.getTime() - DEFAULT_BACKFILL_DAYS * 24 * 60 * 60_000,
@@ -152,7 +152,7 @@ describe('windowing', () => {
     const last = new Date('2026-05-10T11:00:00.000Z');
     store[LAST_SYNC_AT_KEY] = last.toISOString();
     const client = makeClient();
-    await syncHealthConnect('u', 'c', makeDeps(client));
+    await syncHealthConnect('c', makeDeps(client));
     const range = client.readRecords.mock.calls[0][1];
     const expectedStart = new Date(
       last.getTime() - SYNC_OVERLAP_MINUTES * 60_000,
@@ -172,7 +172,7 @@ describe('normalize → POST → persist', () => {
         .mockResolvedValue([{ time: NOW.toISOString(), weight: { inKilograms: 80 } }]),
     });
     const ingest = jest.fn().mockResolvedValue({ inserted: 1, skipped: 0 });
-    const res = await syncHealthConnect('user-9', 'conn-9', {
+    const res = await syncHealthConnect('conn-9', {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       client: client as any,
       ingestApi: { ingest },
@@ -181,8 +181,8 @@ describe('normalize → POST → persist', () => {
     expect(ingest).toHaveBeenCalledTimes(1);
     const posted = ingest.mock.calls[0][0];
     expect(posted).toHaveLength(1);
+    expect(posted[0]).not.toHaveProperty('userId');
     expect(posted[0]).toMatchObject({
-      userId: 'user-9',
       connectionId: 'conn-9',
       provider: 'HEALTH_CONNECT',
       metric: 'BODY_WEIGHT_KG',
@@ -197,7 +197,7 @@ describe('normalize → POST → persist', () => {
     const client = makeClient();
     const ingest = jest.fn().mockRejectedValue(new Error('network'));
     await expect(
-      syncHealthConnect('u', 'c', {
+      syncHealthConnect('c', {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         client: client as any,
         ingestApi: { ingest },
@@ -219,7 +219,7 @@ describe('normalize → POST → persist', () => {
       }),
     });
     const ingest = jest.fn().mockResolvedValue({ inserted: 1, skipped: 0 });
-    const res = await syncHealthConnect('u', 'c', {
+    const res = await syncHealthConnect('c', {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       client: client as any,
       ingestApi: { ingest },

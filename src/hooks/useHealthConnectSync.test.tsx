@@ -90,7 +90,7 @@ describe('useHealthConnectSync', () => {
 
     let res: { normalizedCount: number; inserted: number } | undefined;
     await act(async () => {
-      res = await result.current.sync({ userId: 'u1', connectionId: 'c1' });
+      res = await result.current.sync({ connectionId: 'c1' });
       // Allow the post-resolution mutation state update to flush inside act().
       await Promise.resolve();
     });
@@ -106,9 +106,9 @@ describe('useHealthConnectSync', () => {
     const d = deps();
     const { result } = await renderHook(() => useHealthConnectSync({ deps: d }), { wrapper });
     await act(async () => {
-      await expect(
-        result.current.sync({ userId: 'u1', connectionId: 'c1' }),
-      ).rejects.toBeInstanceOf(HealthConnectUnsupportedError);
+      await expect(result.current.sync({ connectionId: 'c1' })).rejects.toBeInstanceOf(
+        HealthConnectUnsupportedError,
+      );
       await Promise.resolve();
     });
   });

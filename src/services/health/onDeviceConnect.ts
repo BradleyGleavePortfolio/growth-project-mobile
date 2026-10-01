@@ -32,10 +32,6 @@
  */
 
 import { Platform } from 'react-native';
-import AppleHealthKit, {
-  type HealthKitPermissions,
-  type HealthPermission,
-} from 'react-native-health';
 import {
   getSdkStatus,
   initialize as hcInitialize,
@@ -45,6 +41,8 @@ import {
   type Permission as HealthConnectPermission,
 } from 'react-native-health-connect';
 import type { WearableProvider } from '../../api/wearablesConnectionsApi';
+import { HEALTHKIT_READ_PERMISSIONS, healthKitClient } from './healthkit/healthKitClient';
+import { buildReadPermissions } from './healthConnect/healthConnectClient';
 
 /**
  * The outcome of an on-device connect attempt. Exhaustive on purpose so the
@@ -62,35 +60,12 @@ export type OnDeviceConnectOutcome =
   | 'unavailable'
   | 'unsupported';
 
-/** Apple HealthKit read set — the canonical signals the hub ingests. */
-const HEALTHKIT_READ_PERMISSIONS: HealthPermission[] = [
-  AppleHealthKit.Constants.Permissions.Steps,
-  AppleHealthKit.Constants.Permissions.StepCount,
-  AppleHealthKit.Constants.Permissions.HeartRate,
-  AppleHealthKit.Constants.Permissions.RestingHeartRate,
-  AppleHealthKit.Constants.Permissions.HeartRateVariability,
-  AppleHealthKit.Constants.Permissions.ActiveEnergyBurned,
-  AppleHealthKit.Constants.Permissions.SleepAnalysis,
-  AppleHealthKit.Constants.Permissions.Workout,
-];
-
-const HEALTHKIT_PERMISSIONS: HealthKitPermissions = {
-  permissions: {
-    read: HEALTHKIT_READ_PERMISSIONS,
-    write: [],
-  },
-};
-
-/** Health Connect read set — mirrors the Android READ_* permissions in CFG. */
-const HEALTH_CONNECT_READ_PERMISSIONS: HealthConnectPermission[] = [
-  { accessType: 'read', recordType: 'Steps' },
-  { accessType: 'read', recordType: 'HeartRate' },
-  { accessType: 'read', recordType: 'RestingHeartRate' },
-  { accessType: 'read', recordType: 'HeartRateVariabilityRmssd' },
-  { accessType: 'read', recordType: 'ActiveCaloriesBurned' },
-  { accessType: 'read', recordType: 'ExerciseSession' },
-  { accessType: 'read', recordType: 'SleepSession' },
-];
+/**
+ * Health Connect read set. S14: the SAME set the sync service reads
+ * (`buildReadPermissions()`); every entry is declared as an
+ * `android.permission.health.READ_*` permission in app.json.
+ */
+const HEALTH_CONNECT_READ_PERMISSIONS = buildReadPermissions() as HealthConnectPermission[];
 
 /** True when the provider is read on the device's native health store. */
 const ANDROID_HEALTH_CONNECT_PROVIDERS: ReadonlySet<WearableProvider> =
@@ -102,16 +77,16 @@ const ANDROID_HEALTH_CONNECT_PROVIDERS: ReadonlySet<WearableProvider> =
  * to the app, so a clean (error-free) return is treated as `granted` — the
  * authoritative connection status is then re-read server-side after ingest.
  */
-function connectHealthKit(): Promise<OnDeviceConnectOutcome> {
-  return new Promise<OnDeviceConnectOutcome>((resolve) => {
-    AppleHealthKit.initHealthKit(HEALTHKIT_PERMISSIONS, (error: string) => {
-      if (error) {
-        resolve('denied');
-        return;
-      }
-      resolve('granted');
-    });
-  });
+async function connectHealthKit(): Promise<OnDeviceConnectOutcome> {
+  // S14: request the SAME read set the sync service reads, through the
+  // HealthKit client's single native seam, so the history import never needs a
+  // second consent sheet.
+  try {
+    await healthKitClient.requestAuth(HEALTHKIT_READ_PERMISSIONS);
+    return 'granted';
+  } catch {
+    return 'denied';
+  }
 }
 
 /**

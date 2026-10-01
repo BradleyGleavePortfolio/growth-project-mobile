@@ -32,8 +32,8 @@
  *    the first payload sane.
  */
 
-import api from '../../api';
 import { secureStorage } from '../../secureStorage';
+import { WEARABLES_INGEST_PATH, postIngestBatches, type PostIngestDeps } from '../ingestBatching';
 import {
   HEALTHKIT_READ_PERMISSIONS,
   HealthKitReadPermission,
@@ -54,27 +54,41 @@ import {
 export const HEALTHKIT_LAST_SYNC_KEY = 'healthkit_last_sync_at';
 
 /**
- * Backend ingest path for pre-normalized on-device samples.
- *
- * TODO(integration PR / backend HK): the backend route is a STUB — no
- * `POST /v1/wearables/samples/ingest` handler exists on
- * `growth-project-backend@main` yet. The integration PR must implement it to
- * accept `NormalizedSample[]` (bearer-JWT authenticated) and feed the shared
- * `IngestionService`. Until then the client posts against this documented
- * contract path.
+ * Backend ingest path for pre-normalized on-device samples
+ * (`POST /v1/wearables/samples/ingest`, gated server-side by
+ * FEATURE_WEARABLES_INGEST_POST). Posting goes through the shared batching in
+ * `../ingestBatching.ts`; the body never carries `userId` (S14).
  */
-export const HEALTHKIT_INGEST_PATH = '/v1/wearables/samples/ingest';
+export const HEALTHKIT_INGEST_PATH = WEARABLES_INGEST_PATH;
 
-/** Lookback window for the first-ever sync when no cursor is stored. */
+/** History import window for the first-ever sync when no cursor is stored. */
 export const DEFAULT_BACKFILL_DAYS = 30;
+
+/**
+ * Re-read overlap behind the stored cursor. Apple Watch data often reaches the
+ * phone's Health store minutes to an hour after it was recorded, with a start
+ * time before our last sync; re-reading the last hour picks those samples up.
+ * Safe because ingest is idempotent on the backend dedup key.
+ */
+export const SYNC_OVERLAP_MINUTES = 60;
+
+/**
+ * Floor a Date to the start of its LOCAL hour. Hourly statistics buckets
+ * (steps, active energy) are anchored at the query start, so a floored start
+ * keeps bucket boundaries, and the backend dedup key, stable across syncs.
+ */
+export function floorToLocalHour(d: Date): Date {
+  const out = new Date(d.getTime());
+  out.setMinutes(0, 0, 0);
+  return out;
+}
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /** Inputs needed to attribute and route the sync. */
 export interface HealthKitSyncOptions {
-  /** Subject client User.id (stamped onto every sample). */
-  userId: string;
-  /** The wearable connection id this sync ingests through. */
+  // S14: no userId — the backend derives the subject from the JWT.
+  /** The wearable connection id this sync ingests through (server-assigned). */
   connectionId: string;
   /** Optional IANA timezone for the device, threaded onto every sample. */
   sourceTz?: string | null;
@@ -88,6 +102,8 @@ export interface HealthKitSyncOptions {
    * as the new cursor). Defaults to the wall clock. Testing seam.
    */
   now?: Date;
+  /** Testing seam for the batched POST (default: shared axios instance). */
+  ingestDeps?: PostIngestDeps;
 }
 
 /** Outcome of a sync pass. */
@@ -128,15 +144,18 @@ export class HealthKitSyncService {
    * propagates to the caller WITHOUT advancing the cursor.
    */
   async sync(options: HealthKitSyncOptions): Promise<HealthKitSyncResult> {
-    const { userId, connectionId, sourceTz = null } = options;
+    const { connectionId, sourceTz = null } = options;
     const permissions = options.permissions ?? HEALTHKIT_READ_PERMISSIONS;
     const until = options.now ?? new Date();
 
     // Window lower bound: stored cursor, else a bounded backfill. Throwing off
     // iOS happens inside requestAuth/readSamples (the client guards there).
     const lastSyncAt = await this.getLastSyncAt();
-    const since =
-      lastSyncAt ?? new Date(until.getTime() - DEFAULT_BACKFILL_DAYS * MS_PER_DAY);
+    const since = floorToLocalHour(
+      lastSyncAt
+        ? new Date(lastSyncAt.getTime() - SYNC_OVERLAP_MINUTES * 60_000)
+        : new Date(until.getTime() - DEFAULT_BACKFILL_DAYS * MS_PER_DAY),
+    );
 
     // 1) Ensure read authorization (presents the consent sheet on first run).
     await this.client.requestAuth(permissions);
@@ -145,7 +164,7 @@ export class HealthKitSyncService {
     const raw = await this.client.readSamples({ since, until });
 
     // 3) Normalize to the canonical wire contract.
-    const ctx: NormalizationContext = { userId, connectionId, sourceTz };
+    const ctx: NormalizationContext = { connectionId, sourceTz };
     const samples: NormalizedSample[] = normalizeHealthKitResult(raw, ctx);
 
     const sinceIso = since.toISOString();
@@ -163,11 +182,11 @@ export class HealthKitSyncService {
       };
     }
 
-    // 4) POST pre-normalized samples. Bearer JWT is attached by the shared
-    //    axios request interceptor. A rejection here propagates and the
-    //    cursor is intentionally NOT advanced (catch-free: we only persist
-    //    AFTER a resolved POST).
-    await api.post(HEALTHKIT_INGEST_PATH, samples);
+    // 4) POST pre-normalized samples in request-sized batches. Bearer JWT is
+    //    attached by the shared axios request interceptor. A rejection here
+    //    propagates and the cursor is intentionally NOT advanced (catch-free:
+    //    we only persist AFTER every batch resolved).
+    await postIngestBatches(samples, options.ingestDeps);
 
     // 5) Persist the cursor ONLY after a successful POST.
     await secureStorage.setItem(HEALTHKIT_LAST_SYNC_KEY, untilIso);
