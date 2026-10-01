@@ -196,7 +196,7 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
       await dataExportApi.requestExport();
       Alert.alert(
         'Export Requested',
-        'Your data export has been queued. Open Data & Privacy in Settings to track progress and download the file when ready.',
+        'Your data export has been queued. Open Privacy in Settings to track progress and download the file when ready.',
         [{ text: 'OK' }],
       );
     } catch {
@@ -208,7 +208,7 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
 
   const handleDeleteAccount = useCallback(() => {
     Alert.alert(
-      'Delete My Account',
+      'Delete account',
       'This will schedule your account for permanent deletion after a 14-day grace period. You can cancel within that window from Settings.',
       [
         { text: 'Cancel', style: 'cancel' },
@@ -342,13 +342,13 @@ export default function TrustCenterScreen({ navigation }: { navigation: Navigati
             onPress={handleDeleteAccount}
             disabled={deleteBusy}
             accessibilityRole="button"
-            accessibilityLabel="Delete my account"
+            accessibilityLabel="Delete account"
           >
             <View style={[styles.actionIconWrap, styles.actionIconDanger]}>
               <Ionicons name="trash-outline" size={18} color={colors.error} />
             </View>
             <View style={styles.actionBtnText}>
-              <Text style={[styles.actionBtnLabel, styles.dangerText]}>Delete my account</Text>
+              <Text style={[styles.actionBtnLabel, styles.dangerText]}>Delete account</Text>
               <Text style={styles.actionBtnSub}>14-day grace period before permanent deletion</Text>
             </View>
             {deleteBusy ? (

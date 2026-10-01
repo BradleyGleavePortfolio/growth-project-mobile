@@ -116,6 +116,22 @@ describe('TrustCenterScreen source', () => {
   });
 });
 
+describe('TrustCenterScreen labels (operator ruling 10-01: "Privacy", "Delete account")', () => {
+  it('uses the approved Settings labels', () => {
+    expect(SCREEN_SRC).toContain('>Delete account</Text>');
+    expect(SCREEN_SRC).toContain('accessibilityLabel="Delete account"');
+    expect(SCREEN_SRC).toContain("'Delete account',");
+    expect(SCREEN_SRC).not.toMatch(/Delete my account|Delete My Account/);
+    expect(SCREEN_SRC).toContain('Open Privacy in Settings to track progress');
+    expect(SCREEN_SRC).not.toContain('Data & Privacy');
+  });
+
+  it('keeps the policy paths the backend serves (#611 PRIVACY_POLICY_PATH / CONSUMER_HEALTH_POLICY_PATH)', () => {
+    expect(new URL(PRIVACY_POLICY_URL).pathname).toBe('/privacy');
+    expect(new URL(CONSUMER_HEALTH_POLICY_URL).pathname).toBe('/consumer-health-privacy');
+  });
+});
+
 describe('TrustCenterScreen render', () => {
   // Imported after the mocks above are registered.
   const TrustCenterScreen = require('../TrustCenterScreen').default;
