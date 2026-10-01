@@ -106,6 +106,12 @@ describe('signOut', () => {
     expect(await AsyncStorage.getItem('signup_coach_unconfirmed')).toBeNull();
   });
 
+  it('#306 r4 (Sol C1): clears a pending signup role notice so the next person never sees it', async () => {
+    await AsyncStorage.setItem('signup_role_notice', 'coach_retry_not_applied');
+    await signOut();
+    expect(await AsyncStorage.getItem('signup_role_notice')).toBeNull();
+  });
+
   it('clears all auth + session keys and fires logout event exactly once', async () => {
     for (const key of SIGN_OUT_KEYS) {
       await AsyncStorage.setItem(key, 'seed');

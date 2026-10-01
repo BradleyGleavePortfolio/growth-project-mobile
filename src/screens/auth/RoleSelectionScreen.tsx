@@ -93,6 +93,8 @@ export default function RoleSelectionScreen({ navigation, route }: Props) {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [error, setError] = useState('');
   const [cachedCoachId, setCachedCoachId] = useState<string | null>(null);
+  // The user already has a coach, so the only thing left is the notice.
+  const [acknowledgeOnly, setAcknowledgeOnly] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -105,9 +107,11 @@ export default function RoleSelectionScreen({ navigation, route }: Props) {
 
       // C13: a notice written by CreateAccount / Login survives a remount of
       // the auth stack; the route param is only the fast path.
-      if (!route?.params?.signupNotice) {
+      let noticeNow: SignupRoleNoticeKind | null = route?.params?.signupNotice ?? null;
+      if (!noticeNow) {
         const stored = await readSignupRoleNotice();
         if (mounted && stored) setSignupNotice(stored);
+        noticeNow = stored;
       }
 
       // B4: never in retry mode. A failed attach to coach B must not be
@@ -127,6 +131,13 @@ export default function RoleSelectionScreen({ navigation, route }: Props) {
         const u = await readUserCache();
       if (u) {
           if (mounted && u?.coach_id && !isAttachRetry) {
+            // #306 r4 (Sol B2-R3 / C1): a user who already has a coach skips
+            // this step, but never past an unread signup notice; it is shown
+            // and acknowledged first.
+            if (noticeNow) {
+              setAcknowledgeOnly(true);
+              return;
+            }
             await AsyncStorage.removeItem('needs_role_selection');
             await clearSignupRoleNotice();
             authEvents.emit();
@@ -292,6 +303,47 @@ export default function RoleSelectionScreen({ navigation, route }: Props) {
     }
   };
 
+  const noticeBox = signupNotice ? (
+    <View style={styles.retryBox} accessible accessibilityRole="alert" testID="signup-role-notice">
+      <Text style={styles.retryText}>{signupRoleNoticeMessage(signupNotice)}</Text>
+      {signupRoleNoticeNeedsSupport(signupNotice) ? (
+        <Text
+          style={styles.supportLink}
+          accessibilityRole="link"
+          accessibilityLabel="Contact support"
+          testID="signup-role-notice-support"
+          onPress={() => navigation?.navigate('SupportInbox')}
+        >
+          Contact support
+        </Text>
+      ) : null}
+    </View>
+  ) : null;
+
+  if (acknowledgeOnly && signupNotice) {
+    return (
+      <View style={styles.container}>
+        <StatusBar barStyle="dark-content" />
+        <View style={styles.header}>
+          <Text style={styles.title}>Before you continue</Text>
+          {noticeBox}
+        </View>
+        <View style={styles.cardsContainer}>
+          <TouchableOpacity
+            style={styles.continueBtn}
+            onPress={handleKeepCurrentCoach}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Continue"
+            testID="signup-role-notice-acknowledge"
+          >
+            <Text style={styles.continueText}>Continue</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
@@ -299,22 +351,7 @@ export default function RoleSelectionScreen({ navigation, route }: Props) {
       <View style={styles.header}>
         <Text style={styles.greeting}>One more step.</Text>
         <Text style={styles.title}>Pair with your coach</Text>
-        {signupNotice ? (
-          <View style={styles.retryBox} accessible accessibilityRole="alert" testID="signup-role-notice">
-            <Text style={styles.retryText}>{signupRoleNoticeMessage(signupNotice)}</Text>
-            {signupRoleNoticeNeedsSupport(signupNotice) ? (
-              <Text
-                style={styles.supportLink}
-                accessibilityRole="link"
-                accessibilityLabel="Contact support"
-                testID="signup-role-notice-support"
-                onPress={() => navigation?.navigate('SupportInbox')}
-              >
-                Contact support
-              </Text>
-            ) : null}
-          </View>
-        ) : null}
+        {noticeBox}
         {isAttachRetry ? (
           <View
             style={styles.retryBox}

@@ -193,4 +193,37 @@ describe('RoleSelection retry step', () => {
     await findByTestId('signup-role-notice');
     expect(queryByTestId('signup-role-notice-support')).toBeNull();
   });
+
+  // #306 fix round 4 (Sol B2-R3 / C1): a user who already has a coach skips
+  // this step, but never past an unread signup notice.
+  it('a user who already has a coach sees the notice and must acknowledge it before the app', async () => {
+    const { readUserCache } = jest.requireMock('../../../lib/userCache') as { readUserCache: jest.Mock };
+    readUserCache.mockResolvedValue({ id: 'u1', role: 'student', coach_id: 'coach-1' });
+    await AsyncStorage.setItem(SIGNUP_ROLE_NOTICE_KEY, 'coach_retry_not_applied');
+    await AsyncStorage.setItem('needs_role_selection', 'true');
+    const { findByTestId, getByTestId, getByText } = await render(
+      <RoleSelectionScreen navigation={{ navigate: jest.fn() } as never} route={route({ signupNotice: 'coach_retry_not_applied' })} />,
+    );
+    expect(await findByTestId('signup-role-notice-acknowledge')).toBeTruthy();
+    expect(getByText(/Coach sign-up was not applied to this account/)).toBeTruthy();
+    expect(getByTestId('signup-role-notice-support')).toBeTruthy();
+    expect(mockEmit).not.toHaveBeenCalled();
+    await fireEvent.press(getByTestId('signup-role-notice-acknowledge'));
+    await waitFor(() => expect(mockEmit).toHaveBeenCalledTimes(1));
+    expect(await AsyncStorage.getItem(SIGNUP_ROLE_NOTICE_KEY)).toBeNull();
+    expect(await AsyncStorage.getItem('needs_role_selection')).toBeNull();
+    expect(mockSelectRole).not.toHaveBeenCalled();
+    readUserCache.mockResolvedValue({ id: 'u1', role: null });
+  });
+
+  it('guard: a user who already has a coach and no notice still skips the step', async () => {
+    const { readUserCache } = jest.requireMock('../../../lib/userCache') as { readUserCache: jest.Mock };
+    readUserCache.mockResolvedValue({ id: 'u1', role: 'student', coach_id: 'coach-1' });
+    const { queryByTestId } = await render(
+      <RoleSelectionScreen navigation={{ navigate: jest.fn() } as never} route={route(undefined)} />,
+    );
+    await waitFor(() => expect(mockEmit).toHaveBeenCalledTimes(1));
+    expect(queryByTestId('signup-role-notice-acknowledge')).toBeNull();
+    readUserCache.mockResolvedValue({ id: 'u1', role: null });
+  });
 });

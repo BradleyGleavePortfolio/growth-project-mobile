@@ -1,23 +1,35 @@
 /**
- * Coach signup attempts whose outcome was never proven (#306 fix round 3).
+ * Coach signup attempts whose outcome was never proven (#306 fix rounds 3-4).
  *
  * A coach signup can reach the server and commit while its response is lost
  * (network drop, timeout, 5xx after commit). The app then says the outcome is
- * unconfirmed and that a retry with the same sign-in is safe. When the retry
- * answers "existing account, not a coach", that account may well be the one
- * the lost attempt created (for example the kill switch made it a client), so
- * "this account already existed" would be untrue. This marker lets the retry
- * say "coach sign-up was not applied" instead.
+ * unconfirmed and that a retry with the same sign-in is safe. When the retry,
+ * or a later sign-in on the Login screen, answers "existing account, not a
+ * coach", that account may well be the one the lost attempt created (for
+ * example the kill switch made it a client), so "this account already
+ * existed" would be untrue, and silently entering the client app would hide
+ * that the coach request was not applied. This marker lets every place that
+ * gets a server answer (CreateAccount and Login, email, Apple and Google) say
+ * "coach sign-up was not applied" instead, and lets CreateAccount keep the
+ * "outcome unknown" state after the request itself has settled (#306 r4,
+ * Sol B1-R3 / B2-R3).
  *
- * Scope: one marker, bound to the sign-in method (and the email for email
- * signups) and short-lived, so a later person on a shared device does not
- * inherit it. Cleared once any coach attempt gets a server answer, and on
- * sign-out (services/authActions).
+ * Scope: one entry per sign-in method and identity (the email for email
+ * signups; the provider email when the provider gave one before the request),
+ * short-lived, so a later person on a shared device does not inherit it.
+ * An entry is resolved only by a server answer for the same method and
+ * identity (never by a cancelled sheet, a refusal of a later request, or a
+ * policy re-check). All entries are cleared on sign-out (services/authActions).
+ *
+ * Emails are compared trimmed and lower-cased, the same canonical form the
+ * backend stores (#597 normalizeEmail), so "Jane@Example.com " and
+ * "jane@example.com" are the same identity.
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export const COACH_SIGNUP_UNCONFIRMED_KEY = 'signup_coach_unconfirmed';
 export const COACH_SIGNUP_UNCONFIRMED_TTL_MS = 30 * 60 * 1000;
+const MAX_ENTRIES = 6;
 
 export type CoachSignupMethod = 'email' | 'apple' | 'google';
 
@@ -27,47 +39,150 @@ interface Marker {
   at: number;
 }
 
-function normaliseEmail(email: string | undefined): string | undefined {
-  const e = email?.trim().toLowerCase();
+export function normaliseEmail(email: string | undefined | null): string | undefined {
+  const e = typeof email === 'string' ? email.trim().toLowerCase() : '';
   return e ? e : undefined;
 }
 
-export async function rememberUnconfirmedCoachSignup(
-  method: CoachSignupMethod,
-  email?: string,
-  now: number = Date.now(),
-): Promise<void> {
-  const marker: Marker = { method, at: now, ...(method === 'email' ? { email: normaliseEmail(email) } : {}) };
+function isMethod(v: unknown): v is CoachSignupMethod {
+  return v === 'email' || v === 'apple' || v === 'google';
+}
+
+function fresh(m: Marker, now: number): boolean {
+  return now >= m.at && now - m.at <= COACH_SIGNUP_UNCONFIRMED_TTL_MS;
+}
+
+async function readMarkers(now: number): Promise<Marker[]> {
+  let raw: string | null = null;
   try {
-    await AsyncStorage.setItem(COACH_SIGNUP_UNCONFIRMED_KEY, JSON.stringify(marker));
+    raw = await AsyncStorage.getItem(COACH_SIGNUP_UNCONFIRMED_KEY);
+  } catch {
+    return [];
+  }
+  if (!raw) return [];
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  // Round-3 builds stored a single object; read it as a one-entry list.
+  const list = Array.isArray(parsed) ? parsed : [parsed];
+  const out: Marker[] = [];
+  for (const item of list) {
+    const m = item as Partial<Marker> | null;
+    if (!m || !isMethod(m.method) || typeof m.at !== 'number') continue;
+    const marker: Marker = { method: m.method, at: m.at };
+    const email = normaliseEmail(typeof m.email === 'string' ? m.email : undefined);
+    if (email) marker.email = email;
+    if (marker.method === 'email' && !marker.email) continue;
+    if (fresh(marker, now)) out.push(marker);
+  }
+  return out;
+}
+
+async function writeMarkers(markers: Marker[]): Promise<void> {
+  try {
+    if (markers.length === 0) await AsyncStorage.removeItem(COACH_SIGNUP_UNCONFIRMED_KEY);
+    else await AsyncStorage.setItem(COACH_SIGNUP_UNCONFIRMED_KEY, JSON.stringify(markers.slice(-MAX_ENTRIES)));
   } catch {
     // Best effort: without the marker the retry falls back to the generic notice.
   }
 }
 
-/** True when an unconfirmed coach attempt with the same method (and email) is recent. */
-export async function hasUnconfirmedCoachSignup(
-  method: CoachSignupMethod,
-  email?: string,
-  now: number = Date.now(),
-): Promise<boolean> {
-  try {
-    const raw = await AsyncStorage.getItem(COACH_SIGNUP_UNCONFIRMED_KEY);
-    if (!raw) return false;
-    const m = JSON.parse(raw) as Partial<Marker>;
-    if (m.method !== method || typeof m.at !== 'number') return false;
-    if (now - m.at > COACH_SIGNUP_UNCONFIRMED_TTL_MS || now < m.at) return false;
-    if (method === 'email' && m.email !== normaliseEmail(email)) return false;
-    return true;
-  } catch {
-    return false;
-  }
+/**
+ * Does `m` describe the same sign-in as (method, email)?
+ *  - email: the address must match.
+ *  - apple / google: when both sides know the email they must match; when
+ *    either does not (Apple often hides it), the method alone decides, so an
+ *    unproven outcome is never forgotten for lack of an identifier.
+ */
+function sameSignIn(m: Marker, method: CoachSignupMethod, email: string | undefined): boolean {
+  if (m.method !== method) return false;
+  if (method === 'email') return !!email && m.email === email;
+  if (m.email && email) return m.email === email;
+  return true;
 }
 
+export async function rememberUnconfirmedCoachSignup(
+  method: CoachSignupMethod,
+  email?: string | null,
+  now: number = Date.now(),
+): Promise<void> {
+  const e = normaliseEmail(email);
+  if (method === 'email' && !e) return;
+  const kept = (await readMarkers(now)).filter((m) => !(m.method === method && m.email === e));
+  const marker: Marker = { method, at: now, ...(e ? { email: e } : {}) };
+  await writeMarkers([...kept, marker]);
+}
+
+/** True when an unconfirmed coach attempt with the same method (and identity) is recent. */
+export async function hasUnconfirmedCoachSignup(
+  method: CoachSignupMethod,
+  email?: string | null,
+  now: number = Date.now(),
+): Promise<boolean> {
+  const e = normaliseEmail(email);
+  return (await readMarkers(now)).some((m) => sameSignIn(m, method, e));
+}
+
+/** True when any unconfirmed coach attempt from this device is recent. */
+export async function hasAnyUnconfirmedCoachSignup(now: number = Date.now()): Promise<boolean> {
+  return (await readMarkers(now)).length > 0;
+}
+
+/**
+ * A server answer for this sign-in arrived: its earlier unconfirmed attempt is
+ * resolved. Returns whether one was pending. Other sign-ins keep theirs.
+ */
+export async function resolveUnconfirmedCoachSignup(
+  method: CoachSignupMethod,
+  email?: string | null,
+  now: number = Date.now(),
+): Promise<boolean> {
+  const e = normaliseEmail(email);
+  const markers = await readMarkers(now);
+  const kept = markers.filter((m) => !sameSignIn(m, method, e));
+  if (kept.length !== markers.length) {
+    await writeMarkers(kept);
+    return true;
+  }
+  return false;
+}
+
+/** Sign-out: forget every marker. */
 export async function clearUnconfirmedCoachSignup(): Promise<void> {
   try {
     await AsyncStorage.removeItem(COACH_SIGNUP_UNCONFIRMED_KEY);
   } catch {
     // ignore
   }
+}
+
+/**
+ * Shared reconciliation for any server-confirmed sign-in (CreateAccount and
+ * Login; email, Apple, Google). Returns `coach_retry_not_applied` when an
+ * unconfirmed coach attempt for this sign-in is pending and the server says
+ * the account is not a coach, so the caller must show that notice and have it
+ * acknowledged before the client flow. A server coach resolves the attempt
+ * with no notice. The marker is resolved by the caller once the notice is
+ * acknowledged (`resolveUnconfirmedCoachSignup`), so a crash before then
+ * repeats the notice instead of losing it.
+ */
+export async function reconcileCoachAttempt(
+  method: CoachSignupMethod,
+  user: { role?: unknown; email?: unknown } | null | undefined,
+  opts: { emailHint?: string | null; isNewUser?: boolean } = {},
+  now: number = Date.now(),
+): Promise<'coach_retry_not_applied' | null> {
+  if (typeof user?.role !== 'string') return null;
+  const email = normaliseEmail(typeof user.email === 'string' && user.email ? user.email : opts.emailHint ?? undefined);
+  if (!(await hasUnconfirmedCoachSignup(method, email, now))) return null;
+  // A server coach, or an account the server says it created just now (so
+  // the earlier attempt did not create one): resolved, nothing to say.
+  if (user.role === 'coach' || opts.isNewUser === true) {
+    await resolveUnconfirmedCoachSignup(method, email, now);
+    return null;
+  }
+  return 'coach_retry_not_applied';
 }

@@ -104,6 +104,14 @@ describe('signInWithApple', () => {
     expect(await secureStorage.getItem('supabase_token')).toBeNull();
   });
 
+  it('#306 r4: an unconfirmed coach signup carries the email Apple shared, when it shared one', async () => {
+    mockSignInAsync.mockResolvedValueOnce({ identityToken: 'apple-id-token', email: 'x@privaterelay.appleid.com' });
+    mockApiPost.mockRejectedValueOnce(new Error('Cannot reach server'));
+    const result = await signInWithApple({ intendedRole: 'coach' });
+    expect(result.error_code).toBe('coach_signup_unconfirmed');
+    expect(result.provider_email).toBe('x@privaterelay.appleid.com');
+  });
+
   it('#306 r3: a coach signup answered with a 5xx is unconfirmed (it may have committed)', async () => {
     mockSignInAsync.mockResolvedValueOnce({ identityToken: 'apple-id-token' });
     mockApiPost.mockRejectedValueOnce({ response: { status: 502, data: { message: 'Bad gateway' } } });

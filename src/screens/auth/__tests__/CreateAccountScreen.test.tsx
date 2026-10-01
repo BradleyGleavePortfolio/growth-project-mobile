@@ -78,6 +78,7 @@ import { __resetSignupPolicyCacheForTests, loadSignupPolicy } from '../../../lib
 import { secureStorage } from '../../../services/secureStorage';
 import { CoachSignupUnavailableError } from '../../../lib/intendedRole';
 import { SIGNUP_ROLE_NOTICE_KEY } from '../../../lib/signupRoleNotice';
+import { COACH_SIGNUP_UNCONFIRMED_KEY, rememberUnconfirmedCoachSignup } from '../../../lib/coachSignupAttempt';
 
 function makeNav() {
   return { replace: jest.fn(), navigate: jest.fn() };
@@ -915,6 +916,226 @@ describe('CreateAccountScreen', () => {
       expect(utils.queryByTestId('role-choice')).toBeNull();
       expect(utils.getByText('Create your coach account')).toBeTruthy();
       await pending.resolve({ data: { requires_verification: true, role: 'coach' } });
+    });
+  });
+
+  describe('#306 fix round 4 (Sol B1-R3: an unresolved attempt outlives its request)', () => {
+    const PROVIDERS = ['email', 'apple', 'google'];
+    const NO_ACCOUNT = /No account has been created/;
+    const UNCONFIRMED = /We could not confirm your coach account/;
+
+    async function renderCoachWithHeldLive() {
+      await loadSignupPolicy(async () => ({ data: { ...ROLE_CHOICE_POLICY, providers: PROVIDERS } }));
+      let resolveLive: (v: unknown) => void = () => undefined;
+      mockGetSignupPolicy.mockReturnValueOnce(new Promise((r) => { resolveLive = r; }));
+      const nav = makeNav();
+      const utils = await render(<CreateAccountScreen navigation={nav as never} route={undefined} />);
+      await fireEvent.press(utils.getByTestId('role-choice-coach'));
+      expect(utils.getByText('Create your coach account')).toBeTruthy();
+      const disableLive = async () => {
+        await act(async () => {
+          resolveLive({ data: { ...ROLE_CHOICE_POLICY, providers: PROVIDERS, role_choice: false } });
+        });
+      };
+      return { nav, utils, disableLive };
+    }
+
+    async function submitCoachEmail(utils: Awaited<ReturnType<typeof renderCoachWithHeldLive>>['utils']) {
+      await fireEvent.changeText(utils.getByLabelText('Full name'), 'Pat Coach');
+      await fireEvent.changeText(utils.getByLabelText('Email'), 'pat@example.com');
+      await fireEvent.changeText(utils.getByLabelText('Password'), 'Str0ng!pass');
+      await fireEvent.press(utils.getByLabelText('Create account'));
+    }
+
+    function expectUnresolvedState(utils: Awaited<ReturnType<typeof renderCoachWithHeldLive>>['utils']) {
+      expect(utils.getByTestId('coach-choice-withdrawn-unconfirmed')).toBeTruthy();
+      expect(utils.getByText(/An account may or may not have been created/)).toBeTruthy();
+      expect(utils.queryByText(NO_ACCOUNT)).toBeNull();
+      expect(utils.queryByTestId('coach-choice-withdrawn-client')).toBeNull();
+      expect(utils.getByTestId('coach-choice-withdrawn-sign-in')).toBeTruthy();
+    }
+
+    it('email: the response is lost and settles, THEN the live disable lands: unconfirmed, never "No account"', async () => {
+      const { utils, disableLive } = await renderCoachWithHeldLive();
+      mockRegister.mockRejectedValueOnce(new Error('Cannot reach server. Please check your connection and try again.'));
+      await submitCoachEmail(utils);
+      expect(await utils.findByText(UNCONFIRMED)).toBeTruthy();
+      await disableLive();
+      await waitFor(() => expect(utils.getByTestId('coach-choice-withdrawn-notice')).toBeTruthy());
+      expectUnresolvedState(utils);
+    });
+
+    it('Apple: unconfirmed and settled, then the live disable: unconfirmed', async () => {
+      const { utils, disableLive } = await renderCoachWithHeldLive();
+      mockSignInWithApple.mockResolvedValueOnce({ success: false, error: 'x', error_code: 'coach_signup_unconfirmed' });
+      await fireEvent.press(utils.getByTestId('apple-button'));
+      expect(await utils.findByText(UNCONFIRMED)).toBeTruthy();
+      await disableLive();
+      await waitFor(() => expect(utils.getByTestId('coach-choice-withdrawn-notice')).toBeTruthy());
+      expectUnresolvedState(utils);
+    });
+
+    it('Google: unconfirmed and settled, then the live disable: unconfirmed', async () => {
+      const { utils, disableLive } = await renderCoachWithHeldLive();
+      mockSignInWithGoogle.mockResolvedValueOnce({ success: false, error: 'x', error_code: 'coach_signup_unconfirmed' });
+      await fireEvent.press(utils.getByText('Continue with Google'));
+      expect(await utils.findByText(UNCONFIRMED)).toBeTruthy();
+      await disableLive();
+      await waitFor(() => expect(utils.getByTestId('coach-choice-withdrawn-notice')).toBeTruthy());
+      expectUnresolvedState(utils);
+    });
+
+    it('Apple: a lost attempt, then a CANCELLED retry with the disable held: cancellation proves nothing about the first', async () => {
+      const { utils, disableLive } = await renderCoachWithHeldLive();
+      mockSignInWithApple.mockResolvedValueOnce({ success: false, error: 'x', error_code: 'coach_signup_unconfirmed' });
+      await fireEvent.press(utils.getByTestId('apple-button'));
+      expect(await utils.findByText(UNCONFIRMED)).toBeTruthy();
+      let resolveApple: (v: unknown) => void = () => undefined;
+      mockSignInWithApple.mockReturnValueOnce(new Promise((r) => { resolveApple = r; }));
+      const pressing = fireEvent.press(utils.getByTestId('apple-button'));
+      await waitFor(() => expect(mockSignInWithApple).toHaveBeenCalledTimes(2));
+      await disableLive();
+      expect(utils.queryByTestId('coach-choice-withdrawn-notice')).toBeNull();
+      await act(async () => { resolveApple({ success: false, cancelled: true }); });
+      await pressing;
+      await waitFor(() => expect(utils.getByTestId('coach-choice-withdrawn-notice')).toBeTruthy());
+      expectUnresolvedState(utils);
+    });
+
+    it('Google: a lost attempt, then a CANCELLED retry with the disable held: unconfirmed', async () => {
+      const { utils, disableLive } = await renderCoachWithHeldLive();
+      mockSignInWithGoogle.mockResolvedValueOnce({ success: false, error: 'x', error_code: 'coach_signup_unconfirmed' });
+      await fireEvent.press(utils.getByText('Continue with Google'));
+      expect(await utils.findByText(UNCONFIRMED)).toBeTruthy();
+      let resolveGoogle: (v: unknown) => void = () => undefined;
+      mockSignInWithGoogle.mockReturnValueOnce(new Promise((r) => { resolveGoogle = r; }));
+      const pressing = fireEvent.press(utils.getByText('Continue with Google'));
+      await waitFor(() => expect(mockSignInWithGoogle).toHaveBeenCalledTimes(2));
+      await disableLive();
+      await act(async () => { resolveGoogle({ success: false, error: 'Sign-in was cancelled' }); });
+      await pressing;
+      await waitFor(() => expect(utils.getByTestId('coach-choice-withdrawn-notice')).toBeTruthy());
+      expectUnresolvedState(utils);
+    });
+
+    it('email: a lost attempt, then a REFUSED retry (4xx) with the disable held: still unconfirmed', async () => {
+      const { utils, disableLive } = await renderCoachWithHeldLive();
+      mockRegister.mockRejectedValueOnce(Object.assign(new Error('Server error'), { response: { status: 502 } }));
+      await submitCoachEmail(utils);
+      expect(await utils.findByText(UNCONFIRMED)).toBeTruthy();
+      let rejectRegister: (e: unknown) => void = () => undefined;
+      mockRegister.mockReturnValueOnce(new Promise((_res, rej) => { rejectRegister = rej; }));
+      const pressing = fireEvent.press(utils.getByLabelText('Create account'));
+      await waitFor(() => expect(mockRegister).toHaveBeenCalledTimes(2));
+      await disableLive();
+      await act(async () => { rejectRegister(Object.assign(new Error('Too many'), { response: { status: 429, data: { message: 'Too many requests' } } })); });
+      await pressing;
+      await waitFor(() => expect(utils.getByTestId('coach-choice-withdrawn-notice')).toBeTruthy());
+      expectUnresolvedState(utils);
+    });
+
+    it('remount: an unconfirmed attempt from before the remount is consulted before the live answer is applied', async () => {
+      await rememberUnconfirmedCoachSignup('apple');
+      const { utils, disableLive } = await renderCoachWithHeldLive();
+      await disableLive();
+      await waitFor(() => expect(utils.getByTestId('coach-choice-withdrawn-notice')).toBeTruthy());
+      expectUnresolvedState(utils);
+    });
+
+    it('"Check again" never erases it: still off keeps the unconfirmed state; no client account is offered', async () => {
+      const { utils, disableLive } = await renderCoachWithHeldLive();
+      mockRegister.mockRejectedValueOnce(new Error('Cannot reach server. Please check your connection and try again.'));
+      await submitCoachEmail(utils);
+      expect(await utils.findByText(UNCONFIRMED)).toBeTruthy();
+      await disableLive();
+      await waitFor(() => expect(utils.getByTestId('coach-choice-withdrawn-notice')).toBeTruthy());
+      mockGetSignupPolicy.mockResolvedValueOnce({ data: { ...ROLE_CHOICE_POLICY, providers: PROVIDERS, role_choice: false } });
+      await fireEvent.press(utils.getByTestId('coach-choice-withdrawn-recheck'));
+      expect(await utils.findByTestId('coach-choice-recheck-note')).toBeTruthy();
+      expectUnresolvedState(utils);
+      expect(await AsyncStorage.getItem(COACH_SIGNUP_UNCONFIRMED_KEY)).not.toBeNull();
+    });
+
+    it('guard: a server answer for the same email resolves it (the marker is gone)', async () => {
+      mockGetSignupPolicy.mockResolvedValue({ data: ROLE_CHOICE_POLICY });
+      mockRegister
+        .mockRejectedValueOnce(new Error('Cannot reach server. Please check your connection and try again.'))
+        .mockResolvedValueOnce({ data: { requires_verification: true, role: 'coach' } });
+      const utils = await renderScreen(undefined, 'coach');
+      await fillAndSubmit(utils);
+      expect(await utils.findByText(UNCONFIRMED)).toBeTruthy();
+      expect(await AsyncStorage.getItem(COACH_SIGNUP_UNCONFIRMED_KEY)).not.toBeNull();
+      await fireEvent.press(utils.getByLabelText('Create account'));
+      expect(await utils.findByText('Check your inbox')).toBeTruthy();
+      expect(await AsyncStorage.getItem(COACH_SIGNUP_UNCONFIRMED_KEY)).toBeNull();
+    });
+
+    it('a CLIENT retry (coach sign-up now off) that recovers an existing non-coach account is told "not applied"', async () => {
+      await rememberUnconfirmedCoachSignup('apple');
+      mockGetSignupPolicy.mockResolvedValue({ data: { ...ROLE_CHOICE_POLICY, role_choice: false } });
+      mockSignInWithApple.mockResolvedValueOnce({ success: true, is_new_user: false, user: { id: 'u1', role: 'student' } });
+      const utils = await renderScreen(undefined, null);
+      expect(utils.queryByTestId('role-choice')).toBeNull();
+      await fireEvent.press(utils.getByTestId('apple-button'));
+      expect(mockSignInWithApple.mock.calls[0][0].intendedRole).toBeUndefined();
+      await waitFor(() =>
+        expect(utils.nav.replace).toHaveBeenCalledWith('RoleSelection', { signupNotice: 'coach_retry_not_applied' }),
+      );
+      expect(await AsyncStorage.getItem(SIGNUP_ROLE_NOTICE_KEY)).toBe('coach_retry_not_applied');
+    });
+
+    it('a client email retry that finds the address taken after a lost coach attempt says the earlier attempt may have created it', async () => {
+      await rememberUnconfirmedCoachSignup('email', 'pat@example.com');
+      mockGetSignupPolicy.mockResolvedValue({ data: { ...ROLE_CHOICE_POLICY, role_choice: false } });
+      mockRegister.mockRejectedValueOnce(Object.assign(new Error('Conflict'), { response: { status: 409, data: { message: 'Email already registered' } } }));
+      const utils = await renderScreen(undefined, null);
+      await fillAndSubmit(utils);
+      expect(await utils.findByText(/Your earlier coach sign-up may have created it/)).toBeTruthy();
+      expect(mockRegister.mock.calls[0][1]).toBeUndefined();
+    });
+  });
+
+  describe('#306 fix round 4 (backend #597 email canonicalisation, Sol B-597-1)', () => {
+    it('trims the typed address and signs in on the verify step with the address the server stored', async () => {
+      mockGetSignupPolicy.mockResolvedValue({ data: { invite_code_required: false, providers: ['email'] } });
+      mockRegister.mockResolvedValueOnce({ data: { requires_verification: true, email: 'pat@example.com', role: 'student' } });
+      mockLogin.mockResolvedValue({ data: { access_token: 'a', user: { id: 'u1', role: 'student' } } });
+      const utils = await renderScreen();
+      await fireEvent.changeText(utils.getByLabelText('Full name'), 'Pat Client');
+      await fireEvent.changeText(utils.getByLabelText('Email'), ' Pat@Example.com ');
+      await fireEvent.changeText(utils.getByLabelText('Password'), 'Str0ng!pass');
+      await fireEvent.press(utils.getByLabelText('Create account'));
+      expect(await utils.findByText('Check your inbox')).toBeTruthy();
+      expect(mockRegister.mock.calls[0][0].email).toBe('Pat@Example.com');
+      expect(mockRegister.mock.calls[0][1]).toBeUndefined();
+      await fireEvent.press(utils.getByText('I verified my email'));
+      await waitFor(() => expect(mockLogin).toHaveBeenCalledWith({ email: 'pat@example.com', password: 'Str0ng!pass' }));
+      expect(await AsyncStorage.getItem('pending_email')).toBe('pat@example.com');
+    });
+
+    it('guard: a response without the stored address (current production) keeps the typed spelling', async () => {
+      mockGetSignupPolicy.mockResolvedValue({ data: { invite_code_required: false, providers: ['email'] } });
+      mockRegister.mockResolvedValueOnce({ data: { requires_verification: true } });
+      mockLogin.mockResolvedValue({ data: { access_token: 'a', user: { id: 'u1', role: 'student' } } });
+      const utils = await renderScreen();
+      await fireEvent.changeText(utils.getByLabelText('Full name'), 'Pat Client');
+      await fireEvent.changeText(utils.getByLabelText('Email'), 'Pat@Example.com');
+      await fireEvent.changeText(utils.getByLabelText('Password'), 'Str0ng!pass');
+      await fireEvent.press(utils.getByLabelText('Create account'));
+      expect(await utils.findByText('Check your inbox')).toBeTruthy();
+      await fireEvent.press(utils.getByText('I verified my email'));
+      await waitFor(() => expect(mockLogin).toHaveBeenCalledWith({ email: 'Pat@Example.com', password: 'Str0ng!pass' }));
+    });
+
+    it('guard: a different address in the response is ignored', async () => {
+      mockGetSignupPolicy.mockResolvedValue({ data: { invite_code_required: false, providers: ['email'] } });
+      mockRegister.mockResolvedValueOnce({ data: { requires_verification: true, email: 'someone@else.com' } });
+      mockLogin.mockResolvedValue({ data: { access_token: 'a', user: { id: 'u1', role: 'student' } } });
+      const utils = await renderScreen();
+      await fillAndSubmit(utils);
+      expect(await utils.findByText('Check your inbox')).toBeTruthy();
+      await fireEvent.press(utils.getByText('I verified my email'));
+      await waitFor(() => expect(mockLogin).toHaveBeenCalledWith({ email: 'pat@example.com', password: 'Str0ng!pass' }));
     });
   });
 });

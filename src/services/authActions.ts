@@ -27,6 +27,7 @@ import { useFastingStore } from '../store/fastingStore';
 import { foregroundBannerStore } from '../store/foregroundBannerStore';
 import { resetCrispIdentity } from './support/crisp.service';
 import { COACH_SIGNUP_UNCONFIRMED_KEY } from '../lib/coachSignupAttempt';
+import { SIGNUP_ROLE_NOTICE_KEY } from '../lib/signupRoleNotice';
 
 // Tokens live in SecureStore; everything else is plain AsyncStorage.
 const SECURE_SIGN_OUT_KEYS = ['supabase_token', 'supabase_refresh_token'];
@@ -47,6 +48,9 @@ const ASYNC_SIGN_OUT_KEYS = [
   // #306 r3: a pre-sign-in marker of an unconfirmed coach signup; never
   // carried to the next person on the device.
   COACH_SIGNUP_UNCONFIRMED_KEY,
+  // #306 r4 (Sol C1): a signup role notice belongs to the person who signed
+  // up; never shown to the next person on the device.
+  SIGNUP_ROLE_NOTICE_KEY,
   // Pre-R15 global active workout session. Upgrading users may still have
   // a payload at this key from before the per-user namespace landed; if it
   // survives signOut, loadActiveWorkoutSession() on the next user will

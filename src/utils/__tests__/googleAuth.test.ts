@@ -73,6 +73,8 @@ describe('signInWithGoogle: coach request with no server answer', () => {
     const result = await signInWithGoogle({ intendedRole: 'coach' });
     expect(result.success).toBe(false);
     expect(result.error_code).toBe('coach_signup_unconfirmed');
+    // #306 r4: the Google identity scopes the unconfirmed-attempt marker.
+    expect(result.provider_email).toBe('pat@example.com');
     expect(result.user).toBeUndefined();
     expect(result.is_new_user).toBeUndefined();
     expect(result.access_token).toBeUndefined();

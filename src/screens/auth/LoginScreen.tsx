@@ -34,7 +34,26 @@ import { setUserCache } from '../../lib/userCache';
 import { purgePersistedQueryCacheForAllUsers } from '../../services/queryClient';
 import { Colors } from '../../constants/colors';
 import { getLastKnownSignupPolicy, loadSignupPolicy } from '../../lib/signupPolicy';
-import { setSignupRoleNotice } from '../../lib/signupRoleNotice';
+import {
+  clearSignupRoleNotice,
+  setSignupRoleNotice,
+  signupRoleNoticeMessage,
+} from '../../lib/signupRoleNotice';
+import {
+  reconcileCoachAttempt,
+  resolveUnconfirmedCoachSignup,
+  type CoachSignupMethod,
+} from '../../lib/coachSignupAttempt';
+
+// #306 r4 (Sol B2-R3): a sign-in that recovered the account of an earlier,
+// unconfirmed coach signup, and the server says it is not a coach. The
+// notice is shown here and must be acknowledged before the client flow.
+interface CoachAttemptRecovery {
+  method: CoachSignupMethod;
+  identity?: string;
+  priorNeedsRoleSelection: string | null;
+  proceed: () => Promise<void>;
+}
 
 interface Props {
   navigation: NativeStackNavigationProp<AuthStackParamList>;
@@ -86,6 +105,50 @@ export default function LoginScreen({ navigation, route }: Props) {
     () => getLastKnownSignupPolicy()?.roleChoice ?? null,
   );
   const [pendingProvider, setPendingProvider] = useState<'apple' | 'google' | null>(null);
+  const [recovery, setRecovery] = useState<CoachAttemptRecovery | null>(null);
+  const [recoveryBusy, setRecoveryBusy] = useState(false);
+
+  // Shared outcome reconciliation (lib/coachSignupAttempt), the same rule as
+  // CreateAccount: when this sign-in matches an unconfirmed coach attempt and
+  // the server answered with a non-coach account, hold the client flow and
+  // show the "coach sign-up was not applied" notice first. The notice is
+  // persisted and `needs_role_selection` is set while it is shown, so a cold
+  // start before it is acknowledged does not enter the client app. Anything
+  // else proceeds exactly as before.
+  const continueAfterCoachAttemptCheck = async (
+    method: CoachSignupMethod,
+    user: { role?: unknown; email?: unknown } | null | undefined,
+    opts: { emailHint?: string; isNewUser?: boolean },
+    proceed: () => Promise<void>,
+  ) => {
+    const notice = await reconcileCoachAttempt(method, user, opts);
+    if (!notice) {
+      await proceed();
+      return;
+    }
+    const priorNeedsRoleSelection = await AsyncStorage.getItem('needs_role_selection').catch(() => null);
+    await setSignupRoleNotice(notice);
+    await AsyncStorage.setItem('needs_role_selection', 'true').catch(() => undefined);
+    const identity =
+      typeof user?.email === 'string' && user.email ? user.email : opts.emailHint || undefined;
+    setRecovery({ method, identity, priorNeedsRoleSelection, proceed });
+  };
+
+  const acknowledgeRecovery = async () => {
+    if (!recovery || recoveryBusy) return;
+    setRecoveryBusy(true);
+    try {
+      if (recovery.priorNeedsRoleSelection === null) await AsyncStorage.removeItem('needs_role_selection');
+      else await AsyncStorage.setItem('needs_role_selection', recovery.priorNeedsRoleSelection);
+      await clearSignupRoleNotice();
+      await resolveUnconfirmedCoachSignup(recovery.method, recovery.identity);
+      const { proceed } = recovery;
+      setRecovery(null);
+      await proceed();
+    } finally {
+      setRecoveryBusy(false);
+    }
+  };
   useEffect(() => {
     let mounted = true;
     void loadSignupPolicy(() => authApi.getSignupPolicy()).then(({ policy }) => {
@@ -111,7 +174,10 @@ export default function LoginScreen({ navigation, route }: Props) {
   };
 
   const handleLogin = async () => {
-    if (!email || !password) {
+    // Surrounding spaces (keyboard autocomplete) are never part of the
+    // address; case is left as typed (legacy rows may be mixed case).
+    const typedEmail = email.trim();
+    if (!typedEmail || !password) {
       setError('Please enter email and password');
       return;
     }
@@ -120,7 +186,7 @@ export default function LoginScreen({ navigation, route }: Props) {
     setError('');
 
     try {
-      const response = await authApi.login({ email, password });
+      const response = await authApi.login({ email: typedEmail, password });
       const { access_token, refresh_token, user } = response.data;
 
       // Store JWT tokens in SecureStore (not AsyncStorage) for all subsequent API calls.
@@ -145,7 +211,10 @@ export default function LoginScreen({ navigation, route }: Props) {
       track(AnalyticsEvents.LOGIN_COMPLETED, { method: 'email' });
 
       // Fire auth event — RootNavigator will re-check AsyncStorage and navigate
-      authEvents.emit();
+      // (after the coach-attempt notice, when one applies).
+      await continueAfterCoachAttemptCheck('email', user, { emailHint: typedEmail }, async () => {
+        authEvents.emit();
+      });
     } catch (err) {
       // Map any upstream string (Supabase, axios, or backend) into a quiet,
       // safe line. Operators still get the raw error in console / Sentry.
@@ -179,27 +248,39 @@ export default function LoginScreen({ navigation, route }: Props) {
         return;
       }
 
-      if (result.is_new_user || !result.user?.role) {
-        await AsyncStorage.setItem('needs_role_selection', 'true');
-        // Same predicate as the confirm panel (unknown policy counts), and
-        // only when the server actually answered: the legacy fallback
-        // (`server_confirmed: false`) proves nothing about a new account.
-        if (result.is_new_user && result.server_confirmed !== false && roleChoiceEnabled !== false) {
-          await noteNewAccountFromSignIn();
-          navigation.replace('RoleSelection', { signupNotice: 'new_account_from_sign_in' });
+      const proceedGoogle = async () => {
+        if (result.is_new_user || !result.user?.role) {
+          await AsyncStorage.setItem('needs_role_selection', 'true');
+          // Same predicate as the confirm panel (unknown policy counts), and
+          // only when the server actually answered: the legacy fallback
+          // (`server_confirmed: false`) proves nothing about a new account.
+          if (result.is_new_user && result.server_confirmed !== false && roleChoiceEnabled !== false) {
+            await noteNewAccountFromSignIn();
+            navigation.replace('RoleSelection', { signupNotice: 'new_account_from_sign_in' });
+          } else {
+            navigation.replace('RoleSelection');
+          }
         } else {
-          navigation.replace('RoleSelection');
+          // P1-1 (PR #192 INF-1): purge any orphan persisted cache blobs before
+          // this user's first persistence pass, matching the email sign-in path.
+          if (result.user) await setUserCache(result.user);
+          await purgePersistedQueryCacheForAllUsers();
+          // Psych Report #4: Analytics
+          if (result.user?.id) identify(result.user.id, { role: result.user.role });
+          track(AnalyticsEvents.LOGIN_COMPLETED, { method: 'google' });
+          authEvents.emit();
         }
-      } else {
-        // P1-1 (PR #192 INF-1): purge any orphan persisted cache blobs before
-        // this user's first persistence pass, matching the email sign-in path.
-        if (result.user) await setUserCache(result.user);
-        await purgePersistedQueryCacheForAllUsers();
-        // Psych Report #4: Analytics
-        if (result.user?.id) identify(result.user.id, { role: result.user.role });
-        track(AnalyticsEvents.LOGIN_COMPLETED, { method: 'google' });
-        authEvents.emit();
-      }
+      };
+      // Only a server answer can resolve (or reveal) an earlier unconfirmed
+      // coach attempt; the legacy fallback is not one.
+      if (result.server_confirmed === false) await proceedGoogle();
+      else
+        await continueAfterCoachAttemptCheck(
+          'google',
+          result.user,
+          { isNewUser: result.is_new_user },
+          proceedGoogle,
+        );
     } catch (err) {
       const friendly = toFriendlyAuthError(err);
       if (!friendly.cancelled) setError(friendly.message);
@@ -230,24 +311,32 @@ export default function LoginScreen({ navigation, route }: Props) {
         return;
       }
 
-      if (result.is_new_user || !result.user?.role) {
-        await AsyncStorage.setItem('needs_role_selection', 'true');
-        // Same predicate as the confirm panel: an unknown policy counts.
-        if (result.is_new_user && roleChoiceEnabled !== false) {
-          await noteNewAccountFromSignIn();
-          navigation.replace('RoleSelection', { signupNotice: 'new_account_from_sign_in' });
+      const proceedApple = async () => {
+        if (result.is_new_user || !result.user?.role) {
+          await AsyncStorage.setItem('needs_role_selection', 'true');
+          // Same predicate as the confirm panel: an unknown policy counts.
+          if (result.is_new_user && roleChoiceEnabled !== false) {
+            await noteNewAccountFromSignIn();
+            navigation.replace('RoleSelection', { signupNotice: 'new_account_from_sign_in' });
+          } else {
+            navigation.replace('RoleSelection');
+          }
         } else {
-          navigation.replace('RoleSelection');
+          // P1-1 (PR #192 INF-1): purge any orphan persisted cache blobs before
+          // this user's first persistence pass, matching the email sign-in path.
+          if (result.user) await setUserCache(result.user);
+          await purgePersistedQueryCacheForAllUsers();
+          if (result.user?.id) identify(result.user.id, { role: result.user.role });
+          track(AnalyticsEvents.LOGIN_COMPLETED, { method: 'apple' });
+          authEvents.emit();
         }
-      } else {
-        // P1-1 (PR #192 INF-1): purge any orphan persisted cache blobs before
-        // this user's first persistence pass, matching the email sign-in path.
-        if (result.user) await setUserCache(result.user);
-        await purgePersistedQueryCacheForAllUsers();
-        if (result.user?.id) identify(result.user.id, { role: result.user.role });
-        track(AnalyticsEvents.LOGIN_COMPLETED, { method: 'apple' });
-        authEvents.emit();
-      }
+      };
+      await continueAfterCoachAttemptCheck(
+        'apple',
+        result.user,
+        { isNewUser: result.is_new_user },
+        proceedApple,
+      );
     } catch (err) {
       const friendly = toFriendlyAppleAuthError(err);
       if (!friendly.cancelled) setError(friendly.message);
@@ -255,6 +344,43 @@ export default function LoginScreen({ navigation, route }: Props) {
       setAppleLoading(false);
     }
   };
+
+  if (recovery) {
+    return (
+      <View style={styles.container}>
+        <ScrollView contentContainerStyle={styles.scroll}>
+          <View style={styles.header}>
+            <Text style={styles.title} accessibilityRole="header">
+              Coach sign-up was not applied
+            </Text>
+          </View>
+          <View style={styles.confirmBox} accessible accessibilityRole="alert" testID="login-coach-retry-notice">
+            <Text style={styles.confirmBody}>{signupRoleNoticeMessage('coach_retry_not_applied')}</Text>
+            <TouchableOpacity
+              style={[styles.confirmPrimary, recoveryBusy && styles.buttonDisabled]}
+              onPress={acknowledgeRecovery}
+              disabled={recoveryBusy}
+              accessibilityRole="button"
+              accessibilityLabel="Continue as a client"
+              accessibilityState={{ disabled: recoveryBusy, busy: recoveryBusy }}
+              testID="login-coach-retry-continue"
+            >
+              <Text style={styles.confirmPrimaryText}>Continue as a client</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.confirmSecondary}
+              onPress={() => navigation.navigate('SupportInbox')}
+              accessibilityRole="link"
+              accessibilityLabel="Contact support"
+              testID="login-coach-retry-support"
+            >
+              <Text style={styles.confirmSecondaryText}>Contact support</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
 
   return (
     <KeyboardAvoidingView

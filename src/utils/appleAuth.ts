@@ -99,6 +99,12 @@ export interface AppleAuthResult {
   // enter-code retry step instead of continuing silently.
   invite_attached?: boolean;
   invite_attach_error?: string;
+  /**
+   * #306 r4: the email Apple shared on this sign-in (first authorisation
+   * only), returned with `coach_signup_unconfirmed` so the unconfirmed-attempt
+   * marker is scoped to this identity when Apple gives one.
+   */
+  provider_email?: string;
 }
 
 export interface AppleAuthOptions {
@@ -203,7 +209,12 @@ export async function signInWithApple(
       // #306 r3: same rule as Google. A coach request with no server answer
       // (network, timeout, 5xx) may have committed; the outcome is unknown,
       // never reported as a refusal or a generic failure.
-      return { success: false, error: 'Could not confirm the coach account', error_code: COACH_SIGNUP_UNCONFIRMED };
+      return {
+        success: false,
+        error: 'Could not confirm the coach account',
+        error_code: COACH_SIGNUP_UNCONFIRMED,
+        ...(typeof credential.email === 'string' && credential.email ? { provider_email: credential.email } : {}),
+      };
     }
     const apiErr = err as { response?: { data?: { message?: string } }; message?: string };
     const msg =

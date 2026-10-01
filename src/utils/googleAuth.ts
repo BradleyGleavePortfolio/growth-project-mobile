@@ -68,6 +68,12 @@ export interface GoogleAuthResult {
    */
   invite_attached?: boolean;
   invite_code?: string;
+  /**
+   * #306 r4: the Google account's email, returned with
+   * `coach_signup_unconfirmed` so the unconfirmed-attempt marker is scoped to
+   * this identity (lib/coachSignupAttempt), not to every Google sign-in.
+   */
+  provider_email?: string;
 }
 
 export interface GoogleAuthOptions {
@@ -229,6 +235,7 @@ export async function signInWithGoogle(
           success: false,
           error: 'Could not confirm the coach account',
           error_code: COACH_SIGNUP_UNCONFIRMED,
+          ...(supaUser.email ? { provider_email: supaUser.email } : {}),
         };
       }
       // Backend call failed — but we still have Supabase auth
