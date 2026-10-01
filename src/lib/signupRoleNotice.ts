@@ -33,10 +33,15 @@ export function isSignupRoleNoticeKind(v: unknown): v is SignupRoleNoticeKind {
   return typeof v === 'string' && (KINDS as readonly string[]).includes(v);
 }
 
+/** Notices that ask the user to contact support; the screen must offer a way there. */
+export function signupRoleNoticeNeedsSupport(kind: SignupRoleNoticeKind): boolean {
+  return kind === 'coach_request_not_applied';
+}
+
 export function signupRoleNoticeMessage(kind: SignupRoleNoticeKind): string {
   switch (kind) {
     case 'coach_request_not_applied':
-      return 'Coach sign-up was not applied to this account, so it was created as a client account. You can continue as a client. To run your practice here, contact support and we will set up coach access.';
+      return 'Coach sign-up was not applied to this account, so it was created as a client account. You can continue as a client. To run your practice here, contact support and we will set up coach access. Use Contact support below, or Support in Settings at any time.';
     case 'existing_account':
       return 'This Apple ID or Google account already had an account, so we signed you in. The role choice applies only to new accounts.';
     case 'new_account_from_sign_in':

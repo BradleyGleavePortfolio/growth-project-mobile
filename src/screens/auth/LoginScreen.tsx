@@ -181,7 +181,10 @@ export default function LoginScreen({ navigation, route }: Props) {
 
       if (result.is_new_user || !result.user?.role) {
         await AsyncStorage.setItem('needs_role_selection', 'true');
-        if (result.is_new_user && roleChoiceEnabled) {
+        // Same predicate as the confirm panel (unknown policy counts), and
+        // only when the server actually answered: the legacy fallback
+        // (`server_confirmed: false`) proves nothing about a new account.
+        if (result.is_new_user && result.server_confirmed !== false && roleChoiceEnabled !== false) {
           await noteNewAccountFromSignIn();
           navigation.replace('RoleSelection', { signupNotice: 'new_account_from_sign_in' });
         } else {
@@ -229,7 +232,8 @@ export default function LoginScreen({ navigation, route }: Props) {
 
       if (result.is_new_user || !result.user?.role) {
         await AsyncStorage.setItem('needs_role_selection', 'true');
-        if (result.is_new_user && roleChoiceEnabled) {
+        // Same predicate as the confirm panel: an unknown policy counts.
+        if (result.is_new_user && roleChoiceEnabled !== false) {
           await noteNewAccountFromSignIn();
           navigation.replace('RoleSelection', { signupNotice: 'new_account_from_sign_in' });
         } else {

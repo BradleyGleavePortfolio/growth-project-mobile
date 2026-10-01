@@ -164,4 +164,44 @@ describe('Login provider sign-in vs signup role choice (C13 F3)', () => {
     expect(await utils.findByTestId('existing-account-confirm')).toBeTruthy();
     expect(mockSignInWithApple).not.toHaveBeenCalled();
   });
+
+  // #306 fix round 2 (Opus C3 / Sol C2): the confirm panel treats an unknown
+  // policy as "ask", so the new-account notice must use the same predicate.
+  it('Opus C3: policy still loading + provider created a new account: the notice is shown, not skipped', async () => {
+    mockGetSignupPolicy.mockReturnValue(new Promise(() => undefined));
+    mockSignInWithApple.mockResolvedValue({ success: true, is_new_user: true, user: { id: 'u1', role: 'student' } });
+    const nav = { navigate: jest.fn(), replace: jest.fn() };
+    const utils = await render(<LoginScreen navigation={nav as never} route={{ key: 'l', name: 'Login' } as never} />);
+    await fireEvent.press(utils.getByTestId('apple-button'));
+    await fireEvent.press(await utils.findByTestId('existing-account-continue'));
+    await waitFor(() =>
+      expect(nav.replace).toHaveBeenCalledWith('RoleSelection', { signupNotice: 'new_account_from_sign_in' }),
+    );
+    expect(await AsyncStorage.getItem(SIGNUP_ROLE_NOTICE_KEY)).toBe('new_account_from_sign_in');
+  });
+
+  it('Google: a server-confirmed new account is still told (guard for the B1 rule below)', async () => {
+    mockGetSignupPolicy.mockResolvedValue({ data: ROLE_CHOICE_POLICY });
+    mockSignInWithGoogle.mockResolvedValue({
+      success: true, is_new_user: true, server_confirmed: true, user: { id: 'u1', role: 'student' },
+    });
+    const utils = await renderLogin();
+    await fireEvent.press(await utils.findByLabelText('Continue with Google'));
+    await fireEvent.press(await utils.findByTestId('existing-account-continue'));
+    await waitFor(() =>
+      expect(utils.nav.replace).toHaveBeenCalledWith('RoleSelection', { signupNotice: 'new_account_from_sign_in' }),
+    );
+  });
+
+  it('B1 (Login): the Google legacy fallback (server_confirmed:false) is never told "a new client account was created"', async () => {
+    mockGetSignupPolicy.mockResolvedValue({ data: ROLE_CHOICE_POLICY });
+    mockSignInWithGoogle.mockResolvedValue({
+      success: true, is_new_user: true, server_confirmed: false, user: { id: 'supa-1', email: 'a@b.c', name: 'A' },
+    });
+    const utils = await renderLogin();
+    await fireEvent.press(await utils.findByLabelText('Continue with Google'));
+    await fireEvent.press(await utils.findByTestId('existing-account-continue'));
+    await waitFor(() => expect(utils.nav.replace).toHaveBeenCalledWith('RoleSelection'));
+    expect(await AsyncStorage.getItem(SIGNUP_ROLE_NOTICE_KEY)).toBeNull();
+  });
 });

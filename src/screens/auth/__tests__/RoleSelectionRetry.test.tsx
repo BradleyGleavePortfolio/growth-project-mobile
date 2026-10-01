@@ -174,5 +174,23 @@ describe('RoleSelection retry step', () => {
     await new Promise((r) => setTimeout(r, 10));
     expect(queryByTestId('signup-role-notice')).toBeNull();
   });
-});
 
+  // #306 fix round 2 (Opus C4): a notice that says "contact support" must
+  // offer a way to reach the in-app support screen.
+  it('Opus C4: the coach-not-applied notice links to the in-app support screen', async () => {
+    const nav = { navigate: jest.fn(), replace: jest.fn() };
+    const { findByTestId } = await render(
+      <RoleSelectionScreen navigation={nav as never} route={route({ signupNotice: 'coach_request_not_applied' })} />,
+    );
+    await fireEvent.press(await findByTestId('signup-role-notice-support'));
+    expect(nav.navigate).toHaveBeenCalledWith('SupportInbox');
+  });
+
+  it('Opus C4: notices that do not mention support do not show the link', async () => {
+    const { findByTestId, queryByTestId } = await render(
+      <RoleSelectionScreen navigation={{ navigate: jest.fn() } as never} route={route({ signupNotice: 'existing_account' })} />,
+    );
+    await findByTestId('signup-role-notice');
+    expect(queryByTestId('signup-role-notice-support')).toBeNull();
+  });
+});

@@ -26,6 +26,7 @@ import {
   clearSignupRoleNotice,
   readSignupRoleNotice,
   signupRoleNoticeMessage,
+  signupRoleNoticeNeedsSupport,
   type SignupRoleNoticeKind,
 } from '../../lib/signupRoleNotice';
 import PasteInviteCodeButton from '../../components/invite/PasteInviteCodeButton';
@@ -71,7 +72,7 @@ function logRedacted(label: string, err: unknown): void {
   console.warn(label, { status: status ?? null, kind });
 }
 
-export default function RoleSelectionScreen({ route }: Props) {
+export default function RoleSelectionScreen({ navigation, route }: Props) {
   const { colors } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
   // Retry mode: signup created the account but the backend reported
@@ -301,6 +302,17 @@ export default function RoleSelectionScreen({ route }: Props) {
         {signupNotice ? (
           <View style={styles.retryBox} accessible accessibilityRole="alert" testID="signup-role-notice">
             <Text style={styles.retryText}>{signupRoleNoticeMessage(signupNotice)}</Text>
+            {signupRoleNoticeNeedsSupport(signupNotice) ? (
+              <Text
+                style={styles.supportLink}
+                accessibilityRole="link"
+                accessibilityLabel="Contact support"
+                testID="signup-role-notice-support"
+                onPress={() => navigation?.navigate('SupportInbox')}
+              >
+                Contact support
+              </Text>
+            ) : null}
           </View>
         ) : null}
         {isAttachRetry ? (
@@ -492,6 +504,7 @@ const makeStyles = (colors: ThemeColors) =>
     marginVertical: 12,
   },
   retryText: { ...typography.bodySmall, color: colors.textPrimary },
+  supportLink: { ...typography.bodySmall, color: colors.primary, textDecorationLine: 'underline', marginTop: 8 },
   skipText: { ...typography.bodySmall, color: colors.textMuted, textAlign: 'center', paddingVertical: 8 },
   continueBtn: {
     backgroundColor: colors.primary,
