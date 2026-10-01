@@ -11,6 +11,7 @@
  * user backed out of the flow" from "something went wrong" — the former
  * should be silent, the latter should be surfaced.
  */
+import { isAuthErrorDetail } from './authErrorDetail';
 
 export type AuthErrorCategory =
   | 'cancelled'
@@ -155,6 +156,14 @@ export const SIGNUP_PASSWORD_RULE_FALLBACK =
 export const SIGNUP_UNKNOWN_MESSAGE = 'We could not create your account. Please try again.';
 
 function signupErrorParts(err: unknown): { status?: number; code?: string; messages: string[] } {
+  // #306 r7: a provider helper's sanitised detail (utils/authErrorDetail).
+  if (isAuthErrorDetail(err)) {
+    return {
+      ...(err.status !== null ? { status: err.status } : {}),
+      ...(err.code !== null ? { code: err.code } : {}),
+      messages: err.message ? [err.message] : [],
+    };
+  }
   const r = (err as { response?: { status?: unknown; data?: unknown } } | null | undefined)?.response;
   const status = typeof r?.status === 'number' ? r.status : undefined;
   const data = r?.data;

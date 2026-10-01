@@ -173,10 +173,17 @@ export function describeSignInFailure(
   if (EMAIL_UNCONFIRMED_CODE.test(codeOf(err) ?? '') || EMAIL_UNCONFIRMED_TEXT.test(raw)) {
     return {
       kind: 'email_unconfirmed',
+      // #306 r7 (Opus C-306-8): for Apple / Google the address belongs to
+      // the provider account and we sent no link, so the copy says where to
+      // verify it instead.
       message:
-        flow === 'verify'
-          ? 'Your email is not verified yet. Open the link we sent to this address, then tap I verified my email.'
-          : 'Your email is not confirmed yet. Open the link we sent, then sign in.',
+        provider === 'google'
+          ? 'Your Google account’s email is not verified. Verify it with Google, or sign up with email.'
+          : provider === 'apple'
+            ? 'Your Apple ID’s email is not verified. Verify it with Apple, or sign up with email.'
+            : flow === 'verify'
+              ? 'Your email is not verified yet. Open the link we sent to this address, then tap I verified my email.'
+              : 'Your email is not confirmed yet. Open the link we sent, then sign in.',
       support: false,
       reference: null,
       cancelled: false,
@@ -197,15 +204,18 @@ export function describeSignInFailure(
     };
   }
   if (provider !== 'email' && status === null && base.category !== 'unknown') {
-    // Provider sheet or configuration problem: say which, offer email.
+    // Provider sheet or configuration problem: say which, offer email. A
+    // configuration fault is ours, so it carries a reference and is
+    // reported too (#306 r7).
+    const ref = reportAuthFailure(err, flow, provider);
     return {
       kind: 'provider_unavailable',
       message:
         provider === 'apple'
-          ? 'Sign in with Apple is not available right now. You can use your email and password instead, or contact support.'
-          : 'Sign in with Google is not available right now. You can use your email and password instead, or contact support.',
+          ? `Sign in with Apple is not available right now. You can use your email and password instead, or contact support and quote reference ${ref.short}.`
+          : `Sign in with Google is not available right now. You can use your email and password instead, or contact support and quote reference ${ref.short}.`,
       support: true,
-      reference: null,
+      reference: ref.short,
       cancelled: false,
     };
   }
@@ -216,7 +226,15 @@ export function describeSignInFailure(
 export function describeSignupFailure(err: unknown, provider: AuthProviderName = 'email'): AuthFailure {
   // Apple / Google on CreateAccount fail like a sign-in (the provider sheet
   // or the token exchange); the email form has the signup refusals.
-  if (provider !== 'email') return describeSignInFailure(err, { provider });
+  if (provider !== 'email') {
+    // #306 r7: a code the provider signup carried can be refused like the
+    // email form's; say so instead of a reference.
+    const known = toFriendlySignupError(err);
+    if (known.kind === 'invite_invalid') {
+      return { kind: known.kind, message: known.message, support: false, reference: null, cancelled: false };
+    }
+    return describeSignInFailure(err, { provider });
+  }
   const s = toFriendlySignupError(err);
   if (s.kind === 'unknown') return unknownAuthFailure(err, 'sign_up', provider);
   return { kind: s.kind, message: s.message, support: false, reference: null, cancelled: false };

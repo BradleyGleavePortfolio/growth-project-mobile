@@ -131,17 +131,36 @@ async function writeMarkers(markers: Marker[]): Promise<void> {
 }
 
 /**
- * Does `m` describe the same sign-in as (method, identity)?
+ * Does `m` provably describe the same sign-in as (method, identity)? Used for
+ * anything that binds the attempt to this account (a notice about "your
+ * earlier attempt") or consumes it.
  *  - email: the address must match.
  *  - apple / google (#306 r6, Sol C-306-5): when both sides know the stable
  *    provider subject, it decides (a different Apple ID or Google account
  *    never matches, even with no email). Otherwise, when both know the email,
- *    it decides. Only when no identity can be compared (a marker written
- *    when the helper threw before any identity was known, or by an r5 build
- *    within its 30-minute window) does the method alone decide, so an
- *    unproven outcome is never forgotten for lack of an identifier.
+ *    it decides.
+ *  - #306 r7 (Sol C-306-5 residual): evidence with no identity (a marker
+ *    written when the helper threw before any identity was known, or by an
+ *    r5 build) is never bound to, or consumed by, an identified sign-in. It
+ *    pairs only with an equally unidentified sign-in, and otherwise keeps the
+ *    device-level caution below until it expires (30 minutes) or sign-out.
  */
 function sameSignIn(m: Marker, method: CoachSignupMethod, id: { email?: string; subject?: string }): boolean {
+  if (m.method !== method) return false;
+  if (method === 'email') return !!id.email && m.email === id.email;
+  if (m.subject && id.subject) return m.subject === id.subject;
+  if (m.email && id.email) return m.email === id.email;
+  const markerKnown = !!(m.subject || m.email);
+  const signInKnown = !!(id.subject || id.email);
+  return !markerKnown && !signInKnown;
+}
+
+/**
+ * Could `m` be this sign-in's attempt? True unless a comparable identity
+ * proves it is someone else's. Caution only: it never binds a notice to the
+ * account and never consumes the marker (r7).
+ */
+function couldBeSameSignIn(m: Marker, method: CoachSignupMethod, id: { email?: string; subject?: string }): boolean {
   if (m.method !== method) return false;
   if (method === 'email') return !!id.email && m.email === id.email;
   if (m.subject && id.subject) return m.subject === id.subject;
@@ -174,6 +193,20 @@ export async function hasUnconfirmedCoachSignup(
 ): Promise<boolean> {
   const id = identityOf(identity);
   return (await readMarkers(now)).some((m) => sameSignIn(m, method, id));
+}
+
+/**
+ * Device-level caution (r7): true when a recent unconfirmed attempt with this
+ * method is not provably someone else's. CreateAccount uses it before saying
+ * "No account was created" after a refusal; it binds and consumes nothing.
+ */
+export async function mayHaveUnconfirmedCoachSignup(
+  method: CoachSignupMethod,
+  identity?: CoachSignupIdentity,
+  now: number = Date.now(),
+): Promise<boolean> {
+  const id = identityOf(identity);
+  return (await readMarkers(now)).some((m) => couldBeSameSignIn(m, method, id));
 }
 
 /** True when any unconfirmed coach attempt from this device is recent. */

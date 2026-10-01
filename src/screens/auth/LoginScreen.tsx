@@ -319,8 +319,8 @@ export default function LoginScreen({ navigation, route }: Props) {
         if (result.is_new_user || !result.user?.role) {
           await markRoleSelectionPending(userIdOf(result.user));
           // Same predicate as the confirm panel (unknown policy counts), and
-          // only when the server actually answered: the legacy fallback
-          // (`server_confirmed: false`) proves nothing about a new account.
+          // only for a server answer (`server_confirmed: false` is no longer
+          // produced since r7; it is kept as a defensive check).
           if (result.is_new_user && result.server_confirmed !== false && roleChoiceEnabled !== false) {
             await noteNewAccountFromSignIn();
             navigation.replace('RoleSelection', { signupNotice: 'new_account_from_sign_in' });
@@ -338,16 +338,15 @@ export default function LoginScreen({ navigation, route }: Props) {
           await enterAppOrFinishRoleSelection(result.user);
         }
       };
-      // Only a server answer can resolve (or reveal) an earlier unconfirmed
-      // coach attempt; the legacy fallback is not one.
-      if (result.server_confirmed === false) await proceedGoogle();
-      else
-        await continueAfterCoachAttemptCheck(
-          'google',
-          result.user,
-          { isNewUser: result.is_new_user, providerSubject: result.provider_subject },
-          proceedGoogle,
-        );
+      // #306 r7 (Sol B-306-5): every Google success is a server answer now
+      // (a backend failure comes back as `success:false` with its detail and
+      // is mapped and reported above), so it always reconciles.
+      await continueAfterCoachAttemptCheck(
+        'google',
+        result.user,
+        { isNewUser: result.is_new_user, providerSubject: result.provider_subject },
+        proceedGoogle,
+      );
     } catch (err) {
       const failure = describeSignInFailure(err, { provider: 'google' });
       if (!failure.cancelled) showFailure(failure);

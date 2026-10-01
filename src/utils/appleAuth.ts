@@ -200,7 +200,9 @@ export async function signInWithApple(
     if (authErr?.code === APPLE_CANCEL_CODE) {
       return { success: false, cancelled: true };
     }
-    return { success: false, error: authErr?.message || 'Apple sign-in failed' };
+    // #306 r7: the native error code (for example ERR_REQUEST_FAILED) goes
+    // with the message, so an unknown sheet failure is reported with it.
+    return { success: false, error: authErr?.message || 'Apple sign-in failed', error_detail: toAuthErrorDetail(err) };
   }
 
   if (!credential?.identityToken) {

@@ -76,6 +76,7 @@ import {
 import {
   hasAnyUnconfirmedCoachSignup,
   hasUnconfirmedCoachSignup,
+  mayHaveUnconfirmedCoachSignup,
   normaliseEmail,
   rememberUnconfirmedCoachSignup,
   resolveUnconfirmedCoachSignup,
@@ -342,8 +343,10 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
   // earlier coach attempt with the same sign-in is still unresolved, the
   // screen keeps the "outcome unknown" step (Sign in to check, Check again,
   // Contact support): never "No account was created", never a client offer.
+  // #306 r7: caution only (any earlier attempt with this method that is not
+  // provably someone else's); it never binds or consumes the marker.
   const showCoachRefusal = async (method: CoachSignupMethod, identity?: CoachSignupIdentity) => {
-    if (await hasUnconfirmedCoachSignup(method, identity)) {
+    if (await mayHaveUnconfirmedCoachSignup(method, identity)) {
       unresolvedCoachRef.current = true;
       setError('');
       setErrorSupport(false);

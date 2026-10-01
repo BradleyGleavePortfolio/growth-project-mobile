@@ -55,11 +55,11 @@ export interface GoogleAuthResult {
    */
   error_code?: typeof COACH_SIGNUP_UNAVAILABLE | typeof COACH_SIGNUP_UNCONFIRMED;
   /**
-   * True only when the backend answered /auth/google and `user` /
-   * `is_new_user` come from that answer. False on the legacy fallback where
-   * the backend call failed and `user` is a basic Supabase identity: in that
-   * case nothing is known about whether an account row exists or its role,
-   * so callers must not tell the user an account was created.
+   * True when the backend answered /auth/google and `user` / `is_new_user`
+   * come from that answer. Since #306 r7 every success is a server answer
+   * (the legacy provisional-user fallback is gone: a backend failure is
+   * returned as a failure with `error_detail`); `false` is no longer
+   * produced and callers treat it as not confirmed.
    */
   server_confirmed?: boolean;
   /**
@@ -277,24 +277,24 @@ export async function signInWithGoogle(
           error_detail: toAuthErrorDetail(backendErr),
         };
       }
-      // Backend call failed — but we still have Supabase auth
-      // Store basic user data from Supabase directly. Pre-existing fallback
-      // for sign-in and client signup; `server_confirmed: false` tells the
-      // caller this is not a server answer.
-      const basicUser = {
-        id: supaUser.id,
-        email: supaUser.email || '',
-        name: supaUser.user_metadata?.full_name || supaUser.email || '',
-      };
-      await AsyncStorage.setItem('user_data', JSON.stringify(basicUser));
-
+      // #306 r7 (Sol B-306-5): any other backend failure is a failure too.
+      // The old fallback returned `success:true` with a provisional Supabase
+      // user (`server_confirmed:false`), which entered the app with no
+      // account answer and dropped the status and reference. Now the
+      // provisional session and cache are dropped, and the sanitised detail
+      // goes to the screen, which maps it (network, unverified email, ...)
+      // or shows a reference and reports it. A retry is safe: /auth/google
+      // is an upsert, so an account the server did create is found.
+      await secureStorage.removeItem('supabase_token').catch(() => undefined);
+      await secureStorage.removeItem('supabase_refresh_token').catch(() => undefined);
+      await AsyncStorage.removeItem('user_data').catch(() => undefined);
+      const detail = toAuthErrorDetail(backendErr);
       return {
-        success: true,
-        access_token: accessToken,
-        user: basicUser,
-        is_new_user: true,
-        server_confirmed: false,
-        ...(options.inviteCode ? { invite_attached: false, invite_code: options.inviteCode } : {}),
+        success: false,
+        error: detail.message || 'Google sign-in failed',
+        error_detail: detail,
+        ...(supaUser.email ? { provider_email: supaUser.email } : {}),
+        ...(supaUser.id ? { provider_subject: supaUser.id } : {}),
       };
     }
   } catch (err) {

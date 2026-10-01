@@ -5,6 +5,7 @@ import {
   clearUnconfirmedCoachSignup,
   hasAnyUnconfirmedCoachSignup,
   hasUnconfirmedCoachSignup,
+  mayHaveUnconfirmedCoachSignup,
   normaliseEmail,
   reconcileCoachAttempt,
   rememberUnconfirmedCoachSignup,
@@ -65,8 +66,10 @@ describe('coachSignupAttempt (#306 r4, Sol B1-R3 / B2-R3)', () => {
     await rememberUnconfirmedCoachSignup('google', 'Pat@Gmail.com', 1000);
     expect(await hasUnconfirmedCoachSignup('google', 'pat@gmail.com', 2000)).toBe(true);
     expect(await hasUnconfirmedCoachSignup('google', 'someone@gmail.com', 2000)).toBe(false);
-    // An answer without an email cannot prove it is someone else.
-    expect(await hasUnconfirmedCoachSignup('google', undefined, 2000)).toBe(true);
+    // An answer without an email cannot prove it is someone else, so the
+    // device keeps caution, but nothing is bound to it (#306 r7).
+    expect(await hasUnconfirmedCoachSignup('google', undefined, 2000)).toBe(false);
+    expect(await mayHaveUnconfirmedCoachSignup('google', undefined, 2000)).toBe(true);
   });
 
   it('reads a round-3 single-object marker', async () => {
@@ -168,9 +171,9 @@ describe('provider subject (#306 r6, Sol C-306-5)', () => {
     expect(await reconcileCoachAttempt('apple', user, { providerSubject: 'apple-sub-A' })).toBe('coach_retry_not_applied');
   });
 
-  it('documented residual: a marker with no identity at all (helper threw before any was known) still matches by method', async () => {
+  it('#306 r7 (Sol C-306-5 residual): a marker with no identity is not bound to an identified sign-in', async () => {
     await rememberUnconfirmedCoachSignup('apple');
-    expect(await hasUnconfirmedCoachSignup('apple', { subject: 'apple-sub-B' })).toBe(true);
+    expect(await hasUnconfirmedCoachSignup('apple', { subject: 'apple-sub-B' })).toBe(false);
   });
 
   it('an email marker ignores any subject', async () => {

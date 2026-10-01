@@ -116,9 +116,11 @@ describe('Login reconciles an unconfirmed coach signup (Sol B2-R3)', () => {
   });
 
   it('Apple: a recovered client who already has a coach is still told before entering the app', async () => {
-    await rememberUnconfirmedCoachSignup('apple');
+    // #306 r6/r7: the marker and the sign-in carry the Apple user id.
+    await rememberUnconfirmedCoachSignup('apple', { subject: 'apple-sub-1' });
     mockSignInWithApple.mockResolvedValue({
       success: true,
+      provider_subject: 'apple-sub-1',
       is_new_user: false,
       user: { id: 'u1', email: 'x@privaterelay.appleid.com', role: 'student', coach_id: 'coach-1' },
     });
@@ -148,8 +150,13 @@ describe('Login reconciles an unconfirmed coach signup (Sol B2-R3)', () => {
   });
 
   it('a recovered server coach: no notice, straight in, and the attempt is resolved', async () => {
-    await rememberUnconfirmedCoachSignup('apple');
-    mockSignInWithApple.mockResolvedValue({ success: true, is_new_user: false, user: { id: 'c1', role: 'coach' } });
+    await rememberUnconfirmedCoachSignup('apple', { subject: 'apple-sub-1' });
+    mockSignInWithApple.mockResolvedValue({
+      success: true,
+      provider_subject: 'apple-sub-1',
+      is_new_user: false,
+      user: { id: 'c1', role: 'coach' },
+    });
     const utils = await renderLogin();
     await fireEvent.press(utils.getByTestId('apple-button'));
     await waitFor(() => expect(mockEmit).toHaveBeenCalledTimes(1));

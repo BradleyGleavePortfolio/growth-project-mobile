@@ -157,8 +157,13 @@ describe('#306 fix round 5: owner-scoped role-selection gate on Login', () => {
   });
 
   it('Apple replay: interrupted, then the same Apple account signs in again: notice, Continue, app', async () => {
-    await rememberUnconfirmedCoachSignup('apple');
-    const apple = { success: true, is_new_user: false, user: { id: 'u1', email: 'x@privaterelay.appleid.com', role: 'student' } };
+    await rememberUnconfirmedCoachSignup('apple', { subject: 'apple-sub-1' });
+    const apple = {
+      success: true,
+      provider_subject: 'apple-sub-1',
+      is_new_user: false,
+      user: { id: 'u1', email: 'x@privaterelay.appleid.com', role: 'student' },
+    };
     mockSignInWithApple.mockResolvedValue(apple);
     const first = await renderLogin();
     await fireEvent.press(first.getByTestId('apple-button'));

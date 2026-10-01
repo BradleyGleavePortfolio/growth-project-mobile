@@ -57,9 +57,18 @@ function messageText(err: unknown): string {
 }
 
 function safeCode(err: unknown): string | null {
-  const d = (err as { response?: { data?: unknown } } | null)?.response?.data;
-  if (!d || typeof d !== 'object') return null;
-  for (const c of [(d as { code?: unknown }).code, (d as { error?: unknown }).error]) {
+  const r = (err as { response?: { data?: unknown } } | null)?.response;
+  const d = r?.data;
+  if (d && typeof d === 'object') {
+    for (const c of [(d as { code?: unknown }).code, (d as { error?: unknown }).error]) {
+      if (typeof c === 'string' && SAFE_CODE.test(c)) return c;
+    }
+    return null;
+  }
+  // #306 r7: no response (a native Apple / Google error, or an axios error
+  // with no answer): its own code, such as ERR_REQUEST_FAILED or ERR_NETWORK.
+  if (!r) {
+    const c = (err as { code?: unknown } | null)?.code;
     if (typeof c === 'string' && SAFE_CODE.test(c)) return c;
   }
   return null;

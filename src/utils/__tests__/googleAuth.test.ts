@@ -106,11 +106,20 @@ describe('signInWithGoogle: coach request with no server answer', () => {
     expect(mockStore.get('supabase_token')).toBe('tok-1');
   });
 
-  it('without a coach request the legacy fallback is unchanged but flagged server_confirmed:false', async () => {
+  it('#306 r7 (Sol B-306-5): without a coach request a backend failure is a failure too, with its detail and no provisional session', async () => {
     mockGoogleAuth.mockRejectedValue(http500);
     const result = await signInWithGoogle();
-    expect(result).toMatchObject({ success: true, is_new_user: true, server_confirmed: false });
-    expect(result.user).toEqual({ id: 'supa-1', email: 'pat@example.com', name: 'Pat' });
+    expect(result).toMatchObject({
+      success: false,
+      error: 'Internal server error',
+      error_detail: { kind: 'auth_error_detail', status: 500 },
+      provider_subject: 'supa-1',
+    });
+    expect(result.user).toBeUndefined();
+    expect(result.server_confirmed).toBeUndefined();
+    expect(mockStore.has('supabase_token')).toBe(false);
+    expect(mockStore.has('supabase_refresh_token')).toBe(false);
+    expect(await AsyncStorage.getItem('user_data')).toBeNull();
   });
 });
 
