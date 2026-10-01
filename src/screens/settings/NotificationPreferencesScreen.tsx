@@ -8,6 +8,10 @@
  *   - Reminders       (client_bot)    — meal, water, check-in nudges
  *   - Milestones      (milestones)    — streak and PR celebrations
  *   - System          (system)        — billing and app updates
+ *   - Workout reminders (workout_reminders) — C05 item 7: a note from Roman at
+ *     the client's preferred training time on session days. Default on. The
+ *     backend is the source of truth (workout_reminder_push/_inapp); the
+ *     server value is read on mount so the switch never shows a stale state.
  *
  * Preferences are persisted to AsyncStorage and synced to the backend
  * notifications preferences API where a backend field exists.
@@ -39,11 +43,12 @@ import { mediumTap } from '../../utils/haptics';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type NotifCategory = 'coach_direct' | 'client_bot' | 'milestones' | 'system';
+type NotifCategory = 'coach_direct' | 'client_bot' | 'workout_reminders' | 'milestones' | 'system';
 
 interface CategoryPrefs {
   coach_direct: boolean;
   client_bot: boolean;
+  workout_reminders: boolean;
   milestones: boolean;
   system: boolean;
 }
@@ -51,6 +56,7 @@ interface CategoryPrefs {
 const DEFAULT_PREFS: CategoryPrefs = {
   coach_direct: true,
   client_bot: true,
+  workout_reminders: true,
   milestones: true,
   system: true,
 };
@@ -66,7 +72,16 @@ const BACKEND_FIELD_MAP: Record<NotifCategory, Record<string, boolean>> = {
   milestones: { milestone_push: true, milestone_inapp: true },
   system: { weekly_summary_enabled: true },
   client_bot: { eat_enabled: true },
+  workout_reminders: { workout_reminder_push: true, workout_reminder_inapp: true },
 };
+
+// Read the server value of the workout reminder toggle. Returns null when the
+// response does not carry the field (older backend) so local state stands.
+export function workoutRemindersFromServer(data: unknown): boolean | null {
+  if (typeof data !== 'object' || data === null) return null;
+  const value = (data as { workout_reminder_push?: unknown }).workout_reminder_push;
+  return typeof value === 'boolean' ? value : null;
+}
 
 function buildBackendPayload(category: NotifCategory, value: boolean): Record<string, boolean> {
   const template = BACKEND_FIELD_MAP[category];
@@ -100,6 +115,12 @@ const CATEGORIES: CategoryMeta[] = [
     icon: 'alarm-outline',
   },
   {
+    id: 'workout_reminders',
+    label: 'Workout reminders',
+    description: 'A short note from Roman at your preferred training time on session days.',
+    icon: 'barbell-outline',
+  },
+  {
     id: 'milestones',
     label: 'Milestones',
     description: 'Streak extensions and personal records.',
@@ -130,9 +151,15 @@ export default function NotificationPreferencesScreen({
   const loadPrefs = useCallback(async () => {
     try {
       const raw = await AsyncStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        setPrefs({ ...DEFAULT_PREFS, ...JSON.parse(raw) });
+      let next: CategoryPrefs = raw ? { ...DEFAULT_PREFS, ...JSON.parse(raw) } : DEFAULT_PREFS;
+      try {
+        const res = await notificationsApi.getPreferences();
+        const server = workoutRemindersFromServer(res?.data);
+        if (server !== null) next = { ...next, workout_reminders: server };
+      } catch {
+        // Offline or older backend: keep the locally stored value.
       }
+      setPrefs(next);
     } catch {
       // Fall back to defaults — preference loss is non-fatal.
     } finally {

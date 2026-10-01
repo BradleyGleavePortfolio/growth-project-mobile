@@ -25,6 +25,7 @@ import {
   installForegroundHandler,
   installNotificationResponseHandler,
 } from './src/services/pushNotifications';
+import { syncDeviceTimezone } from './src/services/timezoneSync';
 import { routePushTap } from './src/services/pushTapRouter';
 import { usersApi } from './src/services/api';
 import { authEvents } from './src/utils/authEvents';
@@ -140,6 +141,11 @@ function App() {
       try {
         const token = await secureStorage.getItem('supabase_token');
         if (!token) return; // not authenticated
+        // C05 item 7: workout reminders use the client's local timezone.
+        // Independent of push permission; best-effort.
+        syncDeviceTimezone().catch((e: unknown) => {
+          if (__DEV__) console.warn('Failed to sync timezone', e);
+        });
         const result = await registerForPushNotifications({ requestPermission: false });
         if (result.token) {
           await usersApi.updatePushToken(result.token);

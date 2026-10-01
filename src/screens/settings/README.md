@@ -171,3 +171,19 @@ Specific test cases:
 
 - **Push notification on ready:** Rather than polling, the app could receive a push notification when the export completes.
 - **Progress bar:** Show a rough completion percentage during RUNNING state (requires a backend progress field on the export record).
+
+## Notification categories (`NotificationPreferencesScreen.tsx`)
+
+Client Settings > Notifications shows per-category switches (coach messages,
+reminders, workout reminders, milestones, system). Each switch PATCHes
+`/notifications/preferences` with the mapped backend fields and rolls back on
+failure.
+
+**Workout reminders** (C05 item 7) map to `workout_reminder_push` and
+`workout_reminder_inapp` (default on). The backend sends a short note from
+Roman at the client's preferred training time (consultation S2) on their first
+session day and every plan day, in the client's local timezone, at most once a
+day, and not when that day's session is already logged. The switch reads the
+server value on mount. The device timezone is synced to the backend by
+`src/services/timezoneSync.ts` (called from `App.tsx` after sign-in, once per
+change).
