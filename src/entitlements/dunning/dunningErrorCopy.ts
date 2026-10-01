@@ -20,6 +20,7 @@ export interface DunningErrorCopy {
     | 'STRIPE_UNAVAILABLE'
     | 'LINK_REJECTED'
     | 'SESSION_EXPIRED'
+    | 'STATUS_NOT_AVAILABLE'
     | 'UNKNOWN';
   message: string;
   /** Backend request id when the server supplied one. */
@@ -77,6 +78,16 @@ export function describeDunningError(err: unknown, action: DunningAction): Dunni
     return {
       code: 'RATE_LIMITED',
       message: `Too many attempts in a short time. Wait a minute, then ${retryVerb}.`,
+      reference,
+      report: false,
+    };
+  }
+  if (action === 'load_status' && status === 404) {
+    // The status route ships with backend #628; an older server answers 404.
+    // Expected during rollout, so not reported.
+    return {
+      code: 'STATUS_NOT_AVAILABLE',
+      message: `Your billing status is not available yet. If your plan is paused, email ${SUPPORT_EMAIL}.`,
       reference,
       report: false,
     };

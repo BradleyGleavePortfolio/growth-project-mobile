@@ -246,6 +246,12 @@ describe('specific error copy', () => {
     expect(copy.message).not.toContain('!');
   });
 
+  it('a 404 status read (backend not deployed yet) is expected and not reported', () => {
+    const copy = describeDunningError(axiosError(404, {}), 'load_status');
+    expect(copy.code).toBe('STATUS_NOT_AVAILABLE');
+    expect(copy.report).toBe(false);
+  });
+
   it('unknown failures carry the request reference and the support address', () => {
     const copy = describeDunningError(axiosError(500, {}, { 'x-request-id': 'req-abc' }), 'update_card');
     expect(copy.reference).toBe('req-abc');
