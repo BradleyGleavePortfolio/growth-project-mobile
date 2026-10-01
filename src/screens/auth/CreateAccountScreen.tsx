@@ -48,6 +48,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { AuthStackParamList } from '../../navigation/AuthNavigator';
 import AppleSignInButton from '../../components/AppleSignInButton';
 import { signInWithApple } from '../../utils/appleAuth';
+import { supportMailto } from '../../constants/support';
 // Static import (was a dynamic `import()`): Metro bundles the module either
 // way, and a static import lets the Google path be exercised in Jest.
 import { signInWithGoogle } from '../../utils/googleAuth';
@@ -1290,9 +1291,7 @@ export default function CreateAccountScreen({ navigation, route }: Props) {
                   accessibilityRole="link"
                   accessibilityLabel="Request access by email"
                   onPress={() =>
-                    Linking.openURL(
-                      'mailto:hello@thegrowthproject.app?subject=Request%20access%20to%20The%20Growth%20Project',
-                    )
+                    Linking.openURL(supportMailto('Request access to The Growth Project'))
                   }
                 >
                   Request access

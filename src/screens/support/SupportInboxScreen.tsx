@@ -28,9 +28,9 @@ import HapticPressable from '../../components/HapticPressable';
 import { Ionicons } from '@expo/vector-icons';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import { openSupportChat } from '../../services/support/crisp.service';
-
-// The team inbox, also used for access requests on the signup screen.
-const SUPPORT_EMAIL = 'hello@thegrowthproject.app';
+// The one support inbox (owner ruling 2026-10-01), also used for access
+// requests on the signup screen.
+import { SUPPORT_EMAIL, supportMailto } from '../../constants/support';
 
 interface Props {
   navigation: NavigationProp<ParamListBase>;
@@ -122,7 +122,7 @@ export default function SupportInboxScreen({ navigation, preSignIn = false }: Pr
             intent="medium"
             style={styles.openBtn}
             onPress={() => {
-              void Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=Support%20request`).catch(() => undefined);
+              void Linking.openURL(supportMailto('Support request')).catch(() => undefined);
             }}
             accessibilityRole="button"
             accessibilityLabel="Email support"

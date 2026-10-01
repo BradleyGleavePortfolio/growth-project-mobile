@@ -23,7 +23,9 @@ describe('SupportInboxScreen when live chat is unavailable', () => {
     expect(utils.getByTestId('support-chat-unavailable')).toBeTruthy();
     expect(utils.queryByText(/should open automatically/)).toBeNull();
     expect(utils.queryByTestId('support-chat-open')).toBeNull();
+    // S-ERRORS: the one support address (owner ruling 2026-10-01) is shown in words too.
+    expect(utils.getByText(/Bradleyapple1031@gmail\.com/)).toBeTruthy();
     await fireEvent.press(utils.getByTestId('support-email'));
-    expect(openURL).toHaveBeenCalledWith('mailto:hello@thegrowthproject.app?subject=Support%20request');
+    expect(openURL).toHaveBeenCalledWith('mailto:Bradleyapple1031@gmail.com?subject=Support%20request');
   });
 });
